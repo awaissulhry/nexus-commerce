@@ -30,7 +30,7 @@ import type {
   FooterActionsCtx,
 } from './FlatFileGrid.types'
 import { normalizeCellValue } from './normalizeCellValue'
-import { dropReadOnlyCellChanges, typeApplicabilityGuidance, isRequiredForRow } from './cellFlags'
+import { dropReadOnlyCellChanges, typeApplicabilityGuidance, isRequiredForRow, enumOptionsForRow } from './cellFlags'
 import { countGhosts, makeGhostRows, materializeGhostPatch, pasteGrowCount, topUpGhosts } from './ghost-rows'
 import { SortPanel, applySortLevels, type SortLevel, type SortGroup } from './SortPanel'
 import {
@@ -557,13 +557,15 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
     )
   }
 
-  // Enum / boolean cell
-  const enumOptions = col.kind === 'boolean' ? ['', 'true', 'false'] : col.kind === 'enum' && col.options?.length ? col.options : null
+  // Enum / boolean cell — UFX P4d: options resolve per ROW (a union column
+  // with optionsByProductType offers/validates the row's own type's list).
+  const enumOptions = enumOptionsForRow(col, row)
   if (enumOptions) {
     const custom = renderCellContent?.(col, row, value, displayValue)
     // FF-EN.5 — a strict (SELECTION_ONLY / category-condition) cell holding a
-    // value eBay doesn't list. Allowed (per the product owner) but flagged,
-    // since eBay rejects it at publish. Multi cells flag if ANY part is off-list.
+    // value the channel doesn't list FOR THIS ROW (per-type list on union
+    // sheets). Allowed (per the product owner) but flagged, since the channel
+    // rejects it at publish. Multi cells flag if ANY part is off-list.
     const strictInvalid =
       col.kind === 'enum' && col.enumMode === 'strict' && !!displayValue &&
       displayValue.split(',').map((s) => s.trim()).filter(Boolean).some((v) => !enumOptions.includes(v))
@@ -575,7 +577,7 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
       : ''
     return (
       <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}
-        title={strictInvalid ? `"${displayValue}" isn't in eBay's list for this field — eBay may reject it at publish` : undefined}
+        title={strictInvalid ? `"${displayValue}" isn't in the accepted list for this field${typeof row.product_type === 'string' && row.product_type && col.optionsByProductType ? ` on ${String(row.product_type).toUpperCase()}` : ''} — it may be rejected at publish` : undefined}
         aria-haspopup="listbox" aria-expanded={isActive && dropdownOpen}
         onClick={() => { if (isActive) setDropdownOpen(true) }}
         onDoubleClick={(e) => {

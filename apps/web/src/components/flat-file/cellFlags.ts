@@ -56,6 +56,29 @@ export function isRequiredForRow(
   return list.some((pt) => pt.toUpperCase() === t)
 }
 
+/**
+ * UFX P4d — the option list an enum/boolean CELL should offer + validate
+ * against, resolved per row. On a union sheet a column's flat `options` is the
+ * cross-type superset; when the column carries `optionsByProductType` and the
+ * row's type has an entry, that per-type list wins (with the blank '' entry
+ * prepended, mirroring how manifests lead their option lists). Booleans and
+ * untyped/unlisted rows keep the legacy behavior. Returns null for non-enum
+ * columns or enums without options.
+ */
+export function enumOptionsForRow(
+  col: Pick<FlatFileColumn, 'kind' | 'options' | 'optionsByProductType'>,
+  row: BaseRow,
+): string[] | null {
+  if (col.kind === 'boolean') return ['', 'true', 'false']
+  if (col.kind !== 'enum') return null
+  const t = rowProductType(row)
+  const perType = t ? col.optionsByProductType?.[t] : undefined
+  if (perType && perType.length) {
+    return perType[0] === '' ? perType : ['', ...perType]
+  }
+  return col.options?.length ? col.options : null
+}
+
 export function dropReadOnlyCellChanges<C extends { rowId: string; colId: string }>(
   changes: C[],
   colById: Map<string, FlatFileColumn>,

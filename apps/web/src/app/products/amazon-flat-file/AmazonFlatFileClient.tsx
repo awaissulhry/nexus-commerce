@@ -100,6 +100,9 @@ interface Column {
    *  apply to. undefined on a single-type manifest. */
   applicableProductTypes?: string[]
   requiredForProductTypes?: string[]
+  /** UFX P4d — union manifest: each product type's OWN enum option list
+   *  (UPPERCASE type → options). Drives per-row-type dropdowns + validation. */
+  optionsByProductType?: Record<string, string[]>
   /** Usage level from Amazon schema: REQUIRED / RECOMMENDED / OPTIONAL */
   guidance?: string
   maxLength?: number
@@ -2084,8 +2087,16 @@ export default function AmazonFlatFileClient({
   // write path) and asks the page for the infra fields a real Amazon row
   // needs; the edited cell value is applied after, so a user editing
   // product_type itself wins (grid contract).
+  // UFX P4d — union sheets: the materialized type is the category the operator
+  // is LOOKING AT (the active filter chip); with "All" shown the type is
+  // ambiguous — leave it blank: validation prompts for a category, and the
+  // feed's parent-fallback + type-skip (P6d) protects a stray submit.
+  const filterTypeRef = useRef(filterType)
+  useEffect(() => { filterTypeRef.current = filterType }, [filterType])
+  const isUnionModeRef = useRef(isUnionMode)
+  useEffect(() => { isUnionModeRef.current = isUnionMode }, [isUnionMode])
   const onMaterializeRow = useCallback((): Partial<Row> => ({
-    product_type: productTypeRef.current,
+    product_type: isUnionModeRef.current ? (filterTypeRef.current ?? '') : productTypeRef.current,
     record_action: 'full_update',
   }), [])
 
@@ -4465,13 +4476,19 @@ function computeRowCompleteness(row: Row, columns: Column[]): { filled: number; 
   const rowType = parentage.toLowerCase() === 'parent' ? 'VARIATION_PARENT'
     : parentage.toLowerCase() === 'child' ? 'VARIATION_CHILD'
     : 'STANDALONE'
+  const rowProductType = String(row.product_type ?? '').toUpperCase()
   let total = 0, filled = 0
   for (const col of columns) {
-    if (!col.required) continue
+    // UFX P4d — per-ROW required on union sheets: a column required only for
+    // JACKET must not count against a PANTS row (union-OR over-counted).
+    const requiredForRow = col.requiredForProductTypes
+      ? (!!rowProductType && col.requiredForProductTypes.includes(rowProductType))
+      : col.required
+    if (!requiredForRow) continue
     // applicableParentage greying (mirrors guidanceLevel === 'not-applicable')
     if (col.applicableParentage?.length && !col.applicableParentage.includes(rowType)) continue
     // applicableProductTypes greying (mirrors !appliesToType)
-    if (col.applicableProductTypes && !col.applicableProductTypes.includes(String(row.product_type ?? '').toUpperCase())) continue
+    if (col.applicableProductTypes && !col.applicableProductTypes.includes(rowProductType)) continue
     // FBA-managed quantity is greyed/not-applicable on FBA rows
     if (col.id === 'fulfillment_availability__quantity'
       && /^(AMAZON|AFN|FBA)/.test(String(row.fulfillment_availability__fulfillment_channel_code ?? '').toUpperCase())) continue

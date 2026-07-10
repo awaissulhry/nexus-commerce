@@ -23,6 +23,9 @@ export interface AmazonColumn {
   applicableParentage?: string[]
   applicableProductTypes?: string[]
   requiredForProductTypes?: string[]
+  /** UFX P4d — union manifest: each product type's OWN enum option list
+   *  (UPPERCASE type → options, blank stripped server-side). */
+  optionsByProductType?: Record<string, string[]>
   guidance?: string
   maxLength?: number
   maxUtf8ByteLength?: number
@@ -78,6 +81,7 @@ export function toGridColumn(col: AmazonColumn): FlatFileColumn {
     applicableParentage: col.applicableParentage,
     applicableProductTypes: col.applicableProductTypes,
     requiredForProductTypes: col.requiredForProductTypes,
+    optionsByProductType: col.optionsByProductType,
     guidance: col.guidance,
     maxLength: col.maxLength,
     maxUtf8ByteLength: col.maxUtf8ByteLength,
@@ -130,9 +134,16 @@ export function buildGridColumnGroups(
 // Port of the page's old cellErrors production, mapped onto the grid's
 // ValidationIssue[] (sku/field/level/msg). Covers: required-per-row (via the
 // P2c requiredForProductTypes resolution, falling back to the plain flag),
-// UTF-8 byte caps, char caps, enum warnings, Amazon feed _errorFields,
+// blank product_type prompts (union sheets), UTF-8 byte caps, char caps,
+// per-row-type enum checks (UFX P4d: strict → error, open → warn, resolved
+// against the row's own type's option list), Amazon feed _errorFields,
 // ALA _issueFields (severity-mapped), orphaned children, and the BN.4.3
 // advisories (mixed-type families / missing browse node) as warnings.
+
+/** Row's product type, normalized ('' when absent). */
+function rowTypeOf(row: BaseRow): string {
+  return typeof row.product_type === 'string' ? row.product_type.trim().toUpperCase() : ''
+}
 
 export function validateAmazonRows(
   rows: BaseRow[],
@@ -147,22 +158,56 @@ export function validateAmazonRows(
     // FFP.2 — a delete row sends only sku+operationType; nothing to validate.
     if (String(row.record_action ?? '').toLowerCase() === 'delete') continue
     const sku = skuOf(row)
+    const rowType = rowTypeOf(row)
     for (const col of gridColumns) {
       if (col.id === '__category') continue
       const rawVal = row[col.id]
       const val = rawVal != null ? String(rawVal) : ''
+      // UFX P4d — a real row with no product_type can't resolve any per-type
+      // rule (isRequiredForRow returns false for unresolvable types, so the
+      // union-manifest requiredForProductTypes would otherwise go silent):
+      // prompt for a category explicitly. Materialized ghosts on an unfiltered
+      // union sheet land here by design.
+      if (col.id === 'product_type' && !val && (col.required || col.requiredForProductTypes?.length)) {
+        issues.push({ level: 'error', sku, field: col.id, msg: 'Product Type is required — pick a category for this row' })
+        continue
+      }
       if (isRequiredForRow(col, row) && !val) {
         issues.push({ level: 'error', sku, field: col.id, msg: `${col.label} is required` })
-      } else if (col.maxUtf8ByteLength && val) {
+        continue
+      }
+      // UFX P4d — a value in a column that doesn't apply to this row's type is
+      // never submitted (the feed prunes it via applicableByType): content
+      // checks on it would be pure noise.
+      if (val && rowType && col.applicableProductTypes
+        && !col.applicableProductTypes.some((pt) => pt.toUpperCase() === rowType)) continue
+      if (col.maxUtf8ByteLength && val) {
         // P2.3 — Amazon enforces UTF-8 byte limits (accented chars = 2+ bytes).
         const bytes = enc.encode(val).length
         if (bytes > col.maxUtf8ByteLength) {
           issues.push({ level: 'error', sku, field: col.id, msg: `Exceeds ${col.maxUtf8ByteLength}-byte Amazon limit (${bytes} bytes; accented chars count as 2+)` })
+          continue
         }
-      } else if (col.maxLength && val.length > col.maxLength) {
+      }
+      if (col.maxLength && val.length > col.maxLength) {
         issues.push({ level: 'error', sku, field: col.id, msg: `Exceeds max ${col.maxLength} chars (${val.length})` })
-      } else if (col.options?.length && val && !col.options.includes(val)) {
-        issues.push({ level: 'warn', sku, field: col.id, msg: `"${val}" is not a valid option` })
+        continue
+      }
+      // UFX P4d — enum check against the row's OWN type's option list when the
+      // union column carries one (a theme valid for JACKET must error on a
+      // PANTS row); strict (SELECTION_ONLY) enums error, open enums warn —
+      // parity with the server's checkEnumValues.
+      const perType = rowType ? col.optionsByProductType?.[rowType] : undefined
+      const allowed = perType?.length ? perType : col.options
+      if (allowed?.length && val && !allowed.includes(val)) {
+        issues.push({
+          level: col.enumMode === 'strict' ? 'error' : 'warn',
+          sku,
+          field: col.id,
+          msg: perType?.length
+            ? `"${val}" is not a valid ${col.label} option for ${rowType}`
+            : `"${val}" is not a valid option`,
+        })
       }
     }
   }

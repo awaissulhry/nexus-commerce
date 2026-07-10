@@ -29,6 +29,15 @@ export interface FlatFileColumn {
    */
   multiValue?: boolean
   /**
+   * UFX P4d — union (multi-category) sheets: each product type's OWN option
+   * list (UPPERCASE type → options, no blank entry). When set and the row's
+   * `product_type` has an entry, the cell's dropdown + strict-value flag use
+   * THAT list instead of the flat `options` union (a variation theme valid
+   * for JACKET but not PANTS must not be offered/accepted on a PANTS row).
+   * Rows without a type (or types without an entry) fall back to `options`.
+   */
+  optionsByProductType?: Record<string, string[]>
+  /**
    * Which Amazon parentage levels this field applies to (undefined = all).
    * Drives the listing guidance highlight in the grid.
    */

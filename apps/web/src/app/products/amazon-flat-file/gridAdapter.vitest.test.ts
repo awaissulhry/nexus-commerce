@@ -60,6 +60,14 @@ describe('toGridColumn', () => {
     expect(g.applicableParentage).toEqual(['VARIATION_CHILD'])
   })
 
+  it('UFX P4d — carries optionsByProductType (per-row-type enum lists)', () => {
+    const g = toGridColumn(col({
+      kind: 'enum', options: ['a', 'b'],
+      optionsByProductType: { JACKET: ['a'], PANTS: ['b'] },
+    }))
+    expect(g.optionsByProductType).toEqual({ JACKET: ['a'], PANTS: ['b'] })
+  })
+
   it('folds the localized label into the description', () => {
     const g = toGridColumn(col({ labelEn: 'Title', labelLocal: 'Titolo', description: 'The name' }))
     expect(g.description).toBe('Titolo — The name')
@@ -131,6 +139,71 @@ describe('validateAmazonRows', () => {
     expect(issues.some((i) => key(i) === 'B:shirt_req')).toBe(false)
     // delete + ghost rows produce nothing beyond their absence
     expect(issues.every((i) => i.sku !== 'c' && i.sku !== 'd')).toBe(true)
+  })
+
+  // ── UFX P4d — per-row-type validation on a union sheet ────────────────────
+
+  describe('per-row-type checks (union sheet)', () => {
+    const unionCols = buildGridColumnGroups([{
+      id: 'g', labelEn: 'G', labelLocal: 'G', color: 'blue',
+      columns: [
+        col({ id: 'item_sku', required: true }),
+        // product_type as the union manifest tags it: required for every member type.
+        col({ id: 'product_type', required: true, requiredForProductTypes: ['JACKET', 'PANTS'] }),
+        col({
+          id: 'variation_theme', kind: 'enum', selectionOnly: true,
+          options: ['', 'SIZE_COLOR', 'WAIST_LENGTH'],
+          applicableProductTypes: ['JACKET', 'PANTS'],
+          optionsByProductType: { JACKET: ['SIZE_COLOR'], PANTS: ['WAIST_LENGTH'] },
+        }),
+        col({
+          id: 'style', kind: 'enum', options: ['bomber', 'cargo'],
+          applicableProductTypes: ['JACKET', 'PANTS'],
+          optionsByProductType: { JACKET: ['bomber'], PANTS: ['cargo'] },
+        }),
+        col({ id: 'jacket_only', maxLength: 3, applicableProductTypes: ['JACKET'] }),
+      ],
+    }])[0].columns
+    const key = (i: { sku: string; field: string }) => `${i.sku}:${i.field}`
+
+    it('strict enums error per the ROW type; open enums warn; per-type message names the type', () => {
+      const issues = validateAmazonRows([
+        row({ _rowId: 'a', item_sku: 'A', product_type: 'JACKET', variation_theme: 'SIZE_COLOR', style: 'bomber' }),
+        row({ _rowId: 'b', item_sku: 'B', product_type: 'PANTS', variation_theme: 'SIZE_COLOR', style: 'bomber' }),
+      ], unionCols)
+      // JACKET row: both values valid for its type → clean (modulo the
+      // BN.4.3 missing-browse-node advisory, which is orthogonal).
+      expect(issues.filter((i) => i.sku === 'A' && i.field !== 'recommended_browse_nodes')).toEqual([])
+      // PANTS row: SIZE_COLOR is in the union superset but NOT valid for PANTS.
+      const theme = issues.find((i) => key(i) === 'B:variation_theme')
+      expect(theme?.level).toBe('error') // selectionOnly → strict → error
+      expect(theme?.msg).toContain('PANTS')
+      const style = issues.find((i) => key(i) === 'B:style')
+      expect(style?.level).toBe('warn')  // open enum → warn
+    })
+
+    it('skips content checks on values in columns not applicable to the row type (feed prunes them)', () => {
+      const issues = validateAmazonRows([
+        row({ _rowId: 'p', item_sku: 'P', product_type: 'PANTS', jacket_only: 'waaay-over-limit' }),
+      ], unionCols)
+      expect(issues.some((i) => key(i) === 'P:jacket_only')).toBe(false)
+      // …but the same value on a JACKET row still errors.
+      const issues2 = validateAmazonRows([
+        row({ _rowId: 'j', item_sku: 'J', product_type: 'JACKET', jacket_only: 'waaay-over-limit' }),
+      ], unionCols)
+      expect(issues2.some((i) => key(i) === 'J:jacket_only' && i.level === 'error')).toBe(true)
+    })
+
+    it('a real row with NO product_type gets an explicit category prompt (union required lists resolve to nothing)', () => {
+      const issues = validateAmazonRows([
+        row({ _rowId: 'x', item_sku: 'X', product_type: '' }),
+      ], unionCols)
+      const pt = issues.find((i) => key(i) === 'X:product_type')
+      expect(pt?.level).toBe('error')
+      expect(pt?.msg).toMatch(/pick a category/i)
+      // ghosts stay silent
+      expect(validateAmazonRows([row({ _rowId: 'g', _ghost: true, product_type: '' })], unionCols)).toEqual([])
+    })
   })
 
   it('feed _errorFields + ALA _issueFields + orphan children map to cell issues', () => {

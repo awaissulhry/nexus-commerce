@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dropReadOnlyCellChanges, typeApplicabilityGuidance, isRequiredForRow } from './cellFlags'
+import { dropReadOnlyCellChanges, typeApplicabilityGuidance, isRequiredForRow, enumOptionsForRow } from './cellFlags'
 import type { BaseRow, FlatFileColumn } from './FlatFileGrid.types'
 
 const col = (over: Partial<FlatFileColumn> & { id: string }): FlatFileColumn => ({
@@ -117,5 +117,41 @@ describe('isRequiredForRow', () => {
     expect(isRequiredForRow(c, row({ _rowId: 'g', _ghost: true, product_type: 'SHIRT' }))).toBe(false)
     // materialized (no longer ghost) → required again
     expect(isRequiredForRow(c, row({ _rowId: 'g', _ghost: false, product_type: 'SHIRT' }))).toBe(true)
+  })
+})
+
+// ── UFX P4d — per-row enum options ──────────────────────────────────────────
+
+describe('enumOptionsForRow', () => {
+  const theme = col({
+    id: 'variation_theme', kind: 'enum',
+    options: ['', 'SIZE_COLOR', 'SIZE', 'WAIST_LENGTH'],           // union superset
+    optionsByProductType: { JACKET: ['SIZE_COLOR', 'SIZE'], PANTS: ['WAIST_LENGTH'] },
+  })
+
+  it("uses the row's OWN type's list (blank prepended) on a union column", () => {
+    expect(enumOptionsForRow(theme, row({ _rowId: 'r', product_type: 'JACKET' })))
+      .toEqual(['', 'SIZE_COLOR', 'SIZE'])
+    expect(enumOptionsForRow(theme, row({ _rowId: 'r', product_type: 'pants' })))
+      .toEqual(['', 'WAIST_LENGTH'])
+  })
+
+  it('falls back to the flat union for untyped rows and unlisted types', () => {
+    expect(enumOptionsForRow(theme, row({ _rowId: 'r' }))).toEqual(['', 'SIZE_COLOR', 'SIZE', 'WAIST_LENGTH'])
+    expect(enumOptionsForRow(theme, row({ _rowId: 'r', product_type: 'SHIRT' })))
+      .toEqual(['', 'SIZE_COLOR', 'SIZE', 'WAIST_LENGTH'])
+  })
+
+  it('keeps a per-type list intact when it already leads with the blank entry', () => {
+    const c = col({ id: 'c', kind: 'enum', options: ['a'], optionsByProductType: { SHIRT: ['', 'a'] } })
+    expect(enumOptionsForRow(c, row({ _rowId: 'r', product_type: 'SHIRT' }))).toEqual(['', 'a'])
+  })
+
+  it('legacy columns unchanged: plain enums use options, booleans fixed, others null', () => {
+    expect(enumOptionsForRow(col({ id: 'c', kind: 'enum', options: ['x', 'y'] }), row({ _rowId: 'r', product_type: 'SHIRT' })))
+      .toEqual(['x', 'y'])
+    expect(enumOptionsForRow(col({ id: 'c', kind: 'boolean' }), row({ _rowId: 'r' }))).toEqual(['', 'true', 'false'])
+    expect(enumOptionsForRow(col({ id: 'c', kind: 'text' }), row({ _rowId: 'r' }))).toBeNull()
+    expect(enumOptionsForRow(col({ id: 'c', kind: 'enum' }), row({ _rowId: 'r' }))).toBeNull()
   })
 })
