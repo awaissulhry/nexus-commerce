@@ -140,6 +140,13 @@ export interface WorkspaceData {
   // availableAxes). Lets pickers annotate single-valued axes, which publish
   // as a shared gallery on eBay. Optional: older API responses omit it.
   axisValueCounts?: Record<string, number>
+  // EAC Layer A (additive) — theme-authoritative axes (declared-order,
+  // synonym+fingerprint-deduped, ghosts removed) + operator-facing warnings.
+  // Optional: older API responses omit them, and the drawer falls back to
+  // availableAxes / observed variant values.
+  resolvedAxes?: Array<{ name: string; key: string; values: string[] }>
+  resolvedAxisWarnings?: string[]
+  resolvedAxisSuppressed?: string[]
   amazonJobs: AmazonJobSummary[]
   // IR.7.2 — Map productImage.id → DigitalAsset.id for rows mirrored in
   // the DAM library. Empty when no master image has been pushed yet.
