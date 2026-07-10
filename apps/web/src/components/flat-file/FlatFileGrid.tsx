@@ -985,8 +985,11 @@ export default function FlatFileGrid({
   const allColumnsRef        = useRef<FlatFileColumn[]>([])
   const selAnchorRef         = useRef<{ ri: number; ci: number } | null>(null)
   const selEndRef            = useRef<{ ri: number; ci: number } | null>(null)
-  // #35 — the column a row's Tab-entry started in; Enter returns here and drops
-  // down. Reset by any non-Tab/Enter navigation.
+  // #35 / UFX P2a — the column a row's Tab-entry started in; Enter returns here
+  // and drops down (Sheets/Excel semantics). Maintained by BOTH the navigation-
+  // mode keydown Tab/Enter AND the in-edit navigate() path (Tab/Enter out of a
+  // cell editor). Reset by any other navigation (moveSelection default), a
+  // mouse click, or Escape.
   const entryColRef          = useRef<number | null>(null)
   const isEditingRef         = useRef(false)
   // Mirrors isFillDragging synchronously. The container onPointerMove/onPointerUp
@@ -1609,7 +1612,11 @@ export default function FlatFileGrid({
     if (row && col) setActiveCell({ rowId: row._rowId, colId: col.id })
   }, [])
 
-  const moveSelection = useCallback((dCol: number, dRow: number, extend = false) => {
+  // #35 / UFX P2a — 4th param mirrors the Amazon grid: Tab/Enter pass
+  // keepEntryAnchor=true so the row-entry column survives them; every other
+  // navigation resets it here (instead of ad-hoc per-branch resets).
+  const moveSelection = useCallback((dCol: number, dRow: number, extend = false, keepEntryAnchor = false) => {
+    if (!keepEntryAnchor) entryColRef.current = null
     const maxRi = displayRowsRef.current.length - 1
     const maxCi = allColumnsRef.current.length - 1
     const anchor = selAnchorRef.current; if (!anchor) return
@@ -1697,6 +1704,7 @@ export default function FlatFileGrid({
 
       if (mod && e.key === 'Home') {
         e.preventDefault()
+        entryColRef.current = null
         setSelAnchor({ ri: 0, ci: 0 }); setSelEnd({ ri: 0, ci: 0 })
         const row = displayRowsRef.current[0]; const col = allColumnsRef.current[0]
         if (row && col) setActiveCell({ rowId: row._rowId, colId: col.id })
@@ -1705,6 +1713,7 @@ export default function FlatFileGrid({
       }
       if (mod && e.key === 'End') {
         e.preventDefault()
+        entryColRef.current = null
         const ri = displayRowsRef.current.length - 1; const ci = allColumnsRef.current.length - 1
         setSelAnchor({ ri, ci }); setSelEnd({ ri, ci })
         const row = displayRowsRef.current[ri]; const col = allColumnsRef.current[ci]
@@ -1737,31 +1746,32 @@ export default function FlatFileGrid({
       if (!e.shiftKey && !mod && !e.altKey) {
         const a = selAnchorRef.current
         const maxCi = allColumnsRef.current.length - 1
-        // #35/#36 — Tab advances (wrapping to the next row at the last column) and
-        // records the entry column; Enter returns to that column and drops down.
+        // #35/#36/UFX P2a — Tab advances (wrapping to the next row at the last
+        // column) and records the entry column; Enter returns to that column and
+        // drops down. Both pass keepEntryAnchor so moveSelection preserves it;
+        // every other navigation resets it inside moveSelection.
         if (e.key === 'Tab') {
           e.preventDefault()
           if (a && entryColRef.current === null) entryColRef.current = a.ci
-          if (a && a.ci >= maxCi) moveSelection(-maxCi, 1); else moveSelection(1, 0)
+          if (a && a.ci >= maxCi) moveSelection(-maxCi, 1, false, true); else moveSelection(1, 0, false, true)
           return
         }
         if (e.key === 'Enter') {
           e.preventDefault()
-          if (a && entryColRef.current !== null) moveSelection(entryColRef.current - a.ci, 1)
-          else moveSelection(0, 1)
+          if (a && entryColRef.current !== null) moveSelection(entryColRef.current - a.ci, 1, false, true)
+          else moveSelection(0, 1, false, true)
           return
         }
-        // Any other navigation resets the entry column.
-        if (e.key === 'ArrowDown')  { entryColRef.current = null; e.preventDefault(); moveSelection(0,  1); return }
-        if (e.key === 'ArrowUp')    { entryColRef.current = null; e.preventDefault(); moveSelection(0, -1); return }
-        if (e.key === 'ArrowRight') { entryColRef.current = null; e.preventDefault(); moveSelection(1,  0); return }
-        if (e.key === 'ArrowLeft')  { entryColRef.current = null; e.preventDefault(); moveSelection(-1, 0); return }
+        if (e.key === 'ArrowDown')  { e.preventDefault(); moveSelection(0,  1); return }
+        if (e.key === 'ArrowUp')    { e.preventDefault(); moveSelection(0, -1); return }
+        if (e.key === 'ArrowRight') { e.preventDefault(); moveSelection(1,  0); return }
+        if (e.key === 'ArrowLeft')  { e.preventDefault(); moveSelection(-1, 0); return }
         // #37 — plain Home/End jump to the first/last column of the row; PageUp/
         // Down move by roughly a screen of rows.
-        if (e.key === 'Home') { entryColRef.current = null; e.preventDefault(); moveSelection(-maxCi, 0); return }
-        if (e.key === 'End')  { entryColRef.current = null; e.preventDefault(); moveSelection(maxCi, 0); return }
-        if (e.key === 'PageDown') { entryColRef.current = null; e.preventDefault(); moveSelection(0,  20); return }
-        if (e.key === 'PageUp')   { entryColRef.current = null; e.preventDefault(); moveSelection(0, -20); return }
+        if (e.key === 'Home') { e.preventDefault(); moveSelection(-maxCi, 0); return }
+        if (e.key === 'End')  { e.preventDefault(); moveSelection(maxCi, 0); return }
+        if (e.key === 'PageDown') { e.preventDefault(); moveSelection(0,  20); return }
+        if (e.key === 'PageUp')   { e.preventDefault(); moveSelection(0, -20); return }
       }
       if (e.shiftKey && !mod) {
         if (e.key === 'ArrowDown')  { e.preventDefault(); moveSelection(0,  1, true); return }
@@ -1796,6 +1806,7 @@ export default function FlatFileGrid({
       // marquee) but KEEPS the anchor live, so arrows/typing keep working after
       // Escape instead of the grid going keyboard-dead until a mouse click.
       if (e.key === 'Escape') {
+        entryColRef.current = null  // UFX P2a — Escape also ends the row-entry run
         if (clipboardRange) { setClipboardRange(null); return }
         if (selAnchorRef.current) setSelEnd(selAnchorRef.current)
         return
@@ -1886,10 +1897,19 @@ export default function FlatFileGrid({
     const colIds = allColumnsRef.current.map((c) => c.id)
     const rowIds = displayRowsRef.current.map((r) => r._rowId)
     let ci = colIds.indexOf(colId), ri = rowIds.indexOf(rowId)
-    if (dir === 'right') ci = Math.min(ci + 1, colIds.length - 1)
-    else if (dir === 'left') ci = Math.max(ci - 1, 0)
-    else if (dir === 'down') ri = Math.min(ri + 1, rowIds.length - 1)
-    else ri = Math.max(ri - 1, 0)
+    // UFX P2a (ported from the Amazon grid GX.9) — entry-anchor for IN-EDIT
+    // navigation: Tab out of an editor records the column where the entry run
+    // started; Enter out of an editor drops to the NEXT ROW in that column
+    // (Sheets/Excel row-entry semantics). Without this, typing + Tab + Enter
+    // landed one row down in the LAST tabbed column instead of the first.
+    if (dir === 'right') {
+      if (entryColRef.current === null) entryColRef.current = ci
+      ci = Math.min(ci + 1, colIds.length - 1)
+    } else if (dir === 'left') { entryColRef.current = null; ci = Math.max(ci - 1, 0) }
+    else if (dir === 'down') {
+      ri = Math.min(ri + 1, rowIds.length - 1)
+      if (entryColRef.current !== null) ci = Math.min(entryColRef.current, colIds.length - 1)
+    } else { entryColRef.current = null; ri = Math.max(ri - 1, 0) }
     const nc = colIds[ci], nr = rowIds[ri]
     if (nc && nr) {
       setActiveCell({ rowId: nr, colId: nc }); setSelAnchor({ ri, ci }); setSelEnd({ ri, ci })
