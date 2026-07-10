@@ -47,6 +47,7 @@ import type { AiPanelCtx } from '@/components/flat-file/FlatFileGrid.types'
 import {
   EBAY_FIXED_GROUPS, MARKET_COLUMN_GROUPS, buildCategoryColumns,
   mergeCategoryGroups, buildGhostAspectColumns, computeAspectKeySignature,
+  aspectRoutesToPanel,
   EBAY_CONDITION_LABELS, EBAY_MARKETPLACES,
   type CategoryAspect, type EbayColumn, type EbayColumnGroup,
 } from './ebay-columns'
@@ -1903,6 +1904,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── Cell content overrides ─────────────────────────────────────────────
   const renderCellContent = useCallback<RenderCellContent>((col, _row, value, displayVal) => {
+    // UFX P5 — ghost canvas rows (trailing blank rows, UFX P2d) render plain
+    // default (empty) cells: no red 0/N completeness chip, no Parent/Variant
+    // badges, no '—' / 'Click to search…' placeholders. The blank canvas
+    // looks blank until the first real edit materializes the row.
+    if (_row._ghost === true) return null
     // FFP.1 — typed price is authoritative; when the live DB price diverges
     // (repricer/external) the row carries `_live_price_{mp}` and we show a
     // subtle amber dot with the live value in the tooltip.
@@ -2067,14 +2073,29 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       setCategorySearchOpen(true)
       return true
     }
-    // EFF.4 — Item Specifics aspects: open structured panel instead of inline editor
-    if (col.id.startsWith('aspect_') && itemSpecificsGroup) {
+    // EFF.4 — Item Specifics aspects: open structured panel instead of inline
+    // editor. UFX P5 — ghost aspect columns (data outside every loaded schema,
+    // `ghost: true`, ' ⚠' label) fall through to the inline editor instead:
+    // the panel is schema-driven and can't edit them, which left typing /
+    // double-click / F2 dead on ghost cells (only paste worked).
+    if (aspectRoutesToPanel(col) && itemSpecificsGroup) {
       setAspectsPanelRowId(row._rowId)
       return true
     }
     return false
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemSpecificsGroup])
+
+  // ── Hard per-cell lock (UFX P5) ────────────────────────────────────────
+  // Synthesized shared-membership rows (_readonly, Task 5 shared-mgmt) must be
+  // fully read-only. The onBeforeEditCell guard above only blocks edit-mode
+  // ENTRY (typing / double-click / F2); paste, Delete and fill writes go
+  // through the grid's bulk write path, which consults getCellReadOnly
+  // (dropReadOnlyCellChanges). Without this lock a paste onto a _readonly row
+  // mutated it locally and the edit silently vanished at save — onSave and
+  // publish already filter _readonly/_shared rows out.
+  const getCellReadOnly = useCallback((_col: FlatFileColumn, row: BaseRow): boolean =>
+    (row as EbayRow)._readonly === true, [])
 
   // ── Listing guidance ──────────────────────────────────────────────────
   const getCellGuidance = useCallback((col: FlatFileColumn, row: BaseRow): 'not-applicable' | 'optional' | null => {
@@ -3200,6 +3221,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       onCellChange={onCellChange}
       renderCellContent={renderCellContent}
       onBeforeEditCell={onBeforeEditCell}
+      getCellReadOnly={getCellReadOnly}
       getCellGuidance={getCellGuidance}
       onReplicate={onReplicate}
       renderChannelStrip={renderChannelStrip}

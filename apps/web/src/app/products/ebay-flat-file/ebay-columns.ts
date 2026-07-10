@@ -839,6 +839,18 @@ export function buildGhostAspectColumns(aspectKeys: string[], unionColumnIds: st
   }))
 }
 
+/**
+ * UFX P5 — should an edit on this column route to the Item Specifics panel?
+ * True only for REAL schema aspects: ghost aspect columns (built by
+ * buildGhostAspectColumns from row data outside every loaded schema) fall
+ * through to the grid's inline editor instead — the panel is schema-driven
+ * and can't offer them a proper field, so routing there left typing/F2/
+ * double-click dead on ghost cells (paste was the only way in).
+ */
+export function aspectRoutesToPanel(col: { id: string; ghost?: boolean }): boolean {
+  return col.id.startsWith('aspect_') && col.ghost !== true
+}
+
 // ── Flat column list (for iteration) ──────────────────────────────────
 
 export function getAllEbayColumns(): EbayColumn[] {

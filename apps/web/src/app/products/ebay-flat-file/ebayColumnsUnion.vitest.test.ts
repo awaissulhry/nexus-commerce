@@ -7,6 +7,7 @@ import {
   buildGhostAspectColumns,
   computeAspectKeySignature,
   buildCategoryColumns,
+  aspectRoutesToPanel,
   GHOST_COLUMN_DESC,
   type CategoryAspect,
   type EbayColumnGroup,
@@ -157,5 +158,27 @@ describe('buildGhostAspectColumns', () => {
 
   it('returns nothing when every key is in the union', () => {
     expect(buildGhostAspectColumns(['aspect_Marca'], ['aspect_marca'])).toEqual([])
+  })
+})
+
+describe('aspectRoutesToPanel (UFX P5)', () => {
+  it('routes real schema aspect columns to the Item Specifics panel', () => {
+    expect(aspectRoutesToPanel({ id: 'aspect_Colore' })).toBe(true)
+    expect(aspectRoutesToPanel({ id: 'aspect_Marca', ghost: undefined })).toBe(true)
+    const merged = mergeCategoryGroups([
+      { categoryId: '111', group: group([aspect({ id: 'aspect_Marca', label: 'Marca' })]) },
+    ])
+    expect(aspectRoutesToPanel(merged.columns[0])).toBe(true)
+  })
+
+  it('lets ghost aspect columns fall through to the inline editor', () => {
+    const [g] = buildGhostAspectColumns(['aspect_Team_Name'], [])
+    expect(aspectRoutesToPanel(g)).toBe(false)
+    expect(aspectRoutesToPanel({ id: 'aspect_Legacy', ghost: true })).toBe(false)
+  })
+
+  it('never routes non-aspect columns', () => {
+    expect(aspectRoutesToPanel({ id: 'title' })).toBe(false)
+    expect(aspectRoutesToPanel({ id: 'category_id', ghost: true })).toBe(false)
   })
 })
