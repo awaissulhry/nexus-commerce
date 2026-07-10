@@ -39,11 +39,16 @@ export function typeApplicabilityGuidance(
  * (uppercased) is in the list; rows without a resolvable type get none.
  * Without the field, falls back to the plain `required` flag (legacy columns
  * unchanged).
+ *
+ * UFX P2d — ghost (blank canvas) rows are never "required": the '⚠ required'
+ * placeholder + red styling would make the canvas look broken (GX.5 parity
+ * with the Amazon grid's `col.required && !isGhost`).
  */
 export function isRequiredForRow(
   col: Pick<FlatFileColumn, 'required' | 'requiredForProductTypes'>,
   row: BaseRow,
 ): boolean {
+  if (row._ghost === true) return false
   const list = col.requiredForProductTypes
   if (!list) return !!col.required
   const t = rowProductType(row)

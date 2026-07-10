@@ -110,4 +110,12 @@ describe('isRequiredForRow', () => {
     expect(isRequiredForRow(c, row({ _rowId: 'r' }))).toBe(false)
     expect(isRequiredForRow(c, row({ _rowId: 'r', product_type: '' }))).toBe(false)
   })
+
+  it("UFX P2d — ghost canvas rows are never required (no '⚠ required' on the blank canvas)", () => {
+    expect(isRequiredForRow(col({ id: 'c', required: true }), row({ _rowId: 'g', _ghost: true }))).toBe(false)
+    const c = col({ id: 'c', required: true, requiredForProductTypes: ['SHIRT'] })
+    expect(isRequiredForRow(c, row({ _rowId: 'g', _ghost: true, product_type: 'SHIRT' }))).toBe(false)
+    // materialized (no longer ghost) → required again
+    expect(isRequiredForRow(c, row({ _rowId: 'g', _ghost: false, product_type: 'SHIRT' }))).toBe(true)
+  })
 })

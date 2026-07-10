@@ -30,6 +30,7 @@ import type {
 } from './FlatFileGrid.types'
 import { normalizeCellValue } from './normalizeCellValue'
 import { dropReadOnlyCellChanges, typeApplicabilityGuidance, isRequiredForRow } from './cellFlags'
+import { countGhosts, makeGhostRows, materializeGhostPatch, pasteGrowCount, topUpGhosts } from './ghost-rows'
 import { SortPanel, applySortLevels, type SortLevel, type SortGroup } from './SortPanel'
 import {
   loadGroups, saveGroups, loadGroupMode, saveGroupMode, loadCollapsedGroups, saveCollapsedGroups,
@@ -783,7 +784,7 @@ function GroupHeader({ row, label, color, count, bandClass, isExpanded, onToggle
 
 export default function FlatFileGrid({
   channel, title, titleIcon, marketplace, storageKey,
-  columnGroups, initialRows, makeBlankRow, minRows = 15,
+  columnGroups, initialRows, makeBlankRow, minRows = 15, ghostRows,
   getGroupKey, validate,
   onSave, onReload, onCellChange,
   renderCellContent, renderRowMeta, onBeforeEditCell, getCellGuidance, getCellReadOnly,
@@ -801,9 +802,14 @@ export default function FlatFileGrid({
   const { exportCatalogWorkbook, exporting: exportingWorkbook } = useCatalogWorkbookExport()
 
   // ── Row state ──────────────────────────────────────────────────────────
+  // UFX P2d — with the ghost canvas on, minRows padding is redundant (the
+  // canvas IS the padding, and unlike padToMin rows it's excluded from dirty
+  // counts/save/validation): skip it so 0 real rows reach the empty-state CTA.
+  const ghostEnabled = ghostRows != null && ghostRows > 0
+  const effectiveMinRows = ghostEnabled ? 0 : minRows
   const paddedInitRef = useRef<BaseRow[] | null>(null)
   if (!paddedInitRef.current) {
-    const padded = padToMin(initialRows, makeBlankRow, minRows)
+    const padded = padToMin(initialRows, makeBlankRow, effectiveMinRows)
     // Restore saved drag-drop order: reconcile saved _rowId order with current rows.
     // New rows (not in saved order) append at end; deleted ids are dropped.
     try {
@@ -829,6 +835,17 @@ export default function FlatFileGrid({
   // ── Undo / redo (Amazon-style history/future arrays) ───────────────────
   const rowsRef = useRef<BaseRow[]>(rows)
   useEffect(() => { rowsRef.current = rows }, [rows])
+
+  // UFX P2d — ghost-canvas topup (GX.5 parity): keep `ghostRows` trailing
+  // blank rows so there's always a canvas to type into; refills after a ghost
+  // materializes (auto-grow). Converges: the count guard here plus topUpGhosts
+  // returning the SAME array when full means it can never render-loop.
+  useEffect(() => {
+    if (!ghostEnabled) return
+    if (countGhosts(rows) >= ghostRows!) return
+    setRows((prev) => topUpGhosts(prev, ghostRows!, makeBlankRow))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, ghostEnabled, ghostRows])
 
   const [history, setHistory] = useState<BaseRow[][]>([])
   const [future,  setFuture]  = useState<BaseRow[][]>([])
@@ -1060,20 +1077,29 @@ export default function FlatFileGrid({
   const defaultGetGroupKey = useCallback((row: BaseRow) => String(row.platformProductId ?? row._rowId), [])
   const resolvedGetGroupKey = getGroupKey ?? defaultGetGroupKey
 
+  // UFX P2d — the REAL (non-ghost) rows: everything that already consumed
+  // `rows` for data purposes (grouping, search, counts, validation) now reads
+  // this instead, so the trailing blank canvas can't leak into any of them.
+  // With ghostRows off this IS `rows` (same reference — legacy identical).
+  const realRows = useMemo(
+    () => ghostEnabled ? rows.filter((r) => !r._ghost) : rows,
+    [rows, ghostEnabled],
+  )
+
   const rowGroups = useMemo(() => {
     const groups = new Map<string, BaseRow[]>()
-    for (const row of rows) {
+    for (const row of realRows) {
       const key = resolvedGetGroupKey(row)
       if (!groups.has(key)) groups.set(key, [])
       groups.get(key)!.push(row)
     }
     return groups
-  }, [rows, resolvedGetGroupKey])
+  }, [realRows, resolvedGetGroupKey])
 
   const filteredRows = useMemo(() => {
-    if (!searchQuery) return rows
+    if (!searchQuery) return realRows
     const q = searchQuery.toLowerCase()
-    return rows.filter((r) => {
+    return realRows.filter((r) => {
       if (String(r.sku ?? r.item_sku ?? '').toLowerCase().includes(q)) return true
       if (String(r.title ?? '').toLowerCase().includes(q)) return true
       if (String(r.asin ?? '').includes(q)) return true
@@ -1084,7 +1110,7 @@ export default function FlatFileGrid({
       }
       return false
     })
-  }, [rows, searchQuery])
+  }, [realRows, searchQuery])
 
   // P4 — custom-group section key for a row (only meaningful in custom mode).
   const customSectionKey = useCallback((row: BaseRow) => {
@@ -1094,6 +1120,16 @@ export default function FlatFileGrid({
   }, [customGroups, skuOf])
 
   const displayRows = useMemo(() => {
+    // UFX P2d — the ghost canvas is appended at the very bottom, OUTSIDE the
+    // family/custom sections, and only in the default (unsearched) view — a
+    // search result shouldn't be padded with blanks. Empty when disabled, so
+    // finish() returns each branch's array untouched (legacy identical).
+    const ghostTail = ghostEnabled && !searchQuery ? rows.filter((r) => r._ghost) : []
+    const finish = (result: BaseRow[]): BaseRow[] => {
+      const final = ghostTail.length ? [...result, ...ghostTail] : result
+      displayRowsRef.current = final
+      return final
+    }
     // P4 — CUSTOM mode: partition rows by custom group (in group.order),
     // Ungrouped last; column-sort applies WITHIN each group. A collapsed group
     // contributes just its first row as a header anchor (skipped in render).
@@ -1111,14 +1147,12 @@ export default function FlatFileGrid({
         if (collapsedCustomGroups.has(key)) { out.push(bucket[0]); return }
         out.push(...(sortConfig.length ? applySortLevels(bucket as Array<Record<string, unknown>>, sortConfig) as BaseRow[] : bucket))
       })
-      displayRowsRef.current = out
-      return out
+      return finish(out)
     }
     // P4 — NONE mode: flat, no sections; column sort applies to the whole sheet.
     if (enableCustomGroups && groupMode === 'none') {
       const out = sortConfig.length ? applySortLevels([...filteredRows] as Array<Record<string, unknown>>, sortConfig) as BaseRow[] : [...filteredRows]
-      displayRowsRef.current = out
-      return out
+      return finish(out)
     }
     // FAMILY (default / feature-off) — unchanged.
     // Build per-group arrays, pinning _isParent=true to index 0 within each group.
@@ -1156,10 +1190,16 @@ export default function FlatFileGrid({
     } else {
       result = groupArrays.flat()
     }
-    displayRowsRef.current = result
-    return result
+    return finish(result)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rowGroups, filteredRows, collapsedRowGroups, sortConfig, enableCustomGroups, groupMode, customGroups, collapsedCustomGroups, customSectionKey])
+  }, [rows, ghostEnabled, rowGroups, filteredRows, collapsedRowGroups, sortConfig, enableCustomGroups, groupMode, customGroups, collapsedCustomGroups, customSectionKey])
+
+  // UFX P2d — displayed rows minus the ghost canvas, for the select-all
+  // checkbox (Amazon parity: realDisplayRows). Same reference when disabled.
+  const realDisplayRows = useMemo(
+    () => ghostEnabled ? displayRows.filter((r) => !r._ghost) : displayRows,
+    [displayRows, ghostEnabled],
+  )
 
   // P4 — per-section metadata for custom-group headers (name/color/count).
   const customGroupMeta = useMemo(() => {
@@ -1261,13 +1301,16 @@ export default function FlatFileGrid({
     return null
   }, [isFillDragging, fillDragEnd, normSel])
 
+  // UFX P2d — validate() sees only real rows: blank canvas rows are not data.
   const validationIssues = useMemo(
-    () => validate ? validate(rows) : [],
-    [rows, validate],
+    () => validate ? validate(realRows) : [],
+    [realRows, validate],
   )
 
   // #83 — memoize the status-bar derivations instead of recomputing every render
-  const dirtyCount  = useMemo(() => rows.filter((r) => r._dirty).length, [rows])
+  // (UFX P2d — dirty is counted over realRows; a ghost is never dirty anyway,
+  // but this guarantees the canvas can't inflate the count.)
+  const dirtyCount  = useMemo(() => realRows.filter((r) => r._dirty).length, [realRows])
   const errorCount  = useMemo(() => validationIssues.filter((i) => i.level === 'error').length, [validationIssues])
   const warnCount   = useMemo(() => validationIssues.filter((i) => i.level === 'warn').length, [validationIssues])
 
@@ -1328,8 +1371,14 @@ export default function FlatFileGrid({
   // applies all changes in one O(N) pass (no per-row findIndex), and emits
   // onCellChange for each (rowId,colId,value) so side-effects (e.g. the eBay
   // category_id → schema reload) fire no matter how the value was set.
+  // UFX P2d — `appendRows` (paste-beyond-end auto-grow) are ghost rows added
+  // to the sheet in the SAME setRows pass as the changes that write into them,
+  // so the whole paste is one undo snapshot. Materialization also lives here:
+  // since this is the single write path, ANY real write into a ghost (typing
+  // commit via updateCell, paste, fill, enum pick, F&R, AI) flips it into a
+  // plain new row (_ghost:false, _isNew:true, _dirty:true).
   type CellChange = { rowId: string; colId: string; value: unknown }
-  const commitCells = useCallback((changes: CellChange[]) => {
+  const commitCells = useCallback((changes: CellChange[], appendRows: BaseRow[] = []) => {
     if (changes.length === 0) return
     // #23/#74/#75 — normalize every bulk-written value the same way the
     // interactive editors do (normalizeCellValue): coerce booleans, clamp to
@@ -1349,7 +1398,7 @@ export default function FlatFileGrid({
     }
     // #30 — drop no-op changes (delete-empty, fill-same, re-pick same enum) so
     // rows aren't falsely marked dirty and undo isn't polluted with dead steps.
-    const rowById = new Map(rowsRef.current.map((r) => [r._rowId, r]))
+    const rowById = new Map([...rowsRef.current, ...appendRows].map((r) => [r._rowId, r]))
     // UFX P2b — central per-CELL read-only guard: since commitCells is the single
     // write path for paste/fill/delete/replace/AI, filtering here means no bulk
     // path can write a cell the getCellReadOnly predicate locks.
@@ -1365,13 +1414,19 @@ export default function FlatFileGrid({
       const arr = byRow.get(ch.rowId)
       if (arr) arr.push(ch); else byRow.set(ch.rowId, [ch])
     }
-    setRows((prev) => prev.map((r) => {
-      const cs = byRow.get(r._rowId)
-      if (!cs) return r
-      const updated: BaseRow = { ...r, _dirty: true }
-      for (const c of cs) updated[c.colId] = c.value
-      return updated
-    }))
+    setRows((prev) => {
+      // UFX P2d — appended grow-rows join the sheet only when something was
+      // actually written (real.length > 0 — guaranteed here); pasted-into
+      // ghosts (appended or pre-existing) materialize via the patch below.
+      const base = appendRows.length ? [...prev, ...appendRows] : prev
+      return base.map((r) => {
+        const cs = byRow.get(r._rowId)
+        if (!cs) return r
+        const updated: BaseRow = { ...r, ...materializeGhostPatch(r), _dirty: true }
+        for (const c of cs) updated[c.colId] = c.value
+        return updated
+      })
+    })
     for (const ch of real) onCellChange?.(ch.rowId, ch.colId, ch.value)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pushSnapshot, onCellChange])
@@ -1428,10 +1483,23 @@ export default function FlatFileGrid({
     const changes: CellChange[] = []
     let tgtH = dataRows.length
     let tgtW = 1
+    // UFX P2d — paste-beyond-end auto-grow: with the ghost canvas enabled (and
+    // its tail visible, i.e. the default unsearched view) the pool grows to fit
+    // the pasted block instead of refusing (#11). The grown rows start as
+    // ghosts appended at the very end — same place the paste targets — and
+    // commitCells materializes every row actually written into a plain new row,
+    // exactly like Add-row produces (per the #11 comment below, they carry no
+    // parent/child structure of their own).
+    const canGrow = ghostEnabled && !searchQuery
+    const baseLen = displayRowsRef.current.length
+    let extraRows: BaseRow[] = []
+    const rowAt = (i: number): BaseRow | undefined =>
+      i < baseLen ? displayRowsRef.current[i] : extraRows[i - baseLen]
     if (hasHeaders) {
+      if (canGrow) extraRows = makeGhostRows(pasteGrowCount(baseLen, startRi, dataRows.length), makeBlankRow)
       dataRows.forEach((line, riOffset) => {
         const pasteRow = line.split('\t')
-        const dr = displayRowsRef.current[startRi + riOffset]; if (!dr) return
+        const dr = rowAt(startRi + riOffset); if (!dr) return
         pasteRow.forEach((val, pi) => { const ci = headerMap.get(pi); if (ci !== undefined) { const col = allColumnsRef.current[ci]; if (isWritableCol(col)) changes.push({ rowId: dr._rowId, colId: col.id, value: val }) } })
       })
     } else {
@@ -1444,8 +1512,9 @@ export default function FlatFileGrid({
         const selH = normSel.rMax - normSel.rMin + 1, selW = normSel.cMax - normSel.cMin + 1
         if (selH >= dataH && selW >= dataW && selH % dataH === 0 && selW % dataW === 0) { tgtH = selH; tgtW = selW }
       }
+      if (canGrow) extraRows = makeGhostRows(pasteGrowCount(baseLen, startRi, tgtH), makeBlankRow)
       for (let ro = 0; ro < tgtH; ro++) {
-        const dr = displayRowsRef.current[startRi + ro]; if (!dr) continue
+        const dr = rowAt(startRi + ro); if (!dr) continue
         const srcRow = block[ro % dataH]
         for (let co = 0; co < tgtW; co++) {
           const col = allColumnsRef.current[startCi + co]
@@ -1453,18 +1522,20 @@ export default function FlatFileGrid({
         }
       }
     }
-    commitCells(changes)
-    // #11 — rows past the end can't be written (parent/child structure makes
-    // silent auto-append unsafe); warn instead of dropping them silently.
-    const overflow = (startRi + tgtH) - displayRowsRef.current.length
+    commitCells(changes, extraRows)
+    // #11 — without the ghost canvas, rows past the end can't be written
+    // (parent/child structure makes silent auto-append unsafe); warn instead
+    // of dropping them silently. With auto-grow, grownLen covers the block.
+    const grownLen = baseLen + extraRows.length
+    const overflow = (startRi + tgtH) - grownLen
     if (overflow > 0) {
       toast({ title: `${overflow} pasted row${overflow > 1 ? 's' : ''} didn't fit`, description: 'Add more rows first, then paste again to include them.', tone: 'warning' })
     }
-    const lastR = Math.min(tgtH - 1, displayRowsRef.current.length - 1 - startRi)
+    const lastR = Math.min(tgtH - 1, grownLen - 1 - startRi)
     const lastC = hasHeaders ? Math.max(0, ...headerMap.values()) : startCi + tgtW - 1
     setSelEnd({ ri: startRi + lastR, ci: Math.min(lastC, allColumnsRef.current.length - 1) })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selAnchor, normSel, commitCells, smartPasteEnabled, toast])
+  }, [selAnchor, normSel, commitCells, smartPasteEnabled, toast, ghostEnabled, searchQuery, makeBlankRow])
 
   const handleFillDown = useCallback(() => {
     if (!normSel) return
@@ -1509,7 +1580,12 @@ export default function FlatFileGrid({
   const fillToBottom = useCallback(() => {
     if (!normSel) return
     const { rMin, rMax, cMin, cMax } = normSel
-    const lastRi = displayRowsRef.current.length - 1
+    // UFX P2d — fill down to the last REAL row (GX.6 parity): the trailing
+    // ghost canvas is not a fill-to-bottom target. Without ghosts this is
+    // simply the last row, as before.
+    const dr = displayRowsRef.current
+    let lastRi = -1
+    for (let i = dr.length - 1; i >= 0; i--) { if (!dr[i]?._ghost) { lastRi = i; break } }
     if (lastRi <= rMax) return
     const selH = rMax - rMin + 1
     const changes: CellChange[] = []
@@ -1917,7 +1993,9 @@ export default function FlatFileGrid({
   }, [commitCells])
 
   const liveUpdateCell = useCallback((rowId: string, colId: string, value: string) => {
-    setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [colId]: value, _dirty: true } : r))
+    // UFX P2d — a typed edit committed on exit (commitInput) is the other write
+    // path besides commitCells; it materializes a ghost the same way.
+    setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, ...materializeGhostPatch(r), [colId]: value, _dirty: true } : r))
     onCellChange?.(rowId, colId, value)  // #9 — commit-on-exit (commitInput) fires side-effects for typed edits too
   }, [onCellChange])
 
@@ -1951,7 +2029,9 @@ export default function FlatFileGrid({
   // ── Save / reload ──────────────────────────────────────────────────────
 
   async function saveDraft() {
-    const dirty = rows.filter((r) => r._dirty)
+    // UFX P2d — onSave(dirty) must never receive ghosts. A ghost is never
+    // dirty by construction; the !_ghost guard makes it a hard guarantee.
+    const dirty = rows.filter((r) => r._dirty && !r._ghost)
     if (!dirty.length) { toast({ title: 'Nothing to save', tone: 'info' }); return }
     setSaving(true)
     try {
@@ -1970,7 +2050,9 @@ export default function FlatFileGrid({
     setLoading(true)
     try {
       const loaded = await onReload()
-      const padded = padToMin(loaded, makeBlankRow, minRows)
+      // UFX P2d — with the ghost canvas on, no padToMin: the topup effect
+      // re-appends the canvas below the freshly loaded rows.
+      const padded = padToMin(loaded, makeBlankRow, effectiveMinRows)
       setRows(padded); setHistory([]); setFuture([])
     } catch (err) {
       toast.error('Failed to reload: ' + (err instanceof Error ? err.message : String(err)))
@@ -2037,7 +2119,7 @@ export default function FlatFileGrid({
           <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5 flex-shrink-0" />
           {titleIcon}
           <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">{title}</span>
-          <Badge variant="default">{rows.length} rows</Badge>
+          <Badge variant="default">{realRows.length} rows</Badge>
           {dirtyCount > 0 && <Badge variant="warning" className="flex-shrink-0"><AlertCircle className="w-3 h-3 mr-1" />{dirtyCount} unsaved</Badge>}
           <div className="flex-1 min-w-0" />
           <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5 flex-shrink-0" />
@@ -2360,10 +2442,11 @@ export default function FlatFileGrid({
               {/* Row 1: group color bands */}
               <tr>
                 <th className="sticky left-0 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 w-9 min-w-[36px] text-center" rowSpan={2}>
+                  {/* UFX P2d — select-all covers only real rows (ghost canvas excluded) */}
                   <input type="checkbox" className="w-3.5 h-3.5 accent-blue-600" aria-label="Select all rows"
-                    checked={displayRows.length > 0 && selectedRows.size === displayRows.length}
-                    ref={(el) => { if (el) el.indeterminate = selectedRows.size > 0 && selectedRows.size < displayRows.length }}
-                    onChange={(e) => setSelectedRows(e.target.checked ? new Set(displayRows.map((r) => r._rowId)) : new Set())} />
+                    checked={realDisplayRows.length > 0 && selectedRows.size === realDisplayRows.length}
+                    ref={(el) => { if (el) el.indeterminate = selectedRows.size > 0 && selectedRows.size < realDisplayRows.length }}
+                    onChange={(e) => setSelectedRows(e.target.checked ? new Set(realDisplayRows.map((r) => r._rowId)) : new Set())} />
                 </th>
                 <th className="sticky left-9 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 text-xs text-slate-400 text-center font-normal" style={{ width: rowHeaderWidth, minWidth: rowHeaderWidth }} rowSpan={2}>#</th>
                 {visibleGroups.map((g) => (
@@ -2425,6 +2508,25 @@ export default function FlatFileGrid({
             </thead>
 
             <tbody>
+              {/* UFX P2d — the empty state sits ABOVE the data rows: with the
+                  ghost canvas and 0 real rows, the CTA renders WITH the blank
+                  canvas below it (click the CTA or just start typing). Legacy
+                  (no ghosts): displayRows is empty whenever filteredRows is, so
+                  the DOM is identical to when this block sat below the loop. */}
+              {filteredRows.length === 0 && !loading && (
+                <tr><td colSpan={allColumns.length + 2} className="px-6 py-10 text-center">
+                  {searchQuery ? (
+                    <span className="text-sm text-slate-400 italic">No rows match your search.</span>
+                  ) : (
+                    <div className="flex flex-col items-center gap-1.5">
+                      <p className="text-sm font-medium text-slate-600 dark:text-slate-300">No products yet</p>
+                      <p className="text-xs text-slate-400 max-w-md">Add your first listing to get started — choose a parent if it has variations (sizes, colours), or a single item if it doesn’t.</p>
+                      {renderEmptyAction ? <div className="mt-1">{renderEmptyAction()}</div> : null}
+                    </div>
+                  )}
+                </td></tr>
+              )}
+
               {(() => {
                 const rendered: React.ReactNode[] = []
                 const GROUP_BAND_COLORS = ['bg-blue-50/30 dark:bg-blue-950/10', 'bg-violet-50/30 dark:bg-violet-950/10', 'bg-emerald-50/30 dark:bg-emerald-950/10', 'bg-amber-50/30 dark:bg-amber-950/10', 'bg-rose-50/30 dark:bg-rose-950/10', 'bg-cyan-50/30 dark:bg-cyan-950/10']
@@ -2443,15 +2545,20 @@ export default function FlatFileGrid({
                 const noneMode   = enableCustomGroups && groupMode === 'none'
 
                 displayRows.forEach((row, rowIndex) => {
+                  // UFX P2d — the trailing ghost canvas renders as plain rows
+                  // OUTSIDE the family/custom-group machinery: no section
+                  // headers, no collapse, no family band colour.
+                  const isGhostRow = row._ghost === true
                   const groupKey   = resolvedGetGroupKey(row)
                   const groupRows  = rowGroups.get(groupKey) ?? [row]
                   // P4 — section key + collapse are mode-aware.
                   const sectionKey  = customMode ? customSectionKey(row) : groupKey
-                  const isCollapsed = customMode ? collapsedCustomGroups.has(sectionKey)
+                  const isCollapsed = isGhostRow ? false
+                    : customMode ? collapsedCustomGroups.has(sectionKey)
                     : noneMode ? false
                     : collapsedRowGroups.has(groupKey)
 
-                  if (!renderedGroupHeaders.has(sectionKey)) {
+                  if (!isGhostRow && !renderedGroupHeaders.has(sectionKey)) {
                     renderedGroupHeaders.add(sectionKey)
                     if (customMode) {
                       const meta = customGroupMeta.get(sectionKey)
@@ -2501,7 +2608,7 @@ export default function FlatFileGrid({
                       : row._status === 'pending' ? 'bg-amber-50/70 dark:bg-amber-950/20'
                       : row._isNew  ? 'bg-sky-50/40 dark:bg-sky-950/10'
                       : row._dirty  ? 'bg-yellow-50/40 dark:bg-yellow-950/10'
-                      : (!customMode && !noneMode && groupRows.length > 1) ? GROUP_BAND_COLORS[groupBandIdx.get(groupKey)! % GROUP_BAND_COLORS.length] : ''
+                      : (!isGhostRow && !customMode && !noneMode && groupRows.length > 1) ? GROUP_BAND_COLORS[groupBandIdx.get(groupKey)! % GROUP_BAND_COLORS.length] : ''
 
                     const frozenBg = row._status === 'pushed'  ? 'bg-emerald-50 dark:bg-emerald-950/60'
                       : row._status === 'error'   ? 'bg-red-50 dark:bg-red-950/60'
@@ -2634,20 +2741,6 @@ export default function FlatFileGrid({
                 })
                 return rendered
               })()}
-
-              {filteredRows.length === 0 && !loading && (
-                <tr><td colSpan={allColumns.length + 2} className="px-6 py-10 text-center">
-                  {searchQuery ? (
-                    <span className="text-sm text-slate-400 italic">No rows match your search.</span>
-                  ) : (
-                    <div className="flex flex-col items-center gap-1.5">
-                      <p className="text-sm font-medium text-slate-600 dark:text-slate-300">No products yet</p>
-                      <p className="text-xs text-slate-400 max-w-md">Add your first listing to get started — choose a parent if it has variations (sizes, colours), or a single item if it doesn’t.</p>
-                      {renderEmptyAction ? <div className="mt-1">{renderEmptyAction()}</div> : null}
-                    </div>
-                  )}
-                </td></tr>
-              )}
 
               <tr>
                 <td colSpan={allColumns.length + 2} className="px-4 py-2 border-t border-dashed border-slate-200 dark:border-slate-700">

@@ -77,6 +77,15 @@ export interface BaseRow {
   _productId?: string
   _dirty?: boolean
   _isNew?: boolean
+  /**
+   * UFX P2d — a trailing blank "canvas" row (Sheets-style infinite grid).
+   * Ghosts are visually normal blank rows but are excluded from dirty counts,
+   * Save, validation, select-all, exports and the '⚠ required' markers; the
+   * first real edit materializes one into a plain new row (_ghost:false,
+   * _isNew:true, _dirty:true). Only present when the grid's `ghostRows` prop
+   * is set.
+   */
+  _ghost?: boolean
   _status?: 'idle' | 'pending' | 'pushed' | 'success' | 'error'
   _feedMessage?: string
   [key: string]: unknown
@@ -184,6 +193,19 @@ export interface FlatFileGridProps {
   initialRows: BaseRow[]
   makeBlankRow: () => BaseRow
   minRows?: number
+  /**
+   * UFX P2d — Sheets-style "infinite canvas": keep this many trailing blank
+   * ghost rows (built from makeBlankRow with `_ghost:true` and `_isNew`/`_dirty`
+   * forced false) appended at the very bottom, outside family/custom groups,
+   * in the default unsearched view only. Typing/paste/fill/enum-pick into a
+   * ghost materializes it into a plain new row and the buffer tops back up, so
+   * the grid grows forever as you type. Ghosts are excluded from dirty counts,
+   * onSave(dirty), validate(), select-all, exports and the '⚠ required'
+   * markers. Paste blocks that overrun the end auto-grow the pool instead of
+   * being refused. When enabled the consumer no longer needs minRows padding.
+   * Undefined = legacy behavior, byte-identical.
+   */
+  ghostRows?: number
 
   getGroupKey?: (row: BaseRow) => string
 
