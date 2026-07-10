@@ -550,8 +550,15 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
   const isSticky = stickyLeft !== undefined
   const stickyTint = isSticky && !isEditing ? cn(stateBg, validBg) : null
   const stickyOverlay = stickyTint ? (
-    <span aria-hidden className={cn('absolute inset-0 pointer-events-none transition-colors', stickyTint)} />
+    <span aria-hidden className={cn('absolute inset-0 pointer-events-none transition-colors', stickyTint,
+      // Hover tint lives HERE for sticky cells — on the <td> it would override
+      // the solid base (hover:bg-white/50 beats bg-white while hovered) and
+      // reopen the translucency this overlay exists to close.
+      'group-hover/ffc:bg-white/50 dark:group-hover/ffc:bg-slate-700/30')} />
   ) : null
+  const cellHoverCls = stickyTint
+    ? 'cursor-pointer group/ffc'
+    : 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30'
 
   const baseCls = cn(
     'border-b border-r border-slate-200 dark:border-slate-700 relative transition-colors',
@@ -561,10 +568,12 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
     // Suppress native text selection while dragging to select cells; the input
     // in an editing cell keeps its own selectable text (UA reset).
     !isEditing && 'select-none',
-    isReadOnly && 'opacity-75',
+    // Read-only dim: on sticky cells opacity on the <td> would translucify the
+    // solid base (same bleed class as the hover bug) — dim the content instead.
+    isReadOnly && !stickyTint && 'opacity-75',
   )
   // Content must be POSITIONED so it paints above the sticky overlay.
-  const contentAboveOverlay = stickyOverlay ? 'relative' : ''
+  const contentAboveOverlay = stickyOverlay ? cn('relative', isReadOnly && 'opacity-75') : ''
 
   const tdPointerDown = (e: React.PointerEvent<HTMLTableCellElement>) => {
     if (e.button !== 0) return
@@ -731,7 +740,7 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
     }
     const custom = renderCellContent?.(col, row, value, displayValue)
     return (
-      <td {...tdShared} className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')} style={{ ...cellStyle, ...selStyle }}>
+      <td {...tdShared} className={cn(baseCls, cellHoverCls)} style={{ ...cellStyle, ...selStyle }}>
         {stickyOverlay}
         {fillHandle}
         <div className={cn('px-1.5 flex items-center text-xs text-slate-800 dark:text-slate-200 truncate', contentAboveOverlay)} style={hStyle}>
@@ -771,7 +780,7 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
   // Text / number — display
   const custom = renderCellContent?.(col, row, value, displayValue)
   return (
-    <td {...tdShared} className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')}
+    <td {...tdShared} className={cn(baseCls, cellHoverCls)}
       style={{ ...cellStyle, ...selStyle }} title={guidanceTitle ?? validIssue?.msg ?? col.description}
       aria-invalid={validIssue?.level === 'error' ? true : undefined}>
       {stickyOverlay}
