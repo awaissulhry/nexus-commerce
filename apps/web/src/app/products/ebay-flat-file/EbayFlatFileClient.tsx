@@ -13,7 +13,8 @@ import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { applyBulkFollow, applyBulkBuffer } from '@/lib/follow-master'
 import { Badge } from '@/components/ui/Badge'
 import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
-import type { BaseRow, FlatFileColumn, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, PushExtrasCtx, RenderCellContent } from '@/components/flat-file/FlatFileGrid.types'
+import type { BaseRow, FlatFileColumn, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, PushExtrasCtx, RenderCellContent, GridContextMenuCtx } from '@/components/flat-file/FlatFileGrid.types'
+import { FlatFileContextMenu } from '@/components/flat-file/FlatFileContextMenu'
 import { Modal } from '@/design-system/components/Modal'
 import { Menu } from '@/design-system/components/Menu'
 import { Banner } from '@/design-system/components/Banner'
@@ -2973,6 +2974,54 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [descModal, categorySearchOpen, categorySearchRowId, marketplace, loadCategorySchemas, pullDiffData, pullDiffOpen, makePullDiffApplyHandler, aspectsPanelRowId, itemSpecificsGroup, valueOrderOpen, familyId, importWizardOpen, importInitialFile, exportColumns, handleImport])
 
+  // ── Slot: right-click context menu (UFX P7 item 1 — shared FlatFileContextMenu) ──
+  // Channel-appropriate actions: inserts are local blank rows (same as the
+  // grid's Add row), delete routes through eBay's EXISTING delete-confirm flow
+  // (soft-delete + live delist — never a bare local row removal), and the add
+  // flow opens the AddListingPopover. Reads the latest grid ctx via the
+  // renderToolbarFetch refs, so actions never see stale rows.
+  const renderContextMenu = useCallback((ctx: GridContextMenuCtx) => {
+    const insertAt = (offset: 0 | 1) => {
+      const rows = latestRowsRef.current
+      const anchorId = ctx.anchorRow?._rowId
+      const idx = anchorId ? rows.findIndex((r) => r._rowId === anchorId) : -1
+      const next = [...rows]
+      const newRow = makeBlankRow()
+      if (idx === -1) next.push(newRow); else next.splice(idx + offset, 0, newRow)
+      latestPushHistoryRef.current?.(next)
+    }
+    // Same deletable predicate as the toolbar Rows menu (needs a SKU; synthesized
+    // read-only membership rows are only deletable when they're shared memberships).
+    const deletable = (ctx.selectionRows as EbayRow[])
+      .filter((r) => !!r.sku && !(r._readonly === true && r._shared !== true))
+    return (
+      <FlatFileContextMenu
+        x={ctx.x}
+        y={ctx.y}
+        onClose={ctx.close}
+        items={[
+          { label: 'Cut', shortcut: '⌘X', onClick: ctx.ops.cut, disabled: !ctx.hasSelection },
+          { label: 'Copy', shortcut: '⌘C', onClick: ctx.ops.copy, disabled: !ctx.hasSelection },
+          { label: 'Paste', shortcut: '⌘V', onClick: ctx.ops.paste },
+          { separator: true },
+          { label: 'Insert row above', onClick: () => insertAt(0) },
+          { label: 'Insert row below', onClick: () => insertAt(1) },
+          {
+            label: `Delete row${deletable.length !== 1 ? 's' : ''}… (${deletable.length})`,
+            danger: true,
+            disabled: deletable.length === 0,
+            onClick: () => setDeleteConfirmRows(deletable),
+          },
+          { separator: true },
+          { label: 'Add listing…', onClick: () => setAddListingOpen(true) },
+          { separator: true },
+          { label: 'Group selected…', onClick: ctx.ops.groupFromSelection, disabled: ctx.selRowCount === 0 },
+          { label: 'Clear cells', shortcut: 'Del', onClick: ctx.ops.clearCells, disabled: !ctx.hasSelection },
+        ]}
+      />
+    )
+  }, [])
+
   // ── Group key for eBay variations ──────────────────────────────────────
   // Mirrors server ebayFamilyKey (ebay-flat-file-create.logic.ts:255):
   //   explicit parent/standalone → own sku (fallback _productId/_rowId)
@@ -3224,6 +3273,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       getCellReadOnly={getCellReadOnly}
       getCellGuidance={getCellGuidance}
       onReplicate={onReplicate}
+      renderContextMenu={renderContextMenu}
       renderChannelStrip={renderChannelStrip}
       renderPushExtras={renderPushExtras}
       renderEmptyAction={() => (

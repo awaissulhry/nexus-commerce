@@ -31,6 +31,7 @@ import { type PullDiffApplyResult } from './PullDiffModal'
 import { type ImportApplyResult } from './ImportWizardModal'
 import { PendingPullBanner } from '../_shared/PendingPullBanner'
 import { TbBtn as SharedTbBtn } from '@/components/flat-file/FlatFileToolbar'
+import { FlatFileContextMenu } from '@/components/flat-file/FlatFileContextMenu'
 import { ColumnGroupModal } from '@/design-system/components/ColumnGroupModal'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -3927,51 +3928,51 @@ export default function AmazonFlatFileClient({
     )
   }, [isUnionMode, sheetTypes, bulkSetProductType, deleteSelected])
 
-  // ── Slot: right-click context menu (Amazon ContextMenu on grid ops) ──────
-  const renderContextMenu = useCallback((ctx: GridContextMenuCtx) => (
-    <ContextMenu
-      x={ctx.x}
-      y={ctx.y}
-      canPaste={true}
-      hasSelection={ctx.hasSelection}
-      selRowCount={ctx.selRowCount}
-      onCut={ctx.ops.cut}
-      onCopy={ctx.ops.copy}
-      onPaste={ctx.ops.paste}
-      onAddRows={() => setAddRowsPanel({ type: 'row', position: 'below', anchorRowId: ctx.anchorRow?._rowId })}
-      onInsertAbove={() => {
-        const anchorId = ctx.anchorRow?._rowId
-        pushSnapshot()
-        const newRow = makeEmptyRow(productTypeRef.current, marketplaceRef.current)
-        setRows((prev) => {
-          const idx = anchorId ? prev.findIndex((r) => r._rowId === anchorId) : -1
-          if (idx === -1) return [...prev, newRow]
-          const next = [...prev]; next.splice(idx, 0, newRow); return next
-        })
-      }}
-      onInsertBelow={() => {
-        const anchorId = ctx.anchorRow?._rowId
-        pushSnapshot()
-        const newRow = makeEmptyRow(productTypeRef.current, marketplaceRef.current)
-        setRows((prev) => {
-          const idx = anchorId ? prev.findIndex((r) => r._rowId === anchorId) : -1
-          if (idx === -1) return [...prev, newRow]
-          const next = [...prev]; next.splice(idx + 1, 0, newRow); return next
-        })
-      }}
-      onDeleteRows={async () => {
-        const toRemove = ctx.selectionRows as Row[]
-        const n = toRemove.length
-        if (!n) return
-        if (!confirm(`Remove ${n} listing${n === 1 ? '' : 's'} from Amazon ${marketplaceRef.current}? The product and its stock stay in Nexus; other channels are untouched.`)) return
-        pushSnapshot()
-        await removeFromAmazon(toRemove)
-      }}
-      onClearCells={ctx.ops.clearCells}
-      onGroupSelected={ctx.ops.groupFromSelection}
-      onClose={ctx.close}
-    />
-  ), [pushSnapshot, setRows, removeFromAmazon])
+  // ── Slot: right-click context menu (shared FlatFileContextMenu on grid ops) ──
+  const renderContextMenu = useCallback((ctx: GridContextMenuCtx) => {
+    const insertAt = (offset: 0 | 1) => {
+      const anchorId = ctx.anchorRow?._rowId
+      pushSnapshot()
+      const newRow = makeEmptyRow(productTypeRef.current, marketplaceRef.current)
+      setRows((prev) => {
+        const idx = anchorId ? prev.findIndex((r) => r._rowId === anchorId) : -1
+        if (idx === -1) return [...prev, newRow]
+        const next = [...prev]; next.splice(idx + offset, 0, newRow); return next
+      })
+    }
+    return (
+      <FlatFileContextMenu
+        x={ctx.x}
+        y={ctx.y}
+        onClose={ctx.close}
+        items={[
+          { label: 'Cut', shortcut: '⌘X', onClick: ctx.ops.cut, disabled: !ctx.hasSelection },
+          { label: 'Copy', shortcut: '⌘C', onClick: ctx.ops.copy, disabled: !ctx.hasSelection },
+          { label: 'Paste', shortcut: '⌘V', onClick: ctx.ops.paste },
+          { separator: true },
+          { label: 'Insert row above', onClick: () => insertAt(0) },
+          { label: 'Insert row below', onClick: () => insertAt(1) },
+          {
+            label: `Delete row${ctx.selRowCount !== 1 ? 's' : ''}`,
+            disabled: !ctx.hasSelection,
+            onClick: () => {
+              const toRemove = ctx.selectionRows as Row[]
+              const n = toRemove.length
+              if (!n) return
+              if (!confirm(`Remove ${n} listing${n === 1 ? '' : 's'} from Amazon ${marketplaceRef.current}? The product and its stock stay in Nexus; other channels are untouched.`)) return
+              pushSnapshot()
+              void removeFromAmazon(toRemove)
+            },
+          },
+          { separator: true },
+          { label: 'Add rows here…', onClick: () => setAddRowsPanel({ type: 'row', position: 'below', anchorRowId: ctx.anchorRow?._rowId }) },
+          { separator: true },
+          { label: 'Group selected…', onClick: ctx.ops.groupFromSelection, disabled: ctx.selRowCount === 0 },
+          { label: 'Clear cells', shortcut: 'Del', onClick: ctx.ops.clearCells, disabled: !ctx.hasSelection },
+        ]}
+      />
+    )
+  }, [pushSnapshot, setRows, removeFromAmazon])
 
   // ── Slot: row-header meta (ASIN link · status · badges · clone) ──────────
   const renderRowMeta = useCallback((row: BaseRow) => {
@@ -6466,72 +6467,6 @@ function HealthModal({
 }
 
 // ── ContextMenu ────────────────────────────────────────────────────────
-
-interface ContextMenuProps {
-  x: number
-  y: number
-  canPaste: boolean
-  hasSelection: boolean
-  selRowCount: number
-  onCut: () => void
-  onCopy: () => void
-  onPaste: () => void
-  onInsertAbove: () => void
-  onInsertBelow: () => void
-  onDeleteRows: () => void
-  onAddRows: () => void
-  onClearCells: () => void
-  onGroupSelected: () => void
-  onClose: () => void
-}
-
-function ContextMenu({ x, y, canPaste, hasSelection, selRowCount, onCut, onCopy, onPaste, onInsertAbove, onInsertBelow, onDeleteRows, onAddRows, onClearCells, onGroupSelected, onClose }: ContextMenuProps) {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    function handle(e: MouseEvent) {
-      if (!ref.current?.contains(e.target as Node)) onClose()
-    }
-    document.addEventListener('mousedown', handle, true)
-    return () => document.removeEventListener('mousedown', handle, true)
-  }, [onClose])
-
-  function item(label: string, shortcut: string | undefined, onClick: () => void, disabled = false) {
-    return (
-      <button type="button" disabled={disabled}
-        onClick={() => { onClick(); onClose() }}
-        className={cn(
-          'w-full flex items-center justify-between gap-6 px-3 py-1.5 text-xs text-left transition-colors',
-          disabled ? 'text-slate-300 dark:text-slate-600 cursor-default'
-          : 'text-slate-700 dark:text-slate-300 hover:bg-blue-500 hover:text-white',
-        )}>
-        <span>{label}</span>
-        {shortcut && <span className="text-[10px] font-mono opacity-60">{shortcut}</span>}
-      </button>
-    )
-  }
-
-  // Adjust position to not overflow viewport
-  const menuW = 200, menuH = 300
-  const left = Math.min(x, window.innerWidth - menuW - 8)
-  const top = Math.min(y, window.innerHeight - menuH - 8)
-
-  return (
-    <div ref={ref}
-      className="fixed z-[9999] w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl py-1 overflow-hidden"
-      style={{ left, top }}>
-      {item('Cut', '⌘X', onCut, !hasSelection)}
-      {item('Copy', '⌘C', onCopy, !hasSelection)}
-      {item('Paste', '⌘V', onPaste, !canPaste)}
-      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
-      {item('Insert row above', undefined, onInsertAbove)}
-      {item('Insert row below', undefined, onInsertBelow)}
-      {item(`Delete row${selRowCount !== 1 ? 's' : ''}`, undefined, onDeleteRows, !hasSelection)}
-      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
-      {item('Add rows here…', undefined, onAddRows)}
-      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
-      {item('Group selected…', undefined, onGroupSelected, selRowCount === 0)}
-      {item('Clear cells', 'Del', onClearCells, !hasSelection)}
-    </div>
-  )
-}
+// UFX P7 (item 1) — extracted to the shared
+// @/components/flat-file/FlatFileContextMenu so eBay renders the same menu.
 
