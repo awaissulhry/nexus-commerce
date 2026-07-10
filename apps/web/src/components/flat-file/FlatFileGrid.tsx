@@ -27,6 +27,7 @@ import { FFReplicateModal } from '@/app/products/amazon-flat-file/FFReplicateMod
 import type {
   FlatFileGridProps, BaseRow, FlatFileColumn, FlatFileColumnGroup,
   ValidationIssue, RenderCellContent, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, ReplicateCtx,
+  FooterActionsCtx,
 } from './FlatFileGrid.types'
 import { normalizeCellValue } from './normalizeCellValue'
 import { dropReadOnlyCellChanges, typeApplicabilityGuidance, isRequiredForRow } from './cellFlags'
@@ -785,16 +786,18 @@ function GroupHeader({ row, label, color, count, bandClass, isExpanded, onToggle
 export default function FlatFileGrid({
   channel, title, titleIcon, marketplace, storageKey,
   columnGroups, initialRows, makeBlankRow, minRows = 15, ghostRows,
-  getGroupKey, validate,
-  onSave, onReload, onCellChange,
+  getGroupKey, bucketMode, validate,
+  onSave, onReload, onCellChange, onMaterializeRow,
+  onSortConfigChange, onRowOrderChange,
   renderCellContent, renderRowMeta, getRowImageUrl, onBeforeEditCell, getCellGuidance, getCellReadOnly,
   onReplicate,
   renderChannelStrip, renderPushExtras, renderFeedBanner, renderModals,
   renderToolbarFetch, renderToolbarImport, renderBar3Left,
-  renderAiPanel, renderEmptyAction,
+  renderAiPanel, renderEmptyAction, renderContextMenu, renderFooterActions,
   onColumnsClick, columnsActive, toolbarTrailing,
   columnGroupState, onGroupStateChange,
   fileMenuItems, editMenuItems,
+  apiRef,
   enableCustomGroups = false,
 }: FlatFileGridProps) {
   const router = useRouter()
@@ -887,6 +890,8 @@ export default function FlatFileGrid({
   const [isEditing,      setIsEditing]      = useState(false)
   const [editInitialChar, setEditInitialChar] = useState<string | null>(null)
   const [clipboardRange, setClipboardRange] = useState<NormSel | null>(null)
+  // UFX P3 — consumer context-menu anchor (only used with renderContextMenu)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
 
   // ── Column / row resize ────────────────────────────────────────────────
   const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
@@ -993,7 +998,10 @@ export default function FlatFileGrid({
 
   // ── P4 — custom named groups (opt-in; persisted under the storageKey scope) ─
   const [customGroups, setCustomGroups] = useState<CustomGroup[]>(() => enableCustomGroups ? loadGroups(storageKey) : [])
-  const [groupMode, setGroupMode] = useState<CustomGroupMode>(() => enableCustomGroups ? loadGroupMode(storageKey) : 'family')
+  const [rawGroupMode, setGroupMode] = useState<CustomGroupMode>(() => enableCustomGroups ? loadGroupMode(storageKey) : 'family')
+  // UFX P3 — 'bucket' only means something when the consumer declared a
+  // bucketMode; a stale persisted value otherwise falls back to 'family'.
+  const groupMode: CustomGroupMode = rawGroupMode === 'bucket' && !bucketMode ? 'family' : rawGroupMode
   const [collapsedCustomGroups, setCollapsedCustomGroups] = useState<Set<string>>(() => enableCustomGroups ? loadCollapsedGroups(storageKey) : new Set())
   const [groupCreate, setGroupCreate] = useState<{ skus: string[] } | null>(null)
   const [manageGroupsOpen, setManageGroupsOpen] = useState(false)
@@ -1034,6 +1042,7 @@ export default function FlatFileGrid({
   const onBeforeEditCellRef  = useRef(onBeforeEditCell)
   const getCellGuidanceRef   = useRef(getCellGuidance)
   const getCellReadOnlyRef   = useRef(getCellReadOnly)
+  const onMaterializeRowRef  = useRef(onMaterializeRow)
 
   useEffect(() => { selAnchorRef.current = selAnchor }, [selAnchor])
   useEffect(() => { selEndRef.current    = selEnd }, [selEnd])
@@ -1041,6 +1050,7 @@ export default function FlatFileGrid({
   useEffect(() => { onBeforeEditCellRef.current = onBeforeEditCell }, [onBeforeEditCell])
   useEffect(() => { getCellGuidanceRef.current  = getCellGuidance },  [getCellGuidance])
   useEffect(() => { getCellReadOnlyRef.current  = getCellReadOnly },  [getCellReadOnly])
+  useEffect(() => { onMaterializeRowRef.current = onMaterializeRow }, [onMaterializeRow])
 
   // ── Derived state ──────────────────────────────────────────────────────
 
@@ -1096,21 +1106,49 @@ export default function FlatFileGrid({
     return groups
   }, [realRows, resolvedGetGroupKey])
 
+  // UFX P3 — the Bar-3 filter panel (parentage / has-ASIN / missing-required)
+  // now actually filters rows (it previously only fed saved views). Row
+  // parentage resolves generically: Amazon's parentage_level, eBay's explicit
+  // parentage, or the legacy _isParent flag.
+  const filterActive = filterState.parentage !== 'any' || filterState.hasAsin !== 'any' || filterState.missingRequired
   const filteredRows = useMemo(() => {
-    if (!searchQuery) return realRows
-    const q = searchQuery.toLowerCase()
-    return realRows.filter((r) => {
-      if (String(r.sku ?? r.item_sku ?? '').toLowerCase().includes(q)) return true
-      if (String(r.title ?? '').toLowerCase().includes(q)) return true
-      if (String(r.asin ?? '').includes(q)) return true
-      // #53 — also match any per-market eBay item/listing id column shown in the
-      // grid (was only the single ebay_item_id field).
-      for (const k in r) {
-        if (/(_item_id|_listing_id)$|^ebay_item_id/.test(k) && String(r[k] ?? '').toLowerCase().includes(q)) return true
+    let out = realRows
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      out = out.filter((r) => {
+        if (String(r.sku ?? r.item_sku ?? '').toLowerCase().includes(q)) return true
+        if (String(r.title ?? r.item_name ?? '').toLowerCase().includes(q)) return true
+        if (String(r.asin ?? r._asin ?? '').toLowerCase().includes(q)) return true
+        // #53 — also match any per-market eBay item/listing id column shown in the
+        // grid (was only the single ebay_item_id field).
+        for (const k in r) {
+          if (/(_item_id|_listing_id)$|^ebay_item_id/.test(k) && String(r[k] ?? '').toLowerCase().includes(q)) return true
+        }
+        return false
+      })
+    }
+    if (filterState.parentage !== 'any') {
+      const want = filterState.parentage === 'parent' ? 'parent' : 'child'
+      const parentageOf = (r: BaseRow): string => {
+        const p = String(r.parentage_level ?? r.parentage ?? '')
+        if (p) return p
+        return r._isParent === true ? 'parent' : r._isParent === false ? 'child' : ''
       }
-      return false
-    })
-  }, [realRows, searchQuery])
+      out = out.filter((r) => parentageOf(r) === want)
+    }
+    if (filterState.hasAsin !== 'any') {
+      out = out.filter((r) => (filterState.hasAsin === 'yes') === !!(r.asin ?? r._asin))
+    }
+    if (filterState.missingRequired) {
+      out = out.filter((r) => allColumns.some((c) => {
+        if (c.readOnly || c.kind === 'readonly') return false
+        if (!isRequiredForRow(c, r)) return false
+        const v = r[c.id]
+        return v == null || String(v).trim() === ''
+      }))
+    }
+    return out
+  }, [realRows, searchQuery, filterState, allColumns])
 
   // P4 — custom-group section key for a row (only meaningful in custom mode).
   const customSectionKey = useCallback((row: BaseRow) => {
@@ -1121,10 +1159,10 @@ export default function FlatFileGrid({
 
   const displayRows = useMemo(() => {
     // UFX P2d — the ghost canvas is appended at the very bottom, OUTSIDE the
-    // family/custom sections, and only in the default (unsearched) view — a
-    // search result shouldn't be padded with blanks. Empty when disabled, so
-    // finish() returns each branch's array untouched (legacy identical).
-    const ghostTail = ghostEnabled && !searchQuery ? rows.filter((r) => r._ghost) : []
+    // family/custom sections, and only in the default (unsearched, unfiltered)
+    // view — a search/filter result shouldn't be padded with blanks. Empty when
+    // disabled, so finish() returns each branch's array untouched.
+    const ghostTail = ghostEnabled && !searchQuery && !filterActive ? rows.filter((r) => r._ghost) : []
     const finish = (result: BaseRow[]): BaseRow[] => {
       const final = ghostTail.length ? [...result, ...ghostTail] : result
       displayRowsRef.current = final
@@ -1190,9 +1228,29 @@ export default function FlatFileGrid({
     } else {
       result = groupArrays.flat()
     }
+    // UFX P3 — BUCKET mode: keep the family ordering computed above, then
+    // stably partition it into the consumer's declared sections (empty buckets
+    // hidden; a collapsed bucket contributes its first row as a header anchor,
+    // skipped in render). Unknown bucket keys fall into the first bucket.
+    if (bucketMode && groupMode === 'bucket') {
+      const byBucket = new Map<string, BaseRow[]>(bucketMode.buckets.map((b) => [b.key, []]))
+      const fallbackKey = bucketMode.buckets[0]?.key
+      for (const row of result) {
+        const k = bucketMode.bucketFor(row, realRows)
+        ;(byBucket.get(k) ?? byBucket.get(fallbackKey))?.push(row)
+      }
+      const out: BaseRow[] = []
+      for (const b of bucketMode.buckets) {
+        const bucketRows = byBucket.get(b.key)!
+        if (!bucketRows.length) continue
+        if (collapsedCustomGroups.has(`bk:${b.key}`)) { out.push(bucketRows[0]); continue }
+        out.push(...bucketRows)
+      }
+      return finish(out)
+    }
     return finish(result)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, ghostEnabled, rowGroups, filteredRows, collapsedRowGroups, sortConfig, enableCustomGroups, groupMode, customGroups, collapsedCustomGroups, customSectionKey])
+  }, [rows, ghostEnabled, filterActive, realRows, rowGroups, filteredRows, collapsedRowGroups, sortConfig, enableCustomGroups, groupMode, bucketMode, customGroups, collapsedCustomGroups, customSectionKey])
 
   // UFX P2d — displayed rows minus the ghost canvas, for the select-all
   // checkbox (Amazon parity: realDisplayRows). Same reference when disabled.
@@ -1211,6 +1269,19 @@ export default function FlatFileGrid({
     return m
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enableCustomGroups, groupMode, customGroups, filteredRows, customSectionKey])
+
+  // UFX P3 — per-bucket header metadata (name/color/count) for bucket mode.
+  const bucketMeta = useMemo(() => {
+    const m = new Map<string, { name: string; color: GroupColorName; count: number }>()
+    if (!bucketMode || groupMode !== 'bucket') return m
+    for (const b of bucketMode.buckets) m.set(`bk:${b.key}`, { name: b.name, color: b.color, count: 0 })
+    const fallback = bucketMode.buckets[0] ? `bk:${bucketMode.buckets[0].key}` : ''
+    for (const row of filteredRows) {
+      const e = m.get(`bk:${bucketMode.bucketFor(row, realRows)}`) ?? m.get(fallback)
+      if (e) e.count++
+    }
+    return m
+  }, [bucketMode, groupMode, filteredRows, realRows])
 
   const normSel = useMemo<NormSel | null>(() => {
     if (!selAnchor || !selEnd) return null
@@ -1306,6 +1377,20 @@ export default function FlatFileGrid({
     () => validate ? validate(realRows) : [],
     [realRows, validate],
   )
+
+  // UFX P3 — per-CELL issue map so validation issues shade the exact cell
+  // (red/amber tint + corner marker + tooltip; the cell already supported a
+  // validIssue prop but it was never wired). Keyed by `${sku}:${field}`;
+  // an error wins over a warn on the same cell.
+  const issueByCell = useMemo(() => {
+    const m = new Map<string, ValidationIssue>()
+    for (const iss of validationIssues) {
+      const k = `${iss.sku}:${iss.field}`
+      const prev = m.get(k)
+      if (!prev || (prev.level === 'warn' && iss.level === 'error')) m.set(k, iss)
+    }
+    return m
+  }, [validationIssues])
 
   // #83 — memoize the status-bar derivations instead of recomputing every render
   // (UFX P2d — dirty is counted over realRows; a ghost is never dirty anyway,
@@ -1422,7 +1507,10 @@ export default function FlatFileGrid({
       return base.map((r) => {
         const cs = byRow.get(r._rowId)
         if (!cs) return r
-        const updated: BaseRow = { ...r, ...materializeGhostPatch(r), _dirty: true }
+        // UFX P3 — the consumer materialize patch stamps infra fields (e.g.
+        // product_type) after the built-in patch; the edited cell values are
+        // applied last, so a user editing one of those fields wins.
+        const updated: BaseRow = { ...r, ...materializeGhostPatch(r), ...(r._ghost ? onMaterializeRowRef.current?.(r) : undefined), _dirty: true }
         for (const c of cs) updated[c.colId] = c.value
         return updated
       })
@@ -1490,7 +1578,7 @@ export default function FlatFileGrid({
     // commitCells materializes every row actually written into a plain new row,
     // exactly like Add-row produces (per the #11 comment below, they carry no
     // parent/child structure of their own).
-    const canGrow = ghostEnabled && !searchQuery
+    const canGrow = ghostEnabled && !searchQuery && !filterActive
     const baseLen = displayRowsRef.current.length
     let extraRows: BaseRow[] = []
     const rowAt = (i: number): BaseRow | undefined =>
@@ -1535,7 +1623,7 @@ export default function FlatFileGrid({
     const lastC = hasHeaders ? Math.max(0, ...headerMap.values()) : startCi + tgtW - 1
     setSelEnd({ ri: startRi + lastR, ci: Math.min(lastC, allColumnsRef.current.length - 1) })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selAnchor, normSel, commitCells, smartPasteEnabled, toast, ghostEnabled, searchQuery, makeBlankRow])
+  }, [selAnchor, normSel, commitCells, smartPasteEnabled, toast, ghostEnabled, searchQuery, filterActive, makeBlankRow])
 
   const handleFillDown = useCallback(() => {
     if (!normSel) return
@@ -1755,6 +1843,9 @@ export default function FlatFileGrid({
       const inField = !!tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable)
       if (inField && !isEditingRef.current) return
 
+      // UFX P3 — any key closes the consumer context menu (Amazon parity).
+      setCtxMenu((p) => (p ? null : p))
+
       const mod = e.metaKey || e.ctrlKey
       if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return }
       if (mod && e.key === 'z' &&  e.shiftKey) { e.preventDefault(); redo(); return }
@@ -1940,6 +2031,7 @@ export default function FlatFileGrid({
     if (fromId === toId) return
     pushSnapshot()
     setSortConfig([])  // drag-drop overrides sort (same as Amazon)
+    onSortConfigChange?.([])  // UFX P3 — consumers mirroring the sort see the clear
     setRows((prev) => {
       const displayed = displayRowsRef.current.map((r) => r._rowId)
       const rowMap = new Map(prev.map((r) => [r._rowId, r]))
@@ -1952,7 +2044,9 @@ export default function FlatFileGrid({
       const notDisplayed = prev.filter((r) => !displayed.includes(r._rowId))
       const reordered = [...next.map((id) => rowMap.get(id)!).filter(Boolean), ...notDisplayed]
       // Persist row order so drag-drop survives page reload
-      try { localStorage.setItem(`${storageKey}-row-order`, JSON.stringify(reordered.map((r) => r._rowId))) } catch {}
+      const ids = reordered.map((r) => r._rowId)
+      try { localStorage.setItem(`${storageKey}-row-order`, JSON.stringify(ids)) } catch {}
+      onRowOrderChange?.(ids)  // UFX P3 — e.g. Amazon market-sync propagation
       return reordered
     })
     setDraggingRowId(null); setDropTarget(null)
@@ -1995,7 +2089,7 @@ export default function FlatFileGrid({
   const liveUpdateCell = useCallback((rowId: string, colId: string, value: string) => {
     // UFX P2d — a typed edit committed on exit (commitInput) is the other write
     // path besides commitCells; it materializes a ghost the same way.
-    setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, ...materializeGhostPatch(r), [colId]: value, _dirty: true } : r))
+    setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, ...materializeGhostPatch(r), ...(r._ghost ? onMaterializeRowRef.current?.(r) : undefined), [colId]: value, _dirty: true } : r))
     onCellChange?.(rowId, colId, value)  // #9 — commit-on-exit (commitInput) fires side-effects for typed edits too
   }, [onCellChange])
 
@@ -2062,6 +2156,35 @@ export default function FlatFileGrid({
   // Load on mount
   useEffect(() => { void loadData() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // UFX P3 — minimal imperative API for the consumer (jump-to-cell from
+  // page-level panels like the Amazon feed report). Clears search + collapse
+  // state first so the target row can't be hidden, then selects + scrolls.
+  useEffect(() => {
+    if (!apiRef) return
+    apiRef.current = {
+      goToCell: (sku: string, field: string) => {
+        setSearchQuery('')
+        setCollapsedRowGroups(new Set())
+        setCollapsedCustomGroups(new Set())
+        const go = (): boolean => {
+          const ri = displayRowsRef.current.findIndex((r) => String(r.sku ?? r.item_sku ?? '') === sku)
+          const ci = allColumnsRef.current.findIndex((c) => c.id === field)
+          if (ri < 0 || ci < 0) return false
+          selAnchorRef.current = { ri, ci }
+          setSelAnchor({ ri, ci }); setSelEnd({ ri, ci })
+          const row = displayRowsRef.current[ri]
+          if (row) setActiveCell({ rowId: row._rowId, colId: field })
+          requestAnimationFrame(() =>
+            document.querySelector(`[data-ri="${ri}"][data-ci="${ci}"]`)?.scrollIntoView({ block: 'center', inline: 'center' }))
+          return true
+        }
+        // displayRows recomputes after the state flush above — retry across frames
+        requestAnimationFrame(() => { if (!go()) requestAnimationFrame(() => { go() }) })
+      },
+    }
+    return () => { apiRef.current = null }
+  }, [apiRef])
+
   // ── Slot contexts ──────────────────────────────────────────────────────
 
   const modalsCtx = useMemo<ModalsCtx>(
@@ -2070,12 +2193,17 @@ export default function FlatFileGrid({
     [rows],
   )
   const toolbarFetchCtx = useMemo<ToolbarFetchCtx>(
-    () => ({ rows, selectedRows, loading, setRows, pushHistory: (r: BaseRow[]) => { pushSnapshot(); setRows(r) } }),
+    () => ({ rows, selectedRows, loading, setRows, setSelectedRows, pushHistory: (r: BaseRow[]) => { pushSnapshot(); setRows(r) } }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rows, selectedRows, loading],
   )
   const toolbarImportCtx = useMemo<ToolbarImportCtx>(
-    () => ({ loading, rows, setRows, pushHistory: (r: BaseRow[]) => { pushSnapshot(); setRows(r) }, onReload: () => { void onReload() } }),
+    // UFX P3 — ctx.onReload now runs the GRID's own load (fetch via the
+    // consumer's onReload + setRows), matching the toolbar Reload button.
+    // It previously invoked the consumer callback and DISCARDED the rows, so
+    // slot-triggered reloads (eBay scope toggle, market-switch draft restore)
+    // never updated the mounted grid.
+    () => ({ loading, rows, setRows, pushHistory: (r: BaseRow[]) => { pushSnapshot(); setRows(r) }, onReload: () => { void loadData() } }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [loading, rows],
   )
@@ -2181,7 +2309,7 @@ export default function FlatFileGrid({
                   columns: g.columns.map((c) => ({ id: c.id, label: c.label ?? c.id })),
                 }))}
                 initial={sortConfig}
-                onApply={(levels) => { setSortConfig(levels); setSortPanelOpen(false) }}
+                onApply={(levels) => { setSortConfig(levels); onSortConfigChange?.(levels); setSortPanelOpen(false) }}
                 onClose={() => setSortPanelOpen(false)}
               />
             ) : null
@@ -2215,12 +2343,12 @@ export default function FlatFileGrid({
             <div className="flex items-center gap-1">
               <span className="text-[11px] text-slate-400">Group by</span>
               <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
-                {(['family', 'custom', 'none'] as CustomGroupMode[]).map((m) => (
+                {(['family', ...(bucketMode ? (['bucket'] as CustomGroupMode[]) : []), 'custom', 'none'] as CustomGroupMode[]).map((m) => (
                   <button key={m} type="button" onClick={() => setGroupMode(m)}
-                    className={cn('px-2 py-0.5 text-[11px] capitalize', groupMode === m
+                    className={cn('px-2 py-0.5 text-[11px]', m !== 'bucket' && 'capitalize', groupMode === m
                       ? 'bg-blue-600 text-white'
                       : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700')}>
-                    {m}
+                    {m === 'bucket' ? bucketMode!.label : m}
                   </button>
                 ))}
               </div>
@@ -2395,10 +2523,66 @@ export default function FlatFileGrid({
 
       {renderModals?.(modalsCtx)}
 
+      {/* UFX P3 — consumer context menu (fresh ops each render, so a menu
+          click never acts on a stale selection). */}
+      {ctxMenu && renderContextMenu && renderContextMenu({
+        x: ctxMenu.x,
+        y: ctxMenu.y,
+        close: () => setCtxMenu(null),
+        hasSelection: !!normSel,
+        selRowCount: Math.max(selectedRows.size, normSel ? normSel.rMax - normSel.rMin + 1 : 0),
+        selectionRows: normSel ? displayRows.slice(normSel.rMin, normSel.rMax + 1).filter((r) => !r._ghost) : [],
+        anchorRow: selAnchor ? displayRows[selAnchor.ri] ?? null : null,
+        ops: {
+          cut: () => { handleCut(); setClipboardRange(normSel) },
+          copy: () => { handleCopy(); setClipboardRange(normSel) },
+          paste: () => { void handlePaste(); setClipboardRange(null) },
+          clearCells: handleDeleteCells,
+        },
+      })}
+
       {/* ── Main grid + optional AI panel ─────────────── */}
       <div className="flex-1 flex overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden">
       <div className="flex-1 overflow-auto"
+        onContextMenu={(e) => {
+          // UFX P3 — consumer context menu: right-click on the row # selects
+          // the whole row (unless already inside the selection); on a cell
+          // outside the selection, selects that cell. Then opens the menu.
+          if (!renderContextMenu) return
+          const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null
+          const rowEl = el?.closest('[data-row-ri]') as HTMLElement | null
+          if (rowEl) {
+            e.preventDefault()
+            const ri = parseInt(rowEl.dataset.rowRi ?? '', 10)
+            if (isNaN(ri)) return
+            const sel = selAnchorRef.current && selEndRef.current
+              ? { rMin: Math.min(selAnchorRef.current.ri, selEndRef.current.ri), rMax: Math.max(selAnchorRef.current.ri, selEndRef.current.ri) }
+              : null
+            if (!(sel && ri >= sel.rMin && ri <= sel.rMax)) {
+              const maxCi = allColumnsRef.current.length - 1
+              selAnchorRef.current = { ri, ci: 0 }
+              setSelAnchor({ ri, ci: 0 }); setSelEnd({ ri, ci: maxCi })
+              const row = displayRowsRef.current[ri]; const col = allColumnsRef.current[0]
+              if (row && col) setActiveCell({ rowId: row._rowId, colId: col.id })
+            }
+            setCtxMenu({ x: e.clientX, y: e.clientY })
+            return
+          }
+          const td = el?.closest('[data-ri]') as HTMLElement | null
+          if (!td) return
+          e.preventDefault()
+          const ri = parseInt(td.dataset.ri ?? '', 10)
+          const ci = parseInt(td.dataset.ci ?? '', 10)
+          if (isNaN(ri) || isNaN(ci)) return
+          if (!selAnchorRef.current || !selEndRef.current) {
+            selAnchorRef.current = { ri, ci }
+            setSelAnchor({ ri, ci }); setSelEnd({ ri, ci })
+            const row = displayRowsRef.current[ri]; const col = allColumnsRef.current[ci]
+            if (row && col) setActiveCell({ rowId: row._rowId, colId: col.id })
+          }
+          setCtxMenu({ x: e.clientX, y: e.clientY })
+        }}
         onPointerMove={(e) => {
           if (e.buttons !== 1) return
           const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null
@@ -2543,6 +2727,12 @@ export default function FlatFileGrid({
 
                 const customMode = enableCustomGroups && groupMode === 'custom'
                 const noneMode   = enableCustomGroups && groupMode === 'none'
+                const bucketModeOn = !!bucketMode && groupMode === 'bucket'
+                const bucketKeyFor = (row: BaseRow): string => {
+                  if (!bucketMode) return ''
+                  const k = `bk:${bucketMode.bucketFor(row, realRows)}`
+                  return bucketMeta.has(k) ? k : (bucketMode.buckets[0] ? `bk:${bucketMode.buckets[0].key}` : k)
+                }
 
                 displayRows.forEach((row, rowIndex) => {
                   // UFX P2d — the trailing ghost canvas renders as plain rows
@@ -2552,15 +2742,28 @@ export default function FlatFileGrid({
                   const groupKey   = resolvedGetGroupKey(row)
                   const groupRows  = rowGroups.get(groupKey) ?? [row]
                   // P4 — section key + collapse are mode-aware.
-                  const sectionKey  = customMode ? customSectionKey(row) : groupKey
+                  const sectionKey  = customMode ? customSectionKey(row) : bucketModeOn ? bucketKeyFor(row) : groupKey
                   const isCollapsed = isGhostRow ? false
-                    : customMode ? collapsedCustomGroups.has(sectionKey)
+                    : customMode || bucketModeOn ? collapsedCustomGroups.has(sectionKey)
                     : noneMode ? false
                     : collapsedRowGroups.has(groupKey)
 
                   if (!isGhostRow && !renderedGroupHeaders.has(sectionKey)) {
                     renderedGroupHeaders.add(sectionKey)
-                    if (customMode) {
+                    if (bucketModeOn) {
+                      // UFX P3 — bucket section header (e.g. FBA / FBM)
+                      const meta = bucketMeta.get(sectionKey)
+                      if (meta) {
+                        rendered.push(
+                          <GroupHeader key={`hdr-${sectionKey}`} label={meta.name}
+                            color={meta.color} count={meta.count}
+                            bandClass="bg-slate-50 dark:bg-slate-800/50"
+                            isExpanded={!isCollapsed} showImage={false} imageSize={imageSize}
+                            colSpan={allColumns.length + 2}
+                            onToggle={() => setCollapsedCustomGroups((prev) => { const n = new Set(prev); n.has(sectionKey) ? n.delete(sectionKey) : n.add(sectionKey); return n })} />
+                        )
+                      }
+                    } else if (customMode) {
                       const meta = customGroupMeta.get(sectionKey)
                       if (meta) {
                         rendered.push(
@@ -2602,15 +2805,17 @@ export default function FlatFileGrid({
                     const isDragging = draggingRowId === row._rowId
                     const dropInd    = dropTarget?.rowId === row._rowId ? dropTarget.half : null
 
+                    // UFX P3 — 'success' (Amazon feed result) styles like 'pushed'.
+                    const pushedOk = row._status === 'pushed' || row._status === 'success'
                     const rowBg = isRowSel ? 'bg-blue-50/40 dark:bg-blue-900/10'
-                      : row._status === 'pushed'  ? 'bg-emerald-50/70 dark:bg-emerald-950/20'
+                      : pushedOk ? 'bg-emerald-50/70 dark:bg-emerald-950/20'
                       : row._status === 'error'   ? 'bg-red-50/70 dark:bg-red-950/20'
                       : row._status === 'pending' ? 'bg-amber-50/70 dark:bg-amber-950/20'
                       : row._isNew  ? 'bg-sky-50/40 dark:bg-sky-950/10'
                       : row._dirty  ? 'bg-yellow-50/40 dark:bg-yellow-950/10'
-                      : (!isGhostRow && !customMode && !noneMode && groupRows.length > 1) ? GROUP_BAND_COLORS[groupBandIdx.get(groupKey)! % GROUP_BAND_COLORS.length] : ''
+                      : (!isGhostRow && !customMode && !noneMode && !bucketModeOn && groupRows.length > 1) ? GROUP_BAND_COLORS[groupBandIdx.get(groupKey)! % GROUP_BAND_COLORS.length] : ''
 
-                    const frozenBg = row._status === 'pushed'  ? 'bg-emerald-50 dark:bg-emerald-950/60'
+                    const frozenBg = pushedOk ? 'bg-emerald-50 dark:bg-emerald-950/60'
                       : row._status === 'error'   ? 'bg-red-50 dark:bg-red-950/60'
                       : row._status === 'pending' ? 'bg-amber-50 dark:bg-amber-950/60'
                       : row._isNew  ? 'bg-sky-50 dark:bg-sky-950/40'
@@ -2644,7 +2849,7 @@ export default function FlatFileGrid({
                           // native drag only starts if the pointer moves while held, and
                           // a completed drag suppresses the click.
                           onMouseDown={() => { canDragRef.current = true; setArmedDragRowId(row._rowId) }} onMouseUp={() => { canDragRef.current = false; setArmedDragRowId(null) }}>
-                          {row._status === 'pushed'  ? <CheckCircle2 className="w-3 h-3 text-emerald-500 mx-auto" />
+                          {pushedOk ? <CheckCircle2 className="w-3 h-3 text-emerald-500 mx-auto" />
                           : row._status === 'error'   ? <Tooltip label={<span className="text-xs">{String(row._feedMessage ?? 'Push error')}</span>} className="h10-ds-tooltip--light"><AlertCircle className="w-3 h-3 text-red-500 mx-auto" /></Tooltip>
                           : row._status === 'pending' ? <Loader2 className="w-3 h-3 text-amber-500 animate-spin mx-auto" />
                           : <input type="checkbox" className="w-3.5 h-3.5 accent-blue-600" checked={isRowSel} draggable={false}
@@ -2717,10 +2922,13 @@ export default function FlatFileGrid({
                           // absent or returns null. Cell stays fully editable.
                           const guidanceLevel = getCellGuidanceRef.current?.(col, row) ?? typeApplicabilityGuidance(col, row)
                           const cellReadOnly  = getCellReadOnlyRef.current?.(col, row) ?? false
+                          // UFX P3 — wire validation issues to the exact cell
+                          const validIssue    = issueByCell.size ? issueByCell.get(`${skuOf(row)}:${col.id}`) : undefined
 
                           return (
                             <SpreadsheetCell key={`${row._rowId}-${col.id}`}
                               col={col} row={row} value={row[col.id]}
+                              validIssue={validIssue}
                               isActive={isActive} cellBg={cellBg} width={w} cellHeight={rowHeight}
                               ri={ri} ci={ci}
                               isSelected={isInSel} selEdges={selEdges}
@@ -2754,6 +2962,16 @@ export default function FlatFileGrid({
 
               <tr>
                 <td colSpan={allColumns.length + 2} className="px-4 py-2 border-t border-dashed border-slate-200 dark:border-slate-700">
+                  {renderFooterActions ? (
+                    // UFX P3 — consumer-owned footer actions (e.g. Amazon's
+                    // Add row/parent/variant + API-backed delete). The default
+                    // buttons below are fully replaced.
+                    renderFooterActions({
+                      ...toolbarFetchCtx,
+                      anchorRow: (selAnchor ? displayRows[selAnchor.ri] ?? null : null),
+                      groupFromSelection,
+                    } satisfies FooterActionsCtx)
+                  ) : (
                   <div className="flex items-center gap-2">
                     <Button size="sm" variant="ghost" onClick={addRow}><Plus className="w-3.5 h-3.5 mr-1" />Add row</Button>
                     {enableCustomGroups && selectedRows.size > 0 && (
@@ -2768,6 +2986,7 @@ export default function FlatFileGrid({
                       </Button>
                     )}
                   </div>
+                  )}
                 </td>
               </tr>
             </tbody>

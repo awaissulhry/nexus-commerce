@@ -5,8 +5,9 @@
 // Amazon page's group-model.ts; storage is keyed by an opaque `scope` string
 // (e.g. "ebay-IT") so each channel+market keeps its own groups.
 
-/** The shared grid supports three grouping modes (user choice: Family/Custom/None). */
-export type CustomGroupMode = 'family' | 'custom' | 'none'
+/** The shared grid's grouping modes (user choice: Family/Custom/None, plus the
+ *  opt-in consumer 'bucket' auto-section mode — UFX P3, e.g. Amazon FBA/FBM). */
+export type CustomGroupMode = 'family' | 'custom' | 'none' | 'bucket'
 
 export type GroupColorName = 'blue' | 'purple' | 'emerald' | 'orange' | 'teal' | 'amber'
 export const GROUP_PALETTE: readonly GroupColorName[] = ['blue', 'purple', 'emerald', 'orange', 'teal', 'amber']
@@ -106,6 +107,10 @@ export function saveGroups(scope: string, groups: CustomGroup[]): void {
 
 export function loadGroupMode(scope: string): CustomGroupMode {
   const v = readJson<string>(MODE_KEY(scope), 'family')
+  // UFX P3 — 'fulfillment' is the Amazon page's legacy stored value for its
+  // FBA/FBM auto-sections; it maps onto the grid's 'bucket' mode. A grid
+  // without a bucketMode prop falls back to 'family' at runtime.
+  if (v === 'fulfillment' || v === 'bucket') return 'bucket'
   return v === 'custom' || v === 'none' ? v : 'family'
 }
 export function saveGroupMode(scope: string, mode: CustomGroupMode): void {

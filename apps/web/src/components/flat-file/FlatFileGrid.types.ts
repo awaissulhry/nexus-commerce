@@ -1,4 +1,5 @@
 import type React from 'react'
+import type { GroupColorName } from './group-model'
 
 // ── Column schema ─────────────────────────────────────────────────────────
 
@@ -160,6 +161,62 @@ export interface ToolbarFetchCtx {
   loading: boolean
   setRows: React.Dispatch<React.SetStateAction<BaseRow[]>>
   pushHistory: (rows: BaseRow[]) => void
+  /** UFX P3 — lets consumer actions drive the checkbox selection (e.g. Amazon's
+   *  "Select all Pinned"). Additive; existing consumers ignore it. */
+  setSelectedRows: React.Dispatch<React.SetStateAction<Set<string>>>
+}
+
+// ── UFX P3 — consumer footer-actions slot context ─────────────────────────
+// ToolbarFetchCtx plus the current keyboard-selection anchor row (or null),
+// so page-level "Add row here" flows can position inserts.
+export interface FooterActionsCtx extends ToolbarFetchCtx {
+  anchorRow: BaseRow | null
+  /** Opens the grid's Create-group popover for the current selection
+   *  (only meaningful with enableCustomGroups). */
+  groupFromSelection: () => void
+}
+
+// ── UFX P3 — consumer right-click context menu ────────────────────────────
+// The grid owns the open/close state + the right-click selection semantics
+// (right-click on the row # selects the whole row; on an unselected cell,
+// selects that cell) and passes fresh clipboard ops each render, so menu
+// actions never operate on a stale selection.
+export interface GridContextMenuCtx {
+  x: number
+  y: number
+  close: () => void
+  hasSelection: boolean
+  selRowCount: number
+  /** The real (non-ghost) display rows inside the current range selection. */
+  selectionRows: BaseRow[]
+  anchorRow: BaseRow | null
+  ops: {
+    cut: () => void
+    copy: () => void
+    paste: () => void
+    clearCells: () => void
+  }
+}
+
+// ── UFX P3 — bucket (auto-section) grouping mode ──────────────────────────
+// A consumer-declared partition of the sheet into fixed sections (e.g. the
+// Amazon FBA/FBM split). Adds one button to the Group-by strip; rows keep
+// their family ordering and are stably partitioned into the declared buckets
+// (empty buckets are hidden; sections collapse like custom groups).
+export interface BucketGroupMode {
+  /** Group-by strip button label, e.g. 'FBA/FBM'. */
+  label: string
+  buckets: Array<{ key: string; name: string; color: GroupColorName }>
+  /** Section key for a row. `rows` = all real rows (for cross-row rules like
+   *  "a parent follows its FBA children"). Unknown keys fall into bucket 0. */
+  bucketFor: (row: BaseRow, rows: BaseRow[]) => string
+}
+
+// ── UFX P3 — minimal imperative grid API ──────────────────────────────────
+export interface FlatFileGridApi {
+  /** Clear search/collapse state, then select + scroll to the cell for
+   *  (sku, field). Best-effort across two frames. */
+  goToCell: (sku: string, field: string) => void
 }
 
 export interface ToolbarImportCtx {
@@ -209,11 +266,52 @@ export interface FlatFileGridProps {
 
   getGroupKey?: (row: BaseRow) => string
 
+  /**
+   * UFX P3 — opt-in auto-section grouping mode (e.g. Amazon FBA/FBM). Adds a
+   * button (bucketMode.label) to the Group-by strip. Undefined = strip and
+   * behavior unchanged.
+   */
+  bucketMode?: BucketGroupMode
+
   validate?: (rows: BaseRow[]) => ValidationIssue[]
 
   onSave: (dirty: BaseRow[]) => Promise<{ saved: number; createResult?: { errors?: unknown[] } }>
   onReload: () => Promise<BaseRow[]>
   onCellChange?: (rowId: string, colId: string, value: unknown) => void
+
+  /**
+   * UFX P3 — extra consumer patch merged into a ghost row when it materializes
+   * (first real edit). Applied AFTER the built-in materialize patch and BEFORE
+   * the edited cell value, so infra fields (e.g. Amazon's product_type +
+   * record_action) can be stamped without overriding what the user typed.
+   */
+  onMaterializeRow?: (row: BaseRow) => Partial<BaseRow>
+
+  /**
+   * UFX P3 — notified whenever the user applies a new sort config (SortPanel
+   * Apply, or a drag-reorder clearing the sort). Lets consumers mirror the
+   * persisted `${storageKey}-sort` to other scopes (Amazon market sync).
+   */
+  onSortConfigChange?: (levels: SortLevel[]) => void
+  /** UFX P3 — notified with the full _rowId order after a drag-reorder. */
+  onRowOrderChange?: (rowIds: string[]) => void
+
+  /**
+   * UFX P3 — consumer-rendered right-click context menu. When provided, the
+   * grid preventDefaults contextmenu over cells/row headers, applies the
+   * Sheets-style right-click selection, and renders this with fresh ops.
+   */
+  renderContextMenu?: (ctx: GridContextMenuCtx) => React.ReactNode
+
+  /**
+   * UFX P3 — replaces the grid's default footer actions (Add row / Group /
+   * Delete buttons) with consumer content. Needed where "delete" must be a
+   * channel API call (Amazon remove-from-market), not a local row removal.
+   */
+  renderFooterActions?: (ctx: FooterActionsCtx) => React.ReactNode
+
+  /** UFX P3 — receives a minimal imperative API (goToCell). */
+  apiRef?: React.MutableRefObject<FlatFileGridApi | null>
 
   // Override display content for specific cells (return null = default rendering)
   renderCellContent?: RenderCellContent
