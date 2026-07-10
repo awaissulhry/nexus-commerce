@@ -32,6 +32,7 @@ import type {
 } from './FlatFileGrid.types'
 import { normalizeCellValue } from './normalizeCellValue'
 import { computeDropdownPosition, MIN_DROPDOWN_WIDTH } from './dropdown-position'
+import { computeAutoFitWidth } from './column-autofit'
 import { tokenizeClipboard } from './paste-tokenizer'
 import { isComposingKeyEvent } from './composition'
 import { setFlatFileDirtyCount, shouldConfirmLeave } from './unsaved-guard'
@@ -2789,10 +2790,22 @@ export default function FlatFileGrid({
                         onClick={(e) => { e.stopPropagation(); setFrozenColCount(colIdx < frozenColCount ? colIdx : colIdx + 1) }}>
                         <Pin className="w-3 h-3" />
                       </button>
-                      {/* Resize handle */}
+                      {/* Resize handle — double-click auto-fits to rendered content (UFX P7 item 6) */}
                       <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize group/cr flex items-center justify-center z-10"
                         onMouseDown={(e) => { e.stopPropagation(); startColResize(e, col.id, w) }}
-                        onDoubleClick={(e) => { e.stopPropagation(); setColWidths((p) => { const n = { ...p }; delete n[col.id]; return n }) }}>
+                        onDoubleClick={(e) => {
+                          e.stopPropagation()
+                          // Measure the header label + every RENDERED cell's content
+                          // (rows skipped by content-visibility measure 0 and are
+                          // ignored by computeAutoFitWidth). td > div covers the
+                          // content wrapper in every display branch.
+                          const th = (e.currentTarget as HTMLElement).closest('th')
+                          const widths: number[] = [th ? th.scrollWidth : 0]
+                          document.querySelectorAll<HTMLElement>(`td[data-ci="${colIdx}"] > div`)
+                            .forEach((el) => widths.push(el.scrollWidth))
+                          const fit = computeAutoFitWidth(widths)
+                          if (fit != null) setColWidths((p) => (p[col.id] === fit ? p : { ...p, [col.id]: fit }))
+                        }}>
                         <div className="w-px h-3/4 rounded-full bg-slate-300/50 group-hover/cr:bg-blue-400 dark:bg-slate-600/50 dark:group-hover/cr:bg-blue-500 transition-colors" />
                       </div>
                     </th>
