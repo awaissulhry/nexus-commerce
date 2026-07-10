@@ -1538,7 +1538,13 @@ export async function pushVariationGroup(
   const currency = mp === 'UK' ? 'GBP' : 'EUR'
   const catId    = (parentRow.category_id as string | undefined) ?? ''
   // EFX P9a/P9f — shared (parent-level) offer terms, resolved once for the family.
-  const bestOfferTerms = buildBestOfferTerms(parentRow, currency, opts?.warningsSink)
+  // EFX P9a — Best Offer is intentionally NOT built for a variation group: eBay
+  // rejects Best Offer on any SKU that belongs to an inventory item group (error
+  // 25737 "La Proposta d'acquisto non è consentita…"). Surface it as a warning
+  // (warn-never-block) so the operator knows their Best Offer setting was ignored.
+  if (parentRow.best_offer_enabled && opts?.warningsSink) {
+    opts.warningsSink.push('Best Offer (Trattativa) isn’t supported on multi-variation eBay listings — it was ignored for this family.')
+  }
   const quantityLimitPerBuyer = resolveQuantityLimitPerBuyer(parentRow)
 
   // Seed from Step-1 errors: if any inventory_item PUT already failed, skip
@@ -1583,8 +1589,8 @@ export async function pushVariationGroup(
         ...(fulfillmentPolicyId ? { fulfillmentPolicyId } : {}),
         ...(paymentPolicyId     ? { paymentPolicyId }     : {}),
         ...(returnPolicyId      ? { returnPolicyId }      : {}),
-        // EFX P9a — Best Offer (Trattativa). eBay nests it under listingPolicies.
-        bestOfferTerms,
+        // EFX P9a — Best Offer OMITTED for variation groups: eBay forbids it on a
+        // SKU that belongs to an inventory item group (error 25737).
       },
       // merchantLocationKey (top-level, not inside listingPolicies) tells eBay
       // the seller's location so it can resolve Item.Country for the listing.
@@ -1994,8 +2000,10 @@ export async function pushOffersOnly(
         ...(fulfillmentPolicyId ? { fulfillmentPolicyId } : {}),
         ...(paymentPolicyId     ? { paymentPolicyId }     : {}),
         ...(returnPolicyId      ? { returnPolicyId }      : {}),
-        // EFX P9a — Best Offer (Trattativa). eBay nests it under listingPolicies.
-        bestOfferTerms,
+        // EFX P9a — Best Offer, but NOT for variation-group members: eBay rejects
+        // it on a SKU that belongs to an inventory item group (25737). A standalone
+        // single-SKU family keeps Best Offer.
+        ...(variantRows.length > 1 ? {} : { bestOfferTerms }),
       },
       ...(merchantLocationKey ? { merchantLocationKey } : {}),
       quantityLimitPerBuyer,
