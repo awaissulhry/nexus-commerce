@@ -1,7 +1,7 @@
 'use client'
 import { createRef, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
-import { CheckCircle2, ChevronDown, ChevronRight, Copy, ImageIcon, Loader2, RefreshCw, XCircle } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronRight, Copy, ImageIcon, Loader2, Plus, RefreshCw, Search, X, XCircle } from 'lucide-react'
 import { Drawer } from '@/design-system/components/Drawer'
 import { Menu } from '@/design-system/components/Menu'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
@@ -15,9 +15,10 @@ import ChannelImageGrid, { type ImageGridColumn, type ImageGridRow } from '@/app
 import ImagePickerModal from '@/app/products/[id]/edit/tabs/images/ImagePickerModal'
 import type { WorkspaceData, ListingImage, VariantSummary, ProductImage } from '@/app/products/[id]/edit/tabs/images/types'
 import { Select } from '@/design-system/primitives/Select'
+import { Input } from '@/design-system/primitives/Input'
 import { axisSynonymKey, describeResolvedAxis, SHARED_GALLERY_AXIS, type ResolvedAxisFeedback } from './variationValueOrder.pure'
 import { buildImageBuckets, resolvedAxisFor } from './resolvedAxes.pure'
-import type { ImageFamilySummary } from './imageFamilies.pure'
+import { mergeImageFamilies, type ImageFamilySummary } from './imageFamilies.pure'
 // EFX P7 — pure assign/copy/cap semantics (reuse allowed, in-bucket dedup,
 // 12-cap rejection). See imageBuckets.vitest.test.ts for the invariants.
 import { EBAY_BUCKET_CAP, assignImage, copyImageAt, copySetTo, type Buckets } from './imageBuckets.pure'
@@ -171,10 +172,17 @@ interface FamilySectionProps {
   /** Mirrors modal open prop — triggers workspace load on open, reset on close. */
   open: boolean
   onSyncColumns?: (urls: string[]) => void
+  /**
+   * Family has no eBay ChannelListing yet (added via the "Add family" picker
+   * from a draft). Images can be curated + saved, but PUBLISH fails until the
+   * listing is created via the flat-file push. Drives the header chip only —
+   * Save works unchanged.
+   */
+  isDraft?: boolean
 }
 
 const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
-  function FamilySection({ productId, marketplace, collapsible = false, open, onSyncColumns }, ref) {
+  function FamilySection({ productId, marketplace, collapsible = false, open, onSyncColumns, isDraft = false }, ref) {
     const { toast } = useToast()
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -615,6 +623,14 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
             </button>
           )}
           <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex-shrink-0 min-w-0 truncate">{sku}</span>
+          {isDraft && (
+            <span
+              className="text-[10px] rounded-full px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium flex-shrink-0"
+              title="This family has no eBay listing yet. You can curate and Save its images, but they can't be published until the listing is created via the flat-file push."
+            >
+              Draft — not listed yet
+            </span>
+          )}
           {hasDirty && !saving && (
             <span className="text-[10px] rounded-full px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium flex-shrink-0">
               unsaved
@@ -1024,6 +1040,9 @@ export interface EbayFlatFileImageDrawerProps {
 /** Mirrors the API's MAX_PER_CALL in bulk-image-publish.routes.ts. */
 const BULK_MAX = 50
 
+/** localStorage key for operator-added families (survives a page reload). */
+const ADDED_FAMILIES_KEY = 'efx-added-families'
+
 /** One per-family outcome from the bulk publish, plus client-side P5 feedback. */
 interface BulkFamilyOutcome {
   productId: string
@@ -1038,7 +1057,113 @@ interface BulkFamilyOutcome {
   feedback: ResolvedAxisFeedback | null
 }
 
-export function EbayFlatFileImageDrawer({ open, onClose, marketplace, families, onSyncColumns }: EbayFlatFileImageDrawerProps) {
+// ── Add-family picker ─────────────────────────────────────────────────────────
+// Targeted alternative to the flat file's "All products" scope toggle: search
+// the catalog and pull SPECIFIC families/item ids into the drawer — published
+// OR unpublished DRAFT — without loading the whole sheet. Backed by
+// GET /api/products/lookup (parent + standalone, deletedAt null, no eBay-listing
+// requirement so drafts are findable).
+
+interface LookupItem {
+  id: string
+  sku: string
+  title: string
+  isParent: boolean
+  hasEbayListing: boolean
+}
+
+function AddFamilyPicker({ presentIds, onAdd }: { presentIds: Set<string>; onAdd: (f: ImageFamilySummary) => void }) {
+  const [q, setQ] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [items, setItems] = useState<LookupItem[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [focused, setFocused] = useState(false)
+
+  useEffect(() => {
+    const term = q.trim()
+    if (term.length < 2) { setItems([]); setError(null); setLoading(false); return }
+    setLoading(true); setError(null)
+    const ctrl = new AbortController()
+    const t = setTimeout(() => {
+      beFetch(`/api/products/lookup?q=${encodeURIComponent(term)}&limit=20`, { signal: ctrl.signal })
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() as Promise<{ items: LookupItem[] }> })
+        .then(d => setItems(d.items ?? []))
+        .catch((e: unknown) => { if (!(e instanceof DOMException && e.name === 'AbortError')) setError(e instanceof Error ? e.message : String(e)) })
+        .finally(() => setLoading(false))
+    }, 250)
+    return () => { clearTimeout(t); ctrl.abort() }
+  }, [q])
+
+  const term = q.trim()
+  const showDropdown = focused && term.length >= 2
+
+  return (
+    <div className="relative">
+      <Input
+        value={q}
+        onChange={e => setQ(e.target.value)}
+        onFocus={() => setFocused(true)}
+        // Delay blur so a result click registers before the dropdown unmounts.
+        onBlur={() => setTimeout(() => setFocused(false), 150)}
+        leadingIcon={<Search className="w-3.5 h-3.5" />}
+        placeholder="Add a family by SKU or title (drafts included)…"
+        aria-label="Search products to add a family to this drawer"
+      />
+      {showDropdown && (
+        <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg max-h-72 overflow-y-auto">
+          {loading && (
+            <div className="flex items-center gap-2 px-3 py-2.5 text-xs text-slate-500">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Searching…
+            </div>
+          )}
+          {!loading && error && (
+            <div className="px-3 py-2.5 text-xs text-red-600 dark:text-red-400">Search failed: {error}</div>
+          )}
+          {!loading && !error && items.length === 0 && (
+            <div className="px-3 py-2.5 text-xs text-slate-400">No products match “{term}”.</div>
+          )}
+          {!loading && !error && items.map(it => {
+            const already = presentIds.has(it.id)
+            return (
+              <button
+                key={it.id}
+                type="button"
+                disabled={already}
+                // onMouseDown fires before the input's blur, so the click always lands.
+                onMouseDown={e => { e.preventDefault() }}
+                onClick={() => {
+                  if (already) return
+                  onAdd({ productId: it.id, parentSku: it.sku, title: it.title, variantCount: 0, hasEbayListing: it.hasEbayListing })
+                  setQ('')
+                }}
+                className={[
+                  'w-full flex items-center gap-2 px-3 py-2 text-left border-b border-slate-100 dark:border-slate-800 last:border-0 transition-colors',
+                  already ? 'opacity-50 cursor-default' : 'hover:bg-slate-50 dark:hover:bg-slate-800/60',
+                ].join(' ')}
+              >
+                {already
+                  ? <CheckCircle2 className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                  : <Plus className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />}
+                <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 flex-shrink-0">{it.sku}</span>
+                {it.title && <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate min-w-0">{it.title}</span>}
+                <span className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+                  {!it.hasEbayListing && (
+                    <span className="text-[10px] rounded-full px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium">
+                      draft
+                    </span>
+                  )}
+                  {already && <span className="text-[10px] text-slate-400">added</span>}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function EbayFlatFileImageDrawer({ open, onClose, marketplace, families: derivedFamilies, onSyncColumns }: EbayFlatFileImageDrawerProps) {
   const { toast } = useToast()
 
   // Stable ref map keyed by productId — persists across renders without extra deps.
@@ -1047,6 +1172,32 @@ export function EbayFlatFileImageDrawer({ open, onClose, marketplace, families, 
     if (!refsMap.current.has(pid)) refsMap.current.set(pid, createRef<FamilySectionHandle>())
     return refsMap.current.get(pid)!
   }, [])
+
+  // ── "Add family" picker — operator-added families (targeted curation) ──────
+  // Families the operator pulls in via the picker, merged with the sheet-derived
+  // ones (deriveImageFamilies). Session-persistent; a cheap localStorage mirror
+  // keeps them across a page reload too. Each FamilySection is id-driven, so an
+  // added family "just works" — no sheet reload.
+  const [addedFamilies, setAddedFamilies] = useState<ImageFamilySummary[]>(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const raw = window.localStorage.getItem(ADDED_FAMILIES_KEY)
+      const parsed = raw ? (JSON.parse(raw) as unknown) : null
+      return Array.isArray(parsed) ? (parsed as ImageFamilySummary[]).filter(f => f && typeof f.productId === 'string' && f.productId) : []
+    } catch { return [] }
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try { window.localStorage.setItem(ADDED_FAMILIES_KEY, JSON.stringify(addedFamilies)) } catch { /* quota / private mode — session state still holds */ }
+  }, [addedFamilies])
+
+  // Derived (sheet) families win on id collision; picker adds only genuinely
+  // new families. Set of added ids drives the "—" variant badge (real count
+  // is unknown until the FamilySection loads).
+  const families = useMemo(() => mergeImageFamilies(derivedFamilies, addedFamilies), [derivedFamilies, addedFamilies])
+  const derivedIds = useMemo(() => new Set(derivedFamilies.map(f => f.productId)), [derivedFamilies])
+  const addedIds = useMemo(() => new Set(addedFamilies.map(f => f.productId)), [addedFamilies])
+  const presentIds = useMemo(() => new Set(families.map(f => f.productId)), [families])
 
   const [busyAll, setBusyAll] = useState(false)
 
@@ -1077,6 +1228,17 @@ export function EbayFlatFileImageDrawer({ open, onClose, marketplace, families, 
     setMountedIds(prev => prev.has(pid) ? prev : new Set(prev).add(pid))
   }, [])
 
+  // ── Add / remove operator-picked families ─────────────────────────────────
+  const addFamily = useCallback((f: ImageFamilySummary) => {
+    setAddedFamilies(prev => prev.some(x => x.productId === f.productId) ? prev : [...prev, f])
+    // Auto-expand so the operator can curate the just-added family immediately.
+    setMountedIds(prev => prev.has(f.productId) ? prev : new Set(prev).add(f.productId))
+  }, [])
+  const removeAddedFamily = useCallback((pid: string) => {
+    setAddedFamilies(prev => prev.filter(f => f.productId !== pid))
+    setMountedIds(prev => { if (!prev.has(pid)) return prev; const n = new Set(prev); n.delete(pid); return n })
+  }, [])
+
   // ── Save All (expanded families only — unexpanded ones can't be dirty) ────
 
   const saveAll = useCallback(async () => {
@@ -1094,16 +1256,28 @@ export function EbayFlatFileImageDrawer({ open, onClose, marketplace, families, 
   // ── Publish All — ONE bulk request instead of N sequential publishes ──────
 
   const publishAll = useCallback(async () => {
-    if (families.length > BULK_MAX) {
-      setBulkError(`Publish All sends at most ${BULK_MAX} families per run — this sheet has ${families.length}. Narrow the sheet's scope (or publish families individually) and retry.`)
+    // A family the picker flagged as having no eBay listing (hasEbayListing ===
+    // false) CANNOT be published — the publish service returns "isn't
+    // priced/listed on eBay yet". Excluding them from the bulk request keeps
+    // Publish All honest (no silent per-family failure); Save All / their own
+    // Save still work. Sheet-derived families (flag undefined) publish as before.
+    const drafts = families.filter(f => f.hasEbayListing === false)
+    const publishable = families.filter(f => f.hasEbayListing !== false)
+    if (publishable.length > BULK_MAX) {
+      setBulkError(`Publish All sends at most ${BULK_MAX} families per run — this run has ${publishable.length}. Narrow the scope (or publish families individually) and retry.`)
+      return
+    }
+    if (publishable.length === 0) {
+      setBulkError(`Nothing to publish — every family here is a draft with no eBay listing yet. Curate + Save works, but create each listing via the flat-file push before publishing images.`)
       return
     }
     setBusyAll(true)
     setBulkResults(null)
     setBulkError(null)
     try {
-      // 1 — silently save every dirty expanded family so the bulk publish
-      // pushes the curation the operator is looking at, never stale buckets.
+      // 1 — silently save every dirty expanded family (drafts included: image
+      // save works on a draft) so the bulk publish pushes the curation the
+      // operator is looking at, never stale buckets.
       const saveFailed: string[] = []
       for (const f of families) {
         const ok = await refsMap.current.get(f.productId)?.current?.saveSilent() ?? true
@@ -1113,11 +1287,12 @@ export function EbayFlatFileImageDrawer({ open, onClose, marketplace, families, 
         setBulkError(`Save failed for ${saveFailed.join(', ')} — nothing was published.`)
         return
       }
-      // 2 — one request. Expanded families send the axis on screen
-      // ('__shared__' included); never-expanded ones omit activeAxis so the
-      // server falls back to the stored imageAxisPreference (P5 persists
-      // every picker change, so the fallback tracks the last pick).
-      const items = families.map(f => {
+      // 2 — one request over the PUBLISHABLE families only. Expanded families
+      // send the axis on screen ('__shared__' included); never-expanded ones
+      // omit activeAxis so the server falls back to the stored
+      // imageAxisPreference (P5 persists every picker change, so the fallback
+      // tracks the last pick).
+      const items = publishable.map(f => {
         const info = refsMap.current.get(f.productId)?.current?.getAxisInfo()
         return {
           productId: f.productId,
@@ -1147,12 +1322,23 @@ export function EbayFlatFileImageDrawer({ open, onClose, marketplace, families, 
           : null
         map.set(r.productId, { ...r, feedback })
       }
+      // Surface skipped drafts explicitly (not a silent omission) — same
+      // per-family result row, with the "create the listing first" reason.
+      for (const f of drafts) {
+        map.set(f.productId, {
+          productId: f.productId,
+          ok: false,
+          message: 'Skipped — not listed on eBay yet. Create the listing via the flat-file push, then publish its images.',
+          feedback: null,
+        })
+      }
       setBulkResults(map)
       const okN = [...map.values()].filter(r => r.ok).length
-      if (okN === families.length) {
-        toast.success(`Published images for ${okN === 1 ? 'the family' : `all ${okN} families`} to ${publishMarket}`)
+      const skipNote = drafts.length > 0 ? ` (${drafts.length} draft${drafts.length !== 1 ? 's' : ''} skipped)` : ''
+      if (okN === publishable.length) {
+        toast.success(`Published images for ${okN === 1 ? 'the family' : `all ${okN} families`} to ${publishMarket}${skipNote}`)
       } else {
-        toast.error(`Published ${okN}/${families.length} families to ${publishMarket} — see per-family results`)
+        toast.error(`Published ${okN}/${publishable.length} families to ${publishMarket} — see per-family results${skipNote}`)
       }
     } catch (err) {
       setBulkError(err instanceof Error ? err.message : String(err))
@@ -1170,7 +1356,7 @@ export function EbayFlatFileImageDrawer({ open, onClose, marketplace, families, 
       onClose={onClose}
       title="eBay Images"
       subtitle={hasProducts
-        ? `${families.length} product famil${families.length !== 1 ? 'ies' : 'y'} in this sheet`
+        ? `${families.length} product famil${families.length !== 1 ? 'ies' : 'y'}${addedFamilies.length > 0 ? ` (${addedFamilies.length} added)` : ''}`
         : undefined}
       width={840}
       footer={isMulti ? (
@@ -1188,9 +1374,19 @@ export function EbayFlatFileImageDrawer({ open, onClose, marketplace, families, 
         </div>
       ) : undefined}
     >
-      {!hasProducts ? (
-        <Banner variant="warning" title="No product">
-          Open this from a product&rsquo;s flat file to manage its eBay images.
+      <div className="flex flex-col gap-4">
+        {/* Add-family picker — targeted curation for specific families/item ids */}
+        <div className="flex flex-col gap-1.5">
+          <AddFamilyPicker presentIds={presentIds} onAdd={addFamily} />
+          <span className="text-[10.5px] text-slate-400">
+            Pull specific families in to curate them together — search by SKU or title. Drafts (no eBay listing yet)
+            can be curated + saved, but publishing needs a live listing.
+          </span>
+        </div>
+
+        {!hasProducts ? (
+        <Banner variant="warning" title="No families yet">
+          Search above to add a family, or open this from a product&rsquo;s flat file to manage its eBay images.
         </Banner>
       ) : (
         <div className="flex flex-col gap-4">
@@ -1271,25 +1467,40 @@ export function EbayFlatFileImageDrawer({ open, onClose, marketplace, families, 
                   marketplace={publishMarket}
                   collapsible={isMulti}
                   open={open}
+                  isDraft={f.hasEbayListing === false}
                   onSyncColumns={onSyncColumns ? urls => onSyncColumns(f.productId, urls) : undefined}
                 />
               )
             }
             const r = bulkResults?.get(f.productId)
+            const isAdded = addedIds.has(f.productId) && !derivedIds.has(f.productId)
+            const isDraft = f.hasEbayListing === false
             return (
-              <button
+              <div
                 key={f.productId}
-                type="button"
-                onClick={() => expandFamily(f.productId)}
-                aria-label={`Expand ${f.parentSku || f.productId} images`}
-                className="w-full flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-4 py-2.5 text-left hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="w-full flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-4 py-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
-                <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex-shrink-0">{f.parentSku || f.productId}</span>
-                {f.title && (
-                  <span className="text-xs text-slate-500 dark:text-slate-400 truncate min-w-0">{f.title}</span>
-                )}
+                <button
+                  type="button"
+                  onClick={() => expandFamily(f.productId)}
+                  aria-label={`Expand ${f.parentSku || f.productId} images`}
+                  className="flex-1 min-w-0 flex items-center gap-2 text-left"
+                >
+                  <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex-shrink-0">{f.parentSku || f.productId}</span>
+                  {f.title && (
+                    <span className="text-xs text-slate-500 dark:text-slate-400 truncate min-w-0">{f.title}</span>
+                  )}
+                </button>
                 <span className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+                  {isDraft && (
+                    <span
+                      className="text-[10px] rounded-full px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium"
+                      title="No eBay listing yet — curate + Save works, but publishing needs a live listing."
+                    >
+                      Draft — not listed yet
+                    </span>
+                  )}
                   {r && (
                     <span className={[
                       'text-[10px] rounded-full px-1.5 py-0.5 font-medium',
@@ -1297,18 +1508,29 @@ export function EbayFlatFileImageDrawer({ open, onClose, marketplace, families, 
                         ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                         : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400',
                     ].join(' ')}>
-                      {r.ok ? `published → ${publishMarket}` : 'publish failed'}
+                      {r.ok ? `published → ${publishMarket}` : (isDraft ? 'skipped' : 'publish failed')}
                     </span>
                   )}
                   <span className="text-[10px] rounded-full px-1.5 py-0.5 bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300 font-medium">
-                    {f.variantCount} variant{f.variantCount !== 1 ? 's' : ''}
+                    {isAdded ? '—' : `${f.variantCount} variant${f.variantCount !== 1 ? 's' : ''}`}
                   </span>
+                  {isAdded && (
+                    <button
+                      type="button"
+                      onClick={() => removeAddedFamily(f.productId)}
+                      aria-label={`Remove ${f.parentSku || f.productId} from this drawer`}
+                      className="rounded p-0.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 dark:hover:text-slate-200 dark:hover:bg-slate-700 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </span>
-              </button>
+              </div>
             )
           })}
         </div>
       )}
+      </div>
     </Drawer>
   )
 }

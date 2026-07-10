@@ -27,6 +27,7 @@ import {
 } from '../services/product-search.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
 import { logger } from '../utils/logger.js'
+import { allowApiKeyScope } from '../lib/api-key-hook.js'
 
 // JSON-blob fields (family / workflowStage / coverage / categoryPath) use
 // an empty schema so fast-json-stringify serializes them with JSON.stringify
@@ -149,6 +150,103 @@ const productsSearchRoutes: FastifyPluginAsync = async (fastify) => {
           error: err instanceof Error ? err.message : String(err),
         })
         return reply.code(500).send({ error: 'Search failed' })
+      }
+    },
+  )
+
+  // ── Lightweight family lookup ─────────────────────────────────────────────
+  //
+  //   GET /api/products/lookup?q=<term>&limit=20
+  //
+  // Powers the eBay images drawer's "Add family" picker: the operator curates
+  // images for SPECIFIC families/item ids together without loading the whole
+  // catalog. Distinct from the faceted /products/search above (which is
+  // ProductReadCache/Typesense-backed and returns the full grid payload) —
+  // this hits Postgres directly so DRAFT families (created but not yet backfilled
+  // into the read cache) are findable immediately.
+  //
+  // Scope: top-level products only (parentId IS NULL = variation parents +
+  // standalones — the family roots the images workspace keys on), never
+  // soft-deleted, and with NO eBay-listing requirement so a curatable-but-not-
+  // yet-listed draft still shows up. `hasEbayListing` lets the drawer flag
+  // drafts that can be curated + saved but not published until their listing
+  // is created via the flat-file push.
+  fastify.get<{ Querystring: { q?: string; limit?: string } }>(
+    '/products/lookup',
+    {
+      // Same soft gate as GET /products: anonymous today, enforces
+      // 'products:read' once a real Bearer is sent.
+      preHandler: allowApiKeyScope('products:read'),
+      schema: {
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              items: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    sku: { type: 'string' },
+                    title: { type: 'string' },
+                    isParent: { type: 'boolean' },
+                    hasEbayListing: { type: 'boolean' },
+                  },
+                },
+              },
+            },
+          },
+          500: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const q = String(request.query.q ?? '').trim()
+        const take = Math.min(
+          Math.max(parseInt(String(request.query.limit ?? '20'), 10) || 20, 1),
+          50,
+        )
+        const where: Record<string, unknown> = { parentId: null, deletedAt: null }
+        if (q) {
+          where.OR = [
+            { sku: { contains: q, mode: 'insensitive' } },
+            { name: { contains: q, mode: 'insensitive' } },
+          ]
+        }
+        const rows = await prisma.product.findMany({
+          where: where as any,
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            isParent: true,
+            // Presence of ANY eBay ChannelListing → publishable; absence → the
+            // "Draft — not listed yet" case (image save works, publish doesn't).
+            channelListings: {
+              where: { channel: 'EBAY' },
+              select: { id: true },
+              take: 1,
+            },
+          },
+          orderBy: [{ updatedAt: 'desc' }],
+          take,
+        })
+        return {
+          items: rows.map((r) => ({
+            id: r.id,
+            sku: r.sku,
+            title: r.name ?? '',
+            isParent: r.isParent,
+            hasEbayListing: r.channelListings.length > 0,
+          })),
+        }
+      } catch (err) {
+        logger.error('[products-lookup] query failed', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+        return reply.code(500).send({ error: 'Lookup failed' })
       }
     },
   )

@@ -7,7 +7,7 @@
  * Run: npx vitest run apps/web/src/app/products/ebay-flat-file/imageFamilies.vitest.test.ts
  */
 import { describe, it, expect } from 'vitest'
-import { deriveImageFamilies, type FamilyDeriveRow } from './imageFamilies.pure'
+import { deriveImageFamilies, mergeImageFamilies, type FamilyDeriveRow, type ImageFamilySummary } from './imageFamilies.pure'
 
 const parent = (id: string, sku: string, title = ''): FamilyDeriveRow => ({
   _isParent: true, _productId: id, sku, title,
@@ -92,5 +92,43 @@ describe('deriveImageFamilies', () => {
     expect(deriveImageFamilies(rows)).toEqual([
       { productId: 'p1', parentSku: 'PAR', title: '', variantCount: 0 },
     ])
+  })
+})
+
+describe('mergeImageFamilies', () => {
+  const fam = (id: string, extra: Partial<ImageFamilySummary> = {}): ImageFamilySummary => ({
+    productId: id, parentSku: id.toUpperCase(), title: '', variantCount: 0, ...extra,
+  })
+
+  it('appends added families after the derived ones, in order', () => {
+    const derived = [fam('p1'), fam('p2')]
+    const added = [fam('a1', { hasEbayListing: true }), fam('a2', { hasEbayListing: false })]
+    expect(mergeImageFamilies(derived, added).map(f => f.productId)).toEqual(['p1', 'p2', 'a1', 'a2'])
+  })
+
+  it('derived family wins on id collision (added duplicate dropped)', () => {
+    const derived = [fam('p1', { variantCount: 3, parentSku: 'SHEET' })]
+    const added = [fam('p1', { variantCount: 0, parentSku: 'PICKER', hasEbayListing: false })]
+    const out = mergeImageFamilies(derived, added)
+    expect(out).toHaveLength(1)
+    expect(out[0]).toEqual({ productId: 'p1', parentSku: 'SHEET', title: '', variantCount: 3 })
+  })
+
+  it('de-dupes within the added list too', () => {
+    const out = mergeImageFamilies([], [fam('a1'), fam('a1', { title: 'dup' })])
+    expect(out).toHaveLength(1)
+    expect(out[0].productId).toBe('a1')
+  })
+
+  it('preserves the hasEbayListing draft flag on added families', () => {
+    const out = mergeImageFamilies([fam('p1')], [fam('a1', { hasEbayListing: false })])
+    expect(out.find(f => f.productId === 'a1')?.hasEbayListing).toBe(false)
+    // derived family stays flag-free (unknown)
+    expect(out.find(f => f.productId === 'p1')?.hasEbayListing).toBeUndefined()
+  })
+
+  it('skips id-less entries defensively', () => {
+    const out = mergeImageFamilies([fam('p1')], [{ productId: '', parentSku: '', title: '', variantCount: 0 }])
+    expect(out.map(f => f.productId)).toEqual(['p1'])
   })
 })

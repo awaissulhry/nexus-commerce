@@ -19,6 +19,14 @@ export interface ImageFamilySummary {
   title: string
   /** Number of variant child rows currently in the sheet for this family. */
   variantCount: number
+  /**
+   * Whether the family has an eBay ChannelListing. Only set on families added
+   * via the drawer's "Add family" picker (the /products/lookup endpoint reports
+   * it); left undefined for sheet-derived families (already in an eBay view).
+   * `false` = DRAFT: images can be curated + saved but not published until the
+   * listing is created via the flat-file push.
+   */
+  hasEbayListing?: boolean
 }
 
 /** Minimal row shape — mirrors the fields derivedProductIds/familyParentIds read. */
@@ -91,4 +99,31 @@ export function deriveImageFamilies(
   }
 
   return [...out.values()]
+}
+
+/**
+ * Merge the sheet-derived families with the ones the operator added via the
+ * drawer's "Add family" picker, de-duped by productId. Derived families win on
+ * collision (they carry the live sheet variantCount + parent SKU/title); a
+ * picker-added family whose id already appears in the sheet is dropped, so the
+ * same family never renders twice. Order: all derived first (sheet order),
+ * then the added ones in add order.
+ */
+export function mergeImageFamilies(
+  derived: ImageFamilySummary[],
+  added: ImageFamilySummary[],
+): ImageFamilySummary[] {
+  const seen = new Set<string>()
+  const out: ImageFamilySummary[] = []
+  for (const f of derived) {
+    if (!f.productId || seen.has(f.productId)) continue
+    seen.add(f.productId)
+    out.push(f)
+  }
+  for (const f of added) {
+    if (!f.productId || seen.has(f.productId)) continue
+    seen.add(f.productId)
+    out.push(f)
+  }
+  return out
 }
