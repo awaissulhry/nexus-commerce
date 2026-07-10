@@ -196,24 +196,33 @@ export function complianceBlockers(
 }
 
 /**
- * Pure — map the canonical payload to Amazon flat-file column values, using the
- * attribute keys the Amazon cockpit already reads (AC.4 ComplianceCard). Only
+ * Pure — map the canonical payload to Amazon flat-file column values. Only
  * emits a key when there's a value. Dangerous-goods enum mapping is deferred to
  * C5 (it's product-type-specific). Country-of-origin keeps its label here; the
  * existing feed serializer converts label→code on submit.
+ *
+ * UFX P6e — the keys are the REAL schema attribute names. The old
+ * `eu_responsible_person` / `responsible_person_address` /
+ * `manufacturer_contact_information` exist in ZERO of the 72 live cached
+ * schema definitions, so the per-type applicable-columns gate (FFP.3/MT.2)
+ * silently pruned them from every feed — the compliance auto-fill never
+ * landed. Amazon's GPSR model is reference-by-registered-contact (email/URL):
+ *   - gpsr_manufacturer_reference.gpsr_manufacturer_email_address — the
+ *     manufacturer's GPSR contact (always expected for GPSR products);
+ *   - dsa_responsible_party_address.value — the EU Responsible Person's
+ *     contact, which must match an RP registered in Seller Central.
+ * Xavia manufactures its own gear, so the Brand Settings contact email serves
+ * as both. The feed serializer emits the correct nested shapes (flat
+ * single-sub for gpsr_manufacturer_reference, [{value,…}] for the rest).
  */
 export function buildAmazonComplianceColumns(payload: CompliancePayload): Record<string, string> {
   const cols: Record<string, string> = {}
   if (payload.countryOfOrigin) cols.country_of_origin = payload.countryOfOrigin
-  if (payload.manufacturer) {
-    cols.manufacturer = payload.manufacturer
-    cols.manufacturer_contact_information = payload.manufacturer
-  }
-  const rp = payload.responsiblePerson
-  if (rp?.name) cols.eu_responsible_person = rp.name
-  if (rp) {
-    const addr = [...(rp.addressLines ?? []), rp.email, rp.phone].filter(Boolean).join(', ')
-    if (addr) cols.responsible_person_address = addr
+  if (payload.manufacturer) cols.manufacturer = payload.manufacturer
+  const contact = payload.responsiblePerson?.email?.trim()
+  if (contact) {
+    cols.gpsr_manufacturer_reference = contact
+    cols.dsa_responsible_party_address = contact
   }
   return cols
 }

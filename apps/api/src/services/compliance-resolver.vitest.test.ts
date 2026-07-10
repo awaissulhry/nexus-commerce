@@ -116,17 +116,27 @@ describe('C1 — evaluateCompliance', () => {
 })
 
 describe('C1 — buildAmazonComplianceColumns', () => {
-  it('maps the confirmed Amazon keys; folds RP address', () => {
+  it('UFX P6e — maps the REAL schema attribute names (GPSR contact from RP email)', () => {
     const p = buildCompliancePayload({ id: 'p', countryOfOrigin: 'IT', manufacturer: 'Xavia', certificates: [] }, RP)
     const cols = buildAmazonComplianceColumns(p)
     expect(cols.country_of_origin).toBe('IT')
     expect(cols.manufacturer).toBe('Xavia')
-    expect(cols.manufacturer_contact_information).toBe('Xavia')
-    expect(cols.eu_responsible_person).toBe('Xavia Srl')
-    expect(cols.responsible_person_address).toBe('Via Roma 1, 20100 Milano, compliance@xavia.it, +39 02 1234')
+    expect(cols.gpsr_manufacturer_reference).toBe('compliance@xavia.it')
+    expect(cols.dsa_responsible_party_address).toBe('compliance@xavia.it')
+  })
+  it('UFX P6e — never emits the dead legacy names (0 of 72 live schemas define them)', () => {
+    const p = buildCompliancePayload({ id: 'p', countryOfOrigin: 'IT', manufacturer: 'Xavia', certificates: [] }, RP)
+    const cols = buildAmazonComplianceColumns(p)
+    expect(cols).not.toHaveProperty('eu_responsible_person')
+    expect(cols).not.toHaveProperty('responsible_person_address')
+    expect(cols).not.toHaveProperty('manufacturer_contact_information')
   })
   it('emits only keys with data (no RP, no manufacturer)', () => {
     const p = buildCompliancePayload({ id: 'p', countryOfOrigin: 'IT', certificates: [] }, null)
+    expect(Object.keys(buildAmazonComplianceColumns(p))).toEqual(['country_of_origin'])
+  })
+  it('RP without email → no GPSR contact columns', () => {
+    const p = buildCompliancePayload({ id: 'p', countryOfOrigin: 'IT', certificates: [] }, { ...RP, email: null })
     expect(Object.keys(buildAmazonComplianceColumns(p))).toEqual(['country_of_origin'])
   })
 })

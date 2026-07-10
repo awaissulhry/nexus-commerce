@@ -208,8 +208,10 @@ export interface FeedSchemaHints {
    *  that don't belong to the product type (90000900). */
   applicableByType?: Map<string, Set<string>>
   /** FFP.18 — attributes that nest ONE wrapped sub-property (closure→type,
-   *  inner/outer→material …); emitted as `[{sub: [{value,…}]}]`. */
-  wrappedSubPropFields?: Record<string, { sub: string; localized: boolean }>
+   *  inner/outer→material …); emitted as `[{sub: [{value,…}]}]`. UFX P6e adds
+   *  the `flat` variant: ONE PLAIN scalar sub-property (gpsr_manufacturer_reference
+   *  → gpsr_manufacturer_email_address), emitted as `[{sub: value, marketplace_id}]`. */
+  wrappedSubPropFields?: Record<string, WrappedSubPropField>
   /** UFX P1 (P0-2) — declared schema type per sub-property path; sub-values
    *  are coerced by THIS (a string-typed "38" stays a string) instead of
    *  Number() sniffing. Absent (no schema) → legacy sniff. */
@@ -530,13 +532,20 @@ export function normalizeVariationTheme(raw: string, themeMap: Record<string, st
 
 export type SubPropType = 'string' | 'number' | 'boolean'
 
+/** FFP.18 / UFX P6e — one nested sub-property of an attribute. `flat` = the sub
+ *  is a PLAIN scalar (`[{sub: value}]`), not an array of wrapped values. */
+export type WrappedSubPropField = { sub: string; localized: boolean; flat?: boolean }
+
 export function buildSchemaFieldHints(properties: Record<string, any>): {
   localizedFields: Set<string>; numericFields: Set<string>; booleanFields: Set<string>
   /** FFP.18 — attributes whose payload nests ONE wrapped sub-property
    *  (closure→type, inner→material, outer→material …). Emitting these flat
    *  (`closure: [{value}]`) makes Amazon read them as EMPTY — the classic
-   *  "filled in the grid but 'obbligatorio ma mancante'" (90220). */
-  wrappedSubPropFields: Record<string, { sub: string; localized: boolean }>
+   *  "filled in the grid but 'obbligatorio ma mancante'" (90220). UFX P6e adds
+   *  `flat` entries for a single PLAIN scalar sub (gpsr_manufacturer_reference →
+   *  gpsr_manufacturer_email_address): emitted as `[{sub: value}]`, since the
+   *  generic `[{value}]` shape violates the schema (additionalProperties:false). */
+  wrappedSubPropFields: Record<string, WrappedSubPropField>
   /** UFX P1 (P0-2) — declared JSON type per SUB-PROPERTY path, keyed exactly like
    *  expandedFields paths ("apparel_size.size", "item_package_dimensions.length.value",
    *  "item_package_weight.value"/".unit"). The feed builder coerces sub-values by
@@ -547,7 +556,7 @@ export function buildSchemaFieldHints(properties: Record<string, any>): {
   const localizedFields = new Set<string>()
   const numericFields = new Set<string>()
   const booleanFields = new Set<string>()
-  const wrappedSubPropFields: Record<string, { sub: string; localized: boolean }> = {}
+  const wrappedSubPropFields: Record<string, WrappedSubPropField> = {}
   const subPropTypes: Record<string, SubPropType> = {}
   const INFRA = new Set(['marketplace_id', 'language_tag', 'audience'])
   const classify = (node: any): SubPropType | undefined => {
@@ -575,6 +584,14 @@ export function buildSchemaFieldHints(properties: Record<string, any>): {
         const subItemProps: Record<string, any> = sub?.items?.properties ?? {}
         if (sub?.type === 'array' && subItemProps.value) {
           wrappedSubPropFields[fieldId] = { sub: subKeys[0], localized: Boolean(subItemProps.language_tag) }
+        } else if (sub?.type === 'string' || sub?.type === 'number' || sub?.type === 'integer' || sub?.type === 'boolean') {
+          // UFX P6e — single PLAIN scalar sub-property (gpsr_manufacturer_reference
+          // → gpsr_manufacturer_email_address). The generic `[{value,…}]` emission
+          // violates additionalProperties:false, so Amazon drops the attribute;
+          // the correct shape is `[{gpsr_manufacturer_email_address: v,…}]`.
+          // (variation_theme/parent_sku match too but are EXPLICIT_KEYS-handled;
+          // image locators are handled by the image_locator branch first.)
+          wrappedSubPropFields[fieldId] = { sub: subKeys[0], localized: false, flat: true }
         }
       }
     }
@@ -2659,16 +2676,25 @@ export class AmazonFlatFileService {
           if (k.includes('image_locator')) {
             attrs[k] = [{ media_location: String(v), marketplace_id: marketplaceId }]
           } else if (wrappedSubPropFields[k]) {
-            // FFP.18 — nested single-sub-property shape (closure→type,
-            // inner/outer→material …): `closure: [{type: [{value,…}]}]`.
-            // Flat emission made Amazon read these as EMPTY (90220
-            // "obbligatorio ma mancante" on fields the operator HAD filled).
-            const { sub, localized } = wrappedSubPropFields[k]
-            const subCell: Record<string, any> = {
-              value: enumCodeMap[`${k}.${sub}`]?.[String(v)] ?? enumCodeMap[k]?.[String(v)] ?? String(v),
+            const { sub, localized, flat } = wrappedSubPropFields[k]
+            if (flat) {
+              // UFX P6e — single PLAIN scalar sub-property
+              // (gpsr_manufacturer_reference → gpsr_manufacturer_email_address):
+              // `[{gpsr_manufacturer_email_address: v, marketplace_id}]`. The
+              // generic `[{value,…}]` shape violates additionalProperties:false.
+              const coded = String(enumCodeMap[`${k}.${sub}`]?.[String(v)] ?? enumCodeMap[k]?.[String(v)] ?? String(v))
+              attrs[k] = [{ [sub]: coerceSubPropValue(`${k}.${sub}`, coded, subPropTypes), marketplace_id: marketplaceId }]
+            } else {
+              // FFP.18 — nested single-sub-property shape (closure→type,
+              // inner/outer→material …): `closure: [{type: [{value,…}]}]`.
+              // Flat emission made Amazon read these as EMPTY (90220
+              // "obbligatorio ma mancante" on fields the operator HAD filled).
+              const subCell: Record<string, any> = {
+                value: enumCodeMap[`${k}.${sub}`]?.[String(v)] ?? enumCodeMap[k]?.[String(v)] ?? String(v),
+              }
+              if (localized) subCell.language_tag = languageTag
+              attrs[k] = [{ [sub]: [subCell], marketplace_id: marketplaceId }]
             }
-            if (localized) subCell.language_tag = languageTag
-            attrs[k] = [{ [sub]: [subCell], marketplace_id: marketplaceId }]
           } else {
             const cell: Record<string, any> = { value: emitValue(k, String(v)), marketplace_id: marketplaceId }
             if (isLocalized(k)) cell.language_tag = languageTag
