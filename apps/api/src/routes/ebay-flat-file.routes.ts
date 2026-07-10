@@ -1316,6 +1316,18 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
         // FCF.3 — cap at FBM-available so eBay never lists more than we hold.
         const qty = capToFbm(row._productId as string | undefined, sku, Number(row[`${prefix}_qty`] ?? row.quantity ?? 0), mp);
+        // Diagnostic — per-variant qty trace on the wire (api mode). No secrets.
+        request.log.info({ sku, rawItQty: row[`${prefix}_qty`] ?? null, sharedQty: row.quantity ?? null, cappedQty: qty }, 'ebay-push qty-trace');
+
+        // FM/25004 — never PUT an inventory_item with quantity 0 (eBay error 25004
+        // "quantity must be greater than 0"). Mirror the price guard above: report a
+        // clear per-SKU reason and skip this row. NOT applied to the deactivate/offer
+        // path, which legitimately sets availableQuantity 0 to keep the ItemID.
+        const buffer = row._productId ? (bufferByListing.get(`${row._productId}::${mp.toUpperCase()}`) ?? 0) : 0;
+        if (Number(qty) <= 0) {
+          perRowResults.push({ sku, market: mp, status: 'ERROR', message: `Out of stock — the shared pool has 0 available for this variant${buffer > 0 ? ` (buffer ${buffer})` : ''}. eBay can't list a 0-quantity variant (error 25004); restock or lower the buffer, then re-push.` });
+          continue;
+        }
 
         // EFX P9e — per-market content: the flat row carries only the ACTIVE
         // market's title/description/subtitle. Re-resolve THIS market's own saved

@@ -1067,6 +1067,21 @@ export async function pushVariationGroup(
 
     // FCF.3 — cap each variant at its FBM-available pool.
     const qty = capToFbm(row._productId as string | undefined, sku, Number(row[`${mp.toLowerCase()}_qty`] ?? row.quantity ?? 0), mp)
+    // Diagnostic — per-variant qty trace (service has no fastify logger; use the
+    // existing [ebay-push] console channel). Lightweight, no secrets.
+    console.log('[ebay-push] qty-trace %j', { sku, rawItQty: row[`${mp.toLowerCase()}_qty`] ?? null, sharedQty: row.quantity ?? null, cappedQty: qty })
+
+    // FM/25004 — never PUT an inventory_item with quantity 0: eBay rejects it with
+    // error 25004 ("quantity must be greater than 0"). When capToFbm floors this
+    // variant to 0 (the shared pool is empty for this SKU), skip it with a clear
+    // per-SKU reason — mirrors the no-images guard below. The blanket integrity
+    // guard after the loop (results.filter status ERROR → abort) then keeps this
+    // SKU out of the group PUT, so no 25701 can follow.
+    const buffer = Number(row[`${mp.toLowerCase()}_buffer`] ?? 0) || 0
+    if (Number(qty) <= 0) {
+      results.push({ sku, market: mp, status: 'ERROR', message: `Out of stock — the shared pool has 0 available for this variant${buffer > 0 ? ` (buffer ${buffer})` : ''}. eBay can't list a 0-quantity variant (error 25004); restock or lower the buffer, then re-push.` })
+      continue
+    }
 
     // Use the colour-representative image set (same URLs for every variant of
     // the same colour). eBay deduplicates by URL, so all Black-size variants
