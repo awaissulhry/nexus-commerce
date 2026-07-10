@@ -2,6 +2,8 @@
  * FP1.3 — the inbox workspace container: three panes, URL ?focus deep-link,
  * SSE-driven refresh (worker events arrive via the outbox bridge), keyboard
  * grammar (j/k move · Enter open · e close · s snooze · r reply · Esc back).
+ * Post-arc fix: pinned grid row (minmax(0,1fr)) so pane scrolling works, and
+ * drag-resizable pane widths (persisted; double-click a handle to reset).
  */
 "use client";
 
@@ -14,6 +16,83 @@ import { ConversationList } from "./ConversationList";
 import { ContextRail } from "./ContextRail";
 import { ThreadPane } from "./ThreadPane";
 import type { ListResponse, ThreadResponse } from "./types";
+
+// Resizable pane geometry — Owner-adjustable, persisted per browser.
+const PANES_KEY = "factory.inbox.paneWidths";
+const LIST_DEFAULT = 360;
+const RAIL_DEFAULT = 300;
+const LIST_MIN = 280;
+const LIST_MAX = 640;
+const RAIL_MIN = 240;
+const RAIL_MAX = 520;
+const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
+
+function PaneHandle({
+  onDelta,
+  onCommit,
+  onReset,
+  label,
+}: {
+  onDelta: (deltaX: number) => void;
+  onCommit: () => void;
+  onReset: () => void;
+  label: string;
+}) {
+  const drag = useRef<{ pointerId: number; lastX: number } | null>(null);
+  const [active, setActive] = useState(false);
+
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={label}
+      title="Drag to resize · double-click to reset"
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        drag.current = { pointerId: e.pointerId, lastX: e.clientX };
+        setActive(true);
+      }}
+      onPointerMove={(e) => {
+        if (drag.current?.pointerId !== e.pointerId) return;
+        const delta = e.clientX - drag.current.lastX;
+        if (delta !== 0) {
+          drag.current.lastX = e.clientX;
+          onDelta(delta);
+        }
+      }}
+      onPointerUp={(e) => {
+        if (drag.current?.pointerId !== e.pointerId) return;
+        drag.current = null;
+        setActive(false);
+        onCommit();
+      }}
+      onPointerCancel={() => {
+        drag.current = null;
+        setActive(false);
+        onCommit();
+      }}
+      onDoubleClick={onReset}
+      style={{
+        cursor: "col-resize",
+        touchAction: "none",
+        display: "flex",
+        justifyContent: "center",
+        background: "transparent",
+      }}
+    >
+      <div
+        style={{
+          width: active ? 3 : 1,
+          height: "100%",
+          borderRadius: 2,
+          background: active ? "var(--h10-primary)" : "var(--h10-border-subtle)",
+          transition: "background 120ms",
+        }}
+      />
+    </div>
+  );
+}
 
 function InboxInner() {
   const params = useSearchParams();
@@ -32,6 +111,49 @@ function InboxInner() {
   const [busyBulk, setBusyBulk] = useState(false);
   const [cursorIdx, setCursorIdx] = useState(0);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+
+  const [listW, setListW] = useState(LIST_DEFAULT);
+  const [railW, setRailW] = useState(RAIL_DEFAULT);
+  const widthsRef = useRef({ list: LIST_DEFAULT, rail: RAIL_DEFAULT });
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(PANES_KEY) ?? "{}") as { list?: unknown; rail?: unknown };
+      const list = typeof saved.list === "number" ? clamp(saved.list, LIST_MIN, LIST_MAX) : LIST_DEFAULT;
+      const rail = typeof saved.rail === "number" ? clamp(saved.rail, RAIL_MIN, RAIL_MAX) : RAIL_DEFAULT;
+      widthsRef.current = { list, rail };
+      setListW(list);
+      setRailW(rail);
+    } catch {
+      /* defaults stand */
+    }
+  }, []);
+
+  const persistWidths = useCallback(() => {
+    try {
+      localStorage.setItem(PANES_KEY, JSON.stringify(widthsRef.current));
+    } catch {
+      /* private mode etc. — resizing still works for the session */
+    }
+  }, []);
+
+  const resizeList = useCallback((delta: number) => {
+    widthsRef.current.list = clamp(widthsRef.current.list + delta, LIST_MIN, LIST_MAX);
+    setListW(widthsRef.current.list);
+  }, []);
+
+  const resizeRail = useCallback((delta: number) => {
+    // rail handle sits to its LEFT: dragging right shrinks the rail
+    widthsRef.current.rail = clamp(widthsRef.current.rail - delta, RAIL_MIN, RAIL_MAX);
+    setRailW(widthsRef.current.rail);
+  }, []);
+
+  const resetWidths = useCallback(() => {
+    widthsRef.current = { list: LIST_DEFAULT, rail: RAIL_DEFAULT };
+    setListW(LIST_DEFAULT);
+    setRailW(RAIL_DEFAULT);
+    persistWidths();
+  }, [persistWidths]);
 
   const focusId = params.get("focus");
 
@@ -170,14 +292,15 @@ function InboxInner() {
       style={{
         height: "calc(100dvh - 52px)",
         display: "grid",
-        gridTemplateColumns: "360px minmax(0, 1fr) 300px",
+        gridTemplateColumns: `${listW}px 6px minmax(0, 1fr) 6px ${railW}px`,
+        gridTemplateRows: "minmax(0, 1fr)",
         border: "1px solid var(--h10-border)",
         borderRadius: 12,
         background: "var(--h10-surface)",
         overflow: "hidden",
       }}
     >
-      <div style={{ borderRight: "1px solid var(--h10-border-subtle)", minWidth: 0 }}>
+      <div style={{ minWidth: 0, minHeight: 0, overflow: "hidden" }}>
         <ConversationList
           data={list}
           loading={listLoading}
@@ -199,8 +322,12 @@ function InboxInner() {
           busyBulk={busyBulk}
         />
       </div>
-      <ThreadPane thread={thread} loading={threadLoading} onMutated={refresh} composerRef={composerRef} />
-      <div style={{ borderLeft: "1px solid var(--h10-border-subtle)", background: "var(--h10-surface-raised)" }}>
+      <PaneHandle onDelta={resizeList} onCommit={persistWidths} onReset={resetWidths} label="Resize conversation list" />
+      <div style={{ minWidth: 0, minHeight: 0, overflow: "hidden" }}>
+        <ThreadPane thread={thread} loading={threadLoading} onMutated={refresh} composerRef={composerRef} />
+      </div>
+      <PaneHandle onDelta={resizeRail} onCommit={persistWidths} onReset={resetWidths} label="Resize context rail" />
+      <div style={{ minWidth: 0, minHeight: 0, overflow: "hidden", background: "var(--h10-surface-raised)" }}>
         <ContextRail thread={thread} onMutated={refresh} />
       </div>
     </div>
