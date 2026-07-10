@@ -5,7 +5,7 @@
  * is "only emit a hint when confidently true; never block".
  */
 import { describe, it, expect } from 'vitest'
-import { evaluateConditionalRequirements, conditionalRequirementIssues } from './conditional-requirements.js'
+import { evaluateConditionalRequirements, conditionalRequirementIssues, conditionalRequiredErrors, extractConditionalFields } from './conditional-requirements.js'
 
 const ids = (hints: { field: string }[]) => hints.map((h) => h.field).sort()
 
@@ -111,5 +111,60 @@ describe('conditionalRequirementIssues — advisory warnings for empty condition
   it('filled conditional field → no warning', () => {
     const issues = conditionalRequirementIssues({ allOf: [rule] }, { parentage_level: 'child', variation_theme: 'SIZE' })
     expect(issues).toEqual([])
+  })
+})
+
+// ── UFX P1 additions ────────────────────────────────────────────────────────
+
+describe('UFX P1 — dependentRequired evaluation', () => {
+  const schema = { required: ['item_name'], dependentRequired: { battery_type: ['num_batteries', 'item_name'] } }
+
+  it('trigger filled → dependency required (with a "because" trigger)', () => {
+    const hints = evaluateConditionalRequirements(schema, { battery_type: 'lithium' })
+    expect(ids(hints)).toEqual(['num_batteries'])
+    expect(hints[0].because.field).toBe('battery_type')
+  })
+  it('trigger empty → nothing fires', () => {
+    expect(evaluateConditionalRequirements(schema, {})).toEqual([])
+    expect(evaluateConditionalRequirements(schema, { battery_type: '  ' })).toEqual([])
+  })
+  it('statically-required dependencies are excluded (item_name)', () => {
+    const hints = evaluateConditionalRequirements(schema, { battery_type: 'lithium' })
+    expect(hints.find((h) => h.field === 'item_name')).toBeUndefined()
+  })
+})
+
+describe('UFX P1 — extractConditionalFields (manifest tagging)', () => {
+  const schema = {
+    required: ['item_name', 'variation_theme'],
+    allOf: [
+      { if: { required: ['parentage_level'] }, then: { required: ['variation_theme', 'child_parent_sku_relationship'] } },
+      { if: { required: ['x'] }, then: { required: ['a'] }, else: { required: ['b'] } },
+    ],
+    dependentRequired: { battery_type: ['num_batteries'] },
+  }
+  it('collects then + else + dependentRequired fields, minus static required', () => {
+    expect([...extractConditionalFields(schema)].sort())
+      .toEqual(['a', 'b', 'child_parent_sku_relationship', 'num_batteries'])
+  })
+  it('no conditionals → empty set', () => {
+    expect(extractConditionalFields({ required: ['item_name'] }).size).toBe(0)
+  })
+})
+
+describe('UFX P1 — conditionalRequiredErrors (preflight error severity)', () => {
+  const rule = {
+    if: { required: ['parentage_level'], properties: { parentage_level: { items: { required: ['value'] } } } },
+    then: { required: ['variation_theme'] },
+  }
+  it('empty conditionally-required field → ERROR (90220 class)', () => {
+    const issues = conditionalRequiredErrors({ allOf: [rule] }, { parentage_level: 'child' })
+    expect(issues).toHaveLength(1)
+    expect(issues[0]).toMatchObject({ field: 'variation_theme', severity: 'error' })
+    expect(issues[0].message).toMatch(/90220/)
+  })
+  it('filled field / unmet condition → no error', () => {
+    expect(conditionalRequiredErrors({ allOf: [rule] }, { parentage_level: 'child', variation_theme: 'SIZE' })).toEqual([])
+    expect(conditionalRequiredErrors({ allOf: [rule] }, {})).toEqual([])
   })
 })

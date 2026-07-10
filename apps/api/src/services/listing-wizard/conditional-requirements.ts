@@ -150,7 +150,9 @@ function findEnumOrConst(node: any): string | undefined {
 /**
  * Given a product-type schema and the current flat values, return the attributes
  * that are CONDITIONALLY required right now (excluding those already statically
- * required). Pure + deterministic.
+ * required). Pure + deterministic. UFX P1 — also evaluates JSON-Schema
+ * `dependentRequired` ({ trigger: [deps…] }: filling the trigger makes the deps
+ * required), which some Amazon schemas use alongside allOf/if/then.
  */
 export function evaluateConditionalRequirements(
   schema: any,
@@ -174,7 +176,44 @@ export function evaluateConditionalRequirements(
       if (!hints.has(f)) hints.set(f, { field: f, because })
     }
   }
+
+  // dependentRequired — presence-based, so always fully evaluable (conservative).
+  const dep = schema?.dependentRequired
+  if (dep && typeof dep === 'object' && !Array.isArray(dep)) {
+    for (const [trigger, deps] of Object.entries(dep)) {
+      if (!Array.isArray(deps) || !nonEmpty(values[trigger])) continue
+      for (const f of deps) {
+        if (typeof f !== 'string' || staticRequired.has(f)) continue
+        if (!hints.has(f)) hints.set(f, { field: f, because: { field: trigger } })
+      }
+    }
+  }
+
   return [...hints.values()]
+}
+
+/**
+ * UFX P1 — every attribute that COULD become conditionally required under this
+ * schema (any allOf then/else `required` + any dependentRequired dependency),
+ * without evaluating conditions. Excludes statically-required attributes. Used
+ * to tag manifest columns `conditional: true` for the UI. Pure.
+ */
+export function extractConditionalFields(schema: any): Set<string> {
+  const out = new Set<string>()
+  const staticRequired = new Set<string>(Array.isArray(schema?.required) ? schema.required : [])
+  const allOf = Array.isArray(schema?.allOf) ? schema.allOf : []
+  for (const rule of allOf) {
+    if (!rule || typeof rule !== 'object' || !rule.if) continue
+    for (const f of [...extractRequired(rule.then), ...extractRequired(rule.else)]) out.add(f)
+  }
+  const dep = schema?.dependentRequired
+  if (dep && typeof dep === 'object' && !Array.isArray(dep)) {
+    for (const deps of Object.values(dep)) {
+      if (Array.isArray(deps)) for (const f of deps) if (typeof f === 'string') out.add(f)
+    }
+  }
+  for (const f of staticRequired) out.delete(f)
+  return out
 }
 
 /**
@@ -194,5 +233,27 @@ export function conditionalRequirementIssues(
         ? ` (required because ${labelOf(h.because.field)}${h.because.value ? ` = ${h.because.value}` : ' is set'})`
         : ''
       return { field: h.field, severity: 'warning' as const, message: `"${labelOf(h.field)}" is likely required${trigger}` }
+    })
+}
+
+/**
+ * UFX P1 — flat-file preflight variant: conditionally-required attributes that
+ * are currently EMPTY → ERROR issues (Amazon rejects these post-feed as 90220,
+ * so preflight surfaces them as hard errors before submit). Evaluation stays
+ * conservative — a rule that can't be fully evaluated from row data emits
+ * nothing, so an error here is almost certainly a real Amazon rejection.
+ */
+export function conditionalRequiredErrors(
+  schema: any,
+  values: Record<string, unknown>,
+  labelOf: (fieldId: string) => string = (f) => f,
+): Array<{ field: string; severity: 'error'; message: string }> {
+  return evaluateConditionalRequirements(schema, values)
+    .filter((h) => !nonEmpty(values[h.field]))
+    .map((h) => {
+      const trigger = h.because.field
+        ? ` because ${labelOf(h.because.field)}${h.because.value ? ` = ${h.because.value}` : ' is set'}`
+        : ' under this configuration'
+      return { field: h.field, severity: 'error' as const, message: `"${labelOf(h.field)}" is required${trigger} — Amazon will reject the row without it (90220)` }
     })
 }
