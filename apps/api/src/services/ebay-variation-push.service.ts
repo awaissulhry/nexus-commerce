@@ -10,6 +10,7 @@ import { ebayAccountService } from './ebay-account.service.js'
 import { syncActivatedListings } from './listing-activation-sync.service.js'
 import { parseThemeAxes, AXIS_SYNONYM_GROUPS, axisSynonymKey } from './ebay-theme-axes.js'
 import { clampImageSets, EBAY_VARIATION_IMAGE_MAX } from './images/ebay-image-axis.pure.js'
+import { validateVariationFamily } from './ebay-variation-preflight.js'
 import { Prisma } from '@nexus/database'
 
 // EFX D5 — AXIS_SYNONYM_GROUPS + axisSynonymKey now live in ebay-theme-axes.ts
@@ -613,6 +614,55 @@ export function resolveVideoIds(
   return [id]
 }
 
+/**
+ * STEP 1a — clamp a resolved quantity to a safe non-negative integer for
+ * shipToLocationAvailability. A non-finite / null / negative value becomes 0 so
+ * we never serialize `null` (eBay 25004 "quantità non valida"); a fractional
+ * value floors (3.9 → 3). Extracted verbatim from the inline push expression.
+ */
+export function computeSafeQty(qty: unknown): number {
+  const n = Number(qty)
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
+}
+
+/**
+ * STEP 1b — a variation listing can only publish with ≥1 sellable variant.
+ * Mirrors the `anyVariantSellable` accumulation (a variant is sellable when its
+ * clamped qty > 0). All-zero ⇒ false ⇒ the push aborts with a clear message.
+ */
+export function familyHasSellableVariant(qtys: number[]): boolean {
+  return qtys.some((q) => q > 0)
+}
+
+/**
+ * STEP 1c — build the eBay variesBy `specifications` array from the resolved,
+ * fingerprint-deduped axis specs. Extracted VERBATIM from the inline push body
+ * so BOTH the publish path AND the pre-flight validator consume ONE spec-builder
+ * (no value drift between what we validate and what we send).
+ *
+ * Behaviour-preserving: with ≥1 valid spec, each spec's values are value-ordered
+ * exactly as before (custom order → standard size → numeric → as-is, via
+ * sortAxisValues); with NO valid spec it falls back to the historical single
+ * "Custom Bundle" spec whose values are the family SKUs.
+ */
+export function buildVariesBySpecifications(
+  validSpecs: VariationAxisSpec[],
+  valueOrder: Record<string, string[]>,
+  fallbackSkus: string[],
+): Array<{ name: string; values: string[] }> {
+  if (validSpecs.length > 0) {
+    return validSpecs.map((e) => ({
+      name: e.name,
+      values: sortAxisValues(
+        [...e.values].filter(Boolean),
+        e.name,
+        valueOrder[axisSynonymKey(e.name)] ?? valueOrder[e.name] ?? valueOrder[e.name.toLowerCase()],
+      ),
+    }))
+  }
+  return [{ name: 'Custom Bundle', values: fallbackSkus }]
+}
+
 export async function pushVariationGroup(
   groupKey: string,
   rows: Array<Record<string, unknown>>,
@@ -874,16 +924,11 @@ export async function pushVariationGroup(
 
   // Build variesBy specifications from the resolved spec set (value ordering +
   // Custom Bundle fallback unchanged).
-  const specifications = validSpecs.length > 0
-    ? validSpecs.map(e => ({
-        name: e.name,
-        values: sortAxisValues(
-          [...e.values].filter(Boolean),
-          e.name,
-          valueOrder[axisSynonymKey(e.name)] ?? valueOrder[e.name] ?? valueOrder[e.name.toLowerCase()],
-        ),
-      }))
-    : [{ name: 'Custom Bundle', values: variantRows.map(r => r.sku as string).filter(Boolean) }]
+  const specifications = buildVariesBySpecifications(
+    validSpecs,
+    valueOrder,
+    variantRows.map(r => r.sku as string).filter(Boolean),
+  )
   const pictureSpec = pictureAxis
     ? validSpecs.find(s => s.name.toLowerCase() === pictureAxis.toLowerCase()
         || s.rawName.toLowerCase() === pictureAxis.toLowerCase()
@@ -923,6 +968,39 @@ export async function pushVariationGroup(
         }
       }
     }
+  }
+
+  // ── STEP 3 — variation-family pre-flight (WARN-NEVER-BLOCK) ───────────────
+  // Advisory, pure validation over the EXACT resolved axes + specifications the
+  // group PUT sends (built by the shared buildVariesBySpecifications above), so
+  // what we warn about is byte-identical to what we publish. Every issue — even
+  // block-soft — is only surfaced via warningsSink (which the route returns as
+  // `axisWarnings`); the push STILL PROCEEDS. Wrapped defensively so a validator
+  // bug can never regress a working publish. Runs after row-normalisation so the
+  // per-variant value lookups match the canonical keys the item PUT uses.
+  //
+  // NOTE: wired here (immediately after specs are assembled) rather than in the
+  // route, because this is the only place the fully-resolved axes/specifications
+  // exist — reusing them avoids duplicating the prisma-backed axis resolution in
+  // the route (which would reintroduce the drift this hardening exists to remove).
+  try {
+    const preflightQtys = variantRows.map(r =>
+      computeSafeQty(capToFbm(r._productId as string | undefined, r.sku as string,
+        Number(r[`${mp.toLowerCase()}_qty`] ?? r.quantity ?? 0), mp)))
+    const brandDefaulted = variantRows.some(r =>
+      !String(r.brand ?? '').trim() && !String(brandBySku.get(r.sku as string) ?? '').trim())
+    const familyIssues = validateVariationFamily(variantRows, resolved, specifications, {
+      brandDefaulted,
+      safeQtys: preflightQtys,
+      // AXIS_STRUCTURE_CHANGE — SKIPPED: the live listing's previously-published
+      // axis names aren't available in this scope. storedAxisOrder is the DECLARED
+      // set (== the current axes by construction), NOT what eBay actually
+      // published, so passing it would fabricate the comparison. Left as a
+      // follow-up (needs a stored snapshot of the last-published axis names).
+    })
+    for (const issue of familyIssues) sinkWarn(`${issue.message} ${issue.fixHint}`.trim())
+  } catch (err) {
+    console.warn('[ebay-push] variation pre-flight validator failed (non-fatal)', err)
   }
 
   // Pre-flight: every variant must have a non-empty value for every FINAL spec name.
@@ -1006,7 +1084,7 @@ export async function pushVariationGroup(
   // eBay lists a variation with some sizes at qty 0 (they show as out of stock);
   // only the whole listing needs >=1 sellable variant. Track that here for the
   // all-zero guard before the group publish.
-  let anyVariantSellable = false
+  const safeQtys: number[] = []
   for (const row of variantRows) {
     const sku = row.sku as string
 
@@ -1098,10 +1176,10 @@ export async function pushVariationGroup(
     // family whenever any size was out of stock). Publish it at its capToFbm qty.
     // safeQty clamps a non-finite/negative value to 0 so we never serialize `null`
     // into shipToLocationAvailability (eBay would reject that as 25004 "quantità non
-    // valida"). The all-zero case is caught by the anyVariantSellable guard before
+    // valida"). The all-zero case is caught by the familyHasSellableVariant guard before
     // the group publish.
-    const safeQty = Number.isFinite(Number(qty)) && Number(qty) > 0 ? Math.floor(Number(qty)) : 0
-    if (safeQty > 0) anyVariantSellable = true
+    const safeQty = computeSafeQty(qty)
+    safeQtys.push(safeQty)
 
     // Use the colour-representative image set (same URLs for every variant of
     // the same colour). eBay deduplicates by URL, so all Black-size variants
@@ -1305,7 +1383,7 @@ export async function pushVariationGroup(
   // eBay needs >=1 sellable variant to publish a variation listing. If EVERY
   // variant resolved to 0 available, abort with a clear message rather than doing
   // the group PUT + publish only to hit eBay's misleading all-zero 25007.
-  if (!anyVariantSellable) {
+  if (!familyHasSellableVariant(safeQtys)) {
     return variantRows.map(r => ({
       sku: r.sku as string, market: mp, status: 'ERROR' as const,
       message: 'Every variant is out of stock — eBay needs at least one sellable variation to publish this listing. Restock (or lower a buffer) on at least one size, then re-push.',
@@ -1959,6 +2037,36 @@ export async function pushOffersOnly(
   if (offerWarnings.length > 0) console.warn('[ebay-push] offers-only best-offer:', offerWarnings.join(' | '))
 
   const variantSkusList = variantRows.map(r => r.sku as string).filter(Boolean)
+
+  // L5 — Best Offer must NEVER be sent on a SKU that belongs to an eBay inventory
+  // item group: eBay rejects it with error 25737. The old gate (`variantRows.length
+  // > 1`) still leaked Best Offer when the operator selected a SINGLE variant of a
+  // family for an offers-only push — that one SKU is still a group member on eBay.
+  //
+  // Group membership isn't returned in this offers-only scope, so we use the SAFE
+  // proxy: a SKU is treated as a group member unless it is a genuinely standalone,
+  // single-SKU listing. Heuristic (unknown ⇒ omit — the safe default):
+  //   • the push must be exactly ONE non-parent variant with no parent container
+  //     row (a real family push carries a parent and/or >1 variant), AND
+  //   • that sole product must be neither a child (parentId set) nor a parent with
+  //     children — i.e. it is not part of any variation family in our catalog.
+  // Only then do we send Best Offer; every family (or unknown) push omits it.
+  let bestOfferEligible = false
+  if (variantRows.length === 1 && !rows.some(r => r._isParent === true)) {
+    const soleSku = variantRows[0]?.sku as string | undefined
+    if (soleSku) {
+      try {
+        const p = await prisma.product.findFirst({
+          where: { sku: soleSku },
+          select: { parentId: true, _count: { select: { children: true } } },
+        })
+        bestOfferEligible = !!p && p.parentId == null && (p._count?.children ?? 0) === 0
+      } catch {
+        bestOfferEligible = false // unknown → safe default: omit Best Offer
+      }
+    }
+  }
+
   const cachedOfferIds = await loadCachedOfferIds(variantSkusList, region, marketplaceId)
   const collectedOfferIds = new Map<string, string>()
   const results: Array<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string }> = []
@@ -2000,10 +2108,11 @@ export async function pushOffersOnly(
         ...(fulfillmentPolicyId ? { fulfillmentPolicyId } : {}),
         ...(paymentPolicyId     ? { paymentPolicyId }     : {}),
         ...(returnPolicyId      ? { returnPolicyId }      : {}),
-        // EFX P9a — Best Offer, but NOT for variation-group members: eBay rejects
-        // it on a SKU that belongs to an inventory item group (25737). A standalone
-        // single-SKU family keeps Best Offer.
-        ...(variantRows.length > 1 ? {} : { bestOfferTerms }),
+        // EFX P9a / L5 — Best Offer, but NEVER for a SKU that is (or may be) an
+        // inventory-item-group member: eBay rejects it with 25737. Only a
+        // genuinely standalone single-SKU listing is eligible (see bestOfferEligible
+        // above); unknown/family pushes omit it — the safe default.
+        ...(bestOfferEligible ? { bestOfferTerms } : {}),
       },
       ...(merchantLocationKey ? { merchantLocationKey } : {}),
       quantityLimitPerBuyer,

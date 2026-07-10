@@ -15,6 +15,7 @@ import { parseThemeAxes } from './ebay-theme-axes.js'
 import {
   resolveVariationAxes,
   dedupeSpecsByValueFingerprint,
+  buildVariesBySpecifications,
   axisSynonymKey,
   type VariationAxisSpec,
 } from './ebay-variation-push.service.js'
@@ -239,5 +240,39 @@ describe('resolveVariationAxes — DECLARED mode (D2/D7/D8)', () => {
     // With Special picked as the picture axis, it is exempt and survives.
     const withOverride = resolveVariationAxes(rows, null, { pictureAxisOverride: 'Special' })
     expect(withOverride.validSpecs.map((s) => s.name)).toContain('Special')
+  })
+})
+
+// ── STEP 1c — buildVariesBySpecifications (shared spec-builder) ───────────────
+describe('buildVariesBySpecifications', () => {
+  const mkSpec = (name: string, values: string[]): VariationAxisSpec => ({
+    name,
+    rawName: name,
+    values: new Set(values),
+    coverage: values.length,
+  })
+
+  it('applies the custom value order for an axis (spec ordering)', () => {
+    const specs = [mkSpec('Taglia', ['L', 'S', 'M'])]
+    const out = buildVariesBySpecifications(specs, { __dim1__: ['S', 'M', 'L'] }, [])
+    expect(out).toEqual([{ name: 'Taglia', values: ['S', 'M', 'L'] }])
+  })
+
+  it('sorts known clothing sizes via the built-in standard order', () => {
+    const specs = [mkSpec('Taglia', ['XL', 'S', 'M'])]
+    const out = buildVariesBySpecifications(specs, {}, [])
+    expect(out[0].values).toEqual(['S', 'M', 'XL'])
+  })
+
+  it('preserves whitespace/case-distinct values (no dedup here)', () => {
+    const specs = [mkSpec('Colore', ['Nero', 'nero', 'Blu '])]
+    const out = buildVariesBySpecifications(specs, {}, [])
+    // Colore is not a size dimension → values pass through unsorted & unmodified.
+    expect(out[0].values).toEqual(['Nero', 'nero', 'Blu '])
+  })
+
+  it('falls back to a single Custom Bundle spec of SKUs when no valid spec', () => {
+    const out = buildVariesBySpecifications([], {}, ['SKU-A', 'SKU-B'])
+    expect(out).toEqual([{ name: 'Custom Bundle', values: ['SKU-A', 'SKU-B'] }])
   })
 })
