@@ -1,6 +1,8 @@
 # UFX — Unified Flat-File Excellence
 
-**Date:** 2026-07-10 · **Status:** APPROVED (user: "Proceed however you recommend") · **Approach:** Option B extract-then-swap, phase-by-phase, verify each unit, commit+push after each verified unit.
+**Date:** 2026-07-10 · **Status:** ✅ ENGAGEMENT COMPLETE 2026-07-11 (all 8 phases shipped + verified; sweep found+fixed one residual: 6269bece frozen-cell hover/read-only translucency) · **Approach:** Option B extract-then-swap, phase-by-phase, verify each unit, commit+push after each verified unit.
+
+**Phase 8 sweep results (2026-07-11):** Local — api 188f/2201t, web 42f/391t, both tsc clean, _ffp2 9/9 + _ffp3 11/11. Prod-verified live — context menus (both pages), portal+flip dropdown at bottom row, per-column header menu w/ correct disabled states, FBA Quantity/Follow/Buffer triple-lock '—' (exactly 3 locked cells on FBA row), ghost canvas + blank rendering + materialization + accurate 174-rows/1-unsaved/Submit(1) counts + single-undo atomic revert (both pages), frozen-fix bundle marker. Not interactively re-verified on prod (unit-tested + implementer-walked locally, listed honestly): Set-category union walkthrough + reload-restore, market-strip latency badge + Alt-digit single-fire, auto-fit visual, RFC-4180 live paste, nav-away guard (native dialog freezes automation — deliberately skipped), IME. Operator actions pending: GPSR entities (RP/manufacturer emails in Seller Central + it_IT doc URLs → then flip warnings→errors), PS01-PS06 safety images (manual Image Manager), optional live walkthrough session. Explicitly deferred: PATCH sparse diffs, requirement color legend + Data Definitions panel (propose separately), ARIA grid roles, density toggle, Amazon empty-state CTA.
 
 ## Goals (user's words)
 1. Amazon flat file absolutely perfect — multiple categories in one file, all columns shown and greyed (like eBay) when irrelevant **but still editable**.
@@ -78,6 +80,8 @@ Root cause of most inconsistencies = the grid fork — Phase 3 unification disso
 10. Two divergent FindReplaceBar copies (`app/_shared/bulk-edit/...` vs `app/bulk-operations/...`) — unify onto one file.
 11. Save affordance wording/shape differs (inherent Amazon-feed vs eBay-publish divergence — align visual language post-Phase 3).
 
+**Carried residual (from P5, 2026-07-10):** eBay ghost-row category search modal applies via setRows without ghost materialization (pre-existing) — fold into the Phase 7/8 pass.
+
 **P3 polish**
 12. Amazon loading skeleton strip h-9 vs real h-8 (`amazon-flat-file/loading.tsx:20` vs `ChannelStrip.tsx:73`) — 1px layout shift.
 13. IME/dead-key composition unhandled (#76) — first composed keystroke can be swallowed in type-to-edit cells.
@@ -85,3 +89,14 @@ Root cause of most inconsistencies = the grid fork — Phase 3 unification disso
 15. Amazon lacks empty-state onboarding CTA (eBay wires `renderEmptyAction`).
 
 Verified-consistent (don't re-litigate): undo depth 50, status-bar aggregates (it-IT aware), inputMode=decimal number cells, validation jump-to-cell, `?` shortcut cheat-sheet, skeleton loading.
+
+## GPSR brief (Phase 6 batch 2 — researched 2026-07-10, sources in session)
+- In scope ONLY for EU marketplaces (ES FR BE NL DE IT SE PL). Enforcement live since 2024-12-13 — missing data ⇒ listing suppression on IT today.
+- Attributes (JSON/Listings dotted form; VERIFY exact spelling against live `getDefinitionsProductType` requirements=LISTING on APJ6JRA9NG5V4 before coding — secondary sources disagree on `gpsr_manufacturer_email_address` spelling):
+  - `dsa_responsible_party_address` = [{value:<RP EMAIL>, marketplace_id}] — required when manufacturer outside EU; email must match an RP REGISTERED IN SELLER CENTRAL (RsP register). Reference-by-email model, NOT inline name/address.
+  - `gpsr_manufacturer_reference` = [{gpsr_manufacturer_email_address:<email>, marketplace_id}] — always required for GPSR products.
+  - `gpsr_safety_attestation` = [{value:boolean, marketplace_id}] — true = "no warnings needed"; mutually exclusive with compliance_media presence.
+  - `compliance_media` repeatable {content_type(enum ~18: safety_information, instructions_for_use, user_manual, warranty…), content_language (IT⇒it_IT must match marketplace), source_location (PUBLIC https URL, .pdf/.jpg/.jpeg/.png)}. No upload API — docs are self-hosted URLs.
+- Editor validation (EU rows only): manufacturer email valid+present; RP email when manufacturer non-EU; attestation XOR ≥1 complete compliance_media; media URL/type/language integrity; PPE (motorcycle gear = Cat II, EN 17092/EN 1621) has NO first-class schema attrs confirmed — CE/DoC goes via compliance_media; PS01-PS06 safety images are a manual Image-Manager step (surface a reminder, not automatable).
+- OPERATOR INPUTS NEEDED before batch 2 ships live validation: manufacturer + RP entities registered in Seller Central and their emails; hosted it_IT safety-doc URLs; per-product attestation decisions.
+- First implementation step: dump the real OUTERWEAR IT schema and grep gpsr/dsa/compliance_media to confirm shapes; error codes undocumented — capture empirically from processing-report issues[].
