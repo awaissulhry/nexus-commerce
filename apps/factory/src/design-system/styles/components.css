@@ -292,6 +292,17 @@
   font-weight: 700;
   color: var(--text-primary);
 }
+/* EFX P6 — title/subtitle stack (subtitle is optional) */
+.h10-ds-drawer-ht {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.h10-ds-drawer-ht .st {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
 .h10-ds-drawer-b {
   flex: 1;
   overflow-y: auto;
