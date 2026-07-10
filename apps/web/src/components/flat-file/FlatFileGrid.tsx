@@ -32,6 +32,7 @@ import type {
 import { normalizeCellValue } from './normalizeCellValue'
 import { tokenizeClipboard } from './paste-tokenizer'
 import { isComposingKeyEvent } from './composition'
+import { setFlatFileDirtyCount, shouldConfirmLeave } from './unsaved-guard'
 import { dropReadOnlyCellChanges, typeApplicabilityGuidance, isRequiredForRow, enumOptionsForRow } from './cellFlags'
 import { countGhosts, makeGhostRows, materializeGhostPatch, pasteGrowCount, topUpGhosts } from './ghost-rows'
 import { SortPanel, applySortLevels, type SortLevel, type SortGroup } from './SortPanel'
@@ -1408,6 +1409,25 @@ export default function FlatFileGrid({
   const dirtyCount  = useMemo(() => realRows.filter((r) => r._dirty).length, [realRows])
   const errorCount  = useMemo(() => validationIssues.filter((i) => i.level === 'error').length, [validationIssues])
   const warnCount   = useMemo(() => validationIssues.filter((i) => i.level === 'warn').length, [validationIssues])
+
+  // UFX P7 (item 3) — nav-away guard. Publish the dirty (non-ghost) count so
+  // the ChannelStrip can confirm channel switches, and confirm tab-close /
+  // hard-nav via beforeunload while dirty rows exist. Market switches are
+  // deliberately unguarded (they flush edits to a local draft).
+  useEffect(() => {
+    setFlatFileDirtyCount(dirtyCount)
+    return () => setFlatFileDirtyCount(0)
+  }, [dirtyCount])
+  useEffect(() => {
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      if (!shouldConfirmLeave()) return
+      e.preventDefault()
+      // Chrome requires returnValue to be set; the browser shows its own copy.
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [])
 
   const toneMap = useMemo(() => {
     const out = new Map<string, string>()

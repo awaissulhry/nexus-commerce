@@ -13,6 +13,7 @@ import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { ShoppingCart, Tag } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { channelSwitchMessage, getFlatFileDirtyCount } from '@/components/flat-file/unsaved-guard'
 
 interface Props {
   channel: 'amazon' | 'ebay'
@@ -54,6 +55,11 @@ export function ChannelStrip({ channel, marketplace, familyId }: Props) {
 
   function go(next: 'amazon' | 'ebay') {
     if (next === channel) return
+    // UFX P7 (item 3) — confirm when the mounted grid has unsaved rows.
+    // Honest copy: edits persist as a local draft, so this is a heads-up,
+    // not a data-loss wall. Market switches stay friction-free (drafts flush).
+    const dirty = getFlatFileDirtyCount()
+    if (dirty > 0 && !confirm(channelSwitchMessage(dirty))) return
     // When rendered inside /bulk-operations, stay within that route
     const isBulkOps = pathname.startsWith('/bulk-operations')
     const path = isBulkOps
