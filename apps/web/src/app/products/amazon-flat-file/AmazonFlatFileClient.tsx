@@ -5,31 +5,33 @@ import '@/design-system/styles/components.css'
 import '@/design-system/styles/patterns.css'
 
 import {
-  useCallback, useEffect, useRef, useState, useMemo, memo,
-  type KeyboardEvent,
+  useCallback, useEffect, useRef, useState, useMemo,
 } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import {
-  Activity, AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  Clock, Copy, Download, FileSpreadsheet, GitBranch, GitFork, Globe, History, Image as ImageIcon, Keyboard, Loader2, Pin, Plus, RefreshCw, RotateCcw,
+  Activity, AlertCircle, AlertTriangle, CheckCircle2, ChevronDown,
+  Clock, Copy, Download, FileSpreadsheet, GitBranch, GitFork, Globe, History, Loader2, Pin, Plus, RefreshCw, RotateCcw,
   Search, Send, Trash2, Upload, X, ArrowRightLeft,
-  Undo2, Redo2, GripVertical, Wand2, Layers,
+  GripVertical, Wand2, Layers,
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
-import { evaluateRule, TONE_CLASSES, type ConditionalRule } from '@/app/_shared/bulk-edit/conditional-format'
-import { type FindCell } from '@/app/_shared/bulk-edit/find-replace'
 import { useFlatFileCore } from '@/components/flat-file/useFlatFileCore'
-import { normalizeSyntheticCell } from './normalizeSyntheticCell'
-import { AMAZON_FILTER_DEFAULT, type AmazonFFFilterState, type AmazonFilterDims } from '../_shared/flat-file-filter.types'
-import { FFSavedViews, type FFViewState } from '../_shared/FFSavedViews'
+import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
+import type {
+  BaseRow, FlatFileColumn, FlatFileGridApi, AiPanelCtx,
+  ToolbarFetchCtx, ToolbarImportCtx, PushExtrasCtx, ModalsCtx,
+  FooterActionsCtx, GridContextMenuCtx,
+} from '@/components/flat-file/FlatFileGrid.types'
+import {
+  buildGridColumnGroups, validateAmazonRows, isFbaRow, isFbaManagedCell,
+  amazonGroupKey, fbaBucketFor, type AmazonColumnGroup,
+} from './gridAdapter'
+import { AMAZON_FILTER_DEFAULT, type AmazonFilterDims } from '../_shared/flat-file-filter.types'
 import { type PullDiffApplyResult } from './PullDiffModal'
 import { type ImportApplyResult } from './ImportWizardModal'
 import { PendingPullBanner } from '../_shared/PendingPullBanner'
-import { FLAT_FILE_SHORTCUTS } from '../_shared/flat-file-shortcuts'
-import { useCatalogWorkbookExport } from '../_shared/useCatalogWorkbookExport'
-import { FlatFileToolbar as FlatFileIconToolbar, TbBtn as SharedTbBtn } from '@/components/flat-file/FlatFileToolbar'
+import { TbBtn as SharedTbBtn } from '@/components/flat-file/FlatFileToolbar'
 import { ColumnGroupModal } from '@/design-system/components/ColumnGroupModal'
-import { Tooltip } from '@/design-system/primitives/Tooltip'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { PublishModeBadge } from '@/components/PublishModeBadge'
@@ -42,54 +44,21 @@ import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { applyBulkFollow, applyBulkBuffer } from '@/lib/follow-master'
 import { Modal as DSModal } from '@/design-system/components/Modal'
 import { Badge } from '@/components/ui/Badge'
-import { IconButton } from '@/components/ui/IconButton'
 import { TagInput } from '@/design-system/primitives/TagInput'
 import { ChannelStrip } from '../ebay-flat-file/ChannelStrip'
 import { OverrideBadge } from '../_shared/OverrideBadge'
-import type { FlatFileAiChange } from '@/components/flat-file/FlatFileGrid.types'
-import { FEED_ERROR_CODES } from './feedErrorCodes'
-import { categoryOf, assignCategory, productTypesInUse, mixedTypeFamilies, rowsMissingNode, formatNodeBreadcrumb } from './category-model'
-import {
-  loadGroups, saveGroups, loadGroupMode, saveGroupMode, loadCollapsedGroups, saveCollapsedGroups,
-  groupIdForSku, fulfillmentBucket, makeGroupId, assignSkusToGroup, GROUP_PALETTE,
-  type GroupMode, type FlatFileGroup, type FamilyColorName,
-} from './group-model'
-import { CreateGroupPopover } from './CreateGroupPopover'
+import { categoryOf, assignCategory, productTypesInUse, formatNodeBreadcrumb } from './category-model'
 
 // EH.5 — Lazy-loaded modals, panels, and bars. Each one only ships
 // to the browser when the operator first opens it, so the initial
 // AmazonFlatFileClient chunk drops from ~600 kB to under ~250 kB.
 // All are client-only (state-gated, no SSR benefit) — ssr: false
 // short-circuits the SSR pass for them entirely.
-const FindReplaceBar = dynamic(
-  () => import('@/app/_shared/bulk-edit/components/FindReplaceBar').then((m) => m.FindReplaceBar),
-  { ssr: false },
-)
-const ConditionalFormatBar = dynamic(
-  () => import('@/app/_shared/bulk-edit/components/ConditionalFormatBar').then((m) => m.ConditionalFormatBar),
-  { ssr: false },
-)
-const AmazonFFFilterPanelLazy = dynamic(
-  () => import('../_shared/AmazonFFFilterPanel').then((m) => m.AmazonFFFilterPanel),
-  { ssr: false },
-)
-const AIBulkModal = dynamic(
-  () => import('./AIBulkModal').then((m) => m.AIBulkModal),
-  { ssr: false },
-)
-const FFReplicateModal = dynamic(
-  () => import('./FFReplicateModal').then((m) => m.FFReplicateModal),
-  { ssr: false },
-)
 const PullDiffModal = dynamic(
   () => import('./PullDiffModal').then((m) => m.PullDiffModal),
   { ssr: false },
 )
 // PullHistoryDrawer removed — merged into HistoryModal (H.1–H.4)
-const KeyboardShortcutsModal = dynamic(
-  () => import('../../_shared/grid-lens/KeyboardShortcutsModal').then((m) => m.KeyboardShortcutsModal),
-  { ssr: false },
-)
 const CascadeModal = dynamic(
   () => import('../_shared/CascadeModal').then((m) => m.CascadeModal),
   { ssr: false },
@@ -103,29 +72,9 @@ const ImportWizardModal = dynamic(
   { ssr: false },
 )
 const SetCategoryModal = dynamic(() => import('./SetCategoryModal'), { ssr: false })
-const ManageGroupsModal = dynamic(() => import('./ManageGroupsModal').then((m) => m.ManageGroupsModal), { ssr: false })
 
-/**
- * EH.5 — Returns true once `open` has been true at least once, then
- * stays true forever. Used to gate dynamic-imported modals so:
- *   - The chunk doesn't load until the operator first opens it
- *     (gating by `open` directly would unload the modal on close,
- *     wiping any in-modal state)
- *   - Subsequent opens are instant (chunk + component stay mounted)
- *
- * Mutating a ref during render is legal: it derives from props, not
- * from state, so it's idempotent and doesn't break React's render
- * model. The hook returns the same value across renders once true.
- */
-function useOpenOnce(open: boolean): boolean {
-  const ref = useRef(false)
-  if (open) ref.current = true
-  return ref.current
-}
 
 // ── Types ──────────────────────────────────────────────────────────────
-
-interface NormSel { rMin: number; rMax: number; cMin: number; cMax: number }
 
 type ColumnKind = 'text' | 'longtext' | 'number' | 'enum' | 'boolean'
 
@@ -337,8 +286,6 @@ interface TranslateResult {
   errors: Record<string, string>
 }
 
-interface ValidationIssue { level: 'error' | 'warn'; msg: string }
-
 // ── Constants ──────────────────────────────────────────────────────────
 
 const MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'UK']
@@ -388,124 +335,6 @@ function saveCachedManifest(mp: string, pt: string, manifest: Manifest): void {
 }
 const _prefetchInFlight = new Set<string>()
 
-const GROUP_COLORS: Record<string, {
-  band: string; header: string; text: string; cell: string; badge: string
-}> = {
-  blue:    { band: 'bg-blue-50 dark:bg-blue-950/30', header: 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200', text: 'text-blue-700 dark:text-blue-300', cell: 'bg-blue-50/50 dark:bg-blue-950/10', badge: 'bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-800' },
-  purple:  { band: 'bg-purple-50 dark:bg-purple-950/30', header: 'bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-200', text: 'text-purple-700 dark:text-purple-300', cell: 'bg-purple-50/50 dark:bg-purple-950/10', badge: 'bg-purple-100 text-purple-700 border border-purple-200 dark:bg-purple-900/40 dark:text-purple-300 dark:border-purple-800' },
-  emerald: { band: 'bg-emerald-50 dark:bg-emerald-950/30', header: 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200', text: 'text-emerald-700 dark:text-emerald-300', cell: 'bg-emerald-50/50 dark:bg-emerald-950/10', badge: 'bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-800' },
-  orange:  { band: 'bg-orange-50 dark:bg-orange-950/30', header: 'bg-orange-100 dark:bg-orange-900/50 text-orange-800 dark:text-orange-200', text: 'text-orange-700 dark:text-orange-300', cell: 'bg-orange-50/50 dark:bg-orange-950/10', badge: 'bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/40 dark:text-orange-300 dark:border-orange-800' },
-  teal:    { band: 'bg-teal-50 dark:bg-teal-950/30', header: 'bg-teal-100 dark:bg-teal-900/50 text-teal-800 dark:text-teal-200', text: 'text-teal-700 dark:text-teal-300', cell: 'bg-teal-50/50 dark:bg-teal-950/10', badge: 'bg-teal-100 text-teal-700 border border-teal-200 dark:bg-teal-900/40 dark:text-teal-300 dark:border-teal-800' },
-  amber:   { band: 'bg-amber-50 dark:bg-amber-950/30', header: 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200', text: 'text-amber-700 dark:text-amber-300', cell: 'bg-amber-50/50 dark:bg-amber-950/10', badge: 'bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800' },
-  yellow:  { band: 'bg-yellow-50 dark:bg-yellow-950/30', header: 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-200', text: 'text-yellow-700 dark:text-yellow-300', cell: 'bg-yellow-50/50 dark:bg-yellow-950/10', badge: 'bg-yellow-100 text-yellow-700 border border-yellow-200 dark:bg-yellow-900/40 dark:text-yellow-300 dark:border-yellow-800' },
-  sky:     { band: 'bg-sky-50 dark:bg-sky-950/30', header: 'bg-sky-100 dark:bg-sky-900/50 text-sky-800 dark:text-sky-200', text: 'text-sky-700 dark:text-sky-300', cell: 'bg-sky-50/50 dark:bg-sky-950/10', badge: 'bg-sky-100 text-sky-700 border border-sky-200 dark:bg-sky-900/40 dark:text-sky-300 dark:border-sky-800' },
-  red:     { band: 'bg-red-50 dark:bg-red-950/30', header: 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200', text: 'text-red-700 dark:text-red-300', cell: 'bg-red-50/50 dark:bg-red-950/10', badge: 'bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/40 dark:text-red-300 dark:border-red-800' },
-  violet:  { band: 'bg-violet-50 dark:bg-violet-950/30', header: 'bg-violet-100 dark:bg-violet-900/50 text-violet-800 dark:text-violet-200', text: 'text-violet-700 dark:text-violet-300', cell: 'bg-violet-50/50 dark:bg-violet-950/10', badge: 'bg-violet-100 text-violet-700 border border-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-800' },
-  slate:   { band: 'bg-slate-50 dark:bg-slate-900/30', header: 'bg-slate-100 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300', text: 'text-slate-600 dark:text-slate-400', cell: '', badge: 'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800/40 dark:text-slate-400 dark:border-slate-700' },
-}
-
-function gColor(color: string) {
-  return GROUP_COLORS[color] ?? GROUP_COLORS.slate
-}
-
-// ── Per-product-family row banding ─────────────────────────────────────────
-// Cycles through 6 colours. Each family (parent + its children) gets one slot.
-// These are background-only classes to avoid cascading text-color onto cells.
-const FAMILY_PALETTE = ['blue', 'purple', 'emerald', 'orange', 'teal', 'amber'] as const
-type FamilyColor = typeof FAMILY_PALETTE[number]
-
-const FC_PARENT_ROW: Record<FamilyColor, string> = {
-  blue:    'bg-blue-100/80 dark:bg-blue-900/35',
-  purple:  'bg-purple-100/80 dark:bg-purple-900/35',
-  emerald: 'bg-emerald-100/80 dark:bg-emerald-900/35',
-  orange:  'bg-orange-100/80 dark:bg-orange-900/35',
-  teal:    'bg-teal-100/80 dark:bg-teal-900/35',
-  amber:   'bg-amber-100/80 dark:bg-amber-900/35',
-}
-const FC_CHILD_ROW: Record<FamilyColor, string> = {
-  blue:    'bg-blue-50/60 dark:bg-blue-950/20',
-  purple:  'bg-purple-50/60 dark:bg-purple-950/20',
-  emerald: 'bg-emerald-50/60 dark:bg-emerald-950/20',
-  orange:  'bg-orange-50/60 dark:bg-orange-950/20',
-  teal:    'bg-teal-50/60 dark:bg-teal-950/20',
-  amber:   'bg-amber-50/60 dark:bg-amber-950/20',
-}
-// Opaque equivalents for sticky/frozen cells (prevent scroll bleed-through)
-const FC_PARENT_FROZEN: Record<FamilyColor, string> = {
-  blue:    'bg-blue-100 dark:bg-blue-900/60',
-  purple:  'bg-purple-100 dark:bg-purple-900/60',
-  emerald: 'bg-emerald-100 dark:bg-emerald-900/60',
-  orange:  'bg-orange-100 dark:bg-orange-900/60',
-  teal:    'bg-teal-100 dark:bg-teal-900/60',
-  amber:   'bg-amber-100 dark:bg-amber-900/60',
-}
-const FC_CHILD_FROZEN: Record<FamilyColor, string> = {
-  blue:    'bg-blue-50 dark:bg-blue-950/40',
-  purple:  'bg-purple-50 dark:bg-purple-950/40',
-  emerald: 'bg-emerald-50 dark:bg-emerald-950/40',
-  orange:  'bg-orange-50 dark:bg-orange-950/40',
-  teal:    'bg-teal-50 dark:bg-teal-950/40',
-  amber:   'bg-amber-50 dark:bg-amber-950/40',
-}
-// Left-border accent: strong on parent (section-header feel), subtle on children
-const FC_PARENT_BORDER: Record<FamilyColor, string> = {
-  blue:    'border-l-blue-400 dark:border-l-blue-500',
-  purple:  'border-l-purple-400 dark:border-l-purple-500',
-  emerald: 'border-l-emerald-400 dark:border-l-emerald-500',
-  orange:  'border-l-orange-400 dark:border-l-orange-500',
-  teal:    'border-l-teal-400 dark:border-l-teal-500',
-  amber:   'border-l-amber-400 dark:border-l-amber-500',
-}
-const FC_CHILD_BORDER: Record<FamilyColor, string> = {
-  blue:    'border-l-blue-200 dark:border-l-blue-800',
-  purple:  'border-l-purple-200 dark:border-l-purple-800',
-  emerald: 'border-l-emerald-200 dark:border-l-emerald-800',
-  orange:  'border-l-orange-200 dark:border-l-orange-800',
-  teal:    'border-l-teal-200 dark:border-l-teal-800',
-  amber:   'border-l-amber-200 dark:border-l-amber-800',
-}
-
-// ── CG — group section rendering (VIEW-ONLY) ──────────────────────────────
-// A RenderItem is either a data row (carrying its index into displayRows, so
-// paste/selection/nav ri-mapping is unchanged) or a synthetic section header.
-// Header items exist ONLY in the render output — never in rows/displayRows/the
-// Amazon feed.
-type RenderItem =
-  | { kind: 'header'; groupId: string; name: string; color: FamilyColorName; count: number; collapsed: boolean; dimmed: boolean }
-  | { kind: 'row'; row: Row; dataIdx: number }
-
-function GroupHeaderRow({
-  name, color, count, collapsed, dimmed, colSpan, onToggle,
-}: {
-  name: string; color: FamilyColorName; count: number; collapsed: boolean; dimmed: boolean; colSpan: number; onToggle: () => void
-}) {
-  return (
-    <tr>
-      <td
-        colSpan={colSpan}
-        className={cn(
-          'px-2 py-1 border-b border-l-4 border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/60',
-          FC_PARENT_BORDER[color],
-          dimmed && 'opacity-50',
-        )}
-      >
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-expanded={!collapsed}
-          className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
-        >
-          {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-          <span>{name}</span>
-          <span className="font-normal normal-case text-slate-400 dark:text-slate-500">
-            {dimmed ? '· 0 shown' : `· ${count} ${count === 1 ? 'SKU' : 'SKUs'}`}
-          </span>
-        </button>
-      </td>
-    </tr>
-  )
-}
-
 function makeEmptyRow(productType: string, _marketplace: string, parentage = ''): Row {
   return {
     _rowId: `new-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -518,11 +347,6 @@ function makeEmptyRow(productType: string, _marketplace: string, parentage = '')
     variation_theme: '',
   }
 }
-
-// BN.2.1 — synthetic derived column; NEVER enters data/paste/serialize paths.
-// CAT-WIDTH: single source of truth — used in both column def AND sticky-offset math.
-const CATEGORY_COL_WIDTH = 360
-const CATEGORY_COL: Column = { id: '__category', fieldRef: '', labelEn: 'Category', labelLocal: 'Category', required: false, kind: 'text', width: CATEGORY_COL_WIDTH }
 
 // FM Phase 2b — synthetic per-market Follow/Pinned control, spliced in right after
 // the Quantity column (see effectiveManifest). 'Follow' = quantity tracks the shared
@@ -568,9 +392,6 @@ function makeGhostRow(): Row {
     parent_sku: '',
     variation_theme: '',
   }
-}
-function makeGhostRows(n: number): Row[] {
-  return Array.from({ length: n }, () => makeGhostRow())
 }
 
 // ── Variation-family helpers (Add-variation wizard) ─────────────────────
@@ -701,7 +522,6 @@ export default function AmazonFlatFileClient({
   initialProductType,
   familyId,
 }: Props) {
-  const router = useRouter()
   const searchParams = useSearchParams()
 
   const [marketplace, setMarketplace] = useState(initialMarketplace)
@@ -777,7 +597,6 @@ export default function AmazonFlatFileClient({
   // sort/row-order writes always landed in the FIRST market's keys, even after
   // the user switched. Now writes track the active market.
   const mp = marketplace.toUpperCase()
-  const rowOrderKey = `ff-amazon-${mp}-row-order`
 
   // ── Market sync state ──────────────────────────────────────────────────
   // Each market has a boolean: when true it receives auto-propagation from
@@ -803,11 +622,19 @@ export default function AmazonFlatFileClient({
 
   const [applyPanelOpen, setApplyPanelOpen] = useState(false)
 
+  // UFX P3 — the grid owns + persists the sort config (ff-amazon-{MP}-sort);
+  // this mirror (seeded from storage, updated via onSortConfigChange) feeds
+  // the market-sync propagation exactly like the old page-level state did.
+  const sortConfigRef = useRef<SortLevel[]>([])
+  useEffect(() => {
+    try { sortConfigRef.current = JSON.parse(localStorage.getItem(`ff-amazon-${mp}-sort`) ?? '[]') } catch { sortConfigRef.current = [] }
+  }, [mp])
+
   function applyOrderToMarkets(targets: string[]) {
-    const ids = rows.map((r) => r._rowId as string)
+    const ids = latestRowsRef.current.map((r) => r._rowId as string)
     for (const m of targets) {
       try { localStorage.setItem(`ff-amazon-${m}-row-order`, JSON.stringify(ids)) } catch {}
-      try { localStorage.setItem(`ff-amazon-${m}-sort`, JSON.stringify(sortConfig)) } catch {}
+      try { localStorage.setItem(`ff-amazon-${m}-sort`, JSON.stringify(sortConfigRef.current)) } catch {}
     }
   }
 
@@ -832,40 +659,59 @@ export default function AmazonFlatFileClient({
     }
   }
 
-  const [rows, setRows] = useState<Row[]>(() => {
-    const merged = mergeAsinCache(initialRows, initialMarketplace)
-    try {
-      // Try per-market key first, fall back to legacy shared key for migration
-      const raw = localStorage.getItem(rowOrderKey) ?? localStorage.getItem('ff-amazon-row-order')
-      const saved: string[] | null = JSON.parse(raw ?? 'null')
-      if (Array.isArray(saved) && saved.length > 0) {
-        const orderMap = new Map(saved.map((id, i) => [id, i]))
-        const inOrder = merged.filter((r) => orderMap.has(r._rowId as string))
-        inOrder.sort((a, b) => orderMap.get(a._rowId as string)! - orderMap.get(b._rowId as string)!)
-        const notInOrder = merged.filter((r) => !orderMap.has(r._rowId as string))
-        return [...inOrder, ...notInOrder]
-      }
-    } catch {}
-    return merged
-  })
-  // MT.3 / BN.2.3 — derive sheetTypes from the union of the primary product type
-  // AND the types actually present in the rows. A mixed-type family (e.g. COAT
-  // rows + PANTS rows) therefore renders both types' columns automatically.
-  // On market-switch, rows reload via loadData so inUse reflects the new set;
-  // productType change re-derives immediately.
-  // VALUE-GUARD: the functional updater compares sorted joined strings and returns
-  // the PREVIOUS array when the set is unchanged — this prevents a new sheetTypes
-  // reference on every cell edit from thrashing the union-manifest fetch.
-  useEffect(() => {
+  // ── UFX P3 — grid-owned rows, page-observed via refs (eBay pattern) ──────
+  // The shared FlatFileGrid owns the rows state. The page reads live rows via
+  // latestRowsRef (updated on every grid render through renderToolbarFetch)
+  // and writes through the captured grid setters. `setRows`/`pushSnapshot`
+  // shims keep the page's many handlers (submit gathering, feed polling,
+  // pull/import apply, copy-to-market …) verbatim.
+  const latestRowsRef = useRef<Row[]>([])
+  const latestSelectedRowsRef = useRef<Set<string>>(new Set())
+  const latestSetRowsRef = useRef<React.Dispatch<React.SetStateAction<BaseRow[]>> | null>(null)
+  const latestPushHistoryRef = useRef<((rows: BaseRow[]) => void) | null>(null)
+  const latestSetSelectedRowsRef = useRef<React.Dispatch<React.SetStateAction<Set<string>>> | null>(null)
+  // Captures ctx.onReload (the grid's own load path) so page-level events —
+  // scope change, external invalidation, follow/buffer apply — can reload the
+  // MOUNTED grid.
+  const onReloadCtxRef = useRef<(() => void) | null>(null)
+  const rowsRef = latestRowsRef // alias — kept handlers read rowsRef.current
+
+  const setRows: React.Dispatch<React.SetStateAction<Row[]>> = useCallback((action) => {
+    const set = latestSetRowsRef.current
+    if (!set) return
+    if (typeof action === 'function') {
+      set((prev) => (action as (p: Row[]) => Row[])(prev as Row[]) as BaseRow[])
+    } else {
+      set(action as BaseRow[])
+    }
+  }, [])
+
+  // Push an undo snapshot of the grid's CURRENT rows (grid pushHistory with
+  // the same array reference: history records it, the setState bails out).
+  const pushSnapshot = useCallback(() => {
+    latestPushHistoryRef.current?.(latestRowsRef.current as BaseRow[])
+  }, [])
+
+  // MT.3 / BN.2.3 — derive sheetTypes from the union of the primary product
+  // type AND the types actually present in the rows (signalled from
+  // renderToolbarFetch on every grid rows change — the grid exposes no
+  // onRowsChange). VALUE-GUARD identical to the old effect: no-op when the
+  // set is unchanged → no union-manifest refetch churn.
+  const syncSheetTypesFromRows = useCallback((rows: Row[], pt: string) => {
     const inUse = productTypesInUse(rows)                                   // distinct UPPERCASE
-    const next = Array.from(new Set([productType.toUpperCase(), ...inUse])).filter(Boolean)
+    const next = Array.from(new Set([pt.toUpperCase(), ...inUse])).filter(Boolean)
     setSheetTypes((prev) => {
       const a = [...prev].map((t) => t.toUpperCase()).sort().join(',')
       const b = [...next].sort().join(',')
-      return a === b ? prev : next                                          // no-op when set unchanged → no union refetch churn
+      return a === b ? prev : next
     })
+  }, [])
+  // productType/marketplace switches re-derive immediately (rows reload comes
+  // separately through the grid's own reload).
+  useEffect(() => {
+    syncSheetTypesFromRows(latestRowsRef.current, productType)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productType, marketplace, rows])
+  }, [productType, marketplace])
 
   // Non-null when localStorage has a draft with unsaved edits that differ from
   // the DB rows loaded on this page open.
@@ -921,38 +767,16 @@ export default function AmazonFlatFileClient({
     initialFilter: AMAZON_FILTER_DEFAULT,
   })
 
+  // UFX P3 — the shared FlatFileGrid now owns sort / conditional format /
+  // filter / smart paste / row images / find&replace / validation panel /
+  // AI panel + modal / row selection. The page keeps only the column-group
+  // model (Columns modal + controlled group state passed to the grid).
   const {
-    sortConfig, setSortConfig: _setSortCoreConfig, persistSort,
-    sortPanelOpen, setSortPanelOpen,
-    cfRules, setCfRules, persistCfRules,
-    conditionalOpen: cfOpen, setConditionalOpen: setCfOpen,
-    ffFilter, setFfFilter: setFFFilter,
-    filterOpen: filterPanelOpen, setFilterOpen: setFilterPanelOpen,
-    smartPasteEnabled, toggleSmartPaste,
-    showRowImages, rowImageSize: imageSize, toggleRowImages, changeImageSize: setImageSizeCore,
     columnGroups, setColumnGroups,
     closedGroups, groupOrder, applyGroupSettings,
     columnsOpen, setColumnsOpen,
-    findReplaceOpen, setFindReplaceOpen,
-    validationOpen: showValidPanel, setValidationOpen: setShowValidPanel,
-    aiPanelOpen, setAiPanelOpen,
-    aiModalOpen, setAiModalOpen,
-    selectedRows, setSelectedRows,
   } = core
 
-  // Wrapper: persistSort + propagate across synced markets
-  const setSortConfig = useCallback((levels: SortLevel[]) => {
-    persistSort(levels)
-    propagateSort(levels)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [persistSort])
-
-
-  // Derived: open = all manifest groups minus whatever the user has closed
-  const openGroups = useMemo(
-    () => new Set((effectiveManifest?.groups ?? []).map((g) => g.id).filter((id) => !closedGroups.has(id))),
-    [effectiveManifest, closedGroups],
-  )
 
   // Sync columnGroups when effectiveManifest changes (market or productType switch)
   useEffect(() => {
@@ -978,41 +802,34 @@ export default function AmazonFlatFileClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveManifest])
 
-  // Search
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchMode, setSearchMode] = useState<'rows' | 'columns'>('rows')
-  const searchRef = useRef<HTMLInputElement>(null)
-
-  const [activeCell, setActiveCell] = useState<{ rowId: string; colId: string } | null>(null)
-  const [selAnchor, setSelAnchor] = useState<{ ri: number; ci: number } | null>(null)
-  const [selEnd,    setSelEnd]    = useState<{ ri: number; ci: number } | null>(null)
-  const [isFillDragging, setIsFillDragging] = useState(false)
-  const [fillDragEnd,    setFillDragEnd]    = useState<{ ri: number; ci: number } | null>(null)
-  const [isEditing, setIsEditing] = useState(false)
-  const [editInitialChar, setEditInitialChar] = useState<string | null>(null)
-  const [clipboardRange, setClipboardRange] = useState<NormSel | null>(null)
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  // Add-rows panel — anchorRowId captures where the panel was opened from
+  // (footer selection anchor or context-menu row) so above/below inserts land
+  // next to it (the grid owns the live selection now).
   const [addRowsPanel, setAddRowsPanel] = useState<{
     type: 'row' | 'parent' | 'variant'
     position: 'end' | 'above' | 'below'
+    anchorRowId?: string
   } | null>(null)
 
-  const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
-  // ── CG — custom SKU groups (view-only; per-market, localStorage) ──────
-  // Grouping is a pure VIEW concern: it never enters rows/data/paste/serialize/
-  // submit/export. `family` (default) renders identically to before.
-  const [groupMode, setGroupMode] = useState<GroupMode>(() => loadGroupMode(marketplace))
-  const [customGroups, setCustomGroups] = useState<FlatFileGroup[]>(() => loadGroups(marketplace))
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => loadCollapsedGroups(marketplace))
-  // Pending "Group selected…" creation (captured SKUs + draft name/colour).
-  const [groupCreate, setGroupCreate] = useState<{ skus: string[] } | null>(null)
-  const [manageGroupsOpen, setManageGroupsOpen] = useState(false)
-  // Tracks the market the group state currently belongs to, so persistence
-  // saves to the right market and a market switch never clobbers it.
-  const groupMarketRef = useRef(marketplace)
-  const [frozenColCount, setFrozenColCount] = useState<number>(() => {
-    try { return parseInt(localStorage.getItem('ff-frozen-cols') ?? '1', 10) || 1 } catch { return 1 }
-  })
+  // ── CG — custom groups + FBA/FBM sections now live in the shared grid ────
+  // One-time key migration: the page persisted groups under
+  // ff-amazon-{MP}-groups; the shared grid scopes them as
+  // ff-{storageKey}-groups with storageKey `ff-amazon-{MP}` →
+  // ff-ff-amazon-{MP}-groups. Copy old → new once so operator groups (and
+  // the group mode / collapsed set) survive the port.
+  useEffect(() => {
+    try {
+      for (const m of MARKETPLACES) {
+        for (const suffix of ['groups', 'group-mode', 'collapsed-groups']) {
+          const oldKey = `ff-amazon-${m}-${suffix}`
+          const newKey = `ff-ff-amazon-${m}-${suffix}`
+          const old = localStorage.getItem(oldKey)
+          if (old != null && localStorage.getItem(newKey) == null) localStorage.setItem(newKey, old)
+        }
+      }
+    } catch { /* non-fatal */ }
+  }, [])
+
   const [imagesByAsin, setImagesByAsin] = useState<Record<string, string | null>>(() => {
     try {
       const raw = localStorage.getItem('ff-images-cache')
@@ -1026,7 +843,6 @@ export default function AmazonFlatFileClient({
   const [polling, setPolling] = useState(false)
   const { toast } = useToast() // FFS.7 — submit summary + feed-completion notices
   const confirm = useConfirm() // FM Phase 3 — bulk Follow/Pinned confirmation
-  const { exportCatalogWorkbook, exporting: exportingWorkbook } = useCatalogWorkbookExport()
   const [submitPanelOpen, setSubmitPanelOpen] = useState(false)
   // FFC — pre-publish Review & Confirm gate. A Promise-based modal so Submit can
   // `await` the operator's decision in place of the old crude confirm().
@@ -1058,28 +874,8 @@ export default function AmazonFlatFileClient({
   const [historyOpen, setHistoryOpen] = useState(false)
   // versionPanelOpen kept to handle "Version history…" menu — redirects to historyOpen
 
-  // BF.1 — Find & Replace
-  const [matchKeys, setMatchKeys] = useState<Set<string>>(new Set())
-
-  // BF.4 — AI bulk actions (open states now from useFlatFileCore above)
-
-  // BM.2 — Replicate modal
-  const [replicateOpen, setReplicateOpen] = useState(false)
-
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // ── Column + row resize ────────────────────────────────────────────
-  const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
-    try { return JSON.parse(localStorage.getItem('ff-col-widths') ?? '{}') } catch { return {} }
-  })
-  const [rowHeight, setRowHeight] = useState<number>(() => {
-    try { return Math.max(24, parseInt(localStorage.getItem('ff-row-height') ?? '28', 10) || 28) } catch { return 28 }
-  })
-  const [resizingType, setResizingType] = useState<'col' | 'row' | null>(null)
-  const resizeDragRef = useRef<{
-    type: 'col' | 'row'; colId?: string
-    startX: number; startY: number; startVal: number
-  } | null>(null)
   const [coverageModalOpen, setCoverageModalOpen] = useState(false)
   const [healthModalOpen, setHealthModalOpen] = useState(false)
   const [pullPanelOpen, setPullPanelOpen] = useState(false)
@@ -1098,7 +894,6 @@ export default function AmazonFlatFileClient({
     skusReturned: number
     jobId: string
   } | null>(null)
-  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [showSetCategory, setShowSetCategory] = useState(false)
   const [bufferModal, setBufferModal] = useState<{ productIds: string[] } | null>(null) // FM Phase 4
   const [bufferInput, setBufferInput] = useState('1')
@@ -1124,11 +919,6 @@ export default function AmazonFlatFileClient({
   // latches. Gating the JSX with these keeps the chunk + component
   // unmounted until first use (saves initial bundle), then keeps them
   // mounted afterward (preserves in-modal state across open/close).
-  const findReplaceMounted = useOpenOnce(findReplaceOpen)
-  const cfMounted = useOpenOnce(cfOpen)
-  const filterPanelMounted = useOpenOnce(filterPanelOpen)
-  const aiModalMounted = useOpenOnce(aiModalOpen)
-  const replicateMounted = useOpenOnce(replicateOpen)
   const [pendingPullReview, setPendingPullReview] = useState<{
     jobId: string
     rows: Row[]
@@ -1136,55 +926,11 @@ export default function AmazonFlatFileClient({
     skusReturned: number
     doneAt: string | null
   } | null>(null)
-  // Tracks the anchor row when user drags on the # column to select rows
-  const rowDragRef = useRef<number | null>(null)
-
-  // ── Undo / Redo ────────────────────────────────────────────────────
-  const rowsRef = useRef<Row[]>(rows)
-  useEffect(() => { rowsRef.current = rows }, [rows])
   // FFX.2 — true when the local grid has diverged from the DB (e.g. a pull that
   // isn't yet round-tripped). Survives Publish clearing _dirty, so a background
   // external reload can't silently overwrite freshly-pulled work. Cleared after
   // a sync-to-DB / fromDB load / discard, when grid == DB again.
   const localDivergedRef = useRef(false)
-
-  // On mount: reconcile localStorage draft with the SSR DB snapshot.
-  // P.3 — _isNew rows not yet in the DB (creation failed in a previous session)
-  // are auto-injected into the grid immediately, so they reappear without a
-  // manual "Restore" click. Other dirty rows (failed updates) still show the
-  // restore banner so the operator can choose whether to re-apply them.
-  useEffect(() => {
-    if (!initialProductType) return
-    try {
-      const base = `ff-rows-${initialMarketplace.toUpperCase()}-${initialProductType.toUpperCase()}`
-      const key = familyId ? `${base}-family-${familyId}` : base
-      const raw = localStorage.getItem(key)
-      if (!raw) return
-      const saved = JSON.parse(raw) as Row[]
-      if (!Array.isArray(saved) || saved.length === 0) return
-
-      // Auto-inject new rows that were never persisted to the DB.
-      const dbSkus = new Set(
-        (initialRows ?? []).map((r: any) => String(r.item_sku ?? '').trim()).filter(Boolean),
-      )
-      const unpersistedNew = saved.filter(
-        (r) => r._isNew && String(r.item_sku ?? '').trim() && !dbSkus.has(String(r.item_sku ?? '').trim()),
-      )
-      if (unpersistedNew.length > 0) {
-        setRows((prev) => {
-          const existingSkus = new Set(prev.map((r) => String(r.item_sku ?? '').trim()).filter(Boolean))
-          const toAdd = unpersistedNew.filter((r) => !existingSkus.has(String(r.item_sku ?? '').trim()))
-          return toAdd.length ? [...prev, ...mergeAsinCache(toAdd, initialMarketplace)] : prev
-        })
-      }
-
-      // Restore banner: only show when there are dirty rows (sync failures).
-      if (saved.some((r) => r._dirty)) {
-        setDraftBanner(saved)
-      }
-    } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   // P5: On mount, ask the API if a recent pull job is waiting for
   // review (operator pulled then closed the tab / refreshed before
@@ -1221,101 +967,11 @@ export default function AmazonFlatFileClient({
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const displayRowsRef = useRef<Row[]>([])
-  // FFP.11 — anchor row for shift-click checkbox range selection.
-  const lastRowSelRef = useRef<string | null>(null)
-  const allColumnsRef = useRef<Column[]>([])
-  const selAnchorRef = useRef<{ ri: number; ci: number } | null>(null)
-  const selEndRef = useRef<{ ri: number; ci: number } | null>(null)
-  const isEditingRef = useRef(false)
-  // GX.9 — column-anchor for Sheets-style row entry: Tab across a row's fields,
-  // then Enter drops to the next row at the column where the row entry started.
-  // Set by Tab, used by Enter, reset by any other navigation.
-  const entryAnchorColRef = useRef<number | null>(null)
-
-  useEffect(() => { selAnchorRef.current = selAnchor }, [selAnchor])
-  useEffect(() => { selEndRef.current = selEnd }, [selEnd])
-  useEffect(() => { isEditingRef.current = isEditing }, [isEditing])
-
-  const [draggingRowId, setDraggingRowId] = useState<string | null>(null)
-  const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null)
-  const [dropTarget, setDropTarget] = useState<{ rowId: string; half: 'top' | 'bottom' } | null>(null)
-  const [history, setHistory] = useState<Row[][]>([])
-  const [future, setFuture] = useState<Row[][]>([])
-
-  const pushSnapshot = useCallback(() => {
-    setHistory((prev) => [...prev.slice(-49), rowsRef.current])
-    setFuture([])
-  }, [])
-
-  const applyAiChanges = useCallback((changes: FlatFileAiChange[]) => {
-    if (changes.length === 0) return
-    pushSnapshot()
-    setRows((prev) => {
-      const byRowId = new Map(prev.map((r) => [r._rowId as string, r]))
-      const bySku = new Map(prev.map((r) => [String(r.item_sku ?? ''), r]))
-      const updated = new Map<string, Row>()
-      for (const ch of changes) {
-        const row = byRowId.get(ch.rowId) ?? bySku.get(ch.sku)
-        if (!row) continue
-        const existing = updated.get(row._rowId as string) ?? { ...row }
-        // FB1-client — AI writes into the synthetic Follow/Buffer cells go through
-        // the same enum/number enforcement as paste/fill (junk keeps the previous value).
-        updated.set(row._rowId as string, { ...existing, [ch.field]: normalizeSyntheticCell(ch.field, ch.newValue, existing[ch.field]), _dirty: true })
-      }
-      return prev.map((r) => updated.get(r._rowId as string) ?? r)
-    })
-  }, [pushSnapshot])
-
-  const undo = useCallback(() => {
-    setHistory((prev) => {
-      if (!prev.length) return prev
-      const next = [...prev]
-      const snapshot = next.pop()!
-      setFuture((f) => [rowsRef.current, ...f.slice(0, 49)])
-      setRows(snapshot)
-      return next
-    })
-  }, [])
-
-  const redo = useCallback(() => {
-    setFuture((prev) => {
-      if (!prev.length) return prev
-      const next = [...prev]
-      const snapshot = next.shift()!
-      setHistory((h) => [...h.slice(-49), rowsRef.current])
-      setRows(snapshot)
-      return next
-    })
-  }, [])
-
-  // Persist resize state to localStorage
-  useEffect(() => { try { localStorage.setItem('ff-col-widths', JSON.stringify(colWidths)) } catch {} }, [colWidths])
-  useEffect(() => { try { localStorage.setItem('ff-row-height', String(rowHeight)) } catch {} }, [rowHeight])
-  useEffect(() => { try { localStorage.setItem('ff-frozen-cols', String(frozenColCount)) } catch {} }, [frozenColCount])
-
   // IN.1 — Override badges toggle (default on)
   const [showOverrideBadges, setShowOverrideBadges] = useState<boolean>(() => {
     try { return localStorage.getItem('ff-show-overrides') !== '0' } catch { return true }
   })
   useEffect(() => { try { localStorage.setItem('ff-show-overrides', showOverrideBadges ? '1' : '0') } catch {} }, [showOverrideBadges])
-
-  // CG — persist group state on change. Save to the ref-tracked market (NOT
-  // `marketplace` in deps) so switching markets — which reloads state below —
-  // can't save the old market's groups into the new market's key.
-  useEffect(() => { saveGroups(groupMarketRef.current, customGroups) }, [customGroups])
-  useEffect(() => { saveGroupMode(groupMarketRef.current, groupMode) }, [groupMode])
-  useEffect(() => { saveCollapsedGroups(groupMarketRef.current, collapsedGroups) }, [collapsedGroups])
-  // CG — rehydrate group state when the market changes (ref guard skips mount
-  // and prevents a load/save loop; persist effects above don't fire here since
-  // their deps are the state values, which only change on the next render).
-  useEffect(() => {
-    if (groupMarketRef.current === marketplace) return
-    groupMarketRef.current = marketplace
-    setGroupMode(loadGroupMode(marketplace))
-    setCustomGroups(loadGroups(marketplace))
-    setCollapsedGroups(loadCollapsedGroups(marketplace))
-  }, [marketplace])
 
   // IN.2 — Cascade button toggle (default on) + row being cascaded
   const [showCascadeButtons, setShowCascadeButtons] = useState<boolean>(() => {
@@ -1323,44 +979,6 @@ export default function AmazonFlatFileClient({
   })
   useEffect(() => { try { localStorage.setItem('ff-show-cascade', showCascadeButtons ? '1' : '0') } catch {} }, [showCascadeButtons])
   const [cascadeRow, setCascadeRow] = useState<Row | null>(null)
-
-  // Auto row height when images toggled on or size changed
-  useEffect(() => {
-    if (showRowImages) {
-      // Row # always visible (12px) + image + padding; ASIN + status add ~28px for M/L/XL
-      const asinExtra = imageSize >= 48 ? 28 : 0
-      setRowHeight(imageSize + 24 + asinExtra)
-    }
-  }, [showRowImages, imageSize])
-
-  // Global mouse handlers for drag-resize
-  useEffect(() => {
-    function onMove(e: MouseEvent) {
-      const d = resizeDragRef.current
-      if (!d) return
-      if (d.type === 'col' && d.colId) {
-        setColWidths((p) => ({ ...p, [d.colId!]: Math.max(60, d.startVal + e.clientX - d.startX) }))
-      } else if (d.type === 'row') {
-        setRowHeight(Math.max(24, d.startVal + e.clientY - d.startY))
-      }
-    }
-    function onUp() { resizeDragRef.current = null; setResizingType(null) }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-    return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
-  }, [])
-
-  const startColResize = useCallback((e: React.MouseEvent, colId: string, curW: number) => {
-    e.preventDefault(); e.stopPropagation()
-    resizeDragRef.current = { type: 'col', colId, startX: e.clientX, startY: 0, startVal: curW }
-    setResizingType('col')
-  }, [])
-
-  const startRowResize = useCallback((e: React.MouseEvent, curH: number) => {
-    e.preventDefault(); e.stopPropagation()
-    resizeDragRef.current = { type: 'row', startX: 0, startY: e.clientY, startVal: curH }
-    setResizingType('row')
-  }, [])
 
   // ── Fetch known product types whenever marketplace changes ─────────
   useEffect(() => {
@@ -1411,52 +1029,35 @@ export default function AmazonFlatFileClient({
     return [...ordered, ...rest]
   }, [columnGroups, effectiveManifest, groupOrder])
 
-  const visibleGroups = useMemo(
-    () => orderedGroups.filter((g) => openGroups.has(g.id)),
-    [orderedGroups, openGroups],
-  )
-
-  // Column-mode search: filter columns within visible groups
-  const displayGroups = useMemo<ColumnGroup[]>(() => {
-    let groups = visibleGroups
-    // MT.5 — filter the union grid to one category's columns (+ shared/infra
-    // columns, which have no applicableProductTypes). Only when the filter is
-    // an active sheet category.
-    if (filterType && sheetTypes.map((t) => t.toUpperCase()).includes(filterType)) {
-      groups = groups
-        .map((g) => ({
-          ...g,
-          columns: g.columns.filter((c) => !c.applicableProductTypes || c.applicableProductTypes.includes(filterType)),
-        }))
-        .filter((g) => g.columns.length > 0)
-    }
-    if (!searchQuery || searchMode !== 'columns') return groups
-    const q = searchQuery.toLowerCase()
-    return groups
-      .map((g) => ({
-        ...g,
-        columns: g.columns.filter(
-          (c) =>
-            c.id.toLowerCase().includes(q) ||
-            c.labelEn.toLowerCase().includes(q) ||
-            c.labelLocal.toLowerCase().includes(q) ||
-            c.fieldRef.toLowerCase().includes(q),
-        ),
-      }))
-      .filter((g) => g.columns.length > 0)
-  }, [visibleGroups, searchQuery, searchMode, filterType, sheetTypes])
-
   // BN.1.1 — override display label only; id/fieldRef stay untouched (row keys + serialization).
   const withBrowseNodeLabel = (col: Column): Column =>
     col.id === 'recommended_browse_nodes' || /^recommended_browse_nodes\b/.test(col.fieldRef)
       ? { ...col, labelEn: 'Browse node', labelLocal: 'Browse node' }
       : col
 
-  const allColumns = useMemo<Column[]>(
-    () => displayGroups.flatMap((g) => g.columns).map(withBrowseNodeLabel),
-    [displayGroups],
-  )
-  useEffect(() => { allColumnsRef.current = allColumns }, [allColumns])
+  // UFX P3 — the column groups handed to the shared grid: manifest groups
+  // converted to the grid contract (per-type applicability first-class,
+  // selectionOnly→strict enums, synthetic Category column after record_action).
+  // MT.5 — filterType narrows the union sheet to one category's columns.
+  const gridColumnGroups = useMemo(() => {
+    const activeFilter = filterType && sheetTypes.map((t) => t.toUpperCase()).includes(filterType) ? filterType : null
+    const groups = (effectiveManifest?.groups ?? []).map((g) => ({ ...g, columns: g.columns.map(withBrowseNodeLabel) }))
+    return buildGridColumnGroups(groups as AmazonColumnGroup[], { filterType: activeFilter })
+  }, [effectiveManifest, filterType, sheetTypes])
+
+  // The grid's VISIBLE columns in its render order (controlled group order +
+  // visibility) — used by the column quick-jump (data-ci lookup) and the
+  // variant-clone axis resolution.
+  const visibleGridColumns = useMemo(() => {
+    const byId = new Map(gridColumnGroups.map((g) => [g.id, g]))
+    const ordered = groupOrder.length
+      ? [
+          ...(groupOrder.map((id) => byId.get(id)).filter(Boolean) as typeof gridColumnGroups),
+          ...gridColumnGroups.filter((g) => !groupOrder.includes(g.id)),
+        ]
+      : gridColumnGroups
+    return ordered.filter((g) => !closedGroups.has(g.id)).flatMap((g) => g.columns)
+  }, [gridColumnGroups, groupOrder, closedGroups])
 
   const manifestColumns = useMemo<Column[]>(
     () => (effectiveManifest?.groups ?? []).flatMap((g) => g.columns),
@@ -1469,24 +1070,6 @@ export default function AmazonFlatFileClient({
     return col?.optionLabels ?? {}
   }, [manifestColumns])
 
-  // BN.2.1 — position helpers for the synthetic Category column injection.
-  // categoryInsertAfterIdx: allColumns index of record_action (insert Category after it).
-  // categoryGroupInsertAfterIdx: displayGroups index of the group that contains record_action.
-  // These drive the 3 render-side injections; data/paste/nav/serialize keep using allColumns.
-  const categoryInsertAfterIdx = useMemo(
-    () => allColumns.findIndex((c) => c.id === 'record_action'),
-    [allColumns],
-  )
-  const categoryGroupInsertAfterIdx = useMemo(() => {
-    if (categoryInsertAfterIdx < 0) return -1
-    let cum = 0
-    for (let gi = 0; gi < displayGroups.length; gi++) {
-      cum += displayGroups[gi].columns.length
-      if (cum > categoryInsertAfterIdx) return gi
-    }
-    return displayGroups.length - 1
-  }, [displayGroups, categoryInsertAfterIdx])
-
   // Field ID → label map. Powers the PullDiffModal so the diff table
   // shows "Title" instead of "item_name". Falls back to the field id
   // for any pulled attribute not represented in the manifest.
@@ -1498,1034 +1081,77 @@ export default function AmazonFlatFileClient({
     return m
   }, [manifestColumns])
 
-  const cellErrors = useMemo<Map<string, ValidationIssue>>(() => {
-    const m = new Map<string, ValidationIssue>()
-    for (const row of rows) {
-      if (row._ghost) continue // GX.5 — don't validate blank canvas rows
-      // FFP.2 — a delete row sends only sku+operationType; nothing to validate.
-      if (String(row.record_action ?? '').toLowerCase() === 'delete') continue
-      for (const col of manifestColumns) {
-        const rawVal = row[col.id]
-        const val = rawVal != null ? String(rawVal) : ''
-        if (col.required && !val) {
-          m.set(`${row._rowId as string}:${col.id}`, { level: 'error', msg: `${col.labelEn} is required` })
-        } else if (col.maxUtf8ByteLength && val) {
-          // P2.3 — Amazon enforces UTF-8 byte limits (accented chars = 2+ bytes).
-          // FFP.2 — level 'error' to match server preflight (was 'warn'; the
-          // Review modal counted it as an error, so the grid must agree).
-          const bytes = new TextEncoder().encode(val).length
-          if (bytes > col.maxUtf8ByteLength) {
-            m.set(`${row._rowId as string}:${col.id}`, { level: 'error', msg: `Exceeds ${col.maxUtf8ByteLength}-byte Amazon limit (${bytes} bytes; accented chars count as 2+)` })
-          }
-        } else if (col.maxLength && val.length > col.maxLength) {
-          m.set(`${row._rowId as string}:${col.id}`, { level: 'error', msg: `Exceeds max ${col.maxLength} chars (${val.length})` })
-        } else if (col.options?.length && val && !col.options.includes(val)) {
-          m.set(`${row._rowId as string}:${col.id}`, { level: 'warn', msg: `"${val}" is not a valid option` })
-        }
-      }
-    }
-    // P2.1 — Feed-error field highlighting: when Amazon returns per-field errors,
-    // shade those specific cells red so the operator knows exactly which to fix.
-    // P3.1 — ListingIssue field highlighting: shade issue-flagged cells amber.
-    for (const row of rows) {
-      if (row._ghost) continue
-      if (row._status === 'error' && row._errorFields) {
-        const feedMsg = row._feedMessage ?? 'Amazon rejected this field'
-        for (const fieldId of (row._errorFields as string[])) {
-          const key = `${row._rowId as string}:${fieldId}`
-          if (!m.has(key)) m.set(key, { level: 'error', msg: String(feedMsg) })
-        }
-      }
-      if (row._issueFields && (row._issueFields as string[]).length) {
-        const sev = row._issueSeverity ? String(row._issueSeverity) : 'WARNING'
-        const level: 'error' | 'warn' = sev === 'ERROR' ? 'error' : 'warn'
-        for (const fieldId of (row._issueFields as string[])) {
-          const key = `${row._rowId as string}:${fieldId}`
-          if (!m.has(key)) m.set(key, { level, msg: `Amazon listing issue: ${sev.toLowerCase()} on this attribute` })
-        }
-      }
-    }
-    // P4.1 — Orphaned child detection: flag parent_sku if no parent with that SKU exists.
-    const parentSkus = new Set<string>()
-    for (const r of rows) {
-      if (!r._ghost && r.parentage_level === 'parent' && r.item_sku) parentSkus.add(String(r.item_sku))
-    }
-    for (const row of rows) {
-      if (row._ghost || row.parentage_level !== 'child') continue
-      const ps = String(row.parent_sku ?? '').trim()
-      if (!ps || parentSkus.has(ps)) continue
-      const key = `${row._rowId as string}:parent_sku`
-      if (!m.has(key)) m.set(key, { level: 'error', msg: `No parent row with SKU "${ps}" found — add a parent row or fix the parent SKU` })
-    }
-    return m
-  }, [rows, manifestColumns])
-
-  const validErrorCount = useMemo(() => [...cellErrors.values()].filter((e) => e.level === 'error').length, [cellErrors])
-  const validWarnCount  = useMemo(() => [...cellErrors.values()].filter((e) => e.level === 'warn').length, [cellErrors])
-
-  // BN.4.3 — Advisory-only warnings (never block submit).
-  const mixedFamilies = useMemo(() => mixedTypeFamilies(rows as Array<Record<string, unknown>>), [rows])
-  const missingNodeRowIds = useMemo(() => rowsMissingNode(rows as Array<Record<string, unknown>>), [rows])
-  // Display-only count — kept strictly separate from validErrorCount/validWarnCount (those drive blocking logic).
-  const advisoryCount = mixedFamilies.length + missingNodeRowIds.length
-
-  // P4 — Map from child rowId → parent's variation_theme, used for axis fingerprint + clone.
-  const parentThemeByChildId = useMemo<Map<string, string>>(() => {
-    const parentThemeBySku = new Map<string, string>()
-    for (const r of rows) {
-      if (!r._ghost && r.parentage_level === 'parent' && r.item_sku && r.variation_theme) {
-        parentThemeBySku.set(String(r.item_sku), String(r.variation_theme))
-      }
-    }
-    const m = new Map<string, string>()
-    for (const r of rows) {
-      if (!r._ghost && r.parentage_level === 'child' && r.parent_sku) {
-        const theme = parentThemeBySku.get(String(r.parent_sku))
-        if (theme) m.set(r._rowId as string, theme)
-      }
-    }
-    return m
-  }, [rows])
-
-  // Row-mode search + multi-level sort (display-only, never mutates rows)
-  const displayRows = useMemo<Row[]>(() => {
-    // GX.5 — process only REAL rows through search/sort/filter/grouping; the
-    // trailing ghost (blank canvas) rows are re-appended at the bottom below.
-    const ghostRows = rows.filter((r) => r._ghost)
-    const baseRows = rows.filter((r) => !r._ghost)
-    let result: Row[]
-    if (searchQuery && searchMode === 'rows') {
-      const q = searchQuery.toLowerCase()
-      result = baseRows.filter((row) =>
-        Object.entries(row).some(
-          ([k, v]) => !k.startsWith('_') && v != null && String(v).toLowerCase().includes(q),
-        ),
-      )
-    } else {
-      result = baseRows
-    }
-
-    if (sortConfig.length > 0) {
-      result = [...result].sort((a, b) => {
-        for (const level of sortConfig) {
-          if (!level.colId) continue
-          const aVal = String(a[level.colId] ?? '')
-          const bVal = String(b[level.colId] ?? '')
-          let cmp = 0
-          if (level.mode === 'asc') {
-            cmp = aVal.localeCompare(bVal, undefined, { numeric: true, sensitivity: 'base' })
-          } else if (level.mode === 'desc') {
-            cmp = bVal.localeCompare(aVal, undefined, { numeric: true, sensitivity: 'base' })
-          } else {
-            const ai = level.customOrder.indexOf(aVal)
-            const bi = level.customOrder.indexOf(bVal)
-            cmp = (ai === -1 ? 1e9 : ai) - (bi === -1 ? 1e9 : bi)
-          }
-          if (cmp !== 0) return cmp
-        }
-        return 0
-      })
-    }
-    // BF.3 — extended row filter
-    if (ffFilter.channel.parentage !== 'any') {
-      result = result.filter((row) => {
-        if (ffFilter.channel.parentage === 'parent') return row.parentage_level === 'parent'
-        return row.parentage_level === 'child'
-      })
-    }
-    if (ffFilter.channel.hasAsin !== 'any') {
-      result = result.filter((row) =>
-        ffFilter.channel.hasAsin === 'yes' ? !!row._asin : !row._asin,
-      )
-    }
-    if (ffFilter.missingRequired && manifest) {
-      const reqCols = manifestColumns.filter((c) => c.required)
-      result = result.filter((row) =>
-        reqCols.some((c) => {
-          const v = row[c.id]
-          return v === null || v === undefined || String(v).trim() === ''
-        }),
-      )
-    }
-
-    // FF.40: parent/child hierarchy grouping
-    if (result.some((r) => r.parentage_level === 'parent' || r.parentage_level === 'child')) {
-      const grouped: Row[] = []
-      const processedChildIds = new Set<string>()
-      for (const row of result) {
-        if (row.parentage_level === 'child') continue
-        grouped.push(row)
-        if (row.parentage_level === 'parent' && !collapsedParents.has(row._rowId as string)) {
-          const pSku = String(row.item_sku ?? '')
-          for (const child of result) {
-            if (child.parentage_level === 'child' && String(child.parent_sku ?? '') === pSku) {
-              grouped.push(child)
-              processedChildIds.add(child._rowId as string)
-            }
-          }
-        }
-      }
-      // FFA.5 — only TRUE orphans (parent absent from the view, e.g. filtered out)
-      // get appended. A child of a COLLAPSED parent stays hidden until expanded —
-      // previously it leaked to the bottom of the grid + into fill/copy/validation.
-      const presentParentSkus = new Set(
-        result.filter((r) => r.parentage_level === 'parent').map((r) => String(r.item_sku ?? '')),
-      )
-      for (const row of result) {
-        if (row.parentage_level === 'child'
-          && !processedChildIds.has(row._rowId as string)
-          && !presentParentSkus.has(String(row.parent_sku ?? ''))) {
-          grouped.push(row)
-        }
-      }
-      result = grouped
-    }
-
-    // GX.5 — re-append the blank canvas at the bottom, but only in the default
-    // (unfiltered) view; a search / row-filter result shouldn't be padded.
-    const isDefaultView = !(searchQuery && searchMode === 'rows')
-      && ffFilter.channel.parentage === 'any' && ffFilter.channel.hasAsin === 'any' && !ffFilter.missingRequired
-    if (isDefaultView) result = result === baseRows ? [...baseRows, ...ghostRows] : [...result, ...ghostRows]
-
-    displayRowsRef.current = result
-    return result
-  }, [rows, searchQuery, searchMode, sortConfig, collapsedParents, ffFilter, manifest, manifestColumns])
-
-  // Family colour assignment: map each rowId → FamilyColor.
-  // Derived purely from displayRows — NOT written onto row objects (no data leakage).
-  const familyColorByRowId = useMemo<Map<string, FamilyColor>>(() => {
-    const m = new Map<string, FamilyColor>()
-    // First pass: assign a colour index to each unique parent SKU
-    const parentColorMap = new Map<string, FamilyColor>()
-    let idx = 0
-    for (const row of displayRows) {
-      if (row._ghost || row.parentage_level !== 'parent') continue
-      const sku = String(row.item_sku ?? row._rowId)
-      if (!parentColorMap.has(sku)) {
-        parentColorMap.set(sku, FAMILY_PALETTE[idx % FAMILY_PALETTE.length])
-        idx++
-      }
-    }
-    // Only colour rows when there are at least 2 distinct families (single-family
-    // sheets look fine with plain white rows — banding adds noise not value).
-    if (parentColorMap.size < 2) return m
-    // Second pass: apply colour to parents and their children
-    for (const row of displayRows) {
-      if (row._ghost) continue
-      if (row.parentage_level === 'parent') {
-        const color = parentColorMap.get(String(row.item_sku ?? row._rowId))
-        if (color) m.set(row._rowId as string, color)
-      } else if (row.parentage_level === 'child') {
-        const color = parentColorMap.get(String(row.parent_sku ?? ''))
-        if (color) m.set(row._rowId as string, color)
-      }
-    }
-    return m
-  }, [displayRows])
-
-  // GX.5 — keep a buffer of trailing ghost rows so there's always a blank canvas
-  // to type into (auto-grow). Tops up after a ghost materializes or on load.
-  // Converges: once the buffer is full the guard is false, so no render loop.
-  useEffect(() => {
-    if (!productType) return
-    const ghosts = rows.reduce((n, r) => n + (r._ghost ? 1 : 0), 0)
-    if (ghosts >= GHOST_BUFFER) return
-    setRows((prev) => {
-      const g = prev.reduce((n, r) => n + (r._ghost ? 1 : 0), 0)
-      return g >= GHOST_BUFFER ? prev : [...prev, ...makeGhostRows(GHOST_BUFFER - g)]
-    })
-  }, [rows, productType])
-
-  // GX.5 — the visible rows excluding the blank canvas, for counts + select-all.
-  const realDisplayRows = useMemo(() => displayRows.filter((r) => !r._ghost), [displayRows])
-  const realRowCount = useMemo(() => rows.reduce((n, r) => n + (r._ghost ? 0 : 1), 0), [rows])
-
-  // ── CG — render items: data rows + injected section headers (VIEW-ONLY) ──
-  // Grouped modes REORDER the data rows into sections. `dataIdx` is the row's
-  // index in the *visual* order, and `displayRowsRef` is pointed at that same
-  // visual-order array below — so data-ri / range-selection / paste / fill all
-  // map to the correct rows in grouped view too. Header rows are never added to
-  // displayRows/rows, so submit + export (which iterate `rows`) can't see them.
-  // `family` mode is a 1:1 passthrough → identical DOM to before the feature.
-  const groupHeaderColSpan = allColumns.length + 2 // data cols + Category col + row-header col
-  const renderRows = useMemo<RenderItem[]>(() => {
-    // Returns the render items PLUS the visual-order data rows (for the ref).
-    const build = (): { items: RenderItem[]; ordered: Row[] } => {
-      const passthrough = (): { items: RenderItem[]; ordered: Row[] } => ({
-        items: displayRows.map((row, i) => ({ kind: 'row', row, dataIdx: i })),
-        ordered: displayRows,
-      })
-      if (groupMode === 'family') return passthrough()
-      if (groupMode === 'custom' && customGroups.length === 0) return passthrough()
-
-      const ghosts = displayRows.filter((r) => r._ghost)
-      const reals = displayRows.filter((r) => !r._ghost)
-
-      type Sec = { id: string; name: string; color: FamilyColorName; rows: Row[] }
-      let sections: Sec[]
-      let sectionFor: (row: Row) => string
-
-      if (groupMode === 'custom') {
-        const ids = new Set(customGroups.map((g) => g.id))
-        sections = [...customGroups]
-          .sort((a, b) => a.order - b.order)
-          .map((g) => ({ id: g.id, name: g.name, color: g.color, rows: [] as Row[] }))
-        sections.push({ id: '__ungrouped', name: 'Ungrouped', color: 'blue', rows: [] })
-        sectionFor = (row) => {
-          const gid = groupIdForSku(customGroups, String(row.item_sku ?? ''))
-          return gid && ids.has(gid) ? gid : '__ungrouped'
-        }
-      } else {
-        // fulfillment: a parent follows its FBA children; else bucket by the row.
-        sections = [
-          { id: '__fba', name: 'FBA', color: 'blue', rows: [] },
-          { id: '__fbm', name: 'FBM', color: 'amber', rows: [] },
-        ]
-        const parentHasFba = new Set<string>()
-        for (const row of reals) {
-          if (String(row.parentage_level ?? '') === 'child' && fulfillmentBucket(row) === 'FBA') {
-            parentHasFba.add(String(row.parent_sku ?? ''))
-          }
-        }
-        sectionFor = (row) => {
-          const bucket = String(row.parentage_level ?? '') === 'parent'
-            ? (parentHasFba.has(String(row.item_sku ?? '')) ? 'FBA' : 'FBM')
-            : fulfillmentBucket(row)
-          return bucket === 'FBA' ? '__fba' : '__fbm'
-        }
-      }
-
-      const byId = new Map(sections.map((s) => [s.id, s]))
-      for (const row of reals) byId.get(sectionFor(row))!.rows.push(row)
-
-      // Auto sections (Ungrouped / FBA / FBM) hide when empty; custom groups stay
-      // visible but DIM when a filter hides all their members.
-      const AUTO = new Set(['__ungrouped', '__fba', '__fbm'])
-      const items: RenderItem[] = []
-      const ordered: Row[] = []
-      for (const s of sections) {
-        const empty = s.rows.length === 0
-        if (empty && AUTO.has(s.id)) continue
-        const collapsed = collapsedGroups.has(s.id)
-        items.push({ kind: 'header', groupId: s.id, name: s.name, color: s.color, count: s.rows.length, collapsed, dimmed: empty })
-        if (!collapsed) for (const row of s.rows) { items.push({ kind: 'row', row, dataIdx: ordered.length }); ordered.push(row) }
-      }
-      // Ghost/canvas rows always trail at the bottom, ungrouped + headerless.
-      for (const row of ghosts) { items.push({ kind: 'row', row, dataIdx: ordered.length }); ordered.push(row) }
-      return { items, ordered }
-    }
-    const { items, ordered } = build()
-    // Point the selection/paste ref at the VISUAL order (matches dataIdx / ri).
-    // In family mode `ordered === displayRows`, identical to the assignment in
-    // the displayRows memo. Runs after that memo (renderRows depends on it).
-    displayRowsRef.current = ordered
-    return items
-  }, [displayRows, groupMode, customGroups, collapsedGroups])
-  // P-1 — non-ghost selected count: used for Set-category button label/gate AND
-  // passed to SetCategoryModal so button N === modal N === apply N always agree.
-  const selectedRealCount = useMemo(
-    () => rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string)).length,
-    [rows, selectedRows],
+  // UFX P3 — validation is a pure function handed to the grid (per-cell
+  // shading + counts + panel live inside FlatFileGrid now).
+  const validateRows = useCallback(
+    (rows: BaseRow[]) => validateAmazonRows(rows, gridColumnGroups.flatMap((g) => g.columns)),
+    [gridColumnGroups],
   )
-  // FM Phase 3 — counts for the bulk Follow/Pinned buttons. `followEligibleCount`
-  // excludes FBA rows (Amazon-managed, can't follow/pin); `pinnedCount` drives the
-  // "Select all Pinned" helper for reconnecting the old auto-pins to the pool.
-  const followEligibleCount = useMemo(
-    () => rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string)
-      && !/^(AMAZON|AFN|FBA)/.test(String(r.fulfillment_availability__fulfillment_channel_code ?? '').toUpperCase())).length,
-    [rows, selectedRows],
-  )
-  const pinnedCount = useMemo(
-    () => rows.filter((r) => !r._ghost && r.follow === 'Pinned').length,
-    [rows],
-  )
-  // FM Phase 4 / FB4 — a bulk buffer applies to the selected FBM rows, Following
-  // OR Pinned (on Pinned it's stored and takes effect when the listing returns to
-  // Following — matches the inline cell). FBA stays excluded fail-closed.
-  const bufferEligibleCount = useMemo(
-    () => rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string)
-      && (String(r.follow) === 'Follow' || String(r.follow) === 'Pinned')
-      && !/^(AMAZON|AFN|FBA)/.test(String(r.fulfillment_availability__fulfillment_channel_code ?? '').toUpperCase())).length,
-    [rows, selectedRows],
-  )
+
+  // P4 — variation_theme of a child's parent (used by Clone variant to know
+  // which axis columns to blank). Computed on demand from the live rows.
+  const parentThemeOf = useCallback((row: Row): string => {
+    const ps = String(row.parent_sku ?? '')
+    if (!ps) return ''
+    const parent = latestRowsRef.current.find((r) => !r._ghost && r.parentage_level === 'parent' && String(r.item_sku ?? '') === ps)
+    return String(parent?.variation_theme ?? '')
+  }, [])
+
   // WARM — prefetch the Set-category modal chunk before first click so it opens instantly.
   const warmSetCategoryModal = useCallback(() => { void import('./SetCategoryModal') }, [])
-  useEffect(() => { if (selectedRealCount > 0) warmSetCategoryModal() }, [selectedRealCount > 0, warmSetCategoryModal])
-  // WARM — prefetch the Manage-groups modal chunk as soon as Custom mode is
-  // active, so clicking "Manage" opens instantly instead of cold-loading.
-  const warmManageGroupsModal = useCallback(() => { void import('./ManageGroupsModal') }, [])
-  useEffect(() => { if (groupMode === 'custom') warmManageGroupsModal() }, [groupMode, warmManageGroupsModal])
 
-  // BF.1 — flat list of every visible cell for FindReplaceBar
-  const findCells = useMemo<FindCell[]>(() => {
-    // FFA.4 — only build the full-grid cell index when Find/Replace is actually
-    // open (it's the sole consumer). Previously this allocated rows×cols objects
-    // on every keystroke even with the panel closed.
-    if (!findReplaceOpen) return []
-    const out: FindCell[] = []
-    displayRows.forEach((row, ri) => {
-      allColumnsRef.current.forEach((col, ci) => {
-        out.push({ rowIdx: ri, colIdx: ci, rowId: row._rowId as string, columnId: col.id, value: row[col.id] })
-      })
-    })
-    return out
-  }, [displayRows, findReplaceOpen])
+  // ── Clipboard / selection / keyboard / drag-reorder / resize ─────────────
+  // All owned by the shared FlatFileGrid now (single commitCells write path
+  // with central normalizeCellValue enforcement per column def).
 
-  // BF.2 — per-cell tone map from conditional formatting rules
-  const toneMap = useMemo(() => {
-    const out = new Map<string, string>()
-    if (cfRules.length === 0) return out
-    const active = cfRules.filter((r) => r.enabled)
-    const byCol = new Map<string, ConditionalRule[]>()
-    for (const rule of active) {
-      const arr = byCol.get(rule.columnId) ?? []
-      arr.push(rule)
-      byCol.set(rule.columnId, arr)
-    }
-    displayRows.forEach((row, ri) => {
-      for (const [colId, colRules] of byCol) {
-        for (const rule of colRules) {
-          if (evaluateRule(rule, row[colId])) {
-            out.set(`${ri}:${colId}`, rule.tone)
-            break
-          }
-        }
-      }
-    })
-    return out
-  }, [cfRules, displayRows])
-
-  const normSel = useMemo<NormSel | null>(() => {
-    if (!selAnchor || !selEnd) return null
-    return {
-      rMin: Math.min(selAnchor.ri, selEnd.ri),
-      rMax: Math.max(selAnchor.ri, selEnd.ri),
-      cMin: Math.min(selAnchor.ci, selEnd.ci),
-      cMax: Math.max(selAnchor.ci, selEnd.ci),
-    }
-  }, [selAnchor, selEnd])
-
-  // GX.7 — Sheets-style aggregates of the selected cells (status bar).
-  const selectionStats = useMemo(() => {
-    if (!normSel) return null
-    const parseNum = (raw: string): number | null => {
-      let t = raw.trim().replace(/[^\d.,-]/g, '')
-      if (!t) return null
-      const hasDot = t.includes('.'), hasComma = t.includes(',')
-      if (hasDot && hasComma) t = t.lastIndexOf(',') > t.lastIndexOf('.') ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, '')
-      else if (hasComma) { const p = t.split(','); t = (p.length === 2 && p[1].length <= 2) ? `${p[0]}.${p[1]}` : t.replace(/,/g, '') }
-      const n = parseFloat(t)
-      return Number.isFinite(n) ? n : null
-    }
-    const { rMin, rMax, cMin, cMax } = normSel
-    let nonEmpty = 0, numCount = 0, sum = 0, min = Infinity, max = -Infinity
-    for (let ri = rMin; ri <= rMax; ri++) {
-      const row = displayRows[ri]; if (!row) continue
-      for (let ci = cMin; ci <= cMax; ci++) {
-        const col = allColumns[ci]; if (!col) continue
-        const s = row[col.id] == null ? '' : String(row[col.id]).trim()
-        if (!s) continue
-        nonEmpty++
-        const n = parseNum(s)
-        if (n != null) { numCount++; sum += n; if (n < min) min = n; if (n > max) max = n }
-      }
-    }
-    return { nonEmpty, numCount, sum, avg: numCount ? sum / numCount : 0, min, max }
-  }, [normSel, displayRows, allColumns])
-
-  const fillTarget = useMemo<NormSel | null>(() => {
-    if (!isFillDragging || !fillDragEnd || !normSel) return null
-    const { rMin, rMax, cMin, cMax } = normSel
-    const { ri, ci } = fillDragEnd
-    const dRow = ri > rMax ? ri - rMax : ri < rMin ? ri - rMin : 0
-    const dCol = ci > cMax ? ci - cMax : ci < cMin ? ci - cMin : 0
-    if (Math.abs(dRow) >= Math.abs(dCol)) {
-      if (ri > rMax) return { rMin: rMax + 1, rMax: ri,      cMin, cMax }
-      if (ri < rMin) return { rMin: ri,       rMax: rMin - 1, cMin, cMax }
-    } else {
-      if (ci > cMax) return { rMin, rMax, cMin: cMax + 1, cMax: ci }
-      if (ci < cMin) return { rMin, rMax, cMin: ci,       cMax: cMin - 1 }
-    }
-    return null
-  }, [isFillDragging, fillDragEnd, normSel])
-
-  // ── Clipboard + selection ops ──────────────────────────────────────
-
-  const handleCopy = useCallback(() => {
-    if (!normSel) return
-    const { rMin, rMax, cMin, cMax } = normSel
-    const tsv = displayRowsRef.current.slice(rMin, rMax + 1)
-      .map(row => allColumnsRef.current.slice(cMin, cMax + 1)
-        .map(col => String(row[col.id] ?? '')).join('\t'))
-      .join('\n')
-    navigator.clipboard.writeText(tsv).catch(() => {})
-  }, [normSel])
-
-  const handleDeleteCells = useCallback(() => {
-    if (!normSel) return
-    pushSnapshot()
-    const { rMin, rMax, cMin, cMax } = normSel
-    setRows(prev => {
-      const next = [...prev]
-      for (let ri = rMin; ri <= rMax; ri++) {
-        const dr = displayRowsRef.current[ri]; if (!dr) continue
-        const idx = prev.findIndex(r => r._rowId === dr._rowId); if (idx === -1) continue
-        let updated: Row = { ...prev[idx], _dirty: true }
-        for (let ci = cMin; ci <= cMax; ci++) {
-          const col = allColumnsRef.current[ci]; if (col) updated[col.id] = ''
-        }
-        next[idx] = updated
-      }
-      return next
-    })
-  }, [normSel, pushSnapshot])
-
-  const handleCut = useCallback(() => {
-    handleCopy(); handleDeleteCells()
-  }, [handleCopy, handleDeleteCells])
-
-  const handlePaste = useCallback(async () => {
-    if (!selAnchor) return
-    const text = await navigator.clipboard.readText().catch(() => '')
-    if (!text) return
-    const pasteLines = text.split('\n').filter((l) => l.trim())
-    if (!pasteLines.length) return
-
-    // FF.42: detect header row — if ≥2 cells in first row match known column ids/labels
-    const firstRow = pasteLines[0].split('\t')
-    const colLookup = new Map<string, number>()
-    allColumnsRef.current.forEach((c, i) => {
-      colLookup.set(c.id.toLowerCase(), i)
-      colLookup.set(c.labelEn.toLowerCase(), i)
-      colLookup.set(c.labelLocal.toLowerCase(), i)
-      if (c.fieldRef) colLookup.set(c.fieldRef.toLowerCase(), i)
-    })
-    const headerMap = new Map<number, number>() // pasteColIdx → allColumns index
-    let matchCount = 0
-    firstRow.forEach((cell, pi) => {
-      const ci = colLookup.get(cell.trim().toLowerCase())
-      if (ci !== undefined) { headerMap.set(pi, ci); matchCount++ }
-    })
-    const hasHeaders = smartPasteEnabled && matchCount >= 2
-
-    const dataRows = hasHeaders ? pasteLines.slice(1) : pasteLines
-    const { ri: startRi, ci: startCi } = selAnchor
-    pushSnapshot()
-    setRows((prev) => {
-      const next = [...prev]
-      dataRows.forEach((line, riOffset) => {
-        const pasteRow = line.split('\t')
-        const dr = displayRowsRef.current[startRi + riOffset]; if (!dr) return
-        const idx = prev.findIndex((r) => r._rowId === dr._rowId); if (idx === -1) return
-        const updated: Row = { ...prev[idx], _dirty: true }
-        if (hasHeaders) {
-          pasteRow.forEach((val, pi) => {
-            const ci = headerMap.get(pi)
-            // FB1-client — synthetic Follow/Buffer cells enforce their enum/number
-            // rules on paste (junk keeps the previous value); other columns unchanged.
-            if (ci !== undefined) { const col = allColumnsRef.current[ci]; if (col) updated[col.id] = normalizeSyntheticCell(col.id, val, prev[idx][col.id]) }
-          })
-        } else {
-          pasteRow.forEach((val, ciOffset) => {
-            const col = allColumnsRef.current[startCi + ciOffset]
-            if (col) updated[col.id] = normalizeSyntheticCell(col.id, val, prev[idx][col.id])
-          })
-        }
-        next[idx] = updated
-      })
-      return next
-    })
-    const lastR = dataRows.length - 1
-    const lastC = hasHeaders
-      ? Math.max(0, ...headerMap.values())
-      : startCi + Math.max(...dataRows.map((r) => r.split('\t').length)) - 1
-    setSelEnd({ ri: startRi + lastR, ci: Math.min(lastC, allColumnsRef.current.length - 1) })
-  }, [selAnchor, pushSnapshot, smartPasteEnabled])
-
-  const handleFillDown = useCallback(() => {
-    if (!normSel) return
-    const { rMin, rMax, cMin, cMax } = normSel
-    if (rMin === rMax) return
-    pushSnapshot()
-    const srcRow = displayRowsRef.current[rMin]; if (!srcRow) return
-    setRows(prev => {
-      const next = [...prev]
-      for (let ri = rMin + 1; ri <= rMax; ri++) {
-        const dr = displayRowsRef.current[ri]; if (!dr) continue
-        const idx = prev.findIndex(r => r._rowId === dr._rowId); if (idx === -1) continue
-        let updated: Row = { ...prev[idx], _dirty: true }
-        for (let ci = cMin; ci <= cMax; ci++) {
-          const col = allColumnsRef.current[ci]
-          if (col) updated[col.id] = normalizeSyntheticCell(col.id, srcRow[col.id], prev[idx][col.id])
-        }
-        next[idx] = updated
-      }
-      return next
-    })
-  }, [normSel, pushSnapshot])
-
-  const handleSelectAll = useCallback(() => {
-    const rMax = displayRowsRef.current.length - 1
-    const cMax = allColumnsRef.current.length - 1
-    if (rMax < 0 || cMax < 0) return
-    setSelAnchor({ ri: 0, ci: 0 })
-    setSelEnd({ ri: rMax, ci: cMax })
-    setActiveCell(null)
-  }, [])
-
-  const executeFill = useCallback(() => {
-    if (!normSel || !fillTarget) return
-    pushSnapshot()
-    const { rMin, rMax, cMin, cMax } = normSel
-    const selH = rMax - rMin + 1
-    const selW = cMax - cMin + 1
-    setRows(prev => {
-      const next = [...prev]
-      for (let ri = fillTarget.rMin; ri <= fillTarget.rMax; ri++) {
-        const srcRi = rMin + ((ri - fillTarget.rMin) % selH)
-        const dr = displayRowsRef.current[ri]; if (!dr) continue
-        const srcDr = displayRowsRef.current[srcRi]; if (!srcDr) continue
-        const idx = prev.findIndex(r => r._rowId === dr._rowId); if (idx === -1) continue
-        let updated: Row = { ...prev[idx], _dirty: true }
-        for (let ci = fillTarget.cMin; ci <= fillTarget.cMax; ci++) {
-          const srcCi = cMin + ((ci - fillTarget.cMin) % selW)
-          const col = allColumnsRef.current[ci]
-          const srcCol = allColumnsRef.current[srcCi]
-          // FB1-client — a horizontal fill can drag a foreign column's value into
-          // Follow/Buffer; the synthetic guard rejects it (keeps the previous value).
-          if (col && srcCol) updated[col.id] = normalizeSyntheticCell(col.id, srcDr[srcCol.id], prev[idx][col.id])
-        }
-        next[idx] = updated
-      }
-      return next
-    })
-    // Expand selection to cover filled area
-    setSelEnd({
-      ri: Math.max(normSel.rMax, fillTarget.rMax),
-      ci: Math.max(normSel.cMax, fillTarget.cMax),
-    })
-    setIsFillDragging(false)
-    setFillDragEnd(null)
-  }, [normSel, fillTarget, pushSnapshot])
-
-  // GX.6 — double-click the fill handle to fill the selection down to the bottom
-  // of the data (the last real, non-ghost row), like Sheets. Tiles a multi-row
-  // selection; for a single cell it just copies the value down.
-  const fillToBottom = useCallback(() => {
-    if (!normSel) return
-    const dr = displayRowsRef.current
-    let lastDataRi = -1
-    for (let i = dr.length - 1; i >= 0; i--) { if (!dr[i]?._ghost) { lastDataRi = i; break } }
-    if (lastDataRi <= normSel.rMax) return // nothing below to fill into
-    pushSnapshot()
-    const { rMin, rMax, cMin, cMax } = normSel
-    const selH = rMax - rMin + 1
-    setRows((prev) => {
-      const next = [...prev]
-      for (let ri = rMax + 1; ri <= lastDataRi; ri++) {
-        const targetDr = dr[ri]; if (!targetDr || targetDr._ghost) continue
-        const srcDr = dr[rMin + ((ri - (rMax + 1)) % selH)]; if (!srcDr) continue
-        const idx = prev.findIndex((r) => r._rowId === targetDr._rowId); if (idx === -1) continue
-        const updated: Row = { ...prev[idx], _dirty: true }
-        for (let ci = cMin; ci <= cMax; ci++) {
-          const col = allColumnsRef.current[ci]
-          if (col) updated[col.id] = normalizeSyntheticCell(col.id, srcDr[col.id], prev[idx][col.id])
-        }
-        next[idx] = updated
-      }
-      return next
-    })
-    setSelEnd({ ri: lastDataRi, ci: cMax })
-  }, [normSel, pushSnapshot])
-
-  const handleCellPointerDown = useCallback((ri: number, ci: number, shiftKey: boolean) => {
-    entryAnchorColRef.current = null // clicking a cell starts a fresh row-entry anchor
-    if (shiftKey && selAnchor) {
-      setSelEnd({ ri, ci })
-      setIsEditing(false)
-      setActiveCell(null)
-    } else {
-      setSelAnchor({ ri, ci })
-      setSelEnd({ ri, ci })
-      setIsEditing(false)
-      setEditInitialChar(null)
-      const row = displayRowsRef.current[ri]
-      const col = allColumnsRef.current[ci]
-      if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
-    }
-  }, [selAnchor])
-
-  const handleCellDoubleClick = useCallback((ri: number, ci: number) => {
-    setSelAnchor({ ri, ci })
-    setSelEnd({ ri, ci })
-    setIsEditing(true)
-    setEditInitialChar(null)
-    const row = displayRowsRef.current[ri]
-    const col = allColumnsRef.current[ci]
-    if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
-  }, [])
-
-  const moveSelection = useCallback((dCol: number, dRow: number, extend = false, keepEntryAnchor = false) => {
-    if (!keepEntryAnchor) entryAnchorColRef.current = null // any non-Tab/Enter nav resets the row-entry anchor
-    const maxRi = displayRowsRef.current.length - 1
-    const maxCi = allColumnsRef.current.length - 1
-    const anchor = selAnchorRef.current
-    if (!anchor) return
-    setIsEditing(false)
-    setEditInitialChar(null)
-    if (extend) {
-      const e = selEndRef.current ?? anchor
-      const newRi = Math.max(0, Math.min(maxRi, e.ri + dRow))
-      const newCi = Math.max(0, Math.min(maxCi, e.ci + dCol))
-      setSelEnd({ ri: newRi, ci: newCi })
-    } else {
-      const newRi = Math.max(0, Math.min(maxRi, anchor.ri + dRow))
-      const newCi = Math.max(0, Math.min(maxCi, anchor.ci + dCol))
-      setSelAnchor({ ri: newRi, ci: newCi })
-      setSelEnd({ ri: newRi, ci: newCi })
-      const row = displayRowsRef.current[newRi]
-      const col = allColumnsRef.current[newCi]
-      if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
-      requestAnimationFrame(() => {
-        document.querySelector(`[data-ri="${newRi}"][data-ci="${newCi}"]`)
-          ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-      })
-    }
-  }, [])
-
-  const handleFillHandlePointerDown = useCallback((ri: number, ci: number) => {
-    setIsFillDragging(true)
-    setFillDragEnd({ ri, ci })
-  }, [])
-
-  // GX.9 — edge autoscroll: while drag-selecting cells, hold near the top/bottom
-  // edge of the grid and it scrolls + extends the selection (Sheets behaviour).
-  const gridScrollRef = useRef<HTMLDivElement | null>(null)
-  const autoScrollRef = useRef<{ raf: number; vy: number; x: number; y: number } | null>(null)
-  const stopAutoScroll = useCallback(() => {
-    if (autoScrollRef.current) { cancelAnimationFrame(autoScrollRef.current.raf); autoScrollRef.current = null }
-  }, [])
-  const runAutoScroll = useCallback(() => {
-    const a = autoScrollRef.current; const cont = gridScrollRef.current
-    if (!a || !cont) return
-    cont.scrollTop += a.vy
-    const el = document.elementFromPoint(a.x, a.y) as HTMLElement | null
-    const td = el?.closest('[data-ri]') as HTMLElement | null
-    if (td) {
-      const ri = parseInt(td.dataset.ri ?? '', 10), ci = parseInt(td.dataset.ci ?? '', 10)
-      if (!isNaN(ri) && !isNaN(ci)) setSelEnd((p) => (p?.ri === ri && p?.ci === ci ? p : { ri, ci }))
-    }
-    a.raf = requestAnimationFrame(runAutoScroll)
-  }, [])
-  const updateAutoScroll = useCallback((vy: number, x: number, y: number) => {
-    if (vy === 0) { stopAutoScroll(); return }
-    if (autoScrollRef.current) { Object.assign(autoScrollRef.current, { vy, x, y }) }
-    else { autoScrollRef.current = { raf: requestAnimationFrame(runAutoScroll), vy, x, y } }
-  }, [runAutoScroll, stopAutoScroll])
-  // Safety: always stop autoscroll on any pointer release, even outside the grid.
-  useEffect(() => {
-    const stop = () => stopAutoScroll()
-    window.addEventListener('pointerup', stop)
-    window.addEventListener('pointercancel', stop)
-    return () => { window.removeEventListener('pointerup', stop); window.removeEventListener('pointercancel', stop) }
-  }, [stopAutoScroll])
-
-  const handleFillDrop = useCallback(() => {
-    if (isFillDragging) executeFill()
-  }, [isFillDragging, executeFill])
-
-  // ── Keyboard handler (merged: undo/redo + clipboard + selection) ───
-
-  useEffect(() => {
-    function handle(e: globalThis.KeyboardEvent) {
-      // When focus is in a NON-grid form field (the Create/Manage-Groups name
-      // input, Find & Replace, a filter box, a dropdown search), let that field
-      // own every key. Without this, typing a group name hit the printable-key
-      // branch below → preventDefault + setIsEditing opened the cell editor on
-      // the selected SKU cell, so the name landed in the SKU instead. The grid's
-      // OWN cell editor has isEditingRef.current === true and is handled by the
-      // dedicated editing branch, so it stays exempt.
-      const tgt = e.target as HTMLElement | null
-      const inField = !!tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable)
-      if (inField && !isEditingRef.current) return
-
-      const mod = e.metaKey || e.ctrlKey
-      // Undo/redo — but NOT while editing a cell, so ⌘Z does a native text-undo
-      // inside the input instead of reverting the whole grid.
-      if (mod && e.key === 'z' && !e.shiftKey && !isEditingRef.current) { e.preventDefault(); undo(); return }
-      if (mod && e.key === 'z' && e.shiftKey && !isEditingRef.current)  { e.preventDefault(); redo(); return }
-      if (mod && e.key === 'y' && !isEditingRef.current)                { e.preventDefault(); redo(); return }
-      // BF.1 — Find & Replace
-      if (mod && e.key === 'f') { e.preventDefault(); setFindReplaceOpen(true); return }
-      if (mod && e.shiftKey && e.key === 'G') { e.preventDefault(); setColSearchOpen((o) => !o); return }
-      if (mod && e.key === 'g') { e.preventDefault(); setColumnsOpen(true); return }
-      // PE: '?' opens the shortcuts modal (no modifier — ignore when typing in an input)
-      if (e.key === '?' && !mod && !isEditingRef.current) {
-        const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase()
-        if (tag !== 'input' && tag !== 'textarea') {
-          e.preventDefault()
-          setShortcutsOpen(true)
-          return
-        }
-      }
-
-      // In edit mode: only handle Escape (let input handle everything else)
-      if (isEditingRef.current) {
-        if (e.key === 'Escape') {
-          e.preventDefault()
-          setIsEditing(false)
-          setEditInitialChar(null)
-          // revert is handled in SpreadsheetCell via cancelledRef
-        }
-        return
-      }
-
-      // Close context menu on any key
-      if (contextMenu) { setContextMenu(null) }
-
-      // Select all
-      if (mod && e.key === 'a') { e.preventDefault(); handleSelectAll(); return }
-
-      // Nothing selected yet (fresh load, or after Escape / a row delete): a nav or
-      // edit keystroke wakes the grid at A1 instead of being swallowed — the root of
-      // "shortcuts often don't work". Clipboard/fill need a real selection → no-op.
-      if (!selAnchorRef.current) {
-        if (mod && (e.key === 'c' || e.key === 'x' || e.key === 'v' || e.key === 'd')) return
-        const row0 = displayRowsRef.current[0]; const col0 = allColumnsRef.current[0]
-        if (!row0 || !col0) return
-        setSelAnchor({ ri: 0, ci: 0 }); setSelEnd({ ri: 0, ci: 0 })
-        setActiveCell({ rowId: row0._rowId as string, colId: col0.id })
-        selAnchorRef.current = { ri: 0, ci: 0 }; selEndRef.current = { ri: 0, ci: 0 }
-        // Plain nav just focuses A1; modified nav (⌘Home/End/Arrow) + edit/delete keys
-        // fall through to their own handlers now that an anchor exists.
-        if (!mod && (e.key === 'Tab' || e.key === 'Enter' || e.key.startsWith('Arrow'))) {
-          e.preventDefault(); return
-        }
-      }
-
-      // Clipboard ops
-      if (mod && e.key === 'c') {
-        e.preventDefault()
-        handleCopy()
-        setClipboardRange(normSel)
-        return
-      }
-      if (mod && e.key === 'x') {
-        e.preventDefault()
-        handleCut()
-        setClipboardRange(normSel)
-        return
-      }
-      if (mod && e.key === 'v') {
-        e.preventDefault()
-        void handlePaste()
-        setClipboardRange(null)
-        return
-      }
-      if (mod && e.key === 'd') { e.preventDefault(); handleFillDown(); return }
-
-      // Ctrl+Home / Ctrl+End
-      if (mod && e.key === 'Home') {
-        e.preventDefault()
-        entryAnchorColRef.current = null
-        setSelAnchor({ ri: 0, ci: 0 }); setSelEnd({ ri: 0, ci: 0 })
-        const row = displayRowsRef.current[0]; const col = allColumnsRef.current[0]
-        if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
-        requestAnimationFrame(() => document.querySelector('[data-ri="0"][data-ci="0"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
-        return
-      }
-      if (mod && e.key === 'End') {
-        e.preventDefault()
-        entryAnchorColRef.current = null
-        const ri = displayRowsRef.current.length - 1; const ci = allColumnsRef.current.length - 1
-        setSelAnchor({ ri, ci }); setSelEnd({ ri, ci })
-        const row = displayRowsRef.current[ri]; const col = allColumnsRef.current[ci]
-        if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
-        requestAnimationFrame(() => document.querySelector(`[data-ri="${ri}"][data-ci="${ci}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
-        return
-      }
-
-      // Ctrl+Arrow: jump to edge
-      if (mod && e.key === 'ArrowDown')  { e.preventDefault(); moveSelection(0, displayRowsRef.current.length - 1 - (selAnchorRef.current?.ri ?? 0)); return }
-      if (mod && e.key === 'ArrowUp')    { e.preventDefault(); moveSelection(0, -(selAnchorRef.current?.ri ?? 0)); return }
-      if (mod && e.key === 'ArrowRight') { e.preventDefault(); moveSelection(allColumnsRef.current.length - 1 - (selAnchorRef.current?.ci ?? 0), 0); return }
-      if (mod && e.key === 'ArrowLeft')  { e.preventDefault(); moveSelection(-(selAnchorRef.current?.ci ?? 0), 0); return }
-
-      // Arrow navigation
-      if (!e.shiftKey && !mod) {
-        if (e.key === 'ArrowDown')  { e.preventDefault(); moveSelection(0, 1); return }
-        if (e.key === 'ArrowUp')    { e.preventDefault(); moveSelection(0, -1); return }
-        if (e.key === 'ArrowRight') { e.preventDefault(); moveSelection(1, 0); return }
-        if (e.key === 'ArrowLeft')  { e.preventDefault(); moveSelection(-1, 0); return }
-        if (e.key === 'Enter') {
-          e.preventDefault()
-          const a = entryAnchorColRef.current, ci = selAnchorRef.current?.ci ?? 0
-          moveSelection(a !== null ? a - ci : 0, 1, false, true) // back to anchor column, down a row
-          return
-        }
-        if (e.key === 'Tab') {
-          e.preventDefault()
-          if (entryAnchorColRef.current === null) entryAnchorColRef.current = selAnchorRef.current?.ci ?? 0
-          moveSelection(1, 0, false, true)
-          return
-        }
-      }
-      if (e.shiftKey && !mod) {
-        if (e.key === 'ArrowDown')  { e.preventDefault(); moveSelection(0, 1, true); return }
-        if (e.key === 'ArrowUp')    { e.preventDefault(); moveSelection(0, -1, true); return }
-        if (e.key === 'ArrowRight') { e.preventDefault(); moveSelection(1, 0, true); return }
-        if (e.key === 'ArrowLeft')  { e.preventDefault(); moveSelection(-1, 0, true); return }
-        if (e.key === 'Tab')        { e.preventDefault(); moveSelection(-1, 0, true); return }
-        if (e.key === 'Enter')      { e.preventDefault(); moveSelection(0, -1, true); return }
-      }
-
-      // F2: enter edit mode (preserve content)
-      if (e.key === 'F2') {
-        e.preventDefault()
-        setIsEditing(true)
-        setEditInitialChar(null)
-        return
-      }
-
-      // Delete/Backspace: clear cells
-      if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); handleDeleteCells(); return }
-
-      // Escape: drop the clipboard marquee + context menu and collapse a range back
-      // to the active cell, but KEEP the anchor so the keyboard stays alive (Sheets
-      // behaviour). Nulling it here was the main reason shortcuts went dead.
-      if (e.key === 'Escape') {
-        setClipboardRange(null)
-        setContextMenu(null)
-        entryAnchorColRef.current = null
-        if (selAnchorRef.current) setSelEnd(selAnchorRef.current)
-        return
-      }
-
-      // Printable key: enter edit mode replacing content. preventDefault so the
-      // browser doesn't ALSO type the char into the freshly-focused input — the
-      // char becomes the input's defaultValue (via editInitialChar). Without this
-      // the first letter was entered twice ("A" → "AA").
-      if (e.key.length === 1 && !mod) {
-        e.preventDefault()
-        setIsEditing(true)
-        setEditInitialChar(e.key)
-      }
-    }
-    document.addEventListener('keydown', handle)
-    return () => document.removeEventListener('keydown', handle)
-  }, [undo, redo, contextMenu, normSel, handleCopy, handleCut, handlePaste, handleFillDown, handleDeleteCells, handleSelectAll, moveSelection])
-
-  const reorderRow = useCallback((fromId: string, toId: string, half: 'top' | 'bottom') => {
-    if (fromId === toId) return
-    pushSnapshot()
-    setSortConfig([])
-    setRows((prev) => {
-      const displayed = displayRowsRef.current.map((r) => r._rowId as string)
-      const rowMap = new Map(prev.map((r) => [r._rowId as string, r]))
-      const next = [...displayed]
-      const fi = next.indexOf(fromId)
-      const ti = next.indexOf(toId)
-      if (fi === -1 || ti === -1) return prev
-      next.splice(fi, 1)
-      const adj = fi < ti ? ti - 1 : ti
-      next.splice(half === 'top' ? adj : adj + 1, 0, fromId)
-      const notDisplayed = prev.filter((r) => !displayed.includes(r._rowId as string))
-      const reordered = [...next.map((id) => rowMap.get(id)!).filter(Boolean), ...notDisplayed]
-      const ids = reordered.map((r) => r._rowId as string)
-      try { localStorage.setItem(rowOrderKey, JSON.stringify(ids)) } catch {}
-      propagateRowOrder(ids)
-      return reordered
-    })
-    setDraggingRowId(null)
-    setDropTarget(null)
-  }, [pushSnapshot])
-
-  const colToGroup = useMemo<Map<string, ColumnGroup>>(() => {
-    const m = new Map<string, ColumnGroup>()
-    for (const g of orderedGroups) {
-      for (const c of g.columns) m.set(c.id, g)
-    }
-    return m
-  }, [orderedGroups])
-
-  // # cell width adapts to image size so images never overflow the column
-  const rowHeaderWidth = useMemo(
-    () => showRowImages ? Math.max(28, imageSize + 8) : 28,
-    [showRowImages, imageSize],
-  )
-
-  // P-2: combined memo — stickyLeftByColIdx keyed by allColumns index + categoryStickyLeft
-  // for the synthetic Category column.  When frozenColCount <= categoryInsertAfterIdx, the
-  // loop never reaches column R so catLeft stays undefined and offsets are BYTE-IDENTICAL
-  // to the original (default frozenColCount=1 is unaffected).  When frozen past R the
-  // category's 200px is added to subsequent column offsets and the category itself gets
-  // a sticky left equal to the accumulated offset right after column R.
-  const { stickyLeftByColIdx, categoryStickyLeft } = useMemo(() => {
-    const out: Record<number, number> = {}
-    let left = 36 + rowHeaderWidth // checkbox(36) + row# (dynamic)
-    let catLeft: number | undefined
-    const R = categoryInsertAfterIdx
-    const CAT_W = CATEGORY_COL_WIDTH // matches CATEGORY_COL.width — keep these equal
-    for (let i = 0; i < Math.min(frozenColCount, allColumns.length); i++) {
-      out[i] = left
-      left += colWidths[allColumns[i].id] ?? allColumns[i].width
-      if (i === R) {
-        catLeft = left   // category sits right after column R in the render
-        left += CAT_W   // shift all subsequent frozen cols by category width
-      }
-    }
-    return { stickyLeftByColIdx: out, categoryStickyLeft: catLeft }
-  }, [frozenColCount, allColumns, colWidths, rowHeaderWidth, categoryInsertAfterIdx])
-
-  const dirtyRows = useMemo(() => rows.filter((r) => r._dirty || r._isNew), [rows])
   // FFP.2 — rows Submit can send: unsaved edits OR saved-but-not-yet-submitted.
-  const publishableRows = useMemo(
-    () => rows.filter((r) => !r._ghost && (r._dirty || r._isNew || r._needsPublish)),
-    [rows],
-  )
-  const newCount  = useMemo(() => rows.filter((r) => r._isNew).length, [rows])
+  const publishableOf = (rows: Row[]) => rows.filter((r) => !r._ghost && (r._dirty || r._isNew || r._needsPublish))
 
-  // Memoised string of all unique ASINs in current rows — used as dep to avoid
-  // refetching on every keystroke while still catching newly-fetched ASINs.
-  const rowAsinString = useMemo(() => {
-    const s = new Set<string>()
-    for (const row of rows) {
-      if (row._asin) s.add(String(row._asin))
-    }
-    return [...s].sort().join(',')
-  }, [rows])
-
-  useEffect(() => {
-    if (!showRowImages || !rowAsinString) return
-    const allAsins = rowAsinString.split(',').filter(Boolean)
-    const uncached = allAsins.filter((a) => !(a in imagesByAsin))
-    if (!uncached.length) return
-
-    // Mark as pending immediately (null = loading)
-    setImagesByAsin((prev) => {
-      const update: Record<string, string | null> = {}
-      for (const a of uncached) update[a] = null
-      return { ...prev, ...update }
-    })
-
-    fetch(`${getBackendUrl()}/api/amazon/flat-file/fetch-images`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ asins: uncached, marketplace }),
-    })
-      .then((r) => (r.ok ? r.json() : { images: {} }))
-      .then((data) => {
-        const incoming = data.images ?? {}
-        setImagesByAsin((prev) => {
-          const next = { ...prev, ...incoming }
-          try { localStorage.setItem('ff-images-cache', JSON.stringify(next)) } catch {}
-          return next
-        })
+  // ── ASIN row thumbnails (UFX P3 — grid getRowImageUrl hook) ──────────────
+  // The grid consults getRowImageUrl only while its row-images toggle is on;
+  // uncached ASINs are batched into one fetch per frame. Return semantics:
+  // string → image, null → skeleton (resolving), undefined → default image_1.
+  const imagesByAsinRef = useRef(imagesByAsin)
+  useEffect(() => { imagesByAsinRef.current = imagesByAsin }, [imagesByAsin])
+  const pendingAsinFetchRef = useRef<Set<string> | null>(null)
+  const requestAsinImage = useCallback((asin: string) => {
+    if (pendingAsinFetchRef.current) { pendingAsinFetchRef.current.add(asin); return }
+    pendingAsinFetchRef.current = new Set([asin])
+    setTimeout(() => {
+      const batch = [...(pendingAsinFetchRef.current ?? [])]
+      pendingAsinFetchRef.current = null
+      if (!batch.length) return
+      // Mark as pending immediately (null = loading skeleton)
+      setImagesByAsin((prev) => {
+        const update: Record<string, string | null> = {}
+        for (const a of batch) if (!(a in prev)) update[a] = null
+        return Object.keys(update).length ? { ...prev, ...update } : prev
       })
-      .catch(() => {})
-  // imagesByAsin is intentionally NOT in the dep array (it's updated inside the effect)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showRowImages, rowAsinString, marketplace])
+      fetch(`${getBackendUrl()}/api/amazon/flat-file/fetch-images`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asins: batch, marketplace }),
+      })
+        .then((r) => (r.ok ? r.json() : { images: {} }))
+        .then((data) => {
+          const incoming = data.images ?? {}
+          setImagesByAsin((prev) => {
+            const next = { ...prev, ...incoming }
+            try { localStorage.setItem('ff-images-cache', JSON.stringify(next)) } catch {}
+            return next
+          })
+        })
+        .catch(() => {})
+    }, 50)
+  }, [marketplace])
+
+  const getRowImageUrl = useCallback((row: BaseRow): string | null | undefined => {
+    const asin = row._asin ? String(row._asin) : null
+    if (!asin) return undefined // fall back to the grid's default (image_1 → placeholder)
+    const cached = imagesByAsinRef.current[asin]
+    if (cached === undefined) { requestAsinImage(asin); return null }
+    return cached // string = image; null = still resolving (skeleton)
+  }, [requestAsinImage])
 
   // ── Row persistence (localStorage) ────────────────────────────────
   // Autosave rows keyed by market+productType so edits survive navigation
@@ -2572,25 +1198,36 @@ export default function AmazonFlatFileClient({
   // ACTUAL product types, so a union sheet can NEVER overwrite a per-type sheet's
   // draft (and removing a category can't corrupt one either). Single-type rows →
   // that one type's key (identical to before).
-  const storageType = useMemo(() => {
+  const computeStorageType = useCallback((rows: Row[], pt: string) => {
     const types = [...new Set(rows.map((r) => String(r.product_type ?? '').toUpperCase()).filter(Boolean))].sort()
-    return types.length > 1 ? types.join('+') : (types[0] || productType)
-  }, [rows, productType])
+    return types.length > 1 ? types.join('+') : (types[0] || pt)
+  }, [])
   // Always-fresh handle for the save sites that live in callbacks / unmount
-  // cleanup (so they never persist under a stale key).
-  const storageTypeRef = useRef(storageType)
-  useEffect(() => { storageTypeRef.current = storageType }, [storageType])
+  // cleanup (so they never persist under a stale key). Updated by the grid
+  // rows-change signal below.
+  const storageTypeRef = useRef(initialProductType)
 
-  // Debounced autosave — fires 1 s after last edit. Persists under storageType
-  // (composite for a union sheet) so it never clobbers a per-type draft.
-  useEffect(() => {
-    if (!productType || !rows.length) return
-    const t = setTimeout(() => {
-      saveRows(marketplace, storageType, rows)
+  // Debounced autosave — fires 1 s after last grid edit (renderToolbarFetch
+  // re-renders on every rows change, so it doubles as the rows-changed signal;
+  // the grid exposes no onRowsChange). Persists under storageType (composite
+  // for a union sheet) so it never clobbers a per-type draft. The key + rows
+  // are read from refs at flush time, so edits always land on the market/type
+  // they were made in even across a switch.
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const marketplaceRef = useRef(marketplace)
+  useEffect(() => { marketplaceRef.current = marketplace }, [marketplace])
+  const productTypeRef = useRef(productType)
+  useEffect(() => { productTypeRef.current = productType }, [productType])
+  const scheduleAutosave = useCallback(() => {
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+    const mpAt = marketplaceRef.current
+    autosaveTimerRef.current = setTimeout(() => {
+      const rows = latestRowsRef.current
+      if (!productTypeRef.current || !rows.length) return
+      saveRows(mpAt, storageTypeRef.current, rows)
       setLastLocalSave(Date.now())
     }, 1000)
-    return () => clearTimeout(t)
-  }, [rows, marketplace, storageType, productType])
+  }, [])
 
   // P1.2 — tick every 15 s to keep "saved X ago" label fresh
   useEffect(() => {
@@ -2670,7 +1307,7 @@ export default function AmazonFlatFileClient({
       toast.info('This listing changed elsewhere — use Refresh to load the latest.')
       return
     }
-    void loadData(marketplace, productType, false, true)
+    reloadGridFromServer()
   })
 
   // Load submission history when marketplace/productType change
@@ -2734,11 +1371,10 @@ export default function AmazonFlatFileClient({
     const snap = _swr.get(key)
     const isFresh = !!snap && (Date.now() - snap.fetchedAt) < SWR_TTL_MS
     if (initialManifest && isFresh) {
-      // Return visit: paint rows from the module-level cache instantly.
-      // Use the server-provided manifest (always fresh from the 30-min CDN cache).
+      // Return visit: the grid paints rows from the module-level cache
+      // instantly (initialRows); use the server-provided manifest.
       setManifest(initialManifest)
-      setRows(snap.rows)
-      _swr.set(key, { ...snap, manifest: initialManifest })
+      _swr.set(key, { ...snap!, manifest: initialManifest })
     } else {
       // First visit, stale cache, OR a missing SSR manifest (initialManifest null
       // — e.g. the CDN template fetch failed/timed out). Previously a null
@@ -2761,28 +1397,21 @@ export default function AmazonFlatFileClient({
     setLoadError(null)
     setFeedEntries([])
 
-    // FF-MS.4 — Optimistic paint from cache. If a fresh snapshot exists we
-    // surface it before the fetch even starts; the network call still runs
-    // to revalidate. force=true (Refresh schema) and fromDB=true bypass
-    // the cache because the caller explicitly wants server-fresh data.
+    // FF-MS.4 — Optimistic paint from cache: a fresh SWR snapshot (or the
+    // localStorage manifest on a hard reload) unblocks the grid mount
+    // immediately; the fetch below revalidates. force=true (Refresh schema)
+    // and fromDB=true bypass the optimistic paint.
     let paintedFromCache = false
     if (!force && !fromDB) {
       const snap = _swr.get(cacheKey(mp, pt))
       if (snap && (Date.now() - snap.fetchedAt) < SWR_TTL_MS) {
         setManifest(snap.manifest)
-        const saved = loadSavedRows(mp, pt)
-        setRows(saved && saved.length > 0 ? mergeAsinCache(saved, mp) : snap.rows)
         paintedFromCache = true
         recordSwitchPerf(mp, pt, 'cache')
       } else {
-        // FFP.11 — hard-reload path: the in-memory cache is empty, but the
-        // localStorage manifest (+ the autosaved rows draft) paint the grid
-        // instantly; the fetch below revalidates and swaps in fresh data.
         const cachedManifest = loadCachedManifest(mp, pt)
         if (cachedManifest) {
           setManifest(cachedManifest)
-          const saved = loadSavedRows(mp, pt)
-          if (saved && saved.length > 0) setRows(mergeAsinCache(saved, mp))
           paintedFromCache = true
           recordSwitchPerf(mp, pt, 'cache')
         }
@@ -2813,9 +1442,9 @@ export default function AmazonFlatFileClient({
         _swr.set(cacheKey(mp, pt), { manifest, rows: prev?.rows ?? [], fetchedAt: Date.now() })
         saveCachedManifest(mp, pt, manifest)
       } else {
-        // Full load — fetch manifest + rows in parallel.
-        // fromDB=true: always use DB rows (called on external invalidation or
-        // explicit reload). fromDB=false: prefer localStorage draft if present.
+        // Full load — fetch manifest + rows in parallel. The rows land in the
+        // SWR cache: the grid reads them as initialRows on (re)mount, and its
+        // own onReload consumes the fresh snapshot without a second fetch.
         const [mRes, rRes] = await Promise.all([
           fetch(`${backend}/api/amazon/flat-file/template?${qs}`, { signal: ctrl.signal }),
           fetch(`${backend}/api/amazon/flat-file/rows?${rowsQs}`, { signal: ctrl.signal }),
@@ -2829,32 +1458,18 @@ export default function AmazonFlatFileClient({
         }
         const manifest: Manifest = await mRes.json()
         setManifest(manifest)
-        const saved = fromDB ? null : loadSavedRows(mp, pt)
-        let freshRows: Row[] = []
-        if (saved && saved.length > 0) {
-          freshRows = mergeAsinCache(saved, mp)
-          setRows(freshRows)
-        } else if (rRes.ok) {
-          const d = await rRes.json()
-          freshRows = mergeAsinCache(d.rows ?? [], mp)
-          setRows(freshRows)
-          // Update localStorage so the next page open starts fresh too.
-          if (fromDB) saveRows(mp, pt, freshRows)
-        } else {
-          setRows([])
-        }
-        if (fromDB) { setDraftBanner(null); localDivergedRef.current = false } // FFX.2 — grid == DB
-        // FF-MS.4 — Write through to the SWR cache so next visit is instant.
+        const freshRows: Row[] = rRes.ok ? mergeAsinCache((await rRes.json()).rows ?? [], mp) : []
         _swr.set(cacheKey(mp, pt), { manifest, rows: freshRows, fetchedAt: Date.now() })
-        // FFP.11 — and to localStorage so the next HARD reload is instant too.
         saveCachedManifest(mp, pt, manifest)
-        // FF-MS.9 — Only record fetch-source telemetry if cache didn't already
-        // resolve this switch — otherwise we'd double-log a cache+fetch pair.
+        if (fromDB) {
+          // Push server-fresh rows into the mounted grid + reset the draft so
+          // grid == DB again (external invalidation / explicit refresh).
+          saveRows(mp, computeStorageType(freshRows, pt), freshRows)
+          setDraftBanner(null)
+          localDivergedRef.current = false
+          latestSetRowsRef.current?.(freshRows)
+        }
         if (!paintedFromCache) recordSwitchPerf(mp, pt, 'fetch')
-        // FF-MS.1 — URL is now updated by `navigateTo` BEFORE the fetch starts
-        // (see below), so loadData no longer touches the URL. This avoids the
-        // "switch happens but URL stays put on refresh" class of bugs and lets
-        // the URL→state effect be the single driver of market changes.
       }
     } catch (e: any) {
       if (e?.name === 'AbortError') return
@@ -2868,7 +1483,64 @@ export default function AmazonFlatFileClient({
     } finally {
       if (reqId === loadReqIdRef.current) setLoading(false)
     }
-  }, [familyId, initialManifest, initialMarketplace, initialProductType, initialRows])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [familyId])
+
+  // ── UFX P3 — the grid's own rows load (onReload prop) ────────────────────
+  // Mount / market switch: the autosaved draft wins (FF-MS.5 parity — unsaved
+  // edits survive), else a fresh SWR snapshot, else the server. Explicit
+  // reloads (File ▸ Reload, Discard, scope change, external invalidation) skip
+  // the draft and reset it to match the DB.
+  const pendingDraftRestoreRef = useRef(true)
+  const pageForceServerRef = useRef(false)
+
+  const onGridReload = useCallback(async (): Promise<BaseRow[]> => {
+    const mp = marketplaceRef.current
+    const pt = productTypeRef.current
+    const firstLoad = pendingDraftRestoreRef.current
+    pendingDraftRestoreRef.current = false
+    const forceServer = pageForceServerRef.current
+    pageForceServerRef.current = false
+
+    if (firstLoad && !forceServer) {
+      const saved = loadSavedRows(mp, pt)
+      if (saved && saved.length > 0) {
+        // Informational banner when the restored draft carries unsaved edits.
+        if (saved.some((r) => r._dirty)) setDraftBanner(saved)
+        return mergeAsinCache(saved, mp)
+      }
+      const snap = _swr.get(cacheKey(mp, pt))
+      if (snap && (Date.now() - snap.fetchedAt) < SWR_TTL_MS) return snap.rows
+    }
+
+    const rowsQs = new URLSearchParams({ marketplace: mp, productType: pt })
+    if (familyId) rowsQs.set('productId', familyId)
+    else rowsQs.set('scope', scopeRef.current)
+    const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/rows?${rowsQs}`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const d = await res.json()
+    const freshRows = mergeAsinCache(d.rows ?? [], mp)
+    const prev = _swr.get(cacheKey(mp, pt))
+    if (prev) _swr.set(cacheKey(mp, pt), { ...prev, rows: freshRows, fetchedAt: Date.now() })
+    // A server reload resets the draft to match the DB (the autosave loop
+    // would rewrite it from the fresh rows anyway).
+    saveRows(mp, computeStorageType(freshRows, pt), freshRows)
+    setDraftBanner(null)
+    localDivergedRef.current = false
+    return freshRows
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [familyId])
+
+  /** Reload the MOUNTED grid with server-fresh rows (draft skipped + reset). */
+  const reloadGridFromServer = useCallback(() => {
+    if (onReloadCtxRef.current) {
+      pageForceServerRef.current = true
+      pendingDraftRestoreRef.current = false
+      onReloadCtxRef.current()
+    } else {
+      void loadData(marketplaceRef.current, productTypeRef.current, false, true)
+    }
+  }, [loadData])
 
   // Reload rows from DB when scope toggles between 'listed' and 'all'.
   // Skip the initial mount (loadData fires separately in the mount effect).
@@ -2876,7 +1548,7 @@ export default function AmazonFlatFileClient({
   useEffect(() => {
     if (!scopeReloadMountedRef.current) { scopeReloadMountedRef.current = true; return }
     if (!productType || !marketplace) return
-    void loadData(marketplace, productType, false, true)
+    reloadGridFromServer()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope])
 
@@ -2938,6 +1610,9 @@ export default function AmazonFlatFileClient({
     if (productType && rowsRef.current.some((r) => r._dirty || r._isNew)) {
       saveRows(marketplace, storageTypeRef.current, rowsRef.current)
     }
+    // UFX P3 — the grid remounts for the new (mp, pt); its first load should
+    // restore that market's draft (unsaved edits survive a switch).
+    pendingDraftRestoreRef.current = true
     // FF-MS.9 — Start the switch-latency timer. loadData() reads this back
     // to compute click→ready ms and tags it with source (cache vs fetch).
     const nextMpU = nextMp.toUpperCase()
@@ -3001,6 +1676,7 @@ export default function AmazonFlatFileClient({
     const mpUpper = (urlMpRaw ?? initialMarketplace).toUpperCase()
     const ptUpper = (urlPtRaw ?? initialProductType).toUpperCase()
     if (mpUpper === marketplace && ptUpper === productType) return
+    pendingDraftRestoreRef.current = true
     setMarketplace(mpUpper)
     setProductType(ptUpper)
     // FF-MS.3 — clear the manifest immediately so the user doesn't see
@@ -3038,7 +1714,6 @@ export default function AmazonFlatFileClient({
   useEffect(() => {
     function onKey(e: globalThis.KeyboardEvent) {
       if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return
-      if (isEditingRef.current) return
       const target = e.target as HTMLElement | null
       const tag = target?.tagName?.toLowerCase()
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return
@@ -3083,59 +1758,47 @@ export default function AmazonFlatFileClient({
     }
   }, [marketplace, setRows, toast])
 
+  // UFX P3 — selection lives in the grid; page ops read the live capture.
   const deleteSelected = useCallback(async () => {
-    const rowsToRemove = rows.filter((r) => selectedRows.has(r._rowId as string))
+    const selected = latestSelectedRowsRef.current
+    const rowsToRemove = latestRowsRef.current.filter((r) => selected.has(r._rowId as string))
     const n = rowsToRemove.length
     if (!n) return
     if (!confirm(`Remove ${n} listing${n === 1 ? '' : 's'} from Amazon ${marketplace}? The product and its stock stay in Nexus; other channels are untouched.`)) return
     pushSnapshot()
     await removeFromAmazon(rowsToRemove)
-    setSelectedRows(new Set())
-  }, [rows, selectedRows, marketplace, pushSnapshot, removeFromAmazon])
-
-  // P3 — open the Create-Group popover for the current selection (checkbox Set ∪
-  // drag-range), so grouping works from ticked checkboxes, not only a range.
-  const groupFromSelection = useCallback(() => {
-    setContextMenu(null)
-    const ids = new Set<string>(selectedRows)
-    if (normSel) for (const r of displayRowsRef.current.slice(normSel.rMin, normSel.rMax + 1)) ids.add(r._rowId as string)
-    const skus: string[] = []
-    const seen = new Set<string>()
-    for (const r of rows) {
-      if (r._ghost || !ids.has(r._rowId as string)) continue
-      const sku = String(r.item_sku ?? '')
-      if (sku && !seen.has(sku)) { seen.add(sku); skus.push(sku) }
-    }
-    if (skus.length) setGroupCreate({ skus })
-  }, [selectedRows, normSel, rows])
+    latestSetSelectedRowsRef.current?.(new Set())
+  }, [marketplace, pushSnapshot, removeFromAmazon])
 
   // MT.5 — bulk-set the category for the selected rows (build a mixed sheet fast).
   const bulkSetProductType = useCallback((t: string) => {
     const T = t.toUpperCase()
+    const selected = latestSelectedRowsRef.current
     pushSnapshot()
     setRows((prev) => prev.map((r) =>
-      selectedRows.has(r._rowId as string) ? { ...r, product_type: T, _dirty: true } : r,
+      selected.has(r._rowId as string) ? { ...r, product_type: T, _dirty: true } : r,
     ))
-  }, [selectedRows, pushSnapshot])
+  }, [pushSnapshot, setRows])
 
   // BN.2.2 — bulk-assign product type + browse node to selected rows.
   const applyCategory = useCallback((c: { productType: string; nodeId: string | null }) => {
+    const selected = latestSelectedRowsRef.current
     pushSnapshot()
     setRows((prev) => prev.map((r) =>
-      !r._ghost && selectedRows.has(r._rowId as string)
+      !r._ghost && selected.has(r._rowId as string)
         ? ({ ...assignCategory(r as Record<string, unknown>, c), _dirty: true } as Row)
         : r))
     setSheetTypes((s) => Array.from(new Set([...s, c.productType.toUpperCase()])))
     setShowSetCategory(false)
-  }, [selectedRows, pushSnapshot])
+  }, [pushSnapshot, setRows])
 
   // FM Phase 3 — bulk Set Follow / Set Pinned on the selected rows, for the active
   // market. Routes through the pool-safe endpoint (never writes the warehouse pool);
   // FBA rows are excluded here and skipped fail-closed server-side. Confirms first
   // because Follow re-points quantity at the pool (can change live Amazon quantity).
   const bulkSetFollow = useCallback(async (follow: boolean) => {
-    const isFbaRow = (r: Row) => /^(AMAZON|AFN|FBA)/.test(String(r.fulfillment_availability__fulfillment_channel_code ?? '').toUpperCase())
-    const selected = rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string))
+    const selectedIds = latestSelectedRowsRef.current
+    const selected = latestRowsRef.current.filter((r) => !r._ghost && selectedIds.has(r._rowId as string))
     const productIds = [...new Set(selected.filter((r) => !isFbaRow(r)).map((r) => String(r._productId ?? '')).filter(Boolean))]
     const fbaCount = selected.filter(isFbaRow).length
     if (productIds.length === 0) {
@@ -3160,28 +1823,29 @@ export default function AmazonFlatFileClient({
       if (result.unchanged) parts.push(`${result.unchanged} already ${follow ? 'following' : 'pinned'}`)
       if (result.skippedFba) parts.push(`${result.skippedFba} FBA skipped`)
       toast.success(parts.join(' · '))
-      setSelectedRows(new Set())
-      void loadData(marketplace, productType, false, true) // refresh follow/qty from DB
+      latestSetSelectedRowsRef.current?.(new Set())
+      reloadGridFromServer() // refresh follow/qty from DB
     } catch (e) {
       toast.error(`Couldn't apply Follow/Pinned — ${e instanceof Error ? e.message : String(e)}`)
     }
-  }, [rows, selectedRows, marketplace, productType, confirm, toast, setSelectedRows, loadData])
+  }, [marketplace, confirm, toast, reloadGridFromServer])
 
   // FM Phase 3 — select every Pinned listing in the sheet (active market) so the old
   // auto-pins can be reviewed and bulk-set to Follow in two clicks.
   const selectAllPinned = useCallback(() => {
-    const ids = rows.filter((r) => !r._ghost && r.follow === 'Pinned').map((r) => r._rowId as string)
+    const ids = latestRowsRef.current.filter((r) => !r._ghost && r.follow === 'Pinned').map((r) => r._rowId as string)
     if (ids.length === 0) { toast.info('No pinned listings in this sheet.'); return }
-    setSelectedRows(new Set(ids))
-  }, [rows, setSelectedRows, toast])
+    latestSetSelectedRowsRef.current?.(new Set(ids))
+  }, [toast])
 
   // FM Phase 4 / FB4 — bulk "Set buffer" on the selected FBM rows, Following or
   // Pinned (Pinned stores the value inert; only FBA stays excluded fail-closed).
   const openBufferModal = useCallback(() => {
-    const selected = rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string))
+    const selectedIds = latestSelectedRowsRef.current
+    const selected = latestRowsRef.current.filter((r) => !r._ghost && selectedIds.has(r._rowId as string))
     const productIds = [...new Set(selected
       .filter((r) => (String(r.follow) === 'Follow' || String(r.follow) === 'Pinned')
-        && !/^(AMAZON|AFN|FBA)/.test(String(r.fulfillment_availability__fulfillment_channel_code ?? '').toUpperCase()))
+        && !isFbaRow(r))
       .map((r) => String(r._productId ?? '')).filter(Boolean))]
     if (productIds.length === 0) {
       toast.error('Select some Following or Pinned listings — FBA is Amazon-managed and excluded.')
@@ -3189,7 +1853,7 @@ export default function AmazonFlatFileClient({
     }
     setBufferInput('1')
     setBufferModal({ productIds })
-  }, [rows, selectedRows, toast])
+  }, [toast])
 
   const applyBufferModal = useCallback(async () => {
     if (!bufferModal) return
@@ -3200,12 +1864,12 @@ export default function AmazonFlatFileClient({
       if (result.unchanged) parts.push(`${result.unchanged} already ${buffer}`)
       toast.success(parts.join(' · '))
       setBufferModal(null)
-      setSelectedRows(new Set())
-      void loadData(marketplace, productType, false, true)
+      latestSetSelectedRowsRef.current?.(new Set())
+      reloadGridFromServer()
     } catch (e) {
       toast.error(`Couldn't set buffer — ${e instanceof Error ? e.message : String(e)}`)
     }
-  }, [bufferModal, bufferInput, marketplace, productType, toast, setSelectedRows, loadData])
+  }, [bufferModal, bufferInput, marketplace, toast, reloadGridFromServer])
 
   const handleAddRows = useCallback((params: {
     type: 'row' | 'parent' | 'variant'
@@ -3242,18 +1906,12 @@ export default function AmazonFlatFileClient({
     })
 
     pushSnapshot()
+    const anchorId = addRowsPanel?.anchorRowId
     setRows((prev) => {
       if (position === 'end') return [...prev, ...newRows]
-
-      const displayed = displayRowsRef.current
-      const anchorRi = selAnchorRef.current?.ri ?? 0
-      const endRi = selEndRef.current?.ri ?? anchorRi
-      const targetRi = position === 'above'
-        ? Math.min(anchorRi, endRi)
-        : Math.max(anchorRi, endRi)
-      const targetRow = displayed[targetRi]
-      if (!targetRow) return [...prev, ...newRows]
-      const idx = prev.findIndex((r) => r._rowId === targetRow._rowId)
+      // UFX P3 — insert relative to the anchor row captured when the panel
+      // opened (grid selection anchor / context-menu row).
+      const idx = anchorId ? prev.findIndex((r) => r._rowId === anchorId) : -1
       if (idx === -1) return [...prev, ...newRows]
       const insertAt = position === 'above' ? idx : idx + 1
       const next = [...prev]
@@ -3262,11 +1920,7 @@ export default function AmazonFlatFileClient({
     })
 
     setAddRowsPanel(null)
-
-    // Focus the first new row's SKU cell
-    const firstNew = newRows[0]
-    if (firstNew) setTimeout(() => setActiveCell({ rowId: firstNew._rowId as string, colId: 'item_sku' }), 30)
-  }, [productType, marketplace, pushSnapshot])
+  }, [productType, marketplace, pushSnapshot, addRowsPanel, setRows])
 
   // Add-variation wizard — insert a whole family (1 parent + the Cartesian
   // product of the axis values as children) in one go. Reuses makeEmptyRow for
@@ -3303,17 +1957,10 @@ export default function AmazonFlatFileClient({
     const newRows: Row[] = [parentRow, ...childRows]
 
     pushSnapshot()
+    const anchorId = addRowsPanel?.anchorRowId
     setRows((prev) => {
       if (position === 'end') return [...prev, ...newRows]
-      const displayed = displayRowsRef.current
-      const anchorRi = selAnchorRef.current?.ri ?? 0
-      const endRi = selEndRef.current?.ri ?? anchorRi
-      const targetRi = position === 'above'
-        ? Math.min(anchorRi, endRi)
-        : Math.max(anchorRi, endRi)
-      const targetRow = displayed[targetRi]
-      if (!targetRow) return [...prev, ...newRows]
-      const idx = prev.findIndex((r) => r._rowId === targetRow._rowId)
+      const idx = anchorId ? prev.findIndex((r) => r._rowId === anchorId) : -1
       if (idx === -1) return [...prev, ...newRows]
       const insertAt = position === 'above' ? idx : idx + 1
       const next = [...prev]
@@ -3322,15 +1969,14 @@ export default function AmazonFlatFileClient({
     })
 
     setAddRowsPanel(null)
-    setTimeout(() => setActiveCell({ rowId: parentRow._rowId as string, colId: 'item_sku' }), 30)
-  }, [marketplace, pushSnapshot])
+  }, [marketplace, pushSnapshot, addRowsPanel, setRows])
 
   // P4.3 — Clone variant: duplicate a child row with axis columns and identity
   // fields cleared so the operator only needs to fill in the new variant's values.
   const handleCloneVariant = useCallback((row: Row) => {
     if (row.parentage_level !== 'child') return
-    const theme = parentThemeByChildId.get(row._rowId as string) ?? ''
-    const colIdSet = new Set(allColumnsRef.current.map((c) => c.id))
+    const theme = parentThemeOf(row)
+    const colIdSet = new Set(visibleGridColumns.map((c) => c.id))
     const axisColIds = parseThemeAxes(theme)
       .map((axis) => axisColumnCandidates(axis).find((c) => colIdSet.has(c)))
       .filter((c): c is string => c !== undefined)
@@ -3354,53 +2000,16 @@ export default function AmazonFlatFileClient({
       next.splice(idx === -1 ? next.length : idx + 1, 0, clone)
       return next
     })
-    setTimeout(() => setActiveCell({ rowId: clone._rowId as string, colId: 'item_sku' }), 30)
-  }, [parentThemeByChildId, pushSnapshot])
+  }, [parentThemeOf, visibleGridColumns, pushSnapshot, setRows])
 
-  // GX.5 — editing a ghost (blank canvas) row materializes it into a real new
-  // row; the buffer effect then re-adds a fresh ghost below (auto-grow).
-  // Fills the infra fields a real row needs (the ghost was fully blank). Spread
-  // BEFORE the edited cell so if the user is editing product_type itself, their
-  // value wins.
-  const materializeGhost = (r: Row): Partial<Row> => (r._ghost
-    ? { _ghost: false, _isNew: true, product_type: productType, record_action: 'full_update' }
-    : {})
-
-  const updateCell = useCallback((rowId: string, colId: string, value: unknown) => {
-    pushSnapshot()
-    setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, ...materializeGhost(r), [colId]: value, _dirty: true } : r))
-  }, [productType])
-
-  const liveUpdateCell = useCallback((rowId: string, colId: string, value: unknown) => {
-    setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, ...materializeGhost(r), [colId]: value, _dirty: true } : r))
-  }, [productType])
-
-  const navigate = useCallback((rowId: string, colId: string, dir: 'right' | 'left' | 'down' | 'up') => {
-    const colIds = allColumnsRef.current.map((c) => c.id)
-    const rowIds = displayRowsRef.current.map((r) => r._rowId as string)
-    let ci = colIds.indexOf(colId), ri = rowIds.indexOf(rowId)
-    // GX.9 — column-anchor: Tab sets the anchor, Enter returns to it (row entry).
-    if (dir === 'right') {
-      if (entryAnchorColRef.current === null) entryAnchorColRef.current = ci
-      ci = Math.min(ci + 1, colIds.length - 1)
-    } else if (dir === 'left') { entryAnchorColRef.current = null; ci = Math.max(ci - 1, 0) }
-    else if (dir === 'down') {
-      ri = Math.min(ri + 1, rowIds.length - 1)
-      if (entryAnchorColRef.current !== null) ci = Math.min(entryAnchorColRef.current, colIds.length - 1)
-    } else { entryAnchorColRef.current = null; ri = Math.max(ri - 1, 0) }
-    const nc = colIds[ci], nr = rowIds[ri]
-    if (nc && nr) {
-      setActiveCell({ rowId: nr, colId: nc })
-      setSelAnchor({ ri, ci })
-      setSelEnd({ ri, ci })
-      setIsEditing(false)
-      setEditInitialChar(null)
-      requestAnimationFrame(() => {
-        document.querySelector(`[data-ri="${ri}"][data-ci="${ci}"]`)
-          ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-      })
-    }
-  }, [])
+  // GX.5 — ghost materialization: the grid materializes the row (its single
+  // write path) and asks the page for the infra fields a real Amazon row
+  // needs; the edited cell value is applied after, so a user editing
+  // product_type itself wins (grid contract).
+  const onMaterializeRow = useCallback((): Partial<Row> => ({
+    product_type: productTypeRef.current,
+    record_action: 'full_update',
+  }), [])
 
   // ── Submission + version history ──────────────────────────────────
 
@@ -3440,6 +2049,10 @@ export default function AmazonFlatFileClient({
   // ── Submit ─────────────────────────────────────────────────────────
 
   const handleSubmitToMarkets = useCallback(async (markets: Set<string>, scope: SubmitScope = 'edited') => {
+    // UFX P3 — live grid rows + selection (the grid owns both now). Captured
+    // once per submit so gathering and the pending-status flip stay coherent.
+    const rows = latestRowsRef.current
+    const selectedRows = latestSelectedRowsRef.current
     // FFP.2 — gather rows per market by SCOPE: 'edited' (dirty/new/needs-publish,
     // the default), 'selected' (grid selection), or 'all' (every real row in
     // view). The active market reads from state; other markets read their
@@ -3666,13 +2279,14 @@ export default function AmazonFlatFileClient({
       ))
     }
     setSubmitting(false)
-  }, [rows, selectedRows, marketplace, productType, manifest, saveSubmissionRecord, createVersion, toast, openReviewModal])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marketplace, productType, effectiveManifest, saveSubmissionRecord, createVersion, toast, openReviewModal, setRows])
 
   // ── Platform sync ──────────────────────────────────────────────────
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle')
 
-  const syncToPlatform = useCallback(async (rowsToSync: Row[], isPublished = false) => {
-    if (!manifest) return
+  const syncToPlatform = useCallback(async (rowsToSync: Row[], isPublished = false): Promise<{ errorSkus: string[] }> => {
+    if (!manifest) return { errorSkus: [] }
     // FM Phase 2b — capture per-listing Follow/Pinned intent from the DIRTY rows
     // BEFORE the content save; applied AFTER it (so a Pin snapshots the just-saved
     // quantity). FBA rows carry follow='' and are excluded here; the endpoint also
@@ -3763,20 +2377,30 @@ export default function AmazonFlatFileClient({
         pruneSets(followByBool as Map<unknown, Set<string>>)
         pruneSets(bufferByValue as Map<unknown, Set<string>>)
       }
-      setRows((prev) => prev.map((r) => {
+      // The rows this sync actually sent (only they may flip _dirty/_needsPublish).
+      const syncedSkus = new Set(rowsToSync.map((r) => String(r.item_sku ?? '')).filter(Boolean))
+      // UFX P3 — deferred one tick: when Save runs through the grid, the grid
+      // clears _dirty on every row right after onSave resolves; this patch must
+      // land AFTER that so failed rows stay dirty and _needsPublish arms Submit.
+      setTimeout(() => setRows((prev) => prev.map((r) => {
         const sku = String(r.item_sku ?? '')
         const v = newVersions[sku]
         const withVersion = v != null ? { ...r, _version: v } : r
-        if (!r._ghost && !errorSkus.has(sku) && (withVersion._dirty || withVersion._isNew)) {
+        if (!r._ghost && errorSkus.has(sku)) {
+          // FFA.6 — failed rows keep their unsaved state for a retry.
+          return { ...withVersion, _dirty: true }
+        }
+        if (!r._ghost && syncedSkus.has(sku) && !isPublished) {
           // FFP.2 — a DB save marks the row as still needing an Amazon submit;
           // the post-feed resync (isPublished=true) clears the flag instead.
-          return { ...withVersion, _dirty: false, _isNew: false, _needsPublish: !isPublished }
+          // INVARIANT: Save never disarms Submit.
+          return { ...withVersion, _dirty: false, _isNew: false, _needsPublish: true }
         }
-        if (isPublished && !r._ghost && !errorSkus.has(sku) && withVersion._needsPublish) {
+        if (isPublished && !r._ghost && withVersion._needsPublish) {
           return { ...withVersion, _needsPublish: false }
         }
         return withVersion
-      }))
+      })), 0)
       setTimeout(() => setSyncStatus('idle'), 4000)
       // FFC — surface newly-created products (new SKUs become real Nexus products).
       const createdCount: number = typeof data?.created === 'number' ? data.created : 0
@@ -3854,12 +2478,33 @@ export default function AmazonFlatFileClient({
         }
         toast.warning(`Follow/Buffer not applied to ${parts.join(' · ')}`)
       }
-    } catch {
+      return { errorSkus: [...errorSkus] }
+    } catch (err) {
       setSyncStatus('error')
-      toast.error('Save failed — check your connection and try again')
       setTimeout(() => setSyncStatus('idle'), 6000)
+      // Rethrow — the grid's Save path surfaces the toast and, crucially,
+      // keeps the rows dirty (a failed save must never clear unsaved state).
+      throw err instanceof Error ? err : new Error('Save failed — check your connection and try again')
     }
   }, [manifest, marketplace, productType, toast])
+
+  // ── UFX P3 — grid Save (onSave prop) ──────────────────────────────────────
+  // The grid passes the dirty rows; the wrapper keeps the page's Save
+  // semantics: version snapshot + localStorage draft + platform sync
+  // (which itself applies Follow/Buffer intent and stamps _needsPublish so
+  // Save never disarms Submit).
+  const onGridSave = useCallback(async (dirty: BaseRow[]): Promise<{ saved: number; createResult?: { errors?: unknown[] } }> => {
+    createVersion('Manual save')
+    saveRows(marketplaceRef.current, storageTypeRef.current, latestRowsRef.current)
+    const { errorSkus } = await syncToPlatform(dirty as Row[], false)
+    if (errorSkus.length > 0) {
+      // Suppress the grid's generic "Saved N rows" toast; the FFA.6 warning
+      // toast from syncToPlatform already carries the per-SKU detail.
+      return { saved: Math.max(0, dirty.length - errorSkus.length), createResult: { errors: errorSkus } }
+    }
+    return { saved: dirty.length }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createVersion, syncToPlatform])
 
   const pollAllFeeds = useCallback(async () => {
     if (!feedEntries.length) return
@@ -3926,14 +2571,14 @@ export default function AmazonFlatFileClient({
           // On DONE: sync all rows for this market to the platform with isPublished=true
           if (entry.status === 'DONE') {
             const mpRows = entry.market === marketplace
-              ? rows
+              ? latestRowsRef.current.filter((r) => !r._ghost)
               : (() => {
                   try {
                     const raw = localStorage.getItem(rowStorageKey(entry.market, productType))
                     return raw ? JSON.parse(raw) as Row[] : []
                   } catch { return [] }
                 })()
-            void syncToPlatform(mpRows, true)
+            void syncToPlatform(mpRows, true).catch(() => { /* status chip shows the failure */ })
           }
         } else {
           updateSubmissionRecord(entry.feedId, { status: entry.status as SubmissionRecord['status'] })
@@ -3941,7 +2586,7 @@ export default function AmazonFlatFileClient({
       }
     } catch (e: any) { setLoadError({ message: e?.message ?? 'Polling failed', at: Date.now() }) }
     finally { setPolling(false) }
-  }, [feedEntries, marketplace, productType, rows, updateSubmissionRecord, syncToPlatform, toast])
+  }, [feedEntries, marketplace, productType, updateSubmissionRecord, syncToPlatform, toast, setRows])
 
   // FFS.5 — restore in-flight feeds from the server on mount so a reload/reopen
   // never "loses" a submission that's still processing (feedEntries is in-memory
@@ -4005,6 +2650,8 @@ export default function AmazonFlatFileClient({
     selectedOnly: boolean,
   ): Promise<{ copied: number; skipped: number }> => {
     if (!manifest) return { copied: 0, skipped: 0 }
+    const rows = latestRowsRef.current.filter((r) => !r._ghost)
+    const selectedRows = latestSelectedRowsRef.current
     const allColIds = manifest.groups
       .filter((g) => groupIds.has(g.id))
       .flatMap((g) => g.columns.map((c) => c.id))
@@ -4039,12 +2686,13 @@ export default function AmazonFlatFileClient({
       } catch { skipped += sourceRows.length }
     }
     return { copied, skipped }
-  }, [manifest, rows, selectedRows, productType, familyId])
+  }, [manifest, productType, familyId])
 
   const handleCopyToMarket = useCallback(async (
     targetMarket: string,
     colIds: Set<string>,
   ) => {
+    const rows = latestRowsRef.current.filter((r) => !r._ghost)
     if (!manifest || !rows.length) return
     setPushPanel(null)
     try {
@@ -4073,14 +2721,18 @@ export default function AmazonFlatFileClient({
       }
       const merged = mergeReplicatedRows(existingTarget ?? [], rows, cols, STRUCTURAL)
 
-      setMarketplace(targetMarket)
-      setManifest(targetManifest)
-      setRows(merged)
+      // UFX P3 — persist the merge as the target market's draft and switch
+      // through the normal navigation: the grid remounts for the new market
+      // and its first load restores this draft (mergeReplicatedRows marked
+      // the copies _dirty, so nothing publishes without an explicit Save).
+      saveRows(targetMarket, computeStorageType(merged, productType), merged)
       setFeedEntries([])
+      navigateTo(targetMarket, productType)
     } catch (e: any) {
       setLoadError({ message: e?.message ?? 'Copy failed', at: Date.now() })
     }
-  }, [manifest, rows, productType, familyId])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manifest, productType, familyId])
 
   // ── Pull from Amazon (full attributes, in-editor, undoable) ─────────
   // Calls /api/amazon/flat-file/pull-preview which fetches live SP-API data
@@ -4093,17 +2745,18 @@ export default function AmazonFlatFileClient({
   }) => {
     if (!productType) return
 
+    const rows = latestRowsRef.current
+    const selectedRows = latestSelectedRowsRef.current
     let targetSkus: string[]
     if (opts.scope === 'selected') {
       targetSkus = [...selectedRows]
         .map((id) => rows.find((r) => r._rowId === id)?.item_sku as string | undefined)
         .filter((s): s is string => !!s)
-    } else if (opts.scope === 'visible') {
-      targetSkus = displayRowsRef.current
-        .map((r) => r.item_sku as string | undefined)
-        .filter((s): s is string => !!s)
     } else {
+      // 'visible' ≈ 'all' now (the grid owns search/filter state; every real
+      // row in the sheet is pulled).
       targetSkus = rows
+        .filter((r) => !r._ghost)
         .map((r) => r.item_sku as string | undefined)
         .filter((s): s is string => !!s)
     }
@@ -4166,7 +2819,7 @@ export default function AmazonFlatFileClient({
       setPulling(false)
       setPullProgress(null)
     }
-  }, [marketplace, productType, selectedRows, rows, pushSnapshot])
+  }, [marketplace, productType])
 
   // Called by PullDiffModal on Apply. Merges the chosen rows/columns
   // into editor state (wrapped in pushSnapshot so ⌘Z reverts the
@@ -4286,8 +2939,8 @@ export default function AmazonFlatFileClient({
       `Imported ${result.cellCount} value${result.cellCount === 1 ? '' : 's'}` +
       `${newCount ? ` · creating ${newCount} product${newCount === 1 ? '' : 's'}` : ''} · saving…`,
     )
-    void syncToPlatform(next.filter((r) => !r._ghost), false)
-  }, [pushSnapshot, productType, marketplace, syncToPlatform, familyId])
+    void syncToPlatform(next.filter((r) => !r._ghost), false).catch(() => { /* sync chip shows the failure */ })
+  }, [pushSnapshot, setRows, productType, marketplace, syncToPlatform, familyId])
 
   // FX.1 — export the grid to TSV (Amazon template), CSV, or XLSX. Uses
   // effectiveManifest so a multi-category (MT) union sheet exports every column;
@@ -4295,8 +2948,9 @@ export default function AmazonFlatFileClient({
   const exportFile = useCallback(async (format: 'tsv' | 'csv' | 'xlsx') => {
     const mf = effectiveManifest ?? manifest
     if (!mf) return
+    const selectedRows = latestSelectedRowsRef.current
     const selectedOnly = selectedRows.size > 0
-    const exportable = rows.filter((r) => !r._ghost) // GX.5 — never export blank canvas rows
+    const exportable = latestRowsRef.current.filter((r) => !r._ghost) // GX.5 — never export blank canvas rows
     const outRows = selectedOnly ? exportable.filter((r) => selectedRows.has(r._rowId as string)) : exportable
     if (!outRows.length) { toast.warning('No rows to export'); return }
     // Export in the editor's on-screen column order (orderedGroups — respects the
@@ -4322,27 +2976,10 @@ export default function AmazonFlatFileClient({
     } catch {
       toast.error('Export failed')
     }
-  }, [manifest, effectiveManifest, orderedGroups, rows, selectedRows, productType, marketplace])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manifest, effectiveManifest, orderedGroups, productType, marketplace])
 
-  // ── Save / Discard ────────────────────────────────────────────────
-  const [saveFlash, setSaveFlash] = useState(false)
-
-  const handleSave = useCallback(() => {
-    createVersion('Manual save')
-    saveRows(marketplace, storageTypeRef.current, rows)
-    setSaveFlash(true)
-    setTimeout(() => setSaveFlash(false), 2000)
-    void syncToPlatform(rows.filter((r) => !r._ghost), false)
-  }, [rows, marketplace, productType, createVersion, syncToPlatform])
-
-  const handleDiscard = useCallback(() => {
-    if (!confirm('Discard all local changes? Your edits will be lost and rows will reload from the server.')) return
-    createVersion('Before discard')
-    try { localStorage.removeItem(rowStorageKey(marketplace, productType)) } catch {}
-    localDivergedRef.current = false // FFX.2 — discarding local work; grid reloads from DB
-    setDraftBanner(null) // FFA.6 — the restore-draft banner referred to the now-deleted draft
-    void loadData(marketplace, productType, false)
-  }, [marketplace, productType, loadData, createVersion])
+  // ── Save / Discard — owned by the shared grid (onSave / Discard button) ──
 
   const handleApplyTranslations = useCallback((
     columnMappings: Array<{
@@ -4397,957 +3034,569 @@ export default function AmazonFlatFileClient({
     }
   }, [marketplace, productType, pushSnapshot])
 
-  // P4 — jump-to-cell from the feed-report panel: focus the SKU's cell for the
-  // column Amazon flagged. Clears any active search/collapse so the row can't be
-  // hidden, then selects + scrolls (mirrors the validation-panel / find-replace
-  // navigation at the issue list + FindReplaceBar.onActivate).
+  // P4 — jump-to-cell from the feed-report panel: delegated to the grid's
+  // imperative API (clears search/collapse, selects + scrolls).
+  const gridApiRef = useRef<FlatFileGridApi | null>(null)
   const handleGoToCell = useCallback((sku: string, columnId: string) => {
-    setSearchQuery('')
-    setCollapsedGroups(new Set())
-    setCollapsedParents(new Set())
-    const go = () => {
-      const dr = displayRowsRef.current
-      const rowIdx = dr.findIndex((r) => String(r.item_sku ?? '') === sku)
-      const colIdx = allColumnsRef.current.findIndex((c) => c.id === columnId)
-      if (rowIdx < 0 || colIdx < 0) return false
-      setSelAnchor({ ri: rowIdx, ci: colIdx })
-      setSelEnd({ ri: rowIdx, ci: colIdx })
-      const row = dr[rowIdx]
-      if (row) setActiveCell({ rowId: row._rowId as string, colId: columnId })
-      requestAnimationFrame(() =>
-        document.querySelector(`[data-ri="${rowIdx}"][data-ci="${colIdx}"]`)
-          ?.scrollIntoView({ block: 'center', inline: 'center' }),
-      )
-      return true
-    }
-    // displayRows recomputes after the state flush above — retry across two frames
-    requestAnimationFrame(() => { if (!go()) requestAnimationFrame(go) })
+    gridApiRef.current?.goToCell(sku, columnId)
   }, [])
 
-  // ── Render ─────────────────────────────────────────────────────────
+  // ⌘⇧G — column quick-jump (the grid owns the rest of the keyboard).
+  useEffect(() => {
+    function onKey(e: globalThis.KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'G') { e.preventDefault(); setColSearchOpen((o) => !o) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
-  // IN.2 — Build CascadeModal fields from the row when cascade is triggered
-  const cascadeFields = cascadeRow ? [
-    { key: 'price', label: 'Price', value: cascadeRow.purchasable_offer__our_price },
-    { key: 'title', label: 'Title', value: cascadeRow.item_name },
-    { key: 'description', label: 'Description', value: cascadeRow.product_description },
-    { key: 'quantity', label: 'Quantity', value: cascadeRow.fulfillment_availability__quantity },
-  ] : []
+  // ── Grid contract pieces ───────────────────────────────────────────────
 
-  return (
-    <div className="h-screen bg-slate-50 dark:bg-slate-950 flex flex-col"
-      onDragOver={(e) => { if (!importOpen && e.dataTransfer.types.includes('Files')) e.preventDefault() }}
-      onDrop={(e) => {
-        // FX.7 — drop a spreadsheet on the grid to open the import wizard pre-loaded.
-        // Only reacts to FILE drags (not the grid's own cell/column mouse-drags) and
-        // only when the wizard isn't already open (its own drop zone handles that).
-        if (importOpen || !e.dataTransfer.types.includes('Files')) return
-        const f = e.dataTransfer.files?.[0]
-        if (!f || !/\.(csv|tsv|txt|xlsx|xls|json)$/i.test(f.name)) return
-        e.preventDefault()
-        setImportInitialFile(f); setImportOpen(true)
-      }}>
+  // Blank row factory: fully blank (like the old ghost rows). The grid builds
+  // ghosts from this (forcing _ghost:true, _isNew/_dirty false); real infra
+  // fields are stamped by onMaterializeRow when a ghost is first edited.
+  const makeBlankRow = useCallback((): BaseRow => ({
+    _rowId: `new-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    _isNew: true, _dirty: true, _status: 'idle',
+    item_sku: '',
+    product_type: '',
+    record_action: '',
+    parentage_level: '',
+    parent_sku: '',
+    variation_theme: '',
+  }), [])
 
-      {/* IN.2 — Cascade modal */}
-      {cascadeRow && cascadeRow._productId && (
-        <CascadeModal
-          sourceProductId={String(cascadeRow._productId)}
-          sourceSku={String(cascadeRow.item_sku ?? cascadeRow._rowId)}
-          channel="AMAZON"
-          marketplace={marketplace}
-          availableFields={cascadeFields}
-          onClose={() => setCascadeRow(null)}
-          onSuccess={(n) => { if (n > 0) void loadData(marketplace, productType, false, true) }}
-        />
-      )}
+  // FBA-MANAGED CELLS (INVARIANT — never weaken): quantity + Follow + Buffer
+  // hard-lock on FBA rows. Every edit-entry and bulk-write path is blocked
+  // centrally by the grid (getCellReadOnly → commitCells filter).
+  const getCellReadOnly = useCallback((col: FlatFileColumn, row: BaseRow) => isFbaManagedCell(col.id, row), [])
 
-      {/* Full-screen overlay while resizing — locks cursor, prevents text selection */}
-      {resizingType && (
-        <div className={cn('fixed inset-0 z-[9999] select-none', resizingType === 'col' ? 'cursor-col-resize' : 'cursor-row-resize')} />
-      )}
+  // Parentage greying — 'not-applicable' shading + tooltip, still editable
+  // (union per-type greying is built into the grid via applicableProductTypes).
+  const getCellGuidance = useCallback((col: FlatFileColumn, row: BaseRow): 'not-applicable' | 'optional' | null => {
+    if (!col.applicableParentage?.length) return null
+    const parentage = String(row.parentage_level ?? '').toLowerCase()
+    const rowType = parentage === 'parent' ? 'VARIATION_PARENT'
+      : parentage === 'child' ? 'VARIATION_CHILD'
+      : 'STANDALONE'
+    return col.applicableParentage.includes(rowType) ? null : 'not-applicable'
+  }, [])
 
-      {/* ── Sticky header ────────────────────────────────────── */}
-      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
+  // FBA/FBM auto-sections (grid bucketMode) — parent follows its FBA children.
+  const bucketMode = useMemo(() => ({
+    label: 'FBA/FBM',
+    buckets: [
+      { key: 'FBA', name: 'FBA', color: 'blue' as const },
+      { key: 'FBM', name: 'FBM', color: 'amber' as const },
+    ],
+    bucketFor: (row: BaseRow, rows: BaseRow[]) => fbaBucketFor(row, rows),
+  }), [])
 
-        {/* ── Channel + Market strip ────────────────────────── */}
-        <ChannelStrip channel="amazon" marketplace={marketplace} familyId={familyId} />
+  // Cell display overrides: FBA-managed cells render '—' even when a value
+  // exists (Amazon parity); the derived Category column renders its chip.
+  const renderCellContent = useCallback((col: FlatFileColumn, row: BaseRow, _value: unknown, _displayVal: string): React.ReactNode | null => {
+    if (isFbaManagedCell(col.id, row)) {
+      return <span title="Managed by Amazon for FBA listings — set stock on the Stock page">—</span>
+    }
+    if (col.id === '__category') {
+      if (row._ghost) return <span className="text-slate-300 dark:text-slate-600">—</span>
+      const cat = categoryOf(row as Record<string, unknown>, browseNodeLabels)
+      const crumb = formatNodeBreadcrumb(cat.nodePath)
+      if (!cat.productType && !cat.nodeId) return <span className="text-slate-300 dark:text-slate-600">—</span>
+      return (
+        <span className="flex items-center gap-1.5 min-w-0" title={cat.nodePath ?? undefined}>
+          {cat.productType && <Badge variant="info" size="sm">{cat.productType}</Badge>}
+          {crumb && <span className="text-[11px] text-slate-600 dark:text-slate-300 truncate">{crumb}</span>}
+          {!cat.nodeId && cat.productType && <span className="text-[10px] text-amber-500 shrink-0">no node</span>}
+        </span>
+      )
+    }
+    return null
+  }, [browseNodeLabels])
 
-        {/* ── Bar 1: App chrome + menus + primary actions ───── */}
-        <div className="px-3 h-10 flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/60">
+  // ── Slot: channel strip ──────────────────────────────────────────────────
+  const renderChannelStrip = useCallback(() => (
+    <ChannelStrip channel="amazon" marketplace={marketplace} familyId={familyId} />
+  ), [marketplace, familyId])
 
-          {/* Back */}
-          <IconButton aria-label="Back" size="sm" onClick={() => router.push('/products')} className="!h-auto !w-auto p-1 -ml-0.5 flex-shrink-0">
-            <ChevronLeft className="w-4 h-4" />
-          </IconButton>
+  // ── Slot: fetch group (also the rows-changed signal / live-refs capture) ──
+  const lastSignalledRowsRef = useRef<Row[] | null>(null)
+  const sheetTypesSigRef = useRef('')
+  const renderToolbarFetch = useCallback((ctx: ToolbarFetchCtx) => {
+    // Keep refs current so every page handler acts on the latest grid state.
+    latestRowsRef.current = ctx.rows as Row[]
+    latestSelectedRowsRef.current = ctx.selectedRows
+    latestSetRowsRef.current = ctx.setRows
+    latestPushHistoryRef.current = ctx.pushHistory
+    latestSetSelectedRowsRef.current = ctx.setSelectedRows
 
-          {/* ── Menus — left side ── */}
-          <div className="flex items-center gap-0.5 flex-shrink-0">
-            <MenuDropdown label="File" items={[
-              { label: 'Smart import (CSV/Excel/JSON)…', icon: <Wand2 className="w-3.5 h-3.5" />, onClick: () => { setImportInitialFile(null); setImportOpen(true) }, disabled: !effectiveManifest },
-              { label: 'Import TSV…', icon: <Upload className="w-3.5 h-3.5" />, onClick: () => fileInputRef.current?.click() },
-              { separator: true },
-              { label: `Export as TSV (Amazon)${selectedRows.size > 0 ? ` · ${selectedRows.size} sel` : ''}`, icon: <Download className="w-3.5 h-3.5" />, onClick: () => void exportFile('tsv'), disabled: !rows.length },
-              { label: `Export as CSV${selectedRows.size > 0 ? ` · ${selectedRows.size} sel` : ''}`, icon: <Download className="w-3.5 h-3.5" />, onClick: () => void exportFile('csv'), disabled: !rows.length },
-              { label: `Export as Excel (.xlsx)${selectedRows.size > 0 ? ` · ${selectedRows.size} sel` : ''}`, icon: <Download className="w-3.5 h-3.5" />, onClick: () => void exportFile('xlsx'), disabled: !rows.length },
-              { separator: true },
-              { label: 'Reload rows from server', icon: <RefreshCw className="w-3.5 h-3.5" />, disabled: !productType || !rows.length,
-                onClick: () => {
-                  if (!confirm('Reload rows from server? Your unsaved local edits will be lost.')) return
-                  try { localStorage.removeItem(rowStorageKey(marketplace, productType)) } catch {}
-                  void loadData(marketplace, productType, false)
-                }},
-              { separator: true },
-              { label: 'Version history…', icon: <Clock className="w-3.5 h-3.5" />, onClick: () => setHistoryOpen(true), disabled: !manifest },
-              { separator: true },
-              { label: exportingWorkbook ? 'Exporting workbook…' : 'Catalog workbook (v2)', icon: <FileSpreadsheet className="w-3.5 h-3.5" />, disabled: exportingWorkbook, onClick: () => { const skuIn = [...new Set(rows.filter((r) => !r._ghost).map((r) => String(r.item_sku ?? '')).filter(Boolean))]; void exportCatalogWorkbook({ skuIn }) } },
-            ]} />
-            <MenuDropdown label="Edit" items={[
-              { label: 'Undo', icon: <Undo2 className="w-3.5 h-3.5" />, onClick: undo, disabled: !history.length, shortcut: '⌘Z' },
-              { label: 'Redo', icon: <Redo2 className="w-3.5 h-3.5" />, onClick: redo, disabled: !future.length, shortcut: '⌘⇧Z' },
-              { separator: true },
-              { label: 'Copy to market…', icon: <Copy className="w-3.5 h-3.5" />, onClick: () => setPushPanel((p) => p ? null : { tab: 'copy' }), disabled: !manifest || !rows.length },
-              { separator: true },
-              // FM Phase 3/4 — bulk Follow/Pinned/Buffer on the selected rows (active market).
-              // Kept in the Edit menu, not the toolbar, so the sheet stays uncluttered.
-              { label: `Set Follow${followEligibleCount ? ` (${followEligibleCount})` : ''}`, icon: <RefreshCw className="w-3.5 h-3.5" />, onClick: () => void bulkSetFollow(true), disabled: followEligibleCount === 0 },
-              { label: `Set Pinned${followEligibleCount ? ` (${followEligibleCount})` : ''}`, icon: <Pin className="w-3.5 h-3.5" />, onClick: () => void bulkSetFollow(false), disabled: followEligibleCount === 0 },
-              { label: `Set buffer…${bufferEligibleCount ? ` (${bufferEligibleCount})` : ''}`, icon: <Layers className="w-3.5 h-3.5" />, onClick: openBufferModal, disabled: bufferEligibleCount === 0 },
-              { separator: true },
-              { label: `Select all Pinned${pinnedCount ? ` (${pinnedCount})` : ''}`, onClick: selectAllPinned, disabled: pinnedCount === 0 },
-              { separator: true },
-              { label: 'Reset column widths', onClick: () => { setColWidths({}); try { localStorage.removeItem('ff-col-widths') } catch {} }, disabled: !Object.keys(colWidths).length },
-            ]} />
-            <MenuDropdown label="View" items={[
-              { label: 'Market coverage…', icon: <Globe className="w-3.5 h-3.5" />, onClick: () => setCoverageModalOpen(true), disabled: !manifest || !rows.length },
-              { label: 'Listing health…', icon: <Activity className="w-3.5 h-3.5" />, onClick: () => setHealthModalOpen(true), disabled: !manifest || !rows.length },
-              { separator: true },
-              { label: 'Reset row height', onClick: () => { setRowHeight(28); try { localStorage.setItem('ff-row-height', '28') } catch {} }, disabled: rowHeight === 28 },
-            ]} />
-          </div>
+    // Rows-changed signal: this slot re-renders on every grid render; only a
+    // NEW rows array re-arms the autosave debounce + derived-state syncs.
+    if (lastSignalledRowsRef.current !== ctx.rows) {
+      lastSignalledRowsRef.current = ctx.rows as Row[]
+      storageTypeRef.current = computeStorageType(ctx.rows as Row[], productTypeRef.current)
+      scheduleAutosave()
+      const sig = productTypesInUse(ctx.rows as Array<Record<string, unknown>>).sort().join(',')
+      if (sig !== sheetTypesSigRef.current) {
+        sheetTypesSigRef.current = sig
+        const rows = ctx.rows as Row[]
+        setTimeout(() => syncSheetTypesFromRows(rows, productTypeRef.current), 0)
+      }
+    }
 
-          {/* Separator */}
-          <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5 flex-shrink-0" />
-
-          {/* Title + status badges */}
-          <FileSpreadsheet className="w-4 h-4 text-orange-500 flex-shrink-0" />
-          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">Amazon Flat File</span>
-          {manifest && <><Badge variant="info">{manifest.productType}</Badge><Badge variant="default">{manifest.marketplace}</Badge></>}
-          {familyId && (
-            <span className="inline-flex items-center gap-1 text-xs bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800 rounded px-1.5 py-0.5 flex-shrink-0">
-              <FileSpreadsheet className="w-3 h-3" />Family
-            </span>
+    return (
+      <>
+        {/* Pull from Amazon — full attribute pull (in-memory, undoable via ⌘Z) */}
+        <div className="relative">
+          <SharedTbBtn
+            icon={<Download className="w-3.5 h-3.5" />}
+            title={`Pull from Amazon ${marketplace} — full attribute pull, undoable with ⌘Z. Does not touch the database until you click Save.`}
+            onClick={() => setPullPanelOpen((o) => !o)}
+            disabled={!manifest || pulling || !ctx.rows.length}
+            active={pullPanelOpen}
+          />
+          {pullPanelOpen && (
+            <PullFromAmazonPanel
+              selectedCount={ctx.selectedRows.size}
+              visibleCount={ctx.rows.filter((r) => !r._ghost).length}
+              totalCount={ctx.rows.filter((r) => !r._ghost).length}
+              currentMarket={marketplace}
+              pulling={pulling}
+              onPull={handlePullFromAmazon}
+              onClose={() => setPullPanelOpen(false)}
+            />
           )}
-          {dirtyRows.length > 0 && <Badge variant="warning" className="flex-shrink-0"><AlertCircle className="w-3 h-3 mr-1" />{dirtyRows.length} unsaved</Badge>}
-          {newCount > 0 && <Badge variant="info" className="flex-shrink-0">{newCount} new</Badge>}
-
-          {/* Flex spacer */}
-          <div className="flex-1 min-w-0" />
-
-          {/* Hidden file input for Import */}
-          <input ref={fileInputRef} type="file" accept=".txt,.tsv,.csv,.xlsm,.xlsx" className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = '' }} />
-
-          {/* Feed status badges (FFS.5 — error-aware + terminal-correct) */}
-          {feedEntries.length > 0 && (
-            <div className="flex items-center gap-1">
-              {feedEntries.map((e) => {
-                const errs = feedErrorCount(e.results)
-                const done = e.status === 'DONE'
-                const failed = e.status === 'FATAL' || e.status === 'CANCELLED'
-                const cls = failed || (done && errs > 0)
-                  ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800'
-                  : done
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800'
-                  : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800'
-                const label = done && errs > 0
-                  ? `${e.status} · ${errs} error${errs === 1 ? '' : 's'}`
-                  : (e.status ?? '…')
-                const inFlight = !done && !failed
-                return (
-                  <span key={e.market} title={e.error ?? label}
-                    className={cn('inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full border', cls)}>
-                    {inFlight && (
-                      <span className="relative flex h-1.5 w-1.5 flex-shrink-0">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500" />
-                      </span>
-                    )}
-                    {e.market}: {label}
-                  </span>
-                )
-              })}
-              {/* Always available — re-check even after DONE to re-verify the report */}
-              <Button size="sm" variant="ghost" onClick={pollAllFeeds} loading={polling}>
-                <RefreshCw className="w-3 h-3 mr-1" />Check
-              </Button>
-            </div>
-          )}
-
-          {/* Separator before save/discard/submit */}
-          <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5 flex-shrink-0" />
-
-          {/* Discard */}
-          <Button size="sm" variant="ghost"
-            onClick={handleDiscard}
-            disabled={!dirtyRows.length || loading}
-            className="text-slate-500 hover:text-red-600 dark:hover:text-red-400">
-            Discard
-          </Button>
-
-          {/* Save */}
-          <Button size="sm" variant="ghost"
-            onClick={handleSave}
-            disabled={loading}
-            className={saveFlash ? 'text-emerald-600 dark:text-emerald-400' : ''}>
-            {saveFlash ? <><CheckCircle2 className="w-3.5 h-3.5 mr-1" />Saved</> : 'Save'}
-          </Button>
-          {syncStatus !== 'idle' && (
-            <span className={cn(
-              'text-[11px] flex items-center gap-1 flex-shrink-0 transition-opacity',
-              syncStatus === 'syncing' && 'text-slate-400',
-              syncStatus === 'synced'  && 'text-emerald-600 dark:text-emerald-400',
-              syncStatus === 'error'   && 'text-red-500 dark:text-red-400',
-            )}>
-              {syncStatus === 'syncing' && <><RefreshCw className="w-3 h-3 animate-spin" />Syncing…</>}
-              {syncStatus === 'synced'  && <><CheckCircle2 className="w-3 h-3" />Synced</>}
-              {syncStatus === 'error'   && <>⚠ Sync failed</>}
-            </span>
-          )}
-          {pullProgress && (
-            <span className="text-[11px] flex items-center gap-1 flex-shrink-0 text-blue-600 dark:text-blue-400">
-              <RefreshCw className="w-3 h-3 animate-spin" />
-              Pulling {pullProgress.progress}/{pullProgress.total || '?'} from {marketplace}…
-            </span>
-          )}
-          {pullResult && !pullProgress && (
-            <span className="text-[11px] flex items-center gap-1 flex-shrink-0 text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 className="w-3 h-3" />
-              Pulled {pullResult.pulled}
-              {pullResult.skipped > 0 && ` · ${pullResult.skipped} not on ${marketplace}`}
-              {pullResult.failed > 0 && ` · ${pullResult.failed} failed`}
-              {' · ⌘Z to undo'}
-            </span>
-          )}
-
-          {/* PD.1 — publish-mode truth, right where you publish. A non-LIVE
-              badge means a submit is validated but NOT sent to Amazon. */}
-          <PublishModeBadge channel="amazon" />
-
-          {/* Submit to Amazon */}
-          <div className="relative">
-            <Button size="sm" onClick={() => setSubmitPanelOpen((o) => !o)}
-              disabled={submitting || loading} loading={submitting}
-              className={submitPanelOpen ? 'bg-blue-700' : ''}>
-              <Send className="w-3.5 h-3.5 mr-1.5" />Submit to Amazon{publishableRows.length > 0 && ` (${publishableRows.length})`}
-            </Button>
-            {submitPanelOpen && (
-              <SubmitToAmazonPanel currentMarket={marketplace} productType={productType}
-                familyId={familyId} currentDirtyRows={publishableRows}
-                currentSelectedRows={rows.filter((r) => !r._ghost && selectedRows.has(r._rowId as string))}
-                currentAllRows={rows.filter((r) => !r._ghost)}
-                getMarketRows={(mp) => loadSavedRows(mp, productType) ?? []}
-                onSubmit={handleSubmitToMarkets} onClose={() => setSubmitPanelOpen(false)} />
-            )}
-          </div>
-
-          {/* FFC — pre-publish Review & Confirm gate (replaces the old confirm()). */}
-          {reviewModal && (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-              onMouseDown={(e) => { if (e.target === e.currentTarget) reviewModal.resolve(false) }}
-            >
-              <div className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl">
-                <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-subtle dark:border-slate-800">
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Review &amp; Publish</div>
-                    <div className="text-[11px] text-tertiary">
-                      {reviewModal.data.markets.join(', ')} · {reviewModal.data.totalRows} row{reviewModal.data.totalRows === 1 ? '' : 's'}
-                    </div>
-                  </div>
-                  <button type="button" onClick={() => reviewModal.resolve(false)} className="p-1 rounded text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Cancel">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="px-4 py-3 overflow-y-auto space-y-3">
-                  <div className="flex items-center gap-3 text-[12px] flex-wrap">
-                    {reviewModal.data.newCount > 0 && (
-                      <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
-                        <Plus className="w-3.5 h-3.5" />{reviewModal.data.newCount} new product{reviewModal.data.newCount === 1 ? '' : 's'} will be created
-                      </span>
-                    )}
-                    <span className="text-slate-600 dark:text-slate-300">{reviewModal.data.updateCount} updated</span>
-                  </div>
-                  {reviewModal.data.errors.length > 0 && (
-                    <div className="space-y-1">
-                      <div className="inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-400">
-                        <AlertCircle className="w-3.5 h-3.5" />{reviewModal.data.errors.length} error{reviewModal.data.errors.length === 1 ? '' : 's'}
-                      </div>
-                      <ul className="space-y-1">
-                        {reviewModal.data.errors.slice(0, 40).map((e, i) => (
-                          <li key={`e${i}`} className="text-[11.5px] text-slate-800 dark:text-slate-200 leading-snug">
-                            <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400">{e.mp}·{e.sku}</span> {e.message}
-                          </li>
-                        ))}
-                        {reviewModal.data.errors.length > 40 && <li className="text-[10.5px] text-tertiary">…and {reviewModal.data.errors.length - 40} more</li>}
-                      </ul>
-                    </div>
-                  )}
-                  {reviewModal.data.warnings.length > 0 && (
-                    <div className="space-y-1">
-                      <div className="inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
-                        <AlertTriangle className="w-3.5 h-3.5" />{reviewModal.data.warnings.length} warning{reviewModal.data.warnings.length === 1 ? '' : 's'}
-                      </div>
-                      <ul className="space-y-1">
-                        {reviewModal.data.warnings.slice(0, 40).map((w, i) => (
-                          <li key={`w${i}`} className="text-[11.5px] text-slate-700 dark:text-slate-300 leading-snug">
-                            <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400">{w.mp}·{w.sku}</span> {w.message}
-                          </li>
-                        ))}
-                        {reviewModal.data.warnings.length > 40 && <li className="text-[10.5px] text-tertiary">…and {reviewModal.data.warnings.length - 40} more</li>}
-                      </ul>
-                    </div>
-                  )}
-                  {reviewModal.data.errors.length === 0 && reviewModal.data.warnings.length === 0 && (
-                    <div className="text-[12px] text-emerald-700 dark:text-emerald-400 inline-flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4" />No issues — ready to publish.
-                    </div>
-                  )}
-                  {reviewModal.data.errors.length > 0 && (
-                    <label className="flex items-start gap-2 text-[11.5px] text-rose-700 dark:text-rose-400 cursor-pointer">
-                      <input type="checkbox" checked={reviewErrorAck} onChange={(e) => setReviewErrorAck(e.target.checked)} className="w-3.5 h-3.5 mt-0.5 accent-rose-600" />
-                      <span>
-                        I understand the {reviewModal.data.errors.length} error{reviewModal.data.errors.length === 1 ? '' : 's'} — publish anyway.
-                        Amazon validates authoritatively and reports per-SKU results.
-                      </span>
-                    </label>
-                  )}
-                  {reviewModal.data.warnings.length > 0 && (
-                    <label className="flex items-center gap-2 text-[11.5px] text-slate-700 dark:text-slate-300 cursor-pointer">
-                      <input type="checkbox" checked={reviewAck} onChange={(e) => setReviewAck(e.target.checked)} className="w-3.5 h-3.5" />
-                      I&apos;ve reviewed the {reviewModal.data.warnings.length} warning{reviewModal.data.warnings.length === 1 ? '' : 's'} and want to publish.
-                    </label>
-                  )}
-                </div>
-                <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-subtle dark:border-slate-800">
-                  <button type="button" onClick={() => reviewModal.resolve(false)} className="inline-flex items-center h-7 px-3 rounded text-[12px] border border-default dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
-                  <button type="button" onClick={() => reviewModal.resolve(true)}
-                    disabled={(reviewModal.data.errors.length > 0 && !reviewErrorAck) || (reviewModal.data.warnings.length > 0 && !reviewAck)}
-                    className="inline-flex items-center gap-1.5 h-7 px-3 rounded text-[12px] font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                    <Send className="w-3.5 h-3.5" />Publish to {reviewModal.data.markets.join(', ')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-          {/* History button moved to FlatFileIconToolbar via onHistoryClick */}
-          {/* P1.2 — Draft saved indicator */}
-          {lastSaveLabel && (
-            <span className="text-[10px] text-slate-400 dark:text-slate-500 whitespace-nowrap select-none" aria-live="polite">
-              {lastSaveLabel}
-            </span>
-          )}
-          {/* P1.3 — Column search / quick-jump (⌘⇧G) */}
-          <div className="relative">
+        </div>
+        {/* P8.1 — Feed sparkline: last 10 submissions as coloured dots */}
+        {submissionHistory.length > 0 && (() => {
+          const dots = submissionHistory.slice(-10)
+          return (
             <button
               type="button"
-              onClick={() => setColSearchOpen((o) => !o)}
-              className={cn('h-6 w-6 inline-flex items-center justify-center rounded flex-shrink-0 transition-colors',
-                colSearchOpen
-                  ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400'
-                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-slate-200')}
-              title="Jump to column (⌘⇧G)"
-              aria-label="Jump to column"
+              onClick={() => setHistoryOpen(true)}
+              title={`Last ${dots.length} submission${dots.length !== 1 ? 's' : ''} — click to open history`}
+              className="inline-flex items-center gap-px h-7 px-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              aria-label="Feed submission history sparkline"
             >
-              <Search className="w-3 h-3" />
-            </button>
-            {colSearchOpen && (
-              <div data-col-search className="absolute right-0 top-7 z-50 w-64 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl"
-                onKeyDown={(e) => { if (e.key === 'Escape') { setColSearchOpen(false); setColSearchQuery('') } }}>
-                <div className="px-2 py-1.5 border-b border-slate-100 dark:border-slate-800">
-                  <input
-                    autoFocus
-                    type="text"
-                    placeholder="Search columns…"
-                    value={colSearchQuery}
-                    onChange={(e) => setColSearchQuery(e.target.value)}
-                    className="w-full text-xs bg-transparent text-slate-800 dark:text-slate-200 placeholder:text-slate-400 outline-none"
-                  />
-                </div>
-                <div className="max-h-52 overflow-y-auto py-1">
-                  {(() => {
-                    const q = colSearchQuery.toLowerCase()
-                    const hits = allColumns
-                      .map((c, ci) => ({ c, ci }))
-                      .filter(({ c }) => !q ||
-                        c.labelEn.toLowerCase().includes(q) ||
-                        c.labelLocal.toLowerCase().includes(q) ||
-                        c.id.toLowerCase().includes(q),
-                      )
-                      .slice(0, 24)
-                    if (!hits.length) return <div className="px-3 py-2 text-xs text-slate-400">No columns found</div>
-                    return hits.map(({ c, ci }) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
-                        onClick={() => {
-                          requestAnimationFrame(() => {
-                            document.querySelector(`[data-ri="0"][data-ci="${ci}"]`)?.scrollIntoView({ block: 'nearest', inline: 'center' })
-                          })
-                          setColSearchOpen(false)
-                          setColSearchQuery('')
-                        }}
-                      >
-                        <span className="truncate flex-1">{c.labelEn}</span>
-                        {c.required && <span className="text-[9px] text-amber-500 flex-shrink-0">req</span>}
-                      </button>
-                    ))
-                  })()}
-                </div>
-              </div>
-            )}
-          </div>
-          {/* PE: keyboard shortcuts modal trigger */}
-          <button
-            type="button"
-            onClick={() => setShortcutsOpen(true)}
-            className="h-6 w-6 inline-flex items-center justify-center rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-slate-200 flex-shrink-0"
-            title="Keyboard shortcuts (?)"
-            aria-label="Keyboard shortcuts"
-          >
-            <Keyboard className="w-3 h-3" />
-          </button>
-        </div>
-
-        {/* ── Icon toolbar — shared with eBay via FlatFileIconToolbar ─ */}
-        <FlatFileIconToolbar
-          canUndo={history.length > 0}
-          canRedo={future.length > 0}
-          onUndo={undo}
-          onRedo={redo}
-
-          onCopy={() => setPushPanel((p) => p?.tab === 'copy' ? null : { tab: 'copy' })}
-          copyActive={pushPanel?.tab === 'copy'}
-          copyDisabled={!manifest || !rows.length}
-
-          onReplicate={() => setReplicateOpen(true)}
-          replicateDisabled={!manifest || !rows.length}
-          replicateActive={replicateOpen}
-
-          validationErrorCount={validErrorCount}
-          validationWarnCount={validWarnCount}
-          validationActive={showValidPanel}
-          onValidationClick={() => setShowValidPanel((o) => !o)}
-          validationDisabled={!manifest}
-
-          smartPasteEnabled={smartPasteEnabled}
-          onSmartPasteToggle={toggleSmartPaste}
-
-          showRowImages={showRowImages}
-          rowImageSize={imageSize as 24 | 32 | 48 | 64 | 96}
-          rowImagesDisabled={!manifest}
-          onRowImagesToggle={toggleRowImages}
-          onRowImageSizeChange={(s) => setImageSizeCore(s as 24 | 32 | 48 | 64 | 96)}
-
-          sortLevelCount={sortConfig.length}
-          sortPanelOpen={sortPanelOpen}
-          sortDisabled={!manifest || !rows.length}
-          onSortClick={() => setSortPanelOpen((o) => !o)}
-          sortPanel={
-            <>
-              {sortPanelOpen && (
-                <SortPanel
-                  rows={rows} groups={orderedGroups} initial={sortConfig}
-                  onApply={(levels) => { setSortConfig(levels); setSortPanelOpen(false) }}
-                  onClose={() => setSortPanelOpen(false)}
-                  footerExtra={
-                    <div className="px-4 py-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                          Auto-sync to other markets
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => toggleMarketSync(mp)}
-                          title={marketSync[mp]
-                            ? `ON — changes on ${mp} propagate automatically. Click to make ${mp} independent.`
-                            : `OFF — click to re-enable auto-propagation`}
-                          className={cn(
-                            'text-[10px] px-2 py-0.5 rounded font-medium transition-colors border',
-                            marketSync[mp]
-                              ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400'
-                              : 'bg-slate-50 border-slate-200 text-slate-400 dark:bg-slate-800 dark:border-slate-700',
-                          )}
-                        >
-                          {marketSync[mp] ? 'ON' : 'OFF'}
-                        </button>
-                      </div>
-                      <div>
-                        <button
-                          type="button"
-                          onClick={() => { setSortPanelOpen(false); setApplyPanelOpen(true) }}
-                          className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 font-medium"
-                        >
-                          Apply to specific markets…
-                        </button>
-                      </div>
-                    </div>
-                  }
-                />
-              )}
-              {applyPanelOpen && (
-                <ApplyToPanel
-                  currentMarket={mp}
-                  allMarkets={ALL_MARKETS}
-                  marketSync={marketSync}
-                  onToggleSync={toggleMarketSync}
-                  onApplyNow={applyOrderToMarkets}
-                  onClose={() => setApplyPanelOpen(false)}
-                />
-              )}
-            </>
-          }
-
-          findReplaceOpen={findReplaceOpen}
-          onFindReplaceClick={() => setFindReplaceOpen((o) => !o)}
-          findReplaceDisabled={!manifest}
-
-          conditionalEnabledCount={cfRules.filter((r) => r.enabled).length}
-          conditionalOpen={cfOpen}
-          onConditionalClick={() => setCfOpen((o: boolean) => !o)}
-          conditionalDisabled={!manifest}
-
-          onColumnsClick={() => setColumnsOpen(true)}
-          columnsActive={columnsOpen}
-
-          aiBulkSelectedCount={selectedRows.size}
-          aiBulkDisabled={!manifest}
-          onAiBulkClick={() => setAiModalOpen(true)}
-
-          aiAssistantOpen={aiPanelOpen}
-          onAiAssistantClick={manifest ? () => setAiPanelOpen((o) => !o) : undefined}
-
-          slotAfterReplicate={
-            <>
-              {/* Pull from Amazon — full attribute pull (in-memory, undoable via ⌘Z) */}
-              <div className="relative">
-                <SharedTbBtn
-                  icon={<Download className="w-3.5 h-3.5" />}
-                  title={`Pull from Amazon ${marketplace} — full attribute pull, undoable with ⌘Z. Does not touch the database until you click Save.`}
-                  onClick={() => setPullPanelOpen((o) => !o)}
-                  disabled={!manifest || pulling || !rows.length}
-                  active={pullPanelOpen}
-                />
-                {pullPanelOpen && (
-                  <PullFromAmazonPanel
-                    selectedCount={selectedRows.size}
-                    visibleCount={realDisplayRows.length}
-                    totalCount={rows.length}
-                    currentMarket={marketplace}
-                    pulling={pulling}
-                    onPull={handlePullFromAmazon}
-                    onClose={() => setPullPanelOpen(false)}
-                  />
-                )}
-              </div>
-              {/* P8.1 — Feed sparkline: last 10 submissions as coloured dots */}
-              {submissionHistory.length > 0 && (() => {
-                const dots = submissionHistory.slice(-10)
+              {dots.map((sub, i) => {
+                const isTerminalOk = sub.status === 'DONE' && (sub.errorCount ?? 0) === 0
+                const isTerminalWarn = sub.status === 'DONE' && (sub.errorCount ?? 0) > 0
+                const isFatal = sub.status === 'FATAL' || sub.status === 'CANCELLED'
+                const cls = isFatal ? 'bg-red-500 dark:bg-red-400'
+                  : isTerminalWarn ? 'bg-amber-400 dark:bg-amber-300'
+                  : isTerminalOk ? 'bg-emerald-500 dark:bg-emerald-400'
+                  : 'bg-slate-300 dark:bg-slate-600 animate-pulse'
                 return (
-                  <button
-                    type="button"
-                    onClick={() => setHistoryOpen(true)}
-                    title={`Last ${dots.length} submission${dots.length !== 1 ? 's' : ''} — click to open history`}
-                    className="inline-flex items-center gap-px h-7 px-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    aria-label="Feed submission history sparkline"
-                  >
-                    {dots.map((s, i) => {
-                      const isTerminalOk = s.status === 'DONE' && (s.errorCount ?? 0) === 0
-                      const isTerminalWarn = s.status === 'DONE' && (s.errorCount ?? 0) > 0
-                      const isFatal = s.status === 'FATAL' || s.status === 'CANCELLED'
-                      const cls = isFatal ? 'bg-red-500 dark:bg-red-400'
-                        : isTerminalWarn ? 'bg-amber-400 dark:bg-amber-300'
-                        : isTerminalOk ? 'bg-emerald-500 dark:bg-emerald-400'
-                        : 'bg-slate-300 dark:bg-slate-600 animate-pulse'
-                      return (
-                        <span
-                          key={`${s.id}-${i}`}
-                          className={`inline-block w-1.5 h-4 rounded-sm ${cls}`}
-                          title={`${s.market} · ${s.status}${s.errorCount ? ` · ${s.errorCount} errors` : ''}`}
-                        />
-                      )
-                    })}
-                  </button>
-                )
-              })()}
-              {/* History — same slot/position as eBay */}
-              <SharedTbBtn
-                icon={<History className="w-3.5 h-3.5" />}
-                title="History — push submissions, pull log and version history (⌘H)"
-                onClick={() => setHistoryOpen(true)}
-                active={historyOpen}
-              />
-            </>
-          }
-
-          slotAfterSmartPaste={
-            <>
-              {/* IN.1 — Override badges toggle */}
-              <SharedTbBtn
-                icon={<GitBranch className="w-3.5 h-3.5" />}
-                title={showOverrideBadges ? 'Hide field-override indicators' : 'Show field-override indicators (amber ⎇ badge on rows with channel overrides)'}
-                onClick={() => setShowOverrideBadges((o) => !o)}
-                active={showOverrideBadges}
-              />
-              {/* CG — Group by mode (view-only grouping) */}
-              <div
-                className="flex items-center gap-0.5 ml-1 pl-1.5 border-l border-slate-200 dark:border-slate-700"
-                title="Group rows by variation family (default), fulfillment (FBA/FBM), or your custom groups. View-only — never affects the feed."
-              >
-                <span className="text-[10px] uppercase tracking-wide text-slate-400 mr-0.5 select-none">Group</span>
-                {([['family', 'Family'], ['fulfillment', 'FBA/FBM'], ['custom', 'Custom']] as const).map(([val, label]) => (
-                  <button
-                    key={val}
-                    type="button"
-                    onClick={() => setGroupMode(val)}
-                    aria-pressed={groupMode === val}
-                    className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${
-                      groupMode === val
-                        ? 'bg-blue-600 text-white'
-                        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-                {groupMode !== 'family' && (() => {
-                  const gids = renderRows.flatMap((i) => (i.kind === 'header' ? [i.groupId] : []))
-                  const allCollapsed = gids.length > 0 && gids.every((id) => collapsedGroups.has(id))
-                  return (
-                    <button
-                      type="button"
-                      title={allCollapsed ? 'Expand all groups' : 'Collapse all groups'}
-                      onClick={() => setCollapsedGroups(allCollapsed ? new Set() : new Set(gids))}
-                      className="ml-1 px-1 py-0.5 text-[10px] rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
-                    >
-                      {allCollapsed ? 'Expand all' : 'Collapse all'}
-                    </button>
-                  )
-                })()}
-                {groupMode === 'custom' && (
-                  <button
-                    type="button"
-                    onClick={() => setManageGroupsOpen(true)}
-                    onMouseEnter={warmManageGroupsModal}
-                    onFocus={warmManageGroupsModal}
-                    className="ml-1 px-1 py-0.5 text-[10px] rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
-                  >
-                    Manage
-                  </button>
-                )}
-              </div>
-              {/* IN.2 — Cascade buttons toggle */}
-              <SharedTbBtn
-                icon={<GitFork className="w-3.5 h-3.5" />}
-                title={showCascadeButtons ? 'Hide cascade-to-siblings buttons' : 'Show cascade-to-siblings buttons (⎇↓ on each row)'}
-                onClick={() => setShowCascadeButtons((o) => !o)}
-                active={showCascadeButtons}
-              />
-              {/* IN.2 — Cascade: reset all visible rows back to master */}
-              <SharedTbBtn
-                icon={<RotateCcw className="w-3.5 h-3.5" />}
-                title="Reset all channel overrides to master values (sets followMaster=true on all visible rows)"
-                onClick={async () => {
-                  const overrideRows = rows.filter((r) => {
-                    const fs = r._fieldStates as any
-                    return fs && Object.values(fs).some((v) => v === 'OVERRIDE')
-                  })
-                  if (!overrideRows.length) return
-                  const ids = overrideRows.map((r) => r._listingId as string).filter(Boolean)
-                  await Promise.all(
-                    ids.map((id) =>
-                      fetch(`${getBackendUrl()}/api/listings/${id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          followMasterPrice: true, followMasterTitle: true,
-                          followMasterDescription: true, followMasterQuantity: true,
-                          followMasterBulletPoints: true,
-                        }),
-                      }),
-                    ),
-                  )
-                  void loadData(marketplace, productType, false, true)
-                }}
-                disabled={!rows.length}
-              />
-              {/* Scope: This file / All products — hidden in family drill-in view */}
-              {!familyId && (
-                <div
-                  className="flex items-center gap-0.5 ml-1 pl-1.5 border-l border-slate-200 dark:border-slate-700"
-                  title="This file = only SKUs listed on this Amazon market. All products = full catalog."
-                >
-                  <span className="text-[10px] uppercase tracking-wide text-slate-400 mr-0.5 select-none">Scope</span>
-                  {(['listed', 'all'] as const).map((val) => (
-                    <button
-                      key={val}
-                      type="button"
-                      onClick={() => setScope(val)}
-                      aria-pressed={scope === val}
-                      className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${
-                        scope === val
-                          ? 'bg-blue-600 text-white'
-                          : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                      }`}
-                    >
-                      {val === 'listed' ? 'This file' : 'All products'}
-                    </button>
-                  ))}
-                  {scope === 'listed' && (
-                    <span className="ml-1 text-[10px] text-slate-400 dark:text-slate-500 whitespace-nowrap select-none">
-                      Showing Amazon {marketplace} only
-                    </span>
-                  )}
-                </div>
-              )}
-            </>
-          }
-        />
-
-        {/* ── Bar 3: Marketplace · Product type · Search ────── */}
-        <div className="px-3 py-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 font-medium">Market</span>
-            <div className="flex gap-0.5">
-              {MARKETPLACES.map((m, idx) => {
-                const isActive = marketplace === m
-                const isSwitching = isActive && loading
-                const dirtyCount = otherMarketsDirtyCount[m] ?? 0
-                const shortcutHint = idx < 9 ? ` (Alt+${idx + 1})` : ''
-                return (
-                  <button key={m} type="button"
-                    onClick={() => navigateTo(m, productType)}
-                    onMouseEnter={() => { if (!isActive) void prefetch(m, productType) }}
-                    onFocus={() => { if (!isActive) void prefetch(m, productType) }}
-                    aria-pressed={isActive}
-                    aria-label={`Switch to ${m} marketplace${shortcutHint}${isSwitching ? ' (loading)' : ''}${dirtyCount > 0 ? ` (${dirtyCount} unsaved)` : ''}`}
-                    title={`${m} marketplace${shortcutHint}${dirtyCount > 0 ? ` — ${dirtyCount} unsaved change${dirtyCount === 1 ? '' : 's'}` : ''}`}
-                    className={cn('inline-flex items-center text-xs font-medium px-2 py-0.5 rounded border transition-colors',
-                      isActive
-                        ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
-                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-400')}>
-                    {isSwitching && <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" aria-hidden />}
-                    {m}
-                    {(() => {
-                      const count = isActive ? dirtyRows.length : dirtyCount
-                      if (!count) return null
-                      return (
-                        <span
-                          className={cn(
-                            'ml-1 inline-flex items-center justify-center min-w-[14px] h-3.5 px-1 rounded-sm text-[9px] font-semibold leading-none',
-                            isActive
-                              ? 'bg-amber-500 text-white'
-                              : 'bg-amber-500 text-white',
-                          )}
-                          title={`${count} unsaved change${count === 1 ? '' : 's'}${isActive ? '' : ` on ${m}`}`}
-                        >
-                          {count}
-                        </span>
-                      )
-                    })()}
-                    {isActive && lastSwitchMs !== null && (
-                      <span
-                        className="ml-1 text-[8px] font-mono leading-none text-slate-400 dark:text-slate-500 tabular-nums"
-                        title={`Market switch took ${lastSwitchMs}ms`}
-                      >
-                        {lastSwitchMs < 1000 ? `${lastSwitchMs}ms` : `${(lastSwitchMs / 1000).toFixed(1)}s`}
-                      </span>
-                    )}
-                  </button>
+                  <span
+                    key={`${sub.id}-${i}`}
+                    className={`inline-block w-1.5 h-4 rounded-sm ${cls}`}
+                    title={`${sub.market} · ${sub.status}${sub.errorCount ? ` · ${sub.errorCount} errors` : ''}`}
+                  />
                 )
               })}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* BN.3.1 — Categories in this sheet: replaces Product Type dropdown + "+ Add category".
-                Chips derived from productTypesInUse(rows); clicking a chip filters columns to that type. */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400 font-medium">Categories in this sheet</span>
-              <div className="flex items-center gap-1 flex-wrap">
-                {productTypesInUse(rows).length === 0 ? (
-                  <span className="text-[11px] text-slate-400 italic">none yet — select rows and Set category</span>
-                ) : (
-                  <>
-                    {isUnionMode && (
-                      <button type="button" onClick={() => setFilterType(null)}
-                        className={cn('px-1.5 py-0.5 rounded text-[11px] font-semibold border transition-colors',
-                          !filterType ? 'bg-indigo-100 text-indigo-700 border-indigo-300 dark:bg-indigo-900/40 dark:text-indigo-300' : 'border-slate-200 text-slate-500 hover:border-indigo-400')}>
-                        All
-                      </button>
-                    )}
-                    {productTypesInUse(rows).map((t) => (
-                      <button key={t} type="button" onClick={() => setFilterType((f) => (f === t ? null : t))}
-                        className={cn('px-1.5 py-0.5 rounded text-[11px] font-semibold border transition-colors',
-                          filterType === t ? 'bg-indigo-100 text-indigo-700 border-indigo-300 dark:bg-indigo-900/40 dark:text-indigo-300' : 'border-slate-200 text-slate-500 hover:border-indigo-400')}>
-                        {t}
-                      </button>
-                    ))}
-                  </>
-                )}
-              </div>
-              <Button size="sm" variant="ghost" onClick={() => void loadData(marketplace, productType, true)} loading={loading}
-                title="Refresh schema from Amazon — updates columns/groups, keeps row edits">
-                <RefreshCw className="w-3 h-3 mr-1" />Refresh schema
-              </Button>
-            </div>
-            {/* BN.2.2 — Set category: bulk-assign product type + browse node to selected rows. */}
-            {/* P-1: gate + label on selectedRealCount (non-ghost) so they match the modal's apply count */}
-            {selectedRealCount > 0 && (
-              <Button size="sm" variant="secondary"
-                onMouseEnter={warmSetCategoryModal}
-                onFocus={warmSetCategoryModal}
-                onClick={() => setShowSetCategory(true)}>
-                Set category ({selectedRealCount})
-              </Button>
-            )}
-            {/* FM Phase 3/4 — bulk Follow/Pinned/Buffer moved into the Edit menu (Bar 1) to keep the toolbar uncluttered. */}
-          </div>
+            </button>
+          )
+        })()}
+        {/* History — same slot/position as eBay */}
+        <SharedTbBtn
+          icon={<History className="w-3.5 h-3.5" />}
+          title="History — push submissions, pull log and version history"
+          onClick={() => setHistoryOpen(true)}
+          active={historyOpen}
+        />
+      </>
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marketplace, manifest, pulling, pullPanelOpen, submissionHistory, historyOpen, handlePullFromAmazon, scheduleAutosave, syncSheetTypesFromRows, computeStorageType])
 
-          {/* Search */}
-          {manifest && (
-            <div className="flex items-center gap-1 ml-auto">
-              <div className="relative flex items-center">
-                <Search className="absolute left-2 w-3 h-3 text-slate-400 pointer-events-none" />
-                <input ref={searchRef} type="text" value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Escape' && setSearchQuery('')}
-                  placeholder={searchMode === 'rows' ? 'Search rows…' : 'Search columns…'}
-                  className="pl-6 pr-6 py-0.5 text-xs border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 w-44" />
-                {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} className="absolute right-1.5 text-slate-400 hover:text-slate-600">
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-              <div className="flex border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
-                <button type="button" onClick={() => setSearchMode('rows')}
-                  className={cn('text-xs px-2 py-0.5 transition-colors', searchMode === 'rows'
-                    ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
-                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800')}
-                  title="Filter rows">Rows</button>
-                <button type="button" onClick={() => setSearchMode('columns')}
-                  className={cn('text-xs px-2 py-0.5 transition-colors border-l border-slate-200 dark:border-slate-700', searchMode === 'columns'
-                    ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
-                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800')}
-                  title="Filter columns">Cols</button>
-              </div>
-              {searchQuery && (
-                <span className="text-xs text-slate-400 tabular-nums whitespace-nowrap">
-                  {searchMode === 'rows' ? `${realDisplayRows.length}/${realRowCount}` : `${allColumns.length} col${allColumns.length !== 1 ? 's' : ''}`}
-                </span>
-              )}
-              {/* BF.3 — extended row filter */}
-              {filterPanelMounted && (
-                <AmazonFFFilterPanelLazy
-                  open={filterPanelOpen}
-                  onOpenChange={setFilterPanelOpen}
-                  value={ffFilter as AmazonFFFilterState}
-                  onChange={setFFFilter}
-                />
-              )}
-              {/* BM.1 — saved views */}
-              <FFSavedViews
-                currentState={{
-                  closedGroups: [...closedGroups],
-                  groupOrder: [...groupOrder],
-                  ffFilter,
-                  sortConfig,
-                  cfRules,
-                  frozenColCount,
-                }}
-                onApply={(state: FFViewState) => {
-                  applyGroupSettings(new Set(state.closedGroups), state.groupOrder ?? [])
-                  setFFFilter(state.ffFilter)
-                  setSortConfig(state.sortConfig)
-                  setCfRules(state.cfRules)
-                  setFrozenColCount(state.frozenColCount)
-                }}
-                groups={orderedGroups.map((g) => ({
-                  id: g.id,
-                  label: (g as any).labelEn ?? (g as any).label ?? g.id,
-                }))}
-              />
-            </div>
-          )}
-
-          {/* ColumnGroupModal — replaces the old draggable badge bar */}
-          <ColumnGroupModal
-            open={columnsOpen}
-            onClose={() => setColumnsOpen(false)}
-            groups={orderedGroups.map((g) => ({
-              id: g.id,
-              label: (g as any).labelEn ?? (g as any).label ?? g.id,
-              color: g.color,
-              columns: g.columns.map((c) => c.id),
-              visible: !closedGroups.has(g.id),
-            }))}
-            onGroupsChange={(groups) => {
-              const nextClosed = new Set(groups.filter((g) => !g.visible).map((g) => g.id))
-              const nextOrder = groups.map((g) => g.id)
-              applyGroupSettings(nextClosed, nextOrder)
-            }}
-          />
-        </div>
-
-        {/* ── Badge bar: column group chips (drag-to-reorder, click-to-toggle) ── */}
-        {orderedGroups.length > 0 && (
-          <div className="px-3 py-1 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1 flex-wrap">
-            <span className="text-xs text-slate-400 mr-1">Columns:</span>
-            {orderedGroups.map((g) => {
-              const open = !closedGroups.has(g.id)
-              const isDragging = draggingGroupId === g.id
-              const c = gColor(g.color)
-              return (
-                <button key={g.id} type="button" draggable
-                  onDragStart={(e) => { setDraggingGroupId(g.id); e.dataTransfer.effectAllowed = 'move' }}
-                  onDragEnd={() => setDraggingGroupId(null)}
-                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    if (!draggingGroupId || draggingGroupId === g.id) return
-                    const ids = orderedGroups.map((x) => x.id)
-                    const from = ids.indexOf(draggingGroupId); const to = ids.indexOf(g.id)
-                    const next = [...ids]; next.splice(from, 1); next.splice(to, 0, draggingGroupId)
-                    applyGroupSettings(closedGroups, next)
-                    setDraggingGroupId(null)
-                  }}
-                  onClick={() => {
-                    if (open && orderedGroups.filter((x) => !closedGroups.has(x.id)).length <= 1) return
-                    const n = new Set(closedGroups); open ? n.add(g.id) : n.delete(g.id)
-                    applyGroupSettings(n, groupOrder)
-                  }}
-                  title={g.labelEn}
-                  className={cn('inline-flex items-center gap-1 h-5 px-1.5 text-xs rounded border transition-all cursor-grab active:cursor-grabbing select-none',
-                    c.badge, open ? 'opacity-100' : 'opacity-40 hover:opacity-65',
-                    isDragging && 'opacity-30 scale-95')}>
-                  <ChevronRight className={cn('w-2.5 h-2.5 transition-transform', open && 'rotate-90')} />
-                  <span className="font-medium">{g.labelEn}</span>
-                  <span className="opacity-60 tabular-nums">{g.columns.length}</span>
-                </button>
-              )
-            })}
-            {(groupOrder.length > 0 || closedGroups.size > 0) && (
-              <button type="button"
-                onClick={() => applyGroupSettings(new Set(), [])}
-                className="text-xs text-slate-400 hover:text-slate-600 px-1" title="Reset group order and visibility">↺</button>
+  // ── Slot: view toggles + scope (captures ctx.onReload for page reloads) ──
+  const renderToolbarImport = useCallback((ctx: ToolbarImportCtx) => {
+    onReloadCtxRef.current = ctx.onReload
+    return (
+      <>
+        {/* IN.1 — Override badges toggle */}
+        <SharedTbBtn
+          icon={<GitBranch className="w-3.5 h-3.5" />}
+          title={showOverrideBadges ? 'Hide field-override indicators' : 'Show field-override indicators (amber ⎇ badge on rows with channel overrides)'}
+          onClick={() => setShowOverrideBadges((o) => !o)}
+          active={showOverrideBadges}
+        />
+        {/* IN.2 — Cascade buttons toggle */}
+        <SharedTbBtn
+          icon={<GitFork className="w-3.5 h-3.5" />}
+          title={showCascadeButtons ? 'Hide cascade-to-siblings buttons' : 'Show cascade-to-siblings buttons (⎇↓ on each row)'}
+          onClick={() => setShowCascadeButtons((o) => !o)}
+          active={showCascadeButtons}
+        />
+        {/* IN.2 — Reset all visible overrides back to master */}
+        <SharedTbBtn
+          icon={<RotateCcw className="w-3.5 h-3.5" />}
+          title="Reset all channel overrides to master values (sets followMaster=true on all visible rows)"
+          onClick={async () => {
+            const overrideRows = ctx.rows.filter((r) => {
+              const fs = (r as Row)._fieldStates as any
+              return fs && Object.values(fs).some((v) => v === 'OVERRIDE')
+            })
+            if (!overrideRows.length) return
+            const ids = overrideRows.map((r) => (r as Row)._listingId as string).filter(Boolean)
+            await Promise.all(
+              ids.map((id) =>
+                fetch(`${getBackendUrl()}/api/listings/${id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    followMasterPrice: true, followMasterTitle: true,
+                    followMasterDescription: true, followMasterQuantity: true,
+                    followMasterBulletPoints: true,
+                  }),
+                }),
+              ),
+            )
+            reloadGridFromServer()
+          }}
+          disabled={!ctx.rows.length}
+        />
+        {/* Scope: This file / All products — hidden in family drill-in view */}
+        {!familyId && (
+          <div
+            className="flex items-center gap-0.5 ml-1 pl-1.5 border-l border-slate-200 dark:border-slate-700"
+            title="This file = only SKUs listed on this Amazon market. All products = full catalog."
+          >
+            <span className="text-[10px] uppercase tracking-wide text-slate-400 mr-0.5 select-none">Scope</span>
+            {(['listed', 'all'] as const).map((val) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setScope(val)}
+                aria-pressed={scope === val}
+                className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${
+                  scope === val
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                {val === 'listed' ? 'This file' : 'All products'}
+              </button>
+            ))}
+            {scope === 'listed' && (
+              <span className="ml-1 text-[10px] text-slate-400 dark:text-slate-500 whitespace-nowrap select-none">
+                Showing Amazon {marketplace} only
+              </span>
             )}
           </div>
         )}
+      </>
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showOverrideBadges, showCascadeButtons, scope, familyId, marketplace, reloadGridFromServer])
 
-        {/* Error — FF-MS.6: when a load failed, identifies the failed market,
-            tailors copy per status code, and offers an inline Retry. For
-            operation errors (import/submit/pull) it falls back to a plain
-            message + dismiss. */}
+  // ── File menu extras (grid already has Reload + workbook) ────────────────
+  const fileMenuItems = useMemo(() => [
+    { label: 'Smart import (CSV/Excel/JSON)…', icon: <Wand2 className="w-3.5 h-3.5" />, onClick: () => { setImportInitialFile(null); setImportOpen(true) }, disabled: !effectiveManifest },
+    { label: 'Import TSV…', icon: <Upload className="w-3.5 h-3.5" />, onClick: () => { fileInputRef.current?.click() } },
+    { separator: true, label: '' },
+    { label: 'Export as TSV (Amazon) — selected rows when any are ticked', icon: <Download className="w-3.5 h-3.5" />, onClick: () => void exportFile('tsv'), disabled: !manifest },
+    { label: 'Export as CSV', icon: <Download className="w-3.5 h-3.5" />, onClick: () => void exportFile('csv'), disabled: !manifest },
+    { label: 'Export as Excel (.xlsx)', icon: <Download className="w-3.5 h-3.5" />, onClick: () => void exportFile('xlsx'), disabled: !manifest },
+    { separator: true, label: '' },
+    { label: 'Version history…', icon: <Clock className="w-3.5 h-3.5" />, onClick: () => setHistoryOpen(true), disabled: !manifest },
+    { separator: true, label: '' },
+    { label: 'Market coverage…', icon: <Globe className="w-3.5 h-3.5" />, onClick: () => setCoverageModalOpen(true), disabled: !manifest },
+    { label: 'Listing health…', icon: <Activity className="w-3.5 h-3.5" />, onClick: () => setHealthModalOpen(true), disabled: !manifest },
+  ], [effectiveManifest, manifest, exportFile])
+
+  // ── Edit menu extras (factory — reads live rows/selection) ───────────────
+  const editMenuItems = useCallback((ctx: ToolbarFetchCtx) => {
+    const rows = ctx.rows as Row[]
+    const selected = rows.filter((r) => !r._ghost && ctx.selectedRows.has(r._rowId as string))
+    const followEligibleCount = selected.filter((r) => !isFbaRow(r)).length
+    const bufferEligibleCount = selected.filter((r) =>
+      (String(r.follow) === 'Follow' || String(r.follow) === 'Pinned') && !isFbaRow(r)).length
+    const pinnedCount = rows.filter((r) => !r._ghost && r.follow === 'Pinned').length
+    return [
+      { separator: true },
+      { label: 'Copy to market…', icon: <Copy className="w-3.5 h-3.5" />, onClick: () => setPushPanel((p) => p ? null : { tab: 'copy' }), disabled: !manifest || !rows.length },
+      { label: 'Translate values…', icon: <ArrowRightLeft className="w-3.5 h-3.5" />, onClick: () => setPushPanel((p) => p ? null : { tab: 'translate' }), disabled: !manifest || !rows.length },
+      { separator: true },
+      // FM Phase 3/4 — bulk Follow/Pinned/Buffer on the selected rows (active market).
+      { label: `Set Follow${followEligibleCount ? ` (${followEligibleCount})` : ''}`, icon: <RefreshCw className="w-3.5 h-3.5" />, onClick: () => void bulkSetFollow(true), disabled: followEligibleCount === 0 },
+      { label: `Set Pinned${followEligibleCount ? ` (${followEligibleCount})` : ''}`, icon: <Pin className="w-3.5 h-3.5" />, onClick: () => void bulkSetFollow(false), disabled: followEligibleCount === 0 },
+      { label: `Set buffer…${bufferEligibleCount ? ` (${bufferEligibleCount})` : ''}`, icon: <Layers className="w-3.5 h-3.5" />, onClick: openBufferModal, disabled: bufferEligibleCount === 0 },
+      { separator: true },
+      { label: `Select all Pinned${pinnedCount ? ` (${pinnedCount})` : ''}`, onClick: selectAllPinned, disabled: pinnedCount === 0 },
+      { separator: true },
+      // FF-MS — market sync: copy the current row order + sort to other markets.
+      { label: 'Apply order to markets…', icon: <GripVertical className="w-3.5 h-3.5" />, onClick: () => setApplyPanelOpen(true), disabled: !rows.length },
+    ]
+  }, [manifest, bulkSetFollow, openBufferModal, selectAllPinned])
+
+  // ── Slot: push extras (feed badges · sync chip · Submit) ─────────────────
+  const renderPushExtras = useCallback(({ rows, selectedRows: gridSelected }: PushExtrasCtx) => {
+    const realRows = (rows as Row[]).filter((r) => !r._ghost)
+    const publishable = publishableOf(rows as Row[])
+    return (
+      <>
+        {/* Feed status badges (FFS.5 — error-aware + terminal-correct) */}
+        {feedEntries.length > 0 && (
+          <div className="flex items-center gap-1">
+            {feedEntries.map((e) => {
+              const errs = feedErrorCount(e.results)
+              const done = e.status === 'DONE'
+              const failed = e.status === 'FATAL' || e.status === 'CANCELLED'
+              const cls = failed || (done && errs > 0)
+                ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800'
+                : done
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800'
+                : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800'
+              const label = done && errs > 0
+                ? `${e.status} · ${errs} error${errs === 1 ? '' : 's'}`
+                : (e.status ?? '…')
+              const inFlight = !done && !failed
+              return (
+                <span key={e.market} title={e.error ?? label}
+                  className={cn('inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full border', cls)}>
+                  {inFlight && (
+                    <span className="relative flex h-1.5 w-1.5 flex-shrink-0">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500" />
+                    </span>
+                  )}
+                  {e.market}: {label}
+                </span>
+              )
+            })}
+            {/* Always available — re-check even after DONE to re-verify the report */}
+            <Button size="sm" variant="ghost" onClick={pollAllFeeds} loading={polling}>
+              <RefreshCw className="w-3 h-3 mr-1" />Check
+            </Button>
+          </div>
+        )}
+
+        {syncStatus !== 'idle' && (
+          <span className={cn(
+            'text-[11px] flex items-center gap-1 flex-shrink-0 transition-opacity',
+            syncStatus === 'syncing' && 'text-slate-400',
+            syncStatus === 'synced'  && 'text-emerald-600 dark:text-emerald-400',
+            syncStatus === 'error'   && 'text-red-500 dark:text-red-400',
+          )}>
+            {syncStatus === 'syncing' && <><RefreshCw className="w-3 h-3 animate-spin" />Syncing…</>}
+            {syncStatus === 'synced'  && <><CheckCircle2 className="w-3 h-3" />Synced</>}
+            {syncStatus === 'error'   && <>⚠ Sync failed</>}
+          </span>
+        )}
+        {pullProgress && (
+          <span className="text-[11px] flex items-center gap-1 flex-shrink-0 text-blue-600 dark:text-blue-400">
+            <RefreshCw className="w-3 h-3 animate-spin" />
+            Pulling {pullProgress.progress}/{pullProgress.total || '?'} from {marketplace}…
+          </span>
+        )}
+        {pullResult && !pullProgress && (
+          <span className="text-[11px] flex items-center gap-1 flex-shrink-0 text-emerald-600 dark:text-emerald-400">
+            <CheckCircle2 className="w-3 h-3" />
+            Pulled {pullResult.pulled}
+            {pullResult.skipped > 0 && ` · ${pullResult.skipped} not on ${marketplace}`}
+            {pullResult.failed > 0 && ` · ${pullResult.failed} failed`}
+            {' · ⌘Z to undo'}
+          </span>
+        )}
+
+        {/* PD.1 — publish-mode truth, right where you publish. */}
+        <PublishModeBadge channel="amazon" />
+
+        {/* Submit to Amazon */}
+        <div className="relative">
+          <Button size="sm" onClick={() => setSubmitPanelOpen((o) => !o)}
+            disabled={submitting || loading} loading={submitting}
+            className={submitPanelOpen ? 'bg-blue-700' : ''}>
+            <Send className="w-3.5 h-3.5 mr-1.5" />Submit to Amazon{publishable.length > 0 && ` (${publishable.length})`}
+          </Button>
+          {submitPanelOpen && (
+            <SubmitToAmazonPanel currentMarket={marketplace} productType={productType}
+              familyId={familyId} currentDirtyRows={publishable}
+              currentSelectedRows={realRows.filter((r) => gridSelected.has(r._rowId as string))}
+              currentAllRows={realRows}
+              getMarketRows={(mp) => loadSavedRows(mp, productType) ?? []}
+              onSubmit={handleSubmitToMarkets} onClose={() => setSubmitPanelOpen(false)} />
+          )}
+        </div>
+
+        {/* P1.2 — Draft saved indicator */}
+        {lastSaveLabel && (
+          <span className="text-[10px] text-slate-400 dark:text-slate-500 whitespace-nowrap select-none" aria-live="polite">
+            {lastSaveLabel}
+          </span>
+        )}
+      </>
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feedEntries, polling, pollAllFeeds, syncStatus, pullProgress, pullResult, marketplace, productType, familyId, submitting, loading, submitPanelOpen, handleSubmitToMarkets, lastSaveLabel])
+
+  // ── Toolbar trailing: column quick-jump (⌘⇧G) ────────────────────────────
+  const toolbarTrailing = (
+    <div className="relative">
+      <SharedTbBtn
+        icon={<Search className="w-3.5 h-3.5" />}
+        title="Jump to column (⌘⇧G)"
+        onClick={() => setColSearchOpen((o) => !o)}
+        active={colSearchOpen}
+      />
+      {colSearchOpen && (
+        <div data-col-search className="absolute right-0 top-8 z-50 w-64 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setColSearchOpen(false); setColSearchQuery('') } }}>
+          <div className="px-2 py-1.5 border-b border-slate-100 dark:border-slate-800">
+            <input
+              autoFocus
+              type="text"
+              placeholder="Search columns…"
+              value={colSearchQuery}
+              onChange={(e) => setColSearchQuery(e.target.value)}
+              className="w-full text-xs bg-transparent text-slate-800 dark:text-slate-200 placeholder:text-slate-400 outline-none"
+            />
+          </div>
+          <div className="max-h-52 overflow-y-auto py-1">
+            {(() => {
+              const q = colSearchQuery.toLowerCase()
+              const hits = visibleGridColumns
+                .map((c, ci) => ({ c, ci }))
+                .filter(({ c }) => !q || c.label.toLowerCase().includes(q) || c.id.toLowerCase().includes(q))
+                .slice(0, 24)
+              if (!hits.length) return <div className="px-3 py-2 text-xs text-slate-400">No columns found</div>
+              return hits.map(({ c, ci }) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
+                  onClick={() => {
+                    requestAnimationFrame(() => {
+                      document.querySelector(`[data-ri="0"][data-ci="${ci}"]`)?.scrollIntoView({ block: 'nearest', inline: 'center' })
+                    })
+                    setColSearchOpen(false)
+                    setColSearchQuery('')
+                  }}
+                >
+                  <span className="truncate flex-1">{c.label}</span>
+                  {c.required && <span className="text-[9px] text-amber-500 flex-shrink-0">req</span>}
+                </button>
+              ))
+            })()}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
+  // ── Slot: Bar 3 left — market strip · category chips · Set category ──────
+  const renderBar3Left = useCallback(() => {
+    const liveRows = latestRowsRef.current
+    const activeDirty = liveRows.filter((r) => r._dirty || r._isNew).length
+    const typesInUse = productTypesInUse(liveRows)
+    const selectedRealCount = liveRows.filter((r) => !r._ghost && latestSelectedRowsRef.current.has(r._rowId as string)).length
+    return (
+      <>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400 font-medium">Market</span>
+          <div className="flex gap-0.5">
+            {MARKETPLACES.map((m, idx) => {
+              const isActive = marketplace === m
+              const isSwitching = isActive && loading
+              const dirtyCount = otherMarketsDirtyCount[m] ?? 0
+              const shortcutHint = idx < 9 ? ` (Alt+${idx + 1})` : ''
+              return (
+                <button key={m} type="button"
+                  onClick={() => navigateTo(m, productType)}
+                  onMouseEnter={() => { if (!isActive) void prefetch(m, productType) }}
+                  onFocus={() => { if (!isActive) void prefetch(m, productType) }}
+                  aria-pressed={isActive}
+                  aria-label={`Switch to ${m} marketplace${shortcutHint}${isSwitching ? ' (loading)' : ''}${dirtyCount > 0 ? ` (${dirtyCount} unsaved)` : ''}`}
+                  title={`${m} marketplace${shortcutHint}${dirtyCount > 0 ? ` — ${dirtyCount} unsaved change${dirtyCount === 1 ? '' : 's'}` : ''}`}
+                  className={cn('inline-flex items-center text-xs font-medium px-2 py-0.5 rounded border transition-colors',
+                    isActive
+                      ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
+                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-400')}>
+                  {isSwitching && <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" aria-hidden />}
+                  {m}
+                  {(() => {
+                    const count = isActive ? activeDirty : dirtyCount
+                    if (!count) return null
+                    return (
+                      <span
+                        className="ml-1 inline-flex items-center justify-center min-w-[14px] h-3.5 px-1 rounded-sm text-[9px] font-semibold leading-none bg-amber-500 text-white"
+                        title={`${count} unsaved change${count === 1 ? '' : 's'}${isActive ? '' : ` on ${m}`}`}
+                      >
+                        {count}
+                      </span>
+                    )
+                  })()}
+                  {isActive && lastSwitchMs !== null && (
+                    <span
+                      className="ml-1 text-[8px] font-mono leading-none text-slate-400 dark:text-slate-500 tabular-nums"
+                      title={`Market switch took ${lastSwitchMs}ms`}
+                    >
+                      {lastSwitchMs < 1000 ? `${lastSwitchMs}ms` : `${(lastSwitchMs / 1000).toFixed(1)}s`}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        {familyId && (
+          <span className="inline-flex items-center gap-1 text-xs bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800 rounded px-1.5 py-0.5 flex-shrink-0">
+            <FileSpreadsheet className="w-3 h-3" />Family
+          </span>
+        )}
+        <div className="flex items-center gap-2">
+          {/* BN.3.1 — Categories in this sheet; clicking a chip filters columns to that type. */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400 font-medium">Categories in this sheet</span>
+            <div className="flex items-center gap-1 flex-wrap">
+              {typesInUse.length === 0 ? (
+                <span className="text-[11px] text-slate-400 italic">none yet — select rows and Set category</span>
+              ) : (
+                <>
+                  {isUnionMode && (
+                    <button type="button" onClick={() => setFilterType(null)}
+                      className={cn('px-1.5 py-0.5 rounded text-[11px] font-semibold border transition-colors',
+                        !filterType ? 'bg-indigo-100 text-indigo-700 border-indigo-300 dark:bg-indigo-900/40 dark:text-indigo-300' : 'border-slate-200 text-slate-500 hover:border-indigo-400')}>
+                      All
+                    </button>
+                  )}
+                  {typesInUse.map((t) => (
+                    <button key={t} type="button" onClick={() => setFilterType((f) => (f === t ? null : t))}
+                      className={cn('px-1.5 py-0.5 rounded text-[11px] font-semibold border transition-colors',
+                        filterType === t ? 'bg-indigo-100 text-indigo-700 border-indigo-300 dark:bg-indigo-900/40 dark:text-indigo-300' : 'border-slate-200 text-slate-500 hover:border-indigo-400')}>
+                      {t}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+            <Button size="sm" variant="ghost" onClick={() => void loadData(marketplace, productType, true)} loading={loading}
+              title="Refresh schema from Amazon — updates columns/groups, keeps row edits">
+              <RefreshCw className="w-3 h-3 mr-1" />Refresh schema
+            </Button>
+          </div>
+          {/* BN.2.2 — Set category: bulk-assign product type + browse node to selected rows. */}
+          {selectedRealCount > 0 && (
+            <Button size="sm" variant="secondary"
+              onMouseEnter={warmSetCategoryModal}
+              onFocus={warmSetCategoryModal}
+              onClick={() => setShowSetCategory(true)}>
+              Set category ({selectedRealCount})
+            </Button>
+          )}
+        </div>
+      </>
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marketplace, productType, loading, otherMarketsDirtyCount, lastSwitchMs, navigateTo, prefetch, familyId, isUnionMode, filterType, loadData, warmSetCategoryModal])
+
+  // ── Slot: banners under the toolbar ──────────────────────────────────────
+  const renderFeedBanner = useCallback(() => {
+    if (!loadError && !draftBanner) return null
+    return (
+      <>
+        {/* Error — FF-MS.6 */}
         {loadError && (() => {
           const { status, mp: errMp, pt: errPt, message } = loadError
           const isLoadFailure = !!(errMp && errPt)
@@ -5407,745 +3656,501 @@ export default function AmazonFlatFileClient({
           )
         })()}
 
-        {/* Draft restore banner — shown when localStorage has unsaved edits
-            from a previous session that differ from the DB rows loaded now. */}
+        {/* Draft restored banner — the grid auto-restored unsaved edits; offer a reset. */}
         {draftBanner && (
           <div className="px-4 py-2 bg-amber-50 dark:bg-amber-950/30 border-t border-amber-200 dark:border-amber-800 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300">
               <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-              You have unsaved draft edits from a previous session ({draftBanner.filter((r) => r._dirty).length} rows).
+              Restored {draftBanner.filter((r) => r._dirty).length} unsaved edit{draftBanner.filter((r) => r._dirty).length === 1 ? '' : 's'} from your last session — Save to persist them.
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 type="button"
-                onClick={() => {
-                  setRows(mergeAsinCache(draftBanner, marketplace))
-                  setDraftBanner(null)
-                }}
-                className="text-xs font-medium px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800/60 transition-colors"
+                onClick={() => { setDraftBanner(null); reloadGridFromServer() }}
+                className="text-xs text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
               >
-                Restore draft
+                Discard drafts &amp; reload from server
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  saveRows(marketplace, storageTypeRef.current, rows)
-                  setDraftBanner(null)
-                }}
-                className="text-xs text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
+                onClick={() => setDraftBanner(null)}
+                className="text-xs font-medium px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800/60 transition-colors"
               >
-                Discard
+                Keep drafts
               </button>
             </div>
           </div>
         )}
+      </>
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadError, draftBanner, loading, marketplace, productType, loadData, reloadGridFromServer])
 
-      </header>
+  // ── Slot: footer actions (Add row/parent/variant · Set type · Group · Delete) ──
+  const renderFooterActions = useCallback((ctx: FooterActionsCtx) => {
+    const selCount = ctx.selectedRows.size
+    return (
+      <div className="flex items-center gap-2 relative">
+        <Button size="sm" variant="ghost"
+          onClick={() => setAddRowsPanel({ type: 'row', position: ctx.anchorRow ? 'below' : 'end', anchorRowId: ctx.anchorRow?._rowId })}>
+          <Plus className="w-3.5 h-3.5 mr-1" />Add row
+        </Button>
+        <Button size="sm" variant="ghost"
+          onClick={() => setAddRowsPanel({ type: 'parent', position: ctx.anchorRow ? 'below' : 'end', anchorRowId: ctx.anchorRow?._rowId })}>
+          <Plus className="w-3.5 h-3.5 mr-1" />Add parent
+        </Button>
+        <Button size="sm" variant="ghost"
+          onClick={() => setAddRowsPanel({ type: 'variant', position: ctx.anchorRow ? 'below' : 'end', anchorRowId: ctx.anchorRow?._rowId })}>
+          <Plus className="w-3.5 h-3.5 mr-1" />Add variant
+        </Button>
+        {selCount > 0 && isUnionMode && (
+          <select
+            value=""
+            onChange={(e) => { if (e.target.value) { bulkSetProductType(e.target.value); e.currentTarget.value = '' } }}
+            className="ml-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs text-slate-700 dark:text-slate-200"
+            title={`Set the category for the ${selCount} selected row(s)`}
+          >
+            <option value="">Set type…</option>
+            {sheetTypes.map((t) => t.toUpperCase()).map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        )}
+        {selCount > 0 && (
+          <Button size="sm" variant="ghost" onClick={ctx.groupFromSelection} className="ml-2"
+            title={`Create a custom group from the ${selCount} selected row(s)`}>
+            <Layers className="w-3.5 h-3.5 mr-1" />Group {selCount}…
+          </Button>
+        )}
+        {selCount > 0 && (
+          <Button size="sm" variant="ghost" onClick={deleteSelected}
+            className="text-red-500 hover:text-red-700 ml-2">
+            <Trash2 className="w-3.5 h-3.5 mr-1" />Delete {selCount}
+          </Button>
+        )}
+      </div>
+    )
+  }, [isUnionMode, sheetTypes, bulkSetProductType, deleteSelected])
 
-      {/* ── Empty / loading states ────────────────────────────── */}
-      {/* FFP.4 — the schema auto-loads; there is no "Load" button. A missing
-          manifest is either the pre-load frame (spinner) or a real fetch
-          failure (error + Retry) — never an instructional dead end. */}
-      {!manifest && !loading && !loadError && (
-        <div
-          className="flex-1 flex items-center justify-center gap-2 text-slate-500 text-sm"
-          role="status"
-          aria-live="polite"
-        >
-          <Loader2 className="w-5 h-5 animate-spin" aria-hidden />
-          Preparing {marketplace}{productType ? ` · ${productType}` : ''} schema…
+  // ── Slot: right-click context menu (Amazon ContextMenu on grid ops) ──────
+  const renderContextMenu = useCallback((ctx: GridContextMenuCtx) => (
+    <ContextMenu
+      x={ctx.x}
+      y={ctx.y}
+      canPaste={true}
+      hasSelection={ctx.hasSelection}
+      selRowCount={ctx.selRowCount}
+      onCut={ctx.ops.cut}
+      onCopy={ctx.ops.copy}
+      onPaste={ctx.ops.paste}
+      onAddRows={() => setAddRowsPanel({ type: 'row', position: 'below', anchorRowId: ctx.anchorRow?._rowId })}
+      onInsertAbove={() => {
+        const anchorId = ctx.anchorRow?._rowId
+        pushSnapshot()
+        const newRow = makeEmptyRow(productTypeRef.current, marketplaceRef.current)
+        setRows((prev) => {
+          const idx = anchorId ? prev.findIndex((r) => r._rowId === anchorId) : -1
+          if (idx === -1) return [...prev, newRow]
+          const next = [...prev]; next.splice(idx, 0, newRow); return next
+        })
+      }}
+      onInsertBelow={() => {
+        const anchorId = ctx.anchorRow?._rowId
+        pushSnapshot()
+        const newRow = makeEmptyRow(productTypeRef.current, marketplaceRef.current)
+        setRows((prev) => {
+          const idx = anchorId ? prev.findIndex((r) => r._rowId === anchorId) : -1
+          if (idx === -1) return [...prev, newRow]
+          const next = [...prev]; next.splice(idx + 1, 0, newRow); return next
+        })
+      }}
+      onDeleteRows={async () => {
+        const toRemove = ctx.selectionRows as Row[]
+        const n = toRemove.length
+        if (!n) return
+        if (!confirm(`Remove ${n} listing${n === 1 ? '' : 's'} from Amazon ${marketplaceRef.current}? The product and its stock stay in Nexus; other channels are untouched.`)) return
+        pushSnapshot()
+        await removeFromAmazon(toRemove)
+      }}
+      onClearCells={ctx.ops.clearCells}
+      onGroupSelected={ctx.ops.groupFromSelection}
+      onClose={ctx.close}
+    />
+  ), [pushSnapshot, setRows, removeFromAmazon])
+
+  // ── Slot: row-header meta (ASIN link · status · badges · clone) ──────────
+  const renderRowMeta = useCallback((row: BaseRow) => {
+    const r = row as Row
+    if (r._ghost) return null
+    const asin = r._asin ? String(r._asin) : null
+    const domain = AMAZON_DOMAIN[marketplace] ?? 'amazon.com'
+    const listingStatus = r._listingStatus != null ? String(r._listingStatus) : null
+    return (
+      <div className="flex flex-col items-end gap-0.5">
+        {asin && (
+          <a
+            href={`https://www.${domain}/dp/${asin}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[9px] font-mono text-blue-500 hover:text-blue-700 hover:underline leading-none block truncate z-10 relative"
+            title={`ASIN: ${asin} — open on ${domain}`}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >{asin}</a>
+        )}
+        {listingStatus && (() => {
+          const cls = (listingStatus === 'ACTIVE' || listingStatus === 'BUYABLE')
+            ? 'text-emerald-600 dark:text-emerald-400'
+            : listingStatus === 'INACTIVE' ? 'text-amber-500 dark:text-amber-400'
+            : 'text-red-500 dark:text-red-400'
+          return <span className={cn('text-[9px] font-semibold leading-none', cls)}>{listingStatus.slice(0, 4)}</span>
+        })()}
+        <div className="flex items-center gap-0.5">
+          {showOverrideBadges && (
+            <OverrideBadge
+              listingId={r._listingId as string | null | undefined}
+              fieldStates={r._fieldStates as any}
+              masterValues={r._masterValues as any}
+            />
+          )}
+          {/* IN.2 — Cascade button */}
+          {showCascadeButtons && r._productId && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setCascadeRow(r) }}
+              onPointerDown={(e) => e.stopPropagation()}
+              title="Apply this row's values to all sibling variants"
+              className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold leading-none transition-colors bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
+            >
+              <GitFork className="h-2.5 w-2.5" />↓
+            </button>
+          )}
+          {/* P4.3 — Clone variant (child rows only) */}
+          {r.parentage_level === 'child' && (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleCloneVariant(r) }}
+              onPointerDown={(e) => e.stopPropagation()}
+              title="Clone this variant — copies all fields, clears axis values (SKU, Color, Size) for you to fill in"
+              className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold leading-none transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700/50 dark:text-slate-300 dark:hover:bg-slate-700"
+            >
+              <Copy className="h-2.5 w-2.5" />
+            </button>
+          )}
+          {/* P1.4 — Last-sync badge */}
+          {r._lastSyncedAt ? (() => {
+            const syncSt = String(r._lastSyncStatus ?? '')
+            const syncAt = new Date(String(r._lastSyncedAt))
+            const secAgo = Math.round((Date.now() - syncAt.getTime()) / 1000)
+            const timeLabel = secAgo < 60 ? `${secAgo}s` : secAgo < 3600 ? `${Math.round(secAgo / 60)}m` : `${Math.round(secAgo / 3600)}h`
+            const ok = /^success$/i.test(syncSt)
+            const errSt = /^error$/i.test(syncSt)
+            return (
+              <span
+                className={cn('shrink-0 text-[8px] font-mono leading-none px-0.5',
+                  ok ? 'text-emerald-500 dark:text-emerald-400'
+                  : errSt ? 'text-red-500 dark:text-red-400'
+                  : 'text-slate-400 dark:text-slate-500')}
+                title={`Last Amazon sync: ${syncAt.toLocaleString()} (${syncSt || 'n/a'})`}
+              >↑{timeLabel}</span>
+            )
+          })() : null}
         </div>
-      )}
-      {!manifest && !loading && loadError && (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center text-slate-400">
-            <FileSpreadsheet className="w-10 h-10 mx-auto mb-2 opacity-40" />
-            <p className="text-sm mb-1">Couldn&apos;t load the Amazon schema for {marketplace}{productType ? ` · ${productType}` : ''}.</p>
-            <p className="text-xs mb-3 text-slate-500">{loadError.message}</p>
-            <Button size="sm" onClick={() => { setLoadError(null); void loadData(marketplace, productType, true) }}>
-              Retry
-            </Button>
-          </div>
-        </div>
-      )}
-      {loading && (
-        <div
-          className="flex-1 flex items-center justify-center gap-2 text-slate-500 text-sm"
-          role="status"
-          aria-live="polite"
-        >
-          <Loader2 className="w-5 h-5 animate-spin" aria-hidden />
-          Loading {marketplace}{productType ? ` · ${productType}` : ''} schema…
-        </div>
-      )}
+      </div>
+    )
+  }, [marketplace, showOverrideBadges, showCascadeButtons, handleCloneVariant])
 
-      {/* ── Spreadsheet + AI panel ────────────────────────────── */}
-      {manifest && !loading && (
-        <div className="flex-1 flex overflow-hidden min-h-0">
-        <div
-          ref={gridScrollRef}
-          className="flex-1 overflow-auto"
-          onContextMenu={(e) => {
-            e.preventDefault()
-            const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null
-
-            // Right-click on the # (row number) cell
-            const rowEl = el?.closest('[data-row-ri]') as HTMLElement | null
-            if (rowEl) {
-              const ri = parseInt(rowEl.dataset.rowRi ?? '', 10)
-              if (!isNaN(ri)) {
-                // Select the full row if not already in selection
-                const alreadySelected = normSel
-                  ? ri >= normSel.rMin && ri <= normSel.rMax
-                  : false
-                if (!alreadySelected) {
-                  const maxCi = allColumnsRef.current.length - 1
-                  setSelAnchor({ ri, ci: 0 })
-                  setSelEnd({ ri, ci: maxCi })
-                  const row = displayRowsRef.current[ri]
-                  const col = allColumnsRef.current[0]
-                  if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
-                }
-                setContextMenu({ x: e.clientX, y: e.clientY })
-              }
-              return
-            }
-
-            // Right-click on a data cell
-            const td = el?.closest('[data-ri]') as HTMLElement | null
-            if (td) {
-              const ri = parseInt(td.dataset.ri ?? '', 10)
-              const ci = parseInt(td.dataset.ci ?? '', 10)
-              if (!isNaN(ri) && !isNaN(ci)) {
-                if (!normSel) {
-                  setSelAnchor({ ri, ci }); setSelEnd({ ri, ci })
-                  const row = displayRowsRef.current[ri]; const col = allColumnsRef.current[ci]
-                  if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
-                }
-                setContextMenu({ x: e.clientX, y: e.clientY })
-              }
-            }
+  // ── Slot: modals that need live grid rows ─────────────────────────────────
+  const renderModals = useCallback(({ rows }: ModalsCtx) => {
+    const realRows = (rows as Row[]).filter((r) => !r._ghost)
+    return (
+      <>
+        {/* Unified history modal — H.1–H.4 */}
+        <HistoryModal
+          open={historyOpen}
+          onClose={() => setHistoryOpen(false)}
+          channel="amazon"
+          marketplace={marketplace}
+          productType={productType}
+          onResubmitErroredSkus={(skus) => {
+            latestSetSelectedRowsRef.current?.(new Set(
+              realRows.filter((r) => skus.includes(String(r.item_sku ?? ''))).map((r) => r._rowId as string),
+            ))
+            setHistoryOpen(false)
           }}
-          onPointerMove={(e) => {
-            if (e.buttons !== 1) return
-            // GX.9 — edge autoscroll while drag-selecting cells
-            const sc = gridScrollRef.current
-            if (sc && selAnchor && !isFillDragging && rowDragRef.current === null) {
-              const r = sc.getBoundingClientRect()
-              const EDGE = 48
-              const vy = e.clientY < r.top + EDGE ? -Math.max(2, Math.ceil((r.top + EDGE - e.clientY) / 3))
-                : e.clientY > r.bottom - EDGE ? Math.max(2, Math.ceil((e.clientY - (r.bottom - EDGE)) / 3)) : 0
-              updateAutoScroll(vy, e.clientX, e.clientY)
-            } else stopAutoScroll()
-            const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null
-
-            // Row # column drag — extend row selection vertically
-            if (rowDragRef.current !== null) {
-              const rowEl = el?.closest('[data-row-ri]') as HTMLElement | null
-              if (rowEl) {
-                const ri = parseInt(rowEl.dataset.rowRi ?? '', 10)
-                if (!isNaN(ri)) {
-                  const maxCi = allColumnsRef.current.length - 1
-                  setSelEnd((p) => (p?.ri === ri && p?.ci === maxCi ? p : { ri, ci: maxCi }))
+          onGoToCell={handleGoToCell}
+          onRePull={(rec) => {
+            setHistoryOpen(false)
+            const isAllCols = rec.columnsApplied.includes('all') || rec.columnsApplied.length === 0
+            const cols = (isAllCols ? 'all' : rec.columnsApplied) as 'all' | PullGroupId[]
+            const skus = rec.skusRequested
+            if (!skus.length) return
+            void (async () => {
+              setPulling(true)
+              setPullProgress({ progress: 0, total: skus.length })
+              setPullResult(null)
+              try {
+                const startRes = await fetch(`${getBackendUrl()}/api/amazon/flat-file/pull-preview/start`, {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ marketplace, productType, skus }),
+                })
+                const startData = await startRes.json()
+                if (!startRes.ok) throw new Error(startData.error ?? 'Pull failed to start')
+                const { jobId } = startData
+                let job: any = null
+                for (let i = 0; i < 1200; i++) {
+                  await new Promise((r) => setTimeout(r, 1500))
+                  const statusRes = await fetch(`${getBackendUrl()}/api/amazon/flat-file/pull-preview/status/${jobId}`)
+                  if (!statusRes.ok) throw new Error('Pull status check failed')
+                  job = await statusRes.json()
+                  setPullProgress({ progress: job.progress, total: job.total })
+                  if (job.status === 'done' || job.status === 'failed') break
                 }
+                if (!job || job.status !== 'done') throw new Error(job?.fatalError ?? 'Pull timed out')
+                const pulledRows: Row[] = Array.isArray(job.rows) ? job.rows : []
+                setPullDiffData({ pulledRows, selectedColumns: cols, skusRequested: skus, skusReturned: pulledRows.length, jobId })
+                setPullDiffOpen(true)
+              } catch (e: any) {
+                setLoadError({ message: e?.message ?? 'Re-pull failed', at: Date.now() })
+              } finally {
+                setPulling(false)
+                setPullProgress(null)
               }
-              return
-            }
-
-            // Regular cell selection / fill drag
-            const td = el?.closest('[data-ri]') as HTMLElement | null
-            if (!td) return
-            const ri = parseInt(td.dataset.ri ?? '', 10)
-            const ci = parseInt(td.dataset.ci ?? '', 10)
-            if (isNaN(ri) || isNaN(ci)) return
-            if (isFillDragging) {
-              setFillDragEnd((p) => (p?.ri === ri && p?.ci === ci ? p : { ri, ci }))
-            } else if (selAnchor) {
-              setSelEnd((p) => (p?.ri === ri && p?.ci === ci ? p : { ri, ci }))
-              setActiveCell(null)
-            }
+            })()
           }}
-          onPointerUp={() => { rowDragRef.current = null; stopAutoScroll(); if (isFillDragging) executeFill() }}
-        >
-          <table className="border-collapse text-sm w-max min-w-full">
-            <thead className="sticky top-0 z-20 bg-white dark:bg-slate-900">
+          onRestoreVersion={(restoredRows) => {
+            latestPushHistoryRef.current?.(restoredRows as BaseRow[])
+            setHistoryOpen(false)
+          }}
+          currentRows={rows as Row[]}
+        />
 
-              {/* Row 1: Group color bands (English group names) */}
-              <tr>
-                {/* Select-all checkbox + row# col (frozen) */}
-                <th className="sticky left-0 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 w-9 min-w-[36px] text-center" rowSpan={3}>
-                  <input
-                    type="checkbox"
-                    className="w-3.5 h-3.5 accent-blue-600"
-                    checked={realDisplayRows.length > 0 && selectedRows.size === realDisplayRows.length}
-                    ref={(el) => {
-                      if (el) el.indeterminate = selectedRows.size > 0 && selectedRows.size < realDisplayRows.length
-                    }}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedRows(new Set(realDisplayRows.map((r) => r._rowId as string)))
-                      } else {
-                        setSelectedRows(new Set())
-                      }
-                    }}
-                    title={selectedRows.size === realDisplayRows.length ? 'Deselect all' : 'Select all'}
-                  />
-                </th>
-                <th
-                  className="sticky left-9 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 text-xs text-slate-400 text-center font-normal"
-                  style={{ width: rowHeaderWidth, minWidth: rowHeaderWidth }}
-                  rowSpan={3}>#</th>
+        {/* Pull diff preview — Phase 2 of in-editor pull */}
+        {pullDiffData && (
+          <PullDiffModal
+            open={pullDiffOpen}
+            pulledRows={pullDiffData.pulledRows as Row[]}
+            currentRows={rows as Row[]}
+            marketplace={marketplace}
+            productType={productType}
+            selectedColumns={pullDiffData.selectedColumns}
+            columnLabels={columnLabelMap}
+            onApply={handlePullDiffApply}
+            onClose={() => { setPullDiffOpen(false); setPullDiffData(null) }}
+          />
+        )}
 
-                {/* BN.2.1 — inject Category band after the group containing record_action */}
-                {displayGroups.flatMap((g, gi) => {
-                  const c = gColor(g.color)
-                  const groupTh = (
-                    <th key={g.id} colSpan={g.columns.length}
-                      className={cn('px-2 py-1 text-xs font-bold border-b border-r border-slate-200 dark:border-slate-700 text-left whitespace-nowrap', c.header)}>
-                      {g.labelLocal}
-                      {g.labelEn && g.labelEn !== g.labelLocal && (
-                        <span className="ml-1.5 font-normal opacity-55 text-[11px]">({g.labelEn})</span>
-                      )}
-                    </th>
-                  )
-                  if (gi === categoryGroupInsertAfterIdx) {
-                    return [groupTh, <th key="__category-band"
-                      style={{ minWidth: CATEGORY_COL.width, width: CATEGORY_COL.width, ...(categoryStickyLeft !== undefined ? { position: 'sticky' as const, left: categoryStickyLeft, zIndex: 30 } : {}) }}
-                      className={cn('px-2 py-1 text-xs font-bold border-b border-r border-slate-200 dark:border-slate-700 text-left whitespace-nowrap text-slate-500 dark:text-slate-400', categoryStickyLeft !== undefined && 'bg-white dark:bg-slate-900')}>
-                      {/* P-3: band label intentionally blank — column header row already says "Category" */}
-                    </th>]
-                  }
-                  return [groupTh]
-                })}
-              </tr>
+        {/* FX.5b — Smart import wizard (external CSV/Excel/TSV/JSON → grid) */}
+        {importOpen && (
+          <ImportWizardModal
+            open={importOpen}
+            marketplace={marketplace}
+            productType={productType}
+            productTypes={sheetTypes}
+            currentRows={rows as Row[]}
+            columnLabels={columnLabelMap}
+            columnIds={manifestColumns.map((c) => c.id)}
+            initialFile={importInitialFile}
+            onApply={handleImportApply}
+            onClose={() => { setImportOpen(false); setImportInitialFile(null) }}
+          />
+        )}
 
-              {/* Row 2: English column labels + column resize handles */}
-              <tr>
-                {/* BN.2.1 — flatMap injects Category th after record_action; ci/colIdx stay allColumns-based */}
-                {allColumns.flatMap((col, colIdx) => {
-                  const c = gColor(colToGroup.get(col.id)?.color ?? 'slate')
-                  const w = colWidths[col.id] ?? col.width
-                  const _th = (
-                    <th key={`en-${col.id}`}
-                      style={{ minWidth: w, width: w, cursor: 'pointer', ...(colIdx < frozenColCount ? { position: 'sticky' as const, left: stickyLeftByColIdx[colIdx] ?? 0, zIndex: 25 } : {}) }}
-                      className={cn('relative group/th px-2 py-0.5 text-left text-xs font-semibold border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none hover:bg-blue-50/50 dark:hover:bg-blue-950/10', c.text,
-                        col.required && 'font-bold',
-                        colIdx < frozenColCount && 'bg-white dark:bg-slate-900')}
-                      title={col.description}
-                      onClick={() => {
-                        const maxRi = displayRows.length - 1
-                        setSelAnchor({ ri: 0, ci: colIdx })
-                        setSelEnd({ ri: maxRi, ci: colIdx })
-                        setIsEditing(false)
-                        const firstRow = displayRows[0]
-                        if (firstRow) setActiveCell({ rowId: firstRow._rowId as string, colId: col.id })
-                      }}>
-                      {col.labelEn}{col.required && <span className="ml-0.5 text-red-500">*</span>}
-                      {/* FF.41 Freeze pin */}
-                      <button
-                        type="button"
-                        className={cn(
-                          'ml-1 p-0.5 rounded-sm opacity-0 group-hover/th:opacity-100 transition-opacity flex-shrink-0',
-                          colIdx < frozenColCount
-                            ? 'text-blue-500 opacity-100'
-                            : 'text-slate-400 hover:text-blue-500',
-                        )}
-                        title={colIdx < frozenColCount ? 'Unfreeze columns' : 'Freeze columns up to here'}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setFrozenColCount(colIdx < frozenColCount ? colIdx : colIdx + 1)
-                        }}
-                      >
-                        <Pin className="w-3 h-3" />
-                      </button>
-                      {/* Push values to markets — column shortcut */}
-                      {col.kind === 'enum' && col.options && col.options.length > 0 && (
-                        <button
-                          type="button"
-                          className="ml-0.5 p-0.5 rounded-sm opacity-0 group-hover/th:opacity-100 transition-opacity flex-shrink-0 text-slate-400 hover:text-violet-500"
-                          title="Translate values for this column to other markets…"
-                          onClick={(e) => { e.stopPropagation(); setPushPanel({ tab: 'translate', preselectedCol: col }) }}
-                        >
-                          <ArrowRightLeft className="w-3 h-3" />
-                        </button>
-                      )}
-                      {/* Resize handle — drag to resize, double-click to reset */}
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize group/colresize flex items-center justify-center z-10"
-                        onMouseDown={(e) => { e.stopPropagation(); startColResize(e, col.id, w) }}
-                        onDoubleClick={(e) => { e.stopPropagation(); setColWidths((p) => { const n = { ...p }; delete n[col.id]; return n }) }}
-                        title="Drag to resize · Double-click to reset"
-                      >
-                        <div className="w-px h-3/4 rounded-full bg-slate-300/50 group-hover/colresize:bg-blue-400 dark:bg-slate-600/50 dark:group-hover/colresize:bg-blue-500 transition-colors" />
-                      </div>
-                    </th>
-                  )
-                  if (col.id === 'record_action') {
-                    return [_th, <th key="en-__category"
-                      style={{ minWidth: CATEGORY_COL.width, width: CATEGORY_COL.width, ...(categoryStickyLeft !== undefined ? { position: 'sticky' as const, left: categoryStickyLeft, zIndex: 25 } : {}) }}
-                      className={cn('px-2 py-0.5 text-left text-xs font-semibold border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none text-indigo-600 dark:text-indigo-400', categoryStickyLeft !== undefined && 'bg-white dark:bg-slate-900')}>
-                      {CATEGORY_COL.labelEn}
-                    </th>]
-                  }
-                  return [_th]
-                })}
-              </tr>
+        {/* View → Market coverage modal */}
+        {coverageModalOpen && (
+          <CoverageModal
+            rows={realRows}
+            marketplace={marketplace}
+            onSwitchMarket={(m) => { setCoverageModalOpen(false); navigateTo(m, productType) }}
+            onClose={() => setCoverageModalOpen(false)}
+          />
+        )}
 
-              {/* Row 3: Italian column labels + max-length hint */}
-              <tr>
-                {/* BN.2.1 — flatMap injects Category th after record_action; ci/colIdx stay allColumns-based */}
-                {allColumns.flatMap((col, colIdx) => {
-                  const w = colWidths[col.id] ?? col.width
-                  const _th = (
-                    <th key={`it-${col.id}`}
-                      style={{ minWidth: w, width: w, ...(colIdx < frozenColCount ? { position: 'sticky' as const, left: stickyLeftByColIdx[colIdx] ?? 0, zIndex: 25 } : {}) }}
-                      className={cn('px-2 py-0.5 text-left text-xs font-normal border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap text-slate-400 dark:text-slate-500 italic',
-                        colIdx < frozenColCount && 'bg-white dark:bg-slate-900')}>
-                      {col.labelLocal}
-                      {col.maxLength != null && (
-                        <span className="ml-1.5 not-italic font-mono text-[10px] text-slate-300 dark:text-slate-600">
-                          max&nbsp;{col.maxLength}
-                        </span>
-                      )}
-                    </th>
-                  )
-                  if (col.id === 'record_action') {
-                    return [_th, <th key="it-__category"
-                      style={{ minWidth: CATEGORY_COL.width, width: CATEGORY_COL.width, ...(categoryStickyLeft !== undefined ? { position: 'sticky' as const, left: categoryStickyLeft, zIndex: 25 } : {}) }}
-                      className={cn('px-2 py-0.5 text-left text-xs font-normal border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap text-slate-400 dark:text-slate-500 italic', categoryStickyLeft !== undefined && 'bg-white dark:bg-slate-900')}>
-                      {CATEGORY_COL.labelLocal}
-                    </th>]
-                  }
-                  return [_th]
-                })}
-              </tr>
-            </thead>
+        {/* View → Listing health modal */}
+        {healthModalOpen && (
+          <HealthModal
+            rows={realRows}
+            columns={manifestColumns}
+            onClose={() => setHealthModalOpen(false)}
+          />
+        )}
 
-            <tbody>
-              {renderRows.map((item) => {
-                if (item.kind === 'header') {
-                  return (
-                    <GroupHeaderRow
-                      key={`gh-${item.groupId}`}
-                      name={item.name}
-                      color={item.color}
-                      count={item.count}
-                      collapsed={item.collapsed}
-                      dimmed={item.dimmed}
-                      colSpan={groupHeaderColSpan}
-                      onToggle={() => setCollapsedGroups((prev) => {
-                        const n = new Set(prev)
-                        if (n.has(item.groupId)) n.delete(item.groupId)
-                        else n.add(item.groupId)
-                        return n
-                      })}
-                    />
-                  )
-                }
-                const row = item.row
-                const rowIdx = item.dataIdx
-                return (
-                <SpreadsheetRow
-                  key={row._rowId as string}
-                  row={row}
-                  rowIdx={rowIdx}
-                  columns={allColumns}
-                  colToGroup={colToGroup}
-                  selected={selectedRows.has(row._rowId as string)}
-                  activeCell={activeCell}
-                  marketplace={marketplace}
-                  colWidths={colWidths}
-                  rowHeight={rowHeight}
-                  rowHeaderWidth={rowHeaderWidth}
-                  showRowImages={showRowImages}
-                  imageSize={imageSize}
-                  imagesByAsin={imagesByAsin}
-                  isDraggingRow={draggingRowId === (row._rowId as string)}
-                  dropIndicator={dropTarget?.rowId === (row._rowId as string) ? dropTarget.half : null}
-                  normSel={normSel}
-                  fillTarget={fillTarget}
-                  isFillDragging={isFillDragging}
-                  isEditing={isEditing}
-                  editInitialChar={editInitialChar}
-                  clipboardRange={clipboardRange}
-                  onSelect={(checked, shiftKey) => {
-                    // FFP.11 — eBay-parity shift-click range selection: apply
-                    // the toggle to every displayed row between the last
-                    // clicked checkbox and this one.
-                    const id = row._rowId as string
-                    setSelectedRows((prev) => {
-                      const n = new Set(prev)
-                      const anchor = lastRowSelRef.current
-                      if (shiftKey && anchor && anchor !== id) {
-                        const ids = displayRowsRef.current.filter((r) => !r._ghost).map((r) => r._rowId as string)
-                        const a = ids.indexOf(anchor)
-                        const b = ids.indexOf(id)
-                        if (a !== -1 && b !== -1) {
-                          for (let i = Math.min(a, b); i <= Math.max(a, b); i++) {
-                            if (checked) n.add(ids[i]); else n.delete(ids[i])
-                          }
-                          lastRowSelRef.current = id
-                          return n
-                        }
-                      }
-                      if (checked) n.add(id); else n.delete(id)
-                      lastRowSelRef.current = id
-                      return n
-                    })
-                  }}
-                  onDeactivate={() => setIsEditing(false)}
-                  onChange={(colId, val) => updateCell(row._rowId as string, colId, val)}
-                  onLiveChange={(colId, val) => liveUpdateCell(row._rowId as string, colId, val)}
-                  onPushSnapshot={pushSnapshot}
-                  onNavigate={(colId, dir) => navigate(row._rowId as string, colId, dir)}
-                  onRowResizeStart={(e) => startRowResize(e, rowHeight)}
-                  onRowDragStart={() => setDraggingRowId(row._rowId as string)}
-                  onRowDragEnd={() => { setDraggingRowId(null); setDropTarget(null) }}
-                  onRowDragOver={(half) => setDropTarget((p) =>
-                    p?.rowId === (row._rowId as string) && p?.half === half ? p : { rowId: row._rowId as string, half }
-                  )}
-                  onRowDrop={(half) => draggingRowId && reorderRow(draggingRowId, row._rowId as string, half)}
-                  onCellPointerDown={handleCellPointerDown}
-                  onCellDoubleClick={handleCellDoubleClick}
-                  onRowSelect={(ri) => {
-                    rowDragRef.current = ri
-                    const maxCi = allColumns.length - 1
-                    setSelAnchor({ ri, ci: 0 })
-                    setSelEnd({ ri, ci: maxCi })
-                    setIsEditing(false)
-                    const row = displayRows[ri]
-                    const col = allColumns[0]
-                    if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
-                  }}
-                  onFillHandlePointerDown={handleFillHandlePointerDown}
-                  onFillToBottom={fillToBottom}
-                  onFillDrop={handleFillDrop}
-                  stickyLeftByColIdx={stickyLeftByColIdx}
-                  categoryStickyLeft={categoryStickyLeft}
-                  cellErrors={cellErrors}
-                  collapsedParents={collapsedParents}
-                  familyColor={familyColorByRowId.get(row._rowId as string)}
-                  matchKeys={matchKeys}
-                  toneMap={toneMap}
-                  onToggleCollapse={(rowId) => setCollapsedParents((prev) => {
-                    const next = new Set(prev)
-                    if (next.has(rowId)) next.delete(rowId)
-                    else next.add(rowId)
-                    return next
-                  })}
-                  showOverrideBadges={showOverrideBadges}
-                  showCascadeButtons={showCascadeButtons}
-                  onCascadeRow={(r) => setCascadeRow(r)}
-                  parentVariationTheme={parentThemeByChildId.get(row._rowId as string)}
-                  onCloneVariant={handleCloneVariant}
-                  onSwitchMarket={(m) => navigateTo(m, productType)}
-                  browseNodeLabels={browseNodeLabels}
-                />
-                )
-              })}
+        {pushPanel && manifest && (
+          <PushToMarketsPanel
+            initialTab={pushPanel.tab}
+            preselectedCol={pushPanel.preselectedCol}
+            manifest={manifest}
+            rows={realRows}
+            enumColumns={manifestColumns.filter((c) => c.kind === 'enum' && c.options && c.options.length > 0)}
+            sourceMarket={marketplace}
+            productType={productType}
+            onCopy={(targetMarket, colIds) => { handleCopyToMarket(targetMarket, colIds) }}
+            onApplyTranslations={(columnMappings) => { handleApplyTranslations(columnMappings); setPushPanel(null) }}
+            onClose={() => setPushPanel(null)}
+          />
+        )}
 
-              {/* Empty search result */}
-              {searchQuery && searchMode === 'rows' && displayRows.length === 0 && (
-                <tr>
-                  <td colSpan={allColumns.length + 3} className="px-6 py-6 text-center text-sm text-slate-400 italic">
-                    No rows match &ldquo;{searchQuery}&rdquo;
-                  </td>
-                </tr>
-              )}
+        {addRowsPanel && (
+          <AddRowsPanel
+            initialType={addRowsPanel.type}
+            initialPosition={addRowsPanel.position}
+            rows={realRows}
+            hasSelection={!!addRowsPanel.anchorRowId}
+            productType={productType}
+            marketplace={marketplace}
+            variationThemes={effectiveManifest?.variationThemes ?? []}
+            manifestColumnIds={manifestColumns.map((c) => c.id)}
+            onAdd={handleAddRows}
+            onAddFamily={handleAddVariationFamily}
+            onClose={() => setAddRowsPanel(null)}
+          />
+        )}
 
-              {/* G.2 — genuinely empty: beginner CTA distinguishing parent (variations) vs single item */}
-              {!searchQuery && displayRows.length === 0 && (
-                <tr>
-                  <td colSpan={allColumns.length + 3} className="px-6 py-10 text-center">
-                    <div className="flex flex-col items-center gap-1.5">
-                      <p className="text-sm font-medium text-slate-600 dark:text-slate-300">No products yet</p>
-                      <p className="text-xs text-slate-400 max-w-md">Add your first product to get started — &ldquo;Add a parent&rdquo; for a listing with variations (sizes, colours), or &ldquo;Add a single item&rdquo; if it has none.</p>
-                      <div className="mt-1 flex items-center gap-2">
-                        <Button size="sm" onClick={() => setAddRowsPanel({ type: 'parent', position: 'end' })}>
-                          <Plus className="w-3.5 h-3.5 mr-1.5" />Add a parent (variations)
-                        </Button>
-                        <Button size="sm" variant="secondary" onClick={() => setAddRowsPanel({ type: 'row', position: 'end' })}>
-                          <Plus className="w-3.5 h-3.5 mr-1.5" />Add a single item
-                        </Button>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              )}
-
-              {/* Add-row bar */}
-              <tr>
-                <td colSpan={allColumns.length + 3} className="px-4 py-2 border-t border-dashed border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center gap-2 relative">
-                    <Button size="sm" variant="ghost"
-                      onClick={() => setAddRowsPanel({ type: 'row', position: normSel ? 'below' : 'end' })}>
-                      <Plus className="w-3.5 h-3.5 mr-1" />Add row
-                    </Button>
-                    <Button size="sm" variant="ghost"
-                      onClick={() => setAddRowsPanel({ type: 'parent', position: normSel ? 'below' : 'end' })}>
-                      <Plus className="w-3.5 h-3.5 mr-1" />Add parent
-                    </Button>
-                    <Button size="sm" variant="ghost"
-                      onClick={() => setAddRowsPanel({ type: 'variant', position: normSel ? 'below' : 'end' })}>
-                      <Plus className="w-3.5 h-3.5 mr-1" />Add variant
-                    </Button>
-                    {selectedRows.size > 0 && isUnionMode && (
-                      <select
-                        value=""
-                        onChange={(e) => { if (e.target.value) { bulkSetProductType(e.target.value); e.currentTarget.value = '' } }}
-                        className="ml-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs text-slate-700 dark:text-slate-200"
-                        title={`Set the category for the ${selectedRows.size} selected row(s)`}
-                      >
-                        <option value="">Set type…</option>
-                        {sheetTypes.map((t) => t.toUpperCase()).map((t) => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    )}
-                    {selectedRows.size > 0 && (
-                      <Button size="sm" variant="ghost" onClick={groupFromSelection} className="ml-2"
-                        title={`Create a custom group from the ${selectedRows.size} selected row(s)`}>
-                        <Layers className="w-3.5 h-3.5 mr-1" />Group {selectedRows.size}…
-                      </Button>
-                    )}
-                    {selectedRows.size > 0 && (
-                      <Button size="sm" variant="ghost" onClick={deleteSelected}
-                        className="text-red-500 hover:text-red-700 ml-2">
-                        <Trash2 className="w-3.5 h-3.5 mr-1" />Delete {selectedRows.size}
-                      </Button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        {/* A4.1 — AI assistant panel */}
-        {aiPanelOpen && (
-          <div className="w-[40%] min-w-[360px] max-w-[560px] border-l border-slate-200 dark:border-slate-700 flex-shrink-0 overflow-y-auto bg-white dark:bg-slate-900">
-            <FlatFileAiPanel
-              rows={rows as any}
-              columns={manifestColumns as any}
-              marketplace={marketplace}
-              onApplyChanges={applyAiChanges}
-              channel="amazon"
+        {/* FF-MS — apply row order + sort to other markets */}
+        {applyPanelOpen && (
+          <div className="fixed top-24 right-4 z-50">
+            <ApplyToPanel
+              currentMarket={mp}
+              allMarkets={ALL_MARKETS}
+              marketSync={marketSync}
+              onToggleSync={toggleMarketSync}
+              onApplyNow={applyOrderToMarkets}
+              onClose={() => setApplyPanelOpen(false)}
             />
           </div>
         )}
-        </div>
+      </>
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyOpen, marketplace, productType, handleGoToCell, pullDiffData, pullDiffOpen, columnLabelMap, handlePullDiffApply, importOpen, sheetTypes, manifestColumns, importInitialFile, handleImportApply, coverageModalOpen, healthModalOpen, navigateTo, pushPanel, manifest, handleCopyToMarket, handleApplyTranslations, addRowsPanel, effectiveManifest, handleAddRows, handleAddVariationFamily, applyPanelOpen, marketSync])
+
+  // ── Render ─────────────────────────────────────────────────────────
+
+  // IN.2 — Build CascadeModal fields from the row when cascade is triggered
+  const cascadeFields = cascadeRow ? [
+    { key: 'price', label: 'Price', value: cascadeRow.purchasable_offer__our_price },
+    { key: 'title', label: 'Title', value: cascadeRow.item_name },
+    { key: 'description', label: 'Description', value: cascadeRow.product_description },
+    { key: 'quantity', label: 'Quantity', value: cascadeRow.fulfillment_availability__quantity },
+  ] : []
+
+  const gridInitialRows = (_swr.get(cacheKey(marketplace, productType))?.rows
+    ?? mergeAsinCache(initialRows ?? [], marketplace)) as BaseRow[]
+
+  return (
+    <div
+      style={{ display: 'contents' }}
+      onDragOver={(e) => { if (!importOpen && e.dataTransfer.types.includes('Files')) e.preventDefault() }}
+      onDrop={(e) => {
+        // FX.7 — drop a spreadsheet on the grid to open the import wizard pre-loaded.
+        if (importOpen || !e.dataTransfer.types.includes('Files')) return
+        const f = e.dataTransfer.files?.[0]
+        if (!f || !/\.(csv|tsv|txt|xlsx|xls|json)$/i.test(f.name)) return
+        e.preventDefault()
+        setImportInitialFile(f); setImportOpen(true)
+      }}>
+
+      {/* Hidden file input for Import TSV */}
+      <input ref={fileInputRef} type="file" accept=".txt,.tsv,.csv,.xlsm,.xlsx" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = '' }} />
+
+      {/* IN.2 — Cascade modal */}
+      {cascadeRow && cascadeRow._productId && (
+        <CascadeModal
+          sourceProductId={String(cascadeRow._productId)}
+          sourceSku={String(cascadeRow.item_sku ?? cascadeRow._rowId)}
+          channel="AMAZON"
+          marketplace={marketplace}
+          availableFields={cascadeFields}
+          onClose={() => setCascadeRow(null)}
+          onSuccess={(n) => { if (n > 0) reloadGridFromServer() }}
+        />
       )}
 
-      {/* ── Status bar ─────────────────────────────────────── */}
-      {manifest && (
-        <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-1 flex items-center gap-4 text-xs text-slate-400 select-none flex-shrink-0">
-          <span>{realDisplayRows.length} row{realDisplayRows.length !== 1 ? 's' : ''}</span>
-          {normSel && (() => {
-            const rCount = normSel.rMax - normSel.rMin + 1
-            const cCount = normSel.cMax - normSel.cMin + 1
-            const total = rCount * cCount
-            return (
-              <span className="text-blue-500">
-                {total === 1 ? '1 cell' : `${rCount} × ${cCount} = ${total} cells`} selected
-              </span>
-            )
-          })()}
-          {selectionStats && selectionStats.nonEmpty >= 2 && (() => {
-            const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toLocaleString(undefined, { maximumFractionDigits: 2 }))
-            return (
-              <span className="text-slate-500 dark:text-slate-400 tabular-nums">
-                Count {selectionStats.nonEmpty}
-                {selectionStats.numCount >= 1 && <> · Sum {fmt(selectionStats.sum)} · Avg {fmt(selectionStats.avg)} · Min {fmt(selectionStats.min)} · Max {fmt(selectionStats.max)}</>}
-              </span>
-            )
-          })()}
-          {dirtyRows.length > 0 && (
-            <span className="text-amber-500 ml-auto">{dirtyRows.length} unsaved change{dirtyRows.length !== 1 ? 's' : ''}</span>
-          )}
-          {clipboardRange && (
-            <span className="text-green-500">
-              {(clipboardRange.rMax - clipboardRange.rMin + 1) * (clipboardRange.cMax - clipboardRange.cMin + 1)} cells in clipboard
-            </span>
-          )}
-          {(validErrorCount > 0 || validWarnCount > 0 || advisoryCount > 0) && (
-            <button
-              type="button"
-              onClick={() => setShowValidPanel((o) => !o)}
-              className={cn(
-                'flex items-center gap-1 ml-auto',
-                validErrorCount > 0 ? 'text-red-500' : validWarnCount > 0 ? 'text-amber-500' : 'text-indigo-500',
-              )}
-            >
-              <AlertTriangle className="w-3 h-3" />
-              {validErrorCount > 0 && <span>{validErrorCount} error{validErrorCount !== 1 ? 's' : ''}</span>}
-              {validWarnCount > 0 && <span>{validWarnCount} warning{validWarnCount !== 1 ? 's' : ''}</span>}
-              {advisoryCount > 0 && validErrorCount === 0 && validWarnCount === 0 && (
-                <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 px-1.5 rounded-full text-[10px]">{advisoryCount} advisory</span>
-              )}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* FF.38 Validation panel */}
-      {showValidPanel && manifest && (
-        <div className="fixed right-4 bottom-12 w-80 max-h-96 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50">
-          <div className="sticky top-0 bg-white dark:bg-slate-900 px-3 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-              Validation
-              {validErrorCount > 0 && <span className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 px-1.5 rounded-full text-[10px]">{validErrorCount} error{validErrorCount !== 1 ? 's' : ''}</span>}
-              {validWarnCount > 0 && <span className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 px-1.5 rounded-full text-[10px]">{validWarnCount} warning{validWarnCount !== 1 ? 's' : ''}</span>}
-              {advisoryCount > 0 && <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 px-1.5 rounded-full text-[10px]">{advisoryCount} advisory</span>}
-            </span>
-            <button type="button" onClick={() => setShowValidPanel(false)} className="text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>
-          </div>
-          {cellErrors.size === 0 && mixedFamilies.length === 0 && missingNodeRowIds.length === 0 ? (
-            <div className="px-3 py-4 text-xs text-center text-slate-400">No issues found</div>
-          ) : (
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {[...cellErrors.entries()].slice(0, 200).map(([key, issue]) => {
-                const [rowId, colId] = key.split(':')
-                const rowIdx = displayRowsRef.current.findIndex((r) => r._rowId === rowId)
-                const colIdx = allColumnsRef.current.findIndex((c) => c.id === colId)
-                const col = allColumnsRef.current.find((c) => c.id === colId) ?? manifestColumns.find((c) => c.id === colId)
-                const rowLabel = rowIdx >= 0 ? `Row ${rowIdx + 1}` : 'Row ?'
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-start gap-2"
-                    onClick={() => {
-                      if (rowIdx < 0 || colIdx < 0) return
-                      setSelAnchor({ ri: rowIdx, ci: colIdx })
-                      setSelEnd({ ri: rowIdx, ci: colIdx })
-                      const row = displayRowsRef.current[rowIdx]
-                      if (row) setActiveCell({ rowId: row._rowId as string, colId })
-                      requestAnimationFrame(() =>
-                        document.querySelector(`[data-ri="${rowIdx}"][data-ci="${colIdx}"]`)
-                          ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-                      )
-                    }}
-                  >
-                    <span className={cn('mt-0.5 w-1.5 h-1.5 rounded-full flex-shrink-0',
-                      issue.level === 'error' ? 'bg-red-500' : 'bg-amber-400')} />
-                    <div className="min-w-0">
-                      <span className="text-[10px] text-slate-400">{rowLabel} · {col?.labelEn ?? colId}</span>
-                      <p className="text-xs text-slate-700 dark:text-slate-300 truncate">{issue.msg}</p>
-                    </div>
-                  </button>
-                )
-              })}
-              {cellErrors.size > 200 && (
-                <div className="px-3 py-2 text-[10px] text-slate-400 text-center">
-                  +{cellErrors.size - 200} more — fix shown issues first
+      {/* FFC — pre-publish Review & Confirm gate (replaces the old confirm()). */}
+      {reviewModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) reviewModal.resolve(false) }}
+        >
+          <div className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-lg border border-default dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl">
+            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-subtle dark:border-slate-800">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Review &amp; Publish</div>
+                <div className="text-[11px] text-tertiary">
+                  {reviewModal.data.markets.join(', ')} · {reviewModal.data.totalRows} row{reviewModal.data.totalRows === 1 ? '' : 's'}
                 </div>
-              )}
-              {/* BN.4.3 — Advisory-only warnings (display only; do NOT block submit) */}
-              {mixedFamilies.length > 0 && (
-                <div className="px-3 py-1.5 flex items-start gap-2">
-                  <span className="mt-0.5 w-1.5 h-1.5 rounded-full flex-shrink-0 bg-amber-300" />
-                  <div className="min-w-0">
-                    <span className="text-[10px] text-slate-400">Advisory</span>
-                    <p className="text-xs text-slate-700 dark:text-slate-300">
-                      {mixedFamilies.length} mixed-type famil{mixedFamilies.length === 1 ? 'y' : 'ies'} ({mixedFamilies.join(', ')}) — Amazon may reject mixed product types in one variation family.
-                    </p>
+              </div>
+              <button type="button" onClick={() => reviewModal.resolve(false)} className="p-1 rounded text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Cancel">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-4 py-3 overflow-y-auto space-y-3">
+              <div className="flex items-center gap-3 text-[12px] flex-wrap">
+                {reviewModal.data.newCount > 0 && (
+                  <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+                    <Plus className="w-3.5 h-3.5" />{reviewModal.data.newCount} new product{reviewModal.data.newCount === 1 ? '' : 's'} will be created
+                  </span>
+                )}
+                <span className="text-slate-600 dark:text-slate-300">{reviewModal.data.updateCount} updated</span>
+              </div>
+              {reviewModal.data.errors.length > 0 && (
+                <div className="space-y-1">
+                  <div className="inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-400">
+                    <AlertCircle className="w-3.5 h-3.5" />{reviewModal.data.errors.length} error{reviewModal.data.errors.length === 1 ? '' : 's'}
                   </div>
+                  <ul className="space-y-1">
+                    {reviewModal.data.errors.slice(0, 40).map((e, i) => (
+                      <li key={`e${i}`} className="text-[11.5px] text-slate-800 dark:text-slate-200 leading-snug">
+                        <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400">{e.mp}·{e.sku}</span> {e.message}
+                      </li>
+                    ))}
+                    {reviewModal.data.errors.length > 40 && <li className="text-[10.5px] text-tertiary">…and {reviewModal.data.errors.length - 40} more</li>}
+                  </ul>
                 </div>
               )}
-              {missingNodeRowIds.length > 0 && (
-                <div className="px-3 py-1.5 flex items-start gap-2">
-                  <span className="mt-0.5 w-1.5 h-1.5 rounded-full flex-shrink-0 bg-amber-300" />
-                  <div className="min-w-0">
-                    <span className="text-[10px] text-slate-400">Advisory</span>
-                    <p className="text-xs text-slate-700 dark:text-slate-300">
-                      {missingNodeRowIds.length} row{missingNodeRowIds.length === 1 ? '' : 's'} have no browse node — Amazon will use the category root (lower discoverability). Set a category to add one.
-                    </p>
+              {reviewModal.data.warnings.length > 0 && (
+                <div className="space-y-1">
+                  <div className="inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                    <AlertTriangle className="w-3.5 h-3.5" />{reviewModal.data.warnings.length} warning{reviewModal.data.warnings.length === 1 ? '' : 's'}
                   </div>
+                  <ul className="space-y-1">
+                    {reviewModal.data.warnings.slice(0, 40).map((w, i) => (
+                      <li key={`w${i}`} className="text-[11.5px] text-slate-700 dark:text-slate-300 leading-snug">
+                        <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400">{w.mp}·{w.sku}</span> {w.message}
+                      </li>
+                    ))}
+                    {reviewModal.data.warnings.length > 40 && <li className="text-[10.5px] text-tertiary">…and {reviewModal.data.warnings.length - 40} more</li>}
+                  </ul>
                 </div>
+              )}
+              {reviewModal.data.errors.length === 0 && reviewModal.data.warnings.length === 0 && (
+                <div className="text-[12px] text-emerald-700 dark:text-emerald-400 inline-flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4" />No issues — ready to publish.
+                </div>
+              )}
+              {reviewModal.data.errors.length > 0 && (
+                <label className="flex items-start gap-2 text-[11.5px] text-rose-700 dark:text-rose-400 cursor-pointer">
+                  <input type="checkbox" checked={reviewErrorAck} onChange={(e) => setReviewErrorAck(e.target.checked)} className="w-3.5 h-3.5 mt-0.5 accent-rose-600" />
+                  <span>
+                    I understand the {reviewModal.data.errors.length} error{reviewModal.data.errors.length === 1 ? '' : 's'} — publish anyway.
+                    Amazon validates authoritatively and reports per-SKU results.
+                  </span>
+                </label>
+              )}
+              {reviewModal.data.warnings.length > 0 && (
+                <label className="flex items-center gap-2 text-[11.5px] text-slate-700 dark:text-slate-300 cursor-pointer">
+                  <input type="checkbox" checked={reviewAck} onChange={(e) => setReviewAck(e.target.checked)} className="w-3.5 h-3.5" />
+                  I&apos;ve reviewed the {reviewModal.data.warnings.length} warning{reviewModal.data.warnings.length === 1 ? '' : 's'} and want to publish.
+                </label>
               )}
             </div>
-          )}
+            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-subtle dark:border-slate-800">
+              <button type="button" onClick={() => reviewModal.resolve(false)} className="inline-flex items-center h-7 px-3 rounded text-[12px] border border-default dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+              <button type="button" onClick={() => reviewModal.resolve(true)}
+                disabled={(reviewModal.data.errors.length > 0 && !reviewErrorAck) || (reviewModal.data.warnings.length > 0 && !reviewAck)}
+                className="inline-flex items-center gap-1.5 h-7 px-3 rounded text-[12px] font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                <Send className="w-3.5 h-3.5" />Publish to {reviewModal.data.markets.join(', ')}
+              </button>
+            </div>
+          </div>
         </div>
-      )}
-
-      {/* BF.1 — Find & Replace */}
-      {manifest && findReplaceMounted && (
-        <div className="fixed top-16 right-4 z-50">
-          <FindReplaceBar
-            open={findReplaceOpen}
-            onClose={() => { setFindReplaceOpen(false); setMatchKeys(new Set()) }}
-            cells={findCells}
-            rangeBounds={normSel ? { minRow: normSel.rMin, maxRow: normSel.rMax, minCol: normSel.cMin, maxCol: normSel.cMax } : null}
-            visibleColumns={allColumnsRef.current.map((c) => ({ id: c.id, label: c.labelEn }))}
-            onActivate={(match) => {
-              setSelAnchor({ ri: match.rowIdx, ci: match.colIdx })
-              setSelEnd({ ri: match.rowIdx, ci: match.colIdx })
-              const row = displayRows[match.rowIdx]
-              if (row) setActiveCell({ rowId: row._rowId as string, colId: match.columnId })
-              requestAnimationFrame(() =>
-                document.querySelector(`[data-ri="${match.rowIdx}"][data-ci="${match.colIdx}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
-              )
-            }}
-            onMatchSetChange={setMatchKeys}
-            onReplaceCell={(rowId, columnId, newValue) => {
-              pushSnapshot()
-              // FB1-client — replace into the synthetic Follow/Buffer cells enforces
-              // their enum/number rules (junk keeps the previous value).
-              setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [columnId]: normalizeSyntheticCell(columnId, newValue, r[columnId]), _dirty: true } : r))
-            }}
-          />
-        </div>
-      )}
-
-      {/* BF.2 — Conditional formatting */}
-      {manifest && cfMounted && (
-        <div className="fixed top-16 right-4 z-50">
-          <ConditionalFormatBar
-            open={cfOpen}
-            onClose={() => setCfOpen(false)}
-            rules={cfRules}
-            onChange={persistCfRules}
-            visibleColumns={allColumnsRef.current.map((c) => ({ id: c.id, label: c.labelEn }))}
-          />
-        </div>
-      )}
-
-      {/* PE: keyboard shortcuts modal — extended with Amazon-only entries (FF-MS.7). */}
-      {shortcutsOpen && (
-        <KeyboardShortcutsModal
-          groups={[
-            ...FLAT_FILE_SHORTCUTS,
-            {
-              title: 'Marketplace',
-              rows: [
-                { keys: ['⌥', '1'], label: 'Switch to IT' },
-                { keys: ['⌥', '2'], label: 'Switch to DE' },
-                { keys: ['⌥', '3'], label: 'Switch to FR' },
-                { keys: ['⌥', '4'], label: 'Switch to ES' },
-                { keys: ['⌥', '5'], label: 'Switch to UK' },
-              ],
-            },
-          ]}
-          onClose={() => setShortcutsOpen(false)}
-        />
-      )}
-
-      {/* View → Market coverage modal */}
-      {coverageModalOpen && (
-        <CoverageModal
-          rows={displayRows.filter((r) => !r._ghost)}
-          marketplace={marketplace}
-          onSwitchMarket={(m) => { setCoverageModalOpen(false); navigateTo(m, productType) }}
-          onClose={() => setCoverageModalOpen(false)}
-        />
-      )}
-
-      {/* View → Listing health modal */}
-      {healthModalOpen && (
-        <HealthModal
-          rows={displayRows.filter((r) => !r._ghost)}
-          columns={allColumns}
-          onClose={() => setHealthModalOpen(false)}
-        />
       )}
 
       {/* P5: completed-while-away banner */}
@@ -6170,129 +4175,11 @@ export default function AmazonFlatFileClient({
         />
       )}
 
-      {/* Unified history modal — H.1–H.4 */}
-      <HistoryModal
-        open={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        channel="amazon"
-        marketplace={marketplace}
-        productType={productType}
-        onResubmitErroredSkus={(skus) => {
-          setSelectedRows(new Set(
-            rows.filter(r => skus.includes(String(r.item_sku ?? ''))).map(r => r._rowId as string)
-          ))
-          setHistoryOpen(false)
-        }}
-        onGoToCell={handleGoToCell}
-        onRePull={(rec) => {
-          setHistoryOpen(false)
-          const isAllCols = rec.columnsApplied.includes('all') || rec.columnsApplied.length === 0
-          const cols = (isAllCols ? 'all' : rec.columnsApplied) as 'all' | PullGroupId[]
-          const skus = rec.skusRequested
-          if (!skus.length) return
-          void (async () => {
-            setPulling(true)
-            setPullProgress({ progress: 0, total: skus.length })
-            setPullResult(null)
-            try {
-              const startRes = await fetch(`${getBackendUrl()}/api/amazon/flat-file/pull-preview/start`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ marketplace, productType, skus }),
-              })
-              const startData = await startRes.json()
-              if (!startRes.ok) throw new Error(startData.error ?? 'Pull failed to start')
-              const { jobId } = startData
-              let job: any = null
-              for (let i = 0; i < 1200; i++) {
-                await new Promise((r) => setTimeout(r, 1500))
-                const statusRes = await fetch(`${getBackendUrl()}/api/amazon/flat-file/pull-preview/status/${jobId}`)
-                if (!statusRes.ok) throw new Error('Pull status check failed')
-                job = await statusRes.json()
-                setPullProgress({ progress: job.progress, total: job.total })
-                if (job.status === 'done' || job.status === 'failed') break
-              }
-              if (!job || job.status !== 'done') throw new Error(job?.fatalError ?? 'Pull timed out')
-              const pulledRows: Row[] = Array.isArray(job.rows) ? job.rows : []
-              setPullDiffData({ pulledRows, selectedColumns: cols, skusRequested: skus, skusReturned: pulledRows.length, jobId })
-              setPullDiffOpen(true)
-            } catch (e: any) {
-              setLoadError({ message: e?.message ?? 'Re-pull failed', at: Date.now() })
-            } finally {
-              setPulling(false)
-              setPullProgress(null)
-            }
-          })()
-        }}
-        onRestoreVersion={(restoredRows) => {
-          pushSnapshot()
-          setRows(restoredRows as Row[])
-          setHistoryOpen(false)
-        }}
-        currentRows={rows}
-      />
-
-      {/* Pull diff preview — Phase 2 of in-editor pull */}
-      {pullDiffData && (
-        <PullDiffModal
-          open={pullDiffOpen}
-          pulledRows={pullDiffData.pulledRows as Row[]}
-          currentRows={rows}
-          marketplace={marketplace}
-          productType={productType}
-          selectedColumns={pullDiffData.selectedColumns}
-          columnLabels={columnLabelMap}
-          onApply={handlePullDiffApply}
-          onClose={() => { setPullDiffOpen(false); setPullDiffData(null) }}
-        />
-      )}
-
-      {/* FX.5b — Smart import wizard (external CSV/Excel/TSV/JSON → grid) */}
-      {importOpen && (
-        <ImportWizardModal
-          open={importOpen}
-          marketplace={marketplace}
-          productType={productType}
-          productTypes={sheetTypes}
-          currentRows={rows}
-          columnLabels={columnLabelMap}
-          columnIds={manifestColumns.map((c) => c.id)}
-          initialFile={importInitialFile}
-          onApply={handleImportApply}
-          onClose={() => { setImportOpen(false); setImportInitialFile(null) }}
-        />
-      )}
-
-      {/* BM.2 — Replicate to multiple markets */}
-      {replicateMounted && (
-        <FFReplicateModal
-          open={replicateOpen}
-          onClose={() => setReplicateOpen(false)}
-          sourceMarket={marketplace}
-          groups={manifest?.groups ?? []}
-          rowCount={rows.length}
-          selectedRowCount={selectedRows.size}
-          onReplicate={handleReplicate}
-        />
-      )}
-
-      {/* BF.4 — AI bulk actions */}
-      {aiModalMounted && (
-        <AIBulkModal
-          open={aiModalOpen}
-          onClose={() => setAiModalOpen(false)}
-          selectedProductIds={[...selectedRows].flatMap((rowId) => {
-            const row = rows.find((r) => r._rowId === rowId)
-            return row?._productId ? [row._productId as string] : []
-          })}
-          marketplace={marketplace}
-        />
-      )}
-
       {/* BN.2.2 — Set category modal */}
       {showSetCategory && (
         <SetCategoryModal open marketplace={marketplace}
           productTypeOptions={productTypes.map((p) => p.value)}
-          selectedCount={selectedRealCount}
+          selectedCount={latestRowsRef.current.filter((r) => !r._ghost && latestSelectedRowsRef.current.has(r._rowId as string)).length}
           onApply={applyCategory} onClose={() => setShowSetCategory(false)} />
       )}
 
@@ -6317,180 +4204,130 @@ export default function AmazonFlatFileClient({
         </DSModal>
       )}
 
-      {pushPanel && manifest && (
-        <PushToMarketsPanel
-          initialTab={pushPanel.tab}
-          preselectedCol={pushPanel.preselectedCol}
-          manifest={manifest}
-          rows={rows}
-          enumColumns={manifestColumns.filter((c) => c.kind === 'enum' && c.options && c.options.length > 0)}
-          sourceMarket={marketplace}
-          productType={productType}
-          onCopy={(targetMarket, colIds) => { handleCopyToMarket(targetMarket, colIds) }}
-          onApplyTranslations={(columnMappings) => { handleApplyTranslations(columnMappings); setPushPanel(null) }}
-          onClose={() => setPushPanel(null)}
-        />
+      {/* ── Empty / loading states (page-level: the grid needs a manifest) ── */}
+      {!manifest && !loading && !loadError && (
+        <div
+          className="h-screen flex items-center justify-center gap-2 text-slate-500 text-sm bg-slate-50 dark:bg-slate-950"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="w-5 h-5 animate-spin" aria-hidden />
+          Preparing {marketplace}{productType ? ` · ${productType}` : ''} schema…
+        </div>
+      )}
+      {!manifest && !loading && loadError && (
+        <div className="h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+          <div className="text-center text-slate-400">
+            <FileSpreadsheet className="w-10 h-10 mx-auto mb-2 opacity-40" />
+            <p className="text-sm mb-1">Couldn&apos;t load the Amazon schema for {marketplace}{productType ? ` · ${productType}` : ''}.</p>
+            <p className="text-xs mb-3 text-slate-500">{loadError.message}</p>
+            <Button size="sm" onClick={() => { setLoadError(null); void loadData(marketplace, productType, true) }}>
+              Retry
+            </Button>
+          </div>
+        </div>
+      )}
+      {!manifest && loading && (
+        <div
+          className="h-screen flex items-center justify-center gap-2 text-slate-500 text-sm bg-slate-50 dark:bg-slate-950"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="w-5 h-5 animate-spin" aria-hidden />
+          Loading {marketplace}{productType ? ` · ${productType}` : ''} schema…
+        </div>
       )}
 
-      {addRowsPanel && (
-        <AddRowsPanel
-          initialType={addRowsPanel.type}
-          initialPosition={addRowsPanel.position}
-          rows={rows}
-          hasSelection={!!normSel}
-          productType={productType}
+      {/* ── The shared grid (UFX P3 — replaces the page's private grid) ──── */}
+      {manifest && (
+        <FlatFileGrid
+          key={`${marketplace}:${productType}`}
+          channel="amazon"
+          title="Amazon Flat File"
+          titleIcon={<FileSpreadsheet className="w-4 h-4 text-orange-500 flex-shrink-0" />}
           marketplace={marketplace}
-          variationThemes={effectiveManifest?.variationThemes ?? []}
-          manifestColumnIds={manifestColumns.map((c) => c.id)}
-          onAdd={handleAddRows}
-          onAddFamily={handleAddVariationFamily}
-          onClose={() => setAddRowsPanel(null)}
+          familyId={familyId}
+          storageKey={`ff-amazon-${mp}`}
+          enableCustomGroups
+          columnGroups={gridColumnGroups}
+          columnGroupState={orderedGroups.map((g) => ({
+            id: g.id,
+            label: g.labelEn,
+            color: g.color,
+            columns: g.columns.map((c) => c.id),
+            visible: !closedGroups.has(g.id),
+          }))}
+          onGroupStateChange={(closed, order) => applyGroupSettings(closed, order)}
+          initialRows={gridInitialRows}
+          makeBlankRow={makeBlankRow}
+          ghostRows={GHOST_BUFFER}
+          getGroupKey={amazonGroupKey}
+          bucketMode={bucketMode}
+          validate={validateRows}
+          onSave={onGridSave}
+          onReload={onGridReload}
+          onMaterializeRow={onMaterializeRow}
+          onSortConfigChange={(levels) => { sortConfigRef.current = levels; propagateSort(levels) }}
+          onRowOrderChange={(ids) => propagateRowOrder(ids)}
+          renderCellContent={renderCellContent}
+          getCellGuidance={getCellGuidance}
+          getCellReadOnly={getCellReadOnly}
+          getRowImageUrl={getRowImageUrl}
+          renderRowMeta={renderRowMeta}
+          onReplicate={handleReplicate}
+          renderChannelStrip={renderChannelStrip}
+          renderPushExtras={renderPushExtras}
+          renderFeedBanner={renderFeedBanner}
+          renderModals={renderModals}
+          renderToolbarFetch={renderToolbarFetch}
+          renderToolbarImport={renderToolbarImport}
+          renderBar3Left={renderBar3Left}
+          renderContextMenu={renderContextMenu}
+          renderFooterActions={renderFooterActions}
+          renderEmptyAction={() => (
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={() => setAddRowsPanel({ type: 'parent', position: 'end' })}>
+                <Plus className="w-3.5 h-3.5 mr-1.5" />Add a parent (variations)
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => setAddRowsPanel({ type: 'row', position: 'end' })}>
+                <Plus className="w-3.5 h-3.5 mr-1.5" />Add a single item
+              </Button>
+            </div>
+          )}
+          fileMenuItems={fileMenuItems}
+          editMenuItems={editMenuItems}
+          onColumnsClick={() => setColumnsOpen(true)}
+          columnsActive={columnsOpen}
+          toolbarTrailing={toolbarTrailing}
+          renderAiPanel={(ctx: AiPanelCtx) => (
+            <FlatFileAiPanel {...(ctx as any)} channel="amazon" />
+          )}
+          apiRef={gridApiRef}
         />
       )}
 
-      {/* FeedSubmissionsPanel + VersionHistoryPanel replaced by HistoryModal above */}
-
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          canPaste={true}
-          hasSelection={!!normSel}
-          selRowCount={Math.max(selectedRows.size, normSel ? normSel.rMax - normSel.rMin + 1 : 0)}
-          onCut={() => { handleCut(); setClipboardRange(normSel) }}
-          onCopy={() => { handleCopy(); setClipboardRange(normSel) }}
-          onPaste={() => void handlePaste()}
-          onAddRows={() => {
-            setContextMenu(null)
-            setAddRowsPanel({ type: 'row', position: 'below' })
-          }}
-          onInsertAbove={() => {
-            if (!selAnchor) return
-            pushSnapshot()
-            const ri = selAnchor.ri
-            const newRow = makeEmptyRow(productType, marketplace)
-            setRows(prev => {
-              const displayed = displayRowsRef.current
-              if (ri >= displayed.length) return [...prev, newRow]
-              const targetId = displayed[ri]._rowId as string
-              const idx = prev.findIndex(r => r._rowId === targetId)
-              if (idx === -1) return prev
-              const next = [...prev]; next.splice(idx, 0, newRow); return next
-            })
-          }}
-          onInsertBelow={() => {
-            if (!selAnchor) return
-            pushSnapshot()
-            const ri = selAnchor.ri
-            const newRow = makeEmptyRow(productType, marketplace)
-            setRows(prev => {
-              const displayed = displayRowsRef.current
-              const targetRi = Math.min(ri + 1, displayed.length - 1)
-              if (targetRi >= displayed.length) return [...prev, newRow]
-              const targetId = displayed[targetRi]._rowId as string
-              const idx = prev.findIndex(r => r._rowId === targetId)
-              if (idx === -1) return [...prev, newRow]
-              const next = [...prev]; next.splice(idx, 0, newRow); return next
-            })
-          }}
-          onDeleteRows={async () => {
-            if (!normSel) return
-            const toRemove = displayRowsRef.current.slice(normSel.rMin, normSel.rMax + 1)
-            const n = toRemove.length
-            if (!n) return
-            if (!confirm(`Remove ${n} listing${n === 1 ? '' : 's'} from Amazon ${marketplace}? The product and its stock stay in Nexus; other channels are untouched.`)) return
-            pushSnapshot()
-            await removeFromAmazon(toRemove)
-            setSelAnchor(null); setSelEnd(null)
-          }}
-          onClearCells={handleDeleteCells}
-          onGroupSelected={groupFromSelection}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
-      {groupCreate && (
-        <CreateGroupPopover
-          skuCount={groupCreate.skus.length}
-          defaultColor={GROUP_PALETTE[customGroups.length % GROUP_PALETTE.length]}
-          onCancel={() => setGroupCreate(null)}
-          onCreate={(name, color) => {
-            const id = makeGroupId(customGroups)
-            const order = customGroups.reduce((m, g) => Math.max(m, g.order), -1) + 1
-            const withNew = [...customGroups, { id, name, color, order, memberSkus: [] as string[] }]
-            setCustomGroups(assignSkusToGroup(withNew, id, groupCreate.skus))
-            setGroupMode('custom')
-            setGroupCreate(null)
-          }}
-        />
-      )}
-      {manageGroupsOpen && (
-        <ManageGroupsModal
-          open={manageGroupsOpen}
-          groups={customGroups}
-          onChange={setCustomGroups}
-          onClose={() => setManageGroupsOpen(false)}
-        />
-      )}
+      {/* ColumnGroupModal — controlled by useFlatFileCore columnsOpen state */}
+      <ColumnGroupModal
+        open={columnsOpen}
+        onClose={() => setColumnsOpen(false)}
+        groups={orderedGroups.map((g) => ({
+          id: g.id,
+          label: g.labelEn,
+          color: g.color,
+          columns: g.columns.map((c) => c.id),
+          visible: !closedGroups.has(g.id),
+        }))}
+        onGroupsChange={(groups) => {
+          const nextClosed = new Set(groups.filter((g) => !g.visible).map((g) => g.id))
+          const nextOrder = groups.map((g) => g.id)
+          applyGroupSettings(nextClosed, nextOrder)
+        }}
+      />
     </div>
   )
 }
 
-// ── SpreadsheetRow ─────────────────────────────────────────────────────
-
-interface RowProps {
-  row: Row; rowIdx: number; columns: Column[]; colToGroup: Map<string, ColumnGroup>
-  selected: boolean; activeCell: { rowId: string; colId: string } | null
-  marketplace: string
-  colWidths: Record<string, number>
-  rowHeight: number
-  rowHeaderWidth: number
-  showRowImages: boolean
-  imageSize: number
-  imagesByAsin: Record<string, string | null>
-  isDraggingRow: boolean
-  dropIndicator: 'top' | 'bottom' | null
-  normSel: NormSel | null
-  fillTarget: NormSel | null
-  isFillDragging: boolean
-  isEditing: boolean
-  editInitialChar: string | null
-  clipboardRange: NormSel | null
-  stickyLeftByColIdx: Record<number, number>
-  /** P-2: sticky left offset for the synthetic Category column when frozen. undefined = not frozen. */
-  categoryStickyLeft?: number
-  cellErrors: Map<string, ValidationIssue>
-  collapsedParents: Set<string>
-  familyColor?: FamilyColor
-  matchKeys: Set<string>
-  toneMap: Map<string, string>
-  onToggleCollapse: (rowId: string) => void
-  /** FFP.11 — shiftKey enables eBay-parity range selection (anchor → clicked row). */
-  onSelect: (c: boolean, shiftKey?: boolean) => void
-  onDeactivate: () => void; onChange: (colId: string, val: unknown) => void
-  onLiveChange: (colId: string, val: string) => void
-  onPushSnapshot: () => void
-  onNavigate: (colId: string, dir: 'right' | 'left' | 'down' | 'up') => void
-  onRowResizeStart: (e: React.MouseEvent) => void
-  onRowDragStart: () => void
-  onRowDragEnd: () => void
-  onRowDragOver: (half: 'top' | 'bottom') => void
-  onRowDrop: (half: 'top' | 'bottom') => void
-  onCellPointerDown: (ri: number, ci: number, shiftKey: boolean) => void
-  onCellDoubleClick: (ri: number, ci: number) => void
-  onRowSelect: (ri: number) => void
-  onFillHandlePointerDown: (ri: number, ci: number) => void
-  onFillToBottom: () => void
-  onFillDrop: () => void
-  showOverrideBadges: boolean
-  showCascadeButtons: boolean
-  onCascadeRow: (row: Row) => void
-  /** P4 — variation_theme from this row's parent (child rows only). */
-  parentVariationTheme?: string
-  onCloneVariant: (row: Row) => void
-  onSwitchMarket: (market: string) => void
-  /** BN.2.1 — browse-node id→path labels for the derived Category chip. */
-  browseNodeLabels: Record<string, string>
-}
+// ── Row completeness (HealthModal) ─────────────────────────────────────
 
 // Per-row required-fields completeness. Counts the SAME required cells the grid
 // reddens — i.e. col.required AND applicable to this row — mirroring the cell's
@@ -6520,1070 +4357,6 @@ function computeRowCompleteness(row: Row, columns: Column[]): { filled: number; 
     if (row[col.id] != null && String(row[col.id]) !== '') filled++
   }
   return { filled, total }
-}
-
-// FF-2 (perf) — event-handler props. Their identity changes on every parent
-// render (inline arrows closing over row._rowId), but their BEHAVIOR is stable,
-// so they must not force a row re-render.
-const SPREADSHEET_ROW_CALLBACK_PROPS = new Set<string>([
-  'onToggleCollapse', 'onSelect', 'onDeactivate', 'onChange', 'onLiveChange', 'onPushSnapshot',
-  'onNavigate', 'onRowResizeStart', 'onRowDragStart', 'onRowDragEnd', 'onRowDragOver', 'onRowDrop',
-  'onCellPointerDown', 'onCellDoubleClick', 'onRowSelect', 'onFillHandlePointerDown', 'onFillToBottom',
-  'onFillDrop', 'onCascadeRow', 'onCloneVariant', 'onSwitchMarket',
-])
-
-// FF-2 (perf) — memo comparator so a keystroke (liveUpdateCell → setRows →
-// cellErrors recompute) no longer re-runs all ~500 row bodies. A row re-renders
-// only when something it actually shows changes: any non-callback prop by
-// identity (every one is a state/useMemo value or an inline primitive, so it's
-// stable when unchanged), PLUS this row's own cell-error levels (the cellErrors
-// Map gets a fresh identity on every edit, but a given row's errors usually
-// don't). The on* callbacks are skipped — identity churns, behavior is stable.
-function areRowPropsEqual(prev: RowProps, next: RowProps): boolean {
-  const keys = Object.keys(next) as Array<keyof RowProps>
-  if (keys.length !== Object.keys(prev).length) return false
-  for (const k of keys) {
-    if (k === 'cellErrors') continue
-    if (SPREADSHEET_ROW_CALLBACK_PROPS.has(k as string)) continue
-    if (!Object.is(prev[k], next[k])) return false
-  }
-  // Per-row cell-error levels (the row body renders its own error chip; cells
-  // are separately memoized so their own error styling is handled there).
-  const rowId = next.row._rowId as string
-  const pe = prev.cellErrors as Map<string, { level: string; msg: string }>
-  const ne = next.cellErrors as Map<string, { level: string; msg: string }>
-  for (const col of next.columns) {
-    const key = `${rowId}:${col.id}`
-    const a = pe.get(key)
-    const b = ne.get(key)
-    if ((a?.level ?? null) !== (b?.level ?? null) || (a?.msg ?? null) !== (b?.msg ?? null)) {
-      return false
-    }
-  }
-  return true
-}
-
-const SpreadsheetRow = memo(SpreadsheetRowImpl, areRowPropsEqual)
-
-function SpreadsheetRowImpl({ row, rowIdx, columns, colToGroup, selected, activeCell,
-  marketplace, colWidths, rowHeight, rowHeaderWidth, showRowImages, imageSize, imagesByAsin,
-  isDraggingRow, dropIndicator,
-  normSel, fillTarget, isFillDragging, isEditing, editInitialChar, clipboardRange,
-  stickyLeftByColIdx, categoryStickyLeft, cellErrors, collapsedParents, familyColor, onToggleCollapse,
-  matchKeys, toneMap,
-  onSelect, onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate, onRowResizeStart,
-  onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop,
-  onCellPointerDown, onCellDoubleClick, onRowSelect, onFillHandlePointerDown, onFillToBottom, onFillDrop,
-  showOverrideBadges, showCascadeButtons, onCascadeRow,
-  onCloneVariant, browseNodeLabels }: RowProps) {
-  const rowId = row._rowId as string
-  const status = row._status
-  const canDragRef = useRef(false)
-  const isParent = row.parentage_level === 'parent'
-  const isChild  = row.parentage_level === 'child'
-
-  const rowBg = status === 'success' ? 'bg-emerald-50/70 dark:bg-emerald-950/20'
-    : status === 'error' ? 'bg-red-50/70 dark:bg-red-950/20'
-    : status === 'pending' ? 'bg-amber-50/70 dark:bg-amber-950/20'
-    // P3.1 — suppressed rows get a faint pink tint (below push-status, above dirty)
-    : row._suppressed ? 'bg-pink-50/60 dark:bg-pink-950/15'
-    : row._isNew ? 'bg-sky-50/40 dark:bg-sky-950/10'
-    : row._dirty ? 'bg-yellow-50/40 dark:bg-yellow-950/10'
-    // Family colour banding — only when ≥2 families present (map is empty otherwise)
-    : isParent && familyColor ? FC_PARENT_ROW[familyColor]
-    : isChild && familyColor ? FC_CHILD_ROW[familyColor]
-    : ''
-
-  // Solid (opaque) equivalent for sticky cells — prevents content bleed-through on scroll
-  const frozenBg = status === 'success' ? 'bg-emerald-50 dark:bg-emerald-950/60'
-    : status === 'error' ? 'bg-red-50 dark:bg-red-950/60'
-    : status === 'pending' ? 'bg-amber-50 dark:bg-amber-950/60'
-    : row._suppressed ? 'bg-pink-50 dark:bg-pink-950/40'
-    : row._isNew ? 'bg-sky-50 dark:bg-sky-950/40'
-    : row._dirty ? 'bg-yellow-50 dark:bg-yellow-950/40'
-    : isParent && familyColor ? FC_PARENT_FROZEN[familyColor]
-    : isChild && familyColor ? FC_CHILD_FROZEN[familyColor]
-    : 'bg-white dark:bg-slate-900'
-
-  return (
-    <tr
-      draggable
-      onDragStart={(e) => {
-        if (!canDragRef.current) { e.preventDefault(); return }
-        e.dataTransfer.effectAllowed = 'move'
-        onRowDragStart()
-      }}
-      onDragEnd={() => { canDragRef.current = false; onRowDragEnd() }}
-      onDragOver={(e) => {
-        e.preventDefault()
-        const rect = e.currentTarget.getBoundingClientRect()
-        onRowDragOver(e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom')
-      }}
-      onDrop={(e) => {
-        e.preventDefault()
-        const rect = e.currentTarget.getBoundingClientRect()
-        onRowDrop(e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom')
-      }}
-      style={{
-        // FF-4 (perf) — let the browser skip layout/paint of off-screen rows.
-        // Unlike windowing, every row stays in the DOM, so drag / fill /
-        // selection / scroll-into-view all keep working unchanged. The
-        // intrinsic height keeps the scrollbar accurate for skipped rows.
-        contentVisibility: 'auto',
-        containIntrinsicSize: `0 ${rowHeight}px`,
-        borderTop: dropIndicator === 'top' ? '2px solid #3b82f6' : undefined,
-        borderBottom: dropIndicator === 'bottom' ? '2px solid #3b82f6' : undefined,
-      }}
-      className={cn('group/row transition-colors', rowBg,
-        isDraggingRow ? 'opacity-40' : 'hover:bg-white/60 dark:hover:bg-slate-800/40')}>
-      {/* Checkbox — also the drag handle (mousedown initiates drag) */}
-      <td
-        className={cn('sticky left-0 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-1.5 w-9 text-center cursor-grab active:cursor-grabbing', frozenBg)}
-        onMouseDown={() => { canDragRef.current = true }}
-        onMouseUp={() => { canDragRef.current = false }}
-      >
-        {status === 'success' ? <CheckCircle2 className="w-3 h-3 text-emerald-500 mx-auto" />
-          : status === 'error' ? (() => {
-            const errMsg = String(row._feedMessage ?? 'Push error')
-            const errCode = row._feedCode ? String(row._feedCode) : ''
-            const errFields = Array.isArray(row._errorFields) ? (row._errorFields as string[]) : []
-            const lookup = errCode ? FEED_ERROR_CODES[errCode] : undefined
-            return (
-              <Tooltip label={
-                <div className="text-xs space-y-1 max-w-[240px]">
-                  {lookup && <div className="font-semibold text-red-300">{lookup.title}</div>}
-                  <div>{errMsg}</div>
-                  {lookup?.hint && <div className="text-slate-400 italic">{lookup.hint}</div>}
-                  {errFields.length > 0 && (
-                    <div className="text-slate-400">Fields: <span className="font-mono">{errFields.join(', ')}</span></div>
-                  )}
-                  {errCode && <div className="text-slate-500 font-mono text-[10px]">Code: {errCode}</div>}
-                </div>
-              } className="h10-ds-tooltip--light">
-                <AlertCircle className="w-3 h-3 text-red-500 mx-auto" />
-              </Tooltip>
-            )
-          })()
-          : status === 'pending' ? <Loader2 className="w-3 h-3 text-amber-500 animate-spin mx-auto" />
-          : <input type="checkbox" checked={selected}
-              // FFP.11 — read shiftKey from onClick (a real MouseEvent) so
-              // shift-range selection works, mirroring the eBay grid; onChange
-              // stays a no-op to satisfy React's controlled-checkbox rule.
-              onClick={(e) => onSelect(!selected, e.shiftKey)}
-              onChange={() => {}}
-              className="w-3.5 h-3.5 accent-blue-600" />}
-      </td>
-      {/* Row # + ASIN badge + row-height resize handle */}
-      <td
-        data-row-ri={rowIdx}
-        className={cn(
-          'sticky left-9 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-0.5 relative group/rowresize select-none',
-          frozenBg,
-          isParent && familyColor ? `border-l-2 ${FC_PARENT_BORDER[familyColor]}`
-            : isChild && familyColor ? `border-l-2 ${FC_CHILD_BORDER[familyColor]}`
-            : isChild ? 'border-l-2 border-l-blue-200 dark:border-l-blue-800'
-            : undefined,
-          // IN.1 — amber left-border when price is overriding master AND has drifted
-          (row._fieldStates as any)?.price === 'OVERRIDE' &&
-            (row._masterValues as any)?.price != null &&
-            row.purchasable_offer__our_price !== String((row._masterValues as any).price) &&
-            'border-l-2 border-l-amber-400 dark:border-l-amber-500',
-        )}
-        onPointerDown={(e) => {
-          if (e.button !== 0) return
-          e.currentTarget.releasePointerCapture(e.pointerId)
-          onRowSelect(rowIdx)
-        }}
-        style={{ cursor: 'ns-resize', width: rowHeaderWidth, minWidth: rowHeaderWidth, height: rowHeight }}>
-        <div
-          className={cn('flex flex-col gap-0.5 w-full', showRowImages ? 'items-center' : 'items-end')}
-          style={{ minHeight: rowHeight, justifyContent: 'center', padding: '4px 1px' }}
-        >
-          {/* Product image */}
-          {showRowImages && (() => {
-            const asin = row._asin ? String(row._asin) : null
-            const imgUrl = asin ? imagesByAsin[asin] : null
-            if (asin && imgUrl) {
-              return (
-                <img
-                  src={imgUrl}
-                  alt=""
-                  className="object-contain rounded flex-shrink-0"
-                  style={{ width: imageSize, height: imageSize, maxWidth: rowHeaderWidth - 4 }}
-                  draggable={false}
-                />
-              )
-            }
-            if (asin && imgUrl === null) {
-              // loading (null = pending)
-              return (
-                <div
-                  className="rounded bg-slate-100 dark:bg-slate-800 animate-pulse flex-shrink-0"
-                  style={{ width: imageSize, height: imageSize }}
-                />
-              )
-            }
-            if (showRowImages) {
-              // no ASIN — grey placeholder
-              return (
-                <div
-                  className="rounded border border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0"
-                  style={{ width: imageSize, height: imageSize }}
-                >
-                  <ImageIcon className="text-slate-300 dark:text-slate-600" style={{ width: imageSize * 0.4, height: imageSize * 0.4 }} />
-                </div>
-              )
-            }
-            return null
-          })()}
-
-          {/* Row number + collapse toggle */}
-          {!showRowImages && (
-            <div className="flex items-center gap-0.5 w-full justify-end">
-              {isParent && (
-                <button
-                  type="button"
-                  className="p-0 text-slate-400 hover:text-slate-600 flex-shrink-0"
-                  onClick={(e) => { e.stopPropagation(); onToggleCollapse(rowId) }}
-                  title={collapsedParents.has(rowId) ? 'Expand children' : 'Collapse children'}
-                >
-                  {collapsedParents.has(rowId)
-                    ? <ChevronRight className="w-3 h-3" />
-                    : <ChevronDown className="w-3 h-3" />}
-                </button>
-              )}
-              {isChild && <span className="w-3 flex-shrink-0" />}
-              <span className={cn('text-xs text-slate-400 tabular-nums', isChild && 'ml-1')}>{rowIdx + 1}</span>
-            </div>
-          )}
-          {showRowImages && (
-            <span className="text-[9px] text-slate-400 tabular-nums leading-none">{rowIdx + 1}</span>
-          )}
-
-          {/* ASIN link — only when row images are ON and at view M/L/XL (size ≥ 48 = M) */}
-          {showRowImages && imageSize >= 48 && row._asin ? (() => {
-            const asin = String(row._asin)
-            const domain = AMAZON_DOMAIN[marketplace] ?? 'amazon.com'
-            return (
-              <a
-                href={`https://www.${domain}/dp/${asin}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[9px] font-mono text-blue-500 hover:text-blue-700 hover:underline leading-none block w-full truncate text-center z-10 relative"
-                title={`ASIN: ${asin} — open on ${domain}`}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-              >{asin}</a>
-            )
-          })() : null}
-
-          {/* Listing status — same visibility rule as ASIN (images ON + view M/L/XL) */}
-          {showRowImages && imageSize >= 48 && row._listingStatus != null && (() => {
-            const s = String(row._listingStatus)
-            const cls = (s === 'ACTIVE' || s === 'BUYABLE')
-              ? 'text-emerald-600 dark:text-emerald-400'
-              : s === 'INACTIVE' ? 'text-amber-500 dark:text-amber-400'
-              : 'text-red-500 dark:text-red-400'
-            return <span className={cn('text-[9px] font-semibold leading-none', cls)}>{s.slice(0, 4)}</span>
-          })()}
-
-
-          {/* IN.1 — Override badge: shows when toggle is on and any field has followMaster*=false */}
-          {showOverrideBadges && (!showRowImages || imageSize >= 48) && (
-            <OverrideBadge
-              listingId={row._listingId as string | null | undefined}
-              fieldStates={row._fieldStates as any}
-              masterValues={row._masterValues as any}
-            />
-          )}
-
-          {/* IN.2 — Cascade button */}
-          {showCascadeButtons && (!showRowImages || imageSize >= 48) && row._productId && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onCascadeRow(row) }}
-              onPointerDown={(e) => e.stopPropagation()}
-              title="Apply this row's values to all sibling variants"
-              className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold leading-none transition-colors bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
-            >
-              <GitFork className="h-2.5 w-2.5" />↓
-            </button>
-          )}
-
-          {/* P4.3 — Clone variant button (child rows only) */}
-          {!row._ghost && isChild && (!showRowImages || imageSize >= 48) && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onCloneVariant(row) }}
-              onPointerDown={(e) => e.stopPropagation()}
-              title="Clone this variant — copies all fields, clears axis values (SKU, Color, Size) for you to fill in"
-              className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold leading-none transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700/50 dark:text-slate-300 dark:hover:bg-slate-700"
-            >
-              <Copy className="h-2.5 w-2.5" />
-            </button>
-          )}
-
-          {/* P1.4 — Last-sync badge: shows when images panel is at M+ (≥48 px) */}
-          {!row._ghost && (() => {
-            if (!row._lastSyncedAt || !showRowImages || imageSize < 48) return null
-            const syncStatus = String(row._lastSyncStatus ?? '')
-            const syncAt = new Date(String(row._lastSyncedAt))
-            const secAgo = Math.round((Date.now() - syncAt.getTime()) / 1000)
-            const timeLabel = secAgo < 60 ? `${secAgo}s` : secAgo < 3600 ? `${Math.round(secAgo / 60)}m` : `${Math.round(secAgo / 3600)}h`
-            const ok = /^success$/i.test(syncStatus)
-            const err = /^error$/i.test(syncStatus)
-            return (
-              <span
-                className={cn('shrink-0 text-[8px] font-mono leading-none px-0.5',
-                  ok ? 'text-emerald-500 dark:text-emerald-400'
-                  : err ? 'text-red-500 dark:text-red-400'
-                  : 'text-slate-400 dark:text-slate-500')}
-                title={`Last Amazon sync: ${syncAt.toLocaleString()} (${syncStatus || 'n/a'})`}
-              >↑{timeLabel}</span>
-            )
-          })()}
-        </div>
-        {/* Row height resize handle at the bottom edge */}
-        <div
-          className="absolute bottom-0 left-0 right-0 h-1.5 cursor-row-resize flex items-end justify-center pb-px opacity-0 group-hover/rowresize:opacity-100 transition-opacity"
-          onMouseDown={onRowResizeStart}
-          title="Drag to resize rows"
-        >
-          <div className="w-4 h-px rounded-full bg-blue-400" />
-        </div>
-      </td>
-
-      {/* Data cells — BN.2.1: flatMap injects __category td after record_action; ci stays allColumns-based */}
-      {columns.flatMap((col, ci) => {
-        const isActive = activeCell?.rowId === rowId && activeCell?.colId === col.id
-        const groupColor = colToGroup.get(col.id)?.color ?? 'slate'
-        const w = colWidths[col.id] ?? col.width
-        const validIssue = cellErrors.get(`${rowId}:${col.id}`)
-        const stickyLeft = stickyLeftByColIdx[ci]
-
-        const isSelected = normSel
-          ? rowIdx >= normSel.rMin && rowIdx <= normSel.rMax && ci >= normSel.cMin && ci <= normSel.cMax
-          : false
-
-        const selEdges = isSelected && normSel ? {
-          top:    rowIdx === normSel.rMin,
-          bottom: rowIdx === normSel.rMax,
-          left:   ci === normSel.cMin,
-          right:  ci === normSel.cMax,
-        } : null
-
-        const isCorner = !!(normSel && !isFillDragging
-          && rowIdx === normSel.rMax && ci === normSel.cMax)
-
-        const isFillTarget = !!(fillTarget
-          && rowIdx >= fillTarget.rMin && rowIdx <= fillTarget.rMax
-          && ci >= fillTarget.cMin && ci <= fillTarget.cMax)
-
-        const fillTargetEdges = isFillTarget && fillTarget ? {
-          top:    rowIdx === fillTarget.rMin,
-          bottom: rowIdx === fillTarget.rMax,
-          left:   ci === fillTarget.cMin,
-          right:  ci === fillTarget.cMax,
-        } : null
-
-        const isCellEditing = isEditing && isActive
-
-        const isClipboard = !!(clipboardRange
-          && rowIdx >= clipboardRange.rMin && rowIdx <= clipboardRange.rMax
-          && ci >= clipboardRange.cMin && ci <= clipboardRange.cMax)
-
-        const clipboardEdges = isClipboard && clipboardRange ? {
-          top:    rowIdx === clipboardRange.rMin,
-          bottom: rowIdx === clipboardRange.rMax,
-          left:   ci === clipboardRange.cMin,
-          right:  ci === clipboardRange.cMax,
-        } : null
-
-        const isMatch = matchKeys.has(`${rowIdx}:${ci}`)
-        const toneCls = toneMap.get(`${rowIdx}:${col.id}`) ? TONE_CLASSES[toneMap.get(`${rowIdx}:${col.id}`)! as keyof typeof TONE_CLASSES] : undefined
-
-        // Listing guidance: detect from applicableParentage on the column
-        const guidanceLevel = (() => {
-          if (!col.applicableParentage?.length) return null
-          const parentage = String(row.parentage_level ?? '')
-          const rowType = parentage.toLowerCase() === 'parent' ? 'VARIATION_PARENT'
-            : parentage.toLowerCase() === 'child' ? 'VARIATION_CHILD'
-            : 'STANDALONE'
-          return col.applicableParentage.includes(rowType) ? null : 'not-applicable' as const
-        })()
-
-        // MT.3b — in a union (multi-category) sheet, grey a cell whose column
-        // doesn't apply to THIS row's product_type. Single-type manifests have
-        // no applicableProductTypes ⇒ always applicable (no greying).
-        const appliesToType = !col.applicableProductTypes
-          || col.applicableProductTypes.includes(String(row.product_type ?? '').toUpperCase())
-
-        // FBA rows: quantity, Follow, AND Buffer are Amazon-managed (a merchant qty
-        // would flip FBA→FBM). All blanked server-side; grey them so they read as
-        // not-applicable (FBM rows keep editable qty + Follow + Buffer cells).
-        const isFbaManagedCell = (col.id === 'fulfillment_availability__quantity' || col.id === 'follow' || col.id === 'buffer')
-          && /^(AMAZON|AFN|FBA)/.test(String(row.fulfillment_availability__fulfillment_channel_code ?? '').toUpperCase())
-        // FB4 — Buffer stays EDITABLE on Pinned rows (parity with eBay + the bulk
-        // endpoint, which stores it inert until the listing is flipped to Follow).
-        // Only FBA keeps buffer read-only ('—'), via isFbaManagedCell above.
-
-        const _cell = (
-          <SpreadsheetCell
-            key={col.id}
-            col={col}
-            value={row[col.id]}
-            isActive={isActive}
-            isEditing={isCellEditing}
-            editInitialChar={isCellEditing ? editInitialChar : null}
-            cellBg={stickyLeft !== undefined ? gColor(groupColor).band : gColor(groupColor).cell}
-            grayed={!appliesToType || isFbaManagedCell}
-            isGhost={!!row._ghost}
-            width={w}
-            cellHeight={rowHeight}
-            isSelected={isSelected}
-            selEdges={selEdges}
-            isCorner={isCorner}
-            isFillTarget={isFillTarget}
-            fillTargetEdges={fillTargetEdges}
-            isClipboard={isClipboard}
-            clipboardEdges={clipboardEdges}
-            isMatch={isMatch}
-            toneCls={toneCls}
-            guidanceLevel={guidanceLevel}
-            ri={rowIdx}
-            ci={ci}
-            onCellPointerDown={(shiftKey) => onCellPointerDown(rowIdx, ci, shiftKey)}
-            onCellDoubleClick={() => onCellDoubleClick(rowIdx, ci)}
-            onFillHandlePointerDown={() => onFillHandlePointerDown(rowIdx, ci)}
-            onFillToBottom={onFillToBottom}
-            onFillDrop={onFillDrop}
-            onDeactivate={onDeactivate}
-            onChange={(v) => onChange(col.id, v)}
-            onLiveChange={(val) => onLiveChange(col.id, val)}
-            onPushSnapshot={onPushSnapshot}
-            onNavigate={(dir) => onNavigate(col.id, dir)}
-            validIssue={validIssue}
-            stickyLeft={stickyLeft}
-          />
-        )
-        // BN.2.1 — inject derived Category td immediately after record_action.
-        // No event handlers → never enters selection/paste/nav paths.
-        if (col.id === 'record_action') {
-          const cat = categoryOf(row as Record<string, unknown>, browseNodeLabels)
-          const crumb = formatNodeBreadcrumb(cat.nodePath)
-          const show = !row._ghost && !!(cat.productType || cat.nodeId)
-          return [
-            _cell,
-            <td key="__category"
-              style={{ minWidth: CATEGORY_COL.width, width: CATEGORY_COL.width, ...(categoryStickyLeft !== undefined ? { position: 'sticky' as const, left: categoryStickyLeft, zIndex: 22 } : {}) }}
-              className="border-b border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-              <div className="px-1.5 flex items-center gap-1.5 min-w-0" style={{ height: rowHeight }} title={cat.nodePath ?? undefined}>
-                {show ? (
-                  <>
-                    {cat.productType && <Badge variant="info" size="sm">{cat.productType}</Badge>}
-                    {crumb && <span className="text-[11px] text-slate-600 dark:text-slate-300 truncate">{crumb}</span>}
-                    {!cat.nodeId && cat.productType && <span className="text-[10px] text-amber-500 shrink-0">no node</span>}
-                  </>
-                ) : <span className="text-slate-300 dark:text-slate-600">—</span>}
-              </div>
-            </td>,
-          ]
-        }
-        return [_cell]
-      })}
-    </tr>
-  )
-}
-
-// ProductTypeDropdown removed — BN.3.1 replaced it with Categories-in-this-sheet chips.
-
-// ── SpreadsheetCell + EnumDropdown ─────────────────────────────────────
-
-interface CellProps {
-  col: Column; value: unknown; isActive: boolean; cellBg: string
-  grayed: boolean
-  /** GX.5 — a trailing blank canvas row: suppress the "⚠ required" placeholder. */
-  isGhost?: boolean
-  width: number
-  cellHeight: number
-  ri: number; ci: number
-  isSelected: boolean
-  selEdges: { top: boolean; right: boolean; bottom: boolean; left: boolean } | null
-  isCorner: boolean
-  isFillTarget: boolean
-  fillTargetEdges: { top: boolean; right: boolean; bottom: boolean; left: boolean } | null
-  isEditing: boolean
-  editInitialChar: string | null
-  isClipboard: boolean
-  clipboardEdges: { top: boolean; right: boolean; bottom: boolean; left: boolean } | null
-  validIssue?: ValidationIssue
-  stickyLeft?: number
-  /** BF.1 — cell is a find-replace match */
-  isMatch?: boolean
-  /** BF.2 — conditional formatting tone class */
-  toneCls?: string
-  /** Listing guidance: not-applicable = dark gray; optional = light gray */
-  guidanceLevel?: 'not-applicable' | 'optional' | null
-  onCellPointerDown: (shiftKey: boolean) => void
-  onCellDoubleClick: () => void
-  onFillHandlePointerDown: () => void
-  onFillToBottom: () => void
-  onFillDrop: () => void
-  onDeactivate: () => void
-  onChange: (val: unknown) => void
-  onLiveChange: (val: string) => void
-  onPushSnapshot: () => void
-  onNavigate: (dir: 'right' | 'left' | 'down' | 'up') => void
-}
-
-// ── Text editing helpers ───────────────────────────────────────────────
-
-function getCharIndexFromPoint(x: number, y: number): number {
-  if (typeof document === 'undefined') return -1
-  if ('caretRangeFromPoint' in document) {
-    const range = (document as any).caretRangeFromPoint(x, y) as Range | null
-    if (range?.startContainer?.nodeType === Node.TEXT_NODE) return range.startOffset
-  }
-  if ('caretPositionFromPoint' in document) {
-    const pos = (document as any).caretPositionFromPoint(x, y) as { offsetNode: Node; offset: number } | null
-    if (pos?.offsetNode?.nodeType === Node.TEXT_NODE) return pos.offset
-  }
-  return -1
-}
-
-function wordBoundsAt(text: string, pos: number): [number, number] {
-  if (!text) return [0, 0]
-  const p = Math.min(Math.max(pos, 0), text.length)
-  const isWordChar = /\w/
-  let start = p
-  while (start > 0 && isWordChar.test(text[start - 1])) start--
-  let end = p
-  while (end < text.length && isWordChar.test(text[end])) end++
-  return start === end ? [p, p] : [start, end]
-}
-
-function SpreadsheetCellImpl({ col, value, isActive, cellBg, width, cellHeight, ri, ci,
-  isSelected, selEdges, isCorner, isFillTarget, fillTargetEdges,
-  isEditing, editInitialChar, isClipboard, clipboardEdges,
-  validIssue, stickyLeft, isMatch, toneCls,
-  guidanceLevel, isGhost, grayed,
-  onCellPointerDown, onCellDoubleClick, onFillHandlePointerDown, onFillToBottom, onFillDrop,
-  onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate }: CellProps) {
-  const displayValue = value != null ? String(value) : ''
-  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [liveLen, setLiveLen] = useState(displayValue.length)
-  const [liveBytes, setLiveBytes] = useState(() => new TextEncoder().encode(displayValue).length)
-  const cancelledRef = useRef(false)
-  // Grayed cells (e.g. FBA quantity) are read-only; deactivate immediately if the
-  // grid somehow starts editing one (e.g. via keyboard shortcut).
-  useEffect(() => { if (isEditing && grayed) onDeactivate() }, [isEditing, grayed, onDeactivate])
-  const effectivelyEditing = isEditing && !grayed
-  const pendingWordSelRef = useRef<{ start: number; end: number } | null | undefined>(undefined)
-  // undefined = F2 entry (select all), null = dblclick but no word found (cursor end), {start,end} = word found
-  const originalValueRef = useRef('')
-  const snapshotPushedRef = useRef(false)
-
-  useEffect(() => {
-    if (!effectivelyEditing || col.kind === 'enum' || !inputRef.current) return
-    inputRef.current.focus()
-    if (editInitialChar !== null) return // key-triggered entry: browser handles selection
-
-    const pending = pendingWordSelRef.current
-    if (pending !== undefined) {
-      // Double-click triggered: apply stored word selection
-      requestAnimationFrame(() => {
-        const inp = inputRef.current as HTMLInputElement | null
-        if (!inp) return
-        if (pending !== null) {
-          inp.setSelectionRange(pending.start, pending.end)
-        } else {
-          inp.setSelectionRange(displayValue.length, displayValue.length)
-        }
-        pendingWordSelRef.current = undefined // reset for next time
-      })
-      return
-    }
-
-    // F2 / programmatic: select all
-    if ('select' in inputRef.current) {
-      (inputRef.current as HTMLInputElement).select()
-    }
-  }, [effectivelyEditing, col.kind, editInitialChar])
-
-  useEffect(() => {
-    if (effectivelyEditing) {
-      snapshotPushedRef.current = false
-    }
-  }, [effectivelyEditing])
-
-  // Reset counters to committed value length each time cell becomes editing
-  useEffect(() => {
-    if (effectivelyEditing) {
-      setLiveLen(displayValue.length)
-      setLiveBytes(new TextEncoder().encode(displayValue).length)
-    }
-  }, [effectivelyEditing])
-
-  // GX.2b — typing on an active enum cell (or F2) opens its dropdown, pre-filled
-  // with the typed character, so Color/Size/Brand support type-to-replace too.
-  useEffect(() => {
-    if (effectivelyEditing && col.kind === 'enum') setDropdownOpen(true)
-  }, [isEditing, col.kind])
-
-  const isEmpty = !displayValue
-  const cellStyle: React.CSSProperties = { minWidth: width, width, ...(stickyLeft !== undefined ? { position: 'sticky' as const, left: stickyLeft, zIndex: 4 } : {}) }
-  const hStyle = { height: cellHeight }
-
-  const selStyle: React.CSSProperties = selEdges ? {
-    borderTop:    selEdges.top    ? '2px solid #3b82f6' : undefined,
-    borderRight:  selEdges.right  ? '2px solid #3b82f6' : undefined,
-    borderBottom: selEdges.bottom ? '2px solid #3b82f6' : undefined,
-    borderLeft:   selEdges.left   ? '2px solid #3b82f6' : undefined,
-  } : fillTargetEdges ? {
-    borderTop:    fillTargetEdges.top    ? '2px dashed #3b82f6' : undefined,
-    borderRight:  fillTargetEdges.right  ? '2px dashed #3b82f6' : undefined,
-    borderBottom: fillTargetEdges.bottom ? '2px dashed #3b82f6' : undefined,
-    borderLeft:   fillTargetEdges.left   ? '2px dashed #3b82f6' : undefined,
-  } : clipboardEdges ? {
-    borderTop:    clipboardEdges.top    ? '2px dashed #22c55e' : undefined,
-    borderRight:  clipboardEdges.right  ? '2px dashed #22c55e' : undefined,
-    borderBottom: clipboardEdges.bottom ? '2px dashed #22c55e' : undefined,
-    borderLeft:   clipboardEdges.left   ? '2px dashed #22c55e' : undefined,
-  } : {}
-
-  const guidanceCls = !isActive && !isSelected && !isMatch && !toneCls
-    ? grayed                             ? 'bg-slate-200 dark:bg-slate-700/70'
-    : guidanceLevel === 'not-applicable' ? 'bg-slate-200 dark:bg-slate-700/70'
-    : guidanceLevel === 'optional'       ? 'bg-slate-100/80 dark:bg-slate-800/60'
-    : ''
-    : ''
-
-  const guidanceTitle = guidanceLevel === 'not-applicable'
-    ? col.applicableParentage?.length
-      ? `Not needed for this row type — typically set on ${col.applicableParentage.map((p) => p.replace('VARIATION_', '').toLowerCase()).join(' or ')} rows only`
-      : 'Not applicable for this product configuration'
-    : undefined
-
-  const baseCls = cn(
-    'border-b border-r border-slate-200 dark:border-slate-700 relative transition-colors',
-    isSelected ? 'bg-blue-100/60 dark:bg-blue-900/20'
-    : isClipboard ? 'bg-green-50/40 dark:bg-green-900/10'
-    : isFillTarget ? 'bg-blue-50/80 dark:bg-blue-900/10'
-    : isMatch ? 'bg-yellow-100 dark:bg-yellow-900/30'
-    : toneCls ? toneCls
-    : guidanceCls || cellBg,
-    isActive && !effectivelyEditing && 'outline outline-2 outline-blue-500 outline-offset-[-1px] z-[5]',
-    effectivelyEditing && 'ring-2 ring-inset ring-blue-500 z-[5]',
-    !isActive && !isSelected && !isMatch && !toneCls && !guidanceLevel && (
-      validIssue?.level === 'error' ? 'bg-red-100/80 dark:bg-red-950/30'
-      : validIssue?.level === 'warn' ? 'bg-amber-50/80 dark:bg-amber-950/20'
-      : ''
-    ),
-  )
-
-  const tdPointerDown = (e: React.PointerEvent<HTMLTableCellElement>) => {
-    if (e.button !== 0) return
-    const tag = (e.target as HTMLElement).tagName
-    // While editing, let clicks on the input/textarea pass through so the browser
-    // can reposition the cursor naturally — don't exit edit mode or reset selection.
-    if (effectivelyEditing && (tag === 'INPUT' || tag === 'TEXTAREA')) return
-    e.currentTarget.releasePointerCapture(e.pointerId)
-    onCellPointerDown(e.shiftKey)
-  }
-
-  // GX.2 — commit the input's CURRENT value before leaving the cell. A single
-  // typed char arrives as the input's defaultValue and fires NO onInput, so
-  // without this it was silently dropped on Tab/Enter/blur ("type 5, Enter → gone").
-  const commitInput = () => {
-    const inp = inputRef.current
-    if (!inp) return
-    const val = inp.value
-    if (val === displayValue) return
-    if (!snapshotPushedRef.current) {
-      originalValueRef.current = displayValue
-      onPushSnapshot()
-      snapshotPushedRef.current = true
-    }
-    onLiveChange(val)
-  }
-
-  function handleKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Tab') { e.preventDefault(); commitInput(); onNavigate(e.shiftKey ? 'left' : 'right') }
-    else if (e.key === 'Enter' && col.kind !== 'longtext') { e.preventDefault(); commitInput(); onNavigate(e.shiftKey ? 'up' : 'down') }
-    else if (e.key === 'Escape') {
-      if (snapshotPushedRef.current) {
-        onLiveChange(originalValueRef.current) // revert to pre-edit value
-        snapshotPushedRef.current = false
-      }
-      cancelledRef.current = true
-      onDeactivate(); setDropdownOpen(false)
-    }
-    else if (e.key === 'ArrowDown' && col.kind === 'enum') { e.preventDefault(); setDropdownOpen(true) }
-  }
-
-  const fillHandle = isCorner ? (
-    <div
-      className="absolute bottom-[-3px] right-[-3px] w-[7px] h-[7px] bg-blue-500 border-[1.5px] border-white dark:border-slate-900 z-20 cursor-crosshair"
-      onPointerDown={(e) => {
-        e.stopPropagation()
-        e.preventDefault()
-        // Release capture so container pointermove tracks the fill drag
-        e.currentTarget.releasePointerCapture(e.pointerId)
-        onFillHandlePointerDown()
-      }}
-      onDoubleClick={(e) => { e.stopPropagation(); e.preventDefault(); onFillToBottom() }}
-      title="Double-click to fill down to the bottom of the data"
-    />
-  ) : null
-
-  // Shared td props — data-ri/ci let the container's pointermove identify which cell the pointer is over
-  const tdShared = {
-    'data-ri': ri, 'data-ci': ci,
-    onPointerDown: tdPointerDown,
-    onPointerUp: onFillDrop,
-    onDoubleClick: (e: React.MouseEvent) => {
-      if (grayed) return
-      // Compute word bounds NOW while static text node is still in DOM
-      const charPos = getCharIndexFromPoint(e.clientX, e.clientY)
-      if (charPos >= 0) {
-        const [s, end] = wordBoundsAt(displayValue, charPos)
-        pendingWordSelRef.current = { start: s, end }
-      } else {
-        pendingWordSelRef.current = null // dblclick but no word — cursor at end
-      }
-      onCellDoubleClick()
-    },
-  }
-
-  // Enum cell: custom dropdown. A grayed enum (not-applicable to this row, or an
-  // Amazon-managed control like Follow on an FBA listing) falls through to the
-  // read-only "—" render below so it can never be edited.
-  if (col.kind === 'enum' && col.options && col.options.length > 0 && !grayed) {
-    // Localized display label for the stored canonical value (e.g. 'parent' → 'Articolo padre')
-    const displayLabel = (col.optionLabels?.[displayValue] ?? displayValue)
-    // A selection-only cell holding a value Amazon doesn't list. Allowed (you
-    // can type your own) but flagged, since Amazon may reject it at submit.
-    const strictInvalid = !!col.selectionOnly && !!displayValue && !col.options.includes(displayValue)
-    return (
-      <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}
-        title={strictInvalid ? `"${displayLabel}" isn't in Amazon's valid values for this field — Amazon may reject it at submit` : undefined}
-        onClick={() => { if (isActive) setDropdownOpen(true) }}
-        onDoubleClick={(e) => {
-          const charPos = getCharIndexFromPoint(e.clientX, e.clientY)
-          pendingWordSelRef.current = charPos >= 0
-            ? (() => { const [s, end] = wordBoundsAt(displayValue, charPos); return { start: s, end } })()
-            : null
-          onCellDoubleClick()
-          setDropdownOpen(true)
-        }}>
-        <div className="px-1.5 flex items-center justify-between gap-1 cursor-pointer group/cell" style={hStyle}>
-          <span className={cn('text-xs truncate flex-1 flex items-center gap-1',
-            strictInvalid ? 'text-amber-600 dark:text-amber-400'
-            : isEmpty ? 'text-slate-300 dark:text-slate-600 italic' : 'text-slate-800 dark:text-slate-200')}>
-            {strictInvalid && <AlertCircle className="w-3 h-3 shrink-0" aria-hidden />}
-            <span className="truncate">{displayLabel || ((col.required && !isGhost) ? '⚠ required' : col.options[0] ? `e.g. ${col.optionLabels?.[col.options[0]] ?? col.options[0]}` : '—')}</span>
-          </span>
-          <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
-        </div>
-        {fillHandle}
-        {isActive && dropdownOpen && (
-          <EnumDropdown
-            options={col.options}
-            optionLabels={col.optionLabels}
-            current={displayValue}
-            selectionOnly={col.selectionOnly}
-            initialQuery={editInitialChar ?? ''}
-            onSelect={(v, dir) => { onChange(v); setDropdownOpen(false); if (dir) onNavigate(dir); else onDeactivate() }}
-            onClose={() => { setDropdownOpen(false); onDeactivate() }}
-          />
-        )}
-      </td>
-    )
-  }
-
-  // Longtext cell
-  if (col.kind === 'longtext') {
-    if (effectivelyEditing) {
-      const atCharLimit = col.maxLength != null && liveLen >= col.maxLength
-      const nearCharLimit = col.maxLength != null && liveLen >= col.maxLength * 0.8
-      const atByteLimit = col.maxUtf8ByteLength != null && liveBytes > col.maxUtf8ByteLength
-      const nearByteLimit = col.maxUtf8ByteLength != null && liveBytes >= col.maxUtf8ByteLength * 0.9
-      const atLimit = atCharLimit || atByteLimit
-      const nearLimit = !atLimit && (nearCharLimit || nearByteLimit)
-      return (
-        <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}>
-          {fillHandle}
-          <textarea ref={inputRef as any} defaultValue={editInitialChar !== null ? editInitialChar : displayValue}
-            onInput={(e) => {
-              // GX.8 — same local-edit model as the text/number cell (GX.3): only the
-              // counter while typing; commitInput() writes the row once on exit.
-              const v = (e.target as HTMLTextAreaElement).value
-              setLiveLen(v.length)
-              if (col.maxUtf8ByteLength != null) setLiveBytes(new TextEncoder().encode(v).length)
-            }}
-            onBlur={() => {
-              if (!cancelledRef.current) commitInput()
-              cancelledRef.current = false
-              onDeactivate()
-            }}
-            onKeyDown={handleKeyDown}
-            maxLength={col.maxLength}
-            className="w-full px-1.5 py-1 text-xs bg-white dark:bg-slate-800 focus:outline-none text-slate-800 dark:text-slate-200 resize-none"
-            style={{ minWidth: width, minHeight: Math.max(cellHeight, 60) }} />
-          {(col.maxLength != null || col.maxUtf8ByteLength != null) && (
-            <div className={cn('absolute bottom-1 right-1.5 text-[9px] tabular-nums font-mono pointer-events-none select-none flex gap-1.5',
-              atLimit ? 'text-red-500 dark:text-red-400 font-bold'
-              : nearLimit ? 'text-amber-500 dark:text-amber-400'
-              : 'text-slate-300 dark:text-slate-600')}>
-              {col.maxLength != null && <span>{liveLen}/{col.maxLength}</span>}
-              {col.maxUtf8ByteLength != null && (
-                <span className={atByteLimit ? 'text-red-500 dark:text-red-400 font-bold' : nearByteLimit ? 'text-amber-500' : ''}>
-                  {liveBytes}B/{col.maxUtf8ByteLength}B
-                </span>
-              )}
-            </div>
-          )}
-        </td>
-      )
-    }
-    const viewByteOver = col.maxUtf8ByteLength != null && new TextEncoder().encode(displayValue).length > col.maxUtf8ByteLength
-    return (
-      <td {...tdShared} className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30',
-        viewByteOver && 'ring-1 ring-inset ring-red-400 dark:ring-red-500')}
-        style={{ ...cellStyle, ...selStyle }}>
-        {fillHandle}
-        <div className="px-1.5 flex items-center text-xs text-slate-800 dark:text-slate-200 truncate" style={hStyle}>
-          {displayValue || <span className="text-slate-300 dark:text-slate-600 italic">{(col.required && !isGhost) ? '⚠ required' : ''}</span>}
-        </div>
-      </td>
-    )
-  }
-
-  // Text / number cell
-  if (effectivelyEditing) {
-    const atCharLimit = col.maxLength != null && liveLen >= col.maxLength
-    const nearCharLimit = col.maxLength != null && liveLen >= col.maxLength * 0.8
-    const atByteLimit = col.maxUtf8ByteLength != null && liveBytes > col.maxUtf8ByteLength
-    const nearByteLimit = col.maxUtf8ByteLength != null && liveBytes >= col.maxUtf8ByteLength * 0.9
-    const atLimit = atCharLimit || atByteLimit
-    const nearLimit = !atLimit && (nearCharLimit || nearByteLimit)
-    return (
-      <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}>
-        {fillHandle}
-        <input ref={inputRef as any} type="text" inputMode={col.kind === 'number' ? 'decimal' : undefined}
-          defaultValue={editInitialChar !== null ? editInitialChar : displayValue} maxLength={col.maxLength}
-          onInput={(e) => {
-            // GX.3 — edit LOCALLY: only update the char counter while typing. No
-            // setRows per keystroke (that re-rendered all ~62k cells on every key —
-            // the real "typing feels laggy"). The input is uncontrolled, so the
-            // typed text shows without React; commitInput() writes the final value
-            // to the row once, on Tab/Enter/blur.
-            const v = (e.target as HTMLInputElement).value
-            setLiveLen(v.length)
-            if (col.maxUtf8ByteLength != null) setLiveBytes(new TextEncoder().encode(v).length)
-          }}
-          onBlur={() => {
-            if (!cancelledRef.current) commitInput()
-            cancelledRef.current = false
-            onDeactivate()
-          }}
-          onKeyDown={handleKeyDown}
-          className="w-full px-1.5 text-xs bg-white dark:bg-slate-800 focus:outline-none text-slate-800 dark:text-slate-200"
-          style={hStyle} />
-        {(col.maxLength != null || col.maxUtf8ByteLength != null) && (
-          <div className={cn('absolute bottom-0.5 right-1 text-[9px] tabular-nums font-mono pointer-events-none select-none leading-none flex gap-1',
-            atLimit ? 'text-red-500 dark:text-red-400 font-bold'
-            : nearLimit ? 'text-amber-500 dark:text-amber-400'
-            : 'text-slate-300 dark:text-slate-600')}>
-            {col.maxLength != null && <span>{liveLen}/{col.maxLength}</span>}
-            {col.maxUtf8ByteLength != null && (
-              <span className={atByteLimit ? 'text-red-500 dark:text-red-400 font-bold' : nearByteLimit ? 'text-amber-500' : ''}>
-                {liveBytes}B/{col.maxUtf8ByteLength}B
-              </span>
-            )}
-          </div>
-        )}
-      </td>
-    )
-  }
-
-  const viewByteOver = col.maxUtf8ByteLength != null && new TextEncoder().encode(displayValue).length > col.maxUtf8ByteLength
-  return (
-    <td {...tdShared} className={cn(baseCls, grayed ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30',
-      viewByteOver && 'ring-1 ring-inset ring-red-400 dark:ring-red-500')}
-      style={{ ...cellStyle, ...selStyle }} title={grayed ? 'Managed by Amazon for FBA listings — set stock on the Stock page' : (guidanceTitle ?? validIssue?.msg ?? col.description)}>
-      {fillHandle}
-      <div className={cn('px-1.5 flex items-center text-xs truncate',
-        grayed ? 'text-slate-400 dark:text-slate-500 select-none'
-        : isEmpty ? ((col.required && !isGhost) ? 'text-red-400 dark:text-red-500 italic' : 'text-slate-300 dark:text-slate-600') : 'text-slate-800 dark:text-slate-200')}
-        style={hStyle}>
-        {grayed ? '—' : (displayValue || ((col.required && !isGhost) ? '⚠ required' : ''))}
-      </div>
-    </td>
-  )
-}
-
-// GX.4 — memoize the cell so a re-render of the parent/row (navigation, a commit,
-// autosave) only re-renders the cells whose VISUAL props actually changed, not all
-// ~62k. The callbacks are intentionally NOT compared: their behaviour is stable for
-// a given (ri, ci, col) — which ARE compared — so a stale closure can't act on the
-// wrong cell. Edge objects are new literals each render, so compare their fields.
-type CellEdges = { top: boolean; right: boolean; bottom: boolean; left: boolean } | null | undefined
-function edgesEqual(a: CellEdges, b: CellEdges): boolean {
-  if (a === b) return true
-  if (!a || !b) return false
-  return a.top === b.top && a.right === b.right && a.bottom === b.bottom && a.left === b.left
-}
-function areCellPropsEqual(a: CellProps, b: CellProps): boolean {
-  return (
-    a.col === b.col &&
-    a.value === b.value &&
-    a.isActive === b.isActive &&
-    a.isEditing === b.isEditing &&
-    a.editInitialChar === b.editInitialChar &&
-    a.cellBg === b.cellBg &&
-    a.grayed === b.grayed &&
-    a.isGhost === b.isGhost &&
-    a.width === b.width &&
-    a.cellHeight === b.cellHeight &&
-    a.isSelected === b.isSelected &&
-    a.isCorner === b.isCorner &&
-    a.isFillTarget === b.isFillTarget &&
-    a.isClipboard === b.isClipboard &&
-    a.isMatch === b.isMatch &&
-    a.toneCls === b.toneCls &&
-    a.guidanceLevel === b.guidanceLevel &&
-    a.ri === b.ri &&
-    a.ci === b.ci &&
-    a.stickyLeft === b.stickyLeft &&
-    edgesEqual(a.selEdges, b.selEdges) &&
-    edgesEqual(a.fillTargetEdges, b.fillTargetEdges) &&
-    edgesEqual(a.clipboardEdges, b.clipboardEdges) &&
-    (a.validIssue === b.validIssue ||
-      (!!a.validIssue && !!b.validIssue && a.validIssue.level === b.validIssue.level && a.validIssue.msg === b.validIssue.msg))
-  )
-}
-const SpreadsheetCell = memo(SpreadsheetCellImpl, areCellPropsEqual)
-
-// ── EnumDropdown ────────────────────────────────────────────────────────
-// Floating dropdown panel that appears below the active enum cell.
-// Matches Excel's "in-cell dropdown" UX: search-to-filter + keyboard nav.
-
-interface EnumDropdownProps {
-  options: string[]
-  /** Maps canonical stored value → localized display label */
-  optionLabels?: Record<string, string>
-  current: string
-  /** When true the user must pick from the list; typed custom values are not allowed */
-  selectionOnly?: boolean
-  /** GX.2b — pre-fill the search (e.g. the char typed to open the dropdown). */
-  initialQuery?: string
-  /** navDir set when committed via Tab/Enter, so the parent can move to the next cell. */
-  onSelect: (val: string, navDir?: 'right' | 'left' | 'down' | 'up') => void
-  onClose: () => void
-}
-
-function EnumDropdown({ options, optionLabels, current, selectionOnly = false, initialQuery = '', onSelect, onClose }: EnumDropdownProps) {
-  const [query, setQuery] = useState(initialQuery)
-  const [highlighted, setHighlighted] = useState(0)
-  const listRef = useRef<HTMLDivElement>(null)
-  const searchRef = useRef<HTMLInputElement>(null)
-
-  const getLabel = (opt: string) => optionLabels?.[opt] ?? opt
-
-  const filtered = useMemo(() => {
-    const q = query.toLowerCase()
-    // Search against both the canonical value AND the localized label
-    return options.filter((o) => !q || o.toLowerCase().includes(q) || getLabel(o).toLowerCase().includes(q))
-  }, [options, optionLabels, query])
-
-  // A typed value not in the list is always allowed (you can write your own);
-  // for selection-only fields it's flagged, since Amazon may reject it.
-  const hasCustom = query.trim() !== '' && !options.includes(query.trim())
-  const totalItems = filtered.length + (hasCustom ? 1 : 0)
-
-  useEffect(() => {
-    const el = searchRef.current
-    if (el) { el.focus(); const n = el.value.length; el.setSelectionRange(n, n) }
-  }, [])
-  useEffect(() => { setHighlighted(0) }, [filtered])
-
-  useEffect(() => {
-    const el = listRef.current?.children[highlighted] as HTMLElement | undefined
-    el?.scrollIntoView({ block: 'nearest' })
-  }, [highlighted])
-
-  useEffect(() => {
-    function handle(e: MouseEvent) {
-      if (!listRef.current?.parentElement?.contains(e.target as Node)) onClose()
-    }
-    document.addEventListener('mousedown', handle, true)
-    return () => document.removeEventListener('mousedown', handle, true)
-  }, [onClose])
-
-  function commit(idx: number, navDir?: 'right' | 'left' | 'down' | 'up') {
-    if (idx === filtered.length && hasCustom) { onSelect(query.trim(), navDir); return }
-    if (filtered[idx] != null) onSelect(filtered[idx], navDir)
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted((h) => Math.min(h + 1, totalItems - 1)) }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted((h) => Math.max(h - 1, 0)) }
-    else if (e.key === 'Enter') { e.preventDefault(); commit(highlighted, e.shiftKey ? 'up' : 'down') }
-    else if (e.key === 'Escape') { e.preventDefault(); onClose() }
-    else if (e.key === 'Tab') { e.preventDefault(); commit(highlighted, e.shiftKey ? 'left' : 'right') }
-  }
-
-  return (
-    <div className="absolute left-0 top-full mt-0 z-50 w-48 min-w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg overflow-hidden"
-      onKeyDown={handleKeyDown}>
-      <div className="px-2 py-1.5 border-b border-slate-100 dark:border-slate-700">
-        <input ref={searchRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
-          placeholder={selectionOnly ? 'Search Amazon’s values…' : 'Search or type your own…'}
-          className="w-full text-xs px-1.5 py-1 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-      </div>
-      <div ref={listRef} className="max-h-52 overflow-y-auto">
-        {filtered.map((opt, i) => (
-          <div key={opt || '_empty'} role="option" aria-selected={opt === current}
-            onMouseDown={(e) => { e.preventDefault(); onSelect(opt) }}
-            onMouseEnter={() => setHighlighted(i)}
-            className={cn(
-              'px-3 py-1.5 text-xs cursor-pointer truncate',
-              i === highlighted ? 'bg-blue-500 text-white'
-              : opt === current ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium'
-              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50',
-            )}>
-            {opt === '' ? <span className="italic opacity-60">— empty —</span> : getLabel(opt)}
-          </div>
-        ))}
-        {filtered.length === 0 && !hasCustom && (
-          <div className="px-3 py-2 text-xs text-slate-400 italic">No matches</div>
-        )}
-        {hasCustom && (
-          <div role="option" aria-selected={false}
-            onMouseDown={(e) => { e.preventDefault(); onSelect(query.trim()) }}
-            onMouseEnter={() => setHighlighted(filtered.length)}
-            className={cn(
-              'px-3 py-1.5 text-xs cursor-pointer border-t flex items-center gap-1.5',
-              selectionOnly ? 'border-amber-200 dark:border-amber-800/60' : 'border-slate-100 dark:border-slate-700',
-              highlighted === filtered.length
-                ? (selectionOnly ? 'bg-amber-500 text-white' : 'bg-blue-500 text-white')
-                : (selectionOnly
-                    ? 'text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30'
-                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'),
-            )}>
-            {selectionOnly && <AlertCircle className="w-3 h-3 shrink-0" />}
-            <span className="opacity-60">Use</span>
-            <span className="font-mono font-medium truncate">&ldquo;{query.trim()}&rdquo;</span>
-            {selectionOnly && (
-              <span className={cn('ml-auto text-[10px] shrink-0', highlighted === filtered.length ? 'text-amber-100' : 'text-amber-500/80')}>
-                not in Amazon&apos;s list
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  )
 }
 
 // ── PushToMarketsPanel helpers ─────────────────────────────────────────
@@ -8122,81 +4895,6 @@ function SubmitToAmazonPanel({
   )
 }
 
-// ── MenuDropdown ───────────────────────────────────────────────────────
-// Generic menu-bar dropdown. Items can have icons, shortcuts, separators.
-
-interface MenuItem {
-  label?: string
-  icon?: React.ReactNode
-  onClick?: () => void
-  disabled?: boolean
-  shortcut?: string
-  separator?: boolean
-}
-
-interface MenuDropdownProps {
-  label: string
-  items: MenuItem[]
-}
-
-function MenuDropdown({ label, items }: MenuDropdownProps) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handle(e: MouseEvent) {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handle, true)
-    return () => document.removeEventListener('mousedown', handle, true)
-  }, [])
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={cn(
-          'h-7 px-2.5 text-xs font-medium rounded transition-colors',
-          open
-            ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
-            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
-        )}
-      >
-        {label}
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full mt-0.5 z-50 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl py-1 overflow-hidden">
-          {items.map((item, i) =>
-            item.separator ? (
-              <div key={i} className="my-1 border-t border-slate-100 dark:border-slate-800" />
-            ) : (
-              <button
-                key={i}
-                type="button"
-                disabled={item.disabled}
-                onClick={() => {
-                  if (!item.disabled && item.onClick) { item.onClick(); setOpen(false) }
-                }}
-                className={cn(
-                  'w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-left transition-colors',
-                  item.disabled
-                    ? 'text-slate-300 dark:text-slate-600 cursor-default'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
-                )}
-              >
-                {item.icon && <span className="w-3.5 h-3.5 flex-shrink-0 flex items-center">{item.icon}</span>}
-                <span className="flex-1">{item.label}</span>
-                {item.shortcut && <span className="text-[10px] font-mono text-slate-400">{item.shortcut}</span>}
-              </button>
-            ),
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── ApplyToPanel ───────────────────────────────────────────────────────
 // Copy current row order + sort to other Amazon markets and/or eBay.
 // Each target has a toggle: on=auto-sync (always propagated), off=manual only.
@@ -8296,246 +4994,6 @@ function ApplyToPanel({
     </div>
   )
 }
-
-// ── SortPanel ──────────────────────────────────────────────────────────
-// Multi-level custom sort panel. Each level targets one column and can
-// be A→Z, Z→A, or a fully custom value order (drag to reorder values).
-
-interface SortPanelProps {
-  rows: Row[]
-  groups: ColumnGroup[]
-  initial: SortLevel[]
-  onApply: (levels: SortLevel[]) => void
-  onClose: () => void
-  footerExtra?: React.ReactNode
-}
-
-function SortPanel({ rows, groups, initial, onApply, onClose, footerExtra }: SortPanelProps) {
-  const [levels, setLevels] = useState<SortLevel[]>(initial)
-  const [draggingLevelId, setDraggingLevelId] = useState<string | null>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
-  const allCols = useMemo(() => groups.flatMap((g) => g.columns), [groups])
-
-  useEffect(() => {
-    function handle(e: MouseEvent) {
-      if (!panelRef.current?.contains(e.target as Node)) onClose()
-    }
-    document.addEventListener('mousedown', handle, true)
-    return () => document.removeEventListener('mousedown', handle, true)
-  }, [onClose])
-
-  function uniqueVals(colId: string): string[] {
-    const seen = new Set<string>()
-    for (const row of rows) {
-      const v = String(row[colId] ?? '').trim()
-      if (v) seen.add(v)
-    }
-    return [...seen].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-  }
-
-  function addLevel() {
-    const first = allCols[0]
-    if (!first) return
-    setLevels((prev) => [
-      ...prev,
-      { id: Math.random().toString(36).slice(2), colId: first.id, mode: 'asc', customOrder: [] },
-    ])
-  }
-
-  function removeLevel(id: string) {
-    setLevels((prev) => prev.filter((l) => l.id !== id))
-  }
-
-  function changeCol(id: string, colId: string) {
-    setLevels((prev) => prev.map((l) => l.id === id ? { ...l, colId, mode: 'asc', customOrder: [] } : l))
-  }
-
-  function changeMode(id: string, mode: SortLevel['mode']) {
-    setLevels((prev) => prev.map((l) => {
-      if (l.id !== id) return l
-      return { ...l, mode, customOrder: mode === 'custom' ? uniqueVals(l.colId) : l.customOrder }
-    }))
-  }
-
-  function reorderValues(levelId: string, fromIdx: number, toIdx: number) {
-    setLevels((prev) => prev.map((l) => {
-      if (l.id !== levelId) return l
-      const next = [...l.customOrder]
-      const [item] = next.splice(fromIdx, 1)
-      next.splice(toIdx, 0, item)
-      return { ...l, customOrder: next }
-    }))
-  }
-
-  function reorderLevels(fromId: string, toId: string) {
-    setLevels((prev) => {
-      const from = prev.findIndex((l) => l.id === fromId)
-      const to   = prev.findIndex((l) => l.id === toId)
-      const next = [...prev]
-      const [item] = next.splice(from, 1)
-      next.splice(to, 0, item)
-      return next
-    })
-  }
-
-  return (
-    <div ref={panelRef}
-      className="absolute left-0 top-full mt-1 z-50 w-[430px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden">
-
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-        <div>
-          <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">Sort rows</div>
-          <div className="text-xs text-slate-400">Levels applied top → bottom. Drag ⠿ to reprioritize.</div>
-        </div>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
-      </div>
-
-      {/* Levels */}
-      <div className="max-h-[60vh] overflow-y-auto">
-        {levels.length === 0 && (
-          <p className="px-4 py-6 text-center text-xs text-slate-400 italic">No sort levels — add one below.</p>
-        )}
-        {levels.map((level, i) => (
-          <div
-            key={level.id}
-            draggable
-            onDragStart={(e) => { setDraggingLevelId(level.id); e.dataTransfer.effectAllowed = 'move' }}
-            onDragEnd={() => setDraggingLevelId(null)}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault()
-              if (draggingLevelId && draggingLevelId !== level.id) reorderLevels(draggingLevelId, level.id)
-              setDraggingLevelId(null)
-            }}
-            className={cn('border-b border-slate-100 dark:border-slate-800 last:border-0', draggingLevelId === level.id && 'opacity-40')}
-          >
-            {/* Level row */}
-            <div className="flex items-center gap-2 px-3 py-2.5">
-              <GripVertical className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 cursor-grab flex-shrink-0" />
-              <span className="text-[10px] font-mono text-slate-400 w-3 text-center flex-shrink-0">{i + 1}</span>
-
-              {/* Column picker */}
-              <select
-                value={level.colId}
-                onChange={(e) => changeCol(level.id, e.target.value)}
-                className="flex-1 min-w-0 text-xs border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                {groups.map((g) => (
-                  <optgroup key={g.id} label={g.labelEn || g.labelLocal}>
-                    {g.columns.map((c) => (
-                      <option key={c.id} value={c.id}>{c.labelEn || c.id}</option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-
-              {/* Mode toggle */}
-              <div className="flex border border-slate-200 dark:border-slate-700 rounded overflow-hidden flex-shrink-0">
-                {(['asc', 'desc', 'custom'] as const).map((m, mi) => (
-                  <button key={m} type="button" onClick={() => changeMode(level.id, m)}
-                    className={cn('text-[10px] px-1.5 py-0.5 transition-colors',
-                      mi > 0 && 'border-l border-slate-200 dark:border-slate-700',
-                      level.mode === m
-                        ? 'bg-blue-500 text-white'
-                        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
-                    )}>
-                    {m === 'asc' ? 'A→Z' : m === 'desc' ? 'Z→A' : 'Custom'}
-                  </button>
-                ))}
-              </div>
-
-              <button type="button" onClick={() => removeLevel(level.id)}
-                className="text-slate-300 hover:text-red-400 dark:text-slate-600 dark:hover:text-red-400 flex-shrink-0">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Custom value list */}
-            {level.mode === 'custom' && (
-              <div className="mx-3 mb-2.5 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-                <div className="px-2 py-1 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                  <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">Custom order — drag to arrange</span>
-                  <span className="text-[10px] text-slate-400 tabular-nums">{level.customOrder.length} values</span>
-                </div>
-                {level.customOrder.length === 0
-                  ? <p className="px-3 py-2 text-xs text-slate-400 italic text-center">No values in current rows for this column.</p>
-                  : <DraggableValueList
-                      values={level.customOrder}
-                      onReorder={(from, to) => reorderValues(level.id, from, to)}
-                    />
-                }
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Footer */}
-      <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
-        <button type="button" onClick={addLevel} disabled={allCols.length === 0}
-          className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 font-medium disabled:opacity-40">
-          + Add sort level
-        </button>
-        <div className="flex-1" />
-        {levels.length > 0 && (
-          <Button size="sm" variant="ghost" onClick={() => { setLevels([]); onApply([]) }}>Reset</Button>
-        )}
-        <Button size="sm" onClick={() => onApply(levels)} disabled={levels.length === 0}>
-          Apply sort
-        </Button>
-      </div>
-      {footerExtra && (
-        <div className="border-t border-slate-100 dark:border-slate-800">
-          {footerExtra}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── DraggableValueList ─────────────────────────────────────────────────
-// Reorderable list of unique field values used inside the Sort panel's
-// custom-order mode.
-
-function DraggableValueList({
-  values, onReorder,
-}: { values: string[]; onReorder: (from: number, to: number) => void }) {
-  const [draggingIdx, setDraggingIdx] = useState<number | null>(null)
-  return (
-    <div className="max-h-40 overflow-y-auto">
-      {values.map((val, i) => (
-        <div
-          key={`${val}-${i}`}
-          draggable
-          onDragStart={(e) => { setDraggingIdx(i); e.dataTransfer.effectAllowed = 'move' }}
-          onDragEnd={() => setDraggingIdx(null)}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => {
-            e.preventDefault()
-            if (draggingIdx !== null && draggingIdx !== i) onReorder(draggingIdx, i)
-            setDraggingIdx(null)
-          }}
-          className={cn(
-            'flex items-center gap-1.5 px-2 py-1 cursor-grab select-none transition-colors',
-            draggingIdx === i ? 'opacity-40' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50',
-          )}
-        >
-          <GripVertical className="w-3 h-3 text-slate-300 dark:text-slate-600 flex-shrink-0" />
-          <span className="text-xs text-slate-700 dark:text-slate-300 flex-1 truncate">
-            {val || <span className="italic text-slate-400">empty</span>}
-          </span>
-          <span className="text-[9px] font-mono text-slate-300 dark:text-slate-600 flex-shrink-0">#{i + 1}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// TbBtn moved to ../_shared/FlatFileIconToolbar.tsx in Phase B. The
-// toolbar block in this file now consumes FlatFileIconToolbar and the
-// shared SharedTbBtn primitive for any Amazon-specific buttons it
-// renders inside its slot props.
 
 // ── TranslateTabContent ────────────────────────────────────────────────
 
