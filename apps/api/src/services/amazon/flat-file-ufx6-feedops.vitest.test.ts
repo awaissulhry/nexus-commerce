@@ -28,7 +28,11 @@
  * ["tecdoc"]); NO replacedBy/replaces marker exists in any cached schema.
  */
 import { describe, it, expect, vi } from 'vitest'
-import { AmazonFlatFileService } from './flat-file.service.js'
+import {
+  AmazonFlatFileService,
+  buildSchemaFieldHints,
+  dedupCellsBySelectors,
+} from './flat-file.service.js'
 import { CategorySchemaService } from '../categories/schema-sync.service.js'
 import { preflightRow } from '../listing-preflight.service.js'
 
@@ -202,5 +206,92 @@ describe('UFX P6g — schema-sync captures envelope requirementsEnforced additiv
       expect(updated).toHaveLength(1)
       expect(updated[0].data.schemaDefinition.__requirementsEnforced).toBe('NOT_ENFORCED')
     } finally { vi.unstubAllGlobals() }
+  })
+})
+
+// ── P6g-3 — meta-schema `selectors` honored in the numbered-column reassembly ─
+
+describe('UFX P6g — buildSchemaFieldHints captures selectors per attribute', () => {
+  it('top-level selectors are captured; attributes without them are absent', () => {
+    const { selectorsByField } = buildSchemaFieldHints({
+      // Real shape: bullet_point [marketplace_id, language_tag], maxUniqueItems 10.
+      bullet_point: {
+        type: 'array', maxUniqueItems: 10, selectors: ['marketplace_id', 'language_tag'],
+        items: { type: 'object', properties: { value: { type: 'string' }, language_tag: {}, marketplace_id: {} } },
+      },
+      // Real shape: ghs_chemical_h_code [marketplace_id, value] — value IS a selector.
+      ghs_chemical_h_code: {
+        type: 'array', maxUniqueItems: 100, selectors: ['marketplace_id', 'value'],
+        items: { type: 'object', properties: { value: { type: 'string' }, marketplace_id: {} } },
+      },
+      color: {
+        type: 'array',
+        items: { type: 'object', properties: { value: { type: 'string' }, language_tag: {}, marketplace_id: {} } },
+      },
+    })
+    expect(selectorsByField.bullet_point).toEqual(['marketplace_id', 'language_tag'])
+    expect(selectorsByField.ghs_chemical_h_code).toEqual(['marketplace_id', 'value'])
+    expect(selectorsByField.color).toBeUndefined()
+  })
+})
+
+describe('UFX P6g — dedupCellsBySelectors', () => {
+  const mp = 'APJ6JRA9NG5V4'
+  const bp = (value: string) => ({ value, language_tag: 'it_IT', marketplace_id: mp })
+
+  it('infra-only selectors (bullet_point shape): distinct values ALL survive — never collapse to one', () => {
+    const cells = [bp('A'), bp('B'), bp('C'), bp('D'), bp('E')]
+    expect(dedupCellsBySelectors(cells, ['marketplace_id', 'language_tag'])).toEqual(cells)
+  })
+
+  it('infra-only selectors: a true duplicate value is dropped, first wins, order preserved', () => {
+    expect(dedupCellsBySelectors([bp('A'), bp('B'), bp('A'), bp('C')], ['marketplace_id', 'language_tag']))
+      .toEqual([bp('A'), bp('B'), bp('C')])
+  })
+
+  it('content selector (ghs shape [marketplace_id, value]): equal tuple = duplicate under Amazon rule', () => {
+    const cells = [
+      { value: 'H200', marketplace_id: mp },
+      { value: 'H201', marketplace_id: mp },
+      { value: 'H200', marketplace_id: mp },
+    ]
+    expect(dedupCellsBySelectors(cells, ['marketplace_id', 'value'])).toEqual([
+      { value: 'H200', marketplace_id: mp },
+      { value: 'H201', marketplace_id: mp },
+    ])
+  })
+
+  it('no selectors / single cell → unchanged (legacy behavior)', () => {
+    const cells = [bp('A'), bp('A')]
+    expect(dedupCellsBySelectors(cells, undefined)).toEqual(cells)
+    expect(dedupCellsBySelectors(cells, [])).toEqual(cells)
+    expect(dedupCellsBySelectors([bp('A')], ['marketplace_id'])).toEqual([bp('A')])
+  })
+})
+
+describe('UFX P6g — feed builder dedups numbered columns by schema selectors', () => {
+  const feedSchemaWithSelectors = {
+    localizedFields: new Set(['bullet_point']),
+    selectorsByField: { bullet_point: ['marketplace_id', 'language_tag'] },
+    // Numbered columns come from the manifest's expandedFields map.
+  }
+  const expanded = { bullet_point_1: 'bullet_point', bullet_point_2: 'bullet_point', bullet_point_3: 'bullet_point' }
+
+  it('duplicate bullet in two numbered columns is sent ONCE; distinct bullets untouched', () => {
+    const r = feedSvc.buildJsonFeedBodyWithReport(
+      [{ item_sku: 'S1', product_type: 'JACKET', bullet_point_1: 'Impermeabile', bullet_point_2: 'Traspirante', bullet_point_3: 'Impermeabile' }],
+      'IT', 'SELLER', expanded, feedSchemaWithSelectors,
+    )
+    const values = JSON.parse(r.body).messages[0].attributes.bullet_point.map((c: any) => c.value)
+    expect(values).toEqual(['Impermeabile', 'Traspirante'])
+  })
+
+  it('no schema selectors → legacy behavior (duplicates pass through)', () => {
+    const r = feedSvc.buildJsonFeedBodyWithReport(
+      [{ item_sku: 'S1', product_type: 'JACKET', bullet_point_1: 'A', bullet_point_2: 'A' }],
+      'IT', 'SELLER', expanded, { localizedFields: new Set(['bullet_point']) },
+    )
+    const values = JSON.parse(r.body).messages[0].attributes.bullet_point.map((c: any) => c.value)
+    expect(values).toEqual(['A', 'A'])
   })
 })

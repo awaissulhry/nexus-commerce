@@ -231,6 +231,15 @@ export interface FeedSchemaHints {
    *  productType malformed the whole feed: 4002010 '#/productType').
    *  UFX P6d — the row's parent (by parent_sku) wins over this fallback. */
   defaultProductType?: string
+  /**
+   * UFX P6g — the meta-schema `selectors` array per top-level attribute: the
+   * item sub-properties that identify unique entries in a multi-value
+   * attribute (pairs with maxUniqueItems). Used by the numbered-column
+   * reassembly to dedup instances that collide under the attribute's OWN
+   * uniqueness rule instead of assuming all-properties uniqueness. Absent
+   * (no schema) → legacy behavior (no dedup).
+   */
+  selectorsByField?: Record<string, string[]>
 }
 
 // ── Language types ─────────────────────────────────────────────────────
@@ -563,12 +572,19 @@ export function buildSchemaFieldHints(properties: Record<string, any>): {
    *  THIS instead of Number() sniffing, so a string-typed all-digits value
    *  (size "38", a leading-zero code) stays a string. */
   subPropTypes: Record<string, SubPropType>
+  /** UFX P6g — meta-schema `selectors` per top-level attribute (the item
+   *  sub-properties that identify unique entries in a multi-value attribute).
+   *  Real cached schemas carry these pervasively — [marketplace_id] or
+   *  [marketplace_id, language_tag] on the flat multi-instance attributes
+   *  (bullet_point, material, special_feature…). */
+  selectorsByField: Record<string, string[]>
 } {
   const localizedFields = new Set<string>()
   const numericFields = new Set<string>()
   const booleanFields = new Set<string>()
   const wrappedSubPropFields: Record<string, WrappedSubPropField> = {}
   const subPropTypes: Record<string, SubPropType> = {}
+  const selectorsByField: Record<string, string[]> = {}
   const INFRA = new Set(['marketplace_id', 'language_tag', 'audience'])
   const classify = (node: any): SubPropType | undefined => {
     const t = node?.type
@@ -581,6 +597,11 @@ export function buildSchemaFieldHints(properties: Record<string, any>): {
     const p = prop as Record<string, any>
     const itemProps: Record<string, any> = p?.items?.properties ?? {}
     if (itemProps.language_tag) localizedFields.add(fieldId)
+    // UFX P6g — capture the attribute's own uniqueness rule for the feed
+    // builder's numbered-column reassembly.
+    if (Array.isArray(p?.selectors) && p.selectors.length > 0) {
+      selectorsByField[fieldId] = p.selectors.map(String)
+    }
     const valueNode = itemProps.value ?? p
     const t = valueNode?.type ?? p?.type
     if (t === 'number' || t === 'integer') numericFields.add(fieldId)
@@ -632,7 +653,7 @@ export function buildSchemaFieldHints(properties: Record<string, any>): {
       if (st) subPropTypes[`${fieldId}.${subId}`] = st
     }
   }
-  return { localizedFields, numericFields, booleanFields, wrappedSubPropFields, subPropTypes }
+  return { localizedFields, numericFields, booleanFields, wrappedSubPropFields, subPropTypes, selectorsByField }
 }
 
 /**
@@ -1077,6 +1098,48 @@ function expandSchemaField(
 
   // ── Pattern D: single column ──────────────────────────────────────────
   return [schemaFieldToColumn(fieldId, prop, isRequired, schemaLabels, schemaEnums, lang)]
+}
+
+// UFX P6g — sub-properties the numbered-column emit stamps IDENTICALLY on
+// every instance of an attribute (same marketplace, same language).
+const STAMPED_INFRA_SELECTORS = new Set(['marketplace_id', 'language_tag'])
+
+/**
+ * UFX P6g — dedup reassembled multi-instance cells by the attribute's OWN
+ * uniqueness rule: the meta-schema `selectors` (pairs with maxUniqueItems —
+ * items with equal selector values are the SAME entry to Amazon). Two shapes
+ * exist in the live cached schemas (49 defs probed):
+ *   - content selectors (ghs_chemical_h_code [marketplace_id, value]): the
+ *     selector tuple alone decides — a second instance with the same tuple is
+ *     a duplicate under Amazon's rule even where other properties differ;
+ *   - infra-only selectors (bullet_point / material / special_feature
+ *     [marketplace_id(, language_tag)]): every instance carries the SAME
+ *     stamped tuple by construction — Amazon counts them as ONE unique entry
+ *     (bullet_point maxUniqueItems=10 vs 5 same-language bullets), so
+ *     collapsing on the tuple would eat legitimate bullets. The instance's
+ *     `value` joins the key instead, so only true duplicates (the same bullet
+ *     typed into two numbered columns) are dropped.
+ * First occurrence wins, order preserved. No selectors known → cells returned
+ * unchanged (legacy behavior for schema-less callers).
+ */
+export function dedupCellsBySelectors(
+  cells: Array<Record<string, any>>,
+  selectors: string[] | undefined,
+): Array<Record<string, any>> {
+  if (!selectors || selectors.length === 0 || cells.length < 2) return cells
+  const infraOnly = selectors.every((s) => STAMPED_INFRA_SELECTORS.has(s))
+  const seen = new Set<string>()
+  const out: Array<Record<string, any>> = []
+  for (const cell of cells) {
+    const key = JSON.stringify([
+      ...selectors.map((s) => cell[s] ?? null),
+      ...(infraOnly ? [cell.value ?? null] : []),
+    ])
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(cell)
+  }
+  return out
 }
 
 // FFA — Amazon rejects any attribute submitted with an empty value ("Invalid
@@ -2174,6 +2237,8 @@ export class AmazonFlatFileService {
     wrappedSubPropFields: Record<string, { sub: string; localized: boolean }>
     /** UFX P1 — declared type per sub-property path ("field.sub[.value|.unit]"). */
     subPropTypes: Record<string, SubPropType>
+    /** UFX P6g — meta-schema selectors per attribute (array-item uniqueness). */
+    selectorsByField: Record<string, string[]>
     /** base field id → UTF-8 byte cap, for pre-submit byte-length validation. */
     byteLimits: Record<string, number>
   }> {
@@ -2435,6 +2500,7 @@ export class AmazonFlatFileService {
     const defaultProductType = (feedSchema.defaultProductType ?? '').toUpperCase()
     const wrappedSubPropFields = feedSchema.wrappedSubPropFields ?? {}
     const subPropTypes = feedSchema.subPropTypes
+    const selectorsByField = feedSchema.selectorsByField ?? {}
 
     // Enum fields are shown in the editor as display LABELS (e.g. "Pakistan") but
     // Amazon's JSON feed requires the underlying CODE (e.g. "PK"). Convert
@@ -2732,11 +2798,14 @@ export class AmazonFlatFileService {
         // attributes (Amazon ignores/rejects those).
         for (const [base, items] of Object.entries(pendingArrays)) {
           items.sort((a, b) => a.idx - b.idx)
-          attrs[base] = items.map((item) => {
+          const cells = items.map((item) => {
             const cell: Record<string, any> = { value: emitValue(base, item.value), marketplace_id: marketplaceId }
             if (isLocalized(base)) cell.language_tag = languageTag
             return cell
           })
+          // UFX P6g — drop instances that collide under the attribute's OWN
+          // uniqueness rule (meta-schema selectors); no schema hint → no dedup.
+          attrs[base] = dedupCellsBySelectors(cells, selectorsByField[base])
         }
         // Emit sub-property objects — convert any enum sub-value (e.g. closure.type,
         // apparel_size.size_system) from its display label to Amazon's code.
