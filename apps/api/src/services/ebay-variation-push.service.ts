@@ -1003,6 +1003,10 @@ export async function pushVariationGroup(
   // Step 1: Create/update each variant's inventory_item.
   // FFP.17 — transient eBay flakes (25604/25001/5xx) collected for a second pass.
   const transientItemFailures: Array<{ sku: string; url: string; body: string }> = []
+  // eBay lists a variation with some sizes at qty 0 (they show as out of stock);
+  // only the whole listing needs >=1 sellable variant. Track that here for the
+  // all-zero guard before the group publish.
+  let anyVariantSellable = false
   for (const row of variantRows) {
     const sku = row.sku as string
 
@@ -1088,20 +1092,16 @@ export async function pushVariationGroup(
     // existing [ebay-push] console channel). Lightweight, no secrets.
     console.log('[ebay-push] qty-trace %j', { sku, rawItQty: row[`${mp.toLowerCase()}_qty`] ?? null, sharedQty: row.quantity ?? null, cappedQty: qty })
 
-    // FM/25004 — never PUT an inventory_item with quantity 0: eBay rejects it with
-    // error 25004 ("quantity must be greater than 0"). When capToFbm floors this
-    // variant to 0 (the shared pool is empty for this SKU), skip it with a clear
-    // per-SKU reason — mirrors the no-images guard below. The blanket integrity
-    // guard after the loop (results.filter status ERROR → abort) then keeps this
-    // SKU out of the group PUT, so no 25701 can follow.
-    // Use !(> 0) — NOT `<= 0` — so a non-finite quantity (NaN/null from an
-    // upstream compute) is ALSO caught here instead of serializing to `null`
-    // and drawing eBay's 25004 ("quantità non valida").
-    const buffer = Number(row[`${mp.toLowerCase()}_buffer`] ?? 0) || 0
-    if (!(Number(qty) > 0)) {
-      results.push({ sku, market: mp, status: 'ERROR', message: `Out of stock — the shared pool has 0 available for this variant${buffer > 0 ? ` (buffer ${buffer})` : ''}. eBay can't list a 0-quantity variant (error 25004); restock or lower the buffer, then re-push.` })
-      continue
-    }
+    // eBay LISTS a variation with some sizes at quantity 0 — those variants show as
+    // out of stock; only the whole listing needs >=1 sellable variant. So we do NOT
+    // skip a 0-qty variant (an earlier guard did, which wrongly aborted the entire
+    // family whenever any size was out of stock). Publish it at its capToFbm qty.
+    // safeQty clamps a non-finite/negative value to 0 so we never serialize `null`
+    // into shipToLocationAvailability (eBay would reject that as 25004 "quantità non
+    // valida"). The all-zero case is caught by the anyVariantSellable guard before
+    // the group publish.
+    const safeQty = Number.isFinite(Number(qty)) && Number(qty) > 0 ? Math.floor(Number(qty)) : 0
+    if (safeQty > 0) anyVariantSellable = true
 
     // Use the colour-representative image set (same URLs for every variant of
     // the same colour). eBay deduplicates by URL, so all Black-size variants
@@ -1165,7 +1165,7 @@ export async function pushVariationGroup(
       },
       condition,
       availability: {
-        shipToLocationAvailability: { quantity: Number(qty) },
+        shipToLocationAvailability: { quantity: safeQty },
       },
       ...(pkgSize ? { packageWeightAndSize: pkgSize } : {}),
     }
@@ -1301,6 +1301,16 @@ export async function pushVariationGroup(
   // sequential calls hit a 25604 "product not found" / 25001 internal error on
   // random SKUs (the exact SKU varies each run — it is eBay-side, not data-driven).
   await new Promise(r => setTimeout(r, 1500))
+
+  // eBay needs >=1 sellable variant to publish a variation listing. If EVERY
+  // variant resolved to 0 available, abort with a clear message rather than doing
+  // the group PUT + publish only to hit eBay's misleading all-zero 25007.
+  if (!anyVariantSellable) {
+    return variantRows.map(r => ({
+      sku: r.sku as string, market: mp, status: 'ERROR' as const,
+      message: 'Every variant is out of stock — eBay needs at least one sellable variation to publish this listing. Restock (or lower a buffer) on at least one size, then re-push.',
+    }))
+  }
 
   // Step 3: (specifications + imageVariesByAxes computed above before Step 1) Create/update the inventory_item_group.
   // variantSKUs is the correct field name (plain string array, not objects).
