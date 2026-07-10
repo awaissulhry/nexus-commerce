@@ -1,9 +1,10 @@
 'use client'
 
 import {
-  useCallback, useEffect, useId, useRef, useState, useMemo, memo,
+  useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useMemo, memo,
   type KeyboardEvent,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
@@ -30,6 +31,7 @@ import type {
   FooterActionsCtx,
 } from './FlatFileGrid.types'
 import { normalizeCellValue } from './normalizeCellValue'
+import { computeDropdownPosition, MIN_DROPDOWN_WIDTH } from './dropdown-position'
 import { tokenizeClipboard } from './paste-tokenizer'
 import { isComposingKeyEvent } from './composition'
 import { setFlatFileDirtyCount, shouldConfirmLeave } from './unsaved-guard'
@@ -164,7 +166,10 @@ function wordBoundsAt(text: string, pos: number): [number, number] {
 
 // ── EnumDropdown ───────────────────────────────────────────────────────────
 
-function EnumDropdown({ options, optionLabels, current, enumMode, multi, initialQuery = '', onSelect, onClose }: {
+function EnumDropdown({ anchor, options, optionLabels, current, enumMode, multi, initialQuery = '', onSelect, onClose }: {
+  /** The cell (<td>) the dropdown belongs to — the portal positions off its
+   *  viewport rect (UFX P7 item 2). */
+  anchor: HTMLElement
   options: string[]; optionLabels?: Record<string, string>
   current: string
   /** 'strict' = eBay only accepts listed values; a typed custom value is
@@ -185,6 +190,38 @@ function EnumDropdown({ options, optionLabels, current, enumMode, multi, initial
   const [hi, setHi] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  // UFX P7 (item 2) — portal position. Measured AFTER render (menu height
+  // depends on the filtered list), then clamped/flipped by the pure math in
+  // dropdown-position.ts. Null until first measure → rendered invisible so
+  // there's no flash at (0,0).
+  const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null)
+  const reposition = useCallback(() => {
+    const menu = rootRef.current
+    if (!menu) return
+    const r = anchor.getBoundingClientRect()
+    const next = computeDropdownPosition({
+      cell: { top: r.top, bottom: r.bottom, left: r.left, width: r.width },
+      menuHeight: menu.offsetHeight,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+    })
+    setPos((p) => (p && p.left === next.left && p.top === next.top && p.width === next.width ? p : next))
+  }, [anchor])
+  // Runs every render: the menu height changes as the query filters the list,
+  // and the setPos bail-out (same values → same reference) prevents loops.
+  useLayoutEffect(() => { reposition() })
+  // Track container + window scroll (capture catches the grid's own
+  // overflow-auto scroller) and window resize.
+  useEffect(() => {
+    window.addEventListener('scroll', reposition, true)
+    window.addEventListener('resize', reposition)
+    return () => {
+      window.removeEventListener('scroll', reposition, true)
+      window.removeEventListener('resize', reposition)
+    }
+  }, [reposition])
 
   const label = (opt: string) => optionLabels?.[opt] ?? opt
 
@@ -230,7 +267,9 @@ function EnumDropdown({ options, optionLabels, current, enumMode, multi, initial
   useEffect(() => { setHi(0) }, [filtered])
   useEffect(() => { (listRef.current?.children[hi] as HTMLElement | undefined)?.scrollIntoView({ block: 'nearest' }) }, [hi])
   useEffect(() => {
-    function h(e: MouseEvent) { if (!listRef.current?.parentElement?.contains(e.target as Node)) onClose() }
+    // Portaled: the menu root (not the td) owns the click-outside boundary —
+    // same semantics as the old inline dropdown (clicking the cell closes it).
+    function h(e: MouseEvent) { if (!rootRef.current?.contains(e.target as Node)) onClose() }
     document.addEventListener('mousedown', h, true)
     return () => document.removeEventListener('mousedown', h, true)
   }, [onClose])
@@ -264,8 +303,15 @@ function EnumDropdown({ options, optionLabels, current, enumMode, multi, initial
     else if (e.key === 'Tab') { e.preventDefault(); commit(hi, e.shiftKey ? undefined : 'right') }
   }
 
-  return (
-    <div className="absolute left-0 top-full mt-0 z-50 w-56 min-w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg overflow-hidden" onKeyDown={handleKeyDown}>
+  // UFX P7 (item 2) — portaled to <body> so the grid's overflow container /
+  // frozen-column stacking can't clip it; flips above the cell on bottom rows.
+  return createPortal(
+    <div ref={rootRef}
+      className="fixed z-[9999] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg overflow-hidden"
+      style={pos
+        ? { left: pos.left, top: pos.top, width: pos.width }
+        : { left: 0, top: 0, width: Math.max(MIN_DROPDOWN_WIDTH, anchor.getBoundingClientRect().width), visibility: 'hidden' }}
+      onKeyDown={handleKeyDown}>
       <div className="px-2 py-1.5 border-b border-slate-100 dark:border-slate-700">
         <input ref={searchRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
           placeholder={enumMode === 'strict' ? 'Search eBay’s values…' : multi ? 'Search or add values…' : 'Search or type your own…'}
@@ -339,7 +385,8 @@ function EnumDropdown({ options, optionLabels, current, enumMode, multi, initial
             className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline px-1">Done</button>
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -386,6 +433,9 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
 }: CellInternalProps) {
   const displayValue = value != null ? String(value) : ''
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
+  // UFX P7 (item 2) — enum cells hand their <td> to the portaled EnumDropdown
+  // as the position anchor.
+  const tdRef = useRef<HTMLTableCellElement | null>(null)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [liveLen, setLiveLen] = useState(displayValue.length)
   const cancelledRef = useRef(false)
@@ -585,7 +635,7 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
       ? displayValue.split(',').map((s) => labelFor(s.trim())).filter(Boolean).join(', ')
       : ''
     return (
-      <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}
+      <td {...tdShared} ref={tdRef} className={baseCls} style={{ ...cellStyle, ...selStyle }}
         title={strictInvalid ? `"${displayValue}" isn't in the accepted list for this field${typeof row.product_type === 'string' && row.product_type && col.optionsByProductType ? ` on ${String(row.product_type).toUpperCase()}` : ''} — it may be rejected at publish` : undefined}
         aria-haspopup="listbox" aria-expanded={isActive && dropdownOpen}
         onClick={() => { if (isActive) setDropdownOpen(true) }}
@@ -609,8 +659,8 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
           <ChevronDown className={cn('w-3 h-3 text-slate-400 flex-shrink-0 transition-opacity', isActive || isSelected ? 'opacity-100' : 'opacity-0 group-hover/cell:opacity-100')} />
         </div>
         {fillHandle}
-        {isActive && dropdownOpen && (
-          <EnumDropdown options={enumOptions} optionLabels={col.optionLabels} current={displayValue}
+        {isActive && dropdownOpen && tdRef.current && (
+          <EnumDropdown anchor={tdRef.current} options={enumOptions} optionLabels={col.optionLabels} current={displayValue}
             enumMode={col.kind === 'enum' ? col.enumMode : undefined}
             multi={col.kind === 'enum' ? col.multiValue : undefined}
             initialQuery={editInitialChar ?? ''}
