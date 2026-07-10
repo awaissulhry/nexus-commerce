@@ -581,18 +581,10 @@ export default function AmazonFlatFileClient({
     return { ...base, groups }
   }, [unionManifest, manifest, sheetTypes])
 
-  // MT.3 — fetch the UNION manifest whenever the sheet holds >1 product type.
-  // Single type ⇒ clear it (effectiveManifest falls back to the single manifest).
-  useEffect(() => {
-    if (sheetTypes.length <= 1) { setUnionManifest(null); return }
-    let alive = true
-    const qs = `marketplace=${marketplace}&productTypes=${encodeURIComponent(sheetTypes.map((t) => t.toUpperCase()).join(','))}`
-    fetch(`${getBackendUrl()}/api/amazon/flat-file/union-template?${qs}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((m) => { if (alive && m) setUnionManifest(m) })
-      .catch(() => { /* union manifest is advisory; single-type still works */ })
-    return () => { alive = false }
-  }, [sheetTypes, marketplace])
+  // MT.3 — the UNION manifest fetch lives in the merged sheetTypes effect
+  // below (UFX P4d): union template + newly-added categories' rows are fetched
+  // IN PARALLEL and applied in one batched pass, so adding a category paints
+  // once instead of paint→widen→grow.
 
   // Always start from the canonical DB state (SSR initialRows). If localStorage
   // has dirty rows from a previous session we surface a restore banner instead
@@ -1311,35 +1303,62 @@ export default function AmazonFlatFileClient({
       : new Set([productType.toUpperCase()])
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productType, marketplace])
+  // UFX P4d — when a category disappears from the sheet (rows reassigned or
+  // removed), prune it from loadedExtraTypesRef so re-adding it refetches its
+  // rows (MT.4's mark-before-await otherwise made a removed type permanently
+  // "loaded" for the session).
   useEffect(() => {
-    if (sheetTypes.length <= 1) return
-    const toLoad = sheetTypes.map((t) => t.toUpperCase()).filter((t) => !loadedExtraTypesRef.current.has(t))
-    if (toLoad.length === 0) return
+    const keep = new Set([productType.toUpperCase(), ...sheetTypes.map((t) => t.toUpperCase())])
+    for (const t of [...loadedExtraTypesRef.current]) {
+      if (!keep.has(t)) loadedExtraTypesRef.current.delete(t)
+    }
+  }, [sheetTypes, productType])
+
+  // UFX P4d — ONE flow per sheetTypes change: the union manifest AND the
+  // newly-added categories' rows are fetched IN PARALLEL, then applied
+  // back-to-back in the same microtask (React batches → one render), so
+  // adding a category paints once — no paint→widen→grow reflow.
+  useEffect(() => {
+    if (sheetTypes.length <= 1) { setUnionManifest(null); return }
     let alive = true
-    ;(async () => {
-      for (const t of toLoad) {
-        loadedExtraTypesRef.current.add(t) // mark before await → no double-fetch
-        try {
-          const q = new URLSearchParams({ marketplace, productType: t })
-          if (familyId) q.set('productId', familyId)
-          else q.set('scope', scopeRef.current)
-          const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/rows?${q}`)
-          if (!alive || !res.ok) continue
-          const d = await res.json()
-          const incoming = mergeAsinCache(
-            (d.rows ?? []).map((r: any) => ({ ...r, product_type: String(r.product_type || t).toUpperCase() })),
-            marketplace,
-          )
-          if (!alive || incoming.length === 0) continue
-          setRows((prev) => {
-            const seen = new Set(prev.map((r) => String(r.item_sku ?? '')))
-            const append = incoming.filter((r: Row) => r.item_sku && !seen.has(String(r.item_sku)))
-            return append.length ? [...prev, ...append] : prev
-          })
-        } catch { /* skip this category */ }
+    const typesU = sheetTypes.map((t) => t.toUpperCase())
+    const toLoad = typesU.filter((t) => !loadedExtraTypesRef.current.has(t))
+    for (const t of toLoad) loadedExtraTypesRef.current.add(t) // mark before await → no double-fetch
+
+    const qs = `marketplace=${marketplace}&productTypes=${encodeURIComponent(typesU.join(','))}`
+    const manifestP: Promise<Manifest | null> = fetch(`${getBackendUrl()}/api/amazon/flat-file/union-template?${qs}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null) // union manifest is advisory; single-type still works
+    const extraRowsP: Promise<Row[][]> = Promise.all(toLoad.map(async (t) => {
+      try {
+        const q = new URLSearchParams({ marketplace, productType: t })
+        if (familyId) q.set('productId', familyId)
+        else q.set('scope', scopeRef.current)
+        const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/rows?${q}`)
+        if (!res.ok) return []
+        const d = await res.json()
+        return mergeAsinCache(
+          (d.rows ?? []).map((r: any) => ({ ...r, product_type: String(r.product_type || t).toUpperCase() })),
+          marketplace,
+        )
+      } catch { return [] /* skip this category */ }
+    }))
+
+    void (async () => {
+      const [m, extraPerType] = await Promise.all([manifestP, extraRowsP])
+      if (!alive) return
+      if (m) setUnionManifest(m)
+      const incoming = extraPerType.flat()
+      if (incoming.length) {
+        setRows((prev) => {
+          const seen = new Set(prev.map((r) => String(r.item_sku ?? '')))
+          const append = incoming.filter((r: Row) => r.item_sku && !seen.has(String(r.item_sku)))
+          return append.length ? [...prev, ...append] : prev
+        })
       }
     })()
     return () => { alive = false }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheetTypes, marketplace, familyId])
 
   // Live sync: reload rows from DB when the Matrix or another tab updates
@@ -1859,6 +1878,33 @@ export default function AmazonFlatFileClient({
     setRows((prev) => prev.map((r) =>
       selected.has(r._rowId as string) ? { ...r, product_type: T, _dirty: true } : r,
     ))
+  }, [pushSnapshot, setRows])
+
+  // UFX P4d — remove a category from a union sheet (chip × → dialog).
+  // 'reassign' recategorizes the rows onto another of the sheet's types
+  // (browse node cleared — it belonged to the old type; the BN.4.3 advisory
+  // prompts for a new one); 'remove' drops the rows from THIS sheet only
+  // (they stay on the server / their own single-type sheet). The sheetTypes
+  // re-derive + loadedExtraTypesRef prune make re-adding the type refetch.
+  const [removeCategoryType, setRemoveCategoryType] = useState<string | null>(null)
+  const reassignCategoryRows = useCallback((fromType: string, toType: string) => {
+    const F = fromType.toUpperCase()
+    const T = toType.toUpperCase()
+    if (!T || T === F) return
+    pushSnapshot()
+    setRows((prev) => prev.map((r) =>
+      !r._ghost && String(r.product_type ?? '').toUpperCase() === F
+        ? { ...r, product_type: T, recommended_browse_nodes: '', _dirty: true }
+        : r))
+    setFilterType((f) => (f === F ? null : f))
+    setRemoveCategoryType(null)
+  }, [pushSnapshot, setRows])
+  const removeCategoryRows = useCallback((fromType: string) => {
+    const F = fromType.toUpperCase()
+    pushSnapshot()
+    setRows((prev) => prev.filter((r) => r._ghost || String(r.product_type ?? '').toUpperCase() !== F))
+    setFilterType((f) => (f === F ? null : f))
+    setRemoveCategoryType(null)
   }, [pushSnapshot, setRows])
 
   // BN.2.2 — bulk-assign product type + browse node to selected rows.
@@ -3693,11 +3739,31 @@ export default function AmazonFlatFileClient({
                     </button>
                   )}
                   {typesInUse.map((t) => (
-                    <button key={t} type="button" onClick={() => setFilterType((f) => (f === t ? null : t))}
-                      className={cn('px-1.5 py-0.5 rounded text-[11px] font-semibold border transition-colors',
-                        filterType === t ? 'bg-indigo-100 text-indigo-700 border-indigo-300 dark:bg-indigo-900/40 dark:text-indigo-300' : 'border-slate-200 text-slate-500 hover:border-indigo-400')}>
-                      {t}
-                    </button>
+                    // UFX P4d — union chips carry a remove affordance (× →
+                    // reassign-or-remove dialog); the label part still toggles
+                    // the column filter. Buttons are siblings (nesting is
+                    // invalid HTML), joined into one chip visually.
+                    <span key={t}
+                      className={cn('inline-flex items-stretch rounded border overflow-hidden transition-colors',
+                        filterType === t ? 'bg-indigo-100 border-indigo-300 dark:bg-indigo-900/40' : 'border-slate-200 hover:border-indigo-400')}>
+                      <button type="button" onClick={() => setFilterType((f) => (f === t ? null : t))}
+                        title={filterType === t ? `Show all categories' columns` : `Show only ${t}'s columns`}
+                        className={cn('px-1.5 py-0.5 text-[11px] font-semibold transition-colors',
+                          filterType === t ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-500')}>
+                        {t}
+                      </button>
+                      {isUnionMode && (
+                        <button type="button" onClick={() => setRemoveCategoryType(t)}
+                          title={`Remove ${t} from this sheet…`}
+                          aria-label={`Remove ${t} from this sheet`}
+                          className={cn('px-1 flex items-center border-l transition-colors',
+                            filterType === t
+                              ? 'border-indigo-200 dark:border-indigo-800 text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-200'
+                              : 'border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500')}>
+                          <X className="w-2.5 h-2.5" aria-hidden />
+                        </button>
+                      )}
+                    </span>
                   ))}
                 </>
               )}
@@ -4316,6 +4382,18 @@ export default function AmazonFlatFileClient({
           onApply={applyCategory} onClose={() => setShowSetCategory(false)} />
       )}
 
+      {/* UFX P4d — remove-category dialog (chip ×): reassign rows or drop them from this sheet */}
+      {removeCategoryType && (
+        <RemoveCategoryDialog
+          type={removeCategoryType}
+          rowCount={latestRowsRef.current.filter((r) => !r._ghost && String(r.product_type ?? '').toUpperCase() === removeCategoryType).length}
+          otherTypes={sheetTypes.map((t) => t.toUpperCase()).filter((t) => t !== removeCategoryType)}
+          onReassign={(to) => reassignCategoryRows(removeCategoryType, to)}
+          onRemoveRows={() => removeCategoryRows(removeCategoryType)}
+          onClose={() => setRemoveCategoryType(null)}
+        />
+      )}
+
       {/* FM Phase 4 — bulk Set buffer modal */}
       {bufferModal && (
         <DSModal open onClose={() => setBufferModal(null)} title="Set buffer" size="sm"
@@ -4457,6 +4535,77 @@ export default function AmazonFlatFileClient({
         }}
       />
     </div>
+  )
+}
+
+// ── RemoveCategoryDialog (UFX P4d) ──────────────────────────────────────
+// Chip × on a union sheet: the operator either reassigns the category's rows
+// to another of the sheet's types (data change — rows go dirty, browse node
+// cleared) or removes them from THIS sheet only (view change — rows stay on
+// the server / their own single-type sheet). DS Modal + Button.
+
+function RemoveCategoryDialog({
+  type, rowCount, otherTypes, onReassign, onRemoveRows, onClose,
+}: {
+  type: string
+  rowCount: number
+  otherTypes: string[]
+  onReassign: (toType: string) => void
+  onRemoveRows: () => void
+  onClose: () => void
+}) {
+  const canReassign = otherTypes.length > 0
+  const [mode, setMode] = useState<'reassign' | 'remove'>(canReassign ? 'reassign' : 'remove')
+  const [target, setTarget] = useState(otherTypes[0] ?? '')
+  const rowsLabel = `${rowCount} row${rowCount === 1 ? '' : 's'}`
+
+  return (
+    <DSModal open onClose={onClose} title={`Remove ${type} from this sheet`} size="sm"
+      footer={
+        <>
+          <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+          <Button variant={mode === 'remove' ? 'danger' : 'primary'} size="sm"
+            disabled={mode === 'reassign' && !target}
+            onClick={() => { if (mode === 'reassign') onReassign(target); else onRemoveRows() }}>
+            {mode === 'reassign' ? `Reassign ${rowsLabel}` : `Remove ${rowsLabel}`}
+          </Button>
+        </>
+      }>
+      <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
+        This sheet has <strong>{rowsLabel}</strong> in <strong>{type}</strong>. Choose what happens to them:
+      </p>
+      <div className="space-y-2">
+        <label className={cn('flex items-start gap-2 p-2 rounded border cursor-pointer transition-colors',
+          mode === 'reassign' ? 'border-indigo-300 bg-indigo-50/60 dark:border-indigo-700 dark:bg-indigo-950/30' : 'border-slate-200 dark:border-slate-700',
+          !canReassign && 'opacity-50 cursor-not-allowed')}>
+          <input type="radio" name="remove-category-mode" className="mt-0.5" checked={mode === 'reassign'}
+            disabled={!canReassign} onChange={() => setMode('reassign')} />
+          <span className="text-xs text-slate-700 dark:text-slate-200">
+            <span className="font-semibold block">Reassign to another category</span>
+            <span className="text-slate-500 dark:text-slate-400 block mb-1.5">
+              Rows switch product type and go dirty (save/submit to apply on Amazon). Their browse node is cleared — set a new one for the target category.
+            </span>
+            {canReassign && (
+              <select value={target} onChange={(e) => setTarget(e.target.value)} disabled={mode !== 'reassign'}
+                className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs text-slate-700 dark:text-slate-200">
+                {otherTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            )}
+          </span>
+        </label>
+        <label className={cn('flex items-start gap-2 p-2 rounded border cursor-pointer transition-colors',
+          mode === 'remove' ? 'border-red-300 bg-red-50/60 dark:border-red-800 dark:bg-red-950/30' : 'border-slate-200 dark:border-slate-700')}>
+          <input type="radio" name="remove-category-mode" className="mt-0.5" checked={mode === 'remove'}
+            onChange={() => setMode('remove')} />
+          <span className="text-xs text-slate-700 dark:text-slate-200">
+            <span className="font-semibold block">Remove the rows from this sheet</span>
+            <span className="text-slate-500 dark:text-slate-400 block">
+              Sheet-only: nothing is deleted on Amazon or in Nexus — the rows come back when you re-add the {type} category. Undo with ⌘Z.
+            </span>
+          </span>
+        </label>
+      </div>
+    </DSModal>
   )
 }
 
