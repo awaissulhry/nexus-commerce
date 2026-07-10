@@ -262,6 +262,15 @@ export class CategorySchemaService {
       await this.detectAndLogChanges(previous, schemaDefinition, query)
     }
 
+    // UFX P6c — visibility: a NEW schema version landing in the cache is what
+    // invalidates every manifest built on the old one (the manifest's
+    // schemaVersion fingerprint changes with it), so make the rotation
+    // greppable in the server logs.
+    console.info(
+      `[schema-sync] NEW schema cached: ${query.channel} ${query.marketplace ?? '-'} ${query.productType} ` +
+      `version ${previous?.schemaVersion ?? '(first fetch)'} → ${schemaVersion}`,
+    )
+
     return this.prisma.categorySchema.create({
       data: {
         channel: 'AMAZON',
