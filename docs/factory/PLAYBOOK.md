@@ -15,6 +15,7 @@ Last updated 2026-07-06 (**🏁 ALL 11 PAGES SHIPPED — Factory OS is COMPLETE*
 | `F0-FINDINGS.md` | Risk register (Gmail policy, Drive quota, plan gates…) | Integration work |
 | `F1-REPORT.md` | What the foundation actually is + deviations + gate fixes | Understanding existing code |
 | `FP1-SPEC.md` | The approved Inbox spec (gate 1 passed 2026-07-05) | Building FP1 — it is binding |
+| `ENTERPRISE-PROGRAM.md` | **EP control tower (2026-07-11+): page-by-page enterprise hardening — claim registry, substrate ownership, anti-duplication protocol** | **ALWAYS, second — before touching any page** |
 
 ---
 

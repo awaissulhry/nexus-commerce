@@ -1,0 +1,48 @@
+# EP — the Enterprise Program (page-by-page hardening · multi-session control tower)
+
+Started 2026-07-11 at the Owner's direction: *"work page by page to make sure it's absolutely enterprise level … no communication gap at all … complete control over each and everything … no duplicate features … keep control of each and everything."* This file is the **coordination contract for every session** working on Factory OS from now on. Read it right after `PLAYBOOK.md`, before touching any page.
+
+## The protocol (binding on every session)
+
+1. **Claim before you work.** Before starting a page, set its row below to `CLAIMED (date)` and commit this file (`git commit --only docs/factory/ENTERPRISE-PROGRAM.md`) — parallel sessions on main make unclaimed parallel work a collision risk. If a row is already CLAIMED, do not touch that page; coordinate through the Owner.
+2. **Per-page cycle (double gate, unchanged):** research (external bar + internal audit) → `EPx-PROPOSAL.md` → Owner approval → phase specs → build → click-through → Owner approval → update the row.
+3. **No feature leaves its home page.** A capability belongs to the page that owns its entity (registry below). If a page needs something another page owns, it consumes that page's API/components — it never re-implements. New cross-page capabilities get an owner ROW here first.
+4. **Shared substrate is owned by workstreams, not pages** (table below). A page proposal may DEPEND on substrate; it may not BUILD it.
+5. **Navigation law:** the 11-page IA (F0-IA.md) is fixed; new surfaces live INSIDE their page (tabs/drawers/sub-routes like `/quotes/...`). Adding a 12th top-level nav item requires Owner sign-off recorded here.
+6. **Design law:** DS-only UI (F0-DESIGN-BRIDGE.md); resizable panes + windowed lists are the standing expectations for any new heavy surface.
+
+## Page registry (EP series codes)
+
+| Page | Code | Status | Proposal | Notes |
+|---|---|---|---|---|
+| Quotes | **EPQ** | **CLAIMED 2026-07-11 (this session) — research in flight** | `EPQ-PROPOSAL.md` (pending) | First page of the program |
+| Inbox | EPI | open | — | partitions/scroll fix shipped 2026-07-10 pre-program |
+| Orders | EPO | open | — | FS1 already fixed kanban truncation |
+| Production | EPP | open | — | |
+| Materials | EPM | open | — | |
+| Products & Pricing | EPD | open | — | |
+| Contacts | EPC | open | — | |
+| Shipping | EPS | open | — | |
+| Financials | EPF | open | — | |
+| Analytics | EPA | open | — | |
+| Settings & Team | EPT | open | — | |
+
+## Shared-substrate ownership (pages consume, never build)
+
+| Substrate | Owner workstream | Status |
+|---|---|---|
+| Real-time/SSE fan-out (O(1) poller, targeted events) | **FS2** | spec next in the scale workstream |
+| Virtualized DataGrid, windowed lists, paged/searchable comboboxes, @mention autocomplete | **FS3** | queued |
+| Write transactions, session-cache, optimistic concurrency, login rate-limit | **FS4** | queued |
+| FTS search, attachment/PDF streaming, snapshot & archival | **FS5** | queued |
+| Per-order internal chat (Order Spaces), system-message feed, presence/read receipts | **FC1–FC6** | approved, after FS2 |
+| Notifications (single write path `notify()`), bell, outbox | F1/FP1 (exists) | live |
+| Load harness + parity + `check:query-bounds` fence | FS0/FS1 (exists) | live — every EP page re-runs it |
+| Approval-gate / margin-floor governance patterns | EPQ defines the house pattern (first consumer) | — |
+
+## Standing cross-page invariants (program-wide)
+
+- Money truth lives in the pure folds (`rollup.ts`, `money.ts`, quote engine) — pages feed them, never fork them; parity script guards every rewrite.
+- Every list bounded (`check:query-bounds`), every heavy page proven on the FS0 harness before its gate closes.
+- Communication events (send/accept/state changes) must land in BOTH the Gmail thread (external) and — once FC ships — the order/quote's internal feed; no silent state changes, ever. "No communication gap" is an exit criterion for every EP page.
+- Playbook rules unchanged: no-touch, scoped commits, no time estimates, honest gate reports.
