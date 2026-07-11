@@ -4875,6 +4875,12 @@ model BrandSettings {
   // balance (useful for quick what-if).
   cashOnHandCents Int?
 
+  // UFX GPSR.1 — hosted CE/PPE user-manual URLs per language, keyed by
+  // UPPER language code ("EN", "DE", …) → public https URL (.pdf/.jpg).
+  // Feeds Amazon compliance_media.source_location per marketplace
+  // (buildAmazonComplianceMediaColumns). Null = no manuals hosted yet.
+  userManualUrls Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
