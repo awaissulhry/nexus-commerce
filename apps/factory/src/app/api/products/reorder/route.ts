@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 
@@ -23,5 +24,10 @@ export const POST = guarded(FEATURES.productsManage, async (req) => {
         : prisma.option.update({ where: { id }, data: { sort: i } }),
     ),
   );
+  const templateId =
+    kind === "group"
+      ? (await prisma.optionGroup.findUnique({ where: { id: ids[0] }, select: { templateId: true } }))?.templateId
+      : (await prisma.option.findUnique({ where: { id: ids[0] }, select: { group: { select: { templateId: true } } } }))?.group.templateId;
+  await publishEventDurable("pricing.updated", { templateId }); // FS2 — no silent mutations
   return NextResponse.json({ ok: true });
 });

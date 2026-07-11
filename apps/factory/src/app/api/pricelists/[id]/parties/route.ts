@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 
@@ -19,5 +20,6 @@ export const PUT = guarded(FEATURES.pricelistsManage, async (req, { params, acto
     data: { parties: { set: parsed.data.partyIds.map((pid) => ({ id: pid })) } },
   });
   void audit({ actorId: actor!.id, entityType: "pricelist", entityId: id, action: "parties.set", after: { count: parsed.data.partyIds.length } });
+  await publishEventDurable("pricing.updated", { priceListId: id }); // FS2 — no silent mutations
   return NextResponse.json({ ok: true });
 });

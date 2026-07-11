@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 
@@ -23,5 +24,7 @@ export const POST = guarded(FEATURES.productsManage, async (req, { params, actor
   const last = await prisma.option.findFirst({ where: { groupId: gid }, orderBy: { sort: "desc" }, select: { sort: true } });
   const option = await prisma.option.create({ data: { groupId: gid, sort: (last?.sort ?? -1) + 1, ...parsed.data } });
   void audit({ actorId: actor!.id, entityType: "group", entityId: gid, action: "option.created", after: { optionId: option.id, name: option.name } });
+  const parent = await prisma.optionGroup.findUnique({ where: { id: gid }, select: { templateId: true } });
+  await publishEventDurable("pricing.updated", { templateId: parent?.templateId }); // FS2 — no silent mutations
   return NextResponse.json({ option }, { status: 201 });
 });

@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { FEATURES, PAGES } from "@/lib/auth/permissions";
 import { allMaterialUsage } from "@/lib/products/material-usage";
@@ -38,5 +39,6 @@ export const POST = guarded(FEATURES.materialsManage, async (req, { actor, resol
   if (!parsed.success) return NextResponse.json({ error: "name and a valid unit (HIDE|SQM|PIECE|M) are required" }, { status: 400 });
   const m = await prisma.material.create({ data: parsed.data });
   void audit({ actorId: actor!.id, entityType: "material", entityId: m.id, action: "created", after: { name: m.name, unit: m.unit } });
+  await publishEventDurable("pricing.updated", { via: "material-created" }); // FS2 — no silent mutations
   return jsonStripped({ material: m }, resolved, { status: 201 });
 });
