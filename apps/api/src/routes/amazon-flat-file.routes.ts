@@ -38,6 +38,7 @@ import {
   resolveComplianceForSkus,
   evaluateCompliance,
   buildAmazonComplianceColumns,
+  buildComplianceMediaFill,
 } from '../services/compliance-resolver.service.js'
 
 import { enqueueContentSyncIfEnabled } from '../services/content-auto-publish.service.js'
@@ -75,6 +76,26 @@ const browseNodeCache = new TtlCache<unknown>({
   ttlMs: 30 * 60_000,
   maxEntries: 200,
 })
+
+// UFX GPSR.1 — the compliance_media auto-fill for one row, gated the same way
+// the /submit merge is: it fires only when ALL THREE sub-columns apply to the
+// row's product type (the schema requires the complete triple — a partial
+// entry is invalid). Shared by the /submit + /preflight GPSR check contexts
+// so the warning preview and the actual fill can never disagree.
+function gpsrMediaAutoFill(
+  row: Record<string, any>,
+  applicable: Set<string> | undefined,
+  complianceBySku: Map<string, any>,
+  marketplace: string,
+): Record<string, string> | undefined {
+  const cp = complianceBySku.get(String(row?.item_sku ?? ''))
+  if (!cp) return undefined
+  const fill = buildComplianceMediaFill(row, cp, marketplace)
+  const keys = Object.keys(fill)
+  if (keys.length === 0) return undefined
+  if (applicable && !keys.every((k) => applicable.has(k))) return undefined
+  return fill
+}
 
 function getSellerId(): string {
   return process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
@@ -396,6 +417,10 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
                 applicableColumns: appByType.get(t),
                 contentTypeValues: enumByType.get(t)?.find((c) => c.id === 'compliance_media__content_type')?.values,
                 contactAutoFill: Boolean(complianceBySku.get(String(r.item_sku ?? ''))?.responsiblePerson?.email?.trim()),
+                // UFX GPSR.1 — preview of the submit-time compliance_media fill
+                // (hosted user manual per marketplace), gated like the fill
+                // itself: all three sub-columns must apply to the row's type.
+                mediaAutoFill: gpsrMediaAutoFill(r, appByType.get(t), complianceBySku, mp),
               },
               // UFX P6g — missing-required downgraded to warnings for PARTIAL_UPDATE
               // rows of a NOT_ENFORCED product type (absent value = ENFORCED).
@@ -513,6 +538,13 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
           const cur = row[k]
           if (cur == null || String(cur).trim() === '') row[k] = v
         }
+        // UFX GPSR.1 — compliance_media (hosted user manual) per marketplace.
+        // buildComplianceMediaFill already guarantees non-clobbering (any
+        // operator sub-value or a truthy attestation → no fill) and the
+        // applicable gate requires the complete triple (schema: all three
+        // sub-fields required on the single-instance attribute).
+        const mediaFill = gpsrMediaAutoFill(row, applicable, complianceBySku, mp)
+        if (mediaFill) Object.assign(row, mediaFill)
       }
     }
 
@@ -695,6 +727,8 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
               applicableColumns: applicableByType.get(t),
               contentTypeValues: enumByType.get(t)?.find((c) => c.id === 'compliance_media__content_type')?.values,
               contactAutoFill: Boolean(complianceBySku.get(sku)?.responsiblePerson?.email?.trim()),
+              // UFX GPSR.1 — preview of the submit-time compliance_media fill.
+              mediaAutoFill: gpsrMediaAutoFill(r, applicableByType.get(t), complianceBySku, mp),
             },
             // UFX P6g — missing-required downgraded to warnings for PARTIAL_UPDATE
             // rows of a NOT_ENFORCED product type (absent value = ENFORCED).

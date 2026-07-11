@@ -32,6 +32,8 @@ import {
 import {
   buildCompliancePayload,
   buildAmazonComplianceColumns,
+  buildAmazonComplianceMediaColumns,
+  buildComplianceMediaFill,
   type ResponsiblePerson,
 } from '../compliance-resolver.service.js'
 
@@ -366,5 +368,186 @@ describe('UFX P6f — preflightRow wiring', () => {
     const issues = preflightRow(row, [], [], { gpsr: ctx() }).filter((i) => i.message.startsWith('GPSR:'))
     expect(issues.length).toBeGreaterThan(0)
     expect(issues.every((i) => i.severity === 'warning')).toBe(true)
+  })
+})
+
+// ── UFX GPSR.1 — hosted user manuals → compliance_media per marketplace ──────
+
+const MANUAL_URLS: Record<string, string> = {
+  EN: 'https://res.cloudinary.com/x/image/upload/v1/compliance/manuals/pages/xavia-user-manual-EN-PS01.jpg',
+  DE: 'https://res.cloudinary.com/x/image/upload/v1/compliance/manuals/pages/xavia-user-manual-DE-PS01.jpg',
+  FR: 'https://res.cloudinary.com/x/image/upload/v1/compliance/manuals/pages/xavia-user-manual-FR-PS01.jpg',
+  ES: 'https://res.cloudinary.com/x/image/upload/v1/compliance/manuals/pages/xavia-user-manual-ES-PS01.jpg',
+  NL: 'https://res.cloudinary.com/x/image/upload/v1/compliance/manuals/pages/xavia-user-manual-NL-PS01.jpg',
+  PL: 'https://res.cloudinary.com/x/image/upload/v1/compliance/manuals/pages/xavia-user-manual-PL-PS01.jpg',
+  SV: 'https://res.cloudinary.com/x/image/upload/v1/compliance/manuals/pages/xavia-user-manual-SV-PS01.jpg',
+}
+
+describe('UFX GPSR.1 — buildAmazonComplianceMediaColumns (marketplace → language)', () => {
+  const payload = buildCompliancePayload(
+    { id: 'p1', sku: 'SKU1', certificates: [] },
+    RP,
+    { userManualUrls: MANUAL_URLS },
+  )
+
+  it('each EU marketplace gets its own language document + locale', () => {
+    for (const [mk, doc, lang] of [
+      ['DE', 'DE', 'de_DE'], ['FR', 'FR', 'fr_FR'], ['ES', 'ES', 'es_ES'],
+      ['NL', 'NL', 'nl_NL'], ['PL', 'PL', 'pl_PL'],
+    ] as const) {
+      const cols = buildAmazonComplianceMediaColumns(payload, mk)
+      expect(cols).toEqual({
+        compliance_media__content_type: 'user_manual',
+        compliance_media__content_language: lang,
+        compliance_media__source_location: MANUAL_URLS[doc],
+      })
+    }
+  })
+
+  it('SE maps to the SV (Swedish) document with sv_SE', () => {
+    const cols = buildAmazonComplianceMediaColumns(payload, 'SE')
+    expect(cols.compliance_media__content_language).toBe('sv_SE')
+    expect(cols.compliance_media__source_location).toBe(MANUAL_URLS.SV)
+  })
+
+  it('BE maps to the FR document with fr_BE (both fr_BE/nl_BE exist in the live enum)', () => {
+    const cols = buildAmazonComplianceMediaColumns(payload, 'BE')
+    expect(cols.compliance_media__content_language).toBe('fr_BE')
+    expect(cols.compliance_media__source_location).toBe(MANUAL_URLS.FR)
+  })
+
+  it('IT falls back to the EN manual with en_GB (documented gap — no Italian pages)', () => {
+    const cols = buildAmazonComplianceMediaColumns(payload, 'IT')
+    expect(cols.compliance_media__content_language).toBe('en_GB')
+    expect(cols.compliance_media__source_location).toBe(MANUAL_URLS.EN)
+  })
+
+  it('UK (not GPSR-mandatory) gets the EN manual; case-insensitive marketplace', () => {
+    expect(buildAmazonComplianceMediaColumns(payload, 'uk').compliance_media__content_language).toBe('en_GB')
+  })
+
+  it('no hosted manuals → NO columns (never a partial entry)', () => {
+    const bare = buildCompliancePayload({ id: 'p1', sku: 'SKU1', certificates: [] }, RP)
+    expect(bare.userManualUrls).toBeNull()
+    expect(buildAmazonComplianceMediaColumns(bare, 'DE')).toEqual({})
+  })
+
+  it('missing language / non-EU marketplace / non-https URL → {}', () => {
+    const onlyEn = buildCompliancePayload({ id: 'p1', certificates: [] }, RP, { userManualUrls: { EN: MANUAL_URLS.EN } })
+    expect(buildAmazonComplianceMediaColumns(onlyEn, 'DE')).toEqual({})
+    expect(buildAmazonComplianceMediaColumns(payload, 'US')).toEqual({})
+    expect(buildAmazonComplianceMediaColumns(payload, '')).toEqual({})
+    const badUrl = buildCompliancePayload({ id: 'p1', certificates: [] }, RP, { userManualUrls: { DE: 'http://insecure/x.pdf' } })
+    expect(buildAmazonComplianceMediaColumns(badUrl, 'DE')).toEqual({})
+  })
+
+  it('lower-case language keys in BrandSettings are normalized', () => {
+    const lower = buildCompliancePayload({ id: 'p1', certificates: [] }, RP, { userManualUrls: { de: MANUAL_URLS.DE } })
+    expect(buildAmazonComplianceMediaColumns(lower, 'DE').compliance_media__source_location).toBe(MANUAL_URLS.DE)
+  })
+})
+
+describe('UFX GPSR.1 — buildComplianceMediaFill (row guards)', () => {
+  const payload = buildCompliancePayload({ id: 'p1', certificates: [] }, RP, { userManualUrls: MANUAL_URLS })
+
+  it('blank row → the complete triple', () => {
+    const fill = buildComplianceMediaFill({ item_sku: 'S' }, payload, 'DE')
+    expect(Object.keys(fill).sort()).toEqual([
+      'compliance_media__content_language',
+      'compliance_media__content_type',
+      'compliance_media__source_location',
+    ])
+    expect(fill.compliance_media__content_type).toBe('user_manual')
+  })
+
+  it('ANY operator-entered sub-value → no fill (operator entry wins whole)', () => {
+    for (const col of ['compliance_media__content_type', 'compliance_media__source_location', 'compliance_media__content_language']) {
+      expect(buildComplianceMediaFill({ [col]: 'x' }, payload, 'DE')).toEqual({})
+    }
+  })
+
+  it('truthy safety attestation → no fill (would contradict the attestation)', () => {
+    expect(buildComplianceMediaFill({ gpsr_safety_attestation: 'true' }, payload, 'DE')).toEqual({})
+    expect(buildComplianceMediaFill({ gpsr_safety_attestation: 'Sì' }, payload, 'DE')).toEqual({})
+    expect(buildComplianceMediaFill({ gpsr_safety_attestation: 'false' }, payload, 'DE')).not.toEqual({})
+  })
+})
+
+describe('UFX GPSR.1 — checkGpsrCompliance with mediaAutoFill', () => {
+  const payload = buildCompliancePayload({ id: 'p1', certificates: [] }, RP, { userManualUrls: MANUAL_URLS })
+  const contactRow = () => ({ item_sku: 'S', gpsr_manufacturer_reference: 'compliance@xavia.it' })
+  const afFor = (mk: string, row: Record<string, any>) => buildComplianceMediaFill(row, payload, mk)
+
+  it('DE + auto-filled de_DE manual → clean (fill suppresses the no-documentation warning)', () => {
+    const row = contactRow()
+    const issues = checkGpsrCompliance(row, ctx({ marketplace: 'DE', mediaAutoFill: afFor('DE', row) }))
+    expect(issues).toEqual([])
+  })
+
+  it('IT + auto-filled EN manual → exactly the en_GB language WARNING, never an error', () => {
+    const row = contactRow()
+    const issues = checkGpsrCompliance(row, ctx({ marketplace: 'IT', mediaAutoFill: afFor('IT', row) }))
+    expect(issues).toHaveLength(1)
+    expect(issues[0].field).toBe('compliance_media__content_language')
+    expect(issues[0].severity).toBe('warning')
+    expect(issues[0].message).toContain('en_GB')
+    expect(issues[0].message).toContain('it_IT')
+    // No "no safety documentation" warning — the fill IS the documentation.
+    expect(issues.some((i) => i.message.includes('either set the safety attestation'))).toBe(false)
+  })
+
+  it('row with its own it_IT media → auto-fill ignored (no double-reporting)', () => {
+    const row = {
+      ...contactRow(),
+      compliance_media__content_type: 'safety_information',
+      compliance_media__source_location: 'https://xavia.it/docs/safety.pdf',
+      compliance_media__content_language: 'it_IT',
+    }
+    const issues = checkGpsrCompliance(row, ctx({ marketplace: 'IT', mediaAutoFill: afFor('IT', {}) }))
+    expect(issues).toEqual([])
+  })
+
+  it('truthy attestation → auto-fill preview ignored (matches the fill guard, no conflict warning)', () => {
+    const row = { ...contactRow(), gpsr_safety_attestation: 'true' }
+    const issues = checkGpsrCompliance(row, ctx({ marketplace: 'DE', mediaAutoFill: afFor('DE', {}) }))
+    expect(issues).toEqual([])
+  })
+})
+
+describe('UFX GPSR.1 — feed emits the single-instance nested compliance_media shape', () => {
+  it('sub-columns reassemble into [{content_type, content_language, source_location, marketplace_id}]', () => {
+    const svc = new AmazonFlatFileService({} as any, {} as any)
+    const expandedFields = {
+      compliance_media__content_type: 'compliance_media.content_type',
+      compliance_media__source_location: 'compliance_media.source_location',
+      compliance_media__content_language: 'compliance_media.content_language',
+    }
+    const rows = [{
+      item_sku: 'SKU1',
+      product_type: 'OUTERWEAR',
+      compliance_media__content_type: 'user_manual',
+      compliance_media__content_language: 'en_GB',
+      compliance_media__source_location: MANUAL_URLS.EN,
+    }]
+    const { body } = svc.buildJsonFeedBodyWithReport(rows, 'IT', 'SELLER', expandedFields, {
+      localizedFields: new Set<string>(), // compliance_media carries NO language_tag
+    })
+    const attrs = JSON.parse(body).messages[0].attributes
+    expect(attrs.compliance_media).toHaveLength(1)
+    expect(attrs.compliance_media[0]).toEqual({
+      content_type: 'user_manual',
+      content_language: 'en_GB',
+      source_location: MANUAL_URLS.EN,
+      marketplace_id: expect.any(String),
+    })
+    expect(attrs.compliance_media[0]).not.toHaveProperty('value')
+    expect(attrs.compliance_media[0]).not.toHaveProperty('language_tag')
+  })
+
+  it('no fill (no URL) → no compliance_media attribute at all', () => {
+    const svc = new AmazonFlatFileService({} as any, {} as any)
+    const rows = [{ item_sku: 'SKU1', product_type: 'OUTERWEAR', brand: 'XAVIA' }]
+    const { body } = svc.buildJsonFeedBodyWithReport(rows, 'IT', 'SELLER', {}, { localizedFields: new Set<string>() })
+    expect(JSON.parse(body).messages[0].attributes).not.toHaveProperty('compliance_media')
   })
 })

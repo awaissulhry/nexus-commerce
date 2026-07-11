@@ -333,6 +333,14 @@ export interface GpsrCheckContext {
    *  contacts (Brand Settings responsible-person email) — suppresses the
    *  missing-contact warning for a row the fill will cover. */
   contactAutoFill?: boolean
+  /** UFX GPSR.1 — the compliance_media sub-columns the submit-time auto-fill
+   *  WILL write for this row (buildComplianceMediaFill: hosted user manual per
+   *  marketplace). When the row carries no compliance_media of its own, these
+   *  values stand in for it: the no-documentation warning is suppressed and the
+   *  integrity checks (incl. the language-match check — which deliberately
+   *  WARNS on IT's en_GB fallback manual) run against what the feed will
+   *  actually carry. Keys are the compliance_media__* column ids. */
+  mediaAutoFill?: Record<string, string>
 }
 
 // Schema says both contact fields accept "e-mail o URL" — accept either shape.
@@ -395,7 +403,13 @@ export function checkGpsrCompliance(row: Record<string, any>, ctx: GpsrCheckCont
   // (b) attestation XOR safety documentation.
   const attTruthy = has(ATT) && GPSR_TRUTHY.has(val(ATT).toLowerCase())
   const cmCols = [CM_TYPE, CM_SRC, CM_LANG].filter(has)
-  const cmPresent = cmCols.some((c) => val(c) !== '')
+  const rowCmPresent = cmCols.some((c) => val(c) !== '')
+  // UFX GPSR.1 — submit-time media auto-fill preview. Only stands in when the
+  // row carries no compliance_media of its own and doesn't attest (mirrors
+  // buildComplianceMediaFill's guards — the fill never fires on those rows).
+  const af = !rowCmPresent && !attTruthy ? (ctx.mediaAutoFill ?? {}) : {}
+  const cmVal = (c: string): string => (val(c) !== '' ? val(c) : String(af[c] ?? '').trim())
+  const cmPresent = rowCmPresent || [CM_TYPE, CM_SRC, CM_LANG].some((c) => String(af[c] ?? '').trim() !== '')
   const sdsPresent = has(SDS) && val(SDS) !== ''
   if (attTruthy && cmPresent) {
     issues.push({
@@ -412,9 +426,11 @@ export function checkGpsrCompliance(row: Record<string, any>, ctx: GpsrCheckCont
     })
   }
 
-  // (c) compliance_media integrity (only when an entry is present).
+  // (c) compliance_media integrity (only when an entry is present — operator
+  // values first, else the auto-fill preview, so e.g. the IT en_GB-manual
+  // fallback surfaces its language-mismatch warning before submit).
   if (cmPresent) {
-    const src = has(CM_SRC) ? val(CM_SRC) : ''
+    const src = has(CM_SRC) ? cmVal(CM_SRC) : ''
     if (src) {
       if (!/^https:\/\//i.test(src)) {
         issues.push({ field: CM_SRC, severity: 'warning', message: 'GPSR: compliance media URL must be a public https:// link' })
@@ -422,20 +438,20 @@ export function checkGpsrCompliance(row: Record<string, any>, ctx: GpsrCheckCont
         issues.push({ field: CM_SRC, severity: 'warning', message: 'GPSR: compliance media must be a .pdf, .jpg, .jpeg or .png file' })
       }
     }
-    const ct = has(CM_TYPE) ? val(CM_TYPE) : ''
+    const ct = has(CM_TYPE) ? cmVal(CM_TYPE) : ''
     if (ct && ctx.contentTypeValues?.length) {
       const ctLc = ct.toLowerCase()
       if (!ctx.contentTypeValues.some((v) => v === ct || v.toLowerCase() === ctLc)) {
         issues.push({ field: CM_TYPE, severity: 'warning', message: `GPSR: "${ct}" isn't an accepted compliance-media content type for this product type` })
       }
     }
-    const lang = has(CM_LANG) ? val(CM_LANG) : ''
+    const lang = has(CM_LANG) ? cmVal(CM_LANG) : ''
     const expected = GPSR_MARKETPLACE_LANGUAGES[mk]
     if (lang && expected && !expected.some((l) => l.toLowerCase() === lang.toLowerCase())) {
       issues.push({
         field: CM_LANG,
         severity: 'warning',
-        message: `GPSR: compliance media language "${lang}" doesn't match the ${mk} marketplace language (expected ${expected.join(' or ')})`,
+        message: `GPSR: compliance media language "${lang}" doesn't match the ${mk} marketplace language (expected ${expected.join(' or ')})${val(CM_LANG) === '' ? ' — the auto-filled user manual has no matching-language edition yet; host one to clear this' : ''}`,
       })
     }
   }

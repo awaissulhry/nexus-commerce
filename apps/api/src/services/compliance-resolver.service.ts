@@ -55,6 +55,9 @@ export interface CompliancePayload {
   notifiedBody: { number: string | null; name: string | null } | null
   declarationOfConformityUrl: string | null
   impactProtectors: ImpactProtector[]
+  // UFX GPSR.1 — hosted user-manual URLs by UPPER language code ("EN", "DE" …),
+  // from BrandSettings.userManualUrls. Feeds compliance_media per marketplace.
+  userManualUrls: Record<string, string> | null
 }
 
 export interface ComplianceIssue {
@@ -88,10 +91,27 @@ const CROSS_BORDER_MARKETS = new Set(['US', 'CA', 'MX', 'JP', 'AU', 'IN', 'AE', 
 
 const iso = (d: Date) => d.toISOString().slice(0, 10)
 
+/** UFX GPSR.1 — brand-level compliance inputs beyond the responsible person. */
+export interface BrandComplianceInput {
+  /** BrandSettings.userManualUrls — UPPER language code → public https URL. */
+  userManualUrls?: unknown
+}
+
+/** Normalize the BrandSettings.userManualUrls Json into a clean string map. */
+function normalizeManualUrls(raw: unknown): Record<string, string> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === 'string' && v.trim() !== '') out[k.toUpperCase()] = v.trim()
+  }
+  return Object.keys(out).length > 0 ? out : null
+}
+
 /** Pure — assemble the canonical payload from a product (+ certs) and the RP. */
 export function buildCompliancePayload(
   product: ComplianceProductInput,
   rp: ResponsiblePerson | null,
+  brand?: BrandComplianceInput | null,
 ): CompliancePayload {
   const certificates = product.certificates ?? []
   const ce = certificates.find((c) => c.certType === 'CE') ?? null
@@ -123,6 +143,7 @@ export function buildCompliancePayload(
     notifiedBody: nb,
     declarationOfConformityUrl: product.declarationOfConformityUrl ?? null,
     impactProtectors,
+    userManualUrls: normalizeManualUrls(brand?.userManualUrls),
   }
 }
 
@@ -227,6 +248,84 @@ export function buildAmazonComplianceColumns(payload: CompliancePayload): Record
   return cols
 }
 
+/**
+ * UFX GPSR.1 — which hosted user-manual language serves each marketplace.
+ * `doc` = key into BrandSettings.userManualUrls (UPPER language code);
+ * `contentLanguage` = the compliance_media.content_language locale, which the
+ * GPSR preflight expects to MATCH the marketplace's official language.
+ * Verified against the live cached schema enum (fr_BE and nl_BE both exist;
+ * FR chosen for BE since we host French pages).
+ *
+ * IT → EN/en_GB is a DOCUMENTED GAP: no Italian manual pages exist yet, so the
+ * Italian marketplace gets the English manual and the P6f language-match check
+ * surfaces a warning (never an error) until the operator adds an IT document.
+ * UK is not GPSR-mandatory — the EN manual is emitted there as harmless extra.
+ */
+export const COMPLIANCE_MEDIA_BY_MARKETPLACE: Record<string, { doc: string; contentLanguage: string }> = {
+  DE: { doc: 'DE', contentLanguage: 'de_DE' },
+  FR: { doc: 'FR', contentLanguage: 'fr_FR' },
+  ES: { doc: 'ES', contentLanguage: 'es_ES' },
+  NL: { doc: 'NL', contentLanguage: 'nl_NL' },
+  PL: { doc: 'PL', contentLanguage: 'pl_PL' },
+  SE: { doc: 'SV', contentLanguage: 'sv_SE' },
+  BE: { doc: 'FR', contentLanguage: 'fr_BE' },
+  IT: { doc: 'EN', contentLanguage: 'en_GB' }, // gap — no Italian pages yet (warn-only)
+  UK: { doc: 'EN', contentLanguage: 'en_GB' },
+  GB: { doc: 'EN', contentLanguage: 'en_GB' },
+}
+
+/**
+ * Pure — the compliance_media flat-file sub-columns for one marketplace:
+ * content_type = 'user_manual' + the marketplace-language document URL. All
+ * three sub-fields are REQUIRED by the schema (single-instance attribute), so
+ * this returns either the complete triple or {} — never a partial entry.
+ * No hosted manual for the marketplace's language / non-EU marketplace /
+ * non-https URL → {} (no columns).
+ */
+export function buildAmazonComplianceMediaColumns(
+  payload: Pick<CompliancePayload, 'userManualUrls'>,
+  marketplace: string,
+): Record<string, string> {
+  const pick = COMPLIANCE_MEDIA_BY_MARKETPLACE[String(marketplace || '').toUpperCase()]
+  const url = pick ? payload.userManualUrls?.[pick.doc] : undefined
+  if (!pick || !url || !/^https:\/\//i.test(url)) return {}
+  return {
+    compliance_media__content_type: 'user_manual',
+    compliance_media__content_language: pick.contentLanguage,
+    compliance_media__source_location: url,
+  }
+}
+
+// Truthy attestation spellings — mirrors the P6f preflight's GPSR_TRUTHY set.
+const ATTESTATION_TRUTHY = new Set(['true', '1', 'sì', 'si', 'yes'])
+
+/**
+ * Pure — the compliance_media auto-fill for one ROW (submit path + preflight
+ * preview). Returns {} (no fill) when:
+ *   - the marketplace has no hosted manual (buildAmazonComplianceMediaColumns);
+ *   - the operator already entered ANY compliance_media sub-value (their entry
+ *     wins whole — mixing operator halves with auto-fill halves is worse than
+ *     either alone);
+ *   - the row attests "no safety documentation needed" (gpsr_safety_attestation
+ *     truthy) — attaching media would contradict the attestation (P6f check b).
+ */
+export function buildComplianceMediaFill(
+  row: Record<string, unknown>,
+  payload: Pick<CompliancePayload, 'userManualUrls'>,
+  marketplace: string,
+): Record<string, string> {
+  const cm = buildAmazonComplianceMediaColumns(payload, marketplace)
+  if (Object.keys(cm).length === 0) return {}
+  const val = (k: string) => (row[k] == null ? '' : String(row[k]).trim())
+  if (
+    val('compliance_media__content_type') ||
+    val('compliance_media__content_language') ||
+    val('compliance_media__source_location')
+  ) return {}
+  if (ATTESTATION_TRUTHY.has(val('gpsr_safety_attestation').toLowerCase())) return {}
+  return cm
+}
+
 /** Format an EN protector standard code for display: EN_1621_2 → 'EN 1621-2'. */
 function formatProtectorStandard(s: string): string {
   return String(s).replace(/^EN_(\d+)_(\d+)$/i, 'EN $1-$2').replace(/_/g, ' ')
@@ -311,21 +410,32 @@ export function buildShopifyComplianceMetafields(
 
 /** The single BrandSettings row → the canonical responsible person. */
 export async function getResponsiblePerson(): Promise<ResponsiblePerson | null> {
+  return (await getBrandCompliance()).rp
+}
+
+/** UFX GPSR.1 — one BrandSettings read → RP + brand-level compliance inputs. */
+export async function getBrandCompliance(): Promise<{
+  rp: ResponsiblePerson | null
+  brand: BrandComplianceInput | null
+}> {
   const b = await prisma.brandSettings.findFirst().catch(() => null)
-  if (!b) return null
+  if (!b) return { rp: null, brand: null }
   return {
-    name: b.companyName ?? null,
-    addressLines: b.addressLines ?? [],
-    email: b.contactEmail ?? null,
-    phone: b.contactPhone ?? null,
-    taxId: b.piva ?? b.taxId ?? null,
+    rp: {
+      name: b.companyName ?? null,
+      addressLines: b.addressLines ?? [],
+      email: b.contactEmail ?? null,
+      phone: b.contactPhone ?? null,
+      taxId: b.piva ?? b.taxId ?? null,
+    },
+    brand: { userManualUrls: b.userManualUrls },
   }
 }
 
 /** Single-product resolve (cockpit publish paths). */
 export async function resolveComplianceById(productId: string): Promise<CompliancePayload | null> {
-  const [rp, product] = await Promise.all([
-    getResponsiblePerson(),
+  const [{ rp, brand }, product] = await Promise.all([
+    getBrandCompliance(),
     prisma.product.findUnique({
       where: { id: productId },
       select: {
@@ -339,7 +449,7 @@ export async function resolveComplianceById(productId: string): Promise<Complian
       },
     }),
   ])
-  return product ? buildCompliancePayload(product as ComplianceProductInput, rp) : null
+  return product ? buildCompliancePayload(product as ComplianceProductInput, rp, brand) : null
 }
 
 /**
@@ -351,8 +461,8 @@ export async function resolveComplianceForSkus(skus: string[]): Promise<Map<stri
   const map = new Map<string, CompliancePayload>()
   const unique = [...new Set(skus.filter(Boolean))]
   if (unique.length === 0) return map
-  const [rp, products] = await Promise.all([
-    getResponsiblePerson(),
+  const [{ rp, brand }, products] = await Promise.all([
+    getBrandCompliance(),
     prisma.product.findMany({
       where: { sku: { in: unique } },
       select: {
@@ -367,7 +477,7 @@ export async function resolveComplianceForSkus(skus: string[]): Promise<Map<stri
     }),
   ])
   for (const p of products) {
-    if (p.sku) map.set(p.sku, buildCompliancePayload(p as ComplianceProductInput, rp))
+    if (p.sku) map.set(p.sku, buildCompliancePayload(p as ComplianceProductInput, rp, brand))
   }
   return map
 }
