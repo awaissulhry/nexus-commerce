@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { FEATURES, PAGES } from "@/lib/auth/permissions";
 
@@ -68,5 +69,6 @@ export const POST = guarded(FEATURES.productsManage, async (req, { actor, resolv
   if (!parsed.success) return NextResponse.json({ error: "name is required" }, { status: 400 });
   const t = await prisma.productTemplate.create({ data: parsed.data });
   void audit({ actorId: actor!.id, entityType: "template", entityId: t.id, action: "created", after: { name: t.name } });
+  await publishEventDurable("pricing.updated", { templateId: t.id }); // FS2 — no silent mutations
   return jsonStripped({ template: t }, resolved, { status: 201 });
 });

@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES, PAGES } from "@/lib/auth/permissions";
 
@@ -28,5 +29,6 @@ export const POST = guarded(FEATURES.pricelistsManage, async (req, { actor }) =>
   if (!parsed.success) return NextResponse.json({ error: "name is required" }, { status: 400 });
   const list = await prisma.priceList.create({ data: { kind: "PARTY_TIER", ...parsed.data } });
   void audit({ actorId: actor!.id, entityType: "pricelist", entityId: list.id, action: "created", after: { name: list.name } });
+  await publishEventDurable("pricing.updated", { priceListId: list.id }); // FS2 — no silent mutations
   return NextResponse.json({ list }, { status: 201 });
 });

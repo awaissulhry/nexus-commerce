@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 
@@ -23,5 +24,6 @@ export const POST = guarded(FEATURES.productsManage, async (req, { params, actor
     data: { templateId: id, sort: (last?.sort ?? -1) + 1, ...parsed.data },
   });
   void audit({ actorId: actor!.id, entityType: "template", entityId: id, action: "group.created", after: { groupId: group.id, name: group.name } });
+  await publishEventDurable("pricing.updated", { templateId: id }); // FS2 — no silent mutations
   return NextResponse.json({ group }, { status: 201 });
 });

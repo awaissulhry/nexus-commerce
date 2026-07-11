@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { FEATURES, PAGES } from "@/lib/auth/permissions";
 
@@ -29,6 +30,7 @@ export const PATCH = guarded(FEATURES.pricelistsManage, async (req, { params, ac
   if (!parsed.success) return NextResponse.json({ error: "Bad request" }, { status: 400 });
   const list = await prisma.priceList.update({ where: { id }, data: parsed.data });
   void audit({ actorId: actor!.id, entityType: "pricelist", entityId: id, action: "updated", after: parsed.data });
+  await publishEventDurable("pricing.updated", { priceListId: id }); // FS2 — no silent mutations
   return jsonStripped({ list }, resolved);
 });
 
@@ -38,5 +40,6 @@ export const DELETE = guarded(FEATURES.pricelistsManage, async (_req, { params, 
   if (list?.kind === "DEFAULT") return NextResponse.json({ error: "The default list (Listino base) cannot be deleted" }, { status: 400 });
   await prisma.priceList.delete({ where: { id } }); // entries cascade; parties fall back to no list
   void audit({ actorId: actor!.id, entityType: "pricelist", entityId: id, action: "deleted" });
+  await publishEventDurable("pricing.updated", { priceListId: id }); // FS2 — no silent mutations
   return NextResponse.json({ ok: true });
 });

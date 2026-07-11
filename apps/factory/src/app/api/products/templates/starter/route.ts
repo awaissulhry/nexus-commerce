@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 
@@ -39,5 +40,6 @@ export const POST = guarded(FEATURES.productsManage, async (_req, { actor }) => 
     select: { id: true, name: true },
   });
   void audit({ actorId: actor!.id, entityType: "template", entityId: template.id, action: "created", after: { via: "starter", name: template.name } });
+  await publishEventDurable("pricing.updated", { templateId: template.id }); // FS2 — no silent mutations
   return NextResponse.json({ template }, { status: 201 });
 });

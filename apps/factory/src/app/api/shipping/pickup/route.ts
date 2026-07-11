@@ -12,6 +12,7 @@ import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { resolveCarrier } from "@/lib/carriers/resolve";
 
 export const permission = FEATURES.labelsPurchase;
@@ -38,6 +39,7 @@ export const POST = guarded(FEATURES.labelsPurchase, async (req, { actor }) => {
     select: { id: true, status: true },
   });
   void audit({ actorId: actor!.id, entityType: "pickup", entityId: pickup.id, action: "pickup.recorded", after: { status: pickup.status, parcels: todays.length } });
+  await publishEventDurable("shipment.updated", { pickup: true }); // FS2 — no silent mutations
 
   return NextResponse.json({ ok: true, status: pickup.status, supportsPickup, parcels: todays.length });
 });

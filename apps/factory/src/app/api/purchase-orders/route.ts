@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { PAGES, FEATURES } from "@/lib/auth/permissions";
 import { nextNumber } from "@/lib/counters";
@@ -45,5 +46,6 @@ export const POST = guarded(FEATURES.materialsManage, async (req, { actor, resol
     select: { id: true, number: true },
   });
   void audit({ actorId: actor!.id, entityType: "purchaseorder", entityId: po.id, action: "created", after: { number, lines: parsed.data.lines.length } });
+  await publishEventDurable("workorder.updated", { purchaseOrderId: po.id, created: true }); // FS2 — no silent mutations
   return jsonStripped({ purchaseOrder: po }, resolved, { status: 201 });
 });

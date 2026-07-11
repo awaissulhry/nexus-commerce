@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 
@@ -31,13 +32,17 @@ export const PATCH = guarded(FEATURES.productsManage, async (req, { params, acto
     data: { ...rest, ...(materialDraws !== undefined ? { materialDraws: materialDraws ?? undefined } : {}) },
   });
   void audit({ actorId: actor!.id, entityType: "option", entityId: oid, action: "updated", after: rest });
+  const parent = await prisma.optionGroup.findUnique({ where: { id: option.groupId }, select: { templateId: true } });
+  await publishEventDurable("pricing.updated", { templateId: parent?.templateId }); // FS2 — no silent mutations
   return NextResponse.json({ option });
 });
 
 export const DELETE = guarded(FEATURES.productsManage, async (_req, { params, actor }) => {
   const { oid } = await params;
   await prisma.optionConstraint.deleteMany({ where: { OR: [{ ifOptionId: oid }, { thenOptionId: oid }] } });
-  await prisma.option.delete({ where: { id: oid } });
+  const option = await prisma.option.delete({ where: { id: oid } });
   void audit({ actorId: actor!.id, entityType: "option", entityId: oid, action: "deleted" });
+  const parent = await prisma.optionGroup.findUnique({ where: { id: option.groupId }, select: { templateId: true } });
+  await publishEventDurable("pricing.updated", { templateId: parent?.templateId }); // FS2 — no silent mutations
   return NextResponse.json({ ok: true });
 });

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 
@@ -20,12 +21,14 @@ export const PATCH = guarded(FEATURES.productsManage, async (req, { params, acto
   if (!parsed.success) return NextResponse.json({ error: "Bad request" }, { status: 400 });
   const constraint = await prisma.optionConstraint.update({ where: { id: cid }, data: parsed.data });
   void audit({ actorId: actor!.id, entityType: "constraint", entityId: cid, action: "updated", after: parsed.data });
+  await publishEventDurable("pricing.updated", { templateId: constraint.templateId }); // FS2 — no silent mutations
   return NextResponse.json({ constraint });
 });
 
 export const DELETE = guarded(FEATURES.productsManage, async (_req, { params, actor }) => {
   const { cid } = await params;
-  await prisma.optionConstraint.delete({ where: { id: cid } });
+  const constraint = await prisma.optionConstraint.delete({ where: { id: cid } });
   void audit({ actorId: actor!.id, entityType: "constraint", entityId: cid, action: "deleted" });
+  await publishEventDurable("pricing.updated", { templateId: constraint.templateId }); // FS2 — no silent mutations
   return NextResponse.json({ ok: true });
 });

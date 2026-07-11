@@ -9,6 +9,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 import { certGateForWorkOrder } from "@/lib/production/cert-gate";
@@ -53,5 +54,6 @@ export const POST = guarded(FEATURES.workordersAdvance, async (req, { params, ac
 
   await prisma.workOrderStage.update({ where: { id: sid }, data: { checklist: checklist as unknown as Prisma.InputJsonValue, ...(parsed.data.certCheckPassed !== undefined ? { certCheckPassed: parsed.data.certCheckPassed } : {}) } });
   void audit({ actorId: actor!.id, entityType: "workorder", entityId: stage.workOrderId, action: "qc.updated", after: { checked: checklist.filter((c) => c.checked).length, certCheckPassed: parsed.data.certCheckPassed } });
+  await publishEventDurable("workorder.updated", { workOrderId: stage.workOrderId, qc: true }); // FS2 — no silent mutations
   return NextResponse.json({ ok: true });
 });
