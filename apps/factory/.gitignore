@@ -8,3 +8,4 @@ data/
 src/generated/
 next-env.d.ts
 .snapshots/
+*.tsbuildinfo
