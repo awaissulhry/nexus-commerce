@@ -15,6 +15,7 @@ import { prisma, factoryDbUrl } from "../src/lib/db";
 import { incrementalSync } from "../src/lib/google/gmail-sync";
 import { notify } from "../src/lib/notifications";
 import { pollInflightShipments } from "../src/lib/shipping/poll-tracking";
+import { quoteTick } from "./quote-tick";
 
 const HEARTBEAT_MS = 30_000;
 const GMAIL_POLL_MS = 10_000;
@@ -181,6 +182,7 @@ async function main() {
     setInterval(() => void heartbeat(), HEARTBEAT_MS),
     setInterval(() => void gmailPoll(), GMAIL_POLL_MS),
     setInterval(() => void inboxTick(), INBOX_TICK_MS),
+    setInterval(() => void quoteTick(), 60_000), // EPQ.1 — expiry sweep
     setInterval(() => void trackingTick(), TRACKING_TICK_MS),
     setInterval(() => void nightlySnapshot(), 60_000),
   ];
