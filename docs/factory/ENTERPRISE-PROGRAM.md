@@ -15,7 +15,7 @@ Started 2026-07-11 at the Owner's direction: *"work page by page to make sure it
 
 | Page | Code | Status | Proposal | Notes |
 |---|---|---|---|---|
-| Quotes | **EPQ** | **CLAIMED 2026-07-11 (this session) — research in flight** | `EPQ-PROPOSAL.md` (pending) | First page of the program |
+| Quotes | **EPQ** | **CLAIMED 2026-07-11 — proposal APPROVED ("proceed with all of it"); EPQ.1 building** | `EPQ-PROPOSAL.md` | Phases EPQ.1→.6; D-1..D-5 per recommendations (Stripe env-gated with bank-transfer fallback until account exists) |
 | Inbox | EPI | **CLAIMED 2026-07-11 (this session) — research in flight** | `EPI-PROPOSAL.md` (pending) | partitions/scroll fix shipped 2026-07-10 pre-program; scope incl. attachment previews, resizable panes, automated views/routing, FC-chat integration points |
 | Orders | EPO | **CLAIMED 2026-07-11 (this session) — research in flight** | `EPO-PROPOSAL.md` (pending) | FS1 already fixed kanban truncation; scope incl. one-timeline depth, order↔financials linkage, brand/party-scoped views, cross-page hop-links (thread/quote/WO/shipment/invoice) |
 | Production | EPP | open | — | |
@@ -23,7 +23,7 @@ Started 2026-07-11 at the Owner's direction: *"work page by page to make sure it
 | Products & Pricing | EPD | open | — | |
 | Contacts | EPC | open | — | |
 | Shipping | EPS | open | — | |
-| Financials | EPF | open | — | |
+| Financials | EPF | **CLAIMED 2026-07-11 (this session) — research in flight** | `EPF-PROPOSAL.md` (pending) | scope incl. Owner's AWA 2026 workbook automation (workbook is a LOCAL-ONLY source — structure may be described in docs, figures never committed), brand-adaptive dynamic money views, invoice/AR depth (credit notes, dunning, reconciliation), consumes EPO order↔financials hop-links + EPQ approval-gate pattern (never re-implements) |
 | Analytics | EPA | open | — | |
 | Settings & Team | EPT | open | — | |
 
@@ -31,8 +31,8 @@ Started 2026-07-11 at the Owner's direction: *"work page by page to make sure it
 
 | Substrate | Owner workstream | Status |
 |---|---|---|
-| Real-time/SSE fan-out (O(1) poller, targeted events) | **FS2** | spec next in the scale workstream |
-| Virtualized DataGrid, windowed lists, paged/searchable comboboxes, @mention autocomplete | **FS3** | queued |
+| Real-time/SSE fan-out (O(1) poller, targeted events) | **FS2** | **spec APPROVED 2026-07-11 — building (EPQ session, main tree)** |
+| Virtualized DataGrid, windowed lists, paged/searchable comboboxes, @mention autocomplete | **FS3** | **spec APPROVED 2026-07-11 — components building; call-site adoption on CLAIMED pages (EPI inbox, EPO orders) is handed to those sessions once components land** |
 | Write transactions, session-cache, optimistic concurrency, login rate-limit | **FS4** | queued |
 | FTS search, attachment/PDF streaming, snapshot & archival | **FS5** | queued |
 | Per-order internal chat (Order Spaces), system-message feed, presence/read receipts | **FC1–FC6** | approved, after FS2 |
