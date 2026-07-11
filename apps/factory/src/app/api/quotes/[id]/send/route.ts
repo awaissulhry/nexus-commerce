@@ -5,6 +5,11 @@
  * freeze a QuoteVersion, flip to SENT. Atomic in spirit: the email goes first —
  * if Gmail fails, nothing is recorded, so a quote is never SENT without a send.
  * NEVER exercised by automation (the Owner sends the real one).
+ * EPQ.1 — supersede semantics: EVERY send mints a fresh accept token; the hash
+ * lands on the QuoteVersion (which pins the version the token points at) AND
+ * on Quote.acceptTokenHash (always the latest — older tokens resolve through
+ * the version row to a superseded page). A below-floor send persists
+ * marginFloorBreached + a floor.acknowledged audit (who/when/how far below).
  */
 import { NextResponse } from "next/server";
 import fs from "node:fs";
@@ -56,7 +61,8 @@ export const POST = guarded(FEATURES.quotesSend, async (req, { params, actor }) 
   const floorRow = await prisma.appSetting.findUnique({ where: { key: "pricing.defaults" } });
   const floor = ((floorRow?.value as { marginFloorPct?: number })?.marginFloorPct) ?? 20;
   const totals = quoteTotals(quote.lines);
-  if (totals.netCents > 0 && totals.marginPct < floor && !acknowledgeFloor) {
+  const floorAckRequired = totals.netCents > 0 && totals.marginPct < floor; // EPQ.1 — persisted below
+  if (floorAckRequired && !acknowledgeFloor) {
     return NextResponse.json({ error: `Net margin ${totals.marginPct.toFixed(1)}% is below your ${floor}% floor — acknowledge to send` }, { status: 422 });
   }
 
@@ -68,17 +74,13 @@ export const POST = guarded(FEATURES.quotesSend, async (req, { params, actor }) 
   const toEmail = quote.party.emails[0]?.email;
   if (!toEmail && !quote.conversation) return NextResponse.json({ error: "This contact has no email on file" }, { status: 400 });
 
-  // accept token (one per quote, reused across versions)
-  const existing = await prisma.quote.findUnique({ where: { id }, select: { acceptTokenHash: true } });
-  let rawToken: string | null = null;
-  let acceptTokenHash = existing?.acceptTokenHash ?? null;
-  if (!acceptTokenHash) {
-    rawToken = randomBytes(24).toString("hex");
-    acceptTokenHash = createHash("sha256").update(rawToken).digest("hex");
-  }
+  // EPQ.1 — accept token: EVERY send mints a fresh one (supersede semantics).
+  // The customer always gets a live link; older links resolve to a superseded
+  // page through the QuoteVersion row that owns their hash.
+  const rawToken = randomBytes(24).toString("hex");
+  const acceptTokenHash = createHash("sha256").update(rawToken).digest("hex");
   const publicBase = process.env.FACTORY_PUBLIC_URL || req.nextUrl.origin;
-  // if we already had a token we can't reconstruct the raw one; only include an accept URL on first send
-  const acceptUrl = rawToken ? `${publicBase}/q/${rawToken}` : null;
+  const acceptUrl = `${publicBase}/q/${rawToken}`;
 
   const snapshot = await buildQuoteSnapshot(id, acceptUrl);
   if (!snapshot) return NextResponse.json({ error: "Could not build the quote" }, { status: 500 });
@@ -114,15 +116,26 @@ export const POST = guarded(FEATURES.quotesSend, async (req, { params, actor }) 
   });
   const sent = await gmail.users.messages.send({ userId: "me", requestBody: { raw, ...(quote.conversation?.gmailThreadId ? { threadId: quote.conversation.gmailThreadId } : {}) } });
 
-  // record: version + state + optimistic OUTBOUND message
+  // record: version (owning this send's token) + state + optimistic OUTBOUND message
   const now = new Date();
-  await prisma.quoteVersion.create({ data: { quoteId: id, version, sentSnapshot: snapshot as object, pdfRef: pdfPath } });
-  await prisma.quote.update({ where: { id }, data: { state: "SENT", sentAt: quote.sentAt ?? now, acceptTokenHash } });
+  await prisma.quoteVersion.create({ data: { quoteId: id, version, sentSnapshot: snapshot as object, pdfRef: pdfPath, acceptTokenHash } });
+  await prisma.quote.update({
+    where: { id },
+    data: {
+      state: "SENT",
+      sentAt: quote.sentAt ?? now,
+      acceptTokenHash, // EPQ.1 — always the LATEST send's token; prior tokens now resolve as superseded
+      ...(floorAckRequired ? { marginFloorBreached: true } : {}), // EPQ.1 — durable record a below-floor offer was knowingly made
+    },
+  });
   if (quote.conversation?.id) {
     await prisma.message.create({ data: { conversationId: quote.conversation.id, gmailMessageId: sent.data.id ?? null, direction: "OUTBOUND", fromAddress: authed.email.toLowerCase(), toAddresses: [recipient], snippet: `Preventivo ${snapshot.number} inviato`, sentAt: now, labels: [] } });
     await prisma.conversation.update({ where: { id: quote.conversation.id }, data: { lastMessageAt: now } });
   }
-  void audit({ actorId: actor!.id, entityType: "quote", entityId: id, action: "sent", after: { version, to: recipient } });
+  if (floorAckRequired) {
+    void audit({ actorId: actor!.id, entityType: "quote", entityId: id, action: "floor.acknowledged", after: { ackBy: actor!.id, marginPct: totals.marginPct, floorPct: floor } });
+  }
+  void audit({ actorId: actor!.id, entityType: "quote", entityId: id, action: "sent", after: { version, to: recipient, netCents: totals.netCents } });
   await publishEventDurable("conversation.updated", { id: quote.conversation?.id });
   await publishEventDurable("pricing.updated", { quoteId: id });
 

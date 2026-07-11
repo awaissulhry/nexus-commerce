@@ -359,6 +359,7 @@ model Quote {
   updatedAt           DateTime       @updatedAt
 
   @@index([partyId, state])
+  @@index([validUntilAt]) // EPQ.1 — the worker's expiry sweep filters SENT quotes by validity
 }
 
 model QuoteLine {
@@ -384,13 +385,14 @@ model QuoteLine {
 }
 
 model QuoteVersion {
-  id           String   @id @default(cuid())
-  quoteId      String
-  quote        Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  version      Int
-  sentSnapshot Json // frozen options, costs, prices at send
-  pdfRef       String?
-  sentAt       DateTime @default(now())
+  id              String   @id @default(cuid())
+  quoteId         String
+  quote           Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  version         Int
+  sentSnapshot    Json // frozen options, costs, prices at send
+  pdfRef          String?
+  acceptTokenHash String?  @unique // EPQ.1 — this send's accept-token hash; Quote.acceptTokenHash always mirrors the LATEST send (older tokens resolve here → superseded page)
+  sentAt          DateTime @default(now())
 
   @@unique([quoteId, version])
 }

@@ -133,7 +133,8 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
         actions={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <a href={`/api/quotes/${quoteId}/pdf`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "var(--h10-text-link)", display: "inline-flex", gap: 4, alignItems: "center" }}><FileDown size={13} /> PDF</a>
-            {quote.state === "SENT" && <Button onClick={() => patchQuote({ state: "DRAFT" })}>Revise</Button>}
+            {/* EPQ.1 — EXPIRED is reversible by Revise (the only edge out of it) */}
+            {(quote.state === "SENT" || quote.state === "EXPIRED") && <Button onClick={() => patchQuote({ state: "DRAFT" })}>Revise</Button>}
             {(quote.state === "DRAFT" || quote.state === "SENT") && <Button variant="primary" onClick={() => setSending(true)} disabled={quote.lines.length === 0}><Send size={13} /> Send</Button>}
           </div>
         }
@@ -223,8 +224,13 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
           {activeLine?.templateId && result && canCost && (
             <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--h10-text-3)", marginBottom: 6 }}>This line</div>
+              {/* EPQ.1 — four-row waterfall (spec parity): the adjustment is a visible signed step, not folded into Net */}
               <Row label="Cost" value={eur(result.costCents ?? 0)} muted />
               <Row label="List" value={eur(result.listPriceCents ?? 0)} muted />
+              <Row label="Adjustment" value={signedEur(activeLine.adjustmentCents)} muted={activeLine.adjustmentCents === 0} />
+              {activeLine.adjustmentCents !== 0 && activeLine.adjustmentReason ? (
+                <div style={{ fontSize: 11, color: "var(--h10-text-3)", margin: "-1px 0 3px", textAlign: "right" }}>“{activeLine.adjustmentReason}”</div>
+              ) : null}
               <Row label="Net" value={eur(result.netPriceCents ?? 0)} />
             </div>
           )}
@@ -271,6 +277,9 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
     </div>
   );
 }
+
+/** EPQ.1 — signed money for the waterfall's Adjustment step. */
+const signedEur = (cents: number) => (cents > 0 ? `+ ${eur(cents)}` : cents < 0 ? `− ${eur(Math.abs(cents))}` : eur(0));
 
 function Row({ label, value, muted, strong }: { label: string; value: string; muted?: boolean; strong?: boolean }) {
   return (
