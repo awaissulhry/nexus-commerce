@@ -3,6 +3,9 @@
  * conversation), patch (deposit/dates/state/lostReason — with lifecycle
  * guards), delete (draft only). Sent quotes are frozen: editing money-bearing
  * fields on a sent quote is refused (a new version is created on re-send).
+ * EPQ.1 — the PATCH enforces the forward-only state machine
+ * (src/lib/quotes/transitions.ts): illegal edges 422 and are audited from→to;
+ * deposit/dates are DRAFT-only; lostReason only lands on a lost outcome.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -12,6 +15,7 @@ import { publishEventDurable } from "@/lib/events";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { FEATURES, PAGES } from "@/lib/auth/permissions";
 import { quoteTotals } from "@/lib/quotes/compose-line";
+import { canTransition, lostReasonAllowed, type QuoteState } from "@/lib/quotes/transitions";
 
 export const permission = { GET: PAGES.quotes, PATCH: FEATURES.quotesCreate, DELETE: FEATURES.quotesCreate };
 
@@ -45,16 +49,43 @@ export const PATCH = guarded(FEATURES.quotesCreate, async (req: NextRequest, { p
   if (!parsed.success) return NextResponse.json({ error: "Bad request" }, { status: 400 });
   const existing = await prisma.quote.findUnique({ where: { id }, select: { state: true } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const from = existing.state as QuoteState;
+
+  // EPQ.1 — forward-only state machine: the transitions map is the authority
+  let to: QuoteState | null = null;
+  if (parsed.data.state && parsed.data.state !== from) {
+    to = parsed.data.state as QuoteState;
+    const chk = canTransition(from, to);
+    if (!chk.ok) {
+      void audit({ actorId: actor!.id, entityType: "quote", entityId: id, action: "transition.refused", before: { from }, after: { to, reason: chk.reason ?? null } });
+      return NextResponse.json({ error: chk.reason, useSend: chk.useSend ?? false }, { status: 422 });
+    }
+  }
+  const effective = to ?? from;
+
+  // EPQ.1 — field guards: deposit/dates only exist on a draft (lines are
+  // frozen elsewhere; these were the raw-API leak); lostReason only on a loss.
+  const touchesDraftOnly = parsed.data.depositPct !== undefined || parsed.data.validUntilAt !== undefined || parsed.data.promiseDateAt !== undefined;
+  if (touchesDraftOnly && from !== "DRAFT") {
+    return NextResponse.json({ error: `Deposit and dates are locked on a ${from.toLowerCase()} quote — Revise it to a draft first` }, { status: 422 });
+  }
+  if (parsed.data.lostReason !== undefined && !lostReasonAllowed(effective)) {
+    return NextResponse.json({ error: "A lost reason only applies to a rejected or expired quote" }, { status: 422 });
+  }
 
   const data: Record<string, unknown> = {};
   if (parsed.data.depositPct !== undefined) data.depositPct = parsed.data.depositPct;
   if (parsed.data.promiseDateAt !== undefined) data.promiseDateAt = parsed.data.promiseDateAt ? new Date(parsed.data.promiseDateAt) : null;
   if (parsed.data.validUntilAt !== undefined) data.validUntilAt = parsed.data.validUntilAt ? new Date(parsed.data.validUntilAt) : null;
   if (parsed.data.lostReason !== undefined) data.lostReason = parsed.data.lostReason;
-  if (parsed.data.state) data.state = parsed.data.state;
+  if (to) data.state = to;
 
   const quote = await prisma.quote.update({ where: { id }, data });
-  void audit({ actorId: actor!.id, entityType: "quote", entityId: id, action: "updated", before: { state: existing.state }, after: parsed.data });
+  if (to) {
+    void audit({ actorId: actor!.id, entityType: "quote", entityId: id, action: "state-changed", before: { from }, after: { to, ...(parsed.data.lostReason !== undefined ? { lostReason: parsed.data.lostReason } : {}) } });
+  } else {
+    void audit({ actorId: actor!.id, entityType: "quote", entityId: id, action: "updated", before: { state: from }, after: parsed.data });
+  }
   await publishEventDurable("pricing.updated", { quoteId: id });
   return jsonStripped({ quote }, resolved);
 });

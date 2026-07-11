@@ -1,16 +1,20 @@
 /**
  * FP3 — the Quotes RFQ pipeline: three live counters, state tabs, search, grid.
  * Clicking a quote (or New quote) opens the QuoteEditor. Deep-linkable via ?q=.
+ * EPQ.1 — Expired tab (the worker sweep finally populates the state) + row
+ * selection with bulk Mark lost (one reason, applied per quote via the
+ * lifecycle-guarded PATCH; SENT rows transition to REJECTED, EXPIRED rows just
+ * take the reason — EXPIRED→REJECTED is not a legal edge).
  */
 "use client";
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
-import { PageHeader } from "@/design-system/patterns";
+import { BulkActionBar, PageHeader } from "@/design-system/patterns";
 import { Card, DataGrid, Modal, useToast } from "@/design-system/components";
 import { Listbox } from "@/design-system/components";
-import { Button, Input, Pill } from "@/design-system/primitives";
+import { Button, Checkbox, Input, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
@@ -23,7 +27,11 @@ const TABS = [
   { id: "sent", label: "Sent" },
   { id: "accepted", label: "Accepted" },
   { id: "rejected", label: "Rejected" },
+  { id: "expired", label: "Expired" }, // EPQ.1
 ];
+
+/** EPQ.1 — bulk Mark lost applies only where a loss makes sense. */
+const canMarkLost = (r: QuoteRow) => r.state === "SENT" || r.state === "EXPIRED";
 
 function Counter({ label, value, tone }: { label: string; value: number; tone: string }) {
   return (
@@ -46,6 +54,11 @@ function PipelineInner() {
   const [parties, setParties] = useState<{ id: string; name: string; kind: string }[]>([]);
   const [partyId, setPartyId] = useState("");
   const [busy, setBusy] = useState(false);
+  // EPQ.1 — bulk mark-lost selection
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [markingLost, setMarkingLost] = useState(false);
+  const [lostReason, setLostReason] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const openId = params.get("q");
 
@@ -53,7 +66,10 @@ function PipelineInner() {
     try {
       const usp = new URLSearchParams({ state });
       if (q.trim()) usp.set("q", q.trim());
-      setData(await apiJson<PipelineResponse>(`/api/quotes?${usp}`));
+      const d = await apiJson<PipelineResponse>(`/api/quotes?${usp}`);
+      setData(d);
+      // EPQ.1 — keep the selection honest: only visible, still-markable rows
+      setSelected((prev) => new Set(d.quotes.filter((r) => prev.has(r.id) && canMarkLost(r)).map((r) => r.id)));
     } catch (e) {
       toast((e as Error).message, "danger");
     }
@@ -83,6 +99,30 @@ function PipelineInner() {
     }
   };
 
+  // EPQ.1 — bulk Mark lost: one reason, applied per quote through the
+  // lifecycle-guarded PATCH (SENT → REJECTED + reason; EXPIRED keeps its state,
+  // takes the reason — the machine has no EXPIRED→REJECTED edge).
+  const markLost = async () => {
+    if (!data) return;
+    setBulkBusy(true);
+    let done = 0, failed = 0;
+    for (const id of selected) {
+      const row = data.quotes.find((r) => r.id === id);
+      if (!row || !canMarkLost(row)) continue;
+      const body = row.state === "SENT" ? { state: "REJECTED", lostReason: lostReason.trim() || null } : { lostReason: lostReason.trim() || null };
+      try { await apiJson(`/api/quotes/${id}`, { method: "PATCH", body: JSON.stringify(body) }); done += 1; }
+      catch { failed += 1; }
+    }
+    setBulkBusy(false);
+    setMarkingLost(false);
+    setLostReason("");
+    setSelected(new Set());
+    toast(failed ? `${done} marked lost · ${failed} failed` : `${done} marked lost`, failed ? "danger" : "success");
+    void load();
+  };
+
+  const toggleSelected = (id: string) => setSelected((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+
   if (openId) return <QuoteEditor quoteId={openId} onBack={closeEditor} />;
 
   return (
@@ -110,6 +150,8 @@ function PipelineInner() {
         </div>
         <DataGrid
           columns={[
+            // EPQ.1 — selection for bulk Mark lost (only states where a loss makes sense)
+            { key: "select", label: "", render: (r: QuoteRow) => canMarkLost(r) ? <Checkbox checked={selected.has(r.id)} onChange={() => toggleSelected(r.id)} aria-label={`Select ${r.number}`} /> : null },
             { key: "number", label: "Quote", render: (r: QuoteRow) => <button type="button" onClick={() => openEditor(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button> },
             { key: "party", label: "Party", render: (r: QuoteRow) => r.party.name },
             { key: "state", label: "State", render: (r: QuoteRow) => <span style={{ display: "inline-flex", gap: 5 }}><Pill tone={STATE_TONE[r.state]}>{r.state}</Pill>{r.convertedOrderId && <Pill tone="success">order</Pill>}</span> },
@@ -122,7 +164,19 @@ function PipelineInner() {
           rowKey={(r: QuoteRow) => r.id}
           emptyState="No quotes yet — start one from an Inbox thread or with New quote."
         />
+        {/* EPQ.1 — bulk actions for the selection */}
+        <BulkActionBar count={selected.size} onClear={() => setSelected(new Set())}>
+          <Button variant="primary" onClick={() => setMarkingLost(true)} disabled={bulkBusy}>Mark lost</Button>
+        </BulkActionBar>
       </Card>
+
+      {/* EPQ.1 — one reason for the whole selection */}
+      <Modal open={markingLost} onClose={() => !bulkBusy && setMarkingLost(false)} title={`Mark ${selected.size} quote${selected.size === 1 ? "" : "s"} lost`} size="sm" footer={<><Button onClick={() => setMarkingLost(false)} disabled={bulkBusy}>Cancel</Button><Button variant="primary" onClick={markLost} disabled={bulkBusy}>{bulkBusy ? "Marking…" : "Mark lost"}</Button></>}>
+        <div style={{ display: "grid", gap: 8 }}>
+          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>Sent quotes become <b>Rejected</b>; expired quotes keep their state — all take this reason (it feeds win/loss).</div>
+          <Input value={lostReason} onChange={(e) => setLostReason(e.target.value)} placeholder="Why was it lost? (optional)" aria-label="Lost reason" />
+        </div>
+      </Modal>
 
       <Modal open={creating} onClose={() => setCreating(false)} title="New quote" size="sm" footer={<><Button onClick={() => setCreating(false)}>Cancel</Button><Button variant="primary" onClick={create} disabled={!partyId || busy}>Create</Button></>}>
         <div style={{ display: "grid", gap: 8 }}>

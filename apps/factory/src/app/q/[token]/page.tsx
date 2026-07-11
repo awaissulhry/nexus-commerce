@@ -17,6 +17,8 @@ type PublicQuote = {
   expired: boolean;
   decided: boolean;
   converted: boolean;
+  superseded?: boolean; // EPQ.1 — this link belongs to an older send of the quote
+  latestExists?: boolean;
   snapshot: { depositPct: number | null; depositCents: number; lines: SnapshotLine[]; totalCents: number };
 };
 
@@ -65,7 +67,9 @@ export default function PublicQuotePage({ params }: { params: Promise<{ token: s
 
   const q = quote!;
   const s = q.snapshot;
-  const openForDecision = q.state === "SENT" && !q.expired;
+  // EPQ.1 — a superseded link never offers a decision (the customer uses the
+  // newest email's link; we deliberately do not surface the new token here)
+  const openForDecision = q.state === "SENT" && !q.expired && !q.superseded;
 
   return (
     <div style={wrap}>
@@ -94,7 +98,11 @@ export default function PublicQuotePage({ params }: { params: Promise<{ token: s
         </div>
         {s.depositPct ? <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 13, color: "#5b6573" }}><span>Acconto ({s.depositPct}%)</span><span>{eur(s.depositCents)}</span></div> : null}
 
-        {q.decided || q.converted ? (
+        {q.superseded ? (
+          <div style={{ marginTop: 22, padding: 12, background: "#eef4fd", borderRadius: 8, fontSize: 13, color: "#1c4d94" }}>
+            Questa offerta è stata sostituita da una versione più recente — trovi il link aggiornato nell&apos;ultima email ricevuta.
+          </div>
+        ) : q.decided || q.converted ? (
           <div style={{ marginTop: 22, padding: 12, background: "#f4f6f9", borderRadius: 8, fontSize: 13, color: "#5b6573" }}>
             {q.converted ? "Questo preventivo è stato accettato ed è in lavorazione." : q.state === "ACCEPTED" ? "Questo preventivo è stato accettato." : "Questo preventivo non è più disponibile."}
           </div>

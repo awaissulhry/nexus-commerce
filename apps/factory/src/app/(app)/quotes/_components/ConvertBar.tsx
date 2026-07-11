@@ -51,6 +51,10 @@ export function ConvertBar({ quote, onChanged }: { quote: QuoteDetail; onChanged
   if (quote.state === "REJECTED") {
     return <div style={{ marginBottom: 12 }}><Banner tone="danger" title="Declined / changes requested">{quote.lostReason ? `“${quote.lostReason}”` : "The customer didn't proceed."} {canCreate && <button type="button" onClick={() => patchState("DRAFT")} style={{ background: "none", border: "none", color: "var(--h10-text-link)", cursor: "pointer" }}>Revise</button>}</Banner></div>;
   }
+  // EPQ.1 — the worker sweeps lapsed SENT quotes here; Revise is the only way out
+  if (quote.state === "EXPIRED") {
+    return <div style={{ marginBottom: 12 }}><Banner tone="warning" title="Expired — validity lapsed">{quote.lostReason ? `“${quote.lostReason}”` : "The offer aged past its valid-until date without a decision."} {canCreate && <button type="button" onClick={() => patchState("DRAFT")} style={{ background: "none", border: "none", color: "var(--h10-text-link)", cursor: "pointer" }}>Revise</button>}</Banner></div>;
+  }
   if (quote.state === "SENT" && canCreate) {
     return (
       <div style={{ marginBottom: 12 }}>

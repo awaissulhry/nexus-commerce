@@ -66,7 +66,15 @@ export const PATCH = guarded(FEATURES.quotesCreate, async (req, { params, actor,
   }
 
   const updated = await prisma.quoteLine.update({ where: { id: lid }, data });
-  void audit({ actorId: actor!.id, entityType: "quote", entityId: line.quote.id, action: "line.updated", after: { lineId: lid } });
+  // EPQ.1 — before/after money in the audit (S5: `{lineId}` alone said nothing)
+  void audit({
+    actorId: actor!.id,
+    entityType: "quote",
+    entityId: line.quote.id,
+    action: "line.updated",
+    before: { lineId: lid, netPriceCents: line.netPriceCents, costCents: line.costCents, adjustmentCents: line.adjustmentCents, qty: line.qty },
+    after: { lineId: lid, netPriceCents: updated.netPriceCents, costCents: updated.costCents, adjustmentCents: updated.adjustmentCents, qty: updated.qty },
+  });
   return jsonStripped({ line: updated, result }, resolved);
 });
 
