@@ -16,7 +16,7 @@ Started 2026-07-11 at the Owner's direction: *"work page by page to make sure it
 | Page | Code | Status | Proposal | Notes |
 |---|---|---|---|---|
 | Quotes | **EPQ** | **CLAIMED 2026-07-11 (this session) — research in flight** | `EPQ-PROPOSAL.md` (pending) | First page of the program |
-| Inbox | EPI | open | — | partitions/scroll fix shipped 2026-07-10 pre-program |
+| Inbox | EPI | **CLAIMED 2026-07-11 (this session) — research in flight** | `EPI-PROPOSAL.md` (pending) | partitions/scroll fix shipped 2026-07-10 pre-program; scope incl. attachment previews, resizable panes, automated views/routing, FC-chat integration points |
 | Orders | EPO | open | — | FS1 already fixed kanban truncation |
 | Production | EPP | open | — | |
 | Materials | EPM | open | — | |
