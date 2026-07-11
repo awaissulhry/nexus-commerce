@@ -10,8 +10,9 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import { PageHeader } from "@/design-system/patterns";
-import { Card, DataGrid, Modal, useToast, Listbox } from "@/design-system/components";
+import { Card, Modal, useToast, Listbox } from "@/design-system/components";
 import { Button, Input, Pill } from "@/design-system/primitives";
+import { VirtualDataGrid } from "@/components/VirtualDataGrid"; // FS3 — windowed rows, DS-grid parity
 import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
 import { ContactDetail } from "./ContactDetail";
@@ -87,7 +88,8 @@ function PipelineInner() {
             {canManage && <Button variant="primary" onClick={() => setCreating(true)}><Plus size={13} /> New contact</Button>}
           </div>
         </div>
-        <DataGrid
+        <VirtualDataGrid
+          height="calc(100dvh - 300px)"
           columns={[
             { key: "name", label: "Name", render: (r: ContactRow) => <button type="button" onClick={() => openDetail(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.name}</button> },
             { key: "kind", label: "Kind", render: (r: ContactRow) => <Pill tone={KIND_TONE[r.kind]}>{KIND_LABEL[r.kind]}</Pill> },

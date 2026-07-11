@@ -14,20 +14,24 @@ import { GuardrailError } from "@/lib/auth/guardrails";
 
 export const permission = FEATURES.usersManage;
 
+const MEMBERS_TAKE = 200; // FS3 — grid shows the first 200 by join order; `count` carries the true total
+
 export const GET = guarded(FEATURES.usersManage, async (_req, { actor }) => {
-  const [users, roles] = await Promise.all([
-    prisma.user.findMany({ // bounded: team-sized table
+  const [users, roles, count] = await Promise.all([
+    prisma.user.findMany({
       orderBy: { createdAt: "asc" },
+      take: MEMBERS_TAKE,
       select: { id: true, displayName: true, email: true, status: true, lastLoginAt: true, roleAssignments: { select: { role: { select: { id: true, key: true, name: true } } } } },
     }),
     prisma.role.findMany({ orderBy: [{ isSystem: "desc" }, { name: "asc" }], select: { id: true, key: true, name: true, isSystem: true } }), // bounded: team-sized table
+    prisma.user.count(),
   ]);
   const members = users.map((u) => ({
     id: u.id, displayName: u.displayName, email: u.email, status: u.status, lastLoginAt: u.lastLoginAt,
     roleId: u.roleAssignments[0]?.role.id ?? null, roleKey: u.roleAssignments[0]?.role.key ?? null, roleName: u.roleAssignments[0]?.role.name ?? "—",
     isYou: u.id === actor!.id,
   }));
-  return NextResponse.json({ members, roles });
+  return NextResponse.json({ members, roles, count });
 });
 
 const Patch = z.object({ userId: z.string().min(1), roleId: z.string().optional(), status: z.enum(["active", "deactivated"]).optional() });

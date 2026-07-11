@@ -8,8 +8,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/design-system/patterns";
-import { Card, DataGrid, useToast } from "@/design-system/components";
+import { Card, useToast } from "@/design-system/components";
 import { Button, Pill } from "@/design-system/primitives";
+import { VirtualDataGrid } from "@/components/VirtualDataGrid"; // FS3 — windowed rows, DS-grid parity
 import { apiJson } from "@/lib/api-client";
 
 type DiffRow = { row: number; action: string; target: string; from?: string; to?: string; note?: string; error?: string };
@@ -125,7 +126,8 @@ export default function ImportExportPage() {
                     ))}
                   </div>
                 )}
-                <DataGrid
+                <VirtualDataGrid
+                  height={360}
                   columns={[
                     { key: "row", label: "Row", render: (r: DiffRow) => r.row },
                     {
@@ -174,7 +176,8 @@ export default function ImportExportPage() {
         </Card>
 
         <Card padded header="Import history">
-          <DataGrid
+          <VirtualDataGrid
+            height={420}
             columns={[
               { key: "createdAt", label: "When", render: (j: Job) => new Date(j.createdAt).toLocaleString() },
               { key: "entity", label: "Entity", render: (j: Job) => j.entity },

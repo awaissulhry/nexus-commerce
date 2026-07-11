@@ -208,3 +208,10 @@ a {
   cursor: pointer;
   padding: 0;
 }
+
+/* FS3 — compact AsyncCombobox variant for tight spots (production card assign). */
+.fs3-combo-compact .h10-ds-combo-in {
+  min-width: 150px;
+  font-size: 12px;
+  padding: 4px 26px 4px 8px;
+}

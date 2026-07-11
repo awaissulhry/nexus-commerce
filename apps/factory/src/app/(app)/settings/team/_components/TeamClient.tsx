@@ -8,8 +8,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { UserPlus, Copy, X, Shield, Plus, Pencil, Trash2, Lock } from "lucide-react";
-import { DataGrid, Listbox, Modal, useToast } from "@/design-system/components";
+import { Listbox, Modal, useToast } from "@/design-system/components";
 import { Button, Input, Pill } from "@/design-system/primitives";
+import { VirtualDataGrid } from "@/components/VirtualDataGrid"; // FS3 — windowed rows, DS-grid parity
 import { apiJson } from "@/lib/api-client";
 import { type Invitation, type Member, type MembersResponse, type PermGroup, type RoleFull, type RoleLite, type RolesResponse } from "./types";
 
@@ -18,6 +19,7 @@ const dmy = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString() : 
 export function TeamClient() {
   const { toast } = useToast();
   const [members, setMembers] = useState<Member[]>([]);
+  const [memberCount, setMemberCount] = useState<number | null>(null);
   const [roles, setRoles] = useState<RoleLite[]>([]);
   const [invites, setInvites] = useState<Invitation[]>([]);
   const [email, setEmail] = useState("");
@@ -31,7 +33,7 @@ export function TeamClient() {
   const load = useCallback(async () => {
     try {
       const m = await apiJson<MembersResponse>("/api/team/members");
-      setMembers(m.members); setRoles(m.roles);
+      setMembers(m.members); setRoles(m.roles); setMemberCount(m.count ?? m.members.length);
       if (!inviteRole) setInviteRole(m.roles.find((r) => r.key === "WORKER")?.id ?? m.roles[0]?.id ?? "");
       setInvites((await apiJson<{ invitations: Invitation[] }>("/api/team/invitations")).invitations);
       const rr = await apiJson<RolesResponse>("/api/team/roles");
@@ -77,8 +79,12 @@ export function TeamClient() {
       </div>
 
       <section style={{ marginBottom: 24 }}>
-        <SectionHead title="Members" count={members.length} />
-        <DataGrid
+        <SectionHead title="Members" count={memberCount ?? members.length} />
+        {memberCount != null && memberCount > members.length && (
+          <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 6 }}>Showing the first {members.length} of {memberCount} members by join date.</div>
+        )}
+        <VirtualDataGrid
+          height="min(56dvh, 560px)"
           columns={[
             { key: "name", label: "Name", render: (m: Member) => <span><b>{m.displayName}</b>{m.isYou && <span style={{ color: "var(--h10-text-3)" }}> · you</span>}</span> },
             { key: "email", label: "Email", render: (m: Member) => m.email },
