@@ -10,8 +10,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Play, Pause, Check, User, ChevronUp, ChevronDown } from "lucide-react";
 import { PageHeader } from "@/design-system/patterns";
-import { Drawer, Menu, Modal, useToast } from "@/design-system/components";
+import { Drawer, Modal, useToast } from "@/design-system/components";
 import { Button, Pill } from "@/design-system/primitives";
+import { AsyncCombobox, type SearchLoader } from "@/components/AsyncCombobox"; // FS3 — paged type-to-find worker assign
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
 import { useFactoryEvents } from "@/lib/use-factory-events";
@@ -23,6 +24,47 @@ import { STAGE_LABEL, type ProductionResponse, type WOCard } from "./types";
 const STATUS_TONE = { running: "info", paused: "warning", not_started: "neutral", done: "success" } as const;
 const COVER = { OK: { c: "var(--h10-success)", t: "covered" }, PARTIAL: { c: "var(--h10-warning, #e9a100)", t: "partly short" }, SHORT: { c: "var(--h10-danger)", t: "short" } } as const;
 const kioskBtn = (primary: boolean): React.CSSProperties => ({ flex: 1, display: "inline-flex", gap: 8, alignItems: "center", justifyContent: "center", padding: "14px 20px", fontSize: 16, fontWeight: 700, borderRadius: 12, cursor: "pointer", border: primary ? "none" : "1px solid var(--h10-border)", background: primary ? "var(--h10-primary)" : "var(--h10-surface)", color: primary ? "#fff" : "var(--h10-text)" });
+
+// FS3 — the worker-assign picker: the old whole-list Menu became a paged,
+// type-to-find AsyncCombobox on /api/users-lite?q= (500 users stay pickable).
+const loadAssignableUsers: SearchLoader = async (q, cursor) => {
+  const usp = new URLSearchParams({ q });
+  if (cursor) usp.set("cursor", cursor);
+  const d = await apiJson<{ users: { id: string; displayName: string }[]; nextCursor?: string | null }>(`/api/users-lite?${usp}`);
+  const options = d.users.map((u) => ({ value: u.id, label: u.displayName }));
+  // browsing page 1 exposes an explicit Unassign row (typing filters it away)
+  return { options: !q && !cursor ? [{ value: "", label: "Unassign" }, ...options] : options, nextCursor: d.nextCursor ?? null };
+};
+
+function AssignPicker({ assignee, onAssign }: { assignee: { id: string; displayName: string } | null; onAssign: (id: string | null) => void }) {
+  const [open, setOpen] = useState(false);
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--h10-text-3)" }}
+      >
+        <span style={{ display: "inline-flex", gap: 3, alignItems: "center", fontSize: 11 }}><User size={11} />{assignee?.displayName?.split(" ")[0] ?? "assign"}</span>
+      </button>
+    );
+  }
+  return (
+    <span onClick={(e) => e.stopPropagation()} style={{ display: "inline-block" }}>
+      <AsyncCombobox
+        className="fs3-combo-compact"
+        loader={loadAssignableUsers}
+        value={assignee?.id}
+        valueLabel={assignee?.displayName}
+        placeholder="Assign…"
+        autoFocus
+        ariaLabel="Assign worker"
+        onChange={(v) => { onAssign(v || null); setOpen(false); }}
+        onDismiss={() => setOpen(false)}
+      />
+    </span>
+  );
+}
 
 function CoverageDot({ w }: { w: WOCard }) {
   if (!w.coverage) return null;
@@ -187,9 +229,7 @@ export function ProductionClient() {
                           <StageTimer cur={w.current} />
                         </span>
                         {canAssign && (
-                          <Menu align="right" label={<span style={{ display: "inline-flex", gap: 3, alignItems: "center", fontSize: 11 }}><User size={11} />{w.current.assignee?.displayName?.split(" ")[0] ?? "assign"}</span>}
-                            triggerProps={{ style: { background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--h10-text-3)" }, onClick: (e: React.MouseEvent) => e.stopPropagation() }}
-                            items={[{ id: "none", label: "Unassign", onSelect: () => void assign(w.current!.id, null) }, ...(data?.workers ?? []).map((u) => ({ id: u.id, label: u.displayName, onSelect: () => void assign(w.current!.id, u.id) }))]} />
+                          <AssignPicker assignee={w.current.assignee} onAssign={(id) => void assign(w.current!.id, id)} />
                         )}
                       </div>
                     )}

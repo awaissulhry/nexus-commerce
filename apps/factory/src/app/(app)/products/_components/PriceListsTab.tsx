@@ -6,10 +6,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
-import { Card, DataGrid, Modal, MultiSelect, useToast } from "@/design-system/components";
+import { ArrowLeft, Plus, Trash2, X } from "lucide-react";
+import { Card, DataGrid, Modal, useToast } from "@/design-system/components";
 import { Listbox } from "@/design-system/components";
 import { Button, Input, Pill } from "@/design-system/primitives";
+import { AsyncCombobox, type SearchLoader } from "@/components/AsyncCombobox"; // FS3 — paged type-to-find party assign
 import { apiFetch, apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
 import { DeltaInput, EuroInput } from "./money";
@@ -85,15 +86,22 @@ type ListDetailData = {
   parties: { id: string; name: string; kind: string }[];
 };
 
+// FS3 — party assignment searches the server (paged) instead of pulling every party
+const loadParties: SearchLoader = async (q, cursor) => {
+  const usp = new URLSearchParams({ q });
+  if (cursor) usp.set("cursor", cursor);
+  const d = await apiJson<{ parties: { id: string; name: string; kind: string }[]; nextCursor?: string | null }>(`/api/parties-lite?${usp}`);
+  return { options: d.parties.map((p) => ({ value: p.id, label: `${p.name} (${p.kind})` })), nextCursor: d.nextCursor ?? null };
+};
+
 function PriceListDetail({ listId, onBack }: { listId: string; onBack: () => void }) {
   const { toast } = useToast();
   const [list, setList] = useState<ListDetailData | null>(null);
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
-  const [parties, setParties] = useState<{ id: string; name: string; kind: string }[]>([]);
   const [details, setDetails] = useState<Record<string, TemplateDetail>>({});
   const [baseOv, setBaseOv] = useState<Record<string, number>>({}); // templateId → basePriceCents
   const [optOv, setOptOv] = useState<Record<string, { mode: "ABSOLUTE" | "PERCENT"; delta: number }>>({}); // optionId → override
-  const [assigned, setAssigned] = useState<string[]>([]);
+  const [assigned, setAssigned] = useState<{ id: string; label: string }[]>([]);
   const [busy, setBusy] = useState(false);
 
   const loadTemplateDetail = useCallback(async (tid: string) => {
@@ -105,15 +113,13 @@ function PriceListDetail({ listId, onBack }: { listId: string; onBack: () => voi
   }, [details]);
 
   const load = useCallback(async () => {
-    const [l, t, p] = await Promise.all([
+    const [l, t] = await Promise.all([
       apiJson<{ list: ListDetailData }>(`/api/pricelists/${listId}`),
       apiJson<{ templates: TemplateRow[] }>("/api/products/templates"),
-      apiJson<{ parties: { id: string; name: string; kind: string }[] }>("/api/parties-lite"),
     ]);
     setList(l.list);
     setTemplates(t.templates);
-    setParties(p.parties);
-    setAssigned(l.list.parties.map((x) => x.id));
+    setAssigned(l.list.parties.map((x) => ({ id: x.id, label: `${x.name} (${x.kind})` })));
     const b: Record<string, number> = {};
     const o: Record<string, { mode: "ABSOLUTE" | "PERCENT"; delta: number }> = {};
     const tids = new Set<string>();
@@ -136,7 +142,7 @@ function PriceListDetail({ listId, onBack }: { listId: string; onBack: () => voi
       for (const [tid, cents] of Object.entries(baseOv)) entries.push({ templateId: tid, optionId: null, basePriceCents: cents, priceDeltaMode: null, priceDelta: null });
       for (const [oid, ov] of Object.entries(optOv)) entries.push({ templateId: null, optionId: oid, basePriceCents: null, priceDeltaMode: ov.mode, priceDelta: ov.delta });
       await apiJson(`/api/pricelists/${listId}/entries`, { method: "PUT", body: JSON.stringify({ entries }) });
-      await apiJson(`/api/pricelists/${listId}/parties`, { method: "PUT", body: JSON.stringify({ partyIds: assigned }) });
+      await apiJson(`/api/pricelists/${listId}/parties`, { method: "PUT", body: JSON.stringify({ partyIds: assigned.map((a) => a.id) }) });
       toast("Price list saved", "success");
       await load();
     } catch (e) {
@@ -171,12 +177,20 @@ function PriceListDetail({ listId, onBack }: { listId: string; onBack: () => voi
         <div style={{ display: "grid", gap: 16 }}>
           <section>
             <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>Applies to</div>
-            <MultiSelect
-              options={parties.map((p) => ({ value: p.id, label: `${p.name} (${p.kind})` }))}
-              value={assigned}
-              onChange={setAssigned}
-              placeholder="Assign brands / customers…"
-            />
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+              {assigned.map((a) => (
+                <span key={a.id} style={{ display: "inline-flex", gap: 5, alignItems: "center", fontSize: 12, padding: "3px 6px 3px 9px", borderRadius: 999, border: "1px solid var(--h10-border)", background: "var(--h10-wash-primary)", color: "var(--h10-text)" }}>
+                  {a.label}
+                  <button type="button" aria-label={`Remove ${a.label}`} onClick={() => setAssigned((xs) => xs.filter((x) => x.id !== a.id))} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--h10-text-3)", display: "grid", placeItems: "center" }}><X size={12} /></button>
+                </span>
+              ))}
+              <AsyncCombobox
+                loader={loadParties}
+                placeholder="Add a brand / customer…"
+                ariaLabel="Assign party"
+                onChange={(id, o) => setAssigned((xs) => (xs.some((x) => x.id === id) ? xs : [...xs, { id, label: o.label }]))}
+              />
+            </div>
           </section>
 
           <section>

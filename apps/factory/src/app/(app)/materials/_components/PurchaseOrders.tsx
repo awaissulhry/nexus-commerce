@@ -8,8 +8,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
-import { DataGrid, Drawer, Modal, useToast, Listbox } from "@/design-system/components";
+import { Drawer, Modal, useToast, Listbox } from "@/design-system/components";
 import { Button, Input, Pill } from "@/design-system/primitives";
+import { VirtualDataGrid } from "@/components/VirtualDataGrid"; // FS3 — windowed rows, DS-grid parity
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
@@ -77,7 +78,8 @@ export function PurchaseOrders({ materials, prefill, onConsumed }: { materials: 
       <div style={{ display: "flex", marginBottom: 10 }}>
         {canManage && <div style={{ marginLeft: "auto" }}><Button variant="primary" onClick={openNew}><Plus size={13} /> New PO</Button></div>}
       </div>
-      <DataGrid
+      <VirtualDataGrid
+        height="calc(100dvh - 320px)"
         columns={[
           { key: "number", label: "PO", render: (r: PORow) => <button type="button" onClick={() => open(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button> },
           { key: "supplier", label: "Supplier", render: (r: PORow) => r.supplier },

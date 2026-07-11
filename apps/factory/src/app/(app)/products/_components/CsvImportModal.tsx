@@ -6,8 +6,9 @@
 "use client";
 
 import { useState } from "react";
-import { Modal, DataGrid, useToast } from "@/design-system/components";
+import { Modal, useToast } from "@/design-system/components";
 import { Button, Pill } from "@/design-system/primitives";
+import { VirtualDataGrid } from "@/components/VirtualDataGrid"; // FS3 — a 10k-row dry-run diff stays smooth
 import { apiJson } from "@/lib/api-client";
 
 type DiffRow = { row: number; action: string; target: string; from?: string; to?: string; note?: string; error?: string };
@@ -72,7 +73,8 @@ export function CsvImportModal({ open, onClose, title, endpoint, templateUrl, co
                 {result.parseErrors.map((e) => <div key={e.row}>Row {e.row}: {e.error}</div>)}
               </div>
             )}
-            <DataGrid
+            <VirtualDataGrid
+              height={280}
               columns={[
                 { key: "row", label: "Row", render: (r: DiffRow) => r.row },
                 { key: "action", label: "Action", render: (r: DiffRow) => <Pill tone={r.error ? "danger" : r.action === "CREATE" ? "success" : r.action === "UPDATE" ? "info" : "neutral"}>{r.error ? "ERROR" : r.action}</Pill> },

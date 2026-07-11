@@ -10,8 +10,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Truck, Package, ExternalLink, Printer, Send, Ban, MapPin, ClipboardList, Download } from "lucide-react";
-import { DataGrid, Drawer, Modal, useToast } from "@/design-system/components";
+import { Drawer, Modal, useToast } from "@/design-system/components";
 import { Button, Pill, RadioCard } from "@/design-system/primitives";
+import { VirtualDataGrid } from "@/components/VirtualDataGrid"; // FS3 — windowed rows, DS-grid parity
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
@@ -72,7 +73,8 @@ export function ShippingClient() {
 
       <section style={{ marginBottom: 22 }}>
         <SectionHeading icon={<Package size={14} />} title="Ready to ship" count={data?.ready.length} />
-        <DataGrid
+        <VirtualDataGrid
+          height="min(48dvh, 520px)"
           columns={[
             { key: "number", label: "Order", render: (r: ReadyRow) => <b>{r.number}</b> },
             { key: "party", label: "Customer", render: (r: ReadyRow) => r.partyName },
@@ -88,7 +90,8 @@ export function ShippingClient() {
 
       <section>
         <SectionHeading icon={<Truck size={14} />} title="In flight" count={data?.inflight.length} />
-        <DataGrid
+        <VirtualDataGrid
+          height="min(48dvh, 520px)"
           columns={[
             { key: "order", label: "Order", render: (r: InflightRow) => <button type="button" onClick={() => openDetail(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.orderNumber}</button> },
             { key: "party", label: "Customer", render: (r: InflightRow) => r.partyName },
