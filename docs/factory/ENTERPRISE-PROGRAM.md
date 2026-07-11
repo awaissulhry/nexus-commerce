@@ -8,7 +8,7 @@ Started 2026-07-11 at the Owner's direction: *"work page by page to make sure it
 2. **Per-page cycle (double gate, unchanged):** research (external bar + internal audit) → `EPx-PROPOSAL.md` → Owner approval → phase specs → build → click-through → Owner approval → update the row.
 3. **No feature leaves its home page.** A capability belongs to the page that owns its entity (registry below). If a page needs something another page owns, it consumes that page's API/components — it never re-implements. New cross-page capabilities get an owner ROW here first.
 4. **Shared substrate is owned by workstreams, not pages** (table below). A page proposal may DEPEND on substrate; it may not BUILD it.
-5. **Navigation law:** the 11-page IA (F0-IA.md) is fixed; new surfaces live INSIDE their page (tabs/drawers/sub-routes like `/quotes/...`). Adding a 12th top-level nav item requires Owner sign-off recorded here.
+5. **Navigation law:** the 11-page IA (F0-IA.md) is fixed; new surfaces live INSIDE their page (tabs/drawers/sub-routes like `/quotes/...`). Adding a top-level nav item requires Owner sign-off recorded here. **Signed off: `/chat` (12th item) — approved by the Owner via FS-FC-PROPOSAL, 2026-07-11 ("proceed with your recommendation"); built in FC2.**
 6. **Design law:** DS-only UI (F0-DESIGN-BRIDGE.md); resizable panes + windowed lists are the standing expectations for any new heavy surface.
 
 ## Page registry (EP series codes)
@@ -17,7 +17,7 @@ Started 2026-07-11 at the Owner's direction: *"work page by page to make sure it
 |---|---|---|---|---|
 | Quotes | **EPQ** | **CLAIMED 2026-07-11 (this session) — research in flight** | `EPQ-PROPOSAL.md` (pending) | First page of the program |
 | Inbox | EPI | **CLAIMED 2026-07-11 (this session) — research in flight** | `EPI-PROPOSAL.md` (pending) | partitions/scroll fix shipped 2026-07-10 pre-program; scope incl. attachment previews, resizable panes, automated views/routing, FC-chat integration points |
-| Orders | EPO | open | — | FS1 already fixed kanban truncation |
+| Orders | EPO | **CLAIMED 2026-07-11 (this session) — research in flight** | `EPO-PROPOSAL.md` (pending) | FS1 already fixed kanban truncation; scope incl. one-timeline depth, order↔financials linkage, brand/party-scoped views, cross-page hop-links (thread/quote/WO/shipment/invoice) |
 | Production | EPP | open | — | |
 | Materials | EPM | open | — | |
 | Products & Pricing | EPD | open | — | |
