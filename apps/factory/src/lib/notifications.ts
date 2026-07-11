@@ -17,6 +17,8 @@ export async function notify(input: {
 }): Promise<void> {
   await prisma.notification.create({ data: input });
   // durable: notify() is called from the WORKER too (sync path, reminders) —
-  // the outbox is the only road to web SSE clients from there (FP1.1)
-  await publishEventDurable("notification.created", { userId: input.userId });
+  // the outbox is the only road to web SSE clients from there (FP1.1).
+  // FS2 — scoped: only the target user's connections are woken (was: every
+  // client's bell refetched on any user's notification — S-11).
+  await publishEventDurable("notification.created", { userId: input.userId }, { userId: input.userId });
 }

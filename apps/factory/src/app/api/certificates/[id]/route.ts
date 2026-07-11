@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 
@@ -34,6 +35,7 @@ export const PATCH = guarded(FEATURES.productsManage, async (req, { params, acto
     },
   });
   void audit({ actorId: actor!.id, entityType: "certificate", entityId: id, action: "updated", after: d });
+  await publishEventDurable("certificate.updated"); // FS2 — no silent mutations
   return NextResponse.json({ certificate });
 });
 
@@ -41,5 +43,6 @@ export const DELETE = guarded(FEATURES.productsManage, async (_req, { params, ac
   const { id } = await params;
   await prisma.certificate.delete({ where: { id } });
   void audit({ actorId: actor!.id, entityType: "certificate", entityId: id, action: "deleted" });
+  await publishEventDurable("certificate.updated"); // FS2 — no silent mutations
   return NextResponse.json({ ok: true });
 });

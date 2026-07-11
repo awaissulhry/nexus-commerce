@@ -14,6 +14,7 @@ import { Drawer, Menu, Modal, useToast } from "@/design-system/components";
 import { Button, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
+import { useFactoryEvents } from "@/lib/use-factory-events";
 import { usePermission } from "@/lib/auth/client";
 import { StageTimer } from "./StageTimer";
 import { QCChecklist } from "./QCChecklist";
@@ -42,7 +43,11 @@ export function ProductionClient() {
     try { setData(await apiJson<ProductionResponse>("/api/production")); }
     catch (e) { toast((e as Error).message, "danger"); }
   }, [toast]);
-  useEffect(() => { void load(); const t = setInterval(() => void load(), 15000); return () => clearInterval(t); }, [load]);
+  // FS2 — event-driven board: stage actions/priority/scrap/consume/payments
+  // arrive via SSE (S-6's client half); the old 15s blind poll — which re-ran
+  // the whole board+coverage query per open tab — becomes a 120s safety net.
+  useEffect(() => { void load(); const t = setInterval(() => void load(), 120_000); return () => clearInterval(t); }, [load]);
+  useFactoryEvents(["workorder.created", "workorder.updated", "order.updated", "pricing.updated"], load, { debounceMs: 1500 });
 
   const act = async (stageId: string, action: "start" | "pause" | "resume" | "finish") => {
     try {

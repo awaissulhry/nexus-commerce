@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 
@@ -26,5 +27,6 @@ export const POST = guarded(FEATURES.contactsManage, async (req, { params, actor
 
   const email = await prisma.partyEmail.create({ data: { partyId: id, email: parsed.data.email, label: parsed.data.label ?? null, matchDomain: parsed.data.matchDomain ?? false } });
   void audit({ actorId: actor!.id, entityType: "party", entityId: id, action: "email-added", after: { email: email.email, matchDomain: email.matchDomain } });
+  await publishEventDurable("party.updated"); // FS2 — no silent mutations
   return NextResponse.json({ email }, { status: 201 });
 });

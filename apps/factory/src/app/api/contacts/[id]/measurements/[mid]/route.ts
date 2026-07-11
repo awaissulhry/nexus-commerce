@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 
@@ -20,5 +21,6 @@ export const DELETE = guarded(FEATURES.contactsManage, async (_req, { params, ac
   await prisma.measurementProfile.updateMany({ where: { supersedesId: mid }, data: { supersedesId: null } });
   await prisma.measurementProfile.delete({ where: { id: mid } });
   void audit({ actorId: actor!.id, entityType: "party", entityId: id, action: "measurement-deleted", after: { profileId: mid } });
+  await publishEventDurable("party.updated"); // FS2 — no silent mutations
   return NextResponse.json({ ok: true });
 });

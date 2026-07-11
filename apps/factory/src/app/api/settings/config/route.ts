@@ -11,6 +11,7 @@ import { FEATURES } from "@/lib/auth/permissions";
 import { rbacMode } from "@/lib/auth/guard";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { DEFAULT_STAGES } from "@/lib/orders/production";
 
 export const permission = FEATURES.settingsManage;
@@ -60,5 +61,6 @@ export const PATCH = guarded(FEATURES.settingsManage, async (req, { actor }) => 
     await prisma.appSetting.upsert({ where: { key: "financials.defaults" }, create: { key: "financials.defaults", value }, update: { value } });
   }
   void audit({ actorId: actor!.id, entityType: "settings", entityId: "config", action: "config-updated", after: d });
+  await publishEventDurable("settings.updated"); // FS2 — no silent mutations
   return NextResponse.json({ ok: true });
 });

@@ -9,6 +9,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { PAGES, FEATURES } from "@/lib/auth/permissions";
 import { quoteTotals } from "@/lib/quotes/compose-line";
@@ -78,6 +79,7 @@ export const PATCH = guarded(FEATURES.contactsManage, async (req, { params, acto
 
   await prisma.party.update({ where: { id }, data });
   void audit({ actorId: actor!.id, entityType: "party", entityId: id, action: archived === undefined ? "updated" : archived ? "archived" : "restored", after: Object.keys(data) });
+  await publishEventDurable("party.updated"); // FS2 — no silent mutations
 
   const payload = await detail(id);
   return jsonStripped(payload, resolved);
@@ -89,5 +91,6 @@ export const DELETE = guarded(FEATURES.contactsManage, async (_req, { params, ac
   if (!exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
   await prisma.party.update({ where: { id }, data: { archivedAt: new Date() } });
   void audit({ actorId: actor!.id, entityType: "party", entityId: id, action: "archived" });
+  await publishEventDurable("party.updated"); // FS2 — no silent mutations
   return NextResponse.json({ ok: true });
 });

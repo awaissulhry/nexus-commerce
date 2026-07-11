@@ -20,7 +20,7 @@ const HEARTBEAT_MS = 30_000;
 const GMAIL_POLL_MS = 10_000;
 const INBOX_TICK_MS = 60_000;
 const TRACKING_TICK_MS = 15 * 60 * 1000; // FP8 — poll in-flight shipments (read-only)
-const OUTBOX_TTL_MS = 10 * 60 * 1000;
+const OUTBOX_TTL_MS = 60 * 60 * 1000; // FS2 — outbox doubles as the gap-free resume window (was 10 min)
 const SNAPSHOT_HOUR = 3;
 const SNAPSHOT_KEEP = 14;
 

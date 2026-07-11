@@ -10,6 +10,7 @@ import { guarded } from "@/lib/auth/guard";
 import { FEATURES, permissionCatalog } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { createRole, editRole, deleteRole } from "@/lib/auth/team-service";
 import { GuardrailError } from "@/lib/auth/guardrails";
 
@@ -32,6 +33,7 @@ export const POST = guarded(FEATURES.rolesManage, async (req, { actor }) => {
   try {
     const role = await createRole(parsed.data.name, parsed.data.permissions);
     void audit({ actorId: actor!.id, entityType: "role", entityId: role.id, action: "role-created", after: { name: parsed.data.name, count: parsed.data.permissions.length } });
+    await publishEventDurable("team.updated"); // FS2 — no silent mutations
     return NextResponse.json({ ok: true, id: role.id }, { status: 201 });
   } catch (e) { return e instanceof GuardrailError ? NextResponse.json({ error: e.message }, { status: 400 }) : Promise.reject(e); }
 });
@@ -42,6 +44,7 @@ export const PATCH = guarded(FEATURES.rolesManage, async (req, { actor }) => {
   try {
     await editRole(parsed.data.roleId, { name: parsed.data.name, permissions: parsed.data.permissions });
     void audit({ actorId: actor!.id, entityType: "role", entityId: parsed.data.roleId, action: "role-edited" });
+    await publishEventDurable("team.updated"); // FS2 — no silent mutations
     return NextResponse.json({ ok: true });
   } catch (e) { return e instanceof GuardrailError ? NextResponse.json({ error: e.message }, { status: 400 }) : Promise.reject(e); }
 });
@@ -52,6 +55,7 @@ export const DELETE = guarded(FEATURES.rolesManage, async (req, { actor }) => {
   try {
     await deleteRole(id);
     void audit({ actorId: actor!.id, entityType: "role", entityId: id, action: "role-deleted" });
+    await publishEventDurable("team.updated"); // FS2 — no silent mutations
     return NextResponse.json({ ok: true });
   } catch (e) { return e instanceof GuardrailError ? NextResponse.json({ error: e.message }, { status: 400 }) : Promise.reject(e); }
 });

@@ -9,6 +9,7 @@ import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { assignRole, setStatus } from "@/lib/auth/team-service";
 import { GuardrailError } from "@/lib/auth/guardrails";
 
@@ -40,10 +41,12 @@ export const PATCH = guarded(FEATURES.usersManage, async (req, { actor, resolved
     if (roleId) {
       await assignRole(!!resolved?.isOwner, userId, roleId, actor!.id);
       void audit({ actorId: actor!.id, entityType: "user", entityId: userId, action: "role-assigned", after: { roleId } });
+      await publishEventDurable("team.updated"); // FS2 — no silent mutations
     }
     if (status) {
       await setStatus(userId, status);
       void audit({ actorId: actor!.id, entityType: "user", entityId: userId, action: `user-${status}` });
+      await publishEventDurable("team.updated"); // FS2 — no silent mutations
     }
     return NextResponse.json({ ok: true });
   } catch (e) {

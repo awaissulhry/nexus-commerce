@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { guarded, PUBLIC } from "@/lib/auth/guard";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { validateInvite, acceptInvite } from "@/lib/auth/team-service";
 import { GuardrailError } from "@/lib/auth/guardrails";
 import { createSession, sessionCookieHeader, csrfCookieHeader, newCsrfToken } from "@/lib/auth/session";
@@ -31,6 +32,7 @@ export const POST = guarded(PUBLIC, async (req, { params }) => {
     const { userId } = await acceptInvite(token, parsed.data.displayName, parsed.data.password);
     const sessionToken = await createSession(userId, { userAgent: req.headers.get("user-agent") ?? undefined });
     void audit({ actorId: userId, entityType: "user", entityId: userId, action: "invite-accepted" });
+    await publishEventDurable("team.updated"); // FS2 — no silent mutations
     const res = NextResponse.json({ ok: true });
     res.headers.append("Set-Cookie", sessionCookieHeader(sessionToken));
     res.headers.append("Set-Cookie", csrfCookieHeader(newCsrfToken()));

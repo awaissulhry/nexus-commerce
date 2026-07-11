@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 
@@ -18,6 +19,7 @@ export const PATCH = guarded(FEATURES.contactsManage, async (req, { params, acto
   if (!email) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const updated = await prisma.partyEmail.update({ where: { id: eid }, data: parsed.data });
   void audit({ actorId: actor!.id, entityType: "party", entityId: id, action: "email-updated", after: { emailId: eid, ...parsed.data } });
+  await publishEventDurable("party.updated"); // FS2 — no silent mutations
   return NextResponse.json({ email: updated });
 });
 
@@ -27,5 +29,6 @@ export const DELETE = guarded(FEATURES.contactsManage, async (_req, { params, ac
   if (!email) return NextResponse.json({ error: "Not found" }, { status: 404 });
   await prisma.partyEmail.delete({ where: { id: eid } });
   void audit({ actorId: actor!.id, entityType: "party", entityId: id, action: "email-removed", after: { email: email.email } });
+  await publishEventDurable("party.updated"); // FS2 — no silent mutations
   return NextResponse.json({ ok: true });
 });

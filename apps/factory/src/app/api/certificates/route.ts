@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES, PAGES } from "@/lib/auth/permissions";
 
@@ -47,5 +48,6 @@ export const POST = guarded(FEATURES.productsManage, async (req, { actor }) => {
     },
   });
   void audit({ actorId: actor!.id, entityType: "certificate", entityId: certificate.id, action: "created", after: { class: certificate.class, certNumber: certificate.certNumber } });
+  await publishEventDurable("certificate.updated"); // FS2 — no silent mutations
   return NextResponse.json({ certificate }, { status: 201 });
 });

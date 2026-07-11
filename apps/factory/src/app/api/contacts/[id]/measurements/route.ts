@@ -10,6 +10,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { PAGES, FEATURES } from "@/lib/auth/permissions";
 
@@ -57,5 +58,6 @@ export const POST = guarded(FEATURES.contactsManage, async (req, { params, actor
     },
   });
   void audit({ actorId: actor!.id, entityType: "party", entityId: id, action: d.supersedesId ? "measurement-versioned" : "measurement-created", after: { profileId: profile.id, garmentType: profile.garmentType, version } });
+  await publishEventDurable("party.updated"); // FS2 — no silent mutations
   return NextResponse.json({ profile }, { status: 201 });
 });

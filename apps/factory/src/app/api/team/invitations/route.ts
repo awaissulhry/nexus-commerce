@@ -9,6 +9,7 @@ import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { invite, revokeInvite } from "@/lib/auth/team-service";
 import { GuardrailError } from "@/lib/auth/guardrails";
 
@@ -32,6 +33,7 @@ export const POST = guarded(FEATURES.usersManage, async (req, { actor }) => {
     const { id, token } = await invite(parsed.data.email, parsed.data.roleId, actor!.id);
     const base = process.env.FACTORY_PUBLIC_URL || req.nextUrl.origin;
     void audit({ actorId: actor!.id, entityType: "invitation", entityId: id, action: "invited", after: { email: parsed.data.email } });
+    await publishEventDurable("team.updated"); // FS2 — no silent mutations
     return NextResponse.json({ ok: true, id, joinUrl: `${base}/join/${token}` }, { status: 201 });
   } catch (e) {
     if (e instanceof GuardrailError) return NextResponse.json({ error: e.message }, { status: 400 });
@@ -44,5 +46,6 @@ export const DELETE = guarded(FEATURES.usersManage, async (req, { actor }) => {
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
   await revokeInvite(id);
   void audit({ actorId: actor!.id, entityType: "invitation", entityId: id, action: "revoked" });
+  await publishEventDurable("team.updated"); // FS2 — no silent mutations
   return NextResponse.json({ ok: true });
 });

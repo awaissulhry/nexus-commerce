@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { PAGES, FEATURES } from "@/lib/auth/permissions";
 
@@ -93,5 +94,6 @@ export const POST = guarded(FEATURES.contactsManage, async (req, { actor, resolv
     select: { id: true, name: true, kind: true },
   });
   void audit({ actorId: actor!.id, entityType: "party", entityId: party.id, action: "created", after: { name: party.name, kind: party.kind } });
+  await publishEventDurable("party.updated"); // FS2 — no silent mutations
   return jsonStripped({ contact: party }, resolved, { status: 201 });
 });
