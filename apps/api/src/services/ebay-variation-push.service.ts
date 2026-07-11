@@ -502,6 +502,39 @@ async function saveOfferIds(
   }))
 }
 
+// Persists the parent listing's last-published variation axis NAMES, per market, to
+// ChannelListing.platformAttributes.__lastPublishedAxes[marketplaceId] — server
+// metadata like __offerIds (NEVER flatFileSnapshot). Called ONLY after a successful
+// publish, so it records what actually went live. Feeds the AXIS_STRUCTURE_CHANGE
+// pre-flight: a later axis-count change (e.g. 3 axes → 2) is caught before it reaches
+// eBay. Merge-only — spreads the existing platformAttributes so __offerIds and every
+// other key are preserved. Queried by `marketplace: mp` to hit the SAME parent
+// listing row the read side used.
+async function saveLastPublishedAxes(
+  parentSku: string,
+  mp: string,
+  marketplaceId: string,
+  axisNames: string[],
+): Promise<void> {
+  if (!parentSku || axisNames.length === 0) return
+  try {
+    const listing = await prisma.channelListing.findFirst({
+      where: { product: { sku: parentSku }, channel: 'EBAY', marketplace: mp },
+      select: { id: true, platformAttributes: true },
+    })
+    if (!listing) return
+    const pa = (listing.platformAttributes ?? {}) as Record<string, unknown>
+    const existing = ((pa.__lastPublishedAxes ?? {}) as Record<string, string[]>)
+    const prev = existing[marketplaceId]
+    // Idempotent — skip the write when the stored axes already match.
+    if (Array.isArray(prev) && prev.length === axisNames.length && prev.every((v, i) => v === axisNames[i])) return
+    await prisma.channelListing.update({
+      where: { id: listing.id },
+      data: { platformAttributes: { ...pa, __lastPublishedAxes: { ...existing, [marketplaceId]: axisNames } } },
+    })
+  } catch { /* non-fatal */ }
+}
+
 /**
  * FM/25004 self-heal — return the offer body for an updateOffer (a FULL
  * replacement) with `availableQuantity` forced to `qty`, preserving every other
@@ -783,6 +816,11 @@ export async function pushVariationGroup(
   let valueOrder: Record<string, string[]> = {}
   // FFP.8 — operator's stored axis ORDER (_variationAxes, per market+channel).
   let storedAxisOrder: string[] = []
+  // AXIS_STRUCTURE_CHANGE — the axis NAMES eBay actually last published for THIS
+  // market (parent listing platformAttributes.__lastPublishedAxes[marketplaceId]),
+  // read below from the parent listing already loaded for label overrides. Fed to
+  // the pre-flight validator; undefined ⇒ first publish ⇒ the check stays silent.
+  let priorPublishedAxes: string[] | undefined
   // EFX D2 — the operator's declared axis SET (authoritative). parseThemeAxes on
   // the parent Product.variationTheme; falling back to the parent listing's
   // stored _variationAxes; null ⇒ LEGACY inference (byte-identical to pre-EFX).
@@ -818,6 +856,13 @@ export async function pushVariationGroup(
       storedAxisOrder = Array.isArray(pa._variationAxes)
         ? (pa._variationAxes as unknown[]).filter((s): s is string => typeof s === 'string')
         : []
+      // AXIS_STRUCTURE_CHANGE read — reuse the just-loaded parent platformAttributes
+      // (no extra query). __lastPublishedAxes is server metadata keyed by marketplaceId
+      // (mirrors __offerIds); absent on a first publish ⇒ leave undefined ⇒ no warning.
+      const lastAxesForMarket = ((pa.__lastPublishedAxes ?? {}) as Record<string, unknown>)[marketplaceId]
+      priorPublishedAxes = Array.isArray(lastAxesForMarket)
+        ? (lastAxesForMarket as unknown[]).filter((s): s is string => typeof s === 'string')
+        : undefined
     }
     // EFX D2 — theme wins; else the parent's stored _variationAxes; else LEGACY.
     const themeAxes = parseThemeAxes(parentThemeRaw)
@@ -992,11 +1037,11 @@ export async function pushVariationGroup(
     const familyIssues = validateVariationFamily(variantRows, resolved, specifications, {
       brandDefaulted,
       safeQtys: preflightQtys,
-      // AXIS_STRUCTURE_CHANGE — SKIPPED: the live listing's previously-published
-      // axis names aren't available in this scope. storedAxisOrder is the DECLARED
-      // set (== the current axes by construction), NOT what eBay actually
-      // published, so passing it would fabricate the comparison. Left as a
-      // follow-up (needs a stored snapshot of the last-published axis names).
+      // AXIS_STRUCTURE_CHANGE — the axis names eBay ACTUALLY published last time for
+      // this market, read above from the parent listing's __lastPublishedAxes. NOT the
+      // declared set (which equals the current axes by construction). undefined on a
+      // first publish ⇒ the validator skips the check (no false positive).
+      priorPublishedAxisNames: priorPublishedAxes,
     })
     for (const issue of familyIssues) sinkWarn(`${issue.message} ${issue.fixHint}`.trim())
   } catch (err) {
@@ -1862,6 +1907,11 @@ export async function pushVariationGroup(
   const pubData = await publishRes.json().catch(() => ({})) as { listingId?: string }
   let listingId = pubData.listingId
   if (collectedOfferIds.size > 0) void saveOfferIds(collectedOfferIds, region, marketplaceId)
+  // AXIS_STRUCTURE_CHANGE write — record the axes that just went live for THIS market.
+  // Reached only past the publish-failure early-return above, so it captures a real
+  // publish. Merge-only into the parent listing's platformAttributes (never clobbers
+  // __offerIds); fire-and-forget like saveOfferIds — server metadata, not sent to eBay.
+  void saveLastPublishedAxes(parentRow.sku as string, mp, marketplaceId, specifications.map(s => s.name))
 
   // Re-publishing an already-active listing returns no listingId in the publish body.
   // Fall back to GET offer for the first variant — the offer's listing.listingId is

@@ -244,6 +244,15 @@ describe('validateVariationFamily — AXIS_STRUCTURE_CHANGE', () => {
     expect(has(issues, 'AXIS_STRUCTURE_CHANGE')).toBe(true)
     expect(get(issues, 'AXIS_STRUCTURE_CHANGE')!.message).toContain('end the listing')
   })
+  it('warns when a stored 3-axis structure collapses to 2 axes', () => {
+    const specs = [spec('Colore', ['Nero']), spec('Taglia', ['M'])]
+    const rows = [row('A', { Colore: 'Nero', Taglia: 'M' })]
+    const issues = validateVariationFamily(rows, resolvedFrom(specs), specs, {
+      priorPublishedAxisNames: ['Tipo di prodotto', 'Colore', 'Taglia'],
+    })
+    expect(has(issues, 'AXIS_STRUCTURE_CHANGE')).toBe(true)
+    expect(get(issues, 'AXIS_STRUCTURE_CHANGE')!.message).toContain('end the listing')
+  })
   it('is silent when axes are unchanged', () => {
     const specs = [spec('Colore', ['Nero']), spec('Taglia', ['M'])]
     const rows = [row('A', { Colore: 'Nero', Taglia: 'M' })]
