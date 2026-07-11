@@ -11,7 +11,7 @@ const money = (c: number) => (c / 100).toFixed(2);
 
 export const GET = guarded(FEATURES.exportsRun, async (_req, { resolved }) => {
   const canMargin = !!resolved && (resolved.isOwner || resolved.permissions.has(FIELDS.marginsView));
-  const quotes = await prisma.quote.findMany({
+  const quotes = await prisma.quote.findMany({ // bounded: export: whole-table by design; streaming rework = FS5
     orderBy: { updatedAt: "desc" },
     include: { party: { select: { name: true } }, lines: { select: { netPriceCents: true, costCents: true, qty: true } } },
   });

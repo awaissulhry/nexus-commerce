@@ -16,11 +16,11 @@ export const permission = FEATURES.usersManage;
 
 export const GET = guarded(FEATURES.usersManage, async (_req, { actor }) => {
   const [users, roles] = await Promise.all([
-    prisma.user.findMany({
+    prisma.user.findMany({ // bounded: team-sized table
       orderBy: { createdAt: "asc" },
       select: { id: true, displayName: true, email: true, status: true, lastLoginAt: true, roleAssignments: { select: { role: { select: { id: true, key: true, name: true } } } } },
     }),
-    prisma.role.findMany({ orderBy: [{ isSystem: "desc" }, { name: "asc" }], select: { id: true, key: true, name: true, isSystem: true } }),
+    prisma.role.findMany({ orderBy: [{ isSystem: "desc" }, { name: "asc" }], select: { id: true, key: true, name: true, isSystem: true } }), // bounded: team-sized table
   ]);
   const members = users.map((u) => ({
     id: u.id, displayName: u.displayName, email: u.email, status: u.status, lastLoginAt: u.lastLoginAt,

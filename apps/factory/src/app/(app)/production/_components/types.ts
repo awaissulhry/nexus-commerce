@@ -33,6 +33,8 @@ export type WOCard = {
 export type ProductionResponse = {
   pipeline: string[];
   workOrders: WOCard[];
+  activeTotal?: number; // FS1 — true count of active WOs (board renders ≤ boardCap)
+  boardCap?: number;
   workers: { id: string; displayName: string }[];
   worker: boolean;
   nowIso: string;

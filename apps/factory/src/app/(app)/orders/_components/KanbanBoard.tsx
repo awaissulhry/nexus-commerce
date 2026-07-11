@@ -45,38 +45,55 @@ function DraggableCard({ r, onOpen }: { r: OrderRow; onOpen: (id: string) => voi
   );
 }
 
-function Lane({ state, orders, onOpen }: { state: OrderState; orders: OrderRow[]; onOpen: (id: string) => void }) {
+function Lane({ state, orders, total, hasMore, onLoadMore, onOpen }: { state: OrderState; orders: OrderRow[]; total: number; hasMore: boolean; onLoadMore: () => void; onOpen: (id: string) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: state });
   return (
     <div style={{ flex: "1 0 220px", minWidth: 220, display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 4px 8px" }}>
         <span style={{ fontSize: 12, fontWeight: 700 }}>{ORDER_STATE_LABEL[state]}</span>
-        <span style={{ fontSize: 11, color: "var(--h10-text-3)" }}>{orders.length}</span>
+        {/* FS1 (C-1) — the TRUE lane count, never just the loaded page */}
+        <span style={{ fontSize: 11, color: "var(--h10-text-3)" }}>{orders.length < total ? `${orders.length} of ${total}` : total}</span>
       </div>
       <div ref={setNodeRef} style={{ flex: 1, minHeight: 120, display: "grid", gap: 8, alignContent: "start", padding: 8, borderRadius: 12, background: isOver ? "var(--h10-wash-primary, rgba(31,111,222,0.06))" : "var(--h10-bg-subtle, rgba(20,28,38,0.02))", outline: isOver ? "1px dashed var(--h10-primary)" : "1px solid transparent", transition: "background 0.12s" }}>
         {orders.map((r) => <DraggableCard key={r.id} r={r} onOpen={onOpen} />)}
         {orders.length === 0 && <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", textAlign: "center", padding: "12px 0" }}>—</div>}
+        {hasMore && (
+          <button type="button" onClick={onLoadMore} style={{ border: "1px dashed var(--h10-border)", borderRadius: 8, background: "none", padding: "7px 0", fontSize: 11.5, color: "var(--h10-text-2)", cursor: "pointer" }}>
+            Load {Math.min(100, total - orders.length)} more
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-export function KanbanBoard({ orders, onMove, onOpen }: { orders: OrderRow[]; onMove: (r: OrderRow, to: OrderState) => void; onOpen: (id: string) => void }) {
+export type LaneData = { rows: OrderRow[]; total: number; nextCursor: string | null };
+
+// FS1 (C-1) — lanes arrive individually bounded + cursored; the board never
+// silently drops an order past a fetch cap again.
+export function KanbanBoard({ lanes, onLoadMore, onMove, onOpen }: { lanes: Record<string, LaneData>; onLoadMore: (state: OrderState) => void; onMove: (r: OrderRow, to: OrderState) => void; onOpen: (id: string) => void }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const [dragging, setDragging] = useState<OrderRow | null>(null);
-  const onStart = (e: DragStartEvent) => setDragging(orders.find((o) => o.id === e.active.id) ?? null);
+  const findRow = (id: unknown) => {
+    for (const l of Object.values(lanes)) { const r = l.rows.find((o) => o.id === id); if (r) return r; }
+    return null;
+  };
+  const onStart = (e: DragStartEvent) => setDragging(findRow(e.active.id));
   const onEnd = (e: DragEndEvent) => {
     setDragging(null);
     const to = e.over?.id as OrderState | undefined;
-    const r = orders.find((o) => o.id === e.active.id);
+    const r = findRow(e.active.id);
     if (r && to && to !== r.state) onMove(r, to);
   };
   return (
     <DndContext sensors={sensors} onDragStart={onStart} onDragEnd={onEnd} onDragCancel={() => setDragging(null)}>
       <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 6 }}>
-        {BOARD_LANES.map((state) => (
-          <Lane key={state} state={state} orders={orders.filter((o) => o.state === state)} onOpen={onOpen} />
-        ))}
+        {BOARD_LANES.map((state) => {
+          const lane = lanes[state] ?? { rows: [], total: 0, nextCursor: null };
+          return (
+            <Lane key={state} state={state} orders={lane.rows} total={lane.total} hasMore={!!lane.nextCursor} onLoadMore={() => onLoadMore(state)} onOpen={onOpen} />
+          );
+        })}
       </div>
       <DragOverlay>{dragging ? <div style={{ border: "1px solid var(--h10-primary)", borderRadius: 10, background: "var(--h10-surface)", padding: 10, width: 220, boxShadow: "0 8px 24px rgb(20 28 38 / 0.18)" }}><CardBody r={dragging} /></div> : null}</DragOverlay>
     </DndContext>

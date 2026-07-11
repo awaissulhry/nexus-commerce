@@ -24,6 +24,7 @@ export type OrderRow = {
 
 export type OrdersResponse = {
   orders: OrderRow[];
+  nextCursor?: string | null; // FS1 — lane/grid cursor pagination
   counters: { inProduction: number; awaitingDeposit: number; overdue: number };
   counts: Record<string, number>;
 };

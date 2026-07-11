@@ -141,7 +141,13 @@ export function FinancialsClient() {
           rowKey={(r: OrderFin) => r.orderId}
           emptyState="No orders yet — money lands here as quotes convert."
         />
-      ) : (
+      ) : null}
+      {tab === "orders" && data && (data.ordersTotal ?? 0) > data.orders.length && (
+        <div style={{ fontSize: 12, color: "var(--h10-text-2)", padding: "8px 2px" }}>
+          Showing the {data.orders.length} most recent of {data.ordersTotal} orders — tiles and rollups cover all of them. Narrow the date range to drill in.
+        </div>
+      )}
+      {tab === "deposits" && (
         <DataGrid
           columns={[
             { key: "number", label: "Order", render: (r: DepositRow) => <button type="button" onClick={() => openDetail(r.orderId)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button> },

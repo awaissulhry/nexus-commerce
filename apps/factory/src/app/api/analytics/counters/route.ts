@@ -12,11 +12,14 @@ export const permission = PAGES.analytics;
 
 export const GET = guarded(PAGES.analytics, async () => {
   const now = new Date();
-  const [openThreads, quotesAwaiting, overduePromises] = await Promise.all([
-    prisma.conversation.findMany({ where: { state: "OPEN" }, select: { messages: { orderBy: { sentAt: "desc" }, take: 1, select: { direction: true } } } }),
+  // FS1 — "unanswered" is a plain COUNT via Conversation.lastMessageDirection
+  // (maintained at both message write points). The old shape — findMany all
+  // OPEN threads with a per-row last-message include — was N-1: it 500'd with
+  // P2029 past ~1k open threads (FS0-BASELINE).
+  const [unansweredThreads, quotesAwaiting, overduePromises] = await Promise.all([
+    prisma.conversation.count({ where: { state: "OPEN", lastMessageDirection: "INBOUND" } }),
     prisma.quote.count({ where: { state: "SENT" } }),
     prisma.order.count({ where: { promiseDateAt: { lt: now }, state: { notIn: ["SHIPPED", "DELIVERED", "CLOSED", "CANCELLED"] } } }),
   ]);
-  const unansweredThreads = openThreads.filter((c) => c.messages[0]?.direction === "INBOUND").length;
   return NextResponse.json({ unansweredThreads, quotesAwaiting, overduePromises });
 });

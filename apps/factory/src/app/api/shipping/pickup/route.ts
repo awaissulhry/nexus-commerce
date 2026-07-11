@@ -31,7 +31,7 @@ export const POST = guarded(FEATURES.labelsPurchase, async (req, { actor }) => {
 
   // attach today's parcels for this account
   const start = new Date(); start.setHours(0, 0, 0, 0);
-  const todays = await prisma.shipment.findMany({ where: { carrierAccountId: carrier.account.id, createdAt: { gte: start }, state: { not: "CANCELLED" } }, select: { id: true } });
+  const todays = await prisma.shipment.findMany({ where: { carrierAccountId: carrier.account.id, createdAt: { gte: start }, state: { not: "CANCELLED" } }, select: { id: true } }); // bounded: operator-selected parcels
 
   const pickup = await prisma.pickup.create({
     data: { carrierAccountId: carrier.account.id, date, status: outside ? "outside_system" : "requested", parcelIds: todays.map((t) => t.id) },

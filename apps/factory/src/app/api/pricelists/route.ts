@@ -12,7 +12,7 @@ import { FEATURES, PAGES } from "@/lib/auth/permissions";
 export const permission = { GET: PAGES.products, POST: FEATURES.pricelistsManage };
 
 export const GET = guarded(PAGES.products, async () => {
-  const lists = await prisma.priceList.findMany({
+  const lists = await prisma.priceList.findMany({ // bounded: price lists are config-sized
     orderBy: [{ kind: "asc" }, { name: "asc" }],
     include: { _count: { select: { entries: true, parties: true } } },
   });

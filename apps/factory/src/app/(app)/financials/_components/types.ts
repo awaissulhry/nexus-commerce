@@ -23,7 +23,7 @@ export type OrderFin = {
 };
 
 export type Tiles = { outstandingCents?: number; depositsDueCents?: number; monthInvoicedCents?: number; monthPaidCents?: number };
-export type FinancialsResponse = { monthKey: string; tiles: Tiles; orders: OrderFin[] };
+export type FinancialsResponse = { monthKey: string; tiles: Tiles; orders: OrderFin[]; ordersTotal?: number }; // FS1 — orders is a bounded page; tiles fold everything
 
 export type InvoiceRow = { id: string; number: string; amountCents?: number; sentAt: string | null; paidAt: string | null };
 export type PaymentRow = { id: string; kind: string; amountCents?: number; method: string | null; receivedAt: string; notes: string | null };

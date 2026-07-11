@@ -81,10 +81,12 @@ async function upsertMessage(ownEmail: string, msg: gmail_v1.Schema$Message): Pr
       subject: subject || null,
       partyId,
       lastMessageAt: sentAt,
+      lastMessageDirection: direction, // FS1 — mirrors lastMessageAt semantics
     },
     update: {
       subject: subject || undefined,
       lastMessageAt: sentAt,
+      lastMessageDirection: direction, // FS1 — mirrors lastMessageAt semantics
       ...(partyId && !existingConversation?.partyId ? { partyId } : {}),
     },
   });
@@ -155,42 +157,86 @@ export async function listGmailLabels() {
     .map((l) => ({ id: l.id!, name: l.name! }));
 }
 
-/** Bounded initial backfill of the chosen label; worker increments after. */
-export async function backfillLabel(labelId: string): Promise<{ threads: number; messages: number }> {
+/**
+ * Paginated backfill of the chosen label. FS1 (C-2): the old version fetched
+ * ONE page of 50 threads and stamped historyId — on a busy mailbox everything
+ * past page one silently never synced. Now: the run walks pages under a
+ * thread budget, persisting Gmail's pageToken (plus the historyId captured at
+ * the START of the whole backfill) in AppSetting; while pages remain,
+ * `historyId` stays null so the worker's next tick re-enters here and resumes.
+ * Only when fully drained does the START historyId get stamped — anything that
+ * arrived mid-backfill replays through incremental sync, so there is no gap.
+ */
+const BACKFILL_STATE_KEY = "gmail.backfill.state";
+type BackfillState = { labelId: string; pageToken: string; startHistoryId: string | null };
+
+export async function backfillLabel(
+  labelId: string,
+  opts?: { budgetThreads?: number },
+): Promise<{ threads: number; messages: number; more: boolean }> {
   const authed = await getAuthedClient();
   if (!authed) throw new Error("Google not connected");
   const gmail = google.gmail({ version: "v1", auth: authed.client });
+  const budget = opts?.budgetThreads ?? BACKFILL_THREADS;
 
-  const threadList = await gmail.users.threads.list({
-    userId: "me",
-    labelIds: [labelId],
-    maxResults: BACKFILL_THREADS,
-  });
-  let messages = 0;
-  for (const t of threadList.data.threads ?? []) {
-    const thread = await gmail.users.threads.get({
-      userId: "me",
-      id: t.id!,
-      format: "metadata",
-      metadataHeaders: ["Subject", "From", "To", "Date", "Message-ID"],
-    });
-    for (const msg of thread.data.messages ?? []) {
-      await upsertMessage(authed.email, msg);
-      messages++;
-    }
+  const savedRow = await prisma.appSetting.findUnique({ where: { key: BACKFILL_STATE_KEY } });
+  const savedRaw = (savedRow?.value ?? null) as BackfillState | null;
+  const saved = savedRaw?.labelId === labelId ? savedRaw : null; // label changed → stale token, start fresh
+  let startHistoryId = saved?.startHistoryId ?? null;
+  if (!saved) {
+    // fresh backfill — capture the mailbox position BEFORE we start walking
+    const profile = await gmail.users.getProfile({ userId: "me" });
+    startHistoryId = profile.data.historyId ? String(profile.data.historyId) : null;
   }
 
-  const profile = await gmail.users.getProfile({ userId: "me" });
-  await prisma.googleConnection.updateMany({
-    where: { email: authed.email },
-    data: {
-      historyId: profile.data.historyId ? String(profile.data.historyId) : undefined,
-      lastSyncAt: new Date(),
-      lastError: null,
-    },
-  });
-  await publishEventDurable("conversation.synced", { backfill: true });
-  return { threads: threadList.data.threads?.length ?? 0, messages };
+  let pageToken: string | undefined = saved?.pageToken;
+  let threads = 0;
+  let messages = 0;
+  while (threads < budget) {
+    const page = await gmail.users.threads.list({
+      userId: "me",
+      labelIds: [labelId],
+      maxResults: Math.min(50, budget - threads),
+      pageToken,
+    });
+    for (const t of page.data.threads ?? []) {
+      const thread = await gmail.users.threads.get({
+        userId: "me",
+        id: t.id!,
+        format: "metadata",
+        metadataHeaders: ["Subject", "From", "To", "Date", "Message-ID"],
+      });
+      for (const msg of thread.data.messages ?? []) {
+        await upsertMessage(authed.email, msg);
+        messages++;
+      }
+      threads++;
+    }
+    pageToken = page.data.nextPageToken ?? undefined;
+    if (!pageToken) break;
+  }
+
+  const more = !!pageToken;
+  if (more) {
+    await prisma.appSetting.upsert({
+      where: { key: BACKFILL_STATE_KEY },
+      create: { key: BACKFILL_STATE_KEY, value: { labelId, pageToken, startHistoryId } as never },
+      update: { value: { labelId, pageToken, startHistoryId } as never },
+    });
+    // historyId stays null → the worker's next tick resumes the backfill
+    await prisma.googleConnection.updateMany({
+      where: { email: authed.email },
+      data: { historyId: null, lastSyncAt: new Date(), lastError: null },
+    });
+  } else {
+    await prisma.appSetting.deleteMany({ where: { key: BACKFILL_STATE_KEY } });
+    await prisma.googleConnection.updateMany({
+      where: { email: authed.email },
+      data: { historyId: startHistoryId ?? undefined, lastSyncAt: new Date(), lastError: null },
+    });
+  }
+  await publishEventDurable("conversation.synced", { backfill: true, more });
+  return { threads, messages, more };
 }
 
 /** Worker cadence: history.list since the stored id; 404 → full resync. */
@@ -245,8 +291,24 @@ export async function incrementalSync(): Promise<{ synced: number } | { resynced
   } catch (err) {
     const status = (err as { status?: number; code?: number }).status ?? (err as { code?: number }).code;
     if (status === 404) {
-      // historyId expired — mandatory full resync (F0-ARCHITECTURE §Gmail)
+      // historyId expired — mandatory full resync (F0-ARCHITECTURE §Gmail).
+      // FS1 (C-2) — this is no longer silent: the Owner is told a recovery is
+      // running, and the paginated backfill resumes across ticks until drained.
       await prisma.googleConnection.update({ where: { id: connection.id }, data: { historyId: null } });
+      void audit({ entityType: "integration", entityId: connection.id, action: "gmail.resync.triggered", after: { reason: "historyId expired (404)" } });
+      const owners = await prisma.user.findMany({
+        where: { status: "active", roleAssignments: { some: { role: { key: "OWNER" } } } },
+        select: { id: true },
+      }); // bounded: owner set is tiny by construction
+      for (const o of owners) {
+        await notify({
+          userId: o.id,
+          kind: "SYSTEM",
+          title: "Gmail sync token expired — full recovery started",
+          body: "Mail is being re-synced page by page in the background; nothing is lost. This banner clears itself when the backfill drains.",
+          href: "/settings/integrations",
+        });
+      }
       await backfillLabel(connection.labelId);
       return { resynced: true };
     }

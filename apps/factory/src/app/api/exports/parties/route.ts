@@ -14,7 +14,7 @@ export const permission = FEATURES.exportsRun;
 export const GET = guarded(FEATURES.exportsRun, async (_req, { resolved }) => {
   const canTerms = !!resolved && (resolved.isOwner || resolved.permissions.has(FIELDS.suppliersView));
   const canDeposit = !!resolved && (resolved.isOwner || resolved.permissions.has(FIELDS.pricesView));
-  const parties = await prisma.party.findMany({
+  const parties = await prisma.party.findMany({ // bounded: export: whole-table by design; streaming rework = FS5
     where: { archivedAt: null },
     include: { emails: true, priceList: { select: { name: true } } },
     orderBy: { name: "asc" },

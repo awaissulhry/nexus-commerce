@@ -46,7 +46,7 @@ export const POST = guarded(PAGES.products, async (req, { resolved }) => {
 
   // enrich composed materials with names (display only; no money)
   const matIds = result.materials.map((m) => m.materialId);
-  const materials = await prisma.material.findMany({ where: { id: { in: matIds } }, select: { id: true, name: true } });
+  const materials = await prisma.material.findMany({ where: { id: { in: matIds } }, select: { id: true, name: true } }); // bounded: per-template config
   const nameById = Object.fromEntries(materials.map((m) => [m.id, m.name]));
   const enriched = {
     ...result,

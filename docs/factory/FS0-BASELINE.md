@@ -51,3 +51,27 @@ Measured 2026-07-11 on `:3199` (`.next-verify`, `FACTORY_RBAC_MODE=enforce`, pro
 6. Exports buffering, LIKE search cost → FS1 bounds now, FS5 FTS later
 
 Artifacts: harness scripts `scripts/scale/seed-scale.ts` + `measure.ts` (re-runnable; raw JSON at `data/scale-baseline.json`, gitignored with the DB). Baseline machine: the Owner's dev machine, Node 20, darwin.
+
+---
+
+## FS1 re-measurement (same harness, same volumes, same machine — 2026-07-11)
+
+| Route | FS0 p50 | FS1 p50 | Target | Verdict |
+|---|---|---|---|---|
+| orders (all states) | 751 ms | **23 ms** | ≤250 | ✅ 33× |
+| orders search | 768 ms | **31 ms** | — | ✅ 25× |
+| production board | 1,788 ms | **65 ms** | ≤300 | ✅ 27× |
+| materials stock | 1,146 ms | **48 ms** | ≤250 | ✅ 24× |
+| financials | 2,021 ms · 22.5 MB | **310 ms · 92 KB** | ≤300 · ≤500 KB | ⚠ p50 3% over target; payload 245× smaller |
+| financials deposits | 166 ms | 219 ms | — | ✅ (now folds ALL live orders via aggregates; was a partial fold) |
+| analytics | **HTTP 500** | **619 ms** | 200 + ≤500 | ⚠ alive at scale; 24% over the latency target |
+| analytics counters | **HTTP 500** | **7 ms** | ≤30 | ✅ |
+| shipping | 162 ms · 5.8 MB | **23 ms · 191 KB** | ≤500 KB | ✅ 30× payload |
+| export orders CSV | 686 ms (fully buffered) | 1,849 ms (streamed) | flat memory | ✅ goal was memory, not latency — documented trade |
+| burst×10 production | 18.4 s wall | **0.68 s** | ≤3 s | ✅ 27× |
+| burst×10 materials | 11.5 s wall | **0.49 s** | — | ✅ 23× |
+| kanban truncation (C-1) | drops past 200 | true lane counts + per-lane load-more | fixed | ✅ verified visually at 50k |
+| Gmail backfill cap (C-2) | 50 threads, silent | paginated + resumable + Owner alert | fixed | ✅ |
+| P2029 include bomb (N-1) | analytics dead ≥1k open threads | zero unbounded includes + `check:query-bounds` fence | fixed | ✅ |
+
+Two honest misses, both flagged rather than chased: **financials 310 vs 300** and **analytics 619 vs 500** — the residual is the shared per-order aggregate fold over 47k live orders (already SQL-side; the next lever is moving party/month rollups fully into SQL, which widens the money-parity surface and belongs to a later phase if the Owner wants it). Every number parity-proven: integer money exact; actual-cost family ±1 cent (float summation associativity on qty×cost, seen once in 47k orders — documented in `scripts/scale/parity.ts`).

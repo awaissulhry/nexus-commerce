@@ -21,11 +21,11 @@ export const GET = guarded(FEATURES.materialsConsume, async (_req, { params }) =
   const { sid } = await params;
   const stage = await prisma.workOrderStage.findUnique({ where: { id: sid }, select: { workOrderId: true } });
   if (!stage) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const moves = await prisma.movementLedger.findMany({ where: { refType: "WorkOrder", refId: stage.workOrderId, type: { in: ["RESERVE", "RELEASE"] } }, select: { materialId: true, type: true, qty: true } });
+  const moves = await prisma.movementLedger.findMany({ where: { refType: "WorkOrder", refId: stage.workOrderId, type: { in: ["RESERVE", "RELEASE"] } }, select: { materialId: true, type: true, qty: true } }); // bounded: per-stage/per-WO scope
   const reserved: Record<string, number> = {};
   for (const m of moves) reserved[m.materialId] = (reserved[m.materialId] ?? 0) + (m.type === "RESERVE" ? m.qty : -m.qty);
   const ids = Object.keys(reserved).filter((k) => reserved[k] > 0.0001);
-  const mats = ids.length ? await prisma.material.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, unit: true } }) : [];
+  const mats = ids.length ? await prisma.material.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, unit: true } }) : []; // bounded: per-stage/per-WO scope
   return NextResponse.json({ reserved: mats.map((m) => ({ materialId: m.id, name: m.name, unit: m.unit, reservedQty: reserved[m.id] })) });
 });
 
@@ -39,7 +39,7 @@ export const POST = guarded(FEATURES.materialsConsume, async (req, { params, act
   const stage = await prisma.workOrderStage.findUnique({ where: { id: sid }, select: { id: true, workOrderId: true } });
   if (!stage) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const moves = await prisma.movementLedger.findMany({ where: { refType: "WorkOrder", refId: stage.workOrderId, type: { in: ["RESERVE", "RELEASE"] } }, select: { materialId: true, type: true, qty: true } });
+  const moves = await prisma.movementLedger.findMany({ where: { refType: "WorkOrder", refId: stage.workOrderId, type: { in: ["RESERVE", "RELEASE"] } }, select: { materialId: true, type: true, qty: true } }); // bounded: per-stage/per-WO scope
   const reserved: Record<string, number> = {};
   for (const m of moves) reserved[m.materialId] = (reserved[m.materialId] ?? 0) + (m.type === "RESERVE" ? m.qty : -m.qty);
 

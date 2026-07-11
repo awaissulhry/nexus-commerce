@@ -15,7 +15,7 @@ import { GuardrailError } from "@/lib/auth/guardrails";
 export const permission = FEATURES.usersManage;
 
 export const GET = guarded(FEATURES.usersManage, async () => {
-  const invitations = await prisma.invitation.findMany({
+  const invitations = await prisma.invitation.findMany({ // bounded: team-sized table
     where: { acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
     orderBy: { createdAt: "desc" },
     select: { id: true, email: true, expiresAt: true, createdAt: true, role: { select: { name: true } } },

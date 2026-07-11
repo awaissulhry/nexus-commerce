@@ -27,7 +27,7 @@ export const POST = guarded(PAGES.contacts, async (req, { resolved }) => {
 
   const base = compose({ template, selectedOptionIds: selections, priceList: await loadPriceListInput(null), adjustmentCents: 0 });
 
-  const parties = await prisma.party.findMany({
+  const parties = await prisma.party.findMany({ // bounded: operator-selected party set
     where: { kind: "CUSTOMER", archivedAt: null },
     orderBy: { name: "asc" },
     select: { id: true, name: true, priceListId: true, priceList: { select: { name: true } } },

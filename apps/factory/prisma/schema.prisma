@@ -266,6 +266,10 @@ model Conversation {
   snoozeUntil   DateTime?
   followUpAt    DateTime? // FP1: quote-chasing reminder; auto-cancelled by any inbound reply
   lastMessageAt DateTime?
+  // FS1 — direction of the latest message, maintained at the two message write
+  // points (gmail-sync upsertMessage, inbox reply). Lets the "unanswered"
+  // counter be a plain COUNT instead of an unbounded relation include (N-1).
+  lastMessageDirection String?
   messages      Message[]
   quotes        Quote[]
   orders        Order[]
@@ -274,6 +278,8 @@ model Conversation {
 
   @@index([state, lastMessageAt])
   @@index([partyId])
+  @@index([snoozeUntil]) // FS1 — worker due-scan (S-7)
+  @@index([followUpAt]) // FS1 — worker due-scan (S-7)
 }
 
 enum MessageDirection {
@@ -317,6 +323,7 @@ model Attachment {
   createdAt   DateTime @default(now())
 
   @@index([entityType, entityId])
+  @@index([messageId]) // FS1 — message→attachments load was a full scan (S-8)
 }
 
 // ── Quotes ───────────────────────────────────────────────────────
@@ -423,6 +430,7 @@ model Order {
 
   @@index([state, promiseDateAt])
   @@index([partyId])
+  @@index([createdAt]) // FS1 — financials loader orders every non-cancelled order by createdAt
 }
 
 model OrderLine {
@@ -464,6 +472,7 @@ model WorkOrder {
   updatedAt       DateTime         @updatedAt
 
   @@index([state, priority])
+  @@index([orderId]) // FS1 — order→WOs lookups were full scans (S-8)
 }
 
 model WorkOrderStage {
@@ -486,6 +495,7 @@ model WorkOrderStage {
 
   @@index([workOrderId, sort])
   @@index([assigneeId, finishedAt])
+  @@index([workOrderId, finishedAt]) // FS1 — throughput's GROUP BY … HAVING all-finished, index-only
 }
 
 // ── Materials & the movement ledger (FD8) ────────────────────────
@@ -546,6 +556,13 @@ model MovementLedger {
 
   @@index([materialId, createdAt])
   @@index([refType, refId])
+  @@index([createdAt]) // FS1 — whole-ledger exports order by createdAt (S-8)
+  // FS1 covering indexes — the two hot aggregates become index-only scans
+  // (measured: stock fold 1,227ms → index-only; actual-cost join 694ms →
+  // prefix range scan). Ledger is append-only, so the write cost is one
+  // insert-time index update each, never an update.
+  @@index([materialId, type, qty])
+  @@index([refType, type, refId, materialId, qty])
 }
 
 enum PurchaseOrderState {

@@ -58,7 +58,7 @@ export const POST = guarded(FEATURES.workordersAdvance, async (req, { params, ac
       await prisma.workOrder.update({ where: { id: stage.workOrderId }, data: { state: "DONE" } });
       woDone = true;
       const orderId = stage.workOrder.orderId;
-      const siblingsWo = await prisma.workOrder.findMany({ where: { orderId }, select: { state: true } });
+      const siblingsWo = await prisma.workOrder.findMany({ where: { orderId }, select: { state: true } }); // bounded: per-order work orders (WorkOrder.orderId indexed in FS1)
       if (siblingsWo.every((s) => s.state === "DONE")) {
         const order = await prisma.order.findUnique({ where: { id: orderId }, select: { state: true } });
         if (order?.state === "IN_PRODUCTION") {

@@ -13,17 +13,25 @@ import { resolvePresets } from "@/lib/shipping/parcel";
 export const permission = PAGES.shipping;
 
 export const GET = guarded(PAGES.shipping, async (_req, { resolved }) => {
-  const [readyRows, inflightRows, carrier, presetRow] = await Promise.all([
+  // FS1 — both queues bounded (S-12/payload diet): the day-sheet works newest-
+  // first; totals surface so nothing hides. 5.8 MB → bounded at scale (FS0).
+  const QUEUE_CAP = 500;
+  const inflightWhere = { state: { in: ["LABEL_PURCHASED", "IN_TRANSIT", "EXCEPTION"] as never[] } };
+  const [readyRows, inflightRows, readyTotal, inflightTotal, carrier, presetRow] = await Promise.all([
     prisma.order.findMany({
       where: { state: "READY" },
       select: { id: true, number: true, promiseDateAt: true, party: { select: { id: true, name: true, addressJson: true } }, _count: { select: { lines: true } } },
       orderBy: [{ promiseDateAt: "asc" }, { createdAt: "asc" }],
+      take: QUEUE_CAP,
     }),
     prisma.shipment.findMany({
-      where: { state: { in: ["LABEL_PURCHASED", "IN_TRANSIT", "EXCEPTION"] } },
+      where: inflightWhere,
       select: { id: true, state: true, service: true, trackingNumber: true, trackingUrl: true, costCents: true, createdAt: true, updatedAt: true, order: { select: { id: true, number: true, party: { select: { name: true } } } } },
       orderBy: { updatedAt: "desc" },
+      take: QUEUE_CAP,
     }),
+    prisma.order.count({ where: { state: "READY" } }),
+    prisma.shipment.count({ where: inflightWhere }),
     resolveCarrier(),
     prisma.appSetting.findUnique({ where: { key: "shipping.parcelPresets" } }),
   ]);
@@ -52,5 +60,5 @@ export const GET = guarded(PAGES.shipping, async (_req, { resolved }) => {
     updatedAt: s.updatedAt,
   }));
 
-  return jsonStripped({ ready, inflight, presets, carrier: { connected: carrier.live, label: carrier.account?.label ?? null, name: carrier.adapter.name } }, resolved);
+  return jsonStripped({ ready, inflight, readyTotal, inflightTotal, presets, carrier: { connected: carrier.live, label: carrier.account?.label ?? null, name: carrier.adapter.name } }, resolved);
 });

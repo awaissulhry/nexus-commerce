@@ -17,20 +17,42 @@ const OVERDUE_STATES = ["CONFIRMED", "IN_PRODUCTION", "READY"];
 export const GET = guarded(PAGES.orders, async (req: NextRequest, { resolved }) => {
   const p = req.nextUrl.searchParams;
   const state = (p.get("state") ?? "all").toUpperCase();
+  // FS1 (C-1) — lane mode: the kanban fetches each lane bounded + cursored so
+  // nothing past the page cap silently vanishes; countsOnly serves the board's
+  // counters without hydrating rows. Cursor ordering gets an id tiebreaker
+  // (promiseDateAt/updatedAt are not unique).
+  const lane = (p.get("lane") ?? "").toUpperCase();
+  const cursor = p.get("cursor") ?? "";
+  const countsOnly = p.get("countsOnly") === "1";
   const q = (p.get("q") ?? "").trim();
   const partyId = p.get("partyId") ?? "";
   const where = {
-    ...(state !== "ALL" ? { state: state as never } : {}),
+    ...(lane ? { state: lane as never } : state !== "ALL" ? { state: state as never } : {}),
     ...(partyId ? { partyId } : {}),
     ...(q ? { OR: [{ number: { contains: q } }, { party: { name: { contains: q } } }] } : {}),
   };
   const now = new Date();
+  const TAKE = lane ? 100 : 200;
+
+  if (countsOnly) {
+    const [inProduction, awaitingDeposit, overdue, counts] = await Promise.all([
+      prisma.order.count({ where: { state: "IN_PRODUCTION" } }),
+      prisma.order.count({ where: { workOrders: { some: { state: "BLOCKED" } } } }),
+      prisma.order.count({ where: { state: { in: OVERDUE_STATES as never[] }, promiseDateAt: { lt: now } } }),
+      prisma.order.groupBy({ by: ["state"], _count: { _all: true } }),
+    ]);
+    return jsonStripped(
+      { orders: [], counters: { inProduction, awaitingDeposit, overdue }, counts: Object.fromEntries(counts.map((c) => [c.state, c._count._all])) },
+      resolved,
+    );
+  }
 
   const [orders, inProduction, awaitingDeposit, overdue, counts] = await Promise.all([
     prisma.order.findMany({
       where,
-      orderBy: [{ promiseDateAt: "asc" }, { updatedAt: "desc" }],
-      take: 200,
+      orderBy: [{ promiseDateAt: "asc" }, { updatedAt: "desc" }, { id: "asc" }],
+      take: TAKE + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       include: {
         party: { select: { id: true, name: true, kind: true } },
         lines: { select: { netPriceCents: true, costCents: true, qty: true } },
@@ -44,6 +66,8 @@ export const GET = guarded(PAGES.orders, async (req: NextRequest, { resolved }) 
     prisma.order.count({ where: { state: { in: OVERDUE_STATES as never[] }, promiseDateAt: { lt: now } } }),
     prisma.order.groupBy({ by: ["state"], _count: { _all: true } }),
   ]);
+  const hasMore = orders.length > TAKE;
+  if (hasMore) orders.pop();
 
   const rows = orders.map((o) => {
     const totals = orderTotals(o.lines);
@@ -70,6 +94,7 @@ export const GET = guarded(PAGES.orders, async (req: NextRequest, { resolved }) 
   return jsonStripped(
     {
       orders: rows,
+      nextCursor: hasMore ? rows[rows.length - 1]?.id ?? null : null,
       counters: { inProduction, awaitingDeposit, overdue },
       counts: Object.fromEntries(counts.map((c) => [c.state, c._count._all])),
     },

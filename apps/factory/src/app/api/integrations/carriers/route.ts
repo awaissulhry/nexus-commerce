@@ -16,7 +16,7 @@ import { CONNECTORS } from "@/lib/carriers/sendcloud";
 export const permission = FEATURES.integrationsManage;
 
 export const GET = guarded(FEATURES.integrationsManage, async () => {
-  const accounts = await prisma.carrierAccount.findMany({
+  const accounts = await prisma.carrierAccount.findMany({ // bounded: carrier accounts: a handful of rows
     select: { id: true, adapterId: true, label: true, caps: true, status: true, createdAt: true },
     orderBy: { createdAt: "desc" },
   });

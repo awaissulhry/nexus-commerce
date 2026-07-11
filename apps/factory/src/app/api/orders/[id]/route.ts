@@ -34,7 +34,7 @@ async function detailPayload(id: string) {
   const order = await prisma.order.findUnique({ where: { id }, include: DETAIL_INCLUDE });
   if (!order) return null;
   const entityIds = [order.id, order.bornFromQuoteId, ...order.workOrders.map((w) => w.id), ...order.payments.map((p) => p.id)].filter(Boolean) as string[];
-  const audits = await prisma.auditLog.findMany({
+  const audits = await prisma.auditLog.findMany({ // bounded: per-order children
     where: { entityId: { in: entityIds }, entityType: { in: ["order", "quote", "workorder", "payment"] } },
     orderBy: { createdAt: "asc" },
     select: { entityType: true, action: true, after: true, createdAt: true },

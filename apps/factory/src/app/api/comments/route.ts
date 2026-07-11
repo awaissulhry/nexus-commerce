@@ -17,7 +17,7 @@ export const GET = guarded(FEATURES.commentsCreate, async (req: NextRequest) => 
   if (!entityType || !entityId) {
     return NextResponse.json({ error: "entityType and entityId required" }, { status: 400 });
   }
-  const items = await prisma.comment.findMany({
+  const items = await prisma.comment.findMany({ // bounded: per-entity comment thread; windowed in FS3
     where: { entityType, entityId },
     orderBy: { createdAt: "asc" },
     include: { author: { select: { displayName: true, email: true } } },

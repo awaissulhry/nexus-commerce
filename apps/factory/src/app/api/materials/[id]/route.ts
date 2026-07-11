@@ -35,7 +35,7 @@ export const GET = guarded(PAGES.materials, async (_req, { params, resolved }) =
   for (const po of openPos) for (const l of (po.lines as { materialId: string; qty: number }[]) ?? []) if (l.materialId === id) expected += Math.max(0, l.qty - (recByPo[po.id] ?? 0));
 
   const usedTemplateIds = await materialUsage(id);
-  const whereUsed = usedTemplateIds.length ? await prisma.productTemplate.findMany({ where: { id: { in: usedTemplateIds } }, select: { id: true, name: true } }) : [];
+  const whereUsed = usedTemplateIds.length ? await prisma.productTemplate.findMany({ where: { id: { in: usedTemplateIds } }, select: { id: true, name: true } }) : []; // bounded: per-material lots
 
   const s = materialStock(moves.map((m) => ({ type: m.type, qty: m.qty })), expected);
   // on-hand per lot = Σ IN(lot) − Σ OUT(lot)

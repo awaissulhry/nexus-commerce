@@ -15,9 +15,9 @@ import { Button, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
-import { canTransition, legalTargets, ORDER_STATE_LABEL } from "@/lib/orders/transitions";
+import { BOARD_LANES, canTransition, legalTargets, ORDER_STATE_LABEL } from "@/lib/orders/transitions";
 import { OrderDetail } from "./OrderDetail";
-import { KanbanBoard } from "./KanbanBoard";
+import { KanbanBoard, type LaneData } from "./KanbanBoard";
 import { STATE_TONE, type OrderRow, type OrdersResponse, type OrderState } from "./types";
 
 const TABS: { id: string; label: string }[] = [
@@ -71,16 +71,55 @@ function PipelineInner() {
   useEffect(() => { const v = localStorage.getItem("factory:orders:view"); if (v === "kanban" || v === "grid") setView(v); }, []);
   const switchView = (v: "grid" | "kanban") => { setView(v); localStorage.setItem("factory:orders:view", v); };
 
+  const [lanes, setLanes] = useState<Record<string, LaneData>>({});
+
+  const laneUrl = useCallback((laneState: string, cursor?: string) => {
+    const usp = new URLSearchParams({ lane: laneState });
+    if (q.trim()) usp.set("q", q.trim());
+    if (partyId) usp.set("partyId", partyId);
+    if (cursor) usp.set("cursor", cursor);
+    return `/api/orders?${usp}`;
+  }, [q, partyId]);
+
   const load = useCallback(async () => {
     try {
-      const usp = new URLSearchParams({ state: view === "kanban" ? "all" : state });
-      if (q.trim()) usp.set("q", q.trim());
-      if (partyId) usp.set("partyId", partyId);
-      setData(await apiJson<OrdersResponse>(`/api/orders?${usp}`));
+      if (view === "kanban") {
+        // FS1 (C-1) — each lane fetched bounded + cursored, counters via
+        // countsOnly; the old single state=all call dropped everything past 200.
+        const usp = new URLSearchParams({ state: "all", countsOnly: "1" });
+        if (q.trim()) usp.set("q", q.trim());
+        if (partyId) usp.set("partyId", partyId);
+        const [countsRes, ...laneRes] = await Promise.all([
+          apiJson<OrdersResponse>(`/api/orders?${usp}`),
+          ...BOARD_LANES.map((s) => apiJson<OrdersResponse>(laneUrl(s))),
+        ]);
+        setData(countsRes);
+        setLanes(Object.fromEntries(BOARD_LANES.map((s, i) => [s, {
+          rows: laneRes[i].orders,
+          total: countsRes.counts?.[s] ?? laneRes[i].orders.length,
+          nextCursor: laneRes[i].nextCursor ?? null,
+        }])));
+      } else {
+        const usp = new URLSearchParams({ state });
+        if (q.trim()) usp.set("q", q.trim());
+        if (partyId) usp.set("partyId", partyId);
+        setData(await apiJson<OrdersResponse>(`/api/orders?${usp}`));
+      }
     } catch (e) {
       toast((e as Error).message, "danger");
     }
-  }, [view, state, q, partyId, toast]);
+  }, [view, state, q, partyId, laneUrl, toast]);
+
+  const loadMoreLane = useCallback(async (laneState: string) => {
+    const lane = lanes[laneState];
+    if (!lane?.nextCursor) return;
+    try {
+      const res = await apiJson<OrdersResponse>(laneUrl(laneState, lane.nextCursor));
+      setLanes((prev) => ({ ...prev, [laneState]: { ...lane, rows: [...lane.rows, ...res.orders], nextCursor: res.nextCursor ?? null } }));
+    } catch (e) {
+      toast((e as Error).message, "danger");
+    }
+  }, [lanes, laneUrl, toast]);
   useEffect(() => { const t = setTimeout(() => void load(), 200); return () => clearTimeout(t); }, [load]);
   useEffect(() => { apiJson<{ parties: { id: string; name: string }[] }>("/api/parties-lite").then((d) => setParties(d.parties)).catch(() => {}); }, []);
 
@@ -199,7 +238,7 @@ function PipelineInner() {
             emptyState="No orders yet — they arrive when you convert an accepted quote."
           />
         ) : (
-          <KanbanBoard orders={data?.orders ?? []} onMove={canEdit ? onMove : () => toast("You can't change order status", "danger")} onOpen={openDetail} />
+          <KanbanBoard lanes={lanes} onLoadMore={(s) => void loadMoreLane(s)} onMove={canEdit ? onMove : () => toast("You can't change order status", "danger")} onOpen={openDetail} />
         )}
       </Card>
 

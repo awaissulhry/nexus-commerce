@@ -16,7 +16,7 @@ import { GuardrailError } from "@/lib/auth/guardrails";
 export const permission = FEATURES.rolesManage;
 
 export const GET = guarded(FEATURES.rolesManage, async () => {
-  const roles = await prisma.role.findMany({ orderBy: [{ isSystem: "desc" }, { name: "asc" }], select: { id: true, key: true, name: true, description: true, isSystem: true, permissions: true, _count: { select: { assignments: true } } } });
+  const roles = await prisma.role.findMany({ orderBy: [{ isSystem: "desc" }, { name: "asc" }], select: { id: true, key: true, name: true, description: true, isSystem: true, permissions: true, _count: { select: { assignments: true } } } }); // bounded: role registry is config-sized
   return NextResponse.json({
     catalog: permissionCatalog(),
     roles: roles.map((r) => ({ id: r.id, key: r.key, name: r.name, description: r.description, isSystem: r.isSystem, permissions: (r.permissions as string[]) ?? [], memberCount: r._count.assignments })),

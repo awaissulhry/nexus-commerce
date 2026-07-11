@@ -63,7 +63,7 @@ export const POST = guarded(FEATURES.ordersEdit, async (_req, { params, actor })
   });
 
   // FP6: reserve each WO's BOM material against the ledger (idempotent, per the line's selections)
-  const createdWos = await prisma.workOrder.findMany({ where: { orderId: id }, select: { id: true, orderLineId: true } });
+  const createdWos = await prisma.workOrder.findMany({ where: { orderId: id }, select: { id: true, orderLineId: true } }); // bounded: per-order work orders
   for (const w of createdWos) await reserveWorkOrder(w.id, w.orderLineId, actor!.id).catch(() => {});
 
   void audit({ actorId: actor!.id, entityType: "order", entityId: id, action: "state-changed", before: { from: "CONFIRMED" }, after: { to: "IN_PRODUCTION", workOrders: planned.length, depositMet } });

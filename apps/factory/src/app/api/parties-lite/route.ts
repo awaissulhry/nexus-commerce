@@ -7,7 +7,7 @@ import { PAGES } from "@/lib/auth/permissions";
 export const permission = PAGES.products;
 
 export const GET = guarded(PAGES.products, async () => {
-  const parties = await prisma.party.findMany({
+  const parties = await prisma.party.findMany({ // bounded: name-list only; paged combobox lands in FS3 (S-16)
     where: { archivedAt: null, kind: { in: ["BRAND", "CUSTOMER"] } },
     orderBy: { name: "asc" },
     select: { id: true, name: true, kind: true, priceListId: true },

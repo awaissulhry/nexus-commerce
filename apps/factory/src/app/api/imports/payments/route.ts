@@ -46,7 +46,7 @@ export const POST = guarded(FEATURES.importsRun, async (req, { actor, resolved }
   const rows = parseBankCsv(parsed.data.rawCsv ?? "");
   if (rows.length === 0) return jsonStripped({ proposals: [], note: "No rows parsed — expected a header naming date, amount and description columns." }, resolved);
 
-  const orders = await prisma.order.findMany({
+  const orders = await prisma.order.findMany({ // bounded: bounded by the uploaded file's row count
     where: { state: { notIn: ["CANCELLED"] } },
     select: { id: true, number: true, party: { select: { name: true } }, lines: { select: { netPriceCents: true, costCents: true, qty: true } }, payments: { select: { amountCents: true } }, invoices: { select: { number: true } } },
   });

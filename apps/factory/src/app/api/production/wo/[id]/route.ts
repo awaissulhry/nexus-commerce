@@ -23,10 +23,10 @@ export const GET = guarded(PAGES.production, async (_req, { params, resolved }) 
   if (!wo) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // actual material cost = Σ OUT (qty × material cost) for this WO
-  const outMoves = await prisma.movementLedger.findMany({ where: { refType: "WorkOrder", refId: id, type: "OUT" }, select: { materialId: true, qty: true } });
+  const outMoves = await prisma.movementLedger.findMany({ where: { refType: "WorkOrder", refId: id, type: "OUT" }, select: { materialId: true, qty: true } }); // bounded: per-WO scope
   let actualMaterialCents = 0;
   if (outMoves.length) {
-    const costs = Object.fromEntries((await prisma.material.findMany({ where: { id: { in: [...new Set(outMoves.map((m) => m.materialId))] } }, select: { id: true, costCents: true } })).map((m) => [m.id, m.costCents]));
+    const costs = Object.fromEntries((await prisma.material.findMany({ where: { id: { in: [...new Set(outMoves.map((m) => m.materialId))] } }, select: { id: true, costCents: true } })).map((m) => [m.id, m.costCents])); // bounded: per-WO scope
     actualMaterialCents = Math.round(outMoves.reduce((s, m) => s + m.qty * (costs[m.materialId] ?? 0), 0));
   }
 

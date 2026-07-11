@@ -39,7 +39,7 @@ export const POST = guarded(FEATURES.materialsReceive, async (req, { params, act
 
   // advance the PO state
   const lines = (po.lines as Line[]) ?? [];
-  const ins = await prisma.movementLedger.findMany({ where: { refType: "PO", refId: id, type: "IN" }, select: { materialId: true, qty: true } });
+  const ins = await prisma.movementLedger.findMany({ where: { refType: "PO", refId: id, type: "IN" }, select: { materialId: true, qty: true } }); // bounded: per-PO scope
   const received: Record<string, number> = {};
   for (const m of ins) received[m.materialId] = (received[m.materialId] ?? 0) + m.qty;
   const newState = poStateAfterReceive(lines, lines.map((l) => received[l.materialId] ?? 0));

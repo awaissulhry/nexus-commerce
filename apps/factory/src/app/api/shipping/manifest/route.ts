@@ -14,7 +14,7 @@ export const GET = guarded(PAGES.shipping, async () => {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
 
-  const shipments = await prisma.shipment.findMany({
+  const shipments = await prisma.shipment.findMany({ // bounded: day-sheet: today's shipments
     where: { createdAt: { gte: start }, state: { not: "CANCELLED" } },
     orderBy: { createdAt: "asc" },
     select: { service: true, trackingNumber: true, order: { select: { number: true, party: { select: { name: true } } } } },

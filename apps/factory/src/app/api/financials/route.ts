@@ -19,5 +19,9 @@ export const GET = guarded(PAGES.financials, async (req, { resolved }) => {
 
   const fins = await loadOrderFinancials(createdAt);
   const monthKey = new Date().toISOString().slice(0, 7);
-  return jsonStripped({ monthKey, tiles: tiles(fins, monthKey), orders: fins }, resolved);
+  // FS1 — tiles fold over EVERY order; the by-order table ships a bounded page
+  // (22.5 MB → <500 KB at 50k orders). FS3 adds paging UI; till then the count
+  // is surfaced so nothing is silently hidden.
+  const TAKE = 200;
+  return jsonStripped({ monthKey, tiles: tiles(fins, monthKey), orders: fins.slice(0, TAKE), ordersTotal: fins.length }, resolved);
 });

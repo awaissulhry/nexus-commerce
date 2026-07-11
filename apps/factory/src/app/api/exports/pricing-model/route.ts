@@ -17,12 +17,12 @@ const delta = (v: number, mode: string) => (mode === "ABSOLUTE" ? money(v) : `${
 export const GET = guarded(FEATURES.exportsRun, async (_req, { resolved }) => {
   const canCost = !!resolved && (resolved.isOwner || resolved.permissions.has(FIELDS.costsView));
   const [templates, lists] = await Promise.all([
-    prisma.productTemplate.findMany({
+    prisma.productTemplate.findMany({ // bounded: export: pricing model is config-sized
       where: { archivedAt: null },
       orderBy: { name: "asc" },
       include: { optionGroups: { orderBy: { sort: "asc" }, include: { options: { orderBy: { sort: "asc" } } } } },
     }),
-    prisma.priceList.findMany({ where: { kind: "PARTY_TIER" }, include: { entries: true } }),
+    prisma.priceList.findMany({ where: { kind: "PARTY_TIER" }, include: { entries: true } }), // bounded: export: pricing model is config-sized
   ]);
 
   // overrides keyed for quick lookup: `${listName}` columns

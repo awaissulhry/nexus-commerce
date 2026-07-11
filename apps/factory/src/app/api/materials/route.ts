@@ -18,7 +18,7 @@ const UNITS = ["HIDE", "SQM", "PIECE", "M"] as const;
 export const GET = guarded(PAGES.products, async (req: NextRequest, { resolved }) => {
   const includeArchived = req.nextUrl.searchParams.get("archived") === "1";
   const [materials, usage] = await Promise.all([
-    prisma.material.findMany({ where: includeArchived ? {} : { archivedAt: null }, orderBy: { name: "asc" } }),
+    prisma.material.findMany({ where: includeArchived ? {} : { archivedAt: null }, orderBy: { name: "asc" } }), // bounded: materials catalog is config-sized (hundreds)
     allMaterialUsage(),
   ]);
   const rows = materials.map((m) => ({ ...m, usedByTemplates: usage.get(m.id)?.size ?? 0 }));

@@ -66,7 +66,7 @@ async function gmailPoll() {
 async function inboxTick() {
   const now = new Date();
   try {
-    const woken = await prisma.conversation.findMany({
+    const woken = await prisma.conversation.findMany({ // bounded: due-scan: snoozeUntil<=now, FS1-indexed, result is only what's due
       where: { state: "SNOOZED", snoozeUntil: { lte: now } },
       select: { id: true, subject: true, assigneeId: true },
     });
@@ -87,7 +87,7 @@ async function inboxTick() {
       }
     }
 
-    const due = await prisma.conversation.findMany({
+    const due = await prisma.conversation.findMany({ // bounded: due-scan: followUpAt<=now, FS1-indexed, result is only what's due
       where: { followUpAt: { lte: now } },
       select: { id: true, subject: true, assigneeId: true },
     });

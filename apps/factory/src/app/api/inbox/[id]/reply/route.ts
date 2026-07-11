@@ -96,7 +96,7 @@ export const POST = guarded(FEATURES.inboxSend, async (req: NextRequest, { param
       labels: [],
     },
   });
-  await prisma.conversation.update({ where: { id }, data: { lastMessageAt: now } });
+  await prisma.conversation.update({ where: { id }, data: { lastMessageAt: now, lastMessageDirection: "OUTBOUND" } });
 
   void audit({
     actorId: actor!.id,

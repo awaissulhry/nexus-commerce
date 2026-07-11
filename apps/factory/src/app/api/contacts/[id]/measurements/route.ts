@@ -17,7 +17,7 @@ export const permission = { GET: PAGES.contacts, POST: FEATURES.contactsManage }
 
 export const GET = guarded(PAGES.contacts, async (_req, { params }) => {
   const { id } = await params;
-  const profiles = await prisma.measurementProfile.findMany({ where: { partyId: id }, orderBy: [{ garmentType: "asc" }, { version: "desc" }] });
+  const profiles = await prisma.measurementProfile.findMany({ where: { partyId: id }, orderBy: [{ garmentType: "asc" }, { version: "desc" }] }); // bounded: per-party measurement versions
   return NextResponse.json({ profiles });
 });
 

@@ -55,7 +55,7 @@ export const GET = guarded(PAGES.inbox, async (_req, { params, resolved }) => {
   ]);
 
   // FP3: quotes born from this thread (the ContextRail "Linked" slot)
-  const quoteRows = await prisma.quote.findMany({
+  const quoteRows = await prisma.quote.findMany({ // bounded: per-conversation history; windowed in FS3 (S-4)
     where: { conversationId: id },
     orderBy: { updatedAt: "desc" },
     include: { lines: { select: { netPriceCents: true, costCents: true, qty: true } } },

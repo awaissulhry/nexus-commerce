@@ -23,33 +23,45 @@ export const GET = guarded(PAGES.production, async (req: NextRequest, { actor, r
   const stageRow = await prisma.appSetting.findUnique({ where: { key: "production.stages" } });
   const pipeline = (((stageRow?.value as { stages?: string[] } | null)?.stages ?? DEFAULT_STAGES) as string[]).filter((s) => typeof s === "string" && s.trim());
 
-  const wos = await prisma.workOrder.findMany({
-    where: { state: { in: ["READY", "IN_PROGRESS", "BLOCKED"] } },
-    orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
-    include: {
-      order: { select: { number: true, promiseDateAt: true, party: { select: { name: true } } } },
-      stages: { include: { assignee: { select: { id: true, displayName: true } } } },
-    },
-  });
+  // FS1 — the board is bounded (S-6): highest-priority 300 active WOs render;
+  // the total count surfaces so nothing is silently hidden (the C-1 lesson).
+  const BOARD_CAP = 300;
+  const activeWhere = { state: { in: ["READY", "IN_PROGRESS", "BLOCKED"] as never[] } };
+  const [wos, activeTotal] = await Promise.all([
+    prisma.workOrder.findMany({
+      where: activeWhere,
+      orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
+      take: BOARD_CAP,
+      include: {
+        order: { select: { number: true, promiseDateAt: true, party: { select: { name: true } } } },
+        stages: { include: { assignee: { select: { id: true, displayName: true } } } },
+      },
+    }),
+    prisma.workOrder.count({ where: activeWhere }),
+  ]);
 
   // FP6 — material coverage: each WO's outstanding demand (RESERVE − RELEASE) vs
   // physical stock, greedily allocated in priority order (wos already priority-sorted).
+  // FS1 — both sides fold in SQL: demand via groupBy over the WO refs (≤ cap ids),
+  // stock via groupBy(materialId,type) bounded to the involved materials.
   const woIds = wos.map((w) => w.id);
-  const woMoves = woIds.length ? await prisma.movementLedger.findMany({ where: { refType: "WorkOrder", refId: { in: woIds }, type: { in: ["RESERVE", "RELEASE"] } }, select: { refId: true, materialId: true, type: true, qty: true } }) : [];
+  const demandSums = woIds.length
+    ? await prisma.movementLedger.groupBy({ by: ["refId", "materialId", "type"], where: { refType: "WorkOrder", refId: { in: woIds }, type: { in: ["RESERVE", "RELEASE"] } }, _sum: { qty: true } })
+    : [];
   const demandByWo: Record<string, Record<string, number>> = {};
-  for (const m of woMoves) { const d = (demandByWo[m.refId as string] ??= {}); d[m.materialId] = (d[m.materialId] ?? 0) + (m.type === "RESERVE" ? m.qty : -m.qty); }
+  for (const m of demandSums) { const d = (demandByWo[m.refId as string] ??= {}); d[m.materialId] = (d[m.materialId] ?? 0) + (m.type === "RESERVE" ? (m._sum.qty ?? 0) : -(m._sum.qty ?? 0)); }
   const cleanDemand = (d: Record<string, number>) => Object.fromEntries(Object.entries(d).filter(([, q]) => q > 0.0001));
-  const matIds = [...new Set(woMoves.map((m) => m.materialId))];
+  const matIds = [...new Set(demandSums.map((m) => m.materialId))];
   const stockByMat: Record<string, number> = {};
   if (matIds.length) {
-    const all = await prisma.movementLedger.findMany({ where: { materialId: { in: matIds } }, select: { materialId: true, type: true, qty: true } });
+    const sums = await prisma.movementLedger.groupBy({ by: ["materialId", "type"], where: { materialId: { in: matIds } }, _sum: { qty: true } });
     const grouped: Record<string, { type: string; qty: number }[]> = {};
-    for (const m of all) (grouped[m.materialId] ??= []).push({ type: m.type, qty: m.qty });
+    for (const s of sums) (grouped[s.materialId] ??= []).push({ type: s.type, qty: s._sum.qty ?? 0 });
     for (const [mat, ms] of Object.entries(grouped)) stockByMat[mat] = foldMovements(ms).inStock;
   }
   const coverage = allocateByPriority(stockByMat, wos.map((w) => ({ id: w.id, demand: cleanDemand(demandByWo[w.id] ?? {}) })));
   // map short material ids → names for the UI
-  const matNames = matIds.length ? Object.fromEntries((await prisma.material.findMany({ where: { id: { in: matIds } }, select: { id: true, name: true } })).map((m) => [m.id, m.name])) : {};
+  const matNames = matIds.length ? Object.fromEntries((await prisma.material.findMany({ where: { id: { in: matIds } }, select: { id: true, name: true } })).map((m) => [m.id, m.name])) : {}; // bounded: children of the ≤300 board WOs
 
   const now = Date.now();
   const cards = wos
@@ -80,7 +92,7 @@ export const GET = guarded(PAGES.production, async (req: NextRequest, { actor, r
       };
     });
 
-  const workers = await prisma.user.findMany({ where: { status: "active" }, orderBy: { displayName: "asc" }, select: { id: true, displayName: true } });
+  const workers = await prisma.user.findMany({ where: { status: "active" }, orderBy: { displayName: "asc" }, select: { id: true, displayName: true } }); // bounded: active users ≈ team size; paged picker lands in FS3 (S-16)
 
-  return jsonStripped({ pipeline, workOrders: cards, workers: workerView ? [] : workers, worker: !!workerView, nowIso: new Date(now).toISOString() }, resolved);
+  return jsonStripped({ pipeline, workOrders: cards, activeTotal, boardCap: BOARD_CAP, workers: workerView ? [] : workers, worker: !!workerView, nowIso: new Date(now).toISOString() }, resolved);
 });

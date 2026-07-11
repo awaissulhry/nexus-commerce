@@ -14,7 +14,7 @@ import { FEATURES, PAGES } from "@/lib/auth/permissions";
 export const permission = { GET: PAGES.products, POST: FEATURES.productsManage };
 
 export const GET = guarded(PAGES.products, async () => {
-  const certificates = await prisma.certificate.findMany({
+  const certificates = await prisma.certificate.findMany({ // bounded: cert registry is a small config table
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { coverage: true } } },
   });

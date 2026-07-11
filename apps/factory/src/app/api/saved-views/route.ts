@@ -15,7 +15,7 @@ export const permission = PAGES.analytics;
 
 export const GET = guarded(PAGES.analytics, async (req, { actor }) => {
   const page = new URL(req.url).searchParams.get("page") ?? "analytics";
-  const views = await prisma.savedView.findMany({ where: { page, userId: actor!.id }, orderBy: { createdAt: "asc" }, select: { id: true, name: true, config: true } });
+  const views = await prisma.savedView.findMany({ where: { page, userId: actor!.id }, orderBy: { createdAt: "asc" }, select: { id: true, name: true, config: true } }); // bounded: per-user saved views
   return NextResponse.json({ views });
 });
 

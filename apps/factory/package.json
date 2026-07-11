@@ -22,7 +22,8 @@
     "test": "vitest run",
     "check:no-touch": "node scripts/no-touch-check.mjs",
     "check:rbac": "tsx scripts/check-rbac-coverage.ts",
-    "check:ds-parity": "node scripts/ds-parity-check.mjs"
+    "check:ds-parity": "node scripts/ds-parity-check.mjs",
+    "check:query-bounds": "node scripts/check-query-bounds.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -198,6 +198,11 @@ export function ProductionClient() {
         })}
       </div>
       {data && data.workOrders.length === 0 && <div style={{ fontSize: 13, color: "var(--h10-text-3)", marginTop: 20, textAlign: "center" }}>Nothing in production yet — Start production on a confirmed order.</div>}
+      {data && (data.activeTotal ?? 0) > data.workOrders.length && (
+        <div style={{ fontSize: 12, color: "var(--h10-text-2)", marginTop: 12, textAlign: "center" }}>
+          Showing the {data.workOrders.length} highest-priority of {data.activeTotal} active work orders — raise a job&rsquo;s priority to surface it.
+        </div>
+      )}
       </>
       )}
 

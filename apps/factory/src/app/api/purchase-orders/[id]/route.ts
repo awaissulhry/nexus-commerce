@@ -19,10 +19,10 @@ async function detail(id: string) {
   const po = await prisma.purchaseOrder.findUnique({ where: { id }, include: { supplier: { select: { id: true, name: true } } } });
   if (!po) return null;
   const lines = (po.lines as Line[]) ?? [];
-  const ins = await prisma.movementLedger.findMany({ where: { refType: "PO", refId: id, type: "IN" }, select: { materialId: true, qty: true } });
+  const ins = await prisma.movementLedger.findMany({ where: { refType: "PO", refId: id, type: "IN" }, select: { materialId: true, qty: true } }); // bounded: per-PO scope
   const received: Record<string, number> = {};
   for (const m of ins) received[m.materialId] = (received[m.materialId] ?? 0) + m.qty;
-  const names = Object.fromEntries((await prisma.material.findMany({ where: { id: { in: lines.map((l) => l.materialId) } }, select: { id: true, name: true } })).map((m) => [m.id, m.name]));
+  const names = Object.fromEntries((await prisma.material.findMany({ where: { id: { in: lines.map((l) => l.materialId) } }, select: { id: true, name: true } })).map((m) => [m.id, m.name])); // bounded: per-PO scope
   return {
     purchaseOrder: {
       id: po.id, number: po.number, state: po.state, supplier: po.supplier, expectedAt: po.expectedAt, createdAt: po.createdAt,

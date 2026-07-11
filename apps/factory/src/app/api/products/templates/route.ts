@@ -14,7 +14,7 @@ export const permission = { GET: PAGES.products, POST: FEATURES.productsManage }
 
 export const GET = guarded(PAGES.products, async (req: NextRequest, { resolved }) => {
   const includeArchived = req.nextUrl.searchParams.get("archived") === "1";
-  const templates = await prisma.productTemplate.findMany({
+  const templates = await prisma.productTemplate.findMany({ // bounded: template catalog is config-sized
     where: includeArchived ? {} : { archivedAt: null },
     orderBy: { name: "asc" },
     include: {

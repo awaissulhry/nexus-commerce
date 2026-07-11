@@ -26,7 +26,7 @@ export const PATCH = guarded(FEATURES.productsManage, async (req, { params, acto
 export const DELETE = guarded(FEATURES.productsManage, async (_req, { params, actor }) => {
   const { gid } = await params;
   // clean constraints referencing this group's options (option ids are plain strings, not FKs)
-  const optionIds = (await prisma.option.findMany({ where: { groupId: gid }, select: { id: true } })).map((o) => o.id);
+  const optionIds = (await prisma.option.findMany({ where: { groupId: gid }, select: { id: true } })).map((o) => o.id); // bounded: per-group options
   if (optionIds.length) {
     await prisma.optionConstraint.deleteMany({
       where: { OR: [{ ifOptionId: { in: optionIds } }, { thenOptionId: { in: optionIds } }] },
