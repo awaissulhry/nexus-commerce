@@ -16,7 +16,7 @@ Started 2026-07-11 at the Owner's direction: *"work page by page to make sure it
 
 | Page | Code | Status | Proposal | Notes |
 |---|---|---|---|---|
-| Quotes | **EPQ** | **CLAIMED 2026-07-11 — proposal APPROVED ("proceed with all of it"); EPQ.1 building** | `EPQ-PROPOSAL.md` | Phases EPQ.1→.6; D-1..D-5 per recommendations (Stripe env-gated with bank-transfer fallback until account exists) |
+| Quotes | **EPQ** | **CLAIMED 2026-07-11 — EPQ.1 SHIPPED (report `EPQ1-REPORT.md`); EPQ.2 next** | `EPQ-PROPOSAL.md` + `EPQ-UI-INVENTORY.md` | Phases EPQ.1→.6; D-1..D-5 per recommendations (Stripe env-gated with bank-transfer fallback until account exists) |
 | Inbox | EPI | **CLAIMED 2026-07-11 (this session) — PROPOSAL DELIVERED, awaiting Owner gate; UI inventory in flight** | `EPI-PROPOSAL.md` ✅ (incl. §5 design dossier) + `EPI-UI-INVENTORY.md` (in flight) | 6 phases: perfection sweep → files/previews/lightbox → query-backed views+routing → composer/send pipeline (undo/scheduled/templates) → triage/collision/read-state → rail Orders card + FC seam; FS3 call-site adoption accepted when components land |
 | Orders | EPO | **CLAIMED 2026-07-11 (this session) — research in flight** | `EPO-PROPOSAL.md` (pending) | FS1 already fixed kanban truncation; scope incl. one-timeline depth, order↔financials linkage, brand/party-scoped views, cross-page hop-links (thread/quote/WO/shipment/invoice) |
 | Production | EPP | open | — | |
@@ -32,8 +32,8 @@ Started 2026-07-11 at the Owner's direction: *"work page by page to make sure it
 
 | Substrate | Owner workstream | Status |
 |---|---|---|
-| Real-time/SSE fan-out (O(1) poller, targeted events) | **FS2** | **spec APPROVED 2026-07-11 — building (EPQ session, main tree)** |
-| Virtualized DataGrid, windowed lists, paged/searchable comboboxes, @mention autocomplete | **FS3** | **spec APPROVED 2026-07-11 — components building; call-site adoption on CLAIMED pages (EPI inbox, EPO orders) is handed to those sessions once components land** |
+| Real-time/SSE fan-out (O(1) poller, targeted events) | **FS2** | **SHIPPED 2026-07-11 (`FS2-REPORT.md`): 50-client proof PASS, gap-free resume, scoped bells; `import.finished` subscriber = EP handoff** |
+| Virtualized DataGrid, windowed lists, paged/searchable comboboxes, @mention autocomplete | **FS3** | **components SHIPPED 2026-07-11 (`src/components/`: VirtualDataGrid, WindowedList, AsyncCombobox, MentionTextarea, PaneHandle/useResizablePanes) + adopted on unclaimed pages. PENDING ADOPTIONS by page owners — EPI: ConversationList/ThreadPane windowing, composer MentionTextarea, InboxClient pane hook, ContextRail picker; EPO: orders grid + party filter; EPQ: quotes grid + party picker (EPQ.3); EPF: financials grids ×3** |
 | Write transactions, session-cache, optimistic concurrency, login rate-limit | **FS4** | queued |
 | FTS search, attachment/PDF streaming, snapshot & archival | **FS5** | queued |
 | Per-order internal chat (Order Spaces), system-message feed, presence/read receipts | **FC1–FC6** | approved, after FS2 |
