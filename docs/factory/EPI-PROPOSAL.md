@@ -82,7 +82,7 @@ Also: no keyboard resize on the pane handles (APG window-splitter pattern absent
 | In-thread find | nobody does it well | **BEAT** | Client-side find across the loaded thread, auto-expand + scroll to hit |
 | Thread export / print | nobody exports whole threads | **BEAT** | `@media print` view + "thread → PDF / zip of .eml" via `format=raw` |
 | Translation IT↔EN | Gmail banner (not in API) | **OWNER DECISION** | DeepL API Free (500k chars/mo) — needs a key; banner + per-contact remembered preference |
-| Resizable panes | VS Code + W3C APG | **ADOPT** | Extend our proven `PaneHandle`: arrow-key resize + Enter collapse (APG separator), drag-past-min snap-close, persist collapsed state. No new dep (react-resizable-panels noted as fallback; v4 renamed its whole API — pin if ever adopted) |
+| Resizable panes | VS Code + W3C APG | **ADOPT** | FS3 shipped the shared `PaneHandle`/`useResizablePanes` substrate (2026-07-11) — EPI.1 adopts it at the inbox call-site and completes the APG grammar: arrow-key resize + Enter collapse, drag-past-min snap-close, persisted collapsed state. No new dep (react-resizable-panels evaluated and passed over; v4 renamed its whole API — pin if ever adopted) |
 | SLA timers | Intercom countdown chips | **DEFER** | FP1's IGNORE stands for now; views + follow-ups cover the need at this team size; revisit post-EPI |
 
 ---
@@ -91,8 +91,8 @@ Also: no keyboard resize on the pane handles (APG window-splitter pattern absent
 
 | Owned elsewhere | Owner | EPI's relationship |
 |---|---|---|
-| O(1) SSE fan-out, targeted events, presence transport | **FS2** | Live "teammate viewing/replying" indicators land only when FS2 ships; EPI ships the send-time conflict pause now (no transport needed) |
-| Windowed thread (S-4), virtualized lists, @mention autocomplete combobox | **FS3** | EPI does not window anything; mention autocomplete arrives when FS3 lands (FC3 consumes the same) |
+| O(1) SSE fan-out, targeted events, presence transport | **FS2** | **SHIPPED 2026-07-11** — live "teammate viewing/replying" indicators are unblocked for EPI.5; EPI still ships the send-time conflict pause as the fail-safe layer |
+| Windowed thread (S-4), virtualized lists, @mention autocomplete combobox | **FS3** | **components SHIPPED 2026-07-11** — call-site adoption handed to EPI per the registry: ConversationList/ThreadPane windowing, composer `MentionTextarea`, `useResizablePanes` in InboxClient, rail `AsyncCombobox`; folded into EPI.1/EPI.5 specs |
 | FTS search (S-13), streamed attachments (S-14), archival | **FS5** | Views/rules are query-backed on the existing WHERE builder — FS5 upgrading LIKE→FTS is transparent to them; preview route reuses today's cache mechanics, FS5 makes it streaming |
 | Order Spaces chat, system feed, presence/read receipts, reactions, DMs | **FC1–FC6** | The inbox stays the external Gmail channel + conversation comments (per D4: customers never in chat). EPI.6 defines the seam: order-linked threads expose "Open order space"; email events can render as cards in the space (FC5 ingests, EPI provides deep links). No chat UI is built here |
 | Notifications single write path | F1 (live) | consumed as-is |
@@ -105,7 +105,7 @@ Nav law: everything ships INSIDE `/inbox` (header sections, drawers, lightbox ov
 
 | Phase | Theme | Headline scope | Migration |
 |---|---|---|---|
-| **EPI.1** | Perfection sweep | All ten §1c defects · APG keyboard pane resize + snap-collapse + composer resize · <1280px rail collapse | none |
+| **EPI.1** | Perfection sweep | All ten §1c defects **+ the `EPI-UI-INVENTORY.md` §6 gaps ledger (17 items — incl. the stranded-SNOOZED bug, worker wakes invisible to open tabs/timeline, silent `e`/`s` keyboard failures, unreachable bulk-assign & link-existing-party wiring, filter-blind tab counts, filters not URL-persisted, client-side permission gating on rail controls)** · pane keyboard resize + snap-collapse via the FS3 `useResizablePanes`/`PaneHandle` substrate (shipped 2026-07-11) + composer resize · <1280px rail collapse | none |
 | **EPI.2** | Files & previews | Inline preview route (image/PDF allowlist) · lightbox · thumbnails · `cid:` fix · rail Files panel · FileDropzone + drag/paste attach · comment attachments · forwarded-dedupe | none (maybe nullable dim cache) |
 | **EPI.3** | Views & routing | `InboxView` header sections (query-backed = auto + retroactive) · builder-on-search with live preview · create-from-message · pin/exclude override + route-prompt · ordered ingest rules with dry-run/Run-now | `InboxView`, `InboxViewOverride`, `InboxRule` |
 | **EPI.4** | Composer & send pipeline | Templates (`#`, `{{party.name}}`, placeholder guard, IT/EN pairs) · OutboundQueue → undo send + scheduled send + Send & Snooze · CC/BCC/subject · new-thread compose · if-no-reply follow-ups · OOO detection · spam surfacing | `MessageTemplate`, `OutboundQueue`, follow-up mode col |

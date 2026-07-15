@@ -17,7 +17,7 @@ Started 2026-07-11 at the Owner's direction: *"work page by page to make sure it
 | Page | Code | Status | Proposal | Notes |
 |---|---|---|---|---|
 | Quotes | **EPQ** | **CLAIMED 2026-07-11 — EPQ.1 SHIPPED (report `EPQ1-REPORT.md`); EPQ.2 next** | `EPQ-PROPOSAL.md` + `EPQ-UI-INVENTORY.md` | Phases EPQ.1→.6; D-1..D-5 per recommendations (Stripe env-gated with bank-transfer fallback until account exists) |
-| Inbox | EPI | **CLAIMED 2026-07-11 (this session) — PROPOSAL DELIVERED, awaiting Owner gate; UI inventory in flight** | `EPI-PROPOSAL.md` ✅ (incl. §5 design dossier) + `EPI-UI-INVENTORY.md` (in flight) | 6 phases: perfection sweep → files/previews/lightbox → query-backed views+routing → composer/send pipeline (undo/scheduled/templates) → triage/collision/read-state → rail Orders card + FC seam; FS3 call-site adoption accepted when components land |
+| Inbox | EPI | **CLAIMED 2026-07-11 (this session) — PROPOSAL + UI INVENTORY delivered, awaiting Owner gate** | `EPI-PROPOSAL.md` ✅ (incl. §5 design dossier) + `EPI-UI-INVENTORY.md` ✅ (17-gap ledger, 2 live bugs) | 6 phases: perfection sweep (incl. gaps ledger) → files/previews/lightbox → query-backed views+routing → composer/send pipeline (undo/scheduled/templates) → triage/collision/read-state → rail Orders card + FC seam; FS2/FS3 shipped — EPI adopts pane hook + windowing + MentionTextarea at call-sites |
 | Orders | EPO | **CLAIMED 2026-07-11 (this session) — research in flight** | `EPO-PROPOSAL.md` (pending) | FS1 already fixed kanban truncation; scope incl. one-timeline depth, order↔financials linkage, brand/party-scoped views, cross-page hop-links (thread/quote/WO/shipment/invoice) |
 | Production | EPP | open | — | |
 | Materials | EPM | open | — | |
