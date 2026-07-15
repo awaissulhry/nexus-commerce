@@ -18,13 +18,13 @@ Started 2026-07-11 at the Owner's direction: *"work page by page to make sure it
 |---|---|---|---|---|
 | Quotes | **EPQ** | **CLAIMED 2026-07-11 — EPQ.1 SHIPPED (report `EPQ1-REPORT.md`); EPQ.2 next** | `EPQ-PROPOSAL.md` + `EPQ-UI-INVENTORY.md` | Phases EPQ.1→.6; D-1..D-5 per recommendations (Stripe env-gated with bank-transfer fallback until account exists) |
 | Inbox | EPI | **CLAIMED 2026-07-11 (this session) — PROPOSAL + UI INVENTORY delivered, awaiting Owner gate** | `EPI-PROPOSAL.md` ✅ (incl. §5 design dossier) + `EPI-UI-INVENTORY.md` ✅ (17-gap ledger, 2 live bugs) | 6 phases: perfection sweep (incl. gaps ledger) → files/previews/lightbox → query-backed views+routing → composer/send pipeline (undo/scheduled/templates) → triage/collision/read-state → rail Orders card + FC seam; FS2/FS3 shipped — EPI adopts pane hook + windowing + MentionTextarea at call-sites |
-| Orders | EPO | **CLAIMED 2026-07-11 (this session) — research in flight** | `EPO-PROPOSAL.md` (pending) | FS1 already fixed kanban truncation; scope incl. one-timeline depth, order↔financials linkage, brand/party-scoped views, cross-page hop-links (thread/quote/WO/shipment/invoice) |
+| Orders | EPO | **CLAIMED 2026-07-11 (this session) — PROPOSAL DELIVERED 2026-07-16, awaiting Owner gate** | `EPO-PROPOSAL.md` ✅ + `EPO-UI-INVENTORY.md` ✅ | 7 phases (integrity → money strip → connected order/hop-links → promise+exception cockpit → amendments/partials/returns → zero-comm-gap → workbench/FS3); D-1..D-6 pending; cross-page touches split per D-1 (search route+production reader = EPO; financials reader = EPF; ConvertBar backlink = EPQ; inbox order card = EPI ph.6); FS3 orders adoptions land in EPO.7 |
 | Production | EPP | open | — | |
 | Materials | EPM | open | — | |
 | Products & Pricing | EPD | open | — | |
 | Contacts | EPC | open | — | |
 | Shipping | EPS | open | — | |
-| Financials | EPF | **CLAIMED 2026-07-11 (this session) — research in flight** | `EPF-PROPOSAL.md` (pending) | scope incl. Owner's AWA 2026 workbook automation (workbook is a LOCAL-ONLY source — structure may be described in docs, figures never committed), brand-adaptive dynamic money views, invoice/AR depth (credit notes, dunning, reconciliation), consumes EPO order↔financials hop-links + EPQ approval-gate pattern (never re-implements) |
+| Financials | EPF | **CLAIMED 2026-07-11 (this session) — PROPOSAL + UI INVENTORY delivered 2026-07-16, awaiting Owner gate** | `EPF-PROPOSAL.md` ✅ (7 phases, D-1…D-12, verified defect register incl. 3 hand-checked P0 money bugs) + `EPF-UI-INVENTORY.md` ✅ | Workbook decoded structure-only (LOCAL-ONLY source — figures never committed): dual-entry party reconciliation is the killer feature (EPF.3). P0s live on prod: export VAT on quoted-not-invoiced, mark-paid double-counts deposits, INV- numbering not per-year. Consumes EPQ gate pattern + tax/SDI fields, EPO hop-links, FS2 SSE, FS3 grids (×3 adoption named); D-8 price-list effective-dating + D-9 Order fields need registry grants if approved |
 | Analytics | EPA | open | — | |
 | Settings & Team | EPT | open | — | |
 
