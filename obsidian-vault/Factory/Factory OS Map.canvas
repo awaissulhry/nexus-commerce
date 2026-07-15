@@ -1,0 +1,40 @@
+{
+	"nodes": [
+		{"id":"legend","type":"text","x":-40,"y":-980,"width":980,"height":280,"text":"# Factory OS — the wiring map\n\n**Solid arrows = the golden flow** (email → money → floor → door → books). Vertical arrows = who feeds/consumes whom.\n\n**Colors:** 🟢 green = actively building · 🟡 yellow = proposal awaiting Owner gate · 🟣 purple = protected data source · no color = open/unclaimed.\n\nCanonical truth: `docs/factory/` (PLAYBOOK → ENTERPRISE-PROGRAM). Status board: [[EP Status Board.canvas]]"},
+		{"id":"prog","type":"file","x":1000,"y":-980,"width":460,"height":280,"file":"Factory/F06 - Enterprise Program (EP).md"},
+		{"id":"gates","type":"file","x":1520,"y":-980,"width":460,"height":280,"file":"Factory/F09 - Roadmap & Owner Gates.md"},
+		{"id":"sessions","type":"file","x":2040,"y":-980,"width":460,"height":280,"file":"Factory/F07 - Sessions & Coordination.md"},
+		{"id":"contacts","type":"file","x":-40,"y":-520,"width":440,"height":300,"file":"Factory/F16 - Contacts (EPC).md"},
+		{"id":"products","type":"file","x":520,"y":-520,"width":440,"height":300,"file":"Factory/F15 - Products & Pricing (EPD).md"},
+		{"id":"chat","type":"file","x":1640,"y":-520,"width":440,"height":300,"file":"Factory/F21 - Chat & Order Spaces (FC).md"},
+		{"id":"inbox","type":"file","x":-40,"y":0,"width":440,"height":300,"color":"3","file":"Factory/F10 - Inbox (EPI).md"},
+		{"id":"quotes","type":"file","x":520,"y":0,"width":440,"height":300,"color":"4","file":"Factory/F11 - Quotes (EPQ).md"},
+		{"id":"orders","type":"file","x":1080,"y":0,"width":440,"height":300,"color":"3","file":"Factory/F12 - Orders (EPO).md"},
+		{"id":"production","type":"file","x":1640,"y":0,"width":440,"height":300,"file":"Factory/F13 - Production (EPP).md"},
+		{"id":"shipping","type":"file","x":2200,"y":0,"width":440,"height":300,"file":"Factory/F17 - Shipping (EPS).md"},
+		{"id":"financials","type":"file","x":2760,"y":0,"width":440,"height":300,"color":"3","file":"Factory/F18 - Financials (EPF).md"},
+		{"id":"analytics","type":"file","x":3320,"y":0,"width":440,"height":300,"file":"Factory/F19 - Analytics (EPA).md"},
+		{"id":"materials","type":"file","x":1640,"y":520,"width":440,"height":300,"file":"Factory/F14 - Materials (EPM).md"},
+		{"id":"workbook","type":"file","x":2760,"y":520,"width":440,"height":300,"color":"6","file":"Factory/F26 - AWA Workbook (structure).md"},
+		{"id":"settings","type":"file","x":3320,"y":520,"width":440,"height":300,"file":"Factory/F20 - Settings & Team (EPT).md"},
+		{"id":"substrate","type":"file","x":-40,"y":520,"width":1000,"height":300,"file":"Factory/F22 - Substrate FS Series.md"}
+	],
+	"edges": [
+		{"id":"e01","fromNode":"contacts","fromSide":"bottom","toNode":"inbox","toSide":"top","label":"sender auto-match (PartyEmail)"},
+		{"id":"e02","fromNode":"contacts","fromSide":"right","toNode":"quotes","toSide":"top","label":"party price list (FD7) + deposit default"},
+		{"id":"e03","fromNode":"products","fromSide":"bottom","toNode":"quotes","toSide":"top","label":"configurator + pricing engine"},
+		{"id":"e04","fromNode":"inbox","fromSide":"right","toNode":"quotes","toSide":"left","label":"thread → quote"},
+		{"id":"e05","fromNode":"quotes","fromSide":"right","toNode":"orders","toSide":"left","label":"accept → convert (bornFromQuoteId)"},
+		{"id":"e06","fromNode":"orders","fromSide":"right","toNode":"production","toSide":"left","label":"start production → WOs (deposit gate FD13)"},
+		{"id":"e07","fromNode":"production","fromSide":"bottom","toNode":"materials","toSide":"top","label":"RESERVE → consume (immutable ledger)"},
+		{"id":"e08","fromNode":"production","fromSide":"right","toNode":"shipping","toSide":"left","label":"PACKING done → READY (cert gate FD14)"},
+		{"id":"e09","fromNode":"shipping","fromSide":"top","toNode":"inbox","toSide":"top","label":"tracking shared into the Gmail thread"},
+		{"id":"e10","fromNode":"orders","fromSide":"bottom","toNode":"financials","toSide":"bottom","label":"money node ↔ hop-links (EPO ↔ EPF)"},
+		{"id":"e11","fromNode":"financials","fromSide":"right","toNode":"analytics","toSide":"left","label":"party/period folds → margin panels"},
+		{"id":"e12","fromNode":"chat","fromSide":"bottom","toNode":"orders","toSide":"top","label":"order space per order (EPO.6 tab host)"},
+		{"id":"e13","fromNode":"workbook","fromSide":"top","toNode":"financials","toSide":"bottom","label":"🔒 EPF.3 party ledger + reconciliation"},
+		{"id":"e14","fromNode":"substrate","fromSide":"top","toNode":"inbox","toSide":"bottom","label":"FS2 SSE · FS3 windowing (every page adopts)"},
+		{"id":"e15","fromNode":"substrate","fromSide":"right","toNode":"materials","toSide":"left","label":"FS0 harness + query-bounds fence (every gate)"},
+		{"id":"e16","fromNode":"quotes","fromSide":"bottom","toNode":"substrate","toSide":"top","label":"defines approval-gate + tax/SDI patterns"}
+	]
+}

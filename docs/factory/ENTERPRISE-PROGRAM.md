@@ -11,6 +11,7 @@ Started 2026-07-11 at the Owner's direction: *"work page by page to make sure it
 4. **Shared substrate is owned by workstreams, not pages** (table below). A page proposal may DEPEND on substrate; it may not BUILD it.
 5. **Navigation law:** the 11-page IA (F0-IA.md) is fixed; new surfaces live INSIDE their page (tabs/drawers/sub-routes like `/quotes/...`). Adding a top-level nav item requires Owner sign-off recorded here. **Signed off: `/chat` (12th item) — approved by the Owner via FS-FC-PROPOSAL, 2026-07-11 ("proceed with your recommendation"); built in FC2.**
 6. **Design law:** DS-only UI (F0-DESIGN-BRIDGE.md); resizable panes + windowed lists are the standing expectations for any new heavy surface.
+7. **Shared visual map (Obsidian, added 2026-07-16 at the Owner's direction):** `obsidian-vault/Factory/` — `F00 - Factory OS MOC` hub, one note per page/substrate, `Factory OS Map.canvas` (wiring) + `EP Status Board.canvas` (status columns). When your page's registry row changes, update YOUR page note + move your card on the status board in the same commit (`git add obsidian-vault/Factory && git commit --only obsidian-vault/Factory --only <your docs>`). The vault is a MAP for the Owner; this file and `docs/factory/` remain the canon and win on any conflict. The AWA workbook privacy rule applies in the vault too: structure only, never figures.
 
 ## Page registry (EP series codes)
 

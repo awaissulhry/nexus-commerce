@@ -1,0 +1,26 @@
+{
+	"nodes": [
+		{"id":"title","type":"text","x":0,"y":-360,"width":2240,"height":140,"text":"# EP Status Board — snapshot 2026-07-16\nSource of truth: `docs/factory/ENTERPRISE-PROGRAM.md` (registry). **Any session that changes its page's status moves its card here and updates [[F06 - Enterprise Program (EP)]].** Gates awaiting the Owner: [[F09 - Roadmap & Owner Gates]]."},
+		{"id":"h1","type":"text","x":0,"y":-160,"width":480,"height":100,"text":"## ⚪ OPEN — unclaimed\nNext session: read PLAYBOOK → claim row → research standard"},
+		{"id":"h2","type":"text","x":560,"y":-160,"width":480,"height":100,"color":"3","text":"## 🟡 AWAITING OWNER GATE\nProposal + UI inventory delivered"},
+		{"id":"h3","type":"text","x":1120,"y":-160,"width":480,"height":100,"color":"4","text":"## 🔨 BUILDING / NEXT UP\nApproved and moving"},
+		{"id":"h4","type":"text","x":1680,"y":-160,"width":480,"height":100,"color":"5","text":"## ✅ SHIPPED\nBase + substrate"},
+		{"id":"o1","type":"file","x":0,"y":0,"width":480,"height":300,"file":"Factory/F13 - Production (EPP).md"},
+		{"id":"o2","type":"file","x":0,"y":340,"width":480,"height":300,"file":"Factory/F14 - Materials (EPM).md"},
+		{"id":"o3","type":"file","x":0,"y":680,"width":480,"height":300,"file":"Factory/F15 - Products & Pricing (EPD).md"},
+		{"id":"o4","type":"file","x":0,"y":1020,"width":480,"height":300,"file":"Factory/F16 - Contacts (EPC).md"},
+		{"id":"o5","type":"file","x":0,"y":1360,"width":480,"height":300,"file":"Factory/F17 - Shipping (EPS).md"},
+		{"id":"o6","type":"file","x":0,"y":1700,"width":480,"height":300,"file":"Factory/F19 - Analytics (EPA).md"},
+		{"id":"o7","type":"file","x":0,"y":2040,"width":480,"height":300,"file":"Factory/F20 - Settings & Team (EPT).md"},
+		{"id":"g1","type":"file","x":560,"y":0,"width":480,"height":300,"color":"3","file":"Factory/F10 - Inbox (EPI).md"},
+		{"id":"g2","type":"file","x":560,"y":340,"width":480,"height":300,"color":"3","file":"Factory/F12 - Orders (EPO).md"},
+		{"id":"g3","type":"file","x":560,"y":680,"width":480,"height":300,"color":"3","file":"Factory/F18 - Financials (EPF).md"},
+		{"id":"g4","type":"text","x":560,"y":1020,"width":480,"height":300,"color":"3","text":"### Also awaiting the Owner\n- FP11 gate steps: flip RBAC `enforce` on :3100 · settle WhatsApp (FD5)\n- FD13 deposit defaults (% + bypass segment)\n- Sendcloud live probe: connect + one €0 label (FD6)\n- ⚠ EPF compliance facts → commercialista before EPF.7"},
+		{"id":"b1","type":"file","x":1120,"y":0,"width":480,"height":300,"color":"4","file":"Factory/F11 - Quotes (EPQ).md"},
+		{"id":"b2","type":"file","x":1120,"y":340,"width":480,"height":300,"file":"Factory/F21 - Chat & Order Spaces (FC).md"},
+		{"id":"b3","type":"text","x":1120,"y":680,"width":480,"height":220,"text":"### In-page substrate adoptions (owned by page sessions)\n- EPI: windowing + panes + MentionTextarea\n- EPO: orders grid (EPO.7)\n- EPQ: matrix pickers (EPQ.3)\n- EPF: financials grids ×3 (EPF.2)"},
+		{"id":"s1","type":"file","x":1680,"y":0,"width":480,"height":300,"color":"5","file":"Factory/F22 - Substrate FS Series.md"},
+		{"id":"s2","type":"text","x":1680,"y":340,"width":480,"height":300,"color":"5","text":"### Shipped history\n- **FP1–FP11**: all 11 pages, golden flow closed end-to-end (2026-07-06)\n- **FS0+FS1**: harness + query hygiene (10-30× cliffs fixed)\n- **FS2**: SSE fan-out, 50-client proof PASS (2026-07-11)\n- **FS3**: virtualization toolkit + unclaimed-page adoption (2026-07-11)\n- **EPQ.1**: quote lifecycle closed & audited (2026-07-11)"}
+	],
+	"edges": []
+}

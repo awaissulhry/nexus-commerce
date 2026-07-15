@@ -49,6 +49,10 @@
 - [[26 - Shared Packages]]
 - [[27 - Bidding Engine Microservice]]
 
+## Sibling Product — Factory OS
+
+- [[F00 - Factory OS MOC]] — Nexus **Factory OS**: the factory-side platform (`apps/factory`, separate app + SQLite DB, same monorepo). Runs the leather/moto-apparel factory end-to-end: Gmail → quotes → orders → production → shipping → financials. Currently in the Enterprise Program hardening era (see [[F06 - Enterprise Program (EP)]] and `Factory OS Map.canvas`).
+
 ---
 
 ## Sync Setup
