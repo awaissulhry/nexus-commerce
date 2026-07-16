@@ -14155,3 +14155,25 @@ model SharedListingMembership {
   @@index([sku, marketplace])
   @@index([productId])
 }
+
+// ── ED.1 (eBay dynamic descriptions) ─────────────────────────────────────────
+// A reusable HTML theme for eBay listing descriptions. The flat file's
+// per-market description stays the operator's BODY copy; at push time the
+// resolved theme wraps it (tokens: {{title}} {{body}} {{gallery}}
+// {{specs_table}} {{policies}} …) and the rendered HTML is what reaches eBay.
+// Assignment lives on ChannelListing.platformAttributes.descriptionThemeId
+// per market row ('none' opts a listing out of the default theme).
+model EbayDescriptionTheme {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  notes     String?
+  html      String   // theme HTML with {{tokens}}; sanitized at render
+  isDefault Boolean  @default(false)
+  active    Boolean  @default(true)
+  builtIn   Boolean  @default(false) // seeded starter — editable, not deletable
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isDefault, active])
+}

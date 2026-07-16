@@ -104,6 +104,7 @@ export function buildSharedListingInput(
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { addFixedPriceItem } from './ebay-trading-api.service.js'
+import { renderListingDescriptionSafe } from './ebay-description-theme.service.js'
 
 export interface SharedListingCtx {
   oauthToken: string
@@ -142,6 +143,21 @@ export async function createSharedListing(
     }
 
     const input = buildSharedListingInput(parentRow, variantRows, market, ctx.capQty)
+
+    // ED.2 — dynamic description: wrap the body in this listing's assigned theme
+    // (shared-SKU listings are per-parent, so each gets its own render). Inert
+    // without a theme; render errors fall back to the raw body.
+    const themeProductId = str(parentRow._productId) || str(variantRows[0]?._productId)
+    if (themeProductId) {
+      const themed = await renderListingDescriptionSafe(prisma, {
+        productId: themeProductId,
+        marketplace: market,
+        mode: 'group',
+        body: input.description,
+        title: input.title,
+      })
+      input.description = themed.html
+    }
 
     // I4 — reject BEFORE the eBay push (mirrors the single-SKU path's price>0 guard) so a
     // 0/undefined-price listing is never created and no Decimal(0) membership is persisted.

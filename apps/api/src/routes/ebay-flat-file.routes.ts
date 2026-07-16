@@ -40,6 +40,7 @@ import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, toListin
 import { parseThemeAxes } from '../services/ebay-theme-axes.js';
 import { pushSharedListings, type SharedListingResult } from '../services/ebay-shared-listing-push.service.js';
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot, buildBestOfferTerms, resolveQuantityLimitPerBuyer, resolvePerMarketContent } from '../services/ebay-variation-push.service.js';
+import { renderListingDescriptionSafe } from '../services/ebay-description-theme.service.js';
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
 import { publishOrderEvent } from '../services/order-events.service.js';
 import { renderExport } from '../services/export/renderers.js';
@@ -1276,6 +1277,23 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             subtitle: parentRowForKey.subtitle as string | undefined,
           });
 
+          // ED.2 — dynamic description for the FAMILY: a variation listing carries
+          // ONE description at the group level, so the theme renders per-group
+          // (colour-sectioned) galleries into it. Inert without a theme; render
+          // errors fall back to the raw body — never blocks a push.
+          const themedFamily = await renderListingDescriptionSafe(prisma, {
+            productId: String(parentRowForKey._productId ?? ''),
+            marketplace: mp,
+            mode: 'group',
+            body: parentContent.description ?? '',
+            title: parentContent.title ?? String(parentRowForKey.title ?? ''),
+            subtitle: parentContent.subtitle,
+          })
+          if (themedFamily.warnings.length > 0) {
+            request.log.info({ family: resolvedGroupKey, mp, warnings: themedFamily.warnings }, 'ebay-push description-theme warnings')
+          }
+          const themedParentContent = { ...parentContent, description: themedFamily.html }
+
           const groupResults = await pushVariationGroup(
             resolvedGroupKey,
             familyRows,
@@ -1290,7 +1308,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             undefined, // pictureAxisOverride
             undefined, // imageOverrideBySku
             undefined, // groupImageOverride
-            { warningsSink: axisWarnings, parentContent }, // EFX D7 warnings + P9e per-market parent content
+            { warningsSink: axisWarnings, parentContent: themedParentContent }, // EFX D7 warnings + P9e per-market parent content (ED.2: theme-rendered)
           );
           perRowResults.push(...groupResults);
           continue;
@@ -1516,12 +1534,28 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               continue
             }
 
+            // ED.2 — dynamic description: wrap this market's body in its assigned
+            // theme (auto gallery/specs/policy blocks). Inert without a theme;
+            // any render error falls back to the raw body — never blocks a push.
+            const themedSingle = await renderListingDescriptionSafe(prisma, {
+              productId: String(row._productId ?? ''),
+              marketplace: mp,
+              mode: 'single',
+              sku,
+              body: marketContent.description ?? '',
+              title: marketContent.title ?? String(row.title ?? ''),
+              subtitle: marketContent.subtitle,
+            })
+            if (themedSingle.warnings.length > 0) {
+              request.log.info({ sku, mp, warnings: themedSingle.warnings }, 'ebay-push description-theme warnings')
+            }
+
             const offerBody: Record<string, unknown> = {
               sku,
               marketplaceId,
               format: 'FIXED_PRICE',
               // EFX P9e — this market's own description + subtitle (falls back to row).
-              listingDescription: marketContent.description ?? '',
+              listingDescription: themedSingle.html,
               ...(marketContent.subtitle ? { subtitle: marketContent.subtitle } : {}),
               categoryId,
               pricingSummary: { price: { value: price.toFixed(2), currency } },
