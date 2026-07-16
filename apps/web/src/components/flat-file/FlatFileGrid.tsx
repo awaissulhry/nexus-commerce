@@ -1005,12 +1005,16 @@ export default function FlatFileGrid({
   })
   const resizeDragRef = useRef<{ type: 'col' | 'row'; colId?: string; startX: number; startY: number; startVal: number } | null>(null)
 
-  // B4 — sticky COLUMN headers. The page's real scroller is the app shell's
-  // <main>, which both the grid toolbar <header> (sticky top-0 z-30) and the
-  // <thead> (sticky z-20) live in — so a top-0 thead pinned BEHIND the ~178px
-  // toolbar and looked "not sticky". The thead's sticky top must equal the
-  // toolbar's live height (it changes when the bars wrap), measured here.
+  // B4 — sticky COLUMN headers, take 2. A sticky thead binds to its NEAREST
+  // overflow ancestor — the grid's own `overflow-auto` wrapper — but that
+  // wrapper never actually scrolled (the min-h-screen root grows and the app
+  // shell's <main> scrolls instead), so sticky never engaged and an offset
+  // against <main> couldn't help either. Fix: bound the wrapper's height to
+  // the viewport (measured from its live top; re-measured when the toolbar
+  // wraps or the window resizes) so IT becomes the real scroller — then the
+  // plain `sticky top-0` thead pins directly under the toolbar.
   const stickyHeaderRef = useRef<HTMLElement>(null)
+  const scrollWrapRef = useRef<HTMLDivElement>(null)
   const [stickyHeaderH, setStickyHeaderH] = useState(0)
   useEffect(() => {
     const el = stickyHeaderRef.current
@@ -1021,6 +1025,17 @@ export default function FlatFileGrid({
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
+  useEffect(() => {
+    const el = scrollWrapRef.current
+    if (!el) return
+    const update = () => {
+      const top = el.getBoundingClientRect().top
+      el.style.maxHeight = `${Math.max(240, Math.round(window.innerHeight - top))}px`
+    }
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [stickyHeaderH])
 
   // #49 — mirror sizes into refs and skip the localStorage write while a resize
   // drag is in progress (it fired JSON.stringify + write on every mousemove);
@@ -2770,7 +2785,7 @@ export default function FlatFileGrid({
       {/* ── Main grid + optional AI panel ─────────────── */}
       <div className="flex-1 flex overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex-1 overflow-auto"
+      <div className="flex-1 overflow-auto" ref={scrollWrapRef}
         onContextMenu={(e) => {
           // UFX P3 — consumer context menu: right-click on the row # selects
           // the whole row (unless already inside the selection); on a cell
@@ -2848,7 +2863,7 @@ export default function FlatFileGrid({
 
         {!loading && (
           <table className="border-collapse text-sm w-max min-w-full">
-            <thead className="sticky z-20 bg-white dark:bg-slate-900" style={{ top: stickyHeaderH }}>
+            <thead className="sticky top-0 z-20 bg-white dark:bg-slate-900">
               {/* Row 1: group color bands */}
               <tr>
                 <th className="sticky left-0 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 w-9 min-w-[36px] text-center" rowSpan={2}>
