@@ -22,9 +22,11 @@ export interface FlatFileMappableColumn {
   id: string
   labelEn?: string
   labelLocal?: string
+  /** Amazon attribute path (manifest `fieldRef`) — powers the template-path tier. */
+  fieldRef?: string
 }
 
-export type MappingSource = 'exact-id' | 'exact-label' | 'normalized' | 'alias' | 'none'
+export type MappingSource = 'template-path' | 'template-alias' | 'exact-id' | 'exact-label' | 'normalized' | 'alias' | 'none'
 
 export interface HeaderMapping {
   /** The external file's header (verbatim). */
@@ -47,10 +49,56 @@ export interface FlatFileMappingResult {
 }
 
 const CONFIDENCE: Record<Exclude<MappingSource, 'none'>, number> = {
+  'template-path': 1,
+  'template-alias': 0.85,
   'exact-id': 1,
   'exact-label': 0.95,
   'normalized': 0.85,
   'alias': 0.7,
+}
+
+/**
+ * A3 (XLSM hybrid) — canonicalize an Amazon listings attribute path so a
+ * template header and a manifest fieldRef compare equal:
+ *   • `[qualifier…]` blocks are dropped — the template carries concrete values
+ *     (`[marketplace_id=APJ6JRA9NG5V4]`, `[language_tag=it_IT]`, `[audience=ALL]`)
+ *     while fieldRefs carry empty names (`[marketplace_id]`) or omit them.
+ *   • the FIRST path segment keeps its `#N` instance index (that is what tells
+ *     `bullet_point#2` from `bullet_point#1`); later segments drop a redundant
+ *     `#1` — the template repeats `#1` at every array level
+ *     (`our_price#1.schedule#1.value_with_tax`), fieldRefs do not.
+ *
+ *   purchasable_offer[…][audience=ALL]#1.our_price#1.schedule#1.value_with_tax
+ *     → purchasable_offer#1.our_price.schedule.value_with_tax
+ *   item_name[marketplace_id=…][language_tag=…]#1.value → item_name#1.value
+ *   color[…][…]#1.standardized_values#1 → color#1.standardized_values
+ */
+export function canonicalizeTemplatePath(path: string): string {
+  const stripped = path.replace(/\[[^\]]*\]/g, '')
+  return stripped
+    .split('.')
+    .map((seg, i) => (i === 0 ? seg : seg.replace(/#1$/, '')))
+    .join('.')
+}
+
+/**
+ * Offer-level template attributes bridged onto their product-level manifest
+ * columns when the schema exposes only the latter. Amazon's v2 templates
+ * manage catalog images through `*_offer_image_locator` columns; the grid's
+ * image columns are the `*_product_image_locator` family.
+ */
+const TEMPLATE_PATH_ALIASES: Record<string, string[]> = {
+  'main_offer_image_locator#1.media_location': ['main_product_image_locator#1.media_location'],
+}
+for (let i = 1; i <= 8; i++) {
+  TEMPLATE_PATH_ALIASES[`other_offer_image_locator_${i}#1.media_location`] = [
+    `other_product_image_locator_${i}#1.media_location`,
+  ]
+}
+
+/** Cheap gate so plain external headers ("Price") never enter the template tier. */
+function looksLikeTemplatePath(header: string): boolean {
+  return header.startsWith('::') || header.includes('[') || /#\d+/.test(header)
 }
 
 /**
@@ -136,6 +184,36 @@ export function suggestFlatFileMapping(
   const assign = (header: string, col: FlatFileMappableColumn, source: Exclude<MappingSource, 'none'>, reason: string) => {
     claimed.add(col.id)
     result.set(header, { header, columnId: col.id, confidence: CONFIDENCE[source], source, reason })
+  }
+
+  // Tier 0 — Amazon-template attribute paths (A3, XLSM hybrid). The official
+  // templates' attr row and the manifest's fieldRefs derive from the same
+  // SP-API listings schema, so after canonicalization they match exactly —
+  // deterministic, not fuzzy. Runs first so a 344-column template claims its
+  // columns before any label heuristics can steal one.
+  const byTemplatePath = new Map<string, FlatFileMappableColumn>()
+  for (const c of columns) {
+    if (!c.fieldRef) continue
+    const key = canonicalizeTemplatePath(c.fieldRef)
+    if (key && !byTemplatePath.has(key)) byTemplatePath.set(key, c)
+  }
+  if (byTemplatePath.size > 0) {
+    for (const h of headers) {
+      if (result.has(h) || !looksLikeTemplatePath(h)) continue
+      const key = canonicalizeTemplatePath(h)
+      const direct = byTemplatePath.get(key)
+      if (direct && !claimed.has(direct.id)) {
+        assign(h, direct, 'template-path', `Amazon template attribute "${key}" is column "${direct.id}"`)
+        continue
+      }
+      for (const aliasKey of TEMPLATE_PATH_ALIASES[key] ?? []) {
+        const bridged = byTemplatePath.get(aliasKey)
+        if (bridged && !claimed.has(bridged.id)) {
+          assign(h, bridged, 'template-alias', `Offer-level template attribute "${key}" bridged to "${bridged.id}"`)
+          break
+        }
+      }
+    }
   }
 
   // Tier 1 — exact column id.

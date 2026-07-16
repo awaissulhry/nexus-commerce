@@ -157,7 +157,7 @@ export function ContextRail({
               value={kind}
               onChange={setKind}
             />
-            <label style={{ display: "flex", gap: 7, alignItems: "center", fontSize: 12 }}>
+            <label style={{ display: "flex", gap: 7, alignItems: "center", fontSize: 12.5 }}>
               <Checkbox checked={matchDomain} onChange={(e) => setMatchDomain(e.target.checked)} aria-label="Match domain" />
               Match everyone @{senderEmail?.split("@")[1] ?? "domain"}
             </label>
@@ -313,7 +313,7 @@ function LinkedQuotes({ thread, onToast }: { thread: ThreadResponse; onToast: (m
           {quotes.map((q) => (
             <button key={q.id} type="button" onClick={() => router.push(`/quotes?q=${q.id}`)} style={{ display: "flex", gap: 6, alignItems: "center", border: "1px solid var(--h10-border-subtle)", borderRadius: 8, padding: "6px 8px", background: "var(--h10-surface)", cursor: "pointer", textAlign: "left" }}>
               <FileText size={13} style={{ color: "var(--h10-text-3)" }} />
-              <b style={{ fontSize: 12 }}>{q.number}</b>
+              <b style={{ fontSize: 12.5 }}>{q.number}</b>
               <Pill tone={QUOTE_TONE[q.state]}>{q.state}</Pill>
               {q.convertedOrderId && <Pill tone="success">order</Pill>}
               {q.state === "DRAFT" && q.netCents === 0 ? (

@@ -940,7 +940,8 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         : await flatFileService.generateManifest(marketplace, pt || types[0])
       const columns = manifest.groups
         .flatMap((g) => g.columns)
-        .map((c) => ({ id: c.id, labelEn: c.labelEn, labelLocal: c.labelLocal }))
+        // fieldRef powers the A3 template-path tier (Amazon official templates).
+        .map((c) => ({ id: c.id, labelEn: c.labelEn, labelLocal: c.labelLocal, fieldRef: c.fieldRef }))
       const result = suggestFlatFileMapping(headers, columns)
       return reply.send({
         ...result,

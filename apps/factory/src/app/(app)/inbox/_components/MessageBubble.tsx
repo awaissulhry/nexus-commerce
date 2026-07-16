@@ -83,7 +83,7 @@ export function MessageBubble({
         display: "inline-flex",
         alignItems: "center",
         gap: 6,
-        fontSize: 12,
+        fontSize: 12.5,
         border: "1px solid var(--h10-border)",
         borderRadius: 8,
         padding: "4px 8px",
