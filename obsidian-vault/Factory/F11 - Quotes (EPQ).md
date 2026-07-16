@@ -14,7 +14,7 @@ The factory's **money mouth**: turns a matched [[F10 - Inbox (EPI)]] conversatio
 | Phase | Delivers | Status |
 |---|---|---|
 | EPQ.1 | Lifecycle closed & audited — server-enforced transition map (422+audit), auto-EXPIRE tick + Expired tab, supersede tokens, SENT field-guard, persisted floor-ack, before/after money audit, 4-row waterfall, bulk mark-lost | ✅ SHIPPED (kills S1-S5, S8) |
-| EPQ.2 | No offer dies of silence — public view tracking, accept/reject/convert notifications, follow-up **Owner task queue** (Italian one-click nudges into the Gmail thread) | ⚪ next |
+| EPQ.2 ✅ 2026-07-16 | No offer dies of silence — public view tracking, accept/reject/convert notifications, follow-up **Owner task queue** (Italian one-click nudges into the Gmail thread) | ⚪ next |
 | EPQ.3 | Pricing discipline — goal-seek in rail (net⇄margin), qty-break/MOQ surcharges, repeat-order pricing, discount reason codes, size-run matrix | ⚪ |
 | EPQ.4 | Cost truth & honest promises — structured cost model (leather m² + wastage, labor, overhead), quote-vs-actual loop from FP6 ledger, CTP-lite promise, convert freezes FULL config spec | ⚪ |
 | EPQ.5 | Acceptance that stands up (Italy/EU) — B2C gross-price fix, tax modes, VIES-gated zero-rating, SDI fields, deposit legal enum, acceptance-evidence bundle, Stripe deposit-on-accept | ⚪ |
