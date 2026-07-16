@@ -26,7 +26,7 @@ import {
 } from '../services/amazon/flat-file.service.js'
 import { renderExport } from '../services/export/renderers.js'
 import { parseCsv, parseXlsx, parseJson, detectFileKind, sniffDelimiter } from '../services/import/parsers.js'
-import { detectAmazonTemplate } from '../services/amazon/template-workbook.js'
+import { detectAmazonTemplate, parseOoxmlSheet, listOoxmlSheets } from '../services/amazon/template-workbook.js'
 import { suggestFlatFileMapping } from '../services/amazon/flat-file-mapping.js'
 import { aiSuggestColumns } from '../services/amazon/flat-file-mapping-ai.js'
 import { coerceRowsWithAi } from '../services/amazon/flat-file-coerce-ai.js'
@@ -869,9 +869,9 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // untouched — the raw external shape the FX.3 smart-mapper maps onto flat-file
   // columns. Text formats (csv/tsv/json) send `text`; xlsx sends base64 `bytesBase64`.
   fastify.post<{
-    Body: { filename?: string; text?: string; bytesBase64?: string }
+    Body: { filename?: string; text?: string; bytesBase64?: string; sheet?: string; headerRow?: number }
   }>('/amazon/flat-file/parse', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
-    const { filename, text, bytesBase64 } = request.body
+    const { filename, text, bytesBase64, sheet, headerRow } = request.body
     if (!text && !bytesBase64) {
       return reply.code(400).send({ error: 'Provide file content (text or bytesBase64)' })
     }
@@ -892,17 +892,49 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         // dedicated fast reader: exceljs needs minutes on their 1 MB+ defined-
         // names tables and cannot see the localized template sheet's row-5
         // headers anyway. Ordinary workbooks fall through to exceljs unchanged.
+        // A2b — the operator has full control: a sheet/headerRow override parses
+        // exactly what they asked for (fast walker), and every Excel response
+        // carries a `workbook` block (all sheets + what was chosen and why).
         const template = await detectAmazonTemplate(bytes)
-        if (template) {
+        const wantsTemplate = template && !headerRow && (!sheet || sheet === template.meta.sheet)
+        if (wantsTemplate) {
           return reply.send({
             kind,
             headers: template.headers,
             rows: template.rows,
             count: template.rows.length,
             template: { ...template.meta, labels: template.labels },
+            workbook: {
+              sheets: (await listOoxmlSheets(bytes)) ?? [template.meta.sheet],
+              sheet: template.meta.sheet,
+              headerRow: template.meta.attrRow,
+              detected: 'amazon-template',
+            },
           })
         }
+        if (sheet || headerRow) {
+          const generic = await parseOoxmlSheet(bytes, { sheet, headerRow })
+          if (generic) {
+            return reply.send({
+              kind,
+              headers: generic.headers,
+              rows: generic.rows,
+              count: generic.rows.length,
+              workbook: { sheets: generic.sheets, sheet: generic.sheet, headerRow: generic.headerRow, detected: 'override' },
+            })
+          }
+        }
         parsed = await parseXlsx(bytes)
+        const sheets = await listOoxmlSheets(bytes)
+        if (sheets && sheets.length > 0) {
+          return reply.send({
+            kind,
+            headers: parsed.headers,
+            rows: parsed.rows,
+            count: parsed.rows.length,
+            workbook: { sheets, sheet: sheets[0], headerRow: 1, detected: 'first-sheet' },
+          })
+        }
       } else if (kind === 'json') {
         if (text == null) return reply.code(400).send({ error: 'json upload requires text' })
         parsed = parseJson(text)

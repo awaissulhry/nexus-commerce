@@ -28,9 +28,33 @@ import { SPREADSHEET_ACCEPT, isExcelBinaryFile } from '@/components/flat-file/im
 
 interface Row { _rowId: string; [key: string]: unknown }
 
-type MappingSource = 'exact-id' | 'exact-label' | 'normalized' | 'alias' | 'ai' | 'none'
+type MappingSource = 'template-path' | 'template-alias' | 'exact-id' | 'exact-label' | 'normalized' | 'alias' | 'ai' | 'none'
 interface HeaderMapping { header: string; columnId: string | null; confidence: number; source: MappingSource; reason: string }
 interface SuggestResponse { mappings: HeaderMapping[]; unmappedHeaders: string[]; unmappedColumns: string[]; columnCount: number }
+
+/** A3w (XLSM hybrid) — /parse's `template` block when an Amazon official template is detected. */
+interface TemplateInfo {
+  grammar: 'v2' | 'legacy'
+  sheet: string
+  marketplace?: string
+  primaryMarketplaceId?: string
+  headerLanguageTag?: string
+  contentLanguageTag?: string
+  templateIdentifier?: string
+  productTypes: string[]
+  actions: { replace: number; partial: number; delete: number; unknown: number }
+  labels?: Record<string, string>
+}
+
+// Owner policy (2026-07-16): quantities default OFF (the shared pool + Follow
+// columns stay authoritative; the file's qty was for the initial listing),
+// prices default ON. FBA rows never import quantity regardless.
+const isQtyColumn = (id: string) => id === 'quantity' || id.endsWith('__quantity')
+const isPriceColumn = (id: string) =>
+  id === 'standard_price' || id === 'sale_price' || id.startsWith('list_price') ||
+  id.includes('our_price') || id.includes('sale_price') || id.includes('seller_allowed_price')
+/** Every EU FBA fulfillment token mentions Amazon (Logistica di Amazon / Versand durch Amazon / …). */
+const FBA_VALUE_HINT = /amazon|amzn/i
 
 interface CoerceIssue { rowIndex: number; columnId: string; status: 'coerced' | 'flagged'; from: string; to: string; note?: string }
 interface CoerceResponse { rows: Record<string, unknown>[]; issues: CoerceIssue[]; counts: { ok: number; coerced: number; flagged: number } }
@@ -48,6 +72,12 @@ export interface ImportApplyResult {
   newRows: Array<{ sku: string; cells: Record<string, string> }>
   updates: Array<{ rowId: string; cells: Record<string, string> }>
   cellCount: number
+  /**
+   * A3w — SKUs of ::record_action=delete rows the operator explicitly armed
+   * (checkbox + typed DELETE). Empty unless the owner opted in; the client
+   * routes them through the existing market-scoped removeFromAmazon flow.
+   */
+  deleteSkus?: string[]
 }
 
 export interface ImportWizardModalProps {
@@ -63,6 +93,8 @@ export interface ImportWizardModalProps {
   onClose: () => void
   /** FX.7 — when the wizard is opened by dropping a file on the grid, parse it on open. */
   initialFile?: File | null
+  /** A3w — lets the template banner switch the grid to the file's own marketplace. */
+  onRequestMarketSwitch?: (marketplace: string) => void
 }
 
 type Step = 'upload' | 'mapping' | 'preview'
@@ -85,7 +117,7 @@ async function fileToPayload(file: File): Promise<{ filename: string; text?: str
 // FX.6b — per-source mapping presets (localStorage). A preset captures the
 // operator's header→column mapping + AI toggle for a recurring supplier file,
 // keyed by its header set, so a re-import auto-applies last time's choices.
-interface ImportPreset { name: string; headers: string[]; mapping: Record<string, string | null>; useAi: boolean; createdAt: number }
+interface ImportPreset { name: string; headers: string[]; mapping: Record<string, string | null>; useAi: boolean; createdAt: number; templateKey?: string }
 const PRESETS_KEY = 'ff-import-presets'
 const headerKey = (h: string[]) => [...h].map((s) => s.toLowerCase().trim()).sort().join('|')
 function loadPresets(): ImportPreset[] {
@@ -94,6 +126,8 @@ function loadPresets(): ImportPreset[] {
 function persistPresets(p: ImportPreset[]) { try { localStorage.setItem(PRESETS_KEY, JSON.stringify(p)) } catch { /* quota */ } }
 
 const SOURCE_BADGE: Record<MappingSource, { label: string; cls: string }> = {
+  'template-path': { label: 'template', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' },
+  'template-alias': { label: 'bridge', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' },
   'exact-id': { label: 'exact', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' },
   'exact-label': { label: 'label', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' },
   'normalized': { label: 'fuzzy', cls: 'bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300' },
@@ -104,6 +138,7 @@ const SOURCE_BADGE: Record<MappingSource, { label: string; cls: string }> = {
 
 export function ImportWizardModal({
   open, marketplace, productType, productTypes, currentRows, columnLabels, columnIds, onApply, onClose, initialFile,
+  onRequestMarketSwitch,
 }: ImportWizardModalProps) {
   const [step, setStep] = useState<Step>('upload')
   const [busy, setBusy] = useState(false)
@@ -128,12 +163,31 @@ export function ImportWizardModal({
   const [aiBusy, setAiBusy] = useState(false)
   const [aiMapped, setAiMapped] = useState<Set<string>>(new Set()) // headers mapped by the AI tail
   const [dragOver, setDragOver] = useState(false)
+  // A3w — Amazon-template context + owner policies.
+  const [template, setTemplate] = useState<TemplateInfo | null>(null)
+  const [importQty, setImportQty] = useState(false)      // owner default: OFF
+  const [importPrices, setImportPrices] = useState(true) // owner default: ON
+  const [includeDeletes, setIncludeDeletes] = useState(false)
+  const [deleteArmText, setDeleteArmText] = useState('')
+  // A2b — workbook control: every Excel parse reports its sheets + the chosen
+  // sheet/header row; the operator can override both and re-parse.
+  const [workbook, setWorkbook] = useState<{ sheets: string[]; sheet: string; headerRow: number; detected: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const consumedFileRef = useRef<File | null>(null)
+  const marketplaceRef = useRef(marketplace)
+  const lastPayloadRef = useRef<{ filename: string; text?: string; bytesBase64?: string } | null>(null)
 
   const typeParam = useMemo(
     () => (productTypes && productTypes.length > 1 ? { productTypes } : { productType }),
     [productTypes, productType],
+  )
+
+  // A3w — template files map/coerce/validate against the FILE's own product
+  // types (a COAT+PANTS template needs the union manifest even when the page
+  // was opened on a single type).
+  const suggestParams = useMemo(
+    () => (template?.productTypes?.length ? { productTypes: template.productTypes } : typeParam),
+    [template, typeParam],
   )
 
   useEffect(() => {
@@ -143,7 +197,10 @@ export function ImportWizardModal({
       setMode('fill-missing'); setPlan(null); setOverrides({}); setExpanded(new Set())
       setAppliedPreset(null); setValidateBySku({}); setAiBusy(false); setAiMapped(new Set())
       setSavingPreset(false); setPresetName('')
+      setTemplate(null); setWorkbook(null); setImportQty(false); setImportPrices(true)
+      setIncludeDeletes(false); setDeleteArmText('')
       consumedFileRef.current = null
+      lastPayloadRef.current = null
     } else {
       setPresets(loadPresets())
     }
@@ -163,17 +220,37 @@ export function ImportWizardModal({
   }, [])
 
   // ── Step 1 → parse ────────────────────────────────────────────────
-  const runParse = useCallback(async (payload: { filename: string; text?: string; bytesBase64?: string }) => {
+  const runParse = useCallback(async (
+    payload: { filename: string; text?: string; bytesBase64?: string },
+    // A2b — operator overrides: parse a specific sheet / treat a specific row as headers.
+    workbookOpts?: { sheet?: string; headerRow?: number },
+  ) => {
     setBusy(true); setError(null)
     try {
-      const res = await post('parse', payload) as { headers: string[]; rows: Record<string, unknown>[] }
+      lastPayloadRef.current = payload
+      const res = await post('parse', { ...payload, ...workbookOpts }) as {
+        headers: string[]; rows: Record<string, unknown>[]; template?: TemplateInfo
+        workbook?: { sheets: string[]; sheet: string; headerRow: number; detected: string }
+      }
       if (!res.headers?.length) throw new Error('No columns found in the file')
       setParsed({ headers: res.headers, rows: res.rows ?? [] })
-      const sug = await post('suggest-mapping', { headers: res.headers, marketplace, ...typeParam }) as SuggestResponse
+      setWorkbook(res.workbook ?? null)
+      // A3w — Amazon official template: map against the FILE's own product
+      // types (a COAT+PANTS file needs the union manifest even when the page
+      // was opened on one type) and remember the template context.
+      const tpl = res.template ?? null
+      setTemplate(tpl)
+      const suggestTypes = tpl?.productTypes?.length ? { productTypes: tpl.productTypes } : typeParam
+      const sug = await post('suggest-mapping', { headers: res.headers, marketplace, ...suggestTypes }) as SuggestResponse
       setSuggest(sug)
       setMapping(new Map(sug.mappings.map((m) => [m.header, m.columnId])))
-      // FX.6b — a saved preset for this exact header set overrides the auto-map.
-      const preset = loadPresets().find((p) => headerKey(p.headers) === headerKey(res.headers))
+      // FX.6b — a saved preset overrides the auto-map. Template files match by
+      // templateIdentifier (stable even when the owner edits columns); others
+      // by the exact header set.
+      const tplKey = tpl?.templateIdentifier ? `tpl:${tpl.templateIdentifier}` : null
+      const preset = loadPresets().find((p) =>
+        tplKey ? p.templateKey === tplKey : (!p.templateKey && headerKey(p.headers) === headerKey(res.headers)),
+      )
       if (preset) { setMapping(new Map(Object.entries(preset.mapping))); setUseAi(preset.useAi); setAppliedPreset(preset.name) }
       else setAppliedPreset(null)
       setStep('mapping')
@@ -206,11 +283,14 @@ export function ImportWizardModal({
   const savePreset = useCallback(() => {
     const name = presetName.trim()
     if (!name || !parsed) return
-    const preset: ImportPreset = { name, headers: parsed.headers, mapping: Object.fromEntries(mapping), useAi, createdAt: Date.now() }
+    const preset: ImportPreset = {
+      name, headers: parsed.headers, mapping: Object.fromEntries(mapping), useAi, createdAt: Date.now(),
+      templateKey: template?.templateIdentifier ? `tpl:${template.templateIdentifier}` : undefined,
+    }
     const next = [...presets.filter((p) => p.name !== name), preset]
     setPresets(next); persistPresets(next); setAppliedPreset(name)
     setPresetName(''); setSavingPreset(false)
-  }, [parsed, presetName, mapping, useAi, presets])
+  }, [parsed, presetName, mapping, useAi, presets, template])
 
   const applyPreset = useCallback((name: string) => {
     const p = presets.find((x) => x.name === name)
@@ -233,7 +313,7 @@ export function ImportWizardModal({
     try {
       const samples: Record<string, string> = {}
       for (const h of unmapped) samples[h] = String(parsed.rows[0]?.[h] ?? '').slice(0, 60)
-      const res = await post('suggest-columns-ai', { headers: unmapped, samples, marketplace, ...typeParam }) as { suggestions: Record<string, { columnId: string; confidence: number } | null> }
+      const res = await post('suggest-columns-ai', { headers: unmapped, samples, marketplace, ...suggestParams }) as { suggestions: Record<string, { columnId: string; confidence: number } | null> }
       const next = new Map(mapping)
       const ai = new Set(aiMapped)
       for (const [h, s] of Object.entries(res.suggestions ?? {})) {
@@ -245,36 +325,88 @@ export function ImportWizardModal({
     } finally {
       setAiBusy(false)
     }
-  }, [parsed, suggest, mapping, aiMapped, post, marketplace, typeParam])
+  }, [parsed, suggest, mapping, aiMapped, post, marketplace, suggestParams])
+
+  // ── A3w — template delete rows + SKU header resolution ────────────
+  const skuHeader = useMemo(() => {
+    for (const [h, c] of mapping) if (c === 'item_sku') return h
+    return parsed?.headers.find((h) => h === 'item_sku' || h.startsWith('contribution_sku')) ?? null
+  }, [mapping, parsed])
+
+  const deleteRows = useMemo(
+    () => (parsed?.rows ?? []).filter((r) => (r as Record<string, unknown>).__action === 'delete'),
+    [parsed],
+  )
+  const deleteSkus = useMemo(() => {
+    if (!skuHeader) return []
+    return [...new Set(deleteRows.map((r) => String((r as Record<string, unknown>)[skuHeader] ?? '').trim()).filter(Boolean))]
+  }, [deleteRows, skuHeader])
+  const deletesArmed = includeDeletes && deleteArmText.trim().toUpperCase() === 'DELETE' && deleteSkus.length > 0
 
   // ── Step 2 → coerce + plan ────────────────────────────────────────
   const mappedRows = useMemo(() => {
     if (!parsed) return []
     const pairs = [...mapping].filter(([, col]) => col) as Array<[string, string]>
-    return parsed.rows.map((row) => {
-      const out: Record<string, unknown> = {}
-      for (const [header, col] of pairs) if (header in row) out[col] = row[header]
-      return out
-    })
+    return parsed.rows
+      // ::record_action=delete rows never merge as content updates — they are
+      // surfaced separately and (only when armed) route through the removal flow.
+      .filter((row) => (row as Record<string, unknown>).__action !== 'delete')
+      .map((row) => {
+        const out: Record<string, unknown> = {}
+        for (const [header, col] of pairs) if (header in row) out[col] = row[header]
+        // FBA belt: every EU FBA fulfillment token mentions Amazon — those rows
+        // never import a quantity (pool/Follow govern; FBA qty is Amazon-managed).
+        const fulfillment = Object.entries(out).find(([k]) => k.includes('fulfillment_channel_code'))?.[1]
+        if (fulfillment && FBA_VALUE_HINT.test(String(fulfillment))) {
+          for (const k of Object.keys(out)) if (isQtyColumn(k)) delete out[k]
+        }
+        return out
+      })
   }, [parsed, mapping])
 
   const mappedCount = useMemo(() => [...mapping.values()].filter(Boolean).length, [mapping])
 
-  const buildPlan = useCallback(async (rows: Record<string, unknown>[], nextMode: Mode) => {
+  // A3w — owner import policies (qty OFF / prices ON by default) applied as a
+  // plan-time column allowlist, so excluded columns never even show as diffs.
+  const planColumns = useMemo(() => {
+    const cols = [...new Set([...mapping.values()].filter(Boolean) as string[])]
+    return cols.filter((id) => (importQty || !isQtyColumn(id)) && (importPrices || !isPriceColumn(id)))
+  }, [mapping, importQty, importPrices])
+
+  const buildPlan = useCallback(async (rows: Record<string, unknown>[], nextMode: Mode, cols?: string[]) => {
     return await post('plan-import', {
-      existing: currentRows, incoming: rows, mode: nextMode, addNewRows: true,
+      existing: currentRows, incoming: rows, mode: nextMode, addNewRows: true, columns: cols ?? planColumns,
     }) as ImportPlan
-  }, [post, currentRows])
+  }, [post, currentRows, planColumns])
+
+  // Re-plan when a policy toggle flips (mirrors changeMode).
+  const changePolicy = useCallback(async (kind: 'qty' | 'prices', value: boolean) => {
+    if (kind === 'qty') setImportQty(value); else setImportPrices(value)
+    if (!coerced) return
+    setBusy(true)
+    try {
+      const qty = kind === 'qty' ? value : importQty
+      const prices = kind === 'prices' ? value : importPrices
+      const cols = [...new Set([...mapping.values()].filter(Boolean) as string[])]
+        .filter((id) => (qty || !isQtyColumn(id)) && (prices || !isPriceColumn(id)))
+      const p = await buildPlan(coerced.rows, mode, cols)
+      setPlan(p); setOverrides({})
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Re-plan failed')
+    } finally {
+      setBusy(false)
+    }
+  }, [coerced, importQty, importPrices, mapping, mode, buildPlan])
 
   const goToPreview = useCallback(async () => {
     setBusy(true); setError(null)
     try {
-      const co = await post('coerce', { rows: mappedRows, marketplace, ...typeParam, ai: useAi }) as CoerceResponse
+      const co = await post('coerce', { rows: mappedRows, marketplace, ...suggestParams, ai: useAi }) as CoerceResponse
       setCoerced(co)
       // FX.6b — pre-flight the coerced rows (best-effort; never blocks the preview).
       const vmap: Record<string, { errors: number; warnings: number }> = {}
       try {
-        const val = await post('validate-rows', { rows: co.rows, marketplace, ...typeParam }) as { results: Array<{ sku: string; issues: Array<{ severity: 'error' | 'warning' }> }> }
+        const val = await post('validate-rows', { rows: co.rows, marketplace, ...suggestParams }) as { results: Array<{ sku: string; issues: Array<{ severity: 'error' | 'warning' }> }> }
         for (const r of val.results ?? []) {
           vmap[r.sku] = {
             errors: r.issues.filter((i) => i.severity === 'error').length,
@@ -291,7 +423,30 @@ export function ImportWizardModal({
     } finally {
       setBusy(false)
     }
-  }, [post, mappedRows, marketplace, typeParam, useAi, buildPlan, mode])
+  }, [post, mappedRows, marketplace, suggestParams, useAi, buildPlan, mode])
+
+  // A3w — the "Switch grid to {market}" banner button changed the page market
+  // while the wizard is open: re-map against the new market's manifest (the
+  // localized enum sets differ per market, so the old mapping is stale).
+  useEffect(() => {
+    if (marketplaceRef.current === marketplace) return
+    marketplaceRef.current = marketplace
+    if (!open || !parsed) return
+    ;(async () => {
+      setBusy(true); setError(null)
+      try {
+        const sug = await post('suggest-mapping', { headers: parsed.headers, marketplace, ...suggestParams }) as SuggestResponse
+        setSuggest(sug)
+        setMapping(new Map(sug.mappings.map((m) => [m.header, m.columnId])))
+        setCoerced(null); setPlan(null); setOverrides({})
+        setStep('mapping')
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Re-mapping for the new market failed')
+      } finally {
+        setBusy(false)
+      }
+    })()
+  }, [marketplace, open, parsed, post, suggestParams])
 
   const changeMode = useCallback(async (next: Mode) => {
     if (!coerced || next === mode) return
@@ -352,8 +507,8 @@ export function ImportWizardModal({
     const updates = plan.updates
       .map((u) => ({ rowId: u.rowId, cells: pick(`upd:${u.rowId}`, u.cells) }))
       .filter((u) => Object.keys(u.cells).length > 0)
-    return { newRows, updates, cellCount }
-  }, [plan, isOn])
+    return { newRows, updates, cellCount, deleteSkus: deletesArmed ? deleteSkus : [] }
+  }, [plan, isOn, deletesArmed, deleteSkus])
 
   if (!open) return null
 
@@ -409,7 +564,7 @@ export function ImportWizardModal({
                   dragOver ? 'border-violet-400 bg-violet-50/60 dark:bg-violet-950/20' : 'border-slate-300 dark:border-slate-700 hover:border-violet-400 hover:bg-violet-50/40 dark:hover:bg-violet-950/10')}>
                 <Upload className="w-7 h-7 text-slate-400" />
                 <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{dragOver ? 'Drop to import' : 'Choose a file or drag it here'}</span>
-                <span className="text-xs text-slate-500">CSV · Excel (.xlsx) · TSV · JSON — supplier columns are auto-mapped next</span>
+                <span className="text-xs text-slate-500">CSV · Excel (.xlsx / .xlsm) · TSV · JSON — Amazon official templates are detected automatically</span>
               </button>
               <input ref={fileRef} type="file" accept={SPREADSHEET_ACCEPT} className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); e.target.value = '' }} />
@@ -431,6 +586,70 @@ export function ImportWizardModal({
           {/* STEP 2 — mapping */}
           {step === 'mapping' && parsed && suggest && (
             <div className="space-y-3">
+              {/* A3w — Amazon official template context */}
+              {template && (
+                <div className="rounded-lg border border-violet-200 dark:border-violet-900/50 bg-violet-50/60 dark:bg-violet-950/20 px-3 py-2 text-[11px] text-violet-800 dark:text-violet-200 space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold">Amazon official template detected</span>
+                    <span className="px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/40">{template.sheet}</span>
+                    {template.marketplace && <span className="px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/40">{template.marketplace}</span>}
+                    {template.productTypes.length > 0 && (
+                      <span className="px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/40">{template.productTypes.join(' + ')}</span>
+                    )}
+                    <span className="text-violet-600 dark:text-violet-300">
+                      {template.actions.replace} create/replace · {template.actions.partial} partial update · {template.actions.delete} delete
+                    </span>
+                  </div>
+                  {template.marketplace && template.marketplace !== marketplace && (
+                    <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+                      <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span>
+                        This is the <b>{template.marketplace}</b> template but the grid is on <b>{marketplace}</b> —
+                        localized values only match the {template.marketplace} column options.
+                      </span>
+                      {onRequestMarketSwitch && (
+                        <button type="button"
+                          onClick={() => onRequestMarketSwitch(template.marketplace!)}
+                          className="px-2 py-0.5 rounded border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-amber-800 dark:text-amber-200 hover:bg-amber-50 dark:hover:bg-amber-950/40 whitespace-nowrap">
+                          Switch grid to {template.marketplace}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* A2b — workbook control: see every sheet, override sheet/header row */}
+              {workbook && (
+                <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-600 dark:text-slate-300">
+                  <span className="text-slate-400 uppercase tracking-wide">Workbook</span>
+                  <label className="inline-flex items-center gap-1">
+                    Sheet
+                    <select
+                      value={workbook.sheet}
+                      disabled={busy}
+                      onChange={(e) => { const p = lastPayloadRef.current; if (p) void runParse(p, { sheet: e.target.value }) }}
+                      className="text-[11px] rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-1.5 py-0.5 focus:outline-none focus:border-violet-400">
+                      {workbook.sheets.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </label>
+                  <label className="inline-flex items-center gap-1">
+                    Header row
+                    <input
+                      type="number" min={1} value={workbook.headerRow} disabled={busy}
+                      onChange={(e) => {
+                        const v = Math.max(1, Number(e.target.value) || 1)
+                        const p = lastPayloadRef.current
+                        if (p && v !== workbook.headerRow) void runParse(p, { sheet: workbook.sheet, headerRow: v })
+                      }}
+                      className="w-14 text-[11px] rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-1.5 py-0.5 focus:outline-none focus:border-violet-400" />
+                  </label>
+                  <span className="text-slate-400">
+                    {workbook.detected === 'amazon-template' ? 'auto-detected from the template structure'
+                      : workbook.detected === 'override' ? 'manual override'
+                      : 'first sheet, first non-empty row'}
+                  </span>
+                </div>
+              )}
               <div className="text-xs text-slate-500 dark:text-slate-400">
                 {fileName && <span className="font-medium text-slate-600 dark:text-slate-300">{fileName} — </span>}
                 {parsed.rows.length} row{parsed.rows.length !== 1 ? 's' : ''} · {parsed.headers.length} columns ·{' '}
@@ -599,6 +818,55 @@ export function ImportWizardModal({
                 </div>
               </div>
 
+              {/* A3w — owner import policies */}
+              <div className="flex items-center gap-4 flex-wrap text-xs text-slate-600 dark:text-slate-300">
+                <label className="inline-flex items-center gap-1.5 cursor-pointer"
+                  title="Off (default): the shared stock pool + Follow columns stay authoritative. FBA rows never import a quantity either way.">
+                  <input type="checkbox" checked={importQty} disabled={busy}
+                    onChange={(e) => void changePolicy('qty', e.target.checked)} className="w-3.5 h-3.5 accent-violet-600" />
+                  Import quantities
+                </label>
+                <label className="inline-flex items-center gap-1.5 cursor-pointer"
+                  title="On (default): prices from the file are applied to this market.">
+                  <input type="checkbox" checked={importPrices} disabled={busy}
+                    onChange={(e) => void changePolicy('prices', e.target.checked)} className="w-3.5 h-3.5 accent-violet-600" />
+                  Import prices
+                </label>
+              </div>
+
+              {/* A3w — ::record_action=delete rows: excluded by default, explicit owner override */}
+              {deleteSkus.length > 0 && (
+                <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/20 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200 space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>
+                      <b>{deleteSkus.length}</b> row{deleteSkus.length !== 1 ? 's' : ''} in this file carr{deleteSkus.length !== 1 ? 'y' : 'ies'} a
+                      <b> delete</b> action — excluded from the import by default.
+                    </span>
+                    <span className="font-mono text-[10px] text-amber-700 dark:text-amber-300 truncate max-w-full">
+                      {deleteSkus.slice(0, 6).join(', ')}{deleteSkus.length > 6 ? ` +${deleteSkus.length - 6} more` : ''}
+                    </span>
+                  </div>
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                    <input type="checkbox" checked={includeDeletes}
+                      onChange={(e) => { setIncludeDeletes(e.target.checked); if (!e.target.checked) setDeleteArmText('') }}
+                      className="w-3.5 h-3.5 accent-amber-600" />
+                    Apply these delete actions (removes the listings from Amazon {marketplace} — product & stock stay in Nexus)
+                  </label>
+                  {includeDeletes && (
+                    <div className="flex items-center gap-2">
+                      <span>Type <b>DELETE</b> to arm:</span>
+                      <input type="text" value={deleteArmText} onChange={(e) => setDeleteArmText(e.target.value)}
+                        placeholder="DELETE"
+                        className="w-24 text-[11px] font-mono rounded border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 px-1.5 py-0.5 focus:outline-none focus:border-amber-500" />
+                      {deletesArmed
+                        ? <span className="text-rose-700 dark:text-rose-300 font-semibold">armed — Apply will remove {deleteSkus.length} listing{deleteSkus.length !== 1 ? 's' : ''}</span>
+                        : <span className="text-amber-600 dark:text-amber-300">not armed</span>}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {plan.newRows.length === 0 && plan.updates.length === 0 && (
                 <div className="text-center py-10 text-sm text-slate-500">Nothing to apply — the import matches the grid for the mapped columns.</div>
               )}
@@ -673,8 +941,15 @@ export function ImportWizardModal({
         <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center gap-3 flex-shrink-0 bg-slate-50 dark:bg-slate-900/50">
           <div className="text-xs text-slate-500 dark:text-slate-400">
             {step === 'preview' && (
-              applyResult.cellCount > 0
-                ? <><CheckCircle2 className="w-3 h-3 inline -mt-0.5 mr-1 text-emerald-600" />Will write <span className="font-semibold text-slate-800 dark:text-slate-100">{applyResult.cellCount}</span> cell{applyResult.cellCount !== 1 ? 's' : ''} · ⌘Z reverts</>
+              applyResult.cellCount > 0 || (applyResult.deleteSkus?.length ?? 0) > 0
+                ? <>
+                    <CheckCircle2 className="w-3 h-3 inline -mt-0.5 mr-1 text-emerald-600" />
+                    Will write <span className="font-semibold text-slate-800 dark:text-slate-100">{applyResult.cellCount}</span> cell{applyResult.cellCount !== 1 ? 's' : ''}
+                    {(applyResult.deleteSkus?.length ?? 0) > 0 && (
+                      <> · <span className="font-semibold text-rose-600 dark:text-rose-400">remove {applyResult.deleteSkus!.length} listing{applyResult.deleteSkus!.length !== 1 ? 's' : ''}</span></>
+                    )}
+                    {' '}· ⌘Z reverts cell edits
+                  </>
                 : 'Select cells to apply.'
             )}
           </div>
@@ -690,8 +965,10 @@ export function ImportWizardModal({
               </Button>
             )}
             {step === 'preview' && (
-              <Button size="sm" disabled={busy || applyResult.cellCount === 0} onClick={() => onApply(applyResult)}>
-                Apply import
+              <Button size="sm"
+                disabled={busy || (applyResult.cellCount === 0 && (applyResult.deleteSkus?.length ?? 0) === 0)}
+                onClick={() => onApply(applyResult)}>
+                Apply import{(applyResult.deleteSkus?.length ?? 0) > 0 ? ` + ${applyResult.deleteSkus!.length} deletion${applyResult.deleteSkus!.length !== 1 ? 's' : ''}` : ''}
               </Button>
             )}
           </div>

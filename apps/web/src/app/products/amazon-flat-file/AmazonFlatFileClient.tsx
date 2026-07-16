@@ -3105,7 +3105,19 @@ export default function AmazonFlatFileClient({
       `${newCount ? ` · creating ${newCount} product${newCount === 1 ? '' : 's'}` : ''} · saving…`,
     )
     void syncToPlatform(next.filter((r) => !r._ghost), false).catch(() => { /* sync chip shows the failure */ })
-  }, [pushSnapshot, setRows, productType, marketplace, syncToPlatform, familyId])
+    // A3w — ::record_action=delete rows the owner explicitly armed in the wizard
+    // (checkbox + typed DELETE) route through the existing market-scoped removal
+    // (listings only; product + stock stay, other channels untouched).
+    if (result.deleteSkus && result.deleteSkus.length > 0) {
+      const wanted = new Set(result.deleteSkus.map((s) => s.trim()))
+      const rowsToRemove = next.filter((r) => wanted.has(String(r.item_sku ?? '').trim()))
+      const missing = result.deleteSkus.length - rowsToRemove.length
+      if (missing > 0) {
+        toast.info(`${missing} delete-action SKU${missing === 1 ? '' : 's'} not found in this grid — skipped`)
+      }
+      if (rowsToRemove.length > 0) void removeFromAmazon(rowsToRemove)
+    }
+  }, [pushSnapshot, setRows, productType, marketplace, syncToPlatform, familyId, removeFromAmazon, toast])
 
   // FX.1 — export the grid to TSV (Amazon template), CSV, or XLSX. Uses
   // effectiveManifest so a multi-category (MT) union sheet exports every column;
@@ -4100,6 +4112,7 @@ export default function AmazonFlatFileClient({
             initialFile={importInitialFile}
             onApply={handleImportApply}
             onClose={() => { setImportOpen(false); setImportInitialFile(null) }}
+            onRequestMarketSwitch={(mp) => navigateTo(mp, productType)}
           />
         )}
 

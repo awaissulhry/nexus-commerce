@@ -336,6 +336,102 @@ function findAttrRow(rows: SheetRow[]): { attrRow: SheetRow; grammar: 'v2' | 'le
   return null
 }
 
+/** A2b — list a workbook's sheet names (fast zip walk; null when not OOXML). */
+export async function listOoxmlSheets(bytes: Uint8Array): Promise<string[] | null> {
+  let zip: JSZip
+  try {
+    zip = await JSZip.loadAsync(bytes)
+  } catch {
+    return null
+  }
+  const sheets = await sheetList(zip)
+  return sheets.length > 0 ? sheets.map((s) => s.name) : null
+}
+
+export interface GenericSheetParse {
+  headers: string[]
+  rows: Record<string, string>[]
+  sheet: string
+  headerRow: number
+  sheets: string[]
+}
+
+/**
+ * A2b — generic fast parse of ONE sheet of an OOXML workbook (operator sheet /
+ * header-row override). Values come back as raw strings (numbers unformatted,
+ * date serials verbatim) — the coerce stage owns typing. Used instead of
+ * exceljs for overrides because template workbooks' side sheets (e.g. the
+ * megarow "Valori validi") stall exceljs for minutes.
+ */
+export async function parseOoxmlSheet(
+  bytes: Uint8Array,
+  opts?: { sheet?: string; headerRow?: number },
+): Promise<GenericSheetParse | null> {
+  let zip: JSZip
+  try {
+    zip = await JSZip.loadAsync(bytes)
+  } catch {
+    return null
+  }
+  const sheets = await sheetList(zip)
+  if (sheets.length === 0) return null
+  const chosen = opts?.sheet ? sheets.find((s) => s.name === opts.sheet) : sheets[0]
+  if (!chosen) {
+    throw new Error(`Sheet "${opts?.sheet}" not found — workbook has: ${sheets.map((s) => s.name).join(', ')}`)
+  }
+  const xml = await readEntry(zip, chosen.target)
+  if (!xml) return null
+  const sst = await sharedStrings(zip)
+
+  let headerRowNum = opts?.headerRow ?? null
+  let headerCells: Map<number, string> | null = null
+  const rows: Record<string, string>[] = []
+  let headers: string[] = []
+  let colOrder: number[] = []
+
+  walkSheetRows(xml, sst, (row) => {
+    if (headerCells === null) {
+      if (headerRowNum === null && row.cells.size > 0) headerRowNum = row.rowNum
+      if (headerRowNum !== null && row.rowNum >= headerRowNum) {
+        if (row.rowNum > headerRowNum || row.cells.size === 0) {
+          // requested header row was empty/absent — treat as no headers
+          headerCells = new Map()
+          return false
+        }
+        headerCells = row.cells
+        const sorted = [...headerCells.entries()].sort((a, b) => a[0] - b[0])
+        colOrder = sorted.map(([c]) => c)
+        // dedupe like services/import/parsers.ts (Price / Price__2)
+        const seen = new Map<string, number>()
+        headers = sorted.map(([, v]) => {
+          const t = v.trim()
+          if (!seen.has(t)) { seen.set(t, 1); return t }
+          const n = (seen.get(t) ?? 1) + 1
+          seen.set(t, n)
+          return `${t}__${n}`
+        })
+      }
+      return
+    }
+    if (headers.length === 0) return false
+    const obj: Record<string, string> = {}
+    let any = false
+    for (let i = 0; i < headers.length; i++) {
+      const v = row.cells.get(colOrder[i]) ?? ''
+      obj[headers[i]] = v
+      if (v !== '') any = true
+    }
+    if (any) rows.push(obj)
+  })
+
+  if (!headers.length) {
+    throw new Error(
+      `No headers found on sheet "${chosen.name}"${opts?.headerRow ? ` at row ${opts.headerRow}` : ''} — pick a different sheet or header row`,
+    )
+  }
+  return { headers, rows, sheet: chosen.name, headerRow: headerRowNum ?? 1, sheets: sheets.map((s) => s.name) }
+}
+
 /**
  * Detect + parse an Amazon official listings template inside OOXML bytes.
  * Returns null when the workbook is not an Amazon template (the caller then

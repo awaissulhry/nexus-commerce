@@ -335,3 +335,60 @@ describe('decodeXml', () => {
     expect(decodeXml('no entities')).toBe('no entities')
   })
 })
+
+describe('A2b — listOoxmlSheets + parseOoxmlSheet (operator overrides)', () => {
+  it('lists sheets and parses a chosen sheet with an explicit header row', async () => {
+    const bytes = await buildWorkbook({
+      sheets: [
+        { name: 'Notes', rows: [{ r: 1, cells: [{ col: 1, v: 'readme' }] }] },
+        {
+          name: 'Data',
+          rows: [
+            { r: 1, cells: [{ col: 1, v: 'junk title row' }] },
+            { r: 3, cells: [{ col: 1, v: 'SKU' }, { col: 2, v: 'Price' }, { col: 3, v: 'Price' }] },
+            { r: 4, cells: [{ col: 1, v: 'A-1' }, { col: 2, v: '9.99', t: 'n' }] },
+            { r: 5, cells: [] },
+            { r: 6, cells: [{ col: 1, v: 'A-2' }, { col: 3, v: '12', t: 'n' }] },
+          ],
+        },
+      ],
+    })
+    const { listOoxmlSheets, parseOoxmlSheet } = await import('./template-workbook.js')
+    expect(await listOoxmlSheets(bytes)).toEqual(['Notes', 'Data'])
+    const parsed = await parseOoxmlSheet(bytes, { sheet: 'Data', headerRow: 3 })
+    expect(parsed).not.toBeNull()
+    expect(parsed!.headers).toEqual(['SKU', 'Price', 'Price__2']) // dedupe mirrors parsers.ts
+    expect(parsed!.rows).toEqual([
+      { SKU: 'A-1', Price: '9.99', Price__2: '' },
+      { SKU: 'A-2', Price: '', Price__2: '12' },
+    ])
+    expect(parsed!.sheet).toBe('Data')
+    expect(parsed!.headerRow).toBe(3)
+  })
+
+  it('defaults to the first sheet + first non-empty row; unknown sheet throws with the sheet list', async () => {
+    const bytes = await buildWorkbook({
+      sheets: [
+        {
+          name: 'Only',
+          rows: [
+            { r: 2, cells: [{ col: 1, v: 'Name' }, { col: 2, v: 'Qty' }] },
+            { r: 3, cells: [{ col: 1, v: 'Widget' }, { col: 2, v: '5', t: 'n' }] },
+          ],
+        },
+      ],
+    })
+    const { parseOoxmlSheet } = await import('./template-workbook.js')
+    const parsed = await parseOoxmlSheet(bytes)
+    expect(parsed!.headers).toEqual(['Name', 'Qty'])
+    expect(parsed!.headerRow).toBe(2)
+    expect(parsed!.rows).toEqual([{ Name: 'Widget', Qty: '5' }])
+    await expect(parseOoxmlSheet(bytes, { sheet: 'Nope' })).rejects.toThrow(/workbook has: Only/)
+  })
+
+  it('returns null for non-zip bytes', async () => {
+    const { parseOoxmlSheet, listOoxmlSheets } = await import('./template-workbook.js')
+    expect(await parseOoxmlSheet(new TextEncoder().encode('nope'))).toBeNull()
+    expect(await listOoxmlSheets(new TextEncoder().encode('nope'))).toBeNull()
+  })
+})
