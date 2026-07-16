@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react'
 import {
-  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, ImageIcon, Loader2, ListOrdered, Pin, Plus, RefreshCw, RotateCcw, Search, Send, Trash2, Unlink, Upload, X, Zap,
+  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, FileText, GitBranch, GitFork, History, ImageIcon, Loader2, ListOrdered, Pin, Plus, RefreshCw, RotateCcw, Search, Send, Trash2, Unlink, Upload, X, Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -32,6 +32,7 @@ import { PrePublishWarningModal } from './PrePublishWarningModal'
 import { EbayImportWizard } from './EbayImportWizard'
 import { stampUnderParent } from './importUnderParent'
 import { planFamilyImport } from './importFamilies.pure'
+import { EbayDescriptionThemesModal } from './EbayDescriptionThemesModal'
 import { EbayFlatFileImageDrawer } from './EbayFlatFileImageModal'
 import { deriveImageFamilies, type FamilyDeriveRow, type ImageFamilySummary } from './imageFamilies.pure'
 import { AspectsPanel } from './AspectsPanel'
@@ -936,12 +937,16 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ED.3 — description themes for the Description Theme column (non-blocking).
   const [descThemes, setDescThemes] = useState<Array<{ id: string; name: string; isDefault: boolean }>>([])
-  useEffect(() => {
+  const loadDescThemes = useCallback(() => {
     fetch(`${BACKEND}/api/ebay/description-themes`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d?.themes) setDescThemes(d.themes) })
       .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  useEffect(() => { loadDescThemes() }, [loadDescThemes])
+  // ED.4 — theme manager modal (File → Description themes…).
+  const [themesModalOpen, setThemesModalOpen] = useState(false)
 
   // B3 — category breadcrumbs (English preferred) for the category_id cells.
   // Keyed on activeCategoryIds (the distinct category ids already tracked for
@@ -2676,6 +2681,14 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       icon: <Upload className="w-3.5 h-3.5" />,
       onClick: () => setImportWizardOpen(true),
     },
+    { separator: true, label: '' },
+    {
+      // ED.4 — manage the dynamic description themes (create/edit/duplicate/
+      // set default) with a live as-pushed preview.
+      label: 'Description themes…',
+      icon: <FileText className="w-3.5 h-3.5" />,
+      onClick: () => setThemesModalOpen(true),
+    },
   ], [exportEbay])
 
   // FM Phase 3/4 — bulk Follow/Buffer, injected into the shared grid's Edit menu
@@ -3093,6 +3106,15 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             setRows(next)
           }}
           onClose={() => setAspectsPanelRowId(null)}
+        />
+
+        {/* ED.4 — theme manager; sample product = first real row for live previews */}
+        <EbayDescriptionThemesModal
+          open={themesModalOpen}
+          onClose={() => setThemesModalOpen(false)}
+          marketplace={marketplace}
+          sampleProductId={String((rows.find((r) => !r._ghost && r._productId) as EbayRow | undefined)?._productId ?? '') || undefined}
+          onChanged={loadDescThemes}
         />
 
         {desc && descModal && (

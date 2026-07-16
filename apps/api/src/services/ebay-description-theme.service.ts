@@ -36,6 +36,9 @@ export interface RenderListingDescriptionArgs {
   policies?: { shipping?: string; returns?: string; payment?: string }
   /** Preview-only: try a specific theme instead of the listing's assignment. */
   themeIdOverride?: string
+  /** Preview-only (ED.4 theme editor): render THIS html as the theme without
+   *  saving anything — lets the manager preview unsaved drafts. */
+  themeHtmlOverride?: string
 }
 
 export interface RenderListingDescriptionResult {
@@ -179,14 +182,16 @@ export async function renderListingDescriptionSafe(
     const assigned = typeof attrs.descriptionThemeId === 'string' ? attrs.descriptionThemeId : undefined
 
     let themeId = args.themeIdOverride ?? assigned
-    if (themeId === 'none') return raw
-    let theme = themeId
-      ? await prisma.ebayDescriptionTheme.findUnique({ where: { id: themeId } })
-      : null
-    if (!theme && !args.themeIdOverride) {
+    if (themeId === 'none' && !args.themeHtmlOverride) return raw
+    let theme = args.themeHtmlOverride
+      ? ({ id: '__draft__', name: 'Draft preview', html: args.themeHtmlOverride, active: true } as never)
+      : themeId
+        ? await prisma.ebayDescriptionTheme.findUnique({ where: { id: themeId } })
+        : null
+    if (!theme && !args.themeIdOverride && !args.themeHtmlOverride) {
       theme = await prisma.ebayDescriptionTheme.findFirst({ where: { isDefault: true, active: true } })
     }
-    if (!theme || !theme.active) return raw
+    if (!theme || !(theme as { active: boolean }).active) return raw
 
     const galleries = await loadGalleries(prisma, args.productId, args.sku)
     const data: DescriptionRenderData = {

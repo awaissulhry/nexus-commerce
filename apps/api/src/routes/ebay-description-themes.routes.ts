@@ -91,9 +91,11 @@ export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstan
       body?: string
       title?: string
       themeId?: string
+      /** ED.4 — preview an UNSAVED theme draft (rendered, never persisted). */
+      themeHtml?: string
     }
   }>('/ebay/description-preview', async (request, reply) => {
-    const { productId, marketplace = 'IT', sku, mode = 'group', body, title, themeId } = request.body ?? {}
+    const { productId, marketplace = 'IT', sku, mode = 'group', body, title, themeId, themeHtml } = request.body ?? {}
     if (!productId) return reply.code(400).send({ error: 'productId required' })
     const listing = await prisma.channelListing.findFirst({
       where: { productId, channel: 'EBAY', region: marketplace.toUpperCase() === 'UK' ? 'GB' : marketplace.toUpperCase() },
@@ -107,6 +109,7 @@ export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstan
       body: body ?? listing?.description ?? '',
       title: title ?? listing?.title ?? undefined,
       themeIdOverride: themeId,
+      themeHtmlOverride: themeHtml,
     })
     return reply.send(result)
   })
