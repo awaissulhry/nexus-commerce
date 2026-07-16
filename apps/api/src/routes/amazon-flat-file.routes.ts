@@ -28,6 +28,11 @@ import { renderExport } from '../services/export/renderers.js'
 import { parseCsv, parseXlsx, parseJson, detectFileKind, sniffDelimiter } from '../services/import/parsers.js'
 import { detectAmazonTemplate, parseOoxmlSheet, listOoxmlSheets } from '../services/amazon/template-workbook.js'
 import { suggestFlatFileMapping } from '../services/amazon/flat-file-mapping.js'
+import {
+  captureTemplateToVault,
+  listVaultEntries,
+  buildAmazonTemplateExport,
+} from '../services/amazon/template-vault.service.js'
 import { aiSuggestColumns } from '../services/amazon/flat-file-mapping-ai.js'
 import { coerceRowsWithAi } from '../services/amazon/flat-file-coerce-ai.js'
 import { planImportMerge, type ImportApplyMode } from '../services/amazon/flat-file-merge.js'
@@ -901,6 +906,12 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         const template = await detectAmazonTemplate(bytes)
         const wantsTemplate = template && !headerRow && (!sheet || sheet === template.meta.sheet)
         if (wantsTemplate) {
+          // A7 — vault auto-capture (owner: ON). The original bytes become the
+          // base for "Export for Amazon (.xlsm)". Fire-and-forget: a vault
+          // hiccup must never fail a parse.
+          void captureTemplateToVault(prisma, bytes, template.meta, filename ?? 'template.xlsm').catch(
+            (err) => request.log.warn({ err }, 'A7 template vault capture failed'),
+          )
           return reply.send({
             kind,
             headers: template.headers,
@@ -1198,6 +1209,62 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       request.log.error(err, 'flat-file/fetch-listings failed')
       return reply.code(500).send({ error: err?.message ?? 'Fetch failed' })
+    }
+  })
+
+  // ── GET /api/amazon/flat-file/template-vault ────────────────────────
+  // A7 — list captured Amazon templates (no bytes). The client uses this to
+  // enable "Export for Amazon (.xlsm)" and show which template will be used.
+  fastify.get<{ Querystring: { marketplace?: string } }>(
+    '/amazon/flat-file/template-vault',
+    async (request, reply) => {
+      try {
+        const entries = await listVaultEntries(prisma, request.query.marketplace || undefined)
+        return reply.send({ entries })
+      } catch (err: any) {
+        request.log.error(err, 'template-vault list failed')
+        return reply.code(500).send({ error: err?.message ?? 'Vault list failed' })
+      }
+    },
+  )
+
+  // ── POST /api/amazon/flat-file/export-template ──────────────────────
+  // A7 — Export for Amazon: clone the vaulted original .xlsm and rewrite ONLY
+  // the Template sheet's data rows from the grid. Amazon's valid-values
+  // sheets, localized dropdowns, macros and named ranges survive verbatim, so
+  // the output re-uploads to Seller Central like a hand-edited original.
+  // Rails (always on): ::record_action blank, FBA quantity never exported.
+  fastify.post<{
+    Body: { manifest: any; rows: any[]; marketplace?: string; templateIdentifier?: string }
+  }>('/amazon/flat-file/export-template', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
+    const { manifest, rows, marketplace, templateIdentifier } = request.body
+    if (!manifest || !Array.isArray(rows) || rows.length === 0) {
+      return reply.code(400).send({ error: 'manifest and rows (non-empty) required' })
+    }
+    try {
+      const columns = (manifest.groups ?? [])
+        .flatMap((g: any) => g.columns ?? [])
+        .map((c: any) => ({ id: c.id, labelEn: c.labelEn, labelLocal: c.labelLocal, fieldRef: c.fieldRef }))
+      const result = await buildAmazonTemplateExport(prisma, {
+        marketplace: String(marketplace ?? manifest.marketplace ?? 'IT'),
+        templateIdentifier: templateIdentifier || undefined,
+        columns,
+        rows,
+      })
+      const base = result.sourceFilename.replace(/\.(xlsm|xlsx)$/i, '').replace(/[^\w.() +-]+/g, '_')
+      reply.header('Content-Type', 'application/vnd.ms-excel.sheet.macroEnabled.12')
+      reply.header(
+        'Content-Disposition',
+        `attachment; filename="${base}-nexus-${Date.now()}.xlsm"`,
+      )
+      reply.header('X-Export-Rows', String(result.rowsWritten))
+      reply.header('X-Export-Mapped-Headers', `${result.mappedHeaders}/${result.totalHeaders}`)
+      return reply.send(result.bytes)
+    } catch (err: any) {
+      const msg = err?.message ?? 'Template export failed'
+      const code = /No Amazon template in the vault/.test(msg) ? 404 : 400
+      request.log.error(err, 'export-template failed')
+      return reply.code(code).send({ error: msg })
     }
   })
 

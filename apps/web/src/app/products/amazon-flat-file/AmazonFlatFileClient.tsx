@@ -3169,6 +3169,54 @@ export default function AmazonFlatFileClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manifest, effectiveManifest, orderedGroups, productType, marketplace])
 
+  // A7 — "Export for Amazon (.xlsm)": clone the vaulted original Amazon
+  // template (auto-captured on every template import) and rewrite only its
+  // data rows from the grid. The vault list gates the menu item.
+  const [templateVault, setTemplateVault] = useState<Array<{ templateIdentifier: string; filename: string; productTypes: string[] }>>([])
+  useEffect(() => {
+    let cancelled = false
+    void fetch(`${getBackendUrl()}/api/amazon/flat-file/template-vault?marketplace=${encodeURIComponent(marketplace)}`)
+      .then((r) => (r.ok ? r.json() : { entries: [] }))
+      .then((d) => { if (!cancelled) setTemplateVault(d.entries ?? []) })
+      .catch(() => { if (!cancelled) setTemplateVault([]) })
+    return () => { cancelled = true }
+  }, [marketplace])
+
+  const exportAmazonTemplate = useCallback(async () => {
+    const mf = effectiveManifest ?? manifest
+    if (!mf) return
+    const selectedRows = latestSelectedRowsRef.current
+    const selectedOnly = selectedRows.size > 0
+    const exportable = latestRowsRef.current.filter((r) => !r._ghost)
+    const outRows = selectedOnly ? exportable.filter((r) => selectedRows.has(r._rowId as string)) : exportable
+    if (!outRows.length) { toast.warning('No rows to export'); return }
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/export-template`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manifest: mf, rows: outRows, marketplace }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        toast.error(err?.error ?? 'Export for Amazon failed')
+        return
+      }
+      const blob = await res.blob()
+      const dispo = res.headers.get('Content-Disposition') ?? ''
+      const fname = /filename="([^"]+)"/.exec(dispo)?.[1] ?? `amazon_template_${marketplace}.xlsm`
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fname
+      a.click()
+      URL.revokeObjectURL(url)
+      const mapped = res.headers.get('X-Export-Mapped-Headers')
+      toast.success(`Exported ${outRows.length} row${outRows.length === 1 ? '' : 's'} into the Amazon template${mapped ? ` (${mapped} columns mapped)` : ''}`)
+    } catch {
+      toast.error('Export for Amazon failed')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manifest, effectiveManifest, marketplace])
+
   // ── Save / Discard — owned by the shared grid (onSave / Discard button) ──
 
   const handleApplyTranslations = useCallback((
@@ -3488,12 +3536,20 @@ export default function AmazonFlatFileClient({
     { label: 'Export as TSV (Amazon) — selected rows when any are ticked', icon: <Download className="w-3.5 h-3.5" />, onClick: () => void exportFile('tsv'), disabled: !manifest },
     { label: 'Export as CSV', icon: <Download className="w-3.5 h-3.5" />, onClick: () => void exportFile('csv'), disabled: !manifest },
     { label: 'Export as Excel (.xlsx)', icon: <Download className="w-3.5 h-3.5" />, onClick: () => void exportFile('xlsx'), disabled: !manifest },
+    {
+      label: templateVault.length
+        ? `Export for Amazon (.xlsm) — ${templateVault[0].filename}`
+        : 'Export for Amazon (.xlsm) — import an Amazon template first',
+      icon: <Download className="w-3.5 h-3.5" />,
+      onClick: () => void exportAmazonTemplate(),
+      disabled: !manifest || templateVault.length === 0,
+    },
     { separator: true, label: '' },
     { label: 'Version history…', icon: <Clock className="w-3.5 h-3.5" />, onClick: () => setHistoryOpen(true), disabled: !manifest },
     { separator: true, label: '' },
     { label: 'Market coverage…', icon: <Globe className="w-3.5 h-3.5" />, onClick: () => setCoverageModalOpen(true), disabled: !manifest },
     { label: 'Listing health…', icon: <Activity className="w-3.5 h-3.5" />, onClick: () => setHealthModalOpen(true), disabled: !manifest },
-  ], [effectiveManifest, manifest, exportFile])
+  ], [effectiveManifest, manifest, exportFile, templateVault, exportAmazonTemplate])
 
   // ── Edit menu extras (factory — reads live rows/selection) ───────────────
   const editMenuItems = useCallback((ctx: ToolbarFetchCtx) => {

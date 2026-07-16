@@ -14177,3 +14177,22 @@ model EbayDescriptionTheme {
 
   @@index([isDefault, active])
 }
+
+// ── A7 (XLSM hybrid) — Amazon template vault ─────────────────────────────────
+// The original Amazon-downloaded template workbook, captured automatically on
+// import (owner decision: auto-capture ON). Export-for-Amazon clones these
+// bytes and rewrites ONLY the Template sheet's data rows from platform truth,
+// so valid-values sheets, named ranges and formatting survive byte-for-byte.
+model AmazonTemplateVault {
+  id                 String   @id @default(cuid())
+  templateIdentifier String   @unique
+  marketplace        String
+  productTypes       String[] @default([])
+  headerLanguageTag  String?
+  filename           String
+  bytes              Bytes
+  capturedAt         DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([marketplace])
+}

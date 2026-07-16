@@ -552,3 +552,120 @@ export async function detectAmazonTemplate(bytes: Uint8Array): Promise<AmazonTem
     },
   }
 }
+
+// ── A7 (XLSM hybrid) — surgical data-row rewrite (Export for Amazon) ─────────
+
+export interface TemplateRewriteResult {
+  bytes: Buffer
+  meta: AmazonTemplateMeta
+  headers: string[]
+  rowsWritten: number
+}
+
+function numToColLetters(n: number): string {
+  let s = ''
+  while (n > 0) {
+    const r = (n - 1) % 26
+    s = String.fromCharCode(65 + r) + s
+    n = Math.floor((n - 1) / 26)
+  }
+  return s
+}
+
+function escXmlText(s: string): string {
+  return s
+    .replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'))
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '') // XML 1.0 forbids these outright
+}
+
+/**
+ * Rewrite ONLY the Template sheet's data rows of an Amazon template workbook,
+ * leaving every other byte of the zip untouched — instructions/dictionary/
+ * valid-values sheets, macros (inert), named ranges, localized dropdowns and
+ * the settings/label/attribute rows all survive verbatim. That is what makes
+ * the output re-uploadable to Seller Central as if hand-edited in Excel.
+ *
+ * `dataRows` are keyed by VERBATIM template header (the attr-row path);
+ * missing/empty values simply emit no cell. Cells are written as inlineStr —
+ * self-contained, no sharedStrings surgery. The stale `<dimension>` hint and
+ * `calcChain.xml` are dropped (Excel recomputes both; leaving them triggers
+ * repair prompts).
+ */
+export async function rewriteTemplateDataRows(
+  bytes: Uint8Array,
+  dataRows: Array<Record<string, string>>,
+): Promise<TemplateRewriteResult> {
+  const parsed = await detectAmazonTemplate(bytes)
+  if (!parsed) {
+    throw new Error('Stored workbook is not an Amazon template — re-import the original template to refresh the vault')
+  }
+  const zip = await JSZip.loadAsync(bytes)
+  const sheets = await sheetList(zip)
+  const target = sheets.find((s) => s.name === parsed.meta.sheet)?.target
+  if (!target) throw new Error(`Template sheet "${parsed.meta.sheet}" missing from workbook`)
+  const xml = await readEntry(zip, target)
+  if (!xml) throw new Error('Template sheet XML unreadable')
+  const sst = await sharedStrings(zip)
+
+  // Column position per verbatim header, from the attr row itself (first wins).
+  const colByHeader = new Map<string, number>()
+  walkSheetRows(xml, sst, (row) => {
+    if (row.rowNum < parsed.meta.attrRow) return
+    if (row.rowNum === parsed.meta.attrRow) {
+      for (const [col, v] of row.cells) if (!colByHeader.has(v)) colByHeader.set(v, col)
+    }
+    return false
+  })
+
+  // Splice point: the first physical row at/after the original data start (or
+  // anything past the attr row when the template shipped empty). Everything
+  // before it — settings, labels, attrs, Amazon's blank spacer row — survives.
+  const spliceFromRow = parsed.meta.dataStartRow ?? parsed.meta.attrRow + 1
+  const sdClose = xml.lastIndexOf('</sheetData>')
+  if (sdClose === -1) throw new Error('Template sheet has no <sheetData> block')
+  let splicePos = sdClose
+  {
+    let i = xml.indexOf('<sheetData')
+    while (i !== -1) {
+      const open = xml.indexOf('<row', i)
+      if (open === -1 || open >= sdClose) break
+      const openEnd = xml.indexOf('>', open)
+      if (openEnd === -1) break
+      const attrs = tagAttrs(xml.slice(open, openEnd + 1))
+      const r = attrs.r ? parseInt(attrs.r, 10) : NaN
+      if (Number.isFinite(r) && r >= spliceFromRow) {
+        splicePos = open
+        break
+      }
+      i = openEnd + 1
+    }
+  }
+
+  const genRows: string[] = []
+  let rowNum = spliceFromRow
+  for (const row of dataRows) {
+    const cells: string[] = []
+    for (const [header, col] of colByHeader) {
+      const v = row[header]
+      if (v == null || v === '') continue
+      cells.push(
+        `<c r="${numToColLetters(col)}${rowNum}" t="inlineStr"><is><t xml:space="preserve">${escXmlText(String(v))}</t></is></c>`,
+      )
+    }
+    genRows.push(`<row r="${rowNum}">${cells.join('')}</row>`)
+    rowNum++
+  }
+
+  let outXml = xml.slice(0, splicePos) + genRows.join('') + xml.slice(sdClose)
+  outXml = outXml.replace(/<dimension[^>]*\/>/, '')
+  zip.file(target, outXml)
+  if (zip.file('xl/calcChain.xml')) zip.remove('xl/calcChain.xml')
+
+  const out = await zip.generateAsync({
+    type: 'nodebuffer',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 6 },
+  })
+  return { bytes: out, meta: parsed.meta, headers: parsed.headers, rowsWritten: dataRows.length }
+}

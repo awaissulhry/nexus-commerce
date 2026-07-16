@@ -392,3 +392,113 @@ describe('A2b — listOoxmlSheets + parseOoxmlSheet (operator overrides)', () =>
     expect(await listOoxmlSheets(new TextEncoder().encode('nope'))).toBeNull()
   })
 })
+
+// ── A7 — rewriteTemplateDataRows + buildTemplateDataRows ─────────────────────
+
+describe('A7 — rewriteTemplateDataRows (Export for Amazon)', () => {
+  it('round-trips: rewritten rows parse back identically, meta/settings survive', async () => {
+    const original = await buildV2Fixture()
+    const { rewriteTemplateDataRows } = await import('./template-workbook.js')
+    const skuH = 'contribution_sku#1.value'
+    const typeH = 'product_type#1.value'
+    const nameH = `item_name[marketplace_id=${MP}][language_tag=it_IT]#1.value`
+    const qtyH = 'fulfillment_availability#1.quantity'
+    const out = await rewriteTemplateDataRows(new Uint8Array(original), [
+      { [skuH]: 'PARENT-1', [typeH]: 'COAT', [nameH]: 'Giacca Moto Uomo & Donna <XL>' },
+      { [skuH]: 'CHILD-1', [typeH]: 'COAT', [qtyH]: '7' },
+      { [skuH]: 'CHILD-2', [typeH]: 'PANTS' },
+    ])
+    expect(out.rowsWritten).toBe(3)
+    expect(out.meta.templateIdentifier).toBe('a0fb4d0d-test')
+
+    const reparsed = await detectAmazonTemplate(new Uint8Array(out.bytes))
+    expect(reparsed).not.toBeNull()
+    expect(reparsed!.meta.templateIdentifier).toBe('a0fb4d0d-test')
+    expect(reparsed!.meta.sheet).toBe('Modello')
+    expect(reparsed!.meta.attrRow).toBe(5)
+    expect(reparsed!.meta.dataStartRow).toBe(7) // blank spacer row 6 preserved
+    expect(reparsed!.rows).toHaveLength(3)
+    expect(reparsed!.rows[0][skuH]).toBe('PARENT-1')
+    expect(reparsed!.rows[0][nameH]).toBe('Giacca Moto Uomo & Donna <XL>') // entity round-trip
+    expect(reparsed!.rows[1][qtyH]).toBe('7')
+    expect(reparsed!.rows[2][typeH]).toBe('PANTS')
+    // every row exports with a blank action → all classified as default replace
+    expect(reparsed!.meta.actions).toEqual({ replace: 3, partial: 0, delete: 0, unknown: 0 })
+    // labels row + headers untouched
+    expect(reparsed!.headers).toEqual(V2_ATTRS)
+    expect(reparsed!.labels[skuH]).toBe('SKU')
+    // sibling sheets survive verbatim
+    const { listOoxmlSheets } = await import('./template-workbook.js')
+    expect(await listOoxmlSheets(new Uint8Array(out.bytes))).toEqual([
+      'Istruzioni', 'Definizioni dati', 'Modello', 'Valori validi',
+    ])
+  })
+
+  it('exports an EMPTY grid (0 data rows) without corrupting the template', async () => {
+    const original = await buildV2Fixture()
+    const { rewriteTemplateDataRows } = await import('./template-workbook.js')
+    const out = await rewriteTemplateDataRows(new Uint8Array(original), [])
+    const reparsed = await detectAmazonTemplate(new Uint8Array(out.bytes))
+    expect(reparsed).not.toBeNull()
+    expect(reparsed!.rows).toHaveLength(0)
+    expect(reparsed!.headers).toEqual(V2_ATTRS)
+  })
+
+  it('rejects non-template bytes with a vault-refresh hint', async () => {
+    const { rewriteTemplateDataRows } = await import('./template-workbook.js')
+    const plain = await buildWorkbook({
+      sheets: [{ name: 'Sheet1', rows: [{ r: 1, cells: [{ col: 1, v: 'Name' }] }] }],
+    })
+    await expect(rewriteTemplateDataRows(new Uint8Array(plain), [])).rejects.toThrow(/not an Amazon template/)
+  })
+})
+
+describe('A7 — buildTemplateDataRows (grid → template rows)', () => {
+  const HEADERS = [
+    'contribution_sku#1.value',
+    '::record_action',
+    'fulfillment_availability#1.fulfillment_channel_code',
+    'fulfillment_availability#1.quantity',
+    `item_name[marketplace_id=${MP}][language_tag=it_IT]#1.value`,
+  ]
+  const COLUMNS = [
+    { id: 'item_sku', fieldRef: 'contribution_sku#1.value' },
+    { id: 'fulfillment_availability__fulfillment_channel_code', fieldRef: 'fulfillment_availability#1.fulfillment_channel_code' },
+    { id: 'quantity', fieldRef: 'fulfillment_availability#1.quantity' },
+    { id: 'item_name', fieldRef: 'item_name#1.value' },
+  ]
+
+  it('maps symmetric to import, blanks ::record_action, collapses newlines', async () => {
+    const { buildTemplateDataRows } = await import('./template-vault.service.js')
+    const { dataRows, skippedEmptyRows } = buildTemplateDataRows(HEADERS, COLUMNS, [
+      {
+        item_sku: 'SKU-1',
+        quantity: '7',
+        fulfillment_availability__fulfillment_channel_code: 'DEFAULT',
+        item_name: 'Giacca  Moto\nUomo',
+      },
+      {}, // all-empty grid row → skipped, not exported as noise
+    ])
+    expect(skippedEmptyRows).toBe(1)
+    expect(dataRows).toHaveLength(1)
+    expect(dataRows[0]['contribution_sku#1.value']).toBe('SKU-1')
+    expect(dataRows[0]['fulfillment_availability#1.quantity']).toBe('7') // FBM keeps qty
+    expect(dataRows[0][`item_name[marketplace_id=${MP}][language_tag=it_IT]#1.value`]).toBe('Giacca Moto Uomo')
+    expect(dataRows[0]['::record_action']).toBeUndefined()
+  })
+
+  it('NEVER exports FBA quantity (Amazon-managed — Follow Master invariant)', async () => {
+    const { buildTemplateDataRows } = await import('./template-vault.service.js')
+    const { dataRows } = buildTemplateDataRows(HEADERS, COLUMNS, [
+      {
+        item_sku: 'SKU-FBA',
+        quantity: '99',
+        fulfillment_availability__fulfillment_channel_code: 'AMAZON_EU',
+      },
+    ])
+    expect(dataRows).toHaveLength(1)
+    expect(dataRows[0]['contribution_sku#1.value']).toBe('SKU-FBA')
+    expect(dataRows[0]['fulfillment_availability#1.fulfillment_channel_code']).toBe('AMAZON_EU')
+    expect(dataRows[0]['fulfillment_availability#1.quantity']).toBeUndefined()
+  })
+})
