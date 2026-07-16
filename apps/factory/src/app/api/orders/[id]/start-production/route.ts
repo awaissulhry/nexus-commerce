@@ -15,6 +15,7 @@ import { FEATURES } from "@/lib/auth/permissions";
 import { orderTotals, depositRequiredCents, depositPaidCents, isDepositMet } from "@/lib/orders/money";
 import { planWorkOrders, DEFAULT_STAGES } from "@/lib/orders/production";
 import { reserveWorkOrder } from "@/lib/production/reserve-service";
+import { ensureOrderSpace } from "@/lib/chat/chat-service";
 
 export const permission = FEATURES.ordersEdit;
 
@@ -69,6 +70,7 @@ export const POST = guarded(FEATURES.ordersEdit, async (_req, { params, actor })
   void audit({ actorId: actor!.id, entityType: "order", entityId: id, action: "state-changed", before: { from: "CONFIRMED" }, after: { to: "IN_PRODUCTION", workOrders: planned.length, depositMet } });
   await publishEventDurable("order.updated", { orderId: id, from: "CONFIRMED", to: "IN_PRODUCTION" });
   await publishEventDurable("workorder.created", { orderId: id, count: planned.length, blocked: !depositMet });
+  void ensureOrderSpace(id).catch(() => {}); // FC1 — order space (idempotent; covers orders born without a quote)
 
   return NextResponse.json({ ok: true, workOrders: planned.length, blocked: !depositMet, stages: stages.length });
 });

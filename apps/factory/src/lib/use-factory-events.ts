@@ -51,7 +51,8 @@ const ALL_TYPES: FactoryEventType[] = [
   "notification.created", "comment.created", "conversation.synced", "conversation.updated",
   "pricing.updated", "order.updated", "workorder.created", "workorder.updated",
   "shipment.updated", "payment.recorded", "integration.changed", "import.finished",
-  "party.updated", "certificate.updated", "team.updated", "settings.updated", "resync",
+  "party.updated", "certificate.updated", "team.updated", "settings.updated",
+  "chat.message", "chat.space", "resync",
 ];
 
 function ensureSource(): void {
