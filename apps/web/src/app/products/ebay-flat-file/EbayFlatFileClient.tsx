@@ -31,6 +31,7 @@ import { scanAspectConflicts, buildPrePublishIssues, type PrePublishIssue } from
 import { PrePublishWarningModal } from './PrePublishWarningModal'
 import { EbayImportWizard } from './EbayImportWizard'
 import { stampUnderParent } from './importUnderParent'
+import { planFamilyImport } from './importFamilies.pure'
 import { EbayFlatFileImageDrawer } from './EbayFlatFileImageModal'
 import { deriveImageFamilies, type FamilyDeriveRow, type ImageFamilySummary } from './imageFamilies.pure'
 import { AspectsPanel } from './AspectsPanel'
@@ -2520,6 +2521,67 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     pushHistory: (rows: BaseRow[]) => void,
     targetParentId?: string,
   ) => {
+    // E2 — family-aware import. Without an explicit "Under parent" override
+    // the file's own parent_sku column builds N families in one pass:
+    // identity is (family, sku), so the SAME child SKU may land under several
+    // parents (the owner's shared-SKU multi-listing model) instead of being
+    // collapsed by the old SKU-keyed map. The override keeps legacy behavior.
+    if (!targetParentId) {
+      const actions = planFamilyImport(imported as Record<string, unknown>[], allRows as Record<string, unknown>[])
+      const next = [...allRows]
+      const byRowId = new Map(next.map((r, i) => [String(r._rowId), i]))
+      let added = 0, updated = 0, families = new Set<string>()
+      for (const a of actions) {
+        if (a.kind === 'update' && a.targetRowId != null) {
+          const idx = byRowId.get(a.targetRowId)
+          if (idx == null) continue
+          const merged = { ...next[idx] } as Record<string, unknown>
+          for (const [k, v] of Object.entries(a.imp)) {
+            if (mode === 'overwrite') merged[k] = v
+            else if (merged[k] == null || merged[k] === '') merged[k] = v
+          }
+          merged._dirty = true
+          next[idx] = merged as BaseRow
+          updated++
+          continue
+        }
+        const baseRow: Record<string, unknown> = { ...makeBlankRow(), ...a.imp, _isNew: true, _dirty: true }
+        // Aspect-split the imported axis values using the family's theme so the
+        // variant renders in the right axis columns immediately.
+        const axes = parseThemeAxes(a.parent?.theme ?? String(a.imp.variation_theme ?? ''))
+        for (const axis of axes) {
+          const val = a.imp[axis] ?? a.imp[axis.toLowerCase()] ?? a.imp[`aspect_${axis}`] ?? a.imp[`aspect_${axis.toLowerCase()}`]
+          if (val !== undefined && val !== null) {
+            const canonKey = `aspect_${axis.replace(/\s+/g, '_')}`
+            const lowerKey = `aspect_${axis.toLowerCase().replace(/\s+/g, '_')}`
+            baseRow[canonKey] = val
+            if (lowerKey !== canonKey) baseRow[lowerKey] = val
+          }
+        }
+        let newRow: Record<string, unknown> = baseRow
+        if (a.parent?.platformId) {
+          newRow = stampUnderParent(baseRow, a.parent.platformId, a.parent.sku)
+        } else if (a.parent) {
+          // Parent comes from the same file — link by parent_sku; the save
+          // pre-pass creates the products and wires parentage server-side.
+          newRow = { ...baseRow, _isParent: false, parentage: 'child', parent_sku: a.parent.sku }
+        } else if (a.isParent) {
+          newRow = { ...baseRow, _isParent: true, parentage: 'parent' }
+        }
+        if (a.parent) families.add(a.parent.sku)
+        next.push(newRow as BaseRow)
+        added++
+      }
+      const ordered = pinBlankRowsLast(next)
+      pushHistory(ordered)
+      setRows(ordered)
+      toast.success(
+        `Imported ${imported.length} row${imported.length === 1 ? '' : 's'} — ${added} added, ${updated} updated` +
+        (families.size > 1 ? ` across ${families.size} families` : ''),
+      )
+      return
+    }
+
     const bySku = new Map(allRows.map((r) => [String(r.sku ?? '').trim(), r]))
     const next = [...allRows]
     let added = 0, updated = 0

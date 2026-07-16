@@ -46,6 +46,7 @@ import { publishOrderEvent } from '../services/order-events.service.js';
 import { renderExport } from '../services/export/renderers.js';
 import { parseCsv, parseFile, sniffDelimiter, detectFileKind, type ParsedFile } from '../services/import/parsers.js';
 import { detectAmazonTemplate } from '../services/amazon/template-workbook.js';
+import { upsertSharedMembershipsFromRows, type SharedMembershipUpsertResult } from '../services/ebay-shared-membership-upsert.service.js';
 // P1.2 — eBay flat-file create/reparent pre-pass (new products persist under their parent before ChannelListing loop runs)
 import { runEbayFlatFileCreates, type CreateResult } from '../services/ebay-flat-file-create.service.js';
 import { ebayFamilyKey } from '../services/ebay-flat-file-create.logic.js';
@@ -771,10 +772,24 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         if (rowListingWrites > 0) saved++;
       }
 
+      // E2 — persist shared-SKU memberships from the saved rows. Memberships
+      // were PUSH-ONLY before this: a file describing listings that already
+      // live on eBay (N parents sharing child SKUs, each with its own ItemID)
+      // imported into the grid but never became synced memberships. Best-effort
+      // and additive — a failure here never fails the save.
+      let sharedMemberships: SharedMembershipUpsertResult | undefined
+      if (activeMp && rows.some(r => (r as Record<string, unknown>).shared_sku_listing === true || (r as Record<string, unknown>)._shared === true)) {
+        try {
+          sharedMemberships = await upsertSharedMembershipsFromRows(rows, activeMp)
+        } catch (err) {
+          request.log.warn(err, 'ebay/flat-file/rows: shared membership upsert failed (save unaffected)')
+        }
+      }
+
       // FFP.1 — `saved` now counts rows that produced at least one real
       // ChannelListing write (honest counter); `processed` keeps the legacy
       // rows-iterated semantics; `contentOnly` = snapshot-fallback saves.
-      return reply.send({ saved, processed, contentOnly, createResult });
+      return reply.send({ saved, processed, contentOnly, createResult, ...(sharedMemberships ? { sharedMemberships } : {}) });
     } catch (err: unknown) {
       request.log.error(err, 'ebay/flat-file/rows PATCH failed');
       return reply
