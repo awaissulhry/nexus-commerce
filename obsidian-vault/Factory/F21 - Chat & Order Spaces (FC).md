@@ -33,3 +33,7 @@ Part of [[F00 - Factory OS MOC]] · closes the "no communication gap" invariant'
 - [[F10 - Inbox (EPI)]] EPI.6 defines the email-event card contract (`?focus=&msg=` anchors) FC5 renders.
 - [[F11 - Quotes (EPQ)]] quote-feed integration deferred to FC5.
 - FS3's `MentionTextarea`/`AsyncCombobox` feed FC composers ([[F22 - Substrate FS Series]]).
+
+## FC1 spec status (2026-07-16)
+
+`docs/factory/FC1-SPEC.md` drafted — **awaiting Owner gate**. Answers all five substrate questions: new Chat* entities (Comment untouched), audits inside chat-service, money via strippable `moneyCents` field (never in body — enforced by test), FC5 sources from the FS2 bus, WORKER gets `pages.chat`+`chat.post` explicitly. Windowed message API ready for FS3's WindowedList in FC2.

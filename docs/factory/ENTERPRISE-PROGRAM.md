@@ -37,7 +37,7 @@ Started 2026-07-11 at the Owner's direction: *"work page by page to make sure it
 | Virtualized DataGrid, windowed lists, paged/searchable comboboxes, @mention autocomplete | **FS3** | **components SHIPPED 2026-07-11 (`src/components/`: VirtualDataGrid, WindowedList, AsyncCombobox, MentionTextarea, PaneHandle/useResizablePanes) + adopted on unclaimed pages. PENDING ADOPTIONS by page owners — EPI: ConversationList/ThreadPane windowing, composer MentionTextarea, InboxClient pane hook, ContextRail picker; EPO: orders grid + party filter; EPQ: quotes grid + party picker (EPQ.3); EPF: financials grids ×3** |
 | Write transactions, session-cache, optimistic concurrency, login rate-limit | **FS4** | queued |
 | FTS search, attachment/PDF streaming, snapshot & archival | **FS5** | queued |
-| Per-order internal chat (Order Spaces), system-message feed, presence/read receipts | **FC1–FC6** | approved, after FS2 |
+| Per-order internal chat (Order Spaces), system-message feed, presence/read receipts | **FC1–FC6** | **FC1-SPEC.md drafted 2026-07-16 (schema/service/API, answers all 5 substrate questions) — AWAITING OWNER GATE; FS2 prerequisite met** |
 | Notifications (single write path `notify()`), bell, outbox | F1/FP1 (exists) | live |
 | Load harness + parity + `check:query-bounds` fence | FS0/FS1 (exists) | live — every EP page re-runs it |
 | Approval-gate / margin-floor governance patterns | EPQ defines the house pattern (first consumer) | — |
