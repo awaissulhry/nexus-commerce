@@ -793,11 +793,15 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     try { localStorage.setItem('ff-show-overrides', showOverrideBadges ? '1' : '0') } catch {}
   }, [showOverrideBadges])
 
-  // Ensure row height is tall enough for badge + row number to both be visible
+  // B2.2 — the legacy 36px row-height FLOOR is gone. It force-wrote
+  // eff-row-height=36 on every load (badge-era fit), which is why eBay rows
+  // stayed 37px however the operator resized and why B2's compact default
+  // never landed. Density is now owner-controlled: drag handle + the View
+  // menu's "Row height: reset to compact". One-time migration: a stored 36
+  // (the old floor's own write) snaps back to the 28 default.
   useState(() => {
     try {
-      const current = parseInt(localStorage.getItem('eff-row-height') ?? '28', 10) || 28
-      if (current < 36) localStorage.setItem('eff-row-height', '36')
+      if (localStorage.getItem('eff-row-height') === '36') localStorage.setItem('eff-row-height', '28')
     } catch {}
   })
 
