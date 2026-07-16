@@ -342,9 +342,9 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // ── POST /api/amazon/flat-file/submit ───────────────────────────────
   // Accepts an array of rows, submits them as a JSON_LISTINGS_FEED to SP-API.
   fastify.post<{
-    Body: { rows: any[]; marketplace?: string; expandedFields?: Record<string, string>; productType?: string; overrideCompliance?: boolean }
+    Body: { rows: any[]; marketplace?: string; expandedFields?: Record<string, string>; deepFields?: Record<string, any>; productType?: string; overrideCompliance?: boolean }
   }>('/amazon/flat-file/submit', async (request, reply) => {
-    const { rows, marketplace = 'IT', expandedFields = {}, productType, overrideCompliance } = request.body
+    const { rows, marketplace = 'IT', expandedFields = {}, deepFields = {}, productType, overrideCompliance } = request.body
     const mp = marketplace.toUpperCase()
     const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
     const sellerId = getSellerId()
@@ -582,6 +582,9 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       wrappedSubPropFields,
       // UFX P1 (P0-2) — schema-typed sub-property coercion ("38" stays a string).
       subPropTypes,
+      // A4C — deep-column reassembly specs (client sends manifest.deepFields,
+      // mirroring expandedFields; absent from older clients → {} → inert).
+      deepFields,
     })
     if (messageCount === 0) {
       return reply.code(400).send({

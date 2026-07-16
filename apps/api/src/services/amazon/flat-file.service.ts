@@ -21,6 +21,7 @@ import { parseLocaleNumber, parseLocaleInt } from '../../lib/parse-locale-number
 import { casUpdateChannelListing, isVersionConflict } from '../channel-listing-cas.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
 import { extractBrowseNodes, browseNodeIdFromRow, resolveBrowseNodeId, buildPlatformAttributes, type BrowseNode } from './browse-nodes.js'
+import { emitUncoveredColumns, applyDeepValue, type DeepFieldSpec } from './flat-file-schema-walk.js'
 import { extractConditionalFields } from '../listing-wizard/conditional-requirements.js'
 import { amazonMarketplaceId } from '../categories/marketplace-ids.js'
 import { buildListingScopeWhere, type ListingScope } from '../flat-file/listing-scope.js'
@@ -205,6 +206,18 @@ export interface FlatFileManifest {
    * Used by buildJsonFeedBody to reassemble multi-instance columns into arrays.
    */
   expandedFields: Record<string, string>
+  /**
+   * A4C — reassembly specs for the exhaustive-expansion columns (schema leaf
+   * paths the specialized patterns didn't cover). Keyed by column id; feed
+   * building rebuilds these into their exact nested SP-API shapes.
+   */
+  deepFields?: Record<string, DeepFieldSpec>
+  /**
+   * A4C — coverage sentinel: every schema leaf must be either pattern-covered
+   * or exhaustively emitted. `uncovered` is [] by construction; anything else
+   * is logged at generation and means a regression in the expansion layer.
+   */
+  __coverage?: { leaves: number; covered: number; emitted: number; uncovered: string[] }
 }
 
 export interface FlatFileRow {
@@ -237,6 +250,10 @@ export interface FeedSchemaHints {
    *  are coerced by THIS (a string-typed "38" stays a string) instead of
    *  Number() sniffing. Absent (no schema) → legacy sniff. */
   subPropTypes?: Record<string, SubPropType>
+  /** A4C — reassembly specs for the exhaustive-expansion deep columns
+   *  (manifest.deepFields). A row cell whose column id is a key here is
+   *  rebuilt into its exact nested SP-API shape via applyDeepValue. */
+  deepFields?: Record<string, DeepFieldSpec>
   /** FFP.3 — fallback productType when a row's own cell is blank (a blank
    *  productType malformed the whole feed: 4002010 '#/productType').
    *  UFX P6d — the row's parent (by parent_sku) wins over this fallback. */
@@ -1442,9 +1459,18 @@ export function mergeManifestsIntoUnion(manifests: FlatFileManifest[], types: st
   })
 
   const expandedFields: Record<string, string> = {}
+  const deepFields: Record<string, DeepFieldSpec> = {}
+  const unionCoverage = { leaves: 0, covered: 0, emitted: 0, uncovered: [] as string[] }
   const variationThemes = new Set<string>()
   for (const m of manifests) {
     Object.assign(expandedFields, m.expandedFields ?? {})
+    Object.assign(deepFields, m.deepFields ?? {})
+    if (m.__coverage) {
+      unionCoverage.leaves += m.__coverage.leaves
+      unionCoverage.covered += m.__coverage.covered
+      unionCoverage.emitted += m.__coverage.emitted
+      unionCoverage.uncovered.push(...m.__coverage.uncovered)
+    }
     for (const vt of m.variationThemes ?? []) variationThemes.add(vt)
   }
 
@@ -1482,6 +1508,8 @@ export function mergeManifestsIntoUnion(manifests: FlatFileManifest[], types: st
     requirementsEnforcedByType: Object.keys(requirementsEnforcedByType).length > 0 ? requirementsEnforcedByType : undefined,
     groups: groupOrder.map((id) => groupById.get(id)!),
     expandedFields,
+    deepFields,
+    __coverage: unionCoverage,
   }
 }
 
@@ -1822,9 +1850,32 @@ export class AmazonFlatFileService {
     // Needed by buildJsonFeedBody to reassemble them into SP-API arrays.
     const expandedFields: Record<string, string> = {}
 
+    // A4C — exhaustive-by-construction expansion (owner mandate: "missing
+    // columns must never happen again"). After the specialized patterns emit
+    // their columns for a field, every remaining schema leaf gets a generic
+    // typed column + a deep-reassembly spec. The coverage sentinel proves it.
+    const deepFields: Record<string, DeepFieldSpec> = {}
+    const coverage = { leaves: 0, covered: 0, emitted: 0, uncovered: [] as string[] }
+
     // Helper: expand one schema property into 1 or N columns
-    const expand = (fieldId: string, prop: Record<string, any>, isReq: boolean) =>
-      expandSchemaField(fieldId, prop, isReq, schemaLabels, schemaEnums, lang, expandedFields)
+    const expand = (fieldId: string, prop: Record<string, any>, isReq: boolean) => {
+      const cols = expandSchemaField(fieldId, prop, isReq, schemaLabels, schemaEnums, lang, expandedFields)
+      try {
+        const extra = emitUncoveredColumns(fieldId, prop, cols)
+        for (const c of extra.columns) cols.push({ ...c, width: c.width } as FlatFileColumn)
+        Object.assign(deepFields, extra.deep)
+        coverage.leaves += extra.leaves
+        coverage.covered += extra.covered
+        coverage.emitted += extra.columns.length
+        const missed = extra.leaves - extra.covered - extra.columns.length
+        if (missed > 0) coverage.uncovered.push(`${fieldId} (+${missed})`)
+      } catch (err) {
+        // Never let the exhaustive layer break manifest generation — but a
+        // failure here IS a coverage gap, so the sentinel records it loudly.
+        coverage.uncovered.push(`${fieldId} (walker error: ${err instanceof Error ? err.message : String(err)})`)
+      }
+      return cols
+    }
 
     const amazonGroups = def.__propertyGroups as
       | Record<string, { title: string; propertyNames: string[] }>
@@ -1901,6 +1952,15 @@ export class AmazonFlatFileService {
       })
     }
 
+    // A4C — coverage sentinel: uncovered leaves are impossible by construction;
+    // anything here means the exhaustive layer regressed. Loud, never fatal.
+    if (coverage.uncovered.length > 0) {
+      console.warn(
+        `[flat-file] SCHEMA COVERAGE GAP ${mp}/${pt}: ${coverage.uncovered.length} field(s) with unemitted leaves`,
+        coverage.uncovered.slice(0, 10),
+      )
+    }
+
     // BN.0.2 — decorate recommended_browse_nodes columns with id→path enum options
     const browseNodes = extractBrowseNodes(def, amazonMarketplaceId(mp))
     const allGroups = [infraGroup, variationsGroup, ...schemaGroups]
@@ -1945,6 +2005,8 @@ export class AmazonFlatFileService {
       requirementsEnforced: typeof def.__requirementsEnforced === 'string' ? def.__requirementsEnforced : undefined,
       groups: allGroups,
       expandedFields,
+      deepFields,
+      __coverage: coverage,
     }
   }
 
@@ -2595,6 +2657,7 @@ export class AmazonFlatFileService {
     const languageTag = LANGUAGE_TAG_MAP[mp] ?? 'it_IT'
 
     const enumCodeMap = feedSchema.enumCodeMap ?? {}
+    const deepFieldSpecs = feedSchema.deepFields ?? {}
     const numericFields = feedSchema.numericFields ?? new Set<string>()
     const booleanFields = feedSchema.booleanFields ?? new Set<string>()
     const localizedFields = feedSchema.localizedFields
@@ -2840,6 +2903,13 @@ export class AmazonFlatFileService {
           // (Amazon's own manifest is the truth). Kills the not-applicable
           // attribute spray that buried real errors under ~50 warnings/SKU.
           if (applicableCols && !applicableCols.has(k)) continue
+          // A4C — exhaustive-expansion deep column: rebuild the exact nested
+          // SP-API shape (arrays-in-arrays, localized wrappers, typed leaves).
+          const deepSpec = deepFieldSpecs[k]
+          if (deepSpec) {
+            applyDeepValue(attrs, deepSpec.field, deepSpec, String(v), { marketplaceId, languageTag })
+            continue
+          }
           const path = expandedFields[k]
           if (path) {
             if (!path.includes('.')) {

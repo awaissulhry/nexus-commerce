@@ -40,6 +40,8 @@ export interface DeepSeg {
 }
 
 export interface DeepFieldSpec {
+  /** The root attribute (schema field id) this leaf belongs to. */
+  field: string
   /** Path segments AFTER the root field (root idx lives in rootIdx). */
   segs: DeepSeg[]
   /** 1-based instance of the root attribute array. */
@@ -128,7 +130,7 @@ export function walkSchemaLeaves(fieldId: string, prop: SchemaNode): DeepLeaf[] 
       labelEn,
       enums: enumsOf(leafNode),
       maxLength: typeof leafNode?.maxLength === 'number' ? leafNode.maxLength : undefined,
-      spec: { segs, rootIdx, leaf: leafKey || 'value', type: scalarType(leafNode), leafLocalized: leafLocalized || undefined },
+      spec: { field: fieldId, segs, rootIdx, leaf: leafKey || 'value', type: scalarType(leafNode), leafLocalized: leafLocalized || undefined },
     })
   }
 

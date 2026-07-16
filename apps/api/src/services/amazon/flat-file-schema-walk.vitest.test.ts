@@ -139,8 +139,8 @@ describe('emitUncoveredColumns — the never-again diff', () => {
 describe('applyDeepValue — nested reassembly', () => {
   it('rebuilds sibling leaves into one nested structure with root stamps', () => {
     const attrs: Record<string, unknown> = {}
-    const specWeightV = { rootIdx: 2, segs: [{ key: 'granular_materials', idx: 3 }], leaf: 'value', type: 'number' as const }
-    const specWeightU = { rootIdx: 2, segs: [{ key: 'granular_materials', idx: 3 }], leaf: 'unit', type: 'string' as const }
+    const specWeightV = { field: 'epr_product_packaging', rootIdx: 2, segs: [{ key: 'granular_materials', idx: 3 }], leaf: 'value', type: 'number' as const }
+    const specWeightU = { field: 'epr_product_packaging', rootIdx: 2, segs: [{ key: 'granular_materials', idx: 3 }], leaf: 'unit', type: 'string' as const }
     // weight is one level deeper (object under the array element)
     const vSpec = { ...specWeightV, segs: [...specWeightV.segs, { key: 'weight' }] }
     const uSpec = { ...specWeightU, segs: [...specWeightU.segs, { key: 'weight' }] }
@@ -160,7 +160,7 @@ describe('applyDeepValue — nested reassembly', () => {
     applyDeepValue(
       attrs,
       'outer',
-      { rootIdx: 1, segs: [{ key: 'material', idx: 2, localized: true }], leaf: 'value', type: 'string' },
+      { field: 'outer', rootIdx: 1, segs: [{ key: 'material', idx: 2, localized: true }], leaf: 'value', type: 'string' },
       'Nylon',
       CTX,
     )
@@ -171,7 +171,7 @@ describe('applyDeepValue — nested reassembly', () => {
     applyDeepValue(
       attrs,
       'purchasable_offer',
-      { rootIdx: 1, segs: [{ key: 'minimum_seller_allowed_price', idx: 1 }, { key: 'schedule', idx: 1 }], leaf: 'value_with_tax', type: 'number' },
+      { field: 'purchasable_offer', rootIdx: 1, segs: [{ key: 'minimum_seller_allowed_price', idx: 1 }, { key: 'schedule', idx: 1 }], leaf: 'value_with_tax', type: 'number' },
       '99.5',
       CTX,
     )
@@ -184,7 +184,7 @@ describe('applyDeepValue — nested reassembly', () => {
 
   it('drops NaN numbers instead of emitting them', () => {
     const attrs: Record<string, unknown> = {}
-    applyDeepValue(attrs, 'chest', { rootIdx: 1, segs: [{ key: 'size', idx: 1 }], leaf: 'value', type: 'number' }, 'abc', CTX)
+    applyDeepValue(attrs, 'chest', { field: 'chest', rootIdx: 1, segs: [{ key: 'size', idx: 1 }], leaf: 'value', type: 'number' }, 'abc', CTX)
     expect(attrs.chest).toBeUndefined()
   })
 })

@@ -2311,7 +2311,7 @@ export default function AmazonFlatFileClient({
         const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/submit`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rows: toSend, marketplace: mp, expandedFields: effectiveManifest?.expandedFields ?? {}, productType }),
+          body: JSON.stringify({ rows: toSend, marketplace: mp, expandedFields: effectiveManifest?.expandedFields ?? {}, deepFields: (effectiveManifest as { deepFields?: Record<string, unknown> } | null)?.deepFields ?? {}, productType }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(`[${mp}] ${data.error ?? 'Submit failed'}`)
