@@ -1,6 +1,8 @@
 # XLSM + Amazon Official-Template Hybrid Import/Export — and Flat-File `#`-Column View Menu
 
-**Date:** 2026-07-16 · **Status: PROPOSAL — AWAITING OWNER GATE** (no code written; per approval-before-implementing + flat-file-untouchable rules, every phase below ships only after explicit approval, phase-by-phase)
+**Date:** 2026-07-16 · **Status: APPROVED + IN FLIGHT** (owner gate opened 2026-07-16: qty import default OFF, price ON, deletes excluded-by-default **with explicit owner override**, vault auto-capture ON, rest as recommended)
+
+> **Progress:** A1+A2 shipped `0403b704` (xlsm end-to-end, 32MB bodyLimit fix, ~30ms template reader — exceljs never finished these workbooks) · A3 shipped `42551c44` (tier-0 template-path mapping on canonicalized fieldRefs) · A3w+**A2b** shipped `8a2d98ae`/`fd702890` (wizard template banner + market switch, qty/price policy toggles, delete-row typed-DELETE override via removeFromAmazon, **multi-sheet + header-row control** — new phase added on owner request: every Excel parse reports all sheets + chosen headerRow, both operator-overridable) · B1 shipped `8c10c1f8` (# column compact by default; View menu with Row details / Row actions / Override badges / Cascade buttons; clone also in context menu). Real-file smoke green on all 5 files. Pending: prod visual verify + live ≥95% map-rate check; then A5 linking → A6 → A7 vault → A8.
 
 ## 0. What the owner asked for
 
