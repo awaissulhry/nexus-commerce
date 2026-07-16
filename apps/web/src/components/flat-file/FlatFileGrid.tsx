@@ -107,7 +107,7 @@ function padToMin(rows: BaseRow[], make: () => BaseRow, min: number): BaseRow[] 
 
 // ── MenuDropdown ───────────────────────────────────────────────────────────
 
-function MenuDropdown({ label, items }: { label: string; items: Array<{ label?: string; icon?: React.ReactNode; shortcut?: string; onClick?: () => void; disabled?: boolean; separator?: boolean }> }) {
+function MenuDropdown({ label, items }: { label: string; items: Array<{ label?: string; icon?: React.ReactNode; shortcut?: string; onClick?: () => void; disabled?: boolean; separator?: boolean; checked?: boolean }> }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -132,6 +132,9 @@ function MenuDropdown({ label, items }: { label: string; items: Array<{ label?: 
                 className={cn('w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-left transition-colors',
                   item.disabled ? 'text-slate-300 dark:text-slate-600 cursor-default'
                                 : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800')}>
+                {item.checked !== undefined && (
+                  <span className="w-3.5 flex-shrink-0 text-violet-600 dark:text-violet-400 font-semibold">{item.checked ? '✓' : ''}</span>
+                )}
                 {item.icon && <span className="w-3.5 h-3.5 flex-shrink-0 flex items-center">{item.icon}</span>}
                 <span className="flex-1">{item.label}</span>
                 {item.shortcut && <span className="text-[10px] font-mono text-slate-400">{item.shortcut}</span>}
@@ -893,7 +896,7 @@ export default function FlatFileGrid({
   renderAiPanel, renderEmptyAction, renderContextMenu, renderFooterActions,
   onColumnsClick, columnsActive, toolbarTrailing,
   columnGroupState, onGroupStateChange,
-  fileMenuItems, editMenuItems,
+  fileMenuItems, editMenuItems, viewMenuItems,
   apiRef,
   enableCustomGroups = false,
 }: FlatFileGridProps) {
@@ -2398,6 +2401,8 @@ export default function FlatFileGrid({
             { label: 'Reset column order (within groups)', onClick: () => setColOrderByGroup({}), disabled: !Object.keys(colOrderByGroup).length },
             ...(editMenuItems?.(toolbarFetchCtx) ?? []),
           ]} />
+          {/* B1 — View menu: display toggles (e.g. # column row details), channel-supplied. */}
+          {viewMenuItems && <MenuDropdown label="View" items={viewMenuItems(toolbarFetchCtx)} />}
           <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5 flex-shrink-0" />
           {titleIcon}
           <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">{title}</span>

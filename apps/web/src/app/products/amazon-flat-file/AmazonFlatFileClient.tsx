@@ -997,6 +997,19 @@ export default function AmazonFlatFileClient({
   useEffect(() => { try { localStorage.setItem('ff-show-cascade', showCascadeButtons ? '1' : '0') } catch {} }, [showCascadeButtons])
   const [cascadeRow, setCascadeRow] = useState<Row | null>(null)
 
+  // B1 — # column density (owner 2026-07-16): the ASIN/status/sync details and
+  // the clone action are HIDDEN by default (the stacked meta stretched every row
+  // past the 28px baseline); the View menu re-enables them. Page-scoped keys —
+  // one setting governs all markets, unlike the per-market storageKey prefs.
+  const [showRowDetails, setShowRowDetails] = useState<boolean>(() => {
+    try { return localStorage.getItem('ff-amazon-view-details') === '1' } catch { return false }
+  })
+  useEffect(() => { try { localStorage.setItem('ff-amazon-view-details', showRowDetails ? '1' : '0') } catch {} }, [showRowDetails])
+  const [showRowActions, setShowRowActions] = useState<boolean>(() => {
+    try { return localStorage.getItem('ff-amazon-view-actions') === '1' } catch { return false }
+  })
+  useEffect(() => { try { localStorage.setItem('ff-amazon-view-actions', showRowActions ? '1' : '0') } catch {} }, [showRowActions])
+
   // ── Fetch known product types whenever marketplace changes ─────────
   useEffect(() => {
     let cancelled = false
@@ -3917,6 +3930,12 @@ export default function AmazonFlatFileClient({
           { separator: true },
           { label: 'Insert row above', onClick: () => insertAt(0) },
           { label: 'Insert row below', onClick: () => insertAt(1) },
+          // B1 — Clone stays reachable even with the # column's action button hidden.
+          {
+            label: 'Clone variant',
+            disabled: (ctx.anchorRow as Row | undefined)?.parentage_level !== 'child',
+            onClick: () => { const a = ctx.anchorRow as Row | undefined; if (a) handleCloneVariant(a) },
+          },
           {
             label: `Delete row${ctx.selRowCount !== 1 ? 's' : ''}`,
             disabled: !ctx.hasSelection,
@@ -3937,15 +3956,22 @@ export default function AmazonFlatFileClient({
         ]}
       />
     )
-  }, [pushSnapshot, setRows, removeFromAmazon])
+  }, [pushSnapshot, setRows, removeFromAmazon, handleCloneVariant])
 
   // ── Slot: row-header meta (ASIN link · status · badges · clone) ──────────
+  // B1 — compact by default: details (ASIN/status/sync) and actions (clone)
+  // render only when enabled in the View menu; override/cascade badges keep
+  // their own IN.1/IN.2 switches (also surfaced in View). All off → null →
+  // the # cell is just the row number and every row sits at the 28px baseline.
   const renderRowMeta = useCallback((row: BaseRow) => {
     const r = row as Row
     if (r._ghost) return null
-    const asin = r._asin ? String(r._asin) : null
+    const wantBadges = showOverrideBadges || (showCascadeButtons && r._productId)
+    const wantActions = showRowActions && r.parentage_level === 'child'
+    if (!showRowDetails && !wantActions && !wantBadges) return null
+    const asin = showRowDetails && r._asin ? String(r._asin) : null
     const domain = AMAZON_DOMAIN[marketplace] ?? 'amazon.com'
-    const listingStatus = r._listingStatus != null ? String(r._listingStatus) : null
+    const listingStatus = showRowDetails && r._listingStatus != null ? String(r._listingStatus) : null
     return (
       <div className="flex flex-col items-end gap-0.5">
         {asin && (
@@ -3985,8 +4011,8 @@ export default function AmazonFlatFileClient({
               <GitFork className="h-2.5 w-2.5" />↓
             </button>
           )}
-          {/* P4.3 — Clone variant (child rows only) */}
-          {r.parentage_level === 'child' && (
+          {/* P4.3 — Clone variant (child rows only; B1: behind View → Row actions) */}
+          {wantActions && (
             <button
               onClick={(e) => { e.stopPropagation(); handleCloneVariant(r) }}
               onPointerDown={(e) => e.stopPropagation()}
@@ -3996,8 +4022,8 @@ export default function AmazonFlatFileClient({
               <Copy className="h-2.5 w-2.5" />
             </button>
           )}
-          {/* P1.4 — Last-sync badge */}
-          {r._lastSyncedAt ? (() => {
+          {/* P1.4 — Last-sync badge (B1: part of View → Row details) */}
+          {showRowDetails && r._lastSyncedAt ? (() => {
             const syncSt = String(r._lastSyncStatus ?? '')
             const syncAt = new Date(String(r._lastSyncedAt))
             const secAgo = Math.round((Date.now() - syncAt.getTime()) / 1000)
@@ -4017,7 +4043,16 @@ export default function AmazonFlatFileClient({
         </div>
       </div>
     )
-  }, [marketplace, showOverrideBadges, showCascadeButtons, handleCloneVariant])
+  }, [marketplace, showOverrideBadges, showCascadeButtons, handleCloneVariant, showRowDetails, showRowActions])
+
+  // B1 — View menu (grid Bar 1): every # column element under owner control.
+  const viewMenuItems = useCallback(() => [
+    { label: 'Row details (ASIN · status · sync)', checked: showRowDetails, onClick: () => setShowRowDetails((v) => !v) },
+    { label: 'Row actions (clone variant)', checked: showRowActions, onClick: () => setShowRowActions((v) => !v) },
+    { separator: true as const },
+    { label: 'Override badges', checked: showOverrideBadges, onClick: () => setShowOverrideBadges((v) => !v) },
+    { label: 'Cascade buttons', checked: showCascadeButtons, onClick: () => setShowCascadeButtons((v) => !v) },
+  ], [showRowDetails, showRowActions, showOverrideBadges, showCascadeButtons])
 
   // ── Slot: modals that need live grid rows ─────────────────────────────────
   const renderModals = useCallback(({ rows }: ModalsCtx) => {
@@ -4452,6 +4487,7 @@ export default function AmazonFlatFileClient({
           getCellReadOnly={getCellReadOnly}
           getRowImageUrl={getRowImageUrl}
           renderRowMeta={renderRowMeta}
+          viewMenuItems={viewMenuItems}
           onReplicate={handleReplicate}
           renderChannelStrip={renderChannelStrip}
           renderPushExtras={renderPushExtras}

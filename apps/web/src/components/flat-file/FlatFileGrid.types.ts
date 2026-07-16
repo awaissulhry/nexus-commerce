@@ -388,6 +388,12 @@ export interface FlatFileGridProps {
    * rows and disable themselves when nothing is selected. Called on every grid render.
    */
   editMenuItems?: (ctx: ToolbarFetchCtx) => Array<{ label?: string; icon?: React.ReactNode; onClick?: () => void; disabled?: boolean; separator?: boolean }>
+  /**
+   * B1 — items for a "View" menu rendered between Edit and the title (display
+   * toggles like the # column's row details/actions). Rendered only when
+   * provided. `checked` renders a leading ✓ so items read as toggles.
+   */
+  viewMenuItems?: (ctx: ToolbarFetchCtx) => Array<{ label?: string; icon?: React.ReactNode; onClick?: () => void; disabled?: boolean; separator?: boolean; checked?: boolean }>
   renderModals?: (ctx: ModalsCtx) => React.ReactNode
   renderToolbarFetch?: (ctx: ToolbarFetchCtx) => React.ReactNode
   renderToolbarImport?: (ctx: ToolbarImportCtx) => React.ReactNode
