@@ -1,6 +1,6 @@
 # F10 - Inbox (EPI)
 
-> **Route:** `/inbox` · **EP code:** EPI · **Status:** 🟡 proposal + design dossier + UI inventory delivered — **awaiting Owner gate** (5 decisions). Nothing built.
+> **Route:** `/inbox` · **EP code:** EPI · **Status:** 🔨 proposal **APPROVED 2026-07-16** ("proceed with your recommendations") — **EPI.1 building** (perfection sweep). Spec: `EPI1-SPEC.md`.
 > Canonical docs: `docs/factory/EPI-PROPOSAL.md` (incl. §5 design dossier) · `EPI-UI-INVENTORY.md` (17-gap ledger) · base: `FP1-SPEC.md`/`FP1-REPORT.md`
 
 Part of [[F00 - Factory OS MOC]] · flow position: [[F01 - Mission & Golden Flow]] step 1 — **the golden flow starts here** · program: [[F06 - Enterprise Program (EP)]]
@@ -27,9 +27,9 @@ Plus 15 more gaps: dark-but-wired routes (bulk assign, link-existing-party), key
 | EPI.5 | Triage & collaboration — per-user read/unread, claim semantics, send-time collision pause, quoted-text collapse, in-thread find, export |
 | EPI.6 | Rail & seams — **Orders card** (fills FP1's reserved slot; consumes [[F12 - Orders (EPO)]] summary shape), party history, FC seam contract |
 
-## Owner decisions pending
+## Owner decisions — RESOLVED 2026-07-16 (approved as recommended)
 
-Approve 6-phase plan? · phase order (pull Views ahead of Previews?) · DeepL translation key yes/no · undo-send window default 10s · views scope = Owner-defined shared views, personal later.
+Six phases in order 1→6 · undo-send default 10s (5/10/20/30 configurable) · views = Owner-defined shared (personal later) · DeepL translation stays slotted in EPI.4 but **dormant until the Owner provides a free DeepL API key**.
 
 ## Owns / Consumes
 

@@ -12,7 +12,7 @@
 		{"id":"o5","type":"file","x":0,"y":1360,"width":480,"height":300,"file":"Factory/F17 - Shipping (EPS).md"},
 		{"id":"o6","type":"file","x":0,"y":1700,"width":480,"height":300,"file":"Factory/F19 - Analytics (EPA).md"},
 		{"id":"o7","type":"file","x":0,"y":2040,"width":480,"height":300,"file":"Factory/F20 - Settings & Team (EPT).md"},
-		{"id":"g1","type":"file","x":560,"y":0,"width":480,"height":300,"color":"3","file":"Factory/F10 - Inbox (EPI).md"},
+		{"id":"g1","type":"file","x":1120,"y":1020,"width":480,"height":300,"color":"4","file":"Factory/F10 - Inbox (EPI).md"},
 		{"id":"g2","type":"file","x":560,"y":340,"width":480,"height":300,"color":"3","file":"Factory/F12 - Orders (EPO).md"},
 		{"id":"g3","type":"file","x":560,"y":680,"width":480,"height":300,"color":"3","file":"Factory/F18 - Financials (EPF).md"},
 		{"id":"g4","type":"text","x":560,"y":1020,"width":480,"height":300,"color":"3","text":"### Also awaiting the Owner\n- FP11 gate steps: flip RBAC `enforce` on :3100 · settle WhatsApp (FD5)\n- FD13 deposit defaults (% + bypass segment)\n- Sendcloud live probe: connect + one €0 label (FD6)\n- ⚠ EPF compliance facts → commercialista before EPF.7"},

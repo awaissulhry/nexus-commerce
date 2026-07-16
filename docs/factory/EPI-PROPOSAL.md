@@ -291,13 +291,12 @@ All additive (live-server rule): `InboxView`, `InboxViewOverride`, `InboxRule`, 
 - Keyboard: full 5.12 grammar works; `?` overlay documents it.
 - No live sends in automation (outbound queue tested with a fake transport, like FP8's FakeCarrier); MIME builder unit-tested; Owner exercises one real send per gate.
 
-## §8 Owner decisions needed at this gate
+## §8 Owner decisions — RESOLVED 2026-07-16 ("Approved, proceed with your recommendations")
 
-1. **Approve the six-phase plan** (each phase still re-gates with its own spec)?
-2. **Phase order** — recommended 1→6; say the word to pull Views (EPI.3) ahead of Previews (EPI.2).
-3. **Translation** — DeepL API Free (500k chars/month) needs an account+key from you; include in EPI.4 or drop?
-4. **Undo-send window default** — 10s (5/10/20/30 configurable)?
-5. **Views scope** — recommended: Owner-defined shared views that all users see (workers consume, don't manage); personal views later.
+1. Six-phase plan **approved**; phases run 1→6 as recommended.
+2. Undo-send default **10s** (5/10/20/30 configurable in Settings).
+3. Views = **Owner-defined shared** (workers consume; personal views later).
+4. Translation: slot stays in EPI.4 but **dormant until the Owner provides a DeepL API Free key** — no external account is created on the Owner's behalf.
 
 ## §9 Out of scope (named, not silent)
 
