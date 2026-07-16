@@ -160,3 +160,42 @@ describe('A3 — template-path tier in suggestFlatFileMapping', () => {
     expect(mappings[0].columnId).toBeNull()
   })
 })
+
+describe('A3.1 — volt identity aliases + suffix relaxation', () => {
+  const columns = [
+    { id: 'external_product_id', labelEn: 'Product ID', fieldRef: '::external_product_id' },
+    { id: 'external_product_id_type', labelEn: 'Product ID Type', fieldRef: '::external_product_id_type' },
+    { id: 'closure__type', labelEn: 'Closure Type', fieldRef: 'closure[marketplace_id]#1.type' },
+    { id: 'rise__style', labelEn: 'Rise Style', fieldRef: 'rise[marketplace_id]#1.style' },
+    { id: 'outer__material', labelEn: 'Outer Material', fieldRef: 'outer[marketplace_id]#1.material' },
+  ]
+  const MP = '[marketplace_id=APJ6JRA9NG5V4]'
+  const LT = '[language_tag=it_IT]'
+
+  it('maps the amzn1.volt identity pair onto the sentinel columns', () => {
+    const { mappings } = suggestFlatFileMapping(
+      ['amzn1.volt.ca.product_id_type', 'amzn1.volt.ca.product_id_value'],
+      columns,
+    )
+    const byHeader = new Map(mappings.map((m) => [m.header, m]))
+    expect(byHeader.get('amzn1.volt.ca.product_id_value')!.columnId).toBe('external_product_id')
+    expect(byHeader.get('amzn1.volt.ca.product_id_type')!.columnId).toBe('external_product_id_type')
+    expect(byHeader.get('amzn1.volt.ca.product_id_value')!.source).toBe('template-alias')
+  })
+
+  it('relaxes a trailing .value (and a trailing instance) onto sub-prop fieldRefs', () => {
+    const headers = [
+      `closure${MP}#1.type${LT}#1.value`,
+      `rise${MP}#1.style${LT}#1.value`,
+      `outer${MP}#1.material${LT}#1.value`,
+      `outer${MP}#1.material${LT}#2.value`, // instance 2 — stays unmapped (claim-once; merge = A3.1b)
+    ]
+    const { mappings } = suggestFlatFileMapping(headers, columns)
+    const byHeader = new Map(mappings.map((m) => [m.header, m.columnId]))
+    expect(byHeader.get(headers[0])).toBe('closure__type')
+    expect(byHeader.get(headers[1])).toBe('rise__style')
+    expect(byHeader.get(headers[2])).toBe('outer__material')
+    expect(byHeader.get(headers[3])).toBeNull()
+    expect(mappings.find((m) => m.header === headers[0])!.source).toBe('template-path')
+  })
+})

@@ -89,6 +89,10 @@ export function canonicalizeTemplatePath(path: string): string {
  */
 const TEMPLATE_PATH_ALIASES: Record<string, string[]> = {
   'main_offer_image_locator#1.media_location': ['main_product_image_locator#1.media_location'],
+  // A3.1 — the v2 templates carry product identity in the amzn1.volt.ca
+  // namespace; the grid models identity via its sentinel columns.
+  'amzn1.volt.ca.product_id_value': ['::external_product_id'],
+  'amzn1.volt.ca.product_id_type': ['::external_product_id_type'],
 }
 for (let i = 1; i <= 8; i++) {
   TEMPLATE_PATH_ALIASES[`other_offer_image_locator_${i}#1.media_location`] = [
@@ -98,7 +102,7 @@ for (let i = 1; i <= 8; i++) {
 
 /** Cheap gate so plain external headers ("Price") never enter the template tier. */
 function looksLikeTemplatePath(header: string): boolean {
-  return header.startsWith('::') || header.includes('[') || /#\d+/.test(header)
+  return header.startsWith('::') || header.includes('[') || /#\d+/.test(header) || header.startsWith('amzn1.')
 }
 
 /**
@@ -206,6 +210,24 @@ export function suggestFlatFileMapping(
         assign(h, direct, 'template-path', `Amazon template attribute "${key}" is column "${direct.id}"`)
         continue
       }
+      // A3.1 — suffix relaxation: the template spells one level deeper than a
+      // manifest sub-prop fieldRef (localized sub-props append ".value", e.g.
+      // template closure#1.type#1.value vs fieldRef closure#1.type). Try with
+      // the trailing ".value" stripped, then with a trailing instance dropped
+      // too (rise#1.style#1.value → rise#1.style). Instances ≥2 of the same
+      // sub-prop stay unmapped by claim-once — the merge mechanism is A3.1b.
+      const relaxed = [key.replace(/\.value$/, ''), key.replace(/#\d+\.value$/, '')]
+        .filter((k) => k !== key)
+      let matched = false
+      for (const rk of [...new Set(relaxed)]) {
+        const col = byTemplatePath.get(rk)
+        if (col && !claimed.has(col.id)) {
+          assign(h, col, 'template-path', `Amazon template attribute "${key}" is column "${col.id}" (relaxed .value)`)
+          matched = true
+          break
+        }
+      }
+      if (matched) continue
       for (const aliasKey of TEMPLATE_PATH_ALIASES[key] ?? []) {
         const bridged = byTemplatePath.get(aliasKey)
         if (bridged && !claimed.has(bridged.id)) {
