@@ -22,8 +22,10 @@ import {
   toMarketplaceId,
   MARKETS,
   axisSynonymKey,
+  resolvePerMarketContent,
   type Market,
 } from '../ebay-variation-push.service.js'
+import { renderListingDescriptionSafe } from '../ebay-description-theme.service.js'
 import { logger } from '../../utils/logger.js'
 import { resolveImagePictureAxis } from './ebay-image-axis.pure.js'
 
@@ -253,6 +255,32 @@ export async function publishEbayImagesViaInventory(
   for (const mp of markets) {
     const listedIds = listedByMarket.get(mp) ?? new Set<string>()
     const marketRows = rows.filter((r) => r._isParent || listedIds.has(r._productId as string))
+    // ED.5a — this path used to push WITHOUT per-market parent content: an
+    // image publish sent one market's title/description to every site (P9e
+    // gap on this route) and, since ED.2, would have stomped a THEMED live
+    // description with the raw body. Resolve this market's own content and
+    // wrap it in the listing's theme — an image publish now refreshes the
+    // themed description (galleries re-render from the just-saved groups),
+    // which is exactly the owner's image automation.
+    const parentRowForContent = marketRows.find((r) => r._isParent) ?? marketRows[0]
+    const contentRegion = mp.toUpperCase() === 'UK' ? 'GB' : mp.toUpperCase()
+    const parentContentListing = await prisma.channelListing.findFirst({
+      where: { productId, channel: 'EBAY', region: contentRegion },
+      select: { title: true, description: true, platformAttributes: true, flatFileSnapshot: true },
+    })
+    const parentContent = resolvePerMarketContent(parentContentListing, {
+      title: parentRowForContent?.title as string | undefined,
+      description: parentRowForContent?.description as string | undefined,
+      subtitle: parentRowForContent?.subtitle as string | undefined,
+    })
+    const themed = await renderListingDescriptionSafe(prisma, {
+      productId,
+      marketplace: mp,
+      mode: 'group',
+      body: parentContent.description ?? '',
+      title: parentContent.title,
+      subtitle: parentContent.subtitle,
+    })
     const groupResults = await pushVariationGroup(
       groupKey,
       marketRows,
@@ -267,7 +295,12 @@ export async function publishEbayImagesViaInventory(
       pictureAxis ?? undefined,
       imageOverrideBySku.size > 0 ? imageOverrideBySku : undefined,
       sharedUrls.length > 0 ? sharedUrls : undefined,
-      { skipOffersOnNoPrice: true, omitImageVariesBy: sharedGallery, warningsSink: pushWarnings },
+      {
+        skipOffersOnNoPrice: true,
+        omitImageVariesBy: sharedGallery,
+        warningsSink: pushWarnings,
+        parentContent: { ...parentContent, description: themed.html },
+      },
     )
     allResults.push(...groupResults)
   }

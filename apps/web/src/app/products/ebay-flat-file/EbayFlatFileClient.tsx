@@ -33,6 +33,7 @@ import { EbayImportWizard } from './EbayImportWizard'
 import { stampUnderParent } from './importUnderParent'
 import { planFamilyImport } from './importFamilies.pure'
 import { EbayDescriptionThemesModal } from './EbayDescriptionThemesModal'
+import { Listbox } from '@/design-system/components/Listbox'
 import { EbayFlatFileImageDrawer } from './EbayFlatFileImageModal'
 import { deriveImageFamilies, type FamilyDeriveRow, type ImageFamilySummary } from './imageFamilies.pure'
 import { AspectsPanel } from './AspectsPanel'
@@ -947,6 +948,14 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   useEffect(() => { loadDescThemes() }, [loadDescThemes])
   // ED.4 — theme manager modal (File → Description themes…).
   const [themesModalOpen, setThemesModalOpen] = useState(false)
+  // ED.5b — bulk "Set description theme…" (Edit menu, selected rows).
+  const [themeBulk, setThemeBulk] = useState<null | {
+    rows: EbayRow[]
+    selected: Set<string>
+    setRows: (rows: BaseRow[]) => void
+    pushHistory: (rows: BaseRow[]) => void
+    value: string
+  }>(null)
 
   // B3 — category breadcrumbs (English preferred) for the category_id cells.
   // Keyed on activeCategoryIds (the distinct category ids already tracked for
@@ -2702,8 +2711,22 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       { label: 'Set to Follow (pool)', icon: <RefreshCw className="w-3.5 h-3.5" />, disabled: noSel, onClick: () => void bulkSetFollowEbay(true, ctx.rows as EbayRow[], ctx.selectedRows) },
       { label: 'Set to Pinned (fixed)', icon: <Pin className="w-3.5 h-3.5" />, disabled: noSel, onClick: () => void bulkSetFollowEbay(false, ctx.rows as EbayRow[], ctx.selectedRows) },
       { label: 'Set buffer…', icon: <ListOrdered className="w-3.5 h-3.5" />, disabled: noSel, onClick: () => openEbayBufferModal(ctx.rows as EbayRow[], ctx.selectedRows) },
+      // ED.5b — bulk-assign the description theme for the ACTIVE market on the
+      // selected rows (per-market like subtitle; Save persists it).
+      {
+        label: 'Set description theme…',
+        icon: <FileText className="w-3.5 h-3.5" />,
+        disabled: noSel || descThemes.length === 0,
+        onClick: () => setThemeBulk({
+          rows: ctx.rows as EbayRow[],
+          selected: new Set(ctx.selectedRows),
+          setRows: ctx.setRows,
+          pushHistory: ctx.pushHistory,
+          value: '',
+        }),
+      },
     ]
-  }, [bulkSetFollowEbay, openEbayBufferModal])
+  }, [bulkSetFollowEbay, openEbayBufferModal, descThemes])
 
   const renderToolbarFetch = useCallback(({ rows, selectedRows, setRows, pushHistory }: ToolbarFetchCtx) => {
     // Keep refs current so fileMenuItems callbacks always act on the latest rows
@@ -3107,6 +3130,42 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           }}
           onClose={() => setAspectsPanelRowId(null)}
         />
+
+        {/* ED.5b — bulk theme assignment for the selected rows (active market) */}
+        {themeBulk && (
+          <Modal
+            open
+            onClose={() => setThemeBulk(null)}
+            title={`Set description theme — ${themeBulk.selected.size} row${themeBulk.selected.size === 1 ? '' : 's'} (${marketplace})`}
+            size="sm"
+            footer={
+              <>
+                <Button size="sm" variant="ghost" onClick={() => setThemeBulk(null)}>Cancel</Button>
+                <Button size="sm" onClick={() => {
+                  const next = (themeBulk.rows as BaseRow[]).map((r) =>
+                    themeBulk.selected.has(String(r._rowId)) ? { ...r, description_theme: themeBulk.value, _dirty: true } : r,
+                  )
+                  themeBulk.pushHistory(next)
+                  themeBulk.setRows(next)
+                  toast.success(`Theme set on ${themeBulk.selected.size} row${themeBulk.selected.size === 1 ? '' : 's'} — Save to persist`)
+                  setThemeBulk(null)
+                }}>Apply</Button>
+              </>
+            }
+          >
+            <p className="text-xs text-slate-500 mb-2">Per-market like subtitle: this assigns the {marketplace} theme; other markets keep their own.</p>
+            <Listbox
+              ariaLabel="Description theme"
+              value={themeBulk.value}
+              options={[
+                { value: '', label: `Default${descThemes.find((t) => t.isDefault) ? ` (${descThemes.find((t) => t.isDefault)!.name})` : ''}` },
+                { value: 'none', label: 'None — raw description' },
+                ...descThemes.map((t) => ({ value: t.id, label: t.name })),
+              ]}
+              onChange={(v) => setThemeBulk((s) => (s ? { ...s, value: v } : s))}
+            />
+          </Modal>
+        )}
 
         {/* ED.4 — theme manager; sample product = first real row for live previews */}
         <EbayDescriptionThemesModal
