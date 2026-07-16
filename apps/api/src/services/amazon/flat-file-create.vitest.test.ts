@@ -77,3 +77,33 @@ describe('buildProductCreateInput', () => {
     expect(d.categoryAttributes).toEqual({ variations: { Color: 'Black', Size: 'XL' } })
   })
 })
+
+describe('A5 — multi-word theme axes + full axis extraction', () => {
+  it('parses TEAM_NAME/ATHLETE/SIZE/COLOR as FOUR axes (underscore joins, slash separates)', () => {
+    expect(ffcParseThemeAxes('TEAM_NAME/ATHLETE/SIZE/COLOR')).toEqual(['Team Name', 'Athlete', 'Size', 'Color'])
+  })
+  it('still splits legacy separator themes where every fragment is an axis noun', () => {
+    expect(ffcParseThemeAxes('SIZE_COLOR')).toEqual(['Size', 'Color'])
+    expect(ffcParseThemeAxes('Size-Color')).toEqual(['Size', 'Color'])
+    expect(ffcParseThemeAxes('SizeName-ColorName')).toEqual(['Size', 'Color'])
+  })
+  it('extracts ALL theme axes from a child row (team_name/athlete + sub-prop sizes)', () => {
+    const row = {
+      variation_theme: 'TEAM_NAME/ATHLETE/SIZE/COLOR',
+      team_name: 'Giacca',
+      athlete: 'Uomo',
+      color: 'Nero Neo',
+      apparel_size__size: 'M (m)',
+    }
+    expect(ffcExtractVariantAxes(row)).toEqual({
+      Color: 'Nero Neo',
+      Size: 'M (m)',
+      'Team Name': 'Giacca',
+      Athlete: 'Uomo',
+    })
+  })
+  it('bottoms_size__size unifies into Size for PANTS rows', () => {
+    expect(ffcExtractVariantAxes({ variation_theme: 'SIZE/COLOR', bottoms_size__size: 'XL', color: 'Nero' }))
+      .toEqual({ Color: 'Nero', Size: 'XL' })
+  })
+})

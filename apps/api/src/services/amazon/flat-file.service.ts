@@ -1575,24 +1575,58 @@ export function ffcExtractVariantAxes(row: Record<string, any>): Record<string, 
   const color = String(row.color ?? '').trim()
   if (color) out.Color = color
   const size = String(
-    row.size ?? row.apparel_size ?? row.shirt_size ?? row.shoe_size ?? row.size_name ?? '',
+    // A5 — sub-prop size columns (apparel_size__size / bottoms_size__size for
+    // the COAT_PANTS family; plain size for APPAREL) unify into the Size axis.
+    row.size ?? row.apparel_size__size ?? row.bottoms_size__size ?? row.apparel_size ??
+    row.shirt_size ?? row.shoe_size ?? row.size_name ?? '',
   ).trim()
   if (size) out.Size = size
+  // A5 — ALL remaining theme axes (the owner's TEAM_NAME/ATHLETE/SIZE/COLOR
+  // unified family lost team_name/athlete here and created axis-less children).
+  // Every axis the row's own variation_theme declares gets its value from the
+  // matching row column (snake_case / spaced / compact spellings).
+  const themeAxes = ffcParseThemeAxes(String(row.variation_theme ?? ''))
+  for (const axis of themeAxes) {
+    if (axis === 'Color' || axis === 'Size' || out[axis]) continue
+    const snake = axis.toLowerCase().replace(/\s+/g, '_')
+    const compact = axis.toLowerCase().replace(/\s+/g, '')
+    const val = String(row[snake] ?? row[axis] ?? row[axis.toLowerCase()] ?? row[compact] ?? '').trim()
+    if (val) out[axis] = val
+  }
   return out
 }
 
 /** Amazon variation_theme (e.g. "SIZE_COLOR", "Color/Size") → axis names. */
+/** Words that are complete variation axes by themselves — used to decide
+ *  whether '_'/'-' inside a theme token SEPARATES axes (legacy SIZE_COLOR)
+ *  or JOINS words of ONE axis (v2 TEAM_NAME: 'name' is not an axis noun). */
+const FFC_AXIS_WORD = /^(colou?r|colou?rname|size|sizename|style|material|materialtype|pattern|patternname|fit|fittype|flavou?r|scent|athlete|count)$/i
+
 export function ffcParseThemeAxes(theme: string | null | undefined): string[] {
   if (!theme) return []
+  // A5 — '/' (and ','/space) always separate AXES. '_' and '-' are ambiguous:
+  // legacy themes use them as separators (SIZE_COLOR = two axes) while v2
+  // multi-word axes use '_' as a word joiner (TEAM_NAME/ATHLETE/SIZE/COLOR is
+  // FOUR axes — the old unconditional '_' split shredded it into six). A token
+  // only splits when EVERY fragment is a complete axis noun.
+  const splitIfAllAxisWords = (token: string, sep: string): string[] | null => {
+    const parts = token.split(sep).map((p) => p.trim()).filter(Boolean)
+    return parts.length >= 2 && parts.every((p) => FFC_AXIS_WORD.test(p)) ? parts : null
+  }
   return theme
-    .split(/[_/\s,]+/)
+    .split(/[/,\s]+/)
     .map((t) => t.trim())
     .filter(Boolean)
+    .flatMap((t) => splitIfAllAxisWords(t, '_') ?? splitIfAllAxisWords(t, '-') ?? [t])
     .map((t) => {
       const lc = t.toLowerCase()
       if (lc.includes('colour') || lc.includes('color')) return 'Color'
       if (lc.includes('size')) return 'Size'
-      return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase()
+      return t
+        .split(/[_-]/)
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ')
     })
 }
 
@@ -3170,6 +3204,7 @@ export class AmazonFlatFileService {
       select: { id: true, sku: true, isParent: true, parentId: true, productType: true },
     })
     const productBySku = new Map(products.map((p) => [p.sku, p]))
+    const createdProductIds: string[] = []
 
     // Fetch enum code maps per unique product type for parentage_level normalization.
     // parentage_level may be stored as a localized label (e.g., 'Articolo padre' for IT)
@@ -3263,10 +3298,20 @@ export class AmazonFlatFileService {
         productBySku.set(sku, created)
         if (getParentageCode(String(rowForCreate.parentage_level ?? ''), String(rowForCreate.product_type ?? '')) === 'parent') parentIdBySku.set(sku, created.id)
         await this.createProductImagesFromRow(created.id, rowForCreate)
+        createdProductIds.push(created.id)
         result.created++
       } catch (err) {
         result.errors.push({ sku, error: `Create failed: ${err instanceof Error ? err.message : String(err)}` })
       }
+    }
+
+    // A5 — FFC-created products were INVISIBLE in /products until a manual
+    // backfill: only the delete path refreshed ProductReadCache. Refresh the
+    // read model for everything just created — best-effort, never blocks.
+    if (createdProductIds.length > 0) {
+      void Promise.allSettled(
+        createdProductIds.map((id) => productReadCacheService.refresh(id)),
+      )
     }
 
     await Promise.allSettled(validRows.map(async (row) => {
