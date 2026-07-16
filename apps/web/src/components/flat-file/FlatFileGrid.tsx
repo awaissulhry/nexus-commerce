@@ -1005,6 +1005,23 @@ export default function FlatFileGrid({
   })
   const resizeDragRef = useRef<{ type: 'col' | 'row'; colId?: string; startX: number; startY: number; startVal: number } | null>(null)
 
+  // B4 — sticky COLUMN headers. The page's real scroller is the app shell's
+  // <main>, which both the grid toolbar <header> (sticky top-0 z-30) and the
+  // <thead> (sticky z-20) live in — so a top-0 thead pinned BEHIND the ~178px
+  // toolbar and looked "not sticky". The thead's sticky top must equal the
+  // toolbar's live height (it changes when the bars wrap), measured here.
+  const stickyHeaderRef = useRef<HTMLElement>(null)
+  const [stickyHeaderH, setStickyHeaderH] = useState(0)
+  useEffect(() => {
+    const el = stickyHeaderRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const update = () => setStickyHeaderH(Math.round(el.getBoundingClientRect().height))
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   // #49 — mirror sizes into refs and skip the localStorage write while a resize
   // drag is in progress (it fired JSON.stringify + write on every mousemove);
   // the final value is flushed once on mouseup (onUp below).
@@ -2373,7 +2390,7 @@ export default function FlatFileGrid({
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
 
       {/* ── Sticky header ────────────────────────────── */}
-      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
+      <header ref={stickyHeaderRef} className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
 
         {renderChannelStrip?.()}
 
@@ -2831,7 +2848,7 @@ export default function FlatFileGrid({
 
         {!loading && (
           <table className="border-collapse text-sm w-max min-w-full">
-            <thead className="sticky top-0 z-20 bg-white dark:bg-slate-900">
+            <thead className="sticky z-20 bg-white dark:bg-slate-900" style={{ top: stickyHeaderH }}>
               {/* Row 1: group color bands */}
               <tr>
                 <th className="sticky left-0 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 w-9 min-w-[36px] text-center" rowSpan={2}>

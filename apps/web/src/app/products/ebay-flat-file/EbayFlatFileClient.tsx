@@ -1111,12 +1111,26 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     columnsOpen, setColumnsOpen,
     closedGroups: coreClosedGroups, applyGroupSettings: coreApplyGroupSettings,
     columnGroups: coreColumnGroups, setColumnGroups: setCoreColumnGroups,
+    groupOrder: coreGroupOrder,
   } = core
 
   // Keep core column groups in sync when marketplace / policy / category changes
   useEffect(() => {
     setCoreColumnGroups(columnGroups)
   }, [columnGroups, setCoreColumnGroups])
+
+  // B5 — group reorder was DEAD on eBay: drags persisted to localStorage via
+  // applyGroupSettings, but the CONTROLLED columnGroupState fed the grid the
+  // RAW memo order (and the sync effect above re-rawed it after every policy/
+  // theme/category fetch), so the saved order never rendered. Apply the
+  // persisted order here — new/unknown groups keep their natural position.
+  const orderedCoreGroups = useMemo(() => {
+    if (!coreGroupOrder.length) return coreColumnGroups
+    const byId = new Map(coreColumnGroups.map((g) => [g.id, g]))
+    const ordered = coreGroupOrder.map((id) => byId.get(id)).filter(Boolean) as typeof coreColumnGroups
+    const rest = coreColumnGroups.filter((g) => !coreGroupOrder.includes(g.id))
+    return [...ordered, ...rest]
+  }, [coreColumnGroups, coreGroupOrder])
 
   // ── Category schema loading ────────────────────────────────────────────
   // EFX P4 — loads ALL of the sheet's categories (union manifest). One failed
@@ -3359,7 +3373,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       <ColumnGroupModal
         open={columnsOpen}
         onClose={() => setColumnsOpen(false)}
-        groups={coreColumnGroups.map((g) => ({
+        groups={orderedCoreGroups.map((g) => ({
           id: g.id,
           label: g.label,
           color: g.color,
@@ -3391,7 +3405,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       storageKey="eff"
       enableCustomGroups
       columnGroups={columnGroups}
-      columnGroupState={coreColumnGroups.map((g) => ({
+      columnGroupState={orderedCoreGroups.map((g) => ({
         id: g.id,
         label: g.label,
         color: g.color,
