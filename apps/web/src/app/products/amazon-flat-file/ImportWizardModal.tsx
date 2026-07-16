@@ -24,6 +24,7 @@ import {
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
+import { SPREADSHEET_ACCEPT, isExcelBinaryFile } from '@/components/flat-file/import-accept'
 
 interface Row { _rowId: string; [key: string]: unknown }
 
@@ -68,8 +69,10 @@ type Step = 'upload' | 'mapping' | 'preview'
 type Mode = 'fill-missing' | 'overwrite'
 
 async function fileToPayload(file: File): Promise<{ filename: string; text?: string; bytesBase64?: string }> {
-  const name = file.name.toLowerCase()
-  if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+  // A1 (XLSM hybrid) — Excel-family files (.xlsx/.xlsm/.xls/.xlsb, or anything
+  // whose first bytes are an Excel container) must travel as base64 bytes; an
+  // .xlsm sent as text mis-parses into mojibake rows.
+  if (await isExcelBinaryFile(file)) {
     const bytes = new Uint8Array(await file.arrayBuffer())
     let bin = ''
     const CHUNK = 0x8000
@@ -408,7 +411,7 @@ export function ImportWizardModal({
                 <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{dragOver ? 'Drop to import' : 'Choose a file or drag it here'}</span>
                 <span className="text-xs text-slate-500">CSV · Excel (.xlsx) · TSV · JSON — supplier columns are auto-mapped next</span>
               </button>
-              <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,.xlsx,.xls,.json" className="hidden"
+              <input ref={fileRef} type="file" accept={SPREADSHEET_ACCEPT} className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); e.target.value = '' }} />
               <div className="flex items-center gap-2 text-[11px] text-slate-400">
                 <div className="flex-1 border-t border-slate-200 dark:border-slate-800" /> or paste rows

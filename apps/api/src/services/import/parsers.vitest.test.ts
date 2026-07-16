@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import ExcelJS from 'exceljs'
-import { parseCsv, parseJson, parseXlsx, sniffDelimiter, sniffDelimiterSmart, detectFileKind } from './parsers.js'
+import { parseCsv, parseJson, parseXlsx, sniffDelimiter, sniffDelimiterSmart, detectFileKind, sniffExcelContainer } from './parsers.js'
 
 describe('FX.2 — parseCsv delimiter', () => {
   it('defaults to comma (existing callers unchanged)', () => {
@@ -101,5 +101,43 @@ describe('FX.2 — parseJson array of objects', () => {
       { SKU: 'A1', Title: 'Jacket', Color: '' },
       { SKU: 'A2', Title: '', Color: 'Red' },
     ])
+  })
+})
+
+describe('A1 (XLSM hybrid) — .xlsm/.xlsb kinds + container sniffing', () => {
+  it('detectFileKind maps .xlsm and .xlsb into the xlsx family', () => {
+    expect(detectFileKind('AIREON IT.xlsm')).toBe('xlsx')
+    expect(detectFileKind('workbook.XLSB')).toBe('xlsx')
+    expect(detectFileKind('legacy.xls')).toBe('xlsx')
+  })
+
+  it('sniffExcelContainer recognizes OOXML zips, BIFF, and neither', async () => {
+    const wb = new ExcelJS.Workbook()
+    wb.addWorksheet('S').addRow(['a'])
+    const ooxml = new Uint8Array((await wb.xlsx.writeBuffer()) as ArrayBuffer)
+    expect(sniffExcelContainer(ooxml)).toBe('ooxml')
+    expect(sniffExcelContainer(new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1]))).toBe('biff')
+    expect(sniffExcelContainer(new TextEncoder().encode('SKU,Title\n1,2'))).toBe('unknown')
+  })
+
+  it('parseXlsx accepts an OOXML buffer regardless of the .xlsm name (bytes win)', async () => {
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet('Sheet1')
+    ws.addRow(['SKU', 'Qty'])
+    ws.addRow(['A1', 5])
+    const bytes = new Uint8Array((await wb.xlsx.writeBuffer()) as ArrayBuffer)
+    const { headers, rows } = await parseXlsx(bytes)
+    expect(headers).toEqual(['SKU', 'Qty'])
+    expect(rows).toHaveLength(1)
+  })
+
+  it('parseXlsx rejects legacy BIFF .xls with a re-save hint', async () => {
+    const biff = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0, 0])
+    await expect(parseXlsx(biff)).rejects.toThrow(/save it as \.xlsx or \.xlsm/)
+  })
+
+  it('parseXlsx rejects non-Excel bytes with a clear message', async () => {
+    const text = new TextEncoder().encode('this is not an excel file')
+    await expect(parseXlsx(text)).rejects.toThrow(/Not a valid Excel workbook/)
   })
 })

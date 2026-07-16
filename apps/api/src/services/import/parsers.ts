@@ -35,9 +35,32 @@ export interface ParsedFile {
 export function detectFileKind(filename: string | null | undefined): FileKind {
   if (!filename) return 'csv'
   const lower = filename.toLowerCase()
-  if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) return 'xlsx'
+  // .xlsm (macro-enabled) and .xlsb (binary) are the same zip container family;
+  // parseXlsx sniffs the actual bytes and rejects what exceljs cannot read.
+  if (
+    lower.endsWith('.xlsx') || lower.endsWith('.xlsm') ||
+    lower.endsWith('.xlsb') || lower.endsWith('.xls')
+  ) return 'xlsx'
   if (lower.endsWith('.json')) return 'json'
   return 'csv'
+}
+
+/**
+ * A1 (XLSM hybrid) — first-bytes container sniff for Excel uploads. OOXML
+ * (.xlsx/.xlsm) is a zip (`PK…`); legacy BIFF (.xls) is an OLE compound file
+ * (D0 CF 11 E0). Extensions lie (real Amazon templates ship as .xlsm with a
+ * macro content-type but no macros; users rename files) — trust bytes only.
+ */
+export function sniffExcelContainer(bytes: Uint8Array): 'ooxml' | 'biff' | 'unknown' {
+  if (
+    bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b &&
+    (bytes[2] === 0x03 || bytes[2] === 0x05 || bytes[2] === 0x07)
+  ) return 'ooxml'
+  if (
+    bytes.length >= 4 && bytes[0] === 0xd0 && bytes[1] === 0xcf &&
+    bytes[2] === 0x11 && bytes[3] === 0xe0
+  ) return 'biff'
+  return 'unknown'
 }
 
 /**
@@ -150,6 +173,17 @@ export function parseCsv(text: string, delimiter: string = ','): ParsedFile {
 }
 
 export async function parseXlsx(bytes: Uint8Array): Promise<ParsedFile> {
+  const container = sniffExcelContainer(bytes)
+  if (container === 'biff') {
+    throw new Error(
+      'Legacy .xls (Excel 97-2003) format is not supported — open the file in Excel and save it as .xlsx or .xlsm, then re-upload.',
+    )
+  }
+  if (container === 'unknown') {
+    throw new Error(
+      'Not a valid Excel workbook (.xlsx/.xlsm) — the content is not an Excel container. If this is a CSV/TSV file, upload it with that extension.',
+    )
+  }
   const wb = new ExcelJS.Workbook()
   await wb.xlsx.load(bytes as unknown as ArrayBuffer)
   const sheet = wb.worksheets[0]

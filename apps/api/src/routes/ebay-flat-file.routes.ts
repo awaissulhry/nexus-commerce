@@ -44,6 +44,7 @@ import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
 import { publishOrderEvent } from '../services/order-events.service.js';
 import { renderExport } from '../services/export/renderers.js';
 import { parseCsv, parseFile, sniffDelimiter, detectFileKind, type ParsedFile } from '../services/import/parsers.js';
+import { detectAmazonTemplate } from '../services/amazon/template-workbook.js';
 // P1.2 — eBay flat-file create/reparent pre-pass (new products persist under their parent before ChannelListing loop runs)
 import { runEbayFlatFileCreates, type CreateResult } from '../services/ebay-flat-file-create.service.js';
 import { ebayFamilyKey } from '../services/ebay-flat-file-create.logic.js';
@@ -1681,13 +1682,17 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
   });
 
   // ── POST /api/ebay/flat-file/export ─────────────────────────────────
+  // A1 (XLSM hybrid) — spreadsheet-sized JSON bodies (base64 Excel / row arrays)
+  // breach Fastify's default 1 MB bodyLimit long before the inline guards run.
+  const FX_BODY_LIMIT = 32 * 1024 * 1024;
+
   // IE.1 — export the current grid to a downloadable file (tsv / csv / xlsx),
   // reusing the shared renderExport. The client sends the column list (id+label,
   // derived from its eBay column model) + the rows to export (all or a subset),
   // so partial export and a blank template (zero rows) are just a smaller `rows`.
   fastify.post<{
     Body: { rows?: Record<string, unknown>[]; columns: { id: string; label: string }[]; format?: 'tsv' | 'csv' | 'xlsx'; marketplace?: string }
-  }>('/ebay/flat-file/export', async (request, reply) => {
+  }>('/ebay/flat-file/export', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
     const { rows = [], columns = [], format = 'csv', marketplace = '' } = request.body ?? {};
     if (!Array.isArray(columns) || columns.length === 0) {
       return reply.code(400).send({ error: 'columns required' });
@@ -1731,14 +1736,23 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
   // xlsx. Header→eBay-column mapping happens client-side in the wizard.
   fastify.post<{
     Body: { content?: string; base64?: string; filename?: string; kind?: 'csv' | 'xlsx' | 'json' }
-  }>('/ebay/flat-file/parse', async (request, reply) => {
+  }>('/ebay/flat-file/parse', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
     const { content, base64, filename, kind } = request.body ?? {};
     const fileKind = kind ?? detectFileKind(filename);
     try {
       let result: ParsedFile;
       if (fileKind === 'xlsx') {
-        if (!base64) return reply.code(400).send({ error: 'xlsx upload needs base64 bytes' });
-        result = await parseFile('xlsx', { bytes: new Uint8Array(Buffer.from(base64, 'base64')) });
+        if (!base64) return reply.code(400).send({ error: 'Excel upload needs base64 bytes' });
+        const bytes = new Uint8Array(Buffer.from(base64, 'base64'));
+        // A2 (XLSM hybrid) — an Amazon official listings template dropped on the
+        // eBay page would otherwise parse its first sheet into garbage rows.
+        // Detect it (fast jszip walk) and point the operator at the right page.
+        if (await detectAmazonTemplate(bytes)) {
+          return reply.code(400).send({
+            error: 'This looks like an Amazon listing template — import it on the Amazon flat-file page instead.',
+          });
+        }
+        result = await parseFile('xlsx', { bytes });
       } else {
         const text = content ?? (base64 ? Buffer.from(base64, 'base64').toString('utf-8') : '');
         if (!text.trim()) return reply.code(400).send({ error: 'empty file' });

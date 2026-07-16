@@ -20,6 +20,7 @@ import { ArrowRight, ArrowLeft, Wand2, ClipboardPaste, UploadCloud } from 'lucid
 
 import { Modal } from '@/design-system/components/Modal'
 import { Stepper } from '@/design-system/components/Stepper'
+import { SPREADSHEET_ACCEPT } from '@/components/flat-file/import-accept'
 import { FileDropzone } from '@/design-system/components/FileDropzone'
 import { DataGrid, type Column } from '@/design-system/components/DataGrid'
 import { Combobox, type ComboboxOption } from '@/design-system/components/Combobox'
@@ -236,7 +237,7 @@ export function EbayImportWizard({
     const file = files[0]
     if (!file) return
     const name = file.name.toLowerCase()
-    const isXlsx = name.endsWith('.xlsx') || name.endsWith('.xls')
+    const isXlsx = name.endsWith('.xlsx') || name.endsWith('.xlsm') || name.endsWith('.xlsb') || name.endsWith('.xls')
     const isJson = name.endsWith('.json')
     const reader = new FileReader()
     reader.onerror = () => setParseError('Could not read the selected file.')
@@ -356,7 +357,7 @@ export function EbayImportWizard({
         <>
           <FileDropzone
             onFiles={onFiles}
-            accept=".csv,.tsv,.xlsx,.xls,.json"
+            accept={SPREADSHEET_ACCEPT}
             maxBytes={MAX_BYTES}
             hint={
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>

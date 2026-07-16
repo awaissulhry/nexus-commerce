@@ -17,6 +17,7 @@ import {
 import dynamic from 'next/dynamic'
 import { useFlatFileCore } from '@/components/flat-file/useFlatFileCore'
 import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
+import { SPREADSHEET_ACCEPT, SPREADSHEET_FILE_RE, EXCEL_BINARY_RE } from '@/components/flat-file/import-accept'
 import type {
   BaseRow, FlatFileColumn, FlatFileGridApi, AiPanelCtx,
   ToolbarFetchCtx, ToolbarImportCtx, PushExtrasCtx, ModalsCtx,
@@ -2736,6 +2737,15 @@ export default function AmazonFlatFileClient({
   // ── Import / Export ────────────────────────────────────────────────
 
   const importFile = useCallback(async (file: File) => {
+    // A1 (XLSM hybrid) — the "Import TSV" picker also accepts Excel files, but
+    // /parse-tsv is text-only: an .xlsx/.xlsm picked here used to be read as
+    // text and mis-parse. Route Excel picks into the smart-import wizard, which
+    // ships bytes and understands Amazon official templates.
+    if (EXCEL_BINARY_RE.test(file.name)) {
+      setImportInitialFile(file)
+      setImportOpen(true)
+      return
+    }
     createVersion('Before import')
     const content = await file.text()
     const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/parse-tsv`, {
@@ -4184,13 +4194,13 @@ export default function AmazonFlatFileClient({
         // FX.7 — drop a spreadsheet on the grid to open the import wizard pre-loaded.
         if (importOpen || !e.dataTransfer.types.includes('Files')) return
         const f = e.dataTransfer.files?.[0]
-        if (!f || !/\.(csv|tsv|txt|xlsx|xls|json)$/i.test(f.name)) return
+        if (!f || !SPREADSHEET_FILE_RE.test(f.name)) return
         e.preventDefault()
         setImportInitialFile(f); setImportOpen(true)
       }}>
 
       {/* Hidden file input for Import TSV */}
-      <input ref={fileInputRef} type="file" accept=".txt,.tsv,.csv,.xlsm,.xlsx" className="hidden"
+      <input ref={fileInputRef} type="file" accept={SPREADSHEET_ACCEPT} className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = '' }} />
 
       {/* IN.2 — Cascade modal */}

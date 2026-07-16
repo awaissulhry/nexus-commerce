@@ -26,6 +26,7 @@ import {
 } from '../services/amazon/flat-file.service.js'
 import { renderExport } from '../services/export/renderers.js'
 import { parseCsv, parseXlsx, parseJson, detectFileKind, sniffDelimiter } from '../services/import/parsers.js'
+import { detectAmazonTemplate } from '../services/amazon/template-workbook.js'
 import { suggestFlatFileMapping } from '../services/amazon/flat-file-mapping.js'
 import { aiSuggestColumns } from '../services/amazon/flat-file-mapping-ai.js'
 import { coerceRowsWithAi } from '../services/amazon/flat-file-coerce-ai.js'
@@ -834,11 +835,18 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // A1 (XLSM hybrid) — the FX import/export endpoints move whole spreadsheets
+  // as JSON (base64 for Excel, row arrays for coerce/plan/export). Fastify's
+  // default 1 MB bodyLimit rejected any real-world workbook before our inline
+  // size guards ever ran — a 344-column Amazon template breaches 1 MB at ~40
+  // rows. 32 MB matches the inline caps below (15/20 MB) + JSON/base64 headroom.
+  const FX_BODY_LIMIT = 32 * 1024 * 1024
+
   // ── POST /api/amazon/flat-file/parse-tsv ────────────────────────────
   // Parse an uploaded TSV flat file (Amazon format) into rows.
   fastify.post<{
     Body: { content: string; productType?: string; marketplace?: string }
-  }>('/amazon/flat-file/parse-tsv', async (request, reply) => {
+  }>('/amazon/flat-file/parse-tsv', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
     const { content, productType = '', marketplace = 'IT' } = request.body
     if (!content || content.length === 0) {
       return reply.code(400).send({ error: 'content is required' })
@@ -862,7 +870,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // columns. Text formats (csv/tsv/json) send `text`; xlsx sends base64 `bytesBase64`.
   fastify.post<{
     Body: { filename?: string; text?: string; bytesBase64?: string }
-  }>('/amazon/flat-file/parse', async (request, reply) => {
+  }>('/amazon/flat-file/parse', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
     const { filename, text, bytesBase64 } = request.body
     if (!text && !bytesBase64) {
       return reply.code(400).send({ error: 'Provide file content (text or bytesBase64)' })
@@ -874,8 +882,27 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       const kind = detectFileKind(filename) // csv | xlsx | json (.tsv/.txt → csv family)
       let parsed
       if (kind === 'xlsx') {
-        if (!bytesBase64) return reply.code(400).send({ error: 'xlsx upload requires bytesBase64' })
-        parsed = await parseXlsx(new Uint8Array(Buffer.from(bytesBase64, 'base64')))
+        if (!bytesBase64) {
+          return reply.code(400).send({
+            error: 'Excel uploads (.xlsx/.xlsm) must be sent as bytesBase64 — re-select the file and try again',
+          })
+        }
+        const bytes = new Uint8Array(Buffer.from(bytesBase64, 'base64'))
+        // A2 (XLSM hybrid) — Amazon's official Custom Listings Templates get a
+        // dedicated fast reader: exceljs needs minutes on their 1 MB+ defined-
+        // names tables and cannot see the localized template sheet's row-5
+        // headers anyway. Ordinary workbooks fall through to exceljs unchanged.
+        const template = await detectAmazonTemplate(bytes)
+        if (template) {
+          return reply.send({
+            kind,
+            headers: template.headers,
+            rows: template.rows,
+            count: template.rows.length,
+            template: { ...template.meta, labels: template.labels },
+          })
+        }
+        parsed = await parseXlsx(bytes)
       } else if (kind === 'json') {
         if (text == null) return reply.code(400).send({ error: 'json upload requires text' })
         parsed = parseJson(text)
@@ -897,7 +924,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // Deterministic; the AI tail for ambiguous headers lands in FX.4.
   fastify.post<{
     Body: { headers: string[]; marketplace?: string; productType?: string; productTypes?: string[] }
-  }>('/amazon/flat-file/suggest-mapping', async (request, reply) => {
+  }>('/amazon/flat-file/suggest-mapping', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
     const { headers, marketplace = 'IT', productType, productTypes } = request.body
     if (!Array.isArray(headers) || headers.length === 0) {
       return reply.code(400).send({ error: 'headers (non-empty array) required' })
@@ -934,7 +961,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // reviewable "AI" matches.
   fastify.post<{
     Body: { headers: string[]; samples?: Record<string, string>; marketplace?: string; productType?: string; productTypes?: string[] }
-  }>('/amazon/flat-file/suggest-columns-ai', async (request, reply) => {
+  }>('/amazon/flat-file/suggest-columns-ai', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
     const { headers, samples = {}, marketplace = 'IT', productType, productTypes } = request.body
     if (!Array.isArray(headers) || headers.length === 0) {
       return reply.code(400).send({ error: 'headers (non-empty array) required' })
@@ -967,7 +994,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // unmatched enum values via a constrained AI pass.
   fastify.post<{
     Body: { rows: Record<string, unknown>[]; marketplace?: string; productType?: string; productTypes?: string[]; ai?: boolean }
-  }>('/amazon/flat-file/coerce', async (request, reply) => {
+  }>('/amazon/flat-file/coerce', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
     const { rows, marketplace = 'IT', productType, productTypes, ai = false } = request.body
     if (!Array.isArray(rows)) {
       return reply.code(400).send({ error: 'rows (array) required' })
@@ -1007,7 +1034,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       matchKey?: string
       addNewRows?: boolean
     }
-  }>('/amazon/flat-file/plan-import', async (request, reply) => {
+  }>('/amazon/flat-file/plan-import', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
     const { existing, incoming, mode = 'fill-missing', columns, matchKey, addNewRows } = request.body
     if (!Array.isArray(existing) || !Array.isArray(incoming)) {
       return reply.code(400).send({ error: 'existing and incoming (arrays) required' })
@@ -1030,7 +1057,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // Reuses A5 preflightRow + MT.2 buildPerTypeValidation. Returns rows w/ issues.
   fastify.post<{
     Body: { rows: Record<string, any>[]; marketplace?: string; productType?: string; productTypes?: string[] }
-  }>('/amazon/flat-file/validate-rows', async (request, reply) => {
+  }>('/amazon/flat-file/validate-rows', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
     const { rows, marketplace = 'IT', productType, productTypes } = request.body
     if (!Array.isArray(rows)) {
       return reply.code(400).send({ error: 'rows (array) required' })
@@ -1149,7 +1176,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // smaller `rows`.
   fastify.post<{
     Body: { manifest: any; rows: any[]; format?: 'tsv' | 'csv' | 'xlsx' }
-  }>('/amazon/flat-file/export', async (request, reply) => {
+  }>('/amazon/flat-file/export', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
     const { manifest, rows, format = 'tsv' } = request.body
     if (!manifest || !rows) {
       return reply.code(400).send({ error: 'manifest and rows required' })
