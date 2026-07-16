@@ -7,9 +7,10 @@
  * the ONE-TIMELINE). Also called directly by the verify harness.
  */
 import { prisma } from "../db";
-import { audit } from "../audit";
 import { publishEventDurable } from "../events";
 import { resolveCarrier } from "../carriers/resolve";
+import { transitionOrder } from "../orders/transition-service";
+import type { OrderState } from "../orders/transitions";
 import { mapCarrierStatus, advanceShipmentState, orderStateFromShipment, IN_FLIGHT_STATES, type OrderStateName } from "./shipment-state";
 
 export type PollSummary = { polled: number; advanced: number; delivered: number };
@@ -51,10 +52,10 @@ export async function pollInflightShipments(): Promise<PollSummary> {
 
     const orderNext = orderStateFromShipment(s.order.state as OrderStateName, newState);
     if (orderNext && orderNext !== s.order.state) {
-      await prisma.order.update({ where: { id: s.orderId }, data: { state: orderNext } });
-      void audit({ actorId: null, entityType: "order", entityId: s.orderId, action: "state-changed", before: { from: s.order.state }, after: { to: orderNext, via: "tracking", shipmentId: s.id } });
-      await publishEventDurable("order.updated", { orderId: s.orderId, from: s.order.state, to: orderNext });
-      if (orderNext === "DELIVERED") delivered++;
+      // EPO1.2 (C2) — the carrier drives the order only through the ONE
+      // transition writer (system actor); a racing/illegal move is a no-op.
+      const outcome = await transitionOrder({ orderId: s.orderId, to: orderNext as OrderState, via: "tracking", actorId: null, note: `shipment ${s.id}` });
+      if (outcome.ok && orderNext === "DELIVERED") delivered++;
     }
   }
   return { polled: shipments.length, advanced, delivered };

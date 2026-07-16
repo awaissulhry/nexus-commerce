@@ -50,7 +50,11 @@ function Lane({ state, orders, total, hasMore, onLoadMore, onOpen }: { state: Or
   return (
     <div style={{ flex: "1 0 220px", minWidth: 220, display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 4px 8px" }}>
-        <span style={{ fontSize: 12, fontWeight: 700 }}>{ORDER_STATE_LABEL[state]}</span>
+        <span style={{ fontSize: 12, fontWeight: 700 }}>
+          {ORDER_STATE_LABEL[state]}
+          {/* EPO1.4 (C1) — this lane is label-driven: dropping here routes to the buy flow */}
+          {state === "SHIPPED" && <span style={{ fontWeight: 400, fontSize: 10.5, color: "var(--h10-text-3)", marginLeft: 5 }}>via label</span>}
+        </span>
         {/* FS1 (C-1) — the TRUE lane count, never just the loaded page */}
         <span style={{ fontSize: 11, color: "var(--h10-text-3)" }}>{orders.length < total ? `${orders.length} of ${total}` : total}</span>
       </div>

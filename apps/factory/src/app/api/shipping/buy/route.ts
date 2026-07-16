@@ -17,7 +17,8 @@ import { publishEventDurable } from "@/lib/events";
 import { resolveCarrier } from "@/lib/carriers/resolve";
 import { AddressZ, ParcelZ } from "@/lib/shipping/validation";
 import { saveLabel } from "@/lib/shipping/label-store";
-import { canTransition } from "@/lib/orders/transitions";
+import { canTransitionVia } from "@/lib/orders/transitions";
+import { transitionOrder } from "@/lib/orders/transition-service";
 
 export const permission = FEATURES.labelsPurchase;
 
@@ -32,7 +33,7 @@ export const POST = guarded(FEATURES.labelsPurchase, async (req, { actor, resolv
   const order = await prisma.order.findUnique({ where: { id: orderId }, select: { id: true, number: true, state: true, party: { select: { id: true, currency: true } } } });
   if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
   if (order.state !== "READY") return NextResponse.json({ error: "Only a Ready order can be shipped" }, { status: 400 });
-  if (!canTransition("READY", "SHIPPED").ok) return NextResponse.json({ error: "Order can't move to shipped" }, { status: 400 });
+  if (!canTransitionVia("READY", "SHIPPED", "label-purchased").ok) return NextResponse.json({ error: "Order can't move to shipped" }, { status: 400 });
 
   const carrier = await resolveCarrier();
 
@@ -71,12 +72,22 @@ export const POST = guarded(FEATURES.labelsPurchase, async (req, { actor, resolv
     bought.push({ shipmentId: ship.id, trackingNumber: label.trackingNumber, labelUrl: `/api/shipping/${ship.id}/label` });
   }
 
-  await prisma.$transaction([
-    prisma.order.update({ where: { id: order.id }, data: { state: "SHIPPED" } }),
-    prisma.party.update({ where: { id: order.party.id }, data: { addressJson: to as Prisma.InputJsonValue } }),
-  ]);
-  void audit({ actorId: actor!.id, entityType: "order", entityId: order.id, action: "state-changed", before: { from: "READY" }, after: { to: "SHIPPED", shipments: bought.length } });
-  await publishEventDurable("order.updated", { orderId: order.id, from: "READY", to: "SHIPPED" });
+  // EPO1.2 (C2) — READY→SHIPPED through the ONE transition writer; the ship-to
+  // memory on the party commits in the same transaction as before.
+  const outcome = await transitionOrder({
+    orderId: order.id,
+    to: "SHIPPED",
+    via: "label-purchased",
+    actorId: actor!.id,
+    also: async (tx) => {
+      await tx.party.update({ where: { id: order.party.id }, data: { addressJson: to as Prisma.InputJsonValue } });
+      return { shipments: bought.length };
+    },
+  });
+  if (!outcome.ok) {
+    // labels are already bought — surface the state problem instead of pretending
+    return NextResponse.json({ error: `Labels bought but the order refused to move: ${outcome.error}`, labels: bought }, { status: outcome.status });
+  }
 
   const first = bought[0];
   return jsonStripped({ ok: true, count: bought.length, shipmentId: first.shipmentId, trackingNumber: first.trackingNumber, labelUrl: first.labelUrl, labels: bought, live: carrier.live }, resolved);

@@ -15,7 +15,8 @@ import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { PAGES, FEATURES } from "@/lib/auth/permissions";
 import { orderTotals, depositRequiredCents, depositPaidCents, isDepositMet } from "@/lib/orders/money";
 import { buildTimeline } from "@/lib/orders/timeline";
-import { canTransition, isStopgap, type OrderState } from "@/lib/orders/transitions";
+import { type OrderState } from "@/lib/orders/transitions";
+import { transitionOrder } from "@/lib/orders/transition-service";
 
 export const permission = { GET: PAGES.orders, PATCH: FEATURES.ordersEdit };
 
@@ -53,6 +54,9 @@ async function detailPayload(id: string) {
       depositRequiredCents: depositRequired,
       depositPaidCents: depositPaid,
       depositMet: isDepositMet(depositRequired, depositPaid),
+      // EPO1.3 (C8) — an order with no originating quote has no deposit terms:
+      // the FD13 gate is OFF and the UI must say so instead of hiding the card.
+      depositTermsMissing: !order.bornFromQuote,
     },
   };
 }
@@ -68,6 +72,9 @@ const Patch = z.object({
   promiseDateAt: z.string().nullable().optional(),
   state: z.enum(["CONFIRMED", "IN_PRODUCTION", "READY", "SHIPPED", "DELIVERED", "CLOSED", "CANCELLED"]).optional(),
   note: z.string().max(500).optional(),
+  // EPO1.1 (D-6) — the caller's read stamp; a mismatch means someone else
+  // changed the order since it was loaded → 409 instead of last-write-wins.
+  expectedUpdatedAt: z.string().optional(),
 });
 
 export const PATCH = guarded(FEATURES.ordersEdit, async (req, { params, actor, resolved }) => {
@@ -76,35 +83,43 @@ export const PATCH = guarded(FEATURES.ordersEdit, async (req, { params, actor, r
   if (!parsed.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   const body = parsed.data;
 
-  const order = await prisma.order.findUnique({ where: { id }, select: { id: true, number: true, state: true } });
+  const order = await prisma.order.findUnique({ where: { id }, select: { id: true, state: true } });
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const from = order.state as OrderState;
-
-  const data: { promiseDateAt?: Date | null; state?: OrderState; cancelReason?: null } = {};
-
-  if (body.promiseDateAt !== undefined) {
-    data.promiseDateAt = body.promiseDateAt ? new Date(body.promiseDateAt) : null;
+  if (body.promiseDateAt === undefined && (!body.state || body.state === from)) {
+    return NextResponse.json({ error: "Nothing to change" }, { status: 400 });
   }
 
+  // EPO1.3 (C3) — promise-date edits: guarded write + audit + a durable event
+  // (they were audited but silent to SSE — live boards never saw them).
+  if (body.promiseDateAt !== undefined) {
+    const promiseDateAt = body.promiseDateAt ? new Date(body.promiseDateAt) : null;
+    const res = await prisma.order.updateMany({
+      where: { id, ...(body.expectedUpdatedAt && !body.state ? { updatedAt: new Date(body.expectedUpdatedAt) } : {}) },
+      data: { promiseDateAt },
+    });
+    if (res.count === 0) return NextResponse.json({ error: "The order changed elsewhere — refresh and retry" }, { status: 409 });
+    void audit({ actorId: actor!.id, entityType: "order", entityId: id, action: "promise-changed", after: { promiseDateAt } });
+    await publishEventDurable("order.updated", { orderId: id, via: "promise-changed", promiseDateAt: promiseDateAt?.toISOString() ?? null });
+  }
+
+  // EPO1.1 (C1/C2/C9) — state changes go through the ONE writer.
   if (body.state && body.state !== from) {
     const to = body.state as OrderState;
-    if (to === "CANCELLED") return NextResponse.json({ error: "Use the Cancel action" }, { status: 400 });
-    const chk = canTransition(from, to);
-    if (!chk.ok) return NextResponse.json({ error: chk.reason, useStartProduction: chk.useStartProduction ?? false }, { status: 400 });
-    data.state = to;
-    if (from === "CANCELLED" && to === "CONFIRMED") data.cancelReason = null; // reopen clears the reason
-  }
-
-  if (Object.keys(data).length === 0) return NextResponse.json({ error: "Nothing to change" }, { status: 400 });
-
-  await prisma.order.update({ where: { id }, data });
-
-  if (data.state) {
-    void audit({ actorId: actor!.id, entityType: "order", entityId: id, action: "state-changed", before: { from }, after: { to: data.state, note: body.note ?? null, stopgap: isStopgap(from, data.state) } });
-    await publishEventDurable("order.updated", { orderId: id, from, to: data.state });
-  }
-  if (data.promiseDateAt !== undefined && !data.state) {
-    void audit({ actorId: actor!.id, entityType: "order", entityId: id, action: "promise-changed", after: { promiseDateAt: data.promiseDateAt } });
+    if (to === "CANCELLED") return NextResponse.json({ error: "Use the Cancel action" }, { status: 422 });
+    const outcome = await transitionOrder({
+      orderId: id,
+      to,
+      via: from === "CANCELLED" && to === "CONFIRMED" ? "reopen" : "manual",
+      actorId: actor!.id,
+      note: body.note,
+      // the promise write above already bumped updatedAt — only pin the stamp
+      // when this PATCH is a pure state change.
+      expectedUpdatedAt: body.promiseDateAt === undefined ? body.expectedUpdatedAt : undefined,
+    });
+    if (!outcome.ok) {
+      return NextResponse.json({ error: outcome.error, useStartProduction: outcome.useStartProduction ?? false }, { status: outcome.status });
+    }
   }
 
   const payload = await detailPayload(id);

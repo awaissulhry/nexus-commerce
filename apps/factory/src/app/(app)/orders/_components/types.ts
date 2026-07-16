@@ -68,6 +68,7 @@ export type OrderDetailResponse = {
     depositRequiredCents?: number;
     depositPaidCents?: number;
     depositMet: boolean;
+    depositTermsMissing?: boolean; // EPO1.3 (C8) — no originating quote ⇒ FD13 gate off, said out loud
   };
 };
 

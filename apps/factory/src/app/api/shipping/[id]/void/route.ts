@@ -12,6 +12,7 @@ import { audit } from "@/lib/audit";
 import { publishEventDurable } from "@/lib/events";
 import { resolveCarrier } from "@/lib/carriers/resolve";
 import { isVoidable } from "@/lib/shipping/shipment-state";
+import { transitionOrder } from "@/lib/orders/transition-service";
 
 export const permission = FEATURES.labelsVoid;
 
@@ -24,18 +25,28 @@ export const POST = guarded(FEATURES.labelsVoid, async (_req, { params, actor })
   const carrier = await resolveCarrier();
   if (s.trackingNumber) await carrier.adapter.cancelShipment(s.trackingNumber).catch(() => {});
 
+  // EPO1.2 (C2) — SHIPPED→READY is a system-only edge the authority now knows
+  // (via "label-voided"); shipment cancel + order restore commit atomically.
   const restoreOrder = s.order.state === "SHIPPED";
-  await prisma.$transaction([
-    prisma.shipment.update({ where: { id }, data: { state: "CANCELLED" } }),
-    ...(restoreOrder ? [prisma.order.update({ where: { id: s.orderId }, data: { state: "READY" } })] : []),
-  ]);
+  if (restoreOrder) {
+    const outcome = await transitionOrder({
+      orderId: s.orderId,
+      to: "READY",
+      via: "label-voided",
+      actorId: actor!.id,
+      note: `shipment ${id} voided`,
+      also: async (tx) => {
+        await tx.shipment.update({ where: { id }, data: { state: "CANCELLED" } });
+        return { shipmentId: id };
+      },
+    });
+    if (!outcome.ok) return NextResponse.json({ error: outcome.error }, { status: outcome.status });
+  } else {
+    await prisma.shipment.update({ where: { id }, data: { state: "CANCELLED" } });
+  }
 
   void audit({ actorId: actor!.id, entityType: "shipment", entityId: id, action: "label.voided", after: { orderId: s.orderId } });
   await publishEventDurable("shipment.updated", { shipmentId: id, orderId: s.orderId, state: "CANCELLED" });
-  if (restoreOrder) {
-    void audit({ actorId: actor!.id, entityType: "order", entityId: s.orderId, action: "state-changed", before: { from: "SHIPPED" }, after: { to: "READY", reason: "label voided" } });
-    await publishEventDurable("order.updated", { orderId: s.orderId, from: "SHIPPED", to: "READY" });
-  }
 
   return NextResponse.json({ ok: true, orderRestored: restoreOrder });
 });

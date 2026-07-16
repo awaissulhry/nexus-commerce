@@ -80,3 +80,49 @@ export function canTransition(from: OrderState, to: OrderState): TransitionCheck
   }
   return { ok: true };
 }
+
+/**
+ * EPO1.1 — who is driving a transition. Every state write names its driver;
+ * the audit row and the `order.updated` event carry it, so the timeline can
+ * always answer "how did this happen".
+ */
+export type TransitionVia =
+  | "manual" // an operator in the Change-status menu / grid pill
+  | "reopen" // CANCELLED → CONFIRMED
+  | "cancel" // the Cancel action (reason required)
+  | "start-production" // the Start-production action (creates the WOs)
+  | "all-wos-done" // FP6: last work order finished ⇒ READY
+  | "label-purchased" // FP8: buy-and-print ⇒ SHIPPED
+  | "tracking" // FP8: carrier poll ⇒ DELIVERED
+  | "label-voided" // FP8: label voided pre-dispatch ⇒ back to READY
+  | "promise-changed" // not a state edge — used on the order.updated event for promise edits
+  | "line-edited"; // not a state edge — used on the order.updated event for line edits
+
+/**
+ * EPO1.1 — system-only edges: in the graph, but legal ONLY when driven by the
+ * named action. Never offered in menus (`legalTargets` doesn't return them).
+ * SHIPPED→READY existed only inside the void driver before — now the authority
+ * knows it.
+ */
+const SYSTEM_EDGES: Record<string, TransitionVia> = {
+  "SHIPPED>READY": "label-voided",
+};
+
+/**
+ * EPO1.1 — the full authority: edge legality INCLUDING the action-owned edges.
+ * `via` names the driver; `start-production` legalizes CONFIRMED→IN_PRODUCTION
+ * (it creates the work orders), `label-voided` legalizes SHIPPED→READY.
+ * Everything else defers to `canTransition`.
+ */
+export function canTransitionVia(from: OrderState, to: OrderState, via: TransitionVia): TransitionCheck {
+  if (via === "start-production" && from === START_PRODUCTION_EDGE.from && to === START_PRODUCTION_EDGE.to) {
+    return { ok: true };
+  }
+  const system = SYSTEM_EDGES[`${from}>${to}`];
+  if (system) {
+    return system === via
+      ? { ok: true }
+      : { ok: false, reason: `${ORDER_STATE_LABEL[from]} → ${ORDER_STATE_LABEL[to]} only happens when a label is voided` };
+  }
+  return canTransition(from, to);
+}

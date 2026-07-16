@@ -1,9 +1,11 @@
 /**
- * FP4 — the orders operational board: three live counters, state tabs, party
- * filter, search, and two views. GRID: the state pill is a transition menu
- * (only legal edges, server-validated) with Undo. KANBAN: drag between lanes =
- * a validated command. Marking SHIPPED prompts a tracking note (manual until
- * FP8). Clicking a number opens the OrderDetail one-timeline. Deep-link ?o=.
+ * FP4 → EPO1.4 — the orders operational board: three live counters, state
+ * tabs, party filter, search, and two views. GRID: the state pill is a
+ * transition menu (only legal edges, server-validated) with Undo. KANBAN:
+ * drag between lanes = a validated command. SHIPPED is label-driven (C1):
+ * moving there routes to the Shipping buy flow — the FP8-era manual modal is
+ * gone. Transitions carry the row's read stamp (D-6): a 409 means the order
+ * changed elsewhere. Clicking a number opens OrderDetail. Deep-link ?o=.
  */
 "use client";
 
@@ -62,8 +64,6 @@ function PipelineInner() {
   const [parties, setParties] = useState<{ id: string; name: string }[]>([]);
   const [cancelling, setCancelling] = useState<OrderRow | null>(null);
   const [reason, setReason] = useState("");
-  const [shipping, setShipping] = useState<OrderRow | null>(null);
-  const [trackingNote, setTrackingNote] = useState("");
   const [busy, setBusy] = useState(false);
 
   const openId = params.get("o");
@@ -128,16 +128,18 @@ function PipelineInner() {
 
   const transition = async (row: OrderRow, to: OrderState) => {
     if (to === "CANCELLED") { setCancelling(row); setReason(""); return; }
-    if (to === "SHIPPED") { setShipping(row); setTrackingNote(""); return; } // stopgap: manual until FP8
+    // EPO1.4 (C1) — SHIPPED is label-driven: the buy flow flips the state
+    if (to === "SHIPPED") { window.location.href = `/shipping?buy=${row.id}`; return; }
     const from = row.state;
     try {
-      await apiJson(`/api/orders/${row.id}`, { method: "PATCH", body: JSON.stringify({ state: to }) });
+      await apiJson(`/api/orders/${row.id}`, { method: "PATCH", body: JSON.stringify({ state: to, expectedUpdatedAt: row.updatedAt }) });
       void load();
       const canUndo = canTransition(to, from).ok;
       toast(<span>Moved to {ORDER_STATE_LABEL[to]}{canUndo ? <> · <button type="button" onClick={() => void undo(row.id, from)} style={undoBtn}>Undo</button></> : null}</span>, "success");
     } catch (e) {
       const msg = (e as Error).message;
       toast(/start production/i.test(msg) ? "Use Start production to begin — it creates the work order." : msg, "danger");
+      if (/changed elsewhere/i.test(msg)) void load(); // D-6: refresh the stale row
     }
   };
   const undo = async (id: string, back: OrderState) => {
@@ -163,17 +165,10 @@ function PipelineInner() {
     try { await apiJson(`/api/orders/${cancelling.id}/cancel`, { method: "POST", body: JSON.stringify({ reason: reason.trim() }) }); setCancelling(null); void load(); toast("Order cancelled", "info"); }
     catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
   };
-  const confirmShip = async () => {
-    if (!shipping) return;
-    setBusy(true);
-    try { await apiJson(`/api/orders/${shipping.id}`, { method: "PATCH", body: JSON.stringify({ state: "SHIPPED", note: trackingNote.trim() || undefined }) }); setShipping(null); void load(); toast("Marked shipped", "success"); }
-    catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
-  };
-
   const stateCell = (r: OrderRow) => {
     const pill = <Pill tone={STATE_TONE[r.state]}>{ORDER_STATE_LABEL[r.state]}</Pill>;
     const targets = legalTargets(r.state).filter((t) => t !== "IN_PRODUCTION" || r.state !== "CONFIRMED");
-    const items = targets.filter((t) => t !== "CANCELLED" || canCancel).map((t) => ({ id: t, label: <>→ {ORDER_STATE_LABEL[t]}</>, onSelect: () => void transition(r, t) }));
+    const items = targets.filter((t) => t !== "CANCELLED" || canCancel).map((t) => ({ id: t, label: t === "SHIPPED" ? <>→ Shipped — buy label</> : <>→ {ORDER_STATE_LABEL[t]}</>, onSelect: () => void transition(r, t) }));
     if (!canEdit || items.length === 0) return <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}>{pill}{r.woBlocked && <Pill tone="warning">blocked</Pill>}</span>;
     return (
       <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}>
@@ -250,13 +245,6 @@ function PipelineInner() {
         </div>
       </Modal>
 
-      <Modal open={!!shipping} onClose={() => setShipping(null)} title={`Mark ${shipping?.number ?? ""} shipped?`} size="sm"
-        footer={<><Button onClick={() => setShipping(null)}>Cancel</Button><Button variant="primary" onClick={confirmShip} disabled={busy}>Mark shipped</Button></>}>
-        <div style={{ display: "grid", gap: 8 }}>
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>Shipments &amp; labels arrive in FP8 — for now this records the shipped state manually. Add a tracking note if you have one.</div>
-          <input value={trackingNote} onChange={(e) => setTrackingNote(e.target.value)} placeholder="Tracking number / carrier (optional)" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: "7px 9px", fontSize: 12.5, background: "var(--h10-surface)", color: "var(--h10-text)" }} />
-        </div>
-      </Modal>
     </div>
   );
 }

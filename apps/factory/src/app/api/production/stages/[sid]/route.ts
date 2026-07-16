@@ -13,6 +13,7 @@ import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 import { start, pause, resume, finish, canStart, woComplete, type StageRow } from "@/lib/production/stage-timer";
 import { certGateForWorkOrder, CERT_BLOCK_MESSAGE } from "@/lib/production/cert-gate";
+import { transitionOrder } from "@/lib/orders/transition-service";
 
 export const permission = { POST: FEATURES.workordersAdvance, PATCH: FEATURES.workordersAssign };
 
@@ -60,12 +61,12 @@ export const POST = guarded(FEATURES.workordersAdvance, async (req, { params, ac
       const orderId = stage.workOrder.orderId;
       const siblingsWo = await prisma.workOrder.findMany({ where: { orderId }, select: { state: true } }); // bounded: per-order work orders (WorkOrder.orderId indexed in FS1)
       if (siblingsWo.every((s) => s.state === "DONE")) {
-        const order = await prisma.order.findUnique({ where: { id: orderId }, select: { state: true } });
-        if (order?.state === "IN_PRODUCTION") {
-          await prisma.order.update({ where: { id: orderId }, data: { state: "READY" } });
-          orderReady = true;
-          void audit({ actorId: actor!.id, entityType: "order", entityId: orderId, action: "state-changed", before: { from: "IN_PRODUCTION" }, after: { to: "READY", via: "all-wos-done" } });
-          await publishEventDurable("order.updated", { orderId, from: "IN_PRODUCTION", to: "READY" });
+        // EPO1.2 (C2) — through the ONE transition writer (legality + guard +
+        // audit + event); a race that already moved the order is a clean no-op.
+        const outcome = await transitionOrder({ orderId, to: "READY", via: "all-wos-done", actorId: actor!.id });
+        orderReady = outcome.ok;
+        if (!outcome.ok && outcome.status !== 409 && outcome.status !== 422) {
+          console.error("[production] order READY transition failed", orderId, outcome.error);
         }
       }
     }

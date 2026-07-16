@@ -683,14 +683,17 @@ enum PaymentKind {
 }
 
 model Payment {
-  id          String      @id @default(cuid())
-  orderId     String
-  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  kind        PaymentKind @default(OTHER)
-  amountCents Int
-  method      String?
-  receivedAt  DateTime    @default(now())
-  notes       String?
+  id             String      @id @default(cuid())
+  orderId        String
+  order          Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  kind           PaymentKind @default(OTHER)
+  amountCents    Int
+  method         String?
+  receivedAt     DateTime    @default(now())
+  notes          String?
+  // EPO1.3 (C4) — client-minted key; a double-submit lands on the unique and
+  // returns the first payment instead of recording the money twice.
+  idempotencyKey String?     @unique
 
   @@index([orderId])
 }

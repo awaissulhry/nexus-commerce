@@ -20,6 +20,9 @@ const Body = z.object({
   amountCents: z.number().int().positive("Amount must be positive"),
   method: z.string().trim().max(80).optional(),
   notes: z.string().trim().max(500).optional(),
+  // EPO1.3 (C4) — minted once when the payment modal opens; retries and
+  // double-clicks reuse it, so the money can only land once.
+  idempotencyKey: z.string().trim().min(8).max(80).optional(),
 });
 
 export const POST = guarded(FEATURES.paymentsRecord, async (req, { params, actor }) => {
@@ -27,21 +30,37 @@ export const POST = guarded(FEATURES.paymentsRecord, async (req, { params, actor
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payment" }, { status: 400 });
 
+  // C4 — replay? return the original outcome instead of recording twice.
+  if (parsed.data.idempotencyKey) {
+    const existing = await prisma.payment.findUnique({ where: { idempotencyKey: parsed.data.idempotencyKey }, select: { id: true, orderId: true } });
+    if (existing) {
+      if (existing.orderId !== id) return NextResponse.json({ error: "Idempotency key was used on another order" }, { status: 409 });
+      return NextResponse.json({ ok: true, unblocked: 0, duplicate: true });
+    }
+  }
+
   const order = await prisma.order.findUnique({
     where: { id },
     include: {
       lines: { select: { netPriceCents: true, costCents: true, qty: true } },
       payments: { select: { kind: true, amountCents: true } },
       bornFromQuote: { select: { depositPct: true } },
-      workOrders: { select: { id: true, state: true } },
+      workOrders: { select: { id: true, number: true, state: true } },
     },
   });
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const payment = await prisma.payment.create({
-    data: { orderId: id, kind: parsed.data.kind, amountCents: parsed.data.amountCents, method: parsed.data.method ?? null, notes: parsed.data.notes ?? null },
-    select: { id: true },
-  });
+  let payment: { id: string };
+  try {
+    payment = await prisma.payment.create({
+      data: { orderId: id, kind: parsed.data.kind, amountCents: parsed.data.amountCents, method: parsed.data.method ?? null, notes: parsed.data.notes ?? null, idempotencyKey: parsed.data.idempotencyKey ?? null },
+      select: { id: true },
+    });
+  } catch (err) {
+    // unique(idempotencyKey) tripped — a concurrent double-submit lost the race
+    if ((err as { code?: string }).code === "P2002") return NextResponse.json({ ok: true, unblocked: 0, duplicate: true });
+    throw err;
+  }
   void audit({ actorId: actor!.id, entityType: "payment", entityId: payment.id, action: "recorded", after: { orderId: id, kind: parsed.data.kind, amountCents: parsed.data.amountCents } });
   await publishEventDurable("payment.recorded", { orderId: id, paymentId: payment.id, kind: parsed.data.kind });
 
@@ -55,6 +74,10 @@ export const POST = guarded(FEATURES.paymentsRecord, async (req, { params, actor
       const res = await prisma.workOrder.updateMany({ where: { id: { in: blocked.map((w) => w.id) } }, data: { state: "READY", blockedReason: null } });
       unblocked = res.count;
       void audit({ actorId: actor!.id, entityType: "order", entityId: id, action: "deposit-met", after: { unblocked } });
+      // EPO1.3 (C3) — per-WO trail: each unblock is its own audit row
+      for (const w of blocked) {
+        void audit({ actorId: actor!.id, entityType: "workorder", entityId: w.id, action: "unblocked", after: { orderId: id, number: w.number, via: "deposit-met" } });
+      }
       await publishEventDurable("workorder.updated", { orderId: id, unblocked });
     }
   }

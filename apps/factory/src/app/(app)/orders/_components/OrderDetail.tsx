@@ -48,6 +48,7 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
   const [payKind, setPayKind] = useState("DEPOSIT");
   const [payEuros, setPayEuros] = useState("");
   const [payMethod, setPayMethod] = useState("");
+  const [payKey, setPayKey] = useState(""); // EPO1.4 (C4) — minted per modal-open; a double-click can't record twice
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -59,16 +60,24 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
   const plannedCount = useMemo(() => (d?.order.lines ?? []).reduce((n, l) => n + Math.max(1, parseSizeRun(l.sizeRun).length), 0), [d]);
 
   const patch = async (body: Record<string, unknown>) => {
-    try { setD(await apiJson<OrderDetailResponse>(`/api/orders/${orderId}`, { method: "PATCH", body: JSON.stringify(body) })); }
-    catch (e) { toast((e as Error).message, "danger"); }
+    // EPO1.4 (D-6) — every edit carries the read stamp; a 409 means someone
+    // else changed the order first, so refresh instead of overwriting them.
+    try { setD(await apiJson<OrderDetailResponse>(`/api/orders/${orderId}`, { method: "PATCH", body: JSON.stringify({ expectedUpdatedAt: d?.order.updatedAt, ...body }) })); }
+    catch (e) {
+      toast((e as Error).message, "danger");
+      if (/changed elsewhere/i.test((e as Error).message)) void load();
+    }
   };
   const transition = async (to: OrderState) => {
     if (to === "CANCELLED") { setCancelling(true); setReason(""); return; }
+    // EPO1.4 (C1) — SHIPPED is label-driven: the buy flow flips the state
+    if (to === "SHIPPED") { window.location.href = `/shipping?buy=${orderId}`; return; }
     const from = d!.order.state;
     try {
       await patch({ state: to });
       const canUndo = canTransition(to, from).ok;
-      toast(<span>Moved to {ORDER_STATE_LABEL[to]}{canUndo ? <> · <button type="button" onClick={() => void patch({ state: from })} style={{ background: "none", border: "none", padding: 0, color: "inherit", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>Undo</button></> : null}</span>, "success");
+      // Undo skips the read stamp (stale by design); the service's state guard still applies
+      toast(<span>Moved to {ORDER_STATE_LABEL[to]}{canUndo ? <> · <button type="button" onClick={() => void patch({ state: from, expectedUpdatedAt: undefined })} style={{ background: "none", border: "none", padding: 0, color: "inherit", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>Undo</button></> : null}</span>, "success");
     } catch (e) { toast((e as Error).message, "danger"); }
   };
   const confirmCancel = async () => {
@@ -90,6 +99,7 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
     setPayKind(prefillDeposit ? "DEPOSIT" : "BALANCE");
     setPayEuros(prefillDeposit && remaining > 0 ? (remaining / 100).toFixed(2) : "");
     setPayMethod("");
+    setPayKey(crypto.randomUUID()); // C4 — one key per modal-open; retries reuse it
     setPaying(true);
   };
   const recordPayment = async () => {
@@ -97,9 +107,10 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
     if (!Number.isFinite(amountCents) || amountCents <= 0) { toast("Enter an amount", "danger"); return; }
     setBusy(true);
     try {
-      const r = await apiJson<{ unblocked: number }>(`/api/orders/${orderId}/payments`, { method: "POST", body: JSON.stringify({ kind: payKind, amountCents, method: payMethod.trim() || undefined }) });
+      const r = await apiJson<{ unblocked: number; duplicate?: boolean }>(`/api/orders/${orderId}/payments`, { method: "POST", body: JSON.stringify({ kind: payKind, amountCents, method: payMethod.trim() || undefined, idempotencyKey: payKey || undefined }) });
       setPaying(false); await load();
-      toast(r.unblocked > 0 ? `Payment recorded — deposit met, ${r.unblocked} work order(s) unblocked` : "Payment recorded", "success");
+      if (r.duplicate) toast("Already recorded — this was a duplicate submit", "info");
+      else toast(r.unblocked > 0 ? `Payment recorded — deposit met, ${r.unblocked} work order(s) unblocked` : "Payment recorded", "success");
     } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
   };
 
@@ -109,7 +120,7 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
   const depositDue = m.depositRequiredCents != null && m.depositRequiredCents > 0 && !m.depositMet;
 
   const targets = legalTargets(o.state).filter((t) => !(o.state === "CONFIRMED" && t === "IN_PRODUCTION")).filter((t) => t !== "CANCELLED" || canCancel);
-  const menuItems = targets.map((t) => ({ id: t, label: <>→ {ORDER_STATE_LABEL[t]}</>, onSelect: () => void transition(t) }));
+  const menuItems = targets.map((t) => ({ id: t, label: t === "SHIPPED" ? <>→ Shipped — buy label</> : <>→ {ORDER_STATE_LABEL[t]}</>, onSelect: () => void transition(t) }));
 
   return (
     <div className="factory-page--centered">
@@ -165,6 +176,14 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
               <RailRow label="Required">{eur(m.depositRequiredCents)}</RailRow>
               <RailRow label="Paid">{eur(m.depositPaidCents ?? 0)}</RailRow>
               {depositDue && canPay && <Button variant="primary" onClick={() => openPayment(true)} style={{ width: "100%", marginTop: 8 }}>Record deposit</Button>}
+            </Card>
+          )}
+
+          {/* EPO1.3 (C8) — the gate being OFF is said out loud, never silent */}
+          {m.depositTermsMissing && (
+            <Card padded>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--h10-text-3)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Deposit (FD13)</div>
+              <div style={{ fontSize: 12, color: "var(--h10-text-3)" }}>No deposit terms — this order has no originating quote, so the deposit gate is off and work orders start unblocked.</div>
             </Card>
           )}
 

@@ -9,6 +9,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 import { parseSizeRun } from "@/lib/orders/production";
@@ -45,5 +46,7 @@ export const PATCH = guarded(FEATURES.ordersEdit, async (req, { params, actor })
 
   await prisma.orderLine.update({ where: { id: lid }, data });
   void audit({ actorId: actor!.id, entityType: "order", entityId: id, action: "line-edited", after: { lineId: lid, ...data } });
+  // EPO1.3 (C3) — a real quantity mutation was silent to SSE; live boards now see it
+  await publishEventDurable("order.updated", { orderId: id, via: "line-edited", lineId: lid });
   return NextResponse.json({ ok: true });
 });
