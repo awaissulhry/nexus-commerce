@@ -13,6 +13,7 @@ import { publishEventDurable } from "@/lib/events";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { FEATURES, PAGES } from "@/lib/auth/permissions";
 import { ensureBodies } from "@/lib/google/gmail-body";
+import { resolveConversationPatch } from "@/lib/inbox/patch";
 
 export const permission = { GET: PAGES.inbox, PATCH: FEATURES.inboxAssign };
 
@@ -88,20 +89,11 @@ export const PATCH = guarded(FEATURES.inboxAssign, async (req: NextRequest, { pa
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const data: Record<string, unknown> = {};
-  if (input.assigneeId !== undefined) data.assigneeId = input.assigneeId;
-  if (input.followUpAt !== undefined) data.followUpAt = input.followUpAt ? new Date(input.followUpAt) : null;
-  if (input.snoozeUntil !== undefined) {
-    data.snoozeUntil = input.snoozeUntil ? new Date(input.snoozeUntil) : null;
-    if (input.snoozeUntil) data.state = "SNOOZED";
-  }
-  if (input.state) {
-    data.state = input.state;
-    if (input.state !== "SNOOZED") data.snoozeUntil = null;
-    if (input.state === "SNOOZED" && !data.snoozeUntil && input.snoozeUntil === undefined) {
-      return NextResponse.json({ error: "Snoozing needs a wake date" }, { status: 400 });
-    }
-  }
+  // EPI1.1 — pure resolver (src/lib/inbox/patch.ts) carries the state rules,
+  // incl. the G2 fix: clearing a wake date while SNOOZED reopens the thread.
+  const resolvedPatch = resolveConversationPatch(existing.state, input);
+  if (!resolvedPatch.ok) return NextResponse.json({ error: resolvedPatch.error }, { status: 400 });
+  const data = resolvedPatch.data;
 
   const updated = await prisma.conversation.update({
     where: { id },

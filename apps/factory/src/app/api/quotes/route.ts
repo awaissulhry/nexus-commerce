@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { publishEventDurable } from "@/lib/events";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { FEATURES, PAGES } from "@/lib/auth/permissions";
 import { quoteTotals } from "@/lib/quotes/compose-line";
@@ -77,5 +78,11 @@ export const POST = guarded(FEATURES.quotesCreate, async (req, { actor, resolved
     },
   });
   void audit({ actorId: actor!.id, entityType: "quote", entityId: quote.id, action: "created", after: { number } });
+  // EPI1.1 (G11) — creation used to be silent: other viewers' linked-quote
+  // rails stayed stale until an unrelated event happened by.
+  void publishEventDurable("pricing.updated", {
+    quoteId: quote.id,
+    ...(quote.conversationId ? { conversationId: quote.conversationId } : {}),
+  });
   return jsonStripped({ quote }, resolved, { status: 201 });
 });

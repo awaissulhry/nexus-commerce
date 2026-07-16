@@ -6,6 +6,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { PAGES } from "@/lib/auth/permissions";
+import { buildListWhere } from "@/lib/inbox/list-where";
 
 export const permission = PAGES.inbox;
 
@@ -19,19 +20,11 @@ export const GET = guarded(PAGES.inbox, async (req: NextRequest, { actor, resolv
   const q = (p.get("q") ?? "").trim();
   const cursor = p.get("cursor");
 
-  const where = {
-    ...(state !== "ALL" ? { state: state as never } : {}),
-    ...(mine ? { assigneeId: actor!.id } : {}),
-    ...(unmatched ? { partyId: null } : {}),
-    ...(q
-      ? {
-          OR: [
-            { subject: { contains: q } },
-            { party: { name: { contains: q } } },
-            { messages: { some: { fromAddress: { contains: q.toLowerCase() } } } },
-          ],
-        }
-      : {}),
+  // EPI1.2 — ONE builder for rows + counts so the tabs can never disagree
+  // with the active Mine/Unmatched/search filters (G8).
+  const { base, where } = buildListWhere({ state, mine, unmatched, q, actorId: actor!.id }) as {
+    base: never;
+    where: never;
   };
 
   const [items, counts, connection] = await Promise.all([
@@ -56,7 +49,7 @@ export const GET = guarded(PAGES.inbox, async (req: NextRequest, { actor, resolv
         },
       },
     }),
-    prisma.conversation.groupBy({ by: ["state"], _count: { _all: true } }),
+    prisma.conversation.groupBy({ by: ["state"], _count: { _all: true }, where: base }),
     prisma.googleConnection.findFirst({ select: { lastSyncAt: true, labelName: true, status: true } }),
   ]);
 

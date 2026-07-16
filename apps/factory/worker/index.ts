@@ -12,6 +12,8 @@ import "dotenv/config";
 import fs from "node:fs";
 import path from "node:path";
 import { prisma, factoryDbUrl } from "../src/lib/db";
+import { audit } from "../src/lib/audit";
+import { publishEventDurable } from "../src/lib/events";
 import { incrementalSync } from "../src/lib/google/gmail-sync";
 import { notify } from "../src/lib/notifications";
 import { pollInflightShipments } from "../src/lib/shipping/poll-tracking";
@@ -76,6 +78,15 @@ async function inboxTick() {
         where: { id: c.id },
         data: { state: "OPEN", snoozeUntil: null },
       });
+      // EPI1.1 (G1) — the wake used to be invisible: no audit row for the
+      // ONE-timeline, no event for open tabs. System actor = null.
+      await audit({
+        actorId: null,
+        entityType: "conversation",
+        entityId: c.id,
+        action: "unsnoozed",
+        after: { state: "OPEN", by: "worker" },
+      });
       if (c.assigneeId) {
         await notify({
           userId: c.assigneeId,
@@ -95,6 +106,14 @@ async function inboxTick() {
     let fallbackOwnerId: string | null | undefined;
     for (const c of due) {
       await prisma.conversation.update({ where: { id: c.id }, data: { followUpAt: null } });
+      // EPI1.1 (G1) — follow-up firing lands in the timeline too.
+      await audit({
+        actorId: null,
+        entityType: "conversation",
+        entityId: c.id,
+        action: "followup.fired",
+        after: { by: "worker" },
+      });
       let target = c.assigneeId;
       if (!target) {
         if (fallbackOwnerId === undefined) {
@@ -119,6 +138,16 @@ async function inboxTick() {
           href: `/inbox?focus=${c.id}`,
         });
       }
+    }
+
+    // EPI1.1 (G1) — one durable event per tick that changed anything, so open
+    // tabs live-refresh on wakes/fired follow-ups (mirrors the bulk idiom).
+    if (woken.length > 0 || due.length > 0) {
+      await publishEventDurable("conversation.updated", {
+        worker: true,
+        woken: woken.length,
+        followUpsFired: due.length,
+      });
     }
 
     await prisma.factoryEventOutbox.deleteMany({
