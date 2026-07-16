@@ -215,3 +215,17 @@ a {
   font-size: 12px;
   padding: 4px 26px 4px 8px;
 }
+
+/* EPI1.2 (D3) — raw buttons in the inbox tree inherit Inter instead of the
+   UA's Arial fallback; sizes stay per-element (design-law scale). */
+.epi-inbox button {
+  font-family: inherit;
+}
+
+/* EPI1.4 — keyboard-focusable pane separators (APG window splitter): a
+   visible ring when focused by keyboard, none for pointer users. */
+.fs3-pane-handle:focus-visible {
+  outline: 2px solid var(--h10-primary);
+  outline-offset: -2px;
+  border-radius: 3px;
+}

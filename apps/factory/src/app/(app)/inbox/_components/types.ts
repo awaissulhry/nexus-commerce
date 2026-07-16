@@ -101,6 +101,9 @@ export const ago = (iso: string | null): string => {
   return `${Math.floor(s / 86400)}d`;
 };
 
+// EPI1.1 — "replied"/"comment.created" removed: the timeline filters those
+// actions out (their message/comment card IS the record), so labels for them
+// were dead code. "followup.fired" is the worker's now-visible reminder.
 export const EVENT_LABELS: Record<string, string> = {
   assigned: "assigned",
   "state.changed": "changed state",
@@ -109,8 +112,7 @@ export const EVENT_LABELS: Record<string, string> = {
   "followup.set": "set a follow-up",
   "followup.cleared": "cleared the follow-up",
   "followup.autocancelled": "follow-up auto-cancelled by a reply",
-  replied: "replied",
+  "followup.fired": "follow-up reminder fired",
   "party.linked": "linked a contact",
-  "comment.created": "commented",
   "attachment.saved_to_drive": "saved an attachment to Drive",
 };

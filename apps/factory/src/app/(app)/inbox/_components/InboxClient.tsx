@@ -1,159 +1,109 @@
 /**
- * FP1.3 — the inbox workspace container: three panes, URL ?focus deep-link,
+ * FP1.3 → EPI1 — the inbox workspace container: three panes, URL deep-links,
  * SSE-driven refresh (worker events arrive via the outbox bridge), keyboard
  * grammar (j/k move · Enter open · e close · s snooze · r reply · Esc back).
- * Post-arc fix: pinned grid row (minmax(0,1fr)) so pane scrolling works, and
- * drag-resizable pane widths (persisted; double-click a handle to reset).
+ * EPI1.2: filters live in the URL (?state=&mine=1&unmatched=1&q=) so views
+ * survive reload and deep-link; list failures surface with Retry; bulk gains
+ * Assign. EPI1.4: panes ride the FS3 substrate (shared PaneHandle +
+ * useResizablePanes — keyboard ←→/Home/End resize, Enter collapses the rail),
+ * and below 1280px the rail folds into a strip that opens as a Drawer.
  */
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useToast } from "@/design-system/components";
+import { PanelRightOpen } from "lucide-react";
+import { Drawer, useToast } from "@/design-system/components";
+import { PaneHandle } from "@/components/PaneHandle";
+import { useResizablePanes, type PaneDef } from "@/components/useResizablePanes";
 import { apiJson } from "@/lib/api-client";
+import { usePermission } from "@/lib/auth/client";
 import { useFactoryEvents } from "@/lib/use-factory-events";
 import { ConversationList } from "./ConversationList";
 import { ContextRail } from "./ContextRail";
 import { ThreadPane } from "./ThreadPane";
-import type { ListResponse, ThreadResponse } from "./types";
+import type { ListResponse, ThreadResponse, UserLite } from "./types";
 
-// Resizable pane geometry — Owner-adjustable, persisted per browser.
+// Pane geometry — Owner-adjustable, persisted per browser (FS3 substrate).
 const PANES_KEY = "factory.inbox.paneWidths";
-const LIST_DEFAULT = 360;
-const RAIL_DEFAULT = 300;
-const LIST_MIN = 280;
-const LIST_MAX = 640;
-const RAIL_MIN = 240;
-const RAIL_MAX = 520;
-const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
-
-function PaneHandle({
-  onDelta,
-  onCommit,
-  onReset,
-  label,
-}: {
-  onDelta: (deltaX: number) => void;
-  onCommit: () => void;
-  onReset: () => void;
-  label: string;
-}) {
-  const drag = useRef<{ pointerId: number; lastX: number } | null>(null);
-  const [active, setActive] = useState(false);
-
-  return (
-    <div
-      role="separator"
-      aria-orientation="vertical"
-      aria-label={label}
-      title="Drag to resize · double-click to reset"
-      onPointerDown={(e) => {
-        e.preventDefault();
-        e.currentTarget.setPointerCapture(e.pointerId);
-        drag.current = { pointerId: e.pointerId, lastX: e.clientX };
-        setActive(true);
-      }}
-      onPointerMove={(e) => {
-        if (drag.current?.pointerId !== e.pointerId) return;
-        const delta = e.clientX - drag.current.lastX;
-        if (delta !== 0) {
-          drag.current.lastX = e.clientX;
-          onDelta(delta);
-        }
-      }}
-      onPointerUp={(e) => {
-        if (drag.current?.pointerId !== e.pointerId) return;
-        drag.current = null;
-        setActive(false);
-        onCommit();
-      }}
-      onPointerCancel={() => {
-        drag.current = null;
-        setActive(false);
-        onCommit();
-      }}
-      onDoubleClick={onReset}
-      style={{
-        cursor: "col-resize",
-        touchAction: "none",
-        display: "flex",
-        justifyContent: "center",
-        background: "transparent",
-      }}
-    >
-      <div
-        style={{
-          width: active ? 3 : 1,
-          height: "100%",
-          borderRadius: 2,
-          background: active ? "var(--h10-primary)" : "var(--h10-border-subtle)",
-          transition: "background 120ms",
-        }}
-      />
-    </div>
-  );
-}
+const RAIL_COLLAPSED_KEY = "factory.inbox.railCollapsed";
+const PANE_DEFS: PaneDef[] = [
+  { min: 280, max: 640, defaultSize: 360 }, // conversation list
+  { min: 240, max: 520, defaultSize: 300, invert: true }, // context rail (handle sits on its left)
+];
+const RAIL_STRIP_W = 36;
 
 function InboxInner() {
   const params = useSearchParams();
   const { toast } = useToast();
+  const canAssign = usePermission("inbox.assign");
 
-  const [state, setState] = useState("open");
-  const [mine, setMine] = useState(false);
-  const [unmatched, setUnmatched] = useState(false);
-  const [q, setQ] = useState("");
-  const [debouncedQ, setDebouncedQ] = useState("");
+  // EPI1.2 — filters initialize FROM the URL and write back to it (G16).
+  const [state, setState] = useState(() => params.get("state") ?? "open");
+  const [mine, setMine] = useState(() => params.get("mine") === "1");
+  const [unmatched, setUnmatched] = useState(() => params.get("unmatched") === "1");
+  const [q, setQ] = useState(() => params.get("q") ?? "");
+  const [debouncedQ, setDebouncedQ] = useState(q);
   const [list, setList] = useState<ListResponse | null>(null);
   const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
   const [thread, setThread] = useState<ThreadResponse | null>(null);
   const [threadLoading, setThreadLoading] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busyBulk, setBusyBulk] = useState(false);
   const [cursorIdx, setCursorIdx] = useState(0);
+  const [users, setUsers] = useState<UserLite[]>([]);
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
-  const [listW, setListW] = useState(LIST_DEFAULT);
-  const [railW, setRailW] = useState(RAIL_DEFAULT);
-  const widthsRef = useRef({ list: LIST_DEFAULT, rail: RAIL_DEFAULT });
-
+  // EPI1.4 — migrate the pre-EPI {list,rail} object payload to the FS3 array
+  // format ONCE, before the hook's hydrate effect reads the key (effects run
+  // in registration order, so this effect is declared first).
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem(PANES_KEY) ?? "{}") as { list?: unknown; rail?: unknown };
-      const list = typeof saved.list === "number" ? clamp(saved.list, LIST_MIN, LIST_MAX) : LIST_DEFAULT;
-      const rail = typeof saved.rail === "number" ? clamp(saved.rail, RAIL_MIN, RAIL_MAX) : RAIL_DEFAULT;
-      widthsRef.current = { list, rail };
-      setListW(list);
-      setRailW(rail);
+      const raw = localStorage.getItem(PANES_KEY);
+      if (!raw) return;
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const legacy = parsed as { list?: unknown; rail?: unknown };
+        const listW = typeof legacy.list === "number" ? legacy.list : PANE_DEFS[0].defaultSize;
+        const railW = typeof legacy.rail === "number" ? legacy.rail : PANE_DEFS[1].defaultSize;
+        localStorage.setItem(PANES_KEY, JSON.stringify([Math.round(listW), Math.round(railW)]));
+      }
     } catch {
-      /* defaults stand */
+      /* hook falls back to defaults */
     }
   }, []);
+  const panes = useResizablePanes(PANES_KEY, PANE_DEFS);
 
-  const persistWidths = useCallback(() => {
+  // EPI1.4 — rail collapse: explicit (Enter / chevron, persisted) or implied
+  // by a narrow window (<1280px folds the rail into a strip + Drawer, D10).
+  const [wide, setWide] = useState(true);
+  const [railCollapsed, setRailCollapsed] = useState(false);
+  const [railDrawer, setRailDrawer] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1280px)");
+    const apply = () => setWide(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
     try {
-      localStorage.setItem(PANES_KEY, JSON.stringify(widthsRef.current));
+      const stored = localStorage.getItem(RAIL_COLLAPSED_KEY);
+      if (stored != null) setRailCollapsed(stored === "1");
     } catch {
-      /* private mode etc. — resizing still works for the session */
+      /* default stands */
     }
+    return () => mq.removeEventListener("change", apply);
   }, []);
-
-  const resizeList = useCallback((delta: number) => {
-    widthsRef.current.list = clamp(widthsRef.current.list + delta, LIST_MIN, LIST_MAX);
-    setListW(widthsRef.current.list);
+  const toggleRail = useCallback(() => {
+    setRailCollapsed((v) => {
+      try {
+        localStorage.setItem(RAIL_COLLAPSED_KEY, v ? "0" : "1");
+      } catch {
+        /* session-only */
+      }
+      return !v;
+    });
   }, []);
-
-  const resizeRail = useCallback((delta: number) => {
-    // rail handle sits to its LEFT: dragging right shrinks the rail
-    widthsRef.current.rail = clamp(widthsRef.current.rail - delta, RAIL_MIN, RAIL_MAX);
-    setRailW(widthsRef.current.rail);
-  }, []);
-
-  const resetWidths = useCallback(() => {
-    widthsRef.current = { list: LIST_DEFAULT, rail: RAIL_DEFAULT };
-    setListW(LIST_DEFAULT);
-    setRailW(RAIL_DEFAULT);
-    persistWidths();
-  }, [persistWidths]);
+  const railShown = wide && !railCollapsed;
 
   const focusId = params.get("focus");
 
@@ -161,6 +111,29 @@ function InboxInner() {
     const t = setTimeout(() => setDebouncedQ(q), 250);
     return () => clearTimeout(t);
   }, [q]);
+
+  // EPI1.2 — ONE url composer so open/Escape/filter changes all preserve each
+  // other (the old open() dropped every filter).
+  const urlFor = useCallback(
+    (focus: string | null) => {
+      const usp = new URLSearchParams();
+      if (state !== "open") usp.set("state", state);
+      if (mine) usp.set("mine", "1");
+      if (unmatched) usp.set("unmatched", "1");
+      if (debouncedQ) usp.set("q", debouncedQ);
+      if (focus) usp.set("focus", focus);
+      const qs = usp.toString();
+      return qs ? `/inbox?${qs}` : "/inbox";
+    },
+    [state, mine, unmatched, debouncedQ],
+  );
+
+  // Shallow routing (documented Next interop: history.replaceState syncs with
+  // useSearchParams) — router.replace to the bare pathname silently no-ops on
+  // a fresh document load at ?focus=, and focus/filters are pure UI state.
+  useEffect(() => {
+    window.history.replaceState(null, "", urlFor(focusId));
+  }, [urlFor, focusId]);
 
   const listUrl = useMemo(() => {
     const usp = new URLSearchParams({ state });
@@ -179,8 +152,10 @@ function InboxInner() {
         setList((prev) =>
           opts?.append && prev ? { ...data, items: [...prev.items, ...data.items] } : data,
         );
-      } catch {
-        /* keep last */
+        setListError(null);
+      } catch (e) {
+        // EPI1.2 (G9) — failures used to keep the stale page silently
+        setListError((e as Error).message || "Couldn't load the inbox");
       } finally {
         setListLoading(false);
       }
@@ -193,6 +168,13 @@ function InboxInner() {
     void loadList();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listUrl]);
+
+  useEffect(() => {
+    if (!canAssign) return;
+    apiJson<{ users: UserLite[] }>("/api/users-lite")
+      .then((d) => setUsers(d.users))
+      .catch(() => {});
+  }, [canAssign]);
 
   const loadThread = useCallback(
     async (id: string, quiet = false) => {
@@ -218,25 +200,29 @@ function InboxInner() {
     if (focusId) void loadThread(focusId, true);
   }, [loadList, loadThread, focusId]);
 
-  useFactoryEvents(["conversation.synced", "conversation.updated", "comment.created"], refresh, {
-    debounceMs: 1500,
-  });
+  // pricing.updated added in EPI1.1 — quote creation refreshes the rail card
+  useFactoryEvents(
+    ["conversation.synced", "conversation.updated", "comment.created", "pricing.updated"],
+    refresh,
+    { debounceMs: 1500 },
+  );
 
-  // Shallow routing (documented Next interop: history.replaceState syncs with
-  // useSearchParams) — router.replace to the bare pathname silently no-ops on
-  // a fresh document load at ?focus=, and focus is pure UI state anyway.
-  const open = useCallback((id: string) => {
-    window.history.replaceState(null, "", `/inbox?focus=${id}`);
-  }, []);
+  const open = useCallback(
+    (id: string) => {
+      window.history.replaceState(null, "", urlFor(id));
+    },
+    [urlFor],
+  );
 
-  const bulk = async (action: "close" | "open") => {
+  const bulk = async (action: "close" | "open" | "assign", assigneeId?: string | null) => {
     setBusyBulk(true);
     try {
       const res = await apiJson<{ ok: number; failed: number }>("/api/inbox/bulk", {
         method: "POST",
-        body: JSON.stringify({ ids: [...selected], action }),
+        body: JSON.stringify({ ids: [...selected], action, ...(action === "assign" ? { assigneeId } : {}) }),
       });
-      toast(`${res.ok} ${action === "close" ? "closed" : "reopened"}${res.failed ? ` · ${res.failed} failed` : ""}`, res.failed ? "warning" : "success");
+      const verb = action === "close" ? "closed" : action === "open" ? "reopened" : "assigned";
+      toast(`${res.ok} ${verb}${res.failed ? ` · ${res.failed} failed` : ""}`, res.failed ? "warning" : "success");
       setSelected(new Set());
       refresh();
     } catch (e) {
@@ -264,10 +250,19 @@ function InboxInner() {
         e.preventDefault();
         open(items[cursorIdx].id);
       } else if (e.key === "Escape" && focusId) {
-        window.history.replaceState(null, "", "/inbox");
+        window.history.replaceState(null, "", urlFor(null));
       } else if (e.key === "e" && focusId) {
         e.preventDefault();
-        void apiJson(`/api/inbox/${focusId}`, { method: "PATCH", body: JSON.stringify({ state: thread?.conversation.state === "CLOSED" ? "OPEN" : "CLOSED" }) }).then(refresh);
+        // EPI1.1 (G6) — refuse to toggle until the focused thread has loaded:
+        // the old code read a null thread as CLOSED and mis-toggled.
+        if (!thread || thread.conversation.id !== focusId) return;
+        const next = thread.conversation.state === "CLOSED" ? "OPEN" : "CLOSED";
+        void apiJson(`/api/inbox/${focusId}`, { method: "PATCH", body: JSON.stringify({ state: next }) })
+          .then(() => {
+            toast(next === "CLOSED" ? "Closed — work done" : "Reopened", "success");
+            refresh();
+          })
+          .catch((err: Error) => toast(err.message, "danger")); // G5 — no more silent failures
       } else if (e.key === "s" && focusId) {
         e.preventDefault();
         const tomorrow8 = new Date();
@@ -277,7 +272,8 @@ function InboxInner() {
           .then(() => {
             toast("Snoozed until tomorrow 08:00 — replies un-snooze it", "info");
             refresh();
-          });
+          })
+          .catch((err: Error) => toast(err.message, "danger")); // G5
       } else if (e.key === "r" && focusId) {
         e.preventDefault();
         composerRef.current?.focus();
@@ -285,14 +281,17 @@ function InboxInner() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [list, cursorIdx, focusId, open, refresh, thread?.conversation.state, toast]);
+  }, [list, cursorIdx, focusId, open, refresh, thread, toast, urlFor]);
+
+  const railCol = railShown ? `${panes.widths[1]}px` : `${RAIL_STRIP_W}px`;
 
   return (
     <div
+      className="epi-inbox"
       style={{
         height: "calc(100dvh - 52px)",
         display: "grid",
-        gridTemplateColumns: `${listW}px 6px minmax(0, 1fr) 6px ${railW}px`,
+        gridTemplateColumns: `${panes.widths[0]}px 6px minmax(0, 1fr) 6px ${railCol}`,
         gridTemplateRows: "minmax(0, 1fr)",
         border: "1px solid var(--h10-border)",
         borderRadius: 12,
@@ -304,6 +303,8 @@ function InboxInner() {
         <ConversationList
           data={list}
           loading={listLoading}
+          error={listError}
+          onRetry={() => void loadList()}
           state={state}
           setState={setState}
           mine={mine}
@@ -317,19 +318,44 @@ function InboxInner() {
           onOpen={open}
           selected={selected}
           setSelected={setSelected}
-          onBulk={(a) => void bulk(a)}
+          onBulk={(a, assigneeId) => void bulk(a, assigneeId)}
           onLoadMore={() => void loadList({ append: true })}
           busyBulk={busyBulk}
+          canAssign={canAssign}
+          users={users}
         />
       </div>
-      <PaneHandle onDelta={resizeList} onCommit={persistWidths} onReset={resetWidths} label="Resize conversation list" />
+      <PaneHandle {...panes.handleProps(0)} label="Resize conversation list" />
       <div style={{ minWidth: 0, minHeight: 0, overflow: "hidden" }}>
         <ThreadPane thread={thread} loading={threadLoading} onMutated={refresh} composerRef={composerRef} />
       </div>
-      <PaneHandle onDelta={resizeRail} onCommit={persistWidths} onReset={resetWidths} label="Resize context rail" />
+      <PaneHandle
+        {...panes.handleProps(1)}
+        label="Resize context rail"
+        onToggle={wide ? toggleRail : () => setRailDrawer(true)}
+      />
       <div style={{ minWidth: 0, minHeight: 0, overflow: "hidden", background: "var(--h10-surface-raised)" }}>
-        <ContextRail thread={thread} onMutated={refresh} />
+        {railShown ? (
+          <ContextRail thread={thread} onMutated={refresh} />
+        ) : (
+          <div style={{ display: "grid", justifyItems: "center", paddingTop: 10 }}>
+            <button
+              type="button"
+              onClick={() => (wide ? toggleRail() : setRailDrawer(true))}
+              title="Show details"
+              aria-label="Show details"
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--h10-text-2)", padding: 6 }}
+            >
+              <PanelRightOpen size={16} />
+            </button>
+          </div>
+        )}
       </div>
+      {!railShown && (
+        <Drawer open={railDrawer} onClose={() => setRailDrawer(false)} title="Details" width={340}>
+          <ContextRail thread={thread} onMutated={refresh} />
+        </Drawer>
+      )}
     </div>
   );
 }
