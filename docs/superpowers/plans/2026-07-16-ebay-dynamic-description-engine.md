@@ -1,6 +1,8 @@
 # ED — eBay Dynamic Description Engine
 
-**Date:** 2026-07-16 · **Status: APPROVED** (owner: "Proceed however you recommend") · flat-file protected surface exception applies to this engagement.
+**Date:** 2026-07-16 · **Status: ✅ ALL PHASES SHIPPED (ED.1–ED.5), awaiting owner test pass** (owner: "Proceed however you recommend") · flat-file protected surface exception applies to this engagement.
+
+> **Progress:** ED.1+ED.2 `b2922394` (theme model + migration, pure renderer + eBay active-content sanitizer, 3 built-in themes, service CRUD, wired at all three push sites — render never blocks a push) · ED.3 `356f9540` (per-market Description Theme column + DescriptionModal "Themed (as pushed)" tab + description-preview endpoint) · ED.4 `49c445e1` (File → "Description themes…" two-pane manager: editor with token click-to-insert, duplicate/default-star/active/delete, unsaved-draft Preview via `themeHtml` override) · ED.5 `53a01cf5` (a: image-publish path resolves per-market parentContent + themed render before pushVariationGroup — fixes the P9e family gap AND means image changes re-push themed descriptions automatically; b: Edit-menu bulk "Set description theme…" over ticked rows). AI body feed stays gated on the prod AI provider (Gemini exhausted — see reference_prod_ai_provider); the description cell already accepts flat-file-ai output when a key lands.
 
 ## Owner goals
 Description field "extremely dynamic": custom embeddable **themes**, **auto-fetched images per variant / per group** (the image-axis groups the drawer manages), **policy blocks**, **per-market localized content**, full automation ("find a way to be the best").
