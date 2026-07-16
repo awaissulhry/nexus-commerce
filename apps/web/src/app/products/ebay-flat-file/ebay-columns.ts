@@ -297,6 +297,15 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
         maxLength: 4000,
         width: 240,
       },
+      {
+        id: 'description_theme',
+        label: 'Description Theme',
+        description: 'ED — the theme that wraps this market’s description at push time (auto galleries from the image groups, specs table, policy blocks). Blank = the default theme; “None” = push the raw description body. Per-market like subtitle: each site keeps its own assignment.',
+        required: false,
+        kind: 'enum',
+        options: [''],
+        width: 170,
+      },
     ],
   },
   {

@@ -560,6 +560,10 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                 ...(sharedPacked.platformAttributes as Record<string, unknown>),
                 subtitle:
                   ((existing?.platformAttributes ?? {}) as Record<string, unknown>).subtitle ?? '',
+                // ED.3 — theme assignment is per-market like subtitle: only the
+                // active market takes the edited value; others keep their own.
+                descriptionThemeId:
+                  ((existing?.platformAttributes ?? {}) as Record<string, unknown>).descriptionThemeId ?? '',
               };
 
           const listingData = {

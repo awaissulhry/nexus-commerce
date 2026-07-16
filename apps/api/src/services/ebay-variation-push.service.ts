@@ -2444,6 +2444,8 @@ export function buildFlatRow(
     condition: (firstAttrs.conditionId as string | undefined) ?? 'NEW',
     category_id: (firstAttrs.categoryId as string | undefined) ?? '',
     subtitle: (firstAttrs.subtitle as string | undefined) ?? '',
+    // ED.3 — per-market description theme assignment (blank = default theme).
+    description_theme: (firstAttrs.descriptionThemeId as string | undefined) ?? '',
     // Phase 4 — shared-SKU listing flag (parent-level), read back from platformAttributes.
     shared_sku_listing: (firstAttrs.sharedSkuListing as boolean | undefined) ?? false,
     description: first?.description ?? '',
@@ -2633,6 +2635,9 @@ export function packSharedFields(row: Record<string, unknown>): {
       conditionId: (row.condition as string) ?? 'NEW',
       categoryId: (row.category_id as string) ?? '',
       subtitle: (row.subtitle as string) ?? '',
+      // ED.3 — description theme id ('' = default, 'none' = raw body). Split
+      // per-market at save exactly like subtitle.
+      descriptionThemeId: ((row.description_theme as string) ?? '').trim(),
       // Phase 4 — shared-SKU listing routing flag (Trading-API multi-variation,
       // shared variant SKUs across parents). Round-trips via existing JSON; no migration.
       sharedSkuListing: Boolean(row.shared_sku_listing),

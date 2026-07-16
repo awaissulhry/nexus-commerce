@@ -212,9 +212,32 @@ export function validateRows(rows: BaseRow[], allRows: BaseRow[] = rows) {
 
 // ── Description modal ─────────────────────────────────────────────────────
 
-function DescriptionModal({ value, onSave, onClose }: { value: string; onSave: (v: string) => void; onClose: () => void }) {
+function DescriptionModal({ value, onSave, onClose, productId, marketplace }: {
+  value: string; onSave: (v: string) => void; onClose: () => void
+  /** ED.3 — enables the Themed tab (renders exactly what a push would send). */
+  productId?: string; marketplace?: string
+}) {
   const [text, setText] = useState(value)
-  const [tab, setTab] = useState<'edit' | 'preview'>('edit')
+  const [tab, setTab] = useState<'edit' | 'preview' | 'themed'>('edit')
+  // ED.3 — server-rendered themed preview (theme + auto galleries + specs).
+  const [themed, setThemed] = useState<{ html: string; themed: boolean; themeName?: string; warnings: string[] } | null>(null)
+  const [themedBusy, setThemedBusy] = useState(false)
+  const loadThemed = async () => {
+    if (!productId) return
+    setThemedBusy(true)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/ebay/description-preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId, marketplace: marketplace ?? 'IT', body: text, mode: 'group' }),
+      })
+      setThemed(r.ok ? await r.json() : null)
+    } catch {
+      setThemed(null)
+    } finally {
+      setThemedBusy(false)
+    }
+  }
   const remaining = 4000 - text.length
   return (
     <Modal
@@ -232,15 +255,15 @@ function DescriptionModal({ value, onSave, onClose }: { value: string; onSave: (
     >
       {/* Tab switcher */}
       <div className="flex gap-1 mb-3 border-b border-slate-200 dark:border-slate-700 -mx-[18px] px-[18px]">
-        {(['edit', 'preview'] as const).map((t) => (
+        {(['edit', 'preview', ...(productId ? (['themed'] as const) : [])] as Array<'edit' | 'preview' | 'themed'>).map((t) => (
           <button key={t} type="button"
-            onClick={() => setTab(t)}
+            onClick={() => { setTab(t); if (t === 'themed') void loadThemed() }}
             className={cn('px-3 py-1.5 text-xs font-medium capitalize rounded-t transition-colors',
               tab === t
                 ? 'text-blue-700 dark:text-blue-300 border-b-2 border-blue-500'
                 : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             )}
-          >{t}</button>
+          >{t === 'themed' ? 'Themed (as pushed)' : t}</button>
         ))}
       </div>
       {tab === 'edit' ? (
@@ -251,14 +274,40 @@ function DescriptionModal({ value, onSave, onClose }: { value: string; onSave: (
             onChange={(e) => setText(e.target.value)}
             placeholder="Enter HTML description…"
           />
-          <p className="mt-2 text-xs text-slate-400">HTML is supported: &lt;p&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;br&gt;…</p>
+          <p className="mt-2 text-xs text-slate-400">HTML is supported: &lt;p&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;br&gt;… This is the BODY copy — the Description Theme column controls the wrapper pushed to eBay (see the “Themed” tab).</p>
         </>
-      ) : (
+      ) : tab === 'preview' ? (
         <div
           className="min-h-[380px] border border-slate-200 dark:border-slate-700 rounded-lg p-4 prose prose-sm dark:prose-invert max-w-none text-sm overflow-y-auto"
           // This is operator-entered content previewed in their own admin UI — no external source
           dangerouslySetInnerHTML={{ __html: text || '<p class="text-slate-400 italic">No content yet…</p>' }}
         />
+      ) : (
+        <div className="min-h-[380px]">
+          <div className="mb-2 flex items-center gap-2 text-xs">
+            {themedBusy ? (
+              <span className="text-slate-400">Rendering exactly what a push would send…</span>
+            ) : themed ? (
+              themed.themed
+                ? <span className="text-emerald-600 dark:text-emerald-400 font-medium">Theme: {themed.themeName}</span>
+                : <span className="text-slate-500">No theme assigned — the raw body is pushed. Pick one in the “Description Theme” column.</span>
+            ) : (
+              <span className="text-slate-400">Preview unavailable (unsaved new row?) — save the row first.</span>
+            )}
+            {themed && themed.warnings.length > 0 && (
+              <span className="text-amber-600 dark:text-amber-400" title={themed.warnings.join('\n')}>⚠ {themed.warnings.length} warning{themed.warnings.length !== 1 ? 's' : ''}</span>
+            )}
+            <button type="button" onClick={() => void loadThemed()} disabled={themedBusy}
+              className="ml-auto px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">
+              Refresh
+            </button>
+          </div>
+          <div
+            className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 max-w-none text-sm overflow-y-auto bg-white"
+            // Server-rendered from the operator's own theme + data, active-content-sanitized.
+            dangerouslySetInnerHTML={{ __html: themed?.html || '<p style="color:#94a3b8;font-style:italic;">Nothing rendered yet.</p>' }}
+          />
+        </div>
       )}
     </Modal>
   )
@@ -866,6 +915,15 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketplace])
 
+  // ED.3 — description themes for the Description Theme column (non-blocking).
+  const [descThemes, setDescThemes] = useState<Array<{ id: string; name: string; isDefault: boolean }>>([])
+  useEffect(() => {
+    fetch(`${BACKEND}/api/ebay/description-themes`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.themes) setDescThemes(d.themes) })
+      .catch(() => {})
+  }, [])
+
   // ── EFX P4 — union Item Specifics group + ghost columns ────────────────
   // The union merges EVERY loaded category's aspect columns (dedup by
   // lowercase id, required = any category requires, options unioned).
@@ -965,7 +1023,28 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           }),
         }
       })
-    const patch = (groups: EbayColumnGroup[]) => patchListing(patchPolicies(groups))
+    // ED.3 — Description Theme column: blank = default theme, 'none' = raw
+    // body, else a stored theme id (labelled by name in the dropdown).
+    const patchDescTheme = (groups: EbayColumnGroup[]): EbayColumnGroup[] =>
+      descThemes.length === 0 ? groups : groups.map((g) => {
+        if (g.id !== 'content') return g
+        return {
+          ...g,
+          columns: g.columns.map((col) => col.id === 'description_theme'
+            ? {
+                ...col,
+                options: ['', 'none', ...descThemes.map((t) => t.id)],
+                optionLabels: {
+                  '': `Default${descThemes.find((t) => t.isDefault) ? ` (${descThemes.find((t) => t.isDefault)!.name})` : ' (no default set)'}`,
+                  none: 'None — raw description',
+                  ...Object.fromEntries(descThemes.map((t) => [t.id, t.name])),
+                },
+                enumMode: 'strict' as const,
+              }
+            : col),
+        }
+      })
+    const patch = (groups: EbayColumnGroup[]) => patchDescTheme(patchListing(patchPolicies(groups)))
     // MS-E — one market at a time: show only the active market's column group
     // (the other markets' data is still loaded, just hidden). Falls back to
     // all markets if the active one has no group (shouldn't happen).
@@ -980,7 +1059,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       itemSpecificsGroup,
       ...patch(marketGroups),
     ]
-  }, [itemSpecificsGroup, policyOptions, conditionOptions, variationThemeOptions, marketplace])
+  }, [itemSpecificsGroup, policyOptions, conditionOptions, variationThemeOptions, marketplace, descThemes])
 
   // ── Shared flat-file core (columns modal state, filter state) ─────────
   // initialGroups: the static base groups without category columns or policy
@@ -2888,6 +2967,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
         {desc && descModal && (
           <DescriptionModal
+            productId={String(desc._productId ?? '') || undefined}
+            marketplace={marketplace}
             value={String(desc.description ?? '')}
             onSave={(v) => {
               // UFX P7 (item 12) — materialize a ghost target (see AspectsPanel note)
