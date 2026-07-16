@@ -734,6 +734,20 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   }, [marketplace, BACKEND])
 
   // IN.2 — Cascade button toggle (default on, shared localStorage key with Amazon)
+  // B2 — row density (owner 2026-07-16): the SKU-cell badge cluster
+  // (Parent/Variant/Shared + completeness chip) and the market status CHIPS
+  // inflated eBay rows past the compact baseline. Hidden by default; the View
+  // menu re-enables them. Status stays visible as plain text when chips are
+  // off. Page-scoped keys (one setting for all markets).
+  const [showSkuBadges, setShowSkuBadges] = useState<boolean>(() => {
+    try { return localStorage.getItem('ff-ebay-view-skubadges') === '1' } catch { return false }
+  })
+  useEffect(() => { try { localStorage.setItem('ff-ebay-view-skubadges', showSkuBadges ? '1' : '0') } catch {} }, [showSkuBadges])
+  const [showStatusChips, setShowStatusChips] = useState<boolean>(() => {
+    try { return localStorage.getItem('ff-ebay-view-statuschips') === '1' } catch { return false }
+  })
+  useEffect(() => { try { localStorage.setItem('ff-ebay-view-statuschips', showStatusChips ? '1' : '0') } catch {} }, [showStatusChips])
+
   const [showCascadeButtons, setShowCascadeButtons] = useState<boolean>(() => {
     try { return localStorage.getItem('ff-show-cascade') !== '0' } catch { return true }
   })
@@ -2022,17 +2036,19 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         <span className="flex items-center gap-1.5 min-w-0">
           {isVariant && <span className="text-slate-300 dark:text-slate-600 shrink-0 font-mono" aria-hidden>└</span>}
           <span className={cn('truncate', isParent && 'font-semibold text-slate-900 dark:text-slate-100')}>{displayVal}</span>
-          {isParent && (
+          {/* B2 — badge cluster behind View → SKU badges (default off; the └ tree
+              cue + parent bolding stay — they cost no height). */}
+          {showSkuBadges && isParent && (
             <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-800">Parent</span>
           )}
-          {isVariant && (
+          {showSkuBadges && isVariant && (
             <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide bg-slate-100 text-slate-500 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700">Variant</span>
           )}
           {/* Task 5 (shared-mgmt) — synthesized membership row badge */}
-          {er._shared && (
+          {showSkuBadges && er._shared && (
             <Badge variant="default" size="sm" className="shrink-0 uppercase tracking-wide text-[9px]">Shared</Badge>
           )}
-          {total > 0 && (
+          {showSkuBadges && total > 0 && (
             <span className={cn('ml-auto shrink-0 font-mono text-[9px] rounded px-1 py-0.5 tabular-nums',
               complete ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
               : partial  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
@@ -2045,15 +2061,22 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         </span>
       )
     }
-    // Market status badge
+    // Market status badge (B2 — chip styling behind View → Status chips; when
+    // off the status stays visible as compact plain text, no padded border).
     if (col.id.endsWith('_status') && col.readOnly) {
-      return displayVal
-        ? <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium',
+      if (!displayVal) return <span className="text-slate-300 text-[10px]">—</span>
+      if (!showStatusChips) {
+        return <span className={cn('text-[10px] font-medium',
+          displayVal.toUpperCase() === 'ACTIVE' ? 'text-emerald-600 dark:text-emerald-400'
+          : displayVal.toUpperCase() === 'DRAFT' ? 'text-amber-600 dark:text-amber-400'
+          : displayVal.toUpperCase() === 'ERROR' ? 'text-red-600 dark:text-red-400'
+          : 'text-slate-500 dark:text-slate-400')}>{displayVal}</span>
+      }
+      return <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium',
             displayVal.toUpperCase() === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300'
             : displayVal.toUpperCase() === 'DRAFT' ? 'bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-300'
             : displayVal.toUpperCase() === 'ERROR' ? 'bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/40 dark:text-red-300'
             : 'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400')}>{displayVal}</span>
-        : <span className="text-slate-300 text-[10px]">—</span>
     }
     // Market item ID with external link
     if (col.id.endsWith('_item_id') && col.readOnly) {
@@ -2139,7 +2162,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     }
     return null
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [familyParentIds, categoryLoading, columnGroups])
+  }, [familyParentIds, categoryLoading, columnGroups, showSkuBadges, showStatusChips])
 
   // ── Edit intercept for modal-based editing ─────────────────────────────
   const onBeforeEditCell = useCallback((col: FlatFileColumn, row: BaseRow): boolean => {
@@ -3390,6 +3413,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       renderAiPanel={(ctx: AiPanelCtx) => (
         <FlatFileAiPanel {...ctx} channel="ebay" />
       )}
+      viewMenuItems={() => [
+        { label: 'SKU badges (Parent · Variant · Shared · completeness)', checked: showSkuBadges, onClick: () => setShowSkuBadges((v) => !v) },
+        { label: 'Status chips (plain text when off)', checked: showStatusChips, onClick: () => setShowStatusChips((v) => !v) },
+        { separator: true as const },
+        { label: 'Override badges', checked: showOverrideBadges, onClick: () => setShowOverrideBadges((v) => !v) },
+        { label: 'Cascade buttons', checked: showCascadeButtons, onClick: () => setShowCascadeButtons((v) => !v) },
+      ]}
       renderRowMeta={(row) => (
         <div className="flex items-center gap-0.5">
           {showOverrideBadges && (
