@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { SPREADSHEET_ACCEPT, isExcelBinaryFile } from '@/components/flat-file/import-accept'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface Row { _rowId: string; [key: string]: unknown }
 
@@ -622,16 +623,17 @@ export function ImportWizardModal({
               {workbook && (
                 <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-600 dark:text-slate-300">
                   <span className="text-slate-400 uppercase tracking-wide">Workbook</span>
-                  <label className="inline-flex items-center gap-1">
+                  <span className="inline-flex items-center gap-1">
                     Sheet
-                    <select
-                      value={workbook.sheet}
+                    <Listbox
+                      ariaLabel="Workbook sheet"
+                      className="min-w-[130px]"
                       disabled={busy}
-                      onChange={(e) => { const p = lastPayloadRef.current; if (p) void runParse(p, { sheet: e.target.value }) }}
-                      className="text-[11px] rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-1.5 py-0.5 focus:outline-none focus:border-violet-400">
-                      {workbook.sheets.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </label>
+                      value={workbook.sheet}
+                      options={workbook.sheets.map((s) => ({ value: s, label: s }))}
+                      onChange={(s) => { const p = lastPayloadRef.current; if (p && s !== workbook.sheet) void runParse(p, { sheet: s }) }}
+                    />
+                  </span>
                   <label className="inline-flex items-center gap-1">
                     Header row
                     <input
