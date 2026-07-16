@@ -352,14 +352,40 @@ model Quote {
   convertedOrderId    String? // FP3: set when an accepted quote becomes an Order
   marginFloorBreached Boolean        @default(false)
   lostReason          String?
+  // EPQ.2 — view tracking (public page opens; counters fold here, events below)
+  viewCount           Int            @default(0)
+  firstViewedAt       DateTime?
+  lastViewedAt        DateTime?
+  // EPQ.2 — follow-up engine: last nudge email + the current due rule.
+  // followUpFlaggedAt doubles as the snooze clock (a FUTURE value = snoozed
+  // until then) and the re-notify dedupe anchor (a fresh value suppresses).
+  lastNudgeAt         DateTime?
+  followUpRule        String? // 'unviewed' | 'viewed-silent' | 'pre-expiry'
+  followUpFlaggedAt   DateTime?
   lines               QuoteLine[]
   versions            QuoteVersion[]
+  viewEvents          QuoteViewEvent[]
   orders              Order[]
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 
   @@index([partyId, state])
   @@index([validUntilAt]) // EPQ.1 — the worker's expiry sweep filters SENT quotes by validity
+}
+
+// EPQ.2 — one row per public-page open (latest OR superseded token; version =
+// the send the token belongs to). ipHash is sha256(ip) — the raw address is
+// never stored. Counters live on Quote so the pipeline never folds this table.
+model QuoteViewEvent {
+  id      String   @id @default(cuid())
+  quoteId String
+  quote   Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  version Int
+  at      DateTime @default(now())
+  ipHash  String?
+  ua      String?
+
+  @@index([quoteId, at])
 }
 
 model QuoteLine {

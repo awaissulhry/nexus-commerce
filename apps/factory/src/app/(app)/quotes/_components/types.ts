@@ -1,5 +1,7 @@
 /** FP3 — shared client types for the Quotes workspace. */
 
+import type { FollowUpRule } from "@/lib/quotes/followup";
+
 export type QuoteState = "DRAFT" | "SENT" | "ACCEPTED" | "REJECTED" | "EXPIRED";
 
 export type QuoteRow = {
@@ -17,12 +19,32 @@ export type QuoteRow = {
   marginCents: number;
   marginPct: number;
   lineCount: number;
+  // EPQ.2 — view tracking for the compact "viewed" cell
+  viewCount: number;
+  firstViewedAt: string | null;
+  lastViewedAt: string | null;
+};
+
+/** EPQ.2 — one row of the Needs-follow-up queue. */
+export type FollowUpRow = {
+  id: string;
+  number: string;
+  party: { id: string; name: string; kind: string };
+  rule: FollowUpRule;
+  days: number;
+  flaggedAt: string | null;
+  sentAt: string | null;
+  lastViewedAt: string | null;
+  validUntilAt: string | null;
+  netCents: number;
 };
 
 export type PipelineResponse = {
   quotes: QuoteRow[];
-  counters: { drafts: number; awaiting: number; overdue: number };
+  counters: { drafts: number; awaiting: number; expiringSoon: number };
   counts: Record<string, number>;
+  followups: FollowUpRow[];
+  followupConfig: { unviewedDays: number; viewedDays: number; preExpiryDays: number };
 };
 
 export type QuoteLine = {
@@ -54,6 +76,12 @@ export type QuoteDetail = {
   convertedOrderId: string | null;
   lostReason: string | null;
   acceptTokenHash: string | null;
+  // EPQ.2 — customer-views card + follow-up state
+  viewCount: number;
+  firstViewedAt: string | null;
+  lastViewedAt: string | null;
+  lastNudgeAt: string | null;
+  followUpRule: string | null;
   party: { id: string; name: string; kind: string; paymentTerms?: string | null; priceListId: string | null; priceList: { name: string } | null };
   conversation: { id: string; subject: string | null } | null;
   lines: QuoteLine[];

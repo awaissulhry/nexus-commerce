@@ -6,6 +6,8 @@
  * EPQ.1 — the PATCH enforces the forward-only state machine
  * (src/lib/quotes/transitions.ts): illegal edges 422 and are audited from→to;
  * deposit/dates are DRAFT-only; lostReason only lands on a lost outcome.
+ * EPQ.2 — manual Mark accepted / Mark rejected ring every other active Owner
+ * (the actor already knows — S6's silent half closed).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -16,6 +18,7 @@ import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { FEATURES, PAGES } from "@/lib/auth/permissions";
 import { quoteTotals } from "@/lib/quotes/compose-line";
 import { canTransition, lostReasonAllowed, type QuoteState } from "@/lib/quotes/transitions";
+import { notifyOwners } from "@/lib/quotes/notify-owners";
 
 export const permission = { GET: PAGES.quotes, PATCH: FEATURES.quotesCreate, DELETE: FEATURES.quotesCreate };
 
@@ -47,7 +50,7 @@ export const PATCH = guarded(FEATURES.quotesCreate, async (req: NextRequest, { p
   const { id } = await params;
   const parsed = Patch.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Bad request" }, { status: 400 });
-  const existing = await prisma.quote.findUnique({ where: { id }, select: { state: true } });
+  const existing = await prisma.quote.findUnique({ where: { id }, select: { state: true, number: true } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const from = existing.state as QuoteState;
 
@@ -83,6 +86,16 @@ export const PATCH = guarded(FEATURES.quotesCreate, async (req: NextRequest, { p
   const quote = await prisma.quote.update({ where: { id }, data });
   if (to) {
     void audit({ actorId: actor!.id, entityType: "quote", entityId: id, action: "state-changed", before: { from }, after: { to, ...(parsed.data.lostReason !== undefined ? { lostReason: parsed.data.lostReason } : {}) } });
+    // EPQ.2 — a manual decision rings every OTHER active Owner (S6)
+    if (to === "ACCEPTED" || to === "REJECTED") {
+      await notifyOwners({
+        title: to === "ACCEPTED" ? `Quote ${existing.number} marked accepted` : `Quote ${existing.number} marked rejected`,
+        body: to === "REJECTED" && parsed.data.lostReason ? parsed.data.lostReason : undefined,
+        entityId: id,
+        href: `/quotes?q=${id}`,
+        excludeUserId: actor!.id,
+      });
+    }
   } else {
     void audit({ actorId: actor!.id, entityType: "quote", entityId: id, action: "updated", before: { state: from }, after: parsed.data });
   }

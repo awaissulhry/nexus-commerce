@@ -10,13 +10,15 @@
  * on Quote.acceptTokenHash (always the latest — older tokens resolve through
  * the version row to a superseded page). A below-floor send persists
  * marginFloorBreached + a floor.acknowledged audit (who/when/how far below).
+ * EPQ.2 — the Gmail plumbing (recipient/threading/send/OUTBOUND record) lives
+ * in src/lib/quotes/mail.ts, shared with the follow-up nudge route. Behavior
+ * identical; the same error strings return before any quote state is written.
  */
 import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
-import { google } from "googleapis";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { publishEventDurable } from "@/lib/events";
@@ -25,8 +27,7 @@ import { FEATURES } from "@/lib/auth/permissions";
 import { composeQuoteLine, quoteTotals } from "@/lib/quotes/compose-line";
 import { buildQuoteSnapshot } from "@/lib/quotes/build-snapshot";
 import { renderQuotePdf } from "@/lib/quotes/render-pdf";
-import { buildReplyMime, replySubject } from "@/lib/google/mime";
-import { getAuthedClient } from "@/lib/google/oauth";
+import { sendQuoteMail } from "@/lib/quotes/mail";
 
 export const permission = FEATURES.quotesSend;
 
@@ -66,14 +67,6 @@ export const POST = guarded(FEATURES.quotesSend, async (req, { params, actor }) 
     return NextResponse.json({ error: `Net margin ${totals.marginPct.toFixed(1)}% is below your ${floor}% floor — acknowledge to send` }, { status: 422 });
   }
 
-  // Gmail must be connected to send
-  const authed = await getAuthedClient();
-  if (!authed) return NextResponse.json({ error: "Connect Gmail in Settings › Integrations first" }, { status: 400 });
-
-  // recipient
-  const toEmail = quote.party.emails[0]?.email;
-  if (!toEmail && !quote.conversation) return NextResponse.json({ error: "This contact has no email on file" }, { status: 400 });
-
   // EPQ.1 — accept token: EVERY send mints a fresh one (supersede semantics).
   // The customer always gets a live link; older links resolve to a superseded
   // page through the QuoteVersion row that owns their hash.
@@ -95,29 +88,21 @@ export const POST = guarded(FEATURES.quotesSend, async (req, { params, actor }) 
   const pdfPath = path.join(dir, `${id}-v${version}.pdf`);
   fs.writeFileSync(pdfPath, pdf);
 
-  // send via Gmail (threaded reply if linked, else new email)
-  const gmail = google.gmail({ version: "v1", auth: authed.client });
-  let lastInboundRfc: string | null = null;
-  let recipient = toEmail;
-  if (quote.conversation?.id) {
-    const lastInbound = await prisma.message.findFirst({ where: { conversationId: quote.conversation.id, direction: "INBOUND" }, orderBy: { sentAt: "desc" }, select: { fromAddress: true, rfcMessageId: true } });
-    if (lastInbound) { lastInboundRfc = lastInbound.rfcMessageId; recipient = recipient ?? lastInbound.fromAddress; }
-  }
-  if (!recipient) return NextResponse.json({ error: "No recipient email" }, { status: 400 });
-
+  // EPQ.2 — send via the shared Gmail plumbing (threaded reply if linked, else
+  // new email); a failure returns here with nothing recorded, exactly as before
   const bodyText = `Buongiorno,\n\nin allegato il preventivo ${snapshot.number}.${acceptUrl ? `\n\nPuò accettarlo qui: ${acceptUrl}` : ""}\n\nCordiali saluti`;
-  const raw = buildReplyMime({
-    from: authed.email,
-    to: [recipient],
-    subject: quote.conversation?.subject ? replySubject(quote.conversation.subject) : `Preventivo ${snapshot.number}`,
-    inReplyTo: lastInboundRfc,
+  const mail = await sendQuoteMail({
+    conversation: quote.conversation,
+    partyEmail: quote.party.emails[0]?.email ?? null,
+    fallbackSubject: `Preventivo ${snapshot.number}`,
     text: bodyText,
+    snippet: `Preventivo ${snapshot.number} inviato`,
     attachments: [{ filename: `Preventivo-${snapshot.number}.pdf`, mimeType: "application/pdf", content: pdf }],
   });
-  const sent = await gmail.users.messages.send({ userId: "me", requestBody: { raw, ...(quote.conversation?.gmailThreadId ? { threadId: quote.conversation.gmailThreadId } : {}) } });
+  if (!mail.ok) return NextResponse.json({ error: mail.error }, { status: mail.status });
 
-  // record: version (owning this send's token) + state + optimistic OUTBOUND message
-  const now = new Date();
+  // record: version (owning this send's token) + state
+  const now = mail.sentAt;
   await prisma.quoteVersion.create({ data: { quoteId: id, version, sentSnapshot: snapshot as object, pdfRef: pdfPath, acceptTokenHash } });
   await prisma.quote.update({
     where: { id },
@@ -128,14 +113,10 @@ export const POST = guarded(FEATURES.quotesSend, async (req, { params, actor }) 
       ...(floorAckRequired ? { marginFloorBreached: true } : {}), // EPQ.1 — durable record a below-floor offer was knowingly made
     },
   });
-  if (quote.conversation?.id) {
-    await prisma.message.create({ data: { conversationId: quote.conversation.id, gmailMessageId: sent.data.id ?? null, direction: "OUTBOUND", fromAddress: authed.email.toLowerCase(), toAddresses: [recipient], snippet: `Preventivo ${snapshot.number} inviato`, sentAt: now, labels: [] } });
-    await prisma.conversation.update({ where: { id: quote.conversation.id }, data: { lastMessageAt: now } });
-  }
   if (floorAckRequired) {
     void audit({ actorId: actor!.id, entityType: "quote", entityId: id, action: "floor.acknowledged", after: { ackBy: actor!.id, marginPct: totals.marginPct, floorPct: floor } });
   }
-  void audit({ actorId: actor!.id, entityType: "quote", entityId: id, action: "sent", after: { version, to: recipient, netCents: totals.netCents } });
+  void audit({ actorId: actor!.id, entityType: "quote", entityId: id, action: "sent", after: { version, to: mail.recipient, netCents: totals.netCents } });
   await publishEventDurable("conversation.updated", { id: quote.conversation?.id });
   await publishEventDurable("pricing.updated", { quoteId: id });
 

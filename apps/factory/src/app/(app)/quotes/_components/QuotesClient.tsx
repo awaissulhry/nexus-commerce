@@ -5,6 +5,10 @@
  * selection with bulk Mark lost (one reason, applied per quote via the
  * lifecycle-guarded PATCH; SENT rows transition to REJECTED, EXPIRED rows just
  * take the reason — EXPIRED→REJECTED is not a legal edge).
+ * EPQ.2 — ?focus= accepted as an alias of ?q= (the ⌘K deep link finally
+ * lands); "Needs follow-up" queue card on top; the Overdue counter became
+ * "Expiring soon" and clicking it filters the grid; the Valid-until column
+ * became the compact "viewed" cell; Export CSV hidden without exports.run.
  */
 "use client";
 
@@ -18,6 +22,8 @@ import { Button, Checkbox, Input, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
+import { formatViewed } from "@/lib/quotes/followup";
+import { FollowUpQueue } from "./FollowUpQueue";
 import { QuoteEditor } from "./QuoteEditor";
 import { STATE_TONE, type PipelineResponse, type QuoteRow } from "./types";
 
@@ -33,13 +39,24 @@ const TABS = [
 /** EPQ.1 — bulk Mark lost applies only where a loss makes sense. */
 const canMarkLost = (r: QuoteRow) => r.state === "SENT" || r.state === "EXPIRED";
 
-function Counter({ label, value, tone }: { label: string; value: number; tone: string }) {
-  return (
-    <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: "8px 14px", minWidth: 120 }}>
+function Counter({ label, value, tone, onClick, active }: { label: string; value: number; tone: string; onClick?: () => void; active?: boolean }) {
+  const box: React.CSSProperties = {
+    border: `1px solid ${active ? "var(--h10-primary)" : "var(--h10-border-subtle)"}`,
+    borderRadius: 10, padding: "8px 14px", minWidth: 120,
+    background: active ? "var(--h10-wash-primary)" : "transparent",
+    textAlign: "left",
+  };
+  const body = (
+    <>
       <div style={{ fontSize: 22, fontWeight: 800, color: tone }}>{value}</div>
       <div style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>{label}</div>
-    </div>
+    </>
   );
+  // EPQ.2 — a counter with an onClick is a real filter affordance, not a tile
+  if (onClick) {
+    return <button type="button" onClick={onClick} aria-pressed={active} style={{ ...box, cursor: "pointer", font: "inherit" }}>{body}</button>;
+  }
+  return <div style={box}>{body}</div>;
 }
 
 function PipelineInner() {
@@ -47,6 +64,8 @@ function PipelineInner() {
   const { toast } = useToast();
   const canCreate = usePermission("quotes.create");
   const canMargin = usePermission("financials.margins.view");
+  const canSend = usePermission("quotes.send"); // EPQ.2 — follow-up queue actions
+  const canExport = usePermission("exports.run"); // EPQ.2 — gap 4
   const [data, setData] = useState<PipelineResponse | null>(null);
   const [state, setState] = useState("all");
   const [q, setQ] = useState("");
@@ -60,7 +79,8 @@ function PipelineInner() {
   const [lostReason, setLostReason] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
 
-  const openId = params.get("q");
+  // EPQ.2 — ?focus= is an alias of ?q= (⌘K search emits focus, gap 1)
+  const openId = params.get("q") ?? params.get("focus");
 
   const load = useCallback(async () => {
     try {
@@ -131,12 +151,27 @@ function PipelineInner() {
       <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
         <Counter label="Drafts" value={data?.counters.drafts ?? 0} tone="var(--h10-text)" />
         <Counter label="Awaiting approval" value={data?.counters.awaiting ?? 0} tone="var(--h10-primary)" />
-        <Counter label="Overdue" value={data?.counters.overdue ?? 0} tone={data && data.counters.overdue > 0 ? "var(--h10-danger)" : "var(--h10-text-3)"} />
+        {/* EPQ.2 — clickable: filters the grid to SENT quotes expiring within the pre-expiry window (gap 15) */}
+        <Counter
+          label="Expiring soon"
+          value={data?.counters.expiringSoon ?? 0}
+          tone={data && data.counters.expiringSoon > 0 ? "var(--h10-danger)" : "var(--h10-text-3)"}
+          onClick={() => setState((s) => (s === "expiring" ? "all" : "expiring"))}
+          active={state === "expiring"}
+        />
         <div style={{ marginLeft: "auto", alignSelf: "center", display: "flex", gap: 12, alignItems: "center" }}>
-          <a href="/api/exports/quotes" style={{ fontSize: 12, color: "var(--h10-text-link)" }}>Export CSV</a>
+          {canExport && <a href="/api/exports/quotes" style={{ fontSize: 12, color: "var(--h10-text-link)" }}>Export CSV</a>}
           {canCreate && <Button variant="primary" onClick={startCreate}><Plus size={13} /> New quote</Button>}
         </div>
       </div>
+      {/* EPQ.2 — the Owner's follow-up task queue (worker-flagged SENT quotes) */}
+      <FollowUpQueue
+        rows={data?.followups ?? []}
+        config={data?.followupConfig ?? { unviewedDays: 3, viewedDays: 7, preExpiryDays: 3 }}
+        canSend={canSend}
+        onOpen={openEditor}
+        onChanged={() => void load()}
+      />
       <Card padded>
         <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
           <div style={{ display: "flex", gap: 4 }}>
@@ -157,7 +192,15 @@ function PipelineInner() {
             { key: "state", label: "State", render: (r: QuoteRow) => <span style={{ display: "inline-flex", gap: 5 }}><Pill tone={STATE_TONE[r.state]}>{r.state}</Pill>{r.convertedOrderId && <Pill tone="success">order</Pill>}</span> },
             { key: "net", label: "Net", align: "right" as const, render: (r: QuoteRow) => (r.lineCount ? eur(r.netCents) : "—") },
             ...(canMargin ? [{ key: "margin", label: "Margin", align: "right" as const, render: (r: QuoteRow) => (r.lineCount ? <Pill tone={r.marginCents < 0 ? "danger" : "success"}>{r.marginPct.toFixed(0)}%</Pill> : "—") }] : []),
-            { key: "valid", label: "Valid until", render: (r: QuoteRow) => (r.validUntilAt ? new Date(r.validUntilAt).toLocaleDateString() : "—") },
+            // EPQ.2 — the compact viewed cell replaced Valid-until (validity lives in the editor rail; expiry pressure lives in the Expiring-soon counter)
+            {
+              key: "viewed", label: "Viewed",
+              render: (r: QuoteRow) => (
+                <span title={r.viewCount ? `First ${r.firstViewedAt ? new Date(r.firstViewedAt).toLocaleString() : "—"} · last ${r.lastViewedAt ? new Date(r.lastViewedAt).toLocaleString() : "—"}` : "Not viewed yet"}>
+                  {formatViewed(r.viewCount, r.lastViewedAt, new Date())}
+                </span>
+              ),
+            },
             { key: "updated", label: "Updated", render: (r: QuoteRow) => new Date(r.updatedAt).toLocaleDateString() },
           ]}
           rows={data?.quotes ?? []}

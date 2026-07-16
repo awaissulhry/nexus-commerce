@@ -5,7 +5,8 @@ import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { publishEventDurable } from "@/lib/events";
 import { guarded, PUBLIC } from "@/lib/auth/guard";
-import { hashToken, notifyOwners } from "@/lib/quotes/public";
+import { hashToken } from "@/lib/quotes/public";
+import { notifyOwners } from "@/lib/quotes/notify-owners";
 
 export const permission = PUBLIC;
 

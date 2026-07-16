@@ -96,8 +96,13 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
   };
 
   const patchQuote = async (data: Record<string, unknown>) => {
-    try { await apiJson(`/api/quotes/${quoteId}`, { method: "PATCH", body: JSON.stringify(data) }); await load(); }
-    catch (e) { toast((e as Error).message, "danger"); }
+    try { await apiJson(`/api/quotes/${quoteId}`, { method: "PATCH", body: JSON.stringify(data) }); await load(); return true; }
+    catch (e) { toast((e as Error).message, "danger"); return false; }
+  };
+
+  // EPQ.2 — Revise gets a success toast (gap 6: silent successes)
+  const revise = async () => {
+    if (await patchQuote({ state: "DRAFT" })) toast("Quote revised — back to draft", "success");
   };
 
   const addLine = async () => {
@@ -129,12 +134,22 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
       <DetailHeader
         backLabel="All quotes"
         onBack={onBack}
-        title={<span style={{ display: "inline-flex", gap: 10, alignItems: "center" }}>{quote.number}<Pill tone={STATE_TONE[quote.state]}>{quote.state}</Pill>{quote.convertedOrderId && <Pill tone="success">converted</Pill>}</span>}
+        title={
+          <span style={{ display: "inline-flex", gap: 10, alignItems: "center" }}>
+            {quote.number}<Pill tone={STATE_TONE[quote.state]}>{quote.state}</Pill>
+            {/* EPQ.2 — the converted pill links to the order (gap 3: quote→order was a dead end) */}
+            {quote.convertedOrderId && (
+              <a href={`/orders?o=${quote.convertedOrderId}`} style={{ textDecoration: "none" }} title="Open the order">
+                <Pill tone="success">converted ↗</Pill>
+              </a>
+            )}
+          </span>
+        }
         actions={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <a href={`/api/quotes/${quoteId}/pdf`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "var(--h10-text-link)", display: "inline-flex", gap: 4, alignItems: "center" }}><FileDown size={13} /> PDF</a>
             {/* EPQ.1 — EXPIRED is reversible by Revise (the only edge out of it) */}
-            {(quote.state === "SENT" || quote.state === "EXPIRED") && <Button onClick={() => patchQuote({ state: "DRAFT" })}>Revise</Button>}
+            {(quote.state === "SENT" || quote.state === "EXPIRED") && <Button onClick={revise}>Revise</Button>}
             {(quote.state === "DRAFT" || quote.state === "SENT") && <Button variant="primary" onClick={() => setSending(true)} disabled={quote.lines.length === 0}><Send size={13} /> Send</Button>}
           </div>
         }
@@ -246,6 +261,25 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
               <DateField ariaLabel="Promise date" value={isoDate(quote.promiseDateAt)} onChange={(v) => patchQuote({ promiseDateAt: v ? new Date(`${v}T12:00:00`).toISOString() : null })} disabled={!isDraft} />
             </label>
           </div>
+
+          {/* EPQ.2 — customer views: the public page records every open */}
+          {quote.sentAt && (
+            <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--h10-text-3)", marginBottom: 6 }}>Customer views</div>
+              {quote.viewCount > 0 ? (
+                <>
+                  <Row label="Views" value={`${quote.viewCount}×`} />
+                  <Row label="First" value={quote.firstViewedAt ? new Date(quote.firstViewedAt).toLocaleString() : "—"} muted />
+                  <Row label="Last" value={quote.lastViewedAt ? new Date(quote.lastViewedAt).toLocaleString() : "—"} muted />
+                </>
+              ) : (
+                <div style={{ fontSize: 12, color: "var(--h10-text-3)" }}>Not viewed yet — the link in the email records every open.</div>
+              )}
+              {quote.lastNudgeAt && (
+                <div style={{ fontSize: 11, color: "var(--h10-text-3)", marginTop: 4 }}>Last follow-up sent {new Date(quote.lastNudgeAt).toLocaleDateString()}.</div>
+              )}
+            </div>
+          )}
 
           {quote.versions.length > 0 && (
             <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: 12 }}>

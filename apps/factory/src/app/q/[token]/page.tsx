@@ -2,6 +2,10 @@
  * FP3.4 — the PUBLIC quote page the customer opens from the email link. No app
  * chrome, no session, no cost/margin (fed the frozen snapshot). Italian, since
  * it is customer-facing. Accept or request changes with one click.
+ * EPQ.2 — failures render an inline banner (no alert()) and re-fetch the
+ * quote's state, so a page that went stale (decided/expired after load) falls
+ * back to the truthful banner instead of dead buttons (gap 16). Every open of
+ * this page is view-tracked server-side by GET /api/q/[token].
  */
 "use client";
 
@@ -33,6 +37,7 @@ export default function PublicQuotePage({ params }: { params: Promise<{ token: s
   const [rejecting, setRejecting] = useState(false);
   const [note, setNote] = useState("");
   const [outcome, setOutcome] = useState<"accepted" | "rejected" | null>(null);
+  const [actError, setActError] = useState<string | null>(null); // EPQ.2 — inline, not alert()
 
   const load = () => {
     fetch(`/api/q/${token}`)
@@ -44,6 +49,7 @@ export default function PublicQuotePage({ params }: { params: Promise<{ token: s
 
   const act = async (kind: "accept" | "reject") => {
     setBusy(true);
+    setActError(null);
     try {
       // same CSRF handshake as the app (apiFetch fetches a token first) — the
       // unguessable link token is the auth; CSRF double-submit stays uniform.
@@ -52,7 +58,13 @@ export default function PublicQuotePage({ params }: { params: Promise<{ token: s
       setOutcome(kind === "accept" ? "accepted" : "rejected");
       setStatus("done");
     } catch (e) {
-      alert((e as Error).message === "expired" ? "Questo preventivo è scaduto." : (e as Error).message === "already_decided" ? "Questo preventivo è già stato gestito." : "Si è verificato un errore.");
+      // EPQ.2 — inline banner + state auto-refresh: if the quote was decided
+      // or expired after this page loaded, re-fetching swaps the dead buttons
+      // for the truthful banner (gap 16)
+      const msg = (e as Error).message;
+      setActError(msg === "expired" ? "Questo preventivo è scaduto." : msg === "already_decided" ? "Questo preventivo è già stato gestito." : "Si è verificato un errore. Riprova tra qualche istante.");
+      setRejecting(false);
+      load();
     } finally {
       setBusy(false);
     }
@@ -97,6 +109,11 @@ export default function PublicQuotePage({ params }: { params: Promise<{ token: s
           <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "ui-monospace, monospace" }}>{eur(s.totalCents)}</span>
         </div>
         {s.depositPct ? <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 13, color: "#5b6573" }}><span>Acconto ({s.depositPct}%)</span><span>{eur(s.depositCents)}</span></div> : null}
+
+        {/* EPQ.2 — inline error (replaces alert()); the state below is re-fetched */}
+        {actError && (
+          <div style={{ marginTop: 18, padding: 12, background: "#fdecec", border: "1px solid #f5c2c4", borderRadius: 8, fontSize: 13, color: "#a12126" }}>{actError}</div>
+        )}
 
         {q.superseded ? (
           <div style={{ marginTop: 22, padding: 12, background: "#eef4fd", borderRadius: 8, fontSize: 13, color: "#1c4d94" }}>
