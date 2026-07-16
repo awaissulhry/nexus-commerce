@@ -20,6 +20,7 @@ export const PAGES = {
   financials: "pages.financials",
   analytics: "pages.analytics",
   settings: "pages.settings",
+  chat: "pages.chat", // FC1: Owner-approved 12th page (FS-FC proposal); nav entry lands in FC2
 } as const;
 
 export const FEATURES = {
@@ -52,6 +53,9 @@ export const FEATURES = {
   usersManage: "users.manage",
   rolesManage: "roles.manage",
   auditView: "audit.view",
+  chatPost: "chat.post", // FC1: post/edit/delete own messages + react in member spaces
+  chatSpacesCreate: "chat.spaces.create", // FC1: create CUSTOM spaces (Owner-only default, substrate Q4)
+  chatSpacesManage: "chat.spaces.manage", // FC1: add/remove members (space MANAGERs pass the service guardrail)
 } as const;
 
 export const FIELDS = {
@@ -111,10 +115,12 @@ export const SYSTEM_ROLES: Record<SystemRoleKey, SystemRoleDef> = {
     permissions: [
       PAGES.production,
       PAGES.materials,
+      PAGES.chat, // FC1 — explicit per spec (substrate Q4): Workers chat in their order spaces
       FEATURES.workordersAdvance,
       FEATURES.materialsConsume,
       FEATURES.commentsCreate,
       FEATURES.searchRun,
+      FEATURES.chatPost, // FC1 — write in own order-spaces: yes; create/manage spaces: no
     ],
   },
 };

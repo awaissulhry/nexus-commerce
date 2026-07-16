@@ -12,6 +12,7 @@ import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 import { nextNumber } from "@/lib/counters";
 import { notifyOwners } from "@/lib/quotes/notify-owners";
+import { ensureOrderSpace } from "@/lib/chat/chat-service";
 
 export const permission = FEATURES.quotesConvert;
 
@@ -57,5 +58,6 @@ export const POST = guarded(FEATURES.quotesConvert, async (_req, { params, actor
     excludeUserId: actor!.id,
   });
   await publishEventDurable("pricing.updated", { quoteId: id, orderId: order.id });
+  void ensureOrderSpace(order.id).catch(() => {}); // FC1 — order space (fire-and-forget, never blocks the convert)
   return NextResponse.json({ order });
 });

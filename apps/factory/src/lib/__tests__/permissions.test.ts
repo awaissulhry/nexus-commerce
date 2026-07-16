@@ -14,8 +14,8 @@ describe("registry", () => {
   it("has no duplicate permission strings", () => {
     expect(new Set(ALL_PERMISSIONS).size).toBe(ALL_PERMISSIONS.length);
   });
-  it("covers the 11 F0-IA pages", () => {
-    expect(Object.keys(PAGES)).toHaveLength(11);
+  it("covers the 11 F0-IA pages + the Owner-approved 12th (/chat, FC1)", () => {
+    expect(Object.keys(PAGES)).toHaveLength(12);
   });
   it("validates membership", () => {
     expect(isValidPermission("pages.inbox")).toBe(true);

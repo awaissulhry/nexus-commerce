@@ -873,6 +873,10 @@ model User {
   ledgerEntries      MovementLedger[]
   stageAssignments   WorkOrderStage[]
   conversations      Conversation[]
+  chatSpacesCreated  ChatSpace[] // FC1
+  chatMessages       ChatMessage[] // FC1
+  chatMemberships    ChatMember[] // FC1
+  chatReactions      ChatReaction[] // FC1
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 }
@@ -928,4 +932,98 @@ model Invitation {
   acceptedAt      DateTime?
   revokedAt       DateTime?
   createdAt       DateTime  @default(now())
+}
+
+// ── FC1 — Order Spaces (per-order internal chat) ─────────────────
+// Money discipline: ChatMessage money rides ONLY in moneyCents/moneyLabel —
+// never interpolated into `body` — so the RBAC field filter (*Cents) strips
+// it for cost-blind Workers by construction (FC1-SPEC §Schema).
+
+enum ChatSpaceKind {
+  ORDER
+  CUSTOM
+  DM
+}
+
+enum ChatMessageKind {
+  MESSAGE
+  SYSTEM
+}
+
+enum ChatMemberRole {
+  MEMBER
+  MANAGER
+}
+
+enum ChatNotifyLevel {
+  ALL
+  MENTIONS
+  OFF
+}
+
+model ChatSpace {
+  id          String        @id @default(cuid())
+  kind        ChatSpaceKind
+  name        String // ORDER spaces are system-named: "ORD-214 · Party"
+  entityType  String? // the order binding ("order"); null for CUSTOM/DM
+  entityId    String?
+  createdById String?
+  createdBy   User?         @relation(fields: [createdById], references: [id])
+  archivedAt  DateTime?
+  members     ChatMember[]
+  messages    ChatMessage[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([entityType, entityId]) // an order has exactly ONE space
+}
+
+model ChatMessage {
+  id            String          @id @default(cuid())
+  spaceId       String
+  space         ChatSpace       @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  authorId      String? // null = system-authored (poll-tracking precedent)
+  author        User?           @relation(fields: [authorId], references: [id])
+  kind          ChatMessageKind @default(MESSAGE)
+  body          String
+  threadRootId  String? // in-line threading data model now; thread UI is FC3
+  threadRoot    ChatMessage?    @relation("ChatThread", fields: [threadRootId], references: [id])
+  threadReplies ChatMessage[]   @relation("ChatThread")
+  moneyCents    Int? // structured money — client-formats AFTER the grain strip
+  moneyLabel    String?
+  meta          Json? // system-event refs: { entityType, entityId, event }
+  reactions     ChatReaction[]
+  editedAt      DateTime?
+  deletedAt     DateTime? // soft — audit keeps truth
+  createdAt     DateTime        @default(now())
+
+  @@index([spaceId, createdAt])
+  @@index([threadRootId])
+}
+
+model ChatMember {
+  id                String          @id @default(cuid())
+  spaceId           String
+  space             ChatSpace       @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role              ChatMemberRole  @default(MEMBER)
+  lastReadMessageId String? // read cursor — unread counts derive from it
+  notifyLevel       ChatNotifyLevel @default(ALL)
+  joinedAt          DateTime        @default(now())
+
+  @@unique([spaceId, userId])
+  @@index([userId]) // member's-spaces list (FS1 covering-index discipline)
+}
+
+model ChatReaction {
+  id        String      @id @default(cuid())
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String
+  createdAt DateTime    @default(now())
+
+  @@unique([messageId, userId, emoji])
 }

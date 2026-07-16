@@ -27,6 +27,8 @@ export type FactoryEventType =
   | "certificate.updated" // FS2 — cert CRUD was silent
   | "team.updated" // FS2 — role/member changes were silent
   | "settings.updated" // FS2 — config changes were silent
+  | "chat.message" // FC1 — {spaceId, messageId}: message posted/edited/deleted/reacted
+  | "chat.space" // FC1 — {spaceId}: space created/membership/read-cursor changed
   | "resync" // FS2 — server → client: gap too old, hard-refetch
   | "ping";
 
