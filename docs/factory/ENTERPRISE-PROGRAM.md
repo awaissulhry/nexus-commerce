@@ -42,6 +42,23 @@ Started 2026-07-11 at the Owner's direction: *"work page by page to make sure it
 | Load harness + parity + `check:query-bounds` fence | FS0/FS1 (exists) | live — every EP page re-runs it |
 | Approval-gate / margin-floor governance patterns | EPQ defines the house pattern (first consumer) | — |
 
+## Cross-review 2026-07-16 (`EP-CROSSREVIEW.md`) — coordination rows + amendments attached to the open gates
+
+First adversarial review of the four proposals against each other (EPF session, program coordination). Verdict: conditionally approvable — no phase re-scoping, but these ownership rows are now BINDING and the per-session one-liners must land in the respective specs:
+
+| Capability | Owner | Consumers / condition |
+|---|---|---|
+| `MessageTemplate` store (variables incl. `{{quote.number}}`/`{{order.number}}`, IT/EN) | **EPI** (EPI.4) | EPQ.2 follow-ups, EPF.4 dunning, EPO.6 transition drafts — configured instances of ONE shared cadence/`FollowUpTask` engine; nobody builds a second template store or queue (B1) |
+| Per-entity open-param table (URL law, extends EPO D-5) | **EPO** | `?o=` /orders · `?c=` /contacts · `?q=` /quotes · `?focus=` /inbox ONLY · `?party=` cross-page · `?from=&to=` (Rome TZ) house date-range. EPI must fix its `/contacts?id=` + `/orders?focus=` links (B2, code-verified broken) |
+| Money-event notifications (payment/invoice `notify()`) | **EPF** | added ONCE in shared FP9/payments routes; EPO owns lifecycle-state notifications (M3) |
+| Exception-queue split | **EPO** = fulfillment/promise (late, at-risk, stalled WO, production-blocking deposit) · **EPF** = billing/AR (deposit terms absent, margin-floor, unbilled, unapplied, money-on-cancelled) | each links to the other, no duplicate predicates (M2) |
+| OrderDetail tab host | **EPO.6 scaffolds** | FC2 mounts into it — FC1 spec must not re-claim it (M4) |
+| Return credits | **EPF's CreditNote API** mints the document | EPO.5 calls it, records only return linkage (M10) |
+| `SavedView` schema steward | **EPF** (richest tuple: filters+group-by+sort+columns+aggregate+default) | EPQ.6/EPO.7 consume (M12) |
+| Interim concurrency/idempotency guards (`updatedAt` 409, idempotency keys, collision-pause) | granted per-page **pending FS4** | FS4 consolidates on claim (M1) |
+
+**Sequencing (binding): EPF.1 gates EPO.2** — the order-board money strip embeds the fold only after EPF.1's semantics fixes (B3). **Per-session one-liners still owed:** EPI — fix outbound params (B2); EPO — `import.finished` in EPO.7 + publish `order-summary` for EPI.6 or bless its read (M6/M9); EPQ — quotes-grid VirtualDataGrid + ConvertBar backlink named in EPQ.6 (M7/M8). EPF's amendments are applied (`EPF-PROPOSAL.md` §9; compliance ⚠ flags superseded by `EPF-COMPLIANCE.md`).
+
 ## Standing cross-page invariants (program-wide)
 
 - Money truth lives in the pure folds (`rollup.ts`, `money.ts`, quote engine) — pages feed them, never fork them; parity script guards every rewrite.

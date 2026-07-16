@@ -19,7 +19,7 @@ Hub: [[F00 - Factory OS MOC]] · coordination model: [[F07 - Sessions & Coordina
 
 | Page | Code | Note | Status |
 |---|---|---|---|
-| Inbox | EPI | [[F10 - Inbox (EPI)]] | 🟡 proposal delivered, awaiting gate |
+| Inbox | EPI | [[F10 - Inbox (EPI)]] | 🔨 proposal APPROVED 2026-07-16; EPI.1 building |
 | Quotes | EPQ | [[F11 - Quotes (EPQ)]] | 🔨 EPQ.1 SHIPPED; EPQ.2 next |
 | Orders | EPO | [[F12 - Orders (EPO)]] | 🟡 proposal delivered, awaiting gate |
 | Production | EPP | [[F13 - Production (EPP)]] | ⚪ open (unclaimed) |
@@ -39,6 +39,10 @@ Hub: [[F00 - Factory OS MOC]] · coordination model: [[F07 - Sessions & Coordina
 - **EPF defines:** the money node (`orderFinancials`) · party ledger + reconciliation · credit notes → [[F18 - Financials (EPF)]]
 - **FS2/FS3/FS4/FS5 + FC:** [[F22 - Substrate FS Series]] and [[F21 - Chat & Order Spaces (FC)]]
 - **F1/FP1 (live):** notifications single write path `notify()`, bell, outbox.
+
+## Cross-review 2026-07-16 (binding coordination rows)
+
+The four proposals were adversarially reviewed against each other (`docs/factory/EP-CROSSREVIEW.md`): verdict **conditionally approvable** — 3 blockers + 12 seam issues, all resolved by ownership rows now in the control tower: MessageTemplate + ONE shared cadence engine → EPI · URL open-param table (`?o=/?c=/?q=/?focus= inbox-only/?party=/?from=&to=`) → EPO · money-event notifications + CreditNote API + SavedView stewardship → EPF · exception-queue split EPO(fulfillment)/EPF(billing) · OrderDetail tab host → EPO.6 · **EPF.1 gates EPO.2**. Per-session one-liners owed: EPI param fix (B2), EPO `import.finished`+order-summary, EPQ grid+backlink in EPQ.6.
 
 ## Standing invariants (program-wide)
 

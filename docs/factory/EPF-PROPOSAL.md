@@ -132,3 +132,22 @@ Every phase: DS-only UI, `*Cents` naming, `guarded()` + permission, audited + ev
 ---
 
 *Nothing in this proposal is built. Per the double gate: Owner approval of scope + decisions D-1…D-12 turns this into per-phase specs (EPF.1 first). The three P0 money defects (D-01, D-02, D-05) are live today on the running instance; if the Owner wants, EPF.1 can be specced and gated first, alone, ahead of the rest.*
+
+---
+
+## 9. Addendum 2026-07-16 — compliance verification + cross-review amendments
+
+**Compliance (see `EPF-COMPLIANCE.md`, which supersedes every ⚠ flag above).** All 12 legal claims verified against primary sources; two corrected:
+- **D-05 reworded:** per-year gapless numbering is *common practice, not law* — Ris. AdE 1/E/2013 requires only progressive + uniquely identifiable numbers, and the live `INV-n` scheme meets that. The P0 stands for the **non-atomic mint** (burned numbers, collision 500s) and the **missing credit-note path**; per-year `INV-2026-n` remains the EPF.1 recommendation as best practice and posture-B/C readiness, not a legal necessity.
+- **Bollo narrowed (EPF.7):** intra-EU (N3.2) and true-export (N3.1) lines are bollo-**exempt** — for this factory's mix bollo is rare; the quarterly dashboard only matters under posture B/C. Posture A additionally hardened: the courtesy PDF must carry "Copia di cortesia — documento privo di valore fiscale" and **no definitive invoice number**; EPF.3/EPF.4 gain a reconciliation field for the externally-issued number + SDI id. Posture C's cost is now known (~€19.90/mo gateway tier), making the A→C revisit operational, not financial.
+
+**Cross-review amendments accepted by EPF (see `EP-CROSSREVIEW.md`):**
+- **B1:** EPF.4's dunning drops its own template/queue machinery — it becomes a configured instance of the **shared cadence engine + EPI-owned MessageTemplate store** (trigger predicate: invoice/balance overdue; stop conditions unchanged).
+- **B3:** **EPF.1 gates EPO.2** — EPO's money strip embeds the fold only after EPF.1's semantics fixes land.
+- **M2:** EPF.5 owns billing/AR exceptions only (absent deposit terms, margin-floor, unbilled, unapplied cash, money-on-cancelled); fulfillment/promise exceptions (late, at-risk, stalled-WO, production-blocking deposit) are EPO.4's, which links here.
+- **M3:** EPF owns money-event notifications; the `notify()` calls land ONCE in the shared FP9/payments routes, deep-linking `/financials?o=` and `/orders?o=` appropriately.
+- **M5:** no EPF phase renders EPQ.5's tax-mode/SDI/deposit-enum fields until EPQ.5 ships; EPF.1's deposit-aware invoicing is pure arithmetic (net − payments received).
+- **M6:** EPF.2's SSE subscriptions add `import.finished` (bank/counterparty import refresh).
+- **M11:** EPF.2's date filters use the house `?from=&to=` (Rome TZ) convention under EPO's URL law; `?party=` credit to EPO D-5.
+- **M12:** EPF stewards the shared `SavedView` tuple (filters + group-by + sort + columns + aggregate + default); EPQ/EPO consume the schema, extensions land here once.
+- **Count fix:** EPF.2 adopts VirtualDataGrid on **all four** financials grids (by-order, by-customer, by-month, deposits) — the registry's "×3" undercounted the month grid.

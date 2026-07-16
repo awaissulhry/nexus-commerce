@@ -8,9 +8,10 @@ Hub: [[F00 - Factory OS MOC]] · status board: `EP Status Board.canvas`
 
 | Gate | What's asked | Where |
 |---|---|---|
-| **EPI proposal** | Approve 6 phases + 5 decisions (phase order, DeepL key, undo-send window, views scope) | [[F10 - Inbox (EPI)]] |
-| **EPO proposal** | Approve 7 phases + D-1..D-6 — **D-1 five-way cross-page split is the coordination linchpin** | [[F12 - Orders (EPO)]] |
-| **EPF proposal** | Approve 7 phases + D-1..D-12 (compliance posture, credit notes, dunning, price-list dating, OFFICE role…) — **3 P0 money bugs are live**; EPF.1 can gate alone first | [[F18 - Financials (EPF)]] |
+| ~~EPI proposal~~ | ✅ **APPROVED 2026-07-16** — EPI.1 building; one cross-review amendment owed (fix `?c=`/`?o=` outbound params, B2) | [[F10 - Inbox (EPI)]] |
+| **EPO proposal** | Approve 7 phases + D-1..D-6, **with the EP-CROSSREVIEW amendments attached** (EPF.1 gates EPO.2; `import.finished`; order-summary for EPI.6; exception-queue split) | [[F12 - Orders (EPO)]] |
+| **EPF proposal** | Approve 7 phases + D-1..D-12 (§9 addendum applies the cross-review + verified compliance) — **3 P0 money bugs are live**; EPF.1 can gate alone first | [[F18 - Financials (EPF)]] |
+| **FC1 spec** | Gate the drafted `FC1-SPEC.md` (Order Spaces substrate) | [[F21 - Chat & Order Spaces (FC)]] |
 | FP11 leftovers | Flip RBAC `enforce` on :3100 · settle WhatsApp (FD5) | [[F20 - Settings & Team (EPT)]] |
 | FD13 params | Deposit % defaults + bypass segment | [[F05 - Decision Register (FD1-14)]] |
 | Sendcloud live step | Connect + one €0 label (capability probe) | [[F17 - Shipping (EPS)]] |

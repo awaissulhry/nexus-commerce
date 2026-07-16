@@ -14,12 +14,13 @@ Hub: [[F00 - Factory OS MOC]] · gates roll-up: [[F09 - Roadmap & Owner Gates]]
 | **EPQ** research | EPQ-PROPOSAL (approved) + EPQ-UI-INVENTORY (16 gaps) + Italy/EU acceptance-compliance research (EPQ.5, citations in spec) | [[F11 - Quotes (EPQ)]] |
 | **EPI** research | EPI-PROPOSAL (+ §5 design dossier) + EPI-UI-INVENTORY (17 gaps, 2 live bugs) | [[F10 - Inbox (EPI)]] |
 | **EPO** research | EPO-PROPOSAL + EPO-UI-INVENTORY (C1-C9 + E1-E14 registers) | [[F12 - Orders (EPO)]] |
-| **EPF** research | EPF-PROPOSAL + EPF-UI-INVENTORY + external bar: SAP B1, Business Central, O2C cross-cutting (incl. Italy/SDI), JobBOSS²/Craftybase, saved-views/pivot-lite/formula-columns (Panko), trust/tie-out UX + AWA workbook decode ([[F26 - AWA Workbook (structure)]]) | [[F18 - Financials (EPF)]] |
+| **EPF** research | EPF-PROPOSAL + EPF-UI-INVENTORY + external bar: SAP B1, Business Central, O2C cross-cutting (incl. Italy/SDI), JobBOSS²/Craftybase, saved-views/pivot-lite/formula-columns (Panko), trust/tie-out UX + AWA workbook decode ([[F26 - AWA Workbook (structure)]]) + **EPF-COMPLIANCE.md** (12 legal claims primary-source verified) | [[F18 - Financials (EPF)]] |
+| **Cross-review** (2026-07-16) | EP-CROSSREVIEW.md — the four proposals reviewed against each other; 3 blockers + 12 seams found and resolved as binding registry rows | [[F06 - Enterprise Program (EP)]] |
 
 ## Research REMAINING
 
 - **Unclaimed pages** — EPP, EPM, EPD, EPC, EPS, EPA, EPT ([[F13 - Production (EPP)]] → [[F20 - Settings & Team (EPT)]]): each needs the full cycle (external bar + internal audit + UI inventory) when claimed. Seeds already exist in each page note's "open items."
-- **⚠ EPF flagged claims** — four research agents (dedicated Italian-compliance deep-dive, AR-automation tooling, dimension systems, owner digests) were cut short by a spend limit 2026-07-11; surviving reports cover the ground but every ⚠-marked legal/pricing claim in EPF-PROPOSAL (SDI deadlines, gateway pricing) must be **re-verified against primary sources + the commercialista before EPF.7 builds**.
+- ~~⚠ EPF flagged claims~~ — **RESOLVED 2026-07-16**: all 12 Italian-compliance claims verified against primary sources (`docs/factory/EPF-COMPLIANCE.md`; two corrected — numbering law, bollo scope). Commercialista confirmation remains a courtesy step before EPF.7, no longer a research gap. The AR-tooling/dimensions/digests gaps were absorbed by the surviving reports + cross-review.
 - **FC1 spec** — approved direction, spec not yet written (next substrate step).
 - **FS4/FS5 specs** — queued scope defined at proposal level only.
 - **Empirical probes owned by the Owner:** Sendcloud plan capabilities (FD6), WhatsApp volume decision (FD5), FD13 deposit defaults.
