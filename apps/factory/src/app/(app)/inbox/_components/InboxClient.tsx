@@ -237,7 +237,9 @@ function InboxInner() {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable;
-      if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+      // EPI1.5 (verify regression R2) — a focused pane separator owns its own
+      // keyboard grammar; Enter there must not double as "open conversation".
+      if (typing || e.metaKey || e.ctrlKey || e.altKey || target.closest?.('[role="separator"]')) return;
       const items = list?.items ?? [];
       if (e.key === "j" || e.key === "k") {
         e.preventDefault();

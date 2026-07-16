@@ -44,14 +44,17 @@ export function PaneHandle({ onDelta, onCommit, onReset, label, onToggle }: Pane
         // Home/End jump to min/max (the pane math clamps), Enter toggles.
         if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
           e.preventDefault();
+          e.stopPropagation();
           onDelta(e.key === "ArrowLeft" ? -KEY_STEP : KEY_STEP);
           onCommit();
         } else if (e.key === "Home" || e.key === "End") {
           e.preventDefault();
+          e.stopPropagation();
           onDelta(e.key === "Home" ? -KEY_JUMP : KEY_JUMP);
           onCommit();
         } else if (e.key === "Enter" && onToggle) {
           e.preventDefault();
+          e.stopPropagation();
           onToggle();
         }
       }}

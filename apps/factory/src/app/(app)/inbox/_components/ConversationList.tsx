@@ -264,7 +264,7 @@ export function ConversationList({
       </div>
 
       {selected.size > 0 && (
-        <BulkActionBar count={selected.size} noun="conversation" onClear={() => setSelected(new Set())}>
+        <BulkActionBar count={selected.size} onClear={() => setSelected(new Set())}>
           <Button onClick={() => onBulk("close")} disabled={busyBulk}>
             Close
           </Button>
