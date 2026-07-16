@@ -2115,6 +2115,20 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // ── GET /api/ebay/flat-file/category-breadcrumbs ────────────────────
+  // B3 — full breadcrumb paths for a set of category ids: `en` from the UK
+  // tree (operators read English; ids are shared across EU sites for most
+  // categories) + `local` from the market's own tree. The cell keeps the
+  // numeric ID as its VALUE (pushes unchanged) and only the DISPLAY changes.
+  fastify.get<{
+    Querystring: { ids?: string; marketplace?: string }
+  }>('/ebay/flat-file/category-breadcrumbs', async (request, reply) => {
+    const ids = String(request.query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+    if (ids.length === 0) return reply.send({ breadcrumbs: {} })
+    const breadcrumbs = await ebayCategoryService.getCategoryBreadcrumbs(ids, request.query.marketplace ?? 'IT')
+    return reply.send({ breadcrumbs })
+  })
+
   // ── GET /api/ebay/flat-file/policies ────────────────────────────────
   // Returns the seller's eBay business policies (fulfillment, payment, return)
   // for a given marketplace so the frontend can show them as dropdown options.

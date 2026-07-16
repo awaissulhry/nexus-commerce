@@ -938,6 +938,22 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       .catch(() => {})
   }, [])
 
+  // B3 — category breadcrumbs (English preferred) for the category_id cells.
+  // Keyed on activeCategoryIds (the distinct category ids already tracked for
+  // the sheet's rows); the cell VALUE stays the numeric id.
+  const [categoryBreadcrumbs, setCategoryBreadcrumbs] = useState<Record<string, { en?: string; local?: string }>>({})
+  useEffect(() => {
+    const missing = activeCategoryIds.filter((id) => id && !(id in categoryBreadcrumbs))
+    if (missing.length === 0) return
+    fetch(`${BACKEND}/api/ebay/flat-file/category-breadcrumbs?ids=${encodeURIComponent(missing.join(','))}&marketplace=${marketplace}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.breadcrumbs) setCategoryBreadcrumbs((prev) => ({ ...prev, ...d.breadcrumbs }))
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCategoryIds, marketplace])
+
   // ── EFX P4 — union Item Specifics group + ghost columns ────────────────
   // The union merges EVERY loaded category's aspect columns (dedup by
   // lowercase id, required = any category requires, options unioned).
@@ -2123,10 +2139,21 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           </button>
         )
       }
+      // B3 — show the full breadcrumb (English preferred, localized fallback)
+      // instead of a blind numeric id; the id stays the cell VALUE (pushes
+      // unchanged) and is kept visible as a small suffix + full tooltip.
+      const crumb = displayVal ? categoryBreadcrumbs[displayVal] : undefined
+      const path = crumb?.en ?? crumb?.local
       return (
-        <button type="button" className="flex items-center w-full h-full text-left" onClick={openSearch}>
+        <button type="button" className="flex items-center gap-1 w-full h-full text-left min-w-0" onClick={openSearch}
+          title={path ? `${path}${crumb?.local && crumb.local !== path ? `\n${crumb.local}` : ''}\n#${displayVal}` : undefined}>
           {displayVal
-            ? <span className="font-mono text-[10px] text-blue-700 dark:text-blue-300">{displayVal}</span>
+            ? path
+              ? <>
+                  <span className="truncate text-[10px] text-slate-700 dark:text-slate-200">{path}</span>
+                  <span className="shrink-0 font-mono text-[9px] text-blue-600/70 dark:text-blue-300/70">#{displayVal}</span>
+                </>
+              : <span className="font-mono text-[10px] text-blue-700 dark:text-blue-300">{displayVal}</span>
             : <span className="text-slate-300 text-[10px]">Click to search categories…</span>}
         </button>
       )
@@ -2162,7 +2189,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     }
     return null
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [familyParentIds, categoryLoading, columnGroups, showSkuBadges, showStatusChips])
+  }, [familyParentIds, categoryLoading, columnGroups, showSkuBadges, showStatusChips, categoryBreadcrumbs])
 
   // ── Edit intercept for modal-based editing ─────────────────────────────
   const onBeforeEditCell = useCallback((col: FlatFileColumn, row: BaseRow): boolean => {

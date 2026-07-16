@@ -290,6 +290,110 @@ export class EbayCategoryService {
    * surface it to the UI instead of returning an empty list that
    * looks like "no results."
    */
+  // ── B3 — category breadcrumbs by ID ────────────────────────────────────────
+  // The grid's category cell shows bare numeric IDs; operators are blind.
+  // These maps let it show the full path — ENGLISH from the UK tree (category
+  // ids are shared across EU sites for the vast majority of categories) with
+  // the market's localized path as fallback/secondary. One full-tree fetch per
+  // treeId, cached 24h in-memory (eBay explicitly recommends caching trees).
+  private treeMaps = new Map<string, { nodes: Map<string, { name: string; parent: string | null }>; expiresAt: number }>()
+
+  private async loadTreeMap(treeId: number): Promise<Map<string, { name: string; parent: string | null }> | null> {
+    const key = String(treeId)
+    const cached = this.treeMaps.get(key)
+    if (cached && cached.expiresAt > Date.now()) return cached.nodes
+    let token: string
+    try {
+      token = await this.getAccessToken()
+    } catch {
+      return null
+    }
+    const apiBase = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
+    try {
+      const res = await fetch(`${apiBase}/commerce/taxonomy/v1/category_tree/${treeId}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      })
+      if (!res.ok) return null
+      const json = (await res.json()) as {
+        rootCategoryNode?: {
+          category?: { categoryId?: string; categoryName?: string }
+          childCategoryTreeNodes?: unknown[]
+        }
+      }
+      const nodes = new Map<string, { name: string; parent: string | null }>()
+      type TreeNode = {
+        category?: { categoryId?: string; categoryName?: string }
+        childCategoryTreeNodes?: TreeNode[]
+      }
+      const stack: Array<{ node: TreeNode; parent: string | null }> = []
+      if (json.rootCategoryNode) stack.push({ node: json.rootCategoryNode as TreeNode, parent: null })
+      while (stack.length > 0) {
+        const { node, parent } = stack.pop()!
+        const id = node.category?.categoryId
+        const name = node.category?.categoryName ?? ''
+        // skip the literal root ("Root"/site name) as a path segment
+        const effectiveParent = parent
+        if (id) nodes.set(id, { name, parent: effectiveParent })
+        for (const child of node.childCategoryTreeNodes ?? []) {
+          stack.push({ node: child, parent: id ?? parent })
+        }
+      }
+      this.treeMaps.set(key, { nodes, expiresAt: Date.now() + 24 * 60 * 60 * 1000 })
+      return nodes
+    } catch (err) {
+      console.warn(`[EbayCategoryService] category tree ${treeId} fetch failed:`, err instanceof Error ? err.message : err)
+      return null
+    }
+  }
+
+  private static buildPath(nodes: Map<string, { name: string; parent: string | null }>, id: string): string | undefined {
+    if (!nodes.has(id)) return undefined
+    const parts: string[] = []
+    let cur: string | null = id
+    let guard = 0
+    while (cur && guard++ < 12) {
+      const n = nodes.get(cur)
+      if (!n) break
+      // the tree root's own name ("Root") is noise — stop above it
+      if (n.parent === null) break
+      parts.push(n.name)
+      cur = n.parent
+    }
+    if (parts.length === 0) {
+      const leaf = nodes.get(id)
+      return leaf?.name || undefined
+    }
+    return parts.reverse().join(' › ')
+  }
+
+  /**
+   * Breadcrumb paths for a set of category ids: `en` from the UK tree
+   * (English; ids shared across EU sites for most categories), `local` from
+   * the marketplace's own tree. Either can be missing — callers prefer
+   * `en ?? local`. Never throws; unresolvable ids are simply absent.
+   */
+  async getCategoryBreadcrumbs(
+    categoryIds: string[],
+    marketplace: string | null,
+  ): Promise<Record<string, { en?: string; local?: string }>> {
+    const ids = [...new Set(categoryIds.map((s) => String(s).trim()).filter(Boolean))].slice(0, 200)
+    if (ids.length === 0) return {}
+    const marketplaceId = normaliseMarketplace(marketplace)
+    const localTreeId = MARKETPLACE_TREE_IDS[marketplaceId]
+    const enTreeId = MARKETPLACE_TREE_IDS.EBAY_UK
+    const [localNodes, enNodes] = await Promise.all([
+      localTreeId !== undefined && localTreeId !== enTreeId ? this.loadTreeMap(localTreeId) : Promise.resolve(null),
+      this.loadTreeMap(enTreeId),
+    ])
+    const out: Record<string, { en?: string; local?: string }> = {}
+    for (const id of ids) {
+      const en = enNodes ? EbayCategoryService.buildPath(enNodes, id) : undefined
+      const local = localNodes ? EbayCategoryService.buildPath(localNodes, id) : undefined
+      if (en || local) out[id] = { ...(en ? { en } : {}), ...(local ? { local } : {}) }
+    }
+    return out
+  }
+
   private async getAccessToken(): Promise<string> {
     // 1. Prefer the seller's OAuth token. We import lazily to avoid
     //    a circular-import / load-order issue with ebayAuthService.
