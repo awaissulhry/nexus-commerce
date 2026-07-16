@@ -36,4 +36,4 @@ Part of [[F00 - Factory OS MOC]] · closes the "no communication gap" invariant'
 
 ## FC1 spec status (2026-07-16)
 
-`docs/factory/FC1-SPEC.md` drafted — **awaiting Owner gate**. Answers all five substrate questions: new Chat* entities (Comment untouched), audits inside chat-service, money via strippable `moneyCents` field (never in body — enforced by test), FC5 sources from the FS2 bus, WORKER gets `pages.chat`+`chat.post` explicitly. Windowed message API ready for FS3's WindowedList in FC2.
+`docs/factory/FC1-SPEC.md` drafted — **APPROVED 2026-07-16 — building**. Answers all five substrate questions: new Chat* entities (Comment untouched), audits inside chat-service, money via strippable `moneyCents` field (never in body — enforced by test), FC5 sources from the FS2 bus, WORKER gets `pages.chat`+`chat.post` explicitly. Windowed message API ready for FS3's WindowedList in FC2.
