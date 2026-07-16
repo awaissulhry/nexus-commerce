@@ -28,7 +28,7 @@ import { canonicalizeTemplatePath } from './flat-file-mapping.js'
 
 const INFRA = new Set(['marketplace_id', 'language_tag', 'audience'])
 const ROOT_INSTANCE_CAP = 5
-const NESTED_INSTANCE_CAP = 4
+const NESTED_INSTANCE_CAP = 5
 const MAX_LEAVES_PER_FIELD = 60
 
 export interface DeepSeg {
@@ -130,7 +130,8 @@ export function walkSchemaLeaves(fieldId: string, prop: SchemaNode): DeepLeaf[] 
       labelEn,
       enums: enumsOf(leafNode),
       maxLength: typeof leafNode?.maxLength === 'number' ? leafNode.maxLength : undefined,
-      spec: { field: fieldId, segs, rootIdx, leaf: leafKey || 'value', type: scalarType(leafNode), leafLocalized: leafLocalized || undefined },
+      // leaf '' is meaningful: "set the array element directly" (bare scalars).
+      spec: { field: fieldId, segs, rootIdx, leaf: leafKey, type: scalarType(leafNode), leafLocalized: leafLocalized || undefined },
     })
   }
 
@@ -150,8 +151,10 @@ export function walkSchemaLeaves(fieldId: string, prop: SchemaNode): DeepLeaf[] 
           : segs
         const effRootIdx = isNested ? rootIdx : i
         if (keys.length === 0) {
-          // array of bare scalars — SP-API wraps everything, treat as {value}
-          emit(effRootIdx, segsWithIdx, 'value', item, localized)
+          // Array of BARE scalars (color.standardized_values, sci.features):
+          // the template addresses the element itself — `…standardized_values#N`
+          // with NO `.value` tail. leaf '' = "set the array element directly".
+          emit(effRootIdx, segsWithIdx, '', item.type ? item : { type: 'string' }, localized)
         } else if (keys.length === 1 && keys[0] === 'value') {
           emit(effRootIdx, segsWithIdx, 'value', props.value ?? {}, localized)
         } else {
@@ -282,7 +285,13 @@ export function applyDeepValue(
   cur.marketplace_id ??= ctx.marketplaceId
   for (const [k, v] of Object.entries(ROOT_EXTRA[fieldId] ?? {})) cur[k] ??= v
 
-  for (const seg of spec.segs) {
+  // leaf '' — bare scalar-array element: the LAST array segment's element IS
+  // the value (color.standardized_values#N). Walk to its parent, then assign
+  // the element slot directly instead of a property.
+  const bareElement = spec.leaf === '' && spec.segs.length > 0 && spec.segs[spec.segs.length - 1].idx != null
+  const walkSegs = bareElement ? spec.segs.slice(0, -1) : spec.segs
+
+  for (const seg of walkSegs) {
     if (seg.idx != null) {
       const arr = ((cur[seg.key] as Array<Record<string, unknown>>) ??= [] as never) as Array<
         Record<string, unknown>
@@ -294,6 +303,15 @@ export function applyDeepValue(
       cur = ((cur[seg.key] as Record<string, unknown>) ??= {} as never) as Record<string, unknown>
     }
   }
-  cur[spec.leaf] = typed
+  if (bareElement) {
+    const last = spec.segs[spec.segs.length - 1]
+    const arr = ((cur[last.key] as unknown[]) ??= [] as never) as unknown[]
+    while (arr.length < (last.idx ?? 1)) arr.push(undefined)
+    arr[(last.idx ?? 1) - 1] = typed
+    // drop placeholder holes so the emitted JSON array is dense
+    for (let i = 0; i < arr.length; i++) if (arr[i] === undefined) arr.splice(i--, 1)
+    return
+  }
+  cur[spec.leaf === '' ? 'value' : spec.leaf] = typed
   if (spec.leafLocalized && spec.segs.length === 0) cur.language_tag ??= ctx.languageTag
 }

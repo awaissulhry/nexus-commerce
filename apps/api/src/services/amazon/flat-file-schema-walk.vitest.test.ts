@@ -63,7 +63,8 @@ describe('walkSchemaLeaves', () => {
       'outer[marketplace_id]#1.material[language_tag]#2.value',
       'outer[marketplace_id]#1.material[language_tag]#3.value',
       'outer[marketplace_id]#1.material[language_tag]#4.value',
-      // nested cap = 4
+      'outer[marketplace_id]#1.material[language_tag]#5.value',
+      // nested cap = 5 (real templates carry #1..#5)
     ])
     expect(leaves[1].colId).toBe('outer__material_2')
     expect(leaves[1].spec.segs[0]).toMatchObject({ key: 'material', idx: 2, localized: true })
@@ -186,5 +187,34 @@ describe('applyDeepValue — nested reassembly', () => {
     const attrs: Record<string, unknown> = {}
     applyDeepValue(attrs, 'chest', { field: 'chest', rootIdx: 1, segs: [{ key: 'size', idx: 1 }], leaf: 'value', type: 'number' }, 'abc', CTX)
     expect(attrs.chest).toBeUndefined()
+  })
+})
+
+describe('A4C-3 — bare scalar-array elements (color_map / sci.features shape)', () => {
+  it('addresses the element itself (no .value tail) and reassembles a dense array', () => {
+    const color = {
+      type: 'array',
+      items: {
+        properties: {
+          value: { type: 'string' },
+          language_tag: { type: 'string' },
+          standardized_values: { type: 'array', maxUniqueItems: 2, items: { type: 'string' } },
+        },
+      },
+    }
+    const leaves = walkSchemaLeaves('color', color as never)
+    const bare = leaves.filter((l) => l.fieldRef.includes('standardized_values'))
+    expect(bare.map((l) => l.fieldRef)).toEqual([
+      'color[marketplace_id]#1.standardized_values#1',
+      'color[marketplace_id]#1.standardized_values#2',
+    ])
+    expect(bare[0].spec.leaf).toBe('')
+
+    const attrs: Record<string, unknown> = {}
+    applyDeepValue(attrs, 'color', bare[0].spec, 'Multicolore', { marketplaceId: 'X', languageTag: 'it_IT' })
+    const root = attrs.color as Array<Record<string, unknown>>
+    expect(root[0].standardized_values).toEqual(['Multicolore'])
+    applyDeepValue(attrs, 'color', bare[1].spec, 'Nero', { marketplaceId: 'X', languageTag: 'it_IT' })
+    expect(root[0].standardized_values).toEqual(['Multicolore', 'Nero'])
   })
 })
