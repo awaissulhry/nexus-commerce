@@ -2401,8 +2401,19 @@ export default function FlatFileGrid({
             { label: 'Reset column order (within groups)', onClick: () => setColOrderByGroup({}), disabled: !Object.keys(colOrderByGroup).length },
             ...(editMenuItems?.(toolbarFetchCtx) ?? []),
           ]} />
-          {/* B1 — View menu: display toggles (e.g. # column row details), channel-supplied. */}
-          {viewMenuItems && <MenuDropdown label="View" items={viewMenuItems(toolbarFetchCtx)} />}
+          {/* B1 — View menu: display toggles (e.g. # column row details), channel-supplied.
+              B2.1 — built-in density reset: a dragged row height persists per
+              storageKey (the "eBay rows taller than Amazon" mystery was a saved
+              36px here) — this puts it back to the compact default in one click. */}
+          {viewMenuItems && <MenuDropdown label="View" items={[
+            ...viewMenuItems(toolbarFetchCtx),
+            { separator: true },
+            {
+              label: rowHeight === 28 ? 'Row height: compact (default)' : `Row height: reset to compact (now ${rowHeight}px)`,
+              checked: rowHeight === 28,
+              onClick: () => { setRowHeight(28); try { localStorage.setItem(`${storageKey}-row-height`, '28') } catch {} },
+            },
+          ]} />}
           <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5 flex-shrink-0" />
           {titleIcon}
           <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">{title}</span>
