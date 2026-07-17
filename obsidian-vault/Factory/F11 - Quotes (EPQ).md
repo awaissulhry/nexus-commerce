@@ -42,3 +42,5 @@ Closed so far: ⌘K deep-link, converted-order nav, overdue counter, stale publi
 
 **Consumes:** notifications, SavedView, worker tick, FS3 comboboxes ([[F22 - Substrate FS Series]]), Gmail thread APIs (via existing endpoints only — Inbox is EPI's), FP6 cost ledger ([[F13 - Production (EPP)]]).
 **Hands out:** convert → Order (`bornFromQuoteId`, promise date, frozen spec) to [[F12 - Orders (EPO)]] · pipeline aggregates to [[F19 - Analytics (EPA)]] · quote feed to [[F21 - Chat & Order Spaces (FC)]] (deferred to FC5) · ConvertBar backlink task (from EPO D-1 split).
+
+**EPQ.5 SHIPPED 2026-07-17** (EPQ5-REPORT.md) — B2C gross-price bug fixed; tax modes + VIES gate + acconto/caparra enum + acceptance-evidence bundle + Stripe-dark deposit. Owner decisions open: D-4 default ACCONTO, CGV text (Legal gear), Stripe/VIES env keys.
