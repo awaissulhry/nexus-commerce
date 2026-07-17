@@ -1,6 +1,6 @@
 # F10 - Inbox (EPI)
 
-> **Route:** `/inbox` · **EP code:** EPI · **Status:** 🔨 **EPI.1 + EPI.2 SHIPPED** (`EPI1-REPORT.md` 2026-07-16 · `EPI2-REPORT.md` 2026-07-17 — lightbox/previews/cid/Files-panel/comment-attachments live; a pre-existing FormData P0 caught+fixed) · ⏳ Owner: click-throughs + **restart :3100** · **EPI.3 Views & Routing next**.
+> **Route:** `/inbox` · **EP code:** EPI · **Status:** 🔨 **EPI.1+2+3 SHIPPED** (latest: `EPI3-REPORT.md` 2026-07-17 — sections/views live: builder w/ live preview, pin/route-prompt, ingest rules + dry-run) · ⏳ Owner click-throughs · **EPI.4 Composer & Send Pipeline next**.
 > Canonical docs: `docs/factory/EPI-PROPOSAL.md` (incl. §5 design dossier) · `EPI-UI-INVENTORY.md` (17-gap ledger) · base: `FP1-SPEC.md`/`FP1-REPORT.md`
 
 Part of [[F00 - Factory OS MOC]] · flow position: [[F01 - Mission & Golden Flow]] step 1 — **the golden flow starts here** · program: [[F06 - Enterprise Program (EP)]]
@@ -22,7 +22,7 @@ Plus 15 more gaps: dark-but-wired routes (bulk assign, link-existing-party), key
 |---|---|
 | EPI.1 ✅ | Perfection sweep SHIPPED 2026-07-16 — 10 visual defects + gaps ledger closed, APG pane keyboard grammar, rail collapse <1280px, filters-in-URL, bulk Assign, link-existing-contact |
 | EPI.2 ✅ | Files & previews SHIPPED 2026-07-17 — inline-allowlist route, lightbox (`?focus=&file=`), thumbnails, `cid:` resolver (migration-free), rail Files panel, drag/paste attach, comment attachments, MentionTextarea |
-| EPI.3 | Views & routing — query-backed `InboxView` tabs w/ live counts, builder-on-search, ordered ingest rules w/ dry-run |
+| EPI.3 ✅ | Views & routing SHIPPED 2026-07-17 — query-backed section pills (claim arithmetic corpus-proven), builder w/ live preview, pin/exclude + route-prompt, ordered ingest rules + Run-now dry-run |
 | EPI.4 | Composer & send pipeline — `#` templates ({{party.name}} + placeholder guard, IT/EN), OutboundQueue = undo-send + scheduled-send + Send & Snooze, OOO detection |
 | EPI.5 | Triage & collaboration — per-user read/unread, claim semantics, send-time collision pause, quoted-text collapse, in-thread find, export |
 | EPI.6 | Rail & seams — **Orders card** (fills FP1's reserved slot; consumes [[F12 - Orders (EPO)]] summary shape), party history, FC seam contract |
