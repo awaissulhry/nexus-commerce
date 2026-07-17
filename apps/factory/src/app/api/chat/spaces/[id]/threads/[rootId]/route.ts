@@ -28,7 +28,8 @@ const MESSAGE_SELECT = {
   editedAt: true,
   deletedAt: true,
   createdAt: true,
-  reactions: { select: { userId: true, emoji: true } },
+  // FC4 — first-reaction order so the earliest emoji keeps the leftmost pill
+  reactions: { select: { userId: true, emoji: true }, orderBy: { createdAt: "asc" } },
 } as const;
 
 /** soft-deleted rows keep their slot but never their words (audit keeps truth) */

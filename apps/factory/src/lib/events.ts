@@ -8,6 +8,8 @@
  * scope.userId and reach only that user's connections. The old ts-based
  * replay ring is gone — resume is outbox-id-based and gap-free (worker
  * events that happened while a client was offline finally replay).
+ * FC4 amendment: ephemeral events (typing/presence) are the ONE sanctioned
+ * exception to "every event is durable" — see publishEphemeral below.
  */
 
 export type FactoryEventType =
@@ -29,6 +31,8 @@ export type FactoryEventType =
   | "settings.updated" // FS2 — config changes were silent
   | "chat.message" // FC1 — {spaceId, messageId}: message posted/edited/deleted/reacted
   | "chat.space" // FC1 — {spaceId}: space created/membership/read-cursor changed
+  | "chat.typing" // FC4 — EPHEMERAL {spaceId, userId, name}: composer keystrokes (throttled), never persisted
+  | "chat.presence" // FC4 — EPHEMERAL {online: userId[]}: the hub's connected-users set changed
   | "resync" // FS2 — server → client: gap too old, hard-refetch
   | "ping";
 
@@ -134,16 +138,75 @@ function ensurePoller(): void {
   }, POLL_MS);
 }
 
+// ── FC4 — ephemeral events (typing / presence) ───────────────────
+
+/**
+ * FC4 — pure ephemeral-event builder (exported for unit tests): id 0 marks
+ * "never persisted" — no outbox row is minted, so the SSE route writes no
+ * `id:` line (Last-Event-ID resume is undisturbed), shouldDeliver never
+ * dupe-skips it, and replayOutboxSince can never return it.
+ */
+export function ephemeralEvent(
+  type: FactoryEventType,
+  payload?: Record<string, unknown>,
+  scope?: EventScope,
+): FactoryEvent {
+  return { id: 0, type, ts: Date.now(), payload, scope };
+}
+
+/**
+ * FC4 — publish an EPHEMERAL event: local in-memory dispatch ONLY, no outbox
+ * write (typing indicators and presence must never cost a DB row per
+ * keystroke). This is correct — not merely acceptable — because the web app
+ * is a single process and every SSE connection lives in THIS hub (the worker
+ * sidecar has no browser clients). If FS6 (multi-process / hosted Postgres)
+ * ever lands, its LISTEN/NOTIFY pub/sub replaces this local dispatch; call
+ * sites keep their shape.
+ */
+export function publishEphemeral(
+  type: FactoryEventType,
+  payload?: Record<string, unknown>,
+  scope?: EventScope,
+): void {
+  dispatch(ephemeralEvent(type, payload, scope));
+}
+
+/** FC4 — distinct authed users currently holding an SSE connection on this hub */
+export function connectedUserIds(): string[] {
+  const ids = new Set<string>();
+  for (const conn of hub.connections) if (conn.userId) ids.add(conn.userId);
+  return [...ids].sort();
+}
+
+/**
+ * FC4 — last-broadcast presence key. Module-local on purpose: worst case
+ * (dev HMR re-evaluates the module) is ONE redundant presence event, which
+ * clients fold idempotently. Comparing against the last broadcast — not the
+ * mutation just performed — also heals connections that dispatch() dropped
+ * on send failure without going through unregister.
+ */
+let lastPresenceKey: string | null = null;
+
+function emitPresenceIfChanged(): void {
+  const online = connectedUserIds();
+  const key = online.join(",");
+  if (key === lastPresenceKey) return;
+  lastPresenceKey = key;
+  publishEphemeral("chat.presence", { online });
+}
+
 /** SSE route: register a connection; returns unregister. Starts/stops the shared poller. */
 export function registerConnection(conn: Connection): () => void {
   hub.connections.add(conn);
   ensurePoller();
+  emitPresenceIfChanged(); // FC4 — the joiner (and everyone else) learns the new online set
   return () => {
     hub.connections.delete(conn);
     if (hub.connections.size === 0 && hub.timer) {
       clearInterval(hub.timer);
       hub.timer = null;
     }
+    emitPresenceIfChanged(); // FC4 — departure (or a dispatch-dropped conn finally aborting)
   };
 }
 

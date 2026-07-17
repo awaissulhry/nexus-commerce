@@ -10,6 +10,8 @@
  * followers + @mentioned, notifyLevel-filtered — the Google rule), explicit
  * audited @all expansion (resolveMentions stays user-only), auto-follow on
  * reply/direct-mention, and follow/unfollow toggles on ChatMember.followedThreads.
+ * FC4 — setNotifyLevel (the per-space All/@mentions/Off dial) and read-cursor
+ * publishes go broadcast so receipt avatars live-update for the whole space.
  */
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
@@ -561,7 +563,36 @@ export async function setReadCursor(spaceId: string, userId: string, messageId: 
     where: { spaceId_userId: { spaceId, userId } },
     data: { lastReadMessageId: messageId },
   });
-  // scoped: only the reader's own connections care (their unread badges)
+  // FC4 — BROADCAST (was scoped to the reader): read cursors are now visible
+  // to the whole space as receipt avatars, so every member's open window must
+  // refetch when one moves. Cursor posts are already client-throttled (one
+  // per newest-visible message), so the fan-out stays tiny-team cheap.
+  await publishEventDurable("chat.space", { spaceId });
+}
+
+/**
+ * FC4 — set the caller's OWN notification level for a space (All activity /
+ * @mentions only / Off). FC3's computeThreadAudience already honors it — this
+ * is just the dial. Personal state, so the refresh event stays scoped to the
+ * setter (nobody else's UI shows it).
+ */
+export async function setNotifyLevel(
+  spaceId: string,
+  userId: string,
+  level: ChatNotifyLevelName,
+): Promise<void> {
+  await requireMembership(spaceId, userId);
+  await prisma.chatMember.update({
+    where: { spaceId_userId: { spaceId, userId } },
+    data: { notifyLevel: level },
+  });
+  void audit({
+    actorId: userId,
+    entityType: "chatSpace",
+    entityId: spaceId,
+    action: "notify.level",
+    after: { level },
+  });
   await publishEventDurable("chat.space", { spaceId }, { userId });
 }
 

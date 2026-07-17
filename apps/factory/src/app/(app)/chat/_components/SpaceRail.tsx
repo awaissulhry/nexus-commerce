@@ -180,6 +180,14 @@ export function SpaceRail({
                     <span className="fc2-rail-name" style={{ fontWeight: s.unread > 0 ? 700 : 600 }}>
                       {s.name}
                     </span>
+                    {/* FC4 — presence: another member of this space is online now */}
+                    {s.onlineOthers > 0 && (
+                      <span
+                        className="fc4-online-dot"
+                        title={`${s.onlineOthers} ${s.onlineOthers === 1 ? "member" : "members"} online`}
+                        aria-label={`${s.onlineOthers} online`}
+                      />
+                    )}
                     <span className="fc2-rail-time">{relTime(s.lastMessage?.createdAt ?? s.updatedAt, now)}</span>
                   </span>
                   <span className="fc2-rail-bottom">

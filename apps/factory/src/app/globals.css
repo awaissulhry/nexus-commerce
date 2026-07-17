@@ -728,3 +728,232 @@ a {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ────────────────────────────────────────────────────────────────
+   FC4 — presence & message affordances: reaction pills + the curated
+   picker, read-receipt avatar rows, the typing line, presence dots. */
+
+/* presence dots — on avatars (absolute, ringed) and inline (rail/header) */
+.fc2-avatar,
+.fc3-face,
+.fc4-receipt-face {
+  position: relative;
+}
+.fc4-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--h10-success);
+  border: 2px solid var(--h10-surface);
+  box-sizing: content-box;
+}
+.fc3-face .fc4-dot,
+.fc4-receipt-face .fc4-dot {
+  width: 6px;
+  height: 6px;
+  border-width: 1.5px;
+}
+.fc4-online-dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--h10-success);
+}
+.fc4-online {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+/* reaction pills under the message */
+.fc4-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+}
+.fc4-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  min-height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--h10-border);
+  background: var(--h10-surface);
+  cursor: pointer;
+  font-family: inherit;
+}
+.fc4-reaction:hover {
+  background: var(--h10-surface-hover);
+}
+.fc4-reaction:disabled {
+  cursor: default;
+}
+.fc4-reaction.is-mine {
+  border-color: var(--h10-primary);
+  background: var(--h10-wash-primary);
+}
+.fc4-reaction-emoji {
+  font-size: 13px;
+  line-height: 1;
+}
+.fc4-reaction-count {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--h10-text-2);
+}
+.fc4-reaction.is-mine .fc4-reaction-count {
+  color: var(--h10-primary);
+}
+/* the ghost "+" pill — appears on row hover (or while its picker is open) */
+.fc4-react-add {
+  color: var(--h10-text-3);
+  visibility: hidden;
+  padding: 1px 6px;
+}
+.fc2-msg-row:hover .fc4-react-add,
+.fc2-msg-row.is-picker-open .fc4-react-add {
+  visibility: visible;
+}
+
+/* the curated picker popover (anchored inside .fc2-msg-main) */
+.fc2-msg-main {
+  position: relative;
+}
+.fc2-msg-row.is-picker-open .fc2-msg-actions {
+  display: inline-flex; /* keep the action bar while its picker is open */
+}
+.fc4-picker {
+  position: absolute;
+  right: 12px;
+  bottom: calc(100% - 6px);
+  z-index: 40;
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(16, 24, 40, 0.14);
+  padding: 4px;
+  display: grid;
+  gap: 2px;
+}
+.fc4-picker-row {
+  display: flex;
+  gap: 2px;
+}
+.fc4-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  border-top: 1px solid var(--h10-border-subtle);
+  padding-top: 4px;
+}
+.fc4-picker-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 5px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--h10-text-2);
+}
+.fc4-picker-btn:hover {
+  background: var(--h10-surface-hover);
+}
+.fc4-picker-more {
+  color: var(--h10-text-3);
+}
+
+/* read receipts — reader initials under the last message each member read */
+.fc4-receipts {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 16px 4px 58px;
+}
+.fc4-receipt-face {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.2px;
+  flex: none;
+}
+.fc4-receipt-extra {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--h10-text-3);
+  background: var(--h10-surface-hover);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+/* the typing line — a reserved slot above the composer (zero layout shift) */
+.fc4-typing {
+  min-height: 18px;
+  padding: 0 16px 2px;
+  font-size: 11.5px;
+  color: var(--h10-text-3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.fc4-typing.is-on {
+  opacity: 1;
+}
+.fc4-typing-dots {
+  display: inline-flex;
+  gap: 2px;
+}
+.fc4-typing-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--h10-text-3);
+  animation: fc4-typing-bounce 1.2s infinite ease-in-out;
+}
+.fc4-typing-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.fc4-typing-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes fc4-typing-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+/* the bell menu — check on the active level */
+.fc4-notify-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.fc4-notify-check {
+  color: var(--h10-primary);
+}

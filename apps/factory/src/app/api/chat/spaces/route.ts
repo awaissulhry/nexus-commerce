@@ -10,6 +10,9 @@
  * FC3 — the payload also carries `threads`: the caller's followed threads
  * with UNREAD activity (someone else replied after their read cursor),
  * newest first, bounded 20 — the rail's Home-ish Threads section.
+ * FC4 — each space carries `onlineOthers` (how many other members hold a
+ * live SSE connection — the rail's presence dot), computed against the
+ * in-memory hub set, never a DB heartbeat.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -19,6 +22,7 @@ import { PAGES, FEATURES } from "@/lib/auth/permissions";
 import { createCustomSpace } from "@/lib/chat/chat-service";
 import { chatErrorResponse } from "@/lib/chat/http";
 import { parseFollowedThreads, unreadMessageWhere } from "@/lib/chat/pure";
+import { connectedUserIds } from "@/lib/events";
 
 /** FC3 — hard cap on followed-thread roots examined per rail refresh */
 const FOLLOWED_SCAN_MAX = 300;
@@ -47,6 +51,9 @@ export const GET = guarded(PAGES.chat, async (_req: NextRequest, { actor, resolv
           updatedAt: true,
           // FC2 — rail anatomy: latest message for the snippet + member count
           _count: { select: { members: true } },
+          // FC4 — member ids for the rail's presence dot (intersected with the
+          // SSE hub's online set server-side; ids never ship to the client)
+          members: { select: { userId: true } },
           messages: {
             orderBy: [{ createdAt: "desc" }, { id: "desc" }],
             take: 1,
@@ -83,8 +90,12 @@ export const GET = guarded(PAGES.chat, async (_req: NextRequest, { actor, resolv
     ),
   );
 
+  // FC4 — presence: how many OTHER members of each space are online right now
+  // (green dot on the rail row). The hub set is in-memory; no DB cost.
+  const online = new Set(connectedUserIds());
+
   const items = memberships.map((m, i) => {
-    const { _count, messages, ...space } = m.space;
+    const { _count, messages, members, ...space } = m.space;
     const last = messages[0] ?? null;
     return {
       ...space,
@@ -92,6 +103,7 @@ export const GET = guarded(PAGES.chat, async (_req: NextRequest, { actor, resolv
       notifyLevel: m.notifyLevel,
       lastReadMessageId: m.lastReadMessageId,
       unread: unreads[i],
+      onlineOthers: members.reduce((n, x) => (x.userId !== actor!.id && online.has(x.userId) ? n + 1 : n), 0),
       // FC2 — rail fields: a tombstoned latest message keeps its slot, never its words
       memberCount: _count.members,
       lastMessage: last

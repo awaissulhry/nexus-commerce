@@ -6,20 +6,42 @@
  * FC3 — the stream is roots-only; every MESSAGE row gains a hover
  * "Reply in thread" action, roots with replies wear the thread bar
  * (facepile · count · last activity), and bodies render mention chips.
+ * FC4 — reaction pills + picker on every row, read-receipt avatar rows under
+ * each member's last-read message, the header bell menu (All / @mentions /
+ * Off), a live "…is typing" line above the composer, and presence (online
+ * count in the header, dots on avatars).
  */
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ExternalLink, Link2 } from "lucide-react";
-import { Modal } from "@/design-system/components";
+import { AtSign, Bell, BellOff, Check, ExternalLink, Link2 } from "lucide-react";
+import { Menu, Modal } from "@/design-system/components";
 import { Button, Skeleton } from "@/design-system/primitives";
 import { WindowedList } from "@/components/WindowedList";
-import { buildStream, entityHref, type MentionMember, type StreamMessage, type StreamRow } from "@/lib/chat/ui";
+import {
+  buildReceiptMap,
+  buildStream,
+  entityHref,
+  typingLabel,
+  type SpaceMember,
+  type StreamMessage,
+  type StreamRow,
+  type Typist,
+} from "@/lib/chat/ui";
 import { Composer } from "./Composer";
-import { MessageRow, SystemRow } from "./MessageParts";
+import { MessageRow, ReceiptRow, SystemRow } from "./MessageParts";
 import type { SpaceItem } from "./types";
 
 const NEAR_BOTTOM_PX = 80;
+
+type NotifyLevel = "ALL" | "MENTIONS" | "OFF";
+
+/** FC4 — the bell menu's face per level (trigger icon + item copy) */
+const NOTIFY_META: Record<NotifyLevel, { icon: React.ReactNode; label: string; hint: string }> = {
+  ALL: { icon: <Bell size={14} />, label: "All activity", hint: "Every message in this space notifies you" },
+  MENTIONS: { icon: <AtSign size={14} />, label: "@mentions only", hint: "Only @you and @all notify you" },
+  OFF: { icon: <BellOff size={14} />, label: "Off", hint: "Nothing from this space notifies you" },
+};
 
 export function SpaceView({
   spaceId,
@@ -38,11 +60,16 @@ export function SpaceView({
   onDelete,
   onCopyLink,
   onOpenThread,
+  onToggleReaction,
+  onlineIds,
+  typists,
+  onTyping,
+  onSetNotifyLevel,
 }: {
   spaceId: string | null;
   space: SpaceItem | undefined;
   messages: StreamMessage[];
-  members: MentionMember[];
+  members: SpaceMember[];
   loading: boolean;
   notMember: boolean;
   hasEarlier: boolean;
@@ -56,6 +83,16 @@ export function SpaceView({
   onCopyLink: () => void;
   /** FC3 — open the right-side thread panel on this root message */
   onOpenThread: (rootId: string) => void;
+  /** FC4 — toggle a reaction (message id + emoji); routes live in ChatClient */
+  onToggleReaction: (messageId: string, emoji: string) => void;
+  /** FC4 — online userIds (presence dots + header count) */
+  onlineIds: ReadonlySet<string>;
+  /** FC4 — who is typing in THIS space right now (pruned upstream) */
+  typists: Typist[];
+  /** FC4 — the composer's throttled typing publisher */
+  onTyping: () => void;
+  /** FC4 — write my notifyLevel for this space (bell menu) */
+  onSetNotifyLevel: (level: NotifyLevel) => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
@@ -68,6 +105,8 @@ export function SpaceView({
   const prevHeightRef = useRef(0);
 
   const rows = useMemo<StreamRow[]>(() => buildStream(messages, Date.now()), [messages]);
+  // FC4 — who sits under which message (the Google receipt rule, pure-tested)
+  const receiptMap = useMemo(() => buildReceiptMap(messages, members, meId), [messages, members, meId]);
   const newestId = messages.length ? messages[messages.length - 1].id : null;
   const oldestId = messages.length ? messages[0].id : null;
   const nowMs = Date.now();
@@ -151,6 +190,9 @@ export function SpaceView({
   }
 
   const orderHref = space?.entityType && space.entityId ? entityHref(space.entityType, space.entityId) : null;
+  // FC4 — presence: how many OTHER members are online (live via chat.presence)
+  const othersOnline = members.reduce((n, m) => (m.id !== meId && onlineIds.has(m.id) ? n + 1 : n), 0);
+  const level: NotifyLevel = space?.notifyLevel ?? "ALL";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minWidth: 0 }}>
@@ -163,10 +205,39 @@ export function SpaceView({
             {space.memberCount} {space.memberCount === 1 ? "member" : "members"}
           </span>
         )}
+        {othersOnline > 0 && (
+          <span className="fc2-space-meta fc4-online" title={`${othersOnline} ${othersOnline === 1 ? "member is" : "members are"} online now`}>
+            <span className="fc4-online-dot" aria-hidden />
+            {othersOnline} online
+          </span>
+        )}
         {orderHref && (
           <a href={orderHref} className="fc2-system-chip" style={{ marginLeft: 0 }}>
             Open order <ExternalLink size={10} />
           </a>
+        )}
+        {/* FC4 — per-space notification settings (writes ChatMember.notifyLevel) */}
+        {space && !notMember && (
+          <Menu
+            align="right"
+            label={NOTIFY_META[level].icon}
+            triggerProps={{
+              className: "fc2-icon-btn",
+              title: `Notifications: ${NOTIFY_META[level].label}`,
+              "aria-label": `Notification settings — currently ${NOTIFY_META[level].label}`,
+            }}
+            items={(Object.keys(NOTIFY_META) as NotifyLevel[]).map((l) => ({
+              id: l,
+              icon: NOTIFY_META[l].icon,
+              label: (
+                <span className="fc4-notify-item" title={NOTIFY_META[l].hint}>
+                  {NOTIFY_META[l].label}
+                  {l === level && <Check size={13} className="fc4-notify-check" />}
+                </span>
+              ),
+              onSelect: l === level ? undefined : () => onSetNotifyLevel(l),
+            }))}
+          />
         )}
         <button type="button" className="fc2-icon-btn" onClick={onCopyLink} title="Copy link to this space" aria-label="Copy link to this space">
           <Link2 size={14} />
@@ -206,8 +277,11 @@ export function SpaceView({
                 const row = rows[i];
                 if (row?.kind === "divider") return 36;
                 if (row?.kind !== "message") return 26;
-                const base = row.runStart ? 54 : 26;
-                return row.message.thread?.replyCount ? base + 26 : base;
+                let est = row.runStart ? 54 : 26;
+                if (row.message.thread?.replyCount) est += 26;
+                if (row.message.reactions?.length) est += 26; // FC4 — pill row
+                if (receiptMap.has(row.message.id)) est += 22; // FC4 — receipt row
+                return est;
               }}
               height="100%"
               className="fc2-stream-scroll"
@@ -223,25 +297,35 @@ export function SpaceView({
                     <span className="fc2-day-chip">{row.label}</span>
                   </div>
                 ) : row.message.kind === "SYSTEM" ? (
-                  <SystemRow message={row.message} />
+                  <>
+                    <SystemRow message={row.message} />
+                    {receiptMap.has(row.message.id) && <ReceiptRow readers={receiptMap.get(row.message.id)!} onlineIds={onlineIds} />}
+                  </>
                 ) : (
-                  <MessageRow
-                    message={row.message}
-                    runStart={row.runStart}
-                    own={!!meId && row.message.authorId === meId}
-                    members={members}
-                    nowMs={nowMs}
-                    onStartEdit={() => startEdit(row.message)}
-                    onAskDelete={() => setConfirmDeleteId(row.message.id)}
-                    editing={editingId === row.message.id}
-                    editText={editText}
-                    setEditText={setEditText}
-                    onSaveEdit={() => void saveEdit()}
-                    onCancelEdit={() => setEditingId(null)}
-                    editBusy={editBusy}
-                    onReply={row.message.pending ? undefined : () => onOpenThread(row.message.id)}
-                    onOpenThread={row.message.thread?.replyCount ? () => onOpenThread(row.message.id) : undefined}
-                  />
+                  <>
+                    <MessageRow
+                      message={row.message}
+                      runStart={row.runStart}
+                      own={!!meId && row.message.authorId === meId}
+                      meId={meId}
+                      members={members}
+                      nowMs={nowMs}
+                      onStartEdit={() => startEdit(row.message)}
+                      onAskDelete={() => setConfirmDeleteId(row.message.id)}
+                      editing={editingId === row.message.id}
+                      editText={editText}
+                      setEditText={setEditText}
+                      onSaveEdit={() => void saveEdit()}
+                      onCancelEdit={() => setEditingId(null)}
+                      editBusy={editBusy}
+                      onReply={row.message.pending ? undefined : () => onOpenThread(row.message.id)}
+                      onOpenThread={row.message.thread?.replyCount ? () => onOpenThread(row.message.id) : undefined}
+                      onToggleReaction={canPost && !row.message.pending ? (emoji) => onToggleReaction(row.message.id, emoji) : undefined}
+                      onlineIds={onlineIds}
+                    />
+                    {/* FC4 — reader avatars under the LAST message each member has read */}
+                    {receiptMap.has(row.message.id) && <ReceiptRow readers={receiptMap.get(row.message.id)!} onlineIds={onlineIds} />}
+                  </>
                 )
               }
             />
@@ -249,7 +333,10 @@ export function SpaceView({
         </div>
       )}
 
-      <Composer canPost={canPost} onSend={onSend} composerKey={spaceId} />
+      {/* FC4 — the typing line: a reserved slot (zero layout shift), fades via CSS */}
+      <TypingLine typists={typists} meId={meId} />
+
+      <Composer canPost={canPost} onSend={onSend} composerKey={spaceId} onTyping={onTyping} />
 
       <Modal
         open={!!confirmDeleteId}
@@ -275,6 +362,29 @@ export function SpaceView({
           <li>The audit log keeps the original text — deletion is soft, never silent.</li>
         </ul>
       </Modal>
+    </div>
+  );
+}
+
+/**
+ * FC4 — "Marco is typing…" above the composer. The slot is ALWAYS reserved
+ * (18px) so appearing/fading never shifts the stream; visibility is an
+ * opacity fade. Upstream owns the 4s TTL prune; this only renders the label.
+ */
+function TypingLine({ typists, meId }: { typists: Typist[]; meId: string | null }) {
+  const label = typingLabel(typists, meId);
+  return (
+    <div className={`fc4-typing${label ? " is-on" : ""}`} aria-live="polite">
+      {label && (
+        <>
+          <span className="fc4-typing-dots" aria-hidden>
+            <span />
+            <span />
+            <span />
+          </span>
+          {label}
+        </>
+      )}
     </div>
   );
 }

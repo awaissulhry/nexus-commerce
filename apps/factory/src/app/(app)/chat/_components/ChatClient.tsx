@@ -12,6 +12,10 @@
  * optimistic reply send, follow/unfollow toggle, and the read cursor now
  * advances over thread replies too while the panel is open. Esc closes the
  * panel first, then returns focus to the rail.
+ * FC4 — the affordance wiring: optimistic reaction toggles (FC1 routes),
+ * presence (GET seed + ephemeral chat.presence payloads), the per-space
+ * typing set (ephemeral chat.typing + 4s prune tick + ≤1/2s publish
+ * throttle), and the bell menu's notifyLevel POST.
  */
 "use client";
 
@@ -23,14 +27,20 @@ import { PaneHandle } from "@/components/PaneHandle";
 import { useResizablePanes, type PaneDef } from "@/components/useResizablePanes";
 import { apiJson } from "@/lib/api-client";
 import { useAuth, usePermission } from "@/lib/auth/client";
-import { useFactoryEvents } from "@/lib/use-factory-events";
+import { useFactoryEvents, useFactoryEventData } from "@/lib/use-factory-events";
 import {
   chatUrl,
+  foldPresence,
   mergeNewestWindow,
+  shouldPublishTyping,
   sortSpacesByActivity,
+  toggleReaction,
+  typingPrune,
+  typingUpsert,
   type FollowedThread,
-  type MentionMember,
+  type SpaceMember,
   type StreamMessage,
+  type Typist,
 } from "@/lib/chat/ui";
 import { SpaceRail } from "./SpaceRail";
 import { SpaceView } from "./SpaceView";
@@ -59,6 +69,7 @@ const toStream = (m: ApiMessage): StreamMessage => ({
   deletedAt: m.deletedAt,
   createdAt: m.createdAt,
   thread: m.thread ?? null,
+  reactions: m.reactions ?? [], // FC4 — pills render these
 });
 
 type ThreadState = {
@@ -88,7 +99,7 @@ function ChatInner() {
   const [followedThreads, setFollowedThreads] = useState<FollowedThread[]>([]);
   const [spacesError, setSpacesError] = useState<string | null>(null);
   const [messages, setMessages] = useState<StreamMessage[]>([]);
-  const [members, setMembers] = useState<MentionMember[]>([]);
+  const [members, setMembers] = useState<SpaceMember[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [hasEarlier, setHasEarlier] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
@@ -251,6 +262,59 @@ function ChatInner() {
     { debounceMs: 1000 },
   );
 
+  // ── FC4: presence — GET seed, then ephemeral chat.presence payloads ──
+  const [online, setOnline] = useState<string[]>([]);
+  const loadPresence = useCallback(async () => {
+    try {
+      const d = await apiJson<{ online: string[] }>("/api/chat/presence");
+      setOnline(d.online);
+    } catch {
+      /* presence is decorative — never toast over it */
+    }
+  }, []);
+  useEffect(() => {
+    void loadPresence();
+  }, [loadPresence]);
+  useFactoryEventData(["chat.presence"], (e) => {
+    if (e.type === "chat.presence") {
+      setOnline((prev) => foldPresence(prev, e.payload));
+      void loadSpaces(); // the rail's onlineOthers dots are server-computed
+    } else {
+      void loadPresence(); // resync — re-seed the snapshot
+    }
+  });
+  const onlineIds = useMemo<ReadonlySet<string>>(() => new Set(online), [online]);
+
+  // ── FC4: typing — ephemeral chat.typing in, 4s prune tick, ≤1/2s publish out ──
+  const [typists, setTypists] = useState<Typist[]>([]);
+  useEffect(() => {
+    setTypists([]); // a new space starts quiet
+  }, [spaceId]);
+  useFactoryEventData(["chat.typing"], (e) => {
+    if (e.type !== "chat.typing") return;
+    const p = e.payload as { spaceId?: string; userId?: string; name?: string } | undefined;
+    if (!p?.spaceId || !p.userId || p.spaceId !== spaceIdRef.current) return;
+    if (p.userId === user?.id) return; // own echo
+    setTypists((prev) => typingUpsert(prev, { userId: p.userId!, name: p.name ?? "Someone" }, Date.now()));
+  });
+  const anyTyping = typists.length > 0;
+  useEffect(() => {
+    if (!anyTyping) return;
+    const t = setInterval(() => setTypists((prev) => typingPrune(prev, Date.now())), 1000);
+    return () => clearInterval(t);
+  }, [anyTyping]);
+
+  const typingSentAt = useRef(0);
+  const publishTyping = useCallback(() => {
+    const id = spaceIdRef.current;
+    const now = Date.now();
+    if (!id || !shouldPublishTyping(typingSentAt.current, now)) return;
+    typingSentAt.current = now;
+    void apiJson(`/api/chat/spaces/${id}/typing`, { method: "POST" }).catch(() => {
+      typingSentAt.current = 0; // let the next keystroke retry
+    });
+  }, []);
+
   // ── read cursor: on open + when a new message becomes visible ──
   // FC3 — with the panel open the cursor follows thread replies too (the
   // newest thing the reader can actually see, by timestamp).
@@ -393,6 +457,61 @@ function ChatInner() {
     [refetchOpenWindows, toast],
   );
 
+  // FC4 — optimistic reaction toggle (main stream + thread root + replies);
+  // the server's chat.message event reconciles everyone else, an error
+  // reverts via refetch.
+  const toggleReactionOn = useCallback(
+    async (messageId: string, emoji: string) => {
+      const me = user?.id;
+      if (!me) return;
+      const current =
+        messages.find((m) => m.id === messageId) ??
+        (thread?.root?.id === messageId ? thread.root : undefined) ??
+        thread?.replies.find((m) => m.id === messageId);
+      if (!current || current.pending) return;
+      const { next, added } = toggleReaction(current.reactions, me, emoji);
+      const patch = (m: StreamMessage) => (m.id === messageId ? { ...m, reactions: next } : m);
+      setMessages((prev) => prev.map(patch));
+      setThread((prev) =>
+        prev ? { ...prev, root: prev.root ? patch(prev.root) : prev.root, replies: prev.replies.map(patch) } : prev,
+      );
+      try {
+        if (added) {
+          await apiJson(`/api/chat/messages/${messageId}/reactions`, { method: "POST", body: JSON.stringify({ emoji }) });
+        } else {
+          await apiJson(`/api/chat/messages/${messageId}/reactions?emoji=${encodeURIComponent(emoji)}`, { method: "DELETE" });
+        }
+      } catch (e) {
+        toast((e as Error).message, "danger");
+        refetchOpenWindows(); // revert to server truth
+      }
+    },
+    [messages, thread, user, toast, refetchOpenWindows],
+  );
+
+  // FC4 — the bell menu: my notification level for the open space
+  const setNotifyLevel = useCallback(
+    async (level: "ALL" | "MENTIONS" | "OFF") => {
+      const id = spaceIdRef.current;
+      if (!id) return;
+      try {
+        await apiJson(`/api/chat/spaces/${id}/notify`, { method: "POST", body: JSON.stringify({ level }) });
+        toast(
+          level === "ALL"
+            ? "Notifications: all activity in this space"
+            : level === "MENTIONS"
+              ? "Notifications: only @mentions in this space"
+              : "Notifications off for this space",
+          "success",
+        );
+        void loadSpaces(); // notifyLevel rides the spaces payload
+      } catch (e) {
+        toast((e as Error).message, "danger");
+      }
+    },
+    [loadSpaces, toast],
+  );
+
   // FC3 — follow/unfollow the open thread
   const toggleFollow = useCallback(async () => {
     const id = spaceIdRef.current;
@@ -498,6 +617,11 @@ function ChatInner() {
         onDelete={remove}
         onCopyLink={copyLink}
         onOpenThread={(rootId) => open(spaceIdRef.current, rootId)}
+        onToggleReaction={(messageId, emoji) => void toggleReactionOn(messageId, emoji)}
+        onlineIds={onlineIds}
+        typists={typists}
+        onTyping={publishTyping}
+        onSetNotifyLevel={(level) => void setNotifyLevel(level)}
       />
       {threadOpen && (
         <>
@@ -522,6 +646,9 @@ function ChatInner() {
             onSendReply={sendReply}
             onEdit={edit}
             onDelete={remove}
+            onToggleReaction={(messageId, emoji) => void toggleReactionOn(messageId, emoji)}
+            onlineIds={onlineIds}
+            onTyping={publishTyping}
           />
         </>
       )}

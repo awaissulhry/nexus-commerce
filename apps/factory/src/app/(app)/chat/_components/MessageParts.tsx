@@ -6,24 +6,33 @@
  * (@handle → displayName pill via the server's own grammar; @all always
  * chips), and the root-message thread bar — facepile (≤3 repliers) · reply
  * count · last-reply time — that opens the panel.
+ * FC4 — reaction pills under the message (own-reaction highlighted, click
+ * toggles) + the hover emoji picker, presence dots on avatars/facepiles, and
+ * the read-receipt avatar row (ReceiptRow — main stream only).
  */
 "use client";
 
-import { ExternalLink, MessageSquareText, Pencil, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { ExternalLink, MessageSquareText, Pencil, SmilePlus, Trash2 } from "lucide-react";
 import { Button } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import {
   avatarHue,
+  groupReactions,
   initialsOf,
   metaChip,
+  reactionNames,
+  receiptStack,
   relTime,
   resolveHandleDisplay,
   splitMentionTokens,
   threadRepliesLabel,
   timeOfDay,
   type MentionMember,
+  type ReceiptReader,
   type StreamMessage,
 } from "@/lib/chat/ui";
+import { ReactionPicker } from "./ReactionPicker";
 
 /** € appears ONLY when the grain strip left moneyCents in the payload */
 export function MoneyChip({ message }: { message: StreamMessage }) {
@@ -81,8 +90,18 @@ export function SystemRow({ message }: { message: StreamMessage }) {
   );
 }
 
-/** FC3 — the root message's thread affordance: facepile · count · last activity */
-export function ThreadBar({ message, nowMs, onOpen }: { message: StreamMessage; nowMs: number; onOpen: () => void }) {
+/** FC3 — the root message's thread affordance: facepile · count · last activity (FC4: + presence dots) */
+export function ThreadBar({
+  message,
+  nowMs,
+  onOpen,
+  onlineIds,
+}: {
+  message: StreamMessage;
+  nowMs: number;
+  onOpen: () => void;
+  onlineIds?: ReadonlySet<string>;
+}) {
   const t = message.thread;
   if (!t || t.replyCount === 0) return null;
   return (
@@ -91,6 +110,7 @@ export function ThreadBar({ message, nowMs, onOpen }: { message: StreamMessage; 
         {t.participants.slice(0, 3).map((p) => (
           <span key={p.id} className="fc3-face" style={{ background: `hsl(${avatarHue(p.id)} 45% 45%)` }}>
             {initialsOf(p.name)}
+            {onlineIds?.has(p.id) && <span className="fc4-dot" aria-label="Online" />}
           </span>
         ))}
       </span>
@@ -100,10 +120,79 @@ export function ThreadBar({ message, nowMs, onOpen }: { message: StreamMessage; 
   );
 }
 
+/**
+ * FC4 — reaction pills under a message: emoji + count, own-reaction
+ * highlighted, click toggles (FC1 react/unreact routes via the parent), a
+ * ghost "+" pill (hover-revealed) reopening the picker. Tooltip = names.
+ */
+export function ReactionPills({
+  message,
+  meId,
+  members,
+  onToggle,
+  onOpenPicker,
+}: {
+  message: StreamMessage;
+  meId: string | null;
+  members: MentionMember[];
+  onToggle?: (emoji: string) => void;
+  onOpenPicker?: () => void;
+}) {
+  const groups = groupReactions(message.reactions, meId);
+  if (groups.length === 0) return null;
+  return (
+    <div className="fc4-reactions">
+      {groups.map((g) => (
+        <button
+          key={g.emoji}
+          type="button"
+          className={`fc4-reaction${g.mine ? " is-mine" : ""}`}
+          onClick={onToggle ? () => onToggle(g.emoji) : undefined}
+          disabled={!onToggle}
+          title={`${reactionNames(g.userIds, meId, members).join(", ")} reacted with ${g.emoji}`}
+          aria-label={`${g.emoji} ${g.count}${g.mine ? " — you reacted, click to remove" : ""}`}
+          aria-pressed={g.mine}
+        >
+          <span className="fc4-reaction-emoji">{g.emoji}</span>
+          <span className="fc4-reaction-count">{g.count}</span>
+        </button>
+      ))}
+      {onOpenPicker && (
+        <button type="button" className="fc4-reaction fc4-react-add" onClick={onOpenPicker} title="Add a reaction" aria-label="Add a reaction">
+          <SmilePlus size={12} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * FC4 — the Google read-receipt row: small reader-initial avatars beneath the
+ * LAST message each member has read (placement math in chat/ui.ts
+ * buildReceiptMap; stack caps at 5 + "+N"; own avatar never reaches here).
+ */
+export function ReceiptRow({ readers, onlineIds }: { readers: ReceiptReader[]; onlineIds?: ReadonlySet<string> }) {
+  if (readers.length === 0) return null;
+  const { shown, extra } = receiptStack(readers);
+  const names = readers.map((r) => r.name).join(", ");
+  return (
+    <div className="fc4-receipts" title={`Read by ${names}`} aria-label={`Read by ${names}`}>
+      {shown.map((r) => (
+        <span key={r.id} className="fc4-receipt-face" style={{ background: `hsl(${avatarHue(r.id)} 45% 45%)` }}>
+          {initialsOf(r.name)}
+          {onlineIds?.has(r.id) && <span className="fc4-dot" aria-label="Online" />}
+        </span>
+      ))}
+      {extra > 0 && <span className="fc4-receipt-extra">+{extra}</span>}
+    </div>
+  );
+}
+
 export function MessageRow({
   message,
   runStart,
   own,
+  meId,
   members,
   onStartEdit,
   onAskDelete,
@@ -115,11 +204,15 @@ export function MessageRow({
   editBusy,
   onReply,
   onOpenThread,
+  onToggleReaction,
+  onlineIds,
   nowMs,
 }: {
   message: StreamMessage;
   runStart: boolean;
   own: boolean;
+  /** FC4 — the viewer (own-reaction highlight + "You" in tooltips) */
+  meId?: string | null;
   members: MentionMember[];
   onStartEdit: () => void;
   onAskDelete: () => void;
@@ -133,17 +226,24 @@ export function MessageRow({
   onReply?: () => void;
   /** FC3 — click the thread bar (present when the message has replies) */
   onOpenThread?: () => void;
+  /** FC4 — toggle a reaction on this message (absent = read-only role) */
+  onToggleReaction?: (emoji: string) => void;
+  /** FC4 — online userIds for presence dots (avatar + facepiles) */
+  onlineIds?: ReadonlySet<string>;
   nowMs?: number;
 }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
   const deleted = !!message.deletedAt;
   const name = message.authorName ?? "Someone";
-  const showActions = !deleted && !editing && !message.pending && (own || !!onReply);
+  const canReact = !deleted && !editing && !message.pending && !!onToggleReaction;
+  const showActions = !deleted && !editing && !message.pending && (own || !!onReply || canReact);
   return (
-    <div className={`fc2-msg-row${runStart ? " is-run-start" : ""}`}>
+    <div className={`fc2-msg-row${runStart ? " is-run-start" : ""}${pickerOpen ? " is-picker-open" : ""}`}>
       <div className="fc2-msg-gutter">
         {runStart && (
           <span className="fc2-avatar" style={{ background: `hsl(${avatarHue(message.authorId ?? "?")} 45% 45%)` }}>
             {initialsOf(name)}
+            {!!message.authorId && onlineIds?.has(message.authorId) && <span className="fc4-dot" aria-label="Online" />}
           </span>
         )}
       </div>
@@ -189,9 +289,23 @@ export function MessageRow({
             {!deleted && <MoneyChip message={message} />}
           </div>
         )}
-        {!editing && onOpenThread && <ThreadBar message={message} nowMs={nowMs ?? Date.now()} onOpen={onOpenThread} />}
+        {!deleted && !editing && (
+          <ReactionPills
+            message={message}
+            meId={meId ?? null}
+            members={members}
+            onToggle={onToggleReaction}
+            onOpenPicker={canReact ? () => setPickerOpen(true) : undefined}
+          />
+        )}
+        {!editing && onOpenThread && <ThreadBar message={message} nowMs={nowMs ?? Date.now()} onOpen={onOpenThread} onlineIds={onlineIds} />}
         {showActions && (
           <span className="fc2-msg-actions">
+            {canReact && (
+              <button type="button" onClick={() => setPickerOpen((o) => !o)} title="Add a reaction" aria-label="Add a reaction">
+                <SmilePlus size={13} />
+              </button>
+            )}
             {onReply && (
               <button type="button" onClick={onReply} title="Reply in thread" aria-label="Reply in thread">
                 <MessageSquareText size={13} />
@@ -208,6 +322,12 @@ export function MessageRow({
               </>
             )}
           </span>
+        )}
+        {pickerOpen && canReact && (
+          <ReactionPicker
+            onPick={(emoji) => onToggleReaction!(emoji)}
+            onClose={() => setPickerOpen(false)}
+          />
         )}
       </div>
     </div>

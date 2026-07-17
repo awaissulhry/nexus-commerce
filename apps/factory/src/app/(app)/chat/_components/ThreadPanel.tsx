@@ -5,6 +5,8 @@
  * Follow/Following toggle in the header (followers join the reply-notify
  * audience). Rows are the shared MessageParts anatomy — own replies get
  * inline edit/delete; one level deep, so no reply-in-thread inside the panel.
+ * FC4 — reaction pills + picker on the root and every reply, presence dots,
+ * and the reply composer publishes typing (space-level indicator).
  */
 "use client";
 
@@ -39,6 +41,9 @@ export function ThreadPanel({
   onSendReply,
   onEdit,
   onDelete,
+  onToggleReaction,
+  onlineIds,
+  onTyping,
 }: {
   spaceId: string;
   rootId: string;
@@ -59,6 +64,12 @@ export function ThreadPanel({
   onSendReply: (body: string) => Promise<boolean>;
   onEdit: (id: string, body: string) => Promise<boolean>;
   onDelete: (id: string) => Promise<void>;
+  /** FC4 — toggle a reaction (message id + emoji); routes live in ChatClient */
+  onToggleReaction: (messageId: string, emoji: string) => void;
+  /** FC4 — online userIds for presence dots */
+  onlineIds: ReadonlySet<string>;
+  /** FC4 — the reply composer's throttled typing publisher */
+  onTyping: () => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
@@ -138,6 +149,7 @@ export function ThreadPanel({
       message={message}
       runStart={runStart}
       own={!!meId && message.authorId === meId}
+      meId={meId}
       members={members}
       nowMs={nowMs}
       onStartEdit={() => startEdit(message)}
@@ -148,6 +160,8 @@ export function ThreadPanel({
       onSaveEdit={() => void saveEdit()}
       onCancelEdit={() => setEditingId(null)}
       editBusy={editBusy}
+      onToggleReaction={canPost && !message.pending ? (emoji) => onToggleReaction(message.id, emoji) : undefined}
+      onlineIds={onlineIds}
     />
   );
 
@@ -235,7 +249,7 @@ export function ThreadPanel({
             </div>
           </div>
 
-          <Composer canPost={canPost} onSend={onSendReply} composerKey={`${spaceId}:${rootId}`} placeholder="Reply in thread — @ to mention…" />
+          <Composer canPost={canPost} onSend={onSendReply} composerKey={`${spaceId}:${rootId}`} placeholder="Reply in thread — @ to mention…" onTyping={onTyping} />
         </>
       )}
 
