@@ -8,6 +8,8 @@
  * in the thread panel, the Google model); each root carries its thread
  * summary (reply count · ≤3 participants · last-reply time) and the payload
  * carries the bounded member list the mention chips resolve against.
+ * FC4 — members also carry per-member read cursors (id + resolved timestamp)
+ * for the receipt-avatar rows; reactions ride in first-reaction order.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -63,7 +65,8 @@ export const GET = guarded(PAGES.chat, async (req: NextRequest, { params, actor,
       editedAt: true,
       deletedAt: true,
       createdAt: true,
-      reactions: { select: { userId: true, emoji: true } },
+      // FC4 — first-reaction order so the earliest emoji keeps the leftmost pill
+      reactions: { select: { userId: true, emoji: true }, orderBy: { createdAt: "asc" } },
     },
   });
 
@@ -111,19 +114,37 @@ export const GET = guarded(PAGES.chat, async (req: NextRequest, { params, actor,
       ]),
   );
 
-  // FC3 — the bounded member list the client's mention chips resolve against
+  // FC3 — the bounded member list the client's mention chips resolve against.
+  // FC4 — each member also carries their read cursor (id + the cursor
+  // message's timestamp) so the client can seat receipt avatars under the
+  // last message each member has read — including when the cursor points at
+  // a thread reply that never appears in the main stream.
   const memberRows = await prisma.chatMember.findMany({
     where: { spaceId },
     take: 500, // bounded: one space's membership (tiny team by construction)
-    select: { user: { select: { id: true, displayName: true, email: true } } },
+    select: { lastReadMessageId: true, user: { select: { id: true, displayName: true, email: true } } },
   });
+  const readCursorIds = [...new Set(memberRows.map((m) => m.lastReadMessageId).filter((id): id is string => !!id))];
+  const readCursorRows = readCursorIds.length
+    ? await prisma.chatMessage.findMany({
+        where: { id: { in: readCursorIds } },
+        take: 500, // bounded: ≤ one cursor message per member
+        select: { id: true, createdAt: true },
+      })
+    : [];
+  const readAtOf = new Map(readCursorRows.map((r) => [r.id, r.createdAt]));
+  const members = memberRows.map((m) => ({
+    ...m.user,
+    lastReadMessageId: m.lastReadMessageId,
+    lastReadAt: (m.lastReadMessageId && readAtOf.get(m.lastReadMessageId)) || null,
+  }));
 
   // soft-deleted rows keep their slot but never their words (audit keeps truth)
   const items = rows.map((m) => ({
     ...(m.deletedAt ? { ...m, body: "", moneyCents: null, moneyLabel: null, meta: null } : m),
     thread: summaryOf.get(m.id) ?? null,
   }));
-  return jsonStripped({ items, window: { before, take }, members: memberRows.map((m) => m.user) }, resolved);
+  return jsonStripped({ items, window: { before, take }, members }, resolved);
 });
 
 const PostBody = z.object({

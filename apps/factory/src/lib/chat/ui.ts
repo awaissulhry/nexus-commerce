@@ -6,6 +6,9 @@
  * newest-window merge the optimistic composer reconciles through. The
  * chat/_components render these; src/lib/__tests__/fc2-chat-ui.test.ts pins
  * them (house pattern: chat/pure.ts, orders/money.ts).
+ * FC4 — reaction grouping/toggling, the read-receipt placement rule, the
+ * typing state machine + throttle gate, and the presence-set fold
+ * (src/lib/__tests__/fc4-affordances.test.ts pins these).
  */
 
 import { MENTION_RE_SOURCE } from "./pure";
@@ -29,6 +32,8 @@ export type StreamMessage = {
   pending?: boolean;
   /** FC3 — root messages carry their thread summary (null/absent = no replies) */
   thread?: ThreadSummary | null;
+  /** FC4 — reaction rows (userId + emoji), first-reaction order; pills group them */
+  reactions?: Reaction[];
 };
 
 export type StreamRow =
@@ -292,6 +297,188 @@ export type FollowedThread = {
   lastReplyAt: string;
   replyCount: number;
 };
+
+// ── FC4 — reactions · read receipts · typing · presence ──────────
+
+export type Reaction = { userId: string; emoji: string };
+
+/** the Google-Chat quick row (hover picker, first tier) */
+export const QUICK_REACTIONS: readonly string[] = ["👍", "✅", "🎉", "❤️", "😂", "😮", "🙏", "👀"];
+
+/** the compact "more" grid — 24, disjoint from the quick row */
+export const MORE_REACTIONS: readonly string[] = [
+  "😀", "😅", "😉", "😊", "😍", "🤩", "🙃", "🤔",
+  "😐", "😢", "😭", "😡", "🤯", "🥳", "😴", "🤒",
+  "🤝", "👏", "💪", "🙌", "👎", "🔥", "💡", "🚀",
+];
+
+export type ReactionGroup = { emoji: string; count: number; mine: boolean; userIds: string[] };
+
+/**
+ * Group raw reaction rows into pills: first-seen order (rows arrive ordered
+ * by first reaction time, so the earliest emoji keeps the leftmost pill —
+ * the Google behavior), per-emoji count, and whether the viewer is in it.
+ * Defensive against duplicate rows (the DB unique makes them impossible;
+ * optimistic client state should not be trusted the same way).
+ */
+export function groupReactions(reactions: Reaction[] | undefined, meId: string | null): ReactionGroup[] {
+  const groups: ReactionGroup[] = [];
+  const byEmoji = new Map<string, ReactionGroup>();
+  for (const r of reactions ?? []) {
+    let g = byEmoji.get(r.emoji);
+    if (!g) {
+      g = { emoji: r.emoji, count: 0, mine: false, userIds: [] };
+      byEmoji.set(r.emoji, g);
+      groups.push(g);
+    }
+    if (g.userIds.includes(r.userId)) continue;
+    g.userIds.push(r.userId);
+    g.count++;
+    if (meId != null && r.userId === meId) g.mine = true;
+  }
+  return groups;
+}
+
+/**
+ * Optimistic toggle: clicking a pill (or picking an emoji) adds the viewer's
+ * reaction when absent, removes it when present. `added` tells the caller
+ * which FC1 route to call (POST vs DELETE); the server's chat.message event
+ * reconciles everyone else.
+ */
+export function toggleReaction(
+  reactions: Reaction[] | undefined,
+  meId: string,
+  emoji: string,
+): { next: Reaction[]; added: boolean } {
+  const list = reactions ?? [];
+  const mine = list.some((r) => r.userId === meId && r.emoji === emoji);
+  return mine
+    ? { next: list.filter((r) => !(r.userId === meId && r.emoji === emoji)), added: false }
+    : { next: [...list, { userId: meId, emoji }], added: true };
+}
+
+/** pill tooltip names — "You" first when the viewer reacted; unknown ids degrade to "Someone" */
+export function reactionNames(userIds: string[], meId: string | null, members: MentionMember[]): string[] {
+  const nameOf = new Map(members.map((m) => [m.id, m.displayName]));
+  const others = userIds.filter((id) => id !== meId).map((id) => nameOf.get(id) ?? "Someone");
+  return meId != null && userIds.includes(meId) ? ["You", ...others] : others;
+}
+
+/**
+ * FC4 — the messages payload's member shape: FC3's mention-chip trio plus the
+ * member's read cursor. `lastReadAt` is the CURSOR MESSAGE's timestamp,
+ * server-resolved, so the client can seat a receipt even when the cursor
+ * points at a thread reply that never appears in the main stream.
+ */
+export type SpaceMember = MentionMember & {
+  lastReadMessageId: string | null;
+  lastReadAt: string | null;
+};
+
+export type ReceiptReader = { id: string; name: string };
+
+/**
+ * The Google read-receipt rule, pure: each OTHER member's avatar sits under
+ * the LAST main-stream message they have read. Placement: the cursor message
+ * itself when it is in the window; otherwise the newest loaded message with
+ * createdAt ≤ the cursor's timestamp (cursor-on-thread-reply, or same-stream
+ * older edits). A cursor older than the loaded window renders nothing (their
+ * position is off-screen); no cursor renders nothing. Own avatar never shows
+ * to self. Pending optimistic rows are never placement targets.
+ */
+export function buildReceiptMap(
+  messages: StreamMessage[],
+  members: SpaceMember[],
+  meId: string | null,
+): Map<string, ReceiptReader[]> {
+  const map = new Map<string, ReceiptReader[]>();
+  if (messages.length === 0) return map;
+  const idIndex = new Map<string, number>();
+  messages.forEach((m, i) => {
+    if (!m.pending) idIndex.set(m.id, i);
+  });
+  for (const member of members) {
+    if (member.id === meId || !member.lastReadMessageId) continue;
+    let idx = idIndex.get(member.lastReadMessageId) ?? -1;
+    if (idx < 0 && member.lastReadAt) {
+      const at = new Date(member.lastReadAt).getTime();
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const m = messages[i];
+        if (m.pending) continue;
+        if (new Date(m.createdAt).getTime() <= at) {
+          idx = i;
+          break;
+        }
+      }
+    }
+    if (idx < 0) continue;
+    const target = messages[idx];
+    const list = map.get(target.id) ?? [];
+    list.push({ id: member.id, name: member.displayName });
+    map.set(target.id, list);
+  }
+  return map;
+}
+
+export const RECEIPT_STACK_MAX = 5;
+
+/** stack up to 5 reader avatars; the rest collapse into "+N" */
+export function receiptStack(
+  readers: ReceiptReader[],
+  max: number = RECEIPT_STACK_MAX,
+): { shown: ReceiptReader[]; extra: number } {
+  return readers.length <= max
+    ? { shown: readers, extra: 0 }
+    : { shown: readers.slice(0, max), extra: readers.length - max };
+}
+
+// typing — ephemeral client state (nothing persists; see events.ts publishEphemeral)
+
+export type Typist = { userId: string; name: string; at: number };
+
+/** an indicator older than this is a lie — fade it */
+export const TYPING_TTL_MS = 4_000;
+/** the composer publishes at most one typing ping per this window */
+export const TYPING_THROTTLE_MS = 2_000;
+
+/** a fresh typing ping replaces the user's entry and prunes the stale in one pass */
+export function typingUpsert(list: Typist[], entry: { userId: string; name: string }, nowMs: number): Typist[] {
+  const fresh = list.filter((t) => t.userId !== entry.userId && nowMs - t.at < TYPING_TTL_MS);
+  return [...fresh, { userId: entry.userId, name: entry.name, at: nowMs }];
+}
+
+/** drop expired typists; returns the SAME reference when nothing expired (render stability) */
+export function typingPrune(list: Typist[], nowMs: number): Typist[] {
+  if (!list.some((t) => nowMs - t.at >= TYPING_TTL_MS)) return list;
+  return list.filter((t) => nowMs - t.at < TYPING_TTL_MS);
+}
+
+/** "Marco is typing…" · "Marco and Anna are typing…" · "+N more"; self excluded; null = show nothing */
+export function typingLabel(list: Typist[], meId: string | null): string | null {
+  const others = list.filter((t) => t.userId !== meId);
+  if (others.length === 0) return null;
+  const names = others.map((t) => t.name.trim().split(/\s+/)[0] || "Someone");
+  if (names.length === 1) return `${names[0]} is typing…`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} are typing…`;
+  return `${names[0]}, ${names[1]} and ${names.length - 2} more are typing…`;
+}
+
+/** the composer-side throttle gate (≤1 publish per TYPING_THROTTLE_MS) */
+export function shouldPublishTyping(lastSentAt: number, nowMs: number): boolean {
+  return nowMs - lastSentAt >= TYPING_THROTTLE_MS;
+}
+
+/**
+ * Fold a chat.presence payload into the online set: `{online: string[]}` is
+ * deduped + sorted (stable renders); anything malformed returns the CURRENT
+ * set unchanged — a junk event must never blank every green dot.
+ */
+export function foldPresence(current: string[], payload: unknown): string[] {
+  if (!payload || typeof payload !== "object") return current;
+  const raw = (payload as { online?: unknown }).online;
+  if (!Array.isArray(raw)) return current;
+  return [...new Set(raw.filter((v): v is string => typeof v === "string" && v.length > 0))].sort();
+}
 
 // ── avatars ──────────────────────────────────────────────────────
 

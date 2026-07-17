@@ -5,8 +5,11 @@
  * FC3 — thread summaries on roots, the bounded members payload the mention
  * chips resolve against, followed threads on the spaces payload, and the
  * thread panel's own response shape.
+ * FC4 — members carry read cursors (SpaceMember), messages carry reactions
+ * (always did — FC1 provisioned them; FC4 renders them), spaces carry
+ * onlineOthers for the rail's presence dot.
  */
-import type { FollowedThread, MentionMember, ThreadSummary } from "@/lib/chat/ui";
+import type { FollowedThread, Reaction, SpaceMember, ThreadSummary } from "@/lib/chat/ui";
 
 export type SpaceItem = {
   id: string;
@@ -19,6 +22,8 @@ export type SpaceItem = {
   notifyLevel: "ALL" | "MENTIONS" | "OFF";
   lastReadMessageId: string | null;
   unread: number;
+  /** FC4 — other members of this space currently online (rail presence dot) */
+  onlineOthers: number;
   memberCount: number;
   lastMessage: {
     id: string;
@@ -45,7 +50,7 @@ export type ApiMessage = {
   editedAt: string | null;
   deletedAt: string | null;
   createdAt: string;
-  reactions: { userId: string; emoji: string }[];
+  reactions: Reaction[];
   /** FC3 — present on main-stream roots that have replies */
   thread?: ThreadSummary | null;
 };
@@ -53,8 +58,8 @@ export type ApiMessage = {
 export type MessagesResponse = {
   items: ApiMessage[];
   window: { before: string | null; take: number };
-  /** FC3 — bounded space membership for mention-chip resolution */
-  members: MentionMember[];
+  /** FC3 — bounded space membership for mention-chip resolution; FC4 — + read cursors */
+  members: SpaceMember[];
 };
 
 /** FC3 — GET /api/chat/spaces/[id]/threads/[rootId] */

@@ -19,12 +19,15 @@ export function Composer({
   canPost,
   onSend,
   placeholder = "Message the space — @ to mention…",
+  onTyping,
 }: {
   /** draft scope — a new key starts a fresh draft (space id, or space+thread in the FC3 panel) */
   composerKey: string;
   canPost: boolean;
   onSend: (body: string) => Promise<boolean>;
   placeholder?: string;
+  /** FC4 — fires on every keystroke with content; the PARENT throttles + publishes (≤1/2s) */
+  onTyping?: () => void;
 }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -69,7 +72,10 @@ export function Composer({
       <MentionTextarea
         key={composerKey} /* a fresh space (or thread) starts a fresh draft */
         value={text}
-        onChange={setText}
+        onChange={(v: string) => {
+          setText(v);
+          if (v.trim()) onTyping?.(); // FC4 — typing signal (parent-throttled, ephemeral)
+        }}
         loader={loader}
         rows={2}
         placeholder={placeholder}

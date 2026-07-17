@@ -6,6 +6,9 @@
  * persists in localStorage and rides `?sinceId=` (plus the browser's native
  * Last-Event-ID on auto-reconnect); a server `resync` event fires every
  * subscriber immediately (their callbacks refetch — that IS the resync).
+ * FC4 amendment: subscribers now receive the parsed event object (existing
+ * refetch-style callers ignore it) and useFactoryEventData exposes it for
+ * the ephemeral chat.typing / chat.presence types.
  */
 "use client";
 
@@ -14,9 +17,13 @@ import type { FactoryEventType } from "@/lib/events";
 
 const LAST_ID_KEY = "factory.events.lastId.v2";
 
+/** FC4 — the wire shape a payload subscriber receives (parsed SSE data) */
+export type FactoryEventData = { type: FactoryEventType; id?: number; payload?: Record<string, unknown> };
+
 type Subscriber = {
   types: Set<FactoryEventType>;
-  fire: () => void;
+  /** refetch-style subscribers ignore the arg; FC4 payload subscribers read it */
+  fire: (event?: FactoryEventData) => void;
 };
 
 type Manager = {
@@ -40,9 +47,9 @@ function recordId(id: number): void {
   }
 }
 
-function dispatchToSubs(type: FactoryEventType): void {
+function dispatchToSubs(type: FactoryEventType, event?: FactoryEventData): void {
   for (const sub of manager().subscribers) {
-    if (type === "resync" || sub.types.has(type)) sub.fire();
+    if (type === "resync" || sub.types.has(type)) sub.fire(event);
   }
 }
 
@@ -52,7 +59,7 @@ const ALL_TYPES: FactoryEventType[] = [
   "pricing.updated", "order.updated", "workorder.created", "workorder.updated",
   "shipment.updated", "payment.recorded", "integration.changed", "import.finished",
   "party.updated", "certificate.updated", "team.updated", "settings.updated",
-  "chat.message", "chat.space", "resync",
+  "chat.message", "chat.space", "chat.typing", "chat.presence", "resync", // chat.typing/presence: FC4 ephemerals
 ];
 
 function ensureSource(): void {
@@ -69,9 +76,9 @@ function ensureSource(): void {
     m.source = source;
     for (const type of ALL_TYPES) {
       source.addEventListener(type, (e) => {
-        const data = JSON.parse((e as MessageEvent).data) as { id?: number };
-        recordId(data.id ?? 0);
-        dispatchToSubs(type);
+        const data = JSON.parse((e as MessageEvent).data) as FactoryEventData;
+        recordId(data.id ?? 0); // ephemeral events carry id 0 — recordId ignores them
+        dispatchToSubs(type, data);
       });
     }
     // pings are liveness only — ids are the resume cursor now; native
@@ -118,4 +125,40 @@ export function useFactoryEvents(
       releaseSourceIfIdle();
     };
   }, [key, debounceMs, enabled]);
+}
+
+/**
+ * FC4 — payload-carrying subscription for the EPHEMERAL event types
+ * (chat.typing / chat.presence): no debounce (an indicator that arrives late
+ * is a lie), the parsed event object reaches the callback so there is nothing
+ * to refetch — by design, since ephemeral events have no DB row behind them.
+ * A server `resync` still fires every subscriber (event.type === "resync");
+ * callers that seeded state from a GET should re-seed on it. Refetch-style
+ * consumers stay on useFactoryEvents — this hook is for payloads only.
+ */
+export function useFactoryEventData(
+  types: FactoryEventType[],
+  onEvent: (event: FactoryEventData) => void,
+  opts?: { enabled?: boolean },
+) {
+  const cb = useRef(onEvent);
+  cb.current = onEvent;
+  const enabled = opts?.enabled ?? true;
+  const key = types.join(",");
+
+  useEffect(() => {
+    if (!enabled || typeof window === "undefined" || !("EventSource" in window)) return;
+    const sub: Subscriber = {
+      types: new Set(key.split(",") as FactoryEventType[]),
+      fire: (event) => {
+        if (event) cb.current(event);
+      },
+    };
+    manager().subscribers.add(sub);
+    ensureSource();
+    return () => {
+      manager().subscribers.delete(sub);
+      releaseSourceIfIdle();
+    };
+  }, [key, enabled]);
 }
