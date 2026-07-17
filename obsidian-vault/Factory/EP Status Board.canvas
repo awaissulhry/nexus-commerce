@@ -1,204 +1,204 @@
 {
-	"nodes": [
-		{
-			"id": "title",
-			"type": "text",
-			"x": 0,
-			"y": -360,
-			"width": 2240,
-			"height": 140,
-			"text": "# EP Status Board \u2014 snapshot 2026-07-17\nSource of truth: `docs/factory/ENTERPRISE-PROGRAM.md` (registry). **Any session that changes its page's status moves its card here and updates [[F06 - Enterprise Program (EP)]].** Gates awaiting the Owner: [[F09 - Roadmap & Owner Gates]]."
-		},
-		{
-			"id": "h1",
-			"type": "text",
-			"x": 0,
-			"y": -160,
-			"width": 480,
-			"height": 100,
-			"text": "## \u26aa OPEN \u2014 unclaimed\nNext session: read PLAYBOOK \u2192 claim row \u2192 research standard"
-		},
-		{
-			"id": "h2",
-			"type": "text",
-			"x": 560,
-			"y": -160,
-			"width": 480,
-			"height": 100,
-			"color": "3",
-			"text": "## \ud83d\udfe1 AWAITING OWNER GATE\nProposal + UI inventory delivered"
-		},
-		{
-			"id": "h3",
-			"type": "text",
-			"x": 1120,
-			"y": -160,
-			"width": 480,
-			"height": 100,
-			"color": "4",
-			"text": "## \ud83d\udd28 BUILDING / NEXT UP\nApproved and moving"
-		},
-		{
-			"id": "h4",
-			"type": "text",
-			"x": 1680,
-			"y": -160,
-			"width": 480,
-			"height": 100,
-			"color": "5",
-			"text": "## \u2705 SHIPPED\nBase + substrate"
-		},
-		{
-			"id": "o1",
-			"type": "file",
-			"x": 0,
-			"y": 0,
-			"width": 480,
-			"height": 300,
-			"file": "Factory/F13 - Production (EPP).md"
-		},
-		{
-			"id": "o2",
-			"type": "file",
-			"x": 0,
-			"y": 340,
-			"width": 480,
-			"height": 300,
-			"file": "Factory/F14 - Materials (EPM).md"
-		},
-		{
-			"id": "o3",
-			"type": "file",
-			"x": 0,
-			"y": 680,
-			"width": 480,
-			"height": 300,
-			"file": "Factory/F15 - Products & Pricing (EPD).md"
-		},
-		{
-			"id": "o4",
-			"type": "file",
-			"x": 0,
-			"y": 1020,
-			"width": 480,
-			"height": 300,
-			"file": "Factory/F16 - Contacts (EPC).md"
-		},
-		{
-			"id": "o5",
-			"type": "file",
-			"x": 0,
-			"y": 1360,
-			"width": 480,
-			"height": 300,
-			"file": "Factory/F17 - Shipping (EPS).md"
-		},
-		{
-			"id": "o6",
-			"type": "file",
-			"x": 0,
-			"y": 1700,
-			"width": 480,
-			"height": 300,
-			"file": "Factory/F19 - Analytics (EPA).md"
-		},
-		{
-			"id": "o7",
-			"type": "file",
-			"x": 0,
-			"y": 2040,
-			"width": 480,
-			"height": 300,
-			"file": "Factory/F20 - Settings & Team (EPT).md"
-		},
-		{
-			"id": "g1",
-			"type": "file",
-			"x": 1120,
-			"y": 1020,
-			"width": 480,
-			"height": 300,
-			"color": "4",
-			"file": "Factory/F10 - Inbox (EPI).md"
-		},
-		{
-			"id": "g2",
-			"type": "file",
-			"x": 1120,
-			"y": 1360,
-			"width": 480,
-			"height": 300,
-			"color": "3",
-			"file": "Factory/F12 - Orders (EPO).md"
-		},
-		{
-			"id": "g3",
-			"type": "file",
-			"x": 1120,
-			"y": 1700,
-			"width": 480,
-			"height": 300,
-			"color": "4",
-			"file": "Factory/F18 - Financials (EPF).md"
-		},
-		{
-			"id": "g4",
-			"type": "text",
-			"x": 560,
-			"y": 1020,
-			"width": 480,
-			"height": 300,
-			"color": "3",
-			"text": "### Also awaiting the Owner\n- \u26a0 RESTART the :3100 dev server (migrations from EPI/EPO/EPQ/EPF/FS5 builds \u2014 trap 6b; FS5's `fs5_fts` also needs `db:migrate` in the merging session)\n- Click-throughs: EPQ.1-.3 \u00b7 EPI.1 \u00b7 EPO.1/.3/.2 \u00b7 EPF.1 (reports each)\n- FP11 gate steps: flip RBAC `enforce` \u00b7 settle WhatsApp (FD5)\n- FD13 deposit defaults \u00b7 Sendcloud live probe (FD6)\n- FS4 spec gate"
-		},
-		{
-			"id": "b1",
-			"type": "file",
-			"x": 1120,
-			"y": 0,
-			"width": 480,
-			"height": 300,
-			"color": "4",
-			"file": "Factory/F11 - Quotes (EPQ).md"
-		},
-		{
-			"id": "b2",
-			"type": "file",
-			"x": 1120,
-			"y": 340,
-			"width": 480,
-			"height": 300,
-			"file": "Factory/F21 - Chat & Order Spaces (FC).md"
-		},
-		{
-			"id": "b3",
-			"type": "text",
-			"x": 1120,
-			"y": 680,
-			"width": 480,
-			"height": 220,
-			"text": "### In-page substrate adoptions (owned by page sessions)\n- EPI: windowing + panes + MentionTextarea\n- EPO: orders grid (EPO.7)\n- EPQ: quotes grid + party picker \u2705 (EPQ.3, 2026-07-17)\n- EPF: financials grids \u00d73 (EPF.2)"
-		},
-		{
-			"id": "s1",
-			"type": "file",
-			"x": 1680,
-			"y": 0,
-			"width": 480,
-			"height": 300,
-			"color": "5",
-			"file": "Factory/F22 - Substrate FS Series.md"
-		},
-		{
-			"id": "s2",
-			"type": "text",
-			"x": 1680,
-			"y": 340,
-			"width": 480,
-			"height": 300,
-			"color": "5",
-			"text": "### Shipped history\n- **FP1\u2013FP11**: all 11 pages, golden flow closed end-to-end (2026-07-06)\n- **FS0+FS1**: harness + query hygiene \u00b7 **FS2**: SSE \u00b7 **FS3**: virtualization (2026-07-11) \u00b7 **FS5**: FTS5 search + streaming + snapshot/archival (07-17, migration authored not applied)\n- **EPQ.1**: quote lifecycle (07-11) \u00b7 **EPQ.2**: silence-killer (07-16) \u00b7 **EPQ.3**: pricing discipline (07-17)\n- **EPI.1**: inbox correctness core (07-16)\n- **EPO.1/.3/.2**: transition-service \u00b7 connected order \u00b7 money strip (07-16/17)\n- **EPF.1**: money-truth repairs \u2014 3 P0 money bugs dead, parity 10/10 at 50k (07-17)"
-		}
-	],
-	"edges": []
+ "nodes": [
+  {
+   "id": "title",
+   "type": "text",
+   "x": 0,
+   "y": -360,
+   "width": 2240,
+   "height": 140,
+   "text": "# EP Status Board — snapshot 2026-07-17\nSource of truth: `docs/factory/ENTERPRISE-PROGRAM.md` (registry). **Any session that changes its page's status moves its card here and updates [[F06 - Enterprise Program (EP)]].** Gates awaiting the Owner: [[F09 - Roadmap & Owner Gates]]."
+  },
+  {
+   "id": "h1",
+   "type": "text",
+   "x": 0,
+   "y": -160,
+   "width": 480,
+   "height": 100,
+   "text": "## ⚪ OPEN — unclaimed\nNext session: read PLAYBOOK → claim row → research standard"
+  },
+  {
+   "id": "h2",
+   "type": "text",
+   "x": 560,
+   "y": -160,
+   "width": 480,
+   "height": 100,
+   "color": "3",
+   "text": "## 🟡 AWAITING OWNER GATE\nProposal + UI inventory delivered"
+  },
+  {
+   "id": "h3",
+   "type": "text",
+   "x": 1120,
+   "y": -160,
+   "width": 480,
+   "height": 100,
+   "color": "4",
+   "text": "## 🔨 BUILDING / NEXT UP\nApproved and moving"
+  },
+  {
+   "id": "h4",
+   "type": "text",
+   "x": 1680,
+   "y": -160,
+   "width": 480,
+   "height": 100,
+   "color": "5",
+   "text": "## ✅ SHIPPED\nBase + substrate"
+  },
+  {
+   "id": "o1",
+   "type": "file",
+   "x": 0,
+   "y": 0,
+   "width": 480,
+   "height": 300,
+   "file": "Factory/F13 - Production (EPP).md"
+  },
+  {
+   "id": "o2",
+   "type": "file",
+   "x": 0,
+   "y": 340,
+   "width": 480,
+   "height": 300,
+   "file": "Factory/F14 - Materials (EPM).md"
+  },
+  {
+   "id": "o3",
+   "type": "file",
+   "x": 0,
+   "y": 680,
+   "width": 480,
+   "height": 300,
+   "file": "Factory/F15 - Products & Pricing (EPD).md"
+  },
+  {
+   "id": "o4",
+   "type": "file",
+   "x": 0,
+   "y": 1020,
+   "width": 480,
+   "height": 300,
+   "file": "Factory/F16 - Contacts (EPC).md"
+  },
+  {
+   "id": "o5",
+   "type": "file",
+   "x": 0,
+   "y": 1360,
+   "width": 480,
+   "height": 300,
+   "file": "Factory/F17 - Shipping (EPS).md"
+  },
+  {
+   "id": "o6",
+   "type": "file",
+   "x": 0,
+   "y": 1700,
+   "width": 480,
+   "height": 300,
+   "file": "Factory/F19 - Analytics (EPA).md"
+  },
+  {
+   "id": "o7",
+   "type": "file",
+   "x": 0,
+   "y": 2040,
+   "width": 480,
+   "height": 300,
+   "file": "Factory/F20 - Settings & Team (EPT).md"
+  },
+  {
+   "id": "g1",
+   "type": "file",
+   "x": 1120,
+   "y": 1020,
+   "width": 480,
+   "height": 300,
+   "color": "4",
+   "file": "Factory/F10 - Inbox (EPI).md"
+  },
+  {
+   "id": "g2",
+   "type": "file",
+   "x": 1120,
+   "y": 1360,
+   "width": 480,
+   "height": 300,
+   "color": "3",
+   "file": "Factory/F12 - Orders (EPO).md"
+  },
+  {
+   "id": "g3",
+   "type": "file",
+   "x": 1120,
+   "y": 1700,
+   "width": 480,
+   "height": 300,
+   "color": "4",
+   "file": "Factory/F18 - Financials (EPF).md"
+  },
+  {
+   "id": "g4",
+   "type": "text",
+   "x": 560,
+   "y": 1020,
+   "width": 480,
+   "height": 300,
+   "color": "3",
+   "text": "### Also awaiting the Owner\n- ⚠ RESTART the :3100 dev server (migrations from EPI/EPO/EPQ/EPF/FS5 builds incl. epq4_cost_model — trap 6b; FS5's `fs5_fts` also needs `db:migrate` in the merging session)\n- Click-throughs: EPQ.1-.4 · EPI.1-.2 · EPO.1-.5/.7 · EPF.1-.2 (reports each)\n- FP11 gate steps: flip RBAC `enforce` · settle WhatsApp (FD5)\n- FD13 deposit defaults · Sendcloud live probe (FD6)"
+  },
+  {
+   "id": "b1",
+   "type": "file",
+   "x": 1120,
+   "y": 0,
+   "width": 480,
+   "height": 300,
+   "color": "4",
+   "file": "Factory/F11 - Quotes (EPQ).md"
+  },
+  {
+   "id": "b2",
+   "type": "file",
+   "x": 1120,
+   "y": 340,
+   "width": 480,
+   "height": 300,
+   "file": "Factory/F21 - Chat & Order Spaces (FC).md"
+  },
+  {
+   "id": "b3",
+   "type": "text",
+   "x": 1120,
+   "y": 680,
+   "width": 480,
+   "height": 220,
+   "text": "### In-page substrate adoptions (owned by page sessions)\n- EPI: windowing + panes + MentionTextarea\n- EPO: orders grid (EPO.7)\n- EPQ: quotes grid + party picker ✅ (EPQ.3, 2026-07-17)\n- EPF: financials grids ×3 (EPF.2)"
+  },
+  {
+   "id": "s1",
+   "type": "file",
+   "x": 1680,
+   "y": 0,
+   "width": 480,
+   "height": 300,
+   "color": "5",
+   "file": "Factory/F22 - Substrate FS Series.md"
+  },
+  {
+   "id": "s2",
+   "type": "text",
+   "x": 1680,
+   "y": 340,
+   "width": 480,
+   "height": 360,
+   "color": "5",
+   "text": "### Shipped history\n- **FP1–FP11**: all 11 pages, golden flow closed end-to-end (2026-07-06)\n- **FS0+FS1** harness · **FS2** SSE · **FS3** virtualization (07-11) · **FS4** write integrity · **FS5** FTS5/streaming/snapshots (07-17, migration authored not applied)\n- **EPQ.1-.5**: lifecycle · silence-killer · pricing · cost truth · Italy/EU acceptance (07-11→07-17)\n- **EPI.1-.2**: correctness core · files/lightbox (07-16/17)\n- **EPO.1-.5/.7**: transition-service · connected order · money strip · cockpit · amendments/returns · workbench (07-16/17)\n- **EPF.1-.2**: money-truth repairs + design-law rebuild — P0s dead, parity 10/10, 44/44 UI asserts (07-17)"
+  }
+ ],
+ "edges": []
 }

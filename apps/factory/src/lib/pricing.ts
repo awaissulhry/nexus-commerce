@@ -19,6 +19,18 @@
  * qty < moqQty, (c) a size surcharge when a parseable size option ≥ threshold
  * is selected — each a labeled "surcharge" waterfall row with its own
  * PriceSource (quantity-tier | moq | size-surcharge). Costs never change.
+ *
+ * EPQ.4 — structured cost model (dormant by default): when the template
+ * carries a consumption row matching the selection's size (exact sizeKey →
+ * null-size fallback) AND a leather €/m² rate is configured, the COST side
+ * stops being baseCost+option-deltas and becomes
+ *   material  = leatherSqm × (1 + wastagePct/100) × leatherCostCentsPerSqm
+ *   labor     = laborHours × laborRateCentsPerHour   (when both exist)
+ *   overhead  = overheadPct % of (material + labor)  (when configured)
+ * — each a labeled kind:"cost" waterfall row (Owner-only in the UI; routes
+ * drop them for callers without the costs grain). Price side untouched. With
+ * no consumption row or no leather rate (today's reality) the cost is
+ * byte-identical to the FP2 formula — parity asserted in tests.
  */
 
 export type DeltaMode = "ABSOLUTE" | "PERCENT";
@@ -60,6 +72,9 @@ export type EngineBomLine = { materialId: string; qty: number; unit: string };
 /** EPQ.3 — one quantity-break tier: the highest minQty ≤ qty applies. */
 export type QuantityBreakRule = { minQty: number; priceDeltaMode: DeltaMode; priceDelta: number };
 
+/** EPQ.4 — one consumption row: m² of leather per garment for a size (null = all sizes). */
+export type ConsumptionRule = { sizeKey: string | null; leatherSqm: number; wastagePct: number };
+
 export type EngineTemplate = {
   id: string;
   name: string;
@@ -73,6 +88,9 @@ export type EngineTemplate = {
   moqQty?: number | null;
   moqSurchargeMode?: DeltaMode;
   moqSurcharge?: number;
+  // EPQ.4 — structured cost model (all optional; absent = cost parity)
+  laborHours?: number | null;
+  consumption?: ConsumptionRule[];
 };
 
 /** A single sparse price-list override row (list.entry). */
@@ -95,10 +113,14 @@ export type PriceSource =
   // EPQ.3 — discipline rows (labeled in the waterfall + Price Source)
   | "quantity-tier"
   | "moq"
-  | "size-surcharge";
+  | "size-surcharge"
+  // EPQ.4 — structured cost rows (Owner-only; zero price contribution)
+  | "consumption-material"
+  | "labor"
+  | "overhead";
 
 export type WaterfallLine = {
-  kind: "base" | "option" | "surcharge";
+  kind: "base" | "option" | "surcharge" | "cost"; // EPQ.4 — "cost" rows carry the structured cost terms
   label: string;
   optionId?: string;
   priceCents: number; // contribution to list price
@@ -129,6 +151,8 @@ export type ComposeResult = {
   marginCents: number;
   marginPct: number;
   marginNegative: boolean;
+  /** EPQ.4 — true when the cost side came from the structured model (material+labor+overhead). */
+  structuredCost: boolean;
   lines: WaterfallLine[];
   materials: ComposedMaterial[];
   violations: Violation[];
@@ -137,6 +161,19 @@ export type ComposeResult = {
 
 /** EPQ.3 — measurement-surcharge rule (AppSetting quotes.measurementSurcharge). */
 export type SizeSurchargeRule = { sizeThreshold: number; mode: DeltaMode; value: number };
+
+/**
+ * EPQ.4 — global cost rates (AppSetting pricing.defaults, all optional). The
+ * structured cost model only ACTIVATES when leatherCostCentsPerSqm is a
+ * positive number AND the template has a matching consumption row — entering
+ * consumption rows alone (before the rates exist) must never collapse a
+ * template's cost to zero.
+ */
+export type CostRates = {
+  laborRateCentsPerHour?: number | null;
+  overheadPct?: number | null;
+  leatherCostCentsPerSqm?: number | null;
+};
 
 export type ComposeInput = {
   template: EngineTemplate;
@@ -147,6 +184,8 @@ export type ComposeInput = {
   qty?: number;
   /** EPQ.3 — size-threshold surcharge; applied only when a parseable size option ≥ threshold is selected. */
   sizeSurcharge?: SizeSurchargeRule | null;
+  /** EPQ.4 — cost rates; absent/null ⇒ the cost side stays baseCost+option-deltas exactly. */
+  costRates?: CostRates | null;
 };
 
 const percentOfBase = (basisPoints: number, baseCents: number): number =>
@@ -188,6 +227,89 @@ export function selectQuantityBreak(breaks: QuantityBreakRule[] | undefined, qty
   return best;
 }
 
+/**
+ * EPQ.4 — the consumption row the selection resolves to, with the size-key
+ * fallback chain: (1) a row whose sizeKey EXACTLY matches a selected option's
+ * name inside a size-named group ("XL" rows work), (2) a row whose sizeKey
+ * equals the parsed numeric size ("IT 58" selection → row "58"), (3) the
+ * null-size (all sizes) row, (4) none — the template stays on base+deltas.
+ */
+export function pickConsumption(template: EngineTemplate, selectedOptionIds: string[]): ConsumptionRule | null {
+  const rows = template.consumption ?? [];
+  if (rows.length === 0) return null;
+  const selected = new Set(selectedOptionIds);
+  const sizeNames: string[] = [];
+  for (const g of template.groups) {
+    if (!SIZE_GROUP_RE.test(g.name)) continue;
+    for (const o of g.options) if (selected.has(o.id)) sizeNames.push(o.name.trim().toLowerCase());
+  }
+  const exact = rows.find((r) => r.sizeKey != null && sizeNames.includes(r.sizeKey.trim().toLowerCase()));
+  if (exact) return exact;
+  const parsed = parseSizeFromSelection(template, selectedOptionIds);
+  if (parsed != null) {
+    const numeric = rows.find((r) => r.sizeKey != null && r.sizeKey.trim() === String(parsed));
+    if (numeric) return numeric;
+  }
+  return rows.find((r) => r.sizeKey == null) ?? null;
+}
+
+/** EPQ.4 — trim-zero number for cost-row labels ("2.4", "6", "15"). */
+const fmtNum = (n: number): string => String(Math.round(n * 100) / 100);
+
+export type StructuredCost = {
+  costCents: number;
+  materialCents: number;
+  laborCents: number;
+  overheadCents: number;
+  rows: WaterfallLine[];
+};
+
+/**
+ * EPQ.4 — the structured cost terms, or null when the model is dormant for
+ * this template+selection (no matching consumption row, or no leather €/m²
+ * rate). Material is the activation anchor; labor and overhead join only when
+ * their own inputs are configured.
+ */
+export function computeStructuredCost(
+  template: EngineTemplate,
+  selectedOptionIds: string[],
+  rates: CostRates | null | undefined,
+): StructuredCost | null {
+  const leatherRate = rates?.leatherCostCentsPerSqm;
+  if (leatherRate == null || !Number.isFinite(leatherRate) || leatherRate <= 0) return null;
+  const row = pickConsumption(template, selectedOptionIds);
+  if (!row || !Number.isFinite(row.leatherSqm) || row.leatherSqm <= 0) return null;
+
+  const wastagePct = Number.isFinite(row.wastagePct) && row.wastagePct > 0 ? row.wastagePct : 0;
+  const materialCents = Math.round(row.leatherSqm * (1 + wastagePct / 100) * leatherRate);
+
+  const hours = template.laborHours;
+  const laborRate = rates?.laborRateCentsPerHour;
+  const laborActive = hours != null && Number.isFinite(hours) && hours > 0 && laborRate != null && Number.isFinite(laborRate) && laborRate > 0;
+  const laborCents = laborActive ? Math.round(hours * laborRate) : 0;
+
+  const overheadPct = rates?.overheadPct;
+  const overheadActive = overheadPct != null && Number.isFinite(overheadPct) && overheadPct > 0;
+  const overheadCents = overheadActive ? Math.round((materialCents + laborCents) * (overheadPct / 100)) : 0;
+
+  const rows: WaterfallLine[] = [
+    {
+      kind: "cost",
+      label: `Material (${fmtNum(row.leatherSqm)} m²${wastagePct > 0 ? ` +${fmtNum(wastagePct)}% waste` : ""})`,
+      priceCents: 0,
+      costCents: materialCents,
+      source: "consumption-material",
+    },
+  ];
+  if (laborActive) {
+    rows.push({ kind: "cost", label: `Labor (${fmtNum(hours)}h × €${(laborRate / 100).toFixed(2)})`, priceCents: 0, costCents: laborCents, source: "labor" });
+  }
+  if (overheadActive && overheadCents !== 0) {
+    rows.push({ kind: "cost", label: `Overhead ${fmtNum(overheadPct)}%`, priceCents: 0, costCents: overheadCents, source: "overhead" });
+  }
+  return { costCents: materialCents + laborCents + overheadCents, materialCents, laborCents, overheadCents, rows };
+}
+
 function indexListEntries(list: PriceListInput) {
   const baseOverride = new Map<string, number>(); // templateId → basePriceCents
   const optionOverride = new Map<string, { mode: DeltaMode; delta: number }>(); // optionId → override
@@ -205,7 +327,7 @@ function indexListEntries(list: PriceListInput) {
 
 /** The heart. Deterministic, integer cents, no side effects. */
 export function compose(input: ComposeInput): ComposeResult {
-  const { template, selectedOptionIds, priceList = null, adjustmentCents = 0, qty = 1, sizeSurcharge = null } = input;
+  const { template, selectedOptionIds, priceList = null, adjustmentCents = 0, qty = 1, sizeSurcharge = null, costRates = null } = input;
   const selected = new Set(selectedOptionIds);
   const { baseOverride, optionOverride } = indexListEntries(priceList);
 
@@ -286,7 +408,22 @@ export function compose(input: ComposeInput): ComposeResult {
   }
 
   const listPriceCents = resolvedBaseCents + priceAbs + pricePct + disciplineCents;
-  const costCents = template.baseCostCents + costAbs + costPct;
+
+  // ── EPQ.4 structured cost: when a consumption row matches the selection AND
+  // the leather rate exists, material+labor+overhead REPLACE the base+delta
+  // cost side; the labeled kind:"cost" rows then carry the whole cost (base/
+  // option rows' cost contributions are zeroed so the cost column still sums
+  // to costCents). Dormant (today's reality) ⇒ byte-identical to FP2. ──
+  const structured = computeStructuredCost(template, selectedOptionIds, costRates);
+  let costCents: number;
+  if (structured) {
+    for (const l of lines) l.costCents = 0;
+    lines.push(...structured.rows);
+    costCents = structured.costCents;
+  } else {
+    costCents = template.baseCostCents + costAbs + costPct;
+  }
+
   const netPriceCents = listPriceCents + adjustmentCents;
   const marginCents = netPriceCents - costCents;
   const marginPct = netPriceCents === 0 ? 0 : (marginCents / netPriceCents) * 100;
@@ -335,6 +472,7 @@ export function compose(input: ComposeInput): ComposeResult {
     marginCents,
     marginPct,
     marginNegative: marginCents < 0,
+    structuredCost: structured != null, // EPQ.4
     lines,
     materials: [...materialMap.values()],
     violations,

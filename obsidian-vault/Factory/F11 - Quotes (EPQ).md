@@ -1,7 +1,7 @@
 # F11 - Quotes (EPQ)
 
-> **Route:** `/quotes` · **EP code:** EPQ · **Status:** 🔨 EPQ.1+.2+.3 **SHIPPED** (reports `EPQ1/EPQ2/EPQ3-REPORT.md`) — EPQ.5 next per the recommended order. ⚠ Owner: restart :3100 + `db:migrate` (`epq3_pricing_discipline` authored, NOT applied). First page of the program; its proposal is Owner-approved ("proceed with all of it").
-> Canonical docs: `docs/factory/EPQ-PROPOSAL.md` · `EPQ-UI-INVENTORY.md` · `EPQ1-REPORT.md` · `EPQ2-REPORT.md` · `EPQ3-REPORT.md` · base: `FP3-SPEC.md`/`FP3-REPORT.md`
+> **Route:** `/quotes` · **EP code:** EPQ · **Status:** 🔨 EPQ.1+.2+.3+.4 **SHIPPED** (reports `EPQ1…EPQ4-REPORT.md`; .4 ships DORMANT — wakes as the Owner enters consumption + rates) — EPQ.5 next, then .6. ⚠ Owner: restart :3100 + `db:migrate` (`epq4_cost_model` authored NOT applied; `epq3_pricing_discipline` too if not yet run). First page of the program; its proposal is Owner-approved ("proceed with all of it").
+> Canonical docs: `docs/factory/EPQ-PROPOSAL.md` · `EPQ-UI-INVENTORY.md` · `EPQ1-REPORT.md` · `EPQ2-REPORT.md` · `EPQ3-REPORT.md` · `EPQ4-REPORT.md` · base: `FP3-SPEC.md`/`FP3-REPORT.md`
 
 Part of [[F00 - Factory OS MOC]] · flow position: [[F01 - Mission & Golden Flow]] step 2 · program: [[F06 - Enterprise Program (EP)]]
 
@@ -16,7 +16,7 @@ The factory's **money mouth**: turns a matched [[F10 - Inbox (EPI)]] conversatio
 | EPQ.1 | Lifecycle closed & audited — server-enforced transition map (422+audit), auto-EXPIRE tick + Expired tab, supersede tokens, SENT field-guard, persisted floor-ack, before/after money audit, 4-row waterfall, bulk mark-lost | ✅ SHIPPED (kills S1-S5, S8) |
 | EPQ.2 | No offer dies of silence — public view tracking, accept/reject/convert notifications, follow-up **Owner task queue** (Italian one-click nudges into the Gmail thread) | ✅ SHIPPED 2026-07-16 |
 | EPQ.3 | Pricing discipline — goal-seek in rail (net⇄margin solves the active line's adjustment, reason auto-focused), qty-break tiers + below-MOQ surcharge, measurement (size) surcharge, discount reason codes, size-run matrix (BRAND), duplicate-open-quote banner, repeat chip + clickable similar quotes, FS3 grid+picker adoption | ✅ SHIPPED 2026-07-17 (handoffs: EPD tier/MOQ editor · EPA by-code tally) |
-| EPQ.4 | Cost truth & honest promises — structured cost model (leather m² + wastage, labor, overhead), quote-vs-actual loop from FP6 ledger, CTP-lite promise, convert freezes FULL config spec | ⚪ |
+| EPQ.4 | Cost truth & honest promises — structured cost model (leather m²×size + wastage, labor h × rate, overhead % — labeled Owner-only cost rows; DORMANT until consumption + rates entered, parity-tested), quote-vs-actual loop from the FP6 ledger (similar rows + converted editor + "last time" recall hint; SHIPPED-gated), CTP-lite promise suggestion "3w base + 1.6w backlog + 2w leather" with Apply (never auto-writes) | ✅ SHIPPED 2026-07-17 (handoff: EPD costing editor + rates surface — APIs live; leftovers for a later gate: convert FULL-spec freeze doc, promise backtest) |
 | EPQ.5 | Acceptance that stands up (Italy/EU) — B2C gross-price fix, tax modes, VIES-gated zero-rating, SDI fields, deposit legal enum, acceptance-evidence bundle, Stripe deposit-on-accept | ⚪ |
 | EPQ.6 | Pipeline command center — revision diff, clone-as-draft, per-quote KPIs, saved views | ⚪ |
 

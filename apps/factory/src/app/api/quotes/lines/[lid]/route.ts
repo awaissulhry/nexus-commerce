@@ -15,6 +15,7 @@ import { audit } from "@/lib/audit";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 import { composeQuoteLine } from "@/lib/quotes/compose-line";
+import { canSeeCosts, dropCostRows } from "@/lib/quotes/cost-model"; // EPQ.4
 import { ADJUSTMENT_REASON_CODES } from "@/lib/quotes/reason-codes";
 import { cleanSizeRun, readSelections, sizeRunTotal, writeSelections } from "@/lib/quotes/selections";
 
@@ -90,7 +91,8 @@ export const PATCH = guarded(FEATURES.quotesCreate, async (req, { params, actor,
     before: { lineId: lid, netPriceCents: line.netPriceCents, costCents: line.costCents, adjustmentCents: line.adjustmentCents, qty: line.qty, adjustmentReasonCode: line.adjustmentReasonCode },
     after: { lineId: lid, netPriceCents: updated.netPriceCents, costCents: updated.costCents, adjustmentCents: updated.adjustmentCents, qty: updated.qty, adjustmentReasonCode: updated.adjustmentReasonCode },
   });
-  return jsonStripped({ line: updated, result }, resolved);
+  // EPQ.4 — cost rows are Owner-only (labels carry rates)
+  return jsonStripped({ line: updated, result: dropCostRows(result, canSeeCosts(resolved)) }, resolved);
 });
 
 export const DELETE = guarded(FEATURES.quotesCreate, async (_req, { params, actor }) => {
