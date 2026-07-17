@@ -22,6 +22,7 @@ import { quoteTotals } from "@/lib/quotes/compose-line";
 import { canTransition, lostReasonAllowed, type QuoteState } from "@/lib/quotes/transitions";
 import { findDuplicateOpenQuote } from "@/lib/quotes/duplicate";
 import { notifyOwners } from "@/lib/quotes/notify-owners";
+import { naturaForMode, type TaxMode } from "@/lib/quotes/tax";
 
 export const permission = { GET: PAGES.quotes, PATCH: FEATURES.quotesCreate, DELETE: FEATURES.quotesCreate };
 
@@ -30,7 +31,8 @@ export const GET = guarded(PAGES.quotes, async (_req, { params, resolved }) => {
   const quote = await prisma.quote.findUnique({
     where: { id },
     include: {
-      party: { select: { id: true, name: true, kind: true, paymentTerms: true, priceListId: true, priceList: { select: { name: true } } } },
+      // EPQ.5 — taxMode/vatNumber/vies* feed the rail's Tax & legal card
+      party: { select: { id: true, name: true, kind: true, paymentTerms: true, priceListId: true, priceList: { select: { name: true } }, taxMode: true, vatNumber: true, viesRequestId: true, viesCheckedAt: true } },
       conversation: { select: { id: true, subject: true } },
       lines: { orderBy: { id: "asc" }, include: { template: { select: { id: true, name: true } } } },
       versions: { orderBy: { version: "desc" }, select: { id: true, version: true, pdfRef: true, sentAt: true } },
@@ -65,6 +67,10 @@ const Patch = z.object({
   validUntilAt: z.string().datetime().nullable().optional(),
   state: z.enum(["DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED"]).optional(),
   lostReason: z.string().max(500).nullable().optional(),
+  // EPQ.5 — compliance fields (DRAFT-only, like deposit/dates)
+  taxMode: z.enum(["IT_B2C", "IT_B2B", "EU_B2B", "EXTRA_EU"]).optional(),
+  depositKind: z.enum(["ACCONTO", "CAPARRA_CONFIRMATORIA"]).optional(),
+  validityWording: z.enum(["REVOCABLE", "IRREVOCABLE"]).optional(),
 });
 
 export const PATCH = guarded(FEATURES.quotesCreate, async (req: NextRequest, { params, actor, resolved }) => {
@@ -89,7 +95,10 @@ export const PATCH = guarded(FEATURES.quotesCreate, async (req: NextRequest, { p
 
   // EPQ.1 — field guards: deposit/dates only exist on a draft (lines are
   // frozen elsewhere; these were the raw-API leak); lostReason only on a loss.
-  const touchesDraftOnly = parsed.data.depositPct !== undefined || parsed.data.validUntilAt !== undefined || parsed.data.promiseDateAt !== undefined;
+  // EPQ.5 — tax mode / deposit kind / validity wording join the same guard.
+  const touchesDraftOnly =
+    parsed.data.depositPct !== undefined || parsed.data.validUntilAt !== undefined || parsed.data.promiseDateAt !== undefined ||
+    parsed.data.taxMode !== undefined || parsed.data.depositKind !== undefined || parsed.data.validityWording !== undefined;
   if (touchesDraftOnly && from !== "DRAFT") {
     return NextResponse.json({ error: `Deposit and dates are locked on a ${from.toLowerCase()} quote — Revise it to a draft first` }, { status: 422 });
   }
@@ -102,6 +111,13 @@ export const PATCH = guarded(FEATURES.quotesCreate, async (req: NextRequest, { p
   if (parsed.data.promiseDateAt !== undefined) data.promiseDateAt = parsed.data.promiseDateAt ? new Date(parsed.data.promiseDateAt) : null;
   if (parsed.data.validUntilAt !== undefined) data.validUntilAt = parsed.data.validUntilAt ? new Date(parsed.data.validUntilAt) : null;
   if (parsed.data.lostReason !== undefined) data.lostReason = parsed.data.lostReason;
+  // EPQ.5 — the natura code (downstream EPF invoicing) tracks the tax mode
+  if (parsed.data.taxMode !== undefined) {
+    data.taxMode = parsed.data.taxMode;
+    data.naturaCode = naturaForMode(parsed.data.taxMode as TaxMode);
+  }
+  if (parsed.data.depositKind !== undefined) data.depositKind = parsed.data.depositKind;
+  if (parsed.data.validityWording !== undefined) data.validityWording = parsed.data.validityWording;
   if (to) data.state = to;
 
   const quote = await prisma.quote.update({ where: { id }, data });

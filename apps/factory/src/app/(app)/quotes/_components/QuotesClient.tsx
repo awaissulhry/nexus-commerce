@@ -28,6 +28,7 @@ import { VirtualDataGrid } from "@/components/VirtualDataGrid"; // FS3 — windo
 import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
 import { formatViewed } from "@/lib/quotes/followup";
+import { ComplianceGear } from "./ComplianceGear"; // EPQ.5 — CGV + bank details
 import { FollowUpQueue } from "./FollowUpQueue";
 import { QuoteEditor } from "./QuoteEditor";
 import { STATE_TONE, type PipelineResponse, type QuoteRow } from "./types";
@@ -169,6 +170,7 @@ function PipelineInner() {
           active={state === "expiring"}
         />
         <div style={{ marginLeft: "auto", alignSelf: "center", display: "flex", gap: 12, alignItems: "center" }}>
+          {canSend && <ComplianceGear />} {/* EPQ.5 — CGV + bank details */}
           {canExport && <a href="/api/exports/quotes" style={{ fontSize: 12, color: "var(--h10-text-link)" }}>Export CSV</a>}
           {canCreate && <Button variant="primary" onClick={startCreate}><Plus size={13} /> New quote</Button>}
         </div>

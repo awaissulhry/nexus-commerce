@@ -21,7 +21,12 @@ export const POST = guarded(FEATURES.quotesConvert, async (_req, { params, actor
   const { id } = await params;
   const quote = await prisma.quote.findUnique({
     where: { id },
-    include: { lines: true },
+    include: {
+      lines: true,
+      // EPQ.5 — a Stripe deposit paid before conversion waits on the version's
+      // evidence as a pending ref; conversion promotes it to a real Payment
+      versions: { orderBy: { version: "desc" }, take: 1, select: { evidenceJson: true } },
+    },
   });
   if (!quote) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (quote.state !== "ACCEPTED") return NextResponse.json({ error: "Only accepted quotes convert to orders" }, { status: 400 });
@@ -57,6 +62,27 @@ export const POST = guarded(FEATURES.quotesConvert, async (_req, { params, actor
     select: { id: true, number: true },
   });
   await prisma.quote.update({ where: { id }, data: { convertedOrderId: order.id } });
+
+  // EPQ.5 — promote a pending Stripe deposit (webhook arrived pre-conversion)
+  // into a Payment on the newborn order; the idempotency key makes a webhook
+  // retry after this point a no-op.
+  const pending = (quote.versions[0]?.evidenceJson as { stripeDeposit?: { sessionId?: string; amountCents?: number } } | null)?.stripeDeposit;
+  if (pending?.sessionId && (pending.amountCents ?? 0) > 0) {
+    try {
+      const payment = await prisma.payment.create({
+        data: {
+          orderId: order.id, kind: "DEPOSIT", amountCents: pending.amountCents!, method: "stripe",
+          notes: `Stripe Checkout — acconto preventivo ${quote.number} (paid before conversion)`,
+          idempotencyKey: `stripe:${pending.sessionId}`,
+        },
+      });
+      void audit({ actorId: actor!.id, entityType: "payment", entityId: payment.id, action: "recorded", after: { via: "quote-convert", quoteId: id, amountCents: pending.amountCents } });
+      await publishEventDurable("payment.recorded", { orderId: order.id, paymentId: payment.id });
+    } catch {
+      // idempotency key already used — the webhook beat us to it; nothing to do
+    }
+  }
+
   void audit({ actorId: actor!.id, entityType: "quote", entityId: id, action: "converted", after: { orderId: order.id, orderNumber: order.number } });
   void audit({ actorId: actor!.id, entityType: "order", entityId: order.id, action: "created", after: { via: "quote", quoteId: id, deposit: quote.depositPct } });
   // EPQ.2 — tell every other active Owner; the link lands on the new order

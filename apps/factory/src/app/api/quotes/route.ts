@@ -19,6 +19,7 @@ import { quoteTotals } from "@/lib/quotes/compose-line";
 import { nextNumber } from "@/lib/counters";
 import { ruleDays, type FollowUpRule } from "@/lib/quotes/followup";
 import { loadFollowUpSettings } from "@/lib/quotes/followup-settings";
+import { naturaForMode, resolveTaxMode } from "@/lib/quotes/tax";
 
 export const permission = { GET: PAGES.quotes, POST: FEATURES.quotesCreate };
 
@@ -100,7 +101,7 @@ const Create = z.object({ partyId: z.string().min(1), conversationId: z.string()
 export const POST = guarded(FEATURES.quotesCreate, async (req, { actor, resolved }) => {
   const parsed = Create.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "partyId required" }, { status: 400 });
-  const party = await prisma.party.findUnique({ where: { id: parsed.data.partyId }, select: { id: true, depositDefaultPct: true } });
+  const party = await prisma.party.findUnique({ where: { id: parsed.data.partyId }, select: { id: true, kind: true, taxMode: true, depositDefaultPct: true } });
   if (!party) return NextResponse.json({ error: "Party not found" }, { status: 404 });
 
   // estimated lead time (honest v1 — real capable-to-promise from floor load lands in FP6)
@@ -108,12 +109,17 @@ export const POST = guarded(FEATURES.quotesCreate, async (req, { actor, resolved
   const leadDays = ((leadRow?.value as { days?: number })?.days) ?? 21;
 
   const number = await nextNumber("quote");
+  // EPQ.5 — the quote snapshots its tax mode from the party at create (the
+  // party's stored mode, else its kind default); DRAFT-editable in the rail.
+  const taxMode = resolveTaxMode(party.taxMode, party.kind);
   const quote = await prisma.quote.create({
     data: {
       number,
       partyId: party.id,
       conversationId: parsed.data.conversationId ?? null,
       depositPct: party.depositDefaultPct ?? null,
+      taxMode,
+      naturaCode: naturaForMode(taxMode),
       validUntilAt: new Date(Date.now() + 30 * 86400000), // 30-day default validity
       promiseDateAt: new Date(Date.now() + leadDays * 86400000),
     },

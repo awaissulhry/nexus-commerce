@@ -33,6 +33,20 @@ model Party {
   depositDefaultPct Float?
   notes             String?
   addressJson       Json? // FP8 — remembered ship-to (name/street/city/postal/country/phone); prefill source
+  // EPQ.5 — tax posture + SDI routing fields so downstream invoicing (EPF) is
+  // mechanical. taxMode: IT_B2C | IT_B2B | EU_B2B | EXTRA_EU; null (all
+  // pre-EPQ.5 rows) = derived from kind (CUSTOMER→IT_B2C, else IT_B2B) — parity.
+  taxMode           String?
+  vatNumber         String? // country prefix included, e.g. IT01234567890
+  codiceFiscale     String?
+  sdiCodice         String? // codice destinatario (SDI e-invoice routing)
+  sdiPec            String? // PEC fallback for SDI routing
+  // EPQ.5 — VIES checkVatApprox proof: the returned requestIdentifier +
+  // timestamp are the canonical audit evidence for art. 41 zero-rating
+  // (a substantive condition since the 2020 Quick Fixes). Cleared when a
+  // re-check comes back invalid.
+  viesRequestId     String?
+  viesCheckedAt     DateTime?
   priceListId       String?
   priceList         PriceList?           @relation(fields: [priceListId], references: [id])
   emails            PartyEmail[]
@@ -107,6 +121,11 @@ model ProductTemplate {
   moqQty           Int?
   moqSurchargeMode DeltaMode           @default(ABSOLUTE)
   moqSurcharge     Int                 @default(0)
+  // EPQ.5 — made-to-measure flag: a bespoke B2C quote prints the art. 59
+  // c.1 lett. c) withdrawal-exclusion clause (CJEU C-529/19 — the exemption
+  // holds only if disclosed). Everything the factory makes today is bespoke;
+  // false = a future standard-size item under the normal 14-day regime.
+  bespoke          Boolean             @default(true)
   optionGroups   OptionGroup[]
   constraints    OptionConstraint[]
   bomLines       BomLine[]
@@ -365,6 +384,16 @@ model Quote {
   conversation        Conversation?  @relation(fields: [conversationId], references: [id])
   state               QuoteState     @default(DRAFT)
   depositPct          Float?
+  // EPQ.5 — compliance snapshot: taxMode copied from the party at create,
+  // DRAFT-editable (null = pre-EPQ.5 row → party-kind default, parity).
+  // naturaCode (N3.2 art. 41 | N3.1 art. 8) stored for downstream EPF
+  // invoicing — field only. depositKind forks the legal character of the
+  // deposit (acconto vs caparra confirmatoria, art. 1385 c.c.);
+  // validityWording forks revocable vs firm offer (art. 1329 c.c.).
+  taxMode             String?
+  naturaCode          String?
+  depositKind         String         @default("ACCONTO")
+  validityWording     String         @default("REVOCABLE")
   promiseDateAt       DateTime?
   validUntilAt        DateTime? // FP3: quote validity window
   sentAt              DateTime? // FP3: first-send timestamp (versions carry each send)
@@ -439,6 +468,12 @@ model QuoteVersion {
   sentSnapshot    Json // frozen options, costs, prices at send
   pdfRef          String?
   acceptTokenHash String?  @unique // EPQ.1 — this send's accept-token hash; Quote.acceptTokenHash always mirrors the LATEST send (older tokens resolve here → superseded page)
+  // EPQ.5 — acceptance/rejection evidence bundle (CAD art. 20 probative
+  // criteria): pdf sha256, CGV version shown, typed-name confirmation,
+  // timestamp, ipHash, ua, view-event refs — written once at decision;
+  // a Stripe pending-deposit ref lands under its own key when the payment
+  // arrives before conversion.
+  evidenceJson    Json?
   sentAt          DateTime @default(now())
 
   @@unique([quoteId, version])
