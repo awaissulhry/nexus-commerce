@@ -171,6 +171,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       // C.2 — new filters
       productTypes?: string
       brands?: string
+      // eBay LISTING SHELLS (2026-07-18) — shared-family parents that are
+      // extra eBay listings OF an existing product. Hidden by default;
+      // pass listingShells=1 (or select the EBAY_LISTING_SHELL type) to show.
+      listingShells?: string
       // W2.12 — filter by ProductFamily.id (comma-separated). Layered
       // on top of brands/productTypes; matches *any* of the listed
       // family ids (Prisma `in:`). Pass `families=null` to filter for
@@ -271,6 +275,16 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       }
       if (productTypeList.length > 0) where.productType = { in: productTypeList }
       if (brandList.length > 0) where.brand = { in: brandList }
+      // eBay LISTING SHELLS — extra eBay listings OF an existing product
+      // (shared-family siblings). Catalog noise by default: excluded unless
+      // the operator asks (listingShells=1) or explicitly selects the type in
+      // the facet — complete control through the existing Filters UI.
+      const includeListingShells =
+        q.listingShells === '1' || q.listingShells === 'true' ||
+        productTypeList.includes('EBAY_LISTING_SHELL')
+      if (!includeListingShells) {
+        where.NOT = [...(Array.isArray(where.NOT) ? where.NOT : where.NOT ? [where.NOT] : []), { productType: 'EBAY_LISTING_SHELL' }]
+      }
       // W2.12 — family filter. families=null means "no family attached";
       // otherwise filter by familyId in the list.
       if (familyFilterUnattached) where.familyId = null
@@ -370,6 +384,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         if (channelList.length > 0) cacheWhere.syncChannels = { hasSome: channelList }
         if (productTypeList.length > 0) cacheWhere.productType = { in: productTypeList }
         if (brandList.length > 0) cacheWhere.brand = { in: brandList }
+        // eBay listing shells — mirror the live-table default exclusion.
+        if (!includeListingShells) {
+          cacheWhere.NOT = [...(Array.isArray(cacheWhere.NOT) ? cacheWhere.NOT : cacheWhere.NOT ? [cacheWhere.NOT] : []), { productType: 'EBAY_LISTING_SHELL' }]
+        }
         if (familyFilterUnattached) cacheWhere.familyId = null
         else if (familyIdList.length > 0) cacheWhere.familyId = { in: familyIdList }
         if (wfStageFilterUnattached) cacheWhere.workflowStageId = null

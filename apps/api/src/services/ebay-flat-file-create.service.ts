@@ -181,6 +181,16 @@ export async function runEbayFlatFileCreates(
     // Map built inside the transaction callback; populated for idMap on success.
     const familyTempToId = new Map<string, string>()
 
+    // eBay LISTING SHELL (2026-07-18): a shared-family parent whose children
+    // are ALL existing pool products (nothing to create) is not a new product —
+    // it is another eBay listing OF an existing product. Mark it so the
+    // catalog (/products) can exclude it by default while the eBay flat file
+    // manages it normally. The sentinel productType rides the read cache and
+    // the type facet, giving the operator full show/hide control.
+    const isListingShell =
+      children.length === 0 &&
+      (opts?.sharedFamilyKeys?.has(parentEntry.sku) ?? false)
+
     try {
       await p.$transaction(async tx => {
         // Create parent first.
@@ -189,6 +199,7 @@ export async function runEbayFlatFileCreates(
           variationTheme: parentEntry.variationTheme,
           isParent: true,
         })
+        if (isListingShell) parentData.productType = 'EBAY_LISTING_SHELL'
         const createdParent = await tx.product.create({
           data: {
             ...parentData,

@@ -33,6 +33,10 @@ export type ProductCreateData = {
   status: string
   syncChannels: string[]
   importSource: string
+  /** 'EBAY_LISTING_SHELL' marks a shared-family parent that is another eBay
+   *  listing OF an existing product, not a new product (catalog hides it by
+   *  default; the type facet toggles it). */
+  productType?: string
   localizedContent: Record<string, Record<string, unknown>>
   brand?: string
   isParent?: boolean

@@ -1176,7 +1176,11 @@ export default function ProductsWorkspace() {
       searchable: true,
       options: facets.productTypes.slice(0, 24).map((p) => ({
         value: p.value,
-        label: IT_TERMS[p.value] ? `${IT_TERMS[p.value]} (${p.value})` : p.value,
+        // eBay listing shells (extra listings OF an existing product) are
+        // hidden from the list by default — selecting this type shows them.
+        label: p.value === 'EBAY_LISTING_SHELL'
+          ? 'eBay listing shells (hidden by default)'
+          : IT_TERMS[p.value] ? `${IT_TERMS[p.value]} (${p.value})` : p.value,
         count: p.count,
       })),
       values: productTypeFilters,
