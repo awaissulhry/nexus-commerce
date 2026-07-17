@@ -92,3 +92,24 @@ export function romeDayWindowUtc(
   if (!gte && !lte) return undefined;
   return { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) };
 }
+
+/**
+ * EPF1 hot-path tiles — invert a Rome `YYYY-MM` monthKey to its exact UTC
+ * half-open instant window `[gte, lt)`: an instant t satisfies
+ * `romeMonthKey(t) === monthKey` ⟺ `gte ≤ t < lt` (property-tested). Lets SQL
+ * range-sum a Rome month TZ-exactly without materializing per-row dates.
+ * Null when the key is malformed.
+ */
+export function romeMonthWindowUtc(monthKey: string): { gte: Date; lt: Date } | null {
+  const m = /^(\d{4})-(\d{2})$/.exec(monthKey.trim());
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  if (mo < 1 || mo > 12) return null;
+  const nextY = mo === 12 ? y + 1 : y;
+  const nextMo = mo === 12 ? 1 : mo + 1;
+  const gte = romeDayStartUtc(`${y}-${String(mo).padStart(2, "0")}-01`);
+  const lt = romeDayStartUtc(`${nextY}-${String(nextMo).padStart(2, "0")}-01`);
+  if (!gte || !lt) return null;
+  return { gte, lt };
+}

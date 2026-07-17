@@ -138,22 +138,39 @@ export function orderFinancials(o: FinOrder): OrderFinancials {
 export type Tiles = { outstandingCents: number; depositsDueCents: number; monthInvoicedCents: number; monthPaidCents: number };
 
 /**
- * Headline tiles. `monthKey` is the current Rome `YYYY-MM`. The month figures
- * bucket by INVOICE ISSUE / PAYMENT RECEIVED dates (D-13) — an old order paid
- * today counts in today's month.
+ * The current month's money as an INPUT to the tiles fold. On the hot path
+ * the loader computes these two figures with TZ-exact range-bounded SQL sums
+ * (`loadMonthMoney` — invoice-issue / payment-received dates in the Rome
+ * month window); doc-dates contexts derive them from the per-order month
+ * buckets via `monthMoneyFromFins`. Same numbers, proven by parity.
  */
-export function tiles(fins: OrderFinancials[], monthKey: string): Tiles {
+export type MonthMoney = { monthKey: string; invoicedCents: number; paidCents: number };
+
+/** Derive a MonthMoney from doc-dated per-order folds (Σ of the Rome-month buckets). */
+export function monthMoneyFromFins(fins: OrderFinancials[], monthKey: string): MonthMoney {
+  let invoicedCents = 0;
+  let paidCents = 0;
+  for (const f of fins) {
+    invoicedCents += f.invoicedByMonthCents[monthKey] ?? 0;
+    paidCents += f.paidByMonthCents[monthKey] ?? 0;
+  }
+  return { monthKey, invoicedCents, paidCents };
+}
+
+/**
+ * Headline tiles. Outstanding/deposits fold over the per-order figures; the
+ * month figures are the supplied MonthMoney (D-13: bucketed by INVOICE ISSUE /
+ * PAYMENT RECEIVED dates in Europe/Rome — an old order paid today counts in
+ * today's month). The SQL provides inputs; the fold does the labeling.
+ */
+export function tiles(fins: OrderFinancials[], month: MonthMoney): Tiles {
   let outstandingCents = 0;
   let depositsDueCents = 0;
-  let monthInvoicedCents = 0;
-  let monthPaidCents = 0;
   for (const f of fins) {
     if (f.balanceCents > 0) outstandingCents += f.balanceCents;
     if (f.depositRequiredCents > 0 && !f.depositMet) depositsDueCents += f.depositRequiredCents - f.depositPaidCents;
-    monthInvoicedCents += f.invoicedByMonthCents[monthKey] ?? 0;
-    monthPaidCents += f.paidByMonthCents[monthKey] ?? 0;
   }
-  return { outstandingCents, depositsDueCents, monthInvoicedCents, monthPaidCents };
+  return { outstandingCents, depositsDueCents, monthInvoicedCents: month.invoicedCents, monthPaidCents: month.paidCents };
 }
 
 export type PartyRollup = { partyId: string; partyName: string; orders: number; netCents: number; paidCents: number; outstandingCents: number; actualMarginCents: number };

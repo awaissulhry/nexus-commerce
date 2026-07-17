@@ -69,7 +69,9 @@ export const GET = guarded(PAGES.analytics, async (req, { resolved }) => {
   }));
 
   // ── margin: by customer / month (FP9 rollup, FS1 SQL-aggregated) + by product ──
-  const fins = await loadOrderFinancials(range, { sorted: false });
+  // EPF1: docDates — marginByMonth buckets by real document Rome months
+  // (analytics is off the hot p50 gate; its 500ms target was parked in FS1)
+  const fins = await loadOrderFinancials(range, { sorted: false, docDates: true });
   const productAggs = await prisma.$queryRaw<{ product: string | null; n: number | bigint; net: number | bigint; cost: number | bigint }[]>(Prisma.sql`
     SELECT l."description" AS product, COUNT(*) AS n, SUM(l."netPriceCents" * l."qty") AS net, SUM(l."costCents" * l."qty") AS cost
     FROM "OrderLine" l JOIN "Order" o ON o."id" = l."orderId"

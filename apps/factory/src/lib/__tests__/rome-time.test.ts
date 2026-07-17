@@ -4,7 +4,7 @@
  * summer, so late-evening UTC instants belong to the NEXT Rome day/month.
  */
 import { describe, expect, it } from "vitest";
-import { romeMonthKey, romeDayKey, romeYear, romeOffsetMinutes, romeDayStartUtc, romeDayEndUtc, romeDayWindowUtc } from "../financials/rome-time";
+import { romeMonthKey, romeDayKey, romeYear, romeOffsetMinutes, romeDayStartUtc, romeDayEndUtc, romeDayWindowUtc, romeMonthWindowUtc } from "../financials/rome-time";
 
 describe("romeMonthKey", () => {
   it("year boundary: 31 Dec 23:30Z is already January in Rome (CET +1)", () => {
@@ -59,5 +59,45 @@ describe("romeDayWindowUtc", () => {
     expect(w?.lte).toBeUndefined();
     expect(romeDayWindowUtc(null, null)).toBeUndefined();
     expect(romeDayWindowUtc("garbage", "junk")).toBeUndefined();
+  });
+});
+
+describe("romeMonthWindowUtc (EPF1 hot-path tiles)", () => {
+  it("summer month: [last-day-of-prev 22:00Z, last-day 22:00Z)", () => {
+    const w = romeMonthWindowUtc("2026-07")!;
+    expect(w.gte.toISOString()).toBe("2026-06-30T22:00:00.000Z");
+    expect(w.lt.toISOString()).toBe("2026-07-31T22:00:00.000Z");
+  });
+  it("winter month + December→January year rollover (CET 23:00Z)", () => {
+    const jan = romeMonthWindowUtc("2026-01")!;
+    expect(jan.gte.toISOString()).toBe("2025-12-31T23:00:00.000Z");
+    expect(jan.lt.toISOString()).toBe("2026-01-31T23:00:00.000Z");
+    const dec = romeMonthWindowUtc("2026-12")!;
+    expect(dec.lt.toISOString()).toBe("2026-12-31T23:00:00.000Z"); // = Rome midnight 2027-01-01
+  });
+  it("DST-straddling months: March starts CET (+1) and ends CEST (+2); October the reverse", () => {
+    const mar = romeMonthWindowUtc("2026-03")!;
+    expect(mar.gte.toISOString()).toBe("2026-02-28T23:00:00.000Z");
+    expect(mar.lt.toISOString()).toBe("2026-03-31T22:00:00.000Z");
+    const oct = romeMonthWindowUtc("2026-10")!;
+    expect(oct.gte.toISOString()).toBe("2026-09-30T22:00:00.000Z");
+    expect(oct.lt.toISOString()).toBe("2026-10-31T23:00:00.000Z");
+  });
+  it("malformed keys ⇒ null", () => {
+    expect(romeMonthWindowUtc("2026-13")).toBeNull();
+    expect(romeMonthWindowUtc("2026-00")).toBeNull();
+    expect(romeMonthWindowUtc("garbage")).toBeNull();
+  });
+  it("PROPERTY: t ∈ [gte, lt) ⟺ romeMonthKey(t) === monthKey (boundary ± instants, both DST regimes)", () => {
+    for (const monthKey of ["2026-01", "2026-03", "2026-07", "2026-10", "2026-12", "2027-01"]) {
+      const w = romeMonthWindowUtc(monthKey)!;
+      for (const edge of [w.gte.getTime(), w.lt.getTime()]) {
+        for (const delta of [-3600_001, -1, 0, 1, 3600_001]) {
+          const t = edge + delta;
+          const inside = t >= w.gte.getTime() && t < w.lt.getTime();
+          expect(`${monthKey}@${t}:${romeMonthKey(new Date(t).toISOString()) === monthKey}`).toBe(`${monthKey}@${t}:${inside}`);
+        }
+      }
+    }
   });
 });
