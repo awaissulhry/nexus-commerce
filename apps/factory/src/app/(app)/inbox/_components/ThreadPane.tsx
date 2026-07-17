@@ -17,6 +17,7 @@ import { apiFetch, apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
 import { repeatedAttachmentIds } from "@/lib/inbox/attachments";
 import { countRemoteImages } from "@/lib/inbox/preview";
+import { Lightbox, type LightboxItem } from "./Lightbox";
 import { MessageBubble } from "./MessageBubble";
 import { EVENT_LABELS, ago, type ThreadResponse } from "./types";
 
@@ -32,11 +33,16 @@ export function ThreadPane({
   loading,
   onMutated,
   composerRef,
+  fileId,
+  onFileChange,
 }: {
   thread: ThreadResponse | null;
   loading: boolean;
   onMutated: () => void;
   composerRef?: React.RefObject<HTMLTextAreaElement>;
+  /** EPI2.2 — ?file= deep link: the lightbox's active attachment */
+  fileId?: string | null;
+  onFileChange?: (id: string | null) => void;
 }) {
   const { toast } = useToast();
   const canSend = usePermission("inbox.send");
@@ -94,6 +100,15 @@ export function ThreadPane({
 
   // EPI1.3 (D6) — chips repeated from an earlier message collapse per bubble
   const repeatedIds = useMemo(() => repeatedAttachmentIds(thread?.messages ?? []), [thread]);
+
+  // EPI2.2 — the lightbox ring: every attachment in the conversation, in order
+  const previewItems = useMemo<LightboxItem[]>(
+    () =>
+      (thread?.messages ?? []).flatMap((m) =>
+        m.attachments.map((a) => ({ id: a.id, filename: a.filename, mimeType: a.mimeType, sizeBytes: a.sizeBytes, webViewLink: a.webViewLink })),
+      ),
+    [thread],
+  );
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -159,6 +174,15 @@ export function ThreadPane({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minWidth: 0 }}>
+      {fileId && onFileChange && previewItems.some((i) => i.id === fileId) && (
+        <Lightbox
+          items={previewItems}
+          activeId={fileId}
+          conversationId={thread.conversation.id}
+          onNavigate={onFileChange}
+          onClose={() => onFileChange(null)}
+        />
+      )}
       <div
         style={{
           display: "flex",
@@ -211,6 +235,7 @@ export function ThreadPane({
               conversationId={thread.conversation.id}
               allowImages={allowImages}
               repeatedIds={repeatedIds}
+              onPreview={onFileChange ? (attId) => onFileChange(attId) : undefined}
             />
           ) : entry.kind === "comment" ? (
             <div

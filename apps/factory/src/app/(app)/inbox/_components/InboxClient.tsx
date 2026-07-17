@@ -106,6 +106,7 @@ function InboxInner() {
   const railShown = wide && !railCollapsed;
 
   const focusId = params.get("focus");
+  const fileId = params.get("file"); // EPI2.2 — lightbox deep link
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q), 250);
@@ -115,13 +116,14 @@ function InboxInner() {
   // EPI1.2 — ONE url composer so open/Escape/filter changes all preserve each
   // other (the old open() dropped every filter).
   const urlFor = useCallback(
-    (focus: string | null) => {
+    (focus: string | null, file?: string | null) => {
       const usp = new URLSearchParams();
       if (state !== "open") usp.set("state", state);
       if (mine) usp.set("mine", "1");
       if (unmatched) usp.set("unmatched", "1");
       if (debouncedQ) usp.set("q", debouncedQ);
       if (focus) usp.set("focus", focus);
+      if (focus && file) usp.set("file", file); // EPI2.2 — lightbox rides the thread
       const qs = usp.toString();
       return qs ? `/inbox?${qs}` : "/inbox";
     },
@@ -132,8 +134,8 @@ function InboxInner() {
   // useSearchParams) — router.replace to the bare pathname silently no-ops on
   // a fresh document load at ?focus=, and focus/filters are pure UI state.
   useEffect(() => {
-    window.history.replaceState(null, "", urlFor(focusId));
-  }, [urlFor, focusId]);
+    window.history.replaceState(null, "", urlFor(focusId, fileId));
+  }, [urlFor, focusId, fileId]);
 
   const listUrl = useMemo(() => {
     const usp = new URLSearchParams({ state });
@@ -239,7 +241,8 @@ function InboxInner() {
       const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable;
       // EPI1.5 (verify regression R2) — a focused pane separator owns its own
       // keyboard grammar; Enter there must not double as "open conversation".
-      if (typing || e.metaKey || e.ctrlKey || e.altKey || target.closest?.('[role="separator"]')) return;
+      // EPI2.2 — same for the lightbox dialog (j/k/e/s must be inert inside).
+      if (typing || e.metaKey || e.ctrlKey || e.altKey || target.closest?.('[role="separator"], [role="dialog"]')) return;
       const items = list?.items ?? [];
       if (e.key === "j" || e.key === "k") {
         e.preventDefault();
@@ -329,7 +332,14 @@ function InboxInner() {
       </div>
       <PaneHandle {...panes.handleProps(0)} label="Resize conversation list" />
       <div style={{ minWidth: 0, minHeight: 0, overflow: "hidden" }}>
-        <ThreadPane thread={thread} loading={threadLoading} onMutated={refresh} composerRef={composerRef} />
+        <ThreadPane
+          thread={thread}
+          loading={threadLoading}
+          onMutated={refresh}
+          composerRef={composerRef}
+          fileId={fileId}
+          onFileChange={(fid) => window.history.replaceState(null, "", urlFor(focusId, fid))}
+        />
       </div>
       <PaneHandle
         {...panes.handleProps(1)}

@@ -14,7 +14,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { Download, HardDriveUpload, ImageOff } from "lucide-react";
 import { useToast } from "@/design-system/components";
 import { apiJson } from "@/lib/api-client";
-import { countRemoteImages, rewriteCidSources } from "@/lib/inbox/preview";
+import { countRemoteImages, previewKind, rewriteCidSources } from "@/lib/inbox/preview";
 import { ago, type ThreadMessage } from "./types";
 
 const kb = (n: number | null) => (n == null ? "" : n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
@@ -41,11 +41,14 @@ export function MessageBubble({
   conversationId,
   allowImages,
   repeatedIds,
+  onPreview,
 }: {
   message: ThreadMessage;
   conversationId: string;
   allowImages: boolean;
   repeatedIds?: Set<string>;
+  /** EPI2.2 — open the conversation lightbox at this attachment */
+  onPreview?: (attId: string) => void;
 }) {
   const { toast } = useToast();
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -86,8 +89,20 @@ export function MessageBubble({
   const hiddenImgCount = !allowImages && message.bodyHtml ? countRemoteImages(message.bodyHtml) : 0;
   const fresh = message.attachments.filter((a) => !repeatedIds?.has(a.id));
   const repeats = message.attachments.filter((a) => repeatedIds?.has(a.id));
+  // EPI2.2 — fresh images become thumbnails; previewable chips open the lightbox
+  const freshImages = onPreview ? fresh.filter((a) => previewKind(a.mimeType) === "image") : [];
+  const freshFiles = onPreview ? fresh.filter((a) => previewKind(a.mimeType) !== "image") : fresh;
 
-  const chip = (att: ThreadMessage["attachments"][number], muted = false) => (
+  const chip = (att: ThreadMessage["attachments"][number], muted = false) => {
+    const canPreview = onPreview && previewKind(att.mimeType) !== "none";
+    const nameStyle = { display: "inline-flex", alignItems: "center", gap: 5, color: "var(--h10-text)" } as const;
+    const inner = (
+      <>
+        {att.filename}
+        <span style={{ color: "var(--h10-text-3)" }}>{kb(att.sizeBytes)}</span>
+      </>
+    );
+    return (
     <span
       key={att.id}
       style={{
@@ -102,14 +117,26 @@ export function MessageBubble({
         opacity: muted ? 0.7 : 1,
       }}
     >
+      {canPreview ? (
+        <button
+          type="button"
+          onClick={() => onPreview(att.id)}
+          title="Preview"
+          style={{ ...nameStyle, background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit" }}
+        >
+          {inner}
+        </button>
+      ) : (
+        <a href={`/api/inbox/${conversationId}/attachments/${att.id}`} title="Download" style={nameStyle}>
+          {inner}
+        </a>
+      )}
       <a
         href={`/api/inbox/${conversationId}/attachments/${att.id}`}
         title="Download"
-        style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--h10-text)" }}
+        style={{ display: "inline-flex", color: "var(--h10-text-3)" }}
       >
-        <Download size={13} />
-        {att.filename}
-        <span style={{ color: "var(--h10-text-3)" }}>{kb(att.sizeBytes)}</span>
+        <Download size={12} />
       </a>
       {att.webViewLink ? (
         <a href={att.webViewLink} target="_blank" rel="noopener noreferrer" style={{ color: "var(--h10-text-link)", fontSize: 11.5 }}>
@@ -128,7 +155,8 @@ export function MessageBubble({
         </button>
       )}
     </span>
-  );
+    );
+  };
 
   return (
     <div
@@ -187,7 +215,25 @@ export function MessageBubble({
       )}
       {message.attachments.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", padding: "8px 14px", borderTop: "1px solid var(--h10-border-subtle)" }}>
-          {fresh.map((att) => chip(att))}
+          {freshImages.map((att) => (
+            // EPI2.2 — image attachments render as lazy 72px thumbnails; click = lightbox
+            <button
+              key={att.id}
+              type="button"
+              onClick={() => onPreview?.(att.id)}
+              title={`${att.filename} · ${kb(att.sizeBytes)}`}
+              style={{ padding: 0, border: "1px solid var(--h10-border)", borderRadius: 8, overflow: "hidden", width: 72, height: 72, cursor: "zoom-in", background: "var(--h10-surface-raised)" }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/api/inbox/${conversationId}/attachments/${att.id}?inline=1`}
+                alt={att.filename}
+                loading="lazy"
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              />
+            </button>
+          ))}
+          {freshFiles.map((att) => chip(att))}
           {repeats.length > 0 && !showRepeats && (
             <button
               type="button"
