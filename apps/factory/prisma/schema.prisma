@@ -1157,3 +1157,45 @@ model ChatReaction {
 
   @@unique([messageId, userId, emoji])
 }
+
+// EPI3.1 — query-backed inbox views (Owner-defined shared sections) + the
+// ordered ingest-rules layer. Views are CRITERIA, never materialized state —
+// membership is computed, so routing is automatic and retroactive.
+model InboxView {
+  id            String   @id @default(cuid())
+  name          String
+  emoji         String?
+  color         String?
+  sortOrder     Int      @default(0) // tab order = claim priority (Superhuman)
+  exclusive     Boolean  @default(true) // claims matches out of the Inbox tab
+  showElsewhere Boolean  @default(false) // exclusive but ALSO visible in Inbox
+  criteria      Json // { all: Criterion[], any: Criterion[] } — zod-validated at the boundary
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  overrides InboxViewOverride[]
+}
+
+model InboxViewOverride {
+  id             String    @id @default(cuid())
+  viewId         String
+  view           InboxView @relation(fields: [viewId], references: [id], onDelete: Cascade)
+  conversationId String
+  mode           String // "pin" | "exclude" — overrides always beat criteria
+  createdAt      DateTime  @default(now())
+
+  @@unique([viewId, conversationId])
+  @@index([conversationId])
+}
+
+model InboxRule {
+  id             String   @id @default(cuid())
+  name           String
+  sortOrder      Int      @default(0) // explicit order — first match wins with stopProcessing
+  enabled        Boolean  @default(true)
+  criteria       Json // same Criteria shape as views
+  actions        Json // [{type:"assign",assigneeId} | {type:"close"}]
+  stopProcessing Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
