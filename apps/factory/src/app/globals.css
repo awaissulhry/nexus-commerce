@@ -240,3 +240,295 @@ a {
 .epi-inbox .h10-ds-actionbar .lbl {
   white-space: nowrap;
 }
+
+/* ────────────────────────────────────────────────────────────────
+   FC2 — /chat: the Google-Chat anatomy, h10-tokenized. Rail rows,
+   day-divider chips, author runs, system lines, tombstones, and the
+   hover action bar on own messages (hover reveal needs CSS — inline
+   styles can't express it). Scoped under .fc2-chat / fc2- classes. */
+
+.fc2-chat:focus-visible,
+.fc2-chat [tabindex="0"]:focus-visible {
+  outline: 2px solid var(--h10-primary);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+/* rail rows — fixed 64px (keyboard scroll math stays exact) */
+.fc2-rail-row {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  width: 100%;
+  padding: 0 12px;
+  border: none;
+  border-bottom: 1px solid var(--h10-border-subtle);
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: var(--h10-text);
+}
+.fc2-rail-row:hover {
+  background: var(--h10-surface-hover);
+}
+.fc2-rail-row.is-active {
+  background: var(--h10-wash-primary);
+}
+.fc2-rail-row.is-cursor {
+  box-shadow: inset 2px 0 0 var(--h10-primary);
+}
+.fc2-rail-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.fc2-rail-kind {
+  flex-shrink: 0;
+  color: var(--h10-text-3);
+}
+.fc2-rail-name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.fc2-rail-time {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--h10-text-3);
+}
+.fc2-rail-bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.fc2-rail-snippet {
+  font-size: 12px;
+  color: var(--h10-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.fc2-rail-badge {
+  flex-shrink: 0;
+  background: var(--h10-primary);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 7px;
+}
+
+/* day-divider chips */
+.fc2-day {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 4px;
+}
+.fc2-day-chip {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--h10-text-2);
+  border: 1px solid var(--h10-border-subtle);
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: var(--h10-surface);
+}
+
+/* message rows: 36px avatar gutter + content; hover reveals own actions */
+.fc2-msg-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  padding: 1px 16px 1px 12px;
+}
+.fc2-msg-row.is-run-start {
+  padding-top: 7px;
+}
+.fc2-msg-row:hover {
+  background: var(--h10-surface-hover);
+}
+.fc2-msg-gutter {
+  display: flex;
+  justify-content: center;
+}
+.fc2-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+  user-select: none;
+}
+.fc2-msg-main {
+  min-width: 0;
+}
+.fc2-msg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+.fc2-msg-time {
+  font-size: 11px;
+  color: var(--h10-text-3);
+}
+.fc2-msg-body {
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fc2-msg-body.is-deleted {
+  color: var(--h10-text-3);
+  font-style: italic;
+}
+.fc2-msg-body.is-pending {
+  opacity: 0.55;
+}
+.fc2-edited {
+  font-size: 11px;
+  color: var(--h10-text-3);
+  margin-left: 5px;
+}
+.fc2-money {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--h10-wash-primary);
+  color: var(--h10-primary);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.fc2-msg-actions {
+  position: absolute;
+  top: -10px;
+  right: 14px;
+  display: none;
+  gap: 2px;
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border);
+  border-radius: 8px;
+  padding: 2px;
+  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.08);
+}
+.fc2-msg-row:hover .fc2-msg-actions {
+  display: inline-flex;
+}
+.fc2-msg-actions button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--h10-text-2);
+  padding: 4px 6px;
+  border-radius: 6px;
+  display: inline-flex;
+}
+.fc2-msg-actions button:hover {
+  background: var(--h10-surface-hover);
+  color: var(--h10-text);
+}
+.fc2-edit-box {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--h10-primary);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: 13px var(--font-sans), sans-serif;
+  background: var(--h10-surface);
+  color: var(--h10-text);
+}
+
+/* SYSTEM messages — centered grey, deep-link chip inline */
+.fc2-system {
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--h10-text-3);
+  padding: 3px 24px;
+}
+.fc2-system-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 7px;
+  padding: 1px 8px;
+  border: 1px solid var(--h10-border);
+  border-radius: 999px;
+  color: var(--h10-primary);
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fc2-system-chip:hover {
+  background: var(--h10-wash-primary);
+}
+.fc2-system-time {
+  margin-left: 7px;
+  font-size: 10.5px;
+}
+
+/* space header */
+.fc2-space-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--h10-border-subtle);
+  min-width: 0;
+}
+.fc2-space-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.fc2-space-meta {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--h10-text-3);
+}
+.fc2-icon-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  border: 1px solid var(--h10-border);
+  background: none;
+  border-radius: 8px;
+  padding: 5px 7px;
+  cursor: pointer;
+  color: var(--h10-text-2);
+  display: inline-flex;
+}
+.fc2-icon-btn:hover {
+  color: var(--h10-primary);
+  border-color: var(--h10-primary);
+}
+.fc2-load-earlier {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--h10-primary);
+  padding: 2px 10px;
+}
+.fc2-load-earlier:disabled {
+  color: var(--h10-text-3);
+  cursor: default;
+}

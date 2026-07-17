@@ -1,7 +1,8 @@
 /**
- * F1 — the factory nav registry: the 11 approved F0-IA pages with their page
- * permission, FP cycle, purpose line and capability bullets (rendered by the
- * designed empty states until each page's cycle lands). Icons are lucide
+ * F1 — the factory nav registry: the 11 approved F0-IA pages — plus /chat,
+ * the Owner-signed-off 12th item (FS-FC proposal; registry §5) — with their
+ * page permission, FP cycle, purpose line and capability bullets (rendered by
+ * the designed empty states until each page's cycle lands). Icons are lucide
  * names resolved in FactoryShell (this module stays server-safe).
  */
 import { PAGES } from "@/lib/auth/permissions";
@@ -12,6 +13,7 @@ export type FactoryPage = {
   href: string;
   icon:
     | "inbox"
+    | "message-circle"
     | "file-text"
     | "clipboard-list"
     | "hammer"
@@ -43,6 +45,24 @@ export const FACTORY_PAGES: FactoryPage[] = [
       "Assignment + close-vs-archive semantics: done is a state of the work, not of someone's inbox view",
       "Snooze and follow-up reminders that cancel themselves when the customer replies",
       "Reply-with-quote: opens the configurator pre-scoped to the sender's price list",
+    ],
+  },
+  {
+    // FC2 — the Owner-approved 12th page (FS-FC proposal): Order Spaces chat
+    id: "chat",
+    label: "Chat",
+    href: "/chat",
+    icon: "message-circle",
+    permission: PAGES.chat,
+    fp: "FC2",
+    purpose:
+      "Order Spaces: every order's internal team room — plus custom rooms — in the Google-Chat shape, kept clean of the customer's Gmail thread.",
+    bullets: [
+      "A space is born with its order and named after it (ORD-214 · Party) — the team talks where the work lives",
+      "Unread badges and last-message snippets on the rail; any space deep-links from anywhere",
+      "System messages narrate the order's life (stage moves, payments, labels) with jump-to-source chips",
+      "@mention a teammate to notify them — the same grammar as inbox comments",
+      "Workers chat cost-blind: money in system messages simply does not exist for them",
     ],
   },
   {

@@ -15,6 +15,7 @@ import {
   Hammer,
   Inbox,
   Layers,
+  MessageCircle,
   Package,
   Settings,
   Truck,
@@ -29,6 +30,8 @@ import { CommandPalette } from "@/components/CommandPalette";
 
 const ICONS: Record<FactoryPage["icon"], React.ComponentType<{ size?: number | string }>> = {
   inbox: Inbox,
+  "message-circle": MessageCircle, // FC2 — /chat
+
   "file-text": FileText,
   "clipboard-list": ClipboardList,
   hammer: Hammer,
