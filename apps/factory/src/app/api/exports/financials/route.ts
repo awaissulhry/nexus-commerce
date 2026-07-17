@@ -6,6 +6,8 @@
  * every column labeled with its date basis; cancelled orders carrying money
  * included, state says so). `from`/`to` are Rome-local days. Columns are
  * dropped by an EXPLICIT grain map (prices/margins) and the run is audited.
+ * EPF2 (D-06 close): `?party=` scopes both sections — the export is now
+ * "export THE CURRENT VIEW", window + customer, and the page's button says so.
  */
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES, FIELDS } from "@/lib/auth/permissions";
@@ -27,14 +29,15 @@ export const GET = guarded(FEATURES.exportsRun, async (req, { actor, resolved })
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
   const window = romeDayWindowUtc(from, to);
+  const partyId = url.searchParams.get("party")?.trim() || undefined;
 
   const [invoices, fins, vatRow] = await Promise.all([
     prisma.invoice.findMany({
-      where: window ? { createdAt: window } : {},
+      where: { ...(window ? { createdAt: window } : {}), ...(partyId ? { order: { partyId } } : {}) },
       orderBy: { createdAt: "asc" },
       select: { number: true, amountCents: true, createdAt: true, sentAt: true, paidAt: true, order: { select: { number: true, party: { select: { name: true } } } } },
     }), // bounded: window-scoped; the no-window call matches the export's historical all-time scope (4 scalars + 2 names per row)
-    loadOrderFinancials(window, { includeCancelledMoney: true }),
+    loadOrderFinancials(window, { includeCancelledMoney: true, partyId }),
     prisma.appSetting.findUnique({ where: { key: "financials.defaults" } }),
   ]);
   const vatRatePct = (vatRow?.value as { vatRatePct?: number } | null)?.vatRatePct ?? 22;
@@ -52,7 +55,7 @@ export const GET = guarded(FEATURES.exportsRun, async (req, { actor, resolved })
   const sec1 = buildRows(invoiceColumns(vatRatePct), invoiceRows, grains);
   const sec2 = buildRows(orderColumns(), fins, grains);
   // section titles avoid commas — toCsv header cells are joined unescaped
-  const windowLabel = `window: ${from ? from.slice(0, 10) : "start"} → ${to ? to.slice(0, 10) : "now"} (Rome days)`;
+  const windowLabel = `window: ${from ? from.slice(0, 10) : "start"} → ${to ? to.slice(0, 10) : "now"} (Rome days)${partyId ? " · one customer" : ""}`;
   const csv = [
     `INVOICES — VAT basis: invoiced amounts · dated by issue date (Rome) · ${windowLabel}`,
     toCsv(sec1.headers, sec1.rows).trimEnd(),
@@ -67,7 +70,7 @@ export const GET = guarded(FEATURES.exportsRun, async (req, { actor, resolved })
     entityType: "export",
     entityId: "financials",
     action: "run",
-    after: { from: from ?? null, to: to ?? null, invoiceRows: invoiceRows.length, orderRows: fins.length, prices: grains.prices, margins: grains.margins },
+    after: { from: from ?? null, to: to ?? null, party: partyId ?? null, invoiceRows: invoiceRows.length, orderRows: fins.length, prices: grains.prices, margins: grains.margins },
   });
 
   return new Response(csv, { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="financials.csv"' } });

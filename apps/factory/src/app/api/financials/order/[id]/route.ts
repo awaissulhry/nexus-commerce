@@ -14,6 +14,9 @@ export const permission = PAGES.financials;
 
 export const GET = guarded(PAGES.financials, async (_req, { params, resolved }) => {
   const { id } = await params;
+  // EPF2 (P2: VAT/gross never visible on-screen) — the drawer renders a
+  // display-only VAT line from the configured rate; still not accounting.
+  const vatRowP = prisma.appSetting.findUnique({ where: { key: "financials.defaults" } });
   const order = await prisma.order.findUnique({
     where: { id },
     select: {
@@ -41,5 +44,6 @@ export const GET = guarded(PAGES.financials, async (_req, { params, resolved }) 
     actualComplete: order.workOrders.length > 0 && order.workOrders.every((w) => w.state === "DONE"),
   } satisfies FinOrder);
 
-  return jsonStripped({ order: { id: order.id, number: order.number, partyName: order.party.name }, rollup, invoices: order.invoices, payments: order.payments }, resolved);
+  const vatRatePct = ((await vatRowP)?.value as { vatRatePct?: number } | null)?.vatRatePct ?? 22;
+  return jsonStripped({ order: { id: order.id, number: order.number, partyName: order.party.name }, rollup, invoices: order.invoices, payments: order.payments, vatRatePct }, resolved);
 });
