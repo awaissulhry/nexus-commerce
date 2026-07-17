@@ -94,6 +94,75 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     const marketplace = request.query.marketplace?.toUpperCase() || undefined;
 
     try {
+      // Multi-listing cluster (2026-07-17): a family FILE must contain the
+      // product's WHOLE eBay world — the pool family PLUS every shared listing
+      // its SKUs participate in (SharedListingMembership siblings). The plain
+      // parent/child filter hid the sibling parents, so their adopted children
+      // (synthesized from memberships, which need the parent row present)
+      // vanished too — "I only see a single parent in the whole file".
+      // Resolution is symmetric: entering from a shared parent's family pulls
+      // the pool family in as well. Families without memberships: zero change.
+      let familyIdSet: string[] | null = null;
+      if (familyId) {
+        const ids = new Set<string>([familyId]);
+        const fam = await prisma.product.findMany({
+          where: { deletedAt: null, OR: [{ id: familyId }, { parentId: familyId }] },
+          select: { id: true, sku: true },
+        });
+        for (const p of fam) ids.add(p.id);
+        const famSkus = fam.map((p) => p.sku).filter(Boolean);
+        // memberships touching this family (by pool product OR by parent SKU)
+        const memberships = await prisma.sharedListingMembership.findMany({
+          where: {
+            status: 'ACTIVE',
+            OR: [
+              { productId: { in: [...ids] } },
+              ...(famSkus.length ? [{ parentSku: { in: famSkus } }] : []),
+            ],
+          },
+          select: { parentSku: true, productId: true },
+        });
+        if (memberships.length > 0) {
+          const linkedProductIds = [...new Set(memberships.map((m) => m.productId).filter((v): v is string => !!v))];
+          // Transitive hop: the pool products' OTHER memberships name the rest
+          // of the sibling listings — so entering the cluster from ANY listing
+          // loads the whole cluster, not just the pool + itself.
+          const clusterMemberships = linkedProductIds.length
+            ? await prisma.sharedListingMembership.findMany({
+                where: { status: 'ACTIVE', productId: { in: linkedProductIds } },
+                select: { parentSku: true },
+              })
+            : [];
+          const parentSkus = [...new Set([
+            ...memberships.map((m) => m.parentSku),
+            ...clusterMemberships.map((m) => m.parentSku),
+          ].filter(Boolean))];
+          const cluster = await prisma.product.findMany({
+            where: {
+              deletedAt: null,
+              OR: [
+                { sku: { in: parentSkus } },                // sibling shared parents
+                { id: { in: linkedProductIds } },           // pool products
+                { parentId: { in: linkedProductIds } },     // (defensive) their children
+              ],
+            },
+            select: { id: true, parentId: true },
+          });
+          for (const p of cluster) {
+            ids.add(p.id);
+            if (p.parentId) ids.add(p.parentId); // pull the pool family's parent too
+          }
+          // one more hop: children of any parent added above
+          const parents = [...ids];
+          const kids = await prisma.product.findMany({
+            where: { deletedAt: null, parentId: { in: parents } },
+            select: { id: true },
+          });
+          for (const k of kids) ids.add(k.id);
+        }
+        familyIdSet = [...ids];
+      }
+
       const products = await prisma.product.findMany({
         where: {
           deletedAt: null,
@@ -102,8 +171,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           // their eBay ChannelListings, which the cockpit matrix writes).
           // Scoped-view: when not drilling into a family, apply scope filter
           // (listed = family-coherent eBay channel filter; all = whole catalog).
-          ...(familyId
-            ? { OR: [{ id: familyId }, { parentId: familyId }] }
+          ...(familyIdSet
+            ? { id: { in: familyIdSet } }
             : buildListingScopeWhere({ channel: 'EBAY', marketplace, scope })),
         },
         include: {
