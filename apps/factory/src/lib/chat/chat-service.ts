@@ -6,6 +6,10 @@
  * moneyCents rides along (pure.ts owns the regex). Every mutation publishes
  * an FS2 event ("chat.message" / "chat.space") so FC2's shell goes live for
  * free. postSystemMessage is the FC5 entry: authorId null, kind SYSTEM.
+ * FC3 — thread-scoped notifications (a reply pings ONLY participants +
+ * followers + @mentioned, notifyLevel-filtered — the Google rule), explicit
+ * audited @all expansion (resolveMentions stays user-only), auto-follow on
+ * reply/direct-mention, and follow/unfollow toggles on ChatMember.followedThreads.
  */
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
@@ -13,7 +17,27 @@ import { notify } from "@/lib/notifications";
 import { resolveMentions } from "@/lib/comments";
 import { publishEventDurable } from "@/lib/events";
 import { OWNER_ROLE_KEY } from "@/lib/auth/permissions";
-import { bodyCarriesMoney, buildOrderSpaceMembers, orderSpaceName } from "./pure";
+import {
+  addFollowedThread,
+  bodyCarriesMoney,
+  bodyMentionsAll,
+  buildOrderSpaceMembers,
+  computeThreadAudience,
+  orderSpaceName,
+  parseFollowedThreads,
+  removeFollowedThread,
+  type ChatNotifyLevelName,
+} from "./pure";
+
+/**
+ * FC3 — the NotificationKind for a non-mention thread-reply ping ("Marco
+ * replied in a thread"). FLAGGED CHOICE: no existing kind fits — it is not a
+ * MENTION (MENTION must stay trustworthy for mention-level filtering), not an
+ * ASSIGNMENT/STATE_CHANGE/REMINDER. SYSTEM is the least-wrong generic bucket;
+ * a proper THREAD_REPLY enum value is a one-line additive migration for a
+ * later phase if kind-based filtering ever needs the distinction.
+ */
+const THREAD_REPLY_KIND = "SYSTEM" as const;
 
 export type ChatErrorCode =
   | "not_found"
@@ -67,7 +91,7 @@ async function requireSpace(spaceId: string) {
 async function requireMembership(spaceId: string, userId: string) {
   const member = await prisma.chatMember.findUnique({
     where: { spaceId_userId: { spaceId, userId } },
-    select: { id: true, role: true, lastReadMessageId: true },
+    select: { id: true, role: true, lastReadMessageId: true, followedThreads: true },
   });
   if (!member) throw new ChatError("not_member", "Not a member of this space");
   return member;
@@ -265,30 +289,177 @@ export async function postMessage(input: {
   // FC2 — last-activity truth for the rail: posting bumps the space row, so
   // the bounded member's-spaces query (orderBy updatedAt desc) IS activity order
   await prisma.chatSpace.update({ where: { id: input.spaceId }, data: { updatedAt: new Date() } });
+
+  // FC3 — resolve the notify audience (the Google rule, pure-tested):
+  // mentions are user-only (resolveMentions); @all expands to the space's
+  // members HERE, explicitly and audited; thread replies ping only
+  // participants + followers + mentioned; notifyLevel filters everything.
+  const mentions = await resolveMentions(body);
+  const allMention = bodyMentionsAll(body);
   void audit({
     actorId: input.author.id,
     entityType: "chatMessage",
     entityId: message.id,
     action: "created",
-    after: { spaceId: input.spaceId, threadRootId: input.threadRootId ?? null },
+    after: {
+      spaceId: input.spaceId,
+      threadRootId: input.threadRootId ?? null,
+      ...(allMention ? { allMention: true } : {}),
+    },
   });
 
-  const mentions = await resolveMentions(body);
-  for (const mention of mentions) {
-    if (mention.id === input.author.id) continue;
+  const needMembers = mentions.length > 0 || allMention || !!input.threadRootId;
+  const members = needMembers
+    ? await prisma.chatMember.findMany({
+        where: { spaceId: input.spaceId },
+        take: 500, // bounded: one space's membership (tiny team by construction)
+        select: { userId: true, notifyLevel: true, followedThreads: true },
+      })
+    : [];
+  const levels: Record<string, ChatNotifyLevelName> = {};
+  for (const m of members) levels[m.userId] = m.notifyLevel;
+
+  const directMentionIds = mentions.map((m) => m.id);
+  const mentionedIds = new Set(directMentionIds);
+  if (allMention) for (const m of members) mentionedIds.add(m.userId);
+
+  let participantIds: string[] = [];
+  let followerIds: string[] = [];
+  if (input.threadRootId) {
+    const participantRows = await prisma.chatMessage.findMany({
+      where: {
+        OR: [{ id: input.threadRootId }, { threadRootId: input.threadRootId }],
+        deletedAt: null,
+        authorId: { not: null },
+      },
+      distinct: ["authorId"],
+      take: 500, // bounded: distinct thread authors ≤ space membership
+      select: { authorId: true },
+    });
+    participantIds = participantRows.map((r) => r.authorId).filter((id): id is string => !!id);
+    followerIds = members
+      .filter((m) => parseFollowedThreads(m.followedThreads).includes(input.threadRootId!))
+      .map((m) => m.userId);
+  }
+
+  const audience = computeThreadAudience({
+    authorId: input.author.id,
+    participantIds,
+    followerIds,
+    mentionedIds: [...mentionedIds],
+    levels,
+  });
+
+  const href = input.threadRootId
+    ? `/chat?space=${input.spaceId}&thread=${input.threadRootId}`
+    : `/chat?space=${input.spaceId}`;
+  const direct = new Set(directMentionIds);
+  for (const userId of audience.mention) {
     await notify({
-      userId: mention.id,
+      userId,
       kind: "MENTION",
-      title: `${input.author.displayName} mentioned you in ${space.name}`,
+      title: direct.has(userId)
+        ? `${input.author.displayName} mentioned you in ${space.name}`
+        : `${input.author.displayName} mentioned everyone in ${space.name}`,
       body: body.slice(0, 140),
       entityType: "chatSpace",
       entityId: input.spaceId,
-      href: `/chat?space=${input.spaceId}`,
+      href,
     });
+  }
+  for (const userId of audience.reply) {
+    await notify({
+      userId,
+      kind: THREAD_REPLY_KIND,
+      title: `${input.author.displayName} replied in a thread · ${space.name}`,
+      body: body.slice(0, 140),
+      entityType: "chatSpace",
+      entityId: input.spaceId,
+      href,
+    });
+  }
+
+  // FC3 — auto-follow (the Google rule): replying to a thread follows it, and
+  // so does being DIRECTLY @mentioned in one (@all never force-follows anyone)
+  if (input.threadRootId) {
+    const followTargets = new Set([input.author.id, ...directMentionIds]);
+    for (const m of members) {
+      if (!followTargets.has(m.userId)) continue;
+      const list = parseFollowedThreads(m.followedThreads);
+      const next = addFollowedThread(list, input.threadRootId);
+      if (next === list) continue; // already following
+      await prisma.chatMember.update({
+        where: { spaceId_userId: { spaceId: input.spaceId, userId: m.userId } },
+        data: { followedThreads: next },
+      });
+    }
   }
 
   await publishEventDurable("chat.message", { spaceId: input.spaceId, messageId: message.id });
   return message;
+}
+
+// ── FC3 — followed threads ───────────────────────────────────────
+
+/** the follow/unfollow guardrail walk shared by both toggles */
+async function requireThreadRoot(spaceId: string, rootId: string) {
+  const root = await prisma.chatMessage.findUnique({
+    where: { id: rootId },
+    select: { id: true, spaceId: true, threadRootId: true },
+  });
+  if (!root || root.spaceId !== spaceId) throw new ChatError("not_found", "Thread not found in this space");
+  if (root.threadRootId) throw new ChatError("invalid", "Threads are one level deep — follow the root message");
+  return root;
+}
+
+/** Follow a thread (idempotent). Membership required; audited; rail refresh is scoped to the follower. */
+export async function followThread(spaceId: string, userId: string, rootId: string): Promise<{ following: boolean }> {
+  await requireSpace(spaceId);
+  const member = await requireMembership(spaceId, userId);
+  await requireThreadRoot(spaceId, rootId);
+
+  const list = parseFollowedThreads(member.followedThreads);
+  const next = addFollowedThread(list, rootId);
+  if (next !== list) {
+    await prisma.chatMember.update({
+      where: { spaceId_userId: { spaceId, userId } },
+      data: { followedThreads: next },
+    });
+    void audit({
+      actorId: userId,
+      entityType: "chatMessage",
+      entityId: rootId,
+      action: "thread.followed",
+      after: { spaceId },
+    });
+    await publishEventDurable("chat.space", { spaceId }, { userId });
+  }
+  return { following: true };
+}
+
+/** Unfollow a thread (idempotent). */
+export async function unfollowThread(spaceId: string, userId: string, rootId: string): Promise<{ following: boolean }> {
+  await requireSpace(spaceId);
+  const member = await requireMembership(spaceId, userId);
+  await requireThreadRoot(spaceId, rootId);
+
+  const list = parseFollowedThreads(member.followedThreads);
+  const next = removeFollowedThread(list, rootId);
+  if (next !== list) {
+    await prisma.chatMember.update({
+      where: { spaceId_userId: { spaceId, userId } },
+      data: { followedThreads: next },
+    });
+    void audit({
+      actorId: userId,
+      entityType: "chatMessage",
+      entityId: rootId,
+      action: "thread.unfollowed",
+      after: { spaceId },
+    });
+    await publishEventDurable("chat.space", { spaceId }, { userId });
+  }
+  return { following: false };
 }
 
 /**

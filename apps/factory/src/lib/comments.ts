@@ -8,8 +8,12 @@ import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { notify } from "@/lib/notifications";
 import { publishEvent } from "@/lib/events";
+// FC3 — the grammar moved to a pure home so the chat UI's mention chips
+// tokenize with the EXACT same regex (parity by construction); behavior here
+// is unchanged and resolveMentions stays user-only (@all is chat-service's).
+import { MENTION_RE_SOURCE } from "@/lib/chat/pure";
 
-const MENTION_RE = /@([\w.+-]+(?:@[\w.-]+)?)/g;
+const MENTION_RE = new RegExp(MENTION_RE_SOURCE, "g");
 
 export async function resolveMentions(body: string): Promise<{ id: string; displayName: string }[]> {
   const handles = [...body.matchAll(MENTION_RE)].map((m) => m[1].toLowerCase());

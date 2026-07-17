@@ -532,3 +532,199 @@ a {
   color: var(--h10-text-3);
   cursor: default;
 }
+
+/* ────────────────────────────────────────────────────────────────
+   FC3 — in-line threads + mention surfacing: mention chips, the root
+   message's thread bar (facepile · count · last activity), the right-side
+   thread panel, and the rail's followed-Threads section. */
+
+.fc3-mention {
+  display: inline;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--h10-wash-primary);
+  color: var(--h10-primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fc3-mention.is-all {
+  background: var(--h10-surface-hover);
+  color: var(--h10-text);
+  border: 1px solid var(--h10-border);
+}
+
+/* the root message's thread affordance */
+.fc3-thread-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 3px;
+  padding: 2px 9px 2px 4px;
+  border: 1px solid var(--h10-border-subtle);
+  border-radius: 999px;
+  background: var(--h10-surface);
+  cursor: pointer;
+  font-family: inherit;
+}
+.fc3-thread-bar:hover {
+  border-color: var(--h10-primary);
+  background: var(--h10-wash-primary);
+}
+.fc3-facepile {
+  display: inline-flex;
+}
+.fc3-face {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 7.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--h10-surface);
+  user-select: none;
+}
+.fc3-face + .fc3-face {
+  margin-left: -5px;
+}
+.fc3-thread-count {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--h10-primary);
+}
+.fc3-thread-time {
+  font-size: 10.5px;
+  color: var(--h10-text-3);
+}
+
+/* the right-side thread panel */
+.fc3-thread-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 0;
+}
+.fc3-thread-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--h10-border-subtle);
+  min-width: 0;
+}
+.fc3-thread-title {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.fc3-thread-sub {
+  font-size: 10.5px;
+  color: var(--h10-text-3);
+}
+.fc3-follow-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--h10-border);
+  border-radius: 999px;
+  background: none;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--h10-text-2);
+  cursor: pointer;
+  font-family: inherit;
+}
+.fc3-follow-btn:hover {
+  border-color: var(--h10-primary);
+  color: var(--h10-primary);
+}
+.fc3-follow-btn.is-following {
+  background: var(--h10-wash-primary);
+  border-color: var(--h10-primary);
+  color: var(--h10-primary);
+}
+.fc3-follow-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.fc3-thread-root {
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 6px 0 2px;
+}
+.fc3-thread-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 12px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--h10-text-3);
+}
+.fc3-thread-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--h10-border-subtle);
+}
+
+/* the rail's followed-Threads section (Google's Home-ish) */
+.fc3-rail-threads {
+  border-bottom: 1px solid var(--h10-border-subtle);
+  flex-shrink: 0;
+}
+.fc3-rail-threads-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--h10-text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.fc3-rail-threads-list {
+  max-height: 176px;
+  overflow-y: auto;
+}
+.fc3-rail-thread {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 5px 12px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: var(--h10-text);
+}
+.fc3-rail-thread:hover {
+  background: var(--h10-surface-hover);
+}
+.fc3-rail-thread-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.fc3-rail-thread-space {
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.fc3-rail-thread-snippet {
+  font-size: 11.5px;
+  color: var(--h10-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

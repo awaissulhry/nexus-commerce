@@ -76,9 +76,14 @@ describe("unreadMessageWhere", () => {
     expect(where).toEqual({
       spaceId: "s1",
       deletedAt: null,
+      threadRootId: null,
       OR: [{ authorId: null }, { authorId: { not: "me" } }],
     });
     expect(where).not.toHaveProperty("createdAt");
+  });
+
+  it("FC3 — counts the MAIN stream only (thread replies notify their audience, not the space badge)", () => {
+    expect(unreadMessageWhere("s1", "me", null).threadRootId).toBeNull();
   });
 
   it("with a cursor, only strictly-newer messages count", () => {

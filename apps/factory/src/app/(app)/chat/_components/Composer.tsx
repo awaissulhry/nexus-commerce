@@ -15,13 +15,16 @@ import type { SearchLoader } from "@/lib/virtual/async-search";
 import { apiJson } from "@/lib/api-client";
 
 export function Composer({
-  spaceId,
+  composerKey,
   canPost,
   onSend,
+  placeholder = "Message the space — @ to mention…",
 }: {
-  spaceId: string;
+  /** draft scope — a new key starts a fresh draft (space id, or space+thread in the FC3 panel) */
+  composerKey: string;
   canPost: boolean;
   onSend: (body: string) => Promise<boolean>;
+  placeholder?: string;
 }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -64,12 +67,12 @@ export function Composer({
   return (
     <div style={{ borderTop: "1px solid var(--h10-border)", padding: 12, display: "grid", gap: 8 }}>
       <MentionTextarea
-        key={spaceId} /* a fresh space starts a fresh draft */
+        key={composerKey} /* a fresh space (or thread) starts a fresh draft */
         value={text}
         onChange={setText}
         loader={loader}
         rows={2}
-        placeholder="Message the space — @ to mention…"
+        placeholder={placeholder}
         ariaLabel="Message"
         textareaRef={(el) => {
           textareaRef.current = el;

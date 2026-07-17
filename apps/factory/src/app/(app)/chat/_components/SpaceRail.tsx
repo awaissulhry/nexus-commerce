@@ -5,15 +5,18 @@
  * snippet + relative time + unread badge; ORDER spaces wear a small package
  * icon. Keyboard when the rail is focused: j/k or ↑/↓ move the selection,
  * Enter opens it. Fixed 64px rows keep the keyboard scroll math exact.
+ * FC3 — a compact "Threads" section above Spaces (Google's Home-ish):
+ * followed threads with unread activity, newest first, bounded 20 by the
+ * server; clicking one deep-links space + thread panel.
  */
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { MessageCircle, Package, Plus, RefreshCw } from "lucide-react";
+import { MessageCircle, MessageSquareText, Package, Plus, RefreshCw } from "lucide-react";
 import { EmptyState } from "@/design-system/components";
 import { Button, Input, Skeleton } from "@/design-system/primitives";
 import { WindowedList } from "@/components/WindowedList";
-import { clampMove, filterSpaces, formatUnread, railSnippet, relTime } from "@/lib/chat/ui";
+import { clampMove, filterSpaces, formatUnread, railSnippet, relTime, type FollowedThread } from "@/lib/chat/ui";
 import type { SpaceItem } from "./types";
 
 const ROW_H = 64;
@@ -21,19 +24,24 @@ const ROW_H = 64;
 export function SpaceRail({
   railRef,
   spaces,
+  threads,
   error,
   onRetry,
   activeId,
   onOpen,
+  onOpenThread,
   canCreate,
   onCreate,
 }: {
   railRef: React.RefObject<HTMLDivElement>;
   spaces: SpaceItem[] | null;
+  /** FC3 — followed threads with unread activity (server-bounded to 20) */
+  threads: FollowedThread[];
   error: string | null;
   onRetry: () => void;
   activeId: string | null;
   onOpen: (id: string) => void;
+  onOpenThread: (spaceId: string, rootId: string) => void;
   canCreate: boolean;
   onCreate: () => void;
 }) {
@@ -98,6 +106,28 @@ export function SpaceRail({
           aria-label="Search spaces"
         />
       </div>
+
+      {threads.length > 0 && (
+        <div className="fc3-rail-threads">
+          <div className="fc3-rail-threads-head">
+            <MessageSquareText size={12} /> Threads
+          </div>
+          <div className="fc3-rail-threads-list">
+            {threads.map((t) => (
+              <button key={t.rootId} type="button" className="fc3-rail-thread" onClick={() => onOpenThread(t.spaceId, t.rootId)}>
+                <span className="fc3-rail-thread-top">
+                  <span className="fc3-rail-thread-space">{t.spaceName}</span>
+                  <span className="fc2-rail-time">{relTime(t.lastReplyAt, now)}</span>
+                </span>
+                <span className="fc3-rail-thread-snippet">
+                  {t.rootAuthorName ? `${t.rootAuthorName.split(/\s+/)[0]}: ` : ""}
+                  {t.snippet}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div ref={listWrapRef} style={{ flex: 1, minHeight: 0 }}>
         {error ? (

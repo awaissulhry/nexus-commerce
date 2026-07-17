@@ -7,6 +7,9 @@
  * member count, both via nested take-1/_count selects on the same bounded
  * query. Activity ordering is real because posting bumps the space row
  * (chat-service).
+ * FC3 — the payload also carries `threads`: the caller's followed threads
+ * with UNREAD activity (someone else replied after their read cursor),
+ * newest first, bounded 20 — the rail's Home-ish Threads section.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -15,7 +18,12 @@ import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { PAGES, FEATURES } from "@/lib/auth/permissions";
 import { createCustomSpace } from "@/lib/chat/chat-service";
 import { chatErrorResponse } from "@/lib/chat/http";
-import { unreadMessageWhere } from "@/lib/chat/pure";
+import { parseFollowedThreads, unreadMessageWhere } from "@/lib/chat/pure";
+
+/** FC3 — hard cap on followed-thread roots examined per rail refresh */
+const FOLLOWED_SCAN_MAX = 300;
+/** FC3 — the Threads section is bounded (Google-Home-ish, compact) */
+const THREADS_TAKE = 20;
 
 export const permission = { GET: PAGES.chat, POST: FEATURES.chatSpacesCreate };
 
@@ -28,6 +36,7 @@ export const GET = guarded(PAGES.chat, async (_req: NextRequest, { actor, resolv
       role: true,
       notifyLevel: true,
       lastReadMessageId: true,
+      followedThreads: true,
       space: {
         select: {
           id: true,
@@ -97,7 +106,77 @@ export const GET = guarded(PAGES.chat, async (_req: NextRequest, { actor, resolv
         : null,
     };
   });
-  return jsonStripped({ items }, resolved);
+
+  // ── FC3 — followed threads with unread activity (the rail's Threads section)
+  const followed: { rootId: string; spaceName: string; cursorAt: Date | null }[] = [];
+  for (const m of memberships) {
+    const cursor = (m.lastReadMessageId && cursorAt.get(m.lastReadMessageId)) || null;
+    for (const rootId of parseFollowedThreads(m.followedThreads)) {
+      if (followed.length >= FOLLOWED_SCAN_MAX) break;
+      followed.push({ rootId, spaceName: m.space.name, cursorAt: cursor });
+    }
+  }
+  let threads: {
+    rootId: string;
+    spaceId: string;
+    spaceName: string;
+    snippet: string;
+    rootAuthorName: string | null;
+    lastReplyAt: Date;
+    replyCount: number;
+  }[] = [];
+  if (followed.length) {
+    const rootIds = followed.map((f) => f.rootId);
+    const [rootRows, replyAgg, otherAgg] = await Promise.all([
+      prisma.chatMessage.findMany({
+        where: { id: { in: rootIds } },
+        take: FOLLOWED_SCAN_MAX, // bounded: capped followed-roots scan
+        select: {
+          id: true,
+          spaceId: true,
+          body: true,
+          deletedAt: true,
+          author: { select: { displayName: true } },
+        },
+      }),
+      // all live replies → count + last activity
+      prisma.chatMessage.groupBy({
+        by: ["threadRootId"],
+        where: { threadRootId: { in: rootIds }, deletedAt: null },
+        _count: { _all: true },
+        _max: { createdAt: true },
+      }),
+      // OTHERS' replies → unread decision (own replies never make a thread unread)
+      prisma.chatMessage.groupBy({
+        by: ["threadRootId"],
+        where: { threadRootId: { in: rootIds }, deletedAt: null, authorId: { not: actor!.id } },
+        _max: { createdAt: true },
+      }),
+    ]);
+    const rootOf = new Map(rootRows.map((r) => [r.id, r]));
+    const aggOf = new Map(replyAgg.map((a) => [a.threadRootId as string, a]));
+    const otherMaxOf = new Map(otherAgg.map((a) => [a.threadRootId as string, a._max.createdAt]));
+    for (const f of followed) {
+      const root = rootOf.get(f.rootId);
+      const agg = aggOf.get(f.rootId);
+      const otherMax = otherMaxOf.get(f.rootId) ?? null;
+      if (!root || !agg?._max.createdAt || !otherMax) continue;
+      const unread = f.cursorAt == null || otherMax > f.cursorAt;
+      if (!unread) continue;
+      threads.push({
+        rootId: f.rootId,
+        spaceId: root.spaceId,
+        spaceName: f.spaceName,
+        snippet: root.deletedAt ? "Message deleted" : root.body.replace(/\s+/g, " ").trim().slice(0, 120),
+        rootAuthorName: root.author?.displayName ?? null,
+        lastReplyAt: agg._max.createdAt,
+        replyCount: agg._count._all,
+      });
+    }
+    threads = threads.sort((a, b) => b.lastReplyAt.getTime() - a.lastReplyAt.getTime()).slice(0, THREADS_TAKE);
+  }
+
+  return jsonStripped({ items, threads }, resolved);
 });
 
 const CreateBody = z.object({

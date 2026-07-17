@@ -7,6 +7,11 @@
  * visibility, windowed message paging accumulated here, CUSTOM space
  * creation behind chat.spaces.create. Keyboard: j/k or ↑/↓ move the rail
  * selection while the rail is focused; Esc anywhere returns focus to it.
+ * FC3 — ?thread=<rootId> opens the right-side thread panel (its own
+ * resizable pane, key factory.chat.threadPaneWidth): windowed replies,
+ * optimistic reply send, follow/unfollow toggle, and the read cursor now
+ * advances over thread replies too while the panel is open. Esc closes the
+ * panel first, then returns focus to the rail.
  */
 "use client";
 
@@ -19,13 +24,26 @@ import { useResizablePanes, type PaneDef } from "@/components/useResizablePanes"
 import { apiJson } from "@/lib/api-client";
 import { useAuth, usePermission } from "@/lib/auth/client";
 import { useFactoryEvents } from "@/lib/use-factory-events";
-import { chatUrl, mergeNewestWindow, sortSpacesByActivity, type StreamMessage } from "@/lib/chat/ui";
+import {
+  chatUrl,
+  mergeNewestWindow,
+  sortSpacesByActivity,
+  type FollowedThread,
+  type MentionMember,
+  type StreamMessage,
+} from "@/lib/chat/ui";
 import { SpaceRail } from "./SpaceRail";
 import { SpaceView } from "./SpaceView";
-import type { ApiMessage, MessagesResponse, SpaceItem, SpacesResponse } from "./types";
+import { ThreadPanel } from "./ThreadPanel";
+import type { ApiMessage, MessagesResponse, SpaceItem, SpacesResponse, ThreadResponse } from "./types";
 
 const PANES_KEY = "factory.chat.paneWidths";
 const PANE_DEFS: PaneDef[] = [{ min: 240, max: 520, defaultSize: 300 }]; // the left rail
+// FC3 — the thread panel: its own instance + key so FC2's saved rail width
+// survives untouched (the inbox lesson: resizable, persisted). invert: the
+// handle sits on the panel's LEADING edge — dragging left grows it.
+const THREAD_PANES_KEY = "factory.chat.threadPaneWidth";
+const THREAD_PANE_DEFS: PaneDef[] = [{ min: 280, max: 560, defaultSize: 340, invert: true }];
 const WINDOW_TAKE = 100;
 
 const toStream = (m: ApiMessage): StreamMessage => ({
@@ -40,7 +58,17 @@ const toStream = (m: ApiMessage): StreamMessage => ({
   editedAt: m.editedAt,
   deletedAt: m.deletedAt,
   createdAt: m.createdAt,
+  thread: m.thread ?? null,
 });
+
+type ThreadState = {
+  rootId: string;
+  root: StreamMessage | null;
+  replies: StreamMessage[];
+  replyCount: number;
+  following: boolean;
+  hasEarlier: boolean;
+};
 
 function ChatInner() {
   const params = useSearchParams();
@@ -52,10 +80,15 @@ function ChatInner() {
   const spaceId = params.get("space");
   const spaceIdRef = useRef(spaceId);
   spaceIdRef.current = spaceId;
+  const threadId = spaceId ? params.get("thread") : null; // a thread is meaningless without its space
+  const threadIdRef = useRef(threadId);
+  threadIdRef.current = threadId;
 
   const [spaces, setSpaces] = useState<SpaceItem[] | null>(null);
+  const [followedThreads, setFollowedThreads] = useState<FollowedThread[]>([]);
   const [spacesError, setSpacesError] = useState<string | null>(null);
   const [messages, setMessages] = useState<StreamMessage[]>([]);
+  const [members, setMembers] = useState<MentionMember[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [hasEarlier, setHasEarlier] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
@@ -64,14 +97,28 @@ function ChatInner() {
   const [newName, setNewName] = useState("");
   const [createBusy, setCreateBusy] = useState(false);
 
+  // FC3 — the open thread panel
+  const [thread, setThread] = useState<ThreadState | null>(null);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [loadingEarlierReplies, setLoadingEarlierReplies] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+
   const railRef = useRef<HTMLDivElement>(null);
   const panes = useResizablePanes(PANES_KEY, PANE_DEFS);
+  const threadPanes = useResizablePanes(THREAD_PANES_KEY, THREAD_PANE_DEFS);
+
+  // ── URL law (quotes/orders pattern) ────────────────────────────
+  const open = useCallback((id: string | null, rootId?: string | null) => {
+    window.history.replaceState(null, "", chatUrl(id, rootId ?? null));
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, []);
 
   // ── rail ───────────────────────────────────────────────────────
   const loadSpaces = useCallback(async () => {
     try {
       const d = await apiJson<SpacesResponse>("/api/chat/spaces");
       setSpaces(sortSpacesByActivity(d.items));
+      setFollowedThreads(d.threads ?? []);
       setSpacesError(null);
     } catch (e) {
       setSpacesError((e as Error).message || "Couldn't load spaces");
@@ -89,6 +136,7 @@ function ChatInner() {
       if (spaceIdRef.current !== id) return; // the user moved on mid-flight
       const window = d.items.map(toStream).reverse(); // newest-first → ascending
       setNotMember(false);
+      setMembers(d.members ?? []);
       setMessages((prev) => (quiet ? mergeNewestWindow(prev, window) : window));
       if (!quiet) setHasEarlier(d.items.length === WINDOW_TAKE);
     } catch (e) {
@@ -103,6 +151,7 @@ function ChatInner() {
 
   useEffect(() => {
     setMessages([]);
+    setMembers([]);
     setHasEarlier(false);
     setNotMember(false);
     if (spaceId) void loadNewest(spaceId, false);
@@ -129,23 +178,93 @@ function ChatInner() {
     }
   }, [messages, loadingEarlier, toast]);
 
-  // ── live: chat events refetch the rail + the open window ───────
+  // ── FC3: the open thread's reply window ────────────────────────
+  const loadThread = useCallback(
+    async (sid: string, rootId: string, quiet: boolean) => {
+      if (!quiet) setThreadLoading(true);
+      try {
+        const d = await apiJson<ThreadResponse>(`/api/chat/spaces/${sid}/threads/${rootId}?take=${WINDOW_TAKE}`);
+        if (spaceIdRef.current !== sid || threadIdRef.current !== rootId) return;
+        const window = d.items.map(toStream).reverse();
+        setThread((prev) => ({
+          rootId,
+          root: toStream(d.root),
+          replies: quiet && prev?.rootId === rootId ? mergeNewestWindow(prev.replies, window) : window,
+          replyCount: d.replyCount,
+          following: d.following,
+          hasEarlier: quiet && prev?.rootId === rootId ? prev.hasEarlier : d.items.length === WINDOW_TAKE,
+        }));
+      } catch (e) {
+        if (spaceIdRef.current !== sid || threadIdRef.current !== rootId) return;
+        const msg = (e as Error).message;
+        if (/not a member/i.test(msg)) return; // the space view already explains
+        toast(msg, "danger");
+        open(sid, null); // dead deep link — close the panel, keep the space
+      } finally {
+        if (threadIdRef.current === rootId) setThreadLoading(false);
+      }
+    },
+    [toast, open],
+  );
+
+  useEffect(() => {
+    setThread(null);
+    if (spaceId && threadId) void loadThread(spaceId, threadId, false);
+  }, [spaceId, threadId, loadThread]);
+
+  const loadEarlierReplies = useCallback(async () => {
+    const sid = spaceIdRef.current;
+    const rootId = threadIdRef.current;
+    const oldest = thread?.replies.find((m) => !m.pending);
+    if (!sid || !rootId || !oldest || loadingEarlierReplies) return;
+    setLoadingEarlierReplies(true);
+    try {
+      const d = await apiJson<ThreadResponse>(`/api/chat/spaces/${sid}/threads/${rootId}?before=${oldest.id}&take=${WINDOW_TAKE}`);
+      if (threadIdRef.current !== rootId) return;
+      const page = d.items.map(toStream).reverse();
+      setThread((prev) => {
+        if (!prev || prev.rootId !== rootId) return prev;
+        const known = new Set(prev.replies.map((m) => m.id));
+        return {
+          ...prev,
+          replies: [...page.filter((m) => !known.has(m.id)), ...prev.replies],
+          hasEarlier: d.items.length === WINDOW_TAKE,
+        };
+      });
+    } catch (e) {
+      toast((e as Error).message, "danger");
+    } finally {
+      setLoadingEarlierReplies(false);
+    }
+  }, [thread, loadingEarlierReplies, toast]);
+
+  // ── live: chat events refetch the rail + the open window(s) ────
   useFactoryEvents(
     ["chat.message", "chat.space"],
     () => {
       void loadSpaces();
       const id = spaceIdRef.current;
       if (id) void loadNewest(id, true);
+      const rootId = threadIdRef.current;
+      if (id && rootId) void loadThread(id, rootId, true);
     },
     { debounceMs: 1000 },
   );
 
   // ── read cursor: on open + when a new message becomes visible ──
+  // FC3 — with the panel open the cursor follows thread replies too (the
+  // newest thing the reader can actually see, by timestamp).
   const activeSpace = useMemo(() => spaces?.find((s) => s.id === spaceId), [spaces, spaceId]);
   const newestRealId = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) if (!messages[i].pending) return messages[i].id;
-    return null;
-  }, [messages]);
+    let best: StreamMessage | null = null;
+    for (const list of [messages, thread?.replies ?? []]) {
+      for (const m of list) {
+        if (m.pending) continue;
+        if (!best || new Date(m.createdAt).getTime() > new Date(best.createdAt).getTime()) best = m;
+      }
+    }
+    return best?.id ?? null;
+  }, [messages, thread]);
   const postedRead = useRef<Record<string, string>>({});
   useEffect(() => {
     if (!spaceId || !newestRealId || notMember) return;
@@ -163,12 +282,6 @@ function ChatInner() {
     document.addEventListener("visibilitychange", post);
     return () => document.removeEventListener("visibilitychange", post);
   }, [spaceId, newestRealId, notMember, loadSpaces]);
-
-  // ── URL law (quotes/orders pattern) ────────────────────────────
-  const open = useCallback((id: string | null) => {
-    window.history.replaceState(null, "", chatUrl(id));
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  }, []);
 
   // ── composer actions (optimistic append + reconcile) ───────────
   const send = useCallback(
@@ -203,34 +316,101 @@ function ChatInner() {
     [user, loadNewest, loadSpaces, toast],
   );
 
+  // FC3 — reply into the open thread (optimistic, replying auto-follows server-side)
+  const sendReply = useCallback(
+    async (body: string): Promise<boolean> => {
+      const id = spaceIdRef.current;
+      const rootId = threadIdRef.current;
+      if (!id || !rootId || !user) return false;
+      const temp: StreamMessage = {
+        id: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        authorId: user.id,
+        authorName: user.displayName,
+        kind: "MESSAGE",
+        body,
+        createdAt: new Date().toISOString(),
+        pending: true,
+      };
+      setThread((prev) => (prev && prev.rootId === rootId ? { ...prev, replies: [...prev.replies, temp] } : prev));
+      try {
+        const d = await apiJson<{ message: { id: string } }>(`/api/chat/spaces/${id}/messages`, {
+          method: "POST",
+          body: JSON.stringify({ body, threadRootId: rootId }),
+        });
+        setThread((prev) =>
+          prev && prev.rootId === rootId
+            ? {
+                ...prev,
+                replies: prev.replies.map((m) => (m.id === temp.id ? { ...m, id: d.message.id, pending: false } : m)),
+                following: true, // replying auto-follows (the Google rule)
+              }
+            : prev,
+        );
+        void loadThread(id, rootId, true); // reconcile server truth
+        void loadNewest(id, true); // the root's thread bar (count/facepile) lives here
+        void loadSpaces();
+        return true;
+      } catch (e) {
+        setThread((prev) => (prev && prev.rootId === rootId ? { ...prev, replies: prev.replies.filter((m) => m.id !== temp.id) } : prev));
+        toast((e as Error).message, "danger");
+        return false;
+      }
+    },
+    [user, loadThread, loadNewest, loadSpaces, toast],
+  );
+
+  const refetchOpenWindows = useCallback(() => {
+    const id = spaceIdRef.current;
+    if (id) void loadNewest(id, true);
+    const rootId = threadIdRef.current;
+    if (id && rootId) void loadThread(id, rootId, true);
+  }, [loadNewest, loadThread]);
+
   const edit = useCallback(
     async (messageId: string, body: string): Promise<boolean> => {
-      const id = spaceIdRef.current;
       try {
         await apiJson(`/api/chat/messages/${messageId}`, { method: "PATCH", body: JSON.stringify({ body }) });
-        if (id) void loadNewest(id, true);
+        refetchOpenWindows();
         return true;
       } catch (e) {
         toast((e as Error).message, "danger");
         return false;
       }
     },
-    [loadNewest, toast],
+    [refetchOpenWindows, toast],
   );
 
   const remove = useCallback(
     async (messageId: string): Promise<void> => {
-      const id = spaceIdRef.current;
       try {
         await apiJson(`/api/chat/messages/${messageId}`, { method: "DELETE" });
         toast("Deleted — a tombstone stays, the audit log keeps the original", "info");
-        if (id) void loadNewest(id, true);
+        refetchOpenWindows();
       } catch (e) {
         toast((e as Error).message, "danger");
       }
     },
-    [loadNewest, toast],
+    [refetchOpenWindows, toast],
   );
+
+  // FC3 — follow/unfollow the open thread
+  const toggleFollow = useCallback(async () => {
+    const id = spaceIdRef.current;
+    const rootId = threadIdRef.current;
+    if (!id || !rootId || !thread || followBusy) return;
+    setFollowBusy(true);
+    try {
+      const d = await apiJson<{ following: boolean }>(`/api/chat/spaces/${id}/threads/${rootId}`, {
+        method: thread.following ? "DELETE" : "POST",
+      });
+      setThread((prev) => (prev && prev.rootId === rootId ? { ...prev, following: d.following } : prev));
+      void loadSpaces(); // the rail's Threads section follows the follow list
+    } catch (e) {
+      toast((e as Error).message, "danger");
+    } finally {
+      setFollowBusy(false);
+    }
+  }, [thread, followBusy, loadSpaces, toast]);
 
   // ── CUSTOM space creation (chat.spaces.create) ─────────────────
   const create = async () => {
@@ -257,23 +437,30 @@ function ChatInner() {
   const copyLink = useCallback(() => {
     if (!spaceIdRef.current) return;
     void navigator.clipboard
-      ?.writeText(`${window.location.origin}${chatUrl(spaceIdRef.current)}`)
-      .then(() => toast("Space link copied", "success"))
+      ?.writeText(`${window.location.origin}${chatUrl(spaceIdRef.current, threadIdRef.current)}`)
+      .then(() => toast("Link copied", "success"))
       .catch(() => toast("Couldn't copy — the address bar has the same link", "warning"));
   }, [toast]);
+
+  const threadOpen = !!(spaceId && threadId) && !notMember;
+  const gridColumns = threadOpen
+    ? `${panes.widths[0]}px 6px minmax(0, 1fr) 6px ${threadPanes.widths[0]}px`
+    : `${panes.widths[0]}px 6px minmax(0, 1fr)`;
 
   return (
     <div
       className="fc2-chat"
-      // Esc returns focus to the rail — unless a consumer already claimed the
-      // key (the mention popover preventDefaults its Escape).
+      // Esc: close the thread panel first; otherwise return focus to the rail —
+      // unless a consumer already claimed the key (mention popover, inline edit).
       onKeyDown={(e) => {
-        if (e.key === "Escape" && !e.defaultPrevented && !creating) railRef.current?.focus();
+        if (e.key !== "Escape" || e.defaultPrevented || creating) return;
+        if (threadIdRef.current) open(spaceIdRef.current, null);
+        else railRef.current?.focus();
       }}
       style={{
         height: "calc(100dvh - 52px)",
         display: "grid",
-        gridTemplateColumns: `${panes.widths[0]}px 6px minmax(0, 1fr)`,
+        gridTemplateColumns: gridColumns,
         gridTemplateRows: "minmax(0, 1fr)",
         border: "1px solid var(--h10-border)",
         borderRadius: 12,
@@ -284,10 +471,12 @@ function ChatInner() {
       <SpaceRail
         railRef={railRef}
         spaces={spaces}
+        threads={followedThreads}
         error={spacesError}
         onRetry={() => void loadSpaces()}
         activeId={spaceId}
         onOpen={(id) => open(id)}
+        onOpenThread={(sid, rootId) => open(sid, rootId)}
         canCreate={canCreate}
         onCreate={() => setCreating(true)}
       />
@@ -296,6 +485,7 @@ function ChatInner() {
         spaceId={spaceId}
         space={activeSpace}
         messages={messages}
+        members={members}
         loading={messagesLoading}
         notMember={notMember}
         hasEarlier={hasEarlier}
@@ -307,7 +497,34 @@ function ChatInner() {
         onEdit={edit}
         onDelete={remove}
         onCopyLink={copyLink}
+        onOpenThread={(rootId) => open(spaceIdRef.current, rootId)}
       />
+      {threadOpen && (
+        <>
+          <PaneHandle {...threadPanes.handleProps(0)} label="Resize thread panel" />
+          <ThreadPanel
+            spaceId={spaceId!}
+            rootId={threadId!}
+            root={thread?.root ?? null}
+            replies={thread?.replies ?? []}
+            replyCount={thread?.replyCount ?? 0}
+            loading={threadLoading}
+            hasEarlier={thread?.hasEarlier ?? false}
+            loadingEarlier={loadingEarlierReplies}
+            onLoadEarlier={() => void loadEarlierReplies()}
+            following={thread?.following ?? false}
+            followBusy={followBusy}
+            onToggleFollow={() => void toggleFollow()}
+            onClose={() => open(spaceIdRef.current, null)}
+            meId={user?.id ?? null}
+            members={members}
+            canPost={canPost}
+            onSendReply={sendReply}
+            onEdit={edit}
+            onDelete={remove}
+          />
+        </>
+      )}
 
       <Modal
         open={creating}
