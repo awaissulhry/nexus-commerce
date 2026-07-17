@@ -77,3 +77,25 @@ describe('upsertSharedMembershipsFromRows', () => {
     expect(upserts[0].create).toMatchObject({ parentSku: 'OTHER-P', itemId: '333' })
   })
 })
+
+describe('normalizeEbaySharedFlags', () => {
+  it('coerces text booleans in place; blanks and real booleans untouched', async () => {
+    const { normalizeEbaySharedFlags } = await import('./ebay-shared-membership-upsert.service.js')
+    const rows: Array<Record<string, unknown>> = [
+      { sku: 'A', shared_sku_listing: 'TRUE', best_offer_enabled: 'FALSE' },
+      { sku: 'B', shared_sku_listing: 'Sì', best_offer_enabled: 1 },
+      { sku: 'C', shared_sku_listing: '', best_offer_enabled: true },
+      { sku: 'D', shared_sku_listing: 'vero' },
+      { sku: 'E', shared_sku_listing: false },
+    ]
+    normalizeEbaySharedFlags(rows)
+    expect(rows[0].shared_sku_listing).toBe(true)
+    expect(rows[0].best_offer_enabled).toBe(false)
+    expect(rows[1].shared_sku_listing).toBe(true)
+    expect(rows[1].best_offer_enabled).toBe(true)
+    expect(rows[2].shared_sku_listing).toBe('') // blank = no value, not false
+    expect(rows[2].best_offer_enabled).toBe(true)
+    expect(rows[3].shared_sku_listing).toBe(true)
+    expect(rows[4].shared_sku_listing).toBe(false)
+  })
+})

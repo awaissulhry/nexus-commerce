@@ -118,6 +118,30 @@ describe('createSharedListing', () => {
     expect(db.created).toHaveLength(0)
   })
 
+  it('adopt belt: a row carrying a live ItemID never re-lists (no eBay call)', async () => {
+    // Imported multi-listing file / live family flipped to shared: the listing
+    // already exists on eBay — creating again would double-list the items.
+    const db = mockDb(null)
+    const addFn = vi.fn(async () => ({ itemId: 'NEW' }))
+    const liveParent = { ...parent, it_item_id: '257584954808' }
+    const res = await createSharedListing(liveParent, variants, { ...ctx0, db, addFixedPriceItemFn: addFn })
+    expect(res.status).toBe('SKIPPED_EXISTS')
+    expect(res.itemId).toBe('257584954808')
+    expect(res.message).toContain('Save the sheet')
+    expect(addFn).not.toHaveBeenCalled()
+    expect(db.created).toHaveLength(0)
+  })
+
+  it('adopt belt: variant-level ItemID also blocks re-listing', async () => {
+    const db = mockDb(null)
+    const addFn = vi.fn(async () => ({ itemId: 'NEW' }))
+    const liveVariants = [{ ...variants[0], ebay_item_id: '256564203510' }, variants[1]]
+    const res = await createSharedListing(parent, liveVariants, { ...ctx0, db, addFixedPriceItemFn: addFn })
+    expect(res.status).toBe('SKIPPED_EXISTS')
+    expect(res.itemId).toBe('256564203510')
+    expect(addFn).not.toHaveBeenCalled()
+  })
+
   it('I1: resolves productId by SKU, not array index, for each membership', async () => {
     // Give variants distinct _productId values and assert each membership got the right one
     const variantsDistinct = [

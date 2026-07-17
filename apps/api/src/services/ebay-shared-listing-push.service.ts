@@ -142,6 +142,26 @@ export async function createSharedListing(
       return { status: 'SKIPPED_EXISTS', parentSku, market, memberships: 0, message: 'memberships already exist for this parent+market' }
     }
 
+    // Adopt-don't-duplicate belt: a row carrying a live ItemID describes a
+    // listing that ALREADY exists on eBay (an imported multi-listing file, or a
+    // live family flipped to shared after a normal publish). AddFixedPriceItem
+    // here would put the same items on eBay twice. Memberships adopt live
+    // listings on SAVE (upsertSharedMembershipsFromRows) — never by re-listing.
+    const mpPrefix = market.toLowerCase()
+    const liveItemId = [parentRow, ...variantRows]
+      .map((r) => str(r[`${mpPrefix}_item_id`]) || str(r.ebay_item_id))
+      .find(Boolean)
+    if (liveItemId) {
+      return {
+        status: 'SKIPPED_EXISTS',
+        itemId: liveItemId,
+        parentSku,
+        market,
+        memberships: 0,
+        message: `already live on eBay (ItemID ${liveItemId}) — Save the sheet to adopt it; quantities then sync via the shared fan-out`,
+      }
+    }
+
     const input = buildSharedListingInput(parentRow, variantRows, market, ctx.capQty)
 
     // ED.2 — dynamic description: wrap the body in this listing's assigned theme

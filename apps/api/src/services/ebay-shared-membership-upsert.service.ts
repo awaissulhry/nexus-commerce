@@ -26,6 +26,27 @@ export interface SharedMembershipUpsertResult {
   skipped: Array<{ sku: string; reason: string }>
 }
 
+/**
+ * Import files carry booleans as text ('TRUE', 'VERO', '1', 'Sì'…), and rows
+ * saved straight after an import can reach the API before the client grid ever
+ * re-materializes them as booleans. Every strict `=== true` check downstream
+ * (shared family keys for the create planner, fan-out gating, Trading-API push
+ * routing) silently fails on the string form — normalize in place at the
+ * request door. Blank strings stay blank (they mean "no value", not false).
+ */
+export function normalizeEbaySharedFlags(rows: Array<Record<string, unknown>>): void {
+  for (const r of rows) {
+    for (const k of ['shared_sku_listing', 'best_offer_enabled']) {
+      const v = r[k]
+      if (typeof v === 'string' && v.trim() !== '') {
+        r[k] = /^(true|vero|wahr|vrai|verdadero|yes|y|x|si|sì|1)$/i.test(v.trim())
+      } else if (typeof v === 'number') {
+        r[k] = v === 1
+      }
+    }
+  }
+}
+
 type Row = Record<string, unknown>
 
 const str = (v: unknown): string => (v == null ? '' : String(v)).trim()

@@ -66,7 +66,7 @@ import { VariationValueOrderModal } from './VariationValueOrderModal'
 import { useFlatFileCore } from '@/components/flat-file/useFlatFileCore'
 import { ColumnGroupModal } from '@/components/flat-file/ColumnGroupModal'
 import { EBAY_FILTER_DEFAULT, type EbayFilterDims } from '../_shared/flat-file-filter.types'
-import { isSharedDuplicateAllowed } from './validateRows.shared'
+import { isSharedDuplicateAllowed, truthyFlag } from './validateRows.shared'
 import { draftKey, readDraft, writeDraft, clearDraft, mergeDraftRows } from './draftStore'
 import { useOrderEventsRefresh } from '@/hooks/use-order-events-refresh'
 
@@ -2528,13 +2528,33 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── IE.2 — merge imported rows into the grid (fill-missing | overwrite) ──
   const handleImport = useCallback((
-    imported: Record<string, unknown>[],
+    importedRaw: Record<string, unknown>[],
     mode: 'fill-missing' | 'overwrite',
     allRows: BaseRow[],
     setRows: (rows: BaseRow[]) => void,
     pushHistory: (rows: BaseRow[]) => void,
     targetParentId?: string,
   ) => {
+    // Files carry booleans as text ('TRUE', 'VERO', '1'…). The grid checkbox and
+    // every strict `=== true` check (duplicate-SKU allowance, shared family keys,
+    // Trading-API routing) need real booleans — coerce once at the import door.
+    // Blank stays blank so fill-missing still treats the cell as empty.
+    const imported = importedRaw.map((imp) => {
+      const out = { ...imp }
+      for (const k of ['shared_sku_listing', 'best_offer_enabled']) {
+        const v = out[k]
+        if (v == null || v === '' || typeof v === 'boolean') continue
+        out[k] = truthyFlag(v)
+      }
+      return out
+    })
+    // The shared-SKU flag is STRUCTURAL (it selects the multi-listing publish
+    // model), not content: apply it in BOTH merge modes when the file provides
+    // a value — under fill-missing a saved `false` would otherwise be
+    // unfillable forever, silently downgrading a multi-listing import.
+    const applyStructural = (merged: Record<string, unknown>, imp: Record<string, unknown>) => {
+      if (typeof imp.shared_sku_listing === 'boolean') merged.shared_sku_listing = imp.shared_sku_listing
+    }
     // E2 — family-aware import. Without an explicit "Under parent" override
     // the file's own parent_sku column builds N families in one pass:
     // identity is (family, sku), so the SAME child SKU may land under several
@@ -2554,6 +2574,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             if (mode === 'overwrite') merged[k] = v
             else if (merged[k] == null || merged[k] === '') merged[k] = v
           }
+          applyStructural(merged, a.imp)
           merged._dirty = true
           next[idx] = merged as BaseRow
           updated++
@@ -2611,6 +2632,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           if (mode === 'overwrite') merged[k] = v
           else if (merged[k] == null || merged[k] === '') merged[k] = v
         }
+        applyStructural(merged, imp)
         merged._dirty = true
         next[idx] = merged as BaseRow
         updated++

@@ -46,7 +46,7 @@ import { publishOrderEvent } from '../services/order-events.service.js';
 import { renderExport } from '../services/export/renderers.js';
 import { parseCsv, parseFile, sniffDelimiter, detectFileKind, type ParsedFile } from '../services/import/parsers.js';
 import { detectAmazonTemplate } from '../services/amazon/template-workbook.js';
-import { upsertSharedMembershipsFromRows, type SharedMembershipUpsertResult } from '../services/ebay-shared-membership-upsert.service.js';
+import { upsertSharedMembershipsFromRows, normalizeEbaySharedFlags, type SharedMembershipUpsertResult } from '../services/ebay-shared-membership-upsert.service.js';
 // P1.2 — eBay flat-file create/reparent pre-pass (new products persist under their parent before ChannelListing loop runs)
 import { runEbayFlatFileCreates, type CreateResult } from '../services/ebay-flat-file-create.service.js';
 import { ebayFamilyKey } from '../services/ebay-flat-file-create.logic.js';
@@ -445,6 +445,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     if (!Array.isArray(rows) || rows.length === 0) {
       return reply.code(400).send({ error: 'rows must be a non-empty array' });
     }
+    // Imported rows can carry boolean flags as text ('TRUE') — the shared
+    // family keys + membership gating below check `=== true` strictly.
+    normalizeEbaySharedFlags(rows as Array<Record<string, unknown>>);
 
     // FFP.1 — the ACTIVE market of the per-market file this save came from.
     // Content fields (title/description) + the flatFileSnapshot are scoped to
@@ -821,6 +824,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     if (!Array.isArray(rows) || rows.length === 0) {
       return reply.code(400).send({ error: 'rows must be non-empty' });
     }
+    // Imported rows can carry boolean flags as text ('TRUE') — the Trading-API
+    // shared-listing routing below checks `shared_sku_listing === true` strictly.
+    normalizeEbaySharedFlags(rows as Array<Record<string, unknown>>);
 
     // ── Publish gate ─────────────────────────────────────────────────────
     // Mirror the cockpit path: honour NEXUS_ENABLE_EBAY_PUBLISH so that
