@@ -1,6 +1,8 @@
 /**
  * FP3.4 — similar-quote recall (JobBOSS² verdict): past quotes for this party
  * or this garment template, won/lost with price, to anchor the new quote.
+ * EPQ.3 — rows carry wasProduced (the quote became an order) so the rail can
+ * chip "repeat" — the repeat-order pricing hook (actuals-prefill is EPQ.4).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -32,7 +34,7 @@ export const GET = guarded(PAGES.quotes, async (req: NextRequest, { resolved }) 
 
   const rows = quotes.map((q) => {
     const t = quoteTotals(q.lines);
-    return { id: q.id, number: q.number, partyName: q.party.name, state: q.state, netCents: t.netCents, marginPct: t.marginPct };
+    return { id: q.id, number: q.number, partyName: q.party.name, state: q.state, netCents: t.netCents, marginPct: t.marginPct, wasProduced: q.convertedOrderId != null };
   });
   return jsonStripped({ quotes: rows }, resolved);
 });

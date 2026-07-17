@@ -5,6 +5,7 @@
  * whitelisted fields, so a schema change can't accidentally leak money).
  */
 import { prisma } from "@/lib/db";
+import { formatSizeRun, readSelections, type SizeRun } from "./selections";
 
 export type SnapshotLine = { description: string; options: string[]; qty: number; unitNetCents: number; lineTotalCents: number };
 export type QuoteSnapshot = {
@@ -25,12 +26,16 @@ export type QuoteSnapshot = {
  * Unit-tested to prove no cost/margin leaks into a customer document.
  */
 export function shapeSnapshotLines(
-  lines: { description: string | null; templateName: string | null; selections: string[]; qty: number; netPriceCents: number }[],
+  lines: { description: string | null; templateName: string | null; selections: string[]; qty: number; netPriceCents: number; sizeRun?: SizeRun | null }[],
   labelById: Map<string, string>,
 ): SnapshotLine[] {
   return lines.map((l) => ({
     description: l.description ?? l.templateName ?? "Custom item",
-    options: l.selections.map((id) => labelById.get(id) ?? "").filter(Boolean),
+    options: [
+      ...l.selections.map((id) => labelById.get(id) ?? "").filter(Boolean),
+      // EPQ.3 — a size-run line spells its matrix out for the customer ("48×5 · 50×3")
+      ...(l.sizeRun ? [`Size run: ${formatSizeRun(l.sizeRun)}`] : []),
+    ],
     qty: l.qty,
     unitNetCents: l.netPriceCents,
     lineTotalCents: l.netPriceCents * l.qty,
@@ -54,7 +59,10 @@ export async function buildQuoteSnapshot(quoteId: string, acceptUrl: string | nu
   for (const g of groups) for (const o of g.options) labelById.set(o.id, `${g.name}: ${o.name}`);
 
   const lines = shapeSnapshotLines(
-    quote.lines.map((l) => ({ description: l.description, templateName: l.template?.name ?? null, selections: (l.selections as string[] | null) ?? [], qty: l.qty, netPriceCents: l.netPriceCents })),
+    quote.lines.map((l) => {
+      const sel = readSelections(l.selections); // EPQ.3 — legacy array OR {options,sizeRun}
+      return { description: l.description, templateName: l.template?.name ?? null, selections: sel.optionIds, qty: l.qty, netPriceCents: l.netPriceCents, sizeRun: sel.sizeRun };
+    }),
     labelById,
   );
   const totalCents = lines.reduce((s, l) => s + l.lineTotalCents, 0);

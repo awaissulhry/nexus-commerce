@@ -1,7 +1,7 @@
 # F11 - Quotes (EPQ)
 
-> **Route:** `/quotes` · **EP code:** EPQ · **Status:** 🔨 EPQ.1 **SHIPPED** (merge `bd091df8`, report `EPQ1-REPORT.md`) — EPQ.2 next. First page of the program; its proposal is Owner-approved ("proceed with all of it").
-> Canonical docs: `docs/factory/EPQ-PROPOSAL.md` · `EPQ-UI-INVENTORY.md` · `EPQ1-REPORT.md` · base: `FP3-SPEC.md`/`FP3-REPORT.md`
+> **Route:** `/quotes` · **EP code:** EPQ · **Status:** 🔨 EPQ.1+.2+.3 **SHIPPED** (reports `EPQ1/EPQ2/EPQ3-REPORT.md`) — EPQ.5 next per the recommended order. ⚠ Owner: restart :3100 + `db:migrate` (`epq3_pricing_discipline` authored, NOT applied). First page of the program; its proposal is Owner-approved ("proceed with all of it").
+> Canonical docs: `docs/factory/EPQ-PROPOSAL.md` · `EPQ-UI-INVENTORY.md` · `EPQ1-REPORT.md` · `EPQ2-REPORT.md` · `EPQ3-REPORT.md` · base: `FP3-SPEC.md`/`FP3-REPORT.md`
 
 Part of [[F00 - Factory OS MOC]] · flow position: [[F01 - Mission & Golden Flow]] step 2 · program: [[F06 - Enterprise Program (EP)]]
 
@@ -14,8 +14,8 @@ The factory's **money mouth**: turns a matched [[F10 - Inbox (EPI)]] conversatio
 | Phase | Delivers | Status |
 |---|---|---|
 | EPQ.1 | Lifecycle closed & audited — server-enforced transition map (422+audit), auto-EXPIRE tick + Expired tab, supersede tokens, SENT field-guard, persisted floor-ack, before/after money audit, 4-row waterfall, bulk mark-lost | ✅ SHIPPED (kills S1-S5, S8) |
-| EPQ.2 ✅ 2026-07-16 | No offer dies of silence — public view tracking, accept/reject/convert notifications, follow-up **Owner task queue** (Italian one-click nudges into the Gmail thread) | ⚪ next |
-| EPQ.3 | Pricing discipline — goal-seek in rail (net⇄margin), qty-break/MOQ surcharges, repeat-order pricing, discount reason codes, size-run matrix | ⚪ |
+| EPQ.2 | No offer dies of silence — public view tracking, accept/reject/convert notifications, follow-up **Owner task queue** (Italian one-click nudges into the Gmail thread) | ✅ SHIPPED 2026-07-16 |
+| EPQ.3 | Pricing discipline — goal-seek in rail (net⇄margin solves the active line's adjustment, reason auto-focused), qty-break tiers + below-MOQ surcharge, measurement (size) surcharge, discount reason codes, size-run matrix (BRAND), duplicate-open-quote banner, repeat chip + clickable similar quotes, FS3 grid+picker adoption | ✅ SHIPPED 2026-07-17 (handoffs: EPD tier/MOQ editor · EPA by-code tally) |
 | EPQ.4 | Cost truth & honest promises — structured cost model (leather m² + wastage, labor, overhead), quote-vs-actual loop from FP6 ledger, CTP-lite promise, convert freezes FULL config spec | ⚪ |
 | EPQ.5 | Acceptance that stands up (Italy/EU) — B2C gross-price fix, tax modes, VIES-gated zero-rating, SDI fields, deposit legal enum, acceptance-evidence bundle, Stripe deposit-on-accept | ⚪ |
 | EPQ.6 | Pipeline command center — revision diff, clone-as-draft, per-quote KPIs, saved views | ⚪ |
@@ -36,7 +36,7 @@ D-1 Stripe deposit on acceptance page ✅ (env-gated, bank-transfer fallback) ·
 
 ## Known gaps still open (from the 16-gap UI inventory)
 
-⌘K `?focus=` deep-link broken (→ EPO fixes search route) · converted-order dead end (no quote→order nav) · silent successes on line edits · deposit 0% unrepresentable · re-sends omit accept link · grid non-sortable · overdue counter inert · public page acts on stale state · ⚠ live compliance bug: B2C prices displayed VAT-silent read as VAT-inclusive against the seller (Cod. Consumo artt. 49/22) — EPQ.5.
+Closed so far: ⌘K deep-link, converted-order nav, overdue counter, stale public page, silent successes (EPQ.2) · similar-quotes inert rows (EPQ.3). Still open: deposit 0% unrepresentable · re-sends omit accept link · grid columns not marked sortable (VirtualDataGrid supports it — flip per column when wanted) · ⚠ live compliance bug: B2C prices displayed VAT-silent read as VAT-inclusive against the seller (Cod. Consumo artt. 49/22) — EPQ.5.
 
 ## Edges
 

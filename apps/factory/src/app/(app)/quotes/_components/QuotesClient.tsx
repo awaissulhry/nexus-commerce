@@ -9,6 +9,10 @@
  * lands); "Needs follow-up" queue card on top; the Overdue counter became
  * "Expiring soon" and clicking it filters the grid; the Valid-until column
  * became the compact "viewed" cell; Export CSV hidden without exports.run.
+ * EPQ.3 — FS3 adoption (program registry): the pipeline grid is a height-bound
+ * VirtualDataGrid (windowed rows, bounded DOM at scale) and the New-quote
+ * party picker is an AsyncCombobox over /api/parties-lite?q= (server-paged
+ * search instead of the whole-table pull).
  */
 "use client";
 
@@ -16,10 +20,11 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import { BulkActionBar, PageHeader } from "@/design-system/patterns";
-import { Card, DataGrid, Modal, useToast } from "@/design-system/components";
-import { Listbox } from "@/design-system/components";
+import { Card, Modal, useToast } from "@/design-system/components";
 import { Button, Checkbox, Input, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
+import { AsyncCombobox, type SearchLoader } from "@/components/AsyncCombobox"; // FS3
+import { VirtualDataGrid } from "@/components/VirtualDataGrid"; // FS3 — windowed rows, DS-grid parity
 import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
 import { formatViewed } from "@/lib/quotes/followup";
@@ -38,6 +43,14 @@ const TABS = [
 
 /** EPQ.1 — bulk Mark lost applies only where a loss makes sense. */
 const canMarkLost = (r: QuoteRow) => r.state === "SENT" || r.state === "EXPIRED";
+
+/** EPQ.3 (FS3) — party picker searches the server; the whole-table pull is gone. */
+const partyLoader: SearchLoader = async (q, cursor) => {
+  const usp = new URLSearchParams({ q });
+  if (cursor) usp.set("cursor", cursor);
+  const d = await apiJson<{ parties: { id: string; name: string; kind: string }[]; nextCursor?: string | null }>(`/api/parties-lite?${usp}`);
+  return { options: d.parties.map((p) => ({ value: p.id, label: `${p.name} (${p.kind})` })), nextCursor: d.nextCursor ?? null };
+};
 
 function Counter({ label, value, tone, onClick, active }: { label: string; value: number; tone: string; onClick?: () => void; active?: boolean }) {
   const box: React.CSSProperties = {
@@ -70,8 +83,8 @@ function PipelineInner() {
   const [state, setState] = useState("all");
   const [q, setQ] = useState("");
   const [creating, setCreating] = useState(false);
-  const [parties, setParties] = useState<{ id: string; name: string; kind: string }[]>([]);
   const [partyId, setPartyId] = useState("");
+  const [partyLabel, setPartyLabel] = useState(""); // EPQ.3 — AsyncCombobox shows the picked label
   const [busy, setBusy] = useState(false);
   // EPQ.1 — bulk mark-lost selection
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -99,18 +112,14 @@ function PipelineInner() {
   const openEditor = (id: string) => { window.history.replaceState(null, "", `/quotes?q=${id}`); window.dispatchEvent(new PopStateEvent("popstate")); };
   const closeEditor = () => { window.history.replaceState(null, "", "/quotes"); window.dispatchEvent(new PopStateEvent("popstate")); void load(); };
 
-  const startCreate = async () => {
-    setCreating(true);
-    try {
-      setParties((await apiJson<{ parties: { id: string; name: string; kind: string }[] }>("/api/parties-lite")).parties);
-    } catch { /* ignore */ }
-  };
+  // EPQ.3 (FS3) — no whole-list prefetch: the AsyncCombobox searches on open
+  const startCreate = () => setCreating(true);
   const create = async () => {
     if (!partyId) return;
     setBusy(true);
     try {
       const d = await apiJson<{ quote: { id: string } }>("/api/quotes", { method: "POST", body: JSON.stringify({ partyId }) });
-      setCreating(false); setPartyId("");
+      setCreating(false); setPartyId(""); setPartyLabel("");
       openEditor(d.quote.id);
     } catch (e) {
       toast((e as Error).message, "danger");
@@ -183,7 +192,9 @@ function PipelineInner() {
           </div>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search number or party…" style={{ marginLeft: "auto", border: "1px solid var(--h10-border)", borderRadius: 8, padding: "5px 9px", fontSize: 12.5, outline: "none", background: "var(--h10-surface)", color: "var(--h10-text)", minWidth: 220 }} />
         </div>
-        <DataGrid
+        {/* EPQ.3 (FS3) — height-bound windowed grid; take-200 today, bounded DOM at any scale */}
+        <VirtualDataGrid
+          height="calc(100dvh - 380px)"
           columns={[
             // EPQ.1 — selection for bulk Mark lost (only states where a loss makes sense)
             { key: "select", label: "", render: (r: QuoteRow) => canMarkLost(r) ? <Checkbox checked={selected.has(r.id)} onChange={() => toggleSelected(r.id)} aria-label={`Select ${r.number}`} /> : null },
@@ -224,8 +235,16 @@ function PipelineInner() {
       <Modal open={creating} onClose={() => setCreating(false)} title="New quote" size="sm" footer={<><Button onClick={() => setCreating(false)}>Cancel</Button><Button variant="primary" onClick={create} disabled={!partyId || busy}>Create</Button></>}>
         <div style={{ display: "grid", gap: 8 }}>
           <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>Who is this quote for?</div>
-          <Listbox ariaLabel="Party" options={[{ value: "", label: "Choose a contact…" }, ...parties.map((p) => ({ value: p.id, label: `${p.name} (${p.kind})` }))]} value={partyId} onChange={setPartyId} />
-          {parties.length === 0 && <div style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>No contacts yet — create one from an Inbox thread first.</div>}
+          {/* EPQ.3 (FS3) — server-paged typeahead over /api/parties-lite?q= */}
+          <AsyncCombobox
+            ariaLabel="Party"
+            loader={partyLoader}
+            value={partyId}
+            valueLabel={partyLabel}
+            placeholder="Choose a contact…"
+            emptyText="No contacts yet — create one from an Inbox thread first."
+            onChange={(v, o) => { setPartyId(v); setPartyLabel(o.label); }}
+          />
         </div>
       </Modal>
     </div>
