@@ -112,7 +112,9 @@ export async function loadOrderFinancials(
         prisma.$queryRaw<PaymentKindAgg[]>(Prisma.sql`
           SELECT "orderId", "kind", SUM("amountCents") AS "amountCents" FROM "Payment" GROUP BY "orderId", "kind"`),
     docDates
-      ? prisma.$queryRaw<InvoiceRow[]>(Prisma.sql`SELECT "orderId", "number", "amountCents", "createdAt" FROM "Invoice" ORDER BY "createdAt" ASC`)
+      ? // same (createdAt, id) tie-break as the hot aggregate — same-ms invoice
+        // pairs must order identically on every path (parity-enforced)
+        prisma.$queryRaw<InvoiceRow[]>(Prisma.sql`SELECT "orderId", "number", "amountCents", "createdAt" FROM "Invoice" ORDER BY "createdAt" ASC, "id" ASC`)
       : // HOT: one row per order — total + the numbers (import matching reads
         // them in bulk), issue-ordered via ORDER BY inside the aggregate
         prisma.$queryRaw<InvoiceAgg[]>(Prisma.sql`

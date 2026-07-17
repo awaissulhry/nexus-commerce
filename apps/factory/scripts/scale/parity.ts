@@ -122,7 +122,7 @@ async function legacyFins(excludeStates: string[]): Promise<OrderFinancials[]> {
         party: { select: { id: true, name: true } },
         lines: { select: { netPriceCents: true, costCents: true, qty: true } },
         payments: { select: { kind: true, amountCents: true, receivedAt: true } },
-        invoices: { select: { number: true, amountCents: true, paidAt: true, createdAt: true }, orderBy: { createdAt: "asc" as const } },
+        invoices: { select: { number: true, amountCents: true, paidAt: true, createdAt: true }, orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }] },
         bornFromQuote: { select: { depositPct: true } },
         workOrders: { select: { id: true, state: true } },
       },

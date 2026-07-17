@@ -59,6 +59,7 @@ export type OrderFinancials = {
   partyId: string;
   partyName: string;
   state: string;
+  createdAtISO: string; // order creation instant (EPF1 — topNewest page selection)
   monthKey: string; // YYYY-MM of order creation, Europe/Rome
   quotedNetCents: number;
   invoicedCents: number;
@@ -85,6 +86,7 @@ const pct = (part: number, whole: number) => (whole > 0 ? (part / whole) * 100 :
 
 export function orderFinancials(o: FinOrder): OrderFinancials {
   const totals = orderTotals(o.lines);
+  const createdAtISO = o.createdAtISO;
   const monthKey = romeMonthKey(o.createdAtISO);
   const invoicedCents = o.invoices.reduce((s, i) => s + (i.amountCents ?? 0), 0);
   const paidCents = o.payments.reduce((s, p) => s + (p.amountCents ?? 0), 0);
@@ -114,6 +116,7 @@ export function orderFinancials(o: FinOrder): OrderFinancials {
     partyId: o.partyId,
     partyName: o.partyName,
     state: o.state,
+    createdAtISO,
     monthKey,
     quotedNetCents: totals.netCents,
     invoicedCents,
@@ -232,6 +235,27 @@ export type CancelledWithMoney = { count: number; paidCents: number; invoicedCen
  * invoiced ≠ 0). They stay OUT of tiles/rollups (cancelled work is not
  * revenue) but are returned beside them so the money can't silently vanish.
  */
+/**
+ * EPF1 — newest-N selection without a full sort: the by-order page shows the
+ * 200 newest of ~50k folded orders; a bounded insertion scan is O(n·log k)-ish
+ * with k=200 and beats both the SQL ORDER BY (≈60ms at the harness) and a JS
+ * full sort. Ties break on id ASC (deterministic, matches the loader).
+ */
+export function topNewest(fins: OrderFinancials[], n: number): OrderFinancials[] {
+  if (n <= 0) return [];
+  const top: OrderFinancials[] = [];
+  const after = (a: OrderFinancials, b: OrderFinancials) =>
+    a.createdAtISO > b.createdAtISO || (a.createdAtISO === b.createdAtISO && a.orderId < b.orderId);
+  for (const f of fins) {
+    if (top.length === n && !after(f, top[n - 1])) continue;
+    let lo = 0, hi = top.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (after(f, top[mid])) hi = mid; else lo = mid + 1; }
+    top.splice(lo, 0, f);
+    if (top.length > n) top.pop();
+  }
+  return top;
+}
+
 export function cancelledWithMoney(fins: OrderFinancials[]): CancelledWithMoney {
   const orders = fins.filter((f) => f.state === "CANCELLED" && (f.paidCents !== 0 || f.invoicedCents !== 0));
   return {
