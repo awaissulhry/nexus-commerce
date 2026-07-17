@@ -39,6 +39,7 @@ import {
 import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, toListingLanguage, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
 import { parseThemeAxes } from '../services/ebay-theme-axes.js';
 import { pushSharedListings, type SharedListingResult } from '../services/ebay-shared-listing-push.service.js';
+import { callTradingApi, siteIdForMarket } from '../services/ebay-trading-api.service.js';
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot, buildBestOfferTerms, resolveQuantityLimitPerBuyer, resolvePerMarketContent } from '../services/ebay-variation-push.service.js';
 import { renderListingDescriptionSafe } from '../services/ebay-description-theme.service.js';
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
@@ -1788,6 +1789,71 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: err instanceof Error ? err.message : 'Export failed' });
     }
   });
+
+  // ── GET /api/ebay/flat-file/verify-item ─────────────────────────────
+  // EI.6 — read-only adoption check: Trading GetItem for one ItemID, compared
+  // against the SharedListingMembership rows the save created. Lets the
+  // operator SEE that an adopted listing's variant SKUs are wired to the pool
+  // before trusting the fan-out. Never writes anything.
+  fastify.get<{ Querystring: { itemId?: string; marketplace?: string } }>(
+    '/ebay/flat-file/verify-item',
+    async (request, reply) => {
+      const itemId = String(request.query.itemId ?? '').trim()
+      const marketplace = String(request.query.marketplace ?? 'IT').toUpperCase()
+      if (!/^\d+$/.test(itemId)) return reply.code(400).send({ error: 'numeric itemId required' })
+      const connection = await prisma.channelConnection.findFirst({
+        where: { channelType: 'EBAY', isActive: true },
+        select: { id: true },
+      })
+      if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
+      let token: string
+      try {
+        token = await ebayAuthService.getValidToken(connection.id)
+      } catch (err: unknown) {
+        return reply.code(503).send({ error: `Failed to get eBay token: ${err instanceof Error ? err.message : String(err)}` })
+      }
+      try {
+        const xml = `<?xml version="1.0" encoding="utf-8"?>
+<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ItemID>${itemId}</ItemID>
+  <IncludeItemSpecifics>false</IncludeItemSpecifics>
+  <OutputSelector>Item.Title</OutputSelector>
+  <OutputSelector>Item.SellingStatus.ListingStatus</OutputSelector>
+  <OutputSelector>Item.Variations.Variation.SKU</OutputSelector>
+  <OutputSelector>Item.Variations.Variation.Quantity</OutputSelector>
+  <OutputSelector>Item.Variations.Variation.SellingStatus.QuantitySold</OutputSelector>
+</GetItemRequest>`
+        const res = await callTradingApi('GetItem', xml, { oauthToken: token, siteId: siteIdForMarket(marketplace) })
+        const raw = res.raw
+        const title = /<Title>([^<]*)<\/Title>/.exec(raw)?.[1] ?? ''
+        const status = /<ListingStatus>([^<]*)<\/ListingStatus>/.exec(raw)?.[1] ?? (raw ? 'Unknown' : 'DRY-RUN')
+        const ebaySkus: string[] = []
+        for (const m of raw.matchAll(/<Variation>[\s\S]*?<SKU>([^<]*)<\/SKU>[\s\S]*?<\/Variation>/g)) {
+          if (m[1]) ebaySkus.push(m[1])
+        }
+        const memberships = await prisma.sharedListingMembership.findMany({
+          where: { marketplace, itemId },
+          select: { sku: true, productId: true },
+        })
+        const memberSkus = new Set(memberships.map((m) => m.sku))
+        const ebaySet = new Set(ebaySkus)
+        const matched = [...memberSkus].filter((s) => ebaySet.has(s))
+        const missingOnEbay = [...memberSkus].filter((s) => !ebaySet.has(s))
+        const extraOnEbay = ebaySkus.filter((s) => !memberSkus.has(s))
+        const unlinked = memberships.filter((m) => !m.productId).map((m) => m.sku)
+        return reply.send({
+          itemId, marketplace, title, status,
+          ebayVariantCount: ebaySkus.length,
+          memberships: memberships.length,
+          matched: matched.length,
+          missingOnEbay, extraOnEbay, unlinked,
+        })
+      } catch (err: unknown) {
+        request.log.error(err, 'verify-item failed')
+        return reply.code(502).send({ error: err instanceof Error ? err.message : 'GetItem failed' })
+      }
+    },
+  )
 
   // ── POST /api/ebay/flat-file/parse ──────────────────────────────────
   // IE.2 — parse an uploaded CSV/TSV/XLSX/JSON into { headers, rows } for the

@@ -1,6 +1,8 @@
 # EI — eBay Import Excellence: fully dynamic, operator-controlled import
 
-**Date:** 2026-07-17 · **Status: PROPOSAL — AWAITING OWNER GATE** · Owner ask: "completely dynamic, especially the import from file feature for the eBay flat file. Proper control over each and everything… best in class." Child SKUs stay identical across listings (inventory pooling) — that model is now unblocked (`ba28fe74`) and this plan makes the import worthy of it.
+**Date:** 2026-07-17 · **Status: ✅ APPROVED ("Proceed with your recommendation") — EI.1–EI.6 SHIPPED same day, EI.7 = runbook `docs/ebay-import-runbook.md` + owner E2E** · Owner ask: "completely dynamic, especially the import from file feature for the eBay flat file. Proper control over each and everything… best in class." Child SKUs stay identical across listings (inventory pooling) — that model is now unblocked (`ba28fe74`) and this plan makes the import worthy of it.
+
+> **Progress:** EI.1+EI.2 `44c60119`+`5338f1b1` (typed coercion + market-aware mapping; Review-listings step with Adopt/Create/Skip + pooled badges + shared quick-fix) · EI.3 `1196fef2` (import policies all-ON per owner, typed-END destructive gate, per-cell from→to plan with exclusions) · EI.4 `07a0b037` (sheet picker + header-row override) · EI.5+EI.6 (aspect unification + category intelligence; "Save wired up" banner + read-only verify-item GetItem read-back). Decisions taken as recommended: qty import ON (pool never written), End-listing typed override, Adopt-by-default. Owner E2E = runbook §4 (GALE 5-listing file).
 
 **Protected surfaces honored:** flat-file editors untouched without approval (this IS the approval request); FBA/pool invariants; existing legacy import untouched; design system only.
 
