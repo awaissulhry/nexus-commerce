@@ -14,6 +14,8 @@ export async function notifyOwners(input: {
   href: string;
   kind?: "STATE_CHANGE" | "REMINDER";
   excludeUserId?: string | null;
+  /** EPO.3 — orders reuse the one broadcast (anti-duplication); defaults to "quote" */
+  entityType?: string;
 }) {
   const owners = await prisma.user.findMany({
     where: { status: "active", roleAssignments: { some: { role: { key: "OWNER" } } } },
@@ -26,7 +28,7 @@ export async function notifyOwners(input: {
       kind: input.kind ?? "STATE_CHANGE",
       title: input.title,
       body: input.body,
-      entityType: "quote",
+      entityType: input.entityType ?? "quote",
       entityId: input.entityId,
       href: input.href,
     });

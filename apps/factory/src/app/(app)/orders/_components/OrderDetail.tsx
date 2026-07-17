@@ -14,6 +14,7 @@ import { Card, DateField, Listbox, Menu, Modal, useToast } from "@/design-system
 import { Button, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
+import { useFactoryEvents } from "@/lib/use-factory-events";
 import { usePermission } from "@/lib/auth/client";
 import { legalTargets, ORDER_STATE_LABEL, canTransition } from "@/lib/orders/transitions";
 import { parseSizeRun } from "@/lib/orders/production";
@@ -30,6 +31,29 @@ function RailRow({ label, children, tone }: { label: string; children: React.Rea
       <span style={{ color: "var(--h10-text-3)" }}>{label}</span>
       <span style={{ fontWeight: 600, color: tone ?? "var(--h10-text)", fontFamily: "ui-monospace, monospace" }}>{children}</span>
     </div>
+  );
+}
+
+/**
+ * EPO.3 — the created-from chain as chips (Odoo smart-buttons × ERPNext
+ * Connections, per the teardown verdicts): each linked document family with
+ * its count, each a hop. Zero-count chips stay visible (the chain IS the
+ * page's mental model) but muted.
+ */
+function ChainChip({ href, label, count }: { href: string; label: string; count?: number }) {
+  const muted = count === 0;
+  return (
+    <a
+      href={href}
+      style={{
+        display: "inline-flex", gap: 5, alignItems: "center", padding: "3px 10px", borderRadius: 999,
+        border: "1px solid var(--h10-border-subtle)", background: "var(--h10-surface)", textDecoration: "none",
+        fontSize: 11.5, fontWeight: 600, color: muted ? "var(--h10-text-3)" : "var(--h10-text-2)",
+      }}
+    >
+      {label}
+      {count != null && <span style={{ fontWeight: 800, color: muted ? "var(--h10-text-3)" : "var(--h10-primary)" }}>{count}</span>}
+    </a>
   );
 }
 
@@ -56,6 +80,8 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
     catch (e) { toast((e as Error).message, "danger"); }
   }, [orderId, toast]);
   useEffect(() => { void load(); }, [load]);
+  // EPO.3 (E11) — the open order stays live: FS2's durable bus, 2s debounce
+  useFactoryEvents(["order.updated", "workorder.created", "workorder.updated", "shipment.updated", "payment.recorded"], load);
 
   const plannedCount = useMemo(() => (d?.order.lines ?? []).reduce((n, l) => n + Math.max(1, parseSizeRun(l.sizeRun).length), 0), [d]);
 
@@ -136,10 +162,19 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
           </div>
         }
       />
-      <div style={{ fontSize: 12, color: "var(--h10-text-3)", marginBottom: 10 }}>
-        {o.party.name}
+      <div style={{ fontSize: 12, color: "var(--h10-text-3)", marginBottom: 8 }}>
+        <a href={`/contacts?c=${o.party.id}`} style={{ color: "var(--h10-text-link)" }}>{o.party.name}</a>
         {o.bornFromQuote ? <> · from <a href={`/quotes?q=${o.bornFromQuote.id}`} style={{ color: "var(--h10-text-link)" }}>{o.bornFromQuote.number}</a></> : null}
         {o.conversation ? <> · <a href={`/inbox?focus=${o.conversation.id}`} style={{ color: "var(--h10-text-link)" }}>thread</a></> : null}
+      </div>
+
+      {/* EPO.3 (E2) — the created-from chain: quote → WOs → shipments → invoices → payments */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+        {o.bornFromQuote && <ChainChip href={`/quotes?q=${o.bornFromQuote.id}`} label={`Quote ${o.bornFromQuote.number}`} />}
+        <ChainChip href={o.workOrders.length === 1 && o.workOrders[0] ? `/production?wo=${o.workOrders[0].id}` : "/production"} label="Work orders" count={o.workOrders.length} />
+        <ChainChip href="/shipping" label="Shipments" count={o.shipments?.length ?? 0} />
+        <ChainChip href="/financials" label="Invoices" count={o.invoices?.length ?? 0} />
+        <ChainChip href="/financials" label="Payments" count={o.payments.length} />
       </div>
 
       {o.state === "CANCELLED" && o.cancelReason && (
@@ -204,14 +239,16 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
               <div style={{ display: "grid", gap: 6 }}>
                 {o.workOrders.map((w) => (
                   <div key={w.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5 }}>
-                    <span style={{ fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{w.number}{w.label ? <span style={{ color: "var(--h10-text-3)", fontWeight: 400 }}> · {w.label}</span> : null}</span>
+                    {/* EPO.3 (E2) — every WO row hops to its drawer on the floor */}
+                    <a href={`/production?wo=${w.id}`} style={{ fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", color: "var(--h10-text-link)", textDecoration: "none" }} title={w.number}>
+                      {w.number}{w.label ? <span style={{ color: "var(--h10-text-3)", fontWeight: 400 }}> · {w.label}</span> : null}
+                    </a>
                     <span style={{ display: "inline-flex", gap: 5, alignItems: "center", flex: "0 0 auto" }}>
                       <span style={{ color: "var(--h10-text-3)", fontSize: 11 }}>{w.stages.length} stages</span>
                       <Pill tone={w.state === "BLOCKED" ? "warning" : w.state === "DONE" ? "success" : "info"}>{w.state === "BLOCKED" ? (w.blockedReason ?? "blocked") : w.state.toLowerCase()}</Pill>
                     </span>
                   </div>
                 ))}
-                <div style={{ fontSize: 11, color: "var(--h10-text-3)", marginTop: 2 }}>The production floor (running these stages) arrives in FP6.</div>
               </div>
             )}
           </Card>

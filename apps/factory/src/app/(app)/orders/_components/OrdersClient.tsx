@@ -16,6 +16,7 @@ import { Card, DataGrid, Menu, Modal, useToast, Listbox } from "@/design-system/
 import { Button, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
+import { useFactoryEvents } from "@/lib/use-factory-events";
 import { usePermission } from "@/lib/auth/client";
 import { BOARD_LANES, canTransition, legalTargets, ORDER_STATE_LABEL } from "@/lib/orders/transitions";
 import { OrderDetail } from "./OrderDetail";
@@ -122,6 +123,9 @@ function PipelineInner() {
   }, [lanes, laneUrl, toast]);
   useEffect(() => { const t = setTimeout(() => void load(), 200); return () => clearTimeout(t); }, [load]);
   useEffect(() => { apiJson<{ parties: { id: string; name: string }[] }>("/api/parties-lite").then((d) => setParties(d.parties)).catch(() => {}); }, []);
+  // EPO.3 (E11) — the board goes live: FS2's durable bus, 2s debounce; a
+  // transition in another window/tab lands here without a manual refresh
+  useFactoryEvents(["order.updated", "workorder.created", "workorder.updated", "shipment.updated", "payment.recorded"], load);
 
   const openDetail = (id: string) => { window.history.replaceState(null, "", `/orders?o=${id}`); window.dispatchEvent(new PopStateEvent("popstate")); };
   const closeDetail = () => { window.history.replaceState(null, "", "/orders"); window.dispatchEvent(new PopStateEvent("popstate")); void load(); };
@@ -219,7 +223,7 @@ function PipelineInner() {
           <DataGrid
             columns={[
               { key: "number", label: "Order", render: (r: OrderRow) => <button type="button" onClick={() => openDetail(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button> },
-              { key: "party", label: "Party", render: (r: OrderRow) => r.party.name },
+              { key: "party", label: "Party", render: (r: OrderRow) => <a href={`/contacts?c=${r.party.id}`} style={{ color: "inherit", textDecoration: "none" }} onMouseEnter={(e) => { (e.target as HTMLElement).style.color = "var(--h10-text-link)"; }} onMouseLeave={(e) => { (e.target as HTMLElement).style.color = "inherit"; }}>{r.party.name}</a> }, // EPO.3 (E2) — party hops to contacts
               { key: "state", label: "State", render: stateCell },
               { key: "net", label: "Net", align: "right" as const, render: (r: OrderRow) => (r.lineCount ? eur(r.netCents ?? 0) : "—") },
               ...(canMargin ? [{ key: "margin", label: "Margin", align: "right" as const, render: (r: OrderRow) => (r.lineCount ? <Pill tone={(r.marginCents ?? 0) < 0 ? "danger" : "success"}>{(r.marginPct ?? 0).toFixed(0)}%</Pill> : "—") }] : []),

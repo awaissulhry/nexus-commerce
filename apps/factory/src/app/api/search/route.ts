@@ -31,7 +31,9 @@ export const GET = guarded(FEATURES.searchRun, async (req: NextRequest, { resolv
     if (parties.length)
       groups.push({
         label: "Contacts",
-        items: parties.map((p) => ({ label: p.name, sublabel: p.kind, href: `/contacts?focus=${p.id}` })),
+        // EPO.3 (C5) — pages read their OWN param (?c=/?q=/?o=), not ?focus=;
+        // every href below now lands ON the entity instead of a dead page-load
+        items: parties.map((p) => ({ label: p.name, sublabel: p.kind, href: `/contacts?c=${p.id}` })),
       });
   }
   if (can(PAGES.quotes)) {
@@ -43,7 +45,7 @@ export const GET = guarded(FEATURES.searchRun, async (req: NextRequest, { resolv
     if (quotes.length)
       groups.push({
         label: "Quotes",
-        items: quotes.map((x) => ({ label: x.number, sublabel: `${x.party.name} · ${x.state}`, href: `/quotes?focus=${x.id}` })),
+        items: quotes.map((x) => ({ label: x.number, sublabel: `${x.party.name} · ${x.state}`, href: `/quotes?q=${x.id}` })),
       });
   }
   if (can(PAGES.orders) || can(PAGES.production)) {
@@ -58,7 +60,8 @@ export const GET = guarded(FEATURES.searchRun, async (req: NextRequest, { resolv
         items: orders.map((x) => ({
           label: x.number,
           sublabel: `${x.party.name} · ${x.state}`,
-          href: can(PAGES.orders) ? `/orders?focus=${x.id}` : `/production?focus=${x.id}`,
+          // Workers land on the production board page-level (no per-order drill there)
+          href: can(PAGES.orders) ? `/orders?o=${x.id}` : "/production",
         })),
       });
   }
@@ -71,7 +74,7 @@ export const GET = guarded(FEATURES.searchRun, async (req: NextRequest, { resolv
     if (materials.length)
       groups.push({
         label: "Materials",
-        items: materials.map((m) => ({ label: m.name, sublabel: m.unit, href: `/materials?focus=${m.id}` })),
+        items: materials.map((m) => ({ label: m.name, sublabel: m.unit, href: "/materials" })), // no entity reader yet (EPM)
       });
   }
   if (can(PAGES.products)) {
@@ -83,7 +86,7 @@ export const GET = guarded(FEATURES.searchRun, async (req: NextRequest, { resolv
     if (templates.length)
       groups.push({
         label: "Products",
-        items: templates.map((t) => ({ label: t.name, href: `/products?focus=${t.id}` })),
+        items: templates.map((t) => ({ label: t.name, href: "/products" })), // honors ?tab= only; entity reader = EPD
       });
   }
   if (can(PAGES.inbox)) {

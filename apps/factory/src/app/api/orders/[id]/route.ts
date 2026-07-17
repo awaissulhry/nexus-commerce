@@ -28,6 +28,7 @@ const DETAIL_INCLUDE = {
   bornFromQuote: { select: { id: true, number: true, createdAt: true, sentAt: true, state: true, depositPct: true } },
   conversation: { select: { id: true, subject: true, createdAt: true } },
   shipments: true,
+  invoices: { select: { id: true, number: true, amountCents: true, sentAt: true, paidAt: true, createdAt: true }, orderBy: { createdAt: "asc" as const } }, // EPO.3 — chain chip + timeline
   reviews: { select: { id: true, createdAt: true } },
 };
 

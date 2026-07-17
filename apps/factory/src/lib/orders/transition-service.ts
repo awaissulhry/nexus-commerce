@@ -41,7 +41,7 @@ export type TransitionInput = {
 };
 
 export type TransitionOutcome =
-  | { ok: true; from: OrderState; to: OrderState }
+  | { ok: true; from: OrderState; to: OrderState; number: string }
   | { ok: false; status: 404 | 409 | 422; error: string; useStartProduction?: boolean };
 
 export async function transitionOrder(input: TransitionInput): Promise<TransitionOutcome> {
@@ -92,5 +92,5 @@ export async function transitionOrder(input: TransitionInput): Promise<Transitio
   });
   await publishEventDurable("order.updated", { orderId, from, to, via });
 
-  return { ok: true, from, to };
+  return { ok: true, from, to, number: order.number };
 }
