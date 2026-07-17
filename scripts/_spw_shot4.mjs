@@ -1,0 +1,20 @@
+import { chromium } from 'playwright'
+
+const URL = 'http://localhost:3000/marketing/ads/campaign-builder/sp-super-wizard'
+const b = await chromium.launch()
+const ctx = await b.newContext({ viewport: { width: 1676, height: 1044 }, deviceScaleFactor: 2 })
+const p = await ctx.newPage()
+await p.goto(URL, { waitUntil: 'domcontentloaded' })
+await p.waitForTimeout(700)
+// jump to step 2 via the stepper (no guard)
+await p.click('.h10-spw-steps button:nth-of-type(2)')
+await p.waitForTimeout(400)
+let el = await p.$('.h10-spw-cset-card'); if (el) await el.screenshot({ path: '/tmp/spw/st2_table.png' })
+console.log('table')
+// footer Next → guard modal (all keyword/PAT campaigns have 0 targeting)
+await p.click('.h10-spw-next')
+await p.waitForTimeout(300)
+el = await p.$('.h10-spw-guard'); if (el) await el.screenshot({ path: '/tmp/spw/st2_guard.png' })
+console.log('guard')
+await b.close()
+console.log('done')

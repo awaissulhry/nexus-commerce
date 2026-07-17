@@ -21,6 +21,11 @@ import { apiFetch, apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
 import { ADJUSTMENT_REASON_CODES, REASON_CODE_LABEL, type AdjustmentReasonCode } from "@/lib/quotes/reason-codes";
 import { formatSizeRun, readSelections, sizeRunTotal, type SizeRun } from "@/lib/quotes/selections";
+import { resolveTaxMode, viesOk, TAX_MODES, TAX_MODE_LABEL } from "@/lib/quotes/tax";
+import {
+  DEPOSIT_KINDS, DEPOSIT_KIND_LABEL, DEPOSIT_KIND_HINT, normalizeDepositKind,
+  VALIDITY_WORDINGS, VALIDITY_WORDING_LABEL, normalizeValidityWording, validityLine,
+} from "@/lib/quotes/legal";
 import { EuroInput, euroStrToCents } from "@/app/(app)/products/_components/money";
 import type { TemplateDetail } from "@/app/(app)/products/_components/types";
 import { SendModal } from "./SendModal";
@@ -59,6 +64,9 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
   // feel finished).
   const [focusReason, setFocusReason] = useState(false);
   const reasonRef = useRef<HTMLInputElement | null>(null);
+  // EPQ.5 — VIES check (EU_B2B parties): VAT input + on-demand button
+  const vatRef = useRef<HTMLInputElement | null>(null);
+  const [viesBusy, setViesBusy] = useState(false);
 
   const load = useCallback(async () => {
     const [d, t, s] = await Promise.all([
@@ -197,6 +205,27 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
   if (!quote) return <Card padded><Button onClick={onBack}><ArrowLeft size={13} /> Back</Button></Card>;
 
   const belowFloor = canMargin && totals != null && totals.netCents > 0 && totals.marginPct < floorPct;
+
+  // EPQ.5 — Tax & legal rail state (quote snapshot with party-kind fallback)
+  const railTaxMode = resolveTaxMode(quote.taxMode ?? quote.party.taxMode, quote.party.kind);
+  const railDepositKind = normalizeDepositKind(quote.depositKind);
+  const railValidityWording = normalizeValidityWording(quote.validityWording);
+  const partyViesOk = viesOk(quote.party);
+  const checkVies = async () => {
+    const vat = vatRef.current?.value.trim() ?? "";
+    if (!vat) { toast("Enter the VAT number first (with its country prefix)", "danger"); return; }
+    setViesBusy(true);
+    try {
+      const d = await apiJson<{ valid: boolean; traderName: string | null }>(`/api/contacts/${quote.party.id}/vies-check`, { method: "POST", body: JSON.stringify({ vatNumber: vat }) });
+      if (d.valid) toast(`VIES check passed${d.traderName ? ` — ${d.traderName}` : ""}`, "success");
+      else toast("This VAT number is NOT valid in VIES — art. 41 stays blocked", "danger");
+      await load();
+    } catch (e) {
+      toast((e as Error).message, "danger");
+    } finally {
+      setViesBusy(false);
+    }
+  };
 
   // EPQ.3 — discipline rows (tier/MOQ/size) render as their own waterfall steps;
   // "List" shows the pre-discipline subtotal so the steps visibly sum to Net
@@ -392,12 +421,72 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
           )}
 
           <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: 12, display: "grid", gap: 10 }}>
-            <label style={{ fontSize: 11.5, color: "var(--h10-text-2)", display: "grid", gap: 3 }}>Deposit %
-              <input type="number" min={0} max={100} defaultValue={quote.depositPct ?? 0} key={quote.depositPct ?? 0} onBlur={(e) => Number(e.target.value) !== (quote.depositPct ?? 0) && patchQuote({ depositPct: Number(e.target.value) || null })} disabled={!isDraft} style={{ width: 70, border: "1px solid var(--h10-border)", borderRadius: 7, padding: "4px 6px", font: "12.5px var(--font-mono)", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+            {/* EPQ.5 — tax mode snapshot (party default at create; DRAFT-editable) */}
+            <label style={{ fontSize: 11.5, color: "var(--h10-text-2)", display: "grid", gap: 3 }}>Tax mode
+              <Listbox
+                ariaLabel="Tax mode"
+                options={TAX_MODES.map((m) => ({ value: m, label: TAX_MODE_LABEL[m] }))}
+                value={railTaxMode}
+                onChange={(v) => { void patchQuote({ taxMode: v }); }}
+                disabled={!isDraft}
+              />
             </label>
+            {railTaxMode === "EU_B2B" && (
+              <div style={{ display: "grid", gap: 6 }}>
+                {partyViesOk ? (
+                  <div style={{ fontSize: 11.5, color: "var(--h10-success, #15a34a)" }}>
+                    VIES ✓ {quote.party.vatNumber} · {quote.party.viesCheckedAt ? new Date(quote.party.viesCheckedAt).toLocaleDateString() : ""} · id {quote.party.viesRequestId}
+                  </div>
+                ) : (
+                  <Banner tone="warning" title="VIES check required">
+                    Art. 41 non-imponibile needs a valid VIES check — until then the documents render as Italy · business and Send is blocked.
+                  </Banner>
+                )}
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <input
+                    ref={vatRef}
+                    defaultValue={quote.party.vatNumber ?? ""}
+                    key={quote.party.vatNumber ?? ""}
+                    placeholder="VAT (e.g. DE123456789)"
+                    aria-label="VAT number"
+                    style={{ flex: 1, minWidth: 0, border: "1px solid var(--h10-border)", borderRadius: 7, padding: "4px 8px", font: "12px var(--font-mono)", background: "var(--h10-surface)", color: "var(--h10-text)", outline: "none" }}
+                  />
+                  <Button onClick={() => void checkVies()} disabled={viesBusy}>{viesBusy ? "Checking…" : "Check VIES"}</Button>
+                </div>
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
+              <label style={{ fontSize: 11.5, color: "var(--h10-text-2)", display: "grid", gap: 3 }}>Deposit %
+                <input type="number" min={0} max={100} defaultValue={quote.depositPct ?? 0} key={quote.depositPct ?? 0} onBlur={(e) => Number(e.target.value) !== (quote.depositPct ?? 0) && patchQuote({ depositPct: Number(e.target.value) || null })} disabled={!isDraft} style={{ width: 70, border: "1px solid var(--h10-border)", borderRadius: 7, padding: "4px 6px", font: "12.5px var(--font-mono)", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+              </label>
+              {/* EPQ.5 — the deposit's LEGAL character (acconto vs caparra, art. 1385) */}
+              <label style={{ fontSize: 11.5, color: "var(--h10-text-2)", display: "grid", gap: 3, flex: 1, minWidth: 150 }}>Deposit kind
+                <Listbox
+                  ariaLabel="Deposit kind"
+                  options={DEPOSIT_KINDS.map((k) => ({ value: k, label: DEPOSIT_KIND_LABEL[k] }))}
+                  value={railDepositKind}
+                  onChange={(v) => { void patchQuote({ depositKind: v }); }}
+                  disabled={!isDraft}
+                />
+              </label>
+            </div>
+            <div style={{ fontSize: 10.5, color: "var(--h10-text-3)" }}>{DEPOSIT_KIND_HINT[railDepositKind]}</div>
             <label style={{ fontSize: 11.5, color: "var(--h10-text-2)", display: "grid", gap: 3 }}>Valid until
               <DateField ariaLabel="Valid until" value={isoDate(quote.validUntilAt)} onChange={(v) => patchQuote({ validUntilAt: v ? new Date(`${v}T23:59:00`).toISOString() : null })} disabled={!isDraft} />
             </label>
+            {/* EPQ.5 — validity wording: revocable vs firm offer (art. 1329 c.c.) */}
+            <label style={{ fontSize: 11.5, color: "var(--h10-text-2)", display: "grid", gap: 3 }}>Validity wording
+              <Listbox
+                ariaLabel="Validity wording"
+                options={VALIDITY_WORDINGS.map((w) => ({ value: w, label: VALIDITY_WORDING_LABEL[w] }))}
+                value={railValidityWording}
+                onChange={(v) => { void patchQuote({ validityWording: v }); }}
+                disabled={!isDraft}
+              />
+            </label>
+            <div style={{ fontSize: 10.5, color: "var(--h10-text-3)", fontStyle: "italic" }}>
+              “{validityLine(railValidityWording, quote.validUntilAt ? new Date(quote.validUntilAt).toLocaleDateString("it-IT") : "{data}")}”
+            </div>
             <label style={{ fontSize: 11.5, color: "var(--h10-text-2)", display: "grid", gap: 3 }}>Promise date <span style={{ fontSize: 10, color: "var(--h10-text-3)" }}>(estimate; real lead time in FP6)</span>
               <DateField ariaLabel="Promise date" value={isoDate(quote.promiseDateAt)} onChange={(v) => patchQuote({ promiseDateAt: v ? new Date(`${v}T12:00:00`).toISOString() : null })} disabled={!isDraft} />
             </label>

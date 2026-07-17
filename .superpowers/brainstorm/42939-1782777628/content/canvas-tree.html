@@ -1,0 +1,117 @@
+<style>
+  .tr-wrap{ font:12px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color:#1c2530; }
+  .tr-app{ border:1px solid #d8dde4; border-radius:12px; overflow:hidden; background:#fff; box-shadow:0 8px 30px rgba(20,28,38,.08); }
+  /* toolbar */
+  .tr-tb{ display:flex; align-items:center; gap:9px; border-bottom:1px solid #e3e7ec; padding:9px 12px; background:#fafbfc; }
+  .tr-srch{ border:1px solid #d8dde4; border-radius:7px; padding:5px 10px; font-size:11px; color:#8a93a1; min-width:210px; background:#fff; }
+  .tr-chip{ border:1px solid #e3e7ec; border-radius:7px; padding:4px 9px; color:#5b6573; font-weight:700; font-size:11px; background:#fff; }
+  .tr-tb .sp{ flex:1; }
+  /* bulk bar */
+  .tr-bulk{ display:flex; align-items:center; gap:9px; background:#eef3fb; border-bottom:1px solid #cfe0f7; padding:7px 12px; }
+  .tr-bcount{ font-weight:800; color:#1f6fde; font-size:11.5px; }
+  .tr-bbtn{ background:#1f6fde; color:#fff; border-radius:7px; padding:5px 11px; font-size:11px; font-weight:700; }
+  .tr-bbtn.ghost{ background:#fff; color:#37495b; border:1px solid #cfe0f7; }
+  /* header row */
+  .tr-colh{ display:flex; align-items:center; padding:6px 12px; border-bottom:1px solid #eef0f3; font-size:8.5px; letter-spacing:.06em; text-transform:uppercase; color:#8a93a1; font-weight:800; }
+  .tr-colh .nm{ flex:1; }
+  .col-sp{ width:84px; text-align:right; } .col-ac{ width:64px; text-align:right; } .col-ag{ width:120px; } .col-act{ width:70px; text-align:right; }
+  /* rows */
+  .tr-row{ display:flex; align-items:center; padding:6px 12px; border-bottom:1px solid #f3f4f6; }
+  .tr-row:hover{ background:#fafcff; }
+  .tr-row.sel{ background:#f3f8ff; }
+  .tr-name{ flex:1; display:flex; align-items:center; gap:7px; min-width:0; }
+  .tr-chev{ width:13px; color:#9aa3b0; font-size:10px; flex:0 0 13px; }
+  .tr-cb{ width:13px; height:13px; border:1.5px solid #c2cad4; border-radius:3px; flex:0 0 13px; }
+  .tr-cb.on{ background:#1f6fde; border-color:#1f6fde; position:relative; }
+  .tr-cb.on::after{ content:'✓'; color:#fff; font-size:9px; position:absolute; top:-2px; left:1px; }
+  .tr-lbl{ font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tr-kind{ font-size:8px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#9aa3b0; border:1px solid #e7eaee; border-radius:4px; padding:0 4px; }
+  .tr-dot{ width:7px; height:7px; border-radius:50%; flex:0 0 7px; display:inline-block; }
+  .ok{ background:#067d62; } .warn{ background:#b87503; } .bad{ background:#e5484d; }
+  .tr-sp{ width:84px; text-align:right; font-weight:700; font-size:11px; }
+  .tr-ac{ width:64px; text-align:right; font-weight:700; font-size:11px; }
+  .tr-ag{ width:120px; display:flex; gap:3px; }
+  .tr-agp{ font-size:8px; font-weight:800; background:#eef3fb; color:#1f6fde; border-radius:4px; padding:1px 4px; }
+  .tr-agp.r{ background:#fff4e0; color:#b87503; }
+  .tr-act{ width:70px; text-align:right; color:#9aa3b0; font-weight:700; }
+  .ind1{ padding-left:6px } .ind2{ padding-left:28px } .ind3{ padding-left:50px } .ind4{ padding-left:72px } .ind5{ padding-left:94px }
+</style>
+
+<h2>Object graph as a tree — manage everything from here</h2>
+<p class="subtitle">Your call: an expandable <b>tree</b> (Market ▸ Portfolio ▸ Campaign ▸ Ad Group ▸ Target), not columns — drill down inline, multi-select with the checkboxes, and act in bulk from the top bar. Health dot, spend, ACoS, and the agents governing each row are on every line. Clicking a row opens the inspector (the right panel from the last screen). Scales to thousands of rows with search + filters + collapse.</p>
+
+<div class="tr-wrap">
+  <div class="tr-app">
+    <div class="tr-tb">
+      <span class="tr-srch">⌕  Search campaigns, targets, ASINs…</span>
+      <span class="tr-chip">Market: All ▾</span>
+      <span class="tr-chip">Health: any ▾</span>
+      <span class="tr-chip">ACoS &gt; 30% ✕</span>
+      <span class="sp"></span>
+      <span class="tr-chip">Expand all</span>
+      <span class="tr-chip">Columns ▾</span>
+    </div>
+
+    <div class="tr-bulk">
+      <span class="tr-bcount">1 campaign · 340 targets selected</span>
+      <span class="tr-bbtn">⚡ Apply agent ▾</span>
+      <span class="tr-bbtn ghost">Lower bid ±%</span>
+      <span class="tr-bbtn ghost">Adjust budget</span>
+      <span class="tr-bbtn ghost">Pause</span>
+      <span class="sp" style="flex:1"></span>
+      <span class="tr-chip">Clear</span>
+    </div>
+
+    <div class="tr-colh"><span class="nm">Object</span><span class="col-sp">Spend 30d</span><span class="col-ac">ACoS</span><span class="col-ag">Agents</span><span class="col-act">Actions</span></div>
+
+    <!-- Market -->
+    <div class="tr-row">
+      <div class="tr-name ind1"><span class="tr-chev">▾</span><span class="tr-cb"></span><span class="tr-lbl">DE · Germany</span><span class="tr-kind">Market</span><span class="tr-dot ok"></span></div>
+      <span class="tr-sp">€1,240</span><span class="tr-ac">22%</span><span class="tr-ag"><span class="tr-agp">3</span></span><span class="tr-act">⋯</span>
+    </div>
+    <!-- Portfolio -->
+    <div class="tr-row">
+      <div class="tr-name ind2"><span class="tr-chev">▾</span><span class="tr-cb"></span><span class="tr-lbl">Moto Jackets</span><span class="tr-kind">Portfolio</span><span class="tr-dot ok"></span></div>
+      <span class="tr-sp">€840</span><span class="tr-ac">24%</span><span class="tr-ag"><span class="tr-agp">Bid</span><span class="tr-agp r">Rank</span></span><span class="tr-act">⋯</span>
+    </div>
+    <!-- Campaign (selected) -->
+    <div class="tr-row sel">
+      <div class="tr-name ind3"><span class="tr-chev">▾</span><span class="tr-cb on"></span><span class="tr-lbl">AIREON Jacket</span><span class="tr-kind">Campaign</span><span class="tr-dot ok"></span></div>
+      <span class="tr-sp">€310</span><span class="tr-ac">24%</span><span class="tr-ag"><span class="tr-agp">Bid</span><span class="tr-agp">Pacer</span><span class="tr-agp r">Rank</span></span><span class="tr-act">⋯</span>
+    </div>
+    <!-- Ad group -->
+    <div class="tr-row">
+      <div class="tr-name ind4"><span class="tr-chev">▾</span><span class="tr-cb on"></span><span class="tr-lbl">Exact — core</span><span class="tr-kind">Ad Group</span><span class="tr-dot ok"></span></div>
+      <span class="tr-sp">€210</span><span class="tr-ac">21%</span><span class="tr-ag"></span><span class="tr-act">⋯</span>
+    </div>
+    <!-- Targets -->
+    <div class="tr-row">
+      <div class="tr-name ind5"><span class="tr-chev"></span><span class="tr-cb on"></span><span class="tr-lbl">"moto jacket"</span><span class="tr-kind">Target</span><span class="tr-dot ok"></span></div>
+      <span class="tr-sp">€36</span><span class="tr-ac">20%</span><span class="tr-ag"></span><span class="tr-act">⋯</span>
+    </div>
+    <div class="tr-row">
+      <div class="tr-name ind5"><span class="tr-chev"></span><span class="tr-cb on"></span><span class="tr-lbl">"airbag jacket"</span><span class="tr-kind">Target</span><span class="tr-dot bad"></span></div>
+      <span class="tr-sp">€2.10</span><span class="tr-ac">0 ord</span><span class="tr-ag"></span><span class="tr-act">⋯</span>
+    </div>
+    <!-- collapsed ad group -->
+    <div class="tr-row">
+      <div class="tr-name ind4"><span class="tr-chev">▸</span><span class="tr-cb"></span><span class="tr-lbl">Phrase — broadmatch</span><span class="tr-kind">Ad Group</span><span class="tr-dot warn"></span></div>
+      <span class="tr-sp">€100</span><span class="tr-ac">33%</span><span class="tr-ag"></span><span class="tr-act">⋯</span>
+    </div>
+    <!-- collapsed campaign -->
+    <div class="tr-row">
+      <div class="tr-name ind3"><span class="tr-chev">▸</span><span class="tr-cb"></span><span class="tr-lbl">MISANO SP-Auto</span><span class="tr-kind">Campaign</span><span class="tr-dot bad"></span></div>
+      <span class="tr-sp">€190</span><span class="tr-ac">61%</span><span class="tr-ag"><span class="tr-agp r">Rank</span></span><span class="tr-act">⋯</span>
+    </div>
+    <!-- collapsed portfolio -->
+    <div class="tr-row">
+      <div class="tr-name ind2"><span class="tr-chev">▸</span><span class="tr-cb"></span><span class="tr-lbl">Helmets</span><span class="tr-kind">Portfolio</span><span class="tr-dot warn"></span></div>
+      <span class="tr-sp">€400</span><span class="tr-ac">38%</span><span class="tr-ag"><span class="tr-agp">Bid</span></span><span class="tr-act">⋯</span>
+    </div>
+    <!-- collapsed market -->
+    <div class="tr-row">
+      <div class="tr-name ind1"><span class="tr-chev">▸</span><span class="tr-cb"></span><span class="tr-lbl">IT · Italy</span><span class="tr-kind">Market</span><span class="tr-dot ok"></span></div>
+      <span class="tr-sp">€2,980</span><span class="tr-ac">19%</span><span class="tr-ag"><span class="tr-agp">5</span></span><span class="tr-act">⋯</span>
+    </div>
+  </div>
+</div>

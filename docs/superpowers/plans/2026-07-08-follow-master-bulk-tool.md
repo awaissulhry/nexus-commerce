@@ -54,6 +54,15 @@ Both editors show **one active market at a time** (verified — the eBay "all ma
 - Switch markets with the strip to control another market; the market you're not on is untouched.
 - **eBay shared "Quantity" column** (a legacy "shared/default" field separate from per-market `it_qty`): OPEN DECISION — keep as read-only reflection, or hide it, so Follow is unambiguously based on the per-market Qty. (Needs your answer on whether you use it.)
 
+## 4a. Follow column implementation architecture (decided 2026-07-08)
+
+- **Data:** the row builders expose a per-market `{mp}_follow` field (`'Follow'` | `'Pinned'`) from `ChannelListing.followMasterQuantity`. eBay: `buildFlatRow` (ebay-variation-push.service.ts). Amazon: its row builder.
+- **Column:** an `enum` dropdown (`Follow` / `Pinned`) added to each market group, shown for the active market (both editors are single-active-market). Owner confirmed labels `Follow`/`Pinned`.
+- **Apply path (SAFE — does NOT go through the flat-file save's quantity logic):** on Save, the client diffs each row's `{mp}_follow` against its loaded original; changed rows are grouped by `(channel, market, follow)` and applied via the proven Phase 0 endpoint `POST /api/listings/follow-master-quantity`. The normal flat-file save (now pool-neutral) handles the other columns. Bulk = the grid's native fill-down/paste on the Follow column, then Save.
+- **eBay shared "Quantity" column:** owner doesn't use it → make it read-only (reflection), Follow lives on the per-market Qty. So eBay and Amazon read identically.
+- **FBA:** eBay is always FBM (no FBA). Amazon FBA rows render Follow + Qty as `—`/disabled (reuse `isFbaQtyCell`); the endpoint already skips FBA.
+- **Order:** Phase 2a eBay (no FBA) → verify/review → Phase 2b Amazon (adds FBA `—`).
+
 ## 4b. UX affordances — tooltips + warnings (REQUIRED, owner-mandated)
 
 Nothing ships without clear guidance on-screen. Every new control explains itself, and the model change is impossible to forget.

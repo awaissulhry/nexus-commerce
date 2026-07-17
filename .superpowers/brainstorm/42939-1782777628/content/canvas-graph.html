@@ -1,0 +1,120 @@
+<style>
+  .cg-wrap{ font:12px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color:#1c2530; }
+  .cg-app{ border:1px solid #d8dde4; border-radius:12px; overflow:hidden; background:#fff; box-shadow:0 8px 30px rgba(20,28,38,.08); }
+  .cg-head{ display:flex; align-items:center; gap:9px; border-bottom:1px solid #e3e7ec; padding:8px 12px; background:#fafbfc; }
+  .cg-chip{ border:1px solid #e3e7ec; border-radius:7px; padding:4px 9px; color:#5b6573; font-weight:700; font-size:11px; background:#fff; }
+  .cg-head .sp{ flex:1; }
+  .cg-seg{ display:flex; border:1px solid #d8dde4; border-radius:7px; overflow:hidden; }
+  .cg-seg span{ padding:4px 12px; font-size:11px; font-weight:700; color:#5b6573; }
+  .cg-seg span.on{ background:#1f6fde; color:#fff; }
+  /* stage */
+  .cg-stage{ position:relative; height:486px; overflow:hidden;
+    background-color:#fbfcfd;
+    background-image:radial-gradient(circle at 1px 1px,#dfe4ea 1px,transparent 0);
+    background-size:22px 22px; }
+  .cg-svg{ position:absolute; inset:0; z-index:0; pointer-events:none; }
+  .cg-node{ position:absolute; width:152px; background:#fff; border:1px solid #dde2e8; border-radius:9px; padding:7px 9px; z-index:1; box-shadow:0 1px 2px rgba(20,28,38,.05); }
+  .cg-k{ font-size:8px; letter-spacing:.06em; text-transform:uppercase; font-weight:800; color:#9aa3b0; }
+  .cg-t{ font-weight:700; font-size:11.5px; margin:1px 0 3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cg-m{ font-size:9.5px; color:#5b6573; display:flex; align-items:center; gap:4px; }
+  .cg-dot{ width:7px; height:7px; border-radius:50%; flex:0 0 7px; display:inline-block; }
+  .ok{ background:#067d62; } .warn{ background:#b87503; } .bad{ background:#e5484d; }
+  .cg-exp{ position:absolute; right:-9px; top:50%; transform:translateY(-50%); width:18px; height:18px; border-radius:50%; background:#fff; border:1px solid #cfd5dd; color:#1f6fde; font-weight:800; font-size:12px; display:flex; align-items:center; justify-content:center; }
+  .cg-node.sel{ border-color:#1f6fde; box-shadow:0 0 0 3px #dce8fb, 0 2px 6px rgba(31,111,222,.18); }
+  .cg-tools{ position:absolute; top:-30px; left:0; display:flex; gap:4px; }
+  .cg-tb{ background:#1c2530; color:#fff; border-radius:6px; font-size:9px; font-weight:700; padding:3px 7px; }
+  /* agent node */
+  .cg-agent{ width:200px; border-color:#c9bdff; box-shadow:0 0 0 3px #f0ecff, 0 2px 8px rgba(124,92,255,.15); }
+  .cg-pipe{ font-size:9px; color:#6b4fd0; background:#f4f1ff; border-radius:5px; padding:3px 6px; margin:3px 0; }
+  .cg-arow{ display:flex; align-items:center; gap:6px; margin-top:3px; }
+  .cg-badge{ font-size:8px; font-weight:800; background:#7c5cff; color:#fff; border-radius:5px; padding:1px 6px; }
+  .cg-scope{ font-size:9px; color:#6b4fd0; font-weight:700; }
+  .cg-learn{ margin-top:5px; font-size:8.5px; font-weight:700; color:#067d62; background:#e7f5ee; border-radius:5px; padding:2px 6px; }
+  /* chrome */
+  .cg-zoom{ position:absolute; left:12px; bottom:12px; display:flex; flex-direction:column; border:1px solid #d8dde4; border-radius:8px; overflow:hidden; background:#fff; z-index:3; }
+  .cg-zoom span{ width:30px; height:28px; display:flex; align-items:center; justify-content:center; font-weight:800; color:#5b6573; border-bottom:1px solid #eef0f3; }
+  .cg-zoom span:last-child{ border-bottom:0; }
+  .cg-mini{ position:absolute; right:12px; bottom:12px; width:140px; height:84px; border:1px solid #d8dde4; border-radius:8px; background:#fff; z-index:3; overflow:hidden; }
+  .cg-mini .d{ position:absolute; width:10px; height:6px; border-radius:2px; background:#cfd6df; }
+  .cg-mini .vp{ position:absolute; border:1.5px solid #1f6fde; border-radius:3px; }
+  .cg-fab{ position:absolute; left:12px; top:10px; z-index:3; display:flex; gap:6px; }
+  .cg-fab .b{ background:#fff; border:1px solid #d8dde4; border-radius:7px; padding:4px 10px; font-size:11px; font-weight:700; color:#37495b; }
+  .cg-fab .b.primary{ background:#1f6fde; color:#fff; border-color:#1f6fde; }
+</style>
+
+<h2>Mission Control — the canvas</h2>
+<p class="subtitle">Infinite, zoomable canvas. Objects are nodes you <b>expand</b> (the ＋ spawns children — Market→Portfolio→Campaign→Ad Group→Target), arrange and group. <b>Agents are nodes you build and wire</b> onto any object or scope (the violet node governs the whole Moto Jackets portfolio = bulk). Select a node for deep config. The agent shows it's <b>learning</b> from outcomes. Toggle Canvas/Tree top-right. Tell me what to refine.</p>
+
+<div class="cg-wrap">
+  <div class="cg-app">
+    <div class="cg-head">
+      <span class="cg-chip">Market: DE ▾</span>
+      <span class="cg-chip">Last 30d ▾</span>
+      <span class="sp"></span>
+      <span class="cg-chip" style="color:#067d62;border-color:#bfe3d4">● Live · learning on</span>
+      <span class="cg-seg"><span class="on">Canvas</span><span>Tree</span></span>
+    </div>
+
+    <div class="cg-stage">
+      <!-- edges -->
+      <svg class="cg-svg" viewBox="0 0 960 486" preserveAspectRatio="none">
+        <!-- hierarchy edges (grey) -->
+        <line x1="164" y1="222" x2="196" y2="146" stroke="#c4ccd6" stroke-width="1.6"/>
+        <line x1="164" y1="222" x2="196" y2="326" stroke="#c4ccd6" stroke-width="1.6"/>
+        <line x1="348" y1="146" x2="392" y2="90"  stroke="#c4ccd6" stroke-width="1.6"/>
+        <line x1="348" y1="146" x2="392" y2="210" stroke="#c4ccd6" stroke-width="1.6"/>
+        <line x1="544" y1="90"  x2="588" y2="74"  stroke="#c4ccd6" stroke-width="1.6"/>
+        <line x1="740" y1="74"  x2="772" y2="34"  stroke="#c4ccd6" stroke-width="1.6"/>
+        <line x1="740" y1="74"  x2="772" y2="122" stroke="#c4ccd6" stroke-width="1.6"/>
+        <!-- governance edge (agent → portfolio, dashed violet) -->
+        <line x1="600" y1="320" x2="300" y2="158" stroke="#7c5cff" stroke-width="1.8" stroke-dasharray="5 4"/>
+        <line x1="600" y1="320" x2="430" y2="206" stroke="#7c5cff" stroke-width="1.8" stroke-dasharray="5 4"/>
+      </svg>
+
+      <!-- floating toolbar -->
+      <div class="cg-fab">
+        <span class="b primary">＋ Add node ▾</span>
+        <span class="b">Auto-layout</span>
+        <span class="b">Group</span>
+        <span class="b">⌕ Find</span>
+      </div>
+
+      <!-- nodes -->
+      <div class="cg-node" style="left:12px;top:196px"><div class="cg-k">Market</div><div class="cg-t">DE · Germany</div><div class="cg-m"><span class="cg-dot ok"></span> €1,240 · 22%</div><span class="cg-exp">−</span></div>
+
+      <div class="cg-node" style="left:196px;top:120px"><div class="cg-k">Portfolio</div><div class="cg-t">Moto Jackets</div><div class="cg-m"><span class="cg-dot ok"></span> €840 · 24%</div><span class="cg-exp">−</span></div>
+      <div class="cg-node" style="left:196px;top:300px"><div class="cg-k">Portfolio</div><div class="cg-t">Helmets</div><div class="cg-m"><span class="cg-dot warn"></span> €400 · 38%</div><span class="cg-exp">＋</span></div>
+
+      <div class="cg-node sel" style="left:392px;top:64px">
+        <div class="cg-tools"><span class="cg-tb">⚙ Config</span><span class="cg-tb">⤢ Inspect</span><span class="cg-tb">⚡ Attach agent</span></div>
+        <div class="cg-k">Campaign</div><div class="cg-t">AIREON Jacket</div><div class="cg-m"><span class="cg-dot ok"></span> €310 · 24%</div><span class="cg-exp">−</span>
+      </div>
+      <div class="cg-node" style="left:392px;top:184px"><div class="cg-k">Campaign</div><div class="cg-t">MISANO SP-Auto</div><div class="cg-m"><span class="cg-dot bad"></span> €190 · 61%</div><span class="cg-exp">＋</span></div>
+
+      <div class="cg-node" style="left:588px;top:48px"><div class="cg-k">Ad Group</div><div class="cg-t">Exact — core</div><div class="cg-m"><span class="cg-dot ok"></span> €210 · 21%</div><span class="cg-exp">−</span></div>
+
+      <div class="cg-node" style="left:772px;top:8px"><div class="cg-k">Target</div><div class="cg-t">"moto jacket"</div><div class="cg-m"><span class="cg-dot ok"></span> €0.74 · 20%</div></div>
+      <div class="cg-node" style="left:772px;top:96px"><div class="cg-k">Target</div><div class="cg-t">"airbag jacket"</div><div class="cg-m"><span class="cg-dot bad"></span> €0.90 · 0 ord</div></div>
+
+      <!-- agent node -->
+      <div class="cg-node cg-agent" style="left:500px;top:300px">
+        <div class="cg-k" style="color:#7c5cff">⚡ Agent</div>
+        <div class="cg-t">Profit Bidder + Waste Sniper</div>
+        <div class="cg-pipe">Signals → IF → Target-ACoS → Bid / Negate</div>
+        <div class="cg-arow"><span class="cg-badge">SUGGEST</span><span class="cg-scope">scope: Moto Jackets · 12 camp</span></div>
+        <div class="cg-learn">▲ learning · 1,240 outcomes · win-rate 73%</div>
+      </div>
+
+      <!-- chrome -->
+      <div class="cg-zoom"><span>＋</span><span>−</span><span>⊡</span></div>
+      <div class="cg-mini">
+        <div class="d" style="left:14px;top:38px"></div><div class="d" style="left:36px;top:24px"></div>
+        <div class="d" style="left:36px;top:56px"></div><div class="d" style="left:62px;top:16px"></div>
+        <div class="d" style="left:62px;top:38px"></div><div class="d" style="left:90px;top:12px;background:#c9bdff"></div>
+        <div class="d" style="left:112px;top:6px"></div><div class="d" style="left:112px;top:22px"></div>
+        <div class="d" style="left:78px;top:58px;background:#c9bdff"></div>
+        <div class="vp" style="left:8px;top:6px;width:96px;height:60px"></div>
+      </div>
+    </div>
+  </div>
+</div>

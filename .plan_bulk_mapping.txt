@@ -1,0 +1,573 @@
+================================================================================
+BULK/AUTO FIELD-MAPPING FEATURE FOR PIM: REUSE INVENTORY + GAPS
+================================================================================
+
+RESEARCH DATE: 2026-06-05
+SCOPE: READ-ONLY analysis of FM-series substrate for BULK / AUTO mapping UX + backend
+
+================================================================================
+SECTION 1: MAPPING SUGGESTIONS (FM.13) — THE HEURISTIC BASIS
+================================================================================
+
+FILE: /Users/awais/nexus-commerce/apps/api/src/services/pim/mapping-suggest.service.ts
+
+HEURISTIC STRATEGY:
+  - Candidate master-attribute set: 39 sources (lines 25–39)
+    • title, description, brand, manufacturer
+    • our_price, categoryAttributes.material, categoryAttributes.color, categoryAttributes.size
+    • bulletPoints, keywords, ean, upc, gtin
+    • Each source has 3–5 canonical aliases (e.g., "brand" → ["brand", "brand_name", 
+      "manufacturer_brand", "vendor"])
+
+  - Two-pass matching:
+    1. PASS 1 (HIGH confidence): normalized exact match of fieldKey OR label against any alias
+       → Example: "item_name" matches "name" exactly → HIGH
+    2. PASS 2 (MEDIUM confidence): substring containment (≥5 chars) in fieldKey/label/alias
+       → Example: "water_resistance_level" contains "material" substring → MEDIUM
+       → Filters out spurious hits like "name" in "color_name" (na ≠ colorname)
+
+ENDPOINT:
+  GET /api/pim/mappings/:channel/:code/suggest?productType=<optional>
+  
+  Input:
+    - channel: 'AMAZON' | 'EBAY' | 'SHOPIFY'
+    - code: marketplace code (e.g., 'IT', 'DE')
+    - productType: optional for per-type suggestions
+  
+  Output shape: {
+    channel, code, productType,
+    suggestions: [{
+      fieldKey,
+      label,
+      suggestedSource,  // path like "title" or "categoryAttributes.color"
+      confidence,       // 'high' | 'medium'
+      reason            // "matches 'brand_name'" or "partial match 'brand'"
+    }],
+    unmappedTotal     // count of ALL unmapped fields for this marketplace
+  }
+
+  NOTE: read-only; operator applies via existing PUT /pim/mappings/:channel/:code/:fieldKey
+
+MASTER-ATTRIBUTE CATALOG (line 25):
+  CANDIDATES array is HARDCODED. To extend it (e.g., add "Peso" / "Weight"):
+    • Edit CANDIDATES array
+    • Add new aliases (italian + english variants recommended)
+    • Recompile + redeploy
+  Future: could move to a seeded DB table for runtime flexibility (e.g., BrandVoiceVariable-style)
+
+================================================================================
+SECTION 2: RULE WRITE PATH + BULK GAPS
+================================================================================
+
+FILE: /Users/awais/nexus-commerce/apps/api/src/routes/pim-mapping.routes.ts
+FILE: /Users/awais/nexus-commerce/apps/api/src/services/pim/schema-mapping.service.ts
+
+CURRENT WRITE ENDPOINTS:
+  
+  PUT /pim/mappings/:channel/:code/:fieldKey
+    • Per-field upsert (line 175–217)
+    • Body: FieldMappingRule { source, fallback?, transforms?, required?, notes? }
+    • Calls: validateFieldRule() → upsertFieldMapping()
+    • Records MappingRevision BEFORE write (for undo history)
+    • Returns: { ok: true, rule: saved }
+  
+  DELETE /pim/mappings/:channel/:code/:fieldKey
+    • Per-field removal (line 412–433)
+    • Records MappingRevision BEFORE delete
+    • Returns: { ok: true }
+
+UPSERT SERVICE (schema-mapping.service.ts, line 367–394):
+  
+  async function upsertFieldMapping(
+    channel, code, fieldKey, rule, productType?
+  ): Promise<MarketplaceSchemaMapping>
+  
+  Algorithm:
+    1. Validate rule shape via validateFieldRule() → throws InvalidMappingError
+    2. Fetch CURRENT mapping via getMappingForMarketplace()
+    3. If productType: write to mapping.byProductType[productType][fieldKey]
+                      (preserves default bucket + other types)
+    4. Else: write to mapping.fields[fieldKey]
+                      (default bucket, no type specificity)
+    5. UPDATE Marketplace row with new JSONB
+    6. Return new mapping
+  
+  ATOMICITY: Single Marketplace.update() call; JSONB merge is Postgres-atomic.
+  
+  PERF CONSIDERATION: N sequential PUT calls = N DB round-trips.
+    • For 100 fields: ~100 upserts = 100 DB calls
+    • No batch endpoint exists; each call is a separate transaction
+    
+  ARCHITECTURE CONSTRAINT: Nested .byProductType overlay design means:
+    • Can't in-place mutate schemaMapping JSONB without re-reading
+    • Bulk write COULD combine N rules into ONE Marketplace.update() via
+      a new bulkUpsertFieldMappings(channel, code, rules[], productType?) service
+    • Would need TRANSACTION isolation to prevent race conditions with per-field
+      edits happening in parallel
+
+BULK WRITE FEASIBILITY: ✓ HIGH
+  - Suggested service signature:
+    async function bulkUpsertFieldMappings(
+      channel: string,
+      code: string,
+      rules: Array<{ fieldKey: string; rule: FieldMappingRule }>,
+      productType?: string | null
+    ): Promise<MarketplaceSchemaMapping>
+  
+  - Implementation:
+    1. Validate all rules via validateFieldRule() on each
+    2. Fetch current mapping once
+    3. Merge all rules into current mapping structure (both default + overlay)
+    4. Validate entire merged mapping via validateMapping()
+    5. Single UPDATE with new JSONB
+    6. Record ONE MappingRevision snapshot with reason "bulk upsert N fields..."
+  
+  - API endpoint:
+    POST /pim/mappings/:channel/:code/bulk?productType=<optional>
+    Body: { rules: [{ fieldKey, rule }, ...] }
+    Response: { ok: true, appliedCount, skippedCount, mapping }
+
+================================================================================
+SECTION 3: CLONE / COPY ACROSS MARKETS + PRODUCTYPES
+================================================================================
+
+FILE: /Users/awais/nexus-commerce/apps/api/src/routes/pim-mapping.routes.ts (line 435–464)
+FILE: /Users/awais/nexus-commerce/apps/api/src/services/pim/mapping-revision.service.ts
+
+REVISION INFRASTRUCTURE (FM.13):
+  
+  MappingRevision table:
+    - id, channel, code, version (unique on all 3)
+    - snapshot: the full schemaMapping JSON at that point
+    - changedBy, reason (strings)
+    - createdAt
+  
+  Endpoints:
+    GET /pim/mappings/:channel/:code/revisions
+      → Returns list of recent revisions (metadata: version, changedBy, reason, createdAt)
+    
+    POST /pim/mappings/:channel/:code/rollback/:revisionId
+      → Restores a past snapshot, records CURRENT state first (undo-safe)
+
+CLONE FEASIBILITY: ✓ HIGH (reuse revision snapshot mechanism)
+  
+  Simplest approach: leverage getResolvedRules() + new bulkUpsertFieldMappings()
+  
+  1. GET source marketplace rules:
+     const sourceRules = await getResolvedRules('AMAZON', 'IT', productType?)
+  
+  2. FOR each target marketplace:
+       POST /pim/mappings/AMAZON/DE/bulk
+       Body: { rules: sourceRules.map((key, rule) => ({ fieldKey: key, rule })) }
+  
+  3. Bulk endpoint applies them atomically
+  
+  4. Optional refinement: clone-specific endpoint
+     POST /pim/mappings/:channel/:code/clone-from?sourceCode=&productType=
+       → Internally calls getResolvedRules() on source
+       → Calls bulkUpsertFieldMappings() on target
+       → Returns { clonedCount, skippedCount, failedCount, reason }
+
+  CAVEAT: Field sets may DIFFER across markets
+    • Amazon IT might have 120 fields, but Amazon DE schema may have 130
+    • Cloning source rules to target should ONLY apply fieldKeys that exist
+      in target's ChannelSchema (via ChannelSchema.findMany filter)
+    • Non-existent fields silently skip (same as if they'd been filtered)
+
+================================================================================
+SECTION 4: AI FOR THE LONG TAIL (UNMAPPED FIELDS)
+================================================================================
+
+FILE: /Users/awais/nexus-commerce/apps/api/src/services/amazon/value-translate.service.ts
+FILE: /Users/awais/nexus-commerce/apps/api/src/services/flat-file-ai.service.ts
+FILE: /Users/awais/nexus-commerce/apps/api/src/services/ai/providers/index.ts
+FILE: /Users/awais/nexus-commerce/apps/api/src/services/ai/budget.service.ts
+
+EXISTING AI CLIENT:
+  
+  Provider pattern: /services/ai/providers/
+    - Two providers: Anthropic + Gemini
+    - Singleton instances: AnthropicProvider, GeminiProvider
+    - Global registry with fallback logic
+    
+  Usage pattern (from flat-file-ai.service.ts):
+    const provider = getProvider('anthropic')  // or null for env-default
+    if (!provider) throw new Error('AI not configured')
+    
+    const result = await provider.generate({
+      prompt: string,
+      jsonMode: true,                          // enforces valid JSON output
+      maxOutputTokens: 1024,
+      temperature: 0.1,  // or 0.3 for more variance
+      feature: 'flat-file-ai',  // for usage tracking
+      model: provider.defaultModel  // or override
+    })
+    
+    Returns: {
+      text: string (raw LLM output),
+      usage: { inputTokens, outputTokens, costUSD, model, provider }
+    }
+  
+  BUDGET ENFORCEMENT (AI-1.3):
+    - Kill switch: NEXUS_AI_KILL_SWITCH env var
+      → When '1'/'true'/'yes'/'on', ALL AI calls refused
+      → Checked BEFORE provider lookup (fail-closed)
+    
+    - Per-call ceiling: NEXUS_AI_PER_CALL_USD_MAX (default $0.50)
+    - Per-wizard ceiling: NEXUS_AI_PER_WIZARD_USD_MAX (default $2.00)
+    - Per-day ceiling: NEXUS_AI_PER_DAY_USD_MAX (default $50.00)
+    - Per-month ceiling: NEXUS_AI_PER_MONTH_USD_MAX (default $500)
+    
+    - readBudgetLimits() function exports these as BudgetLimits { perCallUSD, ... }
+    - Usage is logged to AiUsageLog table (feature, inputTokens, outputTokens, costUSD, etc.)
+    
+    FAILURE MODE: if budget check fails, returns { allowed: false, reason, hitWarn? }
+      → Caller surfaces "budget exceeded" UI and refuses the call
+  
+  KILL SWITCH CHECK:
+    isAiKillSwitchOn() checks env once per call (microsecond-cheap)
+
+MAPPING-SUGGEST AI LAYER DESIGN:
+  
+  New service: mapping-suggest-ai.service.ts
+  
+  Input:
+    channel, code, productType?, fieldKeysWithoutSuggestions[]
+    (the ~10% of fields that heuristic missed)
+  
+  Algorithm:
+    1. Check if AI is available: isAiKillSwitchOn() OR no provider configured
+       → If unavailable, return empty results (heuristic alone is good enough)
+    
+    2. Load all unmapped fields + their labels/descriptions
+    
+    3. Load all master attributes (from the CANDIDATES array or DB)
+    
+    4. Build one prompt per market (batch all unmapped fields together):
+       "Given these external field definitions, find the best master attribute
+        from this list for each:
+        - field_name_123: <label> → <master attr or null>
+        - field_name_456: <label> → <master attr or null>
+        ..."
+    
+    5. Call provider.generate() once with jsonMode: true
+       → Output: { field_name_123: { source: "...", confidence: "..." }, ... }
+    
+    6. Parse response, filter by confidence >= 'medium'
+    
+    7. Return: { suggestions: [...], usage, confidence: 'low' | 'medium' | 'high' }
+
+  ENDPOINT:
+    POST /pim/mappings/:channel/:code/suggest-ai?productType=<optional>
+    
+    Optional Body: { fields?: string[] }  (defaults to all unmapped)
+    
+    Response:
+      {
+        channel, code, productType,
+        suggestions: [
+          {
+            fieldKey,
+            label,
+            suggestedSource,     // AI suggestion (may differ from heuristic)
+            confidence,          // 'high' | 'medium' | 'low'
+            reason,              // "AI confidence: high"
+            source: 'ai'         // distinguish from heuristic
+          }
+        ],
+        usage: { inputTokens, outputTokens, costUSD, model }
+      }
+  
+  COST ESTIMATE:
+    • For Amazon OUTERWEAR (100 fields, ~80% heuristic-matched, 20 unmapped):
+      - 20 fields + labels: ~500 tokens input
+      - 1024 tokens max output
+      - Claude Haiku: ~$0.002 input + $0.0008 output = ~$0.003 per market
+      - 11 EU markets: ~$0.033 per full catalog
+      - Per-call limit ($0.50) easily accommodates this
+  
+  MERGING HEURISTIC + AI:
+    - Heuristic runs first (free, deterministic)
+    - Operator sees HIGH-confidence heuristic results immediately
+    - Optional "Enhance with AI" button on unmapped-count badge
+    - AI call is lazy (on-demand) not eager
+
+================================================================================
+SECTION 5: WHERE BULK-MAP UI LIVES + EXISTING PATTERNS
+================================================================================
+
+FILE: /Users/awais/nexus-commerce/apps/web/src/app/settings/mappings/MappingsClient.tsx
+FILE: /Users/awais/nexus-commerce/apps/web/src/app/settings/mappings/canvas/[channel]/[code]/CanvasClient.tsx
+FILE: /Users/awais/nexus-commerce/apps/web/src/app/_shared/grid-lens/ActionCluster.tsx
+FILE: /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_shared/cockpit-shell/PropagationDiffModal.tsx
+
+TWO NATURAL HOMES:
+
+1. MAPPINGS CONSOLE (/settings/mappings)
+   FILE: MappingsClient.tsx
+   
+   Current structure:
+     - Left pane: marketplace picker (channel/code list with field/mapped counts)
+     - Right pane: flat FieldRuleRow list (one per field)
+   
+   Bulk-map entry point:
+     • Badge on the marketplace picker showing "48 unmapped fields"
+     • Click → triggers "View Suggestions" panel
+     • Or: "Auto-map" button in the right pane header
+   
+   Flow:
+     1. GET /api/pim/mappings/:channel/:code/suggest (fetches heuristic)
+     2. Display review table: fieldKey | label | suggestedSource | confidence | action
+     3. Multi-select + "Apply All" button OR per-row toggles
+     4. Review modal (PropagationDiffModal-style) showing current → proposed
+     5. POST /api/pim/mappings/:channel/:code/bulk to apply
+   
+2. MAPPING CANVAS (/settings/mappings/canvas/[channel]/[code])
+   FILE: CanvasClient.tsx
+   
+   Current structure:
+     - Left: external schema fields (searchable list)
+     - Right: internal variables (searchable, grouped)
+     - Click field → click variable to bind
+   
+   Bulk-map entry point:
+     • Header button: "Auto-map unmapped" or "Suggestions"
+     • Triggers suggestion fetch
+     • Overlays a panel showing suggestions per field (or inline highlights)
+   
+   Would require minimal changes to existing canvas:
+     • Add a suggestion-layer badge on unmapped fields
+     • Optional: highlight suggested variable on the right when field selected
+
+BULK ACTION UI PATTERNS (REUSABLE):
+
+  From /grid-lens/ActionCluster.tsx:
+    - Multi-select checkbox pattern (Set<string> of checked row ids)
+    - Inline confirm flow: defaultChecked() logic on entry load
+    - "Apply to Selected" + "Apply All" buttons
+    - Destructive-item confirm modal { question, confirmLabel }
+  
+  From PropagationDiffModal.tsx:
+    - Two-column before→after table
+    - Per-row checkbox with smart defaults (skip unchanged + no-ops)
+    - selectedCount summary in footer
+    - "Escape" to close, button to apply selected
+    - "busy" state during POST
+    - Glossary note support
+  
+  Recommended hybrid:
+    - Use PropagationDiffModal shape (before→after review)
+    - Add "smart select" buttons: "High confidence", "All", "None"
+    - Show "Skipped" count (for heuristic-no-match fields)
+    - After apply: toast with "Applied 47 mappings" + revision link
+
+================================================================================
+SECTION 6: FIELD CATALOG + PRODUCTTYPE INTERPLAY
+================================================================================
+
+FILE: /Users/awais/nexus-commerce/apps/api/src/services/feed/channel-schema.service.ts
+FILE: /Users/awais/nexus-commerce/packages/database/prisma/schema.prisma
+
+ChannelSchema table structure:
+  - id, channel, marketplace (nullable), fieldKey, label, maxLength, required,
+    allowedValues (JSON), notes, createdAt, updatedAt
+  - Unique index: (channel, marketplace, fieldKey)
+  - Marketplace=null applies to all markets in that channel
+  - Market-specific entries override generic ones (preferential lookup)
+
+FIELD DISCOVERY:
+  
+  For a (channel, marketplace, productType) triple:
+    1. Load ChannelSchema rows:
+       WHERE channel = X AND (marketplace = Y OR marketplace IS NULL)
+       ORDER BY marketplace DESC (specific first)
+    2. Deduplicate by fieldKey (prefer marketplace-specific)
+    3. Load Marketplace.schemaMapping
+    4. Resolve rules via getRulesFor(mapping, productType)
+    5. Per field: { fieldKey, label, rule: null | FieldMappingRule }
+  
+  ProductType scope:
+    • Amazon: 10–20 productTypes per channel (hardcoded + user-added)
+    • eBay: category-level, dynamically from Taxonomy API
+    • Shopify: all fields generic (1 "productType" = default)
+    
+    Suggestion scope:
+      - Heuristic always runs against default bucket FIRST
+      - If productType specified: also run against byProductType overlay
+      - Return BOTH with a tag: { source: 'default' } vs { source: 'overlay' }
+      - When applying: PUT to byProductType overlay if productType set
+
+CROSS-PRODUCTTYPE CLONING:
+  
+  Scenario: operator maps OUTERWEAR productType in AMAZON IT, wants to
+  clone to OUTERWEAR in AMAZON DE.
+  
+  Endpoint:
+    POST /pim/mappings/:channel/:targetCode/clone-from?sourceCode=&productType=
+    
+    Implementation:
+      1. getResolvedRules('AMAZON', 'IT', 'OUTERWEAR')
+      2. Load ChannelSchema for ('AMAZON', 'DE', OUTERWEAR-compatible fields)
+      3. Filter rules to only fields that exist in DE
+      4. bulkUpsertFieldMappings('AMAZON', 'DE', filtered[], 'OUTERWEAR')
+  
+  Caveat: productType values are MARKET-SPECIFIC for eBay
+    • Amazon IT 'OUTERWEAR' ≠ eBay IT category keys
+    • Clone is safe only within the same channel (AMAZON→AMAZON OK,
+      AMAZON→EBAY requires manual mapping of productType keys)
+
+================================================================================
+SECTION 7: PERF + IMPLEMENTATION CONSIDERATIONS
+================================================================================
+
+PERF HOTSPOTS:
+
+  1. Writing 100+ rules:
+     • Current: N sequential PUT calls = N DB round-trips + N revisions
+     • Optimized: 1 bulk endpoint = 1 DB call + 1 revision
+     • Estimated time: 100 sequential = ~1–2s, bulk = ~50–100ms
+  
+  2. Suggesting on 100+ fields:
+     • Heuristic: O(fields × candidates × aliases) ≈ O(100 × 39 × 4) = 15,600 ops
+       → <5ms in-process (no DB hit)
+     • AI: 1 LLM call ≈ 2–3s (network + inference)
+       → Deferred to optional "enhance with AI" button
+  
+  3. Cloning across 11 markets:
+     • 11 × getResolvedRules() = 11 DB hits (cached in memory per request)
+     • 11 × bulkUpsertFieldMappings() = 11 DB writes
+     • Total: ~500–800ms
+     • Could optimize with a new clone-all endpoint: POST /clone-to-all-markets
+       (single service call, 11 updates in sequence within one RPC)
+
+TRANSACTION SAFETY:
+
+  Revision recording:
+    - MappingRevision.create() AFTER Marketplace.update()
+    - If create() fails (non-blocking), warning logged but no rollback
+    - If Marketplace.update() fails, error thrown and revision never created
+    • Design: revisions are best-effort audit trail, not atomic with updates
+
+  Bulk safety:
+    - Validate ALL rules first, reject the batch on ANY validation error
+    - Single Marketplace.update() = Postgres-atomic (no phantom reads)
+    - If concurrent operator clicks PUT while bulk is in flight:
+      • Postgres handles MVCC isolation
+      • One wins, other sees stale data on next read
+      • Operator refreshes → sees current state
+      • No data loss, just potential late-arriving edits lost to race
+    • Mitigation: optimistic lock via Marketplace.version field (future enhancement)
+
+ROLLBACK & UNDO:
+
+  Current: MappingRevision + POST /rollback/:revisionId
+  
+  For bulk operations:
+    - recordMappingRevision() called ONCE before bulk write
+    - Snapshot captures state BEFORE all 100 rules applied
+    - POST /rollback restores entire snapshot atomically
+    - Operator doesn't need to roll back individually
+  
+  Benefit: "Undo bulk apply" is a single click, fast, deterministic
+
+================================================================================
+SECTION 8: GAPS TO BUILD (SUMMARY)
+================================================================================
+
+1. BULK WRITE ENDPOINT
+   [ ] apps/api/src/services/pim/schema-mapping.service.ts
+       Add: bulkUpsertFieldMappings() service
+   [ ] apps/api/src/routes/pim-mapping.routes.ts
+       Add: POST /pim/mappings/:channel/:code/bulk
+   [ ] Response: { ok: true, appliedCount, skippedCount, mapping, version }
+
+2. AI SUGGEST LAYER
+   [ ] apps/api/src/services/pim/mapping-suggest-ai.service.ts
+       Add: suggestMappingsAI() service (lazy, budget-aware)
+   [ ] apps/api/src/routes/pim-mapping.routes.ts
+       Add: POST /pim/mappings/:channel/:code/suggest-ai (optional body: fields[])
+   [ ] Response: { suggestions, usage, timestamp }
+
+3. CLONE ENDPOINTS
+   [ ] apps/api/src/services/pim/schema-mapping.service.ts
+       Add: cloneMappings() service
+   [ ] apps/api/src/routes/pim-mapping.routes.ts
+       Add: POST /pim/mappings/:channel/:code/clone-from?sourceCode=&productType=
+   [ ] Response: { clonedCount, skippedCount, mapping, version }
+
+4. REVIEW + APPLY UI
+   [ ] apps/web/src/app/settings/mappings/SuggestionsModal.tsx (new)
+       - Two-column before→after table
+       - Multi-select + smart select buttons
+       - PropagationDiffModal-style
+   [ ] apps/web/src/app/settings/mappings/MappingsClient.tsx
+       - Add "View Suggestions" button (triggers modal)
+       - Show unmapped count badge on marketplace picker
+   [ ] apps/web/src/app/settings/mappings/canvas/[channel]/[code]/CanvasClient.tsx
+       - Optional: "Auto-map" button + inline suggestion badges
+
+5. CLONE UI
+   [ ] apps/web/src/app/settings/mappings/CloneMarketplaceModal.tsx (new)
+       - Dropdown: "Clone from" marketplace selector
+       - ProductType selector (if source is AMAZON)
+       - "Clone" button → applies bulk
+   [ ] apps/web/src/app/settings/mappings/MappingsClient.tsx
+       - Add "Clone mapping…" menu item on marketplace picker
+
+6. MISSING PIECES (OPTIONAL, 2.0):
+   [ ] Optimistic lock: Marketplace.version field for race-detection
+   [ ] Clone-to-all-markets endpoint: bulk 11-market operations
+   [ ] AI field-grouping: tag suggestions as {core, extended, niche}
+   [ ] Field-coverage dashboard: per-market progress visualization
+   [ ] Template library: operators save + share mapping patterns
+
+================================================================================
+SECTION 9: REUSE INVENTORY (WHAT EXISTS)
+================================================================================
+
+SUBSTRATE (READY TO BUILD ON):
+  ✓ Heuristic suggest (FM.13): suggestSourceForField() + suggestMappings()
+  ✓ Per-field write (PUT endpoint): upsertFieldMapping() service
+  ✓ Revision history: MappingRevision table + recordMappingRevision()
+  ✓ Rule resolution: getRulesFor() (handles byProductType overlay)
+  ✓ Schema: ChannelSchema + Marketplace.schemaMapping JSONB
+  ✓ Validation: validateFieldRule() + validateMapping()
+  ✓ AI provider: Anthropic + Gemini, budget enforcement, kill-switch
+  ✓ UI patterns: PropagationDiffModal (before→after review)
+  ✓ Grid UI: ActionCluster (multi-select, confirm flows)
+
+GAPS:
+  ✗ Bulk write endpoint (N→1 upsert)
+  ✗ AI suggest layer (long-tail unmapped)
+  ✗ Clone between marketplaces endpoint
+  ✗ SuggestionsModal UI (two-column review)
+  ✗ CloneMarketplaceModal UI
+  ✗ Unmapped count badge in marketplace picker
+
+ESTIMATED EFFORT (PHASES):
+  Phase 1 (BULK WRITE): 4–6 hours
+    - bulkUpsertFieldMappings() service (2h)
+    - POST /pim/mappings/:channel/:code/bulk endpoint (1h)
+    - Test coverage (1h)
+    - UI button + integration (1h)
+  
+  Phase 2 (CLONE): 3–4 hours
+    - cloneMappings() service (1h)
+    - POST /clone-from endpoint (1h)
+    - CloneMarketplaceModal UI (2h)
+  
+  Phase 3 (AI SUGGEST): 2–3 hours
+    - suggestMappingsAI() service (1.5h)
+    - POST /suggest-ai endpoint (0.5h)
+    - "Enhance with AI" button (1h)
+  
+  Phase 4 (REVIEW UI): 3–4 hours
+    - SuggestionsModal component (2h)
+    - MappingsClient integration (1h)
+    - Polish + tooltips (1h)
+
+TOTAL: ~12–17 hours (3–4 days)
+
+================================================================================
+END OF REPORT
+================================================================================

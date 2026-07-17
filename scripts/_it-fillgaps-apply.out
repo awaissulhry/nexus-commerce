@@ -1,0 +1,14 @@
+◇ injected env (23) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+pulled GLOVES: 17
+pulled OUTERWEAR: 167
+pulled AUTO_ACCESSORY: 18
+pulled SUIT: 50
+pulled PANTS: 12
+
+Listings to update: 116
+fills: {"image":26,"brand":7,"bullets":95,"asin":6}
+write target: {"attributes":96,"snapshot":20}
+
+Backup: /Users/awais/nexus-commerce/scripts/_backup-it-fillgaps-1782866390036.json
+✅ Updated 116 listings.
+EXIT=0

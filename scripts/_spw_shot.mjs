@@ -1,0 +1,20 @@
+import { chromium } from 'playwright'
+
+const URL = process.env.SPW_URL || 'http://localhost:3000/marketing/ads/campaign-builder/sp-super-wizard'
+const b = await chromium.launch()
+const ctx = await b.newContext({ viewport: { width: 1676, height: 1044 }, deviceScaleFactor: 2 })
+const p = await ctx.newPage()
+await p.goto(URL, { waitUntil: 'domcontentloaded' })
+await p.waitForTimeout(1200)
+await p.screenshot({ path: '/tmp/spw/r_s1.png' })
+console.log('s1 shot')
+await p.click('.h10-spw-next')
+await p.waitForTimeout(350)
+await p.screenshot({ path: '/tmp/spw/r_s2.png' })
+console.log('s2 shot')
+await p.click('.h10-spw-next')
+await p.waitForTimeout(350)
+await p.screenshot({ path: '/tmp/spw/r_s3.png' })
+console.log('s3 shot')
+await b.close()
+console.log('done')

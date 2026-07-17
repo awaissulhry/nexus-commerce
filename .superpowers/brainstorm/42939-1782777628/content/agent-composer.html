@@ -1,0 +1,141 @@
+<style>
+  .ac-wrap{ font:12px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color:#1c2530; }
+  .ac-app{ border:1px solid #d8dde4; border-radius:12px; overflow:hidden; background:#f4f6f9; box-shadow:0 8px 30px rgba(20,28,38,.08); }
+  .ac-head{ display:flex; align-items:center; gap:12px; background:#fff; border-bottom:1px solid #e3e7ec; padding:9px 14px; }
+  .ac-name{ font-weight:800; font-size:13px; } .ac-name small{ color:#8a93a1; font-weight:600; }
+  .ac-head .sp{ flex:1; }
+  .ac-chip{ border:1px solid #e3e7ec; border-radius:7px; padding:4px 9px; color:#5b6573; font-weight:700; font-size:11px; background:#fff; }
+  .ac-chip.auto{ background:#1f6fde; color:#fff; border-color:#1f6fde; }
+  .ac-body{ display:flex; min-height:340px; }
+  /* palette */
+  .ac-pal{ width:166px; border-right:1px solid #e3e7ec; background:#fafbfc; padding:10px; overflow:auto; }
+  .ac-palh{ font-size:8.5px; letter-spacing:.06em; text-transform:uppercase; color:#8a93a1; font-weight:800; margin:9px 0 5px; }
+  .ac-palh:first-child{ margin-top:0; }
+  .ac-blk{ display:flex; align-items:center; gap:6px; background:#fff; border:1px solid #e7eaee; border-radius:6px; padding:4px 7px; margin-bottom:4px; font-size:10.5px; font-weight:600; color:#37495b; }
+  .ac-bd{ width:7px; height:7px; border-radius:2px; flex:0 0 7px; }
+  .sig{ background:#1f6fde; } .lgc{ background:#64748b; } .alg{ background:#7c5cff; } .act{ background:#067d62; } .grd{ background:#b87503; }
+  /* canvas */
+  .ac-canvas{ flex:1; padding:18px 14px; background:radial-gradient(circle at 12px 12px, #e7ebf1 1px, transparent 1px); background-size:18px 18px; overflow:auto; }
+  .ac-pipe{ display:flex; align-items:stretch; gap:0; }
+  .ac-node{ background:#fff; border:1px solid #e3e7ec; border-left-width:3px; border-radius:8px; padding:8px 10px; width:150px; flex:0 0 150px; }
+  .ac-node .ty{ font-size:8px; letter-spacing:.06em; text-transform:uppercase; font-weight:800; color:#8a93a1; }
+  .ac-node .ti{ font-weight:700; font-size:11px; margin:2px 0 3px; }
+  .ac-node .ds{ font-size:9.5px; color:#5b6573; }
+  .ac-node.sig{ border-left-color:#1f6fde; } .ac-node.lgc{ border-left-color:#64748b; }
+  .ac-node.alg{ border-left-color:#7c5cff; } .ac-node.act{ border-left-color:#067d62; } .ac-node.grd{ border-left-color:#b87503; }
+  .ac-node.sel{ border-color:#7c5cff; box-shadow:0 0 0 3px #ece7ff; }
+  .ac-arrow{ flex:0 0 26px; display:flex; align-items:center; justify-content:center; color:#b6c0cd; font-weight:800; }
+  /* config */
+  .ac-cfg{ width:248px; border-left:1px solid #e3e7ec; background:#fff; padding:13px 14px; }
+  .ac-cfgh{ font-size:8.5px; letter-spacing:.06em; text-transform:uppercase; color:#8a93a1; font-weight:800; }
+  .ac-cfgt{ font-weight:800; font-size:13px; margin:3px 0 11px; display:flex; align-items:center; gap:6px; }
+  .ac-fld{ margin-bottom:10px; }
+  .ac-lab{ font-size:9.5px; color:#5b6573; font-weight:700; margin-bottom:3px; }
+  .ac-inp{ border:1px solid #d8dde4; border-radius:6px; padding:5px 8px; font-size:11px; font-weight:600; color:#1c2530; background:#fff; }
+  .ac-seg{ display:flex; border:1px solid #d8dde4; border-radius:6px; overflow:hidden; }
+  .ac-seg span{ flex:1; text-align:center; padding:4px 0; font-size:10px; font-weight:700; color:#5b6573; }
+  .ac-seg span.on{ background:#7c5cff; color:#fff; }
+  .ac-tog{ display:flex; align-items:center; gap:7px; font-size:10.5px; font-weight:600; color:#37495b; }
+  .ac-sw{ width:30px; height:17px; border-radius:9px; background:#7c5cff; position:relative; flex:0 0 30px; }
+  .ac-sw::after{ content:''; position:absolute; top:2px; right:2px; width:13px; height:13px; border-radius:50%; background:#fff; }
+  /* scope bar */
+  .ac-scope{ border-top:1px solid #e3e7ec; background:#fff; padding:10px 14px; }
+  .ac-sch{ font-size:8.5px; letter-spacing:.06em; text-transform:uppercase; color:#8a93a1; font-weight:800; margin-bottom:7px; }
+  .ac-scoperow{ display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+  .ac-scp{ border:1px solid #d8dde4; border-radius:16px; padding:4px 11px; font-size:10.5px; font-weight:700; color:#5b6573; background:#fff; }
+  .ac-scp.on{ background:#eef3fb; color:#1f6fde; border-color:#bcd8fb; }
+  .ac-count{ margin-left:4px; color:#37495b; font-weight:700; font-size:11px; }
+  .ac-foot{ display:flex; align-items:center; gap:9px; margin-top:10px; }
+  .ac-bt{ border:1px solid #d8dde4; background:#fff; border-radius:7px; padding:6px 13px; font-size:11px; font-weight:700; color:#37495b; }
+  .ac-bt.primary{ background:#1f6fde; color:#fff; border-color:#1f6fde; }
+  .ac-back{ background:#e7f5ee; color:#067d62; border:1px solid #bfe3d4; border-radius:7px; padding:5px 11px; font-size:10.5px; font-weight:700; }
+</style>
+
+<h2>Agent Composer — combine signals, logic &amp; algorithms</h2>
+<p class="subtitle">An agent is a <b>pipeline you build</b>, not a single action: drag blocks from the palette (Signals · Logic · Algorithms · Actions · Guardrails), wire them, tune each, then <b>apply it in bulk to any scope</b>. The selected block here is the <b>Target-ACoS Bayesian algorithm</b>. Tell me what blocks/algorithms you want in the library, and how the scope/bulk bar should work.</p>
+
+<div class="ac-wrap">
+  <div class="ac-app">
+    <div class="ac-head">
+      <span class="ac-name">Agent: Waste Sniper + Profit Bidder <small>· draft v1</small></span>
+      <div class="sp"></div>
+      <span class="ac-chip">＋ Add block</span>
+      <span class="ac-chip">Versions</span>
+      <span class="ac-chip auto">Autonomy: SUGGEST ▾</span>
+    </div>
+    <div class="ac-body">
+      <div class="ac-pal">
+        <div class="ac-palh">Signals (reports)</div>
+        <div class="ac-blk"><span class="ac-bd sig"></span> Search-term report</div>
+        <div class="ac-blk"><span class="ac-bd sig"></span> Placement / Top-of-search IS</div>
+        <div class="ac-blk"><span class="ac-bd sig"></span> SQP (Brand Analytics)</div>
+        <div class="ac-blk"><span class="ac-bd sig"></span> True profit · TACOS</div>
+        <div class="ac-blk"><span class="ac-bd sig"></span> Inventory / Buy-box</div>
+        <div class="ac-palh">Logic</div>
+        <div class="ac-blk"><span class="ac-bd lgc"></span> Condition (IF)</div>
+        <div class="ac-blk"><span class="ac-bd lgc"></span> Branch (if / else)</div>
+        <div class="ac-blk"><span class="ac-bd lgc"></span> Math / Expression</div>
+        <div class="ac-palh">Algorithms</div>
+        <div class="ac-blk"><span class="ac-bd alg"></span> Target-ACoS bidder</div>
+        <div class="ac-blk"><span class="ac-bd alg"></span> Bayesian smoothing</div>
+        <div class="ac-blk"><span class="ac-bd alg"></span> Budget pacer</div>
+        <div class="ac-blk"><span class="ac-bd alg"></span> Rank converger</div>
+        <div class="ac-blk"><span class="ac-bd alg"></span> Harvest / n-gram miner</div>
+        <div class="ac-palh">Actions</div>
+        <div class="ac-blk"><span class="ac-bd act"></span> Bid ±% / to-target</div>
+        <div class="ac-blk"><span class="ac-bd act"></span> Budget set / ±</div>
+        <div class="ac-blk"><span class="ac-bd act"></span> Placement bias</div>
+        <div class="ac-blk"><span class="ac-bd act"></span> Add negative / promote</div>
+        <div class="ac-palh">Guardrails</div>
+        <div class="ac-blk"><span class="ac-bd grd"></span> Bid floor / ceiling</div>
+        <div class="ac-blk"><span class="ac-bd grd"></span> Max change / cycle</div>
+      </div>
+
+      <div class="ac-canvas">
+        <div class="ac-pipe">
+          <div class="ac-node sig"><div class="ty">Signal</div><div class="ti">Search-term + IS</div><div class="ds">spend · orders · ACoS · top-search IS · 7/14/30d</div></div>
+          <div class="ac-arrow">→</div>
+          <div class="ac-node lgc"><div class="ty">Logic</div><div class="ti">IF wasteful OR over-target</div><div class="ds">spend≥€2 &amp; 0 ord (14d) — OR — ACoS &gt; 1.3× target (7d)</div></div>
+          <div class="ac-arrow">→</div>
+          <div class="ac-node alg sel"><div class="ty">Algorithm</div><div class="ti">Target-ACoS Bayesian</div><div class="ds">profit mode · smoothing on</div></div>
+          <div class="ac-arrow">→</div>
+          <div class="ac-node act"><div class="ty">Action</div><div class="ti">Bid → target · negate</div><div class="ds">set bid to algo output · add waster as neg-exact</div></div>
+          <div class="ac-arrow">→</div>
+          <div class="ac-node grd"><div class="ty">Guardrail</div><div class="ti">Clamp</div><div class="ds">floor €0.05 · max −20%/cycle</div></div>
+        </div>
+      </div>
+
+      <div class="ac-cfg">
+        <div class="ac-cfgh">Block config</div>
+        <div class="ac-cfgt"><span class="ac-bd alg"></span> Target-ACoS Bayesian</div>
+        <div class="ac-fld"><div class="ac-lab">Target ACoS</div><span class="ac-inp">25 %</span></div>
+        <div class="ac-fld"><div class="ac-lab">Mode</div>
+          <div class="ac-seg"><span>Growth</span><span class="on">Profit</span><span>Balanced</span></div>
+        </div>
+        <div class="ac-fld"><div class="ac-lab">Min clicks before acting</div><span class="ac-inp">15</span></div>
+        <div class="ac-fld"><div class="ac-tog"><span class="ac-sw"></span> Bayesian smoothing (low-data keywords)</div></div>
+        <div class="ac-fld"><div class="ac-lab">Max bid step / cycle</div><span class="ac-inp">20 %</span></div>
+      </div>
+    </div>
+
+    <div class="ac-scope">
+      <div class="ac-sch">Apply to — bulk scope</div>
+      <div class="ac-scoperow">
+        <span class="ac-scp on">Whole market · DE</span>
+        <span class="ac-scp">Whole portfolio</span>
+        <span class="ac-scp on">Selected campaigns<span class="ac-count">12</span></span>
+        <span class="ac-scp">Selected ad groups<span class="ac-count">0</span></span>
+        <span class="ac-scp">Selected targets<span class="ac-count">0</span></span>
+        <span class="ac-scp">+ Dynamic rule…</span>
+        <span style="margin-left:auto;color:#37495b;font-weight:700;font-size:11px">Resolves to <b>12 campaigns · 340 targets</b></span>
+      </div>
+      <div class="ac-foot">
+        <span class="ac-back">⟲ Backtest: would fire 41× · Δprofit +€420 / 30d</span>
+        <div style="flex:1"></div>
+        <span class="ac-bt">Dry-run</span>
+        <span class="ac-bt">Simulate</span>
+        <span class="ac-bt primary">Activate agent</span>
+      </div>
+    </div>
+  </div>
+</div>

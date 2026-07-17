@@ -1,0 +1,17 @@
+import { chromium } from 'playwright'
+import { execSync } from 'node:child_process'
+const b = await chromium.launch()
+const p = await (await b.newContext({ viewport: { width: 1500, height: 1000 }, deviceScaleFactor: 2 })).newPage()
+await p.goto('http://localhost:3000/marketing/ads/campaign-builder/sp-super-wizard', { waitUntil: 'domcontentloaded' }); await p.waitForTimeout(900)
+await p.click('.h10-spw-steps button:nth-of-type(3)'); await p.waitForTimeout(450)
+await p.locator('.h10-spw-perf').click(); await p.waitForTimeout(250)
+const nativeSelects = await p.locator('.h10-pc select').count()
+const styledTriggers = await p.locator('.h10-pc button[aria-haspopup]').count()
+// open the lookback dropdown to confirm the styled popover (not native)
+await p.locator('.h10-pc-win').first().locator('button[aria-haspopup]').click().catch(() => {})
+await p.waitForTimeout(250)
+await p.locator('.h10-spw-perf-body').scrollIntoViewIfNeeded()
+await p.locator('.h10-spw-perf-body').screenshot({ path: '/tmp/spw/pc2.png' })
+console.log(JSON.stringify({ nativeSelects, styledTriggers }))
+await b.close()
+execSync('sips -Z 1300 /tmp/spw/pc2.png --out /tmp/spw/pc2_v.png 2>/dev/null', { stdio: 'ignore' })

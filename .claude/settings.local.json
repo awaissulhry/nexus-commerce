@@ -270,7 +270,17 @@
       "Bash(sed -n '27,50p' /Users/awais/nexus-commerce/apps/web/src/app/products/amazon-flat-file/FFFilterPanel.tsx)",
       "Bash(sed -n '72,82p' /Users/awais/nexus-commerce/apps/web/src/app/products/amazon-flat-file/FFSavedViews.tsx)",
       "Bash(sed -n '380,400p' /Users/awais/nexus-commerce/apps/api/src/services/amazon/flat-file.service.ts)",
-      "Bash(sed -n '588,625p' /Users/awais/nexus-commerce/apps/api/src/services/amazon/flat-file.service.ts)"
+      "Bash(sed -n '588,625p' /Users/awais/nexus-commerce/apps/api/src/services/amazon/flat-file.service.ts)",
+      "Bash(mkdir -p _archive)",
+      "Bash(mv \"ALL JACKETS \\(original from warehouse\\).xlsx\" \"_archive/\")",
+      "Bash(mv \"XAVIA JACKETS - Inventory SIZE-CORRECTED \\(2026-07-06\\).xlsx\" \"_archive/\")",
+      "WebSearch",
+      "Bash(lsof -iTCP:3100 -sTCP:LISTEN -P)",
+      "Bash(mkdir -p /private/tmp/claude-501/-Users-awais-nexus-commerce/881504c4-1055-4b90-a356-029b6ef9082f/scratchpad/xlsm)",
+      "Bash(cp '/Users/awais/Desktop/2026/LISTNGS/JACKETS/AIREON/AMAZON/LISTINGS/IT/AIREON IT - FINAL \\(upload this\\)/AIREON IT.xlsm' /private/tmp/claude-501/-Users-awais-nexus-commerce/881504c4-1055-4b90-a356-029b6ef9082f/scratchpad/xlsm/AIREON-IT.xlsm)",
+      "Bash(cp '/Users/awais/Desktop/2026/LISTNGS/JACKETS/AIREON/AMAZON/LISTINGS/DE/AIREON DE - FINAL \\(upload this\\)/AIREON DE.xlsm' /private/tmp/claude-501/-Users-awais-nexus-commerce/881504c4-1055-4b90-a356-029b6ef9082f/scratchpad/xlsm/AIREON-DE.xlsm)",
+      "Bash(cp '/Users/awais/Desktop/2026/LISTNGS/JACKETS/AIREON/AMAZON/LISTINGS/ES/AIREON ES - FINAL \\(upload this\\)/AIREON ES.xlsm' /private/tmp/claude-501/-Users-awais-nexus-commerce/881504c4-1055-4b90-a356-029b6ef9082f/scratchpad/xlsm/AIREON-ES.xlsm)",
+      "Bash(cp '/Users/awais/Desktop/2026/LISTNGS/JACKETS/AIREON/AMAZON/LISTINGS/FR/AIREON FR - FINAL \\(upload this\\)/AIREON FR.xlsm' /private/tmp/claude-501/-Users-awais-nexus-commerce/881504c4-1055-4b90-a356-029b6ef9082f/scratchpad/xlsm/AIREON-FR.xlsm)"
     ]
   }
 }

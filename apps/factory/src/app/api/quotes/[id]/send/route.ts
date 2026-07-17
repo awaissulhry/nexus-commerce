@@ -29,6 +29,7 @@ import { readSelections } from "@/lib/quotes/selections";
 import { buildQuoteSnapshot } from "@/lib/quotes/build-snapshot";
 import { renderQuotePdf } from "@/lib/quotes/render-pdf";
 import { sendQuoteMail } from "@/lib/quotes/mail";
+import { resolveTaxMode, viesOk } from "@/lib/quotes/tax";
 
 export const permission = FEATURES.quotesSend;
 
@@ -42,7 +43,7 @@ export const POST = guarded(FEATURES.quotesSend, async (req, { params, actor }) 
   const quote = await prisma.quote.findUnique({
     where: { id },
     include: {
-      party: { select: { name: true, priceListId: true, emails: { take: 1, select: { email: true } } } },
+      party: { select: { name: true, kind: true, taxMode: true, vatNumber: true, viesRequestId: true, viesCheckedAt: true, priceListId: true, emails: { take: 1, select: { email: true } } } },
       conversation: { select: { id: true, subject: true, gmailThreadId: true } },
       lines: true,
       versions: { orderBy: { version: "desc" }, take: 1, select: { version: true } },
@@ -51,6 +52,17 @@ export const POST = guarded(FEATURES.quotesSend, async (req, { params, actor }) 
   if (!quote) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!["DRAFT", "SENT"].includes(quote.state)) return NextResponse.json({ error: `A ${quote.state} quote cannot be sent` }, { status: 400 });
   if (quote.lines.length === 0) return NextResponse.json({ error: "Add at least one line first" }, { status: 400 });
+
+  // EPQ.5 — HARD GATE (research 5.1): an EU-B2B quote must not go out claiming
+  // art. 41 non-imponibile without a stored, valid VIES proof — the check is a
+  // substantive condition for zero-rating since the 2020 Quick Fixes.
+  const taxMode = resolveTaxMode(quote.taxMode ?? quote.party.taxMode, quote.party.kind);
+  if (taxMode === "EU_B2B" && !viesOk(quote.party)) {
+    return NextResponse.json(
+      { error: "EU B2B non-taxable (art. 41 DL 331/93) needs a valid VIES check on this contact's VAT number — run Check VIES in the rail, or switch the quote's tax mode to Italy · business" },
+      { status: 422 },
+    );
+  }
 
   // recompose every line: refuse on any blocking violation
   for (const l of quote.lines) {

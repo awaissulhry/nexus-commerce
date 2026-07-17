@@ -1,0 +1,15 @@
+{
+  "parents": [
+    {
+      "id": "cmp27serw0235nv019i5ebyck",
+      "from": "AIR-MESH-JACKET-MEN-OLD",
+      "to": "AIR-MESH-JACKET-MEN"
+    },
+    {
+      "id": "cmonjewz70004o701227at4f9",
+      "from": "XAVIA-MODEL1-COPPIA-DI",
+      "to": "normal-knee-slider"
+    }
+  ],
+  "snapshots": []
+}

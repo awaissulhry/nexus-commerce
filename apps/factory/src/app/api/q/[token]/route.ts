@@ -17,8 +17,34 @@ import { guarded, PUBLIC } from "@/lib/auth/guard";
 import { hashToken } from "@/lib/quotes/public";
 import { recordQuoteView, viewerMeta } from "@/lib/quotes/views";
 import { isQuoteLapsed, isSupersededToken } from "@/lib/quotes/transitions";
+import { loadBankDetails } from "@/lib/quotes/compliance-settings";
+import { stripeEnabled } from "@/lib/stripe";
 
 export const permission = PUBLIC;
+
+/**
+ * EPQ.5 — deposit payment block for an ACCEPTED quote: how much, whether the
+ * Stripe button may show (env-gated, not yet paid), and the bank-transfer
+ * fallback text. `paid` = a DEPOSIT payment on the converted order OR a Stripe
+ * pending ref already stored on the version's evidence.
+ */
+async function depositBlock(q: {
+  state: string;
+  convertedOrderId: string | null;
+  versions: { sentSnapshot: unknown; evidenceJson?: unknown }[];
+}) {
+  if (q.state !== "ACCEPTED" && !q.convertedOrderId) return null;
+  const snap = (q.versions[0]?.sentSnapshot ?? {}) as { depositCents?: number };
+  const depositCents = snap.depositCents ?? 0;
+  if (depositCents <= 0) return null;
+  let paid = Boolean((q.versions[0]?.evidenceJson as { stripeDeposit?: unknown } | null)?.stripeDeposit);
+  if (!paid && q.convertedOrderId) {
+    const payment = await prisma.payment.findFirst({ where: { orderId: q.convertedOrderId, kind: "DEPOSIT" }, select: { id: true } });
+    paid = Boolean(payment);
+  }
+  const bankDetails = (await loadBankDetails()).trim() || null;
+  return { depositCents, paid, stripePayable: stripeEnabled() && !paid, bankDetails };
+}
 
 export const GET = guarded(PUBLIC, async (req, { params }) => {
   const { token } = await params;
@@ -29,7 +55,7 @@ export const GET = guarded(PUBLIC, async (req, { params }) => {
       id: true, number: true, state: true, validUntilAt: true, convertedOrderId: true,
       viewCount: true, firstViewedAt: true, // EPQ.2 — first-view detection
       party: { select: { name: true } },
-      versions: { orderBy: { version: "desc" }, take: 1, select: { version: true, sentSnapshot: true } },
+      versions: { orderBy: { version: "desc" }, take: 1, select: { version: true, sentSnapshot: true, evidenceJson: true } },
     },
   });
   if (quote && quote.versions[0]) {
@@ -49,6 +75,7 @@ export const GET = guarded(PUBLIC, async (req, { params }) => {
       converted: !!quote.convertedOrderId,
       superseded: false,
       snapshot: quote.versions[0].sentSnapshot, // customer-facing, no cost/margin
+      deposit: await depositBlock(quote), // EPQ.5 — pay-the-deposit block (accepted only)
     });
   }
 

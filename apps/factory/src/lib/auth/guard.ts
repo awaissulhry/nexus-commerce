@@ -30,9 +30,17 @@ export const rbacMode = (): "shadow" | "enforce" =>
 
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-export function guarded(permission: Permission, handler: Handler) {
+export function guarded(
+  permission: Permission,
+  handler: Handler,
+  // EPQ.5 — csrf:"skip" is ONLY for signature-verified machine webhooks
+  // (Stripe): they carry no cookies, so the double-submit cannot apply — the
+  // HMAC signature over the raw body IS the anti-forgery proof, and the route
+  // MUST verify it before doing anything. Never use on browser-called routes.
+  opts?: { csrf?: "skip" },
+) {
   return async (req: NextRequest, routeCtx: { params: Promise<Record<string, string>> }) => {
-    if (MUTATING.has(req.method)) {
+    if (MUTATING.has(req.method) && opts?.csrf !== "skip") {
       const cookie = req.cookies.get(CSRF_COOKIE)?.value;
       const header = req.headers.get(CSRF_HEADER);
       if (!cookie || !header || cookie !== header) {

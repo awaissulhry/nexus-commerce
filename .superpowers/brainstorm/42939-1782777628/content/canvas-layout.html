@@ -1,0 +1,143 @@
+<style>
+  .ly-wrap{ font:12px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color:#1c2530; }
+  .ly-app{ border:1px solid #d8dde4; border-radius:12px; overflow:hidden; background:#f4f6f9; box-shadow:0 8px 30px rgba(20,28,38,.08); }
+  /* header */
+  .ly-head{ display:flex; align-items:center; gap:14px; background:#fff; border-bottom:1px solid #e3e7ec; padding:9px 14px; }
+  .ly-brand{ display:flex; align-items:center; gap:8px; font-weight:700; }
+  .ly-logo{ width:22px; height:22px; border-radius:6px; background:#1f6fde; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:12px; }
+  .ly-title{ font-weight:700; }
+  .ly-title small{ color:#8a93a1; font-weight:600; }
+  .ly-head .sp{ flex:1; }
+  .ly-chip{ border:1px solid #e3e7ec; border-radius:7px; padding:4px 9px; color:#5b6573; font-weight:600; font-size:11px; background:#fff; }
+  .ly-chip.live{ color:#067d62; border-color:#bfe3d4; } .ly-chip.live b{ color:#067d62; }
+  .ly-chip.kill{ color:#e5484d; border-color:#f3c0c2; }
+  .ly-auto{ background:#1f6fde; color:#fff; border-color:#1f6fde; }
+  /* body */
+  .ly-body{ display:flex; min-height:430px; }
+  .ly-rail{ width:46px; background:#f1f3f5; border-right:1px solid #e3e7ec; display:flex; flex-direction:column; align-items:center; gap:14px; padding:12px 0; }
+  .ly-rdot{ width:22px; height:22px; border-radius:6px; background:#e6eaf0; }
+  .ly-rdot.on{ background:#1f6fde; }
+  .ly-main{ flex:1; display:flex; flex-direction:column; min-width:0; }
+  /* canvas */
+  .ly-canvas{ flex:1; padding:14px 16px; position:relative; overflow:hidden; }
+  .ly-cols{ display:grid; grid-template-columns:repeat(5,1fr); gap:14px; position:relative; z-index:1; }
+  .ly-colh{ font-size:9.5px; letter-spacing:.07em; text-transform:uppercase; color:#8a93a1; font-weight:800; margin-bottom:8px; text-align:center; }
+  .ly-node{ background:#fff; border:1px solid #e3e7ec; border-radius:8px; padding:7px 8px; margin-bottom:8px; }
+  .ly-node .nt{ font-weight:700; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ly-node .nm{ font-size:9.5px; color:#5b6573; margin-top:3px; display:flex; align-items:center; gap:4px; }
+  .ly-node.focus{ border-color:#1f6fde; box-shadow:0 0 0 3px #dce8fb; }
+  .ly-node.dim{ opacity:.5; }
+  .ly-dot{ width:6px; height:6px; border-radius:50%; display:inline-block; flex:0 0 6px; }
+  .ly-dot.ok{ background:#067d62; } .ly-dot.warn{ background:#b87503; } .ly-dot.bad{ background:#e5484d; }
+  .ly-flow{ position:absolute; top:54px; left:24px; right:24px; height:2px; background:linear-gradient(90deg,#1f6fde,#1f6fde); opacity:.25; z-index:0; }
+  /* activity */
+  .ly-activity{ border-top:1px solid #e3e7ec; background:#fff; padding:8px 14px; }
+  .ly-acth{ font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; color:#8a93a1; font-weight:800; margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+  .ly-row{ display:flex; align-items:center; gap:8px; font-size:10.5px; padding:3px 0; color:#37495b; }
+  .ly-tag{ font-size:8.5px; font-weight:800; letter-spacing:.03em; padding:1px 6px; border-radius:5px; background:#eef3fb; color:#1f6fde; }
+  .ly-tag.g{ background:#e7f5ee; color:#067d62; } .ly-tag.a{ background:#fff4e0; color:#b87503; }
+  .ly-st{ margin-left:auto; font-weight:700; font-size:9.5px; }
+  .ly-st.applied{ color:#067d62; } .ly-st.proposed{ color:#1f6fde; }
+  /* inspector */
+  .ly-insp{ width:268px; border-left:1px solid #e3e7ec; background:#fff; padding:13px 14px; }
+  .ly-bc{ font-size:9px; color:#8a93a1; font-weight:700; letter-spacing:.03em; margin-bottom:6px; }
+  .ly-ih{ font-weight:800; font-size:14px; }
+  .ly-isub{ color:#5b6573; font-size:10.5px; margin:2px 0 12px; }
+  .ly-kpis{ display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-bottom:13px; }
+  .ly-kpi{ border:1px solid #eef0f3; border-radius:7px; padding:6px 8px; }
+  .ly-kpi .k{ font-size:8.5px; color:#8a93a1; text-transform:uppercase; letter-spacing:.04em; font-weight:700; }
+  .ly-kpi .v{ font-weight:800; font-size:13px; margin-top:1px; }
+  .ly-sec{ font-size:9px; color:#8a93a1; font-weight:800; letter-spacing:.06em; text-transform:uppercase; margin:0 0 6px; }
+  .ly-gov{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:13px; }
+  .ly-gv{ border:1px solid #e3e7ec; border-radius:14px; padding:3px 9px; font-size:10px; font-weight:700; color:#37495b; display:flex; align-items:center; gap:5px; }
+  .ly-acts{ display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .ly-btn{ border:1px solid #d8dde4; background:#fff; border-radius:7px; padding:6px 8px; font-size:10.5px; font-weight:700; color:#37495b; text-align:center; }
+  .ly-btn.primary{ background:#1f6fde; color:#fff; border-color:#1f6fde; }
+  .ly-btn.full{ grid-column:1 / -1; }
+</style>
+
+<h2>Mission Control — canvas layout</h2>
+<p class="subtitle">The core working surface. Object graph in the center (Market → Portfolio → Campaign → Ad Group → Target, your corrected order), a focused path highlighted, the live activity stream below, and the object inspector on the right with the actions + the agents governing the selected object. Light H10, no images. Tell me what to change — column order, what's in the inspector, density, what the activity stream shows.</p>
+
+<div class="ly-wrap">
+  <div class="ly-app">
+    <div class="ly-head">
+      <div class="ly-brand"><span class="ly-logo">N</span><span class="ly-title">Mission Control <small>· Ads</small></span></div>
+      <span class="ly-chip">All markets ▾</span>
+      <span class="ly-chip">Last 30 days ▾</span>
+      <div class="sp"></div>
+      <span class="ly-chip live"><b>●</b> Live · 3 agents active</span>
+      <span class="ly-chip ly-auto">Autonomy: SUGGEST ▾</span>
+      <span class="ly-chip kill">⨯ Halt all</span>
+    </div>
+    <div class="ly-body">
+      <div class="ly-rail">
+        <div class="ly-rdot on"></div><div class="ly-rdot"></div><div class="ly-rdot"></div><div class="ly-rdot"></div><div class="ly-rdot"></div>
+      </div>
+      <div class="ly-main">
+        <div class="ly-canvas">
+          <div class="ly-flow"></div>
+          <div class="ly-cols">
+            <div>
+              <div class="ly-colh">Market</div>
+              <div class="ly-node focus"><div class="nt">DE · Germany</div><div class="nm"><span class="ly-dot ok"></span> €1,240 · ACoS 22%</div></div>
+              <div class="ly-node dim"><div class="nt">IT · Italy</div><div class="nm"><span class="ly-dot ok"></span> €2,980 · 19%</div></div>
+            </div>
+            <div>
+              <div class="ly-colh">Portfolio</div>
+              <div class="ly-node focus"><div class="nt">Moto Jackets</div><div class="nm"><span class="ly-dot ok"></span> €840 · 24%</div></div>
+              <div class="ly-node dim"><div class="nt">Helmets</div><div class="nm"><span class="ly-dot warn"></span> €400 · 38%</div></div>
+            </div>
+            <div>
+              <div class="ly-colh">Campaign</div>
+              <div class="ly-node focus"><div class="nt">AIREON Jacket</div><div class="nm"><span class="ly-dot ok"></span> €310 · 24%</div></div>
+              <div class="ly-node dim"><div class="nt">MISANO SP-Auto</div><div class="nm"><span class="ly-dot bad"></span> €190 · 61%</div></div>
+            </div>
+            <div>
+              <div class="ly-colh">Ad Group</div>
+              <div class="ly-node focus"><div class="nt">Exact — core</div><div class="nm"><span class="ly-dot ok"></span> €210 · 21%</div></div>
+              <div class="ly-node dim"><div class="nt">Phrase — broadmatch</div><div class="nm"><span class="ly-dot warn"></span> €100 · 33%</div></div>
+            </div>
+            <div>
+              <div class="ly-colh">Target</div>
+              <div class="ly-node focus"><div class="nt">"moto jacket"</div><div class="nm"><span class="ly-dot ok"></span> €0.74 bid · 20%</div></div>
+              <div class="ly-node dim"><div class="nt">"airbag jacket"</div><div class="nm"><span class="ly-dot bad"></span> €0.90 · 0 ord</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="ly-activity">
+          <div class="ly-acth"><span class="ly-dot ok"></span> Live activity · agent decisions</div>
+          <div class="ly-row"><span class="ly-tag">BID</span> Lower "airbag jacket" −8% — €2.10 spend / 0 orders (14d) <span class="ly-st proposed">PROPOSED · approve</span></div>
+          <div class="ly-row"><span class="ly-tag g">HARVEST</span> Promote "vented moto jacket" → Exact (3 orders) <span class="ly-st applied">APPLIED</span></div>
+          <div class="ly-row"><span class="ly-tag a">RANK</span> MISANO top-of-search IS 31% &lt; 45% target → +12% placement <span class="ly-st proposed">PROPOSED · approve</span></div>
+        </div>
+      </div>
+      <div class="ly-insp">
+        <div class="ly-bc">DE › Moto Jackets › Campaign</div>
+        <div class="ly-ih">AIREON Jacket</div>
+        <div class="ly-isub">SP · Manual · ENABLED · €25/day budget</div>
+        <div class="ly-kpis">
+          <div class="ly-kpi"><div class="k">Spend 30d</div><div class="v">€310</div></div>
+          <div class="ly-kpi"><div class="k">ACoS</div><div class="v">24%</div></div>
+          <div class="ly-kpi"><div class="k">True margin</div><div class="v">31%</div></div>
+          <div class="ly-kpi"><div class="k">Top-of-search IS</div><div class="v">48%</div></div>
+        </div>
+        <div class="ly-sec">Governed by</div>
+        <div class="ly-gov">
+          <span class="ly-gv"><span class="ly-dot ok"></span> Bid Agent</span>
+          <span class="ly-gv"><span class="ly-dot ok"></span> Budget Pacer</span>
+          <span class="ly-gv"><span class="ly-dot warn"></span> Rank Defender</span>
+        </div>
+        <div class="ly-sec">Take action</div>
+        <div class="ly-acts">
+          <div class="ly-btn">Lower bid</div>
+          <div class="ly-btn">Adjust budget</div>
+          <div class="ly-btn">Placement</div>
+          <div class="ly-btn">Add negative</div>
+          <div class="ly-btn full">＋ Attach a rule / agent</div>
+          <div class="ly-btn primary full">Simulate &amp; apply…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

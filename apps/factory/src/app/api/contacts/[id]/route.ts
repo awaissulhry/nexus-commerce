@@ -65,6 +65,12 @@ const Patch = z.object({
   priceListId: z.string().nullable().optional(),
   archived: z.boolean().optional(),
   expectedUpdatedAt: z.string().datetime().optional(), // FS4 — optimistic concurrency (the caller's read stamp)
+  // EPQ.5 — tax posture + SDI routing (downstream invoicing is mechanical)
+  taxMode: z.enum(["IT_B2C", "IT_B2B", "EU_B2B", "EXTRA_EU"]).nullable().optional(),
+  vatNumber: z.string().trim().max(20).nullable().optional(),
+  codiceFiscale: z.string().trim().max(20).nullable().optional(),
+  sdiCodice: z.string().trim().max(10).nullable().optional(),
+  sdiPec: z.string().trim().max(200).nullable().optional(),
 });
 
 export const PATCH = guarded(FEATURES.contactsManage, async (req, { params, actor, resolved }) => {
@@ -73,7 +79,7 @@ export const PATCH = guarded(FEATURES.contactsManage, async (req, { params, acto
   if (!parsed.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   const { archived, expectedUpdatedAt, ...fields } = parsed.data;
 
-  const exists = await prisma.party.findUnique({ where: { id }, select: { id: true, updatedAt: true } });
+  const exists = await prisma.party.findUnique({ where: { id }, select: { id: true, updatedAt: true, vatNumber: true } });
   if (!exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
   // FS4 — the EPO.1 pattern, shared: a stale inline-autosave 409s instead of clobbering
   if (expectedUpdatedAt && !stampMatches(exists.updatedAt, expectedUpdatedAt)) {
@@ -82,6 +88,12 @@ export const PATCH = guarded(FEATURES.contactsManage, async (req, { params, acto
 
   const data: Record<string, unknown> = { ...fields };
   if (archived !== undefined) data.archivedAt = archived ? new Date() : null;
+  // EPQ.5 — a changed/removed VAT number invalidates the stored VIES proof
+  // (the requestIdentifier certifies THAT number; re-check to re-open art. 41)
+  if (fields.vatNumber !== undefined && fields.vatNumber !== exists.vatNumber) {
+    data.viesRequestId = null;
+    data.viesCheckedAt = null;
+  }
   if (Object.keys(data).length === 0) return NextResponse.json({ error: "Nothing to change" }, { status: 400 });
 
   await prisma.party.update({ where: { id }, data });

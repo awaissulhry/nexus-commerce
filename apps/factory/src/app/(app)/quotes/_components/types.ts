@@ -84,7 +84,16 @@ export type QuoteDetail = {
   lastViewedAt: string | null;
   lastNudgeAt: string | null;
   followUpRule: string | null;
-  party: { id: string; name: string; kind: string; paymentTerms?: string | null; priceListId: string | null; priceList: { name: string } | null };
+  // EPQ.5 — compliance snapshot (DRAFT-editable in the Tax & legal card)
+  taxMode: string | null;
+  naturaCode: string | null;
+  depositKind: string;
+  validityWording: string;
+  party: {
+    id: string; name: string; kind: string; paymentTerms?: string | null; priceListId: string | null; priceList: { name: string } | null;
+    // EPQ.5 — tax posture + VIES proof for the rail
+    taxMode: string | null; vatNumber: string | null; viesRequestId: string | null; viesCheckedAt: string | null;
+  };
   conversation: { id: string; subject: string | null } | null;
   lines: QuoteLine[];
   versions: QuoteVersion[];

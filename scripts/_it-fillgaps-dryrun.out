@@ -1,0 +1,21 @@
+  pulling GLOVES (17)… got 17
+  pulling OUTERWEAR (168)… got 167
+  pulling AUTO_ACCESSORY (18)… got 18
+  pulling SUIT (50)… got 50
+  pulling PANTS (12)… got 12
+
+=== FILL-GAPS DRY-RUN (IT) — rows compared: 265, pulled: 264 ===
+FIELD FILL TOTALS: {"image":28,"brand":10,"desc":1,"asin":9,"bullets":97}
+
+Per-family (rows that would get ≥1 field filled):
+  1J-EYE5-Y0TW                     rows= 6  {"image":6,"brand":6,"asin":6,"bullets":6}
+  AIR-MESH-JACKET-MEN              rows= 1  {"brand":1}
+  AIREON                           rows=13  {"bullets":13,"brand":1,"desc":1,"asin":1}
+  AIRMESH-JACKET                   rows= 1  {"image":1,"brand":1,"asin":1}
+  GALE-JACKET                      rows=20  {"image":20}
+  UD-LVLM-1H8T                     rows=11  {"bullets":11}
+  normal-knee-slider               rows= 9  {"bullets":9,"image":1,"brand":1,"asin":1}
+  xavia-knee-slider                rows= 9  {"bullets":9}
+  xracing                          rows=49  {"bullets":49}
+
+Full per-row diff: /Users/awais/nexus-commerce/scripts/_it-fillgaps-diff.tsv

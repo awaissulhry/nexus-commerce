@@ -1,0 +1,117 @@
+<style>
+  .mc-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:8px; }
+  @media (max-width:1100px){ .mc-cards{ grid-template-columns:1fr; } }
+  .mc-cards .card-image{ padding:0 !important; background:transparent !important; }
+  .mc-shot{ overflow:hidden; border-radius:10px; font:11px/1.3 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; border:1px solid rgba(0,0,0,.15); }
+  .mc-topbar{ display:flex; align-items:center; gap:6px; padding:7px 10px; font-weight:700; font-size:9.5px; letter-spacing:.05em; text-transform:uppercase; }
+  .mc-graph{ display:flex; align-items:center; padding:20px 12px; }
+  .mc-node{ flex:1; border-radius:8px; padding:8px 9px; min-width:0; }
+  .mc-ntitle{ font-weight:700; font-size:10.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mc-meta{ font-size:9px; margin-top:4px; display:flex; align-items:center; gap:4px; opacity:.85; }
+  .mc-edge{ height:2px; flex:0 0 20px; }
+  .mc-dot{ width:7px; height:7px; border-radius:50%; display:inline-block; flex:0 0 7px; }
+  .mc-inspector{ padding:7px 10px; font-size:9px; border-top:1px solid; display:flex; align-items:center; gap:5px; }
+  .mc-pill{ padding:1px 6px; border-radius:10px; font-weight:700; font-size:8.5px; }
+
+  /* A — Dark ops-room */
+  .mc-dark{ background:#0b0f17; color:#e7ecf3; }
+  .mc-dark .mc-topbar{ background:#0d1320; color:#9fb0c3; border-bottom:1px solid #1b2636; }
+  .mc-dark .mc-node{ background:#131c2b; border:1px solid #243449; color:#e7ecf3; }
+  .mc-dark .mc-node.sel{ border-color:#2f81f7; box-shadow:0 0 14px rgba(47,129,247,.45); }
+  .mc-dark .mc-node.agent{ background:#0f211f; border-color:#1f5e57; }
+  .mc-dark .mc-edge{ background:linear-gradient(90deg,#2f81f7,#39d0d8); }
+  .mc-dark .mc-inspector{ background:#0d1320; border-color:#1b2636; color:#aeb9c8; }
+  .mc-dark .mc-dot.live{ background:#39d0d8; box-shadow:0 0 6px #39d0d8; }
+  .mc-dark .mc-dot.ok{ background:#2ecc71; }
+  .mc-dark .mc-pill{ background:#10211f; color:#5fe3c0; }
+
+  /* B — Light H10 */
+  .mc-light{ background:#f4f6f9; color:#1c2530; }
+  .mc-light .mc-topbar{ background:#fff; color:#5b6573; border-bottom:1px solid #e3e7ec; }
+  .mc-light .mc-node{ background:#fff; border:1px solid #e3e7ec; color:#1c2530; }
+  .mc-light .mc-node.sel{ border-color:#1f6fde; box-shadow:0 0 0 3px #dce8fb; }
+  .mc-light .mc-node.agent{ background:#eef6ff; border-color:#bcd8fb; }
+  .mc-light .mc-edge{ background:#1f6fde; }
+  .mc-light .mc-inspector{ background:#fff; border-color:#e3e7ec; color:#5b6573; }
+  .mc-light .mc-dot.live{ background:#1f6fde; }
+  .mc-light .mc-dot.ok{ background:#067d62; }
+  .mc-light .mc-pill{ background:#eef3fb; color:#1f6fde; }
+
+  /* C — Hybrid: light shell, dark canvas viewport */
+  .mc-hybrid{ background:#f4f6f9; color:#1c2530; }
+  .mc-hybrid .mc-topbar{ background:#fff; color:#5b6573; border-bottom:1px solid #e3e7ec; }
+  .mc-hybrid .mc-graph{ background:#0d1117; margin:8px; border-radius:8px; border:1px solid #1b2636; }
+  .mc-hybrid .mc-node{ background:#131c2b; border:1px solid #243449; color:#e7ecf3; }
+  .mc-hybrid .mc-node.sel{ border-color:#2f81f7; box-shadow:0 0 12px rgba(47,129,247,.4); }
+  .mc-hybrid .mc-node.agent{ background:#0f211f; border-color:#1f5e57; }
+  .mc-hybrid .mc-edge{ background:linear-gradient(90deg,#2f81f7,#39d0d8); }
+  .mc-hybrid .mc-inspector{ background:#fff; border-color:#e3e7ec; color:#5b6573; }
+  .mc-hybrid .mc-dot.live{ background:#39d0d8; }
+  .mc-hybrid .mc-dot.ok{ background:#2ecc71; }
+  .mc-hybrid .mc-pill{ background:#eef3fb; color:#1f6fde; }
+</style>
+
+<h2>Mission Control — pick the visual direction</h2>
+<p class="subtitle">Same canvas, three looks. Each shows a tiny slice: a market → campaign → agent, the selected node, and an agent proposal in the inspector. All three are built on our design system — the question is the <em>feel</em>. Click the one you're drawn to (you can tell me refinements in the terminal).</p>
+
+<div class="cards mc-cards" data-multiselect>
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mc-shot mc-dark">
+        <div class="mc-topbar"><span class="mc-dot live"></span> Mission Control · DE</div>
+        <div class="mc-graph">
+          <div class="mc-node"><div class="mc-ntitle">DE Market</div><div class="mc-meta">€1,240 · ACoS 22%</div></div>
+          <div class="mc-edge"></div>
+          <div class="mc-node sel"><div class="mc-ntitle">AIREON Jacket</div><div class="mc-meta"><span class="mc-dot ok"></span> ACoS 24%</div></div>
+          <div class="mc-edge"></div>
+          <div class="mc-node agent"><div class="mc-ntitle">⚡ Bid Agent</div><div class="mc-meta"><span class="mc-pill">SUGGEST</span></div></div>
+        </div>
+        <div class="mc-inspector">Bid Agent → propose <b>−8% bid</b> · target ACoS 25% · <span class="mc-pill">approve</span></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A · Dark Ops-Room</h3>
+      <p>Full Palantir Gotham feel — near-black canvas, glowing nodes, maximum signal density. Most dramatic; diverges from the light cockpit.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mc-shot mc-light">
+        <div class="mc-topbar"><span class="mc-dot live"></span> Mission Control · DE</div>
+        <div class="mc-graph">
+          <div class="mc-node"><div class="mc-ntitle">DE Market</div><div class="mc-meta">€1,240 · ACoS 22%</div></div>
+          <div class="mc-edge"></div>
+          <div class="mc-node sel"><div class="mc-ntitle">AIREON Jacket</div><div class="mc-meta"><span class="mc-dot ok"></span> ACoS 24%</div></div>
+          <div class="mc-edge"></div>
+          <div class="mc-node agent"><div class="mc-ntitle">⚡ Bid Agent</div><div class="mc-meta"><span class="mc-pill">SUGGEST</span></div></div>
+        </div>
+        <div class="mc-inspector">Bid Agent → propose <b>−8% bid</b> · target ACoS 25% · <span class="mc-pill">approve</span></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B · Light H10</h3>
+      <p>Stays exactly consistent with the rest of /marketing/ads. Familiar, seamless. Less of the "ops command center" drama.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mc-shot mc-hybrid">
+        <div class="mc-topbar"><span class="mc-dot live"></span> Mission Control · DE</div>
+        <div class="mc-graph">
+          <div class="mc-node"><div class="mc-ntitle">DE Market</div><div class="mc-meta">€1,240 · ACoS 22%</div></div>
+          <div class="mc-edge"></div>
+          <div class="mc-node sel"><div class="mc-ntitle">AIREON Jacket</div><div class="mc-meta"><span class="mc-dot ok"></span> ACoS 24%</div></div>
+          <div class="mc-edge"></div>
+          <div class="mc-node agent"><div class="mc-ntitle">⚡ Bid Agent</div><div class="mc-meta"><span class="mc-pill">SUGGEST</span></div></div>
+        </div>
+        <div class="mc-inspector">Bid Agent → propose <b>−8% bid</b> · target ACoS 25% · <span class="mc-pill">approve</span></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C · Hybrid (Recommended)</h3>
+      <p>Light H10 shell + header (cockpit-consistent), but the canvas <em>workspace</em> is a dark ops viewport. Palantir feel where it matters, no jarring app-wide theme flip.</p>
+    </div>
+  </div>
+</div>
