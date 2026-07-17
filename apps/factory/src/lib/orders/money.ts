@@ -41,6 +41,16 @@ export function isDepositMet(requiredCents: number, paidCents: number): boolean 
 }
 
 /**
+ * EPF1.3 (D-02/D-03) — by how many cents would recording `amountCents` push
+ * Σ payments past the order's net? ≤ 0 means the payment fits. Both payment
+ * entry points 409 on a positive result unless the caller sends
+ * `allowOverpay: true` — overpayments become explicit, never silent.
+ */
+export function overpayCents(netCents: number, paidCents: number, amountCents: number): number {
+  return paidCents + amountCents - netCents;
+}
+
+/**
  * EPO.2 — the ONE payment badge for a list row (NetSuite/ERPNext status-
  * vocabulary verdict: one coarse word, not four numbers). Pure; derived from
  * the same fold numbers the strip governs, so a money-blind caller (fields

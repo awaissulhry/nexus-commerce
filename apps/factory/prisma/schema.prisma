@@ -706,6 +706,10 @@ enum PaymentKind {
   DEPOSIT
   BALANCE
   OTHER
+  // EPF1 (D-11-defect) — interim refunds: negative amountCents allowed ONLY
+  // for this kind (zod-enforced; SQLite enums are runtime-only). Formal
+  // credit notes arrive in EPF.4.
+  REFUND
 }
 
 model Payment {
@@ -720,6 +724,9 @@ model Payment {
   // EPO1.3 (C4) — client-minted key; a double-submit lands on the unique and
   // returns the first payment instead of recording the money twice.
   idempotencyKey String?     @unique
+  // EPF1 (D-10) — sha256(date|amountCents|description) of the bank-statement
+  // row that created this payment; re-importing the same CSV is a no-op.
+  importKey      String?     @unique
 
   @@index([orderId])
 }

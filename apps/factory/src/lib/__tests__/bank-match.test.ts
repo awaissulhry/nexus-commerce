@@ -27,6 +27,14 @@ describe("matchBankRow", () => {
   it("maps over rows", () => {
     expect(matchBankRows([{ date: "d", amountCents: 32000, description: "x" }], targets)).toHaveLength(1);
   });
+  it("EPF1 (D-10): a reference to a settled order is flagged zeroBalance, not silently re-proposed", () => {
+    const ts: MatchTarget[] = [{ orderId: "s", number: "ORD-8", partyName: "Set", balanceCents: 0, invoiceNumbers: ["INV-2026-002"] }];
+    const m = matchBankRow({ date: "d", amountCents: 12000, description: "Bonifico INV-2026-002" }, ts);
+    expect(m).toMatchObject({ orderId: "s", confidence: "high", zeroBalance: true });
+    expect(m.reason).toContain("no open balance");
+    // an open-balance reference stays un-flagged
+    expect(matchBankRow({ date: "d", amountCents: 500, description: "ORD-5" }, targets).zeroBalance).toBeUndefined();
+  });
   it("token-matches any numbering scheme and respects boundaries (ORD-1 ≠ ORD-12)", () => {
     const ts: MatchTarget[] = [
       { orderId: "z", number: "ZZ-BANK-1", partyName: "Z", balanceCents: 40000, invoiceNumbers: [] },
