@@ -7,7 +7,7 @@
  * and the cancelledWithMoney bucket.
  */
 import { describe, expect, it } from "vitest";
-import { orderFinancials, tiles, partyRollup, periodRollup, depositsOutstanding, cancelledWithMoney, vatDisplay, type FinOrder } from "../financials/rollup";
+import { orderFinancials, tiles, monthMoneyFromFins, partyRollup, periodRollup, depositsOutstanding, cancelledWithMoney, vatDisplay, type FinOrder } from "../financials/rollup";
 
 const A: FinOrder = {
   id: "A", number: "ORD-A", partyId: "p1", partyName: "Alfa", state: "IN_PRODUCTION", createdAtISO: "2026-07-01T10:00:00.000Z",
@@ -79,12 +79,14 @@ describe("orderFinancials", () => {
 describe("tiles / rollups", () => {
   const fins = [A, B].map(orderFinancials);
   it("tiles: outstanding + deposits due; month figures bucket by DOCUMENT dates (D-13)", () => {
-    const t = tiles(fins, "2026-07");
+    // monthMoneyFromFins is the doc-dates derivation; on the hot path the SQL
+    // range sums (loadMonthMoney) provide the same MonthMoney input.
+    const t = tiles(fins, monthMoneyFromFins(fins, "2026-07"));
     expect(t.outstandingCents).toBe(35000); // A 35000 + B 0
     expect(t.depositsDueCents).toBe(10000); // B shortfall 20000−10000
     expect(t.monthInvoicedCents).toBe(80000); // B's invoice was ISSUED in July
     expect(t.monthPaidCents).toBe(85000); // A 15000 + B 70000; B's June deposit is NOT July money
-    const june = tiles(fins, "2026-06");
+    const june = tiles(fins, monthMoneyFromFins(fins, "2026-06"));
     expect(june.monthPaidCents).toBe(10000); // …it is June money
     expect(june.monthInvoicedCents).toBe(0);
   });
@@ -93,8 +95,8 @@ describe("tiles / rollups", () => {
       ...A, id: "C", number: "ORD-C", createdAtISO: "2026-01-10T10:00:00.000Z",
       payments: [{ kind: "BALANCE", amountCents: 50000, receivedAtISO: "2026-07-03T10:00:00.000Z" }],
     });
-    expect(tiles([old], "2026-07").monthPaidCents).toBe(50000);
-    expect(tiles([old], "2026-01").monthPaidCents).toBe(0);
+    expect(tiles([old], monthMoneyFromFins([old], "2026-07")).monthPaidCents).toBe(50000);
+    expect(tiles([old], monthMoneyFromFins([old], "2026-01")).monthPaidCents).toBe(0);
   });
   it("deposits outstanding lists only the unmet, with a shortfall", () => {
     const d = depositsOutstanding(fins);

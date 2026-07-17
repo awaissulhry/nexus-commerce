@@ -9,8 +9,8 @@
  */
 import { prisma } from "../../src/lib/db";
 import { materialStock, expectedForMaterial } from "../../src/lib/materials/stock";
-import { loadOrderFinancials } from "../../src/lib/financials/load";
-import { orderFinancials, depositsOutstanding, type FinOrder, type OrderFinancials } from "../../src/lib/financials/rollup";
+import { loadOrderFinancials, loadMonthMoney } from "../../src/lib/financials/load";
+import { orderFinancials, depositsOutstanding, monthMoneyFromFins, romeMonthKey, type FinOrder, type OrderFinancials } from "../../src/lib/financials/rollup";
 import { marginByProduct, marginByProductFromAggregates } from "../../src/lib/analytics/margin-by-product";
 import { quoteWinLoss, quoteWinLossFromGroups } from "../../src/lib/analytics/win-loss";
 import { throughputByWeek } from "../../src/lib/analytics/throughput";
@@ -162,13 +162,18 @@ async function legacyFins(excludeStates: string[]): Promise<OrderFinancials[]> {
  * value sitting on a half-cent boundary — the legacy number was itself
  * summation-order-dependent at that precision (seen once in 47k orders).
  */
-function finsDiff(a: OrderFinancials[], b: OrderFinancials[]): string | null {
+function finsDiff(a: OrderFinancials[], b: OrderFinancials[], opts?: { hotProjection?: boolean }): string | null {
   if (a.length !== b.length) return `length ${a.length} vs ${b.length}`;
+  // EPF1 split-path: the HOT loader's pseudo docs carry no dates, so its
+  // per-order month buckets degrade to the documented creation-month
+  // fallback — they are NOT a shared figure. Every other figure must match.
+  const skip = opts?.hotProjection ? new Set<keyof OrderFinancials>(["invoicedByMonthCents", "paidByMonthCents"]) : new Set<keyof OrderFinancials>();
   const bm = new Map(b.map((x) => [x.orderId, x]));
   for (const x of a) {
     const y = bm.get(x.orderId);
     if (!y) return `missing ${x.orderId}`;
     for (const k of Object.keys(x) as (keyof OrderFinancials)[]) {
+      if (skip.has(k)) continue;
       if (k === "actualCostCents" || k === "actualMarginCents") {
         if (Math.abs((x[k] as number) - (y[k] as number)) > 1) return `${x.orderId}.${k}: ${x[k]} vs ${y[k]}`;
       } else if (k === "actualMarginPct") {
@@ -179,14 +184,37 @@ function finsDiff(a: OrderFinancials[], b: OrderFinancials[]): string | null {
         return `${x.orderId}.${k}: ${JSON.stringify(x[k])} vs ${JSON.stringify(y[k])}`;
       }
     }
+    if (opts?.hotProjection) {
+      // the hot degradation itself must stay lawful: Σ of each map = the total
+      const sum = (r: Record<string, number>) => Object.values(r).reduce((s, v) => s + v, 0);
+      if (sum(x.invoicedByMonthCents) !== x.invoicedCents) return `${x.orderId}: hot invoicedByMonthCents Σ ≠ invoicedCents`;
+      if (sum(x.paidByMonthCents) !== x.paidCents) return `${x.orderId}: hot paidByMonthCents Σ ≠ paidCents`;
+    }
   }
   return null;
 }
 
 async function checkFinancials() {
-  const [legacy, fresh] = [await legacyFins(["CANCELLED"]), await loadOrderFinancials()];
-  const fd = finsDiff(legacy, fresh);
-  report("financials per-order rollup (int money exact; actual-cost ±1c float assoc)", fd === null, fd ?? `${fresh.length} orders`);
+  const legacy = await legacyFins(["CANCELLED"]);
+
+  // DOC-DATES path ≡ legacy: full per-order compare including Rome-month buckets
+  const doc = await loadOrderFinancials(undefined, { docDates: true });
+  const docDiff = finsDiff(legacy, doc);
+  report("financials doc-dates path ≡ legacy (full, incl. month buckets)", docDiff === null, docDiff ?? `${doc.length} orders`);
+
+  // HOT path ≡ legacy: every per-order figure (month buckets excluded by design)
+  const fresh = await loadOrderFinancials();
+  const fd = finsDiff(legacy, fresh, { hotProjection: true });
+  report("financials hot path ≡ legacy (per-order figures; int money exact; actual-cost ±1c float assoc)", fd === null, fd ?? `${fresh.length} orders`);
+
+  // tiles' month figures: TZ-exact SQL range sums ≡ Σ of the doc-dated buckets
+  const monthKey = romeMonthKey(new Date().toISOString());
+  const [sqlMonth, foldMonth] = [await loadMonthMoney(monthKey), monthMoneyFromFins(doc, monthKey)];
+  report(
+    "tiles month money: SQL range sums ≡ doc-dates fold",
+    sqlMonth.invoicedCents === foldMonth.invoicedCents && sqlMonth.paidCents === foldMonth.paidCents,
+    `${monthKey} invoiced ${sqlMonth.invoicedCents}/${foldMonth.invoicedCents} paid ${sqlMonth.paidCents}/${foldMonth.paidCents}`,
+  );
 
   const [legacyDep, freshDep] = [
     depositsOutstanding(await legacyFins(["CANCELLED", "CLOSED"])),
