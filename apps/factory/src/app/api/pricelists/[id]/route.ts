@@ -1,10 +1,15 @@
-/** FP2.4 — one price list: read (entries + parties), rename, delete (not the default). */
+/**
+ * FP2.4 — one price list: read (entries + parties), rename, delete (not the
+ * default). FS4 — the PATCH honours `expectedUpdatedAt` (shared EPO.1 stale
+ * guard → 409).
+ */
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { publishEventDurable } from "@/lib/events";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
+import { assertNotStale } from "@/lib/concurrency";
 import { FEATURES, PAGES } from "@/lib/auth/permissions";
 
 export const permission = { GET: PAGES.products, PATCH: FEATURES.pricelistsManage, DELETE: FEATURES.pricelistsManage };
@@ -22,14 +27,21 @@ export const GET = guarded(PAGES.products, async (_req, { params, resolved }) =>
   return jsonStripped({ list }, resolved);
 });
 
-const Patch = z.object({ name: z.string().trim().min(1).max(160).optional(), notes: z.string().trim().max(1000).nullable().optional() });
+const Patch = z.object({
+  name: z.string().trim().min(1).max(160).optional(),
+  notes: z.string().trim().max(1000).nullable().optional(),
+  expectedUpdatedAt: z.string().datetime().optional(), // FS4 — optimistic concurrency (the caller's read stamp)
+});
 
 export const PATCH = guarded(FEATURES.pricelistsManage, async (req, { params, actor, resolved }) => {
   const { id } = await params;
   const parsed = Patch.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Bad request" }, { status: 400 });
-  const list = await prisma.priceList.update({ where: { id }, data: parsed.data });
-  void audit({ actorId: actor!.id, entityType: "pricelist", entityId: id, action: "updated", after: parsed.data });
+  const { expectedUpdatedAt, ...data } = parsed.data;
+  const stale = await assertNotStale(prisma.priceList, id, expectedUpdatedAt, "price list"); // FS4
+  if (!stale.ok) return NextResponse.json({ error: stale.error }, { status: stale.status });
+  const list = await prisma.priceList.update({ where: { id }, data });
+  void audit({ actorId: actor!.id, entityType: "pricelist", entityId: id, action: "updated", after: data });
   await publishEventDurable("pricing.updated", { priceListId: id }); // FS2 — no silent mutations
   return jsonStripped({ list }, resolved);
 });

@@ -65,6 +65,11 @@ async function gmailPoll() {
  * (auto-cancel on reply lives in the sync path), prune the event outbox.
  * All notifications go durable (notify() writes the outbox) so web SSE
  * clients hear them from this separate process.
+ * FS4 (C-3) — each wake/fire is a PER-ITEM guarded compare-and-set (the WHERE
+ * re-asserts the due condition), never a per-batch transaction: a web-side
+ * un-snooze or inbound-reply cancel racing this tick makes the update count 0
+ * and the item is skipped — no double audit, no ghost reminder. Side effects
+ * (audit/notify) run only after the item's write committed.
  */
 async function inboxTick() {
   const now = new Date();
@@ -73,11 +78,14 @@ async function inboxTick() {
       where: { state: "SNOOZED", snoozeUntil: { lte: now } },
       select: { id: true, subject: true, assigneeId: true },
     });
+    let wokenCount = 0;
     for (const c of woken) {
-      await prisma.conversation.update({
-        where: { id: c.id },
+      const res = await prisma.conversation.updateMany({
+        where: { id: c.id, state: "SNOOZED", snoozeUntil: { lte: now } },
         data: { state: "OPEN", snoozeUntil: null },
       });
+      if (res.count === 0) continue; // raced: someone already woke/closed it
+      wokenCount++;
       // EPI1.1 (G1) — the wake used to be invisible: no audit row for the
       // ONE-timeline, no event for open tabs. System actor = null.
       await audit({
@@ -104,8 +112,14 @@ async function inboxTick() {
       select: { id: true, subject: true, assigneeId: true },
     });
     let fallbackOwnerId: string | null | undefined;
+    let firedCount = 0;
     for (const c of due) {
-      await prisma.conversation.update({ where: { id: c.id }, data: { followUpAt: null } });
+      const res = await prisma.conversation.updateMany({
+        where: { id: c.id, followUpAt: { lte: now } },
+        data: { followUpAt: null },
+      });
+      if (res.count === 0) continue; // raced: a reply auto-cancelled it
+      firedCount++;
       // EPI1.1 (G1) — follow-up firing lands in the timeline too.
       await audit({
         actorId: null,
@@ -142,11 +156,12 @@ async function inboxTick() {
 
     // EPI1.1 (G1) — one durable event per tick that changed anything, so open
     // tabs live-refresh on wakes/fired follow-ups (mirrors the bulk idiom).
-    if (woken.length > 0 || due.length > 0) {
+    // FS4 — counts what actually WON its compare-and-set, not what was due.
+    if (wokenCount > 0 || firedCount > 0) {
       await publishEventDurable("conversation.updated", {
         worker: true,
-        woken: woken.length,
-        followUpsFired: due.length,
+        woken: wokenCount,
+        followUpsFired: firedCount,
       });
     }
 

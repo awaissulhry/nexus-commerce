@@ -67,24 +67,29 @@ export async function sendQuoteMail(input: {
 
   const now = new Date();
   if (input.conversation?.id) {
-    await prisma.message.create({
-      data: {
-        conversationId: input.conversation.id,
-        gmailMessageId: sent.data.id ?? null,
-        direction: "OUTBOUND",
-        fromAddress: authed.email.toLowerCase(),
-        toAddresses: [recipient],
-        snippet: input.snippet,
-        sentAt: now,
-        labels: [],
-      },
-    });
-    // lastMessageDirection is maintained at every message write point (FS1) —
-    // the original send route missed it; the shared helper closes that too
-    await prisma.conversation.update({
-      where: { id: input.conversation.id },
-      data: { lastMessageAt: now, lastMessageDirection: "OUTBOUND" },
-    });
+    // FS4 (C-3) — the OUTBOUND record and the conversation bump commit
+    // together: the thread can no longer show a send its list row denies
+    const conversationId = input.conversation.id;
+    await prisma.$transaction([
+      prisma.message.create({
+        data: {
+          conversationId,
+          gmailMessageId: sent.data.id ?? null,
+          direction: "OUTBOUND",
+          fromAddress: authed.email.toLowerCase(),
+          toAddresses: [recipient],
+          snippet: input.snippet,
+          sentAt: now,
+          labels: [],
+        },
+      }),
+      // lastMessageDirection is maintained at every message write point (FS1) —
+      // the original send route missed it; the shared helper closes that too
+      prisma.conversation.update({
+        where: { id: conversationId },
+        data: { lastMessageAt: now, lastMessageDirection: "OUTBOUND" },
+      }),
+    ]);
   }
   return { ok: true, recipient, gmailMessageId: sent.data.id ?? null, sentAt: now };
 }

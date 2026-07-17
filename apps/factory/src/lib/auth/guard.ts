@@ -9,6 +9,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { audit } from "@/lib/audit";
+import { mutationsBlocked } from "@/lib/db";
 import { resolvePermissions, hasPermission, type Resolved } from "./rbac";
 import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, validateSessionToken, type SessionUser } from "./session";
 import { stripFinancials } from "./strip-financials";
@@ -36,6 +37,14 @@ export function guarded(permission: Permission, handler: Handler) {
       const header = req.headers.get(CSRF_HEADER);
       if (!cookie || !header || cookie !== header) {
         return NextResponse.json({ error: "CSRF check failed", code: "csrf_failed" }, { status: 403 });
+      }
+      // FS4 (S-17) — a DB verified NOT to be in WAL refuses every write: two
+      // processes over a rollback-journal file is how corruption happens.
+      if (mutationsBlocked()) {
+        return NextResponse.json(
+          { error: "Database is not in WAL mode — writes are disabled to protect the file. Check the server log.", code: "db_not_wal" },
+          { status: 503 },
+        );
       }
     }
 

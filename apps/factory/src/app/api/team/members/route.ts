@@ -22,13 +22,14 @@ export const GET = guarded(FEATURES.usersManage, async (_req, { actor }) => {
     prisma.user.findMany({
       orderBy: { createdAt: "asc" },
       take: MEMBERS_TAKE,
-      select: { id: true, displayName: true, email: true, status: true, lastLoginAt: true, roleAssignments: { select: { role: { select: { id: true, key: true, name: true } } } } },
+      select: { id: true, displayName: true, email: true, status: true, lastLoginAt: true, lockedUntil: true, roleAssignments: { select: { role: { select: { id: true, key: true, name: true } } } } },
     }),
     prisma.role.findMany({ orderBy: [{ isSystem: "desc" }, { name: "asc" }], select: { id: true, key: true, name: true, isSystem: true } }), // bounded: team-sized table
     prisma.user.count(),
   ]);
   const members = users.map((u) => ({
     id: u.id, displayName: u.displayName, email: u.email, status: u.status, lastLoginAt: u.lastLoginAt,
+    lockedUntil: u.lockedUntil, // FS4 — owner visibility on login lockouts
     roleId: u.roleAssignments[0]?.role.id ?? null, roleKey: u.roleAssignments[0]?.role.key ?? null, roleName: u.roleAssignments[0]?.role.name ?? "—",
     isYou: u.id === actor!.id,
   }));

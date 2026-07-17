@@ -5,6 +5,7 @@
  * throws the caller: a missing BOM just means nothing to reserve.
  */
 import { prisma } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
 import { garmentDemand } from "./demand";
 
 export async function reserveWorkOrder(woId: string, orderLineId: string | null, actorId: string | null): Promise<number> {
@@ -20,10 +21,21 @@ export async function reserveWorkOrder(woId: string, orderLineId: string | null,
   return demand.length;
 }
 
-/** Consume actual material at CUTTING finish: OUT (used) + RELEASE (free the reservation). */
-export async function consumeWorkOrder(woId: string, materialId: string, usedQty: number, reservedQty: number, actorId: string | null): Promise<void> {
+/**
+ * Consume actual material at CUTTING finish: OUT (used) + RELEASE (free the
+ * reservation). FS4 (C-3) — accepts the caller's transaction client so the
+ * whole consume set + the stage's actualMaterialUse commit together.
+ */
+export async function consumeWorkOrder(
+  woId: string,
+  materialId: string,
+  usedQty: number,
+  reservedQty: number,
+  actorId: string | null,
+  db: Prisma.TransactionClient | typeof prisma = prisma,
+): Promise<void> {
   const rows: { materialId: string; type: "OUT" | "RELEASE"; qty: number; reason: string; refType: string; refId: string; actorId?: string }[] = [];
   if (usedQty > 0) rows.push({ materialId, type: "OUT", qty: usedQty, reason: "consumed at cutting", refType: "WorkOrder", refId: woId, actorId: actorId ?? undefined });
   if (reservedQty > 0) rows.push({ materialId, type: "RELEASE", qty: reservedQty, reason: "reservation cleared at cutting", refType: "WorkOrder", refId: woId, actorId: actorId ?? undefined });
-  if (rows.length) await prisma.movementLedger.createMany({ data: rows });
+  if (rows.length) await db.movementLedger.createMany({ data: rows });
 }

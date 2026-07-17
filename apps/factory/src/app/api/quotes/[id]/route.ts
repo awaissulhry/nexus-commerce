@@ -10,6 +10,7 @@
  * (the actor already knows — S6's silent half closed).
  * EPQ.3 — the GET flags a duplicate open quote (same party, same template set,
  * DRAFT/SENT) for the editor's warning banner. Bounded query, pure comparison.
+ * FS4 — the PATCH honours `expectedUpdatedAt` (shared EPO.1 stale guard → 409).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -18,6 +19,7 @@ import { audit } from "@/lib/audit";
 import { publishEventDurable } from "@/lib/events";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { FEATURES, PAGES } from "@/lib/auth/permissions";
+import { stampMatches, staleMessage } from "@/lib/concurrency";
 import { quoteTotals } from "@/lib/quotes/compose-line";
 import { canTransition, lostReasonAllowed, type QuoteState } from "@/lib/quotes/transitions";
 import { findDuplicateOpenQuote } from "@/lib/quotes/duplicate";
@@ -65,14 +67,19 @@ const Patch = z.object({
   validUntilAt: z.string().datetime().nullable().optional(),
   state: z.enum(["DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED"]).optional(),
   lostReason: z.string().max(500).nullable().optional(),
+  expectedUpdatedAt: z.string().datetime().optional(), // FS4 — optimistic concurrency (the caller's read stamp)
 });
 
 export const PATCH = guarded(FEATURES.quotesCreate, async (req: NextRequest, { params, actor, resolved }) => {
   const { id } = await params;
   const parsed = Patch.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Bad request" }, { status: 400 });
-  const existing = await prisma.quote.findUnique({ where: { id }, select: { state: true, number: true } });
+  const existing = await prisma.quote.findUnique({ where: { id }, select: { state: true, number: true, updatedAt: true } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  // FS4 — the EPO.1 pattern, shared: a stale editor gets a 409, not a lost update
+  if (parsed.data.expectedUpdatedAt && !stampMatches(existing.updatedAt, parsed.data.expectedUpdatedAt)) {
+    return NextResponse.json({ error: staleMessage("quote") }, { status: 409 });
+  }
   const from = existing.state as QuoteState;
 
   // EPQ.1 — forward-only state machine: the transitions map is the authority
@@ -118,7 +125,8 @@ export const PATCH = guarded(FEATURES.quotesCreate, async (req: NextRequest, { p
       });
     }
   } else {
-    void audit({ actorId: actor!.id, entityType: "quote", entityId: id, action: "updated", before: { state: from }, after: parsed.data });
+    const { expectedUpdatedAt: _stamp, ...changes } = parsed.data; // FS4 — the stamp is transport, not a change
+    void audit({ actorId: actor!.id, entityType: "quote", entityId: id, action: "updated", before: { state: from }, after: changes });
   }
   await publishEventDurable("pricing.updated", { quoteId: id });
   return jsonStripped({ quote }, resolved);

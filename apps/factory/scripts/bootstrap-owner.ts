@@ -6,6 +6,7 @@
 import "dotenv/config";
 import { prisma } from "../src/lib/db";
 import { hashPassword } from "../src/lib/auth/password";
+import { assignHandle } from "../src/lib/auth/team-service";
 import { seedSystemRoles } from "../src/lib/auth/seed-roles";
 
 async function main() {
@@ -33,6 +34,7 @@ async function main() {
         passwordHash: hashPassword(password),
       },
     });
+    await assignHandle(user.id, user.displayName); // FS4 — mention handle at user create
     console.log(`bootstrap-owner: created user ${email}`);
   }
 

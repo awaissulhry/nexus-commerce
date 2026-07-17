@@ -3,6 +3,7 @@
  * stage-timer; PATCH { assigneeId } assigns it. Forward-only floor: a stage can
  * only start once every earlier stage is finished. Finishing the last stage
  * completes the Work Order. (The QC→Packing cert gate lands in FP6.4.)
+ * FS4 (C-3) — stage patch + implied WO state are one short transaction.
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -44,34 +45,43 @@ export const POST = guarded(FEATURES.workordersAdvance, async (req, { params, ac
   const patch = TRANSITION[parsed.data.action](stage, now);
   if (!patch) return NextResponse.json({ error: `Can't ${parsed.data.action} this stage now` }, { status: 400 });
 
-  await prisma.workOrderStage.update({ where: { id: sid }, data: patch });
-
-  // starting any stage puts a READY work order into progress
-  if (parsed.data.action === "start" && stage.workOrder.state === "READY") {
-    await prisma.workOrder.update({ where: { id: stage.workOrderId }, data: { state: "IN_PROGRESS" } });
-  }
-
-  // finishing the last stage completes the WO; all a WO done ⇒ the order is READY
+  // FS4 (C-3) — the stage-timer patch and the WO state it implies commit as
+  // ONE short transaction: a crash can no longer finish the last stage while
+  // the work order stays IN_PROGRESS (or start a stage on a WO still READY).
+  // The order READY promotion stays OUTSIDE — it is transitionOrder's own
+  // guarded transaction (EPO.1), with its audit/event after ITS commit.
   let woDone = false;
-  let orderReady = false;
   if (parsed.data.action === "finish") {
     const after = siblings.map((s) => (s.id === sid ? { ...s, finishedAt: new Date(now) } : s));
-    if (woComplete(after)) {
-      await prisma.workOrder.update({ where: { id: stage.workOrderId }, data: { state: "DONE" } });
-      woDone = true;
-      const orderId = stage.workOrder.orderId;
-      const siblingsWo = await prisma.workOrder.findMany({ where: { orderId }, select: { state: true } }); // bounded: per-order work orders (WorkOrder.orderId indexed in FS1)
-      if (siblingsWo.every((s) => s.state === "DONE")) {
-        // EPO1.2 (C2) — through the ONE transition writer (legality + guard +
-        // audit + event); a race that already moved the order is a clean no-op.
-        const outcome = await transitionOrder({ orderId, to: "READY", via: "all-wos-done", actorId: actor!.id });
-        orderReady = outcome.ok;
-        if (outcome.ok) {
-          // EPO.3 — the bell learns about orders (href = the ?o= contract)
-          await notifyOwners({ title: `${outcome.number} is ready to ship`, body: "All work orders are done.", entityType: "order", entityId: orderId, href: `/orders?o=${orderId}`, excludeUserId: actor!.id });
-        } else if (outcome.status !== 409 && outcome.status !== 422) {
-          console.error("[production] order READY transition failed", orderId, outcome.error);
-        }
+    woDone = woComplete(after);
+  }
+  await prisma.$transaction(async (tx) => {
+    await tx.workOrderStage.update({ where: { id: sid }, data: patch });
+    // starting any stage puts a READY work order into progress
+    if (parsed.data.action === "start" && stage.workOrder.state === "READY") {
+      await tx.workOrder.update({ where: { id: stage.workOrderId }, data: { state: "IN_PROGRESS" } });
+    }
+    // finishing the last stage completes the WO
+    if (woDone) {
+      await tx.workOrder.update({ where: { id: stage.workOrderId }, data: { state: "DONE" } });
+    }
+  });
+
+  // all of an order's WOs done ⇒ the order is READY
+  let orderReady = false;
+  if (woDone) {
+    const orderId = stage.workOrder.orderId;
+    const siblingsWo = await prisma.workOrder.findMany({ where: { orderId }, select: { state: true } }); // bounded: per-order work orders (WorkOrder.orderId indexed in FS1)
+    if (siblingsWo.every((s) => s.state === "DONE")) {
+      // EPO1.2 (C2) — through the ONE transition writer (legality + guard +
+      // audit + event); a race that already moved the order is a clean no-op.
+      const outcome = await transitionOrder({ orderId, to: "READY", via: "all-wos-done", actorId: actor!.id });
+      orderReady = outcome.ok;
+      if (outcome.ok) {
+        // EPO.3 — the bell learns about orders (href = the ?o= contract)
+        await notifyOwners({ title: `${outcome.number} is ready to ship`, body: "All work orders are done.", entityType: "order", entityId: orderId, href: `/orders?o=${orderId}`, excludeUserId: actor!.id });
+      } else if (outcome.status !== 409 && outcome.status !== 422) {
+        console.error("[production] order READY transition failed", orderId, outcome.error);
       }
     }
   }

@@ -3,6 +3,7 @@
  * the quantity truly used + RELEASE the reservation (the consume pair). Materials
  * reserved but not used are RELEASED (freed). The `use` map is stored on the
  * stage; the response carries the diff vs the BOM estimate. Behind materials.consume.
+ * FS4 (C-3) — consume pairs + stage record are one short transaction.
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -46,14 +47,19 @@ export const POST = guarded(FEATURES.materialsConsume, async (req, { params, act
   // every material touched (reserved or used) gets OUT(used) + RELEASE(reserved)
   const touched = new Set([...Object.keys(reserved).filter((k) => reserved[k] > 0.0001), ...Object.keys(parsed.data.use)]);
   const diff: { materialId: string; reserved: number; used: number }[] = [];
-  for (const materialId of touched) {
-    const used = parsed.data.use[materialId] ?? 0;
-    const res = Math.max(0, reserved[materialId] ?? 0);
-    await consumeWorkOrder(stage.workOrderId, materialId, used, res, actor!.id);
-    diff.push({ materialId, reserved: res, used });
-  }
-
-  await prisma.workOrderStage.update({ where: { id: sid }, data: { actualMaterialUse: parsed.data.use as Prisma.InputJsonValue } });
+  // FS4 (C-3) — every consume pair AND the stage's actualMaterialUse record
+  // commit as ONE short transaction (bounded: one WO's materials): the ledger
+  // can no longer hold OUT/RELEASE rows for a consumption the stage denies —
+  // or the reverse. Audit/event follow after commit, as everywhere.
+  await prisma.$transaction(async (tx) => {
+    for (const materialId of touched) {
+      const used = parsed.data.use[materialId] ?? 0;
+      const res = Math.max(0, reserved[materialId] ?? 0);
+      await consumeWorkOrder(stage.workOrderId, materialId, used, res, actor!.id, tx);
+      diff.push({ materialId, reserved: res, used });
+    }
+    await tx.workOrderStage.update({ where: { id: sid }, data: { actualMaterialUse: parsed.data.use as Prisma.InputJsonValue } });
+  });
   void audit({ actorId: actor!.id, entityType: "workorder", entityId: stage.workOrderId, action: "material.consumed", after: { stageId: sid, diff } });
   await publishEventDurable("workorder.updated", { workOrderId: stage.workOrderId, consumed: true });
   return NextResponse.json({ ok: true, diff });

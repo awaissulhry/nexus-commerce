@@ -127,9 +127,19 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
     }
   };
 
+  // FS4 — every quote PATCH carries the row stamp; a 409 ("changed elsewhere")
+  // toasts and reloads so the editor is looking at the winning version.
   const patchQuote = async (data: Record<string, unknown>) => {
-    try { await apiJson(`/api/quotes/${quoteId}`, { method: "PATCH", body: JSON.stringify(data) }); await load(); return true; }
-    catch (e) { toast((e as Error).message, "danger"); return false; }
+    try {
+      await apiJson(`/api/quotes/${quoteId}`, { method: "PATCH", body: JSON.stringify({ ...data, ...(quote?.updatedAt ? { expectedUpdatedAt: quote.updatedAt } : {}) }) });
+      await load();
+      return true;
+    } catch (e) {
+      const msg = (e as Error).message;
+      toast(msg, "danger");
+      if (msg.includes("changed elsewhere")) await load();
+      return false;
+    }
   };
 
   // EPQ.2 — Revise gets a success toast (gap 6: silent successes)

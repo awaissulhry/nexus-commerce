@@ -82,6 +82,7 @@ type ListDetailData = {
   kind: string;
   name: string;
   notes: string | null;
+  updatedAt: string; // FS4 — the row stamp echoed back as expectedUpdatedAt
   entries: { templateId: string | null; optionId: string | null; basePriceCents: number | null; priceDeltaMode: "ABSOLUTE" | "PERCENT" | null; priceDelta: number | null }[];
   parties: { id: string; name: string; kind: string }[];
 };
@@ -141,12 +142,15 @@ function PriceListDetail({ listId, onBack }: { listId: string; onBack: () => voi
       const entries: ListDetailData["entries"] = [];
       for (const [tid, cents] of Object.entries(baseOv)) entries.push({ templateId: tid, optionId: null, basePriceCents: cents, priceDeltaMode: null, priceDelta: null });
       for (const [oid, ov] of Object.entries(optOv)) entries.push({ templateId: null, optionId: oid, basePriceCents: null, priceDeltaMode: ov.mode, priceDelta: ov.delta });
-      await apiJson(`/api/pricelists/${listId}/entries`, { method: "PUT", body: JSON.stringify({ entries }) });
+      // FS4 — the replace carries the list's read stamp; 409 → toast + reload below
+      await apiJson(`/api/pricelists/${listId}/entries`, { method: "PUT", body: JSON.stringify({ entries, ...(list?.updatedAt ? { expectedUpdatedAt: list.updatedAt } : {}) }) });
       await apiJson(`/api/pricelists/${listId}/parties`, { method: "PUT", body: JSON.stringify({ partyIds: assigned.map((a) => a.id) }) });
       toast("Price list saved", "success");
       await load();
     } catch (e) {
-      toast((e as Error).message, "danger");
+      const msg = (e as Error).message;
+      toast(msg, "danger");
+      if (msg.includes("changed elsewhere")) await load(); // FS4 — show the winning version
     } finally {
       setBusy(false);
     }

@@ -4,6 +4,7 @@
  * commercial identity (inline autosave) and archive state; DELETE soft-archives
  * (parties are referenced by quotes/orders — never hard-deleted). Grain strip
  * on the way out (terms/deposit by name).
+ * FS4 — the PATCH honours `expectedUpdatedAt` (shared EPO.1 stale guard → 409).
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -12,6 +13,7 @@ import { audit } from "@/lib/audit";
 import { publishEventDurable } from "@/lib/events";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { PAGES, FEATURES } from "@/lib/auth/permissions";
+import { stampMatches, staleMessage } from "@/lib/concurrency";
 import { quoteTotals } from "@/lib/quotes/compose-line";
 import { orderTotals } from "@/lib/orders/money";
 
@@ -62,16 +64,21 @@ const Patch = z.object({
   notes: z.string().trim().max(2000).nullable().optional(),
   priceListId: z.string().nullable().optional(),
   archived: z.boolean().optional(),
+  expectedUpdatedAt: z.string().datetime().optional(), // FS4 — optimistic concurrency (the caller's read stamp)
 });
 
 export const PATCH = guarded(FEATURES.contactsManage, async (req, { params, actor, resolved }) => {
   const { id } = await params;
   const parsed = Patch.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
-  const { archived, ...fields } = parsed.data;
+  const { archived, expectedUpdatedAt, ...fields } = parsed.data;
 
-  const exists = await prisma.party.findUnique({ where: { id }, select: { id: true } });
+  const exists = await prisma.party.findUnique({ where: { id }, select: { id: true, updatedAt: true } });
   if (!exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  // FS4 — the EPO.1 pattern, shared: a stale inline-autosave 409s instead of clobbering
+  if (expectedUpdatedAt && !stampMatches(exists.updatedAt, expectedUpdatedAt)) {
+    return NextResponse.json({ error: staleMessage("contact") }, { status: 409 });
+  }
 
   const data: Record<string, unknown> = { ...fields };
   if (archived !== undefined) data.archivedAt = archived ? new Date() : null;

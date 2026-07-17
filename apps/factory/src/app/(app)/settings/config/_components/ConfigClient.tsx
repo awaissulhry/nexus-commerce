@@ -12,7 +12,7 @@ import { Card, useToast } from "@/design-system/components";
 import { Button, Input, Pill } from "@/design-system/primitives";
 import { apiJson } from "@/lib/api-client";
 
-type Config = { stages: string[]; marginFloorPct: number; depositDefaultPct: number; vatRatePct: number; rbacMode: "shadow" | "enforce" };
+type Config = { stages: string[]; marginFloorPct: number; depositDefaultPct: number; vatRatePct: number; rbacMode: "shadow" | "enforce"; updatedAt: string | null };
 type Backup = { name: string; sizeBytes: number; modifiedAt: string };
 
 const kb = (b: number) => (b >= 1_048_576 ? `${(b / 1_048_576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
@@ -43,17 +43,27 @@ export function ConfigClient() {
   const remove = (i: number) => setStages((s) => s.filter((_, j) => j !== i));
   const add = () => { const v = newStage.trim().toUpperCase(); if (v && !stages.includes(v)) { setStages((s) => [...s, v]); setNewStage(""); } };
 
+  // FS4 — both saves echo the read stamp; a 409 ("changed elsewhere") means
+  // another Owner saved first — toast it and reload their winning values.
+  const saveConfig = async (body: Record<string, unknown>, okMsg: string) => {
+    setBusy(true);
+    try {
+      await apiJson("/api/settings/config", { method: "PATCH", body: JSON.stringify({ ...body, expectedUpdatedAt: cfg?.updatedAt ?? null }) });
+      toast(okMsg, "success");
+      void load();
+    } catch (e) {
+      const msg = (e as Error).message;
+      toast(msg, "danger");
+      if (msg.includes("changed elsewhere")) void load();
+    } finally { setBusy(false); }
+  };
   const savePipeline = async () => {
     const clean = stages.map((s) => s.trim().toUpperCase()).filter(Boolean);
     if (clean.length === 0) { toast("Keep at least one stage", "danger"); return; }
-    setBusy(true);
-    try { await apiJson("/api/settings/config", { method: "PATCH", body: JSON.stringify({ stages: clean }) }); toast("Pipeline saved — new work orders use it", "success"); void load(); }
-    catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
+    await saveConfig({ stages: clean }, "Pipeline saved — new work orders use it");
   };
   const saveDefaults = async () => {
-    setBusy(true);
-    try { await apiJson("/api/settings/config", { method: "PATCH", body: JSON.stringify({ marginFloorPct: +floor || 0, depositDefaultPct: +deposit || 0, vatRatePct: +vat || 0 }) }); toast("Defaults saved", "success"); void load(); }
-    catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
+    await saveConfig({ marginFloorPct: +floor || 0, depositDefaultPct: +deposit || 0, vatRatePct: +vat || 0 }, "Defaults saved");
   };
 
   return (

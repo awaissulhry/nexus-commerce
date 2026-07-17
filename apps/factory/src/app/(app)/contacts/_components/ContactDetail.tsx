@@ -46,8 +46,10 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { apiJson<{ lists: { id: string; name: string }[] }>("/api/pricelists").then((r) => setPriceLists(r.lists ?? [])).catch(() => {}); }, []);
 
+  // FS4 — inline autosaves echo the row stamp; a 409 ("changed elsewhere")
+  // rides the existing error path, which already toasts and reloads.
   const patch = async (body: Record<string, unknown>, quiet = false) => {
-    try { const data = await apiJson<ContactDetailResponse>(`/api/contacts/${contactId}`, { method: "PATCH", body: JSON.stringify(body) }); setD(data); if (!quiet) toast("Saved", "success"); }
+    try { const data = await apiJson<ContactDetailResponse>(`/api/contacts/${contactId}`, { method: "PATCH", body: JSON.stringify({ ...body, ...(d?.contact.updatedAt ? { expectedUpdatedAt: d.contact.updatedAt } : {}) }) }); setD(data); if (!quiet) toast("Saved", "success"); }
     catch (e) { toast((e as Error).message, "danger"); void load(); }
   };
   const saveField = (key: string, value: string, kind: "text" | "number" = "text") => {

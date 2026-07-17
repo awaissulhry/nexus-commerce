@@ -90,7 +90,7 @@ export function TeamClient() {
             { key: "email", label: "Email", render: (m: Member) => m.email },
             { key: "role", label: "Role", render: (m: Member) => <div style={{ maxWidth: 180 }}><Listbox ariaLabel="Role" options={roleOpts} value={m.roleId ?? ""} onChange={(v) => void reassign(m.id, v)} /></div> },
             { key: "last", label: "Last login", render: (m: Member) => <span style={{ fontSize: 12, color: "var(--h10-text-3)" }}>{dmy(m.lastLoginAt)}</span> },
-            { key: "status", label: "Status", render: (m: Member) => (m.status === "active" ? <Pill tone="success">active</Pill> : <Pill tone="neutral">deactivated</Pill>) },
+            { key: "status", label: "Status", render: (m: Member) => (m.lockedUntil && new Date(m.lockedUntil).getTime() > Date.now() ? <Pill tone="warning">locked</Pill> : m.status === "active" ? <Pill tone="success">active</Pill> : <Pill tone="neutral">deactivated</Pill>) }, // FS4 — login lockout visible to the Owner
             { key: "act", label: "", align: "right" as const, render: (m: Member) => (m.isYou ? null : m.status === "active" ? <Button onClick={() => void setStatus(m.id, "deactivated")} style={{ color: "var(--h10-danger)", borderColor: "var(--h10-danger)" }}>Deactivate</Button> : <Button onClick={() => void setStatus(m.id, "active")}>Reactivate</Button>) },
           ]}
           rows={members}

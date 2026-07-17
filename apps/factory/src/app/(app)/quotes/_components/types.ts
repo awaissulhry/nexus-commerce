@@ -88,6 +88,7 @@ export type QuoteDetail = {
   conversation: { id: string; subject: string | null } | null;
   lines: QuoteLine[];
   versions: QuoteVersion[];
+  updatedAt: string; // FS4 — the row stamp the editor echoes back as expectedUpdatedAt
 };
 
 export type ComposeResult = {

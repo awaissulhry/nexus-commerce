@@ -892,6 +892,7 @@ model User {
   id                 String           @id @default(cuid())
   email              String           @unique
   displayName        String
+  handle             String?          @unique // FS4 — @mention key: first.last from displayName, collision-suffixed (-2, -3…)
   passwordHash       String
   status             String           @default("active") // active | deactivated
   failedLoginCount   Int              @default(0)

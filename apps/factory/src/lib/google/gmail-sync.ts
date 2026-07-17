@@ -8,6 +8,8 @@
  * the Missive ADOPT verdicts), assignee notifications, and DURABLE event
  * publishing (this file runs in the WORKER process; the in-memory bus never
  * reaches web SSE clients — FactoryEventOutbox does).
+ * FS4 (C-3) — upsertMessage's writes are one short transaction; side effects
+ * (audit/notify) fire only after commit.
  */
 import { google, type gmail_v1 } from "googleapis";
 import { prisma } from "@/lib/db";
@@ -73,44 +75,10 @@ async function upsertMessage(ownEmail: string, msg: gmail_v1.Schema$Message): Pr
     select: { id: true, state: true, assigneeId: true, snoozeUntil: true, followUpAt: true, partyId: true },
   });
 
-  const conversation = await prisma.conversation.upsert({
-    where: { gmailThreadId: threadId },
-    create: {
-      channel: "GMAIL",
-      gmailThreadId: threadId,
-      subject: subject || null,
-      partyId,
-      lastMessageAt: sentAt,
-      lastMessageDirection: direction, // FS1 — mirrors lastMessageAt semantics
-    },
-    update: {
-      subject: subject || undefined,
-      lastMessageAt: sentAt,
-      lastMessageDirection: direction, // FS1 — mirrors lastMessageAt semantics
-      ...(partyId && !existingConversation?.partyId ? { partyId } : {}),
-    },
-  });
-
-  await prisma.message.create({
-    data: {
-      conversationId: conversation.id,
-      gmailMessageId,
-      direction,
-      fromAddress: from,
-      toAddresses: header(msg, "To")
-        .split(",")
-        .map((a) => parseAddress(a))
-        .filter(Boolean),
-      snippet: msg.snippet ?? null,
-      labels: msg.labelIds ?? [],
-      sentAt,
-    },
-  });
-
   // Work semantics on a NEW inbound message (FP1: Missive-verdict state machine)
+  const patch: Record<string, unknown> = {};
+  const auditActions: string[] = [];
   if (direction === "INBOUND" && existingConversation) {
-    const patch: Record<string, unknown> = {};
-    const auditActions: string[] = [];
     if (existingConversation.state === "CLOSED") {
       patch.state = "OPEN";
       auditActions.push("reopened");
@@ -124,26 +92,69 @@ async function upsertMessage(ownEmail: string, msg: gmail_v1.Schema$Message): Pr
       patch.followUpAt = null;
       auditActions.push("followup.autocancelled");
     }
+  }
+
+  // FS4 (C-3) — conversation upsert + message create + work-semantics patch
+  // commit or vanish TOGETHER: a crash between them can no longer leave a
+  // conversation whose message never landed (or a reopened thread with no
+  // reply attached). Short transaction — reads stay outside; audits and the
+  // assignee notification fire AFTER commit (side effects never run inside).
+  const conversation = await prisma.$transaction(async (tx) => {
+    const conv = await tx.conversation.upsert({
+      where: { gmailThreadId: threadId },
+      create: {
+        channel: "GMAIL",
+        gmailThreadId: threadId,
+        subject: subject || null,
+        partyId,
+        lastMessageAt: sentAt,
+        lastMessageDirection: direction, // FS1 — mirrors lastMessageAt semantics
+      },
+      update: {
+        subject: subject || undefined,
+        lastMessageAt: sentAt,
+        lastMessageDirection: direction, // FS1 — mirrors lastMessageAt semantics
+        ...(partyId && !existingConversation?.partyId ? { partyId } : {}),
+      },
+    });
+    await tx.message.create({
+      data: {
+        conversationId: conv.id,
+        gmailMessageId,
+        direction,
+        fromAddress: from,
+        toAddresses: header(msg, "To")
+          .split(",")
+          .map((a) => parseAddress(a))
+          .filter(Boolean),
+        snippet: msg.snippet ?? null,
+        labels: msg.labelIds ?? [],
+        sentAt,
+      },
+    });
     if (Object.keys(patch).length) {
-      await prisma.conversation.update({ where: { id: conversation.id }, data: patch });
-      for (const action of auditActions) {
-        void audit({ entityType: "conversation", entityId: conversation.id, action, after: { via: "inbound reply" } });
-      }
+      await tx.conversation.update({ where: { id: conv.id }, data: patch });
     }
-    if (existingConversation.assigneeId) {
-      await notify({
-        userId: existingConversation.assigneeId,
-        kind: "STATE_CHANGE",
-        title:
-          existingConversation.state === "CLOSED"
-            ? `Reopened by a reply: ${subject || "(no subject)"}`
-            : `New reply: ${subject || "(no subject)"}`,
-        body: msg.snippet ?? undefined,
-        entityType: "conversation",
-        entityId: conversation.id,
-        href: `/inbox?focus=${conversation.id}`,
-      });
-    }
+    return conv;
+  });
+
+  // after commit: the audit trail + the assignee's bell
+  for (const action of auditActions) {
+    void audit({ entityType: "conversation", entityId: conversation.id, action, after: { via: "inbound reply" } });
+  }
+  if (direction === "INBOUND" && existingConversation?.assigneeId) {
+    await notify({
+      userId: existingConversation.assigneeId,
+      kind: "STATE_CHANGE",
+      title:
+        existingConversation.state === "CLOSED"
+          ? `Reopened by a reply: ${subject || "(no subject)"}`
+          : `New reply: ${subject || "(no subject)"}`,
+      body: msg.snippet ?? undefined,
+      entityType: "conversation",
+      entityId: conversation.id,
+      href: `/inbox?focus=${conversation.id}`,
+    });
   }
 }
 

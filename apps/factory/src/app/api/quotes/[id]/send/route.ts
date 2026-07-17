@@ -102,18 +102,22 @@ export const POST = guarded(FEATURES.quotesSend, async (req, { params, actor }) 
   });
   if (!mail.ok) return NextResponse.json({ error: mail.error }, { status: mail.status });
 
-  // record: version (owning this send's token) + state
+  // record: version (owning this send's token) + state — FS4 (C-3): one short
+  // transaction, so a crash can never leave a SENT quote whose frozen version
+  // (the thing the accept token resolves through) was never written
   const now = mail.sentAt;
-  await prisma.quoteVersion.create({ data: { quoteId: id, version, sentSnapshot: snapshot as object, pdfRef: pdfPath, acceptTokenHash } });
-  await prisma.quote.update({
-    where: { id },
-    data: {
-      state: "SENT",
-      sentAt: quote.sentAt ?? now,
-      acceptTokenHash, // EPQ.1 — always the LATEST send's token; prior tokens now resolve as superseded
-      ...(floorAckRequired ? { marginFloorBreached: true } : {}), // EPQ.1 — durable record a below-floor offer was knowingly made
-    },
-  });
+  await prisma.$transaction([
+    prisma.quoteVersion.create({ data: { quoteId: id, version, sentSnapshot: snapshot as object, pdfRef: pdfPath, acceptTokenHash } }),
+    prisma.quote.update({
+      where: { id },
+      data: {
+        state: "SENT",
+        sentAt: quote.sentAt ?? now,
+        acceptTokenHash, // EPQ.1 — always the LATEST send's token; prior tokens now resolve as superseded
+        ...(floorAckRequired ? { marginFloorBreached: true } : {}), // EPQ.1 — durable record a below-floor offer was knowingly made
+      },
+    }),
+  ]);
   if (floorAckRequired) {
     void audit({ actorId: actor!.id, entityType: "quote", entityId: id, action: "floor.acknowledged", after: { ackBy: actor!.id, marginPct: totals.marginPct, floorPct: floor } });
   }

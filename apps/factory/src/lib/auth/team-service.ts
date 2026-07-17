@@ -4,11 +4,16 @@
  * session re-resolves its grants. Invitations use the session-token shape (raw
  * token in the link, sha256 stored). Not accounting, not auth theatre — just the
  * small set of moves an Owner needs to run the shop.
+ * FS4 — every permission-affecting write also evicts the session cache (S-9,
+ * same-process propagation stays immediate), and user create/rename derives
+ * the @mention handle (S-10, best-effort until fs4_user_handle is applied).
  */
 import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "../db";
 import { hashPassword } from "./password";
 import { OWNER_ROLE_KEY } from "./permissions";
+import { deriveHandle, uniqueHandle } from "./handle";
+import { clearSessionCache, invalidateSessionCacheForUser } from "./session";
 import { assertOwnerGrant, assertNotLastOwner, assertNotSystemRole, assertRoleUnused, assertKnownPermissions, GuardrailError } from "./guardrails";
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -36,6 +41,7 @@ export async function assignRole(actorIsOwner: boolean, targetUserId: string, ro
     prisma.userRole.create({ data: { userId: targetUserId, roleId, grantedByUserId } }),
     prisma.user.update({ where: { id: targetUserId }, data: { permissionsVersion: { increment: 1 } } }),
   ]);
+  invalidateSessionCacheForUser(targetUserId); // FS4 — the cached session carries the old permissionsVersion
 }
 
 export async function setStatus(targetUserId: string, status: "active" | "deactivated"): Promise<void> {
@@ -44,6 +50,40 @@ export async function setStatus(targetUserId: string, status: "active" | "deacti
   }
   await prisma.user.update({ where: { id: targetUserId }, data: { status, permissionsVersion: { increment: 1 } } });
   if (status === "deactivated") await prisma.session.updateMany({ where: { userId: targetUserId, revokedAt: null }, data: { revokedAt: new Date() } });
+  invalidateSessionCacheForUser(targetUserId); // FS4 — deactivation must not ride out the session-cache TTL
+}
+
+/**
+ * FS4 — best-effort handle assignment (S-10): derive `first.last` from the
+ * display name, suffix -2/-3… against existing handles, write it. Best-effort
+ * BY DESIGN: before the fs4_user_handle migration is applied the column does
+ * not exist and this must never break user creation — mentions simply keep
+ * using the legacy scan until the backfill lands (which also covers any user
+ * this skipped).
+ */
+export async function assignHandle(userId: string, displayName: string): Promise<void> {
+  const base = deriveHandle(displayName);
+  if (!base) return;
+  try {
+    const peers = await prisma.user.findMany({
+      where: { handle: { startsWith: base }, id: { not: userId } },
+      select: { handle: true },
+      take: 200, // bounded: team-sized table; startsWith rides the unique index
+    });
+    const taken = new Set(peers.map((p) => p.handle).filter((h): h is string => !!h));
+    await prisma.user.update({ where: { id: userId }, data: { handle: uniqueHandle(base, taken) } });
+  } catch {
+    // pre-migration column, or a concurrent duplicate lost the unique race —
+    // the handle stays null and resolveMentions falls back per-handle
+  }
+}
+
+/** FS4 — rename a member: display name + re-derived handle. No route consumes this yet (EPT wires the UI). */
+export async function renameUser(userId: string, displayName: string): Promise<void> {
+  const name = displayName.trim();
+  if (!name) throw new GuardrailError("unknown_permission", "Display name required");
+  await prisma.user.update({ where: { id: userId }, data: { displayName: name } });
+  await assignHandle(userId, name);
 }
 
 /** Create an invitation; returns the RAW token (shown once, for the join link). */
@@ -80,12 +120,14 @@ export async function acceptInvite(token: string, displayName: string, password:
   if (password.length < 8) throw new GuardrailError("unknown_permission", "Password must be at least 8 characters");
   if (await prisma.user.findUnique({ where: { email: inv.email }, select: { id: true } })) throw new GuardrailError("role_in_use", "That email is already a member");
 
+  const name = displayName.trim() || inv.email;
   const user = await prisma.$transaction(async (tx) => {
-    const u = await tx.user.create({ data: { email: inv.email, displayName: displayName.trim() || inv.email, passwordHash: hashPassword(password), status: "active" }, select: { id: true } });
+    const u = await tx.user.create({ data: { email: inv.email, displayName: name, passwordHash: hashPassword(password), status: "active" }, select: { id: true } });
     await tx.userRole.create({ data: { userId: u.id, roleId: inv.roleId, grantedByUserId: null } });
     await tx.invitation.update({ where: { id: inv.id }, data: { acceptedAt: new Date() } });
     return u;
   });
+  await assignHandle(user.id, name); // FS4 — mention handle at user create (best-effort, outside the txn)
   return { userId: user.id };
 }
 
@@ -107,6 +149,7 @@ export async function editRole(roleId: string, patch: { name?: string; permissio
   await prisma.role.update({ where: { id: roleId }, data: { ...(patch.name ? { name: patch.name.trim() } : {}), ...(patch.permissions ? { permissions: patch.permissions } : {}) } });
   // members of this role must re-resolve their grants
   await prisma.user.updateMany({ where: { roleAssignments: { some: { roleId } } }, data: { permissionsVersion: { increment: 1 } } });
+  clearSessionCache(); // FS4 — a role edit touches many members at once; drop every cached session
 }
 
 export async function deleteRole(roleId: string): Promise<void> {
