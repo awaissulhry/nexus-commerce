@@ -19,18 +19,18 @@ Hub: [[F00 - Factory OS MOC]] · coordination model: [[F07 - Sessions & Coordina
 
 | Page | Code | Note | Status |
 |---|---|---|---|
-| Inbox | EPI | [[F10 - Inbox (EPI)]] | 🔨 proposal APPROVED 2026-07-16; EPI.1 building |
-| Quotes | EPQ | [[F11 - Quotes (EPQ)]] | 🔨 EPQ.1 SHIPPED; EPQ.2 next |
-| Orders | EPO | [[F12 - Orders (EPO)]] | 🟡 proposal delivered, awaiting gate |
+| Inbox | EPI | [[F10 - Inbox (EPI)]] | 🔨 EPI.1 SHIPPED 2026-07-16; EPI.2 next |
+| Quotes | EPQ | [[F11 - Quotes (EPQ)]] | 🔨 EPQ.1+.2 SHIPPED; EPQ.3 next |
+| Orders | EPO | [[F12 - Orders (EPO)]] | 🔨 approved 2026-07-16; EPO.1/.3/.2 SHIPPED (⚠ B3 flag: board mirrors D-02 bug until EPF.1); EPO.4 next |
 | Production | EPP | [[F13 - Production (EPP)]] | ⚪ open (unclaimed) |
 | Materials | EPM | [[F14 - Materials (EPM)]] | ⚪ open |
 | Products & Pricing | EPD | [[F15 - Products & Pricing (EPD)]] | ⚪ open |
 | Contacts | EPC | [[F16 - Contacts (EPC)]] | ⚪ open |
 | Shipping | EPS | [[F17 - Shipping (EPS)]] | ⚪ open |
-| Financials | EPF | [[F18 - Financials (EPF)]] | 🟡 proposal delivered, awaiting gate |
+| Financials | EPF | [[F18 - Financials (EPF)]] | 🔨 approved 2026-07-17; EPF.1 building (unblocks EPO's B3 flag) |
 | Analytics | EPA | [[F19 - Analytics (EPA)]] | ⚪ open |
 | Settings & Team | EPT | [[F20 - Settings & Team (EPT)]] | ⚪ open |
-| Chat | FC | [[F21 - Chat & Order Spaces (FC)]] | ⚪ approved, builds after FS2 (FC1 spec next) |
+| Chat | FC | [[F21 - Chat & Order Spaces (FC)]] | 🔨 FC1 APPROVED 2026-07-16 — building; FC2 shell next after its gate |
 
 ## Cross-page substrate ownership (consume, never rebuild)
 
