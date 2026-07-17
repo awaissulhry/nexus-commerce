@@ -499,6 +499,10 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       // ChannelListing and the LAST block's ItemID stomped the primary
       // listing's linkage (observed live: 20 child CLs flipped to ALT2's id).
       const laneASeen = new Map<string, number>();
+      // sku → productId for EVERY Lane-A row this save touched (created OR
+      // existing) — the client's Follow/Buffer capture needs ids for rows that
+      // already existed as products (createResult.idMap only covers creates).
+      const resolvedIds: Array<{ sku: string; productId: string }> = [];
       for (const row of rows) {
         const sku = row.sku as string;
         if (!sku) continue;
@@ -532,6 +536,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             productId = product.id;
           }
         }
+
+        resolvedIds.push({ sku, productId });
 
         const sharedPacked = packSharedFields(row);
 
@@ -824,7 +830,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       // FFP.1 — `saved` now counts rows that produced at least one real
       // ChannelListing write (honest counter); `processed` keeps the legacy
       // rows-iterated semantics; `contentOnly` = snapshot-fallback saves.
-      return reply.send({ saved, processed, contentOnly, createResult, ...(sharedMemberships ? { sharedMemberships } : {}) });
+      return reply.send({ saved, processed, contentOnly, createResult, resolvedIds, ...(sharedMemberships ? { sharedMemberships } : {}) });
     } catch (err: unknown) {
       request.log.error(err, 'ebay/flat-file/rows PATCH failed');
       return reply
@@ -927,6 +933,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     // FCF.6 — in-flight MCF reservations against the FBA pool, per product.
     let pendingMcfByProduct = new Map<string, number>();
     if (pushProductIds.length > 0) {
+      try {
       const [whRows, clRows, fbaRows, pendingMcf] = await Promise.all([
         prisma.stockLevel.findMany({
           where: { productId: { in: pushProductIds }, location: { type: 'WAREHOUSE' } },
@@ -958,6 +965,15 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         const code = MARKETPLACE_ID_TO_CODE[r.marketplaceId] ?? r.marketplaceId;
         const key = `${r.sku}::${code}`;
         fbaBySkuMarket.set(key, (fbaBySkuMarket.get(key) ?? 0) + r.quantity);
+      }
+      } catch (err: unknown) {
+        // Incident hardening — capacity lookups failing is a clear 503 with a
+        // message, never a bare 500. (Quantities can't be capped safely
+        // without this data, so the push must not proceed.)
+        request.log.error(err, 'ebay/flat-file/push: capacity lookups failed');
+        return reply.code(503).send({
+          error: `Stock/capacity lookup failed — push aborted before any eBay write: ${err instanceof Error ? err.message : String(err)}`,
+        });
       }
     }
     const oversellWarnings: Array<{ sku: string; requested: number; published: number; reason: string }> = [];
@@ -1124,29 +1140,41 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
       // ── FFP.6 — Action: deactivate (offer qty → 0, ItemID kept) ──────
       if (deactivateRows.length > 0) {
-        const zeroed = deactivateRows.map((r) => ({
-          ...r,
-          [`${(mp as string).toLowerCase()}_qty`]: 0,
-          quantity: 0,
-        }));
-        const res = await pushOffersOnly(
-          zeroed, mp, token, connection.id,
-          (connection.connectionMetadata ?? {}) as Record<string, unknown>,
-          EBAY_API_BASE, marketplaceId, capToFbm,
-        );
-        perRowResults.push(...res.map((r) =>
-          r.status === 'PUSHED' ? { ...r, message: 'deactivated — quantity 0 on the live offer (ItemID kept)' } : r,
-        ));
-        const okSkus = new Set(res.filter((r) => r.status === 'PUSHED').map((r) => r.sku));
-        const okIds = deactivateRows
-          .filter((r) => okSkus.has(String(r.sku ?? '')))
-          .map((r) => r._productId as string | undefined)
-          .filter((v): v is string => Boolean(v));
-        if (okIds.length) {
-          await prisma.channelListing.updateMany({
-            where: { productId: { in: okIds }, channel: 'EBAY', region: mp === 'UK' ? 'GB' : mp },
-            data: { quantity: 0 },
-          });
+        try {
+          const zeroed = deactivateRows.map((r) => ({
+            ...r,
+            [`${(mp as string).toLowerCase()}_qty`]: 0,
+            quantity: 0,
+          }));
+          const res = await pushOffersOnly(
+            zeroed, mp, token, connection.id,
+            (connection.connectionMetadata ?? {}) as Record<string, unknown>,
+            EBAY_API_BASE, marketplaceId, capToFbm,
+          );
+          perRowResults.push(...res.map((r) =>
+            r.status === 'PUSHED' ? { ...r, message: 'deactivated — quantity 0 on the live offer (ItemID kept)' } : r,
+          ));
+          const okSkus = new Set(res.filter((r) => r.status === 'PUSHED').map((r) => r.sku));
+          const okIds = deactivateRows
+            .filter((r) => okSkus.has(String(r.sku ?? '')))
+            .map((r) => r._productId as string | undefined)
+            .filter((v): v is string => Boolean(v));
+          if (okIds.length) {
+            await prisma.channelListing.updateMany({
+              where: { productId: { in: okIds }, channel: 'EBAY', region: mp === 'UK' ? 'GB' : mp },
+              data: { quantity: 0 },
+            });
+          }
+        } catch (err: unknown) {
+          // Incident hardening — a deactivate failure is those rows' ERROR,
+          // never a bare 500 for the whole push.
+          request.log.error({ err, market: mp }, 'ebay/flat-file/push: deactivate batch failed');
+          for (const r of deactivateRows) {
+            perRowResults.push({
+              sku: String(r.sku ?? ''), market: mp, status: 'ERROR',
+              message: `deactivate failed: ${err instanceof Error ? err.message : String(err)}`,
+            });
+          }
         }
       }
 
@@ -1225,6 +1253,11 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       }
 
       for (const [familyKey, familyRows] of families) {
+        // Incident hardening (2026-07-17): the family body had NO catch — any
+        // throw (schema fetch, content resolution, prisma arg) escaped as a
+        // bare HTTP 500 that failed the WHOLE push with zero information.
+        // One family's crash is now that family's visible ERROR result.
+        try {
         if (strategy === 'offers-only') {
           const offerResults = await pushOffersOnly(
             familyRows,
@@ -1739,6 +1772,18 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             market: mp,
             status: 'ERROR',
             message: err instanceof Error ? err.message : 'Unknown error',
+          });
+        }
+        } catch (err: unknown) {
+          // Family-level guard (see loop head) — the REAL failure surfaces as
+          // this family's ERROR result instead of a bare 500 for the whole push.
+          const famSku = String((familyRows.find((r) => r._isParent === true) ?? familyRows[0])?.sku ?? familyKey);
+          request.log.error({ err, familyKey, market: mp }, 'ebay/flat-file/push: family failed');
+          perRowResults.push({
+            sku: famSku,
+            market: mp,
+            status: 'ERROR',
+            message: `family push failed: ${err instanceof Error ? err.message : String(err)}`,
           });
         }
       }

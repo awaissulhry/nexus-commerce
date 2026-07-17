@@ -1395,6 +1395,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         collapsedSkus?: string[]
       }
       sharedMemberships?: { families: number; created: number; updated: number; skipped: Array<{ sku: string; reason: string }> }
+      /** sku → productId for every Lane-A row the save touched (created OR existing). */
+      resolvedIds?: Array<{ sku: string; productId: string }>
     }
     if (result.saved > 0) {
       emitInvalidation({ type: 'product.updated', meta: { source: 'ebay-flat-file' } })
@@ -1506,9 +1508,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     // Lane-B rows: quantities fan out via memberships, so per-market
     // Follow/Buffer intent belongs to the FIRST (Lane-A) occurrence only —
     // never counted as "publish first".
-    const createdIdBySkuFB = new Map<string, string>(
-      (result.createResult?.idMap ?? []).map((e) => [e.sku, e.productId]),
-    )
+    const createdIdBySkuFB = new Map<string, string>([
+      // resolvedIds covers EVERY saved row (existing products included — the
+      // "4 parents still warn" gap); idMap kept as fallback for older servers.
+      ...(result.createResult?.idMap ?? []).map((e) => [e.sku, e.productId] as const),
+      ...(result.resolvedIds ?? []).map((e) => [e.sku, e.productId] as const),
+    ])
     // Resolved ONCE per dirty row (both the Follow and Buffer loops read it):
     // rowId → productId, or 'lane-b' for extra shared occurrences.
     const fbPidByRowId = new Map<string, string>()
