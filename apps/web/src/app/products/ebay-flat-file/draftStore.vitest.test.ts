@@ -1,7 +1,7 @@
 /** FFP.1 — draft layer unit tests (pure merge + key building). */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { draftKey, mergeDraftRows, writeDraft, readDraft } from './draftStore'
+import { draftKey, mergeDraftRows, writeDraft, readDraft, removeRowsFromDraft } from './draftStore'
 import type { BaseRow } from '@/components/flat-file/FlatFileGrid.types'
 
 const server = (o: Partial<BaseRow> & { _rowId: string }): BaseRow => ({
@@ -118,5 +118,35 @@ describe('round-trip integrity — _shared rows are draft-protected', () => {
     ] as never)
     const draft = readDraft('k')
     expect(draft?.rows.map((r) => r.sku)).toEqual(['SHARED-1'])
+  })
+})
+
+describe('removeRowsFromDraft — deletion purges draft twins', () => {
+  beforeEach(() => {
+    const store: Record<string, string> = {}
+    globalThis.localStorage = {
+      getItem: (k: string) => store[k] ?? null,
+      setItem: (k: string, v: string) => { store[k] = v },
+      removeItem: (k: string) => { delete store[k] },
+    } as never
+  })
+
+  it('removes by sku and rowId; empty draft is deleted entirely', () => {
+    writeDraft('k', [
+      { _rowId: 'a', sku: 'KEEP', _dirty: true, title: 'x' },
+      { _rowId: 'b', sku: 'BY-SKU', _dirty: true, title: 'y' },
+      { _rowId: 'c', sku: 'BY-ROWID', _dirty: true, title: 'z' },
+    ] as never)
+    const n = removeRowsFromDraft('k', { skus: ['BY-SKU'], rowIds: ['c'] })
+    expect(n).toBe(2)
+    expect(readDraft('k')?.rows.map((r) => r.sku)).toEqual(['KEEP'])
+    expect(removeRowsFromDraft('k', { skus: ['KEEP'] })).toBe(1)
+    expect(readDraft('k')).toBeNull()
+  })
+
+  it('no matches → draft untouched, returns 0', () => {
+    writeDraft('k', [{ _rowId: 'a', sku: 'X', _dirty: true, title: 't' }] as never)
+    expect(removeRowsFromDraft('k', { skus: ['NOPE'] })).toBe(0)
+    expect(readDraft('k')?.rows).toHaveLength(1)
   })
 })

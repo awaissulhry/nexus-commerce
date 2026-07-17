@@ -67,7 +67,7 @@ import { useFlatFileCore } from '@/components/flat-file/useFlatFileCore'
 import { ColumnGroupModal } from '@/components/flat-file/ColumnGroupModal'
 import { EBAY_FILTER_DEFAULT, type EbayFilterDims } from '../_shared/flat-file-filter.types'
 import { isSharedDuplicateAllowed, truthyFlag } from './validateRows.shared'
-import { draftKey, readDraft, writeDraft, clearDraft, mergeDraftRows } from './draftStore'
+import { draftKey, readDraft, writeDraft, clearDraft, mergeDraftRows, removeRowsFromDraft } from './draftStore'
 import { useOrderEventsRefresh } from '@/hooks/use-order-events-refresh'
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -1646,23 +1646,49 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         results: Array<{ sku: string; intent: string; softDeleted: string[]; membershipsRemoved: number; channelListingsRemoved?: number; delisted: boolean; error?: string }>
       }
 
-      // Collect every SKU that was successfully removed
+      // Per-result accounting. Rows the server found NOTHING for (no listing,
+      // no membership, nothing soft-deleted) are pure browser residue — e.g.
+      // extra shared occurrences whose Lane-A write was deliberately skipped.
+      // They MUST still leave the grid (and the draft), otherwise they "come
+      // back again and again" with Save reporting nothing to save.
       const removedSkus = new Set<string>()
+      const residueSkus = new Set<string>()
       let warnCount = 0
       for (const r of json.results) {
         if (r.error) { warnCount++; continue }
-        if (r.intent === 'remove-listing' && r.membershipsRemoved === 0) { warnCount++; continue }
-        if (r.intent === 'remove-channel-listing' && (r.channelListingsRemoved ?? 0) === 0) { warnCount++; continue }
-        removedSkus.add(r.sku)
-        // For family deletes the backend soft-deletes all children too
-        for (const s of (r.softDeleted ?? [])) removedSkus.add(s)
+        const removedAnything =
+          (r.softDeleted?.length ?? 0) > 0 ||
+          (r.membershipsRemoved ?? 0) > 0 ||
+          (r.channelListingsRemoved ?? 0) > 0
+        if (removedAnything) {
+          removedSkus.add(r.sku)
+          for (const s of (r.softDeleted ?? [])) removedSkus.add(s)
+        } else {
+          residueSkus.add(r.sku) // nothing server-side — clear the residue row
+        }
       }
 
-      // Remove deleted rows from grid and update SWR cache
+      // Remove rows by the CONFIRMED targets' rowIds (SKU-global removal would
+      // take out the primary family's twin of a shared SKU as collateral),
+      // plus family soft-delete SKUs from the backend.
+      const targetRowIds = new Set(deleteConfirmRows.map((r) => r._rowId))
+      const removableSku = (s: string) => removedSkus.has(s) || residueSkus.has(s)
       const current = latestRowsRef.current as EbayRow[]
-      const next = current.filter((r) => !removedSkus.has(String(r.sku ?? '')))
+      const next = current.filter((r) => {
+        if (targetRowIds.has(r._rowId) && removableSku(String(r.sku ?? ''))) return false
+        // backend family soft-deletes cover children beyond the selection
+        if (!targetRowIds.has(r._rowId) && removedSkus.has(String(r.sku ?? '')) && r._shared !== true) return false
+        return true
+      })
       _ebay_swr.set(ebayKey, { rows: next, fetchedAt: Date.now() })
       latestSetRowsRef.current?.(next)
+
+      // Draft purge — the other resurrection engine: a deleted row's draft twin
+      // re-appended on every reload before this.
+      removeRowsFromDraft(draftKey(marketplaceRef.current, familyId), {
+        skus: [...removedSkus, ...residueSkus],
+        rowIds: targetRowIds,
+      })
 
       const succeeded = json.results.filter((r) => !r.error)
       const deleted = succeeded.length
@@ -1671,8 +1697,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       const label = deleted !== 1 ? 'listings' : 'listing'
       if (notDelistedCount > 0) {
         toast({ title: `Removed ${deleted} ${label} from eBay ${marketplace} — couldn't end ${notDelistedCount} on eBay (end manually in Seller Hub). Product and stock kept.`, tone: 'info' })
-      } else if (warnCount > 0) {
-        toast({ title: `Removed ${deleted} ${label} from eBay ${marketplace} — product and stock kept.`, description: `${warnCount} row${warnCount !== 1 ? 's' : ''} had nothing to remove — check the grid.`, tone: 'info' })
+      } else if (warnCount > 0 || residueSkus.size > 0) {
+        const bits: string[] = []
+        if (residueSkus.size > 0) bits.push(`${residueSkus.size} row${residueSkus.size !== 1 ? 's were' : ' was'} only in your browser — cleared`)
+        if (warnCount > 0) bits.push(`${warnCount} failed — see errors`)
+        toast({ title: `Removed ${deleted} ${label} from eBay ${marketplace} — product and stock kept.`, description: bits.join(' · '), tone: 'info' })
       } else {
         toast.success(`Removed ${deleted} ${label} from eBay ${marketplace} — product and stock kept.`)
       }

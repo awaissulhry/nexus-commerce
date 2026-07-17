@@ -91,6 +91,37 @@ export function clearDraft(key: string): void {
 }
 
 /**
+ * Purge specific rows from the draft (by SKU or _rowId). Deleting a row MUST
+ * also delete its draft twin — otherwise the draft re-appends it on every
+ * reload and the row "comes back again and again" (GALE delete incident,
+ * 2026-07-17). An emptied draft is removed entirely.
+ */
+export function removeRowsFromDraft(
+  key: string,
+  match: { skus?: Iterable<string>; rowIds?: Iterable<string> },
+): number {
+  try {
+    const draft = readDraft(key)
+    if (!draft) return 0
+    const skus = new Set([...(match.skus ?? [])].map((s) => s.trim()).filter(Boolean))
+    const rowIds = new Set(match.rowIds ?? [])
+    const kept = draft.rows.filter((r) => {
+      const sku = String(r.sku ?? '').trim()
+      if (sku && skus.has(sku)) return false
+      if (rowIds.has(r._rowId)) return false
+      return true
+    })
+    const removed = draft.rows.length - kept.length
+    if (removed === 0) return 0
+    if (kept.length === 0) localStorage.removeItem(key)
+    else localStorage.setItem(key, JSON.stringify({ ...draft, rows: kept }))
+    return removed
+  } catch {
+    return 0
+  }
+}
+
+/**
  * Merge draft rows over server rows.
  * - Match by SKU (trimmed, non-empty) first, then by _rowId (blank new rows).
  * - Matched: draft values win, EXCEPT SYSTEM_KEYS which are copied from the
