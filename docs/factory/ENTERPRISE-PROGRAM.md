@@ -35,7 +35,7 @@ Started 2026-07-11 at the Owner's direction: *"work page by page to make sure it
 |---|---|---|
 | Real-time/SSE fan-out (O(1) poller, targeted events) | **FS2** | **SHIPPED 2026-07-11 (`FS2-REPORT.md`): 50-client proof PASS, gap-free resume, scoped bells; `import.finished` subscriber = EP handoff** |
 | Virtualized DataGrid, windowed lists, paged/searchable comboboxes, @mention autocomplete | **FS3** | **components SHIPPED 2026-07-11 (`src/components/`: VirtualDataGrid, WindowedList, AsyncCombobox, MentionTextarea, PaneHandle/useResizablePanes) + adopted on unclaimed pages. PENDING ADOPTIONS by page owners — EPI: ConversationList/ThreadPane windowing, composer MentionTextarea, InboxClient pane hook, ContextRail picker; EPO: orders grid + party filter; EPQ: ✅ DONE 2026-07-17 (EPQ.3 — pipeline VirtualDataGrid + AsyncCombobox party picker); EPF: financials grids ×3** |
-| Write transactions, session-cache, optimistic concurrency, login rate-limit | **FS4** | **FS4 APPROVED 2026-07-17 — building; stale-guard adoption on EPO/EPF-claimed files recorded as handoffs** |
+| Write transactions, session-cache, optimistic concurrency, login rate-limit | **FS4** | **FS4 SHIPPED 2026-07-17 (`FS4-REPORT.md`): txns, session cache (≤1 query/GET), assertNotStale, login lockout, User.handle live; ⚠ paid a `_prisma_migrations` timestamp-format trap — see report** |
 | FTS search, attachment/PDF streaming, snapshot & archival | **FS5** | queued |
 | Per-order internal chat (Order Spaces), system-message feed, presence/read receipts | **FC1–FC6** | **FC1 APPROVED 2026-07-16 ("however you recommend") — building (worktree); FC2 shell next after its gate** |
 | Notifications (single write path `notify()`), bell, outbox | F1/FP1 (exists) | live |
