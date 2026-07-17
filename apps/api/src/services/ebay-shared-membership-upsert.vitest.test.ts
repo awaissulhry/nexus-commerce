@@ -133,3 +133,55 @@ describe('round-trip integrity — snapshot persisted on upsert', () => {
     expect(snap._dirty).toBeUndefined()
   })
 })
+
+describe('stale-grid guard — reconciled listings never regrow ghost SKUs', () => {
+  const mkDb = (existingRows: Array<{ itemId: string; sku: string }>) => {
+    const upserts: any[] = []
+    return {
+      upserts,
+      db: {
+        sharedListingMembership: {
+          findMany: async () => existingRows,
+          upsert: async (args: any) => { upserts.push(args); return args.create },
+        },
+        product: { findMany: async () => [] },
+      },
+    }
+  }
+
+  it('file-SKU row against a reconciled listing (different live SKUs) → skipped, visible', async () => {
+    const { upsertSharedMembershipsFromRows } = await import('./ebay-shared-membership-upsert.service.js')
+    const { upserts, db } = mkDb([
+      { itemId: '256566101420', sku: 'T1_Ne_S' },
+      { itemId: '256566101420', sku: 'T1_Ne_M' },
+    ])
+    const res = await upsertSharedMembershipsFromRows(
+      [
+        { sku: 'P1', parentage: 'parent', shared_sku_listing: true },
+        { sku: 'GALE-JACKET-BLACK-MEN-S', parentage: 'child', parent_sku: 'P1', it_item_id: '256566101420', it_price: '105' },
+      ],
+      'it',
+      db as never,
+    )
+    expect(upserts).toHaveLength(0)
+    expect(res.skipped).toHaveLength(1)
+    expect(res.skipped[0].reason).toContain('different live SKUs')
+  })
+
+  it('synthesized _shared row (live SKU) passes; fresh listing (no memberships) passes', async () => {
+    const { upsertSharedMembershipsFromRows } = await import('./ebay-shared-membership-upsert.service.js')
+    const { upserts, db } = mkDb([{ itemId: '256566101420', sku: 'T1_Ne_S' }])
+    const res = await upsertSharedMembershipsFromRows(
+      [
+        // live-SKU synthesized row on a reconciled listing → updates fine
+        { sku: 'T1_Ne_S', parentage: 'child', parent_sku: 'GALE-ALT1', it_item_id: '256566101420', it_price: '106', _shared: true },
+        // brand-new listing (no memberships yet) → first adopt creates fine
+        { sku: 'FRESH-SKU', parentage: 'child', parent_sku: 'GALE-ALT1', it_item_id: '999999', it_price: '50', _shared: true },
+      ],
+      'it',
+      db as never,
+    )
+    expect(res.skipped).toHaveLength(0)
+    expect(upserts).toHaveLength(2)
+  })
+})

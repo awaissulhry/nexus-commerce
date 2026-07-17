@@ -1366,6 +1366,27 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                 itemId: r.itemId,
               })
             }
+            // Count integrity ("only pushing 66 rows"): a shared family used to
+            // collapse N child rows into ONE result line, so the operator's
+            // row count never reconciled with what they selected. Every child
+            // row now gets its own explicit line — adopted children are
+            // HANDLED (their quantities ride the pool fan-out), not dropped.
+            const familyOk = sharedResults.every((r) => r.status !== 'ERROR')
+            const famItemId = sharedResults.find((r) => r.itemId)?.itemId
+            for (const child of familyRows) {
+              if ((child as { _isParent?: boolean })._isParent === true) continue
+              const csku = String((child as { sku?: unknown }).sku ?? '')
+              if (!csku) continue
+              perRowResults.push({
+                sku: csku,
+                market: mp,
+                status: familyOk ? 'PUSHED' : 'ERROR',
+                message: familyOk
+                  ? `adopted${famItemId ? ` under ItemID ${famItemId}` : ''} — quantity syncs via the pool fan-out`
+                  : 'family push failed — see the parent row error',
+                itemId: famItemId,
+              })
+            }
             continue
           }
           // Multi-SKU family — push as variation group.

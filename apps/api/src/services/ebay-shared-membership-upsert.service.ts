@@ -128,14 +128,36 @@ export async function upsertSharedMembershipsFromRows(
     for (const f of found) productIdBySku.set(f.sku, f.id)
   }
 
-  // Pre-read existing keys so created/updated counts are honest.
+  // Pre-read ALL memberships of the target listings: powers honest
+  // created/updated counts AND the stale-grid guard below.
+  const targetItemIds = [...new Set(targets.map((t) => t.itemId))]
   const existing = (await db.sharedListingMembership.findMany({
-    where: { marketplace: market, OR: targets.map((t) => ({ itemId: t.itemId, sku: t.sku })) },
+    where: { marketplace: market, itemId: { in: targetItemIds } },
     select: { itemId: true, sku: true },
   })) as Array<{ itemId: string; sku: string }>
   const existingKeys = new Set(existing.map((e) => `${e.itemId}::${e.sku}`))
+  const skusByItem = new Map<string, Set<string>>()
+  for (const e of existing) {
+    if (!skusByItem.has(e.itemId)) skusByItem.set(e.itemId, new Set())
+    skusByItem.get(e.itemId)!.add(e.sku)
+  }
 
   for (const t of targets) {
+    // Stale-grid guard (GALE regression, 2026-07-17): a listing that has been
+    // RECONCILED carries its live eBay SKUs as memberships. A save from a
+    // stale browser grid (or a re-imported file) whose SKU does not exist on
+    // that listing must NOT resurrect a ghost membership — those are exactly
+    // the rows that can never sync ("Il numero SKU non corrisponde") and they
+    // re-trip the publish circuit. Synthesized rows (_shared) always carry
+    // live SKUs, so they pass by construction.
+    const knownSkus = skusByItem.get(t.itemId)
+    if (t.row._shared !== true && knownSkus && knownSkus.size > 0 && !knownSkus.has(t.sku)) {
+      result.skipped.push({
+        sku: t.sku,
+        reason: `listing ${t.itemId} uses different live SKUs — reload the grid (stale rows) or run Reconcile`,
+      })
+      continue
+    }
     const priceRaw = str(t.row[`${prefix}_price`]) || str(t.row.price)
     const priceNum = priceRaw === '' ? null : Number(priceRaw.replace(',', '.'))
     // Round-trip integrity (2026-07-17): persist the FULL row as saved (minus
