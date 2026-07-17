@@ -3314,6 +3314,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           onClose={() => { setImportWizardOpen(false); setImportInitialFile(null) }}
           columns={wizardColumns}
           existingSkus={new Set(rows.map((r) => String(r.sku ?? '').trim()).filter(Boolean))}
+          existingRows={rows as Record<string, unknown>[]}
           existingParents={deriveSheetParents(rows)}
           marketplace={marketplace}
           initialFile={importInitialFile}

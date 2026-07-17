@@ -52,6 +52,17 @@ import {
   type BlockDecision,
   type ImportBlock,
 } from './importBlocks.pure'
+import {
+  IMPORT_POLICIES,
+  filterRowsByPolicies,
+  findDestructiveActionRows,
+  applyDestructiveGate,
+  planImportCells,
+  pruneExcludedCells,
+  type ImportPolicy,
+} from './importPlan.pure'
+import { Checkbox } from '@/design-system/primitives/Checkbox'
+import { Input } from '@/design-system/primitives/Input'
 
 // ── Contract ──────────────────────────────────────────────────────────
 export interface ExistingParent {
@@ -76,6 +87,8 @@ export interface EbayImportWizardProps {
   columns: WizardColumn[]
   /** to count new vs update in the preview */
   existingSkus?: Set<string>
+  /** current grid rows — powers the cell-level merge plan (EI.3) */
+  existingRows?: Record<string, unknown>[]
   /** parents available for "import under parent" mode */
   existingParents?: ExistingParent[]
   onImport: (rows: Record<string, unknown>[], mode: 'fill-missing' | 'overwrite', targetParentId?: string) => void
@@ -159,6 +172,7 @@ export function EbayImportWizard({
   onClose,
   columns,
   existingSkus,
+  existingRows,
   existingParents,
   onImport,
   marketplace,
@@ -178,6 +192,12 @@ export function EbayImportWizard({
   // EI.2 — operator overlays: shared quick-fix rows + per-block decisions.
   const [fixedRows, setFixedRows] = useState<Record<string, unknown>[] | null>(null)
   const [decisions, setDecisions] = useState<Record<string, BlockDecision>>({})
+  // EI.3 — import policies (all ON by default), destructive-action typed gate,
+  // per-cell exclusions from the merge plan.
+  const [disabledPolicies, setDisabledPolicies] = useState<Set<ImportPolicy['id']>>(new Set())
+  const [destructiveArmed, setDestructiveArmed] = useState(false)
+  const [endTyped, setEndTyped] = useState('')
+  const [excludedCells, setExcludedCells] = useState<Set<string>>(new Set())
 
   // Reset ALL state whenever the modal closes/reopens.
   useEffect(() => {
@@ -193,6 +213,10 @@ export function EbayImportWizard({
       setTargetParentId('')
       setFixedRows(null)
       setDecisions({})
+      setDisabledPolicies(new Set())
+      setDestructiveArmed(false)
+      setEndTyped('')
+      setExcludedCells(new Set())
       return
     }
     setFileMarket(marketplace)
@@ -386,10 +410,29 @@ export function EbayImportWizard({
   )
   const hasReviewStep = importTarget === 'new' && !blockAnalysis.flat && blocks.length > 0
 
-  // Final rows the Import button hands over (skip-filtered).
+  // Rows surviving the block decisions (skip-filtered).
   const finalRows = useMemo(
     () => (hasReviewStep ? applyBlockDecisions(workingRows, blocks) : workingRows),
     [hasReviewStep, workingRows, blocks],
+  )
+
+  // EI.3 pipeline: policies → destructive gate → per-cell exclusions.
+  const policyFiltered = useMemo(
+    () => filterRowsByPolicies(finalRows, disabledPolicies),
+    [finalRows, disabledPolicies],
+  )
+  const destructiveSummary = useMemo(() => findDestructiveActionRows(policyFiltered), [policyFiltered])
+  const gatedRows = useMemo(
+    () => applyDestructiveGate(policyFiltered, destructiveSummary, destructiveArmed),
+    [policyFiltered, destructiveSummary, destructiveArmed],
+  )
+  const cellPlan = useMemo(
+    () => planImportCells(gatedRows, existingRows ?? [], mode),
+    [gatedRows, existingRows, mode],
+  )
+  const importRows = useMemo(
+    () => pruneExcludedCells(gatedRows, excludedCells),
+    [gatedRows, excludedCells],
   )
 
   const issueByCell = useMemo(() => {
@@ -409,15 +452,15 @@ export function EbayImportWizard({
 
   const { newCount, updateCount } = useMemo(() => {
     if (!skuColumnId || !existingSkus || existingSkus.size === 0) {
-      return { newCount: finalRows.length, updateCount: 0 }
+      return { newCount: importRows.length, updateCount: 0 }
     }
     let update = 0
-    for (const row of finalRows) {
+    for (const row of importRows) {
       const sku = toCell(row[skuColumnId]).trim()
       if (sku && existingSkus.has(sku)) update += 1
     }
-    return { newCount: finalRows.length - update, updateCount: update }
-  }, [finalRows, skuColumnId, existingSkus])
+    return { newCount: importRows.length - update, updateCount: update }
+  }, [importRows, skuColumnId, existingSkus])
 
   // Parent picker options for "Import under parent" mode.
   const parentOptions: ComboboxOption[] = useMemo(
@@ -793,6 +836,54 @@ export function EbayImportWizard({
 
   const previewRows = workingRows.slice(0, PREVIEW_LIMIT)
 
+  // EI.3 — plan grid columns (from → to per cell, with per-cell exclusion).
+  const planColumns: Column<(typeof cellPlan.changes)[number]>[] = [
+    {
+      key: 'apply',
+      label: 'Apply',
+      align: 'center',
+      render: (c) => {
+        const key = `${c.sku}|${c.columnId}`
+        if (!c.willApply) return <Tag tone="neutral">kept</Tag>
+        return (
+          <Checkbox
+            checked={!excludedCells.has(key)}
+            onChange={(e) => {
+              const checked = e.target.checked
+              setExcludedCells((prev) => {
+                const next = new Set(prev)
+                if (checked) next.delete(key)
+                else next.add(key)
+                return next
+              })
+            }}
+          />
+        )
+      },
+    },
+    { key: 'sku', label: 'SKU', render: (c) => <span style={T.value}>{c.sku}</span> },
+    {
+      key: 'column',
+      label: 'Column',
+      render: (c) => <span style={T.body}>{columnLabelById.get(c.columnId) ?? c.columnId}</span>,
+    },
+    {
+      key: 'diff',
+      label: 'Change',
+      render: (c) => (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: 340 }}>
+          <span style={{ ...T.caption, textDecoration: 'line-through', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }} title={c.from}>
+            {c.from || '—'}
+          </span>
+          <ArrowRight size={11} aria-hidden style={{ color: 'var(--h10-text-3)', flexShrink: 0 }} />
+          <span style={{ ...T.value, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }} title={c.to}>
+            {c.to}
+          </span>
+        </span>
+      ),
+    },
+  ]
+
   const hasParents = (existingParents?.length ?? 0) > 0
 
   const previewBody = (
@@ -842,6 +933,87 @@ export function EbayImportWizard({
         />
       </div>
 
+      {/* EI.3 — what comes along: per-category import policies (identity and
+          structure always import; the stock POOL is never written by a save). */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={T.label}>Import these field groups</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          {IMPORT_POLICIES.map((pcy) => (
+            <Checkbox
+              key={pcy.id}
+              checked={!disabledPolicies.has(pcy.id)}
+              onChange={(e) => {
+                const checked = e.target.checked
+                setDisabledPolicies((prev) => {
+                  const next = new Set(prev)
+                  if (checked) next.delete(pcy.id)
+                  else next.add(pcy.id)
+                  return next
+                })
+                setExcludedCells(new Set())
+              }}
+              label={pcy.label}
+            />
+          ))}
+        </div>
+        <span style={T.caption}>
+          SKUs, parent links, themes, Shared-SKU flags and Item IDs always import. Warehouse stock (the pool) is never
+          written by this import — quantities here are the per-listing eBay quantities.
+        </span>
+      </div>
+
+      {/* EI.3 — destructive actions gate (end / deactivate rows). */}
+      {destructiveSummary.destructiveIndexes.length > 0 && (
+        <Banner
+          variant={destructiveArmed ? 'warning' : 'error'}
+          title={`${destructiveSummary.destructiveIndexes.length} row${destructiveSummary.destructiveIndexes.length === 1 ? '' : 's'} carry a destructive action (${Object.entries(destructiveSummary.byAction).map(([a, n]) => `${n}× ${a}`).join(', ')})`}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span style={T.note}>
+              “end” ends the live listing on the next push (the Item ID is lost); “deactivate” sets it to quantity 0.
+              These rows are excluded from the import unless you explicitly include them.
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <Input
+                value={endTyped}
+                onChange={(e) => {
+                  setEndTyped(e.target.value)
+                  if (e.target.value.trim().toUpperCase() !== 'END') setDestructiveArmed(false)
+                }}
+                placeholder="Type END to enable"
+                style={{ width: 160 }}
+              />
+              <Checkbox
+                checked={destructiveArmed}
+                disabled={endTyped.trim().toUpperCase() !== 'END'}
+                onChange={(e) => setDestructiveArmed(e.target.checked)}
+                label="Include these rows in the import"
+              />
+            </div>
+          </div>
+        </Banner>
+      )}
+
+      {/* EI.3 — cell-level merge plan against the current grid. */}
+      {cellPlan.changes.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={T.label}>
+            Changes to existing rows — {cellPlan.applyCount - excludedCells.size} of {cellPlan.changes.length} will
+            apply{cellPlan.newRowSkus.length > 0 ? ` · ${cellPlan.newRowSkus.length} new row${cellPlan.newRowSkus.length === 1 ? '' : 's'}` : ''}
+          </span>
+          <DataGrid
+            columns={planColumns}
+            rows={cellPlan.changes.slice(0, 100)}
+            rowKey={(c) => `${c.sku}|${c.columnId}`}
+            maxHeight={220}
+            emptyState="No changes."
+          />
+          {cellPlan.changes.length > 100 && (
+            <span style={T.caption}>Showing first 100 of {cellPlan.changes.length} changes.</span>
+          )}
+        </div>
+      )}
+
       {(errorCount > 0 || warnCount > 0) && (
         <Banner
           variant={errorCount > 0 ? 'error' : 'warning'}
@@ -864,7 +1036,7 @@ export function EbayImportWizard({
 
       <Banner
         variant="info"
-        title={`${finalRows.length} ${finalRows.length === 1 ? 'row' : 'rows'} ready${skipCount > 0 ? ` (${skipCount} listing${skipCount === 1 ? '' : 's'} skipped)` : ''}`}
+        title={`${importRows.length} ${importRows.length === 1 ? 'row' : 'rows'} ready${skipCount > 0 ? ` (${skipCount} listing${skipCount === 1 ? '' : 's'} skipped)` : ''}${destructiveSummary.destructiveIndexes.length > 0 && !destructiveArmed ? ` · ${destructiveSummary.destructiveIndexes.length} destructive excluded` : ''}`}
       >
         {skuColumnId ? (
           <>
@@ -943,16 +1115,16 @@ export function EbayImportWizard({
         <Button
           variant="primary"
           disabled={
-            finalRows.length === 0 ||
+            importRows.length === 0 ||
             mappedColumnIds.length === 0 ||
             (importTarget === 'parent' && !targetParentId)
           }
           onClick={() => {
-            onImport(finalRows, mode, importTarget === 'parent' ? targetParentId : undefined)
+            onImport(importRows, mode, importTarget === 'parent' ? targetParentId : undefined)
             onClose()
           }}
         >
-          Import {finalRows.length} {finalRows.length === 1 ? 'row' : 'rows'}
+          Import {importRows.length} {importRows.length === 1 ? 'row' : 'rows'}
           {errorCount > 0 ? ` (${errorCount} cell error${errorCount === 1 ? '' : 's'})` : ''}
         </Button>
       </>
