@@ -60,6 +60,22 @@ describe("romeDayWindowUtc", () => {
     expect(romeDayWindowUtc(null, null)).toBeUndefined();
     expect(romeDayWindowUtc("garbage", "junk")).toBeUndefined();
   });
+  // EPF2 — the picker windows must survive BOTH DST transitions and the year edge
+  it("spring-forward day (29 Mar 2026, 23h long): opens CET 23:00Z, closes CEST 21:59:59.999Z", () => {
+    const w = romeDayWindowUtc("2026-03-29", "2026-03-29")!;
+    expect(w.gte?.toISOString()).toBe("2026-03-28T23:00:00.000Z");
+    expect(w.lte?.toISOString()).toBe("2026-03-29T21:59:59.999Z");
+  });
+  it("fall-back day (25 Oct 2026, 25h long): opens CEST 22:00Z, closes CET 22:59:59.999Z", () => {
+    const w = romeDayWindowUtc("2026-10-25", "2026-10-25")!;
+    expect(w.gte?.toISOString()).toBe("2026-10-24T22:00:00.000Z");
+    expect(w.lte?.toISOString()).toBe("2026-10-25T22:59:59.999Z");
+  });
+  it("year boundary window (31 Dec → 1 Jan) spans Rome midnight, CET both sides", () => {
+    const w = romeDayWindowUtc("2025-12-31", "2026-01-01")!;
+    expect(w.gte?.toISOString()).toBe("2025-12-30T23:00:00.000Z");
+    expect(w.lte?.toISOString()).toBe("2026-01-01T22:59:59.999Z");
+  });
 });
 
 describe("romeMonthWindowUtc (EPF1 hot-path tiles)", () => {

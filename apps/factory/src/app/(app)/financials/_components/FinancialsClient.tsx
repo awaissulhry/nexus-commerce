@@ -1,380 +1,392 @@
 /**
- * FP9.1 — the money page: headline tiles (outstanding / deposits due / this
- * month) over a per-order rollup — quoted → invoiced → paid → balance, and the
- * margin sliding from estimate to actual as the floor consumes material. Every
- * order number drills to /orders. This whole page is behind pages.financials,
- * so a worker never reaches it.
+ * FP9 → EPF2 — the money page at design law. One container owning URL state
+ * (`?tab` `?o` `?from` `?to` `?party` + `?range=all`; all read on load, all
+ * written on change; the drawer is pushState so browser Back closes it — the
+ * EPO.7 idiom), the Rome "last 12 months" default window with a one-click
+ * All-time toggle, SSE freshness (payment.recorded / order.updated /
+ * import.finished → debounced refetch + "money synced Ns ago"), the keyboard
+ * map (1-4 tabs · / search · Esc closes), and the sibling surfaces: four FS3
+ * grids, the money drawer, the consequence modals, the bank import and the
+ * cancelled-money bucket. Whole page behind pages.financials; every cent
+ * grain-stripped at the edge.
  */
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Euro, FilePlus, Send, ArrowUpRight, Printer, Upload, CreditCard, Download } from "lucide-react";
-import { Card, DataGrid, Drawer, Modal, Listbox, useToast } from "@/design-system/components";
-import { Button, Pill } from "@/design-system/primitives";
-import { eur } from "@/design-system/lib/format";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Download, Euro, Upload } from "lucide-react";
+import { PageHeader, GridToolbar } from "@/design-system/patterns";
+import { DateField, Listbox, Modal, Tabs, useToast } from "@/design-system/components";
+import { Button, Skeleton } from "@/design-system/primitives";
+import { AsyncCombobox, type SearchLoader } from "@/components/AsyncCombobox"; // FS3 — paged party picker
 import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
-import { type BankProposal, type DepositRow, type DepositsResponse, type FinancialDetail, type FinancialsResponse, type ImportApplyResponse, type ImportResponse, type InvoiceRow, type OrderFin, type PartyAgg, type PartyResponse, type PaymentRow, type PeriodAgg, type PeriodResponse } from "./types";
+import { useFactoryEvents } from "@/lib/use-factory-events";
+import { defaultWindowFrom, monthDayWindow } from "@/lib/financials/money-ux";
+import { GridSkeleton, DepositsGrid, MonthGrid, OrdersGrid, PartyGrid, money } from "./MoneyGrids";
+import { MoneyDrawer } from "./MoneyDrawer";
+import { NewInvoiceModal, MarkPaidModal } from "./InvoiceModals";
+import { PaymentModal } from "./PaymentModal";
+import { ImportModal } from "./ImportModal";
+import { CancelledDrawer } from "./CancelledDrawer";
+import { FIN_TABS, type DepositRow, type FinTab, type FinancialDetail, type FinancialsResponse, type InvoiceRow, type OrderFin, type PartyAgg, type PeriodAgg, type PartyResponse, type PeriodResponse, type DepositsResponse } from "./types";
 
-const inp: React.CSSProperties = { width: "100%", border: "1px solid var(--h10-border)", borderRadius: 7, padding: "6px 8px", fontSize: 12.5, background: "var(--h10-surface)", color: "var(--h10-text)" };
-const CONF_TONE: Record<string, "success" | "info" | "neutral"> = { high: "success", medium: "info", none: "neutral" };
+const TAB_LABEL: Record<FinTab, string> = { orders: "By order", party: "By customer", month: "By month", deposits: "Deposits outstanding" };
 
-const money = (c?: number) => (c == null ? "—" : eur(c));
+// FS3 — paged type-to-find party filter over /api/parties-lite?q= (EPO.7 idiom)
+const loadPartyOptions: SearchLoader = async (q, cursor) => {
+  const usp = new URLSearchParams({ q });
+  if (cursor) usp.set("cursor", cursor);
+  const d = await apiJson<{ parties: { id: string; name: string }[]; nextCursor?: string | null }>(`/api/parties-lite?${usp}`);
+  const options = d.parties.map((p) => ({ value: p.id, label: p.name }));
+  return { options: !q && !cursor ? [{ value: "", label: "All customers" }, ...options] : options, nextCursor: d.nextCursor ?? null };
+};
 
-export function FinancialsClient() {
+/** Live "money synced Ns ago" line — isolated so only IT re-renders on the tick. */
+function Freshness({ at }: { at: number | null }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => tick((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  if (at == null) return <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>syncing…</span>;
+  const s = Math.max(0, Math.round((Date.now() - at) / 1000));
+  return <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }} data-testid="freshness">money synced {s < 2 ? "just now" : `${s}s ago`}</span>;
+}
+
+const ORDER_STATES = ["CONFIRMED", "IN_PRODUCTION", "READY", "SHIPPED", "DELIVERED", "CLOSED"];
+
+function FinancialsInner() {
+  const params = useSearchParams();
   const { toast } = useToast();
   const canMargin = usePermission("financials.margins.view");
   const canInvoice = usePermission("invoices.manage");
   const canPay = usePermission("payments.record");
   const canImport = usePermission("imports.run");
-  const [data, setData] = useState<FinancialsResponse | null>(null);
-  const [detailId, setDetailId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<FinancialDetail | null>(null);
-  const [tab, setTab] = useState<"orders" | "deposits" | "party" | "month">("orders");
-  const [deposits, setDeposits] = useState<DepositRow[] | null>(null);
+
+  // ── URL state (single source of truth — EPO URL law) ─────────────
+  const rawTab = params.get("tab");
+  const tab: FinTab = FIN_TABS.includes(rawTab as FinTab) ? (rawTab as FinTab) : "orders";
+  const openId = params.get("o");
+  const partyId = params.get("party") ?? "";
+  const allTime = params.get("range") === "all";
+  const fromParam = params.get("from") ?? "";
+  const toParam = params.get("to") ?? "";
+  const defFrom = useRef(defaultWindowFrom(new Date().toISOString())).current;
+  const effFrom = fromParam || (allTime ? "" : defFrom); // the 12-month Rome default — EPF.1's perf lever
+  const effTo = toParam;
+  const filterKey = `${effFrom}|${effTo}|${partyId}`;
+
+  const nav = useCallback((patch: Record<string, string | null>, push = true) => {
+    const usp = new URLSearchParams(window.location.search);
+    for (const [k, v] of Object.entries(patch)) {
+      if (v == null || v === "") usp.delete(k);
+      else usp.set(k, v);
+    }
+    const url = `/financials${usp.toString() ? `?${usp}` : ""}`;
+    if (push) window.history.pushState(null, "", url);
+    else window.history.replaceState(null, "", url);
+    window.dispatchEvent(new PopStateEvent("popstate")); // EPO.7 — useSearchParams re-reads
+  }, []);
+
+  const setTab = useCallback((t: string) => nav({ tab: t === "orders" ? null : t }), [nav]);
+  const openDrawer = useCallback((id: string) => nav({ o: id }), [nav]); // pushState → Back closes (E12)
+  const closeDrawer = useCallback(() => nav({ o: null }), [nav]);
+
+  // ── data ─────────────────────────────────────────────────────────
+  const [core, setCore] = useState<FinancialsResponse | null>(null);
+  const [extraRows, setExtraRows] = useState<OrderFin[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
   const [parties, setParties] = useState<PartyAgg[] | null>(null);
   const [months, setMonths] = useState<PeriodAgg[] | null>(null);
-  const [importOpen, setImportOpen] = useState(false);
-  const [payFor, setPayFor] = useState<{ id: string; number: string } | null>(null);
+  const [deposits, setDeposits] = useState<DepositRow[] | null>(null);
+  const [syncedAt, setSyncedAt] = useState<number | null>(null);
+  const [stateFilter, setStateFilter] = useState("");
+  const [detail, setDetail] = useState<FinancialDetail | null>(null);
 
-  const load = useCallback(async () => {
-    try { setData(await apiJson<FinancialsResponse>("/api/financials")); }
-    catch (e) { toast((e as Error).message, "danger"); }
-  }, [toast]);
-  useEffect(() => { void load(); }, [load]);
+  const winQuery = useCallback((extra?: Record<string, string>) => {
+    const usp = new URLSearchParams();
+    if (effFrom) usp.set("from", effFrom);
+    if (effTo) usp.set("to", effTo);
+    if (partyId) usp.set("party", partyId);
+    for (const [k, v] of Object.entries(extra ?? {})) usp.set(k, v);
+    const s = usp.toString();
+    return s ? `?${s}` : "";
+  }, [effFrom, effTo, partyId]);
 
-  const loadDeposits = useCallback(async () => {
-    try { setDeposits((await apiJson<DepositsResponse>("/api/financials/deposits")).deposits); }
-    catch (e) { toast((e as Error).message, "danger"); }
-  }, [toast]);
-  const loadParties = useCallback(async () => {
-    try { setParties((await apiJson<PartyResponse>("/api/financials/party")).parties); }
-    catch (e) { toast((e as Error).message, "danger"); }
-  }, [toast]);
-  const loadMonths = useCallback(async () => {
-    try { setMonths((await apiJson<PeriodResponse>("/api/financials/period")).months); }
-    catch (e) { toast((e as Error).message, "danger"); }
-  }, [toast]);
+  const loadCore = useCallback(async () => {
+    try {
+      const d = await apiJson<FinancialsResponse>(`/api/financials${winQuery()}`);
+      setCore(d);
+      setExtraRows([]);
+      setCursor(d.nextCursor ?? null);
+      setSyncedAt(Date.now());
+    } catch (e) { toast((e as Error).message, "danger"); }
+  }, [winQuery, toast]);
+
+  const loadTab = useCallback(async (t: FinTab) => {
+    try {
+      if (t === "party") setParties((await apiJson<PartyResponse>(`/api/financials/party${winQuery()}`)).parties);
+      else if (t === "month") setMonths((await apiJson<PeriodResponse>(`/api/financials/period${winQuery()}`)).months);
+      else if (t === "deposits") setDeposits((await apiJson<DepositsResponse>(`/api/financials/deposits${winQuery()}`)).deposits);
+    } catch (e) { toast((e as Error).message, "danger"); }
+  }, [winQuery, toast]);
+
+  // window/party changed (or first mount): drop every cache, reload what's visible
   useEffect(() => {
-    if (tab === "deposits" && deposits == null) void loadDeposits();
-    if (tab === "party" && parties == null) void loadParties();
-    if (tab === "month" && months == null) void loadMonths();
-  }, [tab, deposits, parties, months, loadDeposits, loadParties, loadMonths]);
+    setCore(null); setParties(null); setMonths(null); setDeposits(null); setExtraRows([]); setCursor(null);
+    void loadCore();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- filterKey is the reload trigger
+  }, [filterKey]);
+  // lazy per-tab loads
+  useEffect(() => {
+    if (tab === "party" && parties == null) void loadTab("party");
+    if (tab === "month" && months == null) void loadTab("month");
+    if (tab === "deposits" && deposits == null) void loadTab("deposits");
+  }, [tab, parties, months, deposits, loadTab]);
 
+  const loadMore = useCallback(async () => {
+    if (!cursor) return;
+    try {
+      const d = await apiJson<FinancialsResponse>(`/api/financials${winQuery({ cursor })}`);
+      setExtraRows((prev) => [...prev, ...d.orders]);
+      setCursor(d.nextCursor ?? null);
+    } catch (e) { toast((e as Error).message, "danger"); }
+  }, [cursor, winQuery, toast]);
+
+  // drawer detail follows ?o=
   const loadDetail = useCallback(async (id: string) => {
     try { setDetail(await apiJson<FinancialDetail>(`/api/financials/order/${id}`)); }
     catch (e) { toast((e as Error).message, "danger"); }
   }, [toast]);
-  const openDetail = (id: string) => { setDetailId(id); setDetail(null); void loadDetail(id); };
-  const refreshAll = () => { void load(); setDeposits(null); setParties(null); setMonths(null); if (detailId) void loadDetail(detailId); };
+  useEffect(() => {
+    setDetail(null);
+    if (openId) void loadDetail(openId);
+  }, [openId, loadDetail]);
 
-  const t = data?.tiles;
+  const refreshAll = useCallback(() => {
+    void loadCore();
+    setParties(null); setMonths(null); setDeposits(null);
+    if (tab !== "orders") void loadTab(tab);
+    if (openId) void loadDetail(openId);
+  }, [loadCore, loadTab, loadDetail, tab, openId]);
+
+  // FS2 SSE (cross-review M6: incl. import.finished) — live tiles + active tab
+  useFactoryEvents(["payment.recorded", "order.updated", "import.finished"], refreshAll);
+
+  // ── surfaces state ───────────────────────────────────────────────
+  const [busy, setBusy] = useState(false);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [markPaidFor, setMarkPaidFor] = useState<{ inv: InvoiceRow; orderNumber: string } | null>(null);
+  const [payOpen, setPayOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [cancelledOpen, setCancelledOpen] = useState(false);
+
+  // ── keyboard: 1-4 tabs · / search · Esc handled by DS surfaces ──
+  const partyBoxRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable) return;
+      if (e.key >= "1" && e.key <= "4") {
+        e.preventDefault();
+        setTab(FIN_TABS[Number(e.key) - 1]);
+      } else if (e.key === "/") {
+        e.preventDefault();
+        partyBoxRef.current?.querySelector("input")?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [setTab]);
+
+  // party label for the filter chip (deep-linked ?party= arrives label-less — EPO.7 idiom)
+  const [partyLabel, setPartyLabel] = useState("");
+  useEffect(() => {
+    if (!partyId) { setPartyLabel(""); return; }
+    if (partyLabel) return;
+    apiJson<{ parties: { id: string; name: string }[] }>(`/api/parties-lite`).then((d) => setPartyLabel(d.parties.find((p) => p.id === partyId)?.name ?? "")).catch(() => {});
+  }, [partyId, partyLabel]);
+
+  // ── drill-throughs (D-07 close) ─────────────────────────────────
+  const drillParty = (id: string) => nav({ tab: null, party: id });
+  const drillMonth = (monthKey: string) => {
+    const w = monthDayWindow(monthKey);
+    if (w) nav({ tab: null, from: w.from, to: w.to, range: null });
+  };
+
+  const t = core?.tiles;
+  const cancelled = core?.cancelledWithMoney;
+  const orderRows = [...(core?.orders ?? []), ...extraRows];
+  const shownRows = stateFilter ? orderRows.filter((r) => r.state === stateFilter) : orderRows;
+
+  const windowLabel = allTime && !fromParam && !toParam
+    ? "All time"
+    : fromParam || toParam
+      ? "Custom window (Rome days)"
+      : `Last 12 months · since ${defFrom}`;
+  const exportHref = `/api/exports/financials${winQuery()}`;
+
+  const metrics = [
+    { label: "Outstanding balance", value: core ? <span style={{ color: "var(--h10-text)" }}>{money(t?.outstandingCents)}</span> : <Skeleton width={90} height={22} /> },
+    { label: "Deposits due", value: core ? <span style={{ color: (t?.depositsDueCents ?? 0) > 0 ? "var(--h10-danger)" : "var(--h10-text)" }}>{money(t?.depositsDueCents)}</span> : <Skeleton width={90} height={22} /> },
+    { label: `Invoiced this month (${core?.monthKey ?? "…"})`, value: core ? <>{money(t?.monthInvoicedCents)}</> : <Skeleton width={90} height={22} /> },
+    { label: "Paid this month", value: core ? <span style={{ color: "var(--h10-success-text, var(--h10-text))" }}>{money(t?.monthPaidCents)}</span> : <Skeleton width={90} height={22} /> },
+    ...(cancelled && cancelled.count > 0
+      ? [{
+          label: "Cancelled w/ money",
+          value: (
+            <button type="button" onClick={() => setCancelledOpen(true)} title="See the cancelled orders still carrying money"
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", color: "var(--h10-warning-text, var(--h10-text))", textDecoration: "underline", textUnderlineOffset: 3 }}>
+              {money(cancelled.paidCents)} · {cancelled.count}
+            </button>
+          ),
+        }]
+      : []),
+  ];
+
   return (
     <div className="factory-page factory-grid-grow-1">
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 14 }}>
-        <div>
-          <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}><Euro size={18} /> Financials</h1>
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", marginTop: 2 }}>Order-level money truth — who owes what, and what each order really made. Not accounting.</div>
-        </div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          {canImport && <Button onClick={() => setImportOpen(true)}><Upload size={13} /> Import bank CSV</Button>}
-          <a href="/api/exports/financials" className="h10-ds-btn" style={{ textDecoration: "none", display: "inline-flex", gap: 6, alignItems: "center" }}><Download size={13} /> Export period</a>
+      <PageHeader
+        eyebrow="Factory OS"
+        title={<span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}><Euro size={18} /> Financials</span>}
+        subtitle="Order-level money truth — who owes what, and what each order really made. Not accounting."
+        actions={
+          <div style={{ display: "grid", justifyItems: "end", gap: 4 }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              {canImport && <Button onClick={() => setImportOpen(true)}><Upload size={13} /> Import bank CSV</Button>}
+              <Button onClick={() => setExportOpen(true)}><Download size={13} /> Export period</Button>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <Freshness at={syncedAt} />
+              <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>· all figures EUR</span>
+            </div>
+          </div>
+        }
+      />
+
+      <div style={{ margin: "12px 0 14px" }}>
+        {/* the DS KPI row (MetricStrip markup); the 5th tile appears only when cancelled money exists */}
+        <div className="h10-ds-metrics">
+          {metrics.map((m, i) => (
+            <div key={i} className="h10-ds-metric">
+              <div className="lbl">{m.label}</div>
+              <div className="val" style={{ fontVariantNumeric: "tabular-nums" }}>{m.value}</div>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 18 }}>
-        <Tile label="Outstanding balance" value={money(t?.outstandingCents)} tone="warning" />
-        <Tile label="Deposits due" value={money(t?.depositsDueCents)} tone="danger" />
-        <Tile label="Invoiced this month" value={money(t?.monthInvoicedCents)} />
-        <Tile label="Paid this month" value={money(t?.monthPaidCents)} tone="success" />
+      <Tabs
+        tabs={FIN_TABS.map((id) => ({ id, label: id === "deposits" && deposits && deposits.length > 0 ? `${TAB_LABEL[id]} (${deposits.length})` : TAB_LABEL[id] }))}
+        active={tab}
+        onChange={setTab}
+      />
+
+      <div style={{ margin: "10px 0" }}>
+        <GridToolbar
+          count={
+            tab === "orders" ? (
+              core ? <>Viewing <b>1–{shownRows.length}</b> of <b>{stateFilter ? `${orderRows.length} loaded` : core.ordersTotal ?? orderRows.length}</b> orders</> : <>Loading…</>
+            ) : tab === "party" ? (parties ? <><b>{parties.length}</b> customers</> : <>Loading…</>)
+            : tab === "month" ? (months ? <><b>{months.length}</b> months</> : <>Loading…</>)
+            : (deposits ? <><b>{deposits.length}</b> deposits outstanding</> : <>Loading…</>)
+          }
+          right={
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11.5, color: "var(--h10-text-2)", fontWeight: 600 }} data-testid="window-label">{windowLabel}</span>
+              <div style={{ minWidth: 128 }}><DateField value={effFrom} onChange={(v) => nav({ from: v || null, range: v ? null : "all" }, false)} ariaLabel="Window from (Rome day)" placeholder="from" /></div>
+              <span style={{ color: "var(--h10-text-3)" }}>–</span>
+              <div style={{ minWidth: 128 }}><DateField value={effTo} onChange={(v) => nav({ to: v || null }, false)} ariaLabel="Window to (Rome day)" placeholder="today" /></div>
+              {allTime || fromParam || toParam ? (
+                <Button onClick={() => nav({ from: null, to: null, range: null })}>Last 12 months</Button>
+              ) : (
+                <Button onClick={() => nav({ from: null, to: null, range: "all" })}>All time</Button>
+              )}
+              {partyId ? (
+                <button type="button" onClick={() => nav({ party: null })} title="Clear customer filter"
+                  style={{ display: "inline-flex", gap: 5, alignItems: "center", border: "1px solid var(--h10-primary)", background: "var(--h10-wash-primary, rgba(31,111,222,0.08))", color: "var(--h10-primary)", borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  {partyLabel || "Customer"} <span aria-hidden style={{ fontSize: 14, lineHeight: 1 }}>×</span>
+                </button>
+              ) : (
+                <div style={{ minWidth: 190 }} ref={partyBoxRef}>
+                  <AsyncCombobox loader={loadPartyOptions} value={partyId} placeholder="All customers ( / )" ariaLabel="Filter by customer" onChange={(v, opt) => { setPartyLabel(v ? opt.label : ""); nav({ party: v || null }); }} />
+                </div>
+              )}
+              {tab === "orders" && (
+                <div style={{ minWidth: 150 }}>
+                  <Listbox ariaLabel="Filter by state" value={stateFilter}
+                    options={[{ value: "", label: "All states" }, ...ORDER_STATES.map((s) => ({ value: s, label: s.replace(/_/g, " ").toLowerCase() }))]}
+                    onChange={setStateFilter} placeholder="All states" />
+                </div>
+              )}
+            </div>
+          }
+        />
       </div>
 
-      <div style={{ display: "flex", gap: 4, marginBottom: 12, borderBottom: "1px solid var(--h10-border-subtle)" }}>
-        <TabBtn active={tab === "orders"} onClick={() => setTab("orders")}>By order</TabBtn>
-        <TabBtn active={tab === "party"} onClick={() => setTab("party")}>By customer</TabBtn>
-        <TabBtn active={tab === "month"} onClick={() => setTab("month")}>By month</TabBtn>
-        <TabBtn active={tab === "deposits"} onClick={() => setTab("deposits")}>Deposits outstanding{deposits && deposits.length > 0 ? ` (${deposits.length})` : ""}</TabBtn>
-      </div>
+      {tab === "orders" && (core == null ? <GridSkeleton /> : (
+        <>
+          <OrdersGrid rows={shownRows} canMargin={canMargin} onOpen={openDrawer} />
+          {cursor && !stateFilter && (
+            <div style={{ display: "flex", justifyContent: "center", paddingTop: 10 }}>
+              <button type="button" onClick={() => void loadMore()} style={{ border: "1px dashed var(--h10-border)", borderRadius: 8, background: "none", padding: "7px 16px", fontSize: 12, color: "var(--h10-text-2)", cursor: "pointer" }}>
+                Load more orders ({orderRows.length} of {core.ordersTotal ?? "?"} loaded)
+              </button>
+            </div>
+          )}
+          {stateFilter && <div style={{ fontSize: 12, color: "var(--h10-text-3)", padding: "8px 2px" }}>State filter applies to the {orderRows.length} loaded rows — tiles and totals cover the whole window.</div>}
+        </>
+      ))}
+      {tab === "party" && (parties == null ? <GridSkeleton /> : <PartyGrid rows={parties} canMargin={canMargin} onDrill={drillParty} />)}
+      {tab === "month" && (months == null ? <GridSkeleton /> : <MonthGrid rows={months} canMargin={canMargin} onDrill={drillMonth} />)}
+      {tab === "deposits" && (deposits == null ? <GridSkeleton /> : <DepositsGrid rows={deposits} onOpen={openDrawer} />)}
 
-      {tab === "party" ? (
-        <DataGrid
-          columns={[
-            { key: "party", label: "Customer", render: (r: PartyAgg) => <b>{r.partyName}</b> },
-            { key: "orders", label: "Orders", align: "right" as const, render: (r: PartyAgg) => r.orders },
-            { key: "net", label: "Revenue", align: "right" as const, render: (r: PartyAgg) => money(r.netCents) },
-            { key: "paid", label: "Paid", align: "right" as const, render: (r: PartyAgg) => money(r.paidCents) },
-            { key: "out", label: "Outstanding", align: "right" as const, render: (r: PartyAgg) => money(r.outstandingCents) },
-            ...(canMargin ? [{ key: "margin", label: "Margin (actual)", align: "right" as const, render: (r: PartyAgg) => money(r.actualMarginCents) }] : []),
-          ]}
-          rows={parties ?? []}
-          rowKey={(r: PartyAgg) => r.partyId}
-          emptyState="No customers with orders yet."
-        />
-      ) : tab === "month" ? (
-        <DataGrid
-          columns={[
-            { key: "month", label: "Month", render: (r: PeriodAgg) => <b>{r.monthKey}</b> },
-            { key: "orders", label: "Orders", align: "right" as const, render: (r: PeriodAgg) => r.orders },
-            { key: "net", label: "Revenue", align: "right" as const, render: (r: PeriodAgg) => money(r.netCents) },
-            { key: "invoiced", label: "Invoiced", align: "right" as const, render: (r: PeriodAgg) => money(r.invoicedCents) },
-            { key: "paid", label: "Paid", align: "right" as const, render: (r: PeriodAgg) => money(r.paidCents) },
-            { key: "out", label: "Outstanding", align: "right" as const, render: (r: PeriodAgg) => money(r.outstandingCents) },
-            ...(canMargin ? [{ key: "margin", label: "Margin (actual)", align: "right" as const, render: (r: PeriodAgg) => money(r.actualMarginCents) }] : []),
-          ]}
-          rows={months ?? []}
-          rowKey={(r: PeriodAgg) => r.monthKey}
-          emptyState="No months with orders yet."
-        />
-      ) : tab === "orders" ? (
-        <DataGrid
-          columns={[
-            { key: "number", label: "Order", render: (r: OrderFin) => <button type="button" onClick={() => openDetail(r.orderId)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button> },
-            { key: "party", label: "Customer", render: (r: OrderFin) => r.partyName },
-            { key: "state", label: "State", render: (r: OrderFin) => <span style={{ fontSize: 12, color: "var(--h10-text-3)" }}>{r.state.replace("_", " ").toLowerCase()}</span> },
-            { key: "quoted", label: "Quoted", align: "right" as const, render: (r: OrderFin) => money(r.quotedNetCents) },
-            { key: "invoiced", label: "Invoiced", align: "right" as const, render: (r: OrderFin) => money(r.invoicedCents) },
-            { key: "paid", label: "Paid", align: "right" as const, render: (r: OrderFin) => money(r.paidCents) },
-            { key: "balance", label: "Balance", align: "right" as const, render: (r: OrderFin) => (r.balanceCents === 0 ? <Pill tone="success">paid</Pill> : <span style={{ color: (r.balanceCents ?? 0) > 0 ? "var(--h10-warning-text, var(--h10-text))" : "var(--h10-text)", fontWeight: 600 }}>{money(r.balanceCents)}</span>) },
-            ...(canMargin ? [{ key: "margin", label: "Margin", align: "right" as const, render: (r: OrderFin) => <MarginCell r={r} /> }] : []),
-          ]}
-          rows={data?.orders ?? []}
-          rowKey={(r: OrderFin) => r.orderId}
-          emptyState="No orders yet — money lands here as quotes convert."
-        />
-      ) : null}
-      {tab === "orders" && data && (data.ordersTotal ?? 0) > data.orders.length && (
-        <div style={{ fontSize: 12, color: "var(--h10-text-2)", padding: "8px 2px" }}>
-          Showing the {data.orders.length} most recent of {data.ordersTotal} orders — tiles and rollups cover all of them. Narrow the date range to drill in.
+      <MoneyDrawer
+        open={!!openId}
+        detail={detail}
+        busy={busy}
+        setBusy={setBusy}
+        canInvoice={canInvoice}
+        canMargin={canMargin}
+        canPay={canPay}
+        onNewInvoice={() => setInvoiceOpen(true)}
+        onMarkPaid={(iv) => detail && setMarkPaidFor({ inv: iv, orderNumber: detail.order.number })}
+        onPay={() => setPayOpen(true)}
+        onChanged={refreshAll}
+        onClose={closeDrawer}
+      />
+
+      <NewInvoiceModal detail={detail} open={invoiceOpen} onClose={() => setInvoiceOpen(false)}
+        onDone={(number) => { setInvoiceOpen(false); toast(`Invoice ${number} created`, "success"); refreshAll(); }} />
+      <MarkPaidModal target={markPaidFor} open={!!markPaidFor} onClose={() => setMarkPaidFor(null)}
+        onDone={() => { setMarkPaidFor(null); refreshAll(); }} />
+      <PaymentModal detail={detail} open={payOpen} onClose={() => setPayOpen(false)}
+        onDone={() => { setPayOpen(false); refreshAll(); }} />
+      <ImportModal open={importOpen} canPay={canPay} onClose={() => setImportOpen(false)}
+        onApplied={() => { setImportOpen(false); refreshAll(); }} />
+      <CancelledDrawer bucket={cancelled ?? null} open={cancelledOpen} onClose={() => setCancelledOpen(false)}
+        onOpenOrder={(id) => { setCancelledOpen(false); openDrawer(id); }} />
+
+      {/* EPF2 (D-06 close) — export states exactly what it exports before it runs */}
+      <Modal open={exportOpen} onClose={() => setExportOpen(false)} title="Export period" size="sm"
+        footer={<><Button onClick={() => setExportOpen(false)}>Cancel</Button><Button variant="primary" onClick={() => { window.location.assign(exportHref); setExportOpen(false); }}>Download CSV</Button></>}>
+        <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", lineHeight: 1.6 }} data-testid="export-confirm">
+          Exports <b>the current view</b>: window <b>{windowLabel}</b>{effFrom || effTo ? <> ({effFrom || "start"} → {effTo || "today"}, Rome days)</> : null}
+          {partyId ? <>, customer <b>{partyLabel || "selected"}</b></> : ", all customers"}.
+          Two sections: per-invoice rows (VAT on invoiced amounts, issue-dated) + the per-order rollup. The run is audited.
         </div>
-      )}
-      {tab === "deposits" && (
-        <DataGrid
-          columns={[
-            { key: "number", label: "Order", render: (r: DepositRow) => <button type="button" onClick={() => openDetail(r.orderId)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button> },
-            { key: "party", label: "Customer", render: (r: DepositRow) => r.partyName },
-            { key: "req", label: "Deposit required", align: "right" as const, render: (r: DepositRow) => money(r.depositRequiredCents) },
-            { key: "paid", label: "Paid", align: "right" as const, render: (r: DepositRow) => money(r.depositPaidCents) },
-            { key: "short", label: "Shortfall", align: "right" as const, render: (r: DepositRow) => <span style={{ color: "var(--h10-danger)", fontWeight: 600 }}>{money(r.shortfallCents)}</span> },
-            { key: "blocked", label: "Blocked WOs", align: "right" as const, render: (r: DepositRow) => (r.blockedWorkOrders > 0 ? <Pill tone="warning">{r.blockedWorkOrders} blocked</Pill> : "—") },
-          ]}
-          rows={deposits ?? []}
-          rowKey={(r: DepositRow) => r.orderId}
-          emptyState="No deposits outstanding — nothing on the floor is waiting on money."
-        />
-      )}
-
-      <MoneyDrawer id={detailId} detail={detail} canInvoice={canInvoice} canMargin={canMargin} canPay={canPay} onPay={(o) => setPayFor(o)} onClose={() => setDetailId(null)} onChanged={refreshAll} />
-      <PaymentModal target={payFor} onClose={() => setPayFor(null)} onDone={() => { setPayFor(null); refreshAll(); }} />
-      <ImportModal open={importOpen} canPay={canPay} onClose={() => setImportOpen(false)} onApplied={() => { setImportOpen(false); refreshAll(); }} />
+      </Modal>
     </div>
   );
 }
 
-function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return <button type="button" onClick={onClick} style={{ background: "none", border: "none", borderBottom: `2px solid ${active ? "var(--h10-primary)" : "transparent"}`, padding: "7px 12px", cursor: "pointer", fontSize: 13, fontWeight: active ? 700 : 500, color: active ? "var(--h10-text)" : "var(--h10-text-3)", marginBottom: -1 }}>{children}</button>;
-}
-
-function MoneyDrawer({ id, detail, canInvoice, canMargin, canPay, onPay, onClose, onChanged }: { id: string | null; detail: FinancialDetail | null; canInvoice: boolean; canMargin: boolean; canPay: boolean; onPay: (o: { id: string; number: string }) => void; onClose: () => void; onChanged: () => void }) {
-  const { toast } = useToast();
-  const [busy, setBusy] = useState(false);
-
-  const createInvoice = async () => {
-    if (!detail) return;
-    setBusy(true);
-    try {
-      const r = await apiJson<{ invoice: { number: string } }>("/api/invoices", { method: "POST", body: JSON.stringify({ orderId: detail.order.id }) });
-      toast(`Invoice ${r.invoice.number} created`, "success");
-      onChanged();
-    } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
-  };
-  const invAction = async (invId: string, action: "send" | "paid") => {
-    setBusy(true);
-    try {
-      await apiJson(`/api/invoices/${invId}`, { method: "PATCH", body: JSON.stringify({ action }) });
-      toast(action === "paid" ? "Marked paid — a balance payment was recorded" : "Marked sent", "success");
-      onChanged();
-    } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
-  };
-
-  const d = detail;
-  const roll = d?.rollup;
+export function FinancialsClient() {
   return (
-    <Drawer open={!!id} onClose={onClose} title={d ? `Money · ${d.order.number}` : "Money"} footer={d ? (
-      <div style={{ display: "flex", gap: 8, width: "100%", alignItems: "center" }}>
-        {canInvoice && <Button variant="primary" onClick={createInvoice} disabled={busy}><FilePlus size={13} /> New invoice</Button>}
-        {canPay && <Button onClick={() => onPay({ id: d.order.id, number: d.order.number })}><CreditCard size={13} /> Record payment</Button>}
-        <a href={`/orders?o=${d.order.id}`} className="h10-ds-btn" style={{ marginLeft: "auto", textDecoration: "none", display: "inline-flex", gap: 6, alignItems: "center" }}>Open order <ArrowUpRight size={13} /></a>
-      </div>
-    ) : undefined}>
-      {d && roll && (
-        <div style={{ display: "grid", gap: 16 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <Fig label="Quoted" value={money(roll.quotedNetCents)} />
-            <Fig label="Invoiced" value={money(roll.invoicedCents)} />
-            <Fig label="Paid" value={money(roll.paidCents)} />
-            <Fig label="Balance" value={money(roll.balanceCents)} strong={roll.balanceCents !== 0} />
-            {canMargin && <Fig label={roll.actualIsPending ? "Margin (est)" : "Margin (actual)"} value={money(roll.actualIsPending ? roll.estMarginCents : roll.actualMarginCents)} />}
-          </div>
-
-          <div>
-            <div style={sub}>Invoices</div>
-            {d.invoices.length === 0 ? <Empty>No invoices yet.</Empty> : d.invoices.map((iv: InvoiceRow) => (
-              <div key={iv.id} style={row}>
-                <a href={`/api/invoices/${iv.id}`} target="_blank" rel="noreferrer" style={{ color: "var(--h10-text-link)", fontWeight: 600, display: "inline-flex", gap: 4, alignItems: "center" }}><Printer size={12} /> {iv.number}</a>
-                <span style={{ marginLeft: "auto", display: "inline-flex", gap: 8, alignItems: "center" }}>
-                  <span style={{ fontVariantNumeric: "tabular-nums" }}>{money(iv.amountCents)}</span>
-                  {iv.paidAt ? <Pill tone="success">paid</Pill> : iv.sentAt ? <Pill tone="info">sent</Pill> : <Pill tone="neutral">draft</Pill>}
-                  {canInvoice && !iv.paidAt && (
-                    <>
-                      {!iv.sentAt && <button type="button" disabled={busy} onClick={() => invAction(iv.id, "send")} style={miniBtn}><Send size={11} /> Send</button>}
-                      <button type="button" disabled={busy} onClick={() => invAction(iv.id, "paid")} style={miniBtn}>Mark paid</button>
-                    </>
-                  )}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div>
-            <div style={sub}>Payments</div>
-            {d.payments.length === 0 ? <Empty>No payments yet.</Empty> : d.payments.map((p: PaymentRow) => (
-              <div key={p.id} style={row}>
-                <span style={{ fontSize: 12.5 }}>{p.kind.toLowerCase()}{p.method ? <span style={{ color: "var(--h10-text-3)" }}> · {p.method}</span> : null}</span>
-                <span style={{ marginLeft: "auto", display: "inline-flex", gap: 8, alignItems: "center" }}>
-                  <span style={{ fontVariantNumeric: "tabular-nums" }}>{money(p.amountCents)}</span>
-                  <span style={{ fontSize: 11, color: "var(--h10-text-3)" }}>{new Date(p.receivedAt).toLocaleDateString()}</span>
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </Drawer>
-  );
-}
-
-const sub: React.CSSProperties = { fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 6 };
-const row: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid var(--h10-border-subtle)", fontSize: 12.5 };
-const miniBtn: React.CSSProperties = { border: "1px solid var(--h10-border)", borderRadius: 6, background: "var(--h10-surface)", cursor: "pointer", fontSize: 11, padding: "3px 7px", color: "var(--h10-text-2)", display: "inline-flex", gap: 4, alignItems: "center" };
-function Fig({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
-  return <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 8, padding: "8px 10px" }}><div style={{ fontSize: 10.5, color: "var(--h10-text-3)", textTransform: "uppercase", letterSpacing: 0.3 }}>{label}</div><div style={{ fontSize: 15, fontWeight: strong ? 700 : 600, fontVariantNumeric: "tabular-nums" }}>{value}</div></div>;
-}
-function Empty({ children }: { children: React.ReactNode }) { return <div style={{ fontSize: 12, color: "var(--h10-text-3)", padding: "4px 0" }}>{children}</div>; }
-const lbl2: React.CSSProperties = { fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 3 };
-
-function PaymentModal({ target, onClose, onDone }: { target: { id: string; number: string } | null; onClose: () => void; onDone: () => void }) {
-  const { toast } = useToast();
-  const [kind, setKind] = useState("DEPOSIT");
-  const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState("");
-  const [busy, setBusy] = useState(false);
-  useEffect(() => { if (target) { setKind("DEPOSIT"); setAmount(""); setMethod(""); } }, [target]);
-
-  const submit = async () => {
-    if (!target) return;
-    const cents = Math.round(parseFloat(amount.replace(",", ".")) * 100);
-    if (!(cents > 0)) { toast("Enter an amount", "danger"); return; }
-    setBusy(true);
-    try {
-      const r = await apiJson<{ unblocked: number }>(`/api/orders/${target.id}/payments`, { method: "POST", body: JSON.stringify({ kind, amountCents: cents, method: method || undefined }) });
-      toast(r.unblocked > 0 ? `Payment recorded — ${r.unblocked} work order(s) unblocked` : "Payment recorded", "success");
-      onDone();
-    } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
-  };
-  return (
-    <Modal open={!!target} onClose={onClose} title={target ? `Record payment — ${target.number}` : "Record payment"} size="sm" footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" onClick={submit} disabled={busy}>Record</Button></>}>
-      <div style={{ display: "grid", gap: 10 }}>
-        <div><div style={lbl2}>Kind</div><Listbox ariaLabel="Payment kind" options={[{ value: "DEPOSIT", label: "Deposit" }, { value: "BALANCE", label: "Balance" }, { value: "OTHER", label: "Other" }]} value={kind} onChange={setKind} /></div>
-        <div><div style={lbl2}>Amount (€)</div><input style={inp} type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" /></div>
-        <div><div style={lbl2}>Method (optional)</div><input style={inp} value={method} onChange={(e) => setMethod(e.target.value)} placeholder="bank transfer, card…" /></div>
-      </div>
-    </Modal>
-  );
-}
-
-function ImportModal({ open, canPay, onClose, onApplied }: { open: boolean; canPay: boolean; onClose: () => void; onApplied: () => void }) {
-  const { toast } = useToast();
-  const [csv, setCsv] = useState("");
-  const [proposals, setProposals] = useState<BankProposal[] | null>(null);
-  const [pick, setPick] = useState<Record<number, boolean>>({});
-  const [busy, setBusy] = useState(false);
-  useEffect(() => { if (open) { setCsv(""); setProposals(null); setPick({}); } }, [open]);
-
-  const dryRun = async () => {
-    setBusy(true);
-    try {
-      const r = await apiJson<ImportResponse>("/api/imports/payments", { method: "POST", body: JSON.stringify({ rawCsv: csv }) });
-      setProposals(r.proposals);
-      const p: Record<number, boolean> = {};
-      // EPF1 (D-10): settled-order references (zeroBalance) start UNCHECKED
-      r.proposals.forEach((x, i) => { if (x.orderId && !x.zeroBalance) p[i] = true; });
-      setPick(p);
-      if (r.proposals.length === 0) toast(r.note ?? "No rows parsed", "danger");
-    } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
-  };
-  const apply = async () => {
-    if (!proposals) return;
-    // EPF1 (D-10): the statement row's date + description travel with the apply —
-    // they form the idempotency key and the payment's receivedAt.
-    const applyList = proposals.flatMap((p, i) => (pick[i] && p.orderId && p.amountCents ? [{ orderId: p.orderId, amountCents: p.amountCents, date: p.row.date, description: p.row.description, note: `Bank: ${p.row.description}`.slice(0, 200) }] : []));
-    if (applyList.length === 0) { toast("Select at least one matched row", "danger"); return; }
-    setBusy(true);
-    try {
-      const r = await apiJson<ImportApplyResponse>("/api/imports/payments", { method: "POST", body: JSON.stringify({ apply: applyList }) });
-      const extras = [r.skipped > 0 ? `${r.skipped} duplicate(s) skipped` : null, r.errors.length > 0 ? `${r.errors.length} row(s) errored` : null].filter(Boolean).join(", ");
-      toast(`${r.created} payment(s) recorded${extras ? ` — ${extras}` : ""}`, r.errors.length > 0 ? "danger" : "success");
-      onApplied();
-    } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
-  };
-
-  return (
-    <Modal open={open} onClose={onClose} title="Import bank CSV" size="md" footer={proposals ? (
-      <><Button onClick={() => setProposals(null)}>Back</Button>{canPay && <Button variant="primary" onClick={apply} disabled={busy}>Apply selected</Button>}</>
-    ) : (
-      <><Button onClick={onClose}>Cancel</Button><Button variant="primary" onClick={dryRun} disabled={busy || !csv.trim()}>Match</Button></>
-    )}>
-      {!proposals ? (
-        <div style={{ display: "grid", gap: 8 }}>
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>Paste a statement with a header naming <b>date</b>, <b>amount</b>, <b>description</b> columns. We propose matches by reference or amount; nothing is recorded until you apply.</div>
-          <textarea value={csv} onChange={(e) => setCsv(e.target.value)} rows={8} placeholder={"date,amount,description\n2026-07-01,500.00,Bonifico ORD-1"} style={{ ...inp, fontFamily: "ui-monospace, monospace", resize: "vertical" }} />
-        </div>
-      ) : (
-        <div style={{ display: "grid", gap: 6 }}>
-          {proposals.length === 0 && <div style={{ fontSize: 12.5, color: "var(--h10-text-3)" }}>No rows parsed.</div>}
-          {proposals.map((p, i) => (
-            <label key={i} style={{ display: "flex", gap: 8, alignItems: "center", padding: "7px 8px", border: "1px solid var(--h10-border-subtle)", borderRadius: 8, fontSize: 12.5, opacity: p.orderId ? 1 : 0.6 }}>
-              <input type="checkbox" disabled={!p.orderId} checked={!!pick[i]} onChange={(e) => setPick((s) => ({ ...s, [i]: e.target.checked }))} style={{ accentColor: "var(--h10-primary)" }} />
-              <span style={{ flex: 1 }}>{p.row.description || "(no description)"} <span style={{ color: "var(--h10-text-3)" }}>· {eur(p.row.amountCents ?? 0)}</span></span>
-              {p.number ? <span style={{ color: "var(--h10-text-link)", fontWeight: 600 }}>{p.number}</span> : <span style={{ color: "var(--h10-text-3)" }}>{p.reason}</span>}
-              <Pill tone={CONF_TONE[p.confidence]}>{p.confidence === "none" ? "no match" : p.confidence}</Pill>
-            </label>
-          ))}
-        </div>
-      )}
-    </Modal>
-  );
-}
-
-function Tile({ label, value, tone }: { label: string; value: string; tone?: "warning" | "danger" | "success" }) {
-  const color = tone === "warning" ? "var(--h10-text)" : tone === "danger" ? "var(--h10-danger)" : tone === "success" ? "var(--h10-success-text, var(--h10-text))" : "var(--h10-text)";
-  return (
-    <Card>
-      <div style={{ padding: "14px 16px" }}>
-        <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 6 }}>{label}</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color, fontVariantNumeric: "tabular-nums" }}>{value}</div>
-      </div>
-    </Card>
-  );
-}
-
-function MarginCell({ r }: { r: OrderFin }) {
-  const cents = r.actualIsPending ? r.estMarginCents : r.actualMarginCents;
-  const pctv = r.actualIsPending ? r.estMarginPct : r.actualMarginPct;
-  if (cents == null) return <>—</>;
-  return (
-    <span style={{ display: "inline-flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
-      <span style={{ fontVariantNumeric: "tabular-nums" }}>{eur(cents)} <span style={{ color: "var(--h10-text-3)" }}>{pctv != null ? `${pctv.toFixed(0)}%` : ""}</span></span>
-      <Pill tone={r.actualIsPending ? "neutral" : "info"}>{r.actualIsPending ? "est" : "actual"}</Pill>
-    </span>
+    <Suspense fallback={null}>
+      <FinancialsInner />
+    </Suspense>
   );
 }

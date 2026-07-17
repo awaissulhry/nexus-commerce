@@ -16,6 +16,10 @@ export const PaymentBody = z
     amountCents: z.number().int(),
     method: z.string().trim().max(80).optional(),
     notes: z.string().trim().max(500).optional(),
+    // EPF2 (P2: PaymentModal had no date field) — the payment's value date as a
+    // Rome-local `YYYY-MM-DD`; stored UTC-midnight (same convention as the
+    // bank import's parseBankDate). Absent ⇒ the DB default (now).
+    receivedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD").optional(),
     /** EPF1.3 — explicit escape hatch for the Σ ≤ net overpay guard (409 otherwise). */
     allowOverpay: z.boolean().optional(),
     // EPO1.3 (C4) — minted once when the payment modal opens; retries and

@@ -241,12 +241,20 @@ export type CancelledWithMoney = { count: number; paidCents: number; invoicedCen
  * with k=200 and beats both the SQL ORDER BY (≈60ms at the harness) and a JS
  * full sort. Ties break on id ASC (deterministic, matches the loader).
  */
-export function topNewest(fins: OrderFinancials[], n: number): OrderFinancials[] {
+export function topNewest(
+  fins: OrderFinancials[],
+  n: number,
+  /** EPF2 — page cursor: only rows strictly OLDER than this (createdAt DESC, id ASC tie-break) are eligible. */
+  before?: { createdAtISO: string; orderId: string },
+): OrderFinancials[] {
   if (n <= 0) return [];
   const top: OrderFinancials[] = [];
   const after = (a: OrderFinancials, b: OrderFinancials) =>
     a.createdAtISO > b.createdAtISO || (a.createdAtISO === b.createdAtISO && a.orderId < b.orderId);
+  const olderThanCursor = (f: OrderFinancials) =>
+    !before || f.createdAtISO < before.createdAtISO || (f.createdAtISO === before.createdAtISO && f.orderId > before.orderId);
   for (const f of fins) {
+    if (!olderThanCursor(f)) continue;
     if (top.length === n && !after(f, top[n - 1])) continue;
     let lo = 0, hi = top.length;
     while (lo < hi) { const mid = (lo + hi) >> 1; if (after(f, top[mid])) hi = mid; else lo = mid + 1; }
@@ -254,6 +262,22 @@ export function topNewest(fins: OrderFinancials[], n: number): OrderFinancials[]
     if (top.length > n) top.pop();
   }
   return top;
+}
+
+/** EPF2 — a by-order row as the hot list response ships it (degraded month maps + invoice numbers projected away). */
+export type HotOrderFin = Omit<OrderFinancials, "invoicedByMonthCents" | "paidByMonthCents" | "invoiceNumbers">;
+
+/**
+ * EPF2 (EPF.1 follow-up) — hot-response projection: the per-order Rome-month
+ * maps are DEGRADED on the hot loader path (pseudo entries carry no dates) and
+ * the page never renders them or the invoice-number list; shipping them was
+ * dead transport and a footgun (a client reading a degraded map would get
+ * order-creation buckets). The by-month tab reads /api/financials/period
+ * (doc-dates path) instead. Pure — the fold itself is untouched.
+ */
+export function projectHotOrder(f: OrderFinancials): HotOrderFin {
+  const { invoicedByMonthCents: _im, paidByMonthCents: _pm, invoiceNumbers: _nums, ...rest } = f;
+  return rest;
 }
 
 export function cancelledWithMoney(fins: OrderFinancials[]): CancelledWithMoney {

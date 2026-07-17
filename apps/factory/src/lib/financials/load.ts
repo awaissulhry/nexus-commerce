@@ -73,6 +73,8 @@ export type LoadOrderFinancialsOpts = {
    * of transport avoided).
    */
   docDates?: boolean;
+  /** EPF2 (?party= filter, EPO D-5 law) — scope the fold to one customer (WHERE o.partyId, index-backed). */
+  partyId?: string;
 };
 
 export async function loadOrderFinancials(
@@ -85,7 +87,9 @@ export async function loadOrderFinancials(
   const orderBy = opts?.sorted === false ? Prisma.empty : Prisma.sql`ORDER BY o."createdAt" DESC`;
   const range = Prisma.sql`${
     createdAt?.gte ? Prisma.sql`AND substr(o."createdAt", 1, 23) >= ${createdAt.gte.toISOString().slice(0, 23)}` : Prisma.empty
-  } ${createdAt?.lte ? Prisma.sql`AND substr(o."createdAt", 1, 23) <= ${createdAt.lte.toISOString().slice(0, 23)}` : Prisma.empty}`;
+  } ${createdAt?.lte ? Prisma.sql`AND substr(o."createdAt", 1, 23) <= ${createdAt.lte.toISOString().slice(0, 23)}` : Prisma.empty} ${
+    opts?.partyId ? Prisma.sql`AND o."partyId" = ${opts.partyId}` : Prisma.empty
+  }`;
   const stateScope = opts?.includeCancelledMoney
     ? Prisma.sql`(o."state" NOT IN (${Prisma.join(excluded)}) OR (o."state" = 'CANCELLED' AND (EXISTS (SELECT 1 FROM "Payment" pp WHERE pp."orderId" = o."id") OR EXISTS (SELECT 1 FROM "Invoice" ii WHERE ii."orderId" = o."id"))))`
     : Prisma.sql`o."state" NOT IN (${Prisma.join(excluded)})`;
@@ -205,7 +209,7 @@ export async function loadOrderFinancials(
  */
 export async function loadMonthMoney(
   monthKey: string,
-  scope?: { excludeStates?: string[]; createdAt?: { gte?: Date; lte?: Date } },
+  scope?: { excludeStates?: string[]; createdAt?: { gte?: Date; lte?: Date }; partyId?: string },
 ): Promise<MonthMoney> {
   const window = romeMonthWindowUtc(monthKey);
   if (!window) return { monthKey, invoicedCents: 0, paidCents: 0 };
@@ -214,7 +218,9 @@ export async function loadMonthMoney(
   const excluded = scope?.excludeStates ?? ["CANCELLED"];
   const orderScope = Prisma.sql`o."state" NOT IN (${Prisma.join(excluded)}) ${
     scope?.createdAt?.gte ? Prisma.sql`AND substr(o."createdAt", 1, 23) >= ${scope.createdAt.gte.toISOString().slice(0, 23)}` : Prisma.empty
-  } ${scope?.createdAt?.lte ? Prisma.sql`AND substr(o."createdAt", 1, 23) <= ${scope.createdAt.lte.toISOString().slice(0, 23)}` : Prisma.empty}`;
+  } ${scope?.createdAt?.lte ? Prisma.sql`AND substr(o."createdAt", 1, 23) <= ${scope.createdAt.lte.toISOString().slice(0, 23)}` : Prisma.empty} ${
+    scope?.partyId ? Prisma.sql`AND o."partyId" = ${scope.partyId}` : Prisma.empty
+  }`;
 
   const [paid, invoiced] = await Promise.all([
     prisma.$queryRaw<{ c: number | bigint | null }[]>(Prisma.sql`

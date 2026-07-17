@@ -15,6 +15,7 @@ import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 import { orderTotals, overpayCents } from "@/lib/orders/money";
 import { PaymentBody } from "@/lib/orders/payment-schema";
+import { parseBankDate } from "@/lib/financials/bank-match";
 import { applyDepositGate, type DepositGateDb } from "@/lib/orders/deposit-gate";
 import { paymentRecordedNotice } from "@/lib/financials/notify-money";
 import { notifyOwners } from "@/lib/quotes/notify-owners";
@@ -64,8 +65,10 @@ export const POST = guarded(FEATURES.paymentsRecord, async (req, { params, actor
   try {
     // ONE transaction: payment + audit + deposit gate — commit together (D-17)
     const res = await prisma.$transaction(async (tx) => {
+      // EPF2 — the modal's date field: value date as UTC midnight (bank-import convention)
+      const receivedAt = parsed.data.receivedAt ? parseBankDate(parsed.data.receivedAt) : null;
       const p = await tx.payment.create({
-        data: { orderId: id, kind: parsed.data.kind, amountCents: parsed.data.amountCents, method: parsed.data.method ?? null, notes: parsed.data.notes ?? null, idempotencyKey: parsed.data.idempotencyKey ?? null },
+        data: { orderId: id, kind: parsed.data.kind, amountCents: parsed.data.amountCents, method: parsed.data.method ?? null, notes: parsed.data.notes ?? null, idempotencyKey: parsed.data.idempotencyKey ?? null, ...(receivedAt ? { receivedAt } : {}) },
         select: { id: true },
       });
       await tx.auditLog.create({
