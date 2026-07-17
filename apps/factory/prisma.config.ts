@@ -19,6 +19,17 @@ const url =
   `file:${path.join(process.cwd(), "data", "factory.db")}`;
 process.env.FACTORY_DATABASE_URL = url;
 
+// FS5 — the FTS5 search substrate (migration fs5_fts) lives OUTSIDE
+// schema.prisma: virtual tables are not Prisma-modelable. Declaring the
+// virtual tables AND their SQLite-managed shadow tables externally managed
+// keeps `prisma migrate dev/diff` from proposing `DROP TABLE "…_fts…"` on
+// every future migration (verified against 7.8: without this list the diff
+// emits exactly those DROPs). New FTS tables must be added here.
+const FTS_SHADOWS = ["", "_config", "_content", "_data", "_docsize", "_idx"];
+const ftsExternalTables = ["conversation_fts", "message_fts", "quote_fts", "order_fts", "party_fts"].flatMap((t) =>
+  FTS_SHADOWS.map((s) => `${t}${s}`),
+);
+
 export default defineConfig({
   // Classic (stable) Schema Engine for Migrate; the app's runtime client uses
   // the better-sqlite3 driver adapter independently (src/lib/db.ts).
@@ -28,4 +39,6 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: { url },
+  experimental: { externalTables: true },
+  tables: { external: ftsExternalTables },
 });
