@@ -8,15 +8,16 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Inbox } from "lucide-react";
+import { Crosshair, Download, FileText, Inbox } from "lucide-react";
 import { Banner, Card, DateField, EmptyState, Listbox, useToast } from "@/design-system/components";
 import { Button, Checkbox, Input, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { AsyncCombobox, type SearchLoader } from "@/components/AsyncCombobox";
 import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
+import { previewKind } from "@/lib/inbox/preview";
 import type { ThreadResponse, UserLite } from "./types";
 
 const QUOTE_TONE: Record<string, "neutral" | "info" | "success" | "danger" | "warning"> = { DRAFT: "neutral", SENT: "info", ACCEPTED: "success", REJECTED: "danger", EXPIRED: "warning" };
@@ -35,9 +36,12 @@ const loadContacts: SearchLoader = async (q) => {
 export function ContextRail({
   thread,
   onMutated,
+  onFileOpen,
 }: {
   thread: ThreadResponse | null;
   onMutated: () => void;
+  /** EPI2.3 — open the conversation lightbox at this attachment */
+  onFileOpen?: (attId: string) => void;
 }) {
   const { toast } = useToast();
   const canAssign = usePermission("inbox.assign");
@@ -278,10 +282,100 @@ export function ContextRail({
         )}
       </Card>
 
+      <FilesCard thread={thread} onFileOpen={onFileOpen} />
+
       <Card padded header="Quotes">
         <LinkedQuotes thread={thread} onToast={(m, t) => toast(m, t)} />
       </Card>
     </div>
+  );
+}
+
+/** EPI2.3 — every file in the conversation, previewable + jumpable (Missive's
+ * Files-sidebar verdict). Renders nothing when the thread carries no files. */
+function FilesCard({ thread, onFileOpen }: { thread: ThreadResponse; onFileOpen?: (attId: string) => void }) {
+  const items = useMemo(
+    () =>
+      thread.messages.flatMap((m) =>
+        m.attachments.map((a) => ({ ...a, messageId: m.id, sentAt: m.sentAt })),
+      ),
+    [thread],
+  );
+  if (items.length === 0) return null;
+  const images = items.filter((a) => previewKind(a.mimeType) === "image");
+  const files = items.filter((a) => previewKind(a.mimeType) !== "image");
+  const kb = (n: number | null) => (n == null ? "" : n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+  const showInConversation = (messageId: string) => {
+    const el = document.querySelector(`[data-msg="${messageId}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    (el as HTMLElement).animate(
+      [{ boxShadow: "0 0 0 2px var(--h10-primary)" }, { boxShadow: "0 0 0 2px transparent" }],
+      { duration: 1400 },
+    );
+  };
+
+  return (
+    <Card padded header={`Files (${items.length})`}>
+      <div style={{ display: "grid", gap: 8 }}>
+        {images.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {images.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => onFileOpen?.(a.id)}
+                title={`${a.filename} · ${kb(a.sizeBytes)}`}
+                style={{ padding: 0, border: "1px solid var(--h10-border)", borderRadius: 8, overflow: "hidden", width: 56, height: 56, cursor: "zoom-in", background: "var(--h10-surface)" }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`/api/inbox/${thread.conversation.id}/attachments/${a.id}?inline=1`}
+                  alt={a.filename}
+                  loading="lazy"
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                />
+              </button>
+            ))}
+          </div>
+        )}
+        {files.map((a) => {
+          const canPreview = previewKind(a.mimeType) !== "none";
+          return (
+            <div key={a.id} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12.5, minWidth: 0 }}>
+              <FileText size={13} style={{ color: "var(--h10-text-3)", flexShrink: 0 }} />
+              {canPreview && onFileOpen ? (
+                <button
+                  type="button"
+                  onClick={() => onFileOpen(a.id)}
+                  title="Preview"
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit", color: "var(--h10-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1, textAlign: "left" }}
+                >
+                  {a.filename}
+                </button>
+              ) : (
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>{a.filename}</span>
+              )}
+              <span style={{ fontSize: 11.5, color: "var(--h10-text-3)", flexShrink: 0 }}>{kb(a.sizeBytes)}</span>
+              <a href={`/api/inbox/${thread.conversation.id}/attachments/${a.id}`} title="Download" style={{ display: "inline-flex", color: "var(--h10-text-3)", flexShrink: 0 }}>
+                <Download size={12} />
+              </a>
+              <button
+                type="button"
+                onClick={() => showInConversation(a.messageId)}
+                title="Show in conversation"
+                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "inline-flex", color: "var(--h10-text-3)", flexShrink: 0 }}
+              >
+                <Crosshair size={12} />
+              </button>
+            </div>
+          );
+        })}
+        {images.length > 0 && files.length === 0 && (
+          <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>Click a thumbnail to preview · images jump via the thread</span>
+        )}
+      </div>
+    </Card>
   );
 }
 

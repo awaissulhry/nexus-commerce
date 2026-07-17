@@ -348,7 +348,7 @@ function InboxInner() {
       />
       <div style={{ minWidth: 0, minHeight: 0, overflow: "hidden", background: "var(--h10-surface-raised)" }}>
         {railShown ? (
-          <ContextRail thread={thread} onMutated={refresh} />
+          <ContextRail thread={thread} onMutated={refresh} onFileOpen={(fid) => window.history.replaceState(null, "", urlFor(focusId, fid))} />
         ) : (
           <div style={{ display: "grid", justifyItems: "center", paddingTop: 10 }}>
             <button
@@ -365,7 +365,14 @@ function InboxInner() {
       </div>
       {!railShown && (
         <Drawer open={railDrawer} onClose={() => setRailDrawer(false)} title="Details" width={340}>
-          <ContextRail thread={thread} onMutated={refresh} />
+          <ContextRail
+            thread={thread}
+            onMutated={refresh}
+            onFileOpen={(fid) => {
+              setRailDrawer(false); // lightbox takes the stage
+              window.history.replaceState(null, "", urlFor(focusId, fid));
+            }}
+          />
         </Drawer>
       )}
     </div>

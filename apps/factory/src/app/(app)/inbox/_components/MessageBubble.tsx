@@ -160,6 +160,7 @@ export function MessageBubble({
 
   return (
     <div
+      data-msg={message.id} // EPI2.3 — scroll anchor for the rail Files panel
       style={{
         border: "1px solid var(--h10-border-subtle)",
         borderRadius: 12,
