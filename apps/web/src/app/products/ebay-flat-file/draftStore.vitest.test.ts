@@ -1,7 +1,7 @@
 /** FFP.1 — draft layer unit tests (pure merge + key building). */
 
-import { describe, it, expect } from 'vitest'
-import { draftKey, mergeDraftRows } from './draftStore'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { draftKey, mergeDraftRows, writeDraft, readDraft } from './draftStore'
 import type { BaseRow } from '@/components/flat-file/FlatFileGrid.types'
 
 const server = (o: Partial<BaseRow> & { _rowId: string }): BaseRow => ({
@@ -95,5 +95,28 @@ describe('mergeDraftRows', () => {
     expect(out).toHaveLength(2)
     expect(out[1].title).toBe('typed on blank row')
     expect(out[0].title).toBeUndefined()
+  })
+})
+
+describe('round-trip integrity — _shared rows are draft-protected', () => {
+  const store: Record<string, string> = {}
+  beforeEach(() => {
+    for (const k of Object.keys(store)) delete store[k]
+    // minimal localStorage stub
+    globalThis.localStorage = {
+      getItem: (k: string) => store[k] ?? null,
+      setItem: (k: string, v: string) => { store[k] = v },
+      removeItem: (k: string) => { delete store[k] },
+    } as never
+  })
+
+  it('dirty _shared rows persist to the draft; plain _readonly rows still excluded', () => {
+    writeDraft('k', [
+      { _rowId: 'a', sku: 'SHARED-1', _dirty: true, _shared: true, _readonly: true, it_price: 106 },
+      { _rowId: 'b', sku: 'RO-1', _dirty: true, _readonly: true, title: 'x' },
+      { _rowId: 'c', sku: 'CLEAN', title: 'y' },
+    ] as never)
+    const draft = readDraft('k')
+    expect(draft?.rows.map((r) => r.sku)).toEqual(['SHARED-1'])
   })
 })

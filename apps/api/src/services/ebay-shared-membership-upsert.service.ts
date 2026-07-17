@@ -24,6 +24,9 @@ export interface SharedMembershipUpsertResult {
   created: number
   updated: number
   skipped: Array<{ sku: string; reason: string }>
+  /** Rows whose edited quantity was NOT taken (the shared pool + fan-out own
+   *  quantities on shared listings) — surfaced so a "revert" is never silent. */
+  qtyPoolGoverned: number
 }
 
 /**
@@ -77,7 +80,7 @@ export async function upsertSharedMembershipsFromRows(
 ): Promise<SharedMembershipUpsertResult> {
   const market = marketplace.toUpperCase()
   const prefix = marketplace.toLowerCase()
-  const result: SharedMembershipUpsertResult = { families: 0, created: 0, updated: 0, skipped: [] }
+  const result: SharedMembershipUpsertResult = { families: 0, created: 0, updated: 0, skipped: [], qtyPoolGoverned: 0 }
 
   // Shared families = parent rows flagged shared_sku_listing; children match
   // by parent_sku. Synthesized read-back rows (_shared) also qualify — an
@@ -135,12 +138,26 @@ export async function upsertSharedMembershipsFromRows(
   for (const t of targets) {
     const priceRaw = str(t.row[`${prefix}_price`]) || str(t.row.price)
     const priceNum = priceRaw === '' ? null : Number(priceRaw.replace(',', '.'))
+    // Round-trip integrity (2026-07-17): persist the FULL row as saved (minus
+    // _internal keys) — the Lane-B twin of ChannelListing.flatFileSnapshot.
+    // Row synthesis overlays it verbatim, so save→reload reproduces exactly
+    // what the operator left on this row. Live fields (item id, fan-out qty)
+    // still override on read — see synthesizeSharedRow.
+    const flatFileSnapshot = Object.fromEntries(
+      Object.entries(t.row).filter(([k]) => !k.startsWith('_')),
+    ) as Prisma.InputJsonObject
+    // Quantities on shared listings follow the POOL via the fan-out — an
+    // edited qty cell is deliberately not taken, and we COUNT it so the save
+    // banner can say so (a silent revert is what we're eliminating).
+    const qtyRaw = str(t.row[`${prefix}_qty`])
+    if (qtyRaw !== '') result.qtyPoolGoverned++
     const data = {
       parentSku: t.parentSku || t.sku,
       productId: productIdBySku.get(t.sku) ?? null,
       variationSpecifics: specificsFromRow(t.row),
       ...(priceNum != null && Number.isFinite(priceNum) ? { price: new Prisma.Decimal(priceNum) } : {}),
       status: 'ACTIVE',
+      flatFileSnapshot,
     }
     await db.sharedListingMembership.upsert({
       where: { marketplace_itemId_sku: { marketplace: market, itemId: t.itemId, sku: t.sku } },
