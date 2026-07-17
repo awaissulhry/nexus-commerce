@@ -1,13 +1,24 @@
 'use client'
 
 /**
- * EbayImportWizard — a self-contained 3-step file-import wizard for the eBay flat
- * file (Upload · Map · Preview). Built ENTIRELY from the H10 design system: zero
- * hand-rolled raw-Tailwind colour/border classes. Layout is plain divs with inline
- * `var(--h10-*)` token styles; everything visible is a DS component/primitive.
+ * EbayImportWizard — dynamic file-import wizard for the eBay flat file.
+ * Steps: Upload · Map · Review listings (block files only) · Preview.
+ * Built ENTIRELY from the H10 design system: zero hand-rolled raw-Tailwind
+ * colour/border classes. Layout is plain divs with inline `var(--h10-*)`
+ * token styles; everything visible is a DS component/primitive.
  *
- * The parent owns the contract (props below) and wires the result into the eBay
- * flat-file store. This file does NOT touch EbayFlatFileClient.
+ * EI.1 — typed coercion (importCoerce.pure) + market-aware mapping: per-market
+ * headers ("Item ID", "Price (€)", "Qty"…) resolve against the wizard's File
+ * market selector, so a DE file imported while viewing IT lands on de_* columns
+ * deliberately, never by column-order luck. Per-cell issues surface in Preview.
+ *
+ * EI.2 — block/family review: multi-listing files (parent+children per Item ID,
+ * shared child SKUs pooling stock) get a Review step with per-block
+ * Adopt/Create/Skip decisions (Adopt default when a live Item ID exists — the
+ * listing is never re-created) and a one-click "Flag all as Shared-SKU" fix.
+ *
+ * The parent owns the contract (props below) and wires the result into the
+ * eBay flat-file store. This file does NOT touch EbayFlatFileClient state.
  */
 
 import '@/design-system/styles/tokens.css'
@@ -16,7 +27,7 @@ import '@/design-system/styles/components.css'
 import '@/design-system/styles/patterns.css'
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { ArrowRight, ArrowLeft, Wand2, ClipboardPaste, UploadCloud } from 'lucide-react'
+import { ArrowRight, ArrowLeft, Wand2, ClipboardPaste, UploadCloud, Layers, Link2, AlertTriangle } from 'lucide-react'
 
 import { Modal } from '@/design-system/components/Modal'
 import { Stepper } from '@/design-system/components/Stepper'
@@ -24,6 +35,7 @@ import { SPREADSHEET_ACCEPT } from '@/components/flat-file/import-accept'
 import { FileDropzone } from '@/design-system/components/FileDropzone'
 import { DataGrid, type Column } from '@/design-system/components/DataGrid'
 import { Combobox, type ComboboxOption } from '@/design-system/components/Combobox'
+import { Listbox } from '@/design-system/components/Listbox'
 import { Banner } from '@/design-system/components/Banner'
 import { Button } from '@/design-system/primitives/Button'
 import { Spinner } from '@/design-system/primitives/Spinner'
@@ -32,6 +44,14 @@ import { Tag, type TagTone } from '@/design-system/primitives/Tag'
 import { SegmentedControl } from '@/design-system/primitives/SegmentedControl'
 
 import { getBackendUrl } from '@/lib/backend-url'
+import { coerceEbayImportRows, type CoerceColumnMeta, type CoerceIssue } from './importCoerce.pure'
+import {
+  detectImportBlocks,
+  markAllPooledShared,
+  applyBlockDecisions,
+  type BlockDecision,
+  type ImportBlock,
+} from './importBlocks.pure'
 
 // ── Contract ──────────────────────────────────────────────────────────
 export interface ExistingParent {
@@ -40,11 +60,20 @@ export interface ExistingParent {
   variationTheme?: string
 }
 
+/** Rich column metadata — kind/options drive typed coercion (EI.1). */
+export interface WizardColumn extends CoerceColumnMeta {
+  label: string
+  /** Set on per-market columns ('IT' | 'DE' | …) — targets are scoped to the
+   *  wizard's File market so repeated labels ("Item ID") stay unambiguous. */
+  market?: string
+  readOnly?: boolean
+}
+
 export interface EbayImportWizardProps {
   open: boolean
   onClose: () => void
-  /** the eBay columns to map INTO */
-  columns: { id: string; label: string }[]
+  /** the eBay columns to map INTO (all markets — the wizard scopes by File market) */
+  columns: WizardColumn[]
   /** to count new vs update in the preview */
   existingSkus?: Set<string>
   /** parents available for "import under parent" mode */
@@ -61,6 +90,7 @@ type Confidence = 'exact' | 'fuzzy' | 'none'
 const SKIP = '__skip__'
 const MAX_BYTES = 15 * 1024 * 1024
 const PREVIEW_LIMIT = 50
+const MARKET_CHOICES = ['IT', 'DE', 'FR', 'ES', 'UK'] as const
 
 interface ParseResult {
   headers: string[]
@@ -75,18 +105,12 @@ interface HeaderRow {
   confidence: Confidence
 }
 
-const STEPS = [
-  { key: 'upload', label: 'Upload' },
-  { key: 'map', label: 'Map' },
-  { key: 'preview', label: 'Preview' },
-]
-
 // ── Matching helpers ──────────────────────────────────────────────────
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 
 function autoMatch(
   header: string,
-  columns: { id: string; label: string }[],
+  columns: WizardColumn[],
 ): { target: string; confidence: Confidence } {
   // 1) exact: header === col.id OR header === col.label
   const exact = columns.find((c) => header === c.id || header === c.label)
@@ -129,7 +153,7 @@ export function EbayImportWizard({
   marketplace,
   initialFile,
 }: EbayImportWizardProps) {
-  const [step, setStep] = useState(0)
+  const [stepKey, setStepKey] = useState<'upload' | 'map' | 'review' | 'preview'>('upload')
   const [parsing, setParsing] = useState(false)
   const [parseError, setParseError] = useState<string | null>(null)
   const [parsed, setParsed] = useState<ParseResult | null>(null)
@@ -138,11 +162,16 @@ export function EbayImportWizard({
   const [mode, setMode] = useState<MergeMode>('fill-missing')
   const [importTarget, setImportTarget] = useState<ImportTarget>('new')
   const [targetParentId, setTargetParentId] = useState<string>('')
+  // EI.1 — the market whose per-market columns this FILE addresses.
+  const [fileMarket, setFileMarket] = useState<string>(marketplace)
+  // EI.2 — operator overlays: shared quick-fix rows + per-block decisions.
+  const [fixedRows, setFixedRows] = useState<Record<string, unknown>[] | null>(null)
+  const [decisions, setDecisions] = useState<Record<string, BlockDecision>>({})
 
   // Reset ALL state whenever the modal closes/reopens.
   useEffect(() => {
     if (!open) {
-      setStep(0)
+      setStepKey('upload')
       setParsing(false)
       setParseError(null)
       setParsed(null)
@@ -151,8 +180,11 @@ export function EbayImportWizard({
       setMode('fill-missing')
       setImportTarget('new')
       setTargetParentId('')
+      setFixedRows(null)
+      setDecisions({})
       return
     }
+    setFileMarket(marketplace)
     // Smart default: when exactly one family is loaded, pre-select "Under parent"
     // so the operator doesn't have to switch — importing into a single family is
     // the common case (wizard opened from that family's page).
@@ -174,14 +206,44 @@ export function EbayImportWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialFile])
 
-  // The combobox target options: every eBay column + an explicit Skip option.
+  // ── EI.1: market-scoped mappable columns ────────────────────────────
+  // Core (market-less) columns + ONLY the File market's per-market columns, so
+  // repeated labels ("Item ID", "Price (€)") resolve deterministically.
+  const scopedColumns = useMemo<WizardColumn[]>(
+    () => columns.filter((c) => !c.market || c.market === fileMarket),
+    [columns, fileMarket],
+  )
+
+  // The combobox target options: every scoped column + an explicit Skip option.
   const targetOptions: ComboboxOption[] = useMemo(
     () => [
       { value: SKIP, label: '— Skip this column —' },
-      ...columns.map((c) => ({ value: c.id, label: c.label })),
+      ...scopedColumns.map((c) => ({
+        value: c.id,
+        label:
+          (c.market ? `${c.label} · ${c.market}` : c.label) +
+          (c.kind === 'readonly' ? ' (link only)' : ''),
+      })),
     ],
-    [columns],
+    [scopedColumns],
   )
+
+  const remap = (headers: string[], first: Record<string, unknown>, cols: WizardColumn[]) =>
+    headers.map((header) => {
+      const { target, confidence } = autoMatch(header, cols)
+      return { header, sample: toCell(first[header]), target, confidence }
+    })
+
+  // File market change re-runs the auto-map so per-market headers follow it.
+  const onFileMarketChange = (mp: string) => {
+    setFileMarket(mp)
+    if (parsed) {
+      const cols = columns.filter((c) => !c.market || c.market === mp)
+      setMapping(remap(parsed.headers, parsed.rows[0] ?? {}, cols))
+      setFixedRows(null)
+      setDecisions({})
+    }
+  }
 
   // ── Parse transport (shared by file + paste) ───────────────────────
   async function runParse(body: {
@@ -216,16 +278,13 @@ export function EbayImportWizard({
       if (!result.headers.length) {
         throw new Error('No columns were found in the file. Check it has a header row.')
       }
-      // Seed the auto-mapping from the headers.
+      // Seed the auto-mapping from the headers (scoped to the File market).
       const first = result.rows[0] ?? {}
       setParsed(result)
-      setMapping(
-        result.headers.map((header) => {
-          const { target, confidence } = autoMatch(header, columns)
-          return { header, sample: toCell(first[header]), target, confidence }
-        }),
-      )
-      setStep(1) // auto-advance to Map
+      setMapping(remap(result.headers, first, scopedColumns))
+      setFixedRows(null)
+      setDecisions({})
+      setStepKey('map') // auto-advance to Map
     } catch (err) {
       setParseError(err instanceof Error ? err.message : 'Parse failed.')
     } finally {
@@ -271,19 +330,19 @@ export function EbayImportWizard({
     })
   }
 
-  // ── Derived: mapped rows + stats ────────────────────────────────────
+  // ── Derived: mapped rows + coercion + blocks ────────────────────────
   const mappedHeaders = useMemo(() => mapping.filter((m) => m.target !== SKIP), [mapping])
   const skippedCount = mapping.length - mappedHeaders.length
 
   // The eBay column ids that ended up mapped (dedup, preserve column order).
   const mappedColumnIds = useMemo(() => {
     const used = new Set(mappedHeaders.map((m) => m.target))
-    return columns.filter((c) => used.has(c.id)).map((c) => c.id)
-  }, [mappedHeaders, columns])
+    return scopedColumns.filter((c) => used.has(c.id)).map((c) => c.id)
+  }, [mappedHeaders, scopedColumns])
 
   const columnLabelById = useMemo(() => {
     const m = new Map<string, string>()
-    for (const c of columns) m.set(c.id, c.label)
+    for (const c of columns) m.set(c.id, c.market ? `${c.label} · ${c.market}` : c.label)
     return m
   }, [columns])
 
@@ -301,6 +360,35 @@ export function EbayImportWizard({
     })
   }, [parsed, mappedHeaders])
 
+  // EI.1 — typed coercion against the full column metadata.
+  const coerceResult = useMemo(
+    () => coerceEbayImportRows(mappedRows, columns),
+    [mappedRows, columns],
+  )
+  // EI.2 — operator overlay (shared quick-fix) sits on top of coercion.
+  const workingRows = fixedRows ?? coerceResult.rows
+
+  const blockAnalysis = useMemo(() => detectImportBlocks(workingRows), [workingRows])
+  const blocks = useMemo<ImportBlock[]>(
+    () => blockAnalysis.blocks.map((b) => ({ ...b, decision: decisions[b.key] ?? b.decision })),
+    [blockAnalysis, decisions],
+  )
+  const hasReviewStep = importTarget === 'new' && !blockAnalysis.flat && blocks.length > 0
+
+  // Final rows the Import button hands over (skip-filtered).
+  const finalRows = useMemo(
+    () => (hasReviewStep ? applyBlockDecisions(workingRows, blocks) : workingRows),
+    [hasReviewStep, workingRows, blocks],
+  )
+
+  const issueByCell = useMemo(() => {
+    const m = new Map<string, CoerceIssue>()
+    for (const i of coerceResult.issues) m.set(`${i.rowIndex}|${i.columnId}`, i)
+    return m
+  }, [coerceResult.issues])
+  const errorCount = coerceResult.issues.filter((i) => i.level === 'error').length
+  const warnCount = coerceResult.issues.length - errorCount
+
   // Which eBay column id carries the SKU (for new-vs-update counting).
   const skuColumnId = useMemo(() => {
     const direct = mappedColumnIds.find((id) => id === 'sku' || id === 'SKU')
@@ -310,15 +398,15 @@ export function EbayImportWizard({
 
   const { newCount, updateCount } = useMemo(() => {
     if (!skuColumnId || !existingSkus || existingSkus.size === 0) {
-      return { newCount: mappedRows.length, updateCount: 0 }
+      return { newCount: finalRows.length, updateCount: 0 }
     }
     let update = 0
-    for (const row of mappedRows) {
+    for (const row of finalRows) {
       const sku = toCell(row[skuColumnId]).trim()
       if (sku && existingSkus.has(sku)) update += 1
     }
-    return { newCount: mappedRows.length - update, updateCount: update }
-  }, [mappedRows, skuColumnId, existingSkus])
+    return { newCount: finalRows.length - update, updateCount: update }
+  }, [finalRows, skuColumnId, existingSkus])
 
   // Parent picker options for "Import under parent" mode.
   const parentOptions: ComboboxOption[] = useMemo(
@@ -326,10 +414,31 @@ export function EbayImportWizard({
     [existingParents],
   )
 
+  // ── Steps (dynamic — Review only for block files) ───────────────────
+  const steps = useMemo(
+    () =>
+      hasReviewStep
+        ? [
+            { key: 'upload', label: 'Upload' },
+            { key: 'map', label: 'Map' },
+            { key: 'review', label: 'Review listings' },
+            { key: 'preview', label: 'Preview' },
+          ]
+        : [
+            { key: 'upload', label: 'Upload' },
+            { key: 'map', label: 'Map' },
+            { key: 'preview', label: 'Preview' },
+          ],
+    [hasReviewStep],
+  )
+  const stepIndex = Math.max(0, steps.findIndex((s) => s.key === stepKey))
+  const goNext = () => setStepKey(steps[Math.min(stepIndex + 1, steps.length - 1)].key as typeof stepKey)
+  const goBack = () => setStepKey(steps[Math.max(stepIndex - 1, 0)].key as typeof stepKey)
+
   // ── Render nothing when closed ──────────────────────────────────────
   if (!open) return null
 
-  // ── Step 1: Upload ──────────────────────────────────────────────────
+  // ── Step: Upload ────────────────────────────────────────────────────
   const uploadBody = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {parseError && (
@@ -413,9 +522,12 @@ export function EbayImportWizard({
     </div>
   )
 
-  // ── Step 2: Map ─────────────────────────────────────────────────────
-  const setTarget = (header: string, target: string) =>
+  // ── Step: Map ───────────────────────────────────────────────────────
+  const setTarget = (header: string, target: string) => {
     setMapping((prev) => prev.map((m) => (m.header === header ? { ...m, target } : m)))
+    setFixedRows(null)
+    setDecisions({})
+  }
 
   const mapColumns: Column<HeaderRow>[] = [
     {
@@ -467,39 +579,217 @@ export function EbayImportWizard({
 
   const mapBody = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <Banner variant="info" title={`Map columns for ${marketplace}`}>
+      <Banner variant="info" title={`Map columns for eBay ${fileMarket}`}>
         We auto-matched what we could. Adjust any column or set it to “Skip”.
       </Banner>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          fontSize: 12.5,
-          color: 'var(--h10-text-2)',
-        }}
-      >
-        <Wand2 size={14} aria-hidden style={{ color: 'var(--h10-primary)' }} />
-        <strong style={{ color: 'var(--h10-text)' }}>{mapping.length}</strong> columns ·{' '}
-        <strong style={{ color: 'var(--h10-text)' }}>{mappedHeaders.length}</strong> mapped ·{' '}
-        <strong style={{ color: 'var(--h10-text)' }}>{skippedCount}</strong> skipped
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 200 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--h10-text-2)' }}>
+            File market — per-market columns (Item ID, Price, Qty…) map here
+          </span>
+          <Listbox
+            value={fileMarket}
+            onChange={(v) => onFileMarketChange(String(v))}
+            options={MARKET_CHOICES.map((m) => ({ value: m, label: m === marketplace ? `${m} (current grid)` : m }))}
+          />
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: 12.5,
+            color: 'var(--h10-text-2)',
+            paddingBottom: 6,
+          }}
+        >
+          <Wand2 size={14} aria-hidden style={{ color: 'var(--h10-primary)' }} />
+          <strong style={{ color: 'var(--h10-text)' }}>{mapping.length}</strong> columns ·{' '}
+          <strong style={{ color: 'var(--h10-text)' }}>{mappedHeaders.length}</strong> mapped ·{' '}
+          <strong style={{ color: 'var(--h10-text)' }}>{skippedCount}</strong> skipped
+        </div>
       </div>
+      {fileMarket !== marketplace && (
+        <Banner variant="warning" title={`This file targets eBay ${fileMarket}, the grid shows ${marketplace}`}>
+          Prices, quantities and Item IDs land on the {fileMarket} columns — switch the page’s market selector to {fileMarket} to see them after importing.
+        </Banner>
+      )}
       <DataGrid
         columns={mapColumns}
         rows={mapping}
         rowKey={(r) => r.header}
-        maxHeight={380}
+        maxHeight={340}
         emptyState="No columns to map."
       />
     </div>
   )
 
-  // ── Step 3: Preview & import ────────────────────────────────────────
+  // ── Step: Review listings (EI.2) ────────────────────────────────────
+  const adoptCount = blocks.filter((b) => b.decision === 'adopt').length
+  const createCount = blocks.filter((b) => b.decision === 'create').length
+  const skipCount = blocks.filter((b) => b.decision === 'skip').length
+  const blockErrorCount = blocks.reduce(
+    (n, b) => n + (b.decision !== 'skip' ? b.issues.filter((i) => i.level === 'error').length : 0),
+    0,
+  )
+
+  const reviewColumns: Column<ImportBlock>[] = [
+    {
+      key: 'listing',
+      label: 'Listing',
+      render: (b) => (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 180 }}>
+          <span style={{ fontWeight: 600, color: 'var(--h10-text)' }}>{b.parentSku}</span>
+          {b.title && (
+            <span
+              style={{ fontSize: 11.5, color: 'var(--h10-text-3)', maxWidth: 260, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+              title={b.title}
+            >
+              {b.title}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'itemId',
+      label: 'eBay Item ID',
+      render: (b) =>
+        b.itemId ? (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--h10-text)' }}>
+            <Link2 size={12} aria-hidden style={{ color: 'var(--h10-primary)' }} />
+            {b.itemId}
+          </span>
+        ) : (
+          <Tag tone="neutral">new listing</Tag>
+        ),
+    },
+    {
+      key: 'children',
+      label: 'Variants',
+      align: 'center',
+      render: (b) => {
+        const pooled = b.childSkus.filter((s) => blockAnalysis.pooledSkus.has(s)).length
+        return (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 12.5, color: 'var(--h10-text)' }}>{b.standalone ? '—' : b.childSkus.length}</span>
+            {pooled > 0 && (
+              <Tag tone="info">
+                <Layers size={11} aria-hidden style={{ marginRight: 3 }} />
+                {pooled} pooled
+              </Tag>
+            )}
+          </div>
+        )
+      },
+    },
+    {
+      key: 'shared',
+      label: 'Shared-SKU',
+      align: 'center',
+      render: (b) => (b.shared ? <Tag tone="positive">Shared</Tag> : <Tag tone="neutral">—</Tag>),
+    },
+    {
+      key: 'issues',
+      label: 'Checks',
+      render: (b) =>
+        b.issues.length === 0 ? (
+          <Tag tone="positive">OK</Tag>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {b.issues.map((i, idx) => (
+              <span
+                key={idx}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'flex-start',
+                  gap: 5,
+                  fontSize: 11.5,
+                  color: i.level === 'error' ? 'var(--h10-danger)' : 'var(--h10-warning)',
+                  maxWidth: 320,
+                }}
+              >
+                <AlertTriangle size={11} aria-hidden style={{ marginTop: 2, flexShrink: 0 }} />
+                {i.message}
+              </span>
+            ))}
+          </div>
+        ),
+    },
+    {
+      key: 'decision',
+      label: 'Decision',
+      render: (b) => (
+        <SegmentedControl
+          size="sm"
+          value={b.decision}
+          onChange={(v) => setDecisions((prev) => ({ ...prev, [b.key]: v as BlockDecision }))}
+          options={
+            b.itemId
+              ? [
+                  { value: 'adopt', label: 'Adopt' },
+                  { value: 'skip', label: 'Skip' },
+                ]
+              : [
+                  { value: 'create', label: 'Create' },
+                  { value: 'skip', label: 'Skip' },
+                ]
+          }
+        />
+      ),
+    },
+  ]
+
+  const reviewBody = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <Banner variant="info" title={`${blocks.length} listing${blocks.length === 1 ? '' : 's'} in this file`}>
+        <strong>{adoptCount}</strong> adopt existing eBay listings (linked by Item ID — never re-created) ·{' '}
+        <strong>{createCount}</strong> create new · <strong>{skipCount}</strong> skipped ·{' '}
+        <strong>{blockAnalysis.pooledSkus.size}</strong> SKU{blockAnalysis.pooledSkus.size === 1 ? '' : 's'} pooling stock across listings
+      </Banner>
+      {blockAnalysis.needsSharedFix && !fixedRows && (
+        <Banner variant="error" title="Pooled SKUs need the Shared-SKU flag">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <span>
+              The same child SKUs appear in several listings, but not every listing is flagged Shared-SKU — publishing
+              would stop with duplicate-SKU errors.
+            </span>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                const fixed = markAllPooledShared(workingRows, blockAnalysis)
+                setFixedRows(fixed.rows)
+              }}
+            >
+              Flag all as Shared-SKU
+            </Button>
+          </div>
+        </Banner>
+      )}
+      {fixedRows && (
+        <Banner variant="success" title="Shared-SKU flag applied to all pooled listings">
+          Stock for pooled SKUs stays one warehouse pool; each listing keeps its own price and content.
+        </Banner>
+      )}
+      <DataGrid
+        columns={reviewColumns}
+        rows={blocks}
+        rowKey={(b) => b.key}
+        maxHeight={380}
+        emptyState="No listings detected."
+      />
+    </div>
+  )
+
+  // ── Step: Preview & import ──────────────────────────────────────────
   const previewColumns: Column<Record<string, unknown>>[] = mappedColumnIds.map((id) => ({
     key: id,
     label: columnLabelById.get(id) ?? id,
     render: (row) => {
       const v = toCell(row[id])
+      const rowIndex = workingRows.indexOf(row)
+      const issue = rowIndex >= 0 ? issueByCell.get(`${rowIndex}|${id}`) : undefined
       return (
         <span
           style={{
@@ -509,9 +799,16 @@ export function EbayImportWizard({
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             verticalAlign: 'bottom',
-            color: v ? 'var(--h10-text)' : 'var(--h10-text-3)',
+            color: issue
+              ? issue.level === 'error'
+                ? 'var(--h10-danger)'
+                : 'var(--h10-warning)'
+              : v
+              ? 'var(--h10-text)'
+              : 'var(--h10-text-3)',
+            fontWeight: issue ? 600 : undefined,
           }}
-          title={v}
+          title={issue ? `${issue.message}` : v}
         >
           {v || '—'}
         </span>
@@ -519,7 +816,7 @@ export function EbayImportWizard({
     },
   }))
 
-  const previewRows = mappedRows.slice(0, PREVIEW_LIMIT)
+  const previewRows = workingRows.slice(0, PREVIEW_LIMIT)
 
   const hasParents = (existingParents?.length ?? 0) > 0
 
@@ -570,9 +867,29 @@ export function EbayImportWizard({
         />
       </div>
 
+      {(errorCount > 0 || warnCount > 0) && (
+        <Banner
+          variant={errorCount > 0 ? 'error' : 'warning'}
+          title={`${errorCount} error${errorCount === 1 ? '' : 's'} · ${warnCount} warning${warnCount === 1 ? '' : 's'} in cell values`}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 120, overflowY: 'auto' }}>
+            {coerceResult.issues.slice(0, 12).map((i, idx) => (
+              <span key={idx} style={{ fontSize: 11.5 }}>
+                Row {i.rowIndex + 1} · {columnLabelById.get(i.columnId) ?? i.columnId}: {i.message}
+              </span>
+            ))}
+            {coerceResult.issues.length > 12 && (
+              <span style={{ fontSize: 11.5, color: 'var(--h10-text-3)' }}>
+                …and {coerceResult.issues.length - 12} more (cells are highlighted below)
+              </span>
+            )}
+          </div>
+        </Banner>
+      )}
+
       <Banner
         variant="info"
-        title={`${mappedRows.length} ${mappedRows.length === 1 ? 'row' : 'rows'} ready`}
+        title={`${finalRows.length} ${finalRows.length === 1 ? 'row' : 'rows'} ready${skipCount > 0 ? ` (${skipCount} listing${skipCount === 1 ? '' : 's'} skipped)` : ''}`}
       >
         {skuColumnId ? (
           <>
@@ -594,12 +911,12 @@ export function EbayImportWizard({
             columns={previewColumns}
             rows={previewRows}
             rowKey={(_r) => String(previewRows.indexOf(_r))}
-            maxHeight={360}
+            maxHeight={320}
             emptyState="No rows to preview."
           />
-          {mappedRows.length > previewRows.length && (
+          {workingRows.length > previewRows.length && (
             <span style={{ fontSize: 11.5, color: 'var(--h10-text-3)' }}>
-              Showing first {previewRows.length} of {mappedRows.length} rows.
+              Showing first {previewRows.length} of {workingRows.length} rows.
             </span>
           )}
         </div>
@@ -609,19 +926,35 @@ export function EbayImportWizard({
 
   // ── Footer (per step) ───────────────────────────────────────────────
   let footer: ReactNode = null
-  if (step === 0) {
+  if (stepKey === 'upload') {
     footer = (
       <Button variant="ghost" onClick={onClose}>
         Cancel
       </Button>
     )
-  } else if (step === 1) {
+  } else if (stepKey === 'map') {
     footer = (
       <>
-        <Button variant="secondary" onClick={() => setStep(0)}>
+        <Button variant="secondary" onClick={goBack}>
           <ArrowLeft size={14} aria-hidden /> Back
         </Button>
-        <Button variant="primary" disabled={mappedHeaders.length === 0} onClick={() => setStep(2)}>
+        <Button variant="primary" disabled={mappedHeaders.length === 0} onClick={goNext}>
+          Continue <ArrowRight size={14} aria-hidden />
+        </Button>
+      </>
+    )
+  } else if (stepKey === 'review') {
+    footer = (
+      <>
+        <Button variant="secondary" onClick={goBack}>
+          <ArrowLeft size={14} aria-hidden /> Back
+        </Button>
+        <Button
+          variant="primary"
+          disabled={blocks.every((b) => b.decision === 'skip')}
+          onClick={goNext}
+          title={blockErrorCount > 0 ? 'There are unresolved checks — you can still continue and fix them in the grid' : undefined}
+        >
           Continue <ArrowRight size={14} aria-hidden />
         </Button>
       </>
@@ -629,22 +962,23 @@ export function EbayImportWizard({
   } else {
     footer = (
       <>
-        <Button variant="secondary" onClick={() => setStep(1)}>
+        <Button variant="secondary" onClick={goBack}>
           <ArrowLeft size={14} aria-hidden /> Back
         </Button>
         <Button
           variant="primary"
           disabled={
-            mappedRows.length === 0 ||
+            finalRows.length === 0 ||
             mappedColumnIds.length === 0 ||
             (importTarget === 'parent' && !targetParentId)
           }
           onClick={() => {
-            onImport(mappedRows, mode, importTarget === 'parent' ? targetParentId : undefined)
+            onImport(finalRows, mode, importTarget === 'parent' ? targetParentId : undefined)
             onClose()
           }}
         >
-          Import {mappedRows.length} {mappedRows.length === 1 ? 'row' : 'rows'}
+          Import {finalRows.length} {finalRows.length === 1 ? 'row' : 'rows'}
+          {errorCount > 0 ? ` (${errorCount} cell error${errorCount === 1 ? '' : 's'})` : ''}
         </Button>
       </>
     )
@@ -658,12 +992,12 @@ export function EbayImportWizard({
       title="Import eBay flat-file data"
       subtitle={
         <div style={{ marginTop: 8 }}>
-          <Stepper steps={STEPS} current={step} />
+          <Stepper steps={steps} current={stepIndex} />
         </div>
       }
       footer={footer}
     >
-      {step === 0 ? uploadBody : step === 1 ? mapBody : previewBody}
+      {stepKey === 'upload' ? uploadBody : stepKey === 'map' ? mapBody : stepKey === 'review' ? reviewBody : previewBody}
     </Modal>
   )
 }

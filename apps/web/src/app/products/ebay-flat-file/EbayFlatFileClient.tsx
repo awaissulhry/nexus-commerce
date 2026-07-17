@@ -29,7 +29,7 @@ import { AddListingPopover } from './AddListingPopover'
 import { localizedAxisName } from './axisDefaults.pure'
 import { scanAspectConflicts, buildPrePublishIssues, type PrePublishIssue } from './prePublishIssues.pure'
 import { PrePublishWarningModal } from './PrePublishWarningModal'
-import { EbayImportWizard } from './EbayImportWizard'
+import { EbayImportWizard, type WizardColumn } from './EbayImportWizard'
 import { stampUnderParent } from './importUnderParent'
 import { planFamilyImport } from './importFamilies.pure'
 import { EbayDescriptionThemesModal } from './EbayDescriptionThemesModal'
@@ -2498,6 +2498,33 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     return out
   }, [columnGroups])
 
+  // EI.1 — rich wizard columns: full metadata (kind/options/enumMode/min/max)
+  // powers typed coercion, and per-market columns for ALL markets are tagged
+  // with their market so the wizard's File-market selector scopes them —
+  // columnGroups itself carries only the ACTIVE market's group (MS-E).
+  const wizardColumns = useMemo<WizardColumn[]>(() => {
+    const out: WizardColumn[] = []
+    const seen = new Set<string>()
+    const push = (c: EbayColumn, market?: string) => {
+      if (seen.has(c.id)) return
+      seen.add(c.id)
+      out.push({
+        id: c.id, label: c.label, kind: c.kind, options: c.options,
+        optionLabels: c.optionLabels, enumMode: c.enumMode, multiValue: c.multiValue,
+        min: c.min, maxLength: c.maxLength, market,
+      })
+    }
+    for (const g of columnGroups) {
+      const market = g.id.startsWith('market-') ? g.id.slice('market-'.length) : undefined
+      for (const c of g.columns) push(c, market)
+    }
+    for (const g of MARKET_COLUMN_GROUPS) {
+      const market = g.id.slice('market-'.length)
+      for (const c of g.columns) push(c, market)
+    }
+    return out
+  }, [columnGroups])
+
   const exportEbay = useCallback(async (
     format: 'tsv' | 'csv' | 'xlsx',
     scope: 'all' | 'selected' | 'template',
@@ -3285,7 +3312,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         <EbayImportWizard
           open={importWizardOpen}
           onClose={() => { setImportWizardOpen(false); setImportInitialFile(null) }}
-          columns={exportColumns}
+          columns={wizardColumns}
           existingSkus={new Set(rows.map((r) => String(r.sku ?? '').trim()).filter(Boolean))}
           existingParents={deriveSheetParents(rows)}
           marketplace={marketplace}
