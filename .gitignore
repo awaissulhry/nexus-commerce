@@ -61,3 +61,6 @@ prisma/migrations/
 
 # Generated tool output
 repomix-output.xml
+
+# Session-analysis artifacts (screen recordings, frame dumps) — never in VCS (GitHub 100MB hard limit; a 500MB .raw here blocked every push on 2026-07-18)
+.analysis/
