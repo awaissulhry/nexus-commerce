@@ -45,7 +45,7 @@ import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
 import { publishOrderEvent } from '../services/order-events.service.js';
 import { renderExport } from '../services/export/renderers.js';
 import { parseCsv, parseFile, sniffDelimiter, detectFileKind, type ParsedFile } from '../services/import/parsers.js';
-import { detectAmazonTemplate } from '../services/amazon/template-workbook.js';
+import { detectAmazonTemplate, parseOoxmlSheet, listOoxmlSheets } from '../services/amazon/template-workbook.js';
 import { upsertSharedMembershipsFromRows, normalizeEbaySharedFlags, type SharedMembershipUpsertResult } from '../services/ebay-shared-membership-upsert.service.js';
 // P1.2 — eBay flat-file create/reparent pre-pass (new products persist under their parent before ChannelListing loop runs)
 import { runEbayFlatFileCreates, type CreateResult } from '../services/ebay-flat-file-create.service.js';
@@ -1793,10 +1793,17 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
   // IE.2 — parse an uploaded CSV/TSV/XLSX/JSON into { headers, rows } for the
   // import wizard, reusing the shared parsers. Text for csv/tsv/json; base64 for
   // xlsx. Header→eBay-column mapping happens client-side in the wizard.
+  // EI.4 — full operator control on Excel workbooks: every response carries a
+  // `workbook` block (all sheet names + what was parsed), and `sheet` /
+  // `headerRow` overrides re-parse exactly what was asked (fast OOXML walker —
+  // same machinery as the Amazon wizard's A2b).
   fastify.post<{
-    Body: { content?: string; base64?: string; filename?: string; kind?: 'csv' | 'xlsx' | 'json' }
+    Body: {
+      content?: string; base64?: string; filename?: string;
+      kind?: 'csv' | 'xlsx' | 'json'; sheet?: string; headerRow?: number
+    }
   }>('/ebay/flat-file/parse', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
-    const { content, base64, filename, kind } = request.body ?? {};
+    const { content, base64, filename, kind, sheet, headerRow } = request.body ?? {};
     const fileKind = kind ?? detectFileKind(filename);
     try {
       let result: ParsedFile;
@@ -1811,7 +1818,23 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             error: 'This looks like an Amazon listing template — import it on the Amazon flat-file page instead.',
           });
         }
+        if (sheet || headerRow) {
+          const generic = await parseOoxmlSheet(bytes, { sheet, headerRow });
+          if (generic) {
+            return reply.send({
+              kind: fileKind, headers: generic.headers, rows: generic.rows,
+              workbook: { sheets: generic.sheets, sheet: generic.sheet, headerRow: generic.headerRow, detected: 'override' },
+            });
+          }
+        }
         result = await parseFile('xlsx', { bytes });
+        const sheets = await listOoxmlSheets(bytes);
+        if (sheets && sheets.length > 0) {
+          return reply.send({
+            kind: fileKind, headers: result.headers, rows: result.rows,
+            workbook: { sheets, sheet: sheets[0], headerRow: 1, detected: 'first-sheet' },
+          });
+        }
       } else {
         const text = content ?? (base64 ? Buffer.from(base64, 'base64').toString('utf-8') : '');
         if (!text.trim()) return reply.code(400).send({ error: 'empty file' });

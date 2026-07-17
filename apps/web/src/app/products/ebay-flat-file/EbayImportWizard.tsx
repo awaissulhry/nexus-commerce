@@ -26,7 +26,7 @@ import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import '@/design-system/styles/patterns.css'
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArrowRight, ArrowLeft, Wand2, ClipboardPaste, UploadCloud, Layers, Link2, AlertTriangle } from 'lucide-react'
 
 import { Modal } from '@/design-system/components/Modal'
@@ -109,6 +109,8 @@ interface ParseResult {
   headers: string[]
   rows: Record<string, unknown>[]
   kind: string
+  /** EI.4 — present on Excel uploads: all sheets + what was parsed. */
+  workbook?: { sheets: string[]; sheet: string; headerRow: number; detected: string }
 }
 
 interface HeaderRow {
@@ -198,6 +200,9 @@ export function EbayImportWizard({
   const [destructiveArmed, setDestructiveArmed] = useState(false)
   const [endTyped, setEndTyped] = useState('')
   const [excludedCells, setExcludedCells] = useState<Set<string>>(new Set())
+  // EI.4 — sheet/header-row overrides re-POST the same payload with the ask.
+  const lastPayloadRef = useRef<{ content?: string; base64?: string; filename: string; kind?: 'csv' | 'xlsx' | 'json' } | null>(null)
+  const [headerRowDraft, setHeaderRowDraft] = useState('')
 
   // Reset ALL state whenever the modal closes/reopens.
   useEffect(() => {
@@ -217,6 +222,8 @@ export function EbayImportWizard({
       setDestructiveArmed(false)
       setEndTyped('')
       setExcludedCells(new Set())
+      lastPayloadRef.current = null
+      setHeaderRowDraft('')
       return
     }
     setFileMarket(marketplace)
@@ -280,20 +287,24 @@ export function EbayImportWizard({
     }
   }
 
-  // ── Parse transport (shared by file + paste) ───────────────────────
-  async function runParse(body: {
-    content?: string
-    base64?: string
-    filename: string
-    kind?: 'csv' | 'xlsx' | 'json'
-  }) {
+  // ── Parse transport (shared by file + paste + EI.4 overrides) ──────
+  async function runParse(
+    body: {
+      content?: string
+      base64?: string
+      filename: string
+      kind?: 'csv' | 'xlsx' | 'json'
+    },
+    overrides?: { sheet?: string; headerRow?: number },
+  ) {
     setParsing(true)
     setParseError(null)
+    lastPayloadRef.current = body
     try {
       const res = await fetch(`${getBackendUrl()}/api/ebay/flat-file/parse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, ...overrides }),
       })
       const json = (await res.json().catch(() => null)) as
         | (ParseResult & { error?: string })
@@ -309,6 +320,7 @@ export function EbayImportWizard({
         headers: json.headers,
         rows: json.rows,
         kind: json.kind,
+        workbook: (json as ParseResult).workbook,
       }
       if (!result.headers.length) {
         throw new Error('No columns were found in the file. Check it has a header row.')
@@ -319,6 +331,8 @@ export function EbayImportWizard({
       setMapping(remap(result.headers, first, scopedColumns))
       setFixedRows(null)
       setDecisions({})
+      setExcludedCells(new Set())
+      setHeaderRowDraft(result.workbook ? String(result.workbook.headerRow) : '')
       setStepKey('map') // auto-advance to Map
     } catch (err) {
       setParseError(err instanceof Error ? err.message : 'Parse failed.')
@@ -625,6 +639,50 @@ export function EbayImportWizard({
             options={MARKET_CHOICES.map((m) => ({ value: m, label: m === marketplace ? `${m} (current grid)` : m }))}
           />
         </div>
+        {parsed?.workbook && parsed.workbook.sheets.length > 1 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 180 }}>
+            <span style={T.label}>Sheet</span>
+            <Listbox
+              value={parsed.workbook.sheet}
+              onChange={(v) => {
+                if (lastPayloadRef.current) void runParse(lastPayloadRef.current, { sheet: String(v) })
+              }}
+              options={parsed.workbook.sheets.map((sh) => ({ value: sh, label: sh }))}
+            />
+          </div>
+        )}
+        {parsed?.workbook && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 130 }}>
+            <span style={T.label}>Header row</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Input
+                value={headerRowDraft}
+                onChange={(e) => setHeaderRowDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return
+                  const n = parseInt(headerRowDraft, 10)
+                  if (Number.isFinite(n) && n >= 1 && lastPayloadRef.current) {
+                    void runParse(lastPayloadRef.current, { sheet: parsed.workbook!.sheet, headerRow: n })
+                  }
+                }}
+                style={{ width: 64 }}
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!/^\d+$/.test(headerRowDraft.trim()) || parseInt(headerRowDraft, 10) === parsed.workbook.headerRow}
+                onClick={() => {
+                  const n = parseInt(headerRowDraft, 10)
+                  if (Number.isFinite(n) && n >= 1 && lastPayloadRef.current) {
+                    void runParse(lastPayloadRef.current, { sheet: parsed.workbook!.sheet, headerRow: n })
+                  }
+                }}
+              >
+                Re-parse
+              </Button>
+            </div>
+          </div>
+        )}
         <div
           style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 6, ...T.body }}
         >
