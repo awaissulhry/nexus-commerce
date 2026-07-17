@@ -177,7 +177,7 @@
    "y": 680,
    "width": 480,
    "height": 220,
-   "text": "### In-page substrate adoptions (owned by page sessions)\n- EPI: windowing + panes + MentionTextarea\n- EPO: orders grid (EPO.7)\n- EPQ: quotes grid + party picker ✅ (EPQ.3, 2026-07-17)\n- EPF: financials grids ×3 (EPF.2)"
+   "text": "### In-page substrate adoptions (owned by page sessions)\n- EPI: windowing + panes + MentionTextarea\n- EPO: orders grid (EPO.7)\n- EPQ: quotes grid + party picker ✅ (EPQ.3, 2026-07-17)\n- EPF: ✅ grids ×4 DONE (EPF.2, 2026-07-17)"
   },
   {
    "id": "s1",
