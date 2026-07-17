@@ -55,6 +55,18 @@ export const GET = guarded(PAGES.inbox, async (_req, { params, resolved }) => {
     }),
   ]);
 
+  // EPI2.4 — comment attachments ride the polymorphic Attachment host
+  const commentAttachments = comments.length
+    ? await prisma.attachment.findMany({
+        where: { entityType: "comment", entityId: { in: comments.map((c) => c.id) } },
+        select: { id: true, entityId: true, filename: true, mimeType: true, sizeBytes: true, driveFileId: true, webViewLink: true },
+      })
+    : [];
+  const commentsWithFiles = comments.map((c) => ({
+    ...c,
+    attachments: commentAttachments.filter((a) => a.entityId === c.id),
+  }));
+
   // FP3: quotes born from this thread (the ContextRail "Linked" slot)
   const quoteRows = await prisma.quote.findMany({ // bounded: per-conversation history; windowed in FS3 (S-4)
     where: { conversationId: id },
@@ -67,7 +79,7 @@ export const GET = guarded(PAGES.inbox, async (_req, { params, resolved }) => {
     return { id: q.id, number: q.number, state: q.state, netCents: net, marginCents: net - cost, convertedOrderId: q.convertedOrderId };
   });
 
-  return jsonStripped({ conversation, messages, comments, events, quotes }, resolved);
+  return jsonStripped({ conversation, messages, comments: commentsWithFiles, events, quotes }, resolved);
 });
 
 const Patch = z.object({

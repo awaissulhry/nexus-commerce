@@ -295,18 +295,19 @@ export function ContextRail({
  * Files-sidebar verdict). Renders nothing when the thread carries no files. */
 function FilesCard({ thread, onFileOpen }: { thread: ThreadResponse; onFileOpen?: (attId: string) => void }) {
   const items = useMemo(
-    () =>
-      thread.messages.flatMap((m) =>
-        m.attachments.map((a) => ({ ...a, messageId: m.id, sentAt: m.sentAt })),
-      ),
+    () => [
+      ...thread.messages.flatMap((m) => m.attachments.map((a) => ({ ...a, anchor: m.id }))),
+      // EPI2.4 — comment attachments join the panel; their anchor is the bubble
+      ...thread.comments.flatMap((c) => (c.attachments ?? []).map((a) => ({ ...a, anchor: `c-${c.id}` }))),
+    ],
     [thread],
   );
   if (items.length === 0) return null;
   const images = items.filter((a) => previewKind(a.mimeType) === "image");
   const files = items.filter((a) => previewKind(a.mimeType) !== "image");
   const kb = (n: number | null) => (n == null ? "" : n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
-  const showInConversation = (messageId: string) => {
-    const el = document.querySelector(`[data-msg="${messageId}"]`);
+  const showInConversation = (anchor: string) => {
+    const el = document.querySelector(`[data-msg="${anchor}"]`);
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     (el as HTMLElement).animate(
@@ -362,7 +363,7 @@ function FilesCard({ thread, onFileOpen }: { thread: ThreadResponse; onFileOpen?
               </a>
               <button
                 type="button"
-                onClick={() => showInConversation(a.messageId)}
+                onClick={() => showInConversation(a.anchor)}
                 title="Show in conversation"
                 style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "inline-flex", color: "var(--h10-text-3)", flexShrink: 0 }}
               >

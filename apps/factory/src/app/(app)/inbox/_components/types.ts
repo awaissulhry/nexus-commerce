@@ -42,6 +42,8 @@ export type ThreadComment = {
   body: string;
   createdAt: string;
   author: { displayName: string } | null;
+  /** EPI2.4 — internal comments can carry files (polymorphic Attachment host) */
+  attachments?: ThreadMessage["attachments"];
 };
 
 export type ThreadEvent = {

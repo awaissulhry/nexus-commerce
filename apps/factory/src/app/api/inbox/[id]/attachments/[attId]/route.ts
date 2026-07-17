@@ -23,7 +23,17 @@ export const GET = guarded(PAGES.inbox, async (req: NextRequest, { params }) => 
     where: { id: attId },
     include: { message: { select: { conversationId: true } } },
   });
-  if (!att || att.message?.conversationId !== id) {
+  // EPI2.4 — ownership: via the carrying message, OR via a comment on this
+  // conversation (comment attachments have no message).
+  let owned = att?.message?.conversationId === id;
+  if (att && !owned && att.entityType === "comment" && att.entityId) {
+    const comment = await prisma.comment.findUnique({
+      where: { id: att.entityId },
+      select: { entityType: true, entityId: true },
+    });
+    owned = comment?.entityType === "conversation" && comment.entityId === id;
+  }
+  if (!att || !owned) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

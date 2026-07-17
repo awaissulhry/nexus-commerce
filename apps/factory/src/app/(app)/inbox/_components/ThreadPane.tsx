@@ -10,9 +10,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Image as ImageIcon, Lock, Paperclip, Send, X } from "lucide-react";
+import { Download, Image as ImageIcon, Lock, Paperclip, Send, X } from "lucide-react";
 import { useToast } from "@/design-system/components";
 import { Button, SegmentedControl, Pill, Skeleton } from "@/design-system/primitives";
+import { MentionTextarea } from "@/components/MentionTextarea";
+import type { SearchLoader } from "@/lib/virtual/async-search";
 import { apiFetch, apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
 import { repeatedAttachmentIds } from "@/lib/inbox/attachments";
@@ -22,6 +24,19 @@ import { MessageBubble } from "./MessageBubble";
 import { EVENT_LABELS, ago, type ThreadResponse } from "./types";
 
 const COMPOSER_H_KEY = "factory.inbox.composerHeight";
+
+// EPI2.4 — @mention autocomplete (FS3 adoption): the user list is tiny, so
+// one fetch + client filter; option.value is the email = a resolvable handle.
+const mentionLoader: SearchLoader = async (q) => {
+  const d = await apiJson<{ users: { id: string; displayName: string; email: string }[] }>("/api/users-lite");
+  const needle = q.toLowerCase();
+  return {
+    options: d.users
+      .filter((u) => !needle || u.displayName.toLowerCase().includes(needle) || u.email.toLowerCase().includes(needle))
+      .map((u) => ({ value: u.email, label: u.displayName, hint: u.email })),
+    nextCursor: null,
+  };
+};
 
 type TimelineEntry =
   | { kind: "message"; at: number; message: ThreadResponse["messages"][number] }
@@ -53,6 +68,7 @@ export function ThreadPane({
   const [busy, setBusy] = useState(false);
   const [allowImages, setAllowImages] = useState(false);
   const [composerH, setComposerH] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false); // EPI2.4 — drop-to-attach overlay
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -101,14 +117,21 @@ export function ThreadPane({
   // EPI1.3 (D6) — chips repeated from an earlier message collapse per bubble
   const repeatedIds = useMemo(() => repeatedAttachmentIds(thread?.messages ?? []), [thread]);
 
-  // EPI2.2 — the lightbox ring: every attachment in the conversation, in order
-  const previewItems = useMemo<LightboxItem[]>(
-    () =>
-      (thread?.messages ?? []).flatMap((m) =>
-        m.attachments.map((a) => ({ id: a.id, filename: a.filename, mimeType: a.mimeType, sizeBytes: a.sizeBytes, webViewLink: a.webViewLink })),
-      ),
-    [thread],
-  );
+  // EPI2.2 — the lightbox ring: every attachment in the conversation, in
+  // order; EPI2.4 adds comment attachments to the same ring.
+  const previewItems = useMemo<LightboxItem[]>(() => {
+    const toItem = (a: { id: string; filename: string; mimeType: string | null; sizeBytes: number | null; webViewLink: string | null }) => ({
+      id: a.id,
+      filename: a.filename,
+      mimeType: a.mimeType,
+      sizeBytes: a.sizeBytes,
+      webViewLink: a.webViewLink,
+    });
+    return [
+      ...(thread?.messages ?? []).flatMap((m) => m.attachments.map(toItem)),
+      ...(thread?.comments ?? []).flatMap((c) => (c.attachments ?? []).map(toItem)),
+    ];
+  }, [thread]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -119,15 +142,28 @@ export function ThreadPane({
     setBusy(true);
     try {
       if (mode === "comment") {
-        await apiJson("/api/comments", {
-          method: "POST",
-          body: JSON.stringify({
-            entityType: "conversation",
-            entityId: conversationId,
-            body: text.trim(),
-            href: `/inbox?focus=${conversationId}`,
-          }),
-        });
+        // EPI2.4 — comments with files go multipart; plain ones stay JSON
+        if (files.length > 0) {
+          const form = new FormData();
+          form.set("entityType", "conversation");
+          form.set("entityId", conversationId);
+          form.set("body", text.trim());
+          form.set("href", `/inbox?focus=${conversationId}`);
+          for (const f of files) form.append("files", f);
+          const res = await apiFetch("/api/comments", { method: "POST", body: form });
+          const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+          if (!res.ok) throw new Error(payload?.error ?? "Note failed");
+        } else {
+          await apiJson("/api/comments", {
+            method: "POST",
+            body: JSON.stringify({
+              entityType: "conversation",
+              entityId: conversationId,
+              body: text.trim(),
+              href: `/inbox?focus=${conversationId}`,
+            }),
+          });
+        }
       } else {
         const form = new FormData();
         form.set("body", text.trim());
@@ -240,6 +276,7 @@ export function ThreadPane({
           ) : entry.kind === "comment" ? (
             <div
               key={`c-${entry.comment.id}`}
+              data-msg={`c-${entry.comment.id}`} // EPI2.4 — Files-panel anchor
               style={{
                 border: "1px solid var(--h10-warning-soft)",
                 background: "var(--h10-warning-soft)",
@@ -255,6 +292,27 @@ export function ThreadPane({
                 <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--h10-text-3)" }}>{ago(entry.comment.createdAt)} ago</span>
               </div>
               <div style={{ whiteSpace: "pre-wrap" }}>{entry.comment.body}</div>
+              {(entry.comment.attachments?.length ?? 0) > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                  {entry.comment.attachments!.map((a) => (
+                    <span key={a.id} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, border: "1px solid var(--h10-border)", borderRadius: 8, padding: "3px 8px", background: "var(--h10-surface)" }}>
+                      {onFileChange && countRemoteImages("") === 0 && ( // always true — inline guard keeps TS quiet
+                        <button
+                          type="button"
+                          onClick={() => onFileChange(a.id)}
+                          title="Preview"
+                          style={{ background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit", color: "var(--h10-text)", display: "inline-flex", gap: 4, alignItems: "center" }}
+                        >
+                          <Paperclip size={11} /> {a.filename}
+                        </button>
+                      )}
+                      <a href={`/api/inbox/${thread.conversation.id}/attachments/${a.id}`} title="Download" style={{ display: "inline-flex", color: "var(--h10-text-3)" }}>
+                        <Download size={11} />
+                      </a>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             <div key={`e-${entry.event.id}`} style={{ textAlign: "center", fontSize: 11.5, color: "var(--h10-text-3)" }}>
@@ -269,7 +327,37 @@ export function ThreadPane({
           Your role can read this thread but not reply or comment.
         </div>
       ) : (
-        <div style={{ borderTop: "1px solid var(--h10-border)", padding: 12, display: "grid", gap: 8, background: mode === "comment" ? "var(--h10-warning-soft)" : "var(--h10-surface)" }}>
+        <div
+          style={{ position: "relative", borderTop: "1px solid var(--h10-border)", padding: 12, display: "grid", gap: 8, background: mode === "comment" ? "var(--h10-warning-soft)" : "var(--h10-surface)" }}
+          onDragOver={(e) => {
+            // EPI2.4 — Gmail's drop-to-attach zone
+            if (e.dataTransfer.types.includes("Files")) {
+              e.preventDefault();
+              setDragging(true);
+            }
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false);
+          }}
+          onDrop={(e) => {
+            if (e.dataTransfer.files.length === 0) return;
+            e.preventDefault();
+            setDragging(false);
+            setFiles((fs) => [...fs, ...Array.from(e.dataTransfer.files)]);
+          }}
+          onPaste={(e) => {
+            // EPI2.4 — GitHub's paste-to-attach
+            const pasted = Array.from(e.clipboardData?.files ?? []);
+            if (pasted.length === 0) return;
+            e.preventDefault();
+            setFiles((fs) => [...fs, ...pasted]);
+          }}
+        >
+          {dragging && (
+            <div style={{ position: "absolute", inset: 4, zIndex: 5, display: "grid", placeItems: "center", borderRadius: 10, border: "2px dashed var(--h10-primary)", background: "var(--h10-wash-primary)", fontSize: 12.5, fontWeight: 600, color: "var(--h10-primary)", pointerEvents: "none" }}>
+              Drop to attach
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <SegmentedControl
               options={modeOptions}
@@ -282,31 +370,61 @@ export function ThreadPane({
               </span>
             )}
           </div>
-          <textarea
-            ref={composerRef ?? undefined}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onPointerUp={(e) => persistComposerH(e.currentTarget)}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                e.preventDefault();
-                void submit();
-              }
-            }}
-            placeholder={mode === "reply" ? "Reply — sends from your Gmail into this thread…" : "Internal note — the customer never sees this…"}
-            rows={3}
-            style={{
-              width: "100%",
-              resize: "vertical",
-              ...(composerH ? { height: composerH } : {}),
-              border: "1px solid var(--h10-border)",
-              borderRadius: 8,
-              padding: 10,
-              font: "13px var(--font-sans), sans-serif",
-              background: "var(--h10-surface)",
-              color: "var(--h10-text)",
-            }}
-          />
+          {mode === "comment" ? (
+            // EPI2.4 — FS3 MentionTextarea adoption: typed @ autocompletes teammates
+            <MentionTextarea
+              value={text}
+              onChange={setText}
+              loader={mentionLoader}
+              textareaRef={composerRef ?? undefined}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                  e.preventDefault();
+                  void submit();
+                }
+              }}
+              placeholder="Internal note — the customer never sees this…"
+              rows={3}
+              ariaLabel="Internal note"
+              style={{
+                width: "100%",
+                resize: "vertical",
+                ...(composerH ? { height: composerH } : {}),
+                border: "1px solid var(--h10-border)",
+                borderRadius: 8,
+                padding: 10,
+                font: "13px var(--font-sans), sans-serif",
+                background: "var(--h10-surface)",
+                color: "var(--h10-text)",
+              }}
+            />
+          ) : (
+            <textarea
+              ref={composerRef ?? undefined}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onPointerUp={(e) => persistComposerH(e.currentTarget)}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                  e.preventDefault();
+                  void submit();
+                }
+              }}
+              placeholder="Reply — sends from your Gmail into this thread…"
+              rows={3}
+              style={{
+                width: "100%",
+                resize: "vertical",
+                ...(composerH ? { height: composerH } : {}),
+                border: "1px solid var(--h10-border)",
+                borderRadius: 8,
+                padding: 10,
+                font: "13px var(--font-sans), sans-serif",
+                background: "var(--h10-surface)",
+                color: "var(--h10-text)",
+              }}
+            />
+          )}
           {files.length > 0 && (
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {files.map((f, i) => (
@@ -320,21 +438,18 @@ export function ThreadPane({
             </div>
           )}
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {mode === "reply" && (
-              <>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  hidden
-                  onChange={(e) => setFiles((fs) => [...fs, ...Array.from(e.target.files ?? [])])}
-                />
-                <Button onClick={() => fileInputRef.current?.click()}>
-                  <Paperclip size={13} /> Attach
-                </Button>
-              </>
-            )}
-            <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--h10-text-3)" }}>⌘⏎ to send</span>
+            {/* EPI2.4 — comments attach too (FP1 deferral closed) */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              hidden
+              onChange={(e) => setFiles((fs) => [...fs, ...Array.from(e.target.files ?? [])])}
+            />
+            <Button onClick={() => fileInputRef.current?.click()}>
+              <Paperclip size={13} /> Attach
+            </Button>
+            <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--h10-text-3)" }}>drop or paste files · ⌘⏎ to send</span>
             <Button variant="primary" onClick={() => void submit()} disabled={busy || !text.trim()}>
               <Send size={13} /> {busy ? "Sending…" : mode === "reply" ? "Send reply" : "Add note"}
             </Button>
