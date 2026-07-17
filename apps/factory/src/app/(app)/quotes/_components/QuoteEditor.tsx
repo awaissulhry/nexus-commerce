@@ -8,6 +8,14 @@
  * focus), discount reason-code Listbox, quantity-tier/MOQ/size-surcharge rows
  * in the line waterfall, duplicate-open-quote banner, size-run matrix editor
  * (BRAND parties), and clickable similar quotes with a "repeat" chip.
+ * EPQ.4 — cost truth & honest promises: structured cost rows (Material/Labor/
+ * Overhead) inside the Owner-only line card when the template is modeled; a
+ * promise-date SUGGESTION line with its terms ("3w base + 1.6w backlog + 2w
+ * leather") and an Apply button that PATCHes like any manual edit — never
+ * auto-writes; quote-vs-actual — shipped similar rows and the converted
+ * order's card show REAL ledger cost beside the estimate; a dismissible
+ * "last time" recall hint when a line picks a template this party already
+ * bought and the order shipped.
  */
 "use client";
 
@@ -25,7 +33,7 @@ import { EuroInput, euroStrToCents } from "@/app/(app)/products/_components/mone
 import type { TemplateDetail } from "@/app/(app)/products/_components/types";
 import { SendModal } from "./SendModal";
 import { ConvertBar } from "./ConvertBar";
-import { STATE_TONE, type ComposeResult, type GoalSeekResponse, type QuoteDetail, type SimilarQuote } from "./types";
+import { STATE_TONE, type ComposeResult, type GoalSeekResponse, type OrderActual, type PromiseSuggestion, type QuoteDetail, type SimilarQuote } from "./types";
 
 const isoDate = (d: string | null) => (d ? new Date(d).toISOString().slice(0, 10) : "");
 
@@ -46,6 +54,7 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
   const [quote, setQuote] = useState<QuoteDetail | null>(null);
   const [totals, setTotals] = useState<{ netCents: number; costCents: number; marginCents: number; marginPct: number } | null>(null);
   const [duplicate, setDuplicate] = useState<{ id: string; number: string } | null>(null); // EPQ.3
+  const [orderActual, setOrderActual] = useState<OrderActual | null>(null); // EPQ.4 — the converted order's real cost (shipped only)
   const [templates, setTemplates] = useState<{ id: string; name: string }[]>([]);
   const [tplCache, setTplCache] = useState<Record<string, TemplateDetail>>({});
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
@@ -54,6 +63,10 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
   const [floorPct, setFloorPct] = useState(20);
   const [similar, setSimilar] = useState<SimilarQuote[]>([]);
   const [sizeRunOpen, setSizeRunOpen] = useState(false); // EPQ.3 — matrix editor modal
+  // EPQ.4 — promise suggestion (read-only until Apply) + per-template recall hint
+  const [promiseSuggest, setPromiseSuggest] = useState<PromiseSuggestion | null>(null);
+  const [recall, setRecall] = useState<OrderActual | null>(null);
+  const [recallDismissed, setRecallDismissed] = useState<Set<string>>(new Set());
   // EPQ.3 — goal-seek discipline: after applying a solved adjustment, the
   // reason field takes focus (an adjustment without a story is not allowed to
   // feel finished).
@@ -62,13 +75,14 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
 
   const load = useCallback(async () => {
     const [d, t, s] = await Promise.all([
-      apiJson<{ quote: QuoteDetail; totals: typeof totals; duplicate: { id: string; number: string } | null }>(`/api/quotes/${quoteId}`),
+      apiJson<{ quote: QuoteDetail; totals: typeof totals; duplicate: { id: string; number: string } | null; orderActual?: OrderActual | null }>(`/api/quotes/${quoteId}`),
       apiJson<{ templates: { id: string; name: string }[] }>("/api/products/templates"),
       apiJson<{ marginFloorPct: number }>("/api/settings/pricing-defaults").catch(() => ({ marginFloorPct: 20 })),
     ]);
     setQuote(d.quote);
     setTotals(d.totals);
     setDuplicate(d.duplicate ?? null);
+    setOrderActual(d.orderActual ?? null); // EPQ.4
     setTemplates(t.templates);
     setFloorPct(s.marginFloorPct ?? 20);
     // EPQ.3 — navigating editor→editor (similar/duplicate links) keeps the
@@ -76,6 +90,16 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
     setActiveLineId((prev) => (prev && d.quote.lines.some((l) => l.id === prev) ? prev : d.quote.lines[0]?.id ?? null));
   }, [quoteId]);
   useEffect(() => { void load(); }, [load]);
+
+  // EPQ.4 — the promise SUGGESTION (base + backlog + leather terms). Read-only;
+  // re-fetched when the lines change (consumption coverage can shift).
+  useEffect(() => {
+    if (!quote) return;
+    apiJson<{ suggestion: PromiseSuggestion }>(`/api/quotes/${quoteId}/promise-suggest`)
+      .then((d) => setPromiseSuggest(d.suggestion))
+      .catch(() => setPromiseSuggest(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quote?.id, quote?.lines.length]);
 
   const fetchTemplate = useCallback(async (tid: string) => {
     if (tplCache[tid]) return tplCache[tid];
@@ -97,6 +121,17 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
     apiJson<{ quotes: SimilarQuote[] }>(`/api/quotes/similar?${usp}`).then((d) => setSimilar(d.quotes)).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quote?.id, quote?.lines.length]);
+
+  // EPQ.4 — recall hint: this party bought this garment before → "last time:
+  // sold €X, actual cost €Y" (latest SHIPPED order; dismissible per template)
+  const activeTemplateId = quote?.lines.find((l) => l.id === activeLineId)?.templateId ?? null;
+  useEffect(() => {
+    setRecall(null);
+    if (!quote || !activeTemplateId || quote.state !== "DRAFT" || !canCost) return;
+    const usp = new URLSearchParams({ partyId: quote.party.id, templateId: activeTemplateId });
+    apiJson<{ recall: OrderActual | null }>(`/api/quotes/recall?${usp}`).then((d) => setRecall(d.recall)).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quote?.id, quote?.party.id, activeTemplateId, quote?.state]);
 
   // EPQ.3 — the rail composes the STORED line server-side (qty-aware: tier/MOQ/
   // size-surcharge rows included), replacing the old qty-blind products preview
@@ -202,6 +237,9 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
   // "List" shows the pre-discipline subtotal so the steps visibly sum to Net
   const surchargeRows = (result?.lines ?? []).filter((l) => l.kind === "surcharge");
   const preDisciplineListCents = (result?.listPriceCents ?? 0) - surchargeRows.reduce((s, l) => s + (l.priceCents ?? 0), 0);
+  // EPQ.4 — structured cost terms (Material/Labor/Overhead) — present only
+  // when the template is consumption-modeled AND the leather rate exists
+  const costRows = (result?.lines ?? []).filter((l) => l.kind === "cost");
 
   return (
     <div className="factory-page--centered">
@@ -267,6 +305,24 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
                 <Listbox ariaLabel="Template" options={[{ value: "", label: "Choose a product…" }, ...templates.map((t) => ({ value: t.id, label: t.name }))]} value={activeLine.templateId ?? ""} onChange={(v) => { void patchLine({ templateId: v || null, selections: [], sizeRun: null }); }} disabled={!isDraft} />
                 {isDraft && quote.lines.length > 1 && <button type="button" onClick={() => deleteLine(activeLine.id)} style={{ marginLeft: "auto", border: "none", background: "none", cursor: "pointer", color: "var(--h10-danger)", display: "inline-flex", padding: 2 }}><Trash2 size={14} /></button>}
               </div>
+
+              {/* EPQ.4 — recall hint: the party's last produced run of this garment, real cost included; dismissible */}
+              {isDraft && canCost && recall && activeLine.templateId && !recallDismissed.has(activeLine.templateId) && (
+                <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, color: "var(--h10-text-2)", background: "var(--h10-wash-primary)", border: "1px solid var(--h10-border-subtle)", borderRadius: 8, padding: "6px 10px" }}>
+                  <span>
+                    Last time ({recall.orderNumber}): sold <strong style={{ fontFamily: "var(--font-mono)" }}>{eur(recall.soldNetCents ?? 0)}</strong> · actual cost <strong style={{ fontFamily: "var(--font-mono)" }}>{eur(recall.actualCostCents)}</strong>
+                    {recall.estCostCents !== recall.actualCostCents ? <span style={{ color: "var(--h10-text-3)" }}> (est was {eur(recall.estCostCents)})</span> : null}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Dismiss recall hint"
+                    onClick={() => setRecallDismissed((prev) => new Set(prev).add(activeLine.templateId!))}
+                    style={{ marginLeft: "auto", border: "none", background: "none", cursor: "pointer", color: "var(--h10-text-3)", padding: 2, fontSize: 13 }}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
 
               {result?.violations?.filter((v) => v.severity === "BLOCK").map((v, i) => <Banner key={i} tone="danger" title="Can't be quoted">{v.message}</Banner>)}
               {result?.violations?.filter((v) => v.severity === "WARN").map((v, i) => <Banner key={`w${i}`} tone="warning" title="Heads up">{v.message}</Banner>)}
@@ -374,6 +430,13 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
               <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--h10-text-3)", marginBottom: 6 }}>This line</div>
               {/* EPQ.1 — four-row waterfall (spec parity): the adjustment is a visible signed step, not folded into Net */}
               <Row label="Cost" value={eur(result.costCents ?? 0)} muted />
+              {/* EPQ.4 — structured cost breakdown: each term a labeled row ("Material (2.4 m² +8% waste)" …) */}
+              {result.structuredCost && costRows.map((l, i) => (
+                <div key={`c${i}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "1px 0 1px 12px" }}>
+                  <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>{l.label}</span>
+                  <span style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--h10-text-3)" }}>{eur(l.costCents ?? 0)}</span>
+                </div>
+              ))}
               <Row label="List" value={eur(preDisciplineListCents)} muted />
               {/* EPQ.3 — discipline rows: quantity tier / below-MOQ / size surcharge, each a labeled signed step */}
               {surchargeRows.map((l, i) => (
@@ -391,6 +454,19 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
             </div>
           )}
 
+          {/* EPQ.4 — quote-vs-actual: the converted order's REAL (ledger) cost
+              beside the estimate — only once it shipped, only with the grain */}
+          {canCost && orderActual && (
+            <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--h10-text-3)", marginBottom: 6 }}>Order actuals · {orderActual.orderNumber}</div>
+              <Row label="Actual cost" value={eur(orderActual.actualCostCents)} />
+              <Row label="Estimated" value={eur(orderActual.estCostCents)} muted />
+              <div style={{ fontSize: 11.5, marginTop: 3, textAlign: "right", color: orderActual.actualCostCents > orderActual.estCostCents ? "var(--h10-danger)" : "var(--h10-success, #15a34a)" }}>
+                {actualDeltaText(orderActual.actualCostCents, orderActual.estCostCents)}
+              </div>
+            </div>
+          )}
+
           <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: 12, display: "grid", gap: 10 }}>
             <label style={{ fontSize: 11.5, color: "var(--h10-text-2)", display: "grid", gap: 3 }}>Deposit %
               <input type="number" min={0} max={100} defaultValue={quote.depositPct ?? 0} key={quote.depositPct ?? 0} onBlur={(e) => Number(e.target.value) !== (quote.depositPct ?? 0) && patchQuote({ depositPct: Number(e.target.value) || null })} disabled={!isDraft} style={{ width: 70, border: "1px solid var(--h10-border)", borderRadius: 7, padding: "4px 6px", font: "12.5px var(--font-mono)", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
@@ -400,6 +476,24 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
             </label>
             <label style={{ fontSize: 11.5, color: "var(--h10-text-2)", display: "grid", gap: 3 }}>Promise date <span style={{ fontSize: 10, color: "var(--h10-text-3)" }}>(estimate; real lead time in FP6)</span>
               <DateField ariaLabel="Promise date" value={isoDate(quote.promiseDateAt)} onChange={(v) => patchQuote({ promiseDateAt: v ? new Date(`${v}T12:00:00`).toISOString() : null })} disabled={!isDraft} />
+              {/* EPQ.4 — CTP-lite suggestion with its terms spelled out; Apply
+                  writes through the normal PATCH — the field NEVER auto-fills */}
+              {promiseSuggest && (
+                <span style={{ fontSize: 10.5, color: "var(--h10-text-3)", display: "inline-flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
+                  <span>
+                    suggested: {new Date(promiseSuggest.dateISO).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} ({promiseSuggest.formula})
+                  </span>
+                  {isDraft && isoDate(promiseSuggest.dateISO) !== isoDate(quote.promiseDateAt) && (
+                    <button
+                      type="button"
+                      onClick={() => patchQuote({ promiseDateAt: new Date(`${isoDate(promiseSuggest.dateISO)}T12:00:00`).toISOString() })}
+                      style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 600, color: "var(--h10-text-link)" }}
+                    >
+                      Apply
+                    </button>
+                  )}
+                </span>
+              )}
             </label>
           </div>
 
@@ -439,14 +533,22 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
               <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--h10-text-3)", marginBottom: 6 }}>Similar past quotes</div>
               {similar.map((s) => (
                 // EPQ.3 — rows OPEN the quote (inventory gap 7: they were inert); "repeat" = it was produced
-                <button key={s.id} type="button" onClick={() => goToQuote(s.id)} title={`Open ${s.number}`} style={{ display: "flex", width: "100%", justifyContent: "space-between", alignItems: "baseline", fontSize: 12, padding: "2px 0", background: "none", border: "none", cursor: "pointer", font: "inherit", textAlign: "left" }}>
-                  <span style={{ display: "inline-flex", gap: 5, alignItems: "baseline" }}>
-                    <span style={{ color: "var(--h10-text-link)", fontWeight: 600 }}>{s.number}</span>
-                    <Pill tone={s.state === "ACCEPTED" ? "success" : "danger"}>{s.state === "ACCEPTED" ? "won" : "lost"}</Pill>
-                    {s.wasProduced && <Pill tone="info">repeat</Pill>}
-                  </span>
-                  <span style={{ color: "var(--h10-text-2)", fontFamily: "var(--font-mono)" }}>{eur(s.netCents)}</span>
-                </button>
+                <div key={s.id}>
+                  <button type="button" onClick={() => goToQuote(s.id)} title={`Open ${s.number}`} style={{ display: "flex", width: "100%", justifyContent: "space-between", alignItems: "baseline", fontSize: 12, padding: "2px 0", background: "none", border: "none", cursor: "pointer", font: "inherit", textAlign: "left" }}>
+                    <span style={{ display: "inline-flex", gap: 5, alignItems: "baseline" }}>
+                      <span style={{ color: "var(--h10-text-link)", fontWeight: 600 }}>{s.number}</span>
+                      <Pill tone={s.state === "ACCEPTED" ? "success" : "danger"}>{s.state === "ACCEPTED" ? "won" : "lost"}</Pill>
+                      {s.wasProduced && <Pill tone="info">repeat</Pill>}
+                    </span>
+                    <span style={{ color: "var(--h10-text-2)", fontFamily: "var(--font-mono)" }}>{eur(s.netCents)}</span>
+                  </button>
+                  {/* EPQ.4 — the quote-vs-actual line: what the produced run REALLY cost */}
+                  {canCost && s.actual && (
+                    <div style={{ fontSize: 11, color: "var(--h10-text-3)", padding: "0 0 3px", lineHeight: 1.35 }}>
+                      won at {eur(s.netCents)} · actual cost {eur(s.actual.actualCostCents)} vs est {eur(s.actual.estCostCents)}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           )}
@@ -547,6 +649,14 @@ function SizeRunModal({ initial, suggestedSizes, onClose, onSave }: {
 
 /** EPQ.1 — signed money for the waterfall's Adjustment step. */
 const signedEur = (cents: number) => (cents > 0 ? `+ ${eur(cents)}` : cents < 0 ? `− ${eur(Math.abs(cents))}` : eur(0));
+
+/** EPQ.4 — "€48.00 over estimate (+12.3%)" / "on estimate" for the actuals card. */
+function actualDeltaText(actualCents: number, estCents: number): string {
+  const delta = actualCents - estCents;
+  if (delta === 0) return "on estimate";
+  const pct = estCents !== 0 ? ` (${delta > 0 ? "+" : "−"}${Math.abs((delta / estCents) * 100).toFixed(1)}%)` : "";
+  return `${eur(Math.abs(delta))} ${delta > 0 ? "over" : "under"} estimate${pct}`;
+}
 
 function Row({ label, value, muted, strong }: { label: string; value: string; muted?: boolean; strong?: boolean }) {
   return (

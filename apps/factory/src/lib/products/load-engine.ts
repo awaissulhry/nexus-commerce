@@ -15,6 +15,7 @@ export async function loadEngineTemplate(templateId: string): Promise<EngineTemp
       constraints: true,
       bomLines: true,
       quantityBreaks: { orderBy: { minQty: "asc" } }, // EPQ.3 — tier rules ride the template
+      consumption: true, // EPQ.4 — leather m² per size (no rows = cost model dormant)
     },
   });
   if (!t) return null;
@@ -28,6 +29,9 @@ export async function loadEngineTemplate(templateId: string): Promise<EngineTemp
     moqQty: t.moqQty,
     moqSurchargeMode: t.moqSurchargeMode,
     moqSurcharge: t.moqSurcharge,
+    // EPQ.4 — structured cost inputs (absent ⇒ cost parity in compose)
+    laborHours: t.laborHours,
+    consumption: t.consumption.map((c) => ({ sizeKey: c.sizeKey, leatherSqm: c.leatherSqm, wastagePct: c.wastagePct })),
     groups: t.optionGroups.map((g) => ({
       id: g.id,
       name: g.name,

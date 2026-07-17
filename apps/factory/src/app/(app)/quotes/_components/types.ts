@@ -98,10 +98,20 @@ export type ComposeResult = {
   marginCents?: number;
   marginPct?: number;
   marginNegative?: boolean;
-  lines?: { kind: string; label: string; optionId?: string; priceCents?: number; source: string }[];
+  structuredCost?: boolean; // EPQ.4 — cost side came from material+labor+overhead
+  lines?: { kind: string; label: string; optionId?: string; priceCents?: number; costCents?: number; source: string }[];
   materials?: { materialId: string; qty: number; unit: string; name?: string }[];
   violations?: { kind: string; severity: string; message: string }[];
   hasBlockingViolation?: boolean;
+};
+
+/** EPQ.4 — a shipped order's real numbers beside the estimate. */
+export type OrderActual = {
+  orderId?: string;
+  orderNumber: string;
+  actualCostCents: number;
+  estCostCents: number;
+  soldNetCents?: number;
 };
 
 /** EPQ.3 — a similar-quote row (wasProduced ⇒ the "repeat" chip). */
@@ -113,6 +123,16 @@ export type SimilarQuote = {
   netCents: number;
   marginPct: number;
   wasProduced: boolean;
+  /** EPQ.4 — set once the converted order has shipped ("won at €X · actual cost €Y vs est €Z") */
+  actual?: OrderActual | null;
+};
+
+/** EPQ.4 — the CTP-lite promise suggestion (read-only; Apply is the only write). */
+export type PromiseSuggestion = {
+  dateISO: string;
+  totalDays: number;
+  terms: { kind: string; days: number; label: string }[];
+  formula: string;
 };
 
 /** EPQ.3 — goal-seek response (per-unit adjustment + projected quote totals). */

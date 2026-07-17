@@ -5,9 +5,14 @@
  * computes money — it PATCHes selections and receives composed values.
  * EPQ.3 — qty rides in (tier + below-MOQ discipline) and the measurement
  * surcharge rule is loaded from AppSetting; all default OFF ⇒ zero-delta.
+ * EPQ.4 — the cost rates ride in too: when the template carries consumption
+ * data AND the leather rate is configured, the engine's cost side becomes the
+ * structured material+labor+overhead model; otherwise (today's reality) cost
+ * stays EXACTLY baseCost+option-deltas.
  */
 import { compose, type ComposeResult } from "@/lib/pricing";
 import { loadEngineTemplate, loadPriceListInput } from "@/lib/products/load-engine";
+import { loadCostRates } from "./cost-model";
 import { loadMeasurementSurcharge } from "./measurement-surcharge";
 
 export type ComposedLine = {
@@ -30,9 +35,10 @@ export async function composeQuoteLine(input: {
 }): Promise<ComposedLine | null> {
   const template = await loadEngineTemplate(input.templateId);
   if (!template) return null;
-  const [priceList, sizeSurcharge] = await Promise.all([
+  const [priceList, sizeSurcharge, costRates] = await Promise.all([
     loadPriceListInput(input.priceListId),
     loadMeasurementSurcharge(),
+    loadCostRates(), // EPQ.4 — null keys keep the cost side on baseCost+deltas
   ]);
   const result = compose({
     template,
@@ -41,6 +47,7 @@ export async function composeQuoteLine(input: {
     adjustmentCents: input.adjustmentCents,
     qty: input.qty,
     sizeSurcharge,
+    costRates,
   });
   return {
     listPriceCents: result.listPriceCents,

@@ -5,12 +5,15 @@
  * be invisible until the first edit. This route composes the line EXACTLY as
  * the PATCH/send paths do (same composeQuoteLine, same discipline inputs) and
  * writes nothing. Works on sent quotes too (the rail is read-only there).
+ * EPQ.4 — kind:"cost" waterfall rows (their labels embed rates) are dropped
+ * for callers without the costs grain; name-based stripping handles the rest.
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { PAGES } from "@/lib/auth/permissions";
 import { composeQuoteLine } from "@/lib/quotes/compose-line";
+import { canSeeCosts, dropCostRows } from "@/lib/quotes/cost-model";
 import { readSelections } from "@/lib/quotes/selections";
 
 export const permission = PAGES.quotes;
@@ -31,5 +34,7 @@ export const GET = guarded(PAGES.quotes, async (_req, { params, resolved }) => {
     priceListId: line.quote.party.priceListId,
     qty: line.qty,
   });
-  return jsonStripped({ result: composed?.result ?? null }, resolved);
+  // EPQ.4 — cost rows are Owner-only (labels carry rates)
+  const result = dropCostRows(composed?.result ?? null, canSeeCosts(resolved));
+  return jsonStripped({ result }, resolved);
 });

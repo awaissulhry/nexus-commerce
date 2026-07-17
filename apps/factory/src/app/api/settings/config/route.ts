@@ -39,13 +39,19 @@ async function configStamp(): Promise<Date | null> {
 
 export const GET = guarded(FEATURES.settingsManage, async () => {
   const stages = (await readJson<{ stages?: string[] }>("production.stages", {})).stages ?? DEFAULT_STAGES;
-  const pricing = await readJson<{ marginFloorPct?: number; depositDefaultPct?: number }>("pricing.defaults", {});
+  const pricing = await readJson<Record<string, unknown>>("pricing.defaults", {});
   const fin = await readJson<{ vatRatePct?: number }>("financials.defaults", {});
   return NextResponse.json({
     stages,
-    marginFloorPct: pricing.marginFloorPct ?? 20,
-    depositDefaultPct: pricing.depositDefaultPct ?? 30,
+    marginFloorPct: (pricing.marginFloorPct as number | undefined) ?? 20,
+    depositDefaultPct: (pricing.depositDefaultPct as number | undefined) ?? 30,
     vatRatePct: fin.vatRatePct ?? 22,
+    // EPQ.4 — cost-truth + CTP-lite keys (null until the Owner enters them)
+    laborRateCentsPerHour: (pricing.laborRateCentsPerHour as number | undefined) ?? null,
+    overheadPct: (pricing.overheadPct as number | undefined) ?? null,
+    leatherCostCentsPerSqm: (pricing.leatherCostCentsPerSqm as number | undefined) ?? null,
+    capacityPerWeek: (pricing.capacityPerWeek as number | undefined) ?? null,
+    procurementLeadDays: (pricing.procurementLeadDays as number | undefined) ?? null,
     rbacMode: rbacMode(),
     updatedAt: await configStamp(), // FS4 — echoed back as expectedUpdatedAt
   });
@@ -56,8 +62,19 @@ const Patch = z.object({
   marginFloorPct: z.number().min(0).max(100).optional(),
   depositDefaultPct: z.number().min(0).max(100).optional(),
   vatRatePct: z.number().min(0).max(100).optional(),
+  // EPQ.4 — cost-truth + CTP-lite keys (same pricing.defaults row; all
+  // optional, null clears — the machinery stays dormant until entered).
+  // Settings-page surface = EPT/EPD handoff; the API makes entry possible now.
+  laborRateCentsPerHour: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  overheadPct: z.number().min(0).max(100).nullable().optional(),
+  leatherCostCentsPerSqm: z.number().int().min(0).max(10_000_000).nullable().optional(),
+  capacityPerWeek: z.number().min(0).max(10_000).nullable().optional(),
+  procurementLeadDays: z.number().int().min(0).max(365).nullable().optional(),
   expectedUpdatedAt: z.string().datetime().nullable().optional(), // FS4 — null = "read before any config existed"
 });
+
+/** EPQ.4 — the pricing.defaults keys beyond the FP11 pair. */
+const COST_KEYS = ["laborRateCentsPerHour", "overheadPct", "leatherCostCentsPerSqm", "capacityPerWeek", "procurementLeadDays"] as const;
 
 export const PATCH = guarded(FEATURES.settingsManage, async (req, { actor }) => {
   const parsed = Patch.safeParse(await req.json().catch(() => null));
@@ -73,10 +90,23 @@ export const PATCH = guarded(FEATURES.settingsManage, async (req, { actor }) => 
     const stages = d.stages.map((s) => s.trim().toUpperCase()).filter((s, i, a) => s && a.indexOf(s) === i);
     await prisma.appSetting.upsert({ where: { key: "production.stages" }, create: { key: "production.stages", value: { stages } }, update: { value: { stages } } });
   }
-  if (d.marginFloorPct != null || d.depositDefaultPct != null) {
-    const cur = (await prisma.appSetting.findUnique({ where: { key: "pricing.defaults" } }))?.value as { marginFloorPct?: number; depositDefaultPct?: number } | null;
-    const value = { marginFloorPct: d.marginFloorPct ?? cur?.marginFloorPct ?? 20, depositDefaultPct: d.depositDefaultPct ?? cur?.depositDefaultPct ?? 30 };
-    await prisma.appSetting.upsert({ where: { key: "pricing.defaults" }, create: { key: "pricing.defaults", value }, update: { value } });
+  const touchesCostKeys = COST_KEYS.some((k) => d[k] !== undefined);
+  if (d.marginFloorPct != null || d.depositDefaultPct != null || touchesCostKeys) {
+    // EPQ.4 — MERGE over the stored value: this branch used to rebuild the row
+    // as exactly {marginFloorPct, depositDefaultPct}, which would silently
+    // wipe the cost-model/CTP keys every time the Owner saved a margin floor.
+    const cur = (await prisma.appSetting.findUnique({ where: { key: "pricing.defaults" } }))?.value as Record<string, unknown> | null;
+    const value: Record<string, unknown> = {
+      ...(cur ?? {}),
+      marginFloorPct: d.marginFloorPct ?? (cur?.marginFloorPct as number | undefined) ?? 20,
+      depositDefaultPct: d.depositDefaultPct ?? (cur?.depositDefaultPct as number | undefined) ?? 30,
+    };
+    for (const k of COST_KEYS) {
+      if (d[k] === undefined) continue;
+      if (d[k] === null) delete value[k]; // null clears — the key disappears, the machinery goes dormant
+      else value[k] = d[k];
+    }
+    await prisma.appSetting.upsert({ where: { key: "pricing.defaults" }, create: { key: "pricing.defaults", value: value as object }, update: { value: value as object } });
   }
   if (d.vatRatePct != null) {
     const cur = (await prisma.appSetting.findUnique({ where: { key: "financials.defaults" } }))?.value as Record<string, unknown> | null;

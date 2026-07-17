@@ -107,6 +107,9 @@ model ProductTemplate {
   moqQty           Int?
   moqSurchargeMode DeltaMode           @default(ABSOLUTE)
   moqSurcharge     Int                 @default(0)
+  // EPQ.4 — structured cost model: labor hours per garment (null = not
+  // modeled; the cost side stays baseCost+option-deltas — dormancy parity).
+  laborHours     Float?
   optionGroups   OptionGroup[]
   constraints    OptionConstraint[]
   bomLines       BomLine[]
@@ -114,9 +117,25 @@ model ProductTemplate {
   priceEntries   PriceListEntry[]
   quoteLines     QuoteLine[]
   quantityBreaks QuantityBreak[]
+  consumption    TemplateConsumption[]
   archivedAt     DateTime?
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
+}
+
+// EPQ.4 — leather consumption per style(×size): m² of leather one garment
+// draws, plus a wastage % on top. sizeKey null = the all-sizes row (the
+// fallback when no exact-size row matches). No rows = the template has no
+// structured cost model = compose() keeps the FP2 baseCost+deltas exactly.
+model TemplateConsumption {
+  id         String          @id @default(cuid())
+  templateId String
+  template   ProductTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  sizeKey    String? // "58" / "XL" … · null = all sizes
+  leatherSqm Float
+  wastagePct Float           @default(0)
+
+  @@unique([templateId, sizeKey])
 }
 
 // EPQ.3 — quantity-break tiers (B2B): the highest tier with minQty ≤ line qty
