@@ -41,7 +41,7 @@ export type OrdersResponse = {
 };
 
 export type TimelineEvent = {
-  kind: "email" | "quote" | "quote-sent" | "quote-accepted" | "order" | "payment" | "workorder" | "transition" | "shipment" | "review" | "invoice" | "promise" | "stage"; // EPO.3 added the last three
+  kind: "email" | "quote" | "quote-sent" | "quote-accepted" | "order" | "payment" | "workorder" | "transition" | "shipment" | "review" | "invoice" | "promise" | "stage" | "amendment" | "return"; // EPO.3 + EPO.5 additions
   at: string;
   label: string;
   amountCents?: number;
@@ -62,6 +62,7 @@ export type OrderDetailResponse = {
     originalPromiseDateAt: string | null; // EPO.4
     clientRef: string | null; // EPO.4 (D-9)
     urgent: boolean; // EPO.4 (D-9)
+    reapprovalNeededAt: string | null; // EPO.5 — net-changing amendment voided acceptance
     cancelReason: string | null;
     createdAt: string;
     updatedAt: string;
@@ -73,6 +74,8 @@ export type OrderDetailResponse = {
     workOrders: WorkOrderDetail[];
     invoices: InvoiceDetail[]; // EPO.3 — chain chip + timeline source
     shipments: { id: string }[]; // EPO.3 — chain chip count
+    revisions: { rev: number; netDeltaCents?: number; reason: string; createdAt: string }[]; // EPO.5
+    orderReturns: { id: string; number: string; createdAt: string; lines: { outcome: string; qty: number }[] }[]; // EPO.5
     bornFromQuote: { id: string; number: string; state: string; depositPct: number | null } | null;
     conversation: { id: string; subject: string | null } | null;
   };

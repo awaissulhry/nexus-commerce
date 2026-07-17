@@ -12,9 +12,9 @@
  */
 import { prisma } from "@/lib/db";
 
-const PREFIX: Record<string, string> = { quote: "Q-", order: "ORD-", po: "PO-", invoice: "INV-" };
+const PREFIX: Record<string, string> = { quote: "Q-", order: "ORD-", po: "PO-", invoice: "INV-", return: "RET-" }; // EPO.5 adds return
 
-export type CounterKind = "quote" | "order" | "po" | "invoice";
+export type CounterKind = "quote" | "order" | "po" | "invoice" | "return";
 
 /** AppSetting key for a counter — year-scoped when a year is given. */
 export function counterKey(kind: CounterKind, year?: number): string {

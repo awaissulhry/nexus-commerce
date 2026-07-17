@@ -25,7 +25,9 @@ export type TimelineEvent = {
     | "review"
     | "invoice" // EPO.3
     | "promise" // EPO.3
-    | "stage"; // EPO.3
+    | "stage" // EPO.3
+    | "amendment" // EPO.5
+    | "return"; // EPO.5
   at: string; // ISO
   label: string;
   amountCents?: number;
@@ -69,6 +71,8 @@ export type TimelineOrder = {
   }[];
   shipments?: { id: string; trackingNumber?: string | null; service?: string | null; costCents?: number | null; createdAt: DateLike }[];
   invoices?: { id: string; number: string; amountCents?: number | null; sentAt?: DateLike | null; paidAt?: DateLike | null; createdAt: DateLike }[];
+  revisions?: { rev: number; netDeltaCents?: number | null; reason: string; createdAt: DateLike }[]; // EPO.5
+  orderReturns?: { id: string; number: string; createdAt: DateLike; lines?: { outcome: string; qty: number }[] }[]; // EPO.5
   reviews?: { id: string; createdAt: DateLike }[];
 };
 
@@ -130,6 +134,16 @@ export function buildTimeline(order: TimelineOrder, audits: AuditRow[] = []): Ti
   for (const inv of order.invoices ?? []) {
     ev.push({ kind: "invoice", at: iso(inv.createdAt), label: `Invoice ${inv.number} issued`, amountCents: inv.amountCents ?? undefined, href: "/financials" });
     if (inv.paidAt) ev.push({ kind: "invoice", at: iso(inv.paidAt), label: `Invoice ${inv.number} paid`, amountCents: inv.amountCents ?? undefined, href: "/financials" });
+  }
+  // EPO.5 — amendments: rev + reason on the thread; the delta rides amountCents
+  // (grain-stripped upstream — never interpolated into the label)
+  for (const rv of order.revisions ?? []) {
+    ev.push({ kind: "amendment", at: iso(rv.createdAt), label: `Amended (rev ${rv.rev}) — ${rv.reason}`, amountCents: rv.netDeltaCents ?? undefined });
+  }
+  // EPO.5 — returns: outcome summary per return
+  for (const rt of order.orderReturns ?? []) {
+    const parts = (rt.lines ?? []).map((l) => `${l.outcome.toLowerCase()} ×${l.qty}`).join(", ");
+    ev.push({ kind: "return", at: iso(rt.createdAt), label: `Return ${rt.number}${parts ? ` — ${parts}` : ""}` });
   }
   for (const r of order.reviews ?? []) {
     ev.push({ kind: "review", at: iso(r.createdAt), label: "Review received", href: partyHref });

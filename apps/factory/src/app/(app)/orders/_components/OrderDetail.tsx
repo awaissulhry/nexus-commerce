@@ -8,7 +8,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, Hammer, Truck } from "lucide-react";
+import { ArrowUpRight, Hammer, PenLine, Truck, Undo2 } from "lucide-react";
 import { DetailHeader } from "@/design-system/patterns";
 import { Banner, Card, DateField, Listbox, Menu, Modal, useToast } from "@/design-system/components";
 import { Button, Pill } from "@/design-system/primitives";
@@ -75,6 +75,12 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
   const [payMethod, setPayMethod] = useState("");
   const [payKey, setPayKey] = useState(""); // EPO1.4 (C4) — minted per modal-open; a double-click can't record twice
   const [busy, setBusy] = useState(false);
+  // EPO.5 — amendment + return modals
+  const [amending, setAmending] = useState(false);
+  const [amendEdits, setAmendEdits] = useState<Record<string, { qty: string; price: string }>>({});
+  const [amendReason, setAmendReason] = useState("");
+  const [returning, setReturning] = useState(false);
+  const [returnLines, setReturnLines] = useState<Record<string, { qty: string; outcome: string; note: string }>>({});
 
   const load = useCallback(async () => {
     try { setD(await apiJson<OrderDetailResponse>(`/api/orders/${orderId}`)); }
@@ -121,6 +127,45 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
       toast(r.blocked ? `${r.workOrders} work order(s) created — blocked until the deposit is recorded` : `Production started — ${r.workOrders} work order(s) ready`, r.blocked ? "warning" : "success");
     } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
   };
+  // EPO.5 — submit an amendment: server freezes the revision, applies edits,
+  // voids acceptance when the net changed (D-4)
+  const submitAmendment = async () => {
+    const edits = Object.entries(amendEdits)
+      .map(([lineId, v]) => {
+        const e: { lineId: string; qty?: number; netPriceCents?: number } = { lineId };
+        const qn = parseInt(v.qty, 10);
+        if (v.qty !== "" && Number.isFinite(qn) && qn > 0) e.qty = qn;
+        const pn = Math.round(parseFloat(v.price) * 100);
+        if (v.price !== "" && Number.isFinite(pn) && pn >= 0) e.netPriceCents = pn;
+        return e;
+      })
+      .filter((e) => e.qty !== undefined || e.netPriceCents !== undefined);
+    if (edits.length === 0 || !amendReason.trim()) { toast("Change at least one line and give a reason", "danger"); return; }
+    setBusy(true);
+    try {
+      const r = await apiJson<{ rev: number; netDeltaCents?: number; reapprovalNeeded: boolean; workOrdersUntouched: boolean }>(`/api/orders/${orderId}/amend`, { method: "POST", body: JSON.stringify({ reason: amendReason.trim(), edits }) });
+      setAmending(false); setAmendEdits({}); setAmendReason(""); await load();
+      toast(
+        `Amended (rev ${r.rev})${r.reapprovalNeeded ? " — total changed, customer re-approval needed" : ""}${r.workOrdersUntouched ? " — work orders NOT changed, reconcile the floor" : ""}`,
+        r.reapprovalNeeded || r.workOrdersUntouched ? "warning" : "success",
+      );
+    } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
+  };
+
+  // EPO.5 — record a return: repair/remake spawn rework WOs; credit → REFUND hint
+  const submitReturn = async () => {
+    const lines = Object.entries(returnLines)
+      .map(([orderLineId, v]) => ({ orderLineId, qty: parseInt(v.qty, 10), outcome: v.outcome, note: v.note.trim() || undefined }))
+      .filter((l) => Number.isFinite(l.qty) && l.qty > 0);
+    if (lines.length === 0) { toast("Enter a quantity for at least one line", "danger"); return; }
+    setBusy(true);
+    try {
+      const r = await apiJson<{ number: string; reworkWos: string[]; creditHint?: string }>(`/api/orders/${orderId}/returns`, { method: "POST", body: JSON.stringify({ lines }) });
+      setReturning(false); setReturnLines({}); await load();
+      toast(`${r.number} recorded${r.reworkWos.length ? ` — rework ${r.reworkWos.join(", ")} on the floor` : ""}${r.creditHint ? ` · ${r.creditHint}` : ""}`, "success");
+    } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
+  };
+
   // EPO.2 — send / mark-paid ride the FP9 invoice route (consume, never rebuild)
   const invoiceAction = async (invoiceId: string, action: "send" | "paid") => {
     try {
@@ -167,6 +212,9 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {canEdit && o.state === "CONFIRMED" && <Button variant="primary" onClick={() => setStarting(true)}><Hammer size={13} /> Start production</Button>}
             {canBuyLabel && o.state === "READY" && <Button variant="primary" onClick={() => { window.location.href = `/shipping?buy=${o.id}`; }}><Truck size={13} /> Buy label</Button>}
+            {/* EPO.5 — amend while work still makes sense; return once goods left */}
+            {canEdit && ["CONFIRMED", "IN_PRODUCTION", "READY"].includes(o.state) && <Button onClick={() => { setAmendEdits({}); setAmendReason(""); setAmending(true); }}><PenLine size={13} /> Amend</Button>}
+            {canEdit && ["SHIPPED", "DELIVERED", "CLOSED"].includes(o.state) && <Button onClick={() => { setReturnLines({}); setReturning(true); }}><Undo2 size={13} /> Record return</Button>}
             {canEdit && menuItems.length > 0 && <Menu align="right" label="Change status" items={menuItems} triggerProps={{ className: "h10-ds-btn" }} />}
           </div>
         }
@@ -188,6 +236,19 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
 
       {o.state === "CANCELLED" && o.cancelReason && (
         <div style={{ marginBottom: 12, padding: 10, background: "var(--h10-wash-danger, #fdecec)", borderRadius: 8, fontSize: 12.5, color: "var(--h10-danger)" }}>Cancelled — {o.cancelReason}</div>
+      )}
+
+      {/* EPO.5 — a net-changing amendment voided the acceptance; never silent */}
+      {o.reapprovalNeededAt && (
+        <div style={{ marginBottom: 12 }}>
+          <Banner
+            tone="warning"
+            title="An amendment changed the total — the customer's acceptance no longer covers it"
+            action={canEdit ? <Button onClick={() => void (async () => { try { await apiJson(`/api/orders/${orderId}/amend`, { method: "PATCH", body: JSON.stringify({ reapproved: true }) }); await load(); toast("Re-approval recorded", "success"); } catch (e) { toast((e as Error).message, "danger"); } })()}>Mark re-approved</Button> : undefined}
+          >
+            Confirm the new total with them (the thread is one click up), then record it here. Sending the re-approval request automatically arrives with the notifications phase.
+          </Banner>
+        </div>
       )}
 
       {/* EPO.2 — credit AWARENESS, never a hold: this party still owes elsewhere */}
@@ -374,6 +435,43 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
             <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 3 }}>Method (optional)</div>
             <input value={payMethod} onChange={(e) => setPayMethod(e.target.value)} placeholder="bank transfer, card…" style={{ width: "100%", border: "1px solid var(--h10-border)", borderRadius: 8, padding: "7px 9px", fontSize: 13, background: "var(--h10-surface)", color: "var(--h10-text)" }} />
           </div>
+        </div>
+      </Modal>
+
+      {/* EPO.5 — amend: per-line qty/price edits + one reason; the server freezes the revision */}
+      <Modal open={amending} onClose={() => !busy && setAmending(false)} title={`Amend ${o.number}`} size="sm"
+        footer={<><Button onClick={() => setAmending(false)} disabled={busy}>Cancel</Button><Button variant="primary" onClick={submitAmendment} disabled={busy || !amendReason.trim()}>{busy ? "Amending…" : "Amend order"}</Button></>}>
+        <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>
+            Changes create an audited revision — the original lines are kept forever. A changed total voids the customer’s acceptance until you record their re-approval.
+            {o.state !== "CONFIRMED" && <b> Work orders are NOT re-exploded — reconcile the floor yourself.</b>}
+          </div>
+          {o.lines.map((l) => (
+            <div key={l.id} style={{ display: "grid", gridTemplateColumns: "1fr 64px 88px", gap: 6, alignItems: "center", fontSize: 12.5 }}>
+              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }} title={l.description}>{l.description}</span>
+              <input type="number" min="1" placeholder={String(l.qty)} value={amendEdits[l.id]?.qty ?? ""} onChange={(e) => setAmendEdits((p) => ({ ...p, [l.id]: { qty: e.target.value, price: p[l.id]?.price ?? "" } }))} aria-label={`New quantity for ${l.description}`} style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: "5px 7px", fontSize: 12.5, fontFamily: "ui-monospace, monospace", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+              <input type="number" min="0" step="0.01" placeholder={l.netPriceCents != null ? (l.netPriceCents / 100).toFixed(2) : "€"} value={amendEdits[l.id]?.price ?? ""} onChange={(e) => setAmendEdits((p) => ({ ...p, [l.id]: { qty: p[l.id]?.qty ?? "", price: e.target.value } }))} aria-label={`New unit price for ${l.description}`} style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: "5px 7px", fontSize: 12.5, fontFamily: "ui-monospace, monospace", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+            </div>
+          ))}
+          <textarea value={amendReason} onChange={(e) => setAmendReason(e.target.value)} rows={2} placeholder="Why is this order changing? (required)" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: 9, fontSize: 12.5, fontFamily: "inherit", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+        </div>
+      </Modal>
+
+      {/* EPO.5 — return: per-line qty + outcome; repair/remake spawn rework WOs */}
+      <Modal open={returning} onClose={() => !busy && setReturning(false)} title={`Record a return for ${o.number}`} size="sm"
+        footer={<><Button onClick={() => setReturning(false)} disabled={busy}>Cancel</Button><Button variant="primary" onClick={submitReturn} disabled={busy}>{busy ? "Recording…" : "Record return"}</Button></>}>
+        <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>Repair and remake put a rework work order on the floor (full stage flow, QC gate included). Credit is recorded afterwards as a refund payment so the balance stays true.</div>
+          {o.lines.map((l) => (
+            <div key={l.id} style={{ display: "grid", gap: 4 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600 }}>{l.description} <span style={{ color: "var(--h10-text-3)", fontWeight: 400 }}>×{l.qty}</span></div>
+              <div style={{ display: "grid", gridTemplateColumns: "64px 1fr 1fr", gap: 6 }}>
+                <input type="number" min="0" max={l.qty} placeholder="0" value={returnLines[l.id]?.qty ?? ""} onChange={(e) => setReturnLines((p) => ({ ...p, [l.id]: { qty: e.target.value, outcome: p[l.id]?.outcome ?? "REPAIR", note: p[l.id]?.note ?? "" } }))} aria-label={`Return quantity for ${l.description}`} style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: "5px 7px", fontSize: 12.5, fontFamily: "ui-monospace, monospace", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+                <Listbox ariaLabel={`Outcome for ${l.description}`} options={[{ value: "REPAIR", label: "Repair" }, { value: "REMAKE", label: "Remake" }, { value: "CREDIT", label: "Credit" }]} value={returnLines[l.id]?.outcome ?? "REPAIR"} onChange={(v) => setReturnLines((p) => ({ ...p, [l.id]: { qty: p[l.id]?.qty ?? "", outcome: v, note: p[l.id]?.note ?? "" } }))} />
+                <input placeholder="Note (optional)" value={returnLines[l.id]?.note ?? ""} onChange={(e) => setReturnLines((p) => ({ ...p, [l.id]: { qty: p[l.id]?.qty ?? "", outcome: p[l.id]?.outcome ?? "REPAIR", note: e.target.value } }))} aria-label={`Note for ${l.description}`} style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: "5px 7px", fontSize: 12.5, background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+              </div>
+            </div>
+          ))}
         </div>
       </Modal>
 

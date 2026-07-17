@@ -33,6 +33,8 @@ const DETAIL_INCLUDE = {
   conversation: { select: { id: true, subject: true, createdAt: true } },
   shipments: true,
   invoices: { select: { id: true, number: true, amountCents: true, sentAt: true, paidAt: true, createdAt: true }, orderBy: { createdAt: "asc" as const } }, // EPO.3 — chain chip + timeline
+  revisions: { select: { rev: true, netDeltaCents: true, reason: true, createdAt: true }, orderBy: { rev: "asc" as const } }, // EPO.5 — amendments
+  orderReturns: { select: { id: true, number: true, createdAt: true, lines: { select: { outcome: true, qty: true } } }, orderBy: { createdAt: "asc" as const } }, // EPO.5 — returns
   reviews: { select: { id: true, createdAt: true } },
 };
 

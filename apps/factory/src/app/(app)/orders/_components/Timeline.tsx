@@ -6,7 +6,7 @@
 "use client";
 
 import Link from "next/link";
-import { Mail, FileText, Send, CheckCircle2, ClipboardCheck, Euro, Hammer, ArrowRight, Truck, Star, Receipt, CalendarClock, type LucideIcon } from "lucide-react";
+import { Mail, FileText, Send, CheckCircle2, ClipboardCheck, Euro, Hammer, ArrowRight, Truck, Star, Receipt, CalendarClock, PenLine, Undo2, type LucideIcon } from "lucide-react";
 import { eur } from "@/design-system/lib/format";
 import type { TimelineEvent } from "./types";
 
@@ -24,6 +24,8 @@ const ICON: Record<TimelineEvent["kind"], LucideIcon> = {
   invoice: Receipt, // EPO.3
   promise: CalendarClock, // EPO.3
   stage: CheckCircle2, // EPO.3
+  amendment: PenLine, // EPO.5
+  return: Undo2, // EPO.5
 };
 
 const TONE: Partial<Record<TimelineEvent["kind"], string>> = {
@@ -33,6 +35,8 @@ const TONE: Partial<Record<TimelineEvent["kind"], string>> = {
   workorder: "var(--h10-warning)",
   stage: "var(--h10-success)", // EPO.3
   promise: "var(--h10-warning)", // EPO.3
+  amendment: "var(--h10-warning)", // EPO.5
+  return: "var(--h10-danger)", // EPO.5
 };
 
 export function Timeline({ events }: { events: TimelineEvent[] }) {

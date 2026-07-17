@@ -510,6 +510,9 @@ model Order {
   clientRef       String?
   urgent          Boolean       @default(false)
   remakeOfId      String?
+  // EPO.5 — a net-changing amendment voids the customer's acceptance until
+  // the Owner records their re-approval (D-4: net change only).
+  reapprovalNeededAt DateTime?
   cancelReason    String?
   lines           OrderLine[]
   workOrders      WorkOrder[]
@@ -517,6 +520,8 @@ model Order {
   invoices        Invoice[]
   payments        Payment[]
   reviews         Review[]
+  revisions       OrderRevision[] // EPO.5 — amendments after CONFIRMED
+  orderReturns    OrderReturn[] // EPO.5 — returns/repair/remake/credit
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -793,6 +798,58 @@ model Payment {
   importKey      String?     @unique
 
   @@index([orderId])
+}
+
+// EPO.5 — amendments: nothing confirmed is silently editable (ERPNext
+// docstatus verdict). Each amendment freezes the lines AS THEY WERE, the
+// field-level diff, and the net delta; the trail is append-only.
+model OrderRevision {
+  id            String   @id @default(cuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  rev           Int // 1, 2, … per order
+  snapshot      Json // the lines BEFORE this amendment
+  diff          Json // [{lineId, description, field, from, to}]
+  netDeltaCents Int // net change this amendment caused
+  reason        String
+  actorId       String?
+  createdAt     DateTime @default(now())
+
+  @@unique([orderId, rev])
+}
+
+// EPO.5 — returns: repair / remake / credit per line. Repair & remake spawn a
+// rework WorkOrder back through the normal stage flow (QC gate included);
+// credit is recorded as a REFUND payment (EPF.1's mechanism) by the Owner.
+enum ReturnOutcome {
+  REPAIR
+  REMAKE
+  CREDIT
+}
+
+model OrderReturn {
+  id        String            @id @default(cuid())
+  orderId   String
+  order     Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  number    String            @unique // RET-n
+  notes     String?
+  createdAt DateTime          @default(now())
+  lines     OrderReturnLine[]
+
+  @@index([orderId])
+}
+
+model OrderReturnLine {
+  id                String        @id @default(cuid())
+  returnId          String
+  return            OrderReturn   @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  orderLineId       String
+  qty               Int
+  outcome           ReturnOutcome
+  note              String?
+  reworkWorkOrderId String? // set when REPAIR/REMAKE spawned a rework WO
+
+  @@index([returnId])
 }
 
 // ── Platform primitives ──────────────────────────────────────────
