@@ -1,7 +1,8 @@
 /**
  * F1 — ⌘K palette skeleton (Nexus CommandPalette pattern, factory registry):
  * nav commands filtered by permission + live entity search against
- * /api/search. FTS5 + chords upgrade in a later cycle.
+ * /api/search (FTS5-backed since FS5 — same response shape, so this client
+ * needed no change). Chords upgrade in a later cycle.
  */
 "use client";
 

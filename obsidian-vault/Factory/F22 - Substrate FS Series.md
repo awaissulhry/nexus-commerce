@@ -20,9 +20,9 @@ Factory-local (`apps/factory/src/components/` — DS copy stays byte-identical):
 
 `$transaction` around every multi-step write · boot pragma verification (fail loudly if WAL didn't take) · short-TTL session cache keyed on `permissionsVersion` · optimistic-concurrency `updatedAt` guards · login rate-limiting. Exit: concurrent-writer harness with zero SQLITE_BUSY surfaced, authed GET ≤1 DB query. *(EPO D-6 and EPF EPF.1 lean on these patterns — coordinate when FS4 claims.)*
 
-## FS5 — Storage lifecycle ⚪ QUEUED
+## FS5 — Storage lifecycle ✅ SHIPPED 2026-07-17 (⚠ migration `fs5_fts` authored NOT applied)
 
-Streamed attachments/PDFs · FTS5 search (kills leading-wildcard scans; feeds [[F10 - Inbox (EPI)]] views + [[F21 - Chat & Order Spaces (FC)]] FC6 search) · snapshot strategy at scale · archival/export policy (append-only untouched). Exit: 2M ledger rows, search sub-100ms.
+**FTS5 substrate** (S-13): virtual tables + sync triggers for conversations/messages/parties/quotes/orders, backfilled in-migration; tables declared **externally-managed in prisma.config.ts** so `migrate dev` never proposes dropping them (verified trap). `search-fts.ts` = escaped MATCH builder + bounded id helpers; ⌘K rewired (same response shape) with a LIKE fallback until the migration lands. Measured on the 1.2 GB harness clone: backfill 3.9 s, message-body search 0.02–0.3 ms vs 128–173 ms LIKE. **Streaming** (S-14): quote PDF route streams pdfkit + fs; ledger + NEW audit exports are full-table streamed CSVs (id-cursor batches — take-5000 truncation gone). **Snapshots** (S-15): `wal_checkpoint(TRUNCATE)` before `VACUUM INTO` (measured 5.5 s at 1.2 GB), hour/keep via AppSetting `snapshot.config`, duration/sizes stamped on `snapshot.last`. **Retention** = `FS5-RETENTION.md`: append-only forever, export is the archive, snapshots are copies; after a snapshot restore run `fts:rebuild`. **Pending adoptions:** EPI inbox `?q=` + attachment streaming · EPF invoice PDF stream · FC6 chat search (helpers ready). Exit met: search sub-100ms at 2M+ rows.
 
 ## Also standing substrate
 

@@ -166,12 +166,28 @@ export default function ImportExportPage() {
           padded
           header="Exports"
         >
-          <div style={{ fontSize: 12.5 }}>
-            <a href="/api/exports/parties" style={{ color: "var(--h10-text-link)" }}>
-              parties.csv
-            </a>{" "}
-            — round-trips with the import. Financial columns are stripped unless your role holds the
-            grain (the exporter calls the filter explicitly).
+          <div style={{ display: "grid", gap: 6, fontSize: 12.5 }}>
+            <div>
+              <a href="/api/exports/parties" style={{ color: "var(--h10-text-link)" }}>
+                parties.csv
+              </a>{" "}
+              — round-trips with the import. Financial columns are stripped unless your role holds the
+              grain (the exporter calls the filter explicitly).
+            </div>
+            {/* FS5 — the two append-only archival exports (full-table, streamed) */}
+            <div>
+              <a href="/api/exports/ledger" style={{ color: "var(--h10-text-link)" }}>
+                ledger.csv
+              </a>{" "}
+              — the FULL movement ledger, streamed (append-only forever; this export is the archival
+              path — nothing is ever deleted).
+            </div>
+            <div>
+              <a href="/api/exports/audit" style={{ color: "var(--h10-text-link)" }}>
+                audit.csv
+              </a>{" "}
+              — the FULL audit trail, streamed, with before/after as JSON cells.
+            </div>
           </div>
         </Card>
 

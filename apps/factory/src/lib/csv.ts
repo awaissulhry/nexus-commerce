@@ -54,3 +54,16 @@ const escapeCell = (v: unknown): string => {
 export function toCsv(headers: string[], rows: unknown[][]): string {
   return [headers.join(","), ...rows.map((r) => r.map(escapeCell).join(","))].join("\n");
 }
+
+/**
+ * FS5 — CSV body chunk for STREAMED exports: `toCsv([], rows)` yields "\n" +
+ * the joined rows, and that leading newline is exactly the separator from the
+ * previous chunk (the header chunk carries none) — so header + chunks
+ * concatenate into one valid CSV byte-identical to a single toCsv() call.
+ * Empty batches contribute nothing. (exports/orders carries a pre-FS5 local
+ * copy of this — EPO-owned file; adopting csvChunk there is a recorded
+ * cosmetic handoff.)
+ */
+export function csvChunk(rows: unknown[][]): string {
+  return rows.length === 0 ? "" : toCsv([], rows);
+}

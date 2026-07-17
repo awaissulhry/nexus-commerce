@@ -99,9 +99,15 @@ export async function runRuleNow(
   const actions = RuleActionsSchema.parse(rule.actions);
   const data = actionData(actions);
 
-  // only conversations the action would actually CHANGE (honest dry-run)
+  // only conversations the action would actually CHANGE (honest dry-run).
+  // EPI3.5 verifier-caught: SQL NOT(col = X) excludes NULL rows — an assign
+  // rule's main audience is UNASSIGNED (null) conversations, so the filter
+  // must be null-safe or the dry-run shows "nothing to change" over 1783
+  // real targets (proven empirically on the live corpus).
   const changeFilter: Record<string, unknown>[] = [];
-  if (typeof data.assigneeId === "string") changeFilter.push({ NOT: { assigneeId: data.assigneeId } });
+  if (typeof data.assigneeId === "string") {
+    changeFilter.push({ OR: [{ assigneeId: null }, { NOT: { assigneeId: data.assigneeId } }] });
+  }
   if (data.state === "CLOSED") changeFilter.push({ NOT: { state: "CLOSED" } });
 
   const matches = await prisma.conversation.findMany({

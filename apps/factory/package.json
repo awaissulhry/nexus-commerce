@@ -18,6 +18,7 @@
     "db:generate": "prisma generate",
     "db:seed": "tsx scripts/seed.ts",
     "db:reset": "tsx scripts/reset.ts",
+    "fts:rebuild": "tsx scripts/fts-rebuild.ts",
     "bootstrap:owner": "tsx scripts/bootstrap-owner.ts",
     "test": "vitest run",
     "check:no-touch": "node scripts/no-touch-check.mjs",

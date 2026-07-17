@@ -5,7 +5,8 @@
  *   · heartbeat        every 30s → AppSetting worker.heartbeat (Health panel)
  *   · Gmail poll       every 10s → history.list incremental (≈0.02%/day quota)
  *   · tracking tick    every 15m → poll in-flight shipments, drive → delivered
- *   · nightly snapshot 03:xx     → VACUUM INTO .snapshots/ (rotate 14)
+ *   · nightly snapshot 03:xx     → checkpoint + VACUUM INTO .snapshots/, rotate
+ *                                  (hour/keep via AppSetting snapshot.config — FS5)
  * Shares the SQLite file with the web process under WAL.
  */
 import "dotenv/config";
@@ -17,6 +18,7 @@ import { publishEventDurable } from "../src/lib/events";
 import { incrementalSync } from "../src/lib/google/gmail-sync";
 import { notify } from "../src/lib/notifications";
 import { pollInflightShipments } from "../src/lib/shipping/poll-tracking";
+import { resolveSnapshotConfig, SNAPSHOT_DEFAULTS, type SnapshotConfig } from "../src/lib/snapshot-config";
 import { quoteTick } from "./quote-tick";
 
 const HEARTBEAT_MS = 30_000;
@@ -24,8 +26,8 @@ const GMAIL_POLL_MS = 10_000;
 const INBOX_TICK_MS = 60_000;
 const TRACKING_TICK_MS = 15 * 60 * 1000; // FP8 — poll in-flight shipments (read-only)
 const OUTBOX_TTL_MS = 60 * 60 * 1000; // FS2 — outbox doubles as the gap-free resume window (was 10 min)
-const SNAPSHOT_HOUR = 3;
-const SNAPSHOT_KEEP = 14;
+// FS5 — snapshot hour + retention moved to AppSetting `snapshot.config`
+// (resolveSnapshotConfig defaults keep the historic 03:xx / keep-14).
 
 let stopping = false;
 let gmailBusy = false;
@@ -191,10 +193,31 @@ async function trackingTick() {
   }
 }
 
+/**
+ * FS5 (S-15) — nightly snapshot, hardened for large DBs:
+ *   · hour + retention are AppSetting-configurable (`snapshot.config`,
+ *     defaults unchanged: 03:xx, keep 14) — resolveSnapshotConfig is pure
+ *     and fault-tolerant, so a bad value falls back instead of skipping.
+ *   · `wal_checkpoint(TRUNCATE)` runs first: the WAL folds into the main
+ *     file during the quiet window, so VACUUM INTO copies one compact
+ *     source instead of replaying a day of WAL frames.
+ *   · duration + sizes are measured, logged, and stamped durably on
+ *     AppSetting `snapshot.last` (Health-panel food; measured on the 1.2 GB
+ *     harness clone: checkpoint ~10 ms idle, VACUUM INTO ~5.5 s).
+ * Snapshot rotation deletes COPIES only — the archival stance (append-only
+ * forever + streamed exports) is docs/factory/FS5-RETENTION.md.
+ */
 async function nightlySnapshot() {
   const now = new Date();
   const day = now.toISOString().slice(0, 10);
-  if (now.getHours() !== SNAPSHOT_HOUR || lastSnapshotDay === day) return;
+  let cfg: SnapshotConfig = { ...SNAPSHOT_DEFAULTS };
+  try {
+    const row = await prisma.appSetting.findUnique({ where: { key: "snapshot.config" } });
+    cfg = resolveSnapshotConfig(row?.value);
+  } catch {
+    // unreadable settings never block the snapshot — defaults apply
+  }
+  if (now.getHours() !== cfg.hour || lastSnapshotDay === day) return;
   lastSnapshotDay = day;
   try {
     const dbFile = factoryDbUrl().replace(/^file:/, "");
@@ -202,14 +225,36 @@ async function nightlySnapshot() {
     fs.mkdirSync(dir, { recursive: true });
     const target = path.join(dir, `factory-${day}.db`);
     if (!fs.existsSync(target)) {
+      let checkpointMs = 0;
+      const t0 = Date.now();
+      try {
+        await prisma.$queryRawUnsafe(`PRAGMA wal_checkpoint(TRUNCATE);`);
+        checkpointMs = Date.now() - t0;
+      } catch (err) {
+        // a busy checkpoint is fine — VACUUM INTO still reads a correct image
+        console.error("[worker] snapshot wal_checkpoint skipped:", (err as Error).message);
+      }
+      const t1 = Date.now();
       await prisma.$executeRawUnsafe(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
-      console.log(`[worker] snapshot written: ${path.basename(target)}`);
+      const vacuumMs = Date.now() - t1;
+      const dbBytes = statBytes(dbFile);
+      const snapshotBytes = statBytes(target);
+      console.log(
+        `[worker] snapshot written: ${path.basename(target)} in ${vacuumMs} ms ` +
+          `(checkpoint ${checkpointMs} ms · db ${mb(dbBytes)} → snapshot ${mb(snapshotBytes)})`,
+      );
+      const last = { day, at: new Date().toISOString(), checkpointMs, vacuumMs, dbBytes, snapshotBytes };
+      await prisma.appSetting.upsert({
+        where: { key: "snapshot.last" },
+        create: { key: "snapshot.last", value: last },
+        update: { value: last },
+      });
     }
     const snapshots = fs
       .readdirSync(dir)
       .filter((f) => f.startsWith("factory-") && f.endsWith(".db"))
       .sort();
-    while (snapshots.length > SNAPSHOT_KEEP) {
+    while (snapshots.length > cfg.keep) {
       const oldest = snapshots.shift()!;
       fs.rmSync(path.join(dir, oldest));
       console.log(`[worker] snapshot rotated out: ${oldest}`);
@@ -219,8 +264,17 @@ async function nightlySnapshot() {
   }
 }
 
+const statBytes = (p: string): number => {
+  try {
+    return fs.statSync(p).size;
+  } catch {
+    return 0;
+  }
+};
+const mb = (n: number) => `${(n / 1048576).toFixed(1)} MB`;
+
 async function main() {
-  console.log("[worker] Nexus Factory worker starting (heartbeat 30s · gmail 10s · snapshot 03:00)");
+  console.log(`[worker] Nexus Factory worker starting (heartbeat 30s · gmail 10s · snapshot ${String(SNAPSHOT_DEFAULTS.hour).padStart(2, "0")}:xx default)`);
   await heartbeat();
   const timers = [
     setInterval(() => void heartbeat(), HEARTBEAT_MS),

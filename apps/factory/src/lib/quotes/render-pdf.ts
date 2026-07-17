@@ -167,3 +167,26 @@ export function renderQuotePdf(snapshot: QuoteSnapshot, factoryName: string): Pr
     doc.end();
   });
 }
+
+/**
+ * FS5 bridge (merge resolution 2026-07-17): FS5's true stream-draw refactor was
+ * authored against the pre-EPQ.5 renderer; porting it wholesale would have
+ * reverted the compliance rendering (tax modes, gross-first B2C, deposit
+ * wording). Until the stream-draw port is redone ON TOP of the compliance
+ * core (recorded follow-up), live previews stream as a single chunk from the
+ * buffered render — frozen-version files stream from disk in the route and
+ * are unaffected. Signature matches FS5's route contract.
+ */
+export function renderQuotePdfStream(snapshot: QuoteSnapshot, factoryName: string): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        const buf = await renderQuotePdf(snapshot, factoryName);
+        controller.enqueue(new Uint8Array(buf));
+        controller.close();
+      } catch (e) {
+        controller.error(e);
+      }
+    },
+  });
+}
