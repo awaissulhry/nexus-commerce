@@ -39,3 +39,27 @@ export function depositPaidCents(payments: { kind: string; amountCents: number }
 export function isDepositMet(requiredCents: number, paidCents: number): boolean {
   return requiredCents <= 0 || paidCents >= requiredCents;
 }
+
+/**
+ * EPO.2 — the ONE payment badge for a list row (NetSuite/ERPNext status-
+ * vocabulary verdict: one coarse word, not four numbers). Pure; derived from
+ * the same fold numbers the strip governs, so a money-blind caller (fields
+ * stripped to undefined upstream) simply gets no badge.
+ */
+export type PaymentBadge = "paid" | "invoiced" | "deposit-due" | "deposit-paid" | "unpaid";
+
+export function paymentBadge(f: {
+  netCents?: number;
+  balanceCents?: number;
+  invoicedCents?: number;
+  depositRequiredCents?: number;
+  depositPaidCents?: number;
+}): PaymentBadge | null {
+  if (f.netCents == null || f.balanceCents == null) return null; // stripped or empty order
+  if (f.netCents <= 0) return null;
+  if (f.balanceCents <= 0) return "paid";
+  if ((f.depositRequiredCents ?? 0) > 0 && (f.depositPaidCents ?? 0) < (f.depositRequiredCents ?? 0)) return "deposit-due";
+  if ((f.invoicedCents ?? 0) > 0) return "invoiced";
+  if ((f.depositRequiredCents ?? 0) > 0) return "deposit-paid";
+  return "unpaid";
+}

@@ -57,6 +57,7 @@ export const GET = guarded(PAGES.orders, async (req: NextRequest, { resolved }) 
         party: { select: { id: true, name: true, kind: true } },
         lines: { select: { netPriceCents: true, costCents: true, qty: true } },
         payments: { select: { kind: true, amountCents: true } },
+        invoices: { select: { amountCents: true } }, // EPO.2 — per-row invoiced/balance
         workOrders: { select: { state: true } },
         bornFromQuote: { select: { depositPct: true } },
       },
@@ -69,8 +70,17 @@ export const GET = guarded(PAGES.orders, async (req: NextRequest, { resolved }) 
   const hasMore = orders.length > TAKE;
   if (hasMore) orders.pop();
 
+  // EPO.2 — the margin floor (pricing.defaults) powers the low-margin flag;
+  // key starts with "margin" so the strip hides it from margin-blind callers
+  const defaultsRow = await prisma.appSetting.findUnique({ where: { key: "pricing.defaults" } });
+  const marginFloorPct = (defaultsRow?.value as { marginFloorPct?: number } | null)?.marginFloorPct ?? null;
+
   const rows = orders.map((o) => {
     const totals = orderTotals(o.lines);
+    // EPO.2 — per-row order-to-cash truth: same arithmetic as the FP9 fold
+    // (Σ payments / Σ invoices / net − paid), never a re-typed figure
+    const paidCents = o.payments.reduce((s, p) => s + (p.amountCents ?? 0), 0);
+    const invoicedCents = o.invoices.reduce((s, i) => s + (i.amountCents ?? 0), 0);
     return {
       id: o.id,
       number: o.number,
@@ -88,6 +98,9 @@ export const GET = guarded(PAGES.orders, async (req: NextRequest, { resolved }) 
       marginPct: totals.marginPct,
       depositRequiredCents: depositRequiredCents(totals.netCents, o.bornFromQuote?.depositPct),
       depositPaidCents: depositPaidCents(o.payments),
+      paidCents,
+      invoicedCents,
+      balanceCents: totals.netCents - paidCents,
     };
   });
 
@@ -97,6 +110,7 @@ export const GET = guarded(PAGES.orders, async (req: NextRequest, { resolved }) 
       nextCursor: hasMore ? rows[rows.length - 1]?.id ?? null : null,
       counters: { inProduction, awaitingDeposit, overdue },
       counts: Object.fromEntries(counts.map((c) => [c.state, c._count._all])),
+      marginFloorPct,
     },
     resolved,
   );

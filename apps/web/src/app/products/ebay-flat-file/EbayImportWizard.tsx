@@ -61,6 +61,11 @@ import {
   pruneExcludedCells,
   type ImportPolicy,
 } from './importPlan.pure'
+import {
+  deriveAspectMapping,
+  auditCategoryIds,
+  findMissingRequiredAspectsForImport,
+} from './importAspects.pure'
 import { Checkbox } from '@/design-system/primitives/Checkbox'
 import { Input } from '@/design-system/primitives/Input'
 
@@ -78,6 +83,8 @@ export interface WizardColumn extends CoerceColumnMeta {
    *  wizard's File market so repeated labels ("Item ID") stay unambiguous. */
   market?: string
   readOnly?: boolean
+  /** EI.5 — category ids whose schema marks this aspect REQUIRED. */
+  requiredForCategories?: string[]
 }
 
 export interface EbayImportWizardProps {
@@ -256,24 +263,55 @@ export function EbayImportWizard({
     [columns, fileMarket],
   )
 
+  // EI.5 — aspect header unification: dual Italian/English item-specific
+  // headers fold into ONE canonical aspect column (splitting them would
+  // un-group live variants); unknown aspect headers synthesize ghost columns;
+  // variantAttributes junk auto-skips.
+  const aspectDerived = useMemo(
+    () => deriveAspectMapping(parsed?.headers ?? [], new Set(columns.map((c) => c.id))),
+    [parsed, columns],
+  )
+  const effectiveColumns = useMemo<WizardColumn[]>(() => {
+    const synth: WizardColumn[] = []
+    const seen = new Set(scopedColumns.map((c) => c.id))
+    for (const d of aspectDerived.values()) {
+      if (d && d.synth && !seen.has(d.target)) {
+        seen.add(d.target)
+        synth.push({ id: d.target, label: `${d.target.slice('aspect_'.length).replace(/_/g, ' ')} · item specific`, kind: 'text' })
+      }
+    }
+    return [...scopedColumns, ...synth]
+  }, [scopedColumns, aspectDerived])
+
   // The combobox target options: every scoped column + an explicit Skip option.
   const targetOptions: ComboboxOption[] = useMemo(
     () => [
       { value: SKIP, label: '— Skip this column —' },
-      ...scopedColumns.map((c) => ({
+      ...effectiveColumns.map((c) => ({
         value: c.id,
         label:
           (c.market ? `${c.label} · ${c.market}` : c.label) +
           (c.kind === 'readonly' ? ' (link only)' : ''),
       })),
     ],
-    [scopedColumns],
+    [effectiveColumns],
   )
 
   const remap = (headers: string[], first: Record<string, unknown>, cols: WizardColumn[]) =>
     headers.map((header) => {
-      const { target, confidence } = autoMatch(header, cols)
-      return { header, sample: toCell(first[header]), target, confidence }
+      const direct = autoMatch(header, cols)
+      if (direct.target !== SKIP) {
+        return { header, sample: toCell(first[header]), ...direct }
+      }
+      // EI.5 fallback tier — aspect pairs / ⚠ twins / junk.
+      const derived = deriveAspectMapping([header], new Set(cols.map((c) => c.id))).get(header)
+      if (derived === null) {
+        return { header, sample: toCell(first[header]), target: SKIP, confidence: 'none' as Confidence }
+      }
+      if (derived) {
+        return { header, sample: toCell(first[header]), target: derived.target, confidence: 'fuzzy' as Confidence }
+      }
+      return { header, sample: toCell(first[header]), ...direct }
     })
 
   // File market change re-runs the auto-map so per-market headers follow it.
@@ -281,10 +319,26 @@ export function EbayImportWizard({
     setFileMarket(mp)
     if (parsed) {
       const cols = columns.filter((c) => !c.market || c.market === mp)
-      setMapping(remap(parsed.headers, parsed.rows[0] ?? {}, cols))
+      setMapping(remapWholeFile(parsed.headers, parsed.rows[0] ?? {}, cols))
       setFixedRows(null)
       setDecisions({})
     }
+  }
+
+  // Whole-file remap: the aspect tier needs ALL headers at once so the
+  // localized pair ("Taglia (Size)") anchors the folding of its EN twin
+  // ("Size ⚠") into the same canonical column.
+  const remapWholeFile = (headers: string[], first: Record<string, unknown>, cols: WizardColumn[]) => {
+    const base = remap(headers, first, cols)
+    const derivedAll = deriveAspectMapping(headers, new Set(cols.map((c) => c.id)))
+    return base.map((m) => {
+      const d = derivedAll.get(m.header)
+      if (d === null) return { ...m, target: SKIP, confidence: 'none' as Confidence }
+      if (d && (m.confidence === 'none' || m.target === SKIP || m.confidence === 'fuzzy')) {
+        return { ...m, target: d.target, confidence: 'fuzzy' as Confidence }
+      }
+      return m
+    })
   }
 
   // ── Parse transport (shared by file + paste + EI.4 overrides) ──────
@@ -328,7 +382,7 @@ export function EbayImportWizard({
       // Seed the auto-mapping from the headers (scoped to the File market).
       const first = result.rows[0] ?? {}
       setParsed(result)
-      setMapping(remap(result.headers, first, scopedColumns))
+      setMapping(remapWholeFile(result.headers, first, scopedColumns))
       setFixedRows(null)
       setDecisions({})
       setExcludedCells(new Set())
@@ -386,8 +440,8 @@ export function EbayImportWizard({
   // The eBay column ids that ended up mapped (dedup, preserve column order).
   const mappedColumnIds = useMemo(() => {
     const used = new Set(mappedHeaders.map((m) => m.target))
-    return scopedColumns.filter((c) => used.has(c.id)).map((c) => c.id)
-  }, [mappedHeaders, scopedColumns])
+    return effectiveColumns.filter((c) => used.has(c.id)).map((c) => c.id)
+  }, [mappedHeaders, effectiveColumns])
 
   const columnLabelById = useMemo(() => {
     const m = new Map<string, string>()
@@ -447,6 +501,13 @@ export function EbayImportWizard({
   const importRows = useMemo(
     () => pruneExcludedCells(gatedRows, excludedCells),
     [gatedRows, excludedCells],
+  )
+
+  // EI.5 — category + required-aspect intelligence.
+  const categoryAudit = useMemo(() => auditCategoryIds(workingRows), [workingRows])
+  const missingRequired = useMemo(
+    () => findMissingRequiredAspectsForImport(workingRows, columns, new Set(mappedColumnIds)),
+    [workingRows, columns, mappedColumnIds],
   )
 
   const issueByCell = useMemo(() => {
@@ -1088,6 +1149,29 @@ export function EbayImportWizard({
                 …and {coerceResult.issues.length - 12} more (cells are highlighted below)
               </span>
             )}
+          </div>
+        </Banner>
+      )}
+
+      {categoryAudit.length > 0 && (
+        <Banner variant="warning" title={`${categoryAudit.length} row${categoryAudit.length === 1 ? ' has' : 's have'} a text category instead of a numeric eBay category ID`}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {categoryAudit.slice(0, 5).map((c) => (
+              <span key={c.rowIndex} style={T.note}>Row {c.rowIndex + 1}: {c.message}</span>
+            ))}
+            {categoryAudit.length > 5 && <span style={T.caption}>…and {categoryAudit.length - 5} more</span>}
+          </div>
+        </Banner>
+      )}
+
+      {missingRequired.length > 0 && (
+        <Banner variant="warning" title="Category-required item specifics not in this file">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {missingRequired.map((m) => (
+              <span key={m.categoryId} style={T.note}>
+                Category {m.categoryId}: {m.missing.join(', ')} — pushes will be blocked until these are filled in the grid
+              </span>
+            ))}
           </div>
         </Banner>
       )}

@@ -779,6 +779,15 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [aspectsPanelRowId, setAspectsPanelRowId] = useState<string | null>(null)
   const [incompleteBefore, setIncompleteBefore] = useState<Array<{ sku: string; count: number }>>([])
   const [blockingErrors, setBlockingErrors] = useState<Array<{ level: 'error' | 'warn'; sku: string; field: string; msg: string }>>([])
+  // EI.6 — post-save adoption report (memberships + created products) with
+  // per-ItemID read-only eBay verification.
+  const [saveReport, setSaveReport] = useState<{
+    at: number
+    productsCreated: number
+    memberships?: { families: number; created: number; updated: number; skipped: Array<{ sku: string; reason: string }> }
+    adoptedItemIds: string[]
+  } | null>(null)
+  const [verifyResults, setVerifyResults] = useState<Record<string, string>>({})
   // S2 — warn-only pre-publish gate. When a push has theme/aspect issues we stash
   // the prepared push here and show the modal; "Publish anyway" resumes it.
   const [prePublishGate, setPrePublishGate] = useState<{
@@ -1385,10 +1394,30 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         warnings: Array<{ sku?: string; reason: string }>
         collapsedSkus?: string[]
       }
+      sharedMemberships?: { families: number; created: number; updated: number; skipped: Array<{ sku: string; reason: string }> }
     }
     if (result.saved > 0) {
       emitInvalidation({ type: 'product.updated', meta: { source: 'ebay-flat-file' } })
       emitInvalidation({ type: 'stock.adjusted', meta: { source: 'ebay-flat-file' } })
+    }
+
+    // EI.6 — adoption visibility: what did this save wire up? Adopted ItemIDs
+    // come from the saved rows themselves (shared rows carrying a live id).
+    {
+      const mpKey = marketplaceRef.current.toLowerCase()
+      const adopted = new Set<string>()
+      for (const r of dirty) {
+        const er = r as EbayRow & Record<string, unknown>
+        const sharedish = er.shared_sku_listing === true || er._shared === true
+        const itemId = String(er[`${mpKey}_item_id`] ?? er.ebay_item_id ?? '').trim()
+        if (sharedish && /^\d+$/.test(itemId)) adopted.add(itemId)
+      }
+      const productsCreated = result.createResult?.idMap?.length ?? 0
+      const m = result.sharedMemberships
+      if (productsCreated > 0 || (m && (m.created > 0 || m.updated > 0 || m.skipped.length > 0))) {
+        setSaveReport({ at: Date.now(), productsCreated, memberships: m, adoptedItemIds: [...adopted] })
+        setVerifyResults({})
+      }
     }
 
     const errors = result.createResult?.errors ?? []
@@ -2456,6 +2485,48 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             </button>
           </Banner>
         )}
+        {saveReport && (
+          <Banner tone="success" onDismiss={() => setSaveReport(null)}>
+            <span className="font-medium">Save wired up:</span>{' '}
+            {saveReport.productsCreated > 0 && <>{saveReport.productsCreated} product{saveReport.productsCreated === 1 ? '' : 's'} created · </>}
+            {saveReport.memberships && (
+              <>
+                {saveReport.memberships.families} listing{saveReport.memberships.families === 1 ? '' : 's'} ·{' '}
+                {saveReport.memberships.created} membership{saveReport.memberships.created === 1 ? '' : 's'} created ·{' '}
+                {saveReport.memberships.updated} updated
+                {saveReport.memberships.skipped.length > 0 && (
+                  <> · {saveReport.memberships.skipped.length} skipped ({saveReport.memberships.skipped[0].reason}{saveReport.memberships.skipped.length > 1 ? ', …' : ''})</>
+                )}
+              </>
+            )}
+            {' '}— pool untouched; quantity fan-out live.
+            {saveReport.adoptedItemIds.length > 0 && (
+              <span className="inline-flex items-center gap-2 ml-2 flex-wrap">
+                {saveReport.adoptedItemIds.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className="underline text-blue-700 dark:text-blue-300"
+                    onClick={() => {
+                      setVerifyResults((prev) => ({ ...prev, [id]: 'checking…' }))
+                      void fetch(`${BACKEND}/api/ebay/flat-file/verify-item?itemId=${id}&marketplace=${marketplaceRef.current}`)
+                        .then((r) => r.json())
+                        .then((d) => {
+                          const msg = d.error
+                            ? `error: ${d.error}`
+                            : `${d.status} · ${d.matched}/${d.memberships} SKUs matched${d.missingOnEbay?.length ? ` · missing on eBay: ${d.missingOnEbay.slice(0, 3).join(', ')}` : ''}${d.unlinked?.length ? ` · ${d.unlinked.length} not pool-linked` : ''}`
+                          setVerifyResults((prev) => ({ ...prev, [id]: msg }))
+                        })
+                        .catch(() => setVerifyResults((prev) => ({ ...prev, [id]: 'verify failed' })))
+                    }}
+                  >
+                    Verify {id}{verifyResults[id] ? ` — ${verifyResults[id]}` : ''}
+                  </button>
+                ))}
+              </span>
+            )}
+          </Banner>
+        )}
         {hasCue && (
           <div className="flex items-center gap-1 px-4 py-1 text-xs text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
             Showing SKUs listed on eBay.{' '}
@@ -2512,6 +2583,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         id: c.id, label: c.label, kind: c.kind, options: c.options,
         optionLabels: c.optionLabels, enumMode: c.enumMode, multiValue: c.multiValue,
         min: c.min, maxLength: c.maxLength, market,
+        requiredForCategories: c.requiredForCategories,
       })
     }
     for (const g of columnGroups) {

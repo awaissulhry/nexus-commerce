@@ -14,6 +14,7 @@ import { FEATURES } from "@/lib/auth/permissions";
 import { start, pause, resume, finish, canStart, woComplete, type StageRow } from "@/lib/production/stage-timer";
 import { certGateForWorkOrder, CERT_BLOCK_MESSAGE } from "@/lib/production/cert-gate";
 import { transitionOrder } from "@/lib/orders/transition-service";
+import { notifyOwners } from "@/lib/quotes/notify-owners";
 
 export const permission = { POST: FEATURES.workordersAdvance, PATCH: FEATURES.workordersAssign };
 
@@ -65,7 +66,10 @@ export const POST = guarded(FEATURES.workordersAdvance, async (req, { params, ac
         // audit + event); a race that already moved the order is a clean no-op.
         const outcome = await transitionOrder({ orderId, to: "READY", via: "all-wos-done", actorId: actor!.id });
         orderReady = outcome.ok;
-        if (!outcome.ok && outcome.status !== 409 && outcome.status !== 422) {
+        if (outcome.ok) {
+          // EPO.3 — the bell learns about orders (href = the ?o= contract)
+          await notifyOwners({ title: `${outcome.number} is ready to ship`, body: "All work orders are done.", entityType: "order", entityId: orderId, href: `/orders?o=${orderId}`, excludeUserId: actor!.id });
+        } else if (outcome.status !== 409 && outcome.status !== 422) {
           console.error("[production] order READY transition failed", orderId, outcome.error);
         }
       }

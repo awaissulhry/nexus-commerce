@@ -10,10 +10,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, Hammer, Truck } from "lucide-react";
 import { DetailHeader } from "@/design-system/patterns";
-import { Card, DateField, Listbox, Menu, Modal, useToast } from "@/design-system/components";
+import { Banner, Card, DateField, Listbox, Menu, Modal, useToast } from "@/design-system/components";
 import { Button, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
+import { useFactoryEvents } from "@/lib/use-factory-events";
 import { usePermission } from "@/lib/auth/client";
 import { legalTargets, ORDER_STATE_LABEL, canTransition } from "@/lib/orders/transitions";
 import { parseSizeRun } from "@/lib/orders/production";
@@ -33,6 +34,29 @@ function RailRow({ label, children, tone }: { label: string; children: React.Rea
   );
 }
 
+/**
+ * EPO.3 — the created-from chain as chips (Odoo smart-buttons × ERPNext
+ * Connections, per the teardown verdicts): each linked document family with
+ * its count, each a hop. Zero-count chips stay visible (the chain IS the
+ * page's mental model) but muted.
+ */
+function ChainChip({ href, label, count }: { href: string; label: string; count?: number }) {
+  const muted = count === 0;
+  return (
+    <a
+      href={href}
+      style={{
+        display: "inline-flex", gap: 5, alignItems: "center", padding: "3px 10px", borderRadius: 999,
+        border: "1px solid var(--h10-border-subtle)", background: "var(--h10-surface)", textDecoration: "none",
+        fontSize: 11.5, fontWeight: 600, color: muted ? "var(--h10-text-3)" : "var(--h10-text-2)",
+      }}
+    >
+      {label}
+      {count != null && <span style={{ fontWeight: 800, color: muted ? "var(--h10-text-3)" : "var(--h10-primary)" }}>{count}</span>}
+    </a>
+  );
+}
+
 export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () => void }) {
   const { toast } = useToast();
   const canEdit = usePermission("orders.edit");
@@ -40,6 +64,7 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
   const canMargin = usePermission("financials.margins.view");
   const canPay = usePermission("payments.record");
   const canBuyLabel = usePermission("labels.purchase");
+  const canInvoice = usePermission("invoices.manage"); // EPO.2 — FP9 actions consumed on the order
   const [d, setD] = useState<OrderDetailResponse | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState("");
@@ -56,6 +81,8 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
     catch (e) { toast((e as Error).message, "danger"); }
   }, [orderId, toast]);
   useEffect(() => { void load(); }, [load]);
+  // EPO.3 (E11) — the open order stays live: FS2's durable bus, 2s debounce
+  useFactoryEvents(["order.updated", "workorder.created", "workorder.updated", "shipment.updated", "payment.recorded"], load);
 
   const plannedCount = useMemo(() => (d?.order.lines ?? []).reduce((n, l) => n + Math.max(1, parseSizeRun(l.sizeRun).length), 0), [d]);
 
@@ -93,6 +120,14 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
       setStarting(false); await load();
       toast(r.blocked ? `${r.workOrders} work order(s) created — blocked until the deposit is recorded` : `Production started — ${r.workOrders} work order(s) ready`, r.blocked ? "warning" : "success");
     } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
+  };
+  // EPO.2 — send / mark-paid ride the FP9 invoice route (consume, never rebuild)
+  const invoiceAction = async (invoiceId: string, action: "send" | "paid") => {
+    try {
+      await apiJson(`/api/invoices/${invoiceId}`, { method: "PATCH", body: JSON.stringify({ action }) });
+      await load();
+      toast(action === "send" ? "Invoice sent" : "Invoice marked paid", "success");
+    } catch (e) { toast((e as Error).message, "danger"); }
   };
   const openPayment = (prefillDeposit: boolean) => {
     const remaining = (d?.money.depositRequiredCents ?? 0) - (d?.money.depositPaidCents ?? 0);
@@ -136,14 +171,32 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
           </div>
         }
       />
-      <div style={{ fontSize: 12, color: "var(--h10-text-3)", marginBottom: 10 }}>
-        {o.party.name}
+      <div style={{ fontSize: 12, color: "var(--h10-text-3)", marginBottom: 8 }}>
+        <a href={`/contacts?c=${o.party.id}`} style={{ color: "var(--h10-text-link)" }}>{o.party.name}</a>
         {o.bornFromQuote ? <> · from <a href={`/quotes?q=${o.bornFromQuote.id}`} style={{ color: "var(--h10-text-link)" }}>{o.bornFromQuote.number}</a></> : null}
         {o.conversation ? <> · <a href={`/inbox?focus=${o.conversation.id}`} style={{ color: "var(--h10-text-link)" }}>thread</a></> : null}
       </div>
 
+      {/* EPO.3 (E2) — the created-from chain: quote → WOs → shipments → invoices → payments */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+        {o.bornFromQuote && <ChainChip href={`/quotes?q=${o.bornFromQuote.id}`} label={`Quote ${o.bornFromQuote.number}`} />}
+        <ChainChip href={o.workOrders.length === 1 && o.workOrders[0] ? `/production?wo=${o.workOrders[0].id}` : "/production"} label="Work orders" count={o.workOrders.length} />
+        <ChainChip href="/shipping" label="Shipments" count={o.shipments?.length ?? 0} />
+        <ChainChip href="/financials" label="Invoices" count={o.invoices?.length ?? 0} />
+        <ChainChip href="/financials" label="Payments" count={o.payments.length} />
+      </div>
+
       {o.state === "CANCELLED" && o.cancelReason && (
         <div style={{ marginBottom: 12, padding: 10, background: "var(--h10-wash-danger, #fdecec)", borderRadius: 8, fontSize: 12.5, color: "var(--h10-danger)" }}>Cancelled — {o.cancelReason}</div>
+      )}
+
+      {/* EPO.2 — credit AWARENESS, never a hold: this party still owes elsewhere */}
+      {(m.partyOutstandingCents ?? 0) > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <Banner tone="warning" title={`${o.party.name} has ${eur(m.partyOutstandingCents!)} outstanding on ${m.partyOutstandingOrders} delivered order${m.partyOutstandingOrders === 1 ? "" : "s"}`}>
+            Information, not a block — <a href={`/contacts?c=${o.party.id}`} style={{ color: "inherit" }}>their history</a> has the detail.
+          </Banner>
+        </div>
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 340px", gap: 16 }}>
@@ -162,9 +215,42 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
                 <span style={{ fontSize: 11, fontWeight: 700, color: "var(--h10-text-3)", textTransform: "uppercase", letterSpacing: 0.4 }}>Money</span>
                 {canPay && <button type="button" onClick={() => openPayment(false)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11.5, color: "var(--h10-text-link)" }}>+ Record payment</button>}
               </div>
-              {m.netCents != null && <RailRow label="Net">{eur(m.netCents)}</RailRow>}
-              {m.costCents != null && <RailRow label="Cost">{eur(m.costCents)}</RailRow>}
-              {canMargin && m.marginCents != null && <RailRow label="Margin" tone={m.marginCents < 0 ? "var(--h10-danger)" : "var(--h10-success)"}>{eur(m.marginCents)} · {(m.marginPct ?? 0).toFixed(0)}%</RailRow>}
+              {/* EPO.2 (E1) — the order-to-cash strip: the FP9 fold, re-surfaced */}
+              {m.netCents != null && <RailRow label="Quoted">{eur(m.netCents)}</RailRow>}
+              {m.invoicedCents != null && <RailRow label="Invoiced">{eur(m.invoicedCents)}</RailRow>}
+              {m.paidCents != null && <RailRow label="Paid">{eur(m.paidCents)}</RailRow>}
+              {m.balanceCents != null && <RailRow label="Balance" tone={m.balanceCents > 0 ? "var(--h10-warning, #9a6700)" : "var(--h10-success)"}>{eur(m.balanceCents)}</RailRow>}
+              {m.costCents != null && <RailRow label={m.actualIsPending === false ? "Cost (actual)" : "Cost (est)"}>{m.actualIsPending === false && m.actualCostCents != null ? eur(m.actualCostCents) : eur(m.costCents)}</RailRow>}
+              {canMargin && m.marginCents != null && (
+                <RailRow label={m.actualIsPending === false ? "Margin (actual)" : "Margin (est)"} tone={(m.actualIsPending === false ? (m.actualMarginCents ?? 0) : m.marginCents) < 0 ? "var(--h10-danger)" : "var(--h10-success)"}>
+                  {m.actualIsPending === false && m.actualMarginCents != null
+                    ? <>{eur(m.actualMarginCents)} · {(m.actualMarginPct ?? 0).toFixed(0)}%</>
+                    : <>{eur(m.marginCents)} · {(m.marginPct ?? 0).toFixed(0)}%</>}
+                </RailRow>
+              )}
+            </Card>
+          )}
+
+          {/* EPO.2 — invoices ON the order, actions via the FP9 endpoints (consumed, not rebuilt) */}
+          {(o.invoices?.length ?? 0) > 0 && (
+            <Card padded>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--h10-text-3)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Invoices</div>
+              <div style={{ display: "grid", gap: 6 }}>
+                {o.invoices.map((iv) => (
+                  <div key={iv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, gap: 6 }}>
+                    <a href={`/api/invoices/${iv.id}`} target="_blank" rel="noreferrer" style={{ fontWeight: 600, color: "var(--h10-text-link)", textDecoration: "none" }} title="Open PDF">{iv.number}</a>
+                    <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}>
+                      {iv.amountCents != null && <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12 }}>{eur(iv.amountCents)}</span>}
+                      <Pill tone={iv.paidAt ? "success" : iv.sentAt ? "info" : "neutral"}>{iv.paidAt ? "paid" : iv.sentAt ? "sent" : "draft"}</Pill>
+                      {canInvoice && !iv.paidAt && (
+                        <button type="button" onClick={() => void invoiceAction(iv.id, iv.sentAt ? "paid" : "send")} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11.5, color: "var(--h10-text-link)" }}>
+                          {iv.sentAt ? "Mark paid" : "Send"}
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </Card>
           )}
 
@@ -204,14 +290,16 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
               <div style={{ display: "grid", gap: 6 }}>
                 {o.workOrders.map((w) => (
                   <div key={w.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5 }}>
-                    <span style={{ fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{w.number}{w.label ? <span style={{ color: "var(--h10-text-3)", fontWeight: 400 }}> · {w.label}</span> : null}</span>
+                    {/* EPO.3 (E2) — every WO row hops to its drawer on the floor */}
+                    <a href={`/production?wo=${w.id}`} style={{ fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", color: "var(--h10-text-link)", textDecoration: "none" }} title={w.number}>
+                      {w.number}{w.label ? <span style={{ color: "var(--h10-text-3)", fontWeight: 400 }}> · {w.label}</span> : null}
+                    </a>
                     <span style={{ display: "inline-flex", gap: 5, alignItems: "center", flex: "0 0 auto" }}>
                       <span style={{ color: "var(--h10-text-3)", fontSize: 11 }}>{w.stages.length} stages</span>
                       <Pill tone={w.state === "BLOCKED" ? "warning" : w.state === "DONE" ? "success" : "info"}>{w.state === "BLOCKED" ? (w.blockedReason ?? "blocked") : w.state.toLowerCase()}</Pill>
                     </span>
                   </div>
                 ))}
-                <div style={{ fontSize: 11, color: "var(--h10-text-3)", marginTop: 2 }}>The production floor (running these stages) arrives in FP6.</div>
               </div>
             )}
           </Card>

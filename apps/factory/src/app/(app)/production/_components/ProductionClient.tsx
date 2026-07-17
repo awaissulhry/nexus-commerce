@@ -7,7 +7,8 @@
  */
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Play, Pause, Check, User, ChevronUp, ChevronDown } from "lucide-react";
 import { PageHeader } from "@/design-system/patterns";
 import { Drawer, Modal, useToast } from "@/design-system/components";
@@ -72,14 +73,23 @@ function CoverageDot({ w }: { w: WOCard }) {
   return <span title={w.shortMaterials?.length ? `${cov.t}: ${w.shortMaterials.join(", ")}` : cov.t} style={{ width: 9, height: 9, borderRadius: 999, background: cov.c, display: "inline-block", flex: "0 0 auto" }} />;
 }
 
-export function ProductionClient() {
+function ProductionInner() {
   const { toast } = useToast();
+  const params = useSearchParams();
   const canAdvance = usePermission("workorders.advance");
   const canAssign = usePermission("workorders.assign");
   const canMaterials = usePermission("materials.consume");
   const [data, setData] = useState<ProductionResponse | null>(null);
   const [openWo, setOpenWo] = useState<string | null>(null);
   const [detail, setDetail] = useState<{ wo: WoDetail } | null>(null);
+
+  // EPO.3 (D-1) — /production?wo=<workOrderId> deep-link: the Orders page's WO
+  // rows and timeline land here with the drawer already open. Mount-only read.
+  useEffect(() => {
+    const wo = params.get("wo");
+    if (wo) { setOpenWo(wo); setDetail(null); void (async () => { try { setDetail(await apiJson<{ wo: WoDetail }>(`/api/production/wo/${wo}`)); } catch { /* stale link — board still renders */ } })(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const load = useCallback(async () => {
     try { setData(await apiJson<ProductionResponse>("/api/production")); }
@@ -307,6 +317,11 @@ export function ProductionClient() {
       </Drawer>
     </div>
   );
+}
+
+/** EPO.3 — Suspense shell for the ?wo= deep-link reader (useSearchParams). */
+export function ProductionClient() {
+  return <Suspense fallback={null}><ProductionInner /></Suspense>;
 }
 
 type WoDetail = {

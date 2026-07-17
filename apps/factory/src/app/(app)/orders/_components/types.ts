@@ -20,6 +20,9 @@ export type OrderRow = {
   marginPct?: number;
   depositRequiredCents?: number;
   depositPaidCents?: number;
+  paidCents?: number; // EPO.2 — per-row order-to-cash
+  invoicedCents?: number;
+  balanceCents?: number;
 };
 
 export type OrdersResponse = {
@@ -27,10 +30,11 @@ export type OrdersResponse = {
   nextCursor?: string | null; // FS1 — lane/grid cursor pagination
   counters: { inProduction: number; awaitingDeposit: number; overdue: number };
   counts: Record<string, number>;
+  marginFloorPct?: number | null; // EPO.2 — low-margin flag threshold (margin-grain-stripped)
 };
 
 export type TimelineEvent = {
-  kind: "email" | "quote" | "quote-sent" | "quote-accepted" | "order" | "payment" | "workorder" | "transition" | "shipment" | "review";
+  kind: "email" | "quote" | "quote-sent" | "quote-accepted" | "order" | "payment" | "workorder" | "transition" | "shipment" | "review" | "invoice" | "promise" | "stage"; // EPO.3 added the last three
   at: string;
   label: string;
   amountCents?: number;
@@ -40,6 +44,7 @@ export type TimelineEvent = {
 export type OrderLineDetail = { id: string; description: string; selections: unknown; sizeRun: unknown; qty: number; netPriceCents?: number; costCents?: number };
 export type WorkOrderDetail = { id: string; number: string; state: string; blockedReason: string | null; label: string | null; priority: number; estCostCents?: number; stages: { id: string; stage: string; sort: number }[] };
 export type PaymentDetail = { id: string; kind: string; amountCents?: number; method: string | null; receivedAt: string; notes: string | null };
+export type InvoiceDetail = { id: string; number: string; amountCents?: number; sentAt: string | null; paidAt: string | null; createdAt: string }; // EPO.3
 
 export type OrderDetailResponse = {
   order: {
@@ -56,6 +61,8 @@ export type OrderDetailResponse = {
     lines: OrderLineDetail[];
     payments: PaymentDetail[];
     workOrders: WorkOrderDetail[];
+    invoices: InvoiceDetail[]; // EPO.3 — chain chip + timeline source
+    shipments: { id: string }[]; // EPO.3 — chain chip count
     bornFromQuote: { id: string; number: string; state: string; depositPct: number | null } | null;
     conversation: { id: string; subject: string | null } | null;
   };
@@ -69,6 +76,15 @@ export type OrderDetailResponse = {
     depositPaidCents?: number;
     depositMet: boolean;
     depositTermsMissing?: boolean; // EPO1.3 (C8) — no originating quote ⇒ FD13 gate off, said out loud
+    invoicedCents?: number; // EPO.2 — the FP9 fold's order-to-cash surface
+    paidCents?: number;
+    balanceCents?: number;
+    actualCostCents?: number;
+    actualMarginCents?: number;
+    actualMarginPct?: number;
+    actualIsPending?: boolean;
+    partyOutstandingCents?: number; // EPO.2 — credit awareness (other delivered/closed orders)
+    partyOutstandingOrders?: number;
   };
 };
 

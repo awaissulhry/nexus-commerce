@@ -8,18 +8,18 @@ Hub: [[F00 - Factory OS MOC]] · status board: `EP Status Board.canvas`
 
 | Gate | What's asked | Where |
 |---|---|---|
-| ~~EPI proposal~~ | ✅ **APPROVED 2026-07-16** — EPI.1 building; one cross-review amendment owed (fix `?c=`/`?o=` outbound params, B2) | [[F10 - Inbox (EPI)]] |
-| **EPO proposal** | Approve 7 phases + D-1..D-6, **with the EP-CROSSREVIEW amendments attached** (EPF.1 gates EPO.2; `import.finished`; order-summary for EPI.6; exception-queue split) | [[F12 - Orders (EPO)]] |
-| **EPF proposal** | Approve 7 phases + D-1..D-12 (§9 addendum applies the cross-review + verified compliance) — **3 P0 money bugs are live**; EPF.1 can gate alone first | [[F18 - Financials (EPF)]] |
-| **FC1 spec** | Gate the drafted `FC1-SPEC.md` (Order Spaces substrate) | [[F21 - Chat & Order Spaces (FC)]] |
+| **FS4 spec** | Gate `FS4-SPEC.md` (write integrity — generalizes EPO.1's `expectedUpdatedAt` pattern house-wide) | [[F22 - Substrate FS Series]] |
+| **Per-phase click-throughs** | EPQ.1/.2 · EPI.1 · EPO.1/.3/.2 gate reports await the Owner's click-through confirmations; ⚠ **restart the `:3100` dev server** (trap 6b — new columns from EPI.1/EPO/EPF.1 migrations) | each report |
+| ~~EPI · EPO · EPF proposals · FC1 spec~~ | ✅ ALL APPROVED (EPI+FC1 2026-07-16; EPO 2026-07-16; EPF 2026-07-17 "proceed however you recommend") — building | — |
 | FP11 leftovers | Flip RBAC `enforce` on :3100 · settle WhatsApp (FD5) | [[F20 - Settings & Team (EPT)]] |
 | FD13 params | Deposit % defaults + bypass segment | [[F05 - Decision Register (FD1-14)]] |
 | Sendcloud live step | Connect + one €0 label (capability probe) | [[F17 - Shipping (EPS)]] |
 
 ## In flight (no gate needed)
 
-- **EPQ.2** building next in the quotes session (view tracking, notifications, follow-up task queue) — [[F11 - Quotes (EPQ)]].
-- **FS3 call-site adoptions** land inside each page's phases (EPI.1/.5, EPO.7, EPQ.3, EPF.2).
+- **EPF.1** building (worktree) — the program's critical path: until it ships, the order board (EPO.2) mirrors the live D-02 negative-balance bug — [[F18 - Financials (EPF)]].
+- **EPQ.3** next (quotes session) · **EPI.2** next (inbox session) · **EPO.4** next (orders session, fulfillment-exceptions scope per M2) · **FC1** building (worktree).
+- **FS3 call-site adoptions** land inside each page's phases (EPI ✅ pane hook in EPI.1; EPO.7, EPQ.3/.6, EPF.2 pending).
 
 ## Recommended sequencing (dependency-aware)
 

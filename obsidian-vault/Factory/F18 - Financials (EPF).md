@@ -1,7 +1,7 @@
 # F18 - Financials (EPF)
 
-> **Route:** `/financials` · **EP code:** EPF · **Status:** 🟡 research COMPLETE, proposal delivered 2026-07-16 (`bf8560c0`) — **awaiting Owner gate** on scope + decisions D-1…D-12.
-> Canonical docs: `docs/factory/EPF-PROPOSAL.md` · `docs/factory/EPF-UI-INVENTORY.md` · shipped base: `docs/factory/FP9-SPEC.md` + `FP9-REPORT.md`
+> **Route:** `/financials` · **EP code:** EPF · **Status:** 🔨 proposal **APPROVED 2026-07-17** ("proceed however you recommend") — D-1..D-12 per recommendations (D-1 posture A, D-8 effective-dating granted, D-9 fields→EPO, D-10 OFFICE role; D-11 stays Owner input) — **EPF.1 building** (spec `EPF1-SPEC.md`). EPF.1 unblocks the B3 flag EPO.2 carries (the board mirrors the negative-balance bug until it ships).
+> Canonical docs: `docs/factory/EPF-PROPOSAL.md` (incl. §9) · `EPF-UI-INVENTORY.md` · `EPF-COMPLIANCE.md` · `EPF1-SPEC.md` · base: `FP9-SPEC.md`/`FP9-REPORT.md`
 
 Part of [[F00 - Factory OS MOC]] · flow position: [[F01 - Mission & Golden Flow]] step 8 · program: [[F06 - Enterprise Program (EP)]]
 

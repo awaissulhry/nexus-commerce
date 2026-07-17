@@ -16,8 +16,10 @@ import { Card, DataGrid, Menu, Modal, useToast, Listbox } from "@/design-system/
 import { Button, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
+import { useFactoryEvents } from "@/lib/use-factory-events";
 import { usePermission } from "@/lib/auth/client";
 import { BOARD_LANES, canTransition, legalTargets, ORDER_STATE_LABEL } from "@/lib/orders/transitions";
+import { paymentBadge } from "@/lib/orders/money";
 import { OrderDetail } from "./OrderDetail";
 import { KanbanBoard, type LaneData } from "./KanbanBoard";
 import { STATE_TONE, type OrderRow, type OrdersResponse, type OrderState } from "./types";
@@ -44,10 +46,20 @@ function Counter({ label, value, tone }: { label: string; value: number; tone: s
   );
 }
 
-function DepositChip({ r }: { r: OrderRow }) {
-  if (r.depositRequiredCents == null || r.depositRequiredCents === 0) return <span style={{ color: "var(--h10-text-3)" }}>—</span>;
-  const met = (r.depositPaidCents ?? 0) >= r.depositRequiredCents;
-  return <Pill tone={met ? "success" : "warning"}>{met ? "deposit paid" : "deposit due"}</Pill>;
+/** EPO.2 — ONE coarse payment word per row (NetSuite/ERPNext vocabulary); strip-blind callers get "—". */
+const BADGE_UI: Record<string, { label: string; tone: "success" | "info" | "warning" | "neutral" }> = {
+  paid: { label: "paid", tone: "success" },
+  invoiced: { label: "invoiced", tone: "info" },
+  "deposit-due": { label: "deposit due", tone: "warning" },
+  "deposit-paid": { label: "deposit paid", tone: "success" },
+  unpaid: { label: "unpaid", tone: "neutral" },
+};
+
+function PaymentChip({ r }: { r: OrderRow }) {
+  const b = paymentBadge(r);
+  if (!b) return <span style={{ color: "var(--h10-text-3)" }}>—</span>;
+  const ui = BADGE_UI[b];
+  return <Pill tone={ui.tone}>{ui.label}</Pill>;
 }
 
 function PipelineInner() {
@@ -122,6 +134,9 @@ function PipelineInner() {
   }, [lanes, laneUrl, toast]);
   useEffect(() => { const t = setTimeout(() => void load(), 200); return () => clearTimeout(t); }, [load]);
   useEffect(() => { apiJson<{ parties: { id: string; name: string }[] }>("/api/parties-lite").then((d) => setParties(d.parties)).catch(() => {}); }, []);
+  // EPO.3 (E11) — the board goes live: FS2's durable bus, 2s debounce; a
+  // transition in another window/tab lands here without a manual refresh
+  useFactoryEvents(["order.updated", "workorder.created", "workorder.updated", "shipment.updated", "payment.recorded"], load);
 
   const openDetail = (id: string) => { window.history.replaceState(null, "", `/orders?o=${id}`); window.dispatchEvent(new PopStateEvent("popstate")); };
   const closeDetail = () => { window.history.replaceState(null, "", "/orders"); window.dispatchEvent(new PopStateEvent("popstate")); void load(); };
@@ -219,11 +234,14 @@ function PipelineInner() {
           <DataGrid
             columns={[
               { key: "number", label: "Order", render: (r: OrderRow) => <button type="button" onClick={() => openDetail(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button> },
-              { key: "party", label: "Party", render: (r: OrderRow) => r.party.name },
+              { key: "party", label: "Party", render: (r: OrderRow) => <a href={`/contacts?c=${r.party.id}`} style={{ color: "inherit", textDecoration: "none" }} onMouseEnter={(e) => { (e.target as HTMLElement).style.color = "var(--h10-text-link)"; }} onMouseLeave={(e) => { (e.target as HTMLElement).style.color = "inherit"; }}>{r.party.name}</a> }, // EPO.3 (E2) — party hops to contacts
               { key: "state", label: "State", render: stateCell },
-              { key: "net", label: "Net", align: "right" as const, render: (r: OrderRow) => (r.lineCount ? eur(r.netCents ?? 0) : "—") },
-              ...(canMargin ? [{ key: "margin", label: "Margin", align: "right" as const, render: (r: OrderRow) => (r.lineCount ? <Pill tone={(r.marginCents ?? 0) < 0 ? "danger" : "success"}>{(r.marginPct ?? 0).toFixed(0)}%</Pill> : "—") }] : []),
-              { key: "deposit", label: "Deposit", render: (r: OrderRow) => <DepositChip r={r} /> },
+              // EPO.2 (C7) — stripped money renders "—", never a misleading €0,00
+              { key: "net", label: "Net", align: "right" as const, render: (r: OrderRow) => (r.netCents != null && r.lineCount ? eur(r.netCents) : "—") },
+              // EPO.2 — balance owed; red once the goods are delivered but unpaid
+              { key: "balance", label: "Balance", align: "right" as const, render: (r: OrderRow) => (r.balanceCents != null && r.lineCount ? <span style={{ color: r.balanceCents > 0 && (r.state === "DELIVERED" || r.state === "CLOSED") ? "var(--h10-danger)" : undefined, fontWeight: r.balanceCents > 0 ? 600 : undefined }}>{eur(r.balanceCents)}</span> : "—") },
+              ...(canMargin ? [{ key: "margin", label: "Margin", align: "right" as const, render: (r: OrderRow) => (r.lineCount && r.marginPct != null ? <Pill tone={(r.marginCents ?? 0) < 0 || (data?.marginFloorPct != null && r.marginPct < data.marginFloorPct) ? "danger" : "success"}>{r.marginPct.toFixed(0)}%</Pill> : "—") }] : []),
+              { key: "payment", label: "Payment", render: (r: OrderRow) => <PaymentChip r={r} /> },
               { key: "promise", label: "Promise", render: (r: OrderRow) => (r.promiseDateAt ? <span style={{ color: r.overdue ? "var(--h10-danger)" : undefined, fontWeight: r.overdue ? 700 : undefined }}>{new Date(r.promiseDateAt).toLocaleDateString()}</span> : "—") },
               { key: "wos", label: "WOs", align: "right" as const, render: (r: OrderRow) => (r.woCount ? r.woCount : "—") },
               { key: "updated", label: "Updated", render: (r: OrderRow) => new Date(r.updatedAt).toLocaleDateString() },

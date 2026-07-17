@@ -79,6 +79,9 @@ export const POST = guarded(FEATURES.paymentsRecord, async (req, { params, actor
         void audit({ actorId: actor!.id, entityType: "workorder", entityId: w.id, action: "unblocked", after: { orderId: id, number: w.number, via: "deposit-met" } });
       }
       await publishEventDurable("workorder.updated", { orderId: id, unblocked });
+      // Cross-review M3: money-event bells (payment/deposit/invoice) are EPF's,
+      // added ONCE in the shared route by their cycle — EPO keeps lifecycle
+      // bells only (ready-to-ship, delivered). Deposit-met bell ceded.
     }
   }
 
