@@ -12,7 +12,6 @@ import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 import { orderTotals, depositRequiredCents, depositPaidCents, isDepositMet } from "@/lib/orders/money";
-import { notifyOwners } from "@/lib/quotes/notify-owners";
 
 export const permission = FEATURES.paymentsRecord;
 
@@ -80,8 +79,9 @@ export const POST = guarded(FEATURES.paymentsRecord, async (req, { params, actor
         void audit({ actorId: actor!.id, entityType: "workorder", entityId: w.id, action: "unblocked", after: { orderId: id, number: w.number, via: "deposit-met" } });
       }
       await publishEventDurable("workorder.updated", { orderId: id, unblocked });
-      // EPO.3 — the deposit landing is a bell moment (href = the ?o= contract)
-      await notifyOwners({ title: `Deposit met — ${unblocked} work order(s) unblocked`, entityType: "order", entityId: id, href: `/orders?o=${id}`, excludeUserId: actor!.id });
+      // Cross-review M3: money-event bells (payment/deposit/invoice) are EPF's,
+      // added ONCE in the shared route by their cycle — EPO keeps lifecycle
+      // bells only (ready-to-ship, delivered). Deposit-met bell ceded.
     }
   }
 
