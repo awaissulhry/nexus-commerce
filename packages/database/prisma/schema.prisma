@@ -14148,6 +14148,12 @@ model SharedListingMembership {
   lastQtyPushed      Int?
   lastPushedAt       DateTime?
   lastError          String?
+  // Round-trip integrity (2026-07-17): the FULL flat-file row as the operator
+  // saved it (minus _internal keys) — the Lane-B twin of
+  // ChannelListing.flatFileSnapshot. Row synthesis overlays this verbatim so a
+  // save→reload reproduces exactly what the operator left; live fields
+  // (item id, fan-out quantity) still come from live data on read.
+  flatFileSnapshot   Json?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 

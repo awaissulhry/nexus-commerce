@@ -53,6 +53,8 @@ export function synthesizeSharedRow(opts: {
     productId?: string | null
     /** P1a — parent SKU for explicit parentage columns. */
     parentSku?: string
+    /** Round-trip integrity — the FULL row as the operator last saved it. */
+    flatFileSnapshot?: Record<string, unknown> | null
   }
   childBaseRow: Record<string, unknown> | null
   parentProductId: string
@@ -60,25 +62,46 @@ export function synthesizeSharedRow(opts: {
   const { membership: m, childBaseRow, parentProductId } = opts
   const mp = m.marketplace.toLowerCase()
   const base: Record<string, unknown> = childBaseRow ? { ...childBaseRow } : { sku: m.sku }
+  // Round-trip integrity (2026-07-17): the operator-saved snapshot overlays the
+  // derived base VERBATIM — whatever they left on this row comes back after
+  // reload (this was the "reverts to the previous version" bug: only price +
+  // specifics survived; every other cell resynthesized from base data).
+  // _internal keys never ride the snapshot; live/system fields below still win.
+  const snapshot: Record<string, unknown> = {}
+  if (m.flatFileSnapshot && typeof m.flatFileSnapshot === 'object') {
+    for (const [k, v] of Object.entries(m.flatFileSnapshot)) {
+      if (!k.startsWith('_')) snapshot[k] = v
+    }
+  }
   return {
     ...base,
+    ...snapshot,
     // C1 — synthesized rows MUST NOT collide with the child's own natural row on
     // _rowId (buildFlatRow sets _rowId = product.id). A unique, stable id keeps
     // React keys, selection, and paste-map targeting isolated from the real row.
     _rowId: `shared::${m.itemId}::${m.sku}`,
     // Keep _productId = the real child id for downstream resolution. buildFlatRow
     // already put it on `base`; when there's no base row, seed it from the membership.
-    ...(childBaseRow ? {} : { _productId: m.productId ?? undefined }),
+    ...(childBaseRow && (childBaseRow as { _productId?: unknown })._productId
+      ? { _productId: (childBaseRow as { _productId?: unknown })._productId }
+      : { _productId: m.productId ?? undefined }),
     _shared: true,
     _readonly: true,
     _isParent: false,
-    // P1a — explicit parentage columns for shared-child rows.
+    // P1a — explicit parentage columns for shared-child rows (live identity —
+    // membership truth beats any stale snapshot value).
     parentage: 'child',
     parent_sku: m.parentSku ?? '',
     platformProductId: parentProductId,
+    sku: m.sku,
     ebay_item_id: m.itemId,
     [`${mp}_item_id`]: m.itemId,
+    // Lane-B operative values: membership price is what pushes/fan-out use
+    // (identical to the snapshot's price by construction of the upsert).
     ...(m.price != null ? { [`${mp}_price`]: m.price, price: m.price } : {}),
+    // Quantity is LIVE-authoritative: the shared pool + fan-out own it. A
+    // saved qty cell deliberately does NOT round-trip (the save reports this
+    // via qtyPoolGoverned so it is never a silent revert).
     ...(m.lastQtyPushed != null ? { [`${mp}_qty`]: m.lastQtyPushed, quantity: m.lastQtyPushed } : {}),
     ...reverseVariationSpecifics(m.variationSpecifics),
   }
@@ -101,6 +124,7 @@ interface MembershipRow {
   variationSpecifics: unknown
   price: DecimalLike | null
   lastQtyPushed: number | null
+  flatFileSnapshot?: unknown
 }
 
 /** Minimal child Product shape that buildFlatRow accepts. */
@@ -221,6 +245,8 @@ export async function loadSharedMembershipRows(
           productId: m.productId,
           // P1a — pass parentSku so synthesized row sets parent_sku correctly.
           parentSku: m.parentSku,
+          // Round-trip integrity — the operator's saved row overlays the base.
+          flatFileSnapshot: (m.flatFileSnapshot as Record<string, unknown> | null) ?? null,
         },
         childBaseRow,
         parentProductId,

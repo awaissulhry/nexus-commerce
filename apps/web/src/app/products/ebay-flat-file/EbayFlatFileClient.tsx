@@ -784,7 +784,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [saveReport, setSaveReport] = useState<{
     at: number
     productsCreated: number
-    memberships?: { families: number; created: number; updated: number; skipped: Array<{ sku: string; reason: string }> }
+    memberships?: { families: number; created: number; updated: number; skipped: Array<{ sku: string; reason: string }>; qtyPoolGoverned?: number }
     adoptedItemIds: string[]
   } | null>(null)
   const [verifyResults, setVerifyResults] = useState<Record<string, string>>({})
@@ -1394,7 +1394,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         warnings: Array<{ sku?: string; reason: string }>
         collapsedSkus?: string[]
       }
-      sharedMemberships?: { families: number; created: number; updated: number; skipped: Array<{ sku: string; reason: string }> }
+      sharedMemberships?: { families: number; created: number; updated: number; skipped: Array<{ sku: string; reason: string }>; qtyPoolGoverned?: number }
       /** sku → productId for every Lane-A row the save touched (created OR existing). */
       resolvedIds?: Array<{ sku: string; productId: string }>
     }
@@ -2535,6 +2535,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                 {saveReport.memberships.updated} updated
                 {saveReport.memberships.skipped.length > 0 && (
                   <> · {saveReport.memberships.skipped.length} skipped ({saveReport.memberships.skipped[0].reason}{saveReport.memberships.skipped.length > 1 ? ', …' : ''})</>
+                )}
+                {(saveReport.memberships.qtyPoolGoverned ?? 0) > 0 && (
+                  <> · quantities on {saveReport.memberships.qtyPoolGoverned} shared row{saveReport.memberships.qtyPoolGoverned === 1 ? '' : 's'} follow the pool (set stock on the Stock page)</>
                 )}
               </>
             )}

@@ -361,3 +361,73 @@ describe('loadSharedMembershipRows', () => {
     expect(pushable[0]._rowId).toBe('child-prod-1')
   })
 })
+
+describe('round-trip integrity — snapshot overlay (the "reverts after save" fix)', () => {
+  const baseMembership = {
+    sku: 'GALE-BLACK-M',
+    itemId: '256566101420',
+    marketplace: 'IT',
+    price: 105,
+    lastQtyPushed: 6,
+    variationSpecifics: { Taglia: 'M', Colore: 'Nero' },
+    productId: 'prod-1',
+    parentSku: 'GALE-ALT1',
+  }
+
+  it('operator-saved snapshot fields survive verbatim over the derived base', () => {
+    const row = synthesizeSharedRow({
+      membership: {
+        ...baseMembership,
+        flatFileSnapshot: {
+          condition: 'NEW_WITH_TAGS',
+          brand: 'XAVIA',
+          image_url_1: 'https://x/custom.jpg',
+          subtitle: 'Per-listing subtitle',
+        },
+      },
+      childBaseRow: { sku: 'GALE-BLACK-M', _productId: 'prod-1', condition: 'NEW', brand: 'OLD-BRAND' },
+      parentProductId: 'parent-1',
+    })
+    expect(row.condition).toBe('NEW_WITH_TAGS') // snapshot beats base
+    expect(row.brand).toBe('XAVIA')
+    expect(row.image_url_1).toBe('https://x/custom.jpg')
+    expect(row.subtitle).toBe('Per-listing subtitle')
+  })
+
+  it('live/system fields ALWAYS beat a stale snapshot (item id, qty, price, identity)', () => {
+    const row = synthesizeSharedRow({
+      membership: {
+        ...baseMembership,
+        flatFileSnapshot: {
+          it_item_id: 'STALE-OLD-ID',
+          it_qty: 999,          // operator-typed qty — pool governs, must NOT round-trip
+          it_price: 89,         // stale — membership.price is operative
+          parentage: 'parent',  // nonsense — identity is membership truth
+          sku: 'WRONG-SKU',
+          _rowId: 'evil',       // _internal keys never ride the snapshot
+          _shared: false,
+        },
+      },
+      childBaseRow: { sku: 'GALE-BLACK-M', _productId: 'prod-1' },
+      parentProductId: 'parent-1',
+    })
+    expect(row.it_item_id).toBe('256566101420')
+    expect(row.it_qty).toBe(6)          // fan-out truth
+    expect(row.it_price).toBe(105)      // membership price operative
+    expect(row.parentage).toBe('child')
+    expect(row.sku).toBe('GALE-BLACK-M')
+    expect(row._rowId).toBe('shared::256566101420::GALE-BLACK-M')
+    expect(row._shared).toBe(true)
+  })
+
+  it('no snapshot → behaves exactly as before (base + membership overrides)', () => {
+    const row = synthesizeSharedRow({
+      membership: { ...baseMembership, flatFileSnapshot: null },
+      childBaseRow: { sku: 'GALE-BLACK-M', _productId: 'prod-1', condition: 'NEW' },
+      parentProductId: 'parent-1',
+    })
+    expect(row.condition).toBe('NEW')
+    expect(row.it_price).toBe(105)
+    expect(row.aspect_Taglia).toBe('M')
+  })
+})

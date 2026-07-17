@@ -63,7 +63,14 @@ export function hasUserContent(row: BaseRow): boolean {
 /** Persist the dirty/new subset; an empty subset clears the draft. */
 export function writeDraft(key: string, allRows: BaseRow[]): void {
   try {
-    const dirty = allRows.filter((r) => (r._dirty || r._isNew) && !r._readonly && hasUserContent(r))
+    // Shared membership rows carry _readonly (system flag) but ARE legitimately
+    // edited via import (Lane-B fields persist to their membership). Excluding
+    // them here silently vaporized those edits on any reload before a save —
+    // part of the "reverts to the previous version" incident (2026-07-17).
+    const dirty = allRows.filter((r) =>
+      (r._dirty || r._isNew) &&
+      !((r as { _readonly?: boolean; _shared?: boolean })._readonly && !(r as { _shared?: boolean })._shared) &&
+      hasUserContent(r))
     if (dirty.length === 0) {
       localStorage.removeItem(key)
       return

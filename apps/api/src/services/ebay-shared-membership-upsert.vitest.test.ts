@@ -99,3 +99,37 @@ describe('normalizeEbaySharedFlags', () => {
     expect(rows[4].shared_sku_listing).toBe(false)
   })
 })
+
+describe('round-trip integrity — snapshot persisted on upsert', () => {
+  it('stores the full row (minus _internal keys) + counts pool-governed qty edits', async () => {
+    const { upsertSharedMembershipsFromRows } = await import('./ebay-shared-membership-upsert.service.js')
+    const upserts: any[] = []
+    const db = {
+      sharedListingMembership: {
+        findMany: async () => [],
+        upsert: async (args: any) => { upserts.push(args); return args.create },
+      },
+      product: { findMany: async () => [] },
+    }
+    const res = await upsertSharedMembershipsFromRows(
+      [
+        { sku: 'P1', parentage: 'parent', shared_sku_listing: true },
+        {
+          sku: 'V1', parentage: 'child', parent_sku: 'P1', it_item_id: '111',
+          it_price: '105', it_qty: '7', condition: 'NEW_WITH_TAGS', brand: 'XAVIA',
+          aspect_Taglia: 'M', _rowId: 'internal', _dirty: true, _productId: 'pid-1',
+        },
+      ],
+      'it',
+      db as never,
+    )
+    expect(res.created).toBe(1)
+    expect(res.qtyPoolGoverned).toBe(1) // it_qty was set — pool governs, counted not silent
+    const snap = upserts[0].create.flatFileSnapshot
+    expect(snap.condition).toBe('NEW_WITH_TAGS')
+    expect(snap.brand).toBe('XAVIA')
+    expect(snap.it_price).toBe('105')
+    expect(snap._rowId).toBeUndefined() // _internal keys stripped
+    expect(snap._dirty).toBeUndefined()
+  })
+})
