@@ -177,7 +177,7 @@
 			"y": 680,
 			"width": 480,
 			"height": 220,
-			"text": "### In-page substrate adoptions (owned by page sessions)\n- EPI: windowing + panes + MentionTextarea\n- EPO: orders grid (EPO.7)\n- EPQ: matrix pickers (EPQ.3)\n- EPF: financials grids \u00d73 (EPF.2)"
+			"text": "### In-page substrate adoptions (owned by page sessions)\n- EPI: windowing + panes + MentionTextarea\n- EPO: orders grid (EPO.7)\n- EPQ: quotes grid + party picker \u2705 (EPQ.3, 2026-07-17)\n- EPF: financials grids \u00d73 (EPF.2)"
 		},
 		{
 			"id": "s1",
@@ -197,7 +197,7 @@
 			"width": 480,
 			"height": 300,
 			"color": "5",
-			"text": "### Shipped history\n- **FP1\u2013FP11**: all 11 pages, golden flow closed end-to-end (2026-07-06)\n- **FS0+FS1**: harness + query hygiene (10-30\u00d7 cliffs fixed)\n- **FS2**: SSE fan-out, 50-client proof PASS (2026-07-11)\n- **FS3**: virtualization toolkit + unclaimed-page adoption (2026-07-11)\n- **EPQ.1**: quote lifecycle closed & audited (2026-07-11)"
+			"text": "### Shipped history\n- **FP1\u2013FP11**: all 11 pages, golden flow closed end-to-end (2026-07-06)\n- **FS0+FS1**: harness + query hygiene (10-30\u00d7 cliffs fixed)\n- **FS2**: SSE fan-out, 50-client proof PASS (2026-07-11)\n- **FS3**: virtualization toolkit + unclaimed-page adoption (2026-07-11)\n- **EPQ.1**: quote lifecycle closed & audited (2026-07-11)\n- **EPQ.2**: no offer dies of silence (2026-07-16)\n- **EPQ.3**: pricing discipline \u2014 goal-seek/tiers/MOQ/size-run/reason codes (2026-07-17)"
 		}
 	],
 	"edges": []
