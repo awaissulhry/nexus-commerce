@@ -1,7 +1,7 @@
 # F12 - Orders (EPO)
 
-> **Route:** `/orders` · **EP code:** EPO · **Status:** 🔨 approved 2026-07-16 — **EPO.1 + .3 + .2 SHIPPED** (.1 transition-service single writer + payment idempotency · .3 connected order: chips, timeline hops+depth, ⌘K fix, `?wo=` reader, bell moments, live board · .2 money strip: quoted/invoiced/paid/balance, est→actual margin, invoices-on-order, payment badge, low-margin flag, credit banner); **EPO.4 (promise integrity + Needs-attention cockpit) next** (order .1→.3→.2→.4→.6→.7→.5).
-> Canonical docs: `docs/factory/EPO-PROPOSAL.md` · `EPO-UI-INVENTORY.md` · reports `EPO1/EPO3/EPO2` · base: `FP4-SPEC.md`/`FP4-REPORT.md`
+> **Route:** `/orders` · **EP code:** EPO · **Status:** 🔨 approved 2026-07-16 — **EPO.1 + .3 + .2 + .4 SHIPPED** (.1 transition-service single writer + payment idempotency · .3 connected order · .2 money strip · .4 Needs-attention default cockpit (M2: late/at-risk/deposit-blocked/stalled), immutable original promise + "slipped ×N" + pre-late risk at historical pace, D-9 fields clientRef/urgent/remakeOf, date filter); **EPO.6 (zero communication gap) next**, then .7, then .5.
+> Canonical docs: `docs/factory/EPO-PROPOSAL.md` · `EPO-UI-INVENTORY.md` · reports `EPO1/EPO3/EPO2/EPO4` · base: `FP4-SPEC.md`/`FP4-REPORT.md`
 
 Part of [[F00 - Factory OS MOC]] · flow position: [[F01 - Mission & Golden Flow]] step 3 · program: [[F06 - Enterprise Program (EP)]]
 

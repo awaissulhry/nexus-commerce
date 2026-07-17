@@ -25,6 +25,7 @@ import { KanbanBoard, type LaneData } from "./KanbanBoard";
 import { STATE_TONE, type OrderRow, type OrdersResponse, type OrderState } from "./types";
 
 const TABS: { id: string; label: string }[] = [
+  { id: "attention", label: "Needs attention" }, // EPO.4 — the default: only actionable rows
   { id: "all", label: "All" },
   { id: "confirmed", label: "Confirmed" },
   { id: "in_production", label: "In production" },
@@ -33,6 +34,14 @@ const TABS: { id: string; label: string }[] = [
   { id: "delivered", label: "Delivered" },
   { id: "cancelled", label: "Cancelled" },
 ];
+
+/** EPO.4 — reason chips for the cockpit (M2: fulfillment-side vocabulary) */
+const REASON_UI: Record<string, { label: string; tone: "danger" | "warning" | "info" }> = {
+  late: { label: "late", tone: "danger" },
+  "at-risk": { label: "at risk", tone: "warning" },
+  "deposit-blocked": { label: "deposit blocking", tone: "warning" },
+  stalled: { label: "stalled", tone: "info" },
+};
 
 const undoBtn: React.CSSProperties = { background: "none", border: "none", padding: 0, color: "inherit", textDecoration: "underline", cursor: "pointer", font: "inherit" };
 const toggleBtn = (active: boolean): React.CSSProperties => ({ border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, padding: "5px 12px", background: active ? "var(--h10-primary)" : "var(--h10-surface)", color: active ? "#fff" : "var(--h10-text-2)" });
@@ -70,9 +79,11 @@ function PipelineInner() {
   const canMargin = usePermission("financials.margins.view");
   const [data, setData] = useState<OrdersResponse | null>(null);
   const [view, setView] = useState<"grid" | "kanban">("grid");
-  const [state, setState] = useState("all");
+  const [state, setState] = useState("attention"); // EPO.4 — the cockpit is the default view
   const [q, setQ] = useState("");
   const [partyId, setPartyId] = useState("");
+  const [fromDate, setFromDate] = useState(""); // EPO.4 — created-at range
+  const [toDate, setToDate] = useState("");
   const [parties, setParties] = useState<{ id: string; name: string }[]>([]);
   const [cancelling, setCancelling] = useState<OrderRow | null>(null);
   const [reason, setReason] = useState("");
@@ -112,15 +123,18 @@ function PipelineInner() {
           nextCursor: laneRes[i].nextCursor ?? null,
         }])));
       } else {
-        const usp = new URLSearchParams({ state });
+        // EPO.4 — the cockpit is a mode, not a state filter
+        const usp = state === "attention" ? new URLSearchParams({ attention: "1" }) : new URLSearchParams({ state });
         if (q.trim()) usp.set("q", q.trim());
         if (partyId) usp.set("partyId", partyId);
+        if (fromDate) usp.set("from", fromDate);
+        if (toDate) usp.set("to", toDate);
         setData(await apiJson<OrdersResponse>(`/api/orders?${usp}`));
       }
     } catch (e) {
       toast((e as Error).message, "danger");
     }
-  }, [view, state, q, partyId, laneUrl, toast]);
+  }, [view, state, q, partyId, fromDate, toDate, laneUrl, toast]);
 
   const loadMoreLane = useCallback(async (laneState: string) => {
     const lane = lanes[laneState];
@@ -227,13 +241,23 @@ function PipelineInner() {
                 <Listbox ariaLabel="Party" options={[{ value: "", label: "All parties" }, ...parties.map((p) => ({ value: p.id, label: p.name }))]} value={partyId} onChange={setPartyId} />
               </div>
             )}
+            {/* EPO.4 — created-at range */}
+            {view === "grid" && (
+              <span style={{ display: "inline-flex", gap: 4, alignItems: "center", fontSize: 11.5, color: "var(--h10-text-3)" }}>
+                <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} aria-label="Created from" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: "4px 6px", fontSize: 11.5, background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+                –
+                <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} aria-label="Created to" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: "4px 6px", fontSize: 11.5, background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+              </span>
+            )}
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search number or party…" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: "5px 9px", fontSize: 12.5, outline: "none", background: "var(--h10-surface)", color: "var(--h10-text)", minWidth: 200 }} />
           </div>
         </div>
         {view === "grid" ? (
           <DataGrid
             columns={[
-              { key: "number", label: "Order", render: (r: OrderRow) => <button type="button" onClick={() => openDetail(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button> },
+              { key: "number", label: "Order", render: (r: OrderRow) => <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}><button type="button" onClick={() => openDetail(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button>{r.urgent && <Pill tone="danger">urgent</Pill>}</span> },
+              // EPO.4 — cockpit mode leads with WHY the row needs attention
+              ...(state === "attention" ? [{ key: "why", label: "Why", render: (r: OrderRow) => <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" as const }}>{(r.attention ?? []).map((a) => { const ui = REASON_UI[a]; return ui ? <Pill key={a} tone={ui.tone}>{ui.label}</Pill> : null; })}</span> }] : []),
               { key: "party", label: "Party", render: (r: OrderRow) => <a href={`/contacts?c=${r.party.id}`} style={{ color: "inherit", textDecoration: "none" }} onMouseEnter={(e) => { (e.target as HTMLElement).style.color = "var(--h10-text-link)"; }} onMouseLeave={(e) => { (e.target as HTMLElement).style.color = "inherit"; }}>{r.party.name}</a> }, // EPO.3 (E2) — party hops to contacts
               { key: "state", label: "State", render: stateCell },
               // EPO.2 (C7) — stripped money renders "—", never a misleading €0,00
@@ -242,13 +266,14 @@ function PipelineInner() {
               { key: "balance", label: "Balance", align: "right" as const, render: (r: OrderRow) => (r.balanceCents != null && r.lineCount ? <span style={{ color: r.balanceCents > 0 && (r.state === "DELIVERED" || r.state === "CLOSED") ? "var(--h10-danger)" : undefined, fontWeight: r.balanceCents > 0 ? 600 : undefined }}>{eur(r.balanceCents)}</span> : "—") },
               ...(canMargin ? [{ key: "margin", label: "Margin", align: "right" as const, render: (r: OrderRow) => (r.lineCount && r.marginPct != null ? <Pill tone={(r.marginCents ?? 0) < 0 || (data?.marginFloorPct != null && r.marginPct < data.marginFloorPct) ? "danger" : "success"}>{r.marginPct.toFixed(0)}%</Pill> : "—") }] : []),
               { key: "payment", label: "Payment", render: (r: OrderRow) => <PaymentChip r={r} /> },
-              { key: "promise", label: "Promise", render: (r: OrderRow) => (r.promiseDateAt ? <span style={{ color: r.overdue ? "var(--h10-danger)" : undefined, fontWeight: r.overdue ? 700 : undefined }}>{new Date(r.promiseDateAt).toLocaleDateString()}</span> : "—") },
+              // EPO.4 — the promise cell carries its integrity: slips + pre-late risk
+              { key: "promise", label: "Promise", render: (r: OrderRow) => (r.promiseDateAt ? <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}><span style={{ color: r.overdue ? "var(--h10-danger)" : undefined, fontWeight: r.overdue ? 700 : undefined }}>{new Date(r.promiseDateAt).toLocaleDateString()}</span>{(r.promiseSlips ?? 0) > 0 && <Pill tone="warning">slipped ×{r.promiseSlips}</Pill>}{r.atRisk && !r.overdue && <Pill tone="warning">at risk</Pill>}</span> : "—") },
               { key: "wos", label: "WOs", align: "right" as const, render: (r: OrderRow) => (r.woCount ? r.woCount : "—") },
               { key: "updated", label: "Updated", render: (r: OrderRow) => new Date(r.updatedAt).toLocaleDateString() },
             ]}
             rows={data?.orders ?? []}
             rowKey={(r: OrderRow) => r.id}
-            emptyState="No orders yet — they arrive when you convert an accepted quote."
+            emptyState={state === "attention" ? "Nothing needs attention — every promise is safe, no work is blocked or stalled." : "No orders yet — they arrive when you convert an accepted quote."}
           />
         ) : (
           <KanbanBoard lanes={lanes} onLoadMore={(s) => void loadMoreLane(s)} onMove={canEdit ? onMove : () => toast("You can't change order status", "danger")} onOpen={openDetail} />

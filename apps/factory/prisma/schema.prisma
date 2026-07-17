@@ -467,6 +467,14 @@ model Order {
   conversation    Conversation? @relation(fields: [conversationId], references: [id])
   state           OrderState    @default(CONFIRMED)
   promiseDateAt   DateTime?
+  // EPO.4 — promise integrity: the FIRST promise, immutable once set (Amazon
+  // first-promise discipline); slips are derived from the audit trail.
+  originalPromiseDateAt DateTime?
+  // EPO.4 (EPF D-9 field request): customer's own PO/reference · owner-set
+  // urgency · link to the order this one remakes (formalized in EPO.5 returns)
+  clientRef       String?
+  urgent          Boolean       @default(false)
+  remakeOfId      String?
   cancelReason    String?
   lines           OrderLine[]
   workOrders      WorkOrder[]

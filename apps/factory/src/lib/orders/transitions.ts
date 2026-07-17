@@ -96,7 +96,8 @@ export type TransitionVia =
   | "tracking" // FP8: carrier poll ⇒ DELIVERED
   | "label-voided" // FP8: label voided pre-dispatch ⇒ back to READY
   | "promise-changed" // not a state edge — used on the order.updated event for promise edits
-  | "line-edited"; // not a state edge — used on the order.updated event for line edits
+  | "line-edited" // not a state edge — used on the order.updated event for line edits
+  | "field-edited"; // EPO.4 — not a state edge; clientRef/urgent edits
 
 /**
  * EPO1.1 — system-only edges: in the graph, but legal ONLY when driven by the

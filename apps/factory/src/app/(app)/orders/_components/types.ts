@@ -23,7 +23,14 @@ export type OrderRow = {
   paidCents?: number; // EPO.2 — per-row order-to-cash
   invoicedCents?: number;
   balanceCents?: number;
+  originalPromiseDateAt?: string | null; // EPO.4 — promise integrity
+  urgent?: boolean;
+  promiseSlips?: number;
+  atRisk?: boolean;
+  attention?: AttentionReason[]; // cockpit mode only
 };
+
+export type AttentionReason = "late" | "at-risk" | "deposit-blocked" | "stalled"; // EPO.4 (M2: fulfillment-side only)
 
 export type OrdersResponse = {
   orders: OrderRow[];
@@ -52,6 +59,9 @@ export type OrderDetailResponse = {
     number: string;
     state: OrderState;
     promiseDateAt: string | null;
+    originalPromiseDateAt: string | null; // EPO.4
+    clientRef: string | null; // EPO.4 (D-9)
+    urgent: boolean; // EPO.4 (D-9)
     cancelReason: string | null;
     createdAt: string;
     updatedAt: string;
@@ -67,6 +77,14 @@ export type OrderDetailResponse = {
     conversation: { id: string; subject: string | null } | null;
   };
   timeline: TimelineEvent[];
+  promise: {
+    originalPromiseDateAt: string | null;
+    slips: number;
+    atRisk: boolean;
+    late: boolean;
+    daysLeft: number | null;
+    neededDays: number | null;
+  }; // EPO.4
   money: {
     netCents?: number;
     costCents?: number;

@@ -18,6 +18,7 @@ import { orderTotals, depositRequiredCents, depositPaidCents, isDepositMet } fro
 import { orderFinancials, type FinOrder } from "@/lib/financials/rollup";
 import { actualCostByOrder } from "@/lib/financials/actual-cost";
 import { buildTimeline } from "@/lib/orders/timeline";
+import { countSlips, promiseRisk } from "@/lib/orders/promise";
 import { type OrderState } from "@/lib/orders/transitions";
 import { transitionOrder } from "@/lib/orders/transition-service";
 
@@ -74,9 +75,36 @@ async function detailPayload(id: string) {
     WHERE o."partyId" = ${order.party.id} AND o."id" <> ${order.id} AND o."state" IN ('DELIVERED', 'CLOSED')`);
   const owing = partyRows.map((r) => Number(r.bal ?? 0)).filter((b) => b > 0);
 
+  // EPO.4 — promise integrity: slips from the trail, at-risk from remaining
+  // stages × the global historical pace (one scalar aggregate).
+  const promiseChanges = audits
+    .filter((a) => a.entityType === "order" && a.action === "promise-changed")
+    .map((a) => (a.after as { promiseDateAt?: string | null } | null)?.promiseDateAt ?? null);
+  const remainingStages = order.workOrders
+    .filter((w) => w.state !== "CANCELLED" && w.state !== "DONE")
+    .reduce((n, w) => n + w.stages.filter((s) => !s.finishedAt).length, 0);
+  const paceRow = await prisma.$queryRaw<{ pace: number | null }[]>(Prisma.sql`
+    SELECT AVG((julianday("finishedAt") - julianday("startedAt")) * 86400000.0) AS "pace"
+    FROM "WorkOrderStage" WHERE "finishedAt" IS NOT NULL AND "startedAt" IS NOT NULL`);
+  const risk = promiseRisk({
+    promiseAtISO: order.promiseDateAt ? order.promiseDateAt.toISOString() : null,
+    state: order.state,
+    remainingStages,
+    perStageMs: paceRow[0]?.pace ?? null,
+    now: Date.now(),
+  });
+
   return {
     order,
     timeline: buildTimeline(order as never, audits as never),
+    promise: {
+      originalPromiseDateAt: order.originalPromiseDateAt,
+      slips: countSlips(order.originalPromiseDateAt ? order.originalPromiseDateAt.toISOString() : null, promiseChanges),
+      atRisk: risk.atRisk,
+      late: risk.late,
+      daysLeft: risk.daysLeft,
+      neededDays: risk.neededDays,
+    },
     money: {
       netCents: totals.netCents,
       costCents: totals.costCents,
@@ -113,6 +141,9 @@ const Patch = z.object({
   promiseDateAt: z.string().nullable().optional(),
   state: z.enum(["CONFIRMED", "IN_PRODUCTION", "READY", "SHIPPED", "DELIVERED", "CLOSED", "CANCELLED"]).optional(),
   note: z.string().max(500).optional(),
+  // EPO.4 (EPF D-9) — customer reference + urgency, owner-editable
+  clientRef: z.string().trim().max(120).nullable().optional(),
+  urgent: z.boolean().optional(),
   // EPO1.1 (D-6) — the caller's read stamp; a mismatch means someone else
   // changed the order since it was loaded → 409 instead of last-write-wins.
   expectedUpdatedAt: z.string().optional(),
@@ -124,24 +155,39 @@ export const PATCH = guarded(FEATURES.ordersEdit, async (req, { params, actor, r
   if (!parsed.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   const body = parsed.data;
 
-  const order = await prisma.order.findUnique({ where: { id }, select: { id: true, state: true } });
+  const order = await prisma.order.findUnique({ where: { id }, select: { id: true, state: true, promiseDateAt: true, originalPromiseDateAt: true } });
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const from = order.state as OrderState;
-  if (body.promiseDateAt === undefined && (!body.state || body.state === from)) {
+  const hasFieldEdit = body.clientRef !== undefined || body.urgent !== undefined;
+  if (body.promiseDateAt === undefined && !hasFieldEdit && (!body.state || body.state === from)) {
     return NextResponse.json({ error: "Nothing to change" }, { status: 400 });
   }
 
-  // EPO1.3 (C3) — promise-date edits: guarded write + audit + a durable event
-  // (they were audited but silent to SSE — live boards never saw them).
+  // EPO1.3 (C3) — promise-date edits: guarded write + audit + a durable event.
+  // EPO.4 — the FIRST promise seeds the immutable original; audits carry the
+  // before-value so slips are derivable from the trail alone.
   if (body.promiseDateAt !== undefined) {
     const promiseDateAt = body.promiseDateAt ? new Date(body.promiseDateAt) : null;
     const res = await prisma.order.updateMany({
       where: { id, ...(body.expectedUpdatedAt && !body.state ? { updatedAt: new Date(body.expectedUpdatedAt) } : {}) },
-      data: { promiseDateAt },
+      data: {
+        promiseDateAt,
+        ...(order.originalPromiseDateAt == null && promiseDateAt ? { originalPromiseDateAt: promiseDateAt } : {}),
+      },
     });
     if (res.count === 0) return NextResponse.json({ error: "The order changed elsewhere — refresh and retry" }, { status: 409 });
-    void audit({ actorId: actor!.id, entityType: "order", entityId: id, action: "promise-changed", after: { promiseDateAt } });
+    void audit({ actorId: actor!.id, entityType: "order", entityId: id, action: "promise-changed", before: { promiseDateAt: order.promiseDateAt }, after: { promiseDateAt } });
     await publishEventDurable("order.updated", { orderId: id, via: "promise-changed", promiseDateAt: promiseDateAt?.toISOString() ?? null });
+  }
+
+  // EPO.4 (D-9) — clientRef / urgent: audited field edits, live to SSE
+  if (hasFieldEdit) {
+    const data: { clientRef?: string | null; urgent?: boolean } = {};
+    if (body.clientRef !== undefined) data.clientRef = body.clientRef === null || body.clientRef === "" ? null : body.clientRef;
+    if (body.urgent !== undefined) data.urgent = body.urgent;
+    await prisma.order.update({ where: { id }, data });
+    void audit({ actorId: actor!.id, entityType: "order", entityId: id, action: "field-edited", after: data });
+    await publishEventDurable("order.updated", { orderId: id, via: "field-edited" });
   }
 
   // EPO1.1 (C1/C2/C9) — state changes go through the ONE writer.

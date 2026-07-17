@@ -23,7 +23,10 @@ function CardBody({ r, onOpen }: { r: OrderRow; onOpen?: (id: string) => void })
   return (
     <div style={{ display: "grid", gap: 5 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
-        <button type="button" onMouseDown={(e) => e.stopPropagation()} onClick={() => onOpen?.(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: onOpen ? "pointer" : "grab", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button>
+        <span style={{ display: "inline-flex", gap: 5, alignItems: "center", minWidth: 0 }}>
+          <button type="button" onMouseDown={(e) => e.stopPropagation()} onClick={() => onOpen?.(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: onOpen ? "pointer" : "grab", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button>
+          {r.urgent && <Pill tone="danger">urgent</Pill>}
+        </span>
         {r.netCents != null && <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, fontWeight: 600 }}>{eur(r.netCents)}</span>}
       </div>
       {/* EPO.3 (E2) — party hops to contacts; mousedown stopped so a click never starts a drag */}

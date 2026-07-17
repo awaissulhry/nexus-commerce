@@ -162,7 +162,7 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
       <DetailHeader
         backLabel="All orders"
         onBack={onBack}
-        title={<span style={{ display: "inline-flex", gap: 10, alignItems: "center" }}>{o.number}<Pill tone={STATE_TONE[o.state]}>{ORDER_STATE_LABEL[o.state]}</Pill></span>}
+        title={<span style={{ display: "inline-flex", gap: 10, alignItems: "center" }}>{o.number}<Pill tone={STATE_TONE[o.state]}>{ORDER_STATE_LABEL[o.state]}</Pill>{o.urgent && <Pill tone="danger">urgent</Pill>}</span>}
         actions={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {canEdit && o.state === "CONFIRMED" && <Button variant="primary" onClick={() => setStarting(true)}><Hammer size={13} /> Start production</Button>}
@@ -274,12 +274,47 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
           )}
 
           <Card padded>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--h10-text-3)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Dates</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--h10-text-3)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>Dates</span>
+              {/* EPO.4 — promise integrity at a glance */}
+              <span style={{ display: "inline-flex", gap: 4 }}>
+                {d.promise.slips > 0 && <Pill tone="warning">slipped ×{d.promise.slips}</Pill>}
+                {d.promise.atRisk && <Pill tone="warning">at risk</Pill>}
+                {d.promise.late && <Pill tone="danger">late</Pill>}
+              </span>
+            </div>
             <div style={{ display: "grid", gap: 4 }}>
               <div style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>Promise date</div>
               <DateField ariaLabel="Promise date" value={isoDate(o.promiseDateAt)} onChange={(v) => void patch({ promiseDateAt: v ? new Date(`${v}T12:00:00`).toISOString() : null })} disabled={!canEdit} />
+              {/* the FIRST promise never disappears — shown whenever it differs */}
+              {d.promise.originalPromiseDateAt && isoDate(d.promise.originalPromiseDateAt) !== isoDate(o.promiseDateAt) && (
+                <RailRow label="Originally">{new Date(d.promise.originalPromiseDateAt).toLocaleDateString()}</RailRow>
+              )}
+              {d.promise.atRisk && d.promise.neededDays != null && d.promise.daysLeft != null && (
+                <div style={{ fontSize: 11.5, color: "var(--h10-warning, #9a6700)" }}>Remaining stages need ~{Math.ceil(d.promise.neededDays)}d at recent pace; {Math.floor(d.promise.daysLeft)}d left.</div>
+              )}
               <RailRow label="Confirmed">{new Date(o.createdAt).toLocaleDateString()}</RailRow>
             </div>
+          </Card>
+
+          {/* EPO.4 (EPF D-9) — reference + urgency, owner-editable */}
+          <Card padded>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--h10-text-3)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>Details</span>
+              {canEdit && (
+                <button type="button" onClick={() => void patch({ urgent: !o.urgent })} style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }} title={o.urgent ? "Clear urgent" : "Mark urgent"}>
+                  <Pill tone={o.urgent ? "danger" : "neutral"}>{o.urgent ? "urgent" : "mark urgent"}</Pill>
+                </button>
+              )}
+            </div>
+            <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 3 }}>Customer reference</div>
+            <input
+              defaultValue={o.clientRef ?? ""}
+              onBlur={(e) => { const v = e.target.value.trim(); if (v !== (o.clientRef ?? "")) void patch({ clientRef: v || null }); }}
+              placeholder="Their PO / reference…"
+              disabled={!canEdit}
+              style={{ width: "100%", border: "1px solid var(--h10-border)", borderRadius: 8, padding: "6px 9px", fontSize: 12.5, background: "var(--h10-surface)", color: "var(--h10-text)" }}
+            />
           </Card>
 
           <Card padded>
