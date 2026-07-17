@@ -11,6 +11,8 @@
  * EPQ.3 — the GET flags a duplicate open quote (same party, same template set,
  * DRAFT/SENT) for the editor's warning banner. Bounded query, pure comparison.
  * FS4 — the PATCH honours `expectedUpdatedAt` (shared EPO.1 stale guard → 409).
+ * EPQ.4 — a converted quote's GET carries its order's ACTUAL cost once that
+ * order has shipped (quote-vs-actual loop; EPF lib consumed read-only).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -25,6 +27,7 @@ import { canTransition, lostReasonAllowed, type QuoteState } from "@/lib/quotes/
 import { findDuplicateOpenQuote } from "@/lib/quotes/duplicate";
 import { notifyOwners } from "@/lib/quotes/notify-owners";
 import { naturaForMode, type TaxMode } from "@/lib/quotes/tax";
+import { orderActuals } from "@/lib/quotes/actuals";
 
 export const permission = { GET: PAGES.quotes, PATCH: FEATURES.quotesCreate, DELETE: FEATURES.quotesCreate };
 
@@ -60,7 +63,14 @@ export const GET = guarded(PAGES.quotes, async (_req, { params, resolved }) => {
       candidates.map((c) => ({ id: c.id, number: c.number, templateIds: c.lines.map((l) => l.templateId) })),
     );
   }
-  return jsonStripped({ quote, totals, duplicate }, resolved);
+
+  // EPQ.4 — quote-vs-actual: once the converted order has SHIPPED, its real
+  // (ledger) cost rides beside the estimate. Bounded: one order.
+  const orderActual = quote.convertedOrderId
+    ? (await orderActuals([quote.convertedOrderId])).get(quote.convertedOrderId) ?? null
+    : null;
+
+  return jsonStripped({ quote, totals, duplicate, orderActual }, resolved);
 });
 
 const Patch = z.object({
