@@ -14,7 +14,7 @@ import { Button, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
-import { type BankProposal, type DepositRow, type DepositsResponse, type FinancialDetail, type FinancialsResponse, type ImportResponse, type InvoiceRow, type OrderFin, type PartyAgg, type PartyResponse, type PaymentRow, type PeriodAgg, type PeriodResponse } from "./types";
+import { type BankProposal, type DepositRow, type DepositsResponse, type FinancialDetail, type FinancialsResponse, type ImportApplyResponse, type ImportResponse, type InvoiceRow, type OrderFin, type PartyAgg, type PartyResponse, type PaymentRow, type PeriodAgg, type PeriodResponse } from "./types";
 
 const inp: React.CSSProperties = { width: "100%", border: "1px solid var(--h10-border)", borderRadius: 7, padding: "6px 8px", fontSize: 12.5, background: "var(--h10-surface)", color: "var(--h10-text)" };
 const CONF_TONE: Record<string, "success" | "info" | "neutral"> = { high: "success", medium: "info", none: "neutral" };
@@ -306,19 +306,23 @@ function ImportModal({ open, canPay, onClose, onApplied }: { open: boolean; canP
       const r = await apiJson<ImportResponse>("/api/imports/payments", { method: "POST", body: JSON.stringify({ rawCsv: csv }) });
       setProposals(r.proposals);
       const p: Record<number, boolean> = {};
-      r.proposals.forEach((x, i) => { if (x.orderId) p[i] = true; });
+      // EPF1 (D-10): settled-order references (zeroBalance) start UNCHECKED
+      r.proposals.forEach((x, i) => { if (x.orderId && !x.zeroBalance) p[i] = true; });
       setPick(p);
       if (r.proposals.length === 0) toast(r.note ?? "No rows parsed", "danger");
     } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
   };
   const apply = async () => {
     if (!proposals) return;
-    const applyList = proposals.flatMap((p, i) => (pick[i] && p.orderId && p.amountCents ? [{ orderId: p.orderId, amountCents: p.amountCents, note: `Bank: ${p.row.description}`.slice(0, 200) }] : []));
+    // EPF1 (D-10): the statement row's date + description travel with the apply —
+    // they form the idempotency key and the payment's receivedAt.
+    const applyList = proposals.flatMap((p, i) => (pick[i] && p.orderId && p.amountCents ? [{ orderId: p.orderId, amountCents: p.amountCents, date: p.row.date, description: p.row.description, note: `Bank: ${p.row.description}`.slice(0, 200) }] : []));
     if (applyList.length === 0) { toast("Select at least one matched row", "danger"); return; }
     setBusy(true);
     try {
-      const r = await apiJson<{ created: number }>("/api/imports/payments", { method: "POST", body: JSON.stringify({ apply: applyList }) });
-      toast(`${r.created} payment(s) recorded`, "success");
+      const r = await apiJson<ImportApplyResponse>("/api/imports/payments", { method: "POST", body: JSON.stringify({ apply: applyList }) });
+      const extras = [r.skipped > 0 ? `${r.skipped} duplicate(s) skipped` : null, r.errors.length > 0 ? `${r.errors.length} row(s) errored` : null].filter(Boolean).join(", ");
+      toast(`${r.created} payment(s) recorded${extras ? ` — ${extras}` : ""}`, r.errors.length > 0 ? "danger" : "success");
       onApplied();
     } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
   };
