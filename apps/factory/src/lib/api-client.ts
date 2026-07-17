@@ -23,7 +23,12 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   const headers = new Headers(init.headers);
   if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
     headers.set("x-factory-csrf", await ensureCsrf());
-    if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
+    // EPI2.5 — default the JSON content-type ONLY for string bodies. Stamping
+    // it on FormData suppressed the multipart boundary, 400-ing every
+    // FormData POST from the UI (comment-with-file; the reply path shares
+    // this helper). fetch() sets the correct multipart header itself when
+    // content-type is absent.
+    if (typeof init.body === "string" && !headers.has("content-type")) headers.set("content-type", "application/json");
   }
   return fetch(path, { ...init, headers });
 }
