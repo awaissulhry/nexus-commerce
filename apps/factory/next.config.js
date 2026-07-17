@@ -4,6 +4,9 @@
  * native addon and the generated Prisma client rides on it — both must stay
  * external to the bundler.
  */
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -12,6 +15,15 @@ const nextConfig = {
   // multi-session lesson apps/web learned with NEXT_DEV_ISOLATED (gate
   // incident 2026-07-05: a parallel build blanked the Owner's running app).
   distDir: process.env.FACTORY_BUILD_DIR || ".next",
+  // EPQ.3 — pin the workspace root to THIS checkout's monorepo root. Without
+  // it, a build inside a git worktree (.claude/worktrees/…) sees two lockfiles
+  // (worktree + outer repo), infers the OUTER repo as root, and resolves the
+  // commerce tree's Next runtime alongside the factory's pinned one — the
+  // export phase then dies with "Expected workStore to be initialized".
+  // On the main checkout this resolves to /…/nexus-commerce, unchanged.
+  turbopack: {
+    root: path.join(path.dirname(fileURLToPath(import.meta.url)), "..", ".."),
+  },
   serverExternalPackages: [
     "@prisma/client",
     "@prisma/adapter-better-sqlite3",
