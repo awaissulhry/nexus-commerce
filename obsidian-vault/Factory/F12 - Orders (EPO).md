@@ -1,7 +1,7 @@
 # F12 - Orders (EPO)
 
-> **Route:** `/orders` · **EP code:** EPO · **Status:** 🔨 approved 2026-07-16 — **EPO.1 SHIPPED** (transition-service single writer, drivers rerouted, payment idempotency, 409 guard) · **EPO.3 SHIPPED 2026-07-17** (`EPO3-REPORT.md`: chain chips, every timeline row a hop + invoices/promise/stages/cancel-reason depth, ⌘K param fix, `/production?wo=` reader, bell order moments, live board via FS2); **EPO.2 (money strip) next** (order .1→.3→.2→.4→.6→.7→.5).
-> Canonical docs: `docs/factory/EPO-PROPOSAL.md` · `EPO-UI-INVENTORY.md` · `EPO1-REPORT.md` · `EPO3-REPORT.md` · base: `FP4-SPEC.md`/`FP4-REPORT.md`
+> **Route:** `/orders` · **EP code:** EPO · **Status:** 🔨 approved 2026-07-16 — **EPO.1 + .3 + .2 SHIPPED** (.1 transition-service single writer + payment idempotency · .3 connected order: chips, timeline hops+depth, ⌘K fix, `?wo=` reader, bell moments, live board · .2 money strip: quoted/invoiced/paid/balance, est→actual margin, invoices-on-order, payment badge, low-margin flag, credit banner); **EPO.4 (promise integrity + Needs-attention cockpit) next** (order .1→.3→.2→.4→.6→.7→.5).
+> Canonical docs: `docs/factory/EPO-PROPOSAL.md` · `EPO-UI-INVENTORY.md` · reports `EPO1/EPO3/EPO2` · base: `FP4-SPEC.md`/`FP4-REPORT.md`
 
 Part of [[F00 - Factory OS MOC]] · flow position: [[F01 - Mission & Golden Flow]] step 3 · program: [[F06 - Enterprise Program (EP)]]
 

@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, Hammer, Truck } from "lucide-react";
 import { DetailHeader } from "@/design-system/patterns";
-import { Card, DateField, Listbox, Menu, Modal, useToast } from "@/design-system/components";
+import { Banner, Card, DateField, Listbox, Menu, Modal, useToast } from "@/design-system/components";
 import { Button, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
@@ -64,6 +64,7 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
   const canMargin = usePermission("financials.margins.view");
   const canPay = usePermission("payments.record");
   const canBuyLabel = usePermission("labels.purchase");
+  const canInvoice = usePermission("invoices.manage"); // EPO.2 — FP9 actions consumed on the order
   const [d, setD] = useState<OrderDetailResponse | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState("");
@@ -119,6 +120,14 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
       setStarting(false); await load();
       toast(r.blocked ? `${r.workOrders} work order(s) created — blocked until the deposit is recorded` : `Production started — ${r.workOrders} work order(s) ready`, r.blocked ? "warning" : "success");
     } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
+  };
+  // EPO.2 — send / mark-paid ride the FP9 invoice route (consume, never rebuild)
+  const invoiceAction = async (invoiceId: string, action: "send" | "paid") => {
+    try {
+      await apiJson(`/api/invoices/${invoiceId}`, { method: "PATCH", body: JSON.stringify({ action }) });
+      await load();
+      toast(action === "send" ? "Invoice sent" : "Invoice marked paid", "success");
+    } catch (e) { toast((e as Error).message, "danger"); }
   };
   const openPayment = (prefillDeposit: boolean) => {
     const remaining = (d?.money.depositRequiredCents ?? 0) - (d?.money.depositPaidCents ?? 0);
@@ -181,6 +190,15 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
         <div style={{ marginBottom: 12, padding: 10, background: "var(--h10-wash-danger, #fdecec)", borderRadius: 8, fontSize: 12.5, color: "var(--h10-danger)" }}>Cancelled — {o.cancelReason}</div>
       )}
 
+      {/* EPO.2 — credit AWARENESS, never a hold: this party still owes elsewhere */}
+      {(m.partyOutstandingCents ?? 0) > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <Banner tone="warning" title={`${o.party.name} has ${eur(m.partyOutstandingCents!)} outstanding on ${m.partyOutstandingOrders} delivered order${m.partyOutstandingOrders === 1 ? "" : "s"}`}>
+            Information, not a block — <a href={`/contacts?c=${o.party.id}`} style={{ color: "inherit" }}>their history</a> has the detail.
+          </Banner>
+        </div>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 340px", gap: 16 }}>
         <div style={{ display: "grid", gap: 12, alignContent: "start" }}>
           <Card padded>
@@ -197,9 +215,42 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
                 <span style={{ fontSize: 11, fontWeight: 700, color: "var(--h10-text-3)", textTransform: "uppercase", letterSpacing: 0.4 }}>Money</span>
                 {canPay && <button type="button" onClick={() => openPayment(false)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11.5, color: "var(--h10-text-link)" }}>+ Record payment</button>}
               </div>
-              {m.netCents != null && <RailRow label="Net">{eur(m.netCents)}</RailRow>}
-              {m.costCents != null && <RailRow label="Cost">{eur(m.costCents)}</RailRow>}
-              {canMargin && m.marginCents != null && <RailRow label="Margin" tone={m.marginCents < 0 ? "var(--h10-danger)" : "var(--h10-success)"}>{eur(m.marginCents)} · {(m.marginPct ?? 0).toFixed(0)}%</RailRow>}
+              {/* EPO.2 (E1) — the order-to-cash strip: the FP9 fold, re-surfaced */}
+              {m.netCents != null && <RailRow label="Quoted">{eur(m.netCents)}</RailRow>}
+              {m.invoicedCents != null && <RailRow label="Invoiced">{eur(m.invoicedCents)}</RailRow>}
+              {m.paidCents != null && <RailRow label="Paid">{eur(m.paidCents)}</RailRow>}
+              {m.balanceCents != null && <RailRow label="Balance" tone={m.balanceCents > 0 ? "var(--h10-warning, #9a6700)" : "var(--h10-success)"}>{eur(m.balanceCents)}</RailRow>}
+              {m.costCents != null && <RailRow label={m.actualIsPending === false ? "Cost (actual)" : "Cost (est)"}>{m.actualIsPending === false && m.actualCostCents != null ? eur(m.actualCostCents) : eur(m.costCents)}</RailRow>}
+              {canMargin && m.marginCents != null && (
+                <RailRow label={m.actualIsPending === false ? "Margin (actual)" : "Margin (est)"} tone={(m.actualIsPending === false ? (m.actualMarginCents ?? 0) : m.marginCents) < 0 ? "var(--h10-danger)" : "var(--h10-success)"}>
+                  {m.actualIsPending === false && m.actualMarginCents != null
+                    ? <>{eur(m.actualMarginCents)} · {(m.actualMarginPct ?? 0).toFixed(0)}%</>
+                    : <>{eur(m.marginCents)} · {(m.marginPct ?? 0).toFixed(0)}%</>}
+                </RailRow>
+              )}
+            </Card>
+          )}
+
+          {/* EPO.2 — invoices ON the order, actions via the FP9 endpoints (consumed, not rebuilt) */}
+          {(o.invoices?.length ?? 0) > 0 && (
+            <Card padded>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--h10-text-3)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Invoices</div>
+              <div style={{ display: "grid", gap: 6 }}>
+                {o.invoices.map((iv) => (
+                  <div key={iv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, gap: 6 }}>
+                    <a href={`/api/invoices/${iv.id}`} target="_blank" rel="noreferrer" style={{ fontWeight: 600, color: "var(--h10-text-link)", textDecoration: "none" }} title="Open PDF">{iv.number}</a>
+                    <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}>
+                      {iv.amountCents != null && <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12 }}>{eur(iv.amountCents)}</span>}
+                      <Pill tone={iv.paidAt ? "success" : iv.sentAt ? "info" : "neutral"}>{iv.paidAt ? "paid" : iv.sentAt ? "sent" : "draft"}</Pill>
+                      {canInvoice && !iv.paidAt && (
+                        <button type="button" onClick={() => void invoiceAction(iv.id, iv.sentAt ? "paid" : "send")} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11.5, color: "var(--h10-text-link)" }}>
+                          {iv.sentAt ? "Mark paid" : "Send"}
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </Card>
           )}
 

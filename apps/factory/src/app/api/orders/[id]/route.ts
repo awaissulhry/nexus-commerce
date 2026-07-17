@@ -8,12 +8,15 @@
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { publishEventDurable } from "@/lib/events";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { PAGES, FEATURES } from "@/lib/auth/permissions";
 import { orderTotals, depositRequiredCents, depositPaidCents, isDepositMet } from "@/lib/orders/money";
+import { orderFinancials, type FinOrder } from "@/lib/financials/rollup";
+import { actualCostByOrder } from "@/lib/financials/actual-cost";
 import { buildTimeline } from "@/lib/orders/timeline";
 import { type OrderState } from "@/lib/orders/transitions";
 import { transitionOrder } from "@/lib/orders/transition-service";
@@ -44,6 +47,30 @@ async function detailPayload(id: string) {
   const totals = orderTotals(order.lines);
   const depositRequired = depositRequiredCents(totals.netCents, order.bornFromQuote?.depositPct);
   const depositPaid = depositPaidCents(order.payments);
+
+  // EPO.2 (E1) — the FULL order-to-cash truth on the order itself, via the
+  // SAME FP9 fold the financials drawer uses (consume, never fork — parity by
+  // construction). actualCost = Σ ledger OUT × material cost across the WOs.
+  const actual = await actualCostByOrder([{ id: order.id, woIds: order.workOrders.map((w) => w.id) }]);
+  const fin = orderFinancials({
+    id: order.id, number: order.number, partyId: order.party.id, partyName: order.party.name, state: order.state, createdAtISO: order.createdAt.toISOString(),
+    lines: order.lines,
+    payments: order.payments,
+    invoices: order.invoices.map((i) => ({ amountCents: i.amountCents ?? 0, paidAt: i.paidAt ? i.paidAt.toISOString() : null })),
+    depositPct: order.bornFromQuote?.depositPct,
+    actualCostCents: actual.get(order.id) ?? null,
+  } satisfies FinOrder);
+
+  // EPO.2 — credit AWARENESS, never a hold (D-rec): what this party still owes
+  // on OTHER delivered/closed orders. One bounded aggregate.
+  const partyRows = await prisma.$queryRaw<{ bal: number | bigint | null }[]>(Prisma.sql`
+    SELECT COALESCE(l."net", 0) - COALESCE(pay."paid", 0) AS "bal"
+    FROM "Order" o
+    LEFT JOIN (SELECT "orderId", SUM("netPriceCents" * "qty") AS "net" FROM "OrderLine" GROUP BY "orderId") l ON l."orderId" = o."id"
+    LEFT JOIN (SELECT "orderId", SUM("amountCents") AS "paid" FROM "Payment" GROUP BY "orderId") pay ON pay."orderId" = o."id"
+    WHERE o."partyId" = ${order.party.id} AND o."id" <> ${order.id} AND o."state" IN ('DELIVERED', 'CLOSED')`);
+  const owing = partyRows.map((r) => Number(r.bal ?? 0)).filter((b) => b > 0);
+
   return {
     order,
     timeline: buildTimeline(order as never, audits as never),
@@ -58,6 +85,16 @@ async function detailPayload(id: string) {
       // EPO1.3 (C8) — an order with no originating quote has no deposit terms:
       // the FD13 gate is OFF and the UI must say so instead of hiding the card.
       depositTermsMissing: !order.bornFromQuote,
+      // EPO.2 — the fold's order-to-cash + est→actual margin surface
+      invoicedCents: fin.invoicedCents,
+      paidCents: fin.paidCents,
+      balanceCents: fin.balanceCents,
+      actualCostCents: fin.actualCostCents,
+      actualMarginCents: fin.actualMarginCents,
+      actualMarginPct: fin.actualMarginPct,
+      actualIsPending: fin.actualIsPending,
+      partyOutstandingCents: owing.reduce((s, b) => s + b, 0),
+      partyOutstandingOrders: owing.length,
     },
   };
 }

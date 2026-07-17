@@ -20,6 +20,9 @@ export type OrderRow = {
   marginPct?: number;
   depositRequiredCents?: number;
   depositPaidCents?: number;
+  paidCents?: number; // EPO.2 — per-row order-to-cash
+  invoicedCents?: number;
+  balanceCents?: number;
 };
 
 export type OrdersResponse = {
@@ -27,6 +30,7 @@ export type OrdersResponse = {
   nextCursor?: string | null; // FS1 — lane/grid cursor pagination
   counters: { inProduction: number; awaitingDeposit: number; overdue: number };
   counts: Record<string, number>;
+  marginFloorPct?: number | null; // EPO.2 — low-margin flag threshold (margin-grain-stripped)
 };
 
 export type TimelineEvent = {
@@ -72,6 +76,15 @@ export type OrderDetailResponse = {
     depositPaidCents?: number;
     depositMet: boolean;
     depositTermsMissing?: boolean; // EPO1.3 (C8) — no originating quote ⇒ FD13 gate off, said out loud
+    invoicedCents?: number; // EPO.2 — the FP9 fold's order-to-cash surface
+    paidCents?: number;
+    balanceCents?: number;
+    actualCostCents?: number;
+    actualMarginCents?: number;
+    actualMarginPct?: number;
+    actualIsPending?: boolean;
+    partyOutstandingCents?: number; // EPO.2 — credit awareness (other delivered/closed orders)
+    partyOutstandingOrders?: number;
   };
 };
 
