@@ -99,19 +99,39 @@ async function checkStock() {
 // invoice numbers, WO states for actualComplete) — the parity claim stays
 // "row-hydrating fold ≡ SQL-aggregate loader" on the NEW semantics.
 async function legacyFins(excludeStates: string[]): Promise<OrderFinancials[]> {
-  const orders = await prisma.order.findMany({
-    where: { state: { notIn: excludeStates as never[] } },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true, number: true, state: true, createdAt: true,
-      party: { select: { id: true, name: true } },
-      lines: { select: { netPriceCents: true, costCents: true, qty: true } },
-      payments: { select: { kind: true, amountCents: true, receivedAt: true } },
-      invoices: { select: { number: true, amountCents: true, paidAt: true, createdAt: true }, orderBy: { createdAt: "asc" as const } },
-      bornFromQuote: { select: { depositPct: true } },
-      workOrders: { select: { id: true, state: true } },
-    },
-  }); // bounded: parity script, one-shot legacy reproduction
+  // paged like the ORIGINAL legacy reproduction — the one-shot relation-include
+  // shape trips P2029 at 50k (each relation select becomes an IN(ids) query)
+  type LegacyOrder = {
+    id: string; number: string; state: string; createdAt: Date;
+    party: { id: string; name: string };
+    lines: { netPriceCents: number; costCents: number; qty: number }[];
+    payments: { kind: string; amountCents: number; receivedAt: Date }[];
+    invoices: { number: string; amountCents: number; paidAt: Date | null; createdAt: Date }[];
+    bornFromQuote: { depositPct: number | null } | null;
+    workOrders: { id: string; state: string }[];
+  };
+  const orders: LegacyOrder[] = [];
+  for (let cursor: string | undefined; ; ) {
+    const page = await prisma.order.findMany({
+      where: { state: { notIn: excludeStates as never[] } },
+      orderBy: { id: "asc" },
+      take: 400, // prisma's SQLite param ceiling is 999 — 400 ids per relation IN() stays under it
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      select: {
+        id: true, number: true, state: true, createdAt: true,
+        party: { select: { id: true, name: true } },
+        lines: { select: { netPriceCents: true, costCents: true, qty: true } },
+        payments: { select: { kind: true, amountCents: true, receivedAt: true } },
+        invoices: { select: { number: true, amountCents: true, paidAt: true, createdAt: true }, orderBy: { createdAt: "asc" as const } },
+        bornFromQuote: { select: { depositPct: true } },
+        workOrders: { select: { id: true, state: true } },
+      },
+    }); // bounded: paged at 400/loop — parity-script legacy reproduction
+    orders.push(...(page as LegacyOrder[]));
+    if (page.length < 400) break;
+    cursor = page[page.length - 1].id;
+  }
+  orders.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : a.id < b.id ? -1 : 1));
   const woToOrder = new Map<string, string>();
   for (const o of orders) for (const w of o.workOrders) woToOrder.set(w.id, o.id);
   const actual = new Map<string, number>();

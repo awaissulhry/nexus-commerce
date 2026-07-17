@@ -68,9 +68,16 @@ export async function loadOrderFinancials(
       SELECT l."orderId" AS "orderId", SUM(l."netPriceCents" * l."qty") AS "netCents", SUM(l."costCents" * l."qty") AS "costCents"
       FROM "OrderLine" l GROUP BY l."orderId"`),
     // EPF1 (D-13): skinny per-row reads — 4 columns each, no relations. The
-    // fold needs each document's own date for Rome-month bucketing.
-    prisma.payment.findMany({ select: { orderId: true, kind: true, amountCents: true, receivedAt: true } }), // bounded: 4 skinny columns per payment, no relations (fold input)
-    prisma.invoice.findMany({ select: { orderId: true, number: true, amountCents: true, createdAt: true }, orderBy: { createdAt: "asc" } }), // bounded: 4 skinny columns per invoice, no relations (fold input); ordered so invoiceNumbers is deterministic
+    // fold needs each document's own date for Rome-month bucketing. $queryRaw,
+    // not findMany: Prisma model materialization of 90k rows costs ~230ms at
+    // the 50k-order harness; raw rows keep the whole loader inside the FS1
+    // p50 budget (measured — see EPF1-REPORT).
+    prisma.$queryRaw<{ orderId: string; kind: string; amountCents: number; receivedAt: string | Date }[]>(
+      Prisma.sql`SELECT "orderId", "kind", "amountCents", "receivedAt" FROM "Payment"`,
+    ),
+    prisma.$queryRaw<{ orderId: string; number: string; amountCents: number; createdAt: string | Date }[]>(
+      Prisma.sql`SELECT "orderId", "number", "amountCents", "createdAt" FROM "Invoice" ORDER BY "createdAt" ASC`,
+    ),
     prisma.$queryRaw<ActualAgg[]>(Prisma.sql`
       SELECT w."orderId" AS "orderId", SUM(ml."qty" * m."costCents") AS "actualCents"
       FROM "MovementLedger" ml
