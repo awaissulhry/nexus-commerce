@@ -16,6 +16,7 @@ import { Button, SegmentedControl, Pill, Skeleton } from "@/design-system/primit
 import { apiFetch, apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
 import { repeatedAttachmentIds } from "@/lib/inbox/attachments";
+import { countRemoteImages } from "@/lib/inbox/preview";
 import { MessageBubble } from "./MessageBubble";
 import { EVENT_LABELS, ago, type ThreadResponse } from "./types";
 
@@ -148,7 +149,9 @@ export function ThreadPane({
     );
   }
 
-  const hasHtml = thread.messages.some((m) => m.bodyHtml && /<img/i.test(m.bodyHtml));
+  // EPI2.1 — the toggle appears only when there are REMOTE images to gate
+  // (embedded cid/data images render regardless, Gmail-style).
+  const hasHtml = thread.messages.some((m) => m.bodyHtml && countRemoteImages(m.bodyHtml) > 0);
   const modeOptions = [
     ...(canSend ? [{ value: "reply", label: "Reply" }] : []),
     ...(canComment ? [{ value: "comment", label: "Internal comment" }] : []),

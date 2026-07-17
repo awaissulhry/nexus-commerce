@@ -39,11 +39,16 @@ export const GET = guarded(PAGES.inbox, async (req: NextRequest, { params }) => 
   }
 
   const bytes = fs.readFileSync(filePath);
+  // EPI2.1 — inline only for the allowlist; the filename in the header is
+  // encoded, and non-previewable types force download even with ?inline=1.
+  const wantsInline = req.nextUrl.searchParams.get("inline") === "1";
+  const inline = wantsInline && previewKind(att.mimeType) !== "none";
   return new Response(new Uint8Array(bytes), {
     headers: {
-      "Content-Type": att.mimeType ?? "application/octet-stream",
-      "Content-Disposition": `attachment; filename="${encodeURIComponent(att.filename)}"`,
+      "Content-Type": inline ? att.mimeType! : (att.mimeType ?? "application/octet-stream"),
+      "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${encodeURIComponent(att.filename)}"`,
       "Content-Length": String(bytes.byteLength),
+      "Cache-Control": "private, max-age=3600",
     },
   });
 });

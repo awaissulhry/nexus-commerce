@@ -10,19 +10,21 @@
  */
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Download, HardDriveUpload, ImageOff } from "lucide-react";
 import { useToast } from "@/design-system/components";
 import { apiJson } from "@/lib/api-client";
+import { countRemoteImages, rewriteCidSources } from "@/lib/inbox/preview";
 import { ago, type ThreadMessage } from "./types";
 
 const kb = (n: number | null) => (n == null ? "" : n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 function buildSrcDoc(bodyHtml: string, allowImages: boolean): string {
-  const img = allowImages ? "https: data: cid:" : "'none'";
-  // D1 — when blocked, images are hidden entirely (the CSP alone leaves the
-  // browser's raw broken-image boxes); the bubble shows a styled notice.
-  const hideImages = allowImages ? "" : "img { display: none !important; }";
+  // EPI2.1 — embedded images (cid → our resolver route = 'self', data:) render
+  // in BOTH states, Gmail-style; only REMOTE http(s) images are gated.
+  const img = allowImages ? "'self' https: data:" : "'self' data:";
+  // D1 — hidden (not broken-boxed) while blocked; the bubble shows the notice.
+  const hideImages = allowImages ? "" : 'img[src^="http"] { display: none !important; }';
   return `<!doctype html><html><head>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src ${img}">
 <style>
@@ -72,7 +74,16 @@ export function MessageBubble({
     }
   };
 
-  const hiddenImgCount = !allowImages && message.bodyHtml ? (message.bodyHtml.match(/<img/gi)?.length ?? 0) : 0;
+  // EPI2.1 — cid: sources resolve through our route (they'd otherwise render
+  // as gray placeholders); the hidden counter now counts REMOTE images only.
+  const renderedHtml = useMemo(
+    () =>
+      message.bodyHtml
+        ? rewriteCidSources(message.bodyHtml, (cid) => `/api/inbox/${conversationId}/messages/${message.id}/cid/${encodeURIComponent(cid)}`)
+        : null,
+    [message.bodyHtml, message.id, conversationId],
+  );
+  const hiddenImgCount = !allowImages && message.bodyHtml ? countRemoteImages(message.bodyHtml) : 0;
   const fresh = message.attachments.filter((a) => !repeatedIds?.has(a.id));
   const repeats = message.attachments.filter((a) => repeatedIds?.has(a.id));
 
@@ -160,12 +171,12 @@ export function MessageBubble({
           {hiddenImgCount} remote image{hiddenImgCount === 1 ? "" : "s"} hidden — use "Load remote images" above
         </div>
       )}
-      {message.bodyHtml ? (
+      {renderedHtml ? (
         <iframe
           ref={iframeRef}
           title={`message-${message.id}`}
           sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-          srcDoc={buildSrcDoc(message.bodyHtml, allowImages)}
+          srcDoc={buildSrcDoc(renderedHtml, allowImages)}
           onLoad={fit}
           style={{ width: "100%", height, border: "none", display: "block", background: "#fff" }}
         />
