@@ -7,7 +7,7 @@
 			"y": -360,
 			"width": 2240,
 			"height": 140,
-			"text": "# EP Status Board \u2014 snapshot 2026-07-16\nSource of truth: `docs/factory/ENTERPRISE-PROGRAM.md` (registry). **Any session that changes its page's status moves its card here and updates [[F06 - Enterprise Program (EP)]].** Gates awaiting the Owner: [[F09 - Roadmap & Owner Gates]]."
+			"text": "# EP Status Board \u2014 snapshot 2026-07-17\nSource of truth: `docs/factory/ENTERPRISE-PROGRAM.md` (registry). **Any session that changes its page's status moves its card here and updates [[F06 - Enterprise Program (EP)]].** Gates awaiting the Owner: [[F09 - Roadmap & Owner Gates]]."
 		},
 		{
 			"id": "h1",
@@ -134,11 +134,11 @@
 		{
 			"id": "g3",
 			"type": "file",
-			"x": 560,
-			"y": 680,
+			"x": 1120,
+			"y": 1700,
 			"width": 480,
 			"height": 300,
-			"color": "3",
+			"color": "4",
 			"file": "Factory/F18 - Financials (EPF).md"
 		},
 		{
@@ -149,7 +149,7 @@
 			"width": 480,
 			"height": 300,
 			"color": "3",
-			"text": "### Also awaiting the Owner\n- FP11 gate steps: flip RBAC `enforce` on :3100 \u00b7 settle WhatsApp (FD5)\n- FD13 deposit defaults (% + bypass segment)\n- Sendcloud live probe: connect + one \u20ac0 label (FD6)\n- \u26a0 EPF compliance facts \u2192 commercialista before EPF.7"
+			"text": "### Also awaiting the Owner\n- \u26a0 RESTART the :3100 dev server (migrations from EPI/EPO/EPQ/EPF builds \u2014 trap 6b)\n- Click-throughs: EPQ.1-.3 \u00b7 EPI.1 \u00b7 EPO.1/.3/.2 \u00b7 EPF.1 (reports each)\n- FP11 gate steps: flip RBAC `enforce` \u00b7 settle WhatsApp (FD5)\n- FD13 deposit defaults \u00b7 Sendcloud live probe (FD6)\n- FS4 spec gate"
 		},
 		{
 			"id": "b1",
@@ -197,7 +197,7 @@
 			"width": 480,
 			"height": 300,
 			"color": "5",
-			"text": "### Shipped history\n- **FP1\u2013FP11**: all 11 pages, golden flow closed end-to-end (2026-07-06)\n- **FS0+FS1**: harness + query hygiene (10-30\u00d7 cliffs fixed)\n- **FS2**: SSE fan-out, 50-client proof PASS (2026-07-11)\n- **FS3**: virtualization toolkit + unclaimed-page adoption (2026-07-11)\n- **EPQ.1**: quote lifecycle closed & audited (2026-07-11)\n- **EPQ.2**: no offer dies of silence (2026-07-16)\n- **EPQ.3**: pricing discipline \u2014 goal-seek/tiers/MOQ/size-run/reason codes (2026-07-17)"
+			"text": "### Shipped history\n- **FP1\u2013FP11**: all 11 pages, golden flow closed end-to-end (2026-07-06)\n- **FS0+FS1**: harness + query hygiene \u00b7 **FS2**: SSE \u00b7 **FS3**: virtualization (2026-07-11)\n- **EPQ.1**: quote lifecycle (07-11) \u00b7 **EPQ.2**: silence-killer (07-16) \u00b7 **EPQ.3**: pricing discipline (07-17)\n- **EPI.1**: inbox correctness core (07-16)\n- **EPO.1/.3/.2**: transition-service \u00b7 connected order \u00b7 money strip (07-16/17)\n- **EPF.1**: money-truth repairs \u2014 3 P0 money bugs dead, parity 10/10 at 50k (07-17)"
 		}
 	],
 	"edges": []

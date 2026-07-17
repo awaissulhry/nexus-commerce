@@ -1,6 +1,6 @@
 # F18 - Financials (EPF)
 
-> **Route:** `/financials` · **EP code:** EPF · **Status:** 🔨 proposal **APPROVED 2026-07-17** ("proceed however you recommend") — D-1..D-12 per recommendations (D-1 posture A, D-8 effective-dating granted, D-9 fields→EPO, D-10 OFFICE role; D-11 stays Owner input) — **EPF.1 building** (spec `EPF1-SPEC.md`). EPF.1 unblocks the B3 flag EPO.2 carries (the board mirrors the negative-balance bug until it ships).
+> **Route:** `/financials` · **EP code:** EPF · **Status:** 🔨 approved 2026-07-17 — **EPF.1 SHIPPED same day** (`EPF1-REPORT.md`: all three P0 money bugs dead, atomic `INV-2026-n`, deposit-aware invoicing + overpay guards, idempotent bank import, Rome-TZ tiles, cancelled-money bucket, money notifications; 502 tests, parity 10/10 at 50k; named p50 deviation 439-478 vs 310 with attribution + levers). **B3 closed — EPO.2's board now shows correct balances.** ⚠ Owner: restart `:3100`. **EPF.2 next** (design-law rebuild, FS3 grids ×4, date-scoped default view).
 > Canonical docs: `docs/factory/EPF-PROPOSAL.md` (incl. §9) · `EPF-UI-INVENTORY.md` · `EPF-COMPLIANCE.md` · `EPF1-SPEC.md` · base: `FP9-SPEC.md`/`FP9-REPORT.md`
 
 Part of [[F00 - Factory OS MOC]] · flow position: [[F01 - Mission & Golden Flow]] step 8 · program: [[F06 - Enterprise Program (EP)]]
