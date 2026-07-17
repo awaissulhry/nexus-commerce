@@ -40,6 +40,7 @@ import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, toListin
 import { parseThemeAxes } from '../services/ebay-theme-axes.js';
 import { pushSharedListings, type SharedListingResult } from '../services/ebay-shared-listing-push.service.js';
 import { callTradingApi, siteIdForMarket } from '../services/ebay-trading-api.service.js';
+import { reconcileMembershipsFromEbay } from '../services/ebay-membership-reconcile.service.js';
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot, buildBestOfferTerms, resolveQuantityLimitPerBuyer, resolvePerMarketContent } from '../services/ebay-variation-push.service.js';
 import { renderListingDescriptionSafe } from '../services/ebay-description-theme.service.js';
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
@@ -1969,6 +1970,40 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       } catch (err: unknown) {
         request.log.error(err, 'verify-item failed')
         return reply.code(502).send({ error: err instanceof Error ? err.message : 'GetItem failed' })
+      }
+    },
+  )
+
+  // ── POST /api/ebay/flat-file/reconcile-item ─────────────────────────
+  // Adopt a live listing AS IT IS: read its REAL variations (GetItem) and
+  // rewrite this listing's memberships to the SKUs eBay actually has, mapped
+  // to our pool products by variation specifics. Fixes listings whose live
+  // custom labels differ from the imported file's SKUs (the GALE root cause —
+  // without this, every quantity push targets non-existent variations and the
+  // listing "reverts" forever). Reads eBay; writes only our DB.
+  fastify.post<{ Body: { itemId?: string; marketplace?: string } }>(
+    '/ebay/flat-file/reconcile-item',
+    async (request, reply) => {
+      const itemId = String(request.body?.itemId ?? '').trim()
+      const marketplace = String(request.body?.marketplace ?? 'IT').toUpperCase()
+      if (!/^\d+$/.test(itemId)) return reply.code(400).send({ error: 'numeric itemId required' })
+      const connection = await prisma.channelConnection.findFirst({
+        where: { channelType: 'EBAY', isActive: true },
+        select: { id: true },
+      })
+      if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
+      let token: string
+      try {
+        token = await ebayAuthService.getValidToken(connection.id)
+      } catch (err: unknown) {
+        return reply.code(503).send({ error: `Failed to get eBay token: ${err instanceof Error ? err.message : String(err)}` })
+      }
+      try {
+        const result = await reconcileMembershipsFromEbay(itemId, marketplace, { oauthToken: token })
+        return reply.send(result)
+      } catch (err: unknown) {
+        request.log.error(err, 'reconcile-item failed')
+        return reply.code(502).send({ error: err instanceof Error ? err.message : 'Reconcile failed' })
       }
     },
   )

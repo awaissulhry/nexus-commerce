@@ -2565,6 +2565,31 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                     Verify {id}{verifyResults[id] ? ` — ${verifyResults[id]}` : ''}
                   </button>
                 ))}
+                {saveReport.adoptedItemIds.map((id) => (
+                  <button
+                    key={`rec-${id}`}
+                    type="button"
+                    className="underline text-violet-700 dark:text-violet-300"
+                    title="Read this listing's REAL variation SKUs from eBay and rewire its memberships to them (fixes listings whose live custom labels differ from the file's SKUs)"
+                    onClick={() => {
+                      setVerifyResults((prev) => ({ ...prev, [id]: 'reconciling…' }))
+                      void fetch(`${BACKEND}/api/ebay/flat-file/reconcile-item`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ itemId: id, marketplace: marketplaceRef.current }),
+                      })
+                        .then((r) => r.json())
+                        .then((d) => {
+                          const msg = d.error
+                            ? `reconcile error: ${d.error}`
+                            : `reconciled: ${d.matched}/${d.liveVariations} matched · ${d.rewritten} rewired · ${d.removedStale} stale removed${d.unmatched?.length ? ` · unmatched: ${d.unmatched.slice(0, 2).join(', ')}…` : ''}`
+                          setVerifyResults((prev) => ({ ...prev, [id]: msg }))
+                        })
+                        .catch(() => setVerifyResults((prev) => ({ ...prev, [id]: 'reconcile failed' })))
+                    }}
+                  >
+                    Reconcile {id}
+                  </button>
+                ))}
               </span>
             )}
           </Banner>
