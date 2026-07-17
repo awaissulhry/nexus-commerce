@@ -9,7 +9,7 @@
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
 import { useState } from "react";
 import { Pill } from "@/design-system/primitives";
-import { eur } from "@/design-system/lib/format";
+import { eur, formatDate } from "@/design-system/lib/format";
 import { BOARD_LANES, ORDER_STATE_LABEL, type OrderState } from "@/lib/orders/transitions";
 import { type OrderRow } from "./types";
 
@@ -36,7 +36,7 @@ function CardBody({ r, onOpen }: { r: OrderRow; onOpen?: (id: string) => void })
       <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap" }}>
         <DepositDot r={r} />
         {r.woBlocked && <Pill tone="warning">blocked</Pill>}
-        {r.promiseDateAt && <span style={{ fontSize: 11, color: r.overdue ? "var(--h10-danger)" : "var(--h10-text-3)", fontWeight: r.overdue ? 700 : 400 }}>{new Date(r.promiseDateAt).toLocaleDateString()}</span>}
+        {r.promiseDateAt && <span style={{ fontSize: 11, color: r.overdue ? "var(--h10-danger)" : "var(--h10-text-3)", fontWeight: r.overdue ? 700 : 400 }}>{formatDate(r.promiseDateAt)}</span>}
       </div>
     </div>
   );

@@ -12,11 +12,11 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PageHeader, BulkActionBar } from "@/design-system/patterns";
-import { Card, Menu, Modal, useToast } from "@/design-system/components";
-import { Button, Pill, Skeleton } from "@/design-system/primitives";
+import { Card, Menu, MetricStrip, Modal, useToast } from "@/design-system/components";
+import { Button, Input, Pill, SegmentedControl, Skeleton } from "@/design-system/primitives";
 import { VirtualDataGrid } from "@/components/VirtualDataGrid"; // FS3 — EPO.7 adoption (assigned)
 import { AsyncCombobox, type SearchLoader } from "@/components/AsyncCombobox"; // FS3 — paged party filter
-import { eur } from "@/design-system/lib/format";
+import { eur, formatDate } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
 import { useFactoryEvents } from "@/lib/use-factory-events";
 import { usePermission } from "@/lib/auth/client";
@@ -55,16 +55,9 @@ const loadPartyOptions: SearchLoader = async (q, cursor) => {
 };
 
 const undoBtn: React.CSSProperties = { background: "none", border: "none", padding: 0, color: "inherit", textDecoration: "underline", cursor: "pointer", font: "inherit" };
-const toggleBtn = (active: boolean): React.CSSProperties => ({ border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, padding: "5px 12px", background: active ? "var(--h10-primary)" : "var(--h10-surface)", color: active ? "#fff" : "var(--h10-text-2)" });
 
-function Counter({ label, value, tone }: { label: string; value: number; tone: string }) {
-  return (
-    <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: "8px 14px", minWidth: 120 }}>
-      <div style={{ fontSize: 22, fontWeight: 800, color: tone }}>{value}</div>
-      <div style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>{label}</div>
-    </div>
-  );
-}
+// EPO.7b — saved views (personal, HubSpot pinned-tabs adapt)
+type SavedViewRow = { id: string; name: string; config: { state?: string; q?: string; partyId?: string; partyLabel?: string; from?: string; to?: string; view?: "grid" | "kanban" } };
 
 /** EPO.2 — ONE coarse payment word per row (NetSuite/ERPNext vocabulary); strip-blind callers get "—". */
 const BADGE_UI: Record<string, { label: string; tone: "success" | "info" | "warning" | "neutral" }> = {
@@ -105,6 +98,14 @@ function PipelineInner() {
   const [cancelling, setCancelling] = useState<OrderRow | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  // EPO.7b — saved views + historical import
+  const canImport = usePermission("imports.run");
+  const [views, setViews] = useState<SavedViewRow[]>([]);
+  const [savingView, setSavingView] = useState(false);
+  const [viewName, setViewName] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importCsv, setImportCsv] = useState("");
+  const [importResult, setImportResult] = useState<{ dryRun: boolean; rows: number; errorCount: number; created?: number; errors: { row: number; error: string }[]; diff: { row: number; note: string; error?: string }[] } | null>(null);
 
   const openId = params.get("o");
   const gridRows = [...(data?.orders ?? []), ...gridExtra]; // EPO.7 — first page + appended cursor pages
@@ -196,8 +197,45 @@ function PipelineInner() {
     apiJson<{ parties: { id: string; name: string }[] }>(`/api/parties-lite`).then((d) => setPartyLabel(d.parties.find((p) => p.id === partyId)?.name ?? "")).catch(() => {});
   }, [partyId, partyLabel]);
   // EPO.3 (E11) — the board goes live: FS2's durable bus, 2s debounce; a
-  // transition in another window/tab lands here without a manual refresh
-  useFactoryEvents(["order.updated", "workorder.created", "workorder.updated", "shipment.updated", "payment.recorded"], load);
+  // transition in another window/tab lands here without a manual refresh.
+  // EPO.7b (M6) — import.finished joins the list: a finished import refreshes once.
+  useFactoryEvents(["order.updated", "workorder.created", "workorder.updated", "shipment.updated", "payment.recorded", "import.finished"], load);
+
+  // EPO.7b — personal saved views
+  const loadViews = useCallback(() => { apiJson<{ views: SavedViewRow[] }>("/api/orders/saved-views").then((d) => setViews(d.views)).catch(() => {}); }, []);
+  useEffect(() => { loadViews(); }, [loadViews]);
+  const applyView = (v: SavedViewRow) => {
+    const c = v.config;
+    setState(c.state ?? "all");
+    setQ(c.q ?? "");
+    setFromDate(c.from ?? "");
+    setToDate(c.to ?? "");
+    if (c.view) switchView(c.view);
+    setPartyFilter(c.partyId ?? "", c.partyLabel ?? "");
+  };
+  const saveView = async () => {
+    if (!viewName.trim()) return;
+    setBusy(true);
+    try {
+      const config = { state, ...(q.trim() ? { q: q.trim() } : {}), ...(partyId ? { partyId, partyLabel } : {}), ...(fromDate ? { from: fromDate } : {}), ...(toDate ? { to: toDate } : {}), view };
+      await apiJson("/api/orders/saved-views", { method: "POST", body: JSON.stringify({ name: viewName.trim(), config }) });
+      setSavingView(false); setViewName(""); loadViews(); toast("View saved", "success");
+    } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
+  };
+  const deleteView = async (id: string) => {
+    try { await apiJson(`/api/orders/saved-views?id=${id}`, { method: "DELETE" }); loadViews(); } catch (e) { toast((e as Error).message, "danger"); }
+  };
+
+  // EPO.7b — historical import: dry-run first, apply only valid rows
+  const runImport = async (dryRun: boolean) => {
+    if (!importCsv.trim()) return;
+    setBusy(true);
+    try {
+      const r = await apiJson<NonNullable<typeof importResult>>("/api/imports/orders", { method: "POST", body: JSON.stringify({ csv: importCsv, dryRun }) });
+      setImportResult(r);
+      if (!r.dryRun) { toast(`${r.created ?? 0} order(s) imported`, "success"); void load(); }
+    } catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
+  };
 
   // EPO.7 (D-5) — the party filter is URL state; other pages deep-link /orders?party=<id>
   const setPartyFilter = (id: string, label: string) => {
@@ -313,16 +351,20 @@ function PipelineInner() {
   return (
     <div className="factory-page factory-grid-grow-2">
       <PageHeader eyebrow="Factory OS" title="Orders" subtitle="The operational board: every confirmed job, its lifecycle, its money, and one click to its whole story." />
-      <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
-        <Counter label="In production" value={data?.counters.inProduction ?? 0} tone="var(--h10-primary)" />
-        <Counter label="Awaiting deposit" value={data?.counters.awaitingDeposit ?? 0} tone={data && data.counters.awaitingDeposit > 0 ? "var(--h10-warning)" : "var(--h10-text-3)"} />
-        <Counter label="Overdue" value={data?.counters.overdue ?? 0} tone={data && data.counters.overdue > 0 ? "var(--h10-danger)" : "var(--h10-text-3)"} />
+      <div style={{ display: "flex", gap: 10, marginBottom: 14, alignItems: "center" }}>
+        {/* EPO.7b — DS MetricStrip replaces the hand-rolled counter tiles */}
+        <div style={{ flex: "0 1 460px" }}>
+          <MetricStrip metrics={[
+            { label: "In production", value: <span style={{ color: "var(--h10-primary)" }}>{data?.counters.inProduction ?? 0}</span> },
+            { label: "Awaiting deposit", value: <span style={{ color: data && data.counters.awaitingDeposit > 0 ? "var(--h10-warning)" : "var(--h10-text-3)" }}>{data?.counters.awaitingDeposit ?? 0}</span> },
+            { label: "Overdue", value: <span style={{ color: data && data.counters.overdue > 0 ? "var(--h10-danger)" : "var(--h10-text-3)" }}>{data?.counters.overdue ?? 0}</span> },
+          ]} />
+        </div>
         <div style={{ marginLeft: "auto", alignSelf: "center", display: "flex", gap: 12, alignItems: "center" }}>
+          {canImport && <button type="button" onClick={() => { setImportCsv(""); setImportResult(null); setImporting(true); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 12, color: "var(--h10-text-link)" }}>Import history</button>}
           <a href={exportHref()} style={{ fontSize: 12, color: "var(--h10-text-link)" }}>Export CSV</a>
-          <div style={{ display: "flex", border: "1px solid var(--h10-border)", borderRadius: 8, overflow: "hidden" }}>
-            <button type="button" onClick={() => switchView("grid")} style={toggleBtn(view === "grid")}>Grid</button>
-            <button type="button" onClick={() => switchView("kanban")} style={toggleBtn(view === "kanban")}>Kanban</button>
-          </div>
+          {/* EPO.7b — DS SegmentedControl replaces the hand-rolled toggle (keyboard + aria for free) */}
+          <SegmentedControl size="sm" options={[{ value: "grid", label: "Grid" }, { value: "kanban", label: "Kanban" }]} value={view} onChange={(v) => switchView(v as "grid" | "kanban")} />
         </div>
       </div>
       <Card padded>
@@ -349,17 +391,29 @@ function PipelineInner() {
                 <AsyncCombobox loader={loadPartyOptions} value={partyId} placeholder="All parties" ariaLabel="Filter by party" onChange={(v, opt) => setPartyFilter(v, opt.label)} />
               </div>
             )}
-            {/* EPO.4 — created-at range */}
+            {/* EPO.4 range + search — EPO.7b: DS Input owns hover/focus states */}
             {view === "grid" && (
               <span style={{ display: "inline-flex", gap: 4, alignItems: "center", fontSize: 11.5, color: "var(--h10-text-3)" }}>
-                <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} aria-label="Created from" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: "4px 6px", fontSize: 11.5, background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+                <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} aria-label="Created from" />
                 –
-                <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} aria-label="Created to" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: "4px 6px", fontSize: 11.5, background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+                <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} aria-label="Created to" />
               </span>
             )}
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search number or party…" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: "5px 9px", fontSize: 12.5, outline: "none", background: "var(--h10-surface)", color: "var(--h10-text)", minWidth: 200 }} />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search number or party…" aria-label="Search orders" style={{ minWidth: 180 }} />
           </div>
         </div>
+        {/* EPO.7b — personal saved views as pinned chips; ⭐ saves the current filters */}
+        {view === "grid" && (views.length > 0 || state !== "attention" || q.trim() || partyId || fromDate || toDate) && (
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
+            {views.map((v) => (
+              <span key={v.id} style={{ display: "inline-flex", alignItems: "center", gap: 4, border: "1px solid var(--h10-border-subtle)", borderRadius: 999, padding: "3px 4px 3px 10px", fontSize: 11.5, background: "var(--h10-surface)" }}>
+                <button type="button" onClick={() => applyView(v)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 600, color: "var(--h10-text-2)" }}>{v.name}</button>
+                <button type="button" onClick={() => void deleteView(v.id)} aria-label={`Delete view ${v.name}`} title="Delete view" style={{ background: "none", border: "none", padding: "0 4px", cursor: "pointer", color: "var(--h10-text-3)", fontSize: 12, lineHeight: 1 }}>×</button>
+              </span>
+            ))}
+            <button type="button" onClick={() => { setViewName(""); setSavingView(true); }} style={{ background: "none", border: "1px dashed var(--h10-border)", borderRadius: 999, padding: "3px 10px", cursor: "pointer", fontSize: 11.5, color: "var(--h10-text-3)" }}>+ Save view</button>
+          </div>
+        )}
         {view === "grid" && data == null ? (
           // EPO.7 (E12) — skeleton on first load; no more empty-state flash
           <div style={{ display: "grid", gap: 8, padding: "4px 0" }}>{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} height={34} />)}</div>
@@ -383,9 +437,9 @@ function PipelineInner() {
               ...(canMargin ? [{ key: "margin", label: "Margin", align: "right" as const, render: (r: OrderRow) => (r.lineCount && r.marginPct != null ? <Pill tone={(r.marginCents ?? 0) < 0 || (data?.marginFloorPct != null && r.marginPct < data.marginFloorPct) ? "danger" : "success"}>{r.marginPct.toFixed(0)}%</Pill> : "—") }] : []),
               { key: "payment", label: "Payment", render: (r: OrderRow) => <PaymentChip r={r} /> },
               // EPO.4 — the promise cell carries its integrity: slips + pre-late risk
-              { key: "promise", label: "Promise", render: (r: OrderRow) => (r.promiseDateAt ? <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}><span style={{ color: r.overdue ? "var(--h10-danger)" : undefined, fontWeight: r.overdue ? 700 : undefined }}>{new Date(r.promiseDateAt).toLocaleDateString()}</span>{(r.promiseSlips ?? 0) > 0 && <Pill tone="warning">slipped ×{r.promiseSlips}</Pill>}{r.atRisk && !r.overdue && <Pill tone="warning">at risk</Pill>}</span> : "—") },
+              { key: "promise", label: "Promise", render: (r: OrderRow) => (r.promiseDateAt ? <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}><span style={{ color: r.overdue ? "var(--h10-danger)" : undefined, fontWeight: r.overdue ? 700 : undefined }}>{formatDate(r.promiseDateAt)}</span>{(r.promiseSlips ?? 0) > 0 && <Pill tone="warning">slipped ×{r.promiseSlips}</Pill>}{r.atRisk && !r.overdue && <Pill tone="warning">at risk</Pill>}</span> : "—") },
               { key: "wos", label: "WOs", align: "right" as const, render: (r: OrderRow) => (r.woCount ? r.woCount : "—") },
-              { key: "updated", label: "Updated", render: (r: OrderRow) => new Date(r.updatedAt).toLocaleDateString() },
+              { key: "updated", label: "Updated", render: (r: OrderRow) => formatDate(r.updatedAt) },
             ]}
             rows={gridRows}
             rowKey={(r: OrderRow) => r.id}
@@ -412,6 +466,37 @@ function PipelineInner() {
         <div style={{ display: "grid", gap: 8 }}>
           <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>A reason is required. Open work orders are cancelled with the order.</div>
           <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="Why is this order being cancelled?" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: 9, fontSize: 12.5, fontFamily: "inherit", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+        </div>
+      </Modal>
+
+      {/* EPO.7b — name + save the current filter set as a personal view */}
+      <Modal open={savingView} onClose={() => !busy && setSavingView(false)} title="Save this view" size="sm"
+        footer={<><Button onClick={() => setSavingView(false)} disabled={busy}>Cancel</Button><Button variant="primary" onClick={() => void saveView()} disabled={busy || !viewName.trim()}>Save</Button></>}>
+        <div style={{ display: "grid", gap: 8 }}>
+          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>Saves the current tab, search, brand, date range and layout as a one-click chip. Personal — only you see it.</div>
+          <Input value={viewName} onChange={(e) => setViewName(e.target.value)} placeholder="e.g. Aireon in production" aria-label="View name" autoFocus />
+        </div>
+      </Modal>
+
+      {/* EPO.7b — historical-order import: paste CSV → dry-run diff → apply valid rows */}
+      <Modal open={importing} onClose={() => !busy && setImporting(false)} title="Import order history" size="sm"
+        footer={<>
+          <Button onClick={() => setImporting(false)} disabled={busy}>Close</Button>
+          <Button onClick={() => void runImport(true)} disabled={busy || !importCsv.trim()}>{busy ? "Checking…" : "Dry run"}</Button>
+          <Button variant="primary" onClick={() => void runImport(false)} disabled={busy || !importResult?.dryRun || importResult.rows === 0 || importResult.rows === importResult.errorCount}>Apply valid rows</Button>
+        </>}>
+        <div style={{ display: "grid", gap: 8 }}>
+          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>
+            One row = one past order with a single line. Columns: <code style={{ fontSize: 11 }}>party, description, qty, unit_net_eur, unit_cost_eur, state, confirmed_date, promise_date, number, client_ref</code>. Parties must exist first (Contacts import). Nothing is written until Apply — and only rows the dry run cleared.
+          </div>
+          <textarea value={importCsv} onChange={(e) => { setImportCsv(e.target.value); setImportResult(null); }} rows={6} placeholder="Paste CSV here…" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: 9, fontSize: 11.5, fontFamily: "ui-monospace, monospace", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+          {importResult && (
+            <div style={{ maxHeight: 180, overflowY: "auto", display: "grid", gap: 3, fontSize: 11.5 }}>
+              <div style={{ fontWeight: 700 }}>{importResult.dryRun ? `Dry run — ${importResult.rows} row(s), ${importResult.errorCount} error(s)` : `Imported ${importResult.created ?? 0} order(s)`}</div>
+              {importResult.errors.map((e) => <div key={`p${e.row}`} style={{ color: "var(--h10-danger)" }}>Row {e.row}: {e.error}</div>)}
+              {importResult.diff.map((d) => <div key={`d${d.row}`} style={{ color: d.error ? "var(--h10-danger)" : "var(--h10-text-2)" }}>Row {d.row}: {d.error ?? d.note}</div>)}
+            </div>
+          )}
         </div>
       </Modal>
 

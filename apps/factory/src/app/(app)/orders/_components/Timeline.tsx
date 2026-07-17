@@ -7,7 +7,7 @@
 
 import Link from "next/link";
 import { Mail, FileText, Send, CheckCircle2, ClipboardCheck, Euro, Hammer, ArrowRight, Truck, Star, Receipt, CalendarClock, PenLine, Undo2, type LucideIcon } from "lucide-react";
-import { eur } from "@/design-system/lib/format";
+import { eur, formatDate } from "@/design-system/lib/format";
 import type { TimelineEvent } from "./types";
 
 const ICON: Record<TimelineEvent["kind"], LucideIcon> = {
@@ -58,7 +58,7 @@ export function Timeline({ events }: { events: TimelineEvent[] }) {
                   {e.label}
                   {e.amountCents != null && <span style={{ marginLeft: 8, fontFamily: "ui-monospace, monospace", fontWeight: 700 }}>{eur(e.amountCents)}</span>}
                 </div>
-                <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginTop: 1 }}>{new Date(e.at).toLocaleString()}</div>
+                <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginTop: 1 }}>{formatDate(e.at)} · {new Date(e.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</div>
               </div>
             </div>
           );

@@ -12,7 +12,7 @@ import { ArrowUpRight, Hammer, PenLine, Truck, Undo2 } from "lucide-react";
 import { DetailHeader } from "@/design-system/patterns";
 import { Banner, Card, DateField, Listbox, Menu, Modal, useToast } from "@/design-system/components";
 import { Button, Pill } from "@/design-system/primitives";
-import { eur } from "@/design-system/lib/format";
+import { eur, formatDate } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
 import { useFactoryEvents } from "@/lib/use-factory-events";
 import { usePermission } from "@/lib/auth/client";
@@ -234,8 +234,9 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
         <ChainChip href="/financials" label="Payments" count={o.payments.length} />
       </div>
 
+      {/* EPO.7b — DS Banner replaces the hand-rolled wash */}
       {o.state === "CANCELLED" && o.cancelReason && (
-        <div style={{ marginBottom: 12, padding: 10, background: "var(--h10-wash-danger, #fdecec)", borderRadius: 8, fontSize: 12.5, color: "var(--h10-danger)" }}>Cancelled — {o.cancelReason}</div>
+        <div style={{ marginBottom: 12 }}><Banner tone="danger" title="Cancelled">{o.cancelReason}</Banner></div>
       )}
 
       {/* EPO.5 — a net-changing amendment voided the acceptance; never silent */}
@@ -349,12 +350,12 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
               <DateField ariaLabel="Promise date" value={isoDate(o.promiseDateAt)} onChange={(v) => void patch({ promiseDateAt: v ? new Date(`${v}T12:00:00`).toISOString() : null })} disabled={!canEdit} />
               {/* the FIRST promise never disappears — shown whenever it differs */}
               {d.promise.originalPromiseDateAt && isoDate(d.promise.originalPromiseDateAt) !== isoDate(o.promiseDateAt) && (
-                <RailRow label="Originally">{new Date(d.promise.originalPromiseDateAt).toLocaleDateString()}</RailRow>
+                <RailRow label="Originally">{formatDate(d.promise.originalPromiseDateAt)}</RailRow>
               )}
               {d.promise.atRisk && d.promise.neededDays != null && d.promise.daysLeft != null && (
                 <div style={{ fontSize: 11.5, color: "var(--h10-warning, #9a6700)" }}>Remaining stages need ~{Math.ceil(d.promise.neededDays)}d at recent pace; {Math.floor(d.promise.daysLeft)}d left.</div>
               )}
-              <RailRow label="Confirmed">{new Date(o.createdAt).toLocaleDateString()}</RailRow>
+              <RailRow label="Confirmed">{formatDate(o.createdAt)}</RailRow>
             </div>
           </Card>
 

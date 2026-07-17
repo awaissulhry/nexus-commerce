@@ -1,6 +1,6 @@
 # F12 - Orders (EPO)
 
-> **Route:** `/orders` · **EP code:** EPO · **Status:** 🔨 approved 2026-07-16 — **EPO.1+.3+.2+.4+.7-core+.5 SHIPPED** (.1 single-writer + idempotency · .3 connected order · .2 money strip · .4 Needs-attention cockpit + promise integrity · .7 scale/brand-view/bulk/nav · .5 audited amendments + acceptance-void/re-approval + returns RET-n → rework WOs). **Remaining, all blocked-or-flagged:** EPO.6 (B1: needs EPI.4 template store) · E6 partials (EPS's buy drawer — D-2 shape recorded) · EPO.7b (saved-views perm, CSV import, DS sweep).
+> **Route:** `/orders` · **EP code:** EPO · **Status:** 🔨 approved 2026-07-16 — **EPO.1+.3+.2+.4+.7-core+.5 SHIPPED** (.1 single-writer + idempotency · .3 connected order · .2 money strip · .4 Needs-attention cockpit + promise integrity · .7 scale/brand-view/bulk/nav · .5 audited amendments + acceptance-void/re-approval + returns RET-n → rework WOs). **EPO.7b SHIPPED** (saved views · history import + M6 · DS sweep + one date format). **Page boundary COMPLETE — remaining are cross-boundary by rule:** EPO.6 (B1: needs EPI.4 template store) · E6 partials (EPS's buy drawer — D-2 shape recorded).
 > Canonical docs: `docs/factory/EPO-PROPOSAL.md` · `EPO-UI-INVENTORY.md` · reports `EPO1/EPO3/EPO2/EPO4/EPO7/EPO5` · base: `FP4-SPEC.md`/`FP4-REPORT.md`
 
 Part of [[F00 - Factory OS MOC]] · flow position: [[F01 - Mission & Golden Flow]] step 3 · program: [[F06 - Enterprise Program (EP)]]
