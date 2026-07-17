@@ -39,4 +39,13 @@ describe("financials grain strip", () => {
     expect(out.order.actualMarginCents).toBe(28000); // 50000 − 22000
     expect(out.order.estCostCents).toBe(25000);
   });
+  it("EPF1: the month-bucket money maps ride the *Cents catch-all — gone without the price grain", () => {
+    const noGrains = { isOwner: false, permissions: new Set(["pages.financials"]) } as Resolved;
+    const stripped = stripFinancials({ order: fin }, noGrains) as { order: Record<string, unknown> };
+    expect("paidByMonthCents" in stripped.order).toBe(false);
+    expect("invoicedByMonthCents" in stripped.order).toBe(false);
+    const kept = stripFinancials({ order: fin }, pricesOnly) as { order: Record<string, unknown> };
+    expect(kept.order.paidByMonthCents).toEqual(fin.paidByMonthCents);
+    expect((stripFinancials({ order: fin }, owner) as { order: Record<string, unknown> }).order.invoicedByMonthCents).toEqual(fin.invoicedByMonthCents);
+  });
 });

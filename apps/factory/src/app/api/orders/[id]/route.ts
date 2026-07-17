@@ -55,10 +55,13 @@ async function detailPayload(id: string) {
   const fin = orderFinancials({
     id: order.id, number: order.number, partyId: order.party.id, partyName: order.party.name, state: order.state, createdAtISO: order.createdAt.toISOString(),
     lines: order.lines,
-    payments: order.payments,
-    invoices: order.invoices.map((i) => ({ amountCents: i.amountCents ?? 0, paidAt: i.paidAt ? i.paidAt.toISOString() : null })),
+    // EPF1 (D-13/D-14): document dates + WO completion keep this fold's
+    // semantics identical to the financials drawer/tiles (one truth).
+    payments: order.payments.map((p) => ({ kind: p.kind, amountCents: p.amountCents, receivedAtISO: p.receivedAt.toISOString() })),
+    invoices: order.invoices.map((i) => ({ amountCents: i.amountCents ?? 0, paidAt: i.paidAt ? i.paidAt.toISOString() : null, issuedAtISO: i.createdAt.toISOString(), number: i.number })),
     depositPct: order.bornFromQuote?.depositPct,
     actualCostCents: actual.get(order.id) ?? null,
+    actualComplete: order.workOrders.length > 0 && order.workOrders.every((w) => w.state === "DONE"),
   } satisfies FinOrder);
 
   // EPO.2 — credit AWARENESS, never a hold (D-rec): what this party still owes

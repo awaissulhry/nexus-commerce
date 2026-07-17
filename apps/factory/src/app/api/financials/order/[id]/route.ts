@@ -23,7 +23,7 @@ export const GET = guarded(PAGES.financials, async (_req, { params, resolved }) 
       payments: { select: { id: true, kind: true, amountCents: true, method: true, receivedAt: true, notes: true }, orderBy: { receivedAt: "asc" } },
       invoices: { select: { id: true, number: true, amountCents: true, sentAt: true, paidAt: true, createdAt: true }, orderBy: { createdAt: "asc" } },
       bornFromQuote: { select: { depositPct: true } },
-      workOrders: { select: { id: true } },
+      workOrders: { select: { id: true, state: true } },
     },
   });
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -32,10 +32,13 @@ export const GET = guarded(PAGES.financials, async (_req, { params, resolved }) 
   const rollup = orderFinancials({
     id: order.id, number: order.number, partyId: order.party.id, partyName: order.party.name, state: order.state, createdAtISO: order.createdAt.toISOString(),
     lines: order.lines,
-    payments: order.payments,
-    invoices: order.invoices.map((i) => ({ amountCents: i.amountCents, paidAt: i.paidAt ? i.paidAt.toISOString() : null })),
+    // EPF1 (D-13/D-14): document dates feed the Rome-month buckets; WO states
+    // drive actualIsPending — the drawer agrees with tiles by construction.
+    payments: order.payments.map((p) => ({ kind: p.kind, amountCents: p.amountCents, receivedAtISO: p.receivedAt.toISOString() })),
+    invoices: order.invoices.map((i) => ({ amountCents: i.amountCents, paidAt: i.paidAt ? i.paidAt.toISOString() : null, issuedAtISO: i.createdAt.toISOString(), number: i.number })),
     depositPct: order.bornFromQuote?.depositPct,
     actualCostCents: actual.get(order.id) ?? null,
+    actualComplete: order.workOrders.length > 0 && order.workOrders.every((w) => w.state === "DONE"),
   } satisfies FinOrder);
 
   return jsonStripped({ order: { id: order.id, number: order.number, partyName: order.party.name }, rollup, invoices: order.invoices, payments: order.payments }, resolved);

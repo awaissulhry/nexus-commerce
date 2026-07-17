@@ -94,6 +94,10 @@ async function checkStock() {
 }
 
 // ── 2. financials: legacy hydrate vs shipped SQL loader ──
+// EPF1 re-baseline: the legacy reproduction now carries the SAME inputs the
+// EPF1 fold semantics need (payment/invoice dates for Rome-month buckets,
+// invoice numbers, WO states for actualComplete) — the parity claim stays
+// "row-hydrating fold ≡ SQL-aggregate loader" on the NEW semantics.
 async function legacyFins(excludeStates: string[]): Promise<OrderFinancials[]> {
   const orders = await prisma.order.findMany({
     where: { state: { notIn: excludeStates as never[] } },
@@ -102,10 +106,10 @@ async function legacyFins(excludeStates: string[]): Promise<OrderFinancials[]> {
       id: true, number: true, state: true, createdAt: true,
       party: { select: { id: true, name: true } },
       lines: { select: { netPriceCents: true, costCents: true, qty: true } },
-      payments: { select: { kind: true, amountCents: true } },
-      invoices: { select: { amountCents: true, paidAt: true } },
+      payments: { select: { kind: true, amountCents: true, receivedAt: true } },
+      invoices: { select: { number: true, amountCents: true, paidAt: true, createdAt: true }, orderBy: { createdAt: "asc" as const } },
       bornFromQuote: { select: { depositPct: true } },
-      workOrders: { select: { id: true } },
+      workOrders: { select: { id: true, state: true } },
     },
   }); // bounded: parity script, one-shot legacy reproduction
   const woToOrder = new Map<string, string>();
@@ -122,9 +126,11 @@ async function legacyFins(excludeStates: string[]): Promise<OrderFinancials[]> {
   return orders.map((o) =>
     orderFinancials({
       id: o.id, number: o.number, partyId: o.party.id, partyName: o.party.name, state: o.state, createdAtISO: o.createdAt.toISOString(),
-      lines: o.lines, payments: o.payments,
-      invoices: o.invoices.map((i) => ({ amountCents: i.amountCents, paidAt: i.paidAt ? i.paidAt.toISOString() : null })),
+      lines: o.lines,
+      payments: o.payments.map((p) => ({ kind: p.kind, amountCents: p.amountCents, receivedAtISO: p.receivedAt.toISOString() })),
+      invoices: o.invoices.map((i) => ({ amountCents: i.amountCents, paidAt: i.paidAt ? i.paidAt.toISOString() : null, issuedAtISO: i.createdAt.toISOString(), number: i.number })),
       depositPct: o.bornFromQuote?.depositPct, actualCostCents: actual.get(o.id) ?? null,
+      actualComplete: o.workOrders.length > 0 && o.workOrders.every((w) => w.state === "DONE"),
     } satisfies FinOrder),
   );
 }
