@@ -10,8 +10,25 @@ export const permission = FEATURES.exportsRun;
 const money = (c: number) => (c / 100).toFixed(2);
 const day = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : "");
 
-export const GET = guarded(FEATURES.exportsRun, async (_req, { resolved }) => {
+export const GET = guarded(FEATURES.exportsRun, async (req, { resolved }) => {
   const canMoney = !!resolved && (resolved.isOwner || resolved.permissions.has(FIELDS.marginsView));
+
+  // EPO.7 (E9) — the export honors the board's active filters (same where
+  // grammar as the list route); a bare request still exports everything.
+  const p = new URL(req.url).searchParams;
+  const state = (p.get("state") ?? "").toUpperCase();
+  const partyId = p.get("partyId") ?? "";
+  const q = (p.get("q") ?? "").trim();
+  const fromStr = p.get("from") ?? "";
+  const toStr = p.get("to") ?? "";
+  const where = {
+    ...(state && state !== "ALL" ? { state: state as never } : {}),
+    ...(partyId ? { partyId } : {}),
+    ...(q ? { OR: [{ number: { contains: q } }, { party: { name: { contains: q } } }] } : {}),
+    ...(fromStr || toStr
+      ? { createdAt: { ...(fromStr ? { gte: new Date(`${fromStr}T00:00:00`) } : {}), ...(toStr ? { lte: new Date(`${toStr}T23:59:59`) } : {}) } }
+      : {}),
+  };
   const headers = ["number", "party", "state", "net", ...(canMoney ? ["margin_pct", "deposit_required", "deposit_paid"] : []), "promise_date", "confirmed", "work_orders", "updated"];
 
   // FS1 — two-phase streamed export: ONE id-list query carries the sort
@@ -25,7 +42,7 @@ export const GET = guarded(FEATURES.exportsRun, async (_req, { resolved }) => {
       try {
         controller.enqueue(encoder.encode(headers.join(",")));
         const ids = (
-          await prisma.order.findMany({ orderBy: [{ promiseDateAt: "asc" }, { updatedAt: "desc" }, { id: "asc" }], select: { id: true } })
+          await prisma.order.findMany({ where, orderBy: [{ promiseDateAt: "asc" }, { updatedAt: "desc" }, { id: "asc" }], select: { id: true } })
         ).map((o) => o.id); // bounded: id-only sort spine for the streamed export
         for (let i = 0; i < ids.length; i += BATCH) {
           const chunk = ids.slice(i, i + BATCH);

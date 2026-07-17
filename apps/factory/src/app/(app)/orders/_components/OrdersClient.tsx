@@ -11,9 +11,11 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { PageHeader } from "@/design-system/patterns";
-import { Card, DataGrid, Menu, Modal, useToast, Listbox } from "@/design-system/components";
-import { Button, Pill } from "@/design-system/primitives";
+import { PageHeader, BulkActionBar } from "@/design-system/patterns";
+import { Card, Menu, Modal, useToast } from "@/design-system/components";
+import { Button, Pill, Skeleton } from "@/design-system/primitives";
+import { VirtualDataGrid } from "@/components/VirtualDataGrid"; // FS3 — EPO.7 adoption (assigned)
+import { AsyncCombobox, type SearchLoader } from "@/components/AsyncCombobox"; // FS3 — paged party filter
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";
 import { useFactoryEvents } from "@/lib/use-factory-events";
@@ -41,6 +43,15 @@ const REASON_UI: Record<string, { label: string; tone: "danger" | "warning" | "i
   "at-risk": { label: "at risk", tone: "warning" },
   "deposit-blocked": { label: "deposit blocking", tone: "warning" },
   stalled: { label: "stalled", tone: "info" },
+};
+
+// EPO.7 (FS3) — paged type-to-find party filter over /api/parties-lite?q=
+const loadPartyOptions: SearchLoader = async (q, cursor) => {
+  const usp = new URLSearchParams({ q });
+  if (cursor) usp.set("cursor", cursor);
+  const d = await apiJson<{ parties: { id: string; name: string }[]; nextCursor?: string | null }>(`/api/parties-lite?${usp}`);
+  const options = d.parties.map((p) => ({ value: p.id, label: p.name }));
+  return { options: !q && !cursor ? [{ value: "", label: "All parties" }, ...options] : options, nextCursor: d.nextCursor ?? null };
 };
 
 const undoBtn: React.CSSProperties = { background: "none", border: "none", padding: 0, color: "inherit", textDecoration: "underline", cursor: "pointer", font: "inherit" };
@@ -81,15 +92,24 @@ function PipelineInner() {
   const [view, setView] = useState<"grid" | "kanban">("grid");
   const [state, setState] = useState("attention"); // EPO.4 — the cockpit is the default view
   const [q, setQ] = useState("");
-  const [partyId, setPartyId] = useState("");
   const [fromDate, setFromDate] = useState(""); // EPO.4 — created-at range
   const [toDate, setToDate] = useState("");
-  const [parties, setParties] = useState<{ id: string; name: string }[]>([]);
+  // EPO.7 (D-5) — the party filter lives in the URL: /orders?party=<id> is the
+  // brand-view contract other pages deep-link to; Back/Forward restore it.
+  const partyId = params.get("party") ?? "";
+  const [partyLabel, setPartyLabel] = useState("");
+  const [gridExtra, setGridExtra] = useState<OrderRow[]>([]); // EPO.7 (C6) — cursor pages appended past the first
+  const [gridCursor, setGridCursor] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set()); // EPO.7 (E9) — bulk selection
+  const [bulkCancelling, setBulkCancelling] = useState(false);
   const [cancelling, setCancelling] = useState<OrderRow | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
 
   const openId = params.get("o");
+  const gridRows = [...(data?.orders ?? []), ...gridExtra]; // EPO.7 — first page + appended cursor pages
+  const toggleSelected = (id: string) => setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const clearSelection = () => setSelected(new Set());
 
   useEffect(() => { const v = localStorage.getItem("factory:orders:view"); if (v === "kanban" || v === "grid") setView(v); }, []);
   const switchView = (v: "grid" | "kanban") => { setView(v); localStorage.setItem("factory:orders:view", v); };
@@ -129,12 +149,33 @@ function PipelineInner() {
         if (partyId) usp.set("partyId", partyId);
         if (fromDate) usp.set("from", fromDate);
         if (toDate) usp.set("to", toDate);
-        setData(await apiJson<OrdersResponse>(`/api/orders?${usp}`));
+        const res = await apiJson<OrdersResponse>(`/api/orders?${usp}`);
+        setData(res);
+        setGridExtra([]); // EPO.7 — a fresh filter drops any appended cursor pages…
+        setGridCursor(res.nextCursor ?? null);
+        setSelected(new Set()); // …and any selection (the rows changed under it)
       }
     } catch (e) {
       toast((e as Error).message, "danger");
     }
   }, [view, state, q, partyId, fromDate, toDate, laneUrl, toast]);
+
+  // EPO.7 (C6) — the grid no longer silently caps at 200: the API cursor is now
+  // consumed. VirtualDataGrid windows the DOM, so appended pages stay cheap.
+  const loadMoreGrid = useCallback(async () => {
+    if (!gridCursor) return;
+    const usp = state === "attention" ? new URLSearchParams({ attention: "1" }) : new URLSearchParams({ state });
+    if (q.trim()) usp.set("q", q.trim());
+    if (partyId) usp.set("partyId", partyId);
+    if (fromDate) usp.set("from", fromDate);
+    if (toDate) usp.set("to", toDate);
+    usp.set("cursor", gridCursor);
+    try {
+      const res = await apiJson<OrdersResponse>(`/api/orders?${usp}`);
+      setGridExtra((prev) => [...prev, ...res.orders]);
+      setGridCursor(res.nextCursor ?? null);
+    } catch (e) { toast((e as Error).message, "danger"); }
+  }, [gridCursor, state, q, partyId, fromDate, toDate, toast]);
 
   const loadMoreLane = useCallback(async (laneState: string) => {
     const lane = lanes[laneState];
@@ -147,13 +188,47 @@ function PipelineInner() {
     }
   }, [lanes, laneUrl, toast]);
   useEffect(() => { const t = setTimeout(() => void load(), 200); return () => clearTimeout(t); }, [load]);
-  useEffect(() => { apiJson<{ parties: { id: string; name: string }[] }>("/api/parties-lite").then((d) => setParties(d.parties)).catch(() => {}); }, []);
+  // EPO.7 (D-5) — resolve the label for a party arriving via a bare ?party= deep
+  // link (another page linked in) so the brand chip reads the name, not the id.
+  useEffect(() => {
+    if (!partyId) { setPartyLabel(""); return; }
+    if (partyLabel) return;
+    apiJson<{ parties: { id: string; name: string }[] }>(`/api/parties-lite`).then((d) => setPartyLabel(d.parties.find((p) => p.id === partyId)?.name ?? "")).catch(() => {});
+  }, [partyId, partyLabel]);
   // EPO.3 (E11) — the board goes live: FS2's durable bus, 2s debounce; a
   // transition in another window/tab lands here without a manual refresh
   useFactoryEvents(["order.updated", "workorder.created", "workorder.updated", "shipment.updated", "payment.recorded"], load);
 
-  const openDetail = (id: string) => { window.history.replaceState(null, "", `/orders?o=${id}`); window.dispatchEvent(new PopStateEvent("popstate")); };
-  const closeDetail = () => { window.history.replaceState(null, "", "/orders"); window.dispatchEvent(new PopStateEvent("popstate")); void load(); };
+  // EPO.7 (D-5) — the party filter is URL state; other pages deep-link /orders?party=<id>
+  const setPartyFilter = (id: string, label: string) => {
+    const usp = new URLSearchParams(window.location.search);
+    if (id) usp.set("party", id); else usp.delete("party");
+    usp.delete("o"); // filtering closes any open detail
+    setPartyLabel(id ? label : "");
+    window.history.pushState(null, "", `/orders${usp.toString() ? `?${usp}` : ""}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
+  // EPO.7 (E12) — pushState so the browser Back button closes the detail
+  // (was replaceState — Back skipped it). The party filter is preserved.
+  const openDetail = (id: string) => {
+    const usp = new URLSearchParams(window.location.search);
+    usp.set("o", id);
+    window.history.pushState(null, "", `/orders?${usp}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+  const closeDetail = () => {
+    const usp = new URLSearchParams(window.location.search);
+    usp.delete("o");
+    window.history.pushState(null, "", `/orders${usp.toString() ? `?${usp}` : ""}`);
+    window.dispatchEvent(new PopStateEvent("popstate")); // onPop reloads the list
+  };
+  // returning to the list via the browser Back button reloads it
+  useEffect(() => {
+    const onPop = () => { if (!new URLSearchParams(window.location.search).get("o")) void load(); };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [load]);
 
   const transition = async (row: OrderRow, to: OrderState) => {
     if (to === "CANCELLED") { setCancelling(row); setReason(""); return; }
@@ -194,6 +269,32 @@ function PipelineInner() {
     try { await apiJson(`/api/orders/${cancelling.id}/cancel`, { method: "POST", body: JSON.stringify({ reason: reason.trim() }) }); setCancelling(null); void load(); toast("Order cancelled", "info"); }
     catch (e) { toast((e as Error).message, "danger"); } finally { setBusy(false); }
   };
+
+  // EPO.7 (E9) — bulk cancel: ONE reason for the selection, each order still
+  // validated + audited server-side (no bulk endpoint that bypasses the guard).
+  const bulkCancellable = gridRows.filter((r) => selected.has(r.id) && legalTargets(r.state).includes("CANCELLED"));
+  const confirmBulkCancel = async () => {
+    if (!reason.trim() || bulkCancellable.length === 0) return;
+    setBusy(true);
+    let ok = 0;
+    for (const r of bulkCancellable) {
+      try { await apiJson(`/api/orders/${r.id}/cancel`, { method: "POST", body: JSON.stringify({ reason: reason.trim() }) }); ok++; }
+      catch { /* per-order failure surfaced in the count */ }
+    }
+    setBulkCancelling(false); setReason(""); clearSelection(); void load(); setBusy(false);
+    toast(ok === bulkCancellable.length ? `${ok} order(s) cancelled` : `${ok} of ${bulkCancellable.length} cancelled — the rest couldn't be`, ok > 0 ? "info" : "danger");
+  };
+
+  // EPO.7 (E9) — the CSV export honors the active filters (mirror of the list query)
+  const exportHref = () => {
+    const usp = new URLSearchParams();
+    if (state !== "attention" && state !== "all") usp.set("state", state);
+    if (q.trim()) usp.set("q", q.trim());
+    if (partyId) usp.set("partyId", partyId);
+    if (fromDate) usp.set("from", fromDate);
+    if (toDate) usp.set("to", toDate);
+    return `/api/exports/orders${usp.toString() ? `?${usp}` : ""}`;
+  };
   const stateCell = (r: OrderRow) => {
     const pill = <Pill tone={STATE_TONE[r.state]}>{ORDER_STATE_LABEL[r.state]}</Pill>;
     const targets = legalTargets(r.state).filter((t) => t !== "IN_PRODUCTION" || r.state !== "CONFIRMED");
@@ -217,7 +318,7 @@ function PipelineInner() {
         <Counter label="Awaiting deposit" value={data?.counters.awaitingDeposit ?? 0} tone={data && data.counters.awaitingDeposit > 0 ? "var(--h10-warning)" : "var(--h10-text-3)"} />
         <Counter label="Overdue" value={data?.counters.overdue ?? 0} tone={data && data.counters.overdue > 0 ? "var(--h10-danger)" : "var(--h10-text-3)"} />
         <div style={{ marginLeft: "auto", alignSelf: "center", display: "flex", gap: 12, alignItems: "center" }}>
-          <a href="/api/exports/orders" style={{ fontSize: 12, color: "var(--h10-text-link)" }}>Export CSV</a>
+          <a href={exportHref()} style={{ fontSize: 12, color: "var(--h10-text-link)" }}>Export CSV</a>
           <div style={{ display: "flex", border: "1px solid var(--h10-border)", borderRadius: 8, overflow: "hidden" }}>
             <button type="button" onClick={() => switchView("grid")} style={toggleBtn(view === "grid")}>Grid</button>
             <button type="button" onClick={() => switchView("kanban")} style={toggleBtn(view === "kanban")}>Kanban</button>
@@ -236,9 +337,16 @@ function PipelineInner() {
             </div>
           )}
           <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-            {parties.length > 0 && (
+            {/* EPO.7 (D-5) — the brand-view chip: a party arriving via ?party= (a
+                deep link from Contacts/Financials) reads as a dismissible filter */}
+            {partyId ? (
+              <button type="button" onClick={() => setPartyFilter("", "")} title="Clear brand filter" style={{ display: "inline-flex", gap: 5, alignItems: "center", border: "1px solid var(--h10-primary)", background: "var(--h10-wash-primary, rgba(31,111,222,0.08))", color: "var(--h10-primary)", borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                {partyLabel || "Brand"} <span aria-hidden style={{ fontSize: 14, lineHeight: 1 }}>×</span>
+              </button>
+            ) : (
               <div style={{ minWidth: 190 }}>
-                <Listbox ariaLabel="Party" options={[{ value: "", label: "All parties" }, ...parties.map((p) => ({ value: p.id, label: p.name }))]} value={partyId} onChange={setPartyId} />
+                {/* FS3 — paged type-to-find party filter (was a whole-list Listbox) */}
+                <AsyncCombobox loader={loadPartyOptions} value={partyId} placeholder="All parties" ariaLabel="Filter by party" onChange={(v, opt) => setPartyFilter(v, opt.label)} />
               </div>
             )}
             {/* EPO.4 — created-at range */}
@@ -252,9 +360,17 @@ function PipelineInner() {
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search number or party…" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: "5px 9px", fontSize: 12.5, outline: "none", background: "var(--h10-surface)", color: "var(--h10-text)", minWidth: 200 }} />
           </div>
         </div>
-        {view === "grid" ? (
-          <DataGrid
+        {view === "grid" && data == null ? (
+          // EPO.7 (E12) — skeleton on first load; no more empty-state flash
+          <div style={{ display: "grid", gap: 8, padding: "4px 0" }}>{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} height={34} />)}</div>
+        ) : view === "grid" ? (
+          <VirtualDataGrid
+            height="calc(100dvh - 340px)"
             columns={[
+              // EPO.7 (E9) — bulk selection. (No client column sort: with cursor
+              // pagination it would reorder only the LOADED rows — the server's
+              // promise-asc sort stays the single truth across pages.)
+              { key: "select", label: "", width: 34, render: (r: OrderRow) => <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelected(r.id)} aria-label={`Select ${r.number}`} /> },
               { key: "number", label: "Order", render: (r: OrderRow) => <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}><button type="button" onClick={() => openDetail(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button>{r.urgent && <Pill tone="danger">urgent</Pill>}</span> },
               // EPO.4 — cockpit mode leads with WHY the row needs attention
               ...(state === "attention" ? [{ key: "why", label: "Why", render: (r: OrderRow) => <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" as const }}>{(r.attention ?? []).map((a) => { const ui = REASON_UI[a]; return ui ? <Pill key={a} tone={ui.tone}>{ui.label}</Pill> : null; })}</span> }] : []),
@@ -271,13 +387,24 @@ function PipelineInner() {
               { key: "wos", label: "WOs", align: "right" as const, render: (r: OrderRow) => (r.woCount ? r.woCount : "—") },
               { key: "updated", label: "Updated", render: (r: OrderRow) => new Date(r.updatedAt).toLocaleDateString() },
             ]}
-            rows={data?.orders ?? []}
+            rows={gridRows}
             rowKey={(r: OrderRow) => r.id}
             emptyState={state === "attention" ? "Nothing needs attention — every promise is safe, no work is blocked or stalled." : "No orders yet — they arrive when you convert an accepted quote."}
           />
         ) : (
           <KanbanBoard lanes={lanes} onLoadMore={(s) => void loadMoreLane(s)} onMove={canEdit ? onMove : () => toast("You can't change order status", "danger")} onOpen={openDetail} />
         )}
+        {/* EPO.7 (C6) — the grid consumes the cursor: no more silent 200-row cliff */}
+        {view === "grid" && gridCursor && (
+          <div style={{ display: "flex", justifyContent: "center", paddingTop: 10 }}>
+            <button type="button" onClick={() => void loadMoreGrid()} style={{ border: "1px dashed var(--h10-border)", borderRadius: 8, background: "none", padding: "7px 16px", fontSize: 12, color: "var(--h10-text-2)", cursor: "pointer" }}>Load more orders</button>
+          </div>
+        )}
+        {/* EPO.7 (E9) — bulk actions for the selection */}
+        <BulkActionBar count={selected.size} onClear={clearSelection}>
+          {canCancel && <Button onClick={() => { setReason(""); setBulkCancelling(true); }} disabled={bulkCancellable.length === 0} style={{ background: "var(--h10-danger)", color: "#fff", borderColor: "var(--h10-danger)" }}>Cancel {bulkCancellable.length || ""} selected</Button>}
+          <a href={exportHref()} style={{ fontSize: 12.5, color: "var(--h10-text-link)", alignSelf: "center" }}>Export filtered CSV</a>
+        </BulkActionBar>
       </Card>
 
       <Modal open={!!cancelling} onClose={() => setCancelling(null)} title={`Cancel ${cancelling?.number ?? ""}?`} size="sm"
@@ -285,6 +412,15 @@ function PipelineInner() {
         <div style={{ display: "grid", gap: 8 }}>
           <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>A reason is required. Open work orders are cancelled with the order.</div>
           <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="Why is this order being cancelled?" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: 9, fontSize: 12.5, fontFamily: "inherit", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+        </div>
+      </Modal>
+
+      {/* EPO.7 (E9) — one reason for the whole selection; each order still validated server-side */}
+      <Modal open={bulkCancelling} onClose={() => !busy && setBulkCancelling(false)} title={`Cancel ${bulkCancellable.length} order${bulkCancellable.length === 1 ? "" : "s"}?`} size="sm"
+        footer={<><Button onClick={() => setBulkCancelling(false)} disabled={busy}>Keep them</Button><Button onClick={confirmBulkCancel} disabled={!reason.trim() || busy} style={{ background: "var(--h10-danger)", color: "#fff", borderColor: "var(--h10-danger)" }}>{busy ? "Cancelling…" : "Cancel orders"}</Button></>}>
+        <div style={{ display: "grid", gap: 8 }}>
+          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>The reason applies to all {bulkCancellable.length}. Open work orders are cancelled with each. {selected.size > bulkCancellable.length && <>({selected.size - bulkCancellable.length} of your selection can’t be cancelled from their state and will be skipped.)</>}</div>
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="Why are these orders being cancelled?" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: 9, fontSize: 12.5, fontFamily: "inherit", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
         </div>
       </Modal>
 

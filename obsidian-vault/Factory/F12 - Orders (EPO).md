@@ -1,7 +1,7 @@
 # F12 - Orders (EPO)
 
-> **Route:** `/orders` · **EP code:** EPO · **Status:** 🔨 approved 2026-07-16 — **EPO.1 + .3 + .2 + .4 SHIPPED** (.1 transition-service single writer + payment idempotency · .3 connected order · .2 money strip · .4 Needs-attention default cockpit (M2: late/at-risk/deposit-blocked/stalled), immutable original promise + "slipped ×N" + pre-late risk at historical pace, D-9 fields clientRef/urgent/remakeOf, date filter); **EPO.6 (zero communication gap) next**, then .7, then .5.
-> Canonical docs: `docs/factory/EPO-PROPOSAL.md` · `EPO-UI-INVENTORY.md` · reports `EPO1/EPO3/EPO2/EPO4` · base: `FP4-SPEC.md`/`FP4-REPORT.md`
+> **Route:** `/orders` · **EP code:** EPO · **Status:** 🔨 approved 2026-07-16 — **EPO.1+.3+.2+.4+.7-core SHIPPED** (.1 single-writer + idempotency · .3 connected order · .2 money strip · .4 Needs-attention cockpit + promise integrity · .7 VirtualDataGrid/200-cap-kill + `?party=` brand-view chip (D-5 URL law) + bulk + Back-closes-detail). **EPO.7b deferred+flagged: saved-views, historical CSV import, DS/hex sweep.** Next: **EPO.6 (zero comm gap)** when EPI.4 MessageTemplate store lands (B1 dep), else EPO.5. Dep-adjusted order .1→.3→.2→.4→.7→.6→.5.
+> Canonical docs: `docs/factory/EPO-PROPOSAL.md` · `EPO-UI-INVENTORY.md` · reports `EPO1/EPO3/EPO2/EPO4/EPO7` · base: `FP4-SPEC.md`/`FP4-REPORT.md`
 
 Part of [[F00 - Factory OS MOC]] · flow position: [[F01 - Mission & Golden Flow]] step 3 · program: [[F06 - Enterprise Program (EP)]]
 
