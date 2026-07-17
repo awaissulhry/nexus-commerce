@@ -1,7 +1,12 @@
 /**
  * FC1 — GET: the caller's spaces + unread counts (bounded aggregates over the
  * read cursor); POST: create a CUSTOM space (chat.spaces.create — Owner-only
- * by default, substrate Q4). No UI consumes this yet — FC2's shell does.
+ * by default, substrate Q4).
+ * FC2 — the rail consumes this: each space also carries its latest message
+ * (snippet + activity sort; body only — money never rides the rail) and its
+ * member count, both via nested take-1/_count selects on the same bounded
+ * query. Activity ordering is real because posting bumps the space row
+ * (chat-service).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -23,7 +28,30 @@ export const GET = guarded(PAGES.chat, async (_req: NextRequest, { actor, resolv
       role: true,
       notifyLevel: true,
       lastReadMessageId: true,
-      space: { select: { id: true, kind: true, name: true, entityType: true, entityId: true, updatedAt: true } },
+      space: {
+        select: {
+          id: true,
+          kind: true,
+          name: true,
+          entityType: true,
+          entityId: true,
+          updatedAt: true,
+          // FC2 — rail anatomy: latest message for the snippet + member count
+          _count: { select: { members: true } },
+          messages: {
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+            take: 1,
+            select: {
+              id: true,
+              kind: true,
+              body: true,
+              deletedAt: true,
+              createdAt: true,
+              author: { select: { displayName: true } },
+            },
+          },
+        },
+      },
     },
   });
 
@@ -46,13 +74,29 @@ export const GET = guarded(PAGES.chat, async (_req: NextRequest, { actor, resolv
     ),
   );
 
-  const items = memberships.map((m, i) => ({
-    ...m.space,
-    role: m.role,
-    notifyLevel: m.notifyLevel,
-    lastReadMessageId: m.lastReadMessageId,
-    unread: unreads[i],
-  }));
+  const items = memberships.map((m, i) => {
+    const { _count, messages, ...space } = m.space;
+    const last = messages[0] ?? null;
+    return {
+      ...space,
+      role: m.role,
+      notifyLevel: m.notifyLevel,
+      lastReadMessageId: m.lastReadMessageId,
+      unread: unreads[i],
+      // FC2 — rail fields: a tombstoned latest message keeps its slot, never its words
+      memberCount: _count.members,
+      lastMessage: last
+        ? {
+            id: last.id,
+            kind: last.kind,
+            body: last.deletedAt ? "" : last.body,
+            authorName: last.author?.displayName ?? null,
+            deletedAt: last.deletedAt,
+            createdAt: last.createdAt,
+          }
+        : null,
+    };
+  });
   return jsonStripped({ items }, resolved);
 });
 

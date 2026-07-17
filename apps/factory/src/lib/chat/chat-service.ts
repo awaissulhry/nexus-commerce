@@ -262,6 +262,9 @@ export async function postMessage(input: {
     },
     select: { id: true },
   });
+  // FC2 — last-activity truth for the rail: posting bumps the space row, so
+  // the bounded member's-spaces query (orderBy updatedAt desc) IS activity order
+  await prisma.chatSpace.update({ where: { id: input.spaceId }, data: { updatedAt: new Date() } });
   void audit({
     actorId: input.author.id,
     entityType: "chatMessage",
@@ -316,6 +319,8 @@ export async function postSystemMessage(input: {
     },
     select: { id: true },
   });
+  // FC2 — system posts count as activity too (rail ordering, see postMessage)
+  await prisma.chatSpace.update({ where: { id: input.spaceId }, data: { updatedAt: new Date() } });
   void audit({
     actorId: null,
     entityType: "chatMessage",
