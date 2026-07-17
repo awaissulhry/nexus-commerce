@@ -102,15 +102,35 @@ model ProductTemplate {
   description    String?
   baseCostCents  Int                   @default(0)
   basePriceCents Int                   @default(0)
+  // EPQ.3 — below-MOQ surcharge (B2B): qty under moqQty adds a labeled
+  // waterfall row. moqQty null = no MOQ (zero-delta parity for old data).
+  moqQty           Int?
+  moqSurchargeMode DeltaMode           @default(ABSOLUTE)
+  moqSurcharge     Int                 @default(0)
   optionGroups   OptionGroup[]
   constraints    OptionConstraint[]
   bomLines       BomLine[]
   certCoverage   CertificateCoverage[]
   priceEntries   PriceListEntry[]
   quoteLines     QuoteLine[]
+  quantityBreaks QuantityBreak[]
   archivedAt     DateTime?
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
+}
+
+// EPQ.3 — quantity-break tiers (B2B): the highest tier with minQty ≤ line qty
+// applies as a per-unit price delta ("Quantity tier ≥50" waterfall row).
+// No rows = no tiers = zero-delta (parity with pre-EPQ.3 quotes).
+model QuantityBreak {
+  id             String          @id @default(cuid())
+  templateId     String
+  template       ProductTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  minQty         Int
+  priceDeltaMode DeltaMode       @default(ABSOLUTE)
+  priceDelta     Int             @default(0) // cents when ABSOLUTE, basis points when PERCENT
+
+  @@unique([templateId, minQty])
 }
 
 model OptionGroup {
@@ -402,6 +422,7 @@ model QuoteLine {
   listPriceCents       Int                 @default(0)
   adjustmentCents      Int                 @default(0)
   adjustmentReason     String?
+  adjustmentReasonCode String? // EPQ.3 — LOYALTY | COMPETITIVE | VOLUME | REWORK | GOODWILL | OTHER (enum in code — SQLite)
   netPriceCents        Int                 @default(0)
   costCents            Int                 @default(0)
   marginCents          Int                 @default(0)

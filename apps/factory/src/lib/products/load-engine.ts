@@ -14,6 +14,7 @@ export async function loadEngineTemplate(templateId: string): Promise<EngineTemp
       optionGroups: { orderBy: { sort: "asc" }, include: { options: { orderBy: { sort: "asc" } } } },
       constraints: true,
       bomLines: true,
+      quantityBreaks: { orderBy: { minQty: "asc" } }, // EPQ.3 — tier rules ride the template
     },
   });
   if (!t) return null;
@@ -22,6 +23,11 @@ export async function loadEngineTemplate(templateId: string): Promise<EngineTemp
     name: t.name,
     baseCostCents: t.baseCostCents,
     basePriceCents: t.basePriceCents,
+    // EPQ.3 — pricing discipline inputs (absent/empty ⇒ zero-delta in compose)
+    quantityBreaks: t.quantityBreaks.map((b) => ({ minQty: b.minQty, priceDeltaMode: b.priceDeltaMode, priceDelta: b.priceDelta })),
+    moqQty: t.moqQty,
+    moqSurchargeMode: t.moqSurchargeMode,
+    moqSurcharge: t.moqSurcharge,
     groups: t.optionGroups.map((g) => ({
       id: g.id,
       name: g.name,

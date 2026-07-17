@@ -8,6 +8,8 @@
  * deposit/dates are DRAFT-only; lostReason only lands on a lost outcome.
  * EPQ.2 — manual Mark accepted / Mark rejected ring every other active Owner
  * (the actor already knows — S6's silent half closed).
+ * EPQ.3 — the GET flags a duplicate open quote (same party, same template set,
+ * DRAFT/SENT) for the editor's warning banner. Bounded query, pure comparison.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -18,6 +20,7 @@ import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { FEATURES, PAGES } from "@/lib/auth/permissions";
 import { quoteTotals } from "@/lib/quotes/compose-line";
 import { canTransition, lostReasonAllowed, type QuoteState } from "@/lib/quotes/transitions";
+import { findDuplicateOpenQuote } from "@/lib/quotes/duplicate";
 import { notifyOwners } from "@/lib/quotes/notify-owners";
 
 export const permission = { GET: PAGES.quotes, PATCH: FEATURES.quotesCreate, DELETE: FEATURES.quotesCreate };
@@ -35,7 +38,25 @@ export const GET = guarded(PAGES.quotes, async (_req, { params, resolved }) => {
   });
   if (!quote) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const totals = quoteTotals(quote.lines);
-  return jsonStripped({ quote, totals }, resolved);
+
+  // EPQ.3 — duplicate-open-quote banner: another DRAFT/SENT quote for the same
+  // party with the same template set is probably the same negotiation twice.
+  // Bounded candidate list; pure set comparison (src/lib/quotes/duplicate.ts).
+  let duplicate: { id: string; number: string } | null = null;
+  const templateIds = quote.lines.map((l) => l.templateId);
+  if ((quote.state === "DRAFT" || quote.state === "SENT") && templateIds.some((t) => t != null)) {
+    const candidates = await prisma.quote.findMany({
+      where: { partyId: quote.partyId, id: { not: id }, state: { in: ["DRAFT", "SENT"] } },
+      orderBy: { updatedAt: "desc" },
+      take: 10,
+      select: { id: true, number: true, lines: { select: { templateId: true } } },
+    });
+    duplicate = findDuplicateOpenQuote(
+      templateIds,
+      candidates.map((c) => ({ id: c.id, number: c.number, templateIds: c.lines.map((l) => l.templateId) })),
+    );
+  }
+  return jsonStripped({ quote, totals, duplicate }, resolved);
 });
 
 const Patch = z.object({

@@ -3,9 +3,12 @@
  * authority). Loads the party's price list so the line is party-scoped, runs
  * compose(), and returns the per-unit money to persist. The browser never
  * computes money — it PATCHes selections and receives composed values.
+ * EPQ.3 — qty rides in (tier + below-MOQ discipline) and the measurement
+ * surcharge rule is loaded from AppSetting; all default OFF ⇒ zero-delta.
  */
 import { compose, type ComposeResult } from "@/lib/pricing";
 import { loadEngineTemplate, loadPriceListInput } from "@/lib/products/load-engine";
+import { loadMeasurementSurcharge } from "./measurement-surcharge";
 
 export type ComposedLine = {
   listPriceCents: number;
@@ -23,11 +26,22 @@ export async function composeQuoteLine(input: {
   selections: string[];
   adjustmentCents: number;
   priceListId: string | null | undefined;
+  qty: number; // EPQ.3 — drives quantity tiers + MOQ; every caller passes the line's qty
 }): Promise<ComposedLine | null> {
   const template = await loadEngineTemplate(input.templateId);
   if (!template) return null;
-  const priceList = await loadPriceListInput(input.priceListId);
-  const result = compose({ template, selectedOptionIds: input.selections, priceList, adjustmentCents: input.adjustmentCents });
+  const [priceList, sizeSurcharge] = await Promise.all([
+    loadPriceListInput(input.priceListId),
+    loadMeasurementSurcharge(),
+  ]);
+  const result = compose({
+    template,
+    selectedOptionIds: input.selections,
+    priceList,
+    adjustmentCents: input.adjustmentCents,
+    qty: input.qty,
+    sizeSurcharge,
+  });
   return {
     listPriceCents: result.listPriceCents,
     costCents: result.costCents,

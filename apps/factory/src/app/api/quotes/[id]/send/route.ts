@@ -25,6 +25,7 @@ import { publishEventDurable } from "@/lib/events";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 import { composeQuoteLine, quoteTotals } from "@/lib/quotes/compose-line";
+import { readSelections } from "@/lib/quotes/selections";
 import { buildQuoteSnapshot } from "@/lib/quotes/build-snapshot";
 import { renderQuotePdf } from "@/lib/quotes/render-pdf";
 import { sendQuoteMail } from "@/lib/quotes/mail";
@@ -54,7 +55,7 @@ export const POST = guarded(FEATURES.quotesSend, async (req, { params, actor }) 
   // recompose every line: refuse on any blocking violation
   for (const l of quote.lines) {
     if (!l.templateId) continue;
-    const c = await composeQuoteLine({ templateId: l.templateId, selections: (l.selections as string[] | null) ?? [], adjustmentCents: l.adjustmentCents, priceListId: quote.party.priceListId });
+    const c = await composeQuoteLine({ templateId: l.templateId, selections: readSelections(l.selections).optionIds, adjustmentCents: l.adjustmentCents, priceListId: quote.party.priceListId, qty: l.qty });
     if (c?.hasBlockingViolation) return NextResponse.json({ error: "A line has a blocking constraint — resolve it before sending" }, { status: 400 });
   }
 

@@ -12,6 +12,7 @@ import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 import { nextNumber } from "@/lib/counters";
 import { notifyOwners } from "@/lib/quotes/notify-owners";
+import { readSelections } from "@/lib/quotes/selections";
 import { ensureOrderSpace } from "@/lib/chat/chat-service";
 
 export const permission = FEATURES.quotesConvert;
@@ -36,13 +37,21 @@ export const POST = guarded(FEATURES.quotesConvert, async (_req, { params, actor
       state: "CONFIRMED",
       promiseDateAt: quote.promiseDateAt,
       lines: {
-        create: quote.lines.map((l) => ({
-          description: l.description ?? "Custom item",
-          selections: (l.selections as object) ?? undefined,
-          qty: l.qty,
-          netPriceCents: l.netPriceCents,
-          costCents: l.costCents,
-        })),
+        create: quote.lines.map((l) => {
+          // EPQ.3 — size-run lines land in the ORDER's convention: option ids
+          // in selections (production's cert-gate/reserve readers expect a
+          // plain array) and the {size: qty} matrix in OrderLine.sizeRun (so
+          // Start-production explodes per-size WOs exactly like FP4 entry).
+          const sel = readSelections(l.selections);
+          return {
+            description: l.description ?? "Custom item",
+            selections: sel.optionIds as unknown as object,
+            sizeRun: sel.sizeRun ?? undefined,
+            qty: l.qty,
+            netPriceCents: l.netPriceCents,
+            costCents: l.costCents,
+          };
+        }),
       },
     },
     select: { id: true, number: true },

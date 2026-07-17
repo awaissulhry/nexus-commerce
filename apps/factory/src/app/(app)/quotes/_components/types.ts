@@ -52,11 +52,13 @@ export type QuoteLine = {
   templateId: string | null;
   template: { id: string; name: string } | null;
   description: string | null;
-  selections: string[] | null;
+  /** raw stored shape — read through readSelections() (EPQ.3: array OR {options,sizeRun}) */
+  selections: unknown;
   qty: number;
   listPriceCents: number;
   adjustmentCents: number;
   adjustmentReason: string | null;
+  adjustmentReasonCode: string | null; // EPQ.3 — discount reason code
   netPriceCents: number;
   costCents: number;
   marginCents: number;
@@ -99,6 +101,23 @@ export type ComposeResult = {
   materials?: { materialId: string; qty: number; unit: string; name?: string }[];
   violations?: { kind: string; severity: string; message: string }[];
   hasBlockingViolation?: boolean;
+};
+
+/** EPQ.3 — a similar-quote row (wasProduced ⇒ the "repeat" chip). */
+export type SimilarQuote = {
+  id: string;
+  number: string;
+  partyName: string;
+  state: string;
+  netCents: number;
+  marginPct: number;
+  wasProduced: boolean;
+};
+
+/** EPQ.3 — goal-seek response (per-unit adjustment + projected quote totals). */
+export type GoalSeekResponse = {
+  adjustmentCents: number;
+  projected?: { netCents: number; costCents?: number; marginCents?: number; marginPct?: number };
 };
 
 export const STATE_TONE: Record<QuoteState, "neutral" | "info" | "success" | "warning" | "danger"> = {
