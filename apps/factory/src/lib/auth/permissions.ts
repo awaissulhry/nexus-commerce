@@ -26,6 +26,7 @@ export const PAGES = {
 export const FEATURES = {
   inboxSend: "inbox.send",
   inboxAssign: "inbox.assign",
+  inboxViewsManage: "inbox.views.manage", // EPI3: create/edit/reorder views + rules. Consumption rides pages.inbox.
   quotesCreate: "quotes.create",
   quotesSend: "quotes.send",
   quotesConvert: "quotes.convert",

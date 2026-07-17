@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { PAGES } from "@/lib/auth/permissions";
 import { buildListWhere } from "@/lib/inbox/list-where";
+import { CriteriaSchema, defaultTabWhere, viewListWhere, type OverrideLite, type ViewLite } from "@/lib/inbox/views";
 
 export const permission = PAGES.inbox;
 
@@ -19,13 +20,48 @@ export const GET = guarded(PAGES.inbox, async (req: NextRequest, { actor, resolv
   const unmatched = p.get("unmatched") === "1";
   const q = (p.get("q") ?? "").trim();
   const cursor = p.get("cursor");
+  const viewParam = p.get("view");
 
   // EPI1.2 — ONE builder for rows + counts so the tabs can never disagree
   // with the active Mine/Unmatched/search filters (G8).
-  const { base, where } = buildListWhere({ state, mine, unmatched, q, actorId: actor!.id }) as {
-    base: never;
-    where: never;
-  };
+  const built = buildListWhere({ state, mine, unmatched, q, actorId: actor!.id });
+
+  // EPI3.2 — views: membership composes ON TOP of the filters; the active
+  // view (or the default-Inbox complement) scopes rows AND state counts, and
+  // every header pill gets a filter-honest count of its own.
+  const viewRows = await prisma.inboxView.findMany({ orderBy: { sortOrder: "asc" }, take: 50 }); // bounded: hand-authored config
+  const views: ViewLite[] = [];
+  const viewMeta: { id: string; name: string; emoji: string | null; color: string | null; exclusive: boolean; showElsewhere: boolean }[] = [];
+  for (const v of viewRows) {
+    const parsed = CriteriaSchema.safeParse(v.criteria);
+    if (!parsed.success) continue;
+    views.push({ id: v.id, exclusive: v.exclusive, showElsewhere: v.showElsewhere, criteria: parsed.data });
+    viewMeta.push({ id: v.id, name: v.name, emoji: v.emoji, color: v.color, exclusive: v.exclusive, showElsewhere: v.showElsewhere });
+  }
+  const overrides: OverrideLite[] = views.length
+    ? await prisma.inboxViewOverride.findMany({ take: 2000, select: { viewId: true, conversationId: true, mode: true } }) // bounded: manual pins/excludes
+    : [];
+  const activeView = viewParam ? views.find((v) => v.id === viewParam) ?? null : null;
+  const membership = activeView
+    ? viewListWhere(activeView, views, overrides)
+    : views.length
+      ? defaultTabWhere(views, overrides)
+      : {};
+
+  const compose = (w: Record<string, unknown>) => (Object.keys(membership).length ? { AND: [w, membership] } : w);
+  const where = compose(built.where) as never;
+  const base = compose(built.base) as never;
+
+  // header pill counts: per-view membership under the SAME state+filters
+  const stateFiltered = built.where as Record<string, unknown>;
+  const viewCounts = await Promise.all(
+    views.map((v) =>
+      prisma.conversation.count({ where: { AND: [stateFiltered, viewListWhere(v, views, overrides)] } as never }),
+    ),
+  );
+  const inboxCount = views.length
+    ? await prisma.conversation.count({ where: { AND: [stateFiltered, defaultTabWhere(views, overrides)] } as never })
+    : null;
 
   const [items, counts, connection] = await Promise.all([
     prisma.conversation.findMany({
@@ -63,6 +99,8 @@ export const GET = guarded(PAGES.inbox, async (req: NextRequest, { actor, resolv
       nextCursor: hasMore ? page[page.length - 1].id : null,
       counts: tabCounts,
       sync: connection,
+      views: viewMeta.map((m, i) => ({ ...m, count: viewCounts[i] })),
+      inboxCount,
     },
     resolved,
   );

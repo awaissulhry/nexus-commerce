@@ -15,6 +15,7 @@ import { google, type gmail_v1 } from "googleapis";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { publishEventDurable } from "@/lib/events";
+import { applyInboxRules } from "@/lib/inbox/rules-service";
 import { notify } from "@/lib/notifications";
 import { TtlCache } from "@/lib/ttl-cache";
 import { matchPartyId, type EmailRow } from "./match";
@@ -141,6 +142,12 @@ async function upsertMessage(ownEmail: string, msg: gmail_v1.Schema$Message): Pr
   // after commit: the audit trail + the assignee's bell
   for (const action of auditActions) {
     void audit({ entityType: "conversation", entityId: conversation.id, action, after: { via: "inbound reply" } });
+  }
+  // EPI3.4 — ingest rules fire ONCE, at conversation creation (first inbound)
+  if (direction === "INBOUND" && !existingConversation) {
+    await applyInboxRules(conversation.id).catch((err) =>
+      console.error("[gmail-sync] rules failed for", conversation.id, (err as Error).message),
+    );
   }
   if (direction === "INBOUND" && existingConversation?.assigneeId) {
     await notify({

@@ -17,6 +17,19 @@ export type ListResponse = {
   nextCursor: string | null;
   counts: Record<string, number>;
   sync: { lastSyncAt: string | null; labelName: string | null; status: string } | null;
+  /** EPI3 — header view pills (tab order = claim priority) + the Inbox complement count */
+  views?: InboxViewMeta[];
+  inboxCount?: number | null;
+};
+
+export type InboxViewMeta = {
+  id: string;
+  name: string;
+  emoji: string | null;
+  color: string | null;
+  exclusive: boolean;
+  showElsewhere: boolean;
+  count: number;
 };
 
 export type ThreadMessage = {
@@ -117,4 +130,9 @@ export const EVENT_LABELS: Record<string, string> = {
   "followup.fired": "follow-up reminder fired",
   "party.linked": "linked a contact",
   "attachment.saved_to_drive": "saved an attachment to Drive",
+  // EPI3 — views/rules leave visible tracks in the ONE-timeline
+  "rule.applied": "routed by a rule",
+  "view.pinned": "pinned to a view",
+  "view.excluded": "excluded from a view",
+  "view.override.cleared": "cleared a view override",
 };
