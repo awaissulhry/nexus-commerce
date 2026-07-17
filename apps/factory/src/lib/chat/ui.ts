@@ -8,6 +8,8 @@
  * them (house pattern: chat/pure.ts, orders/money.ts).
  */
 
+import { MENTION_RE_SOURCE } from "./pure";
+
 // ── message stream anatomy ───────────────────────────────────────
 
 export type StreamMessage = {
@@ -25,6 +27,8 @@ export type StreamMessage = {
   createdAt: string;
   /** optimistic append not yet confirmed by the server */
   pending?: boolean;
+  /** FC3 — root messages carry their thread summary (null/absent = no replies) */
+  thread?: ThreadSummary | null;
 };
 
 export type StreamRow =
@@ -207,9 +211,10 @@ export function formatUnread(n: number): string {
   return n > 99 ? "99+" : String(n);
 }
 
-/** the deep-link law: /chat?space=<id> */
-export function chatUrl(spaceId: string | null): string {
-  return spaceId ? `/chat?space=${spaceId}` : "/chat";
+/** the deep-link law: /chat?space=<id>[&thread=<rootId>] (FC3 — a thread is meaningless without its space) */
+export function chatUrl(spaceId: string | null, threadId?: string | null): string {
+  if (!spaceId) return "/chat";
+  return threadId ? `/chat?space=${spaceId}&thread=${threadId}` : `/chat?space=${spaceId}`;
 }
 
 /** rail keyboard cursor: clamped (never wraps), -1 on an empty list */
@@ -217,6 +222,76 @@ export function clampMove(index: number, delta: number, count: number): number {
   if (count <= 0) return -1;
   return Math.min(count - 1, Math.max(0, index + delta));
 }
+
+// ── FC3 — thread affordances + mention chips ─────────────────────
+
+/** a root message's thread summary (rides the messages payload) */
+export type ThreadSummary = {
+  replyCount: number;
+  lastReplyAt: string;
+  /** up to 3 distinct repliers for the facepile */
+  participants: { id: string; name: string }[];
+};
+
+export function threadRepliesLabel(n: number): string {
+  return n === 1 ? "1 reply" : `${n} replies`;
+}
+
+/** the bounded space-members payload the mention chips resolve against */
+export type MentionMember = { id: string; displayName: string; email: string };
+
+export type BodyToken =
+  | { kind: "text"; text: string }
+  | { kind: "mention"; handle: string; raw: string; all: boolean };
+
+/**
+ * Tokenize a message body with the SERVER's mention grammar
+ * (MENTION_RE_SOURCE — parity by construction): mention tokens carry the
+ * handle; `all` marks the @all broadcast. Concatenating raw/text round-trips
+ * the body exactly, so rendering never loses a character.
+ */
+export function splitMentionTokens(body: string): BodyToken[] {
+  const re = new RegExp(MENTION_RE_SOURCE, "g");
+  const tokens: BodyToken[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body))) {
+    if (m.index > last) tokens.push({ kind: "text", text: body.slice(last, m.index) });
+    tokens.push({ kind: "mention", handle: m[1], raw: m[0], all: m[1].toLowerCase() === "all" });
+    last = m.index + m[0].length;
+  }
+  if (last < body.length) tokens.push({ kind: "text", text: body.slice(last) });
+  return tokens;
+}
+
+/**
+ * Client-side twin of resolveMentions' matching rules (email · email prefix ·
+ * dotted.display.name · first name), over the bounded members payload. Null =
+ * no member matches → the token renders as plain text, exactly like the
+ * server would have resolved nobody.
+ */
+export function resolveHandleDisplay(handle: string, members: MentionMember[]): string | null {
+  const h = handle.toLowerCase();
+  for (const m of members) {
+    const email = m.email.toLowerCase();
+    const display = m.displayName.toLowerCase();
+    if (email === h || email.split("@")[0] === h || display.replace(/\s+/g, ".") === h || display.split(/\s+/)[0] === h) {
+      return m.displayName;
+    }
+  }
+  return null;
+}
+
+/** a followed thread with unread activity (the rail's Threads section) */
+export type FollowedThread = {
+  rootId: string;
+  spaceId: string;
+  spaceName: string;
+  snippet: string;
+  rootAuthorName: string | null;
+  lastReplyAt: string;
+  replyCount: number;
+};
 
 // ── avatars ──────────────────────────────────────────────────────
 

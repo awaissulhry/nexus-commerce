@@ -1082,6 +1082,7 @@ model ChatMember {
   role              ChatMemberRole  @default(MEMBER)
   lastReadMessageId String? // read cursor — unread counts derive from it
   notifyLevel       ChatNotifyLevel @default(ALL)
+  followedThreads   Json? // FC3 — array of thread rootIds this member follows (capped, newest kept)
   joinedAt          DateTime        @default(now())
 
   @@unique([spaceId, userId])

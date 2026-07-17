@@ -13,9 +13,13 @@ import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { notify } from "@/lib/notifications";
 import { publishEvent } from "@/lib/events";
+// FC3 — the grammar moved to a pure home so the chat UI's mention chips
+// tokenize with the EXACT same regex (parity by construction); behavior here
+// is unchanged and resolveMentions stays user-only (@all is chat-service's).
+import { MENTION_RE_SOURCE } from "@/lib/chat/pure";
 
-const MENTION_RE = /@([\w.+-]+(?:@[\w.-]+)?)/g;
-const LEGACY_SCAN_TAKE = 500; // bounded: fallback only — active users, name-ordered
+const MENTION_RE = new RegExp(MENTION_RE_SOURCE, "g"); // FC3 — single grammar, shared with chat
+const LEGACY_SCAN_TAKE = 500; // bounded: fallback only — active users, name-ordered (FS4)
 
 type Mention = { id: string; displayName: string };
 type UserRow = { id: string; email: string; displayName: string; handle?: string | null };

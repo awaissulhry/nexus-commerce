@@ -2,18 +2,22 @@
  * FP1.2 — attachment download: Gmail fetch → local cache
  * (data/attachments/<attId>/<filename>) → stream. Ownership is checked
  * against the conversation in the URL.
+ * EPI2.1 — `?inline=1` streams previewable types (raster images + PDF, the
+ * previewKind allowlist) with an inline disposition for the lightbox and
+ * chip thumbnails; everything else keeps forced-download regardless.
  */
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 import { prisma } from "@/lib/db";
 import { guarded } from "@/lib/auth/guard";
 import { PAGES } from "@/lib/auth/permissions";
 import { fetchAttachmentBytes } from "@/lib/google/gmail-body";
+import { previewKind } from "@/lib/inbox/preview";
 
 export const permission = PAGES.inbox;
 
-export const GET = guarded(PAGES.inbox, async (_req, { params }) => {
+export const GET = guarded(PAGES.inbox, async (req: NextRequest, { params }) => {
   const { id, attId } = await params;
   const att = await prisma.attachment.findUnique({
     where: { id: attId },

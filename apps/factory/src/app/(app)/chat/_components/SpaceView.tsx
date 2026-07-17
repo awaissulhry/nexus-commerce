@@ -2,161 +2,30 @@
  * FC2 — the space view: header (name · member count · copy-deep-link ·
  * jump-to-order chip), the windowed message stream (WindowedList over the
  * FC1 ?before= pages, "Load earlier" at the top), and the Google-Chat
- * message anatomy — author runs with avatar/name/time on the first of a run,
- * day-divider chips, centered grey SYSTEM lines with meta deep-link chips,
- * "Message deleted" tombstones, own-message hover actions (inline edit ·
- * delete-with-consequences), and € rendered ONLY when moneyCents survived
- * the grain strip. Composer sits at the bottom (Composer.tsx).
+ * message anatomy (MessageParts.tsx — shared with the FC3 thread panel).
+ * FC3 — the stream is roots-only; every MESSAGE row gains a hover
+ * "Reply in thread" action, roots with replies wear the thread bar
+ * (facepile · count · last activity), and bodies render mention chips.
  */
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ExternalLink, Link2, Pencil, Trash2 } from "lucide-react";
+import { ExternalLink, Link2 } from "lucide-react";
 import { Modal } from "@/design-system/components";
 import { Button, Skeleton } from "@/design-system/primitives";
-import { eur } from "@/design-system/lib/format";
 import { WindowedList } from "@/components/WindowedList";
-import {
-  avatarHue,
-  buildStream,
-  entityHref,
-  initialsOf,
-  metaChip,
-  timeOfDay,
-  type StreamMessage,
-  type StreamRow,
-} from "@/lib/chat/ui";
+import { buildStream, entityHref, type MentionMember, type StreamMessage, type StreamRow } from "@/lib/chat/ui";
 import { Composer } from "./Composer";
+import { MessageRow, SystemRow } from "./MessageParts";
 import type { SpaceItem } from "./types";
 
 const NEAR_BOTTOM_PX = 80;
-
-/** € appears ONLY when the grain strip left moneyCents in the payload */
-function MoneyChip({ message }: { message: StreamMessage }) {
-  if (message.moneyCents == null) return null;
-  return (
-    <span className="fc2-money">
-      {message.moneyLabel ? `${message.moneyLabel}: ` : ""}
-      {eur(message.moneyCents)}
-    </span>
-  );
-}
-
-function SystemRow({ message }: { message: StreamMessage }) {
-  const chip = metaChip(message.meta);
-  return (
-    <div className="fc2-system">
-      <span>
-        {message.deletedAt ? "Message deleted" : message.body}
-        <MoneyChip message={message} />
-        {chip && (
-          <a href={chip.href} className="fc2-system-chip">
-            {chip.label} <ExternalLink size={10} />
-          </a>
-        )}
-        <span className="fc2-system-time">{timeOfDay(message.createdAt)}</span>
-      </span>
-    </div>
-  );
-}
-
-function MessageRow({
-  message,
-  runStart,
-  own,
-  onStartEdit,
-  onAskDelete,
-  editing,
-  editText,
-  setEditText,
-  onSaveEdit,
-  onCancelEdit,
-  editBusy,
-}: {
-  message: StreamMessage;
-  runStart: boolean;
-  own: boolean;
-  onStartEdit: () => void;
-  onAskDelete: () => void;
-  editing: boolean;
-  editText: string;
-  setEditText: (v: string) => void;
-  onSaveEdit: () => void;
-  onCancelEdit: () => void;
-  editBusy: boolean;
-}) {
-  const deleted = !!message.deletedAt;
-  const name = message.authorName ?? "Someone";
-  return (
-    <div className={`fc2-msg-row${runStart ? " is-run-start" : ""}`}>
-      <div className="fc2-msg-gutter">
-        {runStart && (
-          <span className="fc2-avatar" style={{ background: `hsl(${avatarHue(message.authorId ?? "?")} 45% 45%)` }}>
-            {initialsOf(name)}
-          </span>
-        )}
-      </div>
-      <div className="fc2-msg-main">
-        {runStart && (
-          <div className="fc2-msg-head">
-            <b>{name}</b>
-            <span className="fc2-msg-time">{timeOfDay(message.createdAt)}</span>
-          </div>
-        )}
-        {editing ? (
-          <div style={{ display: "grid", gap: 6 }}>
-            <textarea
-              className="fc2-edit-box"
-              value={editText}
-              autoFocus
-              rows={Math.min(6, Math.max(2, editText.split("\n").length))}
-              onChange={(e) => setEditText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  onSaveEdit();
-                } else if (e.key === "Escape") {
-                  e.preventDefault(); // keep focus flow local — Esc here means "stop editing"
-                  onCancelEdit();
-                }
-              }}
-            />
-            <div style={{ display: "flex", gap: 6, fontSize: 11.5, color: "var(--h10-text-3)", alignItems: "center" }}>
-              Enter saves · Esc cancels
-              <span style={{ marginLeft: "auto", display: "inline-flex", gap: 6 }}>
-                <Button onClick={onCancelEdit}>Cancel</Button>
-                <Button variant="primary" onClick={onSaveEdit} disabled={editBusy || !editText.trim()}>
-                  {editBusy ? "Saving…" : "Save"}
-                </Button>
-              </span>
-            </div>
-          </div>
-        ) : (
-          <div className={`fc2-msg-body${deleted ? " is-deleted" : ""}${message.pending ? " is-pending" : ""}`}>
-            {deleted ? "Message deleted" : message.body}
-            {!deleted && message.editedAt && <span className="fc2-edited">(edited)</span>}
-            {!deleted && <MoneyChip message={message} />}
-          </div>
-        )}
-        {own && !deleted && !editing && !message.pending && (
-          <span className="fc2-msg-actions">
-            <button type="button" onClick={onStartEdit} title="Edit" aria-label="Edit message">
-              <Pencil size={13} />
-            </button>
-            <button type="button" onClick={onAskDelete} title="Delete" aria-label="Delete message">
-              <Trash2 size={13} />
-            </button>
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
 
 export function SpaceView({
   spaceId,
   space,
   messages,
+  members,
   loading,
   notMember,
   hasEarlier,
@@ -168,10 +37,12 @@ export function SpaceView({
   onEdit,
   onDelete,
   onCopyLink,
+  onOpenThread,
 }: {
   spaceId: string | null;
   space: SpaceItem | undefined;
   messages: StreamMessage[];
+  members: MentionMember[];
   loading: boolean;
   notMember: boolean;
   hasEarlier: boolean;
@@ -183,6 +54,8 @@ export function SpaceView({
   onEdit: (id: string, body: string) => Promise<boolean>;
   onDelete: (id: string) => Promise<void>;
   onCopyLink: () => void;
+  /** FC3 — open the right-side thread panel on this root message */
+  onOpenThread: (rootId: string) => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
@@ -197,6 +70,7 @@ export function SpaceView({
   const rows = useMemo<StreamRow[]>(() => buildStream(messages, Date.now()), [messages]);
   const newestId = messages.length ? messages[messages.length - 1].id : null;
   const oldestId = messages.length ? messages[0].id : null;
+  const nowMs = Date.now();
 
   const scrollEl = () => wrapRef.current?.querySelector<HTMLElement>(".fc2-stream-scroll") ?? null;
 
@@ -328,7 +202,13 @@ export function SpaceView({
             <WindowedList
               items={rows}
               itemKey={(r) => r.key}
-              estimateSize={(i) => (rows[i]?.kind === "divider" ? 36 : rows[i]?.kind === "message" && rows[i].runStart ? 54 : 26)}
+              estimateSize={(i) => {
+                const row = rows[i];
+                if (row?.kind === "divider") return 36;
+                if (row?.kind !== "message") return 26;
+                const base = row.runStart ? 54 : 26;
+                return row.message.thread?.replyCount ? base + 26 : base;
+              }}
               height="100%"
               className="fc2-stream-scroll"
               style={{ padding: "8px 0" }}
@@ -349,6 +229,8 @@ export function SpaceView({
                     message={row.message}
                     runStart={row.runStart}
                     own={!!meId && row.message.authorId === meId}
+                    members={members}
+                    nowMs={nowMs}
                     onStartEdit={() => startEdit(row.message)}
                     onAskDelete={() => setConfirmDeleteId(row.message.id)}
                     editing={editingId === row.message.id}
@@ -357,6 +239,8 @@ export function SpaceView({
                     onSaveEdit={() => void saveEdit()}
                     onCancelEdit={() => setEditingId(null)}
                     editBusy={editBusy}
+                    onReply={row.message.pending ? undefined : () => onOpenThread(row.message.id)}
+                    onOpenThread={row.message.thread?.replyCount ? () => onOpenThread(row.message.id) : undefined}
                   />
                 )
               }
@@ -365,7 +249,7 @@ export function SpaceView({
         </div>
       )}
 
-      <Composer canPost={canPost} onSend={onSend} spaceId={spaceId} />
+      <Composer canPost={canPost} onSend={onSend} composerKey={spaceId} />
 
       <Modal
         open={!!confirmDeleteId}
