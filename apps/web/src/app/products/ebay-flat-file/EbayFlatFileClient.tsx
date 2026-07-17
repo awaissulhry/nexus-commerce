@@ -1818,7 +1818,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rows: sendRows, markets: publishTargets }),
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok) {
+        // Surface the server's real message, not a bare "HTTP 500". The push
+        // route returns { error } on every failure path.
+        const body = await res.json().catch(() => null) as { error?: string } | null
+        throw new Error(body?.error ? `${body.error} (HTTP ${res.status})` : `HTTP ${res.status}`)
+      }
       const json = await res.json() as { results?: PushResult[]; taskId?: string; axisWarnings?: string[] }
       if (skippedByAction > 0) {
         toast({ title: `${skippedByAction} row${skippedByAction !== 1 ? 's' : ''} skipped (Action = skip)`, tone: 'info' })
@@ -1884,7 +1889,10 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rows: toPush, markets: publishTargets, strategy: 'offers-only' }),
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => null) as { error?: string } | null
+        throw new Error(body?.error ? `${body.error} (HTTP ${res.status})` : `HTTP ${res.status}`)
+      }
       const json = await res.json() as { results?: PushResult[] }
       setHistoryRefreshKey((k) => k + 1)
       if (json.results) {

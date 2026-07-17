@@ -43,6 +43,7 @@ import { callTradingApi, siteIdForMarket } from '../services/ebay-trading-api.se
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot, buildBestOfferTerms, resolveQuantityLimitPerBuyer, resolvePerMarketContent } from '../services/ebay-variation-push.service.js';
 import { renderListingDescriptionSafe } from '../services/ebay-description-theme.service.js';
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
+import { decideEbayPushMode } from '../services/ebay-push-mode.js';
 import { publishOrderEvent } from '../services/order-events.service.js';
 import { renderExport } from '../services/export/renderers.js';
 import { parseCsv, parseFile, sniffDelimiter, detectFileKind, type ParsedFile } from '../services/import/parsers.js';
@@ -1033,12 +1034,31 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       return req;
     };
 
-    // ── Feed mode ───────────────────────────────────────────────────
-    const effectiveMode = mode === 'feed' || rows.length > 50 ? 'feed' : 'api';
+    // ── Mode routing (GALE incident #3, 2026-07-17) ──────────────────
+    // Feed mode (bulk Inventory API) requires UNIQUE SKUs and is categorically
+    // incompatible with the shared-SKU multi-listing model; the old row-count
+    // threshold force-routed an 84-row shared push into it → HTTP 500. See
+    // ebay-push-mode.ts: any shared/`_shared`/duplicate-SKU row forces API mode
+    // regardless of count; explicit mode:'api' always honored.
+    const modeDecision = decideEbayPushMode(rows as Array<Record<string, unknown>>, mode);
+    const { hasSharedRow, hasDuplicateSku } = modeDecision;
+    if (modeDecision.forcedApi) {
+      request.log.info({ hasSharedRow, hasDuplicateSku, rowCount: rows.length }, 'ebay/flat-file/push: shared/duplicate payload — API mode forced (feed would break)');
+    }
+    const effectiveMode = modeDecision.mode;
 
     if (effectiveMode === 'feed') {
       // Feed mode uses first target market
       const mp = targetMarkets[0];
+      // Belt (defense in depth): the routing above already forces API mode for
+      // any shared/duplicate payload, but never let duplicate SKUs reach the
+      // Inventory feed — they collide (one inventory item per SKU) and eBay
+      // rejects the task. Clear 400, not an opaque downstream 500.
+      if (hasDuplicateSku || hasSharedRow) {
+        return reply.code(400).send({
+          error: 'This push contains shared or repeated SKUs (multi-listing) — it must use API mode, not the bulk feed. Retry the push; if it persists, reduce the selection.',
+        });
+      }
       try {
         // Map flat rows to EbayFlatRow shape expected by feed service
         const feedRows = rows.map((r) => {
