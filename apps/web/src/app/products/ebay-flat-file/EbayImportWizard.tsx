@@ -136,6 +136,17 @@ function toCell(value: unknown): string {
   }
 }
 
+// ── Wizard type scale (named styles, not ad-hoc sizes) ────────────────
+const T = {
+  caption: { fontSize: 11.5, color: 'var(--h10-text-3)' } as const,
+  label: { fontSize: 12, fontWeight: 600, color: 'var(--h10-text-2)' } as const,
+  body: { fontSize: 12.5, color: 'var(--h10-text-2)' } as const,
+  value: { fontSize: 12.5, color: 'var(--h10-text)' } as const,
+  micro: { fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)' } as const,
+  note: { fontSize: 11.5 } as const,
+  small: { fontSize: 13 } as const,
+} as const
+
 const CONFIDENCE_META: Record<Confidence, { tone: TagTone; label: string }> = {
   exact: { tone: 'positive', label: 'Exact' },
   fuzzy: { tone: 'warning', label: 'Fuzzy' },
@@ -460,7 +471,7 @@ export function EbayImportWizard({
           }}
         >
           <Spinner size={28} />
-          <span style={{ fontSize: 13 }}>Parsing your file…</span>
+          <span style={T.small}>Parsing your file…</span>
         </div>
       ) : (
         <>
@@ -476,15 +487,7 @@ export function EbayImportWizard({
           />
 
           <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              fontSize: 11,
-              textTransform: 'uppercase',
-              letterSpacing: '0.04em',
-              color: 'var(--h10-text-3)',
-            }}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, ...T.micro }}
           >
             <span style={{ flex: 1, height: 1, background: 'var(--h10-border-subtle)' }} />
             or paste data
@@ -493,14 +496,7 @@ export function EbayImportWizard({
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <label
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 12,
-                fontWeight: 600,
-                color: 'var(--h10-text-2)',
-              }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, ...T.label }}
             >
               <ClipboardPaste size={13} aria-hidden /> Paste CSV / TSV rows
             </label>
@@ -509,7 +505,7 @@ export function EbayImportWizard({
               onChange={(e) => setPasteText(e.target.value)}
               placeholder={'sku\tcondition\tprice\nABC-123\tNew\t49.99'}
               rows={6}
-              style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12 }}
+              style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', ...T.note }}
             />
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <Button variant="secondary" size="sm" disabled={!pasteText.trim()} onClick={onParsePaste}>
@@ -537,14 +533,7 @@ export function EbayImportWizard({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 160 }}>
           <span style={{ fontWeight: 600, color: 'var(--h10-text)' }}>{row.header}</span>
           <span
-            style={{
-              fontSize: 11.5,
-              color: 'var(--h10-text-3)',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              maxWidth: 220,
-            }}
+            style={{ ...T.caption, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}
             title={row.sample}
           >
             {row.sample ? `e.g. ${row.sample}` : 'no sample'}
@@ -584,7 +573,7 @@ export function EbayImportWizard({
       </Banner>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 200 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--h10-text-2)' }}>
+          <span style={T.label}>
             File market — per-market columns (Item ID, Price, Qty…) map here
           </span>
           <Listbox
@@ -594,14 +583,7 @@ export function EbayImportWizard({
           />
         </div>
         <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            fontSize: 12.5,
-            color: 'var(--h10-text-2)',
-            paddingBottom: 6,
-          }}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 6, ...T.body }}
         >
           <Wand2 size={14} aria-hidden style={{ color: 'var(--h10-primary)' }} />
           <strong style={{ color: 'var(--h10-text)' }}>{mapping.length}</strong> columns ·{' '}
@@ -642,7 +624,7 @@ export function EbayImportWizard({
           <span style={{ fontWeight: 600, color: 'var(--h10-text)' }}>{b.parentSku}</span>
           {b.title && (
             <span
-              style={{ fontSize: 11.5, color: 'var(--h10-text-3)', maxWidth: 260, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+              style={{ ...T.caption, maxWidth: 260, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
               title={b.title}
             >
               {b.title}
@@ -656,7 +638,7 @@ export function EbayImportWizard({
       label: 'eBay Item ID',
       render: (b) =>
         b.itemId ? (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--h10-text)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, ...T.value }}>
             <Link2 size={12} aria-hidden style={{ color: 'var(--h10-primary)' }} />
             {b.itemId}
           </span>
@@ -672,7 +654,7 @@ export function EbayImportWizard({
         const pooled = b.childSkus.filter((s) => blockAnalysis.pooledSkus.has(s)).length
         return (
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 12.5, color: 'var(--h10-text)' }}>{b.standalone ? '—' : b.childSkus.length}</span>
+            <span style={T.value}>{b.standalone ? '—' : b.childSkus.length}</span>
             {pooled > 0 && (
               <Tag tone="info">
                 <Layers size={11} aria-hidden style={{ marginRight: 3 }} />
@@ -700,14 +682,7 @@ export function EbayImportWizard({
             {b.issues.map((i, idx) => (
               <span
                 key={idx}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'flex-start',
-                  gap: 5,
-                  fontSize: 11.5,
-                  color: i.level === 'error' ? 'var(--h10-danger)' : 'var(--h10-warning)',
-                  maxWidth: 320,
-                }}
+                style={{ display: 'inline-flex', alignItems: 'flex-start', gap: 5, ...T.note, color: i.level === 'error' ? 'var(--h10-danger)' : 'var(--h10-warning)', maxWidth: 320 }}
               >
                 <AlertTriangle size={11} aria-hidden style={{ marginTop: 2, flexShrink: 0 }} />
                 {i.message}
@@ -825,7 +800,7 @@ export function EbayImportWizard({
       {/* Import destination: new families vs under an existing parent */}
       {hasParents && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--h10-text-2)' }}>
+          <span style={T.label}>
             Import as
           </span>
           <SegmentedControl
@@ -854,7 +829,7 @@ export function EbayImportWizard({
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--h10-text-2)' }}>
+        <span style={T.label}>
           When a row matches an existing SKU…
         </span>
         <SegmentedControl
@@ -874,12 +849,12 @@ export function EbayImportWizard({
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 120, overflowY: 'auto' }}>
             {coerceResult.issues.slice(0, 12).map((i, idx) => (
-              <span key={idx} style={{ fontSize: 11.5 }}>
+              <span key={idx} style={T.note}>
                 Row {i.rowIndex + 1} · {columnLabelById.get(i.columnId) ?? i.columnId}: {i.message}
               </span>
             ))}
             {coerceResult.issues.length > 12 && (
-              <span style={{ fontSize: 11.5, color: 'var(--h10-text-3)' }}>
+              <span style={T.caption}>
                 …and {coerceResult.issues.length - 12} more (cells are highlighted below)
               </span>
             )}
@@ -915,7 +890,7 @@ export function EbayImportWizard({
             emptyState="No rows to preview."
           />
           {workingRows.length > previewRows.length && (
-            <span style={{ fontSize: 11.5, color: 'var(--h10-text-3)' }}>
+            <span style={T.caption}>
               Showing first {previewRows.length} of {workingRows.length} rows.
             </span>
           )}
