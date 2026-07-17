@@ -45,6 +45,8 @@ interface ProductTable {
 /** Minimal prisma interface — satisfied by PrismaClient and the test mock. */
 export interface EbayCreatePrisma {
   product: ProductTable
+  /** Optional — powers the execution-time reparent belt (absent in older mocks). */
+  sharedListingMembership?: { findMany(args: unknown): Promise<unknown[]> }
   $transaction(fn: (tx: { product: ProductTable }) => Promise<void>): Promise<void>
 }
 
@@ -320,7 +322,32 @@ export async function runEbayFlatFileCreates(
   }
 
   // ── Step 5: Reparents ────────────────────────────────────────────────
+  // GALE incident belt (2026-07-17) — execution-time, DB-truth: a product
+  // whose SKU already has shared-listing MEMBERSHIPS is multi-listing by
+  // fact; its Product.parentId stays with the primary family no matter what
+  // the planner concluded (defense-in-depth against key-space/classification
+  // drift — the planner's suppression is the primary guard, this is the belt).
+  let membershipManagedSkus = new Set<string>()
+  if (plan.reparents.length > 0 && p.sharedListingMembership) {
+    try {
+      const skus = [...new Set(plan.reparents.map(r => r.sku).filter(Boolean))]
+      const managed = (await p.sharedListingMembership.findMany({
+        where: { sku: { in: skus } },
+        select: { sku: true },
+      })) as Array<{ sku: string }>
+      membershipManagedSkus = new Set(managed.map(m => m.sku))
+    } catch {
+      /* belt only — planner suppression remains the primary guard */
+    }
+  }
   for (const reparentEntry of plan.reparents) {
+    if (membershipManagedSkus.has(reparentEntry.sku)) {
+      warnings.push({
+        sku: reparentEntry.sku,
+        reason: 'reparent blocked: SKU has shared-listing memberships — the primary family owns Product.parentId',
+      })
+      continue
+    }
     // Temp-reparent: parent was created in this same save (batch or synthetic parent).
     // tempToRealId is fully populated by now (all parentCreates ran above in Step 4a).
     if (reparentEntry.newParentTempRowId) {

@@ -571,6 +571,15 @@ export function planEbayFamilyCreates(input: {
       const existing = existingBySku.get(sku)!
 
       if (isChild) {
+        // GALE incident guard (2026-07-17): a SKU that appears under MULTIPLE
+        // parents in this batch is a shared multi-listing SKU by definition —
+        // its extra parent linkages live on SharedListingMembership, and its
+        // Product.parentId must stay with the primary family. Suppress before
+        // any resolution so no key-space subtlety below can re-parent it.
+        if (collapsedSkus.has(sku)) {
+          warnings.push({ sku, reason: 'reparent suppressed: shared multi-listing SKU (memberships own the extra parents)' })
+          continue
+        }
         // Subject-is-parent guard (FIX 1): a variation parent cannot be turned into a child
         // of another parent — that would create grandparent→parent→children (3 levels).
         // The operator must detach the subject's variants first. This check is FIRST so no
@@ -646,8 +655,14 @@ export function planEbayFamilyCreates(input: {
           // Temp-parent reparent path (batch parent or synthetic-to-be).
           // Self-parent is impossible (temp IDs can never equal an existing product's DB id).
           // No-op is impossible (new parent cannot already be the current parentId).
-          // Check shared-family suppression based on the existing (current) parentId.
-          if (sharedFamilyKeys.has(String(existing.parentId ?? ''))) {
+          // Shared-family suppression — KEY-SPACE COMPLETE (GALE incident fix):
+          // sharedFamilyKeys holds ebayFamilyKey values, which are SKUs for
+          // explicit rows and product ids for legacy rows. The NEW parent here
+          // is identified by parentSku (its family key IS its SKU); the current
+          // parent may be keyed either way. The old check tested only
+          // existing.parentId (an id) and never matched SKU keys — every
+          // explicit multi-listing child re-parented straight through it.
+          if (sharedFamilyKeys.has(parentSku ?? '') || sharedFamilyKeys.has(String(existing.parentId ?? ''))) {
             // FIX 1: reparent suppressed — do NOT create a phantom synthetic parent.
             warnings.push({ sku, reason: 'reparent suppressed: shared family (membership-managed)' })
           } else {
@@ -678,7 +693,9 @@ export function planEbayFamilyCreates(input: {
             errors.push({ sku, reason: 'self-parent: platformProductId points to the product itself' })
           } else if (resolvedParentId !== (existing.parentId ?? '')) {
             // Suppress reparent for shared-SKU families — memberships own the parent linkage.
-            if (sharedFamilyKeys.has(resolvedParentId) || sharedFamilyKeys.has(String(existing.parentId ?? ''))) {
+            // Key-space complete: the new parent may be keyed by id (resolvedParentId)
+            // OR by SKU (parentSku — explicit rows' family key); current parent by id.
+            if (sharedFamilyKeys.has(resolvedParentId) || sharedFamilyKeys.has(parentSku ?? '') || sharedFamilyKeys.has(String(existing.parentId ?? ''))) {
               warnings.push({ sku, reason: 'reparent suppressed: shared family (membership-managed)' })
             } else {
               reparents.push({ productId: existing.id, sku, newParentId: resolvedParentId })

@@ -490,9 +490,29 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         createResult.idMap.map(e => [e.sku, e.productId]),
       );
 
+      // Multi-listing incident fix (GALE 2026-07-17): the SAME SKU legitimately
+      // appears under several shared listings in one save. Lane A
+      // (ChannelListing) is one-per-(product, market) — ONLY the first
+      // occurrence may write it; every extra occurrence is a Lane-B row whose
+      // per-listing price/qty live on its SharedListingMembership (upserted
+      // after this loop). Without this, each duplicate overwrote the same
+      // ChannelListing and the LAST block's ItemID stomped the primary
+      // listing's linkage (observed live: 20 child CLs flipped to ALT2's id).
+      const laneASeen = new Map<string, number>();
       for (const row of rows) {
         const sku = row.sku as string;
         if (!sku) continue;
+
+        // Synthesized shared-membership rows are Lane-B VIEW rows — edits on
+        // them persist via the membership upsert below, never via ChannelListing.
+        if ((row as Record<string, unknown>)._shared === true) { processed++; continue; }
+        const occurrence = (laneASeen.get(sku) ?? 0) + 1;
+        laneASeen.set(sku, occurrence);
+        if (occurrence > 1) {
+          processed++;
+          request.log.info({ sku, occurrence }, 'ebay/flat-file/rows: extra shared occurrence — Lane-B only (no ChannelListing write)');
+          continue;
+        }
 
         // Resolve productId — check pre-pass results before falling back to DB lookup.
         let productId = (row._productId as string) ?? '';
@@ -543,7 +563,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             where: { productId, channel: 'EBAY', region },
             // platformAttributes needed to preserve THIS market's own subtitle
             // (EFX P9e) when the active market's edit is written elsewhere.
-            select: { id: true, price: true, quantity: true, platformAttributes: true },
+            // externalListingId powers the shared-row linkage guard below.
+            select: { id: true, price: true, quantity: true, platformAttributes: true, externalListingId: true },
           });
 
           const oldPrice = existing?.price?.toNumber() ?? null;
@@ -582,7 +603,17 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             // grid columns on save — only write when the row carries a real value,
             // otherwise preserve exactly what the publish write-back stored. This is
             // the fix for "the Item ID / status vanishes every time I reload".
-            ...(itemId ? { externalListingId: itemId } : {}),
+            // Multi-listing hardening: once a listing linkage EXISTS, a shared
+            // row carrying a DIFFERENT ItemID must not flip it — the extra
+            // listing's identity lives on its SharedListingMembership, and the
+            // established Lane-A linkage is the primary listing's (row-order
+            // independent complement to the first-occurrence dedupe above).
+            ...(itemId &&
+            !(Boolean((row as Record<string, unknown>).shared_sku_listing) &&
+              existing?.externalListingId &&
+              existing.externalListingId !== itemId)
+              ? { externalListingId: itemId }
+              : {}),
             ...(status ? { listingStatus: status, offerActive: status === 'ACTIVE' } : {}),
             platformAttributes: marketPlatformAttributes as typeof sharedPacked.platformAttributes,
             // FCF.4 — eBay is merchant-fulfilled: mark fulfillment on THIS
@@ -1075,7 +1106,15 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       // rows, never a push source; skip them so they can't create a phantom listing even
       // if the client filter is bypassed.
       if (row._shared === true) continue;
-      const key = (row.platformProductId as string | undefined) ?? (row.sku as string);
+      // Multi-listing incident fix (GALE 2026-07-17): group by the SAME family
+      // identity the client, the create planner and the save pre-pass use
+      // (ebayFamilyKey — explicit parents by own SKU, explicit children by
+      // parent_sku, legacy rows by platformProductId). The old
+      // `platformProductId ?? sku` key shattered file-linked children into
+      // singleton "families", sending each down the single-SKU offer path.
+      const key =
+        ebayFamilyKey(row as Parameters<typeof ebayFamilyKey>[0]) ||
+        ((row.platformProductId as string | undefined) ?? (row.sku as string));
       if (!families.has(key)) families.set(key, []);
       families.get(key)!.push(row);
     }
@@ -1346,6 +1385,20 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         if (!sku) {
           perRowResults.push({ sku: '', market: mp, status: 'ERROR', message: 'Missing SKU' });
           continue;
+        }
+        // Multi-listing belt: an explicit CHILD alone in its "family" means its
+        // parent isn't in this push (skipped, filtered, or missing). Pushing it
+        // down the single-SKU path would mint a standalone offer for a variant —
+        // a phantom listing. Clear per-row error instead.
+        {
+          const parentage = String((row as Record<string, unknown>).parentage ?? '').trim().toLowerCase();
+          if (parentage === 'child' || parentage === 'variant') {
+            perRowResults.push({
+              sku, market: mp, status: 'ERROR',
+              message: `Variant of "${String((row as Record<string, unknown>).parent_sku ?? '?')}" — include its parent in the push (a variant never publishes as a standalone listing)`,
+            });
+            continue;
+          }
         }
 
         const prefix = mp.toLowerCase() as Lowercase<Market>;

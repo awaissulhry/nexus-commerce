@@ -1657,3 +1657,72 @@ describe('reparent-final-fix guards', () => {
     expect(result.childCreates[0].parentRef).toEqual({ kind: 'existing', productId: 'x-id' })
   })
 })
+
+describe('GALE incident (2026-07-17) — shared multi-listing reparent suppression', () => {
+  // The exact live shape: existing children under the primary family
+  // (GALE-JACKET), a file adding N NEW shared parents whose child rows carry
+  // the SAME SKUs with explicit parentage + parent_sku. sharedFamilyKeys are
+  // SKU-based (ebayFamilyKey of explicit rows). NOTHING may reparent.
+  const galeBatch = () => {
+    const parents = ['IT-GALE', 'GALE-ALT1', 'GALE-ALT2', 'GALE-ALT3']
+    const rows: Array<Record<string, unknown>> = []
+    for (const p of parents) {
+      rows.push({ sku: p, parentage: 'parent', variation_theme: 'Taglia,Colore', shared_sku_listing: true, _rowId: `r-${p}` })
+      for (const c of ['GALE-BLACK-M', 'GALE-BLACK-L']) {
+        rows.push({ sku: c, parentage: 'child', parent_sku: p, shared_sku_listing: true, _rowId: `r-${p}-${c}` })
+      }
+    }
+    return rows
+  }
+  const existing = () => new Map([
+    ['GALE-BLACK-M', { id: 'idM', parentId: 'idPrimary', variationTheme: null, isParent: false }],
+    ['GALE-BLACK-L', { id: 'idL', parentId: 'idPrimary', variationTheme: null, isParent: false }],
+  ])
+  const sharedKeys = new Set(['IT-GALE', 'GALE-ALT1', 'GALE-ALT2', 'GALE-ALT3', 'GALE-JACKET'])
+
+  it('collapsed duplicate SKUs NEVER reparent (multi-block file)', () => {
+    const result = planEbayFamilyCreates({
+      rows: galeBatch() as never,
+      existingBySku: existing() as never,
+      existingParentById: new Map(),
+      sharedFamilyKeys: sharedKeys,
+    })
+    expect(result.reparents).toHaveLength(0)
+    expect(result.parentCreates.map((p) => p.sku).sort()).toEqual(['GALE-ALT1', 'GALE-ALT2', 'GALE-ALT3', 'IT-GALE'])
+    expect(result.childCreates).toHaveLength(0) // children exist — collapsed, never duplicated
+    expect(result.errors).toHaveLength(0)
+    expect(result.warnings.some((w) => w.reason.includes('shared multi-listing SKU'))).toBe(true)
+  })
+
+  it('SINGLE-occurrence shared child (one new shared parent) is suppressed via SKU key', () => {
+    // One block only — no collapse; the temp-parent path must match parentSku
+    // against the SKU-based sharedFamilyKeys (the exact key-space bug).
+    const rows = [
+      { sku: 'GALE-ALT1', parentage: 'parent', variation_theme: 'Taglia,Colore', shared_sku_listing: true, _rowId: 'p1' },
+      { sku: 'GALE-BLACK-M', parentage: 'child', parent_sku: 'GALE-ALT1', shared_sku_listing: true, _rowId: 'c1' },
+    ]
+    const result = planEbayFamilyCreates({
+      rows: rows as never,
+      existingBySku: existing() as never,
+      existingParentById: new Map(),
+      sharedFamilyKeys: new Set(['GALE-ALT1']),
+    })
+    expect(result.reparents).toHaveLength(0)
+    expect(result.warnings.some((w) => w.reason.includes('suppressed'))).toBe(true)
+  })
+
+  it('non-shared explicit reparent still works (guards stay surgical)', () => {
+    const rows = [
+      { sku: 'NEW-PARENT', parentage: 'parent', variation_theme: 'Size', _rowId: 'p1' },
+      { sku: 'GALE-BLACK-M', parentage: 'child', parent_sku: 'NEW-PARENT', _rowId: 'c1' },
+    ]
+    const result = planEbayFamilyCreates({
+      rows: rows as never,
+      existingBySku: existing() as never,
+      existingParentById: new Map(),
+      sharedFamilyKeys: new Set(),
+    })
+    expect(result.reparents).toHaveLength(1)
+    expect(result.reparents[0]).toMatchObject({ productId: 'idM', sku: 'GALE-BLACK-M' })
+  })
+})

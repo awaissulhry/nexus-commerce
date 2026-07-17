@@ -1499,6 +1499,30 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       const er = r as EbayRow
       return !failedRowIds.has(r._rowId) && !er._readonly && !er._shared
     }
+    // Multi-listing incident fix: two false "unpublished" classes killed the
+    // Follow/Buffer capture after an import-save. (1) Rows the save JUST
+    // created have products now — resolve their ids from createResult.idMap
+    // instead of dropping intent. (2) Extra shared occurrences of a SKU are
+    // Lane-B rows: quantities fan out via memberships, so per-market
+    // Follow/Buffer intent belongs to the FIRST (Lane-A) occurrence only —
+    // never counted as "publish first".
+    const createdIdBySkuFB = new Map<string, string>(
+      (result.createResult?.idMap ?? []).map((e) => [e.sku, e.productId]),
+    )
+    // Resolved ONCE per dirty row (both the Follow and Buffer loops read it):
+    // rowId → productId, or 'lane-b' for extra shared occurrences.
+    const fbPidByRowId = new Map<string, string>()
+    {
+      const laneASeenFB = new Set<string>()
+      for (const r of dirty) {
+        const er = r as EbayRow & Record<string, unknown>
+        const sku = String(er.sku ?? '').trim()
+        if (sku && laneASeenFB.has(sku)) { fbPidByRowId.set(r._rowId, 'lane-b'); continue }
+        if (sku) laneASeenFB.add(sku)
+        fbPidByRowId.set(r._rowId, String(er._productId ?? (sku ? createdIdBySkuFB.get(sku) ?? '' : '')))
+      }
+    }
+    const resolveFbProductId = (r: BaseRow): string => fbPidByRowId.get(r._rowId) ?? ''
 
     // FM Phase 2 — apply per-market Follow/Pinned through the dedicated endpoint
     // (pool-safe, FBA-skipping, and it no-op-skips anything unchanged so a routine
@@ -1513,7 +1537,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         if (!capturable(r)) continue
         const fv = (r as Record<string, unknown>)[followKey]
         if (fv !== 'Follow' && fv !== 'Pinned') continue
-        const pid = String((r as EbayRow)._productId ?? '')
+        const pid = resolveFbProductId(r)
+        if (pid === 'lane-b') continue // extra shared occurrence — fan-out governs
         if (!pid) { unpublishedIntent.add(r._rowId); continue }
         const follow = fv === 'Follow'
         if (!byFollow.has(follow)) byFollow.set(follow, new Set())
@@ -1554,7 +1579,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         if (bv === '' || bv == null) continue
         const n = Math.max(0, Math.floor(Number(bv)))
         if (!Number.isFinite(n)) continue
-        const pid = String((r as EbayRow)._productId ?? '')
+        const pid = resolveFbProductId(r)
+        if (pid === 'lane-b') continue // extra shared occurrence — fan-out governs
         if (!pid) { unpublishedIntent.add(r._rowId); continue }
         if (!byBuffer.has(n)) byBuffer.set(n, new Set())
         byBuffer.get(n)!.add(pid)
