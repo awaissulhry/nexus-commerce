@@ -37,3 +37,5 @@ Part of [[F00 - Factory OS MOC]] · closes the "no communication gap" invariant'
 ## FC1 spec status (2026-07-16)
 
 `docs/factory/FC1-SPEC.md` drafted — **APPROVED 2026-07-16 — building**. Answers all five substrate questions: new Chat* entities (Comment untouched), audits inside chat-service, money via strippable `moneyCents` field (never in body — enforced by test), FC5 sources from the FS2 bus, WORKER gets `pages.chat`+`chat.post` explicitly. Windowed message API ready for FS3's WindowedList in FC2.
+
+**FC3 SHIPPED 2026-07-17** (FC3-REPORT.md) — thread panel (3rd resizable pane), thread-scoped notifications (SYSTEM kind for reply-pings; THREAD_REPLY enum = named later add), @all, shared mention grammar with inbox, followed-threads rail section. FC4 next.
