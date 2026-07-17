@@ -12,8 +12,9 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { PanelRightOpen } from "lucide-react";
-import { Drawer, useToast } from "@/design-system/components";
+import { ExternalLink, Pin, PinOff, PanelRightOpen, Sparkles } from "lucide-react";
+import { Drawer, Modal, useToast } from "@/design-system/components";
+import { Button } from "@/design-system/primitives";
 import { PaneHandle } from "@/components/PaneHandle";
 import { useResizablePanes, type PaneDef } from "@/components/useResizablePanes";
 import { apiJson } from "@/lib/api-client";
@@ -21,8 +22,11 @@ import { usePermission } from "@/lib/auth/client";
 import { useFactoryEvents } from "@/lib/use-factory-events";
 import { ConversationList } from "./ConversationList";
 import { ContextRail } from "./ContextRail";
+import { RulesDrawer } from "./RulesDrawer";
 import { ThreadPane } from "./ThreadPane";
-import type { ListResponse, ThreadResponse, UserLite } from "./types";
+import { ViewBuilder, type BuilderInitial } from "./ViewBuilder";
+import { PointerMenu, PointerMenuItem, ViewsBar } from "./ViewsBar";
+import type { ListItem, ListResponse, ThreadResponse, UserLite } from "./types";
 
 // Pane geometry — Owner-adjustable, persisted per browser (FS3 substrate).
 const PANES_KEY = "factory.inbox.paneWidths";
@@ -107,6 +111,16 @@ function InboxInner() {
 
   const focusId = params.get("focus");
   const fileId = params.get("file"); // EPI2.2 — lightbox deep link
+  const viewId = params.get("view"); // EPI3.3 — active view deep link
+
+  // EPI3.3 — views UI state
+  const canViews = usePermission("inbox.views.manage");
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [builderInitial, setBuilderInitial] = useState<BuilderInitial | null>(null);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [deleteViewId, setDeleteViewId] = useState<string | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ item: ListItem; x: number; y: number } | null>(null);
+  const [routePrompt, setRoutePrompt] = useState<{ viewId: string; viewName: string; domain: string } | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q), 250);
@@ -116,8 +130,9 @@ function InboxInner() {
   // EPI1.2 — ONE url composer so open/Escape/filter changes all preserve each
   // other (the old open() dropped every filter).
   const urlFor = useCallback(
-    (focus: string | null, file?: string | null) => {
+    (focus: string | null, file?: string | null, view: string | null = viewId) => {
       const usp = new URLSearchParams();
+      if (view) usp.set("view", view); // EPI3.3 — the active section survives everything
       if (state !== "open") usp.set("state", state);
       if (mine) usp.set("mine", "1");
       if (unmatched) usp.set("unmatched", "1");
@@ -127,7 +142,7 @@ function InboxInner() {
       const qs = usp.toString();
       return qs ? `/inbox?${qs}` : "/inbox";
     },
-    [state, mine, unmatched, debouncedQ],
+    [state, mine, unmatched, debouncedQ, viewId],
   );
 
   // Shallow routing (documented Next interop: history.replaceState syncs with
@@ -142,8 +157,9 @@ function InboxInner() {
     if (mine) usp.set("mine", "1");
     if (unmatched) usp.set("unmatched", "1");
     if (debouncedQ) usp.set("q", debouncedQ);
+    if (viewId) usp.set("view", viewId); // EPI3.3 — membership scopes rows + counts
     return `/api/inbox?${usp}`;
-  }, [state, mine, unmatched, debouncedQ]);
+  }, [state, mine, unmatched, debouncedQ, viewId]);
 
   const loadList = useCallback(
     async (opts?: { append?: boolean; quiet?: boolean }) => {
@@ -234,6 +250,82 @@ function InboxInner() {
     }
   };
 
+  // EPI3.3 — view plumbing: select/cycle sections, builder + rules drawers,
+  // pin/exclude overrides with the Gmail-tabs route-prompt.
+  const selectView = useCallback(
+    (id: string | null) => {
+      window.history.replaceState(null, "", urlFor(focusId, fileId, id));
+    },
+    [urlFor, focusId, fileId],
+  );
+  const editView = useCallback(
+    async (id: string) => {
+      try {
+        const d = await apiJson<{ views: (BuilderInitial & { id: string })[] }>("/api/inbox/views");
+        const v = d.views.find((x) => x.id === id);
+        if (!v) return;
+        setBuilderInitial(v);
+        setBuilderOpen(true);
+      } catch (e) {
+        toast((e as Error).message, "danger");
+      }
+    },
+    [toast],
+  );
+  const moveView = useCallback(
+    async (id: string, dir: -1 | 1) => {
+      const ids = (list?.views ?? []).map((v) => v.id);
+      const i = ids.indexOf(id);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= ids.length) return;
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+      try {
+        await apiJson("/api/inbox/views/reorder", { method: "POST", body: JSON.stringify({ ids }) });
+        refresh();
+      } catch (e) {
+        toast((e as Error).message, "danger");
+      }
+    },
+    [list?.views, refresh, toast],
+  );
+  const pinToView = useCallback(
+    async (item: ListItem, targetViewId: string, viewName: string) => {
+      try {
+        await apiJson(`/api/inbox/${item.id}/view-override`, {
+          method: "POST",
+          body: JSON.stringify({ viewId: targetViewId, mode: "pin" }),
+        });
+        toast(`Pinned to ${viewName}`, "success");
+        refresh();
+        const from = item.messages[0]?.fromAddress ?? "";
+        const domain = from.includes("@") ? from.split("@")[1] : null;
+        if (domain && canViews) setRoutePrompt({ viewId: targetViewId, viewName, domain });
+      } catch (e) {
+        toast((e as Error).message, "danger");
+      }
+    },
+    [refresh, toast, canViews],
+  );
+  const addRouteCriterion = useCallback(async () => {
+    if (!routePrompt) return;
+    try {
+      const d = await apiJson<{ views: { id: string; criteria: { all: unknown[]; any: unknown[] } }[] }>("/api/inbox/views");
+      const v = d.views.find((x) => x.id === routePrompt.viewId);
+      if (!v) return;
+      const criteria = {
+        all: v.criteria.all,
+        any: [...v.criteria.any, { field: "senderDomain", op: "is", value: routePrompt.domain }],
+      };
+      await apiJson(`/api/inbox/views/${routePrompt.viewId}`, { method: "PATCH", body: JSON.stringify({ criteria }) });
+      toast(`Future mail from @${routePrompt.domain} routes to ${routePrompt.viewName}`, "success");
+      refresh();
+    } catch (e) {
+      toast((e as Error).message, "danger");
+    } finally {
+      setRoutePrompt(null);
+    }
+  }, [routePrompt, refresh, toast]);
+
   // keyboard grammar — inert while typing in any field
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -243,6 +335,16 @@ function InboxInner() {
       // keyboard grammar; Enter there must not double as "open conversation".
       // EPI2.2 — same for the lightbox dialog (j/k/e/s must be inert inside).
       if (typing || e.metaKey || e.ctrlKey || e.altKey || target.closest?.('[role="separator"], [role="dialog"]')) return;
+      // EPI3.3 — Tab cycles sections, but ONLY from the page background so
+      // keyboard focus navigation (panes, buttons) stays intact.
+      if (e.key === "Tab" && document.activeElement === document.body && (list?.views?.length ?? 0) > 0) {
+        e.preventDefault();
+        const ring: (string | null)[] = [null, ...(list?.views ?? []).map((v) => v.id)];
+        const cur = ring.indexOf(viewId);
+        const next = ring[(cur + (e.shiftKey ? -1 : 1) + ring.length) % ring.length];
+        selectView(next);
+        return;
+      }
       const items = list?.items ?? [];
       if (e.key === "j" || e.key === "k") {
         e.preventDefault();
@@ -286,15 +388,32 @@ function InboxInner() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [list, cursorIdx, focusId, open, refresh, thread, toast, urlFor]);
+  }, [list, cursorIdx, focusId, open, refresh, thread, toast, urlFor, viewId, selectView]);
 
   const railCol = railShown ? `${panes.widths[1]}px` : `${RAIL_STRIP_W}px`;
+  const activeViewMeta = viewId ? (list?.views ?? []).find((v) => v.id === viewId) ?? null : null;
 
   return (
+    <div className="epi-inbox" style={{ height: "calc(100dvh - 52px)", display: "flex", flexDirection: "column" }}>
+      <ViewsBar
+        views={list?.views ?? []}
+        inboxCount={list?.inboxCount ?? null}
+        activeViewId={viewId}
+        onSelect={selectView}
+        canManage={canViews}
+        onNewView={() => {
+          setBuilderInitial(null);
+          setBuilderOpen(true);
+        }}
+        onEditView={(id) => void editView(id)}
+        onMoveView={(id, dir) => void moveView(id, dir)}
+        onDeleteView={(id) => setDeleteViewId(id)}
+        onOpenRules={() => setRulesOpen(true)}
+      />
     <div
-      className="epi-inbox"
       style={{
-        height: "calc(100dvh - 52px)",
+        flex: 1,
+        minHeight: 0,
         display: "grid",
         gridTemplateColumns: `${panes.widths[0]}px 6px minmax(0, 1fr) 6px ${railCol}`,
         gridTemplateRows: "minmax(0, 1fr)",
@@ -328,6 +447,7 @@ function InboxInner() {
           busyBulk={busyBulk}
           canAssign={canAssign}
           users={users}
+          onRowMenu={(item, x, y) => setCtxMenu({ item, x, y })}
         />
       </div>
       <PaneHandle {...panes.handleProps(0)} label="Resize conversation list" />
@@ -375,6 +495,132 @@ function InboxInner() {
           />
         </Drawer>
       )}
+    </div>
+
+      {/* EPI3.3 — row context menu: open / pin into sections / new view from sender */}
+      {ctxMenu && (
+        <PointerMenu x={ctxMenu.x} y={ctxMenu.y} onClose={() => setCtxMenu(null)}>
+          <PointerMenuItem
+            onSelect={() => {
+              open(ctxMenu.item.id);
+              setCtxMenu(null);
+            }}
+          >
+            <ExternalLink size={13} /> Open
+          </PointerMenuItem>
+          {canAssign &&
+            (list?.views ?? []).slice(0, 8).map((v) => (
+              <PointerMenuItem
+                key={v.id}
+                onSelect={() => {
+                  void pinToView(ctxMenu.item, v.id, v.name);
+                  setCtxMenu(null);
+                }}
+              >
+                <Pin size={13} /> Pin to {v.emoji ? `${v.emoji} ` : ""}{v.name}
+              </PointerMenuItem>
+            ))}
+          {canAssign && activeViewMeta && (
+            <PointerMenuItem
+              onSelect={() => {
+                void apiJson(`/api/inbox/${ctxMenu.item.id}/view-override`, {
+                  method: "POST",
+                  body: JSON.stringify({ viewId: activeViewMeta.id, mode: "exclude" }),
+                })
+                  .then(() => {
+                    toast(`Excluded from ${activeViewMeta.name} — back in the Inbox`, "success");
+                    refresh();
+                  })
+                  .catch((err: Error) => toast(err.message, "danger"));
+                setCtxMenu(null);
+              }}
+            >
+              <PinOff size={13} /> Exclude from {activeViewMeta.name}
+            </PointerMenuItem>
+          )}
+          {canViews && (
+            <PointerMenuItem
+              onSelect={() => {
+                const from = ctxMenu.item.messages[0]?.fromAddress ?? "";
+                const domain = from.includes("@") ? from.split("@")[1] : "";
+                setBuilderInitial({
+                  name: ctxMenu.item.party?.name ?? domain,
+                  criteria: {
+                    all: [],
+                    any: [
+                      ...(from ? [{ field: "senderEmail", op: "is", value: from }] : []),
+                      ...(domain ? [{ field: "senderDomain", op: "is", value: domain }] : []),
+                    ],
+                  },
+                });
+                setBuilderOpen(true);
+                setCtxMenu(null);
+              }}
+            >
+              <Sparkles size={13} /> New view from this sender…
+            </PointerMenuItem>
+          )}
+        </PointerMenu>
+      )}
+
+      <ViewBuilder
+        open={builderOpen}
+        initial={builderInitial}
+        onClose={() => setBuilderOpen(false)}
+        onSaved={() => {
+          setBuilderOpen(false);
+          refresh();
+        }}
+      />
+      <RulesDrawer open={rulesOpen} onClose={() => setRulesOpen(false)} onChanged={refresh} />
+
+      <Modal
+        open={deleteViewId != null}
+        onClose={() => setDeleteViewId(null)}
+        title="Delete this view?"
+        footer={
+          <>
+            <Button onClick={() => setDeleteViewId(null)}>Cancel</Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                const id = deleteViewId!;
+                setDeleteViewId(null);
+                void apiJson(`/api/inbox/views/${id}`, { method: "DELETE" })
+                  .then(() => {
+                    if (viewId === id) selectView(null);
+                    toast("View deleted — its conversations are back in the Inbox", "success");
+                    refresh();
+                  })
+                  .catch((err: Error) => toast(err.message, "danger"));
+              }}
+            >
+              Delete view
+            </Button>
+          </>
+        }
+      >
+        <div style={{ fontSize: 12.5 }}>Its conversations return to the Inbox — nothing is deleted but the section definition.</div>
+      </Modal>
+
+      <Modal
+        open={routePrompt != null}
+        onClose={() => setRoutePrompt(null)}
+        title={routePrompt ? `Route future mail from @${routePrompt.domain}?` : ""}
+        footer={
+          <>
+            <Button onClick={() => setRoutePrompt(null)}>Just this pin</Button>
+            <Button variant="primary" onClick={() => void addRouteCriterion()}>
+              Route the whole domain here
+            </Button>
+          </>
+        }
+      >
+        <div style={{ fontSize: 12.5 }}>
+          Adds a visible condition to {routePrompt?.viewName} — every future email from @{routePrompt?.domain} lands there
+          automatically (Gmail-tabs pattern; you can edit it any time).
+        </div>
+      </Modal>
     </div>
   );
 }

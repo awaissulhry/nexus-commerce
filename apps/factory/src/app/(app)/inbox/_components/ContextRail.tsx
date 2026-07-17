@@ -22,8 +22,9 @@ import type { ThreadResponse, UserLite } from "./types";
 
 const QUOTE_TONE: Record<string, "neutral" | "info" | "success" | "danger" | "warning"> = { DRAFT: "neutral", SENT: "info", ACCEPTED: "success", REJECTED: "danger", EXPIRED: "warning" };
 
-// EPI1.3 (G4) — consumes the Contacts page's own list API (EP rule 3)
-const loadContacts: SearchLoader = async (q) => {
+// EPI1.3 (G4) — consumes the Contacts page's own list API (EP rule 3);
+// exported for the EPI3 view builder's Contact criterion.
+export const loadContacts: SearchLoader = async (q) => {
   const d = await apiJson<{ contacts: { id: string; name: string; kind: string; primaryEmail: string | null }[] }>(
     `/api/contacts?q=${encodeURIComponent(q)}`,
   );

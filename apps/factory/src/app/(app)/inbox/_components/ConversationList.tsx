@@ -44,6 +44,7 @@ export function ConversationList({
   busyBulk,
   canAssign,
   users,
+  onRowMenu,
 }: {
   data: ListResponse | null;
   loading: boolean;
@@ -67,6 +68,8 @@ export function ConversationList({
   busyBulk: boolean;
   canAssign: boolean;
   users: UserLite[];
+  /** EPI3.3 — row right-click menu (pin to view / new view from sender) */
+  onRowMenu?: (item: ListItem, x: number, y: number) => void;
 }) {
   const counts = data?.counts ?? {};
   const total = Object.values(counts).reduce((s, n) => s + n, 0);
@@ -190,6 +193,11 @@ export function ConversationList({
               <div
                 key={item.id}
                 onClick={() => onOpen(item.id)}
+                onContextMenu={(e) => {
+                  if (!onRowMenu) return;
+                  e.preventDefault();
+                  onRowMenu(item, e.clientX, e.clientY);
+                }}
                 data-row={item.id}
                 style={{
                   display: "grid",
