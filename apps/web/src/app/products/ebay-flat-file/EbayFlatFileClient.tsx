@@ -1392,11 +1392,18 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       pendingDraftRestoreRef.current = false
       const draft = readDraft(draftKey(marketplaceRef.current, familyId))
       if (draft?.rows?.length) {
-        const { rows: merged, restored } = mergeDraftRows(rows, draft.rows)
+        const { rows: merged, restored, dropped } = mergeDraftRows(rows, draft.rows)
         if (restored > 0) {
           if (!draftNoticeShownRef.current) {
             draftNoticeShownRef.current = true
             setDraftNotice({ count: restored })
+            if (dropped > 0) {
+              toast({
+                title: `${dropped} stale unsaved edit${dropped === 1 ? '' : 's'} discarded`,
+                description: 'They belonged to rows whose identity changed when the listing published — the published version is the truth and is what you see.',
+                tone: 'info',
+              })
+            }
           }
           // EFX P4 — re-derive category columns from the MERGED rows (drafts
           // included), all distinct categories, so saved Category IDs keep
