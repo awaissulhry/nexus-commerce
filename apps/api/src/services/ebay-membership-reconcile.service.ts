@@ -127,6 +127,11 @@ export interface ReconcileResult {
   rewritten: number
   removedStale: number
   unmatched: string[]
+  /** Incident #33 — listing-level custom label (Item.SKU = parent SKU):
+   *  'set' = backfilled by this reconcile; 'kept' = already correct;
+   *  'unsupported' = the listing rejects Trading revises (Inventory-managed);
+   *  'failed' = revise errored (non-fatal). */
+  customLabel?: 'set' | 'kept' | 'unsupported' | 'failed'
 }
 
 /**
@@ -142,6 +147,7 @@ export async function reconcileMembershipsFromEbay(
   const xml = `<?xml version="1.0" encoding="utf-8"?>
 <GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <ItemID>${itemId}</ItemID>
+  <OutputSelector>Item.SKU</OutputSelector>
   <OutputSelector>Item.Variations.Variation.SKU</OutputSelector>
   <OutputSelector>Item.Variations.Variation.Quantity</OutputSelector>
   <OutputSelector>Item.Variations.Variation.VariationSpecifics</OutputSelector>
@@ -227,6 +233,27 @@ export async function reconcileMembershipsFromEbay(
     })
   }
 
+  // Incident #33 — BACKFILL the listing-level custom label (Item.SKU) with
+  // the parent SKU on listings created before the #30 fix. Metadata-only
+  // revise; Inventory-managed listings reject Trading revises → 'unsupported'.
+  let customLabel: ReconcileResult['customLabel']
+  try {
+    const liveItemSku = /<Item>[\s\S]*?<SKU>([^<]*)<\/SKU>/.exec(res.raw)?.[1] ?? ''
+    const isRealParent = Boolean(parentSku) && parentSku !== itemId
+    if (!isRealParent) {
+      customLabel = undefined
+    } else if (liveItemSku === parentSku) {
+      customLabel = 'kept'
+    } else {
+      const reviseXml = `<?xml version="1.0" encoding="utf-8"?>\n<ReviseFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><Item><ItemID>${itemId}</ItemID><SKU>${parentSku}</SKU></Item></ReviseFixedPriceItemRequest>`
+      await callTradingApi('ReviseFixedPriceItem', reviseXml, { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market) })
+      customLabel = 'set'
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    customLabel = /magazzino|inventory/i.test(msg) ? 'unsupported' : 'failed'
+  }
+
   return {
     itemId,
     marketplace: market,
@@ -235,5 +262,6 @@ export async function reconcileMembershipsFromEbay(
     rewritten,
     removedStale: stale.length,
     unmatched: plan.unmatched,
+    ...(customLabel ? { customLabel } : {}),
   }
 }
