@@ -1,4 +1,5 @@
 import type { AddFixedPriceItemInput, TradingVariation } from './ebay-trading-api.service.js'
+import { toTradingConditionId } from './ebay-condition.js'
 
 export type SharedRow = Record<string, unknown>
 export type CapQtyFn = (productId: string | undefined, sku: string, requested: number, market?: string) => number
@@ -91,7 +92,10 @@ export function buildSharedListingInput(
     title: str(src.title),
     description: str(src.description),
     categoryId: str(src.category_id),
-    conditionId: str(src.condition) || '1000',
+    // Incident #16 — the operator writes NEW/USED_EXCELLENT… (Inventory-style
+    // words); Trading wants numeric ConditionID. Translate; unknown words
+    // resolve to '' and the pre-flight below names them (never eBay code 37).
+    conditionId: str(src.condition) ? toTradingConditionId(str(src.condition)) : '1000',
     country: str(src.item_location_country) || 'IT',
     currency: CURRENCY_BY_MARKET[mkt] ?? 'EUR',
     variationSpecificNames,
@@ -192,7 +196,12 @@ export async function createSharedListing(
       const missing: string[] = []
       if (!str(input.title)) missing.push('title')
       if (!str((input as { categoryId?: unknown }).categoryId)) missing.push('category ID')
-      if (!str((input as { conditionId?: unknown }).conditionId ?? (parentRow.condition as string))) missing.push('condition')
+      if (!str((input as { conditionId?: unknown }).conditionId)) {
+        const rawCond = str(parentRow.condition)
+        missing.push(rawCond
+          ? `condition ('${rawCond}' is not a recognized value — use NEW, NEW_OTHER, USED_EXCELLENT, … or a numeric eBay ConditionID)`
+          : 'condition')
+      }
       if (!input.variations.length) missing.push('variant rows')
       const pics = (input as { pictureUrls?: unknown[] }).pictureUrls
       if (Array.isArray(pics) && pics.length === 0) missing.push('images')

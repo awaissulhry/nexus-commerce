@@ -19,24 +19,11 @@ import { Prisma } from '@nexus/database'
 export { AXIS_SYNONYM_GROUPS, axisSynonymKey }
 
 // FF-EN.2 — eBay numeric conditionId → Inventory API ConditionEnum string.
-// get_item_condition_policies returns numeric ids; the flat-file/Inventory
-// push uses the enum string, so we translate before exposing as options.
-export const CONDITION_ID_TO_ENUM: Record<string, string> = {
-  '1000': 'NEW',
-  '1500': 'NEW_OTHER',
-  '1750': 'NEW_WITH_DEFECTS',
-  '2000': 'CERTIFIED_REFURBISHED',
-  '2010': 'EXCELLENT_REFURBISHED',
-  '2020': 'VERY_GOOD_REFURBISHED',
-  '2030': 'GOOD_REFURBISHED',
-  '2500': 'SELLER_REFURBISHED',
-  '2750': 'LIKE_NEW',
-  '3000': 'USED_EXCELLENT',
-  '4000': 'USED_VERY_GOOD',
-  '5000': 'USED_GOOD',
-  '6000': 'USED_ACCEPTABLE',
-  '7000': 'FOR_PARTS_OR_NOT_WORKING',
-};
+// Incident #16: the table now lives in ebay-condition.ts (shared with the
+// Trading path so the two directions can never drift); re-exported here for
+// existing importers.
+export { CONDITION_ID_TO_ENUM } from './ebay-condition.js';
+import { CONDITION_ID_TO_ENUM } from './ebay-condition.js';
 
 // ── Variation group push helper ────────────────────────────────────────
 
