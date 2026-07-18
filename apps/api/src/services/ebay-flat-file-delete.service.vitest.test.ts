@@ -108,13 +108,14 @@ beforeEach(() => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('delete-product', () => {
-  it('sets product.deletedAt, deletes memberships, and attempts delist', async () => {
+  it('sets deletedAt, deletes memberships, and removes ONLY this SKU\'s variations (never whole listings)', async () => {
     const prod = makeProduct({ id: 'p1', sku: 'SKU-A', ebayItemId: 'ITEM-1' })
     const db = mockPrisma({
       productFindFirst: prod,
       membershipFindMany: [{ itemId: 'ITEM-1' }],
       membershipDeleteManyResult: { count: 2 },
     })
+    mockCallTradingApi.mockResolvedValue({ ack: 'Success', raw: '' })
 
     const results: DeleteTargetResult[] = await runEbayFlatFileDelete(db as any, [
       { sku: 'SKU-A', marketplace: 'IT', intent: 'delete-product' },
@@ -130,23 +131,54 @@ describe('delete-product', () => {
     expect(db.product.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ deletedAt: expect.any(Date) }) }),
     )
-    expect(db.product.update).not.toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ id: undefined }) }),
-    )
-
-    // product.delete was NOT called (no hard delete)
-    // (there is no product.delete method on the interface — confirmed absent)
 
     // Memberships were deleted via deleteMany
     expect(db.sharedListingMembership.deleteMany).toHaveBeenCalled()
 
-    // Delist was attempted
-    expect(mockDispatchChannelDelist).toHaveBeenCalledWith(
-      expect.objectContaining({ externalListingId: 'ITEM-1', targetChannel: 'EBAY' }),
+    // FOOTGUN GUARD: the membership's listing is multi-variation and shared —
+    // the SKU's variation is removed; the LISTING is never ended.
+    expect(r.variationRemoval).toBe('removed')
+    expect(mockCallTradingApi).toHaveBeenCalledWith(
+      'ReviseFixedPriceItem',
+      expect.stringContaining('<Delete>true</Delete>'),
+      expect.anything(),
     )
-
-    // delisted is false because the stub returns success: false
+    expect(mockDispatchChannelDelist).not.toHaveBeenCalled()
     expect(r.delisted).toBe(false)
+  })
+
+  it('standalone product (no memberships, own listing) still whole-listing delists', async () => {
+    const prod = makeProduct({ id: 'p1', sku: 'SKU-A', ebayItemId: 'ITEM-9' })
+    const db = mockPrisma({
+      productFindFirst: prod,
+      membershipFindMany: [],
+      membershipDeleteManyResult: { count: 0 },
+    })
+
+    const [r] = await runEbayFlatFileDelete(db as any, [
+      { sku: 'SKU-A', marketplace: 'IT', intent: 'delete-product' },
+    ])
+
+    expect(r.variationRemoval).toBeUndefined()
+    expect(mockDispatchChannelDelist).toHaveBeenCalledWith(
+      expect.objectContaining({ externalListingId: 'ITEM-9', targetChannel: 'EBAY' }),
+    )
+  })
+
+  it('variation child (parentId set) NEVER delists its family ebayItemId', async () => {
+    const prod = { ...makeProduct({ id: 'p1', sku: 'SKU-A', ebayItemId: 'FAMILY-ITEM' }), parentId: 'parent-1' }
+    const db = mockPrisma({
+      productFindFirst: prod,
+      membershipFindMany: [],
+      membershipDeleteManyResult: { count: 0 },
+    })
+
+    const [r] = await runEbayFlatFileDelete(db as any, [
+      { sku: 'SKU-A', marketplace: 'IT', intent: 'delete-product' },
+    ])
+
+    expect(r.softDeleted).toEqual(['p1'])
+    expect(mockDispatchChannelDelist).not.toHaveBeenCalled()
   })
 
   it('resolves product by productId when provided', async () => {

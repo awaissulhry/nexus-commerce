@@ -965,6 +965,10 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       marketplace?: string;
       mode?: 'api' | 'feed';
       strategy?: 'full' | 'offers-only';
+      /** Adopted (_shared) rows the client excluded from direct push — they are
+       *  pool-fan-out-managed. Recorded in push history so the operator's row
+       *  count ALWAYS reconciles ("66 pushed" vs a 105-row file confusion). */
+      pooledRows?: Array<{ sku: string; itemId?: string }>;
     }
   }>('/ebay/flat-file/push', async (request, reply) => {
     const {
@@ -973,6 +977,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       marketplace = 'IT',
       mode = 'api',
       strategy = 'full',
+      pooledRows = [],
     } = request.body;
 
     if (!Array.isArray(rows) || rows.length === 0) {
@@ -1227,9 +1232,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     const perRowResults: Array<{
       sku: string;
       market: string;
-      status: 'PUSHED' | 'ERROR';
+      // PUSHED/ERROR = direct push outcomes; POOL = adopted row managed via
+      // the pool fan-out; FAMILY = family-header parent (variations push
+      // individually). POOL/FAMILY exist so EVERY row of the operator's scope
+      // is accounted in history — counts must always reconcile.
+      status: 'PUSHED' | 'ERROR' | 'POOL' | 'FAMILY';
       message: string;
       itemId?: string;
+      listingId?: string;
     }> = [];
 
     // EFX D7 — group-level variation-axis warnings collected across every
@@ -1994,8 +2004,39 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       }
     }
 
+    // ── Count integrity: EVERY row of the operator's scope gets a line ──
+    // (1) family-header parents pushed as groups never had their own line;
+    // (2) adopted rows excluded client-side (pool-managed) appeared nowhere.
+    // Without these, history said "66 pushed" for a 105-row file.
+    const primaryMp = (targetMarkets[0] ?? marketplace).toUpperCase();
+    const linedSkus = new Set(perRowResults.map((r) => `${r.sku}::${r.market}`));
+    for (const r of rows as Array<Record<string, unknown>>) {
+      const sku = String(r.sku ?? '').trim();
+      if (!sku) continue;
+      const isParent = r._isParent === true || String(r.parentage ?? '').toLowerCase() === 'parent';
+      if (!isParent) continue;
+      for (const mp of targetMarkets) {
+        if (!linedSkus.has(`${sku}::${mp}`)) {
+          perRowResults.push({ sku, market: mp, status: 'FAMILY', message: 'family header — variations push individually' });
+          linedSkus.add(`${sku}::${mp}`);
+        }
+      }
+    }
+    for (const pr of pooledRows) {
+      const sku = String(pr?.sku ?? '').trim();
+      if (!sku) continue;
+      perRowResults.push({
+        sku,
+        market: primaryMp,
+        status: 'POOL',
+        ...(pr.itemId ? { listingId: String(pr.itemId) } : {}),
+        message: `adopted row${pr.itemId ? ` (ItemID ${pr.itemId})` : ''} — price/quantity managed via the pool fan-out`,
+      });
+    }
+
     const pushed = perRowResults.filter((r) => r.status === 'PUSHED').length;
     const errors = perRowResults.filter((r) => r.status === 'ERROR').length;
+    const pooled = perRowResults.filter((r) => r.status === 'POOL').length;
 
     // Durable push-history record (mirrors AmazonFlatFileFeedJob) so a failed push
     // is inspectable forever, not a 3-second toast. Non-fatal.
@@ -2005,7 +2046,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         data: {
           mode: 'api',
           markets: targetMarkets,
-          skuCount: rows.length,
+          skuCount: rows.length + pooledRows.length,
           status: errors === 0 ? 'DONE' : pushed === 0 ? 'FATAL' : 'PARTIAL',
           pushed,
           failed: errors,
@@ -2029,7 +2070,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       });
     } catch { /* SSE is best-effort */ }
 
-    return reply.send({ mode: 'api', pushed, errors, skipped: skippedCount, results: perRowResults, warnings: oversellWarnings, axisWarnings });
+    return reply.send({ mode: 'api', pushed, errors, pooled, skipped: skippedCount, results: perRowResults, warnings: oversellWarnings, axisWarnings });
   });
 
   // ── GET /api/ebay/flat-file/pushes ──────────────────────────────────

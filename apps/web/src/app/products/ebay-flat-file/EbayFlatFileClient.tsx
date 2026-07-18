@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react'
 import {
   AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, FileText, GitBranch, GitFork, History, ImageIcon, Loader2, ListOrdered, Pin, Plus, RefreshCw, RotateCcw, Search, Send, Trash2, Unlink, Upload, X, Zap,
 } from 'lucide-react'
@@ -573,13 +573,86 @@ function getRowItemId(row: EbayRow, marketplace: string): string | undefined {
   return (mktId ?? row.ebay_item_id) || undefined
 }
 
+/**
+ * Perf isolation (2026-07-18): interaction state (theme selection / buffer
+ * input) lives INSIDE these memoized modals. Held in the parent it re-rendered
+ * the entire grid on every keystroke/selection — the operator felt it as
+ * "Set description theme is slow".
+ */
+const ThemeBulkModal = memo(function ThemeBulkModal({
+  count, marketplace, themes, onApply, onClose,
+}: {
+  count: number
+  marketplace: string
+  themes: Array<{ id: string; name: string; isDefault: boolean }>
+  onApply: (value: string) => void
+  onClose: () => void
+}) {
+  const [value, setValue] = useState('')
+  const def = themes.find((t) => t.isDefault)
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Set description theme — ${count} row${count === 1 ? '' : 's'} (${marketplace})`}
+      size="sm"
+      footer={
+        <>
+          <Button size="sm" variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button size="sm" onClick={() => onApply(value)}>Apply</Button>
+        </>
+      }
+    >
+      <p className="text-xs text-slate-500 mb-2">Per-market like subtitle: this assigns the {marketplace} theme; other markets keep their own.</p>
+      <Listbox
+        ariaLabel="Description theme"
+        value={value}
+        options={[
+          { value: '', label: `Default${def ? ` (${def.name})` : ''}` },
+          { value: 'none', label: 'None — raw description' },
+          ...themes.map((t) => ({ value: t.id, label: t.name })),
+        ]}
+        onChange={setValue}
+      />
+    </Modal>
+  )
+})
+
+const EbayBufferModal = memo(function EbayBufferModal({
+  count, onApply, onClose,
+}: {
+  count: number
+  onApply: (buffer: number) => void
+  onClose: () => void
+}) {
+  const [input, setInput] = useState('1')
+  const apply = () => onApply(Math.max(0, Math.floor(Number(input) || 0)))
+  return (
+    <Modal open onClose={onClose} title="Set buffer" size="sm"
+      footer={
+        <>
+          <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" size="sm" onClick={apply}>Set buffer</Button>
+        </>
+      }>
+      <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
+        Reserve units from the shared pool on <strong>{count}</strong> Following listing{count === 1 ? '' : 's'}. Each will then advertise <strong>pool − buffer</strong> — its live quantity may change and a sync is queued.
+      </p>
+      <label className="block text-xs font-medium text-slate-500 mb-1">Units to hold back</label>
+      <input type="number" min={0} value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') apply() }}
+        autoFocus
+        className="w-28 px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
+    </Modal>
+  )
+})
+
 function EbayDeleteConfirmModal({
   rows,
   allRows,
   marketplace,
   loading,
-  scope,
-  onScopeChange,
   onConfirm,
   onClose,
 }: {
@@ -587,14 +660,15 @@ function EbayDeleteConfirmModal({
   allRows: EbayRow[]
   marketplace: string
   loading: boolean
-  /** Owner-controlled scope for real (non-adopted) rows:
-   *  'channel' = remove the eBay listing only (product stays in the family file)
-   *  'product' = also soft-delete the product (row leaves the file for good) */
-  scope: 'channel' | 'product'
-  onScopeChange: (s: 'channel' | 'product') => void
-  onConfirm: () => void
+  onConfirm: (scope: 'channel' | 'product') => void
   onClose: () => void
 }) {
+  /** Owner-controlled scope for real (non-adopted) rows — LOCAL state so
+   *  toggling the radio never re-renders the grid behind the modal:
+   *  'channel' = remove the eBay listing only (product leaves this file too)
+   *  'product' = also soft-delete the product (recoverable from Products) */
+  const [scope, setScope] = useState<'channel' | 'product'>('channel')
+  const onScopeChange = setScope
   const isSingle = rows.length === 1
   const intents = rows.map((r) => deriveDeleteIntent(r, allRows))
   const familyCount  = intents.filter((i) => i === 'delete-family').length
@@ -649,7 +723,7 @@ function EbayDeleteConfirmModal({
       footer={
         <>
           <Button size="sm" variant="ghost" onClick={onClose} disabled={loading}>Cancel</Button>
-          <Button size="sm" variant="danger" onClick={onConfirm} loading={loading}>
+          <Button size="sm" variant="danger" onClick={() => onConfirm(scope)} loading={loading}>
             <Trash2 className="w-3.5 h-3.5 mr-1.5" />
             {actionLabel}
           </Button>
@@ -689,7 +763,6 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const { toast } = useToast()
   const confirm = useConfirm() // FM Phase 3 — bulk Follow/Pinned confirmation
   const [bufferModal, setBufferModal] = useState<{ productIds: string[] } | null>(null) // FM Phase 4 bulk buffer
-  const [bufferInput, setBufferInput] = useState('1')
   const [marketplace, setMarketplace] = useState(initialMarketplace.toUpperCase())
   const BACKEND = getBackendUrl()
 
@@ -699,8 +772,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // P2.D2 — delete confirm state
   const [deleteConfirmRows, setDeleteConfirmRows] = useState<EbayRow[] | null>(null)
   const [deleteLoading, setDeleteLoading]         = useState(false)
-  // Owner-controlled delete scope (defaults to the safe channel-only removal)
-  const [deleteScope, setDeleteScope]             = useState<'channel' | 'product'>('channel')
+
   const [feedStatus, setFeedStatus]           = useState<FeedStatus | null>(null)
   const [publishPanelOpen, setPublishPanelOpen] = useState(false)
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false)
@@ -827,6 +899,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     issues: PrePublishIssue[]
     sendRows: BaseRow[]
     skippedByAction: number
+    pooledRows: Array<{ sku: string; itemId?: string }>
   } | null>(null)
   const [valueOrderOpen, setValueOrderOpen] = useState(false)
 
@@ -996,7 +1069,6 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     selected: Set<string>
     setRows: (rows: BaseRow[]) => void
     pushHistory: (rows: BaseRow[]) => void
-    value: string
   }>(null)
 
   // B3 — category breadcrumbs (English preferred) for the category_id cells.
@@ -1380,14 +1452,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       toast.error('Select some Following listings — a buffer only applies while Following.')
       return
     }
-    setBufferInput('1')
     setBufferModal({ productIds })
   }, [toast])
 
-  const applyEbayBufferModal = useCallback(async () => {
+  const applyEbayBufferModal = useCallback(async (buffer: number) => {
     if (!bufferModal) return
     const mp = marketplaceRef.current
-    const buffer = Math.max(0, Math.floor(Number(bufferInput) || 0))
     try {
       const res = await applyBulkBuffer({ productIds: bufferModal.productIds, channel: 'EBAY', markets: [mp], buffer })
       const parts = [`${res.updated} → buffer ${buffer}`]
@@ -1398,7 +1468,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     } catch (e) {
       toast.error(`Couldn't set buffer — ${e instanceof Error ? e.message : String(e)}`)
     }
-  }, [bufferModal, bufferInput, toast, reloadGridPreservingEdits])
+  }, [bufferModal, toast, reloadGridPreservingEdits])
 
   // Push status changed anywhere (this tab's push, another tab, or the feed
   // poll cron finishing a bulk task) → refresh itemIds/status live.
@@ -1656,7 +1726,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── P2.D2 — API: delete rows ──────────────────────────────────────────
 
-  const handleExecuteDelete = useCallback(async () => {
+  const handleExecuteDelete = useCallback(async (deleteScope: 'channel' | 'product' = 'channel') => {
     if (!deleteConfirmRows || !deleteConfirmRows.length) return
     const allRows = latestRowsRef.current as EbayRow[]
     const targets = deleteConfirmRows.map((r) => {
@@ -1762,13 +1832,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         toast.success(title)
       }
       setDeleteConfirmRows(null)
-      setDeleteScope('channel')
     } catch (err) {
       toast.error('Delete failed: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setDeleteLoading(false)
     }
-  }, [deleteConfirmRows, marketplace, BACKEND, ebayKey, toast, deleteScope])
+  }, [deleteConfirmRows, marketplace, BACKEND, ebayKey, toast])
 
   // ── API: push to eBay ─────────────────────────────────────────────────
 
@@ -1794,6 +1863,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     // source (they'd create a phantom Inventory-API listing). Mirror the grid's edit block.
     const toPush = scoped.filter((r) => !(r as EbayRow)._readonly && !(r as EbayRow)._shared)
     const adoptedExcluded = scoped.length - toPush.length
+    // Count integrity: adopted rows are EXCLUDED from direct push but must be
+    // ACCOUNTED in push history ("66 pushed" vs a 105-row file read as a bug).
+    const pooledRows = scoped
+      .filter((r) => (r as EbayRow)._shared === true || (r as EbayRow)._readonly === true)
+      .map((r) => ({ sku: String((r as EbayRow).sku ?? ''), itemId: getRowItemId(r as EbayRow, marketplaceRef.current) }))
+      .filter((p) => p.sku)
     if (!toPush.length) {
       toast({
         title: 'Nothing to push directly',
@@ -1879,12 +1954,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     if (issues.length > 0) {
       console.info(`[eBay publish] pre-publish review: ${issues.length} issue(s) — dialog opened`, issues.map((i) => i.message))
       toast({ title: `${issues.length} pre-publish check${issues.length === 1 ? '' : 's'} to review`, description: 'A review dialog is open — "Publish anyway" proceeds.', tone: 'warning' })
-      setPrePublishGate({ issues, sendRows, skippedByAction })
+      setPrePublishGate({ issues, sendRows, skippedByAction, pooledRows })
       return
     }
 
     console.info(`[eBay publish] executing push: ${sendRows.length} rows → ${publishTargets.join(',')}`)
-    await executePush(rows, sendRows, skippedByAction)
+    await executePush(rows, sendRows, skippedByAction, pooledRows)
   }
 
   /**
@@ -1928,7 +2003,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   /** S2 — the actual push request. Extracted from pushToEbay so the warn gate
    *  can resume it unchanged when the operator clicks "Publish anyway". */
-  async function executePush(rows: BaseRow[], sendRows: BaseRow[], skippedByAction: number) {
+  async function executePush(rows: BaseRow[], sendRows: BaseRow[], skippedByAction: number, pooledRows: Array<{ sku: string; itemId?: string }> = []) {
     setPushing(true)
     try {
       // DSP.7 — pre-save dirty rows BEFORE pushing to eBay. Pre-DSP.7
@@ -1948,7 +2023,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       const res = await fetch(`${BACKEND}/api/ebay/flat-file/push`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: sendRows, markets: publishTargets }),
+        body: JSON.stringify({ rows: sendRows, markets: publishTargets, pooledRows }),
       })
       if (!res.ok) {
         // Surface the server's real message, not a bare "HTTP 500". The push
@@ -1956,7 +2031,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         const body = await res.json().catch(() => null) as { error?: string } | null
         throw new Error(body?.error ? `${body.error} (HTTP ${res.status})` : `HTTP ${res.status}`)
       }
-      const json = await res.json() as { results?: PushResult[]; taskId?: string; axisWarnings?: string[] }
+      const json = await res.json() as { results?: PushResult[]; taskId?: string; axisWarnings?: string[]; pushed?: number; pooled?: number }
       if (skippedByAction > 0) {
         toast({ title: `${skippedByAction} row${skippedByAction !== 1 ? 's' : ''} skipped (Action = skip)`, tone: 'info' })
       }
@@ -1974,7 +2049,15 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           toast.error(`${first.sku}: ${first.message}${more}`)
           setHistoryPanelOpen(true)
         } else {
-          toast.success(`Pushed ${json.results.length} rows`)
+          // Honest counts: results now include FAMILY/POOL accounting lines —
+          // "pushed" must mean directly pushed, with the pool shown separately.
+          const directPushed = json.pushed ?? json.results.filter((r) => r.status === 'PUSHED').length
+          const pooledCount = json.pooled ?? json.results.filter((r) => (r as { status?: string }).status === 'POOL').length
+          toast.success(
+            pooledCount > 0
+              ? `Pushed ${directPushed} rows · ${pooledCount} pool-managed — ${json.results.length} total accounted`
+              : `Pushed ${directPushed} rows`,
+          )
         }
         // FFP.5 — refresh the MOUNTED grid (old onReload only warmed the SWR
         // cache; the new Item ID / status columns never appeared until a manual
@@ -3037,7 +3120,6 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           selected: new Set(ctx.selectedRows),
           setRows: ctx.setRows,
           pushHistory: ctx.pushHistory,
-          value: '',
         }),
       },
     ]
@@ -3446,40 +3528,24 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           onClose={() => setAspectsPanelRowId(null)}
         />
 
-        {/* ED.5b — bulk theme assignment for the selected rows (active market) */}
+        {/* ED.5b — bulk theme assignment (perf-isolated: selection state is
+            local to the modal, so choosing a theme never re-renders the grid) */}
         {themeBulk && (
-          <Modal
-            open
+          <ThemeBulkModal
+            count={themeBulk.selected.size}
+            marketplace={marketplace}
+            themes={descThemes}
+            onApply={(value) => {
+              const next = (themeBulk.rows as BaseRow[]).map((r) =>
+                themeBulk.selected.has(String(r._rowId)) ? { ...r, description_theme: value, _dirty: true } : r,
+              )
+              themeBulk.pushHistory(next)
+              themeBulk.setRows(next)
+              toast.success(`Theme set on ${themeBulk.selected.size} row${themeBulk.selected.size === 1 ? '' : 's'} — Save to persist`)
+              setThemeBulk(null)
+            }}
             onClose={() => setThemeBulk(null)}
-            title={`Set description theme — ${themeBulk.selected.size} row${themeBulk.selected.size === 1 ? '' : 's'} (${marketplace})`}
-            size="sm"
-            footer={
-              <>
-                <Button size="sm" variant="ghost" onClick={() => setThemeBulk(null)}>Cancel</Button>
-                <Button size="sm" onClick={() => {
-                  const next = (themeBulk.rows as BaseRow[]).map((r) =>
-                    themeBulk.selected.has(String(r._rowId)) ? { ...r, description_theme: themeBulk.value, _dirty: true } : r,
-                  )
-                  themeBulk.pushHistory(next)
-                  themeBulk.setRows(next)
-                  toast.success(`Theme set on ${themeBulk.selected.size} row${themeBulk.selected.size === 1 ? '' : 's'} — Save to persist`)
-                  setThemeBulk(null)
-                }}>Apply</Button>
-              </>
-            }
-          >
-            <p className="text-xs text-slate-500 mb-2">Per-market like subtitle: this assigns the {marketplace} theme; other markets keep their own.</p>
-            <Listbox
-              ariaLabel="Description theme"
-              value={themeBulk.value}
-              options={[
-                { value: '', label: `Default${descThemes.find((t) => t.isDefault) ? ` (${descThemes.find((t) => t.isDefault)!.name})` : ''}` },
-                { value: 'none', label: 'None — raw description' },
-                ...descThemes.map((t) => ({ value: t.id, label: t.name })),
-              ]}
-              onChange={(v) => setThemeBulk((s) => (s ? { ...s, value: v } : s))}
-            />
-          </Modal>
+          />
         )}
 
         {/* ED.4 — theme manager; sample product = first real row for live previews */}
@@ -3548,7 +3614,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
               // Traceable audit trail: operator proceeded past N issues.
               console.warn(`[eBay push] Publish anyway — proceeding past ${gate.issues.length} pre-publish issue(s):`, gate.issues.map((i) => i.message))
               setPrePublishGate(null)
-              void executePush(rows, gate.sendRows, gate.skippedByAction)
+              void executePush(rows, gate.sendRows, gate.skippedByAction, gate.pooledRows)
             }}
           />
         )}
@@ -3802,32 +3868,18 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           allRows={latestRowsRef.current as EbayRow[]}
           marketplace={marketplace}
           loading={deleteLoading}
-          scope={deleteScope}
-          onScopeChange={setDeleteScope}
-          onConfirm={() => void handleExecuteDelete()}
-          onClose={() => { setDeleteConfirmRows(null); setDeleteScope('channel') }}
+          onConfirm={(scope) => void handleExecuteDelete(scope)}
+          onClose={() => setDeleteConfirmRows(null)}
         />
       )}
 
-      {/* FM Phase 4 — bulk Set buffer modal */}
+      {/* FM Phase 4 — bulk Set buffer modal (perf-isolated input state) */}
       {bufferModal && (
-        <Modal open onClose={() => setBufferModal(null)} title="Set buffer" size="sm"
-          footer={
-            <>
-              <Button variant="ghost" size="sm" onClick={() => setBufferModal(null)}>Cancel</Button>
-              <Button variant="primary" size="sm" onClick={() => void applyEbayBufferModal()}>Set buffer</Button>
-            </>
-          }>
-          <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
-            Reserve units from the shared pool on <strong>{bufferModal.productIds.length}</strong> Following listing{bufferModal.productIds.length === 1 ? '' : 's'}. Each will then advertise <strong>pool − buffer</strong> — its live quantity may change and a sync is queued.
-          </p>
-          <label className="block text-xs font-medium text-slate-500 mb-1">Units to hold back</label>
-          <input type="number" min={0} value={bufferInput}
-            onChange={(e) => setBufferInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') void applyEbayBufferModal() }}
-            autoFocus
-            className="w-28 px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
-        </Modal>
+        <EbayBufferModal
+          count={bufferModal.productIds.length}
+          onApply={(buffer) => void applyEbayBufferModal(buffer)}
+          onClose={() => setBufferModal(null)}
+        />
       )}
 
       {/* ColumnGroupModal — controlled by useFlatFileCore columnsOpen state */}

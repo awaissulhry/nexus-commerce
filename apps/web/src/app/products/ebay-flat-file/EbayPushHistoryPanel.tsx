@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { History, RefreshCw, ChevronRight, ChevronDown, Download, Copy, X, Search } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
-type SkuStatus = 'PUSHED' | 'ERROR'
+type SkuStatus = 'PUSHED' | 'ERROR' | 'POOL' | 'FAMILY'
 interface PerSku { sku: string; market?: string; status: SkuStatus; listingId?: string; message?: string }
 interface PushJob {
   id: string
@@ -51,6 +51,8 @@ function statusChip(job: PushJob): { cls: string; label: string } {
 
 const skuCls: Record<SkuStatus, string> = {
   PUSHED: 'text-emerald-600 dark:text-emerald-400',
+  POOL: 'text-sky-600 dark:text-sky-400',
+  FAMILY: 'text-slate-500 dark:text-slate-400',
   ERROR: 'text-red-600 dark:text-red-400',
 }
 
@@ -150,6 +152,17 @@ export function EbayPushHistoryPanel({ onClose, refreshKey }: { onClose: () => v
                         <div className="text-xs text-slate-500 dark:text-slate-400 mb-2 flex flex-wrap gap-x-3">
                           <span>{job.skuCount} row{job.skuCount === 1 ? '' : 's'}</span>
                           <span className="text-emerald-600 dark:text-emerald-400">{job.pushed} pushed</span>
+                          {(() => {
+                            const lines = job.perSkuResults ?? []
+                            const pool = lines.filter((r) => r.status === 'POOL').length
+                            const fam = lines.filter((r) => r.status === 'FAMILY').length
+                            return (
+                              <>
+                                {pool > 0 && <span className="text-sky-600 dark:text-sky-400">{pool} pool-managed</span>}
+                                {fam > 0 && <span>{fam} family header{fam === 1 ? '' : 's'}</span>}
+                              </>
+                            )
+                          })()}
                           {job.failed > 0 && <span className="text-red-600 dark:text-red-400">{job.failed} error{job.failed === 1 ? '' : 's'}</span>}
                           {job.taskId && <span className="font-mono text-slate-400" title={job.taskId}>task {job.taskId.slice(0, 14)}…</span>}
                         </div>
@@ -175,6 +188,8 @@ export function EbayPushHistoryPanel({ onClose, refreshKey }: { onClose: () => v
                                 <option value="all">All</option>
                                 <option value="ERROR">Errors</option>
                                 <option value="PUSHED">Pushed</option>
+                                <option value="POOL">Pool-managed</option>
+                                <option value="FAMILY">Family headers</option>
                               </select>
                               <button type="button" onClick={() => exportCsv(job)} title="Export CSV" className="h-7 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded hover:bg-white dark:hover:bg-slate-800 inline-flex items-center gap-1"><Download className="w-3 h-3" />CSV</button>
                               {job.failed > 0 && (

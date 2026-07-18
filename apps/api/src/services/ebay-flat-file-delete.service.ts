@@ -374,8 +374,8 @@ async function handleDeleteProduct(
   // Resolve — prefer productId FK, fall back to unique sku.
   const product = (await prisma.product.findFirst({
     where: productId ? { id: productId } : { sku },
-    select: { id: true, sku: true, deletedAt: true, ebayItemId: true },
-  } as any)) as ProductRow | null
+    select: { id: true, sku: true, deletedAt: true, ebayItemId: true, parentId: true },
+  } as any)) as (ProductRow & { parentId?: string | null }) | null
 
   if (!product) {
     return {
@@ -420,17 +420,24 @@ async function handleDeleteProduct(
   })
 
   // Best-effort delist for every eBay ItemID associated with this product.
-  const delistIds = new Set<string>(
-    [
-      ...memberships.map((m) => m.itemId),
-      product.ebayItemId ?? null,
-    ].filter((x): x is string => Boolean(x)),
-  )
-
+  // FOOTGUN FIX (2026-07-18): membership itemIds are MULTI-VARIATION listings
+  // shared with other SKUs — whole-listing delist here would end EVERY adopted
+  // listing because ONE pool child was deleted. Remove ONLY this SKU's
+  // variation from each listing. Same for a variation child's own ebayItemId
+  // (it names the FAMILY listing, not a standalone one).
   let delisted = false
-  for (const iid of delistIds) {
-    const ok = await tryDelist(iid, marketplace, product.id)
-    if (ok) delisted = true
+  let variationRemoval: DeleteTargetResult['variationRemoval']
+  const membershipItemIds = [...new Set(memberships.map((m) => m.itemId))]
+  for (const iid of membershipItemIds) {
+    const out = await tryRemoveVariationFromListing(iid, product.sku, marketplace)
+    // Report the worst outcome so a partial failure is never hidden.
+    if (variationRemoval !== 'failed') {
+      variationRemoval = out === 'failed' ? 'failed' : variationRemoval === 'zeroed' ? 'zeroed' : out
+    }
+  }
+  const isVariationChild = Boolean(product.parentId)
+  if (!isVariationChild && product.ebayItemId && !membershipItemIds.includes(product.ebayItemId)) {
+    delisted = await tryDelist(product.ebayItemId, marketplace, product.id)
   }
 
   return {
@@ -439,6 +446,7 @@ async function handleDeleteProduct(
     softDeleted: [product.id],
     membershipsRemoved,
     delisted,
+    ...(variationRemoval ? { variationRemoval } : {}),
   }
 }
 
