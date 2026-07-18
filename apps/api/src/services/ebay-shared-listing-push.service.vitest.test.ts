@@ -106,6 +106,9 @@ describe('createSharedListing', () => {
     expect(res.memberships).toBe(2)
     expect(db.created).toHaveLength(2)
     expect(db.created[0]).toMatchObject({ marketplace: 'IT', sku: 'LNR-BLK-M', itemId: '110556677', parentSku: 'LNR-BLK', variationSpecifics: { Taglia: 'M' } })
+    // Incident #24 — the pushed row rides the membership from birth: the grid
+    // shows EXACTLY the pushed file after creation, never a base regeneration.
+    expect((db.created[0] as { flatFileSnapshot?: Record<string, unknown> }).flatFileSnapshot?.sku).toBe('LNR-BLK-M')
     expect(addFn).toHaveBeenCalledOnce()
   })
 

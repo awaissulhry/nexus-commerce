@@ -331,6 +331,20 @@ export async function createSharedListing(
       for (const f of found) productIdBySku.set(f.sku as string, f.id as string)
     }
 
+    // Incident #24 — round-trip integrity from birth: the membership stores
+    // the PUSHED row verbatim (flatFileSnapshot), so the grid's synthesized
+    // rows after creation are exactly the file the operator pushed — never a
+    // regeneration from base product data ("reverts to a previous version").
+    const rowBySku = new Map<string, Record<string, unknown>>()
+    for (const r of variantRows) {
+      const rsku = str(r.sku)
+      if (rsku) rowBySku.set(rsku, r as Record<string, unknown>)
+    }
+    const snapshotFor = (vsku: string): Prisma.InputJsonObject | undefined => {
+      const r = rowBySku.get(vsku)
+      if (!r) return undefined
+      return Object.fromEntries(Object.entries(r).filter(([k]) => !k.startsWith('_'))) as Prisma.InputJsonObject
+    }
     await db.$transaction(input.variations.map((v) =>
       db.sharedListingMembership.create({
         data: {
@@ -344,6 +358,7 @@ export async function createSharedListing(
           lastQtyPushed: v.quantity,
           lastPushedAt: new Date(),
           status: 'ACTIVE',
+          ...(snapshotFor(v.sku) ? { flatFileSnapshot: snapshotFor(v.sku) } : {}),
         },
       })
     ))
