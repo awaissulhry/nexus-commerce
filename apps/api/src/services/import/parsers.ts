@@ -188,6 +188,29 @@ export async function parseXlsx(bytes: Uint8Array): Promise<ParsedFile> {
   await wb.xlsx.load(bytes as unknown as ArrayBuffer)
   const sheet = wb.worksheets[0]
   if (!sheet) return { headers: [], rows: [] }
+
+  // Incident #31 — MERGED CELLS. Excel stores a merged range's value only in
+  // its top-left master cell; every covered cell reads null, so grouped
+  // columns (Team Name / Color written once per block and merged down) parsed
+  // as BLANK for all rows under the merge — "cells missing in between".
+  // Expand each merge so every covered cell carries the master value.
+  const mergeMaster = new Map<string, unknown>() // 'row:col' → master value
+  {
+    const colToNum = (letters: string) => letters.split('').reduce((n, ch) => n * 26 + (ch.charCodeAt(0) - 64), 0)
+    const merges: string[] = ((sheet.model as { merges?: string[] } | undefined)?.merges ?? [])
+    for (const range of merges) {
+      const m = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(String(range).replace(/\$/g, ''))
+      if (!m) continue
+      const top = Number(m[2]); const bottom = Number(m[4])
+      const left = colToNum(m[1]); const right = colToNum(m[3])
+      const masterVal = sheet.getRow(top).getCell(left).value
+      if (masterVal == null || masterVal === '') continue
+      for (let r = top; r <= bottom; r++) {
+        for (let c = left; c <= right; c++) mergeMaster.set(`${r}:${c}`, masterVal)
+      }
+    }
+  }
+
   const headers: string[] = []
   const rows: Record<string, unknown>[] = []
   let headerRowIdx: number | null = null
@@ -205,7 +228,11 @@ export async function parseXlsx(bytes: Uint8Array): Promise<ParsedFile> {
     const obj: Record<string, unknown> = {}
     for (let c = 0; c < headers.length; c++) {
       const cell = row.getCell(c + 1)
-      const raw = cell.value
+      let raw: unknown = cell.value
+      if (raw == null || raw === '') {
+        const covered = mergeMaster.get(`${rowIdx}:${c + 1}`)
+        if (covered != null) raw = covered
+      }
       // ExcelJS returns rich objects for some cell types — coerce
       // to scalar where possible.
       let coerced: unknown = raw
