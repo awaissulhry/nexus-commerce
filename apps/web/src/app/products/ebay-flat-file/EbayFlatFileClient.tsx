@@ -1724,6 +1724,16 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // ── API: push to eBay ─────────────────────────────────────────────────
 
   async function pushToEbay(rows: BaseRow[], selectedRows: Set<string>) {
+    try {
+      await pushToEbayInner(rows, selectedRows)
+    } catch (err) {
+      // A silent throw here was indistinguishable from a dead button — never again.
+      console.error('[eBay publish] failed before sending', err)
+      toast.error('Publish failed before sending: ' + (err instanceof Error ? err.message : String(err)))
+    }
+  }
+
+  async function pushToEbayInner(rows: BaseRow[], selectedRows: Set<string>) {
     // Full Publish semantics (2026-07-18): no selection = the WHOLE file.
     // The old dirty-rows-only default made the button appear completely dead
     // on a saved grid (nothing dirty → tiny toast → "not working at all");
@@ -1752,6 +1762,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         tone: 'info',
       })
     }
+    console.info(`[eBay publish] scoped=${scoped.length} pushable=${toPush.length} adoptedExcluded=${adoptedExcluded} selection=${selectedRows.size}`)
 
     // FFP.6 — Action column: 'skip' rows never leave the client; deactivate/end
     // rows go to the server but are exempt from publish validation (an 'end'
@@ -1790,7 +1801,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         toast.error(`${blocking.length} blocking issue${blocking.length > 1 ? 's' : ''} — fix before pushing`)
         return
       }
-      if (!confirm(`${excludableCount} row(s) have blocking issues but aren't live on eBay ${marketplace} yet.\n\nPush the other ${rest.length} row(s) without them? The blocked rows stay untouched on eBay.`)) return
+      const proceed = await confirm({
+        title: `${excludableCount} row${excludableCount === 1 ? ' has' : 's have'} blocking issues`,
+        description: `They aren't live on eBay ${marketplace} yet. Push the other ${rest.length} row${rest.length === 1 ? '' : 's'} without them? The blocked rows stay untouched on eBay.`,
+        confirmLabel: `Push ${rest.length} row${rest.length === 1 ? '' : 's'}`,
+      })
+      if (!proceed) { console.info('[eBay publish] operator declined partial push'); return }
       sendRows = rest
     } else {
       setBlockingErrors([])
@@ -1812,10 +1828,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       issues = await gatherPrePublishIssues(sendRows, rows)
     } catch { /* ignore — warn scan must never block the push */ }
     if (issues.length > 0) {
+      console.info(`[eBay publish] pre-publish review: ${issues.length} issue(s) — dialog opened`, issues.map((i) => i.message))
+      toast({ title: `${issues.length} pre-publish check${issues.length === 1 ? '' : 's'} to review`, description: 'A review dialog is open — "Publish anyway" proceeds.', tone: 'warning' })
       setPrePublishGate({ issues, sendRows, skippedByAction })
       return
     }
 
+    console.info(`[eBay publish] executing push: ${sendRows.length} rows → ${publishTargets.join(',')}`)
     await executePush(rows, sendRows, skippedByAction)
   }
 
