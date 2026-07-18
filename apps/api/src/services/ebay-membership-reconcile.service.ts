@@ -172,7 +172,27 @@ export async function reconcileMembershipsFromEbay(
   const plan = planMembershipReconcile(live, pool)
 
   // parentSku continuity: keep whatever this listing's memberships used.
-  const parentSku = existing[0]?.parentSku ?? itemId
+  // First-touch listings (no memberships yet) resolve the POOL family's real
+  // parent SKU — a numeric itemId fallback broke family grouping in the grid
+  // (audit S6): loadSharedMembershipRows matches by real parent SKUs.
+  let parentSku = existing[0]?.parentSku ?? ''
+  if (!parentSku) {
+    const firstPoolId = plan.entries.find((e) => e.productId)?.productId
+    if (firstPoolId) {
+      const poolChild = await prisma.product.findFirst({
+        where: { id: firstPoolId },
+        select: { parentId: true },
+      })
+      if (poolChild?.parentId) {
+        const poolParent = await prisma.product.findFirst({
+          where: { id: poolChild.parentId },
+          select: { sku: true },
+        })
+        if (poolParent?.sku) parentSku = poolParent.sku
+      }
+    }
+  }
+  if (!parentSku) parentSku = itemId
 
   let rewritten = 0
   for (const e of plan.entries) {

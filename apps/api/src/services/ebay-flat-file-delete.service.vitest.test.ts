@@ -276,10 +276,11 @@ describe('delete-family', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('remove-listing', () => {
-  it('deletes ONE membership, does NOT soft-delete the product, attempts delist', async () => {
+  it('deletes ONE membership, does NOT soft-delete the product, removes the variation (never the listing)', async () => {
     const db = mockPrisma({
       membershipDeleteManyResult: { count: 1 },
     })
+    mockCallTradingApi.mockResolvedValue({ ack: 'Success', raw: '' })
 
     const results = await runEbayFlatFileDelete(db as any, [
       {
@@ -311,10 +312,15 @@ describe('remove-listing', () => {
       }),
     )
 
-    // Delist attempted with the itemId
-    expect(mockDispatchChannelDelist).toHaveBeenCalledWith(
-      expect.objectContaining({ externalListingId: '110099887766' }),
+    // Audit S2 — an itemId-only child target is variation-scoped: the SKU's
+    // variation is removed; the (shared, multi-variation) listing is NOT ended.
+    expect(r.variationRemoval).toBe('removed')
+    expect(mockCallTradingApi).toHaveBeenCalledWith(
+      'ReviseFixedPriceItem',
+      expect.stringContaining('110099887766'),
+      expect.anything(),
     )
+    expect(mockDispatchChannelDelist).not.toHaveBeenCalled()
   })
 
   it('resolves itemId via parentSku and removes the LIVE variation (not the listing)', async () => {

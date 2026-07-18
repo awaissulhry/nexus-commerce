@@ -312,6 +312,7 @@ async function handleRemoveListing(
   }
 
   let resolvedItemId: string | null = itemId ?? null
+  const affectedItemIds: string[] = []
   let membershipsRemoved = 0
 
   if (itemId) {
@@ -322,14 +323,18 @@ async function handleRemoveListing(
       } as any)
       membershipsRemoved = (del as { count: number }).count
     })
+    affectedItemIds.push(itemId)
   } else {
-    // itemId unknown — find via (marketplace, parentSku, sku) to get itemId for delist.
+    // itemId unknown — find via (marketplace, parentSku, sku). The same
+    // (parentSku, sku) can exist on SEVERAL listings — every one must get the
+    // variation removal, not just the first (audit S7).
     const found = (await prisma.sharedListingMembership.findMany({
       where: { marketplace, parentSku: parentSku!, sku },
       select: { itemId: true },
     } as any)) as Array<{ itemId: string }>
 
     if (found.length > 0) resolvedItemId = found[0].itemId
+    affectedItemIds.push(...new Set(found.map((f) => f.itemId)))
 
     await prisma.$transaction(async (tx) => {
       const del = await tx.sharedListingMembership.deleteMany({
@@ -339,17 +344,22 @@ async function handleRemoveListing(
     })
   }
 
-  // Variation-scoped target (a child of a listing, not the listing itself):
-  // remove the variation from the LIVE listing — otherwise eBay truth
-  // resurrects the row on the next reconcile. Whole-listing targets keep the
-  // best-effort delist.
-  const isVariationScoped = Boolean(sku && parentSku && sku !== parentSku)
+  // Audit S2 — whole-listing delist ONLY for an EXPLICIT listing-level target
+  // (sku === parentSku). Any child/row target — including ones sent without a
+  // parentSku — is variation-scoped: ending a shared multi-variation listing
+  // because one row was deleted is never acceptable.
+  const isListingLevel = Boolean(sku && parentSku && sku === parentSku)
   let delisted = false
   let variationRemoval: DeleteTargetResult['variationRemoval']
-  if (isVariationScoped && resolvedItemId) {
-    variationRemoval = await tryRemoveVariationFromListing(resolvedItemId, sku, marketplace)
-  } else {
+  if (isListingLevel) {
     delisted = await tryDelist(resolvedItemId, marketplace)
+  } else {
+    for (const iid of [...new Set(affectedItemIds)]) {
+      const out = await tryRemoveVariationFromListing(iid, sku, marketplace)
+      if (variationRemoval !== 'failed') {
+        variationRemoval = out === 'failed' ? 'failed' : variationRemoval === 'zeroed' ? 'zeroed' : out
+      }
+    }
   }
 
   return {
@@ -403,8 +413,8 @@ async function handleDeleteProduct(
   // SKUs are unique in the Product table so sku-scoped deleteMany is unambiguous.
   const memberships = (await prisma.sharedListingMembership.findMany({
     where: { sku: product.sku },
-    select: { itemId: true },
-  } as any)) as Array<{ itemId: string }>
+    select: { itemId: true, marketplace: true },
+  } as any)) as Array<{ itemId: string; marketplace: string }>
 
   let membershipsRemoved = 0
 
@@ -427,9 +437,20 @@ async function handleDeleteProduct(
   // (it names the FAMILY listing, not a standalone one).
   let delisted = false
   let variationRemoval: DeleteTargetResult['variationRemoval']
-  const membershipItemIds = [...new Set(memberships.map((m) => m.itemId))]
-  for (const iid of membershipItemIds) {
-    const out = await tryRemoveVariationFromListing(iid, product.sku, marketplace)
+  // Audit S4 — memberships span markets; each removal must use ITS listing's
+  // marketplace (siteId), not the delete target's.
+  const seenPairs = new Set<string>()
+  const membershipItemIds: string[] = []
+  const perListing: Array<{ itemId: string; marketplace: string }> = []
+  for (const m of memberships) {
+    const key = `${m.marketplace}::${m.itemId}`
+    if (seenPairs.has(key)) continue
+    seenPairs.add(key)
+    membershipItemIds.push(m.itemId)
+    perListing.push({ itemId: m.itemId, marketplace: m.marketplace || marketplace })
+  }
+  for (const { itemId: iid, marketplace: mkt } of perListing) {
+    const out = await tryRemoveVariationFromListing(iid, product.sku, mkt)
     // Report the worst outcome so a partial failure is never hidden.
     if (variationRemoval !== 'failed') {
       variationRemoval = out === 'failed' ? 'failed' : variationRemoval === 'zeroed' ? 'zeroed' : out
@@ -496,11 +517,12 @@ async function handleDeleteFamily(
   const childIds = children.map((c) => c.id)
   const allSkus = [parent.sku, ...children.map((c) => c.sku)]
 
-  // Collect item IDs for delist BEFORE the transaction.
+  // Collect memberships BEFORE the transaction (itemId + sku + marketplace —
+  // needed for variation-scoped removal on listings this family does not own).
   const memberships = (await prisma.sharedListingMembership.findMany({
     where: { sku: { in: allSkus } },
-    select: { itemId: true },
-  } as any)) as Array<{ itemId: string }>
+    select: { itemId: true, sku: true, marketplace: true },
+  } as any)) as Array<{ itemId: string; sku: string; marketplace: string }>
 
   let membershipsRemoved = 0
 
@@ -528,19 +550,32 @@ async function handleDeleteFamily(
 
   const softDeleted = [parent.id, ...childIds]
 
-  // Best-effort delist for every eBay ItemID found.
-  const delistIds = new Set<string>(
-    [
-      ...memberships.map((m) => m.itemId),
-      parent.ebayItemId ?? null,
-      ...children.map((c) => c.ebayItemId ?? null),
-    ].filter((x): x is string => Boolean(x)),
+  // CRITICAL footgun fix (audit S1): membership itemIds can be OTHER shared
+  // listings that merely carry this family's SKUs as variations — whole-listing
+  // delisting them would end unrelated live listings. Only the family's OWN
+  // listings (parent/children ebayItemId) are ended; foreign listings get
+  // variation-scoped removal of exactly this family's SKUs.
+  const ownIds = new Set<string>(
+    [parent.ebayItemId ?? null, ...children.map((c) => c.ebayItemId ?? null)]
+      .filter((x): x is string => Boolean(x)),
   )
 
   let delisted = false
-  for (const iid of delistIds) {
+  for (const iid of ownIds) {
     const ok = await tryDelist(iid, marketplace)
     if (ok) delisted = true
+  }
+  let variationRemoval: DeleteTargetResult['variationRemoval']
+  const seenMk = new Set<string>()
+  for (const m of memberships) {
+    if (ownIds.has(m.itemId)) continue // already ended with the family
+    const key = `${m.marketplace}::${m.itemId}::${m.sku}`
+    if (seenMk.has(key)) continue
+    seenMk.add(key)
+    const out = await tryRemoveVariationFromListing(m.itemId, m.sku, m.marketplace || marketplace)
+    if (variationRemoval !== 'failed') {
+      variationRemoval = out === 'failed' ? 'failed' : variationRemoval === 'zeroed' ? 'zeroed' : out
+    }
   }
 
   return {
@@ -549,6 +584,7 @@ async function handleDeleteFamily(
     softDeleted,
     membershipsRemoved,
     delisted,
+    ...(variationRemoval ? { variationRemoval } : {}),
   }
 }
 

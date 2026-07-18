@@ -195,8 +195,10 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       // nothing else to remove and resurrected on every reload). JS-side
       // filter: SQL NOT on a JSON path silently drops NULL categoryAttributes
       // rows under three-valued logic. Saving the SKU again clears the stamp.
-      const mktKey = marketplace.toUpperCase()
-      const products = productsUnfiltered.filter((p) => {
+      // marketplace can legitimately be absent (scope=all whole-catalog view) —
+      // exclusion is per-market, so with no market in play nothing is hidden.
+      const mktKey = (marketplace ?? '').toUpperCase()
+      const products = !mktKey ? productsUnfiltered : productsUnfiltered.filter((p) => {
         const attrs = p.categoryAttributes as Record<string, unknown> | null
         const excl = attrs && typeof attrs === 'object' ? (attrs as { ebayFileExcluded?: Record<string, unknown> }).ebayFileExcluded : undefined
         return !(excl && excl[mktKey] === true)
@@ -1180,8 +1182,19 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         });
       }
       try {
+        // Finding #6 (audit 2026-07-18): feed mode ignored the Action column —
+        // rows the operator marked 'skip' were written into the NDJSON and
+        // published anyway. Honor it exactly like API mode ('deactivate'/'end'
+        // are per-offer Trading operations — not expressible in the bulk feed,
+        // so they are excluded here and surfaced in the response).
+        const feedActionOf = (r: Record<string, unknown>) => String((r as { row_action?: unknown }).row_action ?? '').trim().toLowerCase();
+        const feedEligible = rows.filter((r) => !['skip', 'deactivate', 'end'].includes(feedActionOf(r)));
+        const feedExcluded = rows.length - feedEligible.length;
+        if (feedEligible.length === 0) {
+          return reply.code(400).send({ error: 'All rows are excluded by their Action (skip/deactivate/end) — nothing for the feed to publish.' });
+        }
         // Map flat rows to EbayFlatRow shape expected by feed service
-        const feedRows = rows.map((r) => {
+        const feedRows = feedEligible.map((r) => {
           const prefix = mp.toLowerCase() as Lowercase<Market>;
           return {
             ...r,
@@ -1199,7 +1212,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         let feedJobId = '';
         try {
           const j = await prisma.ebayPushJob.create({
-            data: { mode: 'feed', taskId, markets: [mp], skuCount: rows.length, status: 'SUBMITTED', warnings: oversellWarnings as any },
+            data: { mode: 'feed', taskId, markets: [mp], skuCount: feedEligible.length, status: 'SUBMITTED', warnings: oversellWarnings as any },
           });
           feedJobId = j.id;
         } catch (e) {
@@ -1216,9 +1229,10 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         return reply.send({
           mode: 'feed',
           taskId,
-          rowCount: rows.length,
+          rowCount: feedEligible.length,
+          skippedByAction: feedExcluded,
           warnings: oversellWarnings,
-          message: `Feed task created. Poll /api/ebay/flat-file/feed/${taskId} for status.`,
+          message: `Feed task created${feedExcluded > 0 ? ` — ${feedExcluded} row${feedExcluded === 1 ? '' : 's'} excluded by Action (skip/deactivate/end are per-offer operations)` : ''}. Poll /api/ebay/flat-file/feed/${taskId} for status.`,
         });
       } catch (err: unknown) {
         request.log.error(err, 'ebay/flat-file/push feed mode failed');

@@ -122,9 +122,19 @@ export async function addVariationsToListing(
   // candidate missing a declared axis value cannot be added (skipped, visible
   // in the counts). Axis-name matching is case-insensitive.
   const additions: NewVariationInput[] = []
+  // Audit S5 — a crash between eBay's ack and the membership writes used to
+  // orphan live variations forever (GetItem shows them live → skipped; no
+  // membership → no pool fan-out). Live SKUs with NO membership now self-heal.
+  const healCandidates: Array<{ sku: string; live: LiveVariation }> = []
   let skippedExisting = 0
   for (const c of candidates) {
-    if (!c.sku || liveSkus.has(c.sku)) { skippedExisting++; continue }
+    if (!c.sku) { skippedExisting++; continue }
+    if (liveSkus.has(c.sku)) {
+      const lv = live.find((v) => v.sku === c.sku)
+      if (lv) healCandidates.push({ sku: c.sku, live: lv })
+      skippedExisting++
+      continue
+    }
     const projected: Record<string, string> = {}
     let complete = true
     for (const axis of axisNames) {
@@ -149,14 +159,24 @@ export async function addVariationsToListing(
     // Link the new variations to the pool + memberships (fan-out live).
     const products = await prisma.product.findMany({
       where: { sku: { in: additions.map((a) => a.sku) }, deletedAt: null },
-      select: { id: true, sku: true },
+      select: { id: true, sku: true, parentId: true },
     })
     const productIdBySku = new Map(products.map((p) => [p.sku, p.id]))
     const existing = await prisma.sharedListingMembership.findFirst({
       where: { marketplace: market, itemId },
       select: { parentSku: true },
     })
-    const parentSku = existing?.parentSku ?? itemId
+    // Audit S6 — first-touch fallback resolves the POOL family's real parent
+    // SKU (numeric itemId broke grid family-grouping).
+    let parentSku = existing?.parentSku ?? ''
+    if (!parentSku) {
+      const withParent = products.find((p) => p.parentId)
+      if (withParent?.parentId) {
+        const poolParent = await prisma.product.findFirst({ where: { id: withParent.parentId }, select: { sku: true } })
+        if (poolParent?.sku) parentSku = poolParent.sku
+      }
+    }
+    if (!parentSku) parentSku = itemId
     for (const a of additions) {
       await prisma.sharedListingMembership.upsert({
         where: { marketplace_itemId_sku: { marketplace: market, itemId, sku: a.sku } },
@@ -176,6 +196,45 @@ export async function addVariationsToListing(
           status: 'ACTIVE',
           lastQtyPushed: a.quantity,
           lastPushedAt: new Date(),
+        },
+      })
+      membershipsCreated++
+    }
+  }
+
+  // Self-heal (audit S5): live variations missing a membership get one from
+  // LIVE truth (specifics/price from GetItem — the identity eBay actually has).
+  if (healCandidates.length > 0) {
+    const healProducts = await prisma.product.findMany({
+      where: { sku: { in: healCandidates.map((h) => h.sku) }, deletedAt: null },
+      select: { id: true, sku: true, parentId: true },
+    })
+    const healIdBySku = new Map(healProducts.map((p) => [p.sku, p.id]))
+    const anyMembership = await prisma.sharedListingMembership.findFirst({
+      where: { marketplace: market, itemId },
+      select: { parentSku: true },
+    })
+    let healParent = anyMembership?.parentSku ?? ''
+    if (!healParent) {
+      const wp = healProducts.find((p) => p.parentId)
+      if (wp?.parentId) {
+        const pp = await prisma.product.findFirst({ where: { id: wp.parentId }, select: { sku: true } })
+        if (pp?.sku) healParent = pp.sku
+      }
+    }
+    if (!healParent) healParent = itemId
+    for (const h of healCandidates) {
+      const exists = await prisma.sharedListingMembership.findFirst({
+        where: { marketplace: market, itemId, sku: h.sku },
+        select: { id: true },
+      })
+      if (exists) continue
+      await prisma.sharedListingMembership.create({
+        data: {
+          marketplace: market, itemId, sku: h.sku, parentSku: healParent,
+          productId: healIdBySku.get(h.sku) ?? null,
+          variationSpecifics: h.live.specifics,
+          status: 'ACTIVE',
         },
       })
       membershipsCreated++

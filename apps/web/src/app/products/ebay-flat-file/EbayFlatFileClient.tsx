@@ -768,6 +768,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── eBay-specific UI state ─────────────────────────────────────────────
   const [pushing, setPushing]                 = useState(false)
+  // Audit C2 — synchronous in-flight guards: `pushing`/`quickUpdating` flip
+  // only after async pre-save/pre-scan, leaving a double-click window that
+  // fired the whole publish flow twice (duplicate offers).
+  const publishInFlightRef = useRef(false)
+  const quickUpdateInFlightRef = useRef(false)
   const [quickUpdating, setQuickUpdating]     = useState(false)
   // P2.D2 — delete confirm state
   const [deleteConfirmRows, setDeleteConfirmRows] = useState<EbayRow[] | null>(null)
@@ -1361,13 +1366,20 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     const json = await res.json() as { rows: EbayRow[] }
     const serverRows = json.rows ?? []
 
-    // P1-surface: re-inject rows that failed to persist on save and are still missing from the DB
+    // P1-surface: re-inject rows that failed to persist on save and are still
+    // missing from the DB. Audit C3 — ROW-ID keyed (SKU keying either dropped
+    // a failed row because its SKU was live on ANOTHER listing, or resurrected
+    // rows the operator had since deleted).
     let rows = serverRows
     if (savedErrorRows.length > 0) {
+      const serverRowIds = new Set(serverRows.map((r) => r._rowId))
       const serverSkus = new Set(serverRows.map((r) => r.sku))
-      const stillMissing = savedErrorRows.filter((fr) => !serverSkus.has(fr.sku))
+      const stillMissing = savedErrorRows.filter((fr) =>
+        !serverRowIds.has(fr._rowId) && !(String(fr._rowId).startsWith('temp') === false && serverSkus.has(fr.sku)))
       if (stillMissing.length > 0) {
         rows = [...serverRows, ...stillMissing]
+      } else {
+        setSavedErrorRows([])
       }
     }
 
@@ -1545,6 +1557,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       clearDraft(draftKey(marketplaceRef.current, familyId))
     }
 
+    if (errors.length === 0 && savedErrorRows.length > 0) {
+      // Audit C3 — a clean save clears the failed-row buffer (it previously
+      // lived for the component's lifetime and re-injected ghosts on reload).
+      setSavedErrorRows([])
+    }
     if (errors.length > 0) {
       // Map each failed dirty row to its error entry (by SKU or tempRowId)
       const failedRows: EbayRow[] = dirty.flatMap((r) => {
@@ -1557,7 +1574,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       })
 
       // Store failed rows so onReload can re-inject them if user reloads the grid
-      if (failedRows.length > 0) setSavedErrorRows(failedRows)
+      setSavedErrorRows(failedRows)
       // FFP.1 — keep only the failed rows in the draft (saved ones left it)
       writeDraft(draftKey(marketplaceRef.current, familyId), failedRows)
 
@@ -1763,6 +1780,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       // They MUST still leave the grid (and the draft), otherwise they "come
       // back again and again" with Save reporting nothing to save.
       const removedSkus = new Set<string>()
+      // Audit C4 — ONLY family soft-deletes may remove rows beyond the exact
+      // confirmed targets. removedSkus previously included every deleted
+      // target's SKU, which collaterally removed (and draft-purged) OTHER
+      // rows sharing that SKU on different listings.
+      const familyDeletedSkus = new Set<string>()
       const residueSkus = new Set<string>()
       let warnCount = 0
       for (const r of json.results) {
@@ -1774,7 +1796,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           (r.excludedFromFile ?? 0) > 0
         if (removedAnything) {
           removedSkus.add(r.sku)
-          for (const s of (r.softDeleted ?? [])) removedSkus.add(s)
+          if (r.intent === 'delete-family' || r.intent === 'delete-product') {
+            for (const s of (r.softDeleted ?? [])) familyDeletedSkus.add(s)
+          }
         } else {
           residueSkus.add(r.sku) // nothing server-side — clear the residue row
         }
@@ -1788,8 +1812,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       const current = latestRowsRef.current as EbayRow[]
       const next = current.filter((r) => {
         if (targetRowIds.has(r._rowId) && removableSku(String(r.sku ?? ''))) return false
-        // backend family soft-deletes cover children beyond the selection
-        if (!targetRowIds.has(r._rowId) && removedSkus.has(String(r.sku ?? '')) && r._shared !== true) return false
+        // backend family/product soft-deletes cover children beyond the
+        // selection — ONLY those may take out non-target rows (audit C4).
+        if (!targetRowIds.has(r._rowId) && familyDeletedSkus.has(String(r.sku ?? '')) && r._shared !== true) return false
         return true
       })
       _ebay_swr.set(ebayKey, { rows: next, fetchedAt: Date.now() })
@@ -1797,8 +1822,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
       // Draft purge — the other resurrection engine: a deleted row's draft twin
       // re-appended on every reload before this.
+      setSavedErrorRows((prev) => prev.filter((fr) => !targetRowIds.has(fr._rowId)))
       removeRowsFromDraft(draftKey(marketplaceRef.current, familyId), {
-        skus: [...removedSkus, ...residueSkus],
+        skus: [...familyDeletedSkus, ...residueSkus],
         rowIds: targetRowIds,
       })
 
@@ -1842,12 +1868,16 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // ── API: push to eBay ─────────────────────────────────────────────────
 
   async function pushToEbay(rows: BaseRow[], selectedRows: Set<string>) {
+    if (publishInFlightRef.current) return
+    publishInFlightRef.current = true
     try {
       await pushToEbayInner(rows, selectedRows)
     } catch (err) {
       // A silent throw here was indistinguishable from a dead button — never again.
       console.error('[eBay publish] failed before sending', err)
       toast.error('Publish failed before sending: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      publishInFlightRef.current = false
     }
   }
 
@@ -2084,6 +2114,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   }
 
   async function quickUpdateToEbay(rows: BaseRow[], selectedRows: Set<string>) {
+    if (quickUpdateInFlightRef.current) return
+    quickUpdateInFlightRef.current = true
+    try { await quickUpdateToEbayInner(rows, selectedRows) } finally { quickUpdateInFlightRef.current = false }
+  }
+  async function quickUpdateToEbayInner(rows: BaseRow[], selectedRows: Set<string>) {
     const toPush = (selectedRows.size > 0
       ? rows.filter((r) => selectedRows.has(r._rowId))
       : rows.filter((r) => r._dirty))

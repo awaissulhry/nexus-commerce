@@ -149,8 +149,13 @@ export function mergeDraftRows(
 
   for (const draft of draftRows) {
     const sku = String(draft.sku ?? '').trim()
-    let idx = sku ? bySku.get(sku) : undefined
-    if (idx == null) idx = byRowId.get(draft._rowId)
+    // Audit C1 (2026-07-18) — ROW IDENTITY FIRST. SKU-first matching re-applied
+    // a draft edit to the first row sharing the SKU (with shared SKUs that is
+    // routinely the WRONG row — the real cause of "reverts to the previous
+    // version" recurring). SKU is only a fallback for rows whose _rowId
+    // changed across save (temp ids on newly created rows).
+    let idx = byRowId.get(draft._rowId)
+    if (idx == null) idx = sku ? bySku.get(sku) : undefined
     if (idx == null) {
       appended.push({ ...draft, _dirty: true })
       restored++
