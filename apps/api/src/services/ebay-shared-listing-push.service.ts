@@ -179,8 +179,18 @@ export function buildSharedListingInput(
       }
     }
   }
-  const itemSpecifics: Record<string, string> = {}
-  for (const { display, value } of bestByCanonical.values()) itemSpecifics[display] = value
+  // Incident #26 (code 21919308) — eBay caps each specific VALUE at 65 chars;
+  // list-like values (Caratteristiche: 'Ventilato, Impermeabile, …') are
+  // MULTI-VALUE aspects and must ship as several <Value> entries.
+  const itemSpecifics: Record<string, string | string[]> = {}
+  for (const { display, value } of bestByCanonical.values()) {
+    if (value.length > 65 && /[,;]/.test(value)) {
+      const parts = [...new Set(value.split(/[,;]/).map((x) => x.trim()).filter(Boolean))]
+      itemSpecifics[display] = parts
+    } else {
+      itemSpecifics[display] = value
+    }
+  }
 
   return {
     title: str(src.title),
@@ -335,6 +345,16 @@ export async function createSharedListing(
       if (Array.isArray(pics) && pics.length === 0) missing.push('images')
       if (missing.length > 0) {
         return { status: 'ERROR', parentSku, market, memberships: 0, message: `cannot create the listing — missing: ${missing.join(', ')} (fill these on the parent row, Save, then push again)` }
+      }
+      // 65-char cap per specific value (eBay 21919308) — name the offender
+      // instead of letting eBay reject with a truncated message.
+      const specificsForCheck = (input as { itemSpecifics?: Record<string, string | string[]> }).itemSpecifics ?? {}
+      for (const [n, v] of Object.entries(specificsForCheck)) {
+        const vals = Array.isArray(v) ? v : [v]
+        const tooLong = vals.find((x) => x.length > 65)
+        if (tooLong) {
+          return { status: 'ERROR', parentSku, market, memberships: 0, message: `item specific "${n}" has a value over eBay's 65-character limit: "${tooLong.slice(0, 70)}…" — shorten it (or separate list items with commas)` }
+        }
       }
     }
 

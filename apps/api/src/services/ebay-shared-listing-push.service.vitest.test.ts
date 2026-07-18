@@ -295,3 +295,31 @@ describe('incident #25 — variation axes governance', () => {
     expect(input.variationSpecificNames).not.toContain('Materiale')
   })
 })
+
+// ── Incident #26 — multi-value specifics (eBay 65-char value cap, 21919308) ──
+describe('incident #26 — long list-like specifics become multi-value', () => {
+  it('splits a >65-char comma list into multiple values', () => {
+    const rows = [
+      { sku: 'D-M', it_price: 75, it_qty: 1, aspect_taglia: 'M', _productId: 'p1' },
+      { sku: 'D-L', it_price: 75, it_qty: 1, aspect_taglia: 'L', _productId: 'p2' },
+    ]
+    const parent = { sku: 'D', title: 'T', category_id: '9', condition: 'NEW',
+      aspect_caratteristiche: "Ventilato, Imbottitura rimovibile, Leggero, Resistente all'abrasione, Impermeabile" }
+    const input = buildSharedListingInput(parent as never, rows as never, 'IT')
+    const specs = (input as { itemSpecifics?: Record<string, string | string[]> }).itemSpecifics ?? {}
+    expect(Array.isArray(specs.Caratteristiche)).toBe(true)
+    expect(specs.Caratteristiche).toContain('Ventilato')
+    expect(specs.Caratteristiche).toContain('Impermeabile')
+    for (const v of specs.Caratteristiche as string[]) expect(v.length).toBeLessThanOrEqual(65)
+  })
+  it('short values stay single', () => {
+    const rows = [
+      { sku: 'E-M', it_price: 75, it_qty: 1, aspect_taglia: 'M', _productId: 'p1' },
+      { sku: 'E-L', it_price: 75, it_qty: 1, aspect_taglia: 'L', _productId: 'p2' },
+    ]
+    const parent = { sku: 'E', title: 'T', category_id: '9', condition: 'NEW', aspect_stagione: 'Tutte le stagioni' }
+    const input = buildSharedListingInput(parent as never, rows as never, 'IT')
+    const specs = (input as { itemSpecifics?: Record<string, string | string[]> }).itemSpecifics ?? {}
+    expect(specs.Stagione).toBe('Tutte le stagioni')
+  })
+})
