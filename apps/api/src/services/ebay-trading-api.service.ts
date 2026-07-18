@@ -157,7 +157,6 @@ ${sets}
     <Country>${escapeXml(input.country)}</Country>
     <Currency>${escapeXml(input.currency)}</Currency>
 ${input.location ? `    <Location>${escapeXml(input.location)}</Location>\n` : ''}${input.postalCode ? `    <PostalCode>${escapeXml(input.postalCode)}</PostalCode>\n` : ''}${Object.keys(input.itemSpecifics ?? {}).length ? `    <ItemSpecifics>${Object.entries(input.itemSpecifics ?? {}).map(([n, v]) => nameValueList(n, [v])).join('')}</ItemSpecifics>\n` : ''}    <ListingDuration>${escapeXml(duration)}</ListingDuration>
-    <OutOfStockControl>true</OutOfStockControl>
 ${galleryXml}${profilesXml}    <Variations>
 ${variationsXml}
 ${picturesXml}      <VariationSpecificsSet>

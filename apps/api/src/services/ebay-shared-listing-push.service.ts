@@ -1,6 +1,6 @@
 import type { AddFixedPriceItemInput, TradingVariation } from './ebay-trading-api.service.js'
 import { toTradingConditionId } from './ebay-condition.js'
-import { aspectCanonicalName, ASPECT_SYNONYM_GROUPS } from './ebay-theme-axes.js'
+import { aspectCanonicalName, ASPECT_SYNONYM_GROUPS, AXIS_SYNONYM_GROUPS } from './ebay-theme-axes.js'
 
 /** Incident #21 — "blank qty on a shared listing = whatever the pool allows".
  *  Callers' capQty implementations recognize this sentinel and return the pool
@@ -66,7 +66,34 @@ export function buildSharedListingInput(
       }
     }
   }
-  const variationSpecificNames = [...valueSets.entries()].filter(([, s]) => s.size > 1).map(([n]) => n)
+  // Incident #25 (code 219451: 'Colore specifico is not allowed as a
+  // variation specific') — axes are NEVER guessed from arbitrary aspects:
+  // (1) the operator's declared variation_theme rules when present;
+  // (2) the heuristic fallback is RESTRICTED to the known axis dimensions
+  //     (AXIS_SYNONYM_GROUPS) — per-variant aspects outside them (Colore
+  //     specifico, shade names…) stay listing-level item specifics.
+  const displayCase = (n: string) => n.replace(/^\w/, (c) => c.toUpperCase())
+  const declaredTheme = str(parentRow?.variation_theme) || str(variantRows[0]?.variation_theme)
+  let variationSpecificNames: string[]
+  if (declaredTheme) {
+    variationSpecificNames = [...new Set(
+      declaredTheme.split(/[,/|]/)
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .map((t) => {
+          const cl = aspectCanonicalName(t)
+          return displayCase(t.toLowerCase() === cl ? t : cl)
+        }),
+    )]
+  } else {
+    const isKnownAxis = (name: string) => {
+      const cl = aspectCanonicalName(name)
+      return AXIS_SYNONYM_GROUPS.some((g) => (g as string[])[0] === cl)
+    }
+    variationSpecificNames = [...valueSets.entries()]
+      .filter(([n, s]) => s.size > 1 && isKnownAxis(n))
+      .map(([n]) => n)
+  }
 
   const variations: TradingVariation[] = variantRows.map((row) => {
     const sku = str(row.sku)

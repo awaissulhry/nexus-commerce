@@ -270,3 +270,28 @@ describe('incident #19 — synonym collapse (Size+Taglia twins)', () => {
     expect(specs.Stagione).toBe('Tutte le stagioni')
   })
 })
+
+// ── Incident #25 — axes are governed, never guessed (eBay code 219451) ──────
+describe('incident #25 — variation axes governance', () => {
+  it('a per-variant aspect OUTSIDE the known axis dimensions never becomes an axis', () => {
+    const rows = [
+      { sku: 'B-M', it_price: 75, it_qty: 1, aspect_taglia: 'M', aspect_colore_specifico: 'Nero opaco', _productId: 'p1' },
+      { sku: 'B-L', it_price: 75, it_qty: 1, aspect_taglia: 'L', aspect_colore_specifico: 'Giallo fluo', _productId: 'p2' },
+    ]
+    const input = buildSharedListingInput({ sku: 'B', title: 'T', category_id: '9', condition: 'NEW' } as never, rows as never, 'IT')
+    expect(input.variationSpecificNames).toEqual(['Taglia'])
+    const specs = (input as { itemSpecifics?: Record<string, string> }).itemSpecifics ?? {}
+    expect(specs['Colore specifico']).toBe('Nero opaco') // listing-level, first value
+  })
+  it('the operator-declared variation_theme rules when present', () => {
+    const rows = [
+      { sku: 'C-M', it_price: 75, it_qty: 1, aspect_taglia: 'M', aspect_colore: 'Nero', aspect_materiale: 'Pelle', _productId: 'p1' },
+      { sku: 'C-L', it_price: 75, it_qty: 1, aspect_taglia: 'L', aspect_colore: 'Giallo', aspect_materiale: 'Tessuto', _productId: 'p2' },
+    ]
+    const parent = { sku: 'C', title: 'T', category_id: '9', condition: 'NEW', variation_theme: 'Colore,Taglia' }
+    const input = buildSharedListingInput(parent as never, rows as never, 'IT')
+    expect([...input.variationSpecificNames].sort()).toEqual(['Colore', 'Taglia'])
+    // materiale varies but is NOT declared — it stays out of the axes
+    expect(input.variationSpecificNames).not.toContain('Materiale')
+  })
+})
