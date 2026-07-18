@@ -1724,13 +1724,34 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // ── API: push to eBay ─────────────────────────────────────────────────
 
   async function pushToEbay(rows: BaseRow[], selectedRows: Set<string>) {
-    const toPush = (selectedRows.size > 0
+    // Full Publish semantics (2026-07-18): no selection = the WHOLE file.
+    // The old dirty-rows-only default made the button appear completely dead
+    // on a saved grid (nothing dirty → tiny toast → "not working at all");
+    // ticking mostly-adopted rows died the same way after the C2 filter.
+    const scoped = (selectedRows.size > 0
       ? rows.filter((r) => selectedRows.has(r._rowId))
-      : rows.filter((r) => r._dirty))
-      // C2 — synthesized shared-membership rows are read-only VIEW rows; never a push
-      // source (they'd create a phantom Inventory-API listing). Mirror the grid's edit block.
-      .filter((r) => !(r as EbayRow)._readonly && !(r as EbayRow)._shared)
-    if (!toPush.length) { toast({ title: 'Nothing to push', tone: 'info' }); return }
+      : rows.filter((r) => !r._ghost && String((r as EbayRow).sku ?? '').trim()))
+    // C2 — synthesized shared-membership rows are read-only VIEW rows; never a push
+    // source (they'd create a phantom Inventory-API listing). Mirror the grid's edit block.
+    const toPush = scoped.filter((r) => !(r as EbayRow)._readonly && !(r as EbayRow)._shared)
+    const adoptedExcluded = scoped.length - toPush.length
+    if (!toPush.length) {
+      toast({
+        title: 'Nothing to push directly',
+        description: adoptedExcluded > 0
+          ? `The ${adoptedExcluded} row${adoptedExcluded === 1 ? ' is' : 's are'} adopted listing variations — quantities sync automatically via the pool fan-out, and new sizes are added by publishing their family (select the parent row too).`
+          : 'The grid has no pushable rows.',
+        tone: 'info',
+      })
+      return
+    }
+    if (adoptedExcluded > 0) {
+      toast({
+        title: `${adoptedExcluded} adopted row${adoptedExcluded === 1 ? '' : 's'} managed automatically (pool fan-out)`,
+        description: `Publishing the ${toPush.length} directly-pushable row${toPush.length === 1 ? '' : 's'}.`,
+        tone: 'info',
+      })
+    }
 
     // FFP.6 — Action column: 'skip' rows never leave the client; deactivate/end
     // rows go to the server but are exempt from publish validation (an 'end'
