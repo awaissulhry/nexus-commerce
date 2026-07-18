@@ -454,8 +454,18 @@ describe('best-effort delist', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('remove-channel-listing — channel/market isolation + inventory guard', () => {
-  function guardPrisma(deleteManyAssert: (args: any) => void) {
-    // product has NO update/updateMany → any attempt to soft-delete throws → guard.
+  function guardPrisma(deleteManyAssert: (args: any) => void, stampCalls: any[] = []) {
+    // Inventory guard: the ONLY product write this intent may perform is the
+    // per-market file-exclusion stamp (categoryAttributes). deletedAt or any
+    // other field in the update data → throw.
+    const guardedUpdate = async (a: any) => {
+      const keys = Object.keys(a?.data ?? {})
+      if (keys.some((k) => k !== 'categoryAttributes')) {
+        throw new Error(`Product.update may only write categoryAttributes here, got: ${keys.join(',')}`)
+      }
+      stampCalls.push(a)
+      return {}
+    }
     return {
       product: {
         findFirst: async () => ({ id: 'p1', sku: 'SKU1', ebayItemId: null }),
@@ -468,7 +478,7 @@ describe('remove-channel-listing — channel/market isolation + inventory guard'
       },
       $transaction: async (fn: any) => fn({
         product: {
-          update: () => { throw new Error('Product.update must NOT be called (inventory guard)') },
+          update: guardedUpdate,
           updateMany: () => { throw new Error('Product.updateMany must NOT be called') },
         },
         sharedListingMembership: { deleteMany: async () => ({ count: 0 }) },
@@ -489,6 +499,55 @@ describe('remove-channel-listing — channel/market isolation + inventory guard'
     expect(res.intent).toBe('remove-channel-listing')
     expect(res.softDeleted).toEqual([])          // inventory guard: nothing soft-deleted
     expect(res.channelListingsRemoved).toBe(1)
+  })
+
+  it('stamps the per-market file exclusion so the row stays gone (incident #12)', async () => {
+    const stampCalls: any[] = []
+    const prisma = guardPrisma(() => {}, stampCalls)
+    const [res] = await runEbayFlatFileDelete(prisma as any, [
+      { sku: 'SKU1', productId: 'p1', marketplace: 'IT', intent: 'remove-channel-listing' },
+    ])
+    expect(res.excludedFromFile).toBe(1)
+    expect(stampCalls).toHaveLength(1)
+    expect(stampCalls[0].where).toEqual({ id: 'p1' })
+    expect(stampCalls[0].data.categoryAttributes.ebayFileExcluded.IT).toBe(true)
+  })
+
+  it('stamps exclusion even when the product had NO eBay listing at all (the resurrection case)', async () => {
+    const stampCalls: any[] = []
+    const prisma = guardPrisma(() => {}, stampCalls)
+    ;(prisma.channelListing as any).findMany = async () => []
+    prisma.$transaction = (async (fn: any) => fn({
+      product: { update: (prisma.$transaction as any), updateMany: () => { throw new Error('no') } },
+      sharedListingMembership: { deleteMany: async () => ({ count: 0 }) },
+      channelListing: { deleteMany: async () => ({ count: 0 }) },
+    })) as any
+    // rebuild tx with the guarded update capturing stamps
+    prisma.$transaction = (async (fn: any) => fn({
+      product: {
+        update: async (a: any) => { stampCalls.push(a); return {} },
+        updateMany: () => { throw new Error('no') },
+      },
+      sharedListingMembership: { deleteMany: async () => ({ count: 0 }) },
+      channelListing: { deleteMany: async () => ({ count: 0 }) },
+    })) as any
+    const [res] = await runEbayFlatFileDelete(prisma as any, [
+      { sku: 'SKU1', productId: 'p1', marketplace: 'IT', intent: 'remove-channel-listing' },
+    ])
+    expect(res.channelListingsRemoved).toBe(0)   // nothing eBay-side existed…
+    expect(res.excludedFromFile).toBe(1)          // …but the row still leaves the file
+    expect(stampCalls[0].data.categoryAttributes.ebayFileExcluded.IT).toBe(true)
+  })
+
+  it('NEVER whole-listing-delists for a variation child target (family listing protection)', async () => {
+    const prisma = guardPrisma(() => {})
+    const [res] = await runEbayFlatFileDelete(prisma as any, [
+      { sku: 'GALE-BLACK-M', productId: 'p1', parentSku: 'GALE-JACKET', marketplace: 'IT', intent: 'remove-channel-listing' },
+    ])
+    expect(res.error).toBeUndefined()
+    expect(mockDispatchChannelDelist).not.toHaveBeenCalled()
+    expect(res.delisted).toBe(false)
+    expect(res.excludedFromFile).toBe(1)
   })
 
   it('errors (does not throw) when the product is missing', async () => {

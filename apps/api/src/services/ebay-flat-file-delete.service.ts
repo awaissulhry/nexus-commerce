@@ -69,6 +69,9 @@ export interface DeleteTarget {
 }
 
 export interface DeleteTargetResult {
+  /** remove-channel-listing: products stamped with the per-market file
+   *  exclusion (row leaves the file until the SKU is saved again). */
+  excludedFromFile?: number
   /** Variation-scoped live removal outcome (adopted rows): 'removed' = the
    *  variation was deleted from the live listing; 'zeroed' = eBay refused the
    *  delete (sales history) so its quantity was set to 0; 'failed' = neither
@@ -553,8 +556,8 @@ async function handleRemoveChannelListing(
 
   const product = (await prisma.product.findFirst({
     where: productId ? { id: productId } : { sku },
-    select: { id: true, sku: true, ebayItemId: true },
-  } as any)) as { id: string; sku: string; ebayItemId?: string | null } | null
+    select: { id: true, sku: true, ebayItemId: true, categoryAttributes: true },
+  } as any)) as { id: string; sku: string; ebayItemId?: string | null; categoryAttributes?: unknown } | null
 
   if (!product) {
     return {
@@ -572,8 +575,8 @@ async function handleRemoveChannelListing(
   // clears the whole family's presence in that one market.
   const children = (await prisma.product.findMany({
     where: { parentId: product.id, deletedAt: null },
-    select: { id: true },
-  } as any)) as Array<{ id: string }>
+    select: { id: true, categoryAttributes: true },
+  } as any)) as Array<{ id: string; categoryAttributes?: unknown }>
   const productIds = [product.id, ...children.map((c) => c.id)]
 
   // Collect ItemIDs for best-effort delist BEFORE the listings are deleted.
@@ -583,24 +586,57 @@ async function handleRemoveChannelListing(
   } as any)) as Array<{ externalListingId: string | null }>
 
   let channelListingsRemoved = 0
+  let excludedFromFile = 0
+  const market = marketplace.toUpperCase()
   await prisma.$transaction(async (tx) => {
     const del = await tx.channelListing.deleteMany({
       where: { productId: { in: productIds }, channel: 'EBAY', marketplace },
     } as any)
     channelListingsRemoved = (del as { count: number }).count
-    // Product is intentionally NOT modified here.
+    // Incident #12 (2026-07-18): stamp a per-market FILE EXCLUSION on every
+    // targeted product. Without it, a product with no eBay listing (e.g. the
+    // legacy Amazon-FBM twins inside the same family) had NOTHING to remove —
+    // and the family loader resurrected its row on every reload. The stamp is
+    // additive JSON on Product.categoryAttributes, honored by GET /rows and
+    // auto-cleared when the operator saves the SKU in this file again.
+    for (const t of [
+      { id: product.id, categoryAttributes: product.categoryAttributes },
+      ...children,
+    ]) {
+      const attrs =
+        t.categoryAttributes && typeof t.categoryAttributes === 'object'
+          ? { ...(t.categoryAttributes as Record<string, unknown>) }
+          : {}
+      const excl =
+        attrs.ebayFileExcluded && typeof attrs.ebayFileExcluded === 'object'
+          ? { ...(attrs.ebayFileExcluded as Record<string, unknown>) }
+          : {}
+      excl[market] = true
+      await tx.product.update({
+        where: { id: t.id },
+        data: { categoryAttributes: { ...attrs, ebayFileExcluded: excl } },
+      } as any)
+      excludedFromFile++
+    }
   })
 
-  const delistIds = new Set<string>(
-    [
-      ...listings.map((l) => l.externalListingId),
-      product.ebayItemId ?? null,
-    ].filter((x): x is string => Boolean(x)),
-  )
+  // A VARIATION CHILD's ChannelListing carries the FAMILY listing's ItemID —
+  // delisting it would end the whole multi-variation listing because one row
+  // was deleted. Only a parent/standalone target may whole-listing delist;
+  // a child target just leaves the file (its live variation stays, pool-fed).
+  const isVariationChild = Boolean(target.parentSku && target.parentSku !== sku)
   let delisted = false
-  for (const iid of delistIds) {
-    const ok = await tryDelist(iid, marketplace, product.id)
-    if (ok) delisted = true
+  if (!isVariationChild) {
+    const delistIds = new Set<string>(
+      [
+        ...listings.map((l) => l.externalListingId),
+        product.ebayItemId ?? null,
+      ].filter((x): x is string => Boolean(x)),
+    )
+    for (const iid of delistIds) {
+      const ok = await tryDelist(iid, marketplace, product.id)
+      if (ok) delisted = true
+    }
   }
 
   return {
@@ -610,5 +646,6 @@ async function handleRemoveChannelListing(
     membershipsRemoved: 0,
     channelListingsRemoved,
     delisted,
+    excludedFromFile,
   }
 }

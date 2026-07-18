@@ -73,3 +73,18 @@ Deleting a row now severs EVERY source that could resurrect it:
     product family, listed or not.
   - *Also delete the product from Nexus* — soft-delete; the row leaves the
     file for good (recoverable from Products → deleted filter).
+
+### File exclusion (incident #12, 2026-07-18)
+
+A product family can contain children with no eBay presence (e.g. Amazon-FBM
+twin SKUs from a family merge). Deleting such a row used to remove nothing —
+and the family loader resurrected it on every reload. Now **deleting any real
+row stamps a per-market file exclusion** on the product
+(`categoryAttributes.ebayFileExcluded[market] = true`):
+
+- GET /rows skips excluded products → the row stays gone after reload.
+- The product itself is untouched (stock, other channels, Amazon listings).
+- **Saving that SKU in the file again auto-clears the stamp** — re-adding a
+  row is just: add the row (import or type it), Save.
+- A variation child's delete never ends the family's live listing (only a
+  parent/standalone row may whole-listing delist).

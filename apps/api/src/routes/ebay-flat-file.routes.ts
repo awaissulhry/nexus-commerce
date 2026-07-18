@@ -14,6 +14,7 @@
  */
 
 import type { FastifyInstance } from 'fastify';
+import type { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 import { ebayAuthService } from '../services/ebay-auth.service.js';
 import { ebayAccountService } from '../services/ebay-account.service.js';
@@ -165,7 +166,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         familyIdSet = [...ids];
       }
 
-      const products = await prisma.product.findMany({
+      const productsUnfiltered = await prisma.product.findMany({
         where: {
           deletedAt: null,
           // EV.5 — a family must load the parent AND its variant children
@@ -188,6 +189,19 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         },
         orderBy: { sku: 'asc' },
       });
+
+      // Incident #12 — per-market FILE EXCLUSION: rows the operator deleted
+      // from this market's file stay gone (products with no eBay listing had
+      // nothing else to remove and resurrected on every reload). JS-side
+      // filter: SQL NOT on a JSON path silently drops NULL categoryAttributes
+      // rows under three-valued logic. Saving the SKU again clears the stamp.
+      const mktKey = marketplace.toUpperCase()
+      const products = productsUnfiltered.filter((p) => {
+        const attrs = p.categoryAttributes as Record<string, unknown> | null
+        const excl = attrs && typeof attrs === 'object' ? (attrs as { ebayFileExcluded?: Record<string, unknown> }).ebayFileExcluded : undefined
+        return !(excl && excl[mktKey] === true)
+      })
+
 
       // FFP.1 — deterministic listing order: the ACTIVE market's listing first,
       // then most-recently-updated. Both buildFlatRow's shared-field source
@@ -897,6 +911,35 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           sharedMemberships = await upsertSharedMembershipsFromRows(rows, activeMp)
         } catch (err) {
           request.log.warn(err, 'ebay/flat-file/rows: shared membership upsert failed (save unaffected)')
+        }
+      }
+
+      // Incident #12 — auto-UNHIDE: saving a SKU in this file clears its
+      // per-market file exclusion (the delete-stamp), so a re-added row
+      // survives reload instead of vanishing. Additive — never fails the save.
+      if (activeMp && resolvedIds.length > 0) {
+        try {
+          const mkt = activeMp.toUpperCase()
+          const stamped = await prisma.product.findMany({
+            where: { id: { in: resolvedIds.map((r) => r.productId) }, deletedAt: null },
+            select: { id: true, categoryAttributes: true },
+          })
+          for (const sp of stamped) {
+            const attrs = (sp.categoryAttributes && typeof sp.categoryAttributes === 'object'
+              ? { ...(sp.categoryAttributes as Record<string, unknown>) }
+              : {}) as Record<string, unknown>
+            const excl = attrs.ebayFileExcluded as Record<string, unknown> | undefined
+            if (excl && excl[mkt] === true) {
+              const nextExcl = { ...excl }
+              delete nextExcl[mkt]
+              await prisma.product.update({
+                where: { id: sp.id },
+                data: { categoryAttributes: { ...attrs, ebayFileExcluded: nextExcl } as Prisma.InputJsonObject },
+              })
+            }
+          }
+        } catch (err) {
+          request.log.warn(err, 'ebay/flat-file/rows: file-exclusion unhide failed (save unaffected)')
         }
       }
 

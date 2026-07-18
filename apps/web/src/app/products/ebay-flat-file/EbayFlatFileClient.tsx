@@ -662,7 +662,7 @@ function EbayDeleteConfirmModal({
           <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
             <input type="radio" name="ebay-delete-scope" className="mt-0.5" checked={scope === 'channel'}
               onChange={() => onScopeChange('channel')} disabled={loading} />
-            <span><span className="font-medium">Remove from eBay only</span> — the product stays in this family file (the row reappears, unlisted).</span>
+            <span><span className="font-medium">Remove from this eBay file</span> — ends its eBay {marketplace} listing if live; the product and other channels are untouched. The row stays gone until you save this SKU in the file again.</span>
           </label>
           <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
             <input type="radio" name="ebay-delete-scope" className="mt-0.5" checked={scope === 'product'}
@@ -1684,7 +1684,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json() as {
-        results: Array<{ sku: string; intent: string; softDeleted: string[]; membershipsRemoved: number; channelListingsRemoved?: number; delisted: boolean; variationRemoval?: 'removed' | 'zeroed' | 'failed'; error?: string }>
+        results: Array<{ sku: string; intent: string; softDeleted: string[]; membershipsRemoved: number; channelListingsRemoved?: number; excludedFromFile?: number; delisted: boolean; variationRemoval?: 'removed' | 'zeroed' | 'failed'; error?: string }>
       }
 
       // Per-result accounting. Rows the server found NOTHING for (no listing,
@@ -1700,7 +1700,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         const removedAnything =
           (r.softDeleted?.length ?? 0) > 0 ||
           (r.membershipsRemoved ?? 0) > 0 ||
-          (r.channelListingsRemoved ?? 0) > 0
+          (r.channelListingsRemoved ?? 0) > 0 ||
+          (r.excludedFromFile ?? 0) > 0
         if (removedAnything) {
           removedSkus.add(r.sku)
           for (const s of (r.softDeleted ?? [])) removedSkus.add(s)
@@ -1747,6 +1748,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       if (varZeroed  > 0) bits.push(`${varZeroed} kept live with quantity 0 (sales history blocks removal)`)
       if (varFailed  > 0) bits.push(`${varFailed} could NOT be removed on eBay — run Reconcile or remove in Seller Hub, or the row returns`)
       if (softDeletedCount > 0) bits.push(`${softDeletedCount} product${softDeletedCount !== 1 ? 's' : ''} soft-deleted from Nexus (recoverable)`)
+      const excludedCount = succeeded.reduce((n, r) => n + (r.excludedFromFile ?? 0), 0)
+      if (excludedCount > 0) bits.push(`${excludedCount} removed from this file — re-add any time by saving the SKU again`)
       if (notDelistedCount > 0) bits.push(`couldn't end ${notDelistedCount} on eBay — end manually in Seller Hub`)
       if (residueSkus.size > 0) bits.push(`${residueSkus.size} row${residueSkus.size !== 1 ? 's were' : ' was'} only in your browser — cleared`)
       if (warnCount > 0) bits.push(`${warnCount} failed — see errors`)
