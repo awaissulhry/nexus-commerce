@@ -42,6 +42,7 @@ import { pushSharedListings, type SharedListingResult } from '../services/ebay-s
 import { callTradingApi, siteIdForMarket } from '../services/ebay-trading-api.service.js';
 import { reconcileMembershipsFromEbay } from '../services/ebay-membership-reconcile.service.js';
 import { relabelListingToPoolSkus } from '../services/ebay-variation-relabel.service.js';
+import { addVariationsToListing } from '../services/ebay-variation-add.service.js';
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot, buildBestOfferTerms, resolveQuantityLimitPerBuyer, resolvePerMarketContent } from '../services/ebay-variation-push.service.js';
 import { renderListingDescriptionSafe } from '../services/ebay-description-theme.service.js';
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
@@ -1436,22 +1437,71 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                 itemId: r.itemId,
               })
             }
+            // NEW-VARIATION rows on an adopted listing (2026-07-18): the owner
+            // imports the FULL size range; rows whose SKU is not yet a live
+            // variation are ADDED to the listing (ReviseFixedPriceItem with the
+            // axis set extended) instead of dead-ending at the adopt belt.
+            const famItemIdForAdd =
+              String((familyRows.find((r) => (r as Record<string, unknown>)[`${mp.toLowerCase()}_item_id`]) as Record<string, unknown> | undefined)?.[`${mp.toLowerCase()}_item_id`] ?? '') ||
+              sharedResults.find((r) => r.itemId)?.itemId || ''
+            const addedSkus = new Set<string>()
+            const addErrors = new Map<string, string>()
+            if (/^\d+$/.test(famItemIdForAdd)) {
+              const famMemberships = await prisma.sharedListingMembership.findMany({
+                where: { marketplace: mp, itemId: famItemIdForAdd },
+                select: { sku: true },
+              })
+              const memberSkus = new Set(famMemberships.map((m) => m.sku))
+              const prefix = mp.toLowerCase()
+              const candidates = familyRows
+                .filter((r) => (r as { _isParent?: boolean })._isParent !== true)
+                .map((r) => r as Record<string, unknown>)
+                .filter((r) => String(r.sku ?? '').trim() && !memberSkus.has(String(r.sku).trim()))
+                .map((r) => ({
+                  sku: String(r.sku).trim(),
+                  price: Number(r[`${prefix}_price`] ?? r.price ?? 0),
+                  quantity: capToFbm(r._productId as string | undefined, String(r.sku).trim(), Number(r[`${prefix}_qty`] ?? r.quantity ?? 0), mp),
+                  specifics: Object.fromEntries(
+                    Object.entries(r)
+                      .filter(([k, v]) => k.startsWith('aspect_') && typeof v === 'string' && v.trim())
+                      .map(([k, v]) => [k.slice('aspect_'.length).replace(/_/g, ' '), String(v).trim()]),
+                  ),
+                }))
+                .filter((c) => c.price > 0)
+              if (memberSkus.size > 0 && candidates.length > 0) {
+                try {
+                  const addRes = await addVariationsToListing(famItemIdForAdd, mp, candidates, { oauthToken: token })
+                  if (addRes.added > 0) for (const c of candidates.slice(0, addRes.added + addRes.skippedExisting)) addedSkus.add(c.sku)
+                  request.log.info({ itemId: famItemIdForAdd, added: addRes.added, ack: addRes.ebayAck }, 'ebay/push: variations added to live listing')
+                } catch (err: unknown) {
+                  const msg = err instanceof Error ? err.message : String(err)
+                  for (const c of candidates) addErrors.set(c.sku, msg)
+                  request.log.error({ err, itemId: famItemIdForAdd }, 'ebay/push: add-variations failed')
+                }
+              }
+            }
+
             // Count integrity ("only pushing 66 rows"): a shared family used to
             // collapse N child rows into ONE result line, so the operator's
             // row count never reconciled with what they selected. Every child
             // row now gets its own explicit line — adopted children are
             // HANDLED (their quantities ride the pool fan-out), not dropped.
             const familyOk = sharedResults.every((r) => r.status !== 'ERROR')
-            const famItemId = sharedResults.find((r) => r.itemId)?.itemId
+            const famItemId = sharedResults.find((r) => r.itemId)?.itemId ?? (famItemIdForAdd || undefined)
             for (const child of familyRows) {
               if ((child as { _isParent?: boolean })._isParent === true) continue
               const csku = String((child as { sku?: unknown }).sku ?? '')
               if (!csku) continue
+              const addErr = addErrors.get(csku)
               perRowResults.push({
                 sku: csku,
                 market: mp,
-                status: familyOk ? 'PUSHED' : 'ERROR',
-                message: familyOk
+                status: addErr ? 'ERROR' : familyOk ? 'PUSHED' : 'ERROR',
+                message: addErr
+                  ? `add variation failed: ${addErr.slice(0, 200)}`
+                  : addedSkus.has(csku)
+                  ? `variation ADDED to ItemID ${famItemId} — quantity syncs via the pool fan-out`
+                  : familyOk
                   ? `adopted${famItemId ? ` under ItemID ${famItemId}` : ''} — quantity syncs via the pool fan-out`
                   : 'family push failed — see the parent row error',
                 itemId: famItemId,
