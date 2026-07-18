@@ -62,6 +62,13 @@ export interface AddFixedPriceItemInput {
   conditionId: string
   country: string
   currency: string
+  /** Free-text shipping origin ("Santarcangelo di Romagna") — eBay rejects a
+   *  listing without it ("item's location was not filled in"). */
+  location?: string
+  postalCode?: string
+  /** Listing-level item specifics (Marca, Stagione…) — the category's required
+   *  aspects live here, NOT in VariationSpecifics (eBay code 71 without them). */
+  itemSpecifics?: Record<string, string>
   listingDuration?: string
   variationSpecificNames: string[]
   variations: TradingVariation[]
@@ -149,7 +156,7 @@ ${sets}
     <ConditionID>${escapeXml(input.conditionId)}</ConditionID>
     <Country>${escapeXml(input.country)}</Country>
     <Currency>${escapeXml(input.currency)}</Currency>
-    <ListingDuration>${escapeXml(duration)}</ListingDuration>
+${input.location ? `    <Location>${escapeXml(input.location)}</Location>\n` : ''}${input.postalCode ? `    <PostalCode>${escapeXml(input.postalCode)}</PostalCode>\n` : ''}${Object.keys(input.itemSpecifics ?? {}).length ? `    <ItemSpecifics>${Object.entries(input.itemSpecifics ?? {}).map(([n, v]) => nameValueList(n, [v])).join('')}</ItemSpecifics>\n` : ''}    <ListingDuration>${escapeXml(duration)}</ListingDuration>
 ${galleryXml}${profilesXml}    <Variations>
 ${variationsXml}
 ${picturesXml}      <VariationSpecificsSet>

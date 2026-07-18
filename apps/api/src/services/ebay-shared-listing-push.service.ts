@@ -89,6 +89,21 @@ export function buildSharedListingInput(
     ? policyVals
     : undefined
 
+  // Listing-level ItemSpecifics (Marca, Stagione…): every aspect_* value that
+  // is NOT a variation axis, from the parent row first (child fallback). The
+  // category's required aspects live here — eBay code 71 without them.
+  const axisLower = new Set(variationSpecificNames.map((n) => n.toLowerCase()))
+  const itemSpecifics: Record<string, string> = {}
+  for (const source of [parentRow, ...variantRows]) {
+    for (const [k, v] of Object.entries(source ?? {})) {
+      if (!k.startsWith('aspect_') || typeof v !== 'string' || !v.trim()) continue
+      const name = k.slice('aspect_'.length).replace(/_/g, ' ').trim()
+      if (!name || axisLower.has(name.toLowerCase())) continue
+      const canonical = name.replace(/^\w/, (c) => c.toUpperCase())
+      if (!(canonical in itemSpecifics)) itemSpecifics[canonical] = v.trim()
+    }
+  }
+
   return {
     title: str(src.title),
     description: str(src.description),
@@ -98,6 +113,11 @@ export function buildSharedListingInput(
     // resolve to '' and the pre-flight below names them (never eBay code 37).
     conditionId: str(src.condition) ? toTradingConditionId(str(src.condition)) : '1000',
     country: str(src.item_location_country) || 'IT',
+    // Shipping origin: row columns win; otherwise the account's single origin
+    // (mirrors every live listing on this account — probed 2026-07-18).
+    location: str(src.item_location) || process.env.EBAY_ITEM_LOCATION || 'Santarcangelo di Romagna',
+    postalCode: str(src.item_postal_code) || process.env.EBAY_ITEM_POSTAL_CODE || '47822',
+    itemSpecifics,
     currency: CURRENCY_BY_MARKET[mkt] ?? 'EUR',
     variationSpecificNames,
     variations,
