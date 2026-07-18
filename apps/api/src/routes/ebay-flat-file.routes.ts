@@ -38,7 +38,7 @@ import {
   getEbayPullPreviewJobStatus,
 } from '../services/ebay-flat-file-pull-preview.service.js';
 import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, toListingLanguage, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
-import { parseThemeAxes } from '../services/ebay-theme-axes.js';
+import { parseThemeAxes, canonicalizeRowAspects } from '../services/ebay-theme-axes.js';
 import { pushSharedListings, type SharedListingResult } from '../services/ebay-shared-listing-push.service.js';
 import { callTradingApi, siteIdForMarket } from '../services/ebay-trading-api.service.js';
 import { reconcileMembershipsFromEbay, parseLiveVariations } from '../services/ebay-membership-reconcile.service.js';
@@ -420,6 +420,18 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         }
       } catch (err) {
         request.log.warn(err, 'ebay/flat-file/rows: planned-children synthesis failed (non-fatal)')
+      }
+
+      // Incident #20 (approved) — fold legacy language-twin aspect keys into
+      // the localized canonical columns on EVERY outgoing row. The ghost
+      // Color ⚠ / Size ⚠ twins disappear (their data lives in Colore/Taglia),
+      // and the next save persists rows canonicalized — snapshots self-heal.
+      try {
+        let foldedTotal = 0
+        for (const r of rows) foldedTotal += canonicalizeRowAspects(r as Record<string, unknown>)
+        if (foldedTotal > 0) request.log.info({ foldedTotal }, 'ebay/flat-file/rows: legacy aspect keys folded to localized canonicals')
+      } catch (err) {
+        request.log.warn(err, 'ebay/flat-file/rows: aspect canonicalization failed (non-fatal)')
       }
 
       return reply.send({ rows });

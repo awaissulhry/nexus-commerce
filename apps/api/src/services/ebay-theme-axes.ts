@@ -75,6 +75,56 @@ export function aspectCanonicalName(name: string): string {
   return lk
 }
 
+/**
+ * Incident #20 — fold legacy language-twin aspect KEYS on a row into the
+ * localized canonical column (approved 2026-07-18): aspect_color → aspect_colore,
+ * aspect_Size → aspect_taglia, aspect_brand → aspect_marca… The Italian value
+ * wins when both are filled; the English value is preserved when the Italian
+ * cell is empty. Condition-group aspects fold into the structured `condition`
+ * field. Unmapped keys (e.g. aspect_body_type) are left untouched — they stay
+ * visible as ghost columns by design (nothing is silently dropped).
+ * Returns the number of keys folded.
+ */
+export function canonicalizeRowAspects(row: Record<string, unknown>): number {
+  let folded = 0
+  for (const key of Object.keys(row)) {
+    if (!key.startsWith('aspect_') || key === 'aspect_') continue
+    const rawName = key.slice('aspect_'.length).replace(/_/g, ' ').trim()
+    if (!rawName) continue
+    const canonicalLower = aspectCanonicalName(rawName)
+    const canonicalKey = `aspect_${canonicalLower.replace(/ /g, '_')}`
+    const value = row[key]
+    const strValue = typeof value === 'string' ? value.trim() : ''
+
+    // Condition-group aspects are not specifics — fold into `condition`.
+    if (canonicalLower === 'condizione') {
+      if (strValue && !String(row.condition ?? '').trim()) row.condition = strValue
+      delete row[key]
+      folded++
+      continue
+    }
+
+    if (key === canonicalKey) continue // already canonical, exact key
+    if (rawName.toLowerCase() === canonicalLower) {
+      // canonical spelling, non-canonical KEY casing (aspect_Taglia) — normalize
+      const existing = row[canonicalKey]
+      if (typeof existing !== 'string' || !existing.trim()) row[canonicalKey] = value
+      delete row[key]
+      folded++
+      continue
+    }
+    // Foreign-language twin: preserve its value only when the localized cell
+    // is empty; the localized column always wins.
+    const existing = row[canonicalKey]
+    if (strValue && (typeof existing !== 'string' || !existing.trim())) {
+      row[canonicalKey] = strValue
+    }
+    delete row[key]
+    folded++
+  }
+  return folded
+}
+
 /** Maps an axis name to its stable synonym-dimension key.
  *  Known synonym groups → __dim0__ / __dim1__ / …
  *  Custom/unmapped axes → lowercase axis name (the name itself is the stable key). */
