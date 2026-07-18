@@ -41,6 +41,16 @@ export type DeleteIntent =
   | 'remove-listing'
   | 'remove-channel-listing' // NEW: channel+market-scoped; ChannelListing only, Product untouched
 
+/** Every intent the delete service dispatches. The route validates against
+ *  THIS set — a duplicated enum in the route once drifted (it was missing
+ *  remove-channel-listing, so every real-row delete 400'd at the door). */
+export const VALID_DELETE_INTENTS: ReadonlySet<string> = new Set([
+  'delete-product',
+  'delete-family',
+  'remove-listing',
+  'remove-channel-listing',
+] satisfies DeleteIntent[])
+
 export interface DeleteTarget {
   /** Nexus Product.id — preferred identifier; falls back to sku when omitted. */
   productId?: string

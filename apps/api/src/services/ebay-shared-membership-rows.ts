@@ -39,7 +39,10 @@ export function reverseVariationSpecifics(
  * - Overwrites identity/family fields with membership values.
  * - Membership `price` WINS over the child base row's price for the
  *   membership's marketplace (`${mp}_price` and generic `price`).
- * - Sets `_isParent=false`, `_shared=true`, `_readonly=true`.
+ * - Sets `_isParent=false`, `_shared=true`. (2026-07-18: `_readonly` REMOVED —
+ *   the owner edits adopted rows directly; edits persist via the membership
+ *   flatFileSnapshot. Qty stays pool-governed and the axis columns re-read
+ *   live variation identity — those still override on reload.)
  */
 export function synthesizeSharedRow(opts: {
   membership: {
@@ -86,7 +89,6 @@ export function synthesizeSharedRow(opts: {
       ? { _productId: (childBaseRow as { _productId?: unknown })._productId }
       : { _productId: m.productId ?? undefined }),
     _shared: true,
-    _readonly: true,
     _isParent: false,
     // P1a — explicit parentage columns for shared-child rows (live identity —
     // membership truth beats any stale snapshot value).

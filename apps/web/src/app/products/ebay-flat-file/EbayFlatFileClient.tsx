@@ -2423,8 +2423,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── Edit intercept for modal-based editing ─────────────────────────────
   const onBeforeEditCell = useCallback((col: FlatFileColumn, row: BaseRow): boolean => {
-    // Task 5 (shared-mgmt) — synthesized shared membership rows are fully read-only.
-    if ((row as EbayRow)._readonly === true) return true
+    // 2026-07-18 — adopted (_shared) rows are fully editable by owner decision:
+    // edits persist via the membership flatFileSnapshot (qty stays
+    // pool-governed; axis cells re-read live identity on reload).
     if (col.kind === 'longtext') {
       setDescModal({ rowId: row._rowId })
       return true
@@ -2447,16 +2448,10 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemSpecificsGroup])
 
-  // ── Hard per-cell lock (UFX P5) ────────────────────────────────────────
-  // Synthesized shared-membership rows (_readonly, Task 5 shared-mgmt) must be
-  // fully read-only. The onBeforeEditCell guard above only blocks edit-mode
-  // ENTRY (typing / double-click / F2); paste, Delete and fill writes go
-  // through the grid's bulk write path, which consults getCellReadOnly
-  // (dropReadOnlyCellChanges). Without this lock a paste onto a _readonly row
-  // mutated it locally and the edit silently vanished at save — onSave and
-  // publish already filter _readonly/_shared rows out.
-  const getCellReadOnly = useCallback((_col: FlatFileColumn, row: BaseRow): boolean =>
-    (row as EbayRow)._readonly === true, [])
+  // ── Per-cell lock (UFX P5) — RETIRED 2026-07-18 ────────────────────────
+  // Adopted rows are fully editable (owner decision). Stale cached/draft rows
+  // may still carry _readonly:true from older builds — deliberately ignored.
+  const getCellReadOnly = useCallback((_col: FlatFileColumn, _row: BaseRow): boolean => false, [])
 
   // ── Listing guidance ──────────────────────────────────────────────────
   const getCellGuidance = useCallback((col: FlatFileColumn, row: BaseRow): 'not-applicable' | 'optional' | null => {

@@ -56,7 +56,7 @@ import { upsertSharedMembershipsFromRows, normalizeEbaySharedFlags, type SharedM
 import { runEbayFlatFileCreates, type CreateResult } from '../services/ebay-flat-file-create.service.js';
 import { ebayFamilyKey } from '../services/ebay-flat-file-create.logic.js';
 // P2.D1 — eBay flat-file soft-delete (child / product / family)
-import { runEbayFlatFileDelete, type DeleteTarget } from '../services/ebay-flat-file-delete.service.js';
+import { runEbayFlatFileDelete, type DeleteTarget, VALID_DELETE_INTENTS } from '../services/ebay-flat-file-delete.service.js';
 // Task 4 — shared-SKU management: synthesize membership rows for the GET /rows response
 import { loadSharedMembershipRows } from '../services/ebay-shared-membership-rows.js';
 // Scoped-view load — filter to eBay-listed families when scope=listed (default)
@@ -2859,13 +2859,12 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'targets must be a non-empty array' })
     }
 
-    const VALID_INTENTS = new Set(['delete-product', 'delete-family', 'remove-listing'])
     for (const t of targets) {
-      if (!VALID_INTENTS.has(String(t.intent ?? ''))) {
+      if (!VALID_DELETE_INTENTS.has(String(t.intent ?? ''))) {
         return reply
           .code(400)
           .send({
-            error: `Invalid intent: "${t.intent}". Must be one of: delete-product, delete-family, remove-listing`,
+            error: `Invalid intent: "${t.intent}". Must be one of: ${[...VALID_DELETE_INTENTS].join(', ')}`,
           })
       }
     }

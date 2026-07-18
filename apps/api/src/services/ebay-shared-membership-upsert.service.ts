@@ -176,15 +176,22 @@ export async function upsertSharedMembershipsFromRows(
     const data = {
       parentSku: t.parentSku || t.sku,
       productId: productIdBySku.get(t.sku) ?? null,
-      variationSpecifics: specificsFromRow(t.row),
       ...(priceNum != null && Number.isFinite(priceNum) ? { price: new Prisma.Decimal(priceNum) } : {}),
       status: 'ACTIVE',
       flatFileSnapshot,
     }
+    // variationSpecifics is the LIVE variation's identity key (relabel,
+    // reconcile and add-variations all match on it). Now that adopted rows are
+    // freely editable, an aspect edit must never rewrite it — set on CREATE
+    // only; reconcile-from-eBay owns updates.
     await db.sharedListingMembership.upsert({
       where: { marketplace_itemId_sku: { marketplace: market, itemId: t.itemId, sku: t.sku } },
       update: data,
-      create: { marketplace: market, itemId: t.itemId, sku: t.sku, ...data },
+      create: {
+        marketplace: market, itemId: t.itemId, sku: t.sku,
+        variationSpecifics: specificsFromRow(t.row),
+        ...data,
+      },
     })
     if (existingKeys.has(`${t.itemId}::${t.sku}`)) result.updated++
     else result.created++

@@ -59,7 +59,7 @@ describe('synthesizeSharedRow', () => {
     expect(row.platformProductId).toBe('pid-P')
     expect(row._isParent).toBe(false)
     expect(row._shared).toBe(true)
-    expect(row._readonly).toBe(true)
+    expect(row._readonly).toBeUndefined() // 2026-07-18: adopted rows are editable
 
     // P1a — explicit parentage fields
     expect(row.parentage).toBe('child')
@@ -258,7 +258,7 @@ describe('loadSharedMembershipRows', () => {
     // Points to parent-B (the membership parent)
     expect(row.platformProductId).toBe('prod-B')
     expect(row._shared).toBe(true)
-    expect(row._readonly).toBe(true)
+    expect(row._readonly).toBeUndefined() // 2026-07-18: adopted rows are editable
     expect(row._isParent).toBe(false)
     expect(row.ebay_item_id).toBe('item-111')
     // Decimal price converted to number
