@@ -1499,35 +1499,14 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // ── API: save ─────────────────────────────────────────────────────────
 
   const onSave = useCallback(async (dirty: BaseRow[]): Promise<{ saved: number; createResult?: { errors?: unknown[] } }> => {
-    // Incident #28 — 'Save failed before push: Failed to fetch': the save
-    // PATCH had no network resilience (the push POST already did). Saves are
-    // IDEMPOTENT (row upserts), so a network failure gets ONE automatic retry
-    // after 2s (covers deploy-restart windows); a second failure is classified
-    // honestly. Edits are never lost either way — the draft layer holds them.
-    const doSave = () => fetch(`${BACKEND}/api/ebay/flat-file/rows`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      // FFP.1 — marketplace scopes content fields + flatFileSnapshot to the
-      // ACTIVE market's listing server-side (each market file is independent).
-      body: JSON.stringify({ rows: dirty, marketplace: marketplaceRef.current }),
-    })
-    let res: Response
-    try {
-      res = await doSave()
-    } catch {
-      await new Promise((r) => setTimeout(r, 2000))
-      try {
-        res = await doSave()
-      } catch {
-        const reachable = await fetch(`${BACKEND}/api/health`, { signal: AbortSignal.timeout(4000) }).then((h) => h.ok).catch(() => false)
-        throw new Error(reachable
-          ? 'the connection dropped mid-save — your edits are safe in the draft; reload to see what persisted, then Save again'
-          : 'the server is unreachable (likely a deploy restart) — nothing was saved; your edits are safe in the draft. Wait ~1 minute and Save again')
-      }
-    }
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    // P1-surface: read the full response including createResult to detect rows that failed to persist
-    const result = await res.json() as {
+    // Incident #28 — network resilience — and #28b: CHUNKED SAVES. A large
+    // import's save (100+ row PATCH doing hundreds of writes) outlived the
+    // proxy window and was severed mid-request (10 of MOSS's rows landed, the
+    // parent didn't). Rows now save in SMALL SEQUENTIAL CHUNKS — parents
+    // first so children always find their parent — each chunk fast, each
+    // idempotent, each retried once on network failure. Partial progress
+    // persists server-side; a re-Save completes the remainder.
+    type SaveResult = {
       saved: number
       sharedMembershipsError?: string
       createResult?: {
@@ -1537,8 +1516,61 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         collapsedSkus?: string[]
       }
       sharedMemberships?: { families: number; created: number; updated: number; skipped: Array<{ sku: string; reason: string }>; qtyPoolGoverned?: number }
-      /** sku → productId for every Lane-A row the save touched (created OR existing). */
       resolvedIds?: Array<{ sku: string; productId: string }>
+    }
+    const CHUNK = 25
+    const isParentRow = (r: BaseRow) => (r as EbayRow)._isParent === true || String((r as EbayRow).parentage ?? '').trim().toLowerCase() === 'parent'
+    const ordered = [...dirty.filter(isParentRow), ...dirty.filter((r) => !isParentRow(r))]
+    const chunks: BaseRow[][] = []
+    for (let i = 0; i < ordered.length; i += CHUNK) chunks.push(ordered.slice(i, i + CHUNK))
+
+    const saveChunk = async (rowsChunk: BaseRow[]): Promise<SaveResult> => {
+      const doSave = () => fetch(`${BACKEND}/api/ebay/flat-file/rows`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        // FFP.1 — marketplace scopes content fields + flatFileSnapshot to the
+        // ACTIVE market's listing server-side (each market file is independent).
+        body: JSON.stringify({ rows: rowsChunk, marketplace: marketplaceRef.current }),
+      })
+      let res: Response
+      try {
+        res = await doSave()
+      } catch {
+        await new Promise((r) => setTimeout(r, 2000))
+        try {
+          res = await doSave()
+        } catch {
+          const reachable = await fetch(`${BACKEND}/api/health`, { signal: AbortSignal.timeout(4000) }).then((h) => h.ok).catch(() => false)
+          throw new Error(reachable
+            ? 'the connection dropped mid-save — your edits are safe in the draft; already-saved rows persisted (idempotent), Save again to complete the rest'
+            : 'the server is unreachable (likely a deploy restart) — your edits are safe in the draft. Wait ~1 minute and Save again')
+        }
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return await res.json() as SaveResult
+    }
+
+    const result: SaveResult = { saved: 0, createResult: { idMap: [], errors: [], warnings: [], collapsedSkus: [] }, resolvedIds: [] }
+    for (const rowsChunk of chunks) {
+      const part = await saveChunk(rowsChunk)
+      result.saved += part.saved ?? 0
+      if (part.sharedMembershipsError) result.sharedMembershipsError = part.sharedMembershipsError
+      if (part.createResult) {
+        result.createResult!.idMap.push(...(part.createResult.idMap ?? []))
+        result.createResult!.errors.push(...(part.createResult.errors ?? []))
+        result.createResult!.warnings.push(...(part.createResult.warnings ?? []))
+        if (part.createResult.collapsedSkus?.length) result.createResult!.collapsedSkus!.push(...part.createResult.collapsedSkus)
+      }
+      if (part.sharedMemberships) {
+        const agg = result.sharedMemberships ?? { families: 0, created: 0, updated: 0, skipped: [], qtyPoolGoverned: 0 }
+        agg.families += part.sharedMemberships.families ?? 0
+        agg.created += part.sharedMemberships.created ?? 0
+        agg.updated += part.sharedMemberships.updated ?? 0
+        agg.skipped.push(...(part.sharedMemberships.skipped ?? []))
+        agg.qtyPoolGoverned = (agg.qtyPoolGoverned ?? 0) + (part.sharedMemberships.qtyPoolGoverned ?? 0)
+        result.sharedMemberships = agg
+      }
+      if (part.resolvedIds?.length) result.resolvedIds!.push(...part.resolvedIds)
     }
     if (result.sharedMembershipsError) {
       // Audit R9 — the shared model (memberships → adopted rows → fan-out)
