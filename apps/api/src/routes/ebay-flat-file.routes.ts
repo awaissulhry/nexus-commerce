@@ -41,6 +41,7 @@ import { parseThemeAxes } from '../services/ebay-theme-axes.js';
 import { pushSharedListings, type SharedListingResult } from '../services/ebay-shared-listing-push.service.js';
 import { callTradingApi, siteIdForMarket } from '../services/ebay-trading-api.service.js';
 import { reconcileMembershipsFromEbay } from '../services/ebay-membership-reconcile.service.js';
+import { relabelListingToPoolSkus } from '../services/ebay-variation-relabel.service.js';
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot, buildBestOfferTerms, resolveQuantityLimitPerBuyer, resolvePerMarketContent } from '../services/ebay-variation-push.service.js';
 import { renderListingDescriptionSafe } from '../services/ebay-description-theme.service.js';
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
@@ -2094,6 +2095,38 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       } catch (err: unknown) {
         request.log.error(err, 'reconcile-item failed')
         return reply.code(502).send({ error: err instanceof Error ? err.message : 'Reconcile failed' })
+      }
+    },
+  )
+
+  // ── POST /api/ebay/flat-file/relabel-item ───────────────────────────
+  // Owner decision 2026-07-18: put the POOL SKUs on a live listing's
+  // variations (ReviseFixedPriceItem by VariationSpecifics identity), then
+  // rewrite memberships to match. The final step of adoption: every listing
+  // shares identical pool SKUs.
+  fastify.post<{ Body: { itemId?: string; marketplace?: string } }>(
+    '/ebay/flat-file/relabel-item',
+    async (request, reply) => {
+      const itemId = String(request.body?.itemId ?? '').trim()
+      const marketplace = String(request.body?.marketplace ?? 'IT').toUpperCase()
+      if (!/^\d+$/.test(itemId)) return reply.code(400).send({ error: 'numeric itemId required' })
+      const connection = await prisma.channelConnection.findFirst({
+        where: { channelType: 'EBAY', isActive: true },
+        select: { id: true },
+      })
+      if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
+      let token: string
+      try {
+        token = await ebayAuthService.getValidToken(connection.id)
+      } catch (err: unknown) {
+        return reply.code(503).send({ error: `Failed to get eBay token: ${err instanceof Error ? err.message : String(err)}` })
+      }
+      try {
+        const result = await relabelListingToPoolSkus(itemId, marketplace, { oauthToken: token })
+        return reply.send(result)
+      } catch (err: unknown) {
+        request.log.error(err, 'relabel-item failed')
+        return reply.code(502).send({ error: err instanceof Error ? err.message : 'Relabel failed' })
       }
     },
   )
