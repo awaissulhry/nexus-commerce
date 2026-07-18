@@ -85,7 +85,7 @@ describe('planImportCells', () => {
       existing,
       'overwrite',
     )
-    expect(plan.changes).toEqual([{ sku: 'A', columnId: 'title', from: 'Old title', to: 'New title', willApply: true }])
+    expect(plan.changes).toEqual([{ sku: 'A', parentSku: '', columnId: 'title', from: 'Old title', to: 'New title', willApply: true }])
     expect(plan.newRowSkus).toEqual(['NEW-1'])
   })
   it('identical and empty incoming cells produce no change rows', () => {
@@ -95,10 +95,36 @@ describe('planImportCells', () => {
 })
 
 describe('pruneExcludedCells', () => {
-  it('removes exactly the excluded sku|column cells', () => {
+  it('removes exactly the excluded parentSku|sku|column cells', () => {
     const rows = [{ sku: 'A', title: 'T', it_price: '9' }, { sku: 'B', title: 'U' }]
-    const out = pruneExcludedCells(rows, new Set(['A|it_price']))
+    const out = pruneExcludedCells(rows, new Set(['|A|it_price']))
     expect(out[0]).toEqual({ sku: 'A', title: 'T' })
     expect(out[1]).toEqual({ sku: 'B', title: 'U' })
+  })
+
+  it('incident #29 — family-scoped exclusion prunes ONLY that family\'s twin', () => {
+    const rows = [
+      { sku: 'X', parent_sku: 'P1', it_price: '9' },
+      { sku: 'X', parent_sku: 'P2', it_price: '9' },
+    ]
+    const out = pruneExcludedCells(rows, new Set(['P1|X|it_price']))
+    expect(out[0].it_price).toBeUndefined()
+    expect(out[1].it_price).toBe('9')
+  })
+})
+
+describe('incident #29 — family-aware cell planning', () => {
+  it('plans cells for the SAME child SKU under EVERY parent (no first-occurrence-wins)', () => {
+    const existing = [
+      { sku: 'X', parent_sku: 'P1', title: '' },
+      { sku: 'X', parent_sku: 'P2', title: '' },
+    ]
+    const imported = [
+      { sku: 'X', parent_sku: 'P1', title: 'T1' },
+      { sku: 'X', parent_sku: 'P2', title: 'T2' },
+    ]
+    const plan = planImportCells(imported, existing, 'fill-missing')
+    expect(plan.changes).toHaveLength(2)
+    expect(plan.changes.map((c) => `${c.parentSku}:${c.to}`).sort()).toEqual(['P1:T1', 'P2:T2'])
   })
 })

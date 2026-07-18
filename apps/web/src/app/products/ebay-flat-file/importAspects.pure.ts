@@ -31,6 +31,42 @@ export interface AspectDerivedTarget {
 
 const canonKey = (name: string) => `aspect_${name.trim().replace(/\s+/g, '_')}`
 
+/** Incident #29 — bare ENGLISH headers ("Color", "Size", "Brand") map to the
+ *  LOCALIZED canonical aspect. MIRRORS apps/api/src/services/ebay-theme-axes.ts
+ *  ASPECT_SYNONYM_GROUPS (keep both in sync); group[0] = canonical Italian.
+ *  Unmapped headers (Team Name, Body Type…) still import — as their own ghost
+ *  aspect columns, visible with ⚠. */
+const IMPORT_ASPECT_SYNONYMS: ReadonlyArray<ReadonlyArray<string>> = [
+  ['colore', 'color', 'colour', 'color name'],
+  ['taglia', 'size', 'size name', 'misura'],
+  ['stile', 'style', 'style name'],
+  ['materiale', 'material', 'material name'],
+  ['genere', 'gender', 'department'],
+  ['marca', 'brand'],
+  ['stagione', 'season'],
+  ['paese di fabbricazione', 'country/region of manufacture', 'country of manufacture', 'made in'],
+  ['tipo di giacca', 'jacket type'],
+  ['tipo di prodotto', 'product type'],
+  ['adatto a', 'suitable for'],
+  ['livello di protezione', 'protection level'],
+  ['reparto'],
+  ['vestibilità', 'vestibilita', 'fit'],
+]
+const titleCase = (x: string) => x.replace(/^\w/, (c) => c.toUpperCase())
+/** Localized canonical target for a bare header, resolved against known
+ *  column ids case-insensitively; null when the header is no known synonym. */
+export function synonymAspectTarget(header: string, knownColumnIds: Set<string>): string | null {
+  const lower = header.trim().toLowerCase()
+  const group = IMPORT_ASPECT_SYNONYMS.find((g) => (g as string[]).includes(lower))
+  if (!group) return null
+  const canonicalLower = group[0]
+  const wanted = `aspect_${canonicalLower.replace(/ /g, '_')}`
+  for (const id of knownColumnIds) {
+    if (id.toLowerCase() === wanted) return id
+  }
+  return canonKey(titleCase(canonicalLower))
+}
+
 const PAIR_RE = /^(.+?)\s*\((.+?)\)$/
 const WARN_RE = /^(.+?)\s*⚠$/
 const JUNK_RE = /^variantAttributes\s*⚠?$/i
@@ -75,9 +111,25 @@ export function deriveAspectMapping(
     if (canonical) {
       out.set(h, { target: canonical, synth: !knownColumnIds.has(canonical), foldedFrom: name })
     } else {
-      const target = canonKey(name)
-      out.set(h, { target, synth: !knownColumnIds.has(target) })
+      const syn = synonymAspectTarget(name, knownColumnIds)
+      const target = syn ?? canonKey(name)
+      out.set(h, { target, synth: !knownColumnIds.has(target), ...(syn ? { foldedFrom: name } : {}) })
     }
+  }
+
+  // Third pass — BARE headers (no ⚠, no pair) that are language synonyms of a
+  // localized aspect ("Color", "Brand", "Size") land on the canonical column
+  // instead of spawning an English twin (incident #29).
+  for (const h of headers) {
+    const t = h.trim()
+    if (out.has(h) || JUNK_RE.test(t) || PAIR_RE.test(t) || WARN_RE.test(t)) continue
+    const anchored = canonicalByName.get(t.toLowerCase())
+    if (anchored) {
+      out.set(h, { target: anchored, synth: !knownColumnIds.has(anchored), foldedFrom: t })
+      continue
+    }
+    const syn = synonymAspectTarget(t, knownColumnIds)
+    if (syn) out.set(h, { target: syn, synth: !knownColumnIds.has(syn), foldedFrom: t })
   }
 
   return out

@@ -962,7 +962,7 @@ export function EbayImportWizard({
       label: 'Apply',
       align: 'center',
       render: (c) => {
-        const key = `${c.sku}|${c.columnId}`
+        const key = `${c.parentSku}|${c.sku}|${c.columnId}`
         if (!c.willApply) return <Tag tone="neutral">kept</Tag>
         return (
           <Checkbox
@@ -1123,7 +1123,7 @@ export function EbayImportWizard({
           <DataGrid
             columns={planColumns}
             rows={cellPlan.changes.slice(0, 100)}
-            rowKey={(c) => `${c.sku}|${c.columnId}`}
+            rowKey={(c) => `${c.parentSku}|${c.sku}|${c.columnId}`}
             maxHeight={220}
             emptyState="No changes."
           />

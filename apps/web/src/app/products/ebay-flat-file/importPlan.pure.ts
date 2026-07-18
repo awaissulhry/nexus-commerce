@@ -94,12 +94,20 @@ export function applyDestructiveGate(
 
 export interface CellChange {
   sku: string
+  /** Family identity (parent SKU; '' for parent rows) — same child SKU exists
+   *  under SEVERAL parents in the multi-listing model; SKU alone collapsed
+   *  them to first-occurrence-wins ("only a few rows import"). */
+  parentSku: string
   columnId: string
   from: string
   to: string
   /** false when fill-missing keeps the existing non-empty value. */
   willApply: boolean
 }
+
+/** Row identity for import matching: family + sku. */
+export const importRowKey = (r: Record<string, unknown>): string =>
+  `${cellStr(r.parent_sku).trim()}|${cellStr(r.sku).trim()}`
 
 export interface ImportCellPlan {
   changes: CellChange[]
@@ -121,20 +129,34 @@ export function planImportCells(
   existingRows: Record<string, unknown>[],
   mode: 'fill-missing' | 'overwrite',
 ): ImportCellPlan {
-  const bySku = new Map<string, Record<string, unknown>>()
+  // Incident #29 — FAMILY-AWARE identity (parent_sku|sku). The multi-listing
+  // model repeats the same child SKU under several parents; a SKU-keyed map
+  // (first-occurrence-wins) planned cells for only the FIRST family's row and
+  // silently dropped every later family's ("only a few rows import").
+  const byKey = new Map<string, Record<string, unknown>>()
+  const bySkuFallback = new Map<string, Record<string, unknown>>()
   for (const r of existingRows) {
     const sku = cellStr(r.sku).trim()
-    if (sku && !bySku.has(sku)) bySku.set(sku, r)
+    if (!sku) continue
+    const key = importRowKey(r)
+    if (!byKey.has(key)) byKey.set(key, r)
+    if (!bySkuFallback.has(sku)) bySkuFallback.set(sku, r)
   }
   const changes: CellChange[] = []
   const newRowSkus: string[] = []
   for (const imp of importRows) {
     const sku = cellStr(imp.sku).trim()
-    const existing = sku ? bySku.get(sku) : undefined
+    // exact family match first; SKU fallback only for single-family files
+    // whose parent_sku column is absent from the import.
+    const hasParentCol = 'parent_sku' in imp
+    const existing = sku
+      ? (byKey.get(importRowKey(imp)) ?? (hasParentCol ? undefined : bySkuFallback.get(sku)))
+      : undefined
     if (!existing) {
       if (sku) newRowSkus.push(sku)
       continue
     }
+    const parentSku = cellStr(existing.parent_sku).trim()
     for (const [k, v] of Object.entries(imp)) {
       if (k.startsWith('_') || k === 'sku') continue
       const from = cellStr(existing[k])
@@ -142,13 +164,15 @@ export function planImportCells(
       if (to === '' || from === to) continue
       const structuralShared = k === 'shared_sku_listing'
       const willApply = mode === 'overwrite' || from === '' || structuralShared
-      changes.push({ sku, columnId: k, from, to, willApply })
+      changes.push({ sku, parentSku, columnId: k, from, to, willApply })
     }
   }
   return { changes, newRowSkus, applyCount: changes.filter((c) => c.willApply).length }
 }
 
-/** Remove operator-excluded cells ("sku|columnId") from the import rows. */
+/** Remove operator-excluded cells ("parentSku|sku|columnId") from the import
+ *  rows. Incident #29 — family-scoped keys: a SKU-scoped exclusion unticked
+ *  the same cell on EVERY family's twin row at once. */
 export function pruneExcludedCells(
   rows: Record<string, unknown>[],
   excluded: Set<string>,
@@ -157,9 +181,10 @@ export function pruneExcludedCells(
   return rows.map((r) => {
     const sku = cellStr(r.sku).trim()
     if (!sku) return r
+    const rowKey = importRowKey(r)
     const out: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(r)) {
-      if (excluded.has(`${sku}|${k}`)) continue
+      if (excluded.has(`${rowKey}|${k}`)) continue
       out[k] = v
     }
     return out
