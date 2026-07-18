@@ -2,6 +2,11 @@ import type { AddFixedPriceItemInput, TradingVariation } from './ebay-trading-ap
 import { toTradingConditionId } from './ebay-condition.js'
 import { aspectCanonicalName, ASPECT_SYNONYM_GROUPS } from './ebay-theme-axes.js'
 
+/** Incident #21 — "blank qty on a shared listing = whatever the pool allows".
+ *  Callers' capQty implementations recognize this sentinel and return the pool
+ *  availability WITHOUT logging an oversell warning. */
+export const POOL_DEFAULT_QTY_SENTINEL = Number.MAX_SAFE_INTEGER
+
 export type SharedRow = Record<string, unknown>
 export type CapQtyFn = (productId: string | undefined, sku: string, requested: number, market?: string) => number
 
@@ -66,8 +71,17 @@ export function buildSharedListingInput(
   const variations: TradingVariation[] = variantRows.map((row) => {
     const sku = str(row.sku)
     const ean = str(row.ean)
-    const rawQty = num(row[`${prefix}_qty`] ?? row.quantity)
-    const quantity = capQty ? capQty(row._productId as string | undefined, sku, rawQty, mkt) : rawQty
+    // Incident #21 — quantities on a SHARED listing follow the POOL. A blank
+    // qty cell (planned/imported rows never carry one) used to become 0 and
+    // the whole creation died on the all-out-of-stock guard. Blank now means
+    // "whatever the pool allows" (capQty caps MAX_SAFE_INTEGER down to the
+    // pool's available). An EXPLICIT 0 stays 0 — operator suppression.
+    const rawQtyField = row[`${prefix}_qty`] ?? row.quantity
+    const qtyBlank = rawQtyField == null || String(rawQtyField).trim() === ''
+    const rawQty = qtyBlank ? POOL_DEFAULT_QTY_SENTINEL : num(rawQtyField)
+    const quantity = capQty
+      ? capQty(row._productId as string | undefined, sku, rawQty, mkt)
+      : (qtyBlank ? 0 : num(rawQtyField))
     const specifics: Record<string, string> = {}
     // Build a lowercase→value map from the row's aspect_* keys for case-insensitive lookup.
     const rowKeyLower = new Map<string, string>()

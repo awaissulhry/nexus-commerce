@@ -39,7 +39,7 @@ import {
 } from '../services/ebay-flat-file-pull-preview.service.js';
 import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, toListingLanguage, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
 import { parseThemeAxes, canonicalizeRowAspects } from '../services/ebay-theme-axes.js';
-import { pushSharedListings, type SharedListingResult } from '../services/ebay-shared-listing-push.service.js';
+import { pushSharedListings, POOL_DEFAULT_QTY_SENTINEL, type SharedListingResult } from '../services/ebay-shared-listing-push.service.js';
 import { callTradingApi, siteIdForMarket } from '../services/ebay-trading-api.service.js';
 import { reconcileMembershipsFromEbay, parseLiveVariations } from '../services/ebay-membership-reconcile.service.js';
 import { relabelListingToPoolSkus } from '../services/ebay-variation-relabel.service.js';
@@ -1315,7 +1315,10 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     // Resolve the listing's pool, then cap the requested qty at what that pool
     // can publish. Named capToFbm historically; now pool-aware (FCF.5).
     const capToFbm = (pid: string | undefined, sku: string, requested: number, market?: string): number => {
-      const req = Number(requested) || 0;
+      // Incident #21 — pool-default sentinel: blank qty on a shared listing
+      // resolves to the pool's availability, silently (no oversell warning).
+      const poolDefault = requested === POOL_DEFAULT_QTY_SENTINEL;
+      const req = poolDefault ? Number.MAX_SAFE_INTEGER : (Number(requested) || 0);
       const mkt = (market ?? '').toUpperCase();
       const listingKey = pid ? `${pid}::${mkt}` : '';
       const stockBuffer = listingKey ? bufferByListing.get(listingKey) ?? 0 : 0;
@@ -1338,7 +1341,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           pendingReserved: pid ? pendingMcfByProduct.get(pid) ?? 0 : 0,
         }).available;
         if (req > cap) {
-          oversellWarnings.push({
+          if (!poolDefault) oversellWarnings.push({
             sku, requested: req, published: cap,
             reason: stockBuffer > 0 ? `capped to FBA-available, MCF (buffer ${stockBuffer})` : 'capped to FBA-available (MCF)',
           });
@@ -1349,6 +1352,11 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
       // FBM (default): own-warehouse pool.
       if (!pid || !trackedProducts.has(pid)) {
+        if (poolDefault) {
+          // No pool to draw from — never invent stock from the sentinel.
+          oversellWarnings.push({ sku, requested: 0, published: 0, reason: 'blank qty with no tracked pool — resolved to 0 (set a qty or link the product)' });
+          return 0;
+        }
         if (req > 0) oversellWarnings.push({ sku, requested: req, published: req, reason: 'FBM stock not tracked — not capped' });
         return req;
       }
@@ -1359,6 +1367,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         stockBuffer,
       }).available;
       if (req > cap) {
+        if (poolDefault) return cap;
         oversellWarnings.push({
           sku, requested: req, published: cap,
           reason: stockBuffer > 0 ? `capped to FBM-available (buffer ${stockBuffer})` : 'capped to FBM-available',

@@ -2056,11 +2056,40 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           return
         }
       }
-      const res = await fetch(`${BACKEND}/api/ebay/flat-file/push`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: sendRows, markets: publishTargets, pooledRows }),
-      })
+      // Incident #21 — a deploy restart mid-request surfaced as a bare
+      // "Failed to fetch" while the server actually completed the push.
+      // (1) pre-flight ping: if the API is unreachable, say so and DON'T send;
+      // (2) if the POST itself dies at the network layer, say the truth: the
+      // push may have completed — history is authoritative.
+      try {
+        const ping = await fetch(`${BACKEND}/api/health`, { signal: AbortSignal.timeout(4000) })
+        if (!ping.ok) throw new Error(`health ${ping.status}`)
+      } catch {
+        toast({
+          title: 'The server is unreachable right now (likely a deploy restart)',
+          description: 'Nothing was sent. Wait ~1 minute and press Publish again.',
+          tone: 'warning',
+        })
+        return
+      }
+      let res: Response
+      try {
+        res = await fetch(`${BACKEND}/api/ebay/flat-file/push`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows: sendRows, markets: publishTargets, pooledRows }),
+        })
+      } catch (netErr) {
+        setHistoryRefreshKey((k) => k + 1)
+        setHistoryPanelOpen(true)
+        toast({
+          title: 'Connection lost while publishing',
+          description: 'The push may still have completed on the server — Push History (just opened) is the truth. Check it before publishing again to avoid duplicates.',
+          tone: 'warning',
+        })
+        console.error('[eBay publish] network failure mid-request', netErr)
+        return
+      }
       if (!res.ok) {
         // Surface the server's real message, not a bare "HTTP 500". The push
         // route returns { error } on every failure path.
