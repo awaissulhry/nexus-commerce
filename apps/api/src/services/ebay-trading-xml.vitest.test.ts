@@ -26,6 +26,9 @@ describe('buildAddFixedPriceItemXml — eBay IT creation requirements', () => {
   it('carries per-variation EAN default (code 21919301 otherwise)', () => {
     expect(xml).toContain('<VariationProductListingDetails><EAN>Does not apply</EAN></VariationProductListingDetails>')
   })
+  it('OutOfStockControl keeps zero-stock listings alive (incident #22)', () => {
+    expect(xml).toContain('<OutOfStockControl>true</OutOfStockControl>')
+  })
   it('numeric ConditionID (code 37 otherwise)', () => {
     expect(xml).toContain('<ConditionID>1000</ConditionID>')
   })

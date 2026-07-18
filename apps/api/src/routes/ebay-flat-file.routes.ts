@@ -395,6 +395,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           })
           const liveSet = new Set(liveParents.map((m) => m.parentSku))
           const existingRowKey = new Set(rows.map((r) => `${String((r as Record<string, unknown>).parent_sku ?? '')}::${String((r as Record<string, unknown>).sku ?? '')}`))
+          const poolIdBySku = new Map(products.filter((pp) => pp.sku).map((pp) => [pp.sku as string, pp.id]))
           for (const shell of shellParents) {
             if (!shell.sku || liveSet.has(shell.sku)) continue
             const cl = (shell.channelListings ?? []).find((c: { region?: string | null }) => c.region === regionKey)
@@ -405,15 +406,27 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             for (const ch of planned) {
               const csku = String(ch.sku ?? '').trim()
               if (!csku || existingRowKey.has(`${shell.sku}::${csku}`)) continue
-              rows.push({
+              const plannedRow: Record<string, unknown> = {
                 ...ch,
                 _rowId: `planned::${shell.sku}::${csku}`,
-                _productId: undefined,
+                // Incident #22 — pool linkage: the planned SKU is an existing
+                // pool product; its id powers qty resolution (capToFbm) and
+                // membership writeback at creation.
+                _productId: poolIdBySku.get(csku),
                 _isParent: false,
                 parentage: 'child',
                 parent_sku: shell.sku,
                 platformProductId: shell.id,
-              })
+              }
+              // Incident #22 — stale ItemIDs captured while a since-deleted
+              // listing was briefly live must NOT ride planned rows: a numeric
+              // it_item_id flips the Lane-A discriminator and routes the family
+              // into the Inventory lane (which cannot create at qty 0).
+              for (const key of Object.keys(plannedRow)) {
+                if (/^[a-z]{2}_item_id$/.test(key) || key === 'ebay_item_id') delete plannedRow[key]
+                if (/^[a-z]{2}_status$/.test(key)) delete plannedRow[key]
+              }
+              rows.push(plannedRow)
               existingRowKey.add(`${shell.sku}::${csku}`)
             }
           }
