@@ -1499,13 +1499,32 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // ── API: save ─────────────────────────────────────────────────────────
 
   const onSave = useCallback(async (dirty: BaseRow[]): Promise<{ saved: number; createResult?: { errors?: unknown[] } }> => {
-    const res = await fetch(`${BACKEND}/api/ebay/flat-file/rows`, {
+    // Incident #28 — 'Save failed before push: Failed to fetch': the save
+    // PATCH had no network resilience (the push POST already did). Saves are
+    // IDEMPOTENT (row upserts), so a network failure gets ONE automatic retry
+    // after 2s (covers deploy-restart windows); a second failure is classified
+    // honestly. Edits are never lost either way — the draft layer holds them.
+    const doSave = () => fetch(`${BACKEND}/api/ebay/flat-file/rows`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       // FFP.1 — marketplace scopes content fields + flatFileSnapshot to the
       // ACTIVE market's listing server-side (each market file is independent).
       body: JSON.stringify({ rows: dirty, marketplace: marketplaceRef.current }),
     })
+    let res: Response
+    try {
+      res = await doSave()
+    } catch {
+      await new Promise((r) => setTimeout(r, 2000))
+      try {
+        res = await doSave()
+      } catch {
+        const reachable = await fetch(`${BACKEND}/api/health`, { signal: AbortSignal.timeout(4000) }).then((h) => h.ok).catch(() => false)
+        throw new Error(reachable
+          ? 'the connection dropped mid-save — your edits are safe in the draft; reload to see what persisted, then Save again'
+          : 'the server is unreachable (likely a deploy restart) — nothing was saved; your edits are safe in the draft. Wait ~1 minute and Save again')
+      }
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     // P1-surface: read the full response including createResult to detect rows that failed to persist
     const result = await res.json() as {
