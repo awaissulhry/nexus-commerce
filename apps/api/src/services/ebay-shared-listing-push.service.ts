@@ -49,6 +49,7 @@ export function buildSharedListingInput(
 
   const variations: TradingVariation[] = variantRows.map((row) => {
     const sku = str(row.sku)
+    const ean = str(row.ean)
     const rawQty = num(row[`${prefix}_qty`] ?? row.quantity)
     const quantity = capQty ? capQty(row._productId as string | undefined, sku, rawQty, mkt) : rawQty
     const specifics: Record<string, string> = {}
@@ -71,7 +72,7 @@ export function buildSharedListingInput(
     const rawPrice = row[`${prefix}_price`] ?? row.price
     const priceStr = rawPrice == null ? '' : String(rawPrice).trim()
     const price = priceStr === '' ? null : num(priceStr)
-    return { sku, price, quantity, specifics }
+    return { sku, price, quantity, specifics, ean }
   })
 
   const src = parentRow ?? variantRows[0] ?? {}

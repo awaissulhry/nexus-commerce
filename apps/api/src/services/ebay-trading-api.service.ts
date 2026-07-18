@@ -50,6 +50,10 @@ export interface TradingVariation {
   price: number
   quantity: number
   specifics: Record<string, string>
+  /** Product identifier. eBay IT REQUIRES an EAN element per variation on most
+   *  categories (code 21919301); live listings without a real code carry the
+   *  literal "Does not apply" — the builder defaults to it when absent. */
+  ean?: string
 }
 export interface AddFixedPriceItemInput {
   title: string
@@ -79,10 +83,12 @@ export function buildAddFixedPriceItemXml(input: AddFixedPriceItemInput): string
       const specifics = input.variationSpecificNames
         .map((n) => nameValueList(n, [v.specifics[n] ?? '']))
         .join('')
+      const ean = (v.ean ?? '').trim() || 'Does not apply'
       return `      <Variation>
         <SKU>${escapeXml(v.sku)}</SKU>
         <StartPrice>${v.price}</StartPrice>
         <Quantity>${Math.max(0, Math.trunc(v.quantity))}</Quantity>
+        <VariationProductListingDetails><EAN>${escapeXml(ean)}</EAN></VariationProductListingDetails>
         <VariationSpecifics>${specifics}</VariationSpecifics>
       </Variation>`
     })
