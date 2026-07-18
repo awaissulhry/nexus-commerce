@@ -163,6 +163,51 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           });
           for (const k of kids) ids.add(k.id);
         }
+
+        // Incident #15 — UNPUBLISHED extra-listing shells (no memberships yet)
+        // are cluster-linked via categoryAttributes.ebayClusterParent, stamped
+        // at save time. Without this, a freshly imported listing family
+        // vanished from the file on reload until its first successful publish
+        // ("my changes are lost"). Two directions:
+        // (a) reverse: entering FROM a shell pulls its pool family in;
+        // (b) forward: the pool family pulls its linked shells in.
+        try {
+          const entry = await prisma.product.findFirst({
+            where: { id: familyId },
+            select: { categoryAttributes: true },
+          });
+          const entryCluster = entry?.categoryAttributes && typeof entry.categoryAttributes === 'object'
+            ? String((entry.categoryAttributes as Record<string, unknown>).ebayClusterParent ?? '')
+            : '';
+          if (entryCluster) {
+            const poolParent = await prisma.product.findFirst({
+              where: { sku: entryCluster, deletedAt: null },
+              select: { id: true, sku: true },
+            });
+            if (poolParent) {
+              ids.add(poolParent.id);
+              famSkus.push(poolParent.sku);
+              const poolKids = await prisma.product.findMany({
+                where: { parentId: poolParent.id, deletedAt: null },
+                select: { id: true },
+              });
+              for (const k of poolKids) ids.add(k.id);
+            }
+          }
+          const famSkuSet = new Set(famSkus);
+          const shells = await prisma.product.findMany({
+            where: { deletedAt: null, productType: 'EBAY_LISTING_SHELL' },
+            select: { id: true, categoryAttributes: true },
+          });
+          for (const sh of shells) {
+            const cp = sh.categoryAttributes && typeof sh.categoryAttributes === 'object'
+              ? String((sh.categoryAttributes as Record<string, unknown>).ebayClusterParent ?? '')
+              : '';
+            if (cp && famSkuSet.has(cp)) ids.add(sh.id);
+          }
+        } catch (err) {
+          request.log.warn(err, 'ebay/flat-file/rows: shell cluster expansion failed (non-fatal)');
+        }
         familyIdSet = [...ids];
       }
 
@@ -331,6 +376,50 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         rows.push(...sharedRows)
       } catch (err) {
         request.log.error(err, 'ebay/flat-file/rows: shared membership synthesis failed (non-fatal)')
+      }
+
+      // Incident #15 — PLANNED children of unpublished extra listings. Saved
+      // into the shell's CL flatFileSnapshot at save time; synthesized here on
+      // load until the listing goes live (then memberships take precedence).
+      // These are REAL, editable, pushable rows — the durable home that makes
+      // "my changes are lost" structurally impossible for imported families.
+      try {
+        const mpKey = (marketplace ?? 'IT').toUpperCase()
+        const regionKey = mpKey === 'UK' ? 'GB' : mpKey
+        const shellParents = products.filter((pr) => (pr as { productType?: string }).productType === 'EBAY_LISTING_SHELL')
+        if (shellParents.length > 0) {
+          const shellSkus = shellParents.map((pr) => pr.sku).filter(Boolean) as string[]
+          const liveParents = await prisma.sharedListingMembership.findMany({
+            where: { marketplace: mpKey, parentSku: { in: shellSkus } },
+            select: { parentSku: true },
+          })
+          const liveSet = new Set(liveParents.map((m) => m.parentSku))
+          const existingRowKey = new Set(rows.map((r) => `${String((r as Record<string, unknown>).parent_sku ?? '')}::${String((r as Record<string, unknown>).sku ?? '')}`))
+          for (const shell of shellParents) {
+            if (!shell.sku || liveSet.has(shell.sku)) continue
+            const cl = (shell.channelListings ?? []).find((c: { region?: string | null }) => c.region === regionKey)
+            const snap = cl?.flatFileSnapshot && typeof cl.flatFileSnapshot === 'object'
+              ? (cl.flatFileSnapshot as Record<string, unknown>)
+              : null
+            const planned = Array.isArray(snap?._plannedChildren) ? (snap!._plannedChildren as Array<Record<string, unknown>>) : []
+            for (const ch of planned) {
+              const csku = String(ch.sku ?? '').trim()
+              if (!csku || existingRowKey.has(`${shell.sku}::${csku}`)) continue
+              rows.push({
+                ...ch,
+                _rowId: `planned::${shell.sku}::${csku}`,
+                _productId: undefined,
+                _isParent: false,
+                parentage: 'child',
+                parent_sku: shell.sku,
+                platformProductId: shell.id,
+              })
+              existingRowKey.add(`${shell.sku}::${csku}`)
+            }
+          }
+        }
+      } catch (err) {
+        request.log.warn(err, 'ebay/flat-file/rows: planned-children synthesis failed (non-fatal)')
       }
 
       return reply.send({ rows });
@@ -945,6 +1034,86 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           sharedMembershipsError = err instanceof Error ? err.message : String(err)
           request.log.warn(err, 'ebay/flat-file/rows: shared membership upsert failed (save unaffected)')
         }
+      }
+
+      // Incident #15 — SAVE IS DURABLE for unpublished shared families: the
+      // family block (child rows) is persisted into the shell parent's CL
+      // flatFileSnapshot (_plannedChildren) and the shell is cluster-linked
+      // (categoryAttributes.ebayClusterParent). GET /rows synthesizes these
+      // until the listing goes live — a failed/never-run publish can no longer
+      // lose what the operator saved. Additive; never fails the save.
+      try {
+        if (activeMp) {
+          const mpU = activeMp.toUpperCase()
+          const regionU = mpU === 'UK' ? 'GB' : mpU
+          const sharedParentRows = rows.filter((r) => {
+            const rr = r as Record<string, unknown>
+            return rr.shared_sku_listing === true &&
+              String(rr.parentage ?? '').trim().toLowerCase() === 'parent' &&
+              String(rr.sku ?? '').trim() !== '' && rr._shared !== true
+          })
+          for (const pr of sharedParentRows) {
+            const rr = pr as Record<string, unknown>
+            const psku = String(rr.sku).trim()
+            const liveId = String(rr[`${mpU.toLowerCase()}_item_id`] ?? rr.ebay_item_id ?? '').trim()
+            if (/^\d+$/.test(liveId)) continue // already live — memberships own it
+            const memCount = await prisma.sharedListingMembership.count({ where: { marketplace: mpU, parentSku: psku } })
+            if (memCount > 0) continue
+            const children = rows.filter((r) => {
+              const cr = r as Record<string, unknown>
+              return String(cr.parent_sku ?? '').trim() === psku && cr._shared !== true && String(cr.sku ?? '').trim() !== ''
+            })
+            if (children.length === 0) continue
+            const planned = children.map((ch) => Object.fromEntries(Object.entries(ch as Record<string, unknown>).filter(([k]) => !k.startsWith('_'))))
+            const shell = await prisma.product.findFirst({ where: { sku: psku, deletedAt: null }, select: { id: true, categoryAttributes: true } })
+            if (!shell) continue
+            // Cluster linkage: any child SKU's existing pool product names the pool parent.
+            const poolChild = await prisma.product.findFirst({
+              where: { sku: { in: children.map((c) => String((c as Record<string, unknown>).sku).trim()) }, deletedAt: null, parentId: { not: null } },
+              select: { parentId: true },
+            })
+            let clusterParent = ''
+            if (poolChild?.parentId) {
+              const pp = await prisma.product.findFirst({ where: { id: poolChild.parentId }, select: { sku: true } })
+              clusterParent = pp?.sku ?? ''
+            }
+            const attrs = shell.categoryAttributes && typeof shell.categoryAttributes === 'object'
+              ? { ...(shell.categoryAttributes as Record<string, unknown>) }
+              : {}
+            if (clusterParent && attrs.ebayClusterParent !== clusterParent) {
+              await prisma.product.update({
+                where: { id: shell.id },
+                data: { categoryAttributes: { ...attrs, ebayClusterParent: clusterParent } as Prisma.InputJsonObject },
+              })
+            }
+            const shellCl = await prisma.channelListing.findFirst({
+              where: { productId: shell.id, channel: 'EBAY', region: regionU },
+              select: { id: true, flatFileSnapshot: true },
+            })
+            if (shellCl) {
+              const snap = shellCl.flatFileSnapshot && typeof shellCl.flatFileSnapshot === 'object'
+                ? { ...(shellCl.flatFileSnapshot as Record<string, unknown>) }
+                : {}
+              await prisma.channelListing.update({
+                where: { id: shellCl.id },
+                data: { flatFileSnapshot: { ...snap, _plannedChildren: planned } as Prisma.InputJsonObject },
+              })
+            } else {
+              await prisma.channelListing.create({
+                data: {
+                  productId: shell.id,
+                  channel: 'EBAY',
+                  region: regionU,
+                  channelMarket: `EBAY_${regionU}`,
+                  marketplace: mpU,
+                  flatFileSnapshot: { _plannedChildren: planned } as Prisma.InputJsonObject,
+                } as never,
+              })
+            }
+          }
+        }
+      } catch (err) {
+        request.log.warn(err, 'ebay/flat-file/rows: planned-children persist failed (non-fatal)')
       }
 
       // Incident #12 — auto-UNHIDE: saving a SKU in this file clears its

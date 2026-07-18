@@ -182,7 +182,23 @@ export async function createSharedListing(
     // I4 — reject BEFORE the eBay push (mirrors the single-SKU path's price>0 guard) so a
     // 0/undefined-price listing is never created and no Decimal(0) membership is persisted.
     if (input.variations.some((v) => v.price == null || v.price <= 0)) {
-      return { status: 'ERROR', parentSku, market, memberships: 0, message: 'missing/invalid price for one or more shared variants' }
+      const bad = input.variations.filter((v) => v.price == null || v.price <= 0).map((v) => v.sku)
+      return { status: 'ERROR', parentSku, market, memberships: 0, message: `missing/invalid price on: ${bad.slice(0, 5).join(', ')}${bad.length > 5 ? ` (+${bad.length - 5} more)` : ''} — set the ${market} price on those rows` }
+    }
+    // Incident #15 pre-flight — name EVERY missing requirement client-side so
+    // eBay never answers a new-listing attempt with a bare "Input data is
+    // invalid". Checks mirror AddFixedPriceItem's hard requirements.
+    {
+      const missing: string[] = []
+      if (!str(input.title)) missing.push('title')
+      if (!str((input as { categoryId?: unknown }).categoryId)) missing.push('category ID')
+      if (!str((input as { conditionId?: unknown }).conditionId ?? (parentRow.condition as string))) missing.push('condition')
+      if (!input.variations.length) missing.push('variant rows')
+      const pics = (input as { pictureUrls?: unknown[] }).pictureUrls
+      if (Array.isArray(pics) && pics.length === 0) missing.push('images')
+      if (missing.length > 0) {
+        return { status: 'ERROR', parentSku, market, memberships: 0, message: `cannot create the listing — missing: ${missing.join(', ')} (fill these on the parent row, Save, then push again)` }
+      }
     }
 
     // All variant prices validated as positive numbers above — safe to widen for addFn.

@@ -208,11 +208,20 @@ export async function callTradingApi(
   const raw = await res.text()
   const ack = raw.match(/<Ack>([^<]+)<\/Ack>/)?.[1] ?? 'Unknown'
   const itemId = raw.match(/<ItemID>([^<]+)<\/ItemID>/)?.[1]
-  const errors = [...raw.matchAll(/<(?:ShortMessage|LongMessage)>([^<]+)<\/(?:ShortMessage|LongMessage)>/g)].map(
-    (m) => m[1],
-  )
+  const decodeEntities = (x: string) => x
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, '&')
+  const longMessages = [...raw.matchAll(/<LongMessage>([^<]+)<\/LongMessage>/g)].map((m) => decodeEntities(m[1]))
+  const shortMessages = [...raw.matchAll(/<ShortMessage>([^<]+)<\/ShortMessage>/g)].map((m) => decodeEntities(m[1]))
+  const errorCodes = [...raw.matchAll(/<ErrorCode>([^<]+)<\/ErrorCode>/g)].map((m) => m[1])
+  // LongMessage names the exact offending field ("Input data for tag <Item.X>
+  // is invalid…"); ShortMessage alone ("Input data is invalid.") is useless to
+  // the operator — never surface it when a LongMessage exists.
+  const errors = longMessages.length ? longMessages : shortMessages
   if (ack === 'Failure') {
-    throw new Error(`eBay ${callName} Failure: ${errors[0] ?? 'unknown'}`)
+    const detail = errors.slice(0, 2).join(' | ') || 'unknown'
+    const code = errorCodes.length ? ` (code ${errorCodes[0]})` : ''
+    throw new Error(`eBay ${callName} Failure: ${detail}${code}`)
   }
   return { ack, itemId, errors, raw }
 }
