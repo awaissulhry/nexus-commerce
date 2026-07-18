@@ -157,7 +157,7 @@ function deriveSheetParents(rows: BaseRow[]) {
 export { isSharedDuplicateAllowed } from './validateRows.shared'
 
 export function validateRows(rows: BaseRow[], allRows: BaseRow[] = rows) {
-  const issues: Array<{ level: 'error' | 'warn'; sku: string; field: string; msg: string }> = []
+  const issues: Array<{ level: 'error' | 'warn'; sku: string; field: string; msg: string; rowId?: string }> = []
 
   // G.1 — parent/child integrity. Build the set of parent identifiers from the
   // WHOLE sheet (robust to either rowId- or productId-based variant linkage) and
@@ -185,11 +185,19 @@ export function validateRows(rows: BaseRow[], allRows: BaseRow[] = rows) {
   for (const row of rows) {
     const er = row as EbayRow & Record<string, unknown>
     const sku = String(row.sku ?? '')
-    if (!sku) { issues.push({ level: 'error', sku: '?', field: 'sku', msg: 'SKU is required' }); continue }
-    if ((skuCount.get(sku) ?? 0) > 1 && !isSharedDuplicateAllowed(sku, allRows as EbayRow[])) issues.push({ level: 'error', sku, field: 'sku', msg: 'Duplicate SKU — each listing needs a unique SKU' })
+    const rowId = String(row._rowId ?? '')
+    if (!sku) { issues.push({ level: 'error', sku: '?', field: 'sku', msg: 'SKU is required', rowId }); continue }
+    if ((skuCount.get(sku) ?? 0) > 1 && !isSharedDuplicateAllowed(sku, allRows as EbayRow[])) issues.push({ level: 'error', sku, field: 'sku', msg: 'Duplicate SKU — each listing needs a unique SKU', rowId })
     const title = String(row.title ?? '')
-    if (!title) issues.push({ level: 'warn', sku, field: 'title', msg: 'Title is empty' })
-    if (title.length > 80) issues.push({ level: 'error', sku, field: 'title', msg: `Title exceeds 80 chars (${title.length})` })
+    if (!title) issues.push({ level: 'warn', sku, field: 'title', msg: 'Title is empty', rowId })
+    if (title.length > 80) {
+      // Only PARENT/standalone titles go to eBay (a variation child's title is
+      // display-only — the listing carries the parent's). A long child title is
+      // advice, not a blocker: making it an error poisoned whole publishes via
+      // shared SKUs (2026-07-18 "unable to click Full Publish").
+      const isChildRow = er._isParent === false || er.parentage === 'child'
+      issues.push({ level: isChildRow ? 'warn' : 'error', sku, field: 'title', msg: `Title exceeds 80 chars (${title.length})`, rowId })
+    }
 
     if (er._isParent === true) {
       // A parent groups its variants by an axis — without a theme they won't group.
@@ -197,7 +205,7 @@ export function validateRows(rows: BaseRow[], allRows: BaseRow[] = rows) {
     } else if (er._isParent === false) {
       // A variant must belong to a parent present in this sheet.
       const link = String(er.platformProductId ?? '')
-      if (link && !parentIds.has(link)) issues.push({ level: 'error', sku, field: 'parent', msg: "Variant's parent isn't in this sheet — load the family before pushing" })
+      if (link && !parentIds.has(link)) issues.push({ level: 'error', sku, field: 'parent', msg: "Variant's parent isn't in this sheet — load the family before pushing", rowId })
     }
 
     // G.2 — P2.B2 orphan-child: explicit child whose parent_sku matches no parent row's SKU in
@@ -1742,12 +1750,18 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     if (blocking.length) {
       setBlockingErrors(blocking)
       setPublishPanelOpen(true)
-      const blockedSkus = new Set(blocking.map((b) => b.sku))
+      // Row-IDENTITY blocking (2026-07-18): keying by SKU let one bad ADD row
+      // poison every same-SKU row in the sheet — with shared SKUs, the primary
+      // family's LIVE rows matched too, tripping the hard block and making
+      // Full Publish appear dead. An error blocks ITS row, nothing else.
+      const blockedRowIds = new Set(blocking.map((b) => b.rowId).filter(Boolean))
+      const blockedSkusLegacy = new Set(blocking.filter((b) => !b.rowId).map((b) => b.sku))
       const mpKey = marketplace.toLowerCase()
       const isLiveHere = (r: BaseRow) =>
         Boolean(String((r as EbayRow)[`${mpKey}_item_id` as keyof EbayRow] ?? '').trim()) ||
         String((r as EbayRow)[`${mpKey}_status` as keyof EbayRow] ?? '').toUpperCase() === 'ACTIVE'
-      const isBlocked = (r: BaseRow) => blockedSkus.has(String((r as EbayRow).sku ?? ''))
+      const isBlocked = (r: BaseRow) =>
+        blockedRowIds.has(String(r._rowId)) || blockedSkusLegacy.has(String((r as EbayRow).sku ?? ''))
       const hardBlocked = publishRows.filter((r) => isBlocked(r) && ((r as EbayRow)._isParent === true || isLiveHere(r)))
       const rest = sendRows.filter((r) => !isBlocked(r))
       const excludableCount = publishRows.filter(isBlocked).length - hardBlocked.length
