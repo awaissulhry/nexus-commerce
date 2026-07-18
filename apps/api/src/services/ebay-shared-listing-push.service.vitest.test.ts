@@ -16,12 +16,12 @@ describe('buildSharedListingInput', () => {
   const input = buildSharedListingInput(parent, variants, 'IT')
 
   it('derives variation axis names from aspect_* keys with >1 value', () => {
-    expect(input.variationSpecificNames).toEqual(['Size'])
+    expect(input.variationSpecificNames).toEqual(['Taglia']) // incident #19: Size collapses to the localized axis
   })
   it('builds one variation per row with sku/price/qty/specifics', () => {
     expect(input.variations).toHaveLength(2)
-    expect(input.variations[0]).toMatchObject({ sku: 'LNR-BLK-M', price: 49.9, quantity: 5, specifics: { Size: 'M' } })
-    expect(input.variations[1]).toMatchObject({ sku: 'LNR-BLK-L', quantity: 3, specifics: { Size: 'L' } })
+    expect(input.variations[0]).toMatchObject({ sku: 'LNR-BLK-M', price: 49.9, quantity: 5, specifics: { Taglia: 'M' } })
+    expect(input.variations[1]).toMatchObject({ sku: 'LNR-BLK-L', quantity: 3, specifics: { Taglia: 'L' } })
   })
   it('takes listing fields from the parent and currency/country from market', () => {
     expect(input.title).toBe('Inner Liner')
@@ -105,7 +105,7 @@ describe('createSharedListing', () => {
     expect(res.itemId).toBe('110556677')
     expect(res.memberships).toBe(2)
     expect(db.created).toHaveLength(2)
-    expect(db.created[0]).toMatchObject({ marketplace: 'IT', sku: 'LNR-BLK-M', itemId: '110556677', parentSku: 'LNR-BLK', variationSpecifics: { Size: 'M' } })
+    expect(db.created[0]).toMatchObject({ marketplace: 'IT', sku: 'LNR-BLK-M', itemId: '110556677', parentSku: 'LNR-BLK', variationSpecifics: { Taglia: 'M' } })
     expect(addFn).toHaveBeenCalledOnce()
   })
 
@@ -238,5 +238,32 @@ describe('pushSharedListings', () => {
     expect(results.every((r) => r.status === 'CREATED')).toBe(true)
     expect(addFn).toHaveBeenCalledTimes(2)
     expect(db.created).toHaveLength(3) // A: 2 variants, B: 1 variant
+  })
+})
+
+// ── Incident #19 — language-duplicate aspects collapse to the localized name ──
+describe('incident #19 — synonym collapse (Size+Taglia twins)', () => {
+  const rows = [
+    { sku: 'A-M', it_price: 75, it_qty: 2, aspect_taglia: 'M', aspect_Size: 'M', aspect_colore: 'Nero', aspect_Color: 'Black', _productId: 'p1' },
+    { sku: 'A-L', it_price: 75, it_qty: 1, aspect_taglia: 'L', aspect_Size: 'L', aspect_colore: 'Giallo', aspect_Color: 'Yellow', _productId: 'p2' },
+  ]
+  const parent = { sku: 'A', title: 'T', category_id: '9999', condition: 'NEW', aspect_marca: 'XAVIA', aspect_Brand: 'XAVIA-EN', aspect_condizione: 'Nuovo con etichette', aspect_stagione: 'Tutte le stagioni' }
+
+  it('declares ONE localized axis per dimension (never Size+Colore+Color+Taglia)', () => {
+    const input = buildSharedListingInput(parent as never, rows as never, 'IT')
+    expect([...input.variationSpecificNames].sort()).toEqual(['Colore', 'Taglia'])
+  })
+  it('variation values come from the localized column', () => {
+    const input = buildSharedListingInput(parent as never, rows as never, 'IT')
+    expect(input.variations[0].specifics).toEqual({ Taglia: 'M', Colore: 'Nero' })
+    expect(input.variations[1].specifics).toEqual({ Taglia: 'L', Colore: 'Giallo' })
+  })
+  it('item specifics dedupe language twins (Marca wins) and exclude condition', () => {
+    const input = buildSharedListingInput(parent as never, rows as never, 'IT')
+    const specs = (input as { itemSpecifics?: Record<string, string> }).itemSpecifics ?? {}
+    expect(specs.Marca).toBe('XAVIA')
+    expect(specs.Brand).toBeUndefined()
+    expect(specs.Condizione).toBeUndefined()
+    expect(specs.Stagione).toBe('Tutte le stagioni')
   })
 })

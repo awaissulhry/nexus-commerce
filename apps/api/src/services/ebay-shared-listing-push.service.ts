@@ -1,5 +1,6 @@
 import type { AddFixedPriceItemInput, TradingVariation } from './ebay-trading-api.service.js'
 import { toTradingConditionId } from './ebay-condition.js'
+import { aspectCanonicalName, ASPECT_SYNONYM_GROUPS } from './ebay-theme-axes.js'
 
 export type SharedRow = Record<string, unknown>
 export type CapQtyFn = (productId: string | undefined, sku: string, requested: number, market?: string) => number
@@ -26,21 +27,36 @@ export function buildSharedListingInput(
   const prefix = mkt.toLowerCase()
 
   // Axis detection: aspect_* keys with >1 distinct value across variants.
-  // Case-insensitive dedup: first-seen casing wins for the canonical name.
-  const canonicalByLower = new Map<string, string>()   // lower → first-seen canonical
-  const valueSets = new Map<string, Set<string>>()      // canonical → value set
+  // Incident #19 — SYNONYM-COLLAPSED: legacy rows carry English twins
+  // (aspect_size beside aspect_taglia); both used to become declared axes
+  // (live listing showed Size+Color+Colore+Taglia). Names collapse through
+  // aspectCanonicalName — the localized name wins, its value preferred.
+  const canonicalByLower = new Map<string, string>()   // canonical lower → display name
+  const valueSets = new Map<string, Set<string>>()      // display name → value set
   for (const row of variantRows) {
     for (const [k, v] of Object.entries(row)) {
       if (k.startsWith('aspect_') && typeof v === 'string' && v) {
         const rawName = k.slice('aspect_'.length).replace(/_/g, ' ')
         if (!rawName) continue
-        const lower = rawName.toLowerCase()
-        // first-cased-wins: record canonical on first encounter
-        if (!canonicalByLower.has(lower)) {
-          canonicalByLower.set(lower, rawName)
-          valueSets.set(rawName, new Set())
+        const canonicalLower = aspectCanonicalName(rawName)
+        const isCanonicalSpelling = rawName.toLowerCase().trim() === canonicalLower
+        const displayFor = (base: string) => base.replace(/^\w/, (c) => c.toUpperCase())
+        if (!canonicalByLower.has(canonicalLower)) {
+          // display name: the canonical (localized) spelling, first letter up
+          canonicalByLower.set(canonicalLower, displayFor(isCanonicalSpelling ? rawName : canonicalLower))
+          valueSets.set(canonicalByLower.get(canonicalLower)!, new Set())
+        } else if (isCanonicalSpelling) {
+          // prefer the localized spelling as display once seen
+          const prev = canonicalByLower.get(canonicalLower)!
+          const next = displayFor(rawName)
+          if (prev !== next) {
+            const set = valueSets.get(prev)!
+            valueSets.delete(prev)
+            canonicalByLower.set(canonicalLower, next)
+            valueSets.set(next, set)
+          }
         }
-        const canonical = canonicalByLower.get(lower)!
+        const canonical = canonicalByLower.get(canonicalLower)!
         valueSets.get(canonical)!.add(v)
       }
     }
@@ -61,9 +77,17 @@ export function buildSharedListingInput(
       }
     }
     for (const name of variationSpecificNames) {
-      // Canonical name may have spaces; convert to underscored lowercase for key lookup.
-      const lowerKey = `aspect_${name.replace(/ /g, '_').toLowerCase()}`
-      const val = rowKeyLower.get(lowerKey) ?? ''
+      // Canonical name may have spaces; convert to underscored lowercase for key
+      // lookup. Incident #19 — fall back through the synonym spellings so a
+      // legacy row carrying ONLY aspect_size still fills the Taglia axis.
+      const canonicalLower = aspectCanonicalName(name)
+      const spellings = [name.toLowerCase(), canonicalLower,
+        ...(ASPECT_SYNONYM_GROUPS.find((g) => (g as string[]).includes(canonicalLower)) ?? [])]
+      let val = ''
+      for (const sp of spellings) {
+        val = rowKeyLower.get(`aspect_${sp.replace(/ /g, '_')}`) ?? ''
+        if (val) break
+      }
       if (val) specifics[name] = val
     }
     // I4 — only treat a price as present when the selected field actually carries a
@@ -92,17 +116,30 @@ export function buildSharedListingInput(
   // Listing-level ItemSpecifics (Marca, Stagione…): every aspect_* value that
   // is NOT a variation axis, from the parent row first (child fallback). The
   // category's required aspects live here — eBay code 71 without them.
-  const axisLower = new Set(variationSpecificNames.map((n) => n.toLowerCase()))
-  const itemSpecifics: Record<string, string> = {}
+  // Incident #19 — SYNONYM-COLLAPSED (Brand+Marca were both transmitted) and
+  // condition-excluded (eBay renders condition structurally; a Condizione
+  // specific doubled it on the page). Localized names win; when both language
+  // twins carry values, the localized column's value is preferred.
+  const axisCanonicals = new Set(variationSpecificNames.map((n) => aspectCanonicalName(n)))
+  const bestByCanonical = new Map<string, { display: string; value: string; localized: boolean }>()
   for (const source of [parentRow, ...variantRows]) {
     for (const [k, v] of Object.entries(source ?? {})) {
       if (!k.startsWith('aspect_') || typeof v !== 'string' || !v.trim()) continue
       const name = k.slice('aspect_'.length).replace(/_/g, ' ').trim()
-      if (!name || axisLower.has(name.toLowerCase())) continue
-      const canonical = name.replace(/^\w/, (c) => c.toUpperCase())
-      if (!(canonical in itemSpecifics)) itemSpecifics[canonical] = v.trim()
+      if (!name) continue
+      const canonicalLower = aspectCanonicalName(name)
+      if (canonicalLower === 'condizione') continue
+      if (axisCanonicals.has(canonicalLower)) continue
+      const isLocalized = name.toLowerCase() === canonicalLower
+      const display = (isLocalized ? name : canonicalLower).replace(/^\w/, (c) => c.toUpperCase())
+      const prev = bestByCanonical.get(canonicalLower)
+      if (!prev || (isLocalized && !prev.localized)) {
+        bestByCanonical.set(canonicalLower, { display, value: v.trim(), localized: isLocalized })
+      }
     }
   }
+  const itemSpecifics: Record<string, string> = {}
+  for (const { display, value } of bestByCanonical.values()) itemSpecifics[display] = value
 
   return {
     title: str(src.title),

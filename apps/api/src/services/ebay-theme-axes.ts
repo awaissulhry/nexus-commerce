@@ -45,6 +45,36 @@ export const AXIS_SYNONYM_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
   ['genere', 'gender', 'department', 'target audience', 'target_audience'],
 ]
 
+// Incident #19 — language-duplicate ASPECTS (Brand+Marca, Season+Stagione…):
+// legacy products carry English aspect keys beside the Italian schema keys,
+// and both leaked into new Trading listings (4 declared axes, twin specifics).
+// ADDITIVE list — AXIS_SYNONYM_GROUPS' order is load-bearing (__dimN__ keys in
+// stored _axisSortOrder) and must never change. Group[0] = canonical
+// (localized) name, per the owner's rule: the flat file's language wins.
+export const ASPECT_SYNONYM_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
+  ...AXIS_SYNONYM_GROUPS,
+  ['marca', 'brand', 'marke', 'marque'],
+  ['stagione', 'season'],
+  ['paese di fabbricazione', 'country/region of manufacture', 'country of manufacture', 'made in'],
+  ['tipo di giacca', 'jacket type'],
+  ['tipo di prodotto', 'product type'],
+  ['adatto a', 'suitable for'],
+  ['livello di protezione', 'protection level'],
+  ['reparto', 'department'],
+  ['vestibilità', 'vestibilita', 'fit'],
+  ['condizione', 'condition'],
+]
+
+/** Canonical (localized) name for ANY aspect via the synonym groups; unmapped
+ *  names pass through lowercased. */
+export function aspectCanonicalName(name: string): string {
+  const lk = name.toLowerCase().trim()
+  for (const group of ASPECT_SYNONYM_GROUPS) {
+    if ((group as string[]).includes(lk)) return group[0]
+  }
+  return lk
+}
+
 /** Maps an axis name to its stable synonym-dimension key.
  *  Known synonym groups → __dim0__ / __dim1__ / …
  *  Custom/unmapped axes → lowercase axis name (the name itself is the stable key). */

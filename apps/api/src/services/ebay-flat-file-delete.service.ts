@@ -315,11 +315,16 @@ async function handleRemoveListing(
   const affectedItemIds: string[] = []
   let membershipsRemoved = 0
 
+  const listingLevel = Boolean(sku && parentSku && sku === parentSku)
   if (itemId) {
-    // Exact unique-key match: (marketplace, itemId, sku)
+    // Child target: exact unique-key match (marketplace, itemId, sku).
+    // LISTING-LEVEL target (sku === parentSku): sweep EVERY membership of the
+    // listing — deleting a listing used to remove only the parent-SKU row
+    // (which doesn't exist), orphaning all 20 child memberships against a
+    // dead ItemID (incident #19 repair-flow gap).
     await prisma.$transaction(async (tx) => {
       const del = await tx.sharedListingMembership.deleteMany({
-        where: { marketplace, itemId, sku },
+        where: listingLevel ? { marketplace, itemId } : { marketplace, itemId, sku },
       } as any)
       membershipsRemoved = (del as { count: number }).count
     })
@@ -329,7 +334,7 @@ async function handleRemoveListing(
     // (parentSku, sku) can exist on SEVERAL listings — every one must get the
     // variation removal, not just the first (audit S7).
     const found = (await prisma.sharedListingMembership.findMany({
-      where: { marketplace, parentSku: parentSku!, sku },
+      where: listingLevel ? { marketplace, parentSku: parentSku! } : { marketplace, parentSku: parentSku!, sku },
       select: { itemId: true },
     } as any)) as Array<{ itemId: string }>
 
@@ -338,7 +343,7 @@ async function handleRemoveListing(
 
     await prisma.$transaction(async (tx) => {
       const del = await tx.sharedListingMembership.deleteMany({
-        where: { marketplace, parentSku: parentSku!, sku },
+        where: listingLevel ? { marketplace, parentSku: parentSku! } : { marketplace, parentSku: parentSku!, sku },
       } as any)
       membershipsRemoved = (del as { count: number }).count
     })
@@ -348,10 +353,9 @@ async function handleRemoveListing(
   // (sku === parentSku). Any child/row target — including ones sent without a
   // parentSku — is variation-scoped: ending a shared multi-variation listing
   // because one row was deleted is never acceptable.
-  const isListingLevel = Boolean(sku && parentSku && sku === parentSku)
   let delisted = false
   let variationRemoval: DeleteTargetResult['variationRemoval']
-  if (isListingLevel) {
+  if (listingLevel) {
     delisted = await tryDelist(resolvedItemId, marketplace)
   } else {
     for (const iid of [...new Set(affectedItemIds)]) {
