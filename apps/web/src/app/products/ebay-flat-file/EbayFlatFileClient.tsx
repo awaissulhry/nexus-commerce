@@ -2945,7 +2945,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                         .then((d) => {
                           const msg = d.error
                             ? `reconcile error: ${d.error}`
-                            : `reconciled: ${d.matched}/${d.liveVariations} matched · ${d.rewritten} rewired · ${d.removedStale} stale removed${d.unmatched?.length ? ` · unmatched: ${d.unmatched.slice(0, 2).join(', ')}…` : ''}`
+                            : `reconciled: ${d.matched}/${d.liveVariations} matched · ${d.rewritten} rewired · ${d.removedStale} stale removed${d.customLabel ? ` · custom label ${d.customLabel === 'set' ? 'SET to parent SKU' : d.customLabel}` : ''}${d.unmatched?.length ? ` · unmatched: ${d.unmatched.slice(0, 2).join(', ')}…` : ''}`
                           setVerifyResults((prev) => ({ ...prev, [id]: msg }))
                         })
                         .catch(() => setVerifyResults((prev) => ({ ...prev, [id]: 'reconcile failed' })))
