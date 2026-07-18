@@ -87,12 +87,20 @@ export function aspectCanonicalName(name: string): string {
  */
 export function canonicalizeRowAspects(row: Record<string, unknown>): number {
   let folded = 0
+  // Incident #34 (2026-07-19): the canonical KEY matches the schema COLUMN id
+  // convention — aspect_ + SentenceCasedName ("aspect_Colore", "aspect_Paese_
+  // di_fabbricazione"). The first version normalized to lowercase keys, which
+  // the grid's cased column ids could not read — every aspect column displayed
+  // empty while the data sat safely under the lowercase twin. Sentence-cased
+  // targets keep display and storage on one key; lowercase leftovers fold
+  // back into the displayed key on the next load (self-healing).
+  const displayKeyFor = (canonicalLower: string) =>
+    `aspect_${(canonicalLower.charAt(0).toUpperCase() + canonicalLower.slice(1)).replace(/ /g, '_')}`
   for (const key of Object.keys(row)) {
     if (!key.startsWith('aspect_') || key === 'aspect_') continue
     const rawName = key.slice('aspect_'.length).replace(/_/g, ' ').trim()
     if (!rawName) continue
     const canonicalLower = aspectCanonicalName(rawName)
-    const canonicalKey = `aspect_${canonicalLower.replace(/ /g, '_')}`
     const value = row[key]
     const strValue = typeof value === 'string' ? value.trim() : ''
 
@@ -104,20 +112,25 @@ export function canonicalizeRowAspects(row: Record<string, unknown>): number {
       continue
     }
 
-    if (key === canonicalKey) continue // already canonical, exact key
-    if (rawName.toLowerCase() === canonicalLower) {
-      // canonical spelling, non-canonical KEY casing (aspect_Taglia) — normalize
-      const existing = row[canonicalKey]
-      if (typeof existing !== 'string' || !existing.trim()) row[canonicalKey] = value
-      delete row[key]
-      folded++
-      continue
-    }
-    // Foreign-language twin: preserve its value only when the localized cell
-    // is empty; the localized column always wins.
+    // Unmapped aspects (no synonym group) keep their key untouched UNLESS the
+    // key's casing differs from itself (no-op) — ghosts stay as they are.
+    const isKnown = ASPECT_SYNONYM_GROUPS.some((g) => (g as string[]).includes(canonicalLower))
+    if (!isKnown) continue
+
+    const canonicalKey = displayKeyFor(canonicalLower)
+    if (key === canonicalKey) continue // already the displayed canonical key
     const existing = row[canonicalKey]
-    if (strValue && (typeof existing !== 'string' || !existing.trim())) {
-      row[canonicalKey] = strValue
+    const existingStr = typeof existing === 'string' ? existing.trim() : ''
+    const isSameDimensionSpelling = rawName.toLowerCase() === canonicalLower
+    if (isSameDimensionSpelling) {
+      // same name, different key casing (aspect_colore / aspect_COLORE) —
+      // move the value onto the displayed key unless it already has one.
+      if (!existingStr && strValue) row[canonicalKey] = value
+      else if (!(canonicalKey in row) && value != null) row[canonicalKey] = value
+    } else {
+      // language twin (Color → Colore): localized value wins; preserve the
+      // twin's value only when the localized cell is empty.
+      if (strValue && !existingStr) row[canonicalKey] = strValue
     }
     delete row[key]
     folded++

@@ -6,17 +6,20 @@ describe('canonicalizeRowAspects', () => {
   it('folds English twins into the localized column (Italian value wins)', () => {
     const row: Record<string, unknown> = { aspect_colore: 'Nero', aspect_Color: 'Black', aspect_size: 'M', sku: 'X' }
     const n = canonicalizeRowAspects(row)
-    expect(row.aspect_colore).toBe('Nero')       // Italian wins
-    expect(row.aspect_taglia).toBe('M')          // English-only value preserved
+    expect(row.aspect_Colore).toBe('Nero')       // Italian wins (displayed key)
+    expect(row.aspect_Taglia).toBe('M')          // English-only value preserved
     expect(row.aspect_Color).toBeUndefined()
     expect(row.aspect_size).toBeUndefined()
-    expect(n).toBe(2)
+    expect(n).toBe(3) // colore→Colore + Color twin + size→Taglia
   })
-  it('normalizes canonical-spelling keys with odd casing', () => {
-    const row: Record<string, unknown> = { aspect_Taglia: 'L' }
+  it('keeps the displayed sentence-cased key; lowercase twins fold INTO it (incident #34)', () => {
+    const row: Record<string, unknown> = { aspect_taglia: 'L' }
     canonicalizeRowAspects(row)
-    expect(row.aspect_taglia).toBe('L')
-    expect(row.aspect_Taglia).toBeUndefined()
+    expect(row.aspect_Taglia).toBe('L')
+    expect(row.aspect_taglia).toBeUndefined()
+    const untouched: Record<string, unknown> = { aspect_Taglia: 'M' }
+    expect(canonicalizeRowAspects(untouched)).toBe(0)
+    expect(untouched.aspect_Taglia).toBe('M')
   })
   it('folds condition-group aspects into the structured condition field', () => {
     const row: Record<string, unknown> = { aspect_condizione: 'Nuovo con etichette', condition: '' }
@@ -31,13 +34,15 @@ describe('canonicalizeRowAspects', () => {
   it('leaves unmapped keys untouched (Body Type stays ghosted by design)', () => {
     const row: Record<string, unknown> = { aspect_body_type: 'Slim', aspect_marca: 'XAVIA' }
     const n = canonicalizeRowAspects(row)
-    expect(row.aspect_body_type).toBe('Slim')
-    expect(n).toBe(0)
+    expect(row.aspect_body_type).toBe('Slim')     // unmapped ghost untouched
+    expect(row.aspect_Marca).toBe('XAVIA')        // known key normalizes to displayed casing
+    expect(n).toBe(1)
   })
   it('brand twin folds into marca', () => {
     const row: Record<string, unknown> = { aspect_brand: 'XAVIA', aspect_marca: '' }
     canonicalizeRowAspects(row)
-    expect(row.aspect_marca).toBe('XAVIA')
+    expect(row.aspect_Marca).toBe('XAVIA')
     expect(row.aspect_brand).toBeUndefined()
+    expect(row.aspect_marca).toBeUndefined()
   })
 })
