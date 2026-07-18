@@ -313,14 +313,10 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
     label: 'Pricing',
     color: 'emerald',
     columns: [
-      {
-        id: 'price',
-        label: 'Price (EUR)',
-        description: 'Fixed price in Euros (shared / default)',
-        required: false,
-        kind: 'number',
-        width: 100,
-      },
+      // 'price' (generic "Price (EUR)") column REMOVED 2026-07-19 by owner
+      // decision: two price columns (generic + per-market it_price) created
+      // confusion. The per-market price is the real one; the generic `price`
+      // FIELD survives as a data fallback in push paths, just not as a column.
       {
         id: 'best_offer_enabled',
         label: 'Best Offer',

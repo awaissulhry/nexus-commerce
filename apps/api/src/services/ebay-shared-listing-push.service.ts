@@ -411,8 +411,19 @@ export async function createSharedListing(
         },
       })
     ))
+    // Incident #35 (2026-07-19, live-verified): eBay DROPS Item.SKU on
+    // AddFixedPriceItem for multi-variation listings — the custom label only
+    // sticks via a follow-up revise. Fire it automatically; best-effort.
+    let labelNote = ''
+    try {
+      await callTradingApi('ReviseFixedPriceItem', `<?xml version="1.0" encoding="utf-8"?>\n<ReviseFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><Item><ItemID>${itemId}</ItemID><SKU>${parentSku}</SKU></Item></ReviseFixedPriceItemRequest>`,
+        { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market) })
+      labelNote = ' · custom label set'
+    } catch {
+      labelNote = ' · custom label pending (run Reconcile)'
+    }
     const count = input.variations.length
-    return { status: 'CREATED', itemId, parentSku, market, memberships: count, message: `created ${count} memberships` }
+    return { status: 'CREATED', itemId, parentSku, market, memberships: count, message: `created ${count} memberships${labelNote}` }
   } catch (err) {
     return { status: 'ERROR', parentSku, market, memberships: 0, message: err instanceof Error ? err.message : String(err) }
   }
