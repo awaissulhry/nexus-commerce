@@ -2657,13 +2657,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── Slot: channel strip ────────────────────────────────────────────────
 
-  const renderChannelStrip = useCallback(() => (
+  const renderChannelStrip = () => (
     <ChannelStrip channel="ebay" marketplace={marketplace} familyId={familyId} />
-  ), [marketplace, familyId])
+  )
 
   // ── Slot: push extras (after Save button) ─────────────────────────────
 
-  const renderPushExtras = useCallback(({ rows, selectedRows }: PushExtrasCtx) => (
+  const renderPushExtras = ({ rows, selectedRows }: PushExtrasCtx) => (
     <div className="relative flex flex-col items-end gap-1">
       {blockingErrors.length > 0 && publishPanelOpen && (
         <div className="absolute bottom-full mb-1.5 right-0 w-80 rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-800 px-3 py-2 shadow-sm z-50">
@@ -2744,15 +2744,14 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         />
       )}
     </div>
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [pushing, quickUpdating, publishPanelOpen, publishTargets, incompleteBefore, blockingErrors, feedStatus])
+  )
 
   // ── Slot: feed banner ──────────────────────────────────────────────────
 
   // Feed status is shown inline in Bar 1 (renderPushExtras chip) — no longer needed as a banner below the toolbar.
   // If the category schema failed to load, surface a dismissible danger banner here.
   // Task 4 — also show a muted "Showing SKUs listed on eBay / Show all products" cue when scoped.
-  const renderFeedBanner = useCallback(() => {
+  const renderFeedBanner = () => {
     const hasCue = scope === 'listed' && !familyId
     const failedCategories = Object.keys(categorySchemaErrors)
     if (!draftNotice && !hasCue && failedCategories.length === 0 && staleSchemaCategories.length === 0) return null
@@ -2873,7 +2872,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         )}
       </>
     )
-  }, [scope, familyId, categorySchemaErrors, staleSchemaCategories, draftNotice, marketplace])
+  }
 
   // ── Slot: fetch button ─────────────────────────────────────────────────
 
@@ -3177,7 +3176,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     ]
   }, [bulkSetFollowEbay, openEbayBufferModal, descThemes])
 
-  const renderToolbarFetch = useCallback(({ rows, selectedRows, setRows, pushHistory }: ToolbarFetchCtx) => {
+  const renderToolbarFetch = ({ rows, selectedRows, setRows, pushHistory }: ToolbarFetchCtx) => {
     // Keep refs current so fileMenuItems callbacks always act on the latest rows
     latestRowsRef.current = rows
     latestSelectedRowsRef.current = selectedRows
@@ -3455,8 +3454,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         )}
       </>
     )
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, historyPanelOpen, addListingOpen, variantAxisNames, imageModalOpen, hasImageFamilies, openImageDrawer, moveParentOpen, moveTargetId, detachOpen])
+  }
 
   // ── Slot: import button ────────────────────────────────────────────────
 
@@ -3465,7 +3463,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // sit together.
   // Task 4 — also captures ctx.onReload (same pattern as renderToolbarFetch captures setRows)
   // so the scope-change useEffect can trigger the grid's own reload mechanism.
-  const renderToolbarImport = useCallback((ctx: ToolbarImportCtx) => {
+  const renderToolbarImport = (ctx: ToolbarImportCtx) => {
     onReloadCtxRef.current = ctx.onReload
     return (
       <>
@@ -3540,8 +3538,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         />
       </>
     )
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showOverrideBadges, showCascadeButtons, scope, familyId])
+  }
 
   // ── Slot: Bar3 left ────────────────────────────────────────────────────
 
@@ -3557,7 +3554,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── Slot: modals ───────────────────────────────────────────────────────
 
-  const renderModals = useCallback(({ rows, setRows, pushHistory }: ModalsCtx) => {
+  const renderModals = ({ rows, setRows, pushHistory }: ModalsCtx) => {
     const desc = descModal ? rows.find((r) => r._rowId === descModal.rowId) : null
     const aspectsRow = aspectsPanelRowId ? rows.find((r) => r._rowId === aspectsPanelRowId) ?? null : null
     const parentRow = (rows as EbayRow[]).find((r) => r._isParent === true)
@@ -3706,8 +3703,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         />
       </>
     )
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [descModal, categorySearchOpen, categorySearchRowId, marketplace, loadCategorySchemas, pullDiffData, pullDiffOpen, makePullDiffApplyHandler, aspectsPanelRowId, itemSpecificsGroup, valueOrderOpen, familyId, importWizardOpen, importInitialFile, exportColumns, handleImport])
+  }
 
   // ── Slot: right-click context menu (UFX P7 item 1 — shared FlatFileContextMenu) ──
   // Channel-appropriate actions: inserts are local blank rows (same as the
@@ -3715,7 +3711,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // (soft-delete + live delist — never a bare local row removal), and the add
   // flow opens the AddListingPopover. Reads the latest grid ctx via the
   // renderToolbarFetch refs, so actions never see stale rows.
-  const renderContextMenu = useCallback((ctx: GridContextMenuCtx) => {
+  const renderContextMenu = (ctx: GridContextMenuCtx) => {
     const insertAt = (offset: 0 | 1) => {
       const rows = latestRowsRef.current
       const anchorId = ctx.anchorRow?._rowId
@@ -3755,7 +3751,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         ]}
       />
     )
-  }, [])
+  }
 
   // ── Group key for eBay variations ──────────────────────────────────────
   // Mirrors server ebayFamilyKey (ebay-flat-file-create.logic.ts:255):
