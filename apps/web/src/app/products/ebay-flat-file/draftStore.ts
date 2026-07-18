@@ -137,10 +137,13 @@ export function mergeDraftRows(
 
   const bySku = new Map<string, number>()
   const byRowId = new Map<string, number>()
+  const byFamSku = new Map<string, number>()
   serverRows.forEach((r, i) => {
     const sku = String(r.sku ?? '').trim()
     if (sku && !bySku.has(sku)) bySku.set(sku, i)
     byRowId.set(r._rowId, i)
+    const fam = `${String((r as Record<string, unknown>).parent_sku ?? '').trim()}|${sku}`
+    if (sku && !byFamSku.has(fam)) byFamSku.set(fam, i)
   })
 
   const out = [...serverRows]
@@ -165,8 +168,16 @@ export function mergeDraftRows(
     // hard refresh". Server truth wins; the stale draft row is dropped.
     const generated = /^(planned|shared)::/.test(String(draft._rowId ?? ''))
     if (idx == null && generated) {
-      dropped++
-      continue
+      // Audit C6/C9 (2026-07-19): before dropping a stale-generation draft,
+      // resolve its CURRENT twin by family+sku (publish flips planned:: →
+      // shared:: — the edit belongs on the new identity, field-merged).
+      const fam = `${String((draft as Record<string, unknown>).parent_sku ?? '').trim()}|${sku}`
+      const famIdx = sku ? byFamSku.get(fam) : undefined
+      if (famIdx == null) {
+        dropped++
+        continue
+      }
+      idx = famIdx
     }
     if (idx == null) idx = sku ? bySku.get(sku) : undefined
     if (idx == null) {
@@ -175,7 +186,16 @@ export function mergeDraftRows(
       continue
     }
     const server = out[idx]
-    const merged: BaseRow = { ...server, ...draft }
+    // Audit C1 (2026-07-19) — FIELD-LEVEL merge: an EMPTY draft cell never
+    // blanks a filled server cell (the whole-row spread blanked server-filled
+    // fields from stale drafts, then the re-stamped _dirty made the blank
+    // permanent on the next save). Deliberate clears persist by SAVING them.
+    const merged: BaseRow = { ...server }
+    for (const [k, v] of Object.entries(draft)) {
+      if (k.startsWith('_')) continue
+      if (v == null || v === '') continue
+      ;(merged as Record<string, unknown>)[k] = v
+    }
     for (const k of SYSTEM_KEYS) {
       if (k in server) merged[k] = server[k]
       else delete merged[k]

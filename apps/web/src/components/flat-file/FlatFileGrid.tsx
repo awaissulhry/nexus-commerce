@@ -2316,7 +2316,11 @@ export default function FlatFileGrid({
     setSaving(true)
     try {
       const result = await onSave(dirty)
-      setRows((prev) => prev.map((r) => ({ ...r, _dirty: false })))
+      // Audit C2 (2026-07-19): clear _dirty ONLY for rows that were in this
+      // save AND unchanged during its flight (identity compare) — a global
+      // clear marked mid-save edits clean and the draft autosave dropped them.
+      const savedRefs = new Map(dirty.map((r) => [r._rowId, r]))
+      setRows((prev) => prev.map((r) => (savedRefs.get(r._rowId) === r ? { ...r, _dirty: false } : r)))
       setSaveFlash(true); setTimeout(() => setSaveFlash(false), 2000)
       // Only show the generic toast when there are no errors — if the caller
       // (e.g. eBay) returned createResult.errors, it owns the combined toast.
@@ -2333,7 +2337,15 @@ export default function FlatFileGrid({
       // UFX P2d — with the ghost canvas on, no padToMin: the topup effect
       // re-appends the canvas below the freshly loaded rows.
       const padded = padToMin(loaded, makeBlankRow, effectiveMinRows)
-      setRows(padded); setHistory([]); setFuture([])
+      // Audit C4 (2026-07-19): DIRTY rows in the live grid ALWAYS survive an
+      // external reload — the 400ms draft debounce lost edits typed during
+      // the fetch window (SSE-triggered reload races). Unsaved edits win.
+      setRows((prev) => {
+        const dirtyPrev = new Map(prev.filter((r) => r._dirty && !r._ghost).map((r) => [r._rowId, r]))
+        if (dirtyPrev.size === 0) return padded
+        return padded.map((r) => dirtyPrev.get(r._rowId) ?? r)
+      })
+      setHistory([]); setFuture([])
     } catch (err) {
       toast.error('Failed to reload: ' + (err instanceof Error ? err.message : String(err)))
     } finally { setLoading(false) }

@@ -343,9 +343,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       // market's listing still round-trip instead of silently reverting).
       for (let i = 0; i < rows.length; i++) {
         const listings = (((products[i] as any)?.channelListings ?? []) as Array<Record<string, any>>);
+        // Audit #10 (2026-07-19): with an active market, ONLY that market's
+        // snapshot may overlay — the freshest-other-market fallback bled DE
+        // content onto the IT file (and a subsequent save stamped it there).
+        const activeRegion = marketplace ? (marketplace === 'UK' ? 'GB' : marketplace) : null;
         const snapListing = listings.find(
           (l) => l?.flatFileSnapshot && typeof l.flatFileSnapshot === 'object'
-            && Object.keys(l.flatFileSnapshot as Record<string, unknown>).length > 0,
+            && Object.keys(l.flatFileSnapshot as Record<string, unknown>).length > 0
+            && (!activeRegion || l.region === activeRegion),
         );
         if (!snapListing) continue;
         rows[i] = applyEbayFlatFileSnapshot(
@@ -701,6 +706,16 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       // after this loop). Without this, each duplicate overwrote the same
       // ChannelListing and the LAST block's ItemID stomped the primary
       // listing's linkage (observed live: 20 child CLs flipped to ALT2's id).
+      // Audit #1 (2026-07-19) — normalize aspect language ON WRITE: the
+      // operator's latest edit (typed in EITHER spelling column) lands as the
+      // localized canonical key before anything is persisted. Load-side
+      // canonicalization previously DELETED an English-column edit whenever
+      // the Italian twin re-derived a value from live data — the top cause of
+      // "my values keep vanishing after a successful save".
+      for (const row of rows) {
+        try { canonicalizeRowAspects(row as Record<string, unknown>) } catch { /* never blocks a save */ }
+      }
+
       const laneASeen = new Map<string, number>();
       // sku → productId for EVERY Lane-A row this save touched (created OR
       // existing) — the client's Follow/Buffer capture needs ids for rows that
@@ -787,8 +802,12 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         const writtenMps = new Set<Market>();
         for (const mp of MARKETS) {
           const prefix = mp.toLowerCase() as Lowercase<Market>;
-          const newPrice = row[`${prefix}_price`] != null ? Number(row[`${prefix}_price`]) : null;
-          const newQty = row[`${prefix}_qty`] != null ? Number(row[`${prefix}_qty`]) : null;
+          // Audit #12 (2026-07-19): Number('') === 0 — a blank-string cell
+          // must mean "no change", never "set price/qty to 0" (a stray blank
+          // qty cell was ZEROING live listings).
+          const numOrNull = (v: unknown) => (v == null || String(v).trim() === '' ? null : Number(v));
+          const newPrice = numOrNull(row[`${prefix}_price`]);
+          const newQty = numOrNull(row[`${prefix}_qty`]);
           const itemId = (row[`${prefix}_item_id`] as string | null) ?? null;
           const status = (row[`${prefix}_status`] as string | null) ?? null;
 
@@ -815,17 +834,17 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           // while the snapshot made it LOOK per-market). Split subtitle out:
           // only the active market gets the edited value; every other market
           // keeps its OWN existing subtitle (preserve; blank for a new listing).
+          // Audit #7 (2026-07-19): a save that touches another market's
+          // price/qty must NOT stamp the ACTIVE market's content (aspects,
+          // category, images, policies) onto that market's listing. Non-active
+          // markets keep their platformAttributes VERBATIM; only genuinely
+          // new listings (no existing attributes) seed from the active market.
+          const existingAttrs = (existing?.platformAttributes ?? null) as Record<string, unknown> | null;
           const marketPlatformAttributes = isActiveMp
             ? sharedPacked.platformAttributes
-            : {
-                ...(sharedPacked.platformAttributes as Record<string, unknown>),
-                subtitle:
-                  ((existing?.platformAttributes ?? {}) as Record<string, unknown>).subtitle ?? '',
-                // ED.3 — theme assignment is per-market like subtitle: only the
-                // active market takes the edited value; others keep their own.
-                descriptionThemeId:
-                  ((existing?.platformAttributes ?? {}) as Record<string, unknown>).descriptionThemeId ?? '',
-              };
+            : (existingAttrs && Object.keys(existingAttrs).length > 0
+                ? existingAttrs
+                : sharedPacked.platformAttributes);
 
           const listingData = {
             ...(isActiveMp
@@ -1071,16 +1090,30 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         if (activeMp) {
           const mpU = activeMp.toUpperCase()
           const regionU = mpU === 'UK' ? 'GB' : mpU
-          const sharedParentRows = rows.filter((r) => {
+          // Audit #4 + chunked saves (2026-07-19): a children-only chunk has
+          // NO parent row in the payload — capture must group by the CHILD
+          // rows' parent_sku and resolve the shell from the DB; and chunks
+          // must MERGE into _plannedChildren by sku (a wholesale replace kept
+          // only the LAST chunk's children).
+          const plannedFamilySkus = new Set<string>()
+          for (const r of rows) {
             const rr = r as Record<string, unknown>
-            return rr.shared_sku_listing === true &&
-              String(rr.parentage ?? '').trim().toLowerCase() === 'parent' &&
-              String(rr.sku ?? '').trim() !== '' && rr._shared !== true
-          })
-          for (const pr of sharedParentRows) {
-            const rr = pr as Record<string, unknown>
-            const psku = String(rr.sku).trim()
-            const liveId = String(rr[`${mpU.toLowerCase()}_item_id`] ?? rr.ebay_item_id ?? '').trim()
+            const ps = String(rr.parent_sku ?? '').trim()
+            if (ps && rr._shared !== true && String(rr.sku ?? '').trim()) plannedFamilySkus.add(ps)
+          }
+          const parentRowBySku = new Map<string, Record<string, unknown>>()
+          for (const r of rows) {
+            const rr = r as Record<string, unknown>
+            if (rr.shared_sku_listing === true &&
+                String(rr.parentage ?? '').trim().toLowerCase() === 'parent' &&
+                String(rr.sku ?? '').trim() !== '' && rr._shared !== true) {
+              parentRowBySku.set(String(rr.sku).trim(), rr)
+              plannedFamilySkus.add(String(rr.sku).trim())
+            }
+          }
+          for (const psku of plannedFamilySkus) {
+            const rr = parentRowBySku.get(psku)
+            const liveId = rr ? String(rr[`${mpU.toLowerCase()}_item_id`] ?? rr.ebay_item_id ?? '').trim() : ''
             if (/^\d+$/.test(liveId)) continue // already live — memberships own it
             const memCount = await prisma.sharedListingMembership.count({ where: { marketplace: mpU, parentSku: psku } })
             if (memCount > 0) continue
@@ -1090,8 +1123,11 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             })
             if (children.length === 0) continue
             const planned = children.map((ch) => Object.fromEntries(Object.entries(ch as Record<string, unknown>).filter(([k]) => !k.startsWith('_'))))
-            const shell = await prisma.product.findFirst({ where: { sku: psku, deletedAt: null }, select: { id: true, categoryAttributes: true } })
+            const shell = await prisma.product.findFirst({ where: { sku: psku, deletedAt: null }, select: { id: true, categoryAttributes: true, productType: true } })
             if (!shell) continue
+            // Parentless (children-only) chunk: capture only when the DB says
+            // this parent IS an extra-listing shell — never for pool primaries.
+            if (!rr && shell.productType !== 'EBAY_LISTING_SHELL') continue
             // Cluster linkage: any child SKU's existing pool product names the pool parent.
             const poolChild = await prisma.product.findFirst({
               where: { sku: { in: children.map((c) => String((c as Record<string, unknown>).sku).trim()) }, deletedAt: null, parentId: { not: null } },
@@ -1119,9 +1155,15 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               const snap = shellCl.flatFileSnapshot && typeof shellCl.flatFileSnapshot === 'object'
                 ? { ...(shellCl.flatFileSnapshot as Record<string, unknown>) }
                 : {}
+              // MERGE by sku — sequential chunks each carry a SLICE of the
+              // family; replacing wholesale kept only the last chunk.
+              const prevPlanned = Array.isArray(snap._plannedChildren) ? (snap._plannedChildren as Array<Record<string, unknown>>) : []
+              const bySku = new Map(prevPlanned.map((c) => [String(c.sku ?? ''), c]))
+              for (const ch of planned) bySku.set(String(ch.sku ?? ''), ch)
+              const mergedPlanned = [...bySku.values()].filter((c) => String(c.sku ?? '').trim())
               await prisma.channelListing.update({
                 where: { id: shellCl.id },
-                data: { flatFileSnapshot: { ...snap, _plannedChildren: planned } as Prisma.InputJsonObject },
+                data: { flatFileSnapshot: { ...snap, _plannedChildren: mergedPlanned } as Prisma.InputJsonObject },
               })
             } else {
               await prisma.channelListing.create({

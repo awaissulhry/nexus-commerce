@@ -1580,6 +1580,10 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     if (result.saved > 0) {
       emitInvalidation({ type: 'product.updated', meta: { source: 'ebay-flat-file' } })
       emitInvalidation({ type: 'stock.adjusted', meta: { source: 'ebay-flat-file' } })
+      // Audit C5 (2026-07-19): the SWR snapshot predates this save — a market
+      // switch within its TTL repainted PRE-save values ("saved cells
+      // vanished"). Drop it; the next visit refetches truth.
+      try { _ebay_swr.delete(ebayKey) } catch { /* cache is best-effort */ }
     }
 
     // EI.6 — adoption visibility: what did this save wire up? Adopted ItemIDs
@@ -1803,7 +1807,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     }
 
     return { saved: result.saved, createResult: result.createResult }
-  }, [BACKEND, toast])
+  }, [BACKEND, toast, familyId, savedErrorRows])
 
   // ── P2.D2 — API: delete rows ──────────────────────────────────────────
 
@@ -3097,7 +3101,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           if (idx == null) continue
           const merged = { ...next[idx] } as Record<string, unknown>
           for (const [k, v] of Object.entries(a.imp)) {
-            if (mode === 'overwrite') merged[k] = v
+            if (v == null || v === '') continue // audit C3: empty import cell = NO CHANGE, never a blanking
+          if (mode === 'overwrite') merged[k] = v
             else if (merged[k] == null || merged[k] === '') merged[k] = v
           }
           applyStructural(merged, a.imp)
@@ -3166,6 +3171,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         if (idx === -1) continue
         const merged = { ...next[idx] } as Record<string, unknown>
         for (const [k, v] of Object.entries(imp)) {
+          if (v == null || v === '') continue // audit C3: empty import cell = NO CHANGE, never a blanking
           if (mode === 'overwrite') merged[k] = v
           else if (merged[k] == null || merged[k] === '') merged[k] = v
         }

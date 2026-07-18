@@ -2211,13 +2211,18 @@ export function toChannelMarket(mp: Market): string {
  */
 export const EBAY_SNAPSHOT_LIVE_FIELDS = new Set([
   // Identity — product-level, not user-entered in the flat file
-  'sku', 'ean',
+  // 'ean' REMOVED 2026-07-19 (audit #5): it was derived-blank for most rows
+  // and force-reverted operator-typed EANs on every reload. The snapshot wins.
+  'sku',
   // Live eBay system fields
   'ebay_item_id', 'listing_status', 'sync_status', 'last_pushed_at',
-  // Per-market live fields (qty owned by the stock system; ids/status by publish)
+  // Per-market live fields (qty owned by the stock system; ids/status by
+  // publish; price ADDED 2026-07-19 (audit #6): saves write prices to each
+  // market's ChannelListing, so the CL is authoritative — a stale snapshot
+  // froze other markets' price cells and masked repricer changes).
   ...MARKETS.flatMap((mp) => {
     const p = mp.toLowerCase();
-    return [`${p}_qty`, `${p}_item_id`, `${p}_status`, `${p}_listing_id`];
+    return [`${p}_qty`, `${p}_item_id`, `${p}_status`, `${p}_listing_id`, `${p}_price`];
   }),
   // Grouping / family structure — derived from Product.parentId, not user intent.
   // parent_sku + parentage joined 2026-07-18: a stale snapshot's parent_sku

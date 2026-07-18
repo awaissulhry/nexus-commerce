@@ -74,7 +74,7 @@ export async function upsertSharedMembershipsFromRows(
   rows: Row[],
   marketplace: string,
   db: {
-    sharedListingMembership: { findMany: Function; upsert: Function }
+    sharedListingMembership: { findMany: Function; upsert: Function; findFirst?: Function }
     product: { findMany: Function }
   } = prisma as never,
 ): Promise<SharedMembershipUpsertResult> {
@@ -102,7 +102,21 @@ export async function upsertSharedMembershipsFromRows(
     const parent = parentSku ? parents.get(parentSku) : undefined
     const familyShared = parent ? Boolean(parent.shared_sku_listing) : r._shared === true
     if (!familyShared) continue
-    const itemId = str(r[`${prefix}_item_id`]) || str(r.ebay_item_id)
+    let itemId = str(r[`${prefix}_item_id`]) || str(r.ebay_item_id)
+    if (!itemId && parentSku) {
+      // Audit #3 (2026-07-19) — a STALE pre-publish grid row (planned::…)
+      // carries no ItemID, but its family may have published meanwhile. The
+      // live membership resolves the ItemID by (market, parentSku) so the
+      // edit lands in the live snapshot instead of vanishing.
+      const findFirst = db.sharedListingMembership.findFirst
+      if (typeof findFirst === 'function') {
+        const live = await findFirst.call(db.sharedListingMembership, {
+          where: { marketplace: market, parentSku },
+          select: { itemId: true },
+        }) as { itemId?: string } | null
+        if (live?.itemId) itemId = str(live.itemId)
+      }
+    }
     if (!itemId) {
       result.skipped.push({ sku, reason: `no live ItemID on ${market} — publish creates the membership` })
       continue

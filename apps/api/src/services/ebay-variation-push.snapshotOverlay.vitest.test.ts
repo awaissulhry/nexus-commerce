@@ -77,10 +77,10 @@ function snapshot(overrides: Record<string, unknown> = {}): Record<string, unkno
 // ── tests ────────────────────────────────────────────────────────────────
 
 describe('applyEbayFlatFileSnapshot — live fields always win', () => {
-  it('sku and ean come from derivedRow (identity)', () => {
-    const result = applyEbayFlatFileSnapshot(derived(), snapshot({ sku: 'WRONG', ean: 'WRONG' }))
+  it('sku comes from derivedRow (identity); ean comes from the SNAPSHOT (audit #5 2026-07-19: typed EANs round-trip)', () => {
+    const result = applyEbayFlatFileSnapshot(derived(), snapshot({ sku: 'WRONG', ean: 'TYPED-EAN' }))
     expect(result.sku).toBe('SKU-001')
-    expect(result.ean).toBe('1234567890123')
+    expect(result.ean).toBe('TYPED-EAN')
   })
 
   it('ebay_item_id comes from derivedRow (live system field)', () => {
@@ -104,13 +104,13 @@ describe('applyEbayFlatFileSnapshot — live fields always win', () => {
     expect(result.de_qty).toBe(5)
   })
 
-  it('FFP.1 — per-market PRICE comes from the snapshot (typed price wins)', () => {
+  it('audit #6 (2026-07-19) — per-market PRICE comes from the LIVE listing (saves sync CL.price; a frozen snapshot masked repricers)', () => {
     const result = applyEbayFlatFileSnapshot(derived(), snapshot())
-    expect(result.it_price).toBe(45.00)   // operator's saved value, not live 55.00
-    expect(result.de_price).toBe(50.00)   // operator's saved value, not live 60.00
+    expect(result.it_price).toBe(55.00)
+    expect(result.de_price).toBe(60.00)
   })
 
-  it('FFP.1 — price absent from snapshot falls through to the live value', () => {
+  it('price absent from snapshot falls through to the live value', () => {
     const s = snapshot()
     delete s.it_price
     const result = applyEbayFlatFileSnapshot(derived(), s)
@@ -141,30 +141,31 @@ describe('applyEbayFlatFileSnapshot — live fields always win', () => {
 })
 
 describe('applyEbayFlatFileSnapshot — snapshot fields win for user-entered content', () => {
-  it('parentage comes from snapshot (PRIMARY use-case)', () => {
-    // user saved "parent" — DB still shows "child" from parentId
+  // Incident #6 (2026-07-18, 41eb3c9cc): the Product tree is the ONLY
+  // parentage authority — a stale snapshot's parent_sku once re-grouped 20
+  // children under a sibling listing. parentage/parent_sku are LIVE now.
+  it('parentage comes from the DB tree (live authority — incident #6)', () => {
     const result = applyEbayFlatFileSnapshot(
       derived({ parentage: 'child' }),
       snapshot({ parentage: 'parent' }),
     )
-    expect(result.parentage).toBe('parent')
+    expect(result.parentage).toBe('child')
   })
 
-  it('parent_sku comes from snapshot (PRIMARY use-case)', () => {
+  it('parent_sku comes from the DB tree (live authority — incident #6)', () => {
     const result = applyEbayFlatFileSnapshot(
       derived({ parent_sku: 'SKU-DB-PARENT' }),
       snapshot({ parent_sku: 'SKU-SAVED-PARENT' }),
     )
-    expect(result.parent_sku).toBe('SKU-SAVED-PARENT')
+    expect(result.parent_sku).toBe('SKU-DB-PARENT')
   })
 
-  it('parent_sku="" from snapshot wins over DB-derived value', () => {
-    // User cleared parent_sku (saved as empty string) — should stay empty
+  it('a stale snapshot parent_sku="" cannot orphan the row (live authority)', () => {
     const result = applyEbayFlatFileSnapshot(
       derived({ parent_sku: 'SKU-DB-PARENT' }),
       snapshot({ parent_sku: '' }),
     )
-    expect(result.parent_sku).toBe('')
+    expect(result.parent_sku).toBe('SKU-DB-PARENT')
   })
 
   it('title comes from snapshot', () => {
@@ -216,9 +217,9 @@ describe('applyEbayFlatFileSnapshot — fallback for fields absent from snapshot
 })
 
 describe('EBAY_SNAPSHOT_LIVE_FIELDS whitelist', () => {
-  it('contains all 5 market qty/item_id/status/listing_id combinations (price excluded — FFP.1)', () => {
+  it('contains all 5 market qty/item_id/status/listing_id/price combinations (price live since audit #6 2026-07-19)', () => {
     for (const mp of ['it', 'de', 'fr', 'es', 'uk']) {
-      expect(EBAY_SNAPSHOT_LIVE_FIELDS.has(`${mp}_price`)).toBe(false)
+      expect(EBAY_SNAPSHOT_LIVE_FIELDS.has(`${mp}_price`)).toBe(true)
       expect(EBAY_SNAPSHOT_LIVE_FIELDS.has(`${mp}_qty`)).toBe(true)
       expect(EBAY_SNAPSHOT_LIVE_FIELDS.has(`${mp}_item_id`)).toBe(true)
       expect(EBAY_SNAPSHOT_LIVE_FIELDS.has(`${mp}_status`)).toBe(true)
@@ -228,7 +229,8 @@ describe('EBAY_SNAPSHOT_LIVE_FIELDS whitelist', () => {
 
   it('contains system/identity fields', () => {
     expect(EBAY_SNAPSHOT_LIVE_FIELDS.has('sku')).toBe(true)
-    expect(EBAY_SNAPSHOT_LIVE_FIELDS.has('ean')).toBe(true)
+    // ean OUT since audit #5 (2026-07-19): typed EANs round-trip via snapshot
+    expect(EBAY_SNAPSHOT_LIVE_FIELDS.has('ean')).toBe(false)
     expect(EBAY_SNAPSHOT_LIVE_FIELDS.has('ebay_item_id')).toBe(true)
     expect(EBAY_SNAPSHOT_LIVE_FIELDS.has('sync_status')).toBe(true)
     expect(EBAY_SNAPSHOT_LIVE_FIELDS.has('listing_status')).toBe(true)
@@ -237,10 +239,10 @@ describe('EBAY_SNAPSHOT_LIVE_FIELDS whitelist', () => {
     expect(EBAY_SNAPSHOT_LIVE_FIELDS.has('_isParent')).toBe(true)
   })
 
-  it('does NOT include user-entered shared fields', () => {
+  it('does NOT include user-entered shared fields (parentage/parent_sku LIVE since incident #6)', () => {
     // These should come from snapshot, not from the live-fields set
-    expect(EBAY_SNAPSHOT_LIVE_FIELDS.has('parentage')).toBe(false)
-    expect(EBAY_SNAPSHOT_LIVE_FIELDS.has('parent_sku')).toBe(false)
+    expect(EBAY_SNAPSHOT_LIVE_FIELDS.has('parentage')).toBe(true)
+    expect(EBAY_SNAPSHOT_LIVE_FIELDS.has('parent_sku')).toBe(true)
     expect(EBAY_SNAPSHOT_LIVE_FIELDS.has('title')).toBe(false)
     expect(EBAY_SNAPSHOT_LIVE_FIELDS.has('description')).toBe(false)
     expect(EBAY_SNAPSHOT_LIVE_FIELDS.has('category_id')).toBe(false)
