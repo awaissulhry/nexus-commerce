@@ -592,6 +592,39 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       // existing) — the client's Follow/Buffer capture needs ids for rows that
       // already existed as products (createResult.idMap only covers creates).
       const resolvedIds: Array<{ sku: string; productId: string }> = [];
+
+      // Audit R2 — batched prefetch. The loop below used to run one
+      // product.findFirst per id-less row and one channelListing.findFirst per
+      // row × market (a 100-row save ≈ hundreds of sequential round-trips).
+      // Two up-front findMany calls replace them; the loop reads the maps.
+      const prefetchProductIds = new Set<string>(
+        rows.map((r) => String((r as Record<string, unknown>)._productId ?? '')).filter(Boolean),
+      );
+      for (const id of createdIdBySku.values()) prefetchProductIds.add(id);
+      const skusNeedingLookup = [...new Set(
+        rows
+          .filter((r) => !(r as Record<string, unknown>)._productId && String((r as Record<string, unknown>).sku ?? '').trim())
+          .map((r) => String((r as Record<string, unknown>).sku).trim())
+          .filter((sk) => !createdIdBySku.has(sk)),
+      )];
+      if (skusNeedingLookup.length > 0) {
+        const found = await prisma.product.findMany({
+          where: { sku: { in: skusNeedingLookup }, deletedAt: null },
+          select: { id: true, sku: true },
+        });
+        for (const pr of found) prefetchProductIds.add(pr.id);
+        var productIdBySkuPrefetch = new Map(found.map((pr) => [pr.sku, pr.id]));
+      } else {
+        var productIdBySkuPrefetch = new Map<string, string>();
+      }
+      const prefetchedCls = prefetchProductIds.size > 0
+        ? await prisma.channelListing.findMany({
+            where: { productId: { in: [...prefetchProductIds] }, channel: 'EBAY' },
+            select: { id: true, price: true, quantity: true, platformAttributes: true, externalListingId: true, productId: true, region: true },
+          })
+        : [];
+      const clByProductRegion = new Map(prefetchedCls.map((cl) => [`${cl.productId}::${cl.region}`, cl]));
+
       for (const row of rows) {
         const sku = row.sku as string;
         if (!sku) continue;
@@ -614,15 +647,13 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           if (createdId) {
             productId = createdId;
           } else {
-            const product = await prisma.product.findFirst({
-              where: { sku, deletedAt: null },
-              select: { id: true },
-            });
-            if (!product) {
+            const prefetched = productIdBySkuPrefetch.get(sku);
+            if (prefetched) {
+              productId = prefetched;
+            } else {
               request.log.warn({ sku }, 'ebay/flat-file/rows PATCH: product not found, skipping');
               continue;
             }
-            productId = product.id;
           }
         }
 
@@ -653,14 +684,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           const region = mp === 'UK' ? 'GB' : mp;
           const channelMarket = toChannelMarket(mp);
 
-          // Find existing listing
-          const existing = await prisma.channelListing.findFirst({
-            where: { productId, channel: 'EBAY', region },
-            // platformAttributes needed to preserve THIS market's own subtitle
-            // (EFX P9e) when the active market's edit is written elsewhere.
-            // externalListingId powers the shared-row linkage guard below.
-            select: { id: true, price: true, quantity: true, platformAttributes: true, externalListingId: true },
-          });
+          // Find existing listing — served from the batched prefetch (audit R2);
+          // fields match the old per-row findFirst exactly.
+          const existing = clByProductRegion.get(`${productId}::${region}`) ?? null;
 
           const oldPrice = existing?.price?.toNumber() ?? null;
           const oldQty = existing?.quantity ?? null;
@@ -908,10 +934,15 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       // imported into the grid but never became synced memberships. Best-effort
       // and additive — a failure here never fails the save.
       let sharedMemberships: SharedMembershipUpsertResult | undefined
+      let sharedMembershipsError: string | undefined
       if (activeMp && rows.some(r => (r as Record<string, unknown>).shared_sku_listing === true || (r as Record<string, unknown>)._shared === true)) {
         try {
           sharedMemberships = await upsertSharedMembershipsFromRows(rows, activeMp)
         } catch (err) {
+          // Audit R9 — a swallowed failure here meant the save LOOKED complete
+          // while the shared model (memberships → _shared rows → fan-out)
+          // silently didn't persist. Surface it; the Lane-A save still counts.
+          sharedMembershipsError = err instanceof Error ? err.message : String(err)
           request.log.warn(err, 'ebay/flat-file/rows: shared membership upsert failed (save unaffected)')
         }
       }
@@ -948,7 +979,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       // FFP.1 — `saved` now counts rows that produced at least one real
       // ChannelListing write (honest counter); `processed` keeps the legacy
       // rows-iterated semantics; `contentOnly` = snapshot-fallback saves.
-      return reply.send({ saved, processed, contentOnly, createResult, resolvedIds, ...(sharedMemberships ? { sharedMemberships } : {}) });
+      return reply.send({ saved, processed, contentOnly, createResult, resolvedIds, ...(sharedMemberships ? { sharedMemberships } : {}), ...(sharedMembershipsError ? { sharedMembershipsError } : {}) });
     } catch (err: unknown) {
       request.log.error(err, 'ebay/flat-file/rows PATCH failed');
       return reply
@@ -1313,6 +1344,15 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           perRowResults.push(...res.map((r) =>
             r.status === 'PUSHED' ? { ...r, message: 'deactivated — quantity 0 on the live offer (ItemID kept)' } : r,
           ));
+          // Audit R11 — a deactivate row the service didn't echo back was
+          // neither pushed nor errored (silently unhandled). Line it as ERROR.
+          const echoed = new Set(res.map((r) => r.sku));
+          for (const dr of deactivateRows) {
+            const dsku = String(dr.sku ?? '').trim();
+            if (dsku && !echoed.has(dsku)) {
+              perRowResults.push({ sku: dsku, market: mp, status: 'ERROR', message: 'deactivate produced no result from eBay — offer left unchanged; retry or check the offer in Seller Hub' });
+            }
+          }
           const okSkus = new Set(res.filter((r) => r.status === 'PUSHED').map((r) => r.sku));
           const okIds = deactivateRows
             .filter((r) => okSkus.has(String(r.sku ?? '')))
@@ -1499,7 +1539,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               perRowResults.push({
                 sku: r.parentSku,
                 market: mp,
-                status: r.status === 'ERROR' ? 'ERROR' : 'PUSHED',
+                // Honest status (audit R3): SKIPPED_EXISTS performed no eBay
+                // write — that is pool-managed stewardship, not a push.
+                status: r.status === 'ERROR' ? 'ERROR' : r.status === 'SKIPPED_EXISTS' ? 'POOL' : 'PUSHED',
                 message: r.itemId ? `${r.message} (ItemID ${r.itemId})` : r.message,
                 itemId: r.itemId,
               })
@@ -1518,7 +1560,24 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                 where: { marketplace: mp, itemId: famItemIdForAdd },
                 select: { sku: true },
               })
-              const memberSkus = new Set(famMemberships.map((m) => m.sku))
+              let memberSkus = new Set(famMemberships.map((m) => m.sku))
+              // Audit R3 — FIRST ADOPT: a live ItemID with zero memberships is
+              // exactly the case the adopt belt used to dead-end (add-variations
+              // was skipped because we knew nothing about the listing). Adopt it
+              // properly by reconciling memberships from eBay truth first.
+              if (memberSkus.size === 0) {
+                try {
+                  const rec = await reconcileMembershipsFromEbay(famItemIdForAdd, mp, { oauthToken: token })
+                  request.log.info({ itemId: famItemIdForAdd, rewritten: rec.rewritten }, 'ebay/push: first-adopt reconcile')
+                  const again = await prisma.sharedListingMembership.findMany({
+                    where: { marketplace: mp, itemId: famItemIdForAdd },
+                    select: { sku: true },
+                  })
+                  memberSkus = new Set(again.map((m) => m.sku))
+                } catch (err) {
+                  request.log.warn({ err, itemId: famItemIdForAdd }, 'ebay/push: first-adopt reconcile failed — add-variations stays guarded')
+                }
+              }
               const prefix = mp.toLowerCase()
               const candidates = familyRows
                 .filter((r) => (r as { _isParent?: boolean })._isParent !== true)
@@ -1563,13 +1622,13 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               perRowResults.push({
                 sku: csku,
                 market: mp,
-                status: addErr ? 'ERROR' : familyOk ? 'PUSHED' : 'ERROR',
+                status: addErr ? 'ERROR' : !familyOk ? 'ERROR' : addedSkus.has(csku) ? 'PUSHED' : 'POOL',
                 message: addErr
                   ? `add variation failed: ${addErr.slice(0, 200)}`
                   : addedSkus.has(csku)
-                  ? `variation ADDED to ItemID ${famItemId} — quantity syncs via the pool fan-out`
+                  ? `variation ADDED to ItemID ${famItemId} — quantity follows the pool fan-out`
                   : familyOk
-                  ? `adopted${famItemId ? ` under ItemID ${famItemId}` : ''} — quantity syncs via the pool fan-out`
+                  ? `adopted${famItemId ? ` under ItemID ${famItemId}` : ''} — live; price/quantity follow the pool fan-out`
                   : 'family push failed — see the parent row error',
                 itemId: famItemId,
               })
@@ -1868,7 +1927,12 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               if (!sPaymentId     || !pSet.has(sPaymentId))     sPaymentId     = snap.paymentPolicies[0]?.id     ?? ''
               if (!sReturnId      || !rSet.has(sReturnId))      sReturnId      = snap.returnPolicies[0]?.id      ?? ''
               if (!sMlk)          sMlk           = snap.locations[0]?.key ?? ''
-            } catch { /* best-effort — the sMlk hard-check below still guards error 25002 */ }
+            } catch (snapErr) {
+              // Audit R12 — silent skip left cross-market policy IDs unvalidated
+              // and eBay later failed with an opaque 25007. Warn once per push.
+              const wmsg = `policy validation skipped for ${mp} (account snapshot unavailable: ${snapErr instanceof Error ? snapErr.message : String(snapErr)}) — a wrong-market policy ID may fail at publish`
+              if (!axisWarnings.includes(wmsg)) axisWarnings.push(wmsg)
+            }
             if (!sMlk) {
               perRowResults.push({ sku, market: mp, status: 'ERROR',
                 message: 'Missing merchantLocation: add an inventory location in eBay Seller Hub > Inventory > Locations' })
@@ -2239,6 +2303,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       }
       try {
         const result = await reconcileMembershipsFromEbay(itemId, marketplace, { oauthToken: token })
+        await clearFileExclusionForItem(itemId, marketplace, request.log)
         return reply.send(result)
       } catch (err: unknown) {
         request.log.error(err, 'reconcile-item failed')
@@ -2246,6 +2311,42 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       }
     },
   )
+
+
+  // Audit R7 — adopting/reconciling a live listing must UN-HIDE its pool
+  // products: a file-excluded product whose listing the operator just adopted
+  // would stay invisible in GET /rows until an unrelated save cleared the
+  // stamp. Best-effort; never fails the caller.
+  async function clearFileExclusionForItem(itemId: string, marketplace: string, log: { warn: (o: unknown, m: string) => void }) {
+    try {
+      const mkt = marketplace.toUpperCase()
+      const members = await prisma.sharedListingMembership.findMany({
+        where: { marketplace: mkt, itemId },
+        select: { sku: true },
+      })
+      if (members.length === 0) return
+      const stamped = await prisma.product.findMany({
+        where: { sku: { in: members.map((m) => m.sku) }, deletedAt: null },
+        select: { id: true, categoryAttributes: true },
+      })
+      for (const sp of stamped) {
+        const attrs = (sp.categoryAttributes && typeof sp.categoryAttributes === 'object'
+          ? { ...(sp.categoryAttributes as Record<string, unknown>) }
+          : {}) as Record<string, unknown>
+        const excl = attrs.ebayFileExcluded as Record<string, unknown> | undefined
+        if (excl && excl[mkt] === true) {
+          const nextExcl = { ...excl }
+          delete nextExcl[mkt]
+          await prisma.product.update({
+            where: { id: sp.id },
+            data: { categoryAttributes: { ...attrs, ebayFileExcluded: nextExcl } as Prisma.InputJsonObject },
+          })
+        }
+      }
+    } catch (err) {
+      log.warn({ err, itemId }, 'clearFileExclusionForItem failed (non-fatal)')
+    }
+  }
 
   // ── POST /api/ebay/flat-file/relabel-item ───────────────────────────
   // Owner decision 2026-07-18: put the POOL SKUs on a live listing's
@@ -2271,6 +2372,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       }
       try {
         const result = await relabelListingToPoolSkus(itemId, marketplace, { oauthToken: token })
+        await clearFileExclusionForItem(itemId, marketplace, request.log)
         return reply.send(result)
       } catch (err: unknown) {
         request.log.error(err, 'relabel-item failed')

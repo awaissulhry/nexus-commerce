@@ -1503,6 +1503,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     // P1-surface: read the full response including createResult to detect rows that failed to persist
     const result = await res.json() as {
       saved: number
+      sharedMembershipsError?: string
       createResult?: {
         idMap: Array<{ tempRowId?: string; sku: string; productId: string }>
         errors: Array<{ sku?: string; tempRowId?: string; reason: string }>
@@ -1512,6 +1513,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       sharedMemberships?: { families: number; created: number; updated: number; skipped: Array<{ sku: string; reason: string }>; qtyPoolGoverned?: number }
       /** sku → productId for every Lane-A row the save touched (created OR existing). */
       resolvedIds?: Array<{ sku: string; productId: string }>
+    }
+    if (result.sharedMembershipsError) {
+      // Audit R9 — the shared model (memberships → adopted rows → fan-out)
+      // failed to persist even though the row save succeeded. Never silent.
+      toast({ title: 'Save persisted, but the shared-listing links did not', description: `${result.sharedMembershipsError} — reload and save again, or run Reconcile on the affected listing.`, tone: 'warning' })
     }
     if (result.saved > 0) {
       emitInvalidation({ type: 'product.updated', meta: { source: 'ebay-flat-file' } })
@@ -3028,7 +3034,18 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       return
     }
 
-    const bySku = new Map(allRows.map((r) => [String(r.sku ?? '').trim(), r]))
+    // Audit C6 — with shared SKUs the same child SKU exists under SEVERAL
+    // parents; a plain SKU map (last-wins) merged the import into an arbitrary
+    // row. Prefer the row under the CHOSEN parent; fall back to first match.
+    const chosenParent = allRows.find((r) => String((r as EbayRow)._productId ?? r._rowId) === String(targetParentId))
+    const chosenParentSku = String((chosenParent as EbayRow | undefined)?.sku ?? '').trim()
+    const bySku = new Map<string, BaseRow>()
+    for (const r of allRows) {
+      const k = String(r.sku ?? '').trim()
+      if (!k) continue
+      const underChosen = chosenParentSku && String((r as EbayRow).parent_sku ?? '').trim() === chosenParentSku
+      if (!bySku.has(k) || underChosen) bySku.set(k, r)
+    }
     const next = [...allRows]
     let added = 0, updated = 0
     for (const imp of imported) {
