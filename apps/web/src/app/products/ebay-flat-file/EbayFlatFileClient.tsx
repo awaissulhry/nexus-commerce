@@ -578,6 +578,8 @@ function EbayDeleteConfirmModal({
   allRows,
   marketplace,
   loading,
+  scope,
+  onScopeChange,
   onConfirm,
   onClose,
 }: {
@@ -585,6 +587,11 @@ function EbayDeleteConfirmModal({
   allRows: EbayRow[]
   marketplace: string
   loading: boolean
+  /** Owner-controlled scope for real (non-adopted) rows:
+   *  'channel' = remove the eBay listing only (product stays in the family file)
+   *  'product' = also soft-delete the product (row leaves the file for good) */
+  scope: 'channel' | 'product'
+  onScopeChange: (s: 'channel' | 'product') => void
   onConfirm: () => void
   onClose: () => void
 }) {
@@ -618,7 +625,7 @@ function EbayDeleteConfirmModal({
       mainText    = `Delete variant "${sku}"? Recoverable.`
       actionLabel = 'Delete Variant'
     } else {
-      mainText    = `Remove "${sku}" from this listing? It stays live on its other listings.`
+      mainText    = `Remove "${sku}" from this listing? The variation is deleted from the live eBay listing (or set to quantity 0 if it has sales history). Other listings carrying this SKU are untouched.`
       actionLabel = 'Remove from Listing'
     }
   } else {
@@ -650,9 +657,25 @@ function EbayDeleteConfirmModal({
       }
     >
       <p className="text-sm text-slate-700 dark:text-slate-300 mb-3">{mainText}</p>
+      {channelCount > 0 && (
+        <div className="mb-3 space-y-1.5">
+          <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+            <input type="radio" name="ebay-delete-scope" className="mt-0.5" checked={scope === 'channel'}
+              onChange={() => onScopeChange('channel')} disabled={loading} />
+            <span><span className="font-medium">Remove from eBay only</span> — the product stays in this family file (the row reappears, unlisted).</span>
+          </label>
+          <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+            <input type="radio" name="ebay-delete-scope" className="mt-0.5" checked={scope === 'product'}
+              onChange={() => onScopeChange('product')} disabled={loading} />
+            <span><span className="font-medium">Also delete the product from Nexus</span> — the row leaves this file for good (soft-delete, recoverable from Products).</span>
+          </label>
+        </div>
+      )}
       <Banner variant="warning">
         {isAllScopedRemoval
-          ? `This removes the eBay ${marketplace} listing from Nexus. The product and its stock remain — only this channel’s listing is affected. If eBay can’t be reached the listing stays live — end it manually in Seller Hub.`
+          ? scope === 'product'
+            ? `This ends the eBay ${marketplace} listing AND soft-deletes the product from Nexus (recoverable). If eBay can’t be reached the listing stays live — end it manually in Seller Hub.`
+            : `This removes the eBay ${marketplace} listing from Nexus. The product and its stock remain — only this channel’s listing is affected. If eBay can’t be reached the listing stays live — end it manually in Seller Hub.`
           : `This permanently ends the live eBay listing and removes it from Nexus (Nexus record is recoverable; the eBay listing is not). If eBay can’t be reached it stays live — end it manually in Seller Hub.`
         }
       </Banner>
@@ -676,6 +699,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // P2.D2 — delete confirm state
   const [deleteConfirmRows, setDeleteConfirmRows] = useState<EbayRow[] | null>(null)
   const [deleteLoading, setDeleteLoading]         = useState(false)
+  // Owner-controlled delete scope (defaults to the safe channel-only removal)
+  const [deleteScope, setDeleteScope]             = useState<'channel' | 'product'>('channel')
   const [feedStatus, setFeedStatus]           = useState<FeedStatus | null>(null)
   const [publishPanelOpen, setPublishPanelOpen] = useState(false)
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false)
@@ -1634,14 +1659,22 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const handleExecuteDelete = useCallback(async () => {
     if (!deleteConfirmRows || !deleteConfirmRows.length) return
     const allRows = latestRowsRef.current as EbayRow[]
-    const targets = deleteConfirmRows.map((r) => ({
-      productId: r._productId ? String(r._productId) : undefined,
-      sku: String(r.sku ?? ''),
-      marketplace,
-      itemId: getRowItemId(r, marketplace),
-      parentSku: r.parent_sku ?? undefined,
-      intent: deriveDeleteIntent(r, allRows),
-    }))
+    const targets = deleteConfirmRows.map((r) => {
+      const base = deriveDeleteIntent(r, allRows)
+      // Owner chose "also delete the product": escalate real-row removals to a
+      // soft-delete so the row leaves the family file for good.
+      const intent = deleteScope === 'product' && base === 'remove-channel-listing'
+        ? ('delete-product' as const)
+        : base
+      return {
+        productId: r._productId ? String(r._productId) : undefined,
+        sku: String(r.sku ?? ''),
+        marketplace,
+        itemId: getRowItemId(r, marketplace),
+        parentSku: r.parent_sku ?? undefined,
+        intent,
+      }
+    })
     setDeleteLoading(true)
     try {
       const res = await fetch(`${BACKEND}/api/ebay/flat-file/delete`, {
@@ -1651,7 +1684,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json() as {
-        results: Array<{ sku: string; intent: string; softDeleted: string[]; membershipsRemoved: number; channelListingsRemoved?: number; delisted: boolean; error?: string }>
+        results: Array<{ sku: string; intent: string; softDeleted: string[]; membershipsRemoved: number; channelListingsRemoved?: number; delisted: boolean; variationRemoval?: 'removed' | 'zeroed' | 'failed'; error?: string }>
       }
 
       // Per-result accounting. Rows the server found NOTHING for (no listing,
@@ -1700,26 +1733,39 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
       const succeeded = json.results.filter((r) => !r.error)
       const deleted = succeeded.length
-      const delistedCount = succeeded.filter((r) => r.delisted).length
-      const notDelistedCount = deleted - delistedCount
-      const label = deleted !== 1 ? 'listings' : 'listing'
-      if (notDelistedCount > 0) {
-        toast({ title: `Removed ${deleted} ${label} from eBay ${marketplace} — couldn't end ${notDelistedCount} on eBay (end manually in Seller Hub). Product and stock kept.`, tone: 'info' })
-      } else if (warnCount > 0 || residueSkus.size > 0) {
-        const bits: string[] = []
-        if (residueSkus.size > 0) bits.push(`${residueSkus.size} row${residueSkus.size !== 1 ? 's were' : ' was'} only in your browser — cleared`)
-        if (warnCount > 0) bits.push(`${warnCount} failed — see errors`)
-        toast({ title: `Removed ${deleted} ${label} from eBay ${marketplace} — product and stock kept.`, description: bits.join(' · '), tone: 'info' })
+      // Variation-scoped removals (adopted child rows) report via
+      // variationRemoval, NOT delisted — never count them as "couldn't end".
+      const varRemoved = succeeded.filter((r) => r.variationRemoval === 'removed').length
+      const varZeroed  = succeeded.filter((r) => r.variationRemoval === 'zeroed').length
+      const varFailed  = succeeded.filter((r) => r.variationRemoval === 'failed').length
+      const delistEligible = succeeded.filter((r) => r.variationRemoval === undefined)
+      const notDelistedCount = delistEligible.filter((r) => !r.delisted && r.intent !== 'delete-product' && r.intent !== 'delete-family').length
+      const softDeletedCount = succeeded.filter((r) => (r.softDeleted?.length ?? 0) > 0).length
+      const label = deleted !== 1 ? 'rows' : 'row'
+      const bits: string[] = []
+      if (varRemoved > 0) bits.push(`${varRemoved} variation${varRemoved !== 1 ? 's' : ''} removed from the live listing`)
+      if (varZeroed  > 0) bits.push(`${varZeroed} kept live with quantity 0 (sales history blocks removal)`)
+      if (varFailed  > 0) bits.push(`${varFailed} could NOT be removed on eBay — run Reconcile or remove in Seller Hub, or the row returns`)
+      if (softDeletedCount > 0) bits.push(`${softDeletedCount} product${softDeletedCount !== 1 ? 's' : ''} soft-deleted from Nexus (recoverable)`)
+      if (notDelistedCount > 0) bits.push(`couldn't end ${notDelistedCount} on eBay — end manually in Seller Hub`)
+      if (residueSkus.size > 0) bits.push(`${residueSkus.size} row${residueSkus.size !== 1 ? 's were' : ' was'} only in your browser — cleared`)
+      if (warnCount > 0) bits.push(`${warnCount} failed — see errors`)
+      const title = `Removed ${deleted} ${label} from eBay ${marketplace}${softDeletedCount === 0 ? ' — product and stock kept' : ''}.`
+      if (varFailed > 0 || notDelistedCount > 0 || warnCount > 0) {
+        toast({ title, description: bits.join(' · '), tone: 'warning' })
+      } else if (bits.length > 0) {
+        toast({ title, description: bits.join(' · '), tone: 'info' })
       } else {
-        toast.success(`Removed ${deleted} ${label} from eBay ${marketplace} — product and stock kept.`)
+        toast.success(title)
       }
       setDeleteConfirmRows(null)
+      setDeleteScope('channel')
     } catch (err) {
       toast.error('Delete failed: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setDeleteLoading(false)
     }
-  }, [deleteConfirmRows, marketplace, BACKEND, ebayKey, toast])
+  }, [deleteConfirmRows, marketplace, BACKEND, ebayKey, toast, deleteScope])
 
   // ── API: push to eBay ─────────────────────────────────────────────────
 
@@ -3758,8 +3804,10 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           allRows={latestRowsRef.current as EbayRow[]}
           marketplace={marketplace}
           loading={deleteLoading}
+          scope={deleteScope}
+          onScopeChange={setDeleteScope}
           onConfirm={() => void handleExecuteDelete()}
-          onClose={() => setDeleteConfirmRows(null)}
+          onClose={() => { setDeleteConfirmRows(null); setDeleteScope('channel') }}
         />
       )}
 

@@ -54,3 +54,22 @@ node scripts/ds-conformance-guard.mjs --manifest products   # must not exceed ba
 - The wizard's aspect tier only folds `X (Y)` and `X ⚠` shapes; a bare unmatched header still lands in Unmapped for manual mapping.
 - `verify-item` returns `DRY-RUN` status when `NEXUS_EBAY_REAL_API` isn't enabled (non-prod) — memberships comparison still runs.
 - The Combobox target list scopes per-market columns to the wizard's File market; switching market re-runs auto-map and resets block decisions/cell exclusions.
+
+## Deleting rows (2026-07-18)
+
+Deleting a row now severs EVERY source that could resurrect it:
+
+- **Adopted (read-only) child row** → its membership is deleted AND the
+  variation is removed from the live eBay listing (`ReviseFixedPriceItem`
+  `<Delete>true</Delete>`). If eBay refuses because the variation has sales
+  history, its quantity is set to 0 instead (eBay hides qty-0 variations from
+  buyers). The whole listing is never ended by a child-row delete. If the live
+  removal fails, the toast says so — run Reconcile or remove it in Seller Hub,
+  otherwise the next Reconcile restores the row (truth mirrors eBay).
+- **Real row** → the delete dialog offers a scope choice:
+  - *Remove from eBay only* (default) — the ChannelListing is removed; the
+    product stays in the family, so the row reappears on reload as an
+    unlisted family member. This is by design: the family file shows the
+    product family, listed or not.
+  - *Also delete the product from Nexus* — soft-delete; the row leaves the
+    file for good (recoverable from Products → deleted filter).

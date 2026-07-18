@@ -18,6 +18,26 @@ vi.mock('./channel-delist.service.js', () => ({
     mockDispatchChannelDelist(...args),
 }))
 
+// ── Mock live variation-removal dependencies ───────────────────────────────
+const mockCallTradingApi = vi.fn()
+const mockReviseInventoryStatus = vi.fn()
+vi.mock('./ebay-trading-api.service.js', () => ({
+  callTradingApi: (...args: unknown[]) => mockCallTradingApi(...args),
+  reviseInventoryStatus: (...args: unknown[]) => mockReviseInventoryStatus(...args),
+  siteIdForMarket: () => 101,
+  escapeXml: (x: string) => x,
+}))
+vi.mock('./ebay-auth.service.js', () => ({
+  ebayAuthService: { getValidToken: vi.fn().mockResolvedValue('tok') },
+}))
+vi.mock('../db.js', () => ({
+  default: {
+    channelConnection: {
+      findFirst: vi.fn().mockResolvedValue({ id: 'conn-1' }),
+    },
+  },
+}))
+
 // ── Import module under test (after vi.mock) ───────────────────────────────
 const { runEbayFlatFileDelete } = await import(
   './ebay-flat-file-delete.service.js'
@@ -265,11 +285,12 @@ describe('remove-listing', () => {
     )
   })
 
-  it('resolves itemId via parentSku when itemId is not provided', async () => {
+  it('resolves itemId via parentSku and removes the LIVE variation (not the listing)', async () => {
     const db = mockPrisma({
       membershipFindMany: [{ itemId: 'RESOLVED-ITEM' }],
       membershipDeleteManyResult: { count: 1 },
     })
+    mockCallTradingApi.mockResolvedValue({ ack: 'Success', raw: '' })
 
     const results = await runEbayFlatFileDelete(db as any, [
       {
@@ -281,7 +302,52 @@ describe('remove-listing', () => {
     ])
 
     expect(results[0].membershipsRemoved).toBe(1)
-    // Delist attempted with the resolved itemId
+    // Child row (sku ≠ parentSku): the variation is deleted from the live
+    // listing — the whole listing is NOT delisted.
+    expect(results[0].variationRemoval).toBe('removed')
+    expect(mockCallTradingApi).toHaveBeenCalledWith(
+      'ReviseFixedPriceItem',
+      expect.stringContaining('<Delete>true</Delete>'),
+      expect.anything(),
+    )
+    expect(mockCallTradingApi).toHaveBeenCalledWith(
+      'ReviseFixedPriceItem',
+      expect.stringContaining('RESOLVED-ITEM'),
+      expect.anything(),
+    )
+    expect(mockDispatchChannelDelist).not.toHaveBeenCalled()
+  })
+
+  it('falls back to qty 0 when eBay refuses the variation delete (sales history)', async () => {
+    const db = mockPrisma({
+      membershipFindMany: [{ itemId: 'RESOLVED-ITEM' }],
+      membershipDeleteManyResult: { count: 1 },
+    })
+    mockCallTradingApi.mockRejectedValueOnce(new Error('variation has sales'))
+    mockReviseInventoryStatus.mockResolvedValue({ ack: 'Success' })
+
+    const results = await runEbayFlatFileDelete(db as any, [
+      { sku: 'SHARED-L', marketplace: 'IT', parentSku: 'LINER-PARENT', intent: 'remove-listing' },
+    ])
+
+    expect(results[0].variationRemoval).toBe('zeroed')
+    expect(mockReviseInventoryStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ itemId: 'RESOLVED-ITEM', sku: 'SHARED-L', quantity: 0 }),
+      expect.anything(),
+    )
+  })
+
+  it('still delists the WHOLE listing when the target is the listing itself (sku === parentSku)', async () => {
+    const db = mockPrisma({
+      membershipFindMany: [{ itemId: 'RESOLVED-ITEM' }],
+      membershipDeleteManyResult: { count: 3 },
+    })
+
+    const results = await runEbayFlatFileDelete(db as any, [
+      { sku: 'LINER-PARENT', marketplace: 'IT', parentSku: 'LINER-PARENT', intent: 'remove-listing' },
+    ])
+
+    expect(results[0].variationRemoval).toBeUndefined()
     expect(mockDispatchChannelDelist).toHaveBeenCalledWith(
       expect.objectContaining({ externalListingId: 'RESOLVED-ITEM' }),
     )

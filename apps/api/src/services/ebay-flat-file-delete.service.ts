@@ -25,6 +25,9 @@
  */
 
 import { logger } from '../utils/logger.js'
+import prismaClient from '../db.js'
+import { ebayAuthService } from './ebay-auth.service.js'
+import { callTradingApi, siteIdForMarket, escapeXml, reviseInventoryStatus } from './ebay-trading-api.service.js'
 import {
   dispatchChannelDelist,
   type ChannelDelistJob,
@@ -56,6 +59,11 @@ export interface DeleteTarget {
 }
 
 export interface DeleteTargetResult {
+  /** Variation-scoped live removal outcome (adopted rows): 'removed' = the
+   *  variation was deleted from the live listing; 'zeroed' = eBay refused the
+   *  delete (sales history) so its quantity was set to 0; 'failed' = neither
+   *  worked (the membership is still removed — Reconcile would restore it). */
+  variationRemoval?: 'removed' | 'zeroed' | 'failed'
   sku: string
   intent: DeleteIntent
   /** Product IDs that were soft-deleted (deletedAt set). */
@@ -129,6 +137,50 @@ function buildDelistJob(
     externalListingId: itemId,
     syncType: 'DELETE_LISTING',
     payload: { channelAction: 'delete' },
+  }
+}
+
+/**
+ * Remove ONE variation from a live listing (the inverse of add-variations).
+ * Without this, deleting an adopted row only removed our membership while the
+ * variation stayed live on eBay — truth (Reconcile / verify) resurrected the
+ * row "again and again". Delete=true first; if eBay refuses (variations with
+ * sales history can't be deleted), fall back to quantity 0.
+ */
+async function tryRemoveVariationFromListing(
+  itemId: string,
+  sku: string,
+  marketplace: string,
+): Promise<'removed' | 'zeroed' | 'failed'> {
+  try {
+    const conn = await prismaClient.channelConnection.findFirst({
+      where: { channelType: 'EBAY', isActive: true },
+      select: { id: true },
+    })
+    if (!conn) return 'failed'
+    const token = await ebayAuthService.getValidToken(conn.id)
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<ReviseFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <Item>
+    <ItemID>${escapeXml(itemId)}</ItemID>
+    <Variations><Variation><SKU>${escapeXml(sku)}</SKU><Delete>true</Delete></Variation></Variations>
+  </Item>
+</ReviseFixedPriceItemRequest>`
+    try {
+      await callTradingApi('ReviseFixedPriceItem', xml, { oauthToken: token, siteId: siteIdForMarket(marketplace) })
+      return 'removed'
+    } catch (err) {
+      logger.warn('ebay-flat-file-delete: variation Delete refused — falling back to qty 0', {
+        itemId, sku, err: err instanceof Error ? err.message : String(err),
+      })
+      await reviseInventoryStatus({ itemId, sku, quantity: 0 }, { oauthToken: token, market: marketplace })
+      return 'zeroed'
+    }
+  } catch (err) {
+    logger.warn('ebay-flat-file-delete: variation removal failed (non-fatal)', {
+      itemId, sku, err: err instanceof Error ? err.message : String(err),
+    })
+    return 'failed'
   }
 }
 
@@ -274,8 +326,18 @@ async function handleRemoveListing(
     })
   }
 
-  // Best-effort delist — Product is NOT soft-deleted.
-  const delisted = await tryDelist(resolvedItemId, marketplace)
+  // Variation-scoped target (a child of a listing, not the listing itself):
+  // remove the variation from the LIVE listing — otherwise eBay truth
+  // resurrects the row on the next reconcile. Whole-listing targets keep the
+  // best-effort delist.
+  const isVariationScoped = Boolean(sku && parentSku && sku !== parentSku)
+  let delisted = false
+  let variationRemoval: DeleteTargetResult['variationRemoval']
+  if (isVariationScoped && resolvedItemId) {
+    variationRemoval = await tryRemoveVariationFromListing(resolvedItemId, sku, marketplace)
+  } else {
+    delisted = await tryDelist(resolvedItemId, marketplace)
+  }
 
   return {
     sku,
@@ -283,6 +345,7 @@ async function handleRemoveListing(
     softDeleted: [],
     membershipsRemoved,
     delisted,
+    ...(variationRemoval ? { variationRemoval } : {}),
   }
 }
 
