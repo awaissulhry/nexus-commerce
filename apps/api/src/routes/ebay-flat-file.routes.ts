@@ -1476,6 +1476,55 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       }
     }
 
+    // ── API mode — ASYNC (incident #23) ─────────────────────────────
+    // Long pushes were severed by proxy timeouts mid-request ("Failed to
+    // fetch" / "connection lost") while the server kept working. The route now
+    // responds IMMEDIATELY with a RUNNING job id; processing continues in the
+    // background; Push History + the SSE refresh carry live truth. One push at
+    // a time (409 otherwise) — no concurrent-push stomping, no blind retries.
+    const runningJob = await prisma.ebayPushJob.findFirst({
+      where: { status: 'RUNNING', submittedAt: { gt: new Date(Date.now() - 15 * 60_000) } },
+      select: { id: true },
+    });
+    if (runningJob) {
+      return reply.code(409).send({ error: 'A publish is already running — watch Push History and push again when it finishes.', jobId: runningJob.id });
+    }
+    let asyncJobId = '';
+    try {
+      const preJob = await prisma.ebayPushJob.create({
+        data: { mode: 'api', markets: targetMarkets, skuCount: rows.length + pooledRows.length, status: 'RUNNING' },
+      });
+      asyncJobId = preJob.id;
+    } catch (e) {
+      request.log.warn({ err: e }, 'ebay/flat-file/push: job pre-create failed (push continues; history entry created at completion)');
+    }
+
+    const runApiPush = async () => {
+    // Incident #23 — DETERMINISTIC lane marker. A family whose CL carries
+    // __offerIds was created by OUR Inventory-API group publish (offers exist)
+    // → Inventory lane. Trading-managed primaries (AIRMESH on the COAT_PANTS
+    // base) have no __offerIds → shared/Trading lane. Replaces the it_item_id
+    // heuristic, which misrouted Trading primaries into the Inventory lane.
+    const inventoryManagedProducts = new Set<string>();
+    try {
+      const pushProductIds = [...new Set(rows.map((r) => String((r as Record<string, unknown>)._productId ?? '')).filter(Boolean))];
+      if (pushProductIds.length > 0) {
+        const clsForLane = await prisma.channelListing.findMany({
+          where: { productId: { in: pushProductIds }, channel: 'EBAY' },
+          select: { productId: true, platformAttributes: true },
+        });
+        for (const cl of clsForLane) {
+          const attrs = cl.platformAttributes as Record<string, unknown> | null;
+          const offerIds = attrs && typeof attrs === 'object' ? attrs.__offerIds : undefined;
+          if (offerIds && typeof offerIds === 'object' && Object.keys(offerIds as object).length > 0) {
+            inventoryManagedProducts.add(cl.productId);
+          }
+        }
+      }
+    } catch (err) {
+      request.log.warn({ err }, 'ebay/flat-file/push: lane-marker prefetch failed — shared flag decides alone');
+    }
+
     // ── API mode — family-aware per row × market ────────────────────
     const perRowResults: Array<{
       sku: string;
@@ -1733,23 +1782,19 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           // multi-variation listing (same variant SKU may repeat across parents),
           // instead of the unique-SKU Inventory-API group. Flag lives on the parent.
           const sharedParent = familyRows.find((r) => r._isParent) ?? familyRows[0]
-          // GALE-primary incident (2026-07-18): a family whose REAL child rows
-          // carry a live ItemID OWNS that listing as its Inventory-API primary.
-          // Routing it through the Trading shared branch dead-ends at the adopt
-          // belt (Inventory-managed listings reject Trading revises) — missing
-          // variations could NEVER be added by publish (19/20, units short).
-          // A stray shared flag on the primary's row must not change its lane:
-          // Lane-A ownership wins; the shared branch serves EXTRA listings
-          // (shell parents publish alone — their children are synthesized).
-          const ownsLaneAListing = familyRows.some((r) =>
-            (r as Record<string, unknown>)._shared !== true &&
+          // Incident #23 — deterministic lane: __offerIds on a child's CL means
+          // the family's listing is Inventory-API-managed (GALE primary) →
+          // Inventory group lane even when shared-flagged. No offers → the
+          // listing is Trading-managed (AIRMESH primary, every ALT) → shared
+          // lane. The old it_item_id heuristic misrouted Trading primaries.
+          const inventoryManagedFamily = familyRows.some((r) =>
             (r as Record<string, unknown>)._isParent !== true &&
-            /^\d+$/.test(String((r as Record<string, unknown>)[`${mp.toLowerCase()}_item_id`] ?? '')),
+            inventoryManagedProducts.has(String((r as Record<string, unknown>)._productId ?? '')),
           )
-          if (sharedParent?.shared_sku_listing === true && ownsLaneAListing) {
-            request.log.info({ familyKey, market: mp }, 'ebay/push: shared flag on Lane-A-owning family — routed via Inventory group (primary listing)')
+          if (sharedParent?.shared_sku_listing === true && inventoryManagedFamily) {
+            request.log.info({ familyKey, market: mp }, 'ebay/push: shared flag on Inventory-managed family — routed via Inventory group (offers exist)')
           }
-          if (sharedParent?.shared_sku_listing === true && !ownsLaneAListing) {
+          if (sharedParent?.shared_sku_listing === true && !inventoryManagedFamily) {
             const sharedResults: SharedListingResult[] = await pushSharedListings(
               familyRows as Array<Record<string, unknown>>,
               { oauthToken: token, market: mp, capQty: capToFbm },
@@ -2384,9 +2429,21 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
     // Durable push-history record (mirrors AmazonFlatFileFeedJob) so a failed push
     // is inspectable forever, not a 3-second toast. Non-fatal.
-    let apiJobId = '';
+    let apiJobId = asyncJobId;
     try {
-      const j = await prisma.ebayPushJob.create({
+      const j = asyncJobId
+        ? await prisma.ebayPushJob.update({
+            where: { id: asyncJobId },
+            data: {
+              status: errors === 0 ? 'DONE' : pushed === 0 ? 'FATAL' : 'PARTIAL',
+              pushed,
+              failed: errors,
+              perSkuResults: perRowResults as any,
+              warnings: oversellWarnings as any,
+              completedAt: new Date(),
+            },
+          })
+        : await prisma.ebayPushJob.create({
         data: {
           mode: 'api',
           markets: targetMarkets,
@@ -2414,7 +2471,24 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       });
     } catch { /* SSE is best-effort */ }
 
-    return reply.send({ mode: 'api', pushed, errors, pooled, skipped: skippedCount, results: perRowResults, warnings: oversellWarnings, axisWarnings });
+    };
+
+    setImmediate(() => {
+      runApiPush().catch(async (err) => {
+        request.log.error(err, 'ebay/flat-file/push: background push crashed');
+        if (asyncJobId) {
+          await prisma.ebayPushJob.update({
+            where: { id: asyncJobId },
+            data: { status: 'FATAL', errorMessage: err instanceof Error ? err.message : String(err), completedAt: new Date() },
+          }).catch(() => {});
+        }
+        try {
+          publishOrderEvent({ type: 'ebay_push.status_changed', jobId: asyncJobId, taskId: '', status: 'FATAL', pushed: 0, failed: 0, ts: Date.now() });
+        } catch { /* best-effort */ }
+      });
+    });
+
+    return reply.send({ mode: 'api', async: true, jobId: asyncJobId, message: 'Publishing in the background — live results in Push History.' });
   });
 
   // ── GET /api/ebay/flat-file/pushes ──────────────────────────────────

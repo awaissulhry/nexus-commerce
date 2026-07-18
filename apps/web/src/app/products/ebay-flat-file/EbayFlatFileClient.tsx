@@ -2094,9 +2094,27 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         // Surface the server's real message, not a bare "HTTP 500". The push
         // route returns { error } on every failure path.
         const body = await res.json().catch(() => null) as { error?: string } | null
+        if (res.status === 409) {
+          setHistoryRefreshKey((k) => k + 1)
+          setHistoryPanelOpen(true)
+          toast({ title: 'A publish is already running', description: 'Push History (just opened) shows its live status — push again when it finishes.', tone: 'warning' })
+          return
+        }
         throw new Error(body?.error ? `${body.error} (HTTP ${res.status})` : `HTTP ${res.status}`)
       }
-      const json = await res.json() as { results?: PushResult[]; taskId?: string; axisWarnings?: string[]; pushed?: number; pooled?: number }
+      const json = await res.json() as { results?: PushResult[]; taskId?: string; axisWarnings?: string[]; pushed?: number; pooled?: number; async?: boolean; jobId?: string }
+      // Incident #23 — pushes run in the BACKGROUND now: the response arrives
+      // instantly (no connection to lose); history + SSE carry live results.
+      if (json.async) {
+        setHistoryRefreshKey((k) => k + 1)
+        setHistoryPanelOpen(true)
+        toast({
+          title: 'Publishing in the background',
+          description: 'Live results appear in Push History (just opened) — the grid refreshes automatically when it completes.',
+          tone: 'info',
+        })
+        return
+      }
       if (skippedByAction > 0) {
         toast({ title: `${skippedByAction} row${skippedByAction !== 1 ? 's' : ''} skipped (Action = skip)`, tone: 'info' })
       }
@@ -2178,8 +2196,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         const body = await res.json().catch(() => null) as { error?: string } | null
         throw new Error(body?.error ? `${body.error} (HTTP ${res.status})` : `HTTP ${res.status}`)
       }
-      const json = await res.json() as { results?: PushResult[] }
+      const json = await res.json() as { results?: PushResult[]; async?: boolean; jobId?: string }
       setHistoryRefreshKey((k) => k + 1)
+      if (json.async) {
+        setHistoryPanelOpen(true)
+        toast({ title: 'Quick Update running in the background', description: 'Live results in Push History; the grid refreshes when it completes.', tone: 'info' })
+        return
+      }
       if (json.results) {
         const errors = json.results.filter((r) => r.status === 'ERROR')
         if (errors.length) {

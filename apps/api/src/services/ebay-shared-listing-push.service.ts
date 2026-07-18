@@ -179,7 +179,7 @@ export function buildSharedListingInput(
 
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
-import { addFixedPriceItem } from './ebay-trading-api.service.js'
+import { addFixedPriceItem, callTradingApi, siteIdForMarket } from './ebay-trading-api.service.js'
 import { renderListingDescriptionSafe } from './ebay-description-theme.service.js'
 
 export interface SharedListingCtx {
@@ -188,7 +188,7 @@ export interface SharedListingCtx {
   capQty?: CapQtyFn
   addFixedPriceItemFn?: (input: AddFixedPriceItemInput, ctx: { oauthToken: string; market: string }) => Promise<{ itemId: string }>
   db?: {
-    sharedListingMembership: { findFirst: Function; create: Function }
+    sharedListingMembership: { findFirst: Function; create: Function; deleteMany?: Function }
     product: { findMany: Function }
     $transaction: (args: Promise<unknown>[]) => Promise<unknown[]>
   }
@@ -213,9 +213,34 @@ export async function createSharedListing(
   const addFn = ctx.addFixedPriceItemFn ?? addFixedPriceItem
 
   try {
+    // Incident #23 — the adopt belt must never bow to a CORPSE. A membership
+    // (or row ItemID) can reference a listing that has since been ended
+    // (deleted pre-sweep-fix, ended in Seller Hub…). Verify liveness with
+    // GetItem; a dead listing's memberships are swept and creation proceeds.
+    const isListingAlive = async (iid: string): Promise<boolean | null> => {
+      try {
+        if (!iid) return null
+        const got = await callTradingApi('GetItem', `<?xml version="1.0" encoding="utf-8"?>\n<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${iid}</ItemID></GetItemRequest>`,
+          { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market) })
+        if (!got.raw) return null // dry-run/neutralized harness — indeterminate
+        const status = /<ListingStatus>([^<]+)<\/ListingStatus>/.exec(got.raw)?.[1] ?? ''
+        return status === 'Active'
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (/invalid item id|item id was not found|17\)/i.test(msg)) return false
+        return null // indeterminate (network/etc) — do NOT sweep on doubt
+      }
+    }
+
     const existing = await db.sharedListingMembership.findFirst({ where: { marketplace: market, parentSku } })
     if (existing) {
-      return { status: 'SKIPPED_EXISTS', parentSku, market, memberships: 0, message: 'memberships already exist for this parent+market' }
+      const alive = await isListingAlive(String((existing as { itemId?: unknown }).itemId ?? ''))
+      if (alive === false && typeof (db.sharedListingMembership as { deleteMany?: Function }).deleteMany === 'function') {
+        await (db.sharedListingMembership as { deleteMany: Function }).deleteMany({ where: { marketplace: market, parentSku } })
+        // fall through to creation — the old listing is gone; self-healed.
+      } else {
+        return { status: 'SKIPPED_EXISTS', parentSku, market, memberships: 0, message: 'memberships already exist for this parent+market' }
+      }
     }
 
     // Adopt-don't-duplicate belt: a row carrying a live ItemID describes a
@@ -228,14 +253,18 @@ export async function createSharedListing(
       .map((r) => str(r[`${mpPrefix}_item_id`]) || str(r.ebay_item_id))
       .find(Boolean)
     if (liveItemId) {
-      return {
-        status: 'SKIPPED_EXISTS',
-        itemId: liveItemId,
-        parentSku,
-        market,
-        memberships: 0,
-        message: `already live on eBay (ItemID ${liveItemId}) — Save the sheet to adopt it; quantities then sync via the shared fan-out`,
+      const alive = await isListingAlive(liveItemId)
+      if (alive !== false) {
+        return {
+          status: 'SKIPPED_EXISTS',
+          itemId: liveItemId,
+          parentSku,
+          market,
+          memberships: 0,
+          message: `already live on eBay (ItemID ${liveItemId}) — Save the sheet to adopt it; quantities then sync via the shared fan-out`,
+        }
       }
+      // dead row-carried ItemID — ignore it and create fresh (self-heal).
     }
 
     const input = buildSharedListingInput(parentRow, variantRows, market, ctx.capQty)
