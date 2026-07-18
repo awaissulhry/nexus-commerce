@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest'
 import { buildAddFixedPriceItemXml } from './ebay-trading-api.service.js'
 
 const input = {
+  sku: 'PARENT-SKU-1',
   title: 'T', description: 'D', categoryId: '9999', conditionId: '1000',
   country: 'IT', currency: 'EUR',
   location: 'Santarcangelo di Romagna', postalCode: '47822',
@@ -28,6 +29,9 @@ describe('buildAddFixedPriceItemXml — eBay IT creation requirements', () => {
   })
   it('OutOfStockControl is NOT sent (deprecated by eBay — incident #25; the account-level out-of-stock preference governs keep-alive)', () => {
     expect(xml).not.toContain('OutOfStockControl')
+  })
+  it('carries the parent SKU as the listing custom label (incident #30)', () => {
+    expect(xml).toContain('<SKU>PARENT-SKU-1</SKU>')
   })
   it('numeric ConditionID (code 37 otherwise)', () => {
     expect(xml).toContain('<ConditionID>1000</ConditionID>')

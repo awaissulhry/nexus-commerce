@@ -193,6 +193,8 @@ export function buildSharedListingInput(
   }
 
   return {
+    // Incident #30 — the parent SKU IS the listing's custom label on eBay.
+    sku: str(parentRow?.sku),
     title: str(src.title),
     description: str(src.description),
     categoryId: str(src.category_id),

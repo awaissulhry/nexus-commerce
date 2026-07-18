@@ -56,6 +56,9 @@ export interface TradingVariation {
   ean?: string
 }
 export interface AddFixedPriceItemInput {
+  /** Item-level SKU = eBay's "Custom label" in Seller Hub. The PARENT SKU —
+   *  without it the listing shows an empty label (incident #30). */
+  sku?: string
   title: string
   description: string
   categoryId: string
@@ -153,7 +156,7 @@ ${sets}
   <ErrorLanguage>en_US</ErrorLanguage>
   <WarningLevel>High</WarningLevel>
   <Item>
-    <Title>${escapeXml(input.title)}</Title>
+${input.sku ? `    <SKU>${escapeXml(input.sku)}</SKU>\n` : ''}    <Title>${escapeXml(input.title)}</Title>
     <Description><![CDATA[${input.description.replace(/]]>/g, ']]]]><![CDATA[>')}]]></Description>
     <PrimaryCategory><CategoryID>${escapeXml(input.categoryId)}</CategoryID></PrimaryCategory>
     <ConditionID>${escapeXml(input.conditionId)}</ConditionID>
