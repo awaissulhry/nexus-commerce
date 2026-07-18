@@ -2232,8 +2232,15 @@ export const EBAY_SNAPSHOT_LIVE_FIELDS = new Set([
     const p = mp.toLowerCase();
     return [`${p}_qty`, `${p}_item_id`, `${p}_status`, `${p}_listing_id`];
   }),
-  // Grouping / family structure — derived from Product.parentId, not user intent
-  'platformProductId', '_isParent',
+  // Grouping / family structure — derived from Product.parentId, not user intent.
+  // parent_sku + parentage joined 2026-07-18: a stale snapshot's parent_sku
+  // (written by a pre-guard save whose first-occurrence row belonged to a
+  // SIBLING listing's block) re-grouped 20 primary children under ALT3 in the
+  // grid — visible same-family duplicates AND 20 spurious import adds. The
+  // product tree is the ONLY parentage authority; snapshots can never
+  // override it again (P1a fills parent_sku from Product.parentId after
+  // buildFlatRow; the live overlay reasserts it after the snapshot).
+  'platformProductId', '_isParent', 'parent_sku', 'parentage',
 ]);
 
 /**
@@ -2246,9 +2253,10 @@ export const EBAY_SNAPSHOT_LIVE_FIELDS = new Set([
  * Merge strategy (same as Amazon's applySnapshotOverlay):
  *   1. derivedRow — base layer; fields absent from the snapshot fall through here
  *      (handles schema additions after the snapshot was written).
- *   2. snapshot   — user-entered content wins: parentage, parent_sku, title,
- *      description, category_id, condition, aspect_*, images, policies, package
- *      dims, variation_theme, etc.
+ *   2. snapshot   — user-entered content wins: title, description, category_id,
+ *      condition, aspect_*, images, policies, package dims, variation_theme,
+ *      etc. (NOT parent_sku/parentage — family structure is Product-tree
+ *      truth via the live layer since 2026-07-18).
  *   3. live       — EBAY_SNAPSHOT_LIVE_FIELDS + all _-prefixed internal fields
  *      always come from derivedRow (repricer/stock changes show, system state
  *      is authoritative).

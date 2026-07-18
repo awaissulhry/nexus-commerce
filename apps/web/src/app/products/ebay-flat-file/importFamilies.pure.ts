@@ -56,13 +56,24 @@ export function planFamilyImport(imported: Row[], gridRows: Row[]): ImportAction
   // Grid indexes: rows by sku; family key per row (parents key by own sku,
   // children by parent_sku, standalone by '').
   const gridParentBySku = new Map<string, Row>()
+  const parentSkuByPlatformId = new Map<string, string>()
   for (const g of gridRows) {
     const sku = str(g.sku)
-    if (sku && (g._isParent === true || str(g.parentage) === 'parent')) gridParentBySku.set(sku, g)
+    if (sku && (g._isParent === true || str(g.parentage) === 'parent')) {
+      gridParentBySku.set(sku, g)
+      // Belt (2026-07-18): children whose parent_sku cell is stale/blank still
+      // resolve their family through the parent's product id — the tree is
+      // the authority, a snapshot cell must never orphan a child from its
+      // family (that produced 20 spurious adds + same-family duplicates).
+      for (const key of [str(g._productId), str(g.platformProductId), str(g._rowId)]) {
+        if (key) parentSkuByPlatformId.set(key, sku)
+      }
+    }
   }
   const gridFamilyKey = (g: Row): string => {
     if (g._isParent === true || str(g.parentage) === 'parent') return str(g.sku)
-    return str(g.parent_sku)
+    const viaPlatform = parentSkuByPlatformId.get(str(g.platformProductId))
+    return str(g.parent_sku) || viaPlatform || ''
   }
   const gridBySku = new Map<string, Row[]>()
   for (const g of gridRows) {
