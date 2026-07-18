@@ -41,7 +41,7 @@ import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, toListin
 import { parseThemeAxes } from '../services/ebay-theme-axes.js';
 import { pushSharedListings, type SharedListingResult } from '../services/ebay-shared-listing-push.service.js';
 import { callTradingApi, siteIdForMarket } from '../services/ebay-trading-api.service.js';
-import { reconcileMembershipsFromEbay } from '../services/ebay-membership-reconcile.service.js';
+import { reconcileMembershipsFromEbay, parseLiveVariations } from '../services/ebay-membership-reconcile.service.js';
 import { relabelListingToPoolSkus } from '../services/ebay-variation-relabel.service.js';
 import { addVariationsToListing } from '../services/ebay-variation-add.service.js';
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot, buildBestOfferTerms, resolveQuantityLimitPerBuyer, resolvePerMarketContent } from '../services/ebay-variation-push.service.js';
@@ -1530,7 +1530,23 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           // multi-variation listing (same variant SKU may repeat across parents),
           // instead of the unique-SKU Inventory-API group. Flag lives on the parent.
           const sharedParent = familyRows.find((r) => r._isParent) ?? familyRows[0]
-          if (sharedParent?.shared_sku_listing === true) {
+          // GALE-primary incident (2026-07-18): a family whose REAL child rows
+          // carry a live ItemID OWNS that listing as its Inventory-API primary.
+          // Routing it through the Trading shared branch dead-ends at the adopt
+          // belt (Inventory-managed listings reject Trading revises) — missing
+          // variations could NEVER be added by publish (19/20, units short).
+          // A stray shared flag on the primary's row must not change its lane:
+          // Lane-A ownership wins; the shared branch serves EXTRA listings
+          // (shell parents publish alone — their children are synthesized).
+          const ownsLaneAListing = familyRows.some((r) =>
+            (r as Record<string, unknown>)._shared !== true &&
+            (r as Record<string, unknown>)._isParent !== true &&
+            /^\d+$/.test(String((r as Record<string, unknown>)[`${mp.toLowerCase()}_item_id`] ?? '')),
+          )
+          if (sharedParent?.shared_sku_listing === true && ownsLaneAListing) {
+            request.log.info({ familyKey, market: mp }, 'ebay/push: shared flag on Lane-A-owning family — routed via Inventory group (primary listing)')
+          }
+          if (sharedParent?.shared_sku_listing === true && !ownsLaneAListing) {
             const sharedResults: SharedListingResult[] = await pushSharedListings(
               familyRows as Array<Record<string, unknown>>,
               { oauthToken: token, market: mp, capQty: capToFbm },
@@ -1697,6 +1713,30 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             { warningsSink: axisWarnings, parentContent: themedParentContent }, // EFX D7 warnings + P9e per-market parent content (ED.2: theme-rendered)
           );
           perRowResults.push(...groupResults);
+
+          // Post-publish PARITY GUARD (GALE incident 2026-07-18: 19/20
+          // variations live, 367 vs 398 units — silent for weeks). Read the
+          // live listing back and compare against this push's child rows;
+          // drift becomes a loud warning in the SAME push, never silent.
+          try {
+            const prefixP = mp.toLowerCase()
+            const famItemIdRow = familyRows.find((r) => /^\d+$/.test(String((r as Record<string, unknown>)[`${prefixP}_item_id`] ?? '')))
+            const famItemId = String((famItemIdRow as Record<string, unknown> | undefined)?.[`${prefixP}_item_id`] ?? '')
+            const groupOk = groupResults.every((g) => g.status !== 'ERROR')
+            if (groupOk && /^\d+$/.test(famItemId)) {
+              const parityXml = `<?xml version="1.0" encoding="utf-8"?>\n<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${famItemId}</ItemID></GetItemRequest>`
+              const parityGot = await callTradingApi('GetItem', parityXml, { oauthToken: token, siteId: siteIdForMarket(mp) })
+              const liveVars = parseLiveVariations(parityGot.raw)
+              const childRowsP = familyRows.filter((r) => (r as Record<string, unknown>)._isParent !== true && String((r as Record<string, unknown>).sku ?? '').trim())
+              if (liveVars.length > 0 && liveVars.length < childRowsP.length) {
+                const liveSet = new Set(liveVars.map((v) => v.sku))
+                const missing = childRowsP.map((r) => String((r as Record<string, unknown>).sku)).filter((sk) => !liveSet.has(sk))
+                axisWarnings.push(`parity: listing ${famItemId} shows ${liveVars.length}/${childRowsP.length} variations live — missing: ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? '…' : ''} (eBay can take a minute to reflect just-added variations; re-run Verify if this persists)`)
+              }
+            }
+          } catch (err) {
+            request.log.warn({ err, familyKey }, 'ebay/push: parity read-back failed (non-fatal)')
+          }
           continue;
         }
 
@@ -1705,6 +1745,29 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         const sku = row.sku as string;
         if (!sku) {
           perRowResults.push({ sku: '', market: mp, status: 'ERROR', message: 'Missing SKU' });
+          continue;
+        }
+        // Shell/extra-listing parent alone (its children are synthesized _shared
+        // rows that never ride a push): route through the shared push — the
+        // adopt belt makes it a safe no-op (POOL). The single-SKU path would
+        // mint a phantom standalone offer for the parent SKU.
+        if (row.shared_sku_listing === true && String((row as Record<string, unknown>).parentage ?? '').trim().toLowerCase() === 'parent') {
+          try {
+            const sharedResults: SharedListingResult[] = await pushSharedListings(
+              [row] as Array<Record<string, unknown>>,
+              { oauthToken: token, market: mp, capQty: capToFbm },
+            )
+            for (const sr of sharedResults) {
+              perRowResults.push({
+                sku: sr.parentSku, market: mp,
+                status: sr.status === 'ERROR' ? 'ERROR' : sr.status === 'SKIPPED_EXISTS' ? 'POOL' : 'PUSHED',
+                message: sr.itemId ? `${sr.message} (ItemID ${sr.itemId})` : sr.message,
+                itemId: sr.itemId,
+              })
+            }
+          } catch (err) {
+            perRowResults.push({ sku, market: mp, status: 'ERROR', message: `shared listing push failed: ${err instanceof Error ? err.message : String(err)}` })
+          }
           continue;
         }
         // Multi-listing belt: an explicit CHILD alone in its "family" means its
