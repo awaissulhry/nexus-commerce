@@ -1,11 +1,9 @@
-import "dotenv/config";
-import { resolve } from "path";
-import { config } from "dotenv";
-
-// Load root .env so DATABASE_URL is available
-config({ path: resolve(new URL(".", import.meta.url).pathname, "../../../.env") });
-
-// Import prisma from the @nexus/database package
+// './env.js' MUST stay the first import: @nexus/database constructs its
+// pg Pool at import time, so DATABASE_URL has to be in process.env before
+// that module evaluates. A dotenv call in THIS module's body would run too
+// late (ESM evaluates imports before the body) — that was exactly the bug
+// that sent tsx scripts to localhost instead of the configured database.
+import "./env.js";
 import prisma from "@nexus/database";
 
 export default prisma;

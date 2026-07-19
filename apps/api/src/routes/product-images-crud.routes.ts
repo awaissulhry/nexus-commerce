@@ -44,8 +44,10 @@ import { analyzeProductImage } from '../services/ai/image-vision.service.js'
 import { generateLifestyleImage, type ImagenAspectRatio } from '../services/ai/image-generation.service.js'
 import { applyImagesToProducts } from '../services/images/bulk-apply.service.js'
 import {
+  DHASH256_NEAR_DUP_THRESHOLD,
   NEAR_DUP_HAMMING_THRESHOLD,
   aHashBuffer,
+  dHash256Buffer,
   hammingHex,
   sha256Buffer,
 } from '../services/images/image-hash.service.js'
@@ -147,26 +149,32 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
       // original sortOrder; a no-op upload shouldn't reshuffle.
       const existing = await prisma.productImage.count({ where: { productId: id } })
 
-      // IE.2 — Compute the perceptual hash locally (sharp aHash) BEFORE
+      // IE.2 — Compute the perceptual hashes locally (sharp) BEFORE
       // Cloudinary so a near-dup miss short-circuits the upload. Local
-      // hashing also keeps the algorithm uniform with the IE.2 backfill,
-      // which runs the same function on Amazon-synced rows that never
+      // hashing also keeps the algorithm uniform with the backfills,
+      // which run the same functions on Amazon-synced rows that never
       // touched Cloudinary. Fail-open: a sharp decode error logs and
-      // proceeds with perceptualHash=null rather than blocking upload.
+      // proceeds with NULL hashes rather than blocking upload.
       let perceptualHash: string | null = null
+      let dhash256: string | null = null
       try {
         perceptualHash = await aHashBuffer(buf)
+        dhash256 = await dHash256Buffer(buf)
       } catch (e) {
-        req.log.warn({ err: e, productId: id }, 'aHash failed; proceeding without pHash')
+        req.log.warn({ err: e, productId: id }, 'perceptual hashing failed; proceeding without')
       }
 
-      // IE.1.3 — Near-duplicate gate. We now have a pHash; scan existing
-      // rows on this product and surface the closest match within the
-      // Hamming threshold. The FE shows a "looks similar to this one —
-      // use existing or upload anyway?" modal, and the operator can
-      // re-submit with ?force=true to bypass. Done BEFORE the Cloudinary
-      // upload so a "use existing" decision doesn't waste an upload.
-      if (perceptualHash && !force) {
+      // IE.1.3 + IE.13 — Near-duplicate gate. aHash alone collapses
+      // same-silhouette catalog shots and same-template artwork to the
+      // same 64 bits (live-catalog calibration: 44 blocked pairs, 100%
+      // different bytes), so a 409 now requires BOTH hashes to agree:
+      // aHash ≤ 6 AND dhash256 ≤ 26. Candidates missing dhash256 (not
+      // yet backfilled) fail open — a missed warning is recoverable,
+      // a false block is the bug this fixes. The FE shows a "looks
+      // similar — use existing or upload anyway?" modal; ?force=true
+      // bypasses. Done BEFORE the Cloudinary upload so a "use existing"
+      // decision doesn't waste an upload.
+      if (perceptualHash && dhash256 && !force) {
         const candidates = await prisma.productImage.findMany({
           where: { productId: id, perceptualHash: { not: null } },
           select: {
@@ -175,17 +183,26 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
             type: true,
             alt: true,
             perceptualHash: true,
+            dhash256: true,
             width: true,
             height: true,
           },
         })
         let best: { id: string; url: string; type: string; alt: string | null; width: number | null; height: number | null } | null = null
         let bestDistance = Number.POSITIVE_INFINITY
+        let bestDhashDistance: number | null = null
         for (const c of candidates) {
           if (!c.perceptualHash) continue
           const d = hammingHex(c.perceptualHash, perceptualHash)
-          if (d < bestDistance) {
+          if (d > NEAR_DUP_HAMMING_THRESHOLD) continue
+          if (!c.dhash256) continue // not backfilled yet — fail open
+          const d256 = hammingHex(c.dhash256, dhash256)
+          if (d256 > DHASH256_NEAR_DUP_THRESHOLD) continue
+          // Rank surviving candidates by the finer-grained hash so the
+          // modal shows the closest match, not the first row scanned.
+          if (bestDhashDistance === null || d256 < bestDhashDistance) {
             bestDistance = d
+            bestDhashDistance = d256
             best = {
               id: c.id,
               url: c.url,
@@ -196,13 +213,15 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
             }
           }
         }
-        if (best && bestDistance <= NEAR_DUP_HAMMING_THRESHOLD) {
-          // No Cloudinary asset to roll back — we now hash BEFORE
-          // upload, so the 409 path never spent any Cloudinary cost.
+        if (best) {
+          // No Cloudinary asset to roll back — we hash BEFORE upload,
+          // so the 409 path never spent any Cloudinary cost.
           return reply.status(409).send({
             error: 'NEAR_DUPLICATE',
             hammingDistance: bestDistance,
             threshold: NEAR_DUP_HAMMING_THRESHOLD,
+            dhash256Distance: bestDhashDistance,
+            dhash256Threshold: DHASH256_NEAR_DUP_THRESHOLD,
             candidate: best,
           })
         }
@@ -230,6 +249,7 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
           mimeType: formatToMimeType(cloudResult.format),
           contentHash,
           perceptualHash,
+          dhash256,
         },
       })
 

@@ -2123,6 +2123,13 @@ model ProductImage {
   /// human review.
   contentHash    String?
   perceptualHash String?
+  /// IE.13 — 256-bit difference hash (17×16 grayscale, horizontal
+  /// gradient sign), 64 hex chars. Second opinion for the near-dup
+  /// gate: the 8×8 aHash collapses same-silhouette catalog shots (and
+  /// same-template artwork like per-market size charts) to identical
+  /// hashes, so a 409 requires BOTH aHash ≤ 6 AND dhash256 ≤ 26.
+  /// NULL until upload (new rows) or the dhash256 backfill (legacy).
+  dhash256       String?
 
   /// IR.4 — Self-FK for the in-app image editor. When the operator crops /
   /// rotates / flips an existing master image, the result is saved as a NEW

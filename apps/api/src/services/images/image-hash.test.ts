@@ -15,8 +15,10 @@
 
 import sharp from 'sharp'
 import {
+  DHASH256_NEAR_DUP_THRESHOLD,
   NEAR_DUP_HAMMING_THRESHOLD,
   aHashBuffer,
+  dHash256Buffer,
   hammingHex,
   sha256Buffer,
 } from './image-hash.service.js'
@@ -165,6 +167,62 @@ test('aHashBuffer differs for visually different images', async () => {
     .toBuffer()
   const d = hammingHex(await aHashBuffer(dark), await aHashBuffer(light))
   assert(d > NEAR_DUP_HAMMING_THRESHOLD, `distinct images should differ by > ${NEAR_DUP_HAMMING_THRESHOLD}, got ${d}`)
+})
+
+// ── IE.13 — dHash-256 ─────────────────────────────────────────────────
+
+/** Deterministic pseudo-photo: smooth 2-D gradient + a few blocks. */
+async function syntheticPhoto(blocks: Array<{ x: number; y: number; s: number; v: number }>): Promise<Buffer> {
+  const W = 256
+  const raw = Buffer.alloc(W * W)
+  for (let y = 0; y < W; y++)
+    for (let x = 0; x < W; x++)
+      raw[y * W + x] = Math.floor((x / W) * 128 + (y / W) * 96)
+  for (const b of blocks)
+    for (let y = b.y; y < Math.min(W, b.y + b.s); y++)
+      for (let x = b.x; x < Math.min(W, b.x + b.s); x++)
+        raw[y * W + x] = b.v
+  return sharp(raw, { raw: { width: W, height: W, channels: 1 } }).png().toBuffer()
+}
+
+test('dHash256Buffer emits 64 hex chars and is deterministic', async () => {
+  const buf = await syntheticPhoto([{ x: 32, y: 32, s: 64, v: 10 }])
+  const a = await dHash256Buffer(buf)
+  const b = await dHash256Buffer(buf)
+  assertEq(a, b)
+  assertEq(a.length, 64, 'dHash256 must be 64 hex chars (256 bits)')
+  assert(/^[0-9a-f]{64}$/.test(a), 'must be lowercase hex')
+})
+
+test('dHash256Buffer survives resize + recompression (true-dup case)', async () => {
+  // The case the gate MUST keep catching: same image re-exported at a
+  // different resolution / JPEG quality.
+  const source = await syntheticPhoto([
+    { x: 40, y: 60, s: 80, v: 15 },
+    { x: 150, y: 120, s: 50, v: 230 },
+  ])
+  const resized = await sharp(source).resize(120, 120).jpeg({ quality: 70 }).toBuffer()
+  const d = hammingHex(await dHash256Buffer(source), await dHash256Buffer(resized))
+  assert(d <= DHASH256_NEAR_DUP_THRESHOLD, `re-export distance ${d} must be ≤ ${DHASH256_NEAR_DUP_THRESHOLD}`)
+})
+
+test('dHash256Buffer separates different layouts that share a palette', async () => {
+  // Two "shots" with the same global brightness (identical aHash-style
+  // statistics) but different structure — the false-positive family.
+  const shotA = await syntheticPhoto([
+    { x: 30, y: 30, s: 90, v: 20 },
+    { x: 160, y: 40, s: 40, v: 240 },
+  ])
+  const shotB = await syntheticPhoto([
+    { x: 130, y: 120, s: 90, v: 20 },
+    { x: 40, y: 170, s: 40, v: 240 },
+  ])
+  const d = hammingHex(await dHash256Buffer(shotA), await dHash256Buffer(shotB))
+  assert(d > DHASH256_NEAR_DUP_THRESHOLD, `different layouts should differ by > ${DHASH256_NEAR_DUP_THRESHOLD}, got ${d}`)
+})
+
+test('DHASH256_NEAR_DUP_THRESHOLD matches the route expectation', () => {
+  assertEq(DHASH256_NEAR_DUP_THRESHOLD, 26)
 })
 
 let passed = 0
