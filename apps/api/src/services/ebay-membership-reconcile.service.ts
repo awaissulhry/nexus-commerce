@@ -258,7 +258,11 @@ export async function reconcileMembershipsFromEbay(
     await prisma.sharedListingMembership.upsert({
       where: { marketplace_itemId_sku: { marketplace: market, itemId, sku: e.liveSku } },
       update: {
-        productId: e.productId,
+        // Incident #42b — an UNMATCHED re-run must never destroy an existing
+        // pool link: a colour that collides across families (ambiguity refusal)
+        // yields productId null, and writing that null would sever a
+        // previously-established, working linkage. Null never overwrites.
+        ...(e.productId ? { productId: e.productId } : {}),
         variationSpecifics: e.specifics,
         ...(e.price != null ? { price: new Prisma.Decimal(e.price) } : {}),
         parentSku,
