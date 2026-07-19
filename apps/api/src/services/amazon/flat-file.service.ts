@@ -3135,7 +3135,7 @@ export class AmazonFlatFileService {
     const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
     const languageTag   = LANGUAGE_TAG_MAP[mp] ?? 'it_IT'
     const channelMarket = `AMAZON_${mp}`
-    const result = { synced: 0, created: 0, skipped: 0, errors: [] as Array<{ sku: string; error: string }>, versions: {} as Record<string, number> }
+    const result = { synced: 0, created: 0, skipped: 0, errors: [] as Array<{ sku: string; error: string; currentVersion?: number }>, versions: {} as Record<string, number> }
 
     const validRows = rows.filter((r) => {
       const sku = String(r.item_sku ?? '').trim()
@@ -3473,7 +3473,14 @@ export class AmazonFlatFileService {
             if (updated?.version != null) result.versions[sku] = Number(updated.version)
           } catch (e) {
             if (isVersionConflict(e)) {
-              result.errors.push({ sku, error: 'Changed elsewhere since you pulled — re-pull this product before saving (version conflict).' })
+              // FFT.1 — carry the row's CURRENT version so the client can adopt
+              // it (row stays dirty; the next Save then passes CAS and the
+              // operator's data wins knowingly, instead of a dead-end loop).
+              result.errors.push({
+                sku,
+                error: 'Changed elsewhere since you pulled — this row was NOT saved. Save again to overwrite with your version.',
+                currentVersion: e.currentVersion ?? undefined,
+              })
             } else {
               throw e
             }
@@ -3482,7 +3489,11 @@ export class AmazonFlatFileService {
           await this.prisma.channelListing.create({
             data: { productId: product.id, ...listingPayload } as any,
           })
-          result.created++
+          // FFT.1 — `created` counts ROWS (the client toast says "N new
+          // products"): a product created in the FFC pre-pass this save already
+          // counted itself, so its listing-create must not double-count
+          // (battery A-ACCT-CREATE measured created=4 for 2 rows).
+          if (!createdProductIds.includes(product.id)) result.created++
         }
 
         // ── Product hierarchy + type + fulfillment method ──────────

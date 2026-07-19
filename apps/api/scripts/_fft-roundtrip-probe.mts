@@ -79,9 +79,10 @@ try {
 
   // ── L-413: oversized bodies on save/publish endpoints ──────────────────────
   {
-    const bigRows = Array.from({ length: 600 }, (_, i) => ({
-      item_sku: `FFT-413-${i}`,
-      sku: `FFT-413-${i}`,
+    // Deliberately SKU-LESS: once the body limit is lifted these rows reach the
+    // real handlers, and sku-less rows are inert in every lane (Amazon errors
+    // per-row, eBay skips, push/publish gate) — nothing can be written.
+    const bigRows = Array.from({ length: 600 }, () => ({
       item_name: 'x'.repeat(1800),
       title: 'x'.repeat(1800),
     }))
@@ -176,8 +177,12 @@ try {
         rows: [{ ...aRows2[1], _version: 1, item_name: 'should-conflict' }], marketplace: MP, productType: PT,
       })
       const b4 = s4.json() as any
-      const conflict = (b4.errors ?? []).some((e: any) => /version conflict/i.test(String(e.error ?? '')))
-      record('A-VER-STALE', conflict, conflict ? 'stale version surfaced as per-row conflict error' : `no conflict error surfaced (errors: ${JSON.stringify(b4.errors ?? [])})`)
+      const conflictEntry = (b4.errors ?? []).find((e: any) => /version conflict|Changed elsewhere/i.test(String(e.error ?? '')))
+      record('A-VER-STALE', Boolean(conflictEntry), conflictEntry ? 'stale version surfaced as per-row conflict error' : `no conflict error surfaced (errors: ${JSON.stringify(b4.errors ?? [])})`)
+      // FFT.1 contract — the conflict error carries the row's CURRENT version so
+      // the client can adopt it and the operator's next Save wins knowingly.
+      record('A-CONFLICT-VERSION', conflictEntry?.currentVersion != null && Number.isFinite(Number(conflictEntry.currentVersion)),
+        `conflict entry currentVersion=${conflictEntry?.currentVersion}`)
     }
   }
 

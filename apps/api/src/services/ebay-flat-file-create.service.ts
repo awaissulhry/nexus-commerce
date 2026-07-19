@@ -68,6 +68,36 @@ export interface EbayCreatePrisma {
  * @param prisma  PrismaClient (or test-injectable mock matching EbayCreatePrisma).
  * @param rows    Flat rows as received by PATCH /rows — same array the handler loops over.
  */
+/** FFT.1 — the P2002 "idempotent recovery" resolves only ALIVE products; a SKU
+ *  held by a soft-deleted product previously fell through with no idMap entry
+ *  AND no error (the battery's proven silent loss, E-ACCT-DELETED-SKU). Every
+ *  unrecovered SKU becomes a named error, precise when a deleted twin is the
+ *  cause. Reporting must never throw. */
+async function reportUnrecoveredSkus(
+  p: EbayCreatePrisma,
+  unrecovered: Array<{ sku: string; tempRowId: string }>,
+  errors: CreateResult['errors'],
+): Promise<void> {
+  if (!unrecovered.length) return
+  let deletedSet = new Set<string>()
+  try {
+    const twins = (await p.product.findMany({
+      where: { sku: { in: unrecovered.map(u => u.sku) }, deletedAt: { not: null } },
+      select: { sku: true },
+    })) as Array<{ sku: string }>
+    deletedSet = new Set(twins.map(t => t.sku))
+  } catch { /* fall through to the generic message */ }
+  for (const u of unrecovered) {
+    errors.push({
+      sku: u.sku,
+      tempRowId: u.tempRowId,
+      reason: deletedSet.has(u.sku)
+        ? 'SKU belongs to a DELETED product — restore it or use a different SKU; the row was NOT saved.'
+        : 'SKU already in use but could not be resolved to a live product; the row was NOT saved.',
+    })
+  }
+}
+
 export async function runEbayFlatFileCreates(
   prisma: EbayCreatePrisma | PrismaClient,
   rows: EbayRow[],
@@ -264,6 +294,13 @@ export async function runEbayFlatFileCreates(
             idMap.push({ tempRowId: child.tempRowId, sku: child.sku, productId: childRealId })
           }
         }
+        // FFT.1 — anything the recovery could not resolve is reported, never dropped.
+        const unrecovered4a: Array<{ sku: string; tempRowId: string }> = []
+        if (!foundBySku.has(parentEntry.sku)) unrecovered4a.push({ sku: parentEntry.sku, tempRowId: parentEntry.tempRowId })
+        for (const child of children) {
+          if (!foundBySku.has(child.sku)) unrecovered4a.push({ sku: child.sku, tempRowId: child.tempRowId })
+        }
+        await reportUnrecoveredSkus(p, unrecovered4a, errors)
       } else {
         errors.push({
           sku: parentEntry.sku,
@@ -324,6 +361,11 @@ export async function runEbayFlatFileCreates(
             idMap.push({ tempRowId: child.tempRowId, sku: child.sku, productId: childRealId })
           }
         }
+        // FFT.1 — anything the recovery could not resolve is reported, never dropped.
+        const unrecovered4b = children
+          .filter(child => !foundBySku.has(child.sku))
+          .map(child => ({ sku: child.sku, tempRowId: child.tempRowId }))
+        await reportUnrecoveredSkus(p, unrecovered4b, errors)
       } else {
         errors.push({
           reason: `Create failed for children of existing parent ${existingParentId}: ${err instanceof Error ? err.message : String(err)}`,

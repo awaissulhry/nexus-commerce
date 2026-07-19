@@ -344,11 +344,16 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // FFT.1 — save/publish endpoints share the FX 32 MB body limit: rows carry the
+  // full 80+ column snapshot, so a few hundred rows breach Fastify's 1 MB default
+  // (prod-confirmed HTTP 413 on Save). Declared here, above the first consumer.
+  const FX_BODY_LIMIT = 32 * 1024 * 1024
+
   // ── POST /api/amazon/flat-file/submit ───────────────────────────────
   // Accepts an array of rows, submits them as a JSON_LISTINGS_FEED to SP-API.
   fastify.post<{
     Body: { rows: any[]; marketplace?: string; expandedFields?: Record<string, string>; deepFields?: Record<string, any>; productType?: string; overrideCompliance?: boolean }
-  }>('/amazon/flat-file/submit', async (request, reply) => {
+  }>('/amazon/flat-file/submit', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
     const { rows, marketplace = 'IT', expandedFields = {}, deepFields = {}, productType, overrideCompliance } = request.body
     const mp = marketplace.toUpperCase()
     const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
@@ -848,7 +853,8 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // default 1 MB bodyLimit rejected any real-world workbook before our inline
   // size guards ever ran — a 344-column Amazon template breaches 1 MB at ~40
   // rows. 32 MB matches the inline caps below (15/20 MB) + JSON/base64 headroom.
-  const FX_BODY_LIMIT = 32 * 1024 * 1024
+  // (FFT.1 — FX_BODY_LIMIT itself is declared above the submit route so the
+  // save/publish endpoints share it.)
 
   // ── POST /api/amazon/flat-file/parse-tsv ────────────────────────────
   // Parse an uploaded TSV flat file (Amazon format) into rows.
@@ -1398,7 +1404,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       expandedFields?: Record<string, string>
       isPublished?: boolean
     }
-  }>('/amazon/flat-file/sync-rows', async (request, reply) => {
+  }>('/amazon/flat-file/sync-rows', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
     const { rows, marketplace = 'IT', expandedFields = {}, isPublished = false } = request.body
     if (!rows || rows.length === 0) {
       return reply.code(400).send({ error: 'rows must be non-empty' })

@@ -644,13 +644,18 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // FFT.1 — save/push/publish share the FX 32 MB body limit: rows carry the full
+  // 81-column snapshot, so real sheets breach Fastify's 1 MB default
+  // (prod-confirmed HTTP 413). Declared here, above the first consumer.
+  const FX_BODY_LIMIT = 32 * 1024 * 1024;
+
   // ── PATCH /api/ebay/flat-file/rows ──────────────────────────────────
   // Accept flat rows with market-prefixed fields. For each market,
   // find-or-create the ChannelListing and update it. Creates
   // OutboundSyncQueue entries when price or qty actually changes.
   fastify.patch<{
     Body: { rows: Array<Record<string, unknown>>; marketplace?: string }
-  }>('/ebay/flat-file/rows', async (request, reply) => {
+  }>('/ebay/flat-file/rows', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
     const { rows } = request.body;
 
     if (!Array.isArray(rows) || rows.length === 0) {
@@ -673,6 +678,10 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     let saved = 0;          // rows that produced at least one ChannelListing write
     let processed = 0;      // rows iterated (legacy `saved` semantics)
     let contentOnly = 0;    // rows persisted via the snapshot-only fallback
+    // FFT.1 (Z3) — a row that doesn't persist must NEVER vanish from the
+    // response accounting: every skip lands here and the client keeps the row
+    // dirty + draft-protected (battery check E-ACCT-DELETED-SKU).
+    const rowErrors: Array<{ sku: string; rowId?: string; error: string }> = [];
 
     // FM Phase 1 — the flat-file save no longer writes the shared warehouse pool.
     // The old StockLevel/Product.totalStock write here was the AIRMESH clobber: a
@@ -782,7 +791,22 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             if (prefetched) {
               productId = prefetched;
             } else {
-              request.log.warn({ sku }, 'ebay/flat-file/rows PATCH: product not found, skipping');
+              // FFT.1 — the proven silent-loss hole: the row was neither saved
+              // nor reported (typical cause: the SKU belongs to a soft-deleted
+              // product, so the create pre-pass P2002-recovery resolves nothing
+              // and this lookup, filtered deletedAt:null, misses too). Name it.
+              const deletedTwin = await prisma.product.findFirst({
+                where: { sku, deletedAt: { not: null } },
+                select: { id: true },
+              });
+              rowErrors.push({
+                sku,
+                rowId: String((row as Record<string, unknown>)._rowId ?? '') || undefined,
+                error: deletedTwin
+                  ? 'SKU belongs to a DELETED product — restore it from /products (deleted filter) or use a different SKU. Row NOT saved.'
+                  : 'No product exists for this SKU and it could not be created. Row NOT saved.',
+              });
+              request.log.warn({ sku }, 'ebay/flat-file/rows PATCH: product not found — row reported unsaved');
               continue;
             }
           }
@@ -1270,7 +1294,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       // FFP.1 — `saved` now counts rows that produced at least one real
       // ChannelListing write (honest counter); `processed` keeps the legacy
       // rows-iterated semantics; `contentOnly` = snapshot-fallback saves.
-      return reply.send({ saved, processed, contentOnly, createResult, resolvedIds, ...(sharedMemberships ? { sharedMemberships } : {}), ...(sharedMembershipsError ? { sharedMembershipsError } : {}) });
+      return reply.send({ saved, processed, contentOnly, createResult, resolvedIds, errors: rowErrors, ...(sharedMemberships ? { sharedMemberships } : {}), ...(sharedMembershipsError ? { sharedMembershipsError } : {}) });
     } catch (err: unknown) {
       request.log.error(err, 'ebay/flat-file/rows PATCH failed');
       return reply
@@ -1294,7 +1318,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
        *  count ALWAYS reconciles ("66 pushed" vs a 105-row file confusion). */
       pooledRows?: Array<{ sku: string; itemId?: string }>;
     }
-  }>('/ebay/flat-file/push', async (request, reply) => {
+  }>('/ebay/flat-file/push', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
     const {
       rows,
       markets,
@@ -2640,7 +2664,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
   // ── POST /api/ebay/flat-file/export ─────────────────────────────────
   // A1 (XLSM hybrid) — spreadsheet-sized JSON bodies (base64 Excel / row arrays)
   // breach Fastify's default 1 MB bodyLimit long before the inline guards run.
-  const FX_BODY_LIMIT = 32 * 1024 * 1024;
+  // (FFT.1 — FX_BODY_LIMIT is declared above the PATCH /rows route, shared with
+  // save/push/publish.)
 
   // IE.1 — export the current grid to a downloadable file (tsv / csv / xlsx),
   // reusing the shared renderExport. The client sends the column list (id+label,
@@ -2942,7 +2967,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
   // Publish existing offers for selected rows + markets.
   fastify.post<{
     Body: { rowIds: string[]; markets: string[] }
-  }>('/ebay/flat-file/publish', async (request, reply) => {
+  }>('/ebay/flat-file/publish', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
     const { rowIds, markets } = request.body;
 
     if (!Array.isArray(rowIds) || rowIds.length === 0) {
