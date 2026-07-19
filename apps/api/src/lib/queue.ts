@@ -38,25 +38,67 @@ import { logger } from '../utils/logger.js'
 let _redis: Redis | null = null
 let _eventListenersAttached = false
 
+export type RedisTarget =
+  | { kind: 'url'; url: string; options: Record<string, unknown> }
+  | { kind: 'host-port'; host: string; port: number; options: Record<string, unknown> }
+
+/**
+ * RT.1 — resolve where the Redis client should dial.
+ *
+ * THE BUG THIS FIXES: the old code passed `{ url: REDIS_URL, ... }` as the
+ * ioredis options object. ioredis has NO `url` option — the key was silently
+ * ignored and the client dialed the DEFAULT localhost:6379. On Railway there
+ * is no localhost Redis, so the BullMQ instant lane could never connect no
+ * matter what REDIS_URL said (measured: 9/1295 quantity pushes <40s over 7
+ * days — everything fell back to the 60s drain cron). A URL must be ioredis's
+ * FIRST POSITIONAL argument; rediss:// gets TLS (rejectUnauthorized:false
+ * preserved from the old Upstash intent — managed proxies sometimes present
+ * intermediate certs).
+ */
+export function resolveRedisTarget(env: {
+  REDIS_URL?: string
+  REDIS_HOST?: string
+  REDIS_PORT?: string
+}): RedisTarget {
+  const base = { maxRetriesPerRequest: null as null, enableReadyCheck: false }
+  const url = env.REDIS_URL?.trim()
+  if (url) {
+    return {
+      kind: 'url',
+      url,
+      options: url.startsWith('rediss://')
+        ? { ...base, tls: { rejectUnauthorized: false } }
+        : base,
+    }
+  }
+  return {
+    kind: 'host-port',
+    host: env.REDIS_HOST || 'localhost',
+    port: parseInt(env.REDIS_PORT || '6379'),
+    options: base,
+  }
+}
+
 function getRedisConnection(): Redis {
   if (!_redis) {
-    const redisConfig = process.env.REDIS_URL?.includes('rediss://')
-      ? {
-          url: process.env.REDIS_URL,
-          tls: { rejectUnauthorized: false },
-          maxRetriesPerRequest: null as null,
-          enableReadyCheck: false,
-        }
-      : {
-          host: process.env.REDIS_HOST || 'localhost',
-          port: parseInt(process.env.REDIS_PORT || '6379'),
-          maxRetriesPerRequest: null as null,
-          enableReadyCheck: false,
-        }
-
-    _redis = new Redis(redisConfig)
+    const target = resolveRedisTarget(process.env)
+    _redis =
+      target.kind === 'url'
+        ? new Redis(target.url, target.options)
+        : new Redis({ host: target.host, port: target.port, ...target.options })
   }
   return _redis
+}
+
+/**
+ * RT.1 — cheap, never-hanging Redis state for the health endpoint. Reports the
+ * ioredis client's live connection status ('ready' = genuinely connected);
+ * never issues a command, so it cannot block on an unreachable Redis.
+ */
+export function getRedisRuntimeStatus(): { configured: boolean; status: string } {
+  const configured = Boolean(process.env.REDIS_URL || process.env.REDIS_HOST)
+  if (!_redis) return { configured, status: 'not-initialized' }
+  return { configured, status: _redis.status }
 }
 
 export const redis = {
@@ -183,6 +225,8 @@ export interface SafeEnqueueResult {
   timedOut?: boolean
   /** circuit was already open — add() skipped, cron will drain the row. */
   skipped?: boolean
+  /** RT.1 — workers disabled: instant lane has no consumers, add skipped. */
+  workersOff?: boolean
   /** add() rejected with a real error. */
   error?: string
 }
@@ -200,6 +244,15 @@ export async function addJobSafely(
   opts?: Parameters<Queue['add']>[2],
   timeoutMs: number = ENQUEUE_TIMEOUT_MS,
 ): Promise<SafeEnqueueResult> {
+  // RT.1 — no consumers, no producers. With ENABLE_QUEUE_WORKERS off the
+  // instant lane has nobody to process jobs: enqueuing would only pile
+  // unconsumed jobs into Redis (and burn a managed provider's command quota)
+  // while the PENDING DB row + 60s drain cron do the real work. Skipping here
+  // also makes the go-live flip atomic — setting ENABLE_QUEUE_WORKERS=1 turns
+  // on consumers AND producers together.
+  if (process.env.ENABLE_QUEUE_WORKERS !== '1') {
+    return { enqueued: false, skipped: true, workersOff: true }
+  }
   // Circuit open → don't even attempt; the cron drains the PENDING row.
   if (Date.now() < _enqueueCircuitOpenUntil) {
     return { enqueued: false, skipped: true }
