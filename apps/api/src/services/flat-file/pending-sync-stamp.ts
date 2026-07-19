@@ -34,6 +34,11 @@ export async function stampPendingSync(
         targetChannel: opts.channel,
         ...(region ? { OR: [{ targetRegion: region }, { targetRegion: null }] } : {}),
         syncStatus: { in: ['PENDING', 'IN_PROGRESS', 'FAILED'] },
+        // FFT.4 fix — the strip is about LISTING data the grid shows (price/
+        // qty/content), never the ads lane; and pre-launch corpses (weeks-old
+        // exhausted rows) are history, not "your change is failing".
+        syncType: { notIn: ['AD_BID_UPDATE'] },
+        createdAt: { gte: new Date(Date.now() - 7 * 24 * 3600_000) },
       },
       select: { productId: true, syncType: true, syncStatus: true },
       take: 2000,

@@ -131,11 +131,15 @@ export class ProductEventService {
     // dead/unreachable Redis (the exact silent-refresh-loss the reconcile
     // cron's header documents). addJobSafely bounds the wait + circuit-opens;
     // a skipped add is only latency — the 15-min reconcile heals the row.
+    // FFT.4 hotfix — flat-file saves emit in BURSTS (one event per saved
+    // product); a longer coalescing delay keeps the rebuild wave out of the
+    // save window entirely. Everything else keeps the snappy 2s.
+    const refreshDelay = input.metadata?.source === 'FLAT_FILE_IMPORT' ? 15000 : 2000
     void addJobSafely(
       readCacheQueue,
       'refresh',
       { productId: input.aggregateId },
-      { jobId: `cache:refresh:${input.aggregateId}`, delay: 2000 },
+      { jobId: `cache:refresh:${input.aggregateId}`, delay: refreshDelay },
     )
       .then((r) => {
         if (!r.enqueued) {

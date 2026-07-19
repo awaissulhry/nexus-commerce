@@ -26,7 +26,13 @@ export function initializeReadCacheWorker() {
     },
     {
       connection: redis.connection,
-      concurrency: 10,
+      // FFT.4 hotfix — 10 concurrent full-projection rebuilds starved the SAVE
+      // handlers' DB access during post-save bursts (a full-file save emits one
+      // refresh per product): chunk latency climbed 2s → 28s until the edge
+      // severed the request ("connection lost mid-save", operator-reproduced).
+      // The read model is a background projection — 2 lanes drain the same
+      // burst in under a minute without starving anything.
+      concurrency: 2,
     },
   )
 

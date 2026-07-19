@@ -2505,7 +2505,7 @@ export default function AmazonFlatFileClient({
         { synced: 0, created: 0, errors: [], versions: {} }
       let chunksDone = 0
       for (const chunk of chunks) {
-        const postChunk = (rowsPayload: Row[]) => fetch(`${getBackendUrl()}/api/amazon/flat-file/sync-rows`, {
+        const postChunk = (rowsPayload: Row[], signal?: AbortSignal) => fetch(`${getBackendUrl()}/api/amazon/flat-file/sync-rows`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2515,23 +2515,31 @@ export default function AmazonFlatFileClient({
             expandedFields: effectiveManifest?.expandedFields ?? {},
             isPublished,
           }),
+          signal,
         })
-        let res: Response
-        try {
-          res = await postChunk(chunk)
-        } catch {
-          await new Promise((r) => setTimeout(r, 2000))
-          const reachable = await fetch(`${getBackendUrl()}/api/health`, { signal: AbortSignal.timeout(4000) }).then((h) => h.ok).catch(() => false)
-          if (!reachable) {
-            throw new Error(`the server is unreachable (likely a deploy restart) — ${chunksDone > 0 ? `${chunksDone * chunks[0].length} row(s) from earlier chunks persisted; the rest were` : 'nothing was'} not saved. Your edits are safe in the local draft; wait ~1 minute and Save again`)
-          }
+        // FFT.4 hotfix — resilient retry LADDER: server contention or a deploy
+        // window resolves in seconds; a chunk retries with backoff instead of
+        // failing the whole Save after one blip. Every attempt is time-bounded
+        // (90 s) so a hung request can never freeze Save. Retries strip
+        // _version — our own landed attempt would false-conflict the CAS.
+        const BACKOFFS = [2000, 8000, 20000]
+        let res: Response | null = null
+        for (let attempt = 0; ; attempt++) {
           try {
-            // Retry WITHOUT _version: our own first attempt may have landed and
-            // bumped versions, which would false-conflict the CAS. Within this
-            // 2 s window the retry deliberately overwrites with OUR OWN payload.
-            res = await postChunk(chunk.map((r) => { const { _version, ...rest } = r as Row & { _version?: unknown }; return rest as Row }))
+            const payload = attempt === 0
+              ? chunk
+              : chunk.map((r) => { const { _version, ...rest } = r as Row & { _version?: unknown }; return rest as Row })
+            res = await postChunk(payload, AbortSignal.timeout(90_000))
+            break
           } catch {
-            throw new Error('the connection dropped mid-save — already-saved chunks persisted; your edits are safe in the local draft. Save again to complete the rest')
+            if (attempt >= BACKOFFS.length) {
+              const reachable = await fetch(`${getBackendUrl()}/api/health`, { signal: AbortSignal.timeout(4000) }).then((h) => h.ok).catch(() => false)
+              throw new Error(reachable
+                ? 'the connection kept dropping mid-save — already-saved chunks persisted; your edits are safe in the local draft. Save again in a minute to complete the rest'
+                : `the server is unreachable (likely a deploy restart) — ${chunksDone > 0 ? 'earlier chunks persisted; the rest were' : 'nothing was'} not saved. Your edits are safe in the local draft; wait ~1 minute and Save again`)
+            }
+            toast.info(`Saving is slow — retrying chunk ${chunksDone + 1}/${chunks.length} (attempt ${attempt + 2})…`)
+            await new Promise((r) => setTimeout(r, BACKOFFS[attempt]))
           }
         }
         const part = await res.json().catch(() => ({}))

@@ -1545,19 +1545,25 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         // FFP.1 — marketplace scopes content fields + flatFileSnapshot to the
         // ACTIVE market's listing server-side (each market file is independent).
         body: JSON.stringify({ rows: rowsChunk, marketplace: marketplaceRef.current }),
+        signal: AbortSignal.timeout(90_000), // FFT.4 hotfix — a hung request can't freeze Save
       })
-      let res: Response
-      try {
-        res = await doSave()
-      } catch {
-        await new Promise((r) => setTimeout(r, 2000))
+      // FFT.4 hotfix — resilient retry LADDER (parity with the Amazon save):
+      // contention or a deploy window resolves in seconds; retry with backoff,
+      // every attempt time-bounded so a hung request can't freeze Save.
+      const BACKOFFS = [2000, 8000, 20000]
+      let res: Response | null = null
+      for (let attempt = 0; ; attempt++) {
         try {
           res = await doSave()
+          break
         } catch {
-          const reachable = await fetch(`${BACKEND}/api/health`, { signal: AbortSignal.timeout(4000) }).then((h) => h.ok).catch(() => false)
-          throw new Error(reachable
-            ? 'the connection dropped mid-save — your edits are safe in the draft; already-saved rows persisted (idempotent), Save again to complete the rest'
-            : 'the server is unreachable (likely a deploy restart) — your edits are safe in the draft. Wait ~1 minute and Save again')
+          if (attempt >= BACKOFFS.length) {
+            const reachable = await fetch(`${BACKEND}/api/health`, { signal: AbortSignal.timeout(4000) }).then((h) => h.ok).catch(() => false)
+            throw new Error(reachable
+              ? 'the connection kept dropping mid-save — your edits are safe in the draft; already-saved rows persisted (idempotent), Save again in a minute to complete the rest'
+              : 'the server is unreachable (likely a deploy restart) — your edits are safe in the draft. Wait ~1 minute and Save again')
+          }
+          await new Promise((r) => setTimeout(r, BACKOFFS[attempt]))
         }
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
