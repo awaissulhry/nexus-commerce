@@ -91,6 +91,18 @@ function formatToMimeType(format: string | undefined): string | null {
   return `image/${f}`
 }
 
+// IE.15 — Next append position. Count-based assignment collided after
+// deletions (5 rows, delete one, count=4 duplicates the last row's
+// sortOrder); max+1 keeps appends stable until the next reorder writes
+// a fresh contiguous sequence.
+async function nextSortOrder(productId: string): Promise<number> {
+  const agg = await prisma.productImage.aggregate({
+    where: { productId },
+    _max: { sortOrder: true },
+  })
+  return (agg._max.sortOrder ?? -1) + 1
+}
+
 const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
   // ── GET /api/products/:id/images ─────────────────────────────────────
   fastify.get<{ Params: { id: string } }>(
@@ -147,7 +159,7 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
       // Count existing images to assign next sortOrder. Done after the
       // exact-dedup short-circuit because the reused row keeps its
       // original sortOrder; a no-op upload shouldn't reshuffle.
-      const existing = await prisma.productImage.count({ where: { productId: id } })
+      const existing = await nextSortOrder(id)
 
       // IE.2 — Compute the perceptual hashes locally (sharp) BEFORE
       // Cloudinary so a near-dup miss short-circuits the upload. Local
@@ -296,7 +308,7 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
       const exact = await prisma.productImage.findFirst({ where: { productId: id, contentHash } })
       if (exact) return reply.status(200).send({ ...exact, reused: 'exact' })
 
-      const existing = await prisma.productImage.count({ where: { productId: id } })
+      const existing = await nextSortOrder(id)
 
       let cloudResult
       try {
@@ -500,7 +512,7 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
 
       const derivedUrl = buildDerivedUrl(source.publicId, { crop, rotate, flipH, flipV })
 
-      const count = await prisma.productImage.count({ where: { productId: id } })
+      const count = await nextSortOrder(id)
 
       const created = await prisma.productImage.create({
         data: {
@@ -561,7 +573,7 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const { url, width, height } = buildAutoEnhanceUrl(source.publicId, preset)
-      const count = await prisma.productImage.count({ where: { productId: id } })
+      const count = await nextSortOrder(id)
 
       const created = await prisma.productImage.create({
         data: {
@@ -708,7 +720,7 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
       const width = typeof meta?.width === 'number' ? meta.width : null
       const height = typeof meta?.height === 'number' ? meta.height : null
 
-      const count = await prisma.productImage.count({ where: { productId: id } })
+      const count = await nextSortOrder(id)
       const resolvedType = type ?? 'ALT'
       const resolvedAlt = alt !== undefined ? alt : (asset.label || null)
 
@@ -916,7 +928,7 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
           folder: `product-images/${id}/ai-generated`,
         })
 
-        const count = await prisma.productImage.count({ where: { productId: id } })
+        const count = await nextSortOrder(id)
 
         const image = await prisma.productImage.create({
           data: {
