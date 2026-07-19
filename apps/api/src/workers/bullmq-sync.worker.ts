@@ -340,6 +340,10 @@ async function processOutboundSyncJob(job: Job) {
         ? new Date(Date.now() + Math.pow(2, job.attemptsMade) * 5000)
         : null
 
+      // RT.0 — a row is terminal when retries are exhausted OR the failure is
+      // non-retryable (validation-class). Both shapes must dead-letter: a
+      // terminal row without isDead is invisible to the DLQ tab forever.
+      const terminal = exhausted || !isRetryable
       await prisma.outboundSyncQueue.update({
         where: { id: queueId },
         data: {
@@ -348,8 +352,8 @@ async function processOutboundSyncJob(job: Job) {
           errorCode: syncResult.errorCode,
           retryCount: newRetryCount,
           nextRetryAt,
-          // P3.2 — mark dead when retries exhausted
-          ...(exhausted ? { isDead: true, diedAt: new Date() } : {}),
+          // P3.2 — mark dead on any terminal outcome
+          ...(terminal ? { isDead: true, diedAt: new Date() } : {}),
           payload: {
             ...(queueRecord.payload as any),
             processedBy: 'BullMQ',
@@ -359,7 +363,7 @@ async function processOutboundSyncJob(job: Job) {
         },
       })
 
-      if (exhausted) {
+      if (terminal) {
         productEventService.emit({
           aggregateId: queueRecord.productId ?? queueId,
           aggregateType: 'ChannelListing',

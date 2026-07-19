@@ -1,4 +1,5 @@
 import prisma from "../db.js";
+import { logger } from "../utils/logger.js";
 import { amazonSpApiClient } from "../clients/amazon-sp-api.client.js";
 import {
   acquireAmazonPublishToken,
@@ -28,6 +29,7 @@ import { listingPublishService } from "./listing-publish.service.js";
 import { resolveComplianceById, buildShopifyComplianceMetafields } from "./compliance-resolver.service.js";
 import { computeAvailableToPublish } from "./available-to-publish.service.js";
 import { publishOrderEvent } from "./order-events.service.js";
+import { productEventService } from "./product-event.service.js";
 import { reviseInventoryStatus as ebayReviseInventoryStatus } from "./ebay-trading-api.service.js";
 import { toListingLanguage } from "./ebay-variation-push.service.js";
 
@@ -50,6 +52,87 @@ const AD_SYNC_TYPES = [
   "AD_ENTITY_STATE_UPDATE",
   "AD_BIDDING_STRATEGY_UPDATE",
 ] as const;
+
+// ── RT.0 — failure disposition (cron drain path) ────────────────────────────
+// The old handleSyncFailure burned the 3-attempt budget in 2s/4s/8s — inside a
+// single 10-minute circuit-open episode every attempt fails and the row goes
+// terminally FAILED (invisible: no isDead). New semantics:
+//   • circuit-open / rate-limited failures are DEFERRALS: retryCount is NOT
+//     consumed, the row re-arms after the episode should have passed.
+//   • genuinely retryable failures back off 30s / 2m / 10m (+ jitter ≤20%).
+//   • non-retryable (validation-class) failures are terminal immediately.
+//   • every terminal row is dead-lettered (isDead + diedAt + SYNC_DEAD event)
+//     for parity with the BullMQ worker path (P3.2).
+
+const RETRY_BACKOFF_MS = [30_000, 120_000, 600_000] as const;
+const CIRCUIT_DEFER_MS = 5 * 60_000;
+const RATE_LIMIT_DEFER_MS = 60_000;
+
+export function withJitter(ms: number): number {
+  return Math.round(ms * (1 + Math.random() * 0.2));
+}
+
+export type FailureDisposition =
+  | { kind: "deferral"; nextRetryAt: Date; errorCode: "CIRCUIT_OPEN_DEFERRED" }
+  | { kind: "terminal"; errorCode: string }
+  | { kind: "retry"; nextRetryAt: Date; errorCode: "RETRY_SCHEDULED" };
+
+export function computeFailureDisposition(
+  queueItem: { retryCount: number; maxRetries?: number | null },
+  errorMessage: string,
+  opts?: { errorCode?: string; retryable?: boolean },
+  now: number = Date.now(),
+): FailureDisposition {
+  const isCircuitOpen =
+    opts?.errorCode === "EBAY_CIRCUIT_OPEN" || /circuit open/i.test(errorMessage);
+  const isRateLimited =
+    opts?.errorCode === "EBAY_RATE_LIMITED" || /rate limit/i.test(errorMessage);
+  if (isCircuitOpen || isRateLimited) {
+    const defer = isCircuitOpen ? CIRCUIT_DEFER_MS : RATE_LIMIT_DEFER_MS;
+    return {
+      kind: "deferral",
+      nextRetryAt: new Date(now + withJitter(defer)),
+      errorCode: "CIRCUIT_OPEN_DEFERRED",
+    };
+  }
+  if (opts?.retryable === false) {
+    return { kind: "terminal", errorCode: opts?.errorCode ?? "NON_RETRYABLE" };
+  }
+  const newRetryCount = queueItem.retryCount + 1;
+  const maxRetries = queueItem.maxRetries || 3;
+  if (newRetryCount >= maxRetries) {
+    return { kind: "terminal", errorCode: "MAX_RETRIES_EXCEEDED" };
+  }
+  const backoff =
+    RETRY_BACKOFF_MS[Math.min(newRetryCount - 1, RETRY_BACKOFF_MS.length - 1)];
+  return {
+    kind: "retry",
+    nextRetryAt: new Date(now + withJitter(backoff)),
+    errorCode: "RETRY_SCHEDULED",
+  };
+}
+
+// ── RT.0 — eBay "listing ended" auto-heal ───────────────────────────────────
+// Trading-API failures arrive as Ack=Failure with an error code in the thrown
+// message, e.g.: `eBay ReviseInventoryStatus Failure: Non puoi modificare
+// un'inserzione scaduta "256552369326". (code 21916750)`. A dead listing is a
+// PER-LISTING terminal condition: pushing at it can never succeed, and letting
+// it record circuit outcomes froze the whole marketplace lane for ~10 minutes
+// per episode (measured incident, 2026-07-19). Fail-closed: only the codes
+// below auto-end a membership; everything else keeps the existing behavior.
+const EBAY_ENDED_LISTING_CODES = new Set(
+  (process.env.NEXUS_EBAY_ENDED_CODES ?? "21916750")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+);
+
+export function matchEbayEndedListingCode(message: string): string | null {
+  for (const m of message.matchAll(/\(code (\d+)\)/g)) {
+    if (EBAY_ENDED_LISTING_CODES.has(m[1])) return m[1];
+  }
+  return null;
+}
 
 // ── eBay payload helpers (Phase 0.1) ───────────────────────────────────────
 // On eBay, price lives on the OFFER and quantity on the inventory_item — two
@@ -566,7 +649,10 @@ export class OutboundSyncService {
             stats.succeeded++;
           } else {
             // Handle retry logic
-            await this.handleSyncFailure(item, result.error || "Unknown error");
+            await this.handleSyncFailure(item, result.error || "Unknown error", {
+              errorCode: result.errorCode,
+              retryable: result.retryable,
+            });
             stats.failed++;
             stats.errors.push({
               queueId: item.id,
@@ -636,7 +722,10 @@ export class OutboundSyncService {
             });
             stats.succeeded++;
           } else {
-            await this.handleSyncFailure(item, result.error || "Unknown error");
+            await this.handleSyncFailure(item, result.error || "Unknown error", {
+              errorCode: result.errorCode,
+              retryable: result.retryable,
+            });
             stats.failed++;
             stats.errors.push({
               queueId: item.id,
@@ -1205,6 +1294,7 @@ export class OutboundSyncService {
       return {
         success: false, queueId, channel: "EBAY", status: "FAILED",
         message: "Circuit open", error: circuit.error ?? "Circuit open",
+        errorCode: "EBAY_CIRCUIT_OPEN",
       };
     }
 
@@ -1215,6 +1305,7 @@ export class OutboundSyncService {
       return {
         success: false, queueId, channel: "EBAY", status: "FAILED",
         message: "Rate limited", error: acquired.error ?? "Rate limited",
+        errorCode: "EBAY_RATE_LIMITED",
       };
     }
 
@@ -1260,6 +1351,45 @@ export class OutboundSyncService {
       await __ebayTrading.reviseInventoryStatus({ itemId, sku, quantity }, { oauthToken: token, market });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+
+      // RT.0 auto-heal — the listing no longer exists on eBay (ended/expired).
+      // This is a PER-LISTING terminal condition: end every membership riding
+      // this ItemID so the fan-out stops producing rows for it, and do NOT
+      // record a circuit outcome (a dead listing must never freeze the whole
+      // marketplace lane — that was the measured 2026-07-19 incident).
+      const endedCode = matchEbayEndedListingCode(message);
+      if (endedCode) {
+        try {
+          const ended = await prisma.sharedListingMembership.updateMany({
+            where: { marketplace: market, itemId, status: "ACTIVE" },
+            data: {
+              status: "ENDED",
+              lastError: `auto-ended (eBay code ${endedCode}): ${message.slice(0, 300)}`,
+            },
+          });
+          logger.warn("syncSharedTradingQuantity: listing ended on eBay — memberships auto-ENDED", {
+            itemId, market, sku, endedCode, membershipsEnded: ended.count,
+          });
+        } catch (healErr) {
+          logger.error("syncSharedTradingQuantity: membership auto-end failed", {
+            itemId, market,
+            error: healErr instanceof Error ? healErr.message : String(healErr),
+          });
+        }
+        writeAttemptLog({
+          channel: "EBAY", marketplace: marketplaceId, sellerId: connection.id, sku,
+          productId: payload?.productId ?? null, mode, outcome: "failed",
+          payloadDigest: digest, errorMessage: message.slice(0, 500), durationMs: Date.now() - t0,
+        });
+        return {
+          success: false, queueId, channel: "EBAY", status: "FAILED",
+          message: "eBay listing ended — memberships auto-ENDED, push permanently stopped",
+          error: message,
+          errorCode: "EBAY_LISTING_ENDED",
+          retryable: false,
+        };
+      }
+
       recordEbayOutcome(connection.id, marketplaceId, false);
       writeAttemptLog({
         channel: "EBAY", marketplace: marketplaceId, sellerId: connection.id, sku,
@@ -1567,39 +1697,72 @@ export class OutboundSyncService {
   }
 
   /**
-   * Handle sync failure with retry logic
+   * Handle sync failure with retry logic (RT.0 semantics — see
+   * computeFailureDisposition). Circuit-open/rate-limit episodes defer without
+   * consuming retry budget; terminal rows are dead-lettered + emit SYNC_DEAD.
    */
-  private async handleSyncFailure(queueItem: any, errorMessage: string): Promise<void> {
-    const newRetryCount = queueItem.retryCount + 1;
-    const maxRetries = queueItem.maxRetries || 3;
+  private async handleSyncFailure(
+    queueItem: any,
+    errorMessage: string,
+    opts?: { errorCode?: string; retryable?: boolean },
+  ): Promise<void> {
+    const disposition = computeFailureDisposition(queueItem, errorMessage, opts);
 
-    if (newRetryCount >= maxRetries) {
-      // Max retries exceeded, mark as failed
+    if (disposition.kind === "deferral") {
       await prisma.outboundSyncQueue.update({
         where: { id: queueItem.id },
         data: {
           syncStatus: "FAILED",
           errorMessage,
-          errorCode: "MAX_RETRIES_EXCEEDED",
-          retryCount: newRetryCount,
+          errorCode: disposition.errorCode,
+          // retryCount deliberately NOT incremented — the failure belongs to
+          // the circuit/rate-limit episode, not to this row.
+          nextRetryAt: disposition.nextRetryAt,
         },
       });
-    } else {
-      // Schedule retry with exponential backoff
-      const backoffMs = Math.pow(2, newRetryCount) * 1000; // 2s, 4s, 8s
-      const nextRetryAt = new Date(Date.now() + backoffMs);
-
-      await prisma.outboundSyncQueue.update({
-        where: { id: queueItem.id },
-        data: {
-          syncStatus: "FAILED",
-          errorMessage,
-          errorCode: "RETRY_SCHEDULED",
-          retryCount: newRetryCount,
-          nextRetryAt,
-        },
-      });
+      return;
     }
+
+    if (disposition.kind === "terminal") {
+      await prisma.outboundSyncQueue.update({
+        where: { id: queueItem.id },
+        data: {
+          syncStatus: "FAILED",
+          errorMessage,
+          errorCode: disposition.errorCode,
+          retryCount: queueItem.retryCount + 1,
+          isDead: true,
+          diedAt: new Date(),
+        },
+      });
+      productEventService
+        .emit({
+          aggregateId: queueItem.productId ?? queueItem.id,
+          aggregateType: "ChannelListing",
+          eventType: "SYNC_DEAD",
+          data: {
+            queueId: queueItem.id,
+            channel: queueItem.targetChannel,
+            syncType: queueItem.syncType,
+            error: errorMessage,
+            retryCount: queueItem.retryCount + 1,
+          },
+          metadata: { source: "SYSTEM" },
+        })
+        .catch(() => {});
+      return;
+    }
+
+    await prisma.outboundSyncQueue.update({
+      where: { id: queueItem.id },
+      data: {
+        syncStatus: "FAILED",
+        errorMessage,
+        errorCode: disposition.errorCode,
+        retryCount: queueItem.retryCount + 1,
+        nextRetryAt: disposition.nextRetryAt,
+      },
+    });
   }
 
   /* A4.0 — constructAmazonPayload removed; replaced by the module-level

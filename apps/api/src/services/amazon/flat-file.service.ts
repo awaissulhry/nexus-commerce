@@ -20,6 +20,8 @@ import { CategorySchemaService } from '../categories/schema-sync.service.js'
 import { parseLocaleNumber, parseLocaleInt } from '../../lib/parse-locale-number.js'
 import { casUpdateChannelListing, isVersionConflict } from '../channel-listing-cas.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
+import { applyStockMovement } from '../stock-movement.service.js'
+import { logger } from '../../utils/logger.js'
 import { extractBrowseNodes, browseNodeIdFromRow, resolveBrowseNodeId, buildPlatformAttributes, type BrowseNode } from './browse-nodes.js'
 import { emitUncoveredColumns, applyDeepValue, type DeepFieldSpec } from './flat-file-schema-walk.js'
 import { extractConditionalFields } from '../listing-wizard/conditional-requirements.js'
@@ -3291,8 +3293,9 @@ export class AmazonFlatFileService {
           isChildRow && parentSku ? (parentIdBySku.get(parentSku) ?? null) : null
         // Normalize parentage before passing to buildProductCreateInput (pure fn, no codeMap)
         const createRow = { ...rowForCreate, parentage_level: getParentageCode(String(rowForCreate.parentage_level ?? ''), String(rowForCreate.product_type ?? '')) }
+        const createInput = buildProductCreateInput(createRow, { languageTag, parentId })
         const created = await this.prisma.product.create({
-          data: { ...buildProductCreateInput(createRow, { languageTag, parentId }), importedAt: new Date() } as any,
+          data: { ...createInput, importedAt: new Date() } as any,
           select: { id: true, sku: true, isParent: true, parentId: true, productType: true },
         })
         productBySku.set(sku, created)
@@ -3300,6 +3303,36 @@ export class AmazonFlatFileService {
         await this.createProductImagesFromRow(created.id, rowForCreate)
         createdProductIds.push(created.id)
         result.created++
+
+        // RT.0 — seed the WAREHOUSE ledger for the initial quantity. The bare
+        // Product.totalStock write above is not ledger-backed; without this
+        // movement the cascade's pool math reads 0 (54 split-brain products
+        // measured on prod, 2026-07-19) and the first later movement would
+        // zero totalStock via the warehouse-only recompute. FBA rows keep
+        // legacy behavior — their stock is Amazon-side, never warehouse.
+        const initialQty = Number((createInput as { totalStock?: unknown }).totalStock ?? 0)
+        const rowChannelCode = String((createRow as Record<string, unknown>).fulfillment_channel_code ?? '')
+        if (initialQty > 0 && !/amazon|amzn|afn/i.test(rowChannelCode)) {
+          try {
+            await applyStockMovement({
+              productId: created.id,
+              change: initialQty,
+              reason: 'STOCKLEVEL_BACKFILL',
+              referenceType: 'FLAT_FILE_CREATE',
+              referenceId: sku,
+              actor: 'flat-file-import',
+              notes: 'ledger seed at product create (RT.0)',
+            })
+          } catch (seedErr) {
+            // Non-fatal: the product exists; the daily drift check surfaces
+            // any residual, and the RT.0 backfill script can repair it.
+            logger.warn('flat-file create: ledger seed failed', {
+              sku,
+              initialQty,
+              error: seedErr instanceof Error ? seedErr.message : String(seedErr),
+            })
+          }
+        }
       } catch (err) {
         result.errors.push({ sku, error: `Create failed: ${err instanceof Error ? err.message : String(err)}` })
       }

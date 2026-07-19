@@ -818,3 +818,82 @@ export async function listStockMovements(opts: {
     take: Math.min(500, opts.limit ?? 100),
   })
 }
+
+/**
+ * RT.0 — re-run the quantity cascade for a product WITHOUT a stock movement.
+ *
+ * Used to materialize listing quantities after ledger repairs: a Following
+ * FBM listing created before any movement ever ran has `quantity = null`
+ * and has never been pushed (75 such ACTIVE listings measured on prod,
+ * 2026-07-19). This recomputes totalStock from the ledger, fans out
+ * pool−buffer to Following FBM listings, and enqueues pushes — exactly the
+ * applyStockMovement pipeline minus the movement row (which requires a
+ * non-zero change).
+ *
+ * Fail-closed guard: a product whose totalStock is NOT ledger-backed
+ * (legacy direct write — totalStock > 0 with zero WAREHOUSE StockLevel
+ * rows) is REFUSED, because the warehouse-only recompute would zero it.
+ * Backfill the ledger first (see _rt0-ledger-backfill.mts).
+ */
+export async function recascadeProduct(productId: string): Promise<
+  | { ok: true; cascade: CascadeResult; newTotalStock: number }
+  | { ok: false; reason: 'NO_LEDGER'; totalStock: number }
+> {
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { totalStock: true },
+  })
+  const ledgerRows = await prisma.stockLevel.count({
+    where: { productId, location: { type: 'WAREHOUSE' } },
+  })
+  if ((product?.totalStock ?? 0) > 0 && ledgerRows === 0) {
+    return { ok: false, reason: 'NO_LEDGER', totalStock: product?.totalStock ?? 0 }
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const newTotalStock = await recomputeProductTotalStock(tx, productId)
+    const cascade = await cascadeQuantityToListings(tx, {
+      productId,
+      newTotalStock,
+      reason: 'SYNC_RECONCILIATION',
+      change: 0,
+      referenceType: 'RECASCADE',
+      actor: 'system:recascade',
+    })
+    return { cascade, newTotalStock }
+  })
+
+  // Post-commit: same instant-lane + read-cache pattern as applyStockMovement.
+  const priority =
+    process.env.NEXUS_OUTBOUND_PRIORITY === '0'
+      ? undefined
+      : outboundEnqueuePriority('SYNC_RECONCILIATION')
+  for (const queueId of result.cascade.queuedSyncIds) {
+    await addJobSafely(
+      outboundSyncQueue,
+      'sync-job',
+      {
+        queueId,
+        productId,
+        syncType: 'QUANTITY_UPDATE',
+        source: 'RECASCADE',
+        reason: 'SYNC_RECONCILIATION',
+      },
+      {
+        delay: DEFAULT_HOLD_MS,
+        jobId: queueId,
+        ...(priority !== undefined ? { priority } : {}),
+      },
+    )
+  }
+  void productReadCacheService
+    .refresh(productId)
+    .catch((err) =>
+      logger.warn('recascadeProduct: read-cache refresh failed (reconcile cron will heal)', {
+        productId,
+        err: err instanceof Error ? err.message : String(err),
+      }),
+    )
+
+  return { ok: true, cascade: result.cascade, newTotalStock: result.newTotalStock }
+}
