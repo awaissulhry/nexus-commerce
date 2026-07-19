@@ -145,7 +145,10 @@ export const NEXUS_SP_API_NOTIFICATION_TYPES = [
   'FBA_OUTBOUND_SHIPMENT_STATUS',       // RT.6 (MCF)
   'FBA_INVENTORY_AVAILABILITY_CHANGES', // RT.9
   'ANY_OFFER_CHANGED',                  // RT.13
-  'LISTINGS_ITEM_STATUS_CHANGE',        // RT.14
+  // LISTINGS_ITEM_STATUS_CHANGE removed (RT.3): EventBridge-only per SP-API
+  // docs — subscribing it to an SQS destination returns 400 InvalidInput
+  // (observed in the 2026-07-20 boot self-report). Revisit with an
+  // EventBridge destination alongside LISTINGS_ITEM_MFN_QUANTITY_CHANGE.
   'FEED_PROCESSING_FINISHED',           // RT.15
   'ACCOUNT_STATUS_CHANGED',             // RT.16
 ] as const
@@ -203,6 +206,68 @@ export async function setupAllAmazonNotifications(): Promise<{
   // 2. Iterate every type. Per-type failures don't abort the loop —
   // they're surfaced in the result so the operator sees which subs
   // need scope adjustments.
+  // RT.3 — one-shot FULL RECYCLE, driven by a DB directive (no env change
+  // needed): a CronRun row jobName='amazon-notifications-recycle-request'
+  // with status RUNNING requests it. Rationale: the 2026-07-20 incident —
+  // destination + subscriptions + queue policy all verified correct, yet
+  // ZERO messages ever delivered for ANY type; the destination registration
+  // itself was defunct. Deleting it requires deleting subscriptions first
+  // ("Destination has subscriptions", HTTP 403), and only prod holds the
+  // seller token, so the recycle must run here. Order: delete subs
+  // (grantless deleteSubscriptionById) → delete destination → recreate
+  // destination → the normal loop below recreates every subscription.
+  const { default: prisma } = await import('../db.js')
+  const recycleReq = await prisma.cronRun.findFirst({
+    where: { jobName: 'amazon-notifications-recycle-request', status: 'RUNNING' },
+    orderBy: { startedAt: 'desc' },
+  })
+  if (recycleReq) {
+    logger.warn('[amazon-notifications] RECYCLE requested — rebuilding destination + subscriptions', {
+      requestId: recycleReq.id,
+    })
+    const steps: string[] = []
+    try {
+      for (const t of NEXUS_SP_API_NOTIFICATION_TYPES) {
+        try {
+          const existing = await amazonSpApiClient.request<any>('GET', `/notifications/v1/subscriptions/${t}`)
+          const subId = existing?.payload?.subscriptionId
+          if (subId) {
+            const res = await fetch(
+              `https://sellingpartnerapi-${slug}.amazon.com/notifications/v1/subscriptions/${t}/${subId}`,
+              { method: 'DELETE', headers: { 'x-amz-access-token': grantlessToken } },
+            )
+            steps.push(`delSub:${t}=${res.status}`)
+          }
+        } catch { steps.push(`delSub:${t}=absent`) }
+      }
+      if (existingDest?.destinationId) {
+        const res = await fetch(
+          `https://sellingpartnerapi-${slug}.amazon.com/notifications/v1/destinations/${existingDest.destinationId}`,
+          { method: 'DELETE', headers: { 'x-amz-access-token': grantlessToken } },
+        )
+        steps.push(`delDest=${res.status}`)
+      }
+      const destResp = await grantlessPost<any>(grantlessToken, slug, '/notifications/v1/destinations', {
+        name: queueName,
+        resourceSpecification: { sqs: { arn: sqsArn } },
+      })
+      existingDest = { destinationId: destResp.payload?.destinationId ?? destResp.destinationId }
+      steps.push(`newDest=${existingDest.destinationId}`)
+      await prisma.cronRun.update({
+        where: { id: recycleReq.id },
+        data: { status: 'SUCCESS', finishedAt: new Date(), outputSummary: steps.join(' ') },
+      }).catch(() => {})
+      logger.warn('[amazon-notifications] RECYCLE complete', { steps: steps.join(' ') })
+    } catch (err: any) {
+      steps.push(`ERROR=${err?.message ?? String(err)}`)
+      await prisma.cronRun.update({
+        where: { id: recycleReq.id },
+        data: { status: 'FAILED', finishedAt: new Date(), outputSummary: steps.join(' ').slice(0, 900), errorMessage: (err?.message ?? String(err)).slice(0, 500) },
+      }).catch(() => {})
+      logger.error('[amazon-notifications] RECYCLE failed', { error: err?.message ?? String(err) })
+    }
+  }
+
   const perType: Array<{
     type: string
     status: 'created' | 'already_exists' | 'healed' | 'failed'
