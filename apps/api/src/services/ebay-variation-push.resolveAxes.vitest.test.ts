@@ -269,7 +269,7 @@ describe('buildVariesBySpecifications', () => {
     const out = buildVariesBySpecifications(specs, {}, [])
     // No dedup — but order is DETERMINISTIC (locale alphabetical), not
     // first-seen: grid re-sorts must never change the pushed value order.
-    expect(out[0].values).toEqual(['Blu ', 'Nero', 'nero'])
+    expect(out[0].values).toEqual(['Blu ', 'nero', 'Nero']) // it-locale: lowercase collates first
   })
 
   it('falls back to a single Custom Bundle spec of SKUs when no valid spec', () => {
