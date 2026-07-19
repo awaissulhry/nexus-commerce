@@ -23,6 +23,7 @@
  */
 
 import prisma from '../../db.js'
+import { productEventService } from '../product-event.service.js'
 import { AmazonService, AMAZON_MARKETPLACE_CODE_TO_ID } from '../marketplaces/amazon.service.js'
 import { AmazonFlatFileService } from './flat-file.service.js'
 import { CategorySchemaService } from '../categories/schema-sync.service.js'
@@ -196,6 +197,7 @@ async function runJob(job: PullJob): Promise<void> {
 
   // Process SKUs sequentially so we build up asinToSku as parents are pulled.
   // The SP client handles rate-limit back-off automatically.
+  const pulledOk: Array<{ id: string; sku: string }> = []
   for (const product of products) {
     try {
       const listing = await amazonService.fetchListingForFlatFile(product.sku, marketplaceId)
@@ -312,6 +314,7 @@ async function runJob(job: PullJob): Promise<void> {
       }
 
       job.pulled++
+      pulledOk.push({ id: product.id, sku: product.sku })
     } catch (err: any) {
       job.failed++
       job.errors.push({ sku: product.sku, error: err?.message ?? 'Pull failed' })
@@ -320,12 +323,38 @@ async function runJob(job: PullJob): Promise<void> {
     job.progress++
   }
 
-  // Generate flat-file rows from DB — reuses all expansion logic in getExistingRows
+  // Generate flat-file rows from DB — reuses all expansion logic in getExistingRows.
+  // FFT.3a — the rows are built with the snapshot overlay BYPASSED and become
+  // the NEW flatFileSnapshot of every pulled listing: a pull ADOPTS Amazon
+  // truth, and the old snapshot previously masked the entire pull in the grid
+  // ("Pull visibly does nothing"). Non-pulled listings keep their snapshots.
   try {
     const amazon = new AmazonService()
     const schemaService = new CategorySchemaService(prisma, amazon)
     const flatFileService = new AmazonFlatFileService(prisma, schemaService)
-    job.rows = await flatFileService.getExistingRows(mp, pt)
+    const freshRows = await flatFileService.getExistingRows(mp, pt, undefined, 'listed', { skipSnapshotOverlay: true })
+    const rowBySku = new Map(freshRows.map((r) => [String((r as Record<string, unknown>).item_sku ?? ''), r]))
+    for (const { id, sku } of pulledOk) {
+      const row = rowBySku.get(sku)
+      if (!row) continue
+      const snap = Object.fromEntries(Object.entries(row).filter(([k]) => !k.startsWith('_')))
+      await prisma.channelListing.updateMany({
+        where: { productId: id, channel: 'AMAZON', marketplace: mp },
+        data: { flatFileSnapshot: snap } as never,
+      }).catch(() => null)
+    }
+    if (pulledOk.length > 0) {
+      try {
+        void productEventService.emitMany(pulledOk.map(({ id }) => ({
+          aggregateId: id,
+          aggregateType: 'Product' as const,
+          eventType: 'CHANNEL_LISTING_UPDATED' as const,
+          data: { channel: 'AMAZON', marketplace: mp, via: 'flat-file-pull' },
+          metadata: { source: 'OPERATOR' as const },
+        })) as Parameters<typeof productEventService.emitMany>[0])
+      } catch { /* events are best-effort */ }
+    }
+    job.rows = freshRows
   } catch {
     job.rows = []
   }

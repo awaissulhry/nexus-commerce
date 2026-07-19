@@ -30,6 +30,7 @@ delete process.env.ENABLE_QUEUE_WORKERS
 import Fastify from 'fastify'
 const amazonRoutes = (await import('../src/routes/amazon-flat-file.routes.js')).default
 const ebayRoutes = (await import('../src/routes/ebay-flat-file.routes.js')).default
+const unifiedRoutes = (await import('../src/routes/flat-file-unified.routes.js')).default
 const prisma = (await import('../src/db.js')).default
 
 const KEEP = process.argv.includes('--keep')
@@ -69,6 +70,7 @@ async function cleanup() {
 const app = Fastify() // default 1 MB bodyLimit — mirrors prod registration
 await app.register(amazonRoutes)
 await app.register(ebayRoutes)
+await app.register(unifiedRoutes)
 await app.ready()
 
 const inject = (method: 'GET' | 'POST' | 'PATCH', url: string, payload?: unknown) =>
@@ -279,6 +281,46 @@ try {
         : mentioned
           ? `row did NOT persist but the response names it (createErrors ${createErrors.length}, rowErrors ${rowErrors.length})`
           : `HTTP ${r.statusCode} saved=${b.saved} processed=${b.processed} — row neither persisted nor reported: SILENT LOSS`)
+  }
+  // ── FFT.3a: bypass writers must be VISIBLE in the grids (Z5) ───────────────
+  {
+    const aChild = await prisma.product.findFirst({ where: { sku: A_CHILD, deletedAt: null }, select: { id: true } })
+    if (!aChild) {
+      record('U-UNIFIED-AMZ', false, 'scratch amazon child missing')
+    } else {
+      const r = await inject('PATCH', '/flat-file/unified-rows', {
+        changes: [{ rowId: aChild.id, colId: 'amazon_IT_title', value: 'UNIFIED AMZ TITLE' }],
+      })
+      const g = await inject('GET', `/amazon/flat-file/rows?marketplace=${MP}&productType=${PT}&scope=all`)
+      const row = (((g.json() as any).rows ?? []) as Array<Record<string, unknown>>).find((x) => x.item_sku === A_CHILD)
+      record('U-UNIFIED-AMZ', r.statusCode === 200 && String(row?.item_name ?? '') === 'UNIFIED AMZ TITLE',
+        `HTTP ${r.statusCode}; grid item_name='${row?.item_name}' (unified edit must not be masked by the snapshot)`)
+    }
+
+    const eChildP = await prisma.product.findFirst({ where: { sku: E_CHILD, deletedAt: null }, select: { id: true } })
+    const eParentP = await prisma.product.findFirst({ where: { sku: E_PARENT, deletedAt: null }, select: { id: true } })
+    if (!eChildP || !eParentP) {
+      record('U-UNIFIED-EBAY', false, 'scratch ebay family missing')
+    } else {
+      const r = await inject('PATCH', '/flat-file/unified-rows', {
+        changes: [{ rowId: eChildP.id, colId: 'ebay_IT_title', value: 'UNIFIED EBAY TITLE' }],
+      })
+      const g = await inject('GET', `/ebay/flat-file/rows?familyId=${eParentP.id}&marketplace=IT`)
+      const row = (((g.json() as any).rows ?? []) as Array<Record<string, unknown>>).find((x) => x.sku === E_CHILD)
+      record('U-UNIFIED-EBAY', r.statusCode === 200 && String(row?.title ?? '') === 'UNIFIED EBAY TITLE',
+        `HTTP ${r.statusCode}; grid title='${row?.title}'`)
+    }
+
+    // Import-apply engine (FF2.6a) → Amazon grid via the in-write snapshot patch
+    const { applyChanges } = await import('../src/services/flat-file/import/apply.js')
+    const applyRes = await applyChanges(prisma, {
+      changes: [{ sku: A_CHILD, kind: 'update', base: 'title', column: 'title', to: 'APPLIED AMZ TITLE', sheet: 'Amazon IT', channel: 'AMAZON', market: 'IT' }],
+      masterChanges: [],
+    } as never, { scope: { channels: 'ALL', markets: 'ALL' } as never })
+    const g2 = await inject('GET', `/amazon/flat-file/rows?marketplace=${MP}&productType=${PT}&scope=all`)
+    const row2 = (((g2.json() as any).rows ?? []) as Array<Record<string, unknown>>).find((x) => x.item_sku === A_CHILD)
+    record('U-APPLY-AMZ', (applyRes as { applied: number }).applied === 1 && String(row2?.item_name ?? '') === 'APPLIED AMZ TITLE',
+      `applied=${(applyRes as { applied: number }).applied} failed=${(applyRes as { failed: number }).failed}; grid item_name='${row2?.item_name}'; row0=${JSON.stringify((applyRes as { rows?: unknown[] }).rows?.[0] ?? null)}`)
   }
 } catch (err) {
   console.error('battery crashed:', err)

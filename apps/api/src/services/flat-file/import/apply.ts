@@ -30,6 +30,7 @@ import type { ImportScope, Channel } from './scope.js'
 import { MASTER_FIELDS } from '../registry/master-fields.js'
 import { CHANNEL_MARKET_FIELDS } from '../registry/channel-fields.js'
 import type { FieldDefinition } from '../registry/types.js'
+import { productEventService } from '../../product-event.service.js'
 
 // ── Public types ───────────────────────────────────────────────────────────────
 
@@ -151,6 +152,42 @@ function captureInverse(
   return inv
 }
 
+// ── FFT.3a — snapshot patch for applied content changes ───────────────────────
+
+/** Grid ROW keys per channel for the content bases an import can change. The
+ *  flat-file grids read `flatFileSnapshot` verbatim, so an applied import that
+ *  writes only CL columns is invisible (reverts on reload) — the patch folds
+ *  into the SAME updateMany write, atomically. Live-overlay bases (price/
+ *  quantity/sale_price/stock_buffer…) need no patch: the read overlays them. */
+const APPLY_SNAPSHOT_KEY: Record<string, Record<string, string>> = {
+  AMAZON: { title: 'item_name', description: 'product_description', variation_theme: 'variation_theme' },
+  EBAY: { title: 'title', description: 'description', variation_theme: 'variation_theme' },
+}
+
+export function buildApplySnapshotPatch(
+  channel: string,
+  base: string,
+  data: Record<string, unknown>,
+  existingSnapshot: unknown,
+): Record<string, unknown> | null {
+  if (!existingSnapshot || typeof existingSnapshot !== 'object' || Array.isArray(existingSnapshot)) return null
+  const snapBase = existingSnapshot as Record<string, unknown>
+  if (Object.keys(snapBase).length === 0) return null
+  // The written value: the first non-boolean entry (governed writes carry the
+  // override value + a boolean follow flag; follow-flag-only writes have no
+  // content value and produce no patch).
+  const value = Object.values(data).find((v) => typeof v !== 'boolean')
+  if (value === undefined) return null
+  if (base === 'bullets' && channel === 'AMAZON' && Array.isArray(value)) {
+    const snap = { ...snapBase }
+    value.slice(0, 5).forEach((v, i) => { snap[`bullet_point_${i + 1}`] = String(v ?? '') })
+    return snap
+  }
+  const key = APPLY_SNAPSHOT_KEY[channel]?.[base]
+  if (!key) return null
+  return { ...snapBase, [key]: value === null ? '' : value }
+}
+
 // ── applyChanges ───────────────────────────────────────────────────────────────
 
 /**
@@ -175,6 +212,9 @@ export async function applyChanges(
 
   const rows: ApplyRowResult[] = []
   const inverseDiff: InverseCell[] = []
+  // FFT.3a — products whose listings changed; events fire AFTER a successful
+  // apply (fire-and-forget) so the grids/read-model learn about the import.
+  const touchedProductIds = new Set<string>()
   let applied = 0
   let skipped = 0
   let failed = 0
@@ -399,6 +439,17 @@ export async function applyChanges(
             })
           }
 
+          // FFT.3a — imported content must appear in the flat-file grids: fold
+          // the snapshot-key patch into this same write (atomic; existing
+          // snapshots only — a listing without one is served by the legacy
+          // expand-from-attributes read and needs no patch).
+          if (before) {
+            const snapPatch = buildApplySnapshotPatch(String(channel), base, data, (before as Record<string, unknown>).flatFileSnapshot)
+            if (snapPatch) (data as Record<string, unknown>).flatFileSnapshot = snapPatch
+            const pid = (before as Record<string, unknown>).productId
+            if (pid) touchedProductIds.add(String(pid))
+          }
+
           if (!before) {
             // New ChannelListing: CREATE and connect to the Product by SKU.
             // I1: channelMarket and region are NON-NULL columns — always include them.
@@ -444,6 +495,20 @@ export async function applyChanges(
     await prisma.$transaction(applyFn)
   } else {
     await applyFn(prisma)
+  }
+
+  // FFT.3a — announce the applied import (SSE + read-model refresh); only
+  // after the transaction committed, never blocking the result.
+  if (touchedProductIds.size > 0) {
+    try {
+      void productEventService.emitMany([...touchedProductIds].map((id) => ({
+        aggregateId: id,
+        aggregateType: 'Product' as const,
+        eventType: 'FLAT_FILE_IMPORTED' as const,
+        data: { via: 'flat-file-import-apply' },
+        metadata: { source: 'FLAT_FILE_IMPORT' as const },
+      })) as Parameters<typeof productEventService.emitMany>[0])
+    } catch { /* events are best-effort */ }
   }
 
   return { applied, skipped, failed, rows, inverseDiff }

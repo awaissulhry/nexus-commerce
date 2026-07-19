@@ -11,6 +11,8 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { writeListingContent } from '../services/flat-file/listing-content-write.service.js'
+import { productEventService } from '../services/product-event.service.js'
 
 // ─── Active channel × marketplace combos ─────────────────────────────────────
 
@@ -506,6 +508,14 @@ const flatFileUnifiedRoutes: FastifyPluginAsync = async (fastify) => {
             }
             if (Object.keys(safeUpdates).length) {
               await prisma.product.update({ where: { id: rowId }, data: safeUpdates as any })
+              // FFT.3a — master edits announce themselves (SSE + read-model).
+              void productEventService.emit({
+                aggregateId: rowId,
+                aggregateType: 'Product',
+                eventType: 'PRODUCT_UPDATED',
+                data: { via: 'unified-grid', fields: Object.keys(safeUpdates) },
+                metadata: { source: 'API' },
+              } as Parameters<typeof productEventService.emit>[0])
             }
           }
 
@@ -542,17 +552,25 @@ const flatFileUnifiedRoutes: FastifyPluginAsync = async (fastify) => {
             }
 
             if (Object.keys(updateData).length) {
-              await prisma.channelListing.upsert({
-                where: {
-                  productId_channel_marketplace: { productId: rowId, channel: 'AMAZON', marketplace: mp },
-                } as any,
-                create: {
+              // FFT.3a — through the choke point: CL write + snapshot patch +
+              // event, so the Amazon flat-file grid reflects this edit instead
+              // of masking it behind the old snapshot.
+              const snapshotKeys: Record<string, unknown> = {}
+              if ('title' in fields) snapshotKeys.item_name = fields.title
+              if ('description' in fields) snapshotKeys.product_description = fields.description
+              bulletKeys.forEach((k, i) => { if (k in fields) snapshotKeys[`bullet_point_${i + 1}`] = fields[k] })
+              if ('keywords' in fields) snapshotKeys.generic_keyword = fields.keywords
+              if ('browse_node_id' in fields) snapshotKeys.recommended_browse_nodes = fields.browse_node_id
+              await writeListingContent(prisma, {
+                target: { productId: rowId, channel: 'AMAZON', marketplace: mp },
+                fields: updateData,
+                snapshotKeys,
+                createIfMissing: {
                   productId: rowId, channel: 'AMAZON', region: mp,
                   marketplace: mp, channelMarket: `AMAZON_${mp}`,
                   listingStatus: 'DRAFT',
-                  ...updateData,
-                } as any,
-                update: updateData as any,
+                },
+                event: { productId: rowId, eventType: 'CHANNEL_LISTING_UPDATED', source: 'API', data: { channel: 'AMAZON', marketplace: mp, via: 'unified-grid' } },
               })
             }
           }
@@ -581,16 +599,21 @@ const flatFileUnifiedRoutes: FastifyPluginAsync = async (fastify) => {
 
             if (Object.keys(updateData).length) {
               const channelMarket = mp === 'UK' ? 'EBAY_GB' : `EBAY_${mp}`
-              await prisma.channelListing.upsert({
-                where: {
-                  productId_channel_marketplace: { productId: rowId, channel: 'EBAY', marketplace: region },
-                } as any,
-                create: {
+              // FFT.3a — through the choke point (snapshot patch scoped to this
+              // market's listing; price/qty are live-overlaid and need none).
+              const snapshotKeys: Record<string, unknown> = {}
+              if ('title' in fields) snapshotKeys.title = fields.title
+              if ('condition' in fields) snapshotKeys.condition = fields.condition
+              if ('category_id' in fields) snapshotKeys.category_id = fields.category_id
+              await writeListingContent(prisma, {
+                target: { productId: rowId, channel: 'EBAY', marketplace: mp },
+                fields: updateData,
+                snapshotKeys,
+                createIfMissing: {
                   productId: rowId, channel: 'EBAY', region, marketplace: region,
                   channelMarket, listingStatus: 'DRAFT',
-                  ...updateData,
-                } as any,
-                update: updateData as any,
+                },
+                event: { productId: rowId, eventType: 'CHANNEL_LISTING_UPDATED', source: 'API', data: { channel: 'EBAY', marketplace: mp, via: 'unified-grid' } },
               })
             }
           }

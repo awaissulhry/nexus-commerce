@@ -14,6 +14,7 @@
 import prisma from '../../db.js'
 import { AmazonService } from '../marketplaces/amazon.service.js'
 import { logger } from '../../utils/logger.js'
+import { productEventService } from '../product-event.service.js'
 
 const MARKETPLACE_ID_MAP: Record<string, string> = {
   IT: 'APJ6JRA9NG5V4', DE: 'A1PA6795UKMFR9', FR: 'A13V1IB3VIYZZH', ES: 'A1RKKUPIHCS9HS', UK: 'A1F83G8C2ARO7P',
@@ -37,7 +38,7 @@ export async function hydrateAmazonAttributes(
   const onlySparse = opts.onlySparse ?? true
   const all = await prisma.channelListing.findMany({
     where: { channel: 'AMAZON', externalListingId: { not: null } },
-    select: { id: true, marketplace: true, platformAttributes: true, product: { select: { sku: true } } },
+    select: { id: true, marketplace: true, platformAttributes: true, productId: true, product: { select: { sku: true } } },
     take: 5000,
   })
   let targets = onlySparse ? all.filter((l) => isSparse(l.platformAttributes)) : all
@@ -45,6 +46,11 @@ export async function hydrateAmazonAttributes(
 
   const amazon = new AmazonService()
   let hydrated = 0, skipped = 0, errors = 0
+  // FFT.3a — hydrated products announce themselves (SSE + read-model refresh).
+  // No snapshot write here BY DESIGN: keys absent from a snapshot were never
+  // operator-saved, and keys present in one are the operator's saved values
+  // legitimately winning over background enrichment.
+  const hydratedProductIds = new Set<string>()
   for (const l of targets) {
     const mpId = MARKETPLACE_ID_MAP[l.marketplace] ?? MARKETPLACE_ID_MAP.IT
     try {
@@ -62,6 +68,7 @@ export async function hydrateAmazonAttributes(
         },
       })
       hydrated++
+      if (l.productId) hydratedProductIds.add(String(l.productId))
     } catch (e) {
       errors++
       logger.warn('[hydrate-attrs] pull failed', {
@@ -69,6 +76,17 @@ export async function hydrateAmazonAttributes(
         error: e instanceof Error ? e.message : String(e),
       })
     }
+  }
+  if (hydratedProductIds.size > 0) {
+    try {
+      void productEventService.emitMany([...hydratedProductIds].map((id) => ({
+        aggregateId: id,
+        aggregateType: 'Product' as const,
+        eventType: 'CHANNEL_LISTING_UPDATED' as const,
+        data: { via: 'flat-file-hydrate' },
+        metadata: { source: 'AUTOMATION' as const },
+      })) as Parameters<typeof productEventService.emitMany>[0])
+    } catch { /* events are best-effort */ }
   }
   logger.info('[hydrate-attrs] done', { scanned: targets.length, hydrated, skipped, errors, onlySparse })
   return { scanned: targets.length, hydrated, skipped, errors }

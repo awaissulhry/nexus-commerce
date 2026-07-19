@@ -2074,6 +2074,9 @@ export class AmazonFlatFileService {
     productType?: string,
     productId?: string,
     scope: ListingScope = 'listed',
+    // FFT.3a — pull rebuilds snapshots from the LIVE row; bypassing the overlay
+    // here is the only way to get a fresh row for a listing that has one.
+    opts?: { skipSnapshotOverlay?: boolean },
   ): Promise<FlatFileRow[]> {
     const mp = marketplace.toUpperCase()
     let products: any[]
@@ -2414,7 +2417,7 @@ export class AmazonFlatFileService {
       // repricer/stock changes show; everything else comes from the snapshot. The
       // expanded `row` above is the legacy fallback for listings with no snapshot.
       const snapshot = (listing as any)?.flatFileSnapshot as Record<string, any> | null | undefined
-      if (snapshot && typeof snapshot === 'object' && Object.keys(snapshot).length > 0) {
+      if (!opts?.skipSnapshotOverlay && snapshot && typeof snapshot === 'object' && Object.keys(snapshot).length > 0) {
         return applySnapshotOverlay(snapshot, row, parentageCodeMap)
       }
 
