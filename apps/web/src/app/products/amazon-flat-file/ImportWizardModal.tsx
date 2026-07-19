@@ -49,6 +49,13 @@ interface TemplateInfo {
   familyWorkbook?: { familyKey: string } | null
 }
 
+// FFT.5b / AMX.1 — family review step
+import {
+  computeAmazonImportFamilies,
+  skippedRowIndexes,
+  type AmazonImportFamily,
+} from './importFamiliesAmazon.pure'
+
 // Owner policy (2026-07-16): quantities default OFF (the shared pool + Follow
 // columns stay authoritative; the file's qty was for the initial listing),
 // prices default ON. FBA rows never import quantity regardless.
@@ -100,7 +107,7 @@ export interface ImportWizardModalProps {
   onRequestMarketSwitch?: (marketplace: string) => void
 }
 
-type Step = 'upload' | 'mapping' | 'preview'
+type Step = 'upload' | 'mapping' | 'families' | 'preview'
 type Mode = 'fill-missing' | 'overwrite'
 
 async function fileToPayload(file: File): Promise<{ filename: string; text?: string; bytesBase64?: string }> {
@@ -144,6 +151,9 @@ export function ImportWizardModal({
   onRequestMarketSwitch,
 }: ImportWizardModalProps) {
   const [step, setStep] = useState<Step>('upload')
+  // FFT.5b / AMX.1 — family review: per-family Import/Skip before the plan.
+  const [families, setFamilies] = useState<AmazonImportFamily[] | null>(null)
+  const [skippedFamilies, setSkippedFamilies] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fileName, setFileName] = useState('')
@@ -196,6 +206,7 @@ export function ImportWizardModal({
   useEffect(() => {
     if (!open) {
       setStep('upload'); setBusy(false); setError(null); setFileName(''); setPasteText('')
+      setFamilies(null); setSkippedFamilies(new Set())
       setParsed(null); setSuggest(null); setMapping(new Map()); setCoerced(null)
       setMode('fill-missing'); setPlan(null); setOverrides({}); setExpanded(new Set())
       setAppliedPreset(null); setValidateBySku({}); setAiBusy(false); setAiMapped(new Set())
@@ -392,7 +403,7 @@ export function ImportWizardModal({
       const prices = kind === 'prices' ? value : importPrices
       const cols = [...new Set([...mapping.values()].filter(Boolean) as string[])]
         .filter((id) => (qty || !isQtyColumn(id)) && (prices || !isPriceColumn(id)))
-      const p = await buildPlan(coerced.rows, mode, cols)
+      const p = await buildPlan(planInputRows(), mode, cols)
       setPlan(p); setOverrides({})
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Re-plan failed')
@@ -418,15 +429,43 @@ export function ImportWizardModal({
         }
       } catch { /* validation is advisory */ }
       setValidateBySku(vmap)
-      const p = await buildPlan(co.rows, mode)
-      setPlan(p); setOverrides({}); setExpanded(new Set())
-      setStep('preview')
+      // AMX.1 — family review comes BEFORE the plan: group the coerced rows
+      // against the current grid, badge the integrity scenarios, let the
+      // operator Import/Skip per family, then plan only what survives.
+      const fams = computeAmazonImportFamilies(
+        co.rows as Array<Record<string, unknown>>,
+        currentRows as unknown as Array<Record<string, unknown>>,
+      )
+      setFamilies(fams)
+      setSkippedFamilies(new Set())
+      setStep('families')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Coercion failed')
     } finally {
       setBusy(false)
     }
-  }, [post, mappedRows, marketplace, suggestParams, useAi, buildPlan, mode])
+  }, [post, mappedRows, marketplace, suggestParams, useAi, currentRows])
+
+  /** Rows that survive the family Skip decisions — every plan build uses this. */
+  const planInputRows = useCallback((): Array<Record<string, unknown>> => {
+    if (!coerced) return []
+    if (!families || skippedFamilies.size === 0) return coerced.rows as Array<Record<string, unknown>>
+    const skip = skippedRowIndexes(families, skippedFamilies)
+    return (coerced.rows as Array<Record<string, unknown>>).filter((_, i) => !skip.has(i))
+  }, [coerced, families, skippedFamilies])
+
+  const goToPreviewFromFamilies = useCallback(async () => {
+    setBusy(true); setError(null)
+    try {
+      const p = await buildPlan(planInputRows(), mode)
+      setPlan(p); setOverrides({}); setExpanded(new Set())
+      setStep('preview')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Plan failed')
+    } finally {
+      setBusy(false)
+    }
+  }, [buildPlan, planInputRows, mode])
 
   // A3w — the "Switch grid to {market}" banner button changed the page market
   // while the wizard is open: re-map against the new market's manifest (the
@@ -442,6 +481,7 @@ export function ImportWizardModal({
         setSuggest(sug)
         setMapping(new Map(sug.mappings.map((m) => [m.header, m.columnId])))
         setCoerced(null); setPlan(null); setOverrides({})
+        setFamilies(null); setSkippedFamilies(new Set())
         setStep('mapping')
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Re-mapping for the new market failed')
@@ -532,12 +572,12 @@ export function ImportWizardModal({
             <span className="text-xs font-normal text-slate-500">· {marketplace} · {productTypes && productTypes.length > 1 ? `${productTypes.length} types` : productType}</span>
           </div>
           <div className="flex items-center gap-1.5 text-[11px]">
-            {(['upload', 'mapping', 'preview'] as Step[]).map((s, i) => (
+            {(['upload', 'mapping', 'families', 'preview'] as Step[]).map((s, i) => (
               <span key={s} className="flex items-center gap-1.5">
                 {i > 0 && <ChevronRight className="w-3 h-3 text-slate-300" />}
                 <span className={cn('px-2 py-0.5 rounded-full capitalize',
                   step === s ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400')}>
-                  {i + 1}. {s === 'upload' ? 'Upload' : s === 'mapping' ? 'Map' : 'Preview'}
+                  {i + 1}. {s === 'upload' ? 'Upload' : s === 'mapping' ? 'Map' : s === 'families' ? 'Families' : 'Preview'}
                 </span>
               </span>
             ))}
@@ -794,6 +834,48 @@ export function ImportWizardModal({
           )}
 
           {/* STEP 3 — preview */}
+          {step === 'families' && families && (
+            <div className="space-y-2">
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                {families.length} famil{families.length === 1 ? 'y' : 'ies'} in this file — uncheck any to leave it out of the plan entirely. Badges flag integrity risks; nothing is written until Apply.
+              </div>
+              {families.map((f) => {
+                const skipped = skippedFamilies.has(f.key)
+                return (
+                  <div key={f.key} className={`rounded border border-slate-200 dark:border-slate-700 px-3 py-2 flex items-start gap-3 ${skipped ? 'opacity-50' : ''}`}>
+                    <input
+                      type="checkbox" className="mt-1" checked={!skipped}
+                      aria-label={`Import ${f.key}`}
+                      onChange={() => setSkippedFamilies((prev) => {
+                        const n = new Set(prev)
+                        if (n.has(f.key)) n.delete(f.key); else n.add(f.key)
+                        return n
+                      })}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap text-sm">
+                        <span className="font-semibold text-slate-800 dark:text-slate-100">{f.key}</span>
+                        {f.isNewFamily && <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">NEW family</span>}
+                        {f.productType && <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">{f.productType}</span>}
+                        {f.theme && <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">{f.theme}</span>}
+                        <span className="text-xs text-slate-500 dark:text-slate-400">{f.rowCount} row{f.rowCount !== 1 ? 's' : ''} · {f.newCount} new · {f.updateCount} update</span>
+                      </div>
+                      {f.badges.length > 0 && (
+                        <div className="mt-1 space-y-0.5">
+                          {f.badges.map((b, i) => (
+                            <div key={i} className={`text-xs flex items-start gap-1.5 ${b.kind === 'orphan' || b.kind === 'reparent' ? 'text-rose-700 dark:text-rose-300' : 'text-amber-700 dark:text-amber-300'}`}>
+                              <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                              <span><b className="uppercase text-[10px] tracking-wide mr-1">{b.kind.replace('-', ' ')}</b>{b.detail}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
           {step === 'preview' && plan && (
             <div className="space-y-3">
               <div className="flex items-center gap-3 flex-wrap">
@@ -965,12 +1047,18 @@ export function ImportWizardModal({
           <div className="ml-auto flex items-center gap-2">
             {step !== 'upload' && (
               <Button variant="ghost" size="sm" disabled={busy}
-                onClick={() => { setError(null); setStep(step === 'preview' ? 'mapping' : 'upload') }}>Back</Button>
+                onClick={() => { setError(null); setStep(step === 'preview' ? 'families' : step === 'families' ? 'mapping' : 'upload') }}>Back</Button>
             )}
             <Button variant="ghost" size="sm" onClick={() => !busy && onClose()} disabled={busy}>Cancel</Button>
             {step === 'mapping' && (
               <Button size="sm" onClick={goToPreview} disabled={busy || mappedCount === 0} loading={busy}>
-                Preview <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                Review families <ArrowRight className="w-3.5 h-3.5 ml-1" />
+              </Button>
+            )}
+            {step === 'families' && (
+              <Button size="sm" onClick={goToPreviewFromFamilies} loading={busy}
+                disabled={busy || !families || families.length === skippedFamilies.size}>
+                Preview{skippedFamilies.size > 0 ? ` (${skippedFamilies.size} skipped)` : ''} <ArrowRight className="w-3.5 h-3.5 ml-1" />
               </Button>
             )}
             {step === 'preview' && (
