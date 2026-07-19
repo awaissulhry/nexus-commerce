@@ -112,10 +112,23 @@ export function canonicalizeRowAspects(row: Record<string, unknown>): number {
       continue
     }
 
-    // Unmapped aspects (no synonym group) keep their key untouched UNLESS the
-    // key's casing differs from itself (no-op) — ghosts stay as they are.
     const isKnown = ASPECT_SYNONYM_GROUPS.some((g) => (g as string[]).includes(canonicalLower))
-    if (!isKnown) continue
+    if (!isKnown) {
+      // Unmapped aspects keep their name — but SAME-NAME case-twins are
+      // unambiguous (aspect_chiusura beside aspect_Chiusura): fold the
+      // lowercase variant into the sentence-cased key so pre-#34 residue
+      // never lingers as duplicate ghost columns.
+      const sentenceKey = displayKeyFor(rawName.toLowerCase())
+      if (key !== sentenceKey && key.toLowerCase() === sentenceKey.toLowerCase()) {
+        const existing = row[sentenceKey]
+        const existingStr = typeof existing === 'string' ? existing.trim() : ''
+        if (!existingStr && strValue) row[sentenceKey] = value
+        else if (!(sentenceKey in row) && value != null) row[sentenceKey] = value
+        delete row[key]
+        folded++
+      }
+      continue
+    }
 
     const canonicalKey = displayKeyFor(canonicalLower)
     if (key === canonicalKey) continue // already the displayed canonical key

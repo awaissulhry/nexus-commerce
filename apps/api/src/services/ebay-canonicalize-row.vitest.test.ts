@@ -31,12 +31,13 @@ describe('canonicalizeRowAspects', () => {
     expect(row2.condition).toBe('NEW_WITH_TAGS') // structured field wins
     expect(row2.aspect_condition).toBeUndefined()
   })
-  it('leaves unmapped keys untouched (Body Type stays ghosted by design)', () => {
+  it('unmapped keys keep their NAME but normalize casing (Body Type stays ghosted, one key)', () => {
     const row: Record<string, unknown> = { aspect_body_type: 'Slim', aspect_marca: 'XAVIA' }
     const n = canonicalizeRowAspects(row)
-    expect(row.aspect_body_type).toBe('Slim')     // unmapped ghost untouched
+    expect(row.aspect_Body_type).toBe('Slim')     // unmapped ghost, sentence-cased key
+    expect(row.aspect_body_type).toBeUndefined()
     expect(row.aspect_Marca).toBe('XAVIA')        // known key normalizes to displayed casing
-    expect(n).toBe(1)
+    expect(n).toBe(2)
   })
   it('brand twin folds into marca', () => {
     const row: Record<string, unknown> = { aspect_brand: 'XAVIA', aspect_marca: '' }
@@ -44,5 +45,18 @@ describe('canonicalizeRowAspects', () => {
     expect(row.aspect_Marca).toBe('XAVIA')
     expect(row.aspect_brand).toBeUndefined()
     expect(row.aspect_marca).toBeUndefined()
+  })
+})
+
+describe('incident #36b — unmapped case-twins fold to the sentence-cased key', () => {
+  it('aspect_chiusura folds into aspect_Chiusura (value preserved, no dupes)', () => {
+    const row: Record<string, unknown> = { aspect_Chiusura: 'Zip', aspect_chiusura: 'Zip' }
+    canonicalizeRowAspects(row)
+    expect(row.aspect_Chiusura).toBe('Zip')
+    expect(row.aspect_chiusura).toBeUndefined()
+    const only: Record<string, unknown> = { aspect_team_name: 'XAVIA' }
+    canonicalizeRowAspects(only)
+    expect(only.aspect_Team_name).toBe('XAVIA')
+    expect(only.aspect_team_name).toBeUndefined()
   })
 })
