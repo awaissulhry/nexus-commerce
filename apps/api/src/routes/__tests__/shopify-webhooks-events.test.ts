@@ -31,6 +31,8 @@ vi.mock('../../lib/queue.js', () => ({
   readCacheQueue: {
     add: vi.fn().mockResolvedValue({}),
   },
+  // FFT.6 made product-event emit use addJobSafely; partial mock must provide it
+  addJobSafely: vi.fn().mockResolvedValue({ enqueued: true }),
 }))
 
 import { dispatchShopifyWebhook } from '../shopify-webhooks.js'

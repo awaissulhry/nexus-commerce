@@ -485,7 +485,14 @@ ${eventXml}
           const { ebayOrdersService } = await import('../services/ebay-orders.service.js')
           for (const conn of connections) {
             try {
-              await ebayOrdersService.syncEbayOrders(conn.id)
+              // RT.3 — the notification is about an order from moments ago;
+              // a 30-min ranged sync ingests it in one page instead of the
+              // old full 7-day resync per webhook (idempotent either way).
+              await ebayOrdersService.syncEbayOrdersInRange(
+                conn.id,
+                new Date(Date.now() - 30 * 60_000),
+                new Date(Date.now() + 60_000),
+              )
             } catch (err) {
               logger.warn('[eBay notification] legacy-sale order sync failed for connection', {
                 connectionId: conn.id,
@@ -509,7 +516,7 @@ ${eventXml}
     }
 
     if (topic === 'marketplace.order.created') {
-      // Trigger an immediate eBay orders sync scoped to last 5 minutes.
+      // Trigger an immediate eBay orders sync scoped to a short window.
       // The service is idempotent on (channel, channelOrderId) so re-running
       // it is safe even if the cron already picked up the same order.
       void (async () => {
@@ -521,7 +528,12 @@ ${eventXml}
           const { ebayOrdersService } = await import('../services/ebay-orders.service.js')
           for (const conn of connections) {
             try {
-              await ebayOrdersService.syncEbayOrders(conn.id)
+              // RT.3 — ranged (30-min) instead of the full 7-day resync.
+              await ebayOrdersService.syncEbayOrdersInRange(
+                conn.id,
+                new Date(Date.now() - 30 * 60_000),
+                new Date(Date.now() + 60_000),
+              )
             } catch (err) {
               logger.warn('[eBay notification] order sync failed for connection', {
                 connectionId: conn.id,

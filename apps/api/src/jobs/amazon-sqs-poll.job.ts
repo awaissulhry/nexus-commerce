@@ -30,11 +30,22 @@ async function runSqsPoll(): Promise<void> {
   running = true
   try {
     await recordCronRun('amazon-sqs-poll', async () => {
-      const messages = await pollSqsMessages(10)
-      if (messages.length === 0) return 'no messages'
-
+      // RT.3 — continuous long-poll: instead of one 1s short-poll per tick,
+      // drain the queue with 20s SQS long-polls for ~55s of each minute. A
+      // notification arriving mid-wait is returned by SQS immediately, so
+      // delivery→ingest is effectively instant; idle cost is 3 requests/min.
+      const TICK_BUDGET_MS = 55_000
+      const LONG_POLL_SECONDS = 20
+      const tickStarted = Date.now()
+      let totalMessages = 0
       let processed = 0
       let skipped = 0
+
+      // Drain loop — the `for` body below is the pre-RT.3 per-message
+      // processing, unchanged (indentation preserved to keep the diff exact).
+      while (true) {
+      const messages = await pollSqsMessages(10, LONG_POLL_SECONDS)
+      totalMessages += messages.length
 
       for (const msg of messages) {
         // P3.4 — Persist to WebhookEvent so the message appears in
@@ -492,7 +503,14 @@ async function runSqsPoll(): Promise<void> {
         await deleteSqsMessage(msg.receiptHandle)
       }
 
-      return `messages=${messages.length} processed=${processed} skipped=${skipped}`
+      // Stop when another full long-poll wouldn't fit in this tick's budget;
+      // the next cron minute continues seamlessly.
+      if (Date.now() - tickStarted >= TICK_BUDGET_MS - LONG_POLL_SECONDS * 1000) break
+      }
+
+      return totalMessages === 0
+        ? 'no messages'
+        : `messages=${totalMessages} processed=${processed} skipped=${skipped}`
     })
   } finally {
     running = false
@@ -510,14 +528,15 @@ export function startAmazonSqsPollCron(): void {
     return
   }
 
-  // Every minute in cron; we run the poll twice per tick (at 0s and 30s)
-  // using a setTimeout so effective interval is ~30 seconds.
+  // RT.3 — every minute the tick runs a ~55s continuous long-poll drain
+  // (20s SQS waits), so coverage is effectively gapless and a delivered
+  // notification is ingested within ~1s. The old double-fire setTimeout
+  // (two 1s short-polls per minute) is gone.
   scheduledTask = cron.schedule('* * * * *', () => {
     void runSqsPoll()
-    setTimeout(() => { void runSqsPoll() }, 30_000)
   })
 
-  logger.info('amazon-sqs-poll: started (every ~30s)')
+  logger.info('amazon-sqs-poll: started (continuous long-poll)')
 }
 
 export function stopAmazonSqsPollCron(): void {

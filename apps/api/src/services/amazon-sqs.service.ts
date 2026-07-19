@@ -186,7 +186,7 @@ export function isSqsConfigured(): boolean {
  * Poll up to `maxMessages` ORDER_CHANGE notifications from SQS.
  * Returns parsed messages; caller must call deleteMessage() after processing.
  */
-export async function pollSqsMessages(maxMessages = 10): Promise<SqsOrderMessage[]> {
+export async function pollSqsMessages(maxMessages = 10, waitSeconds = 1): Promise<SqsOrderMessage[]> {
   const queueUrl = process.env.AMAZON_SQS_QUEUE_URL
   if (!queueUrl) return []
 
@@ -198,7 +198,9 @@ export async function pollSqsMessages(maxMessages = 10): Promise<SqsOrderMessage
     const response = await client.send(new ReceiveMessageCommand({
       QueueUrl: queueUrl,
       MaxNumberOfMessages: Math.min(maxMessages, 10),
-      WaitTimeSeconds: 1,   // short-poll; cron fires frequently
+      // RT.3 — long-poll capable: SQS returns a message the moment it arrives
+      // during the wait window, so delivery→ingest is effectively instant.
+      WaitTimeSeconds: Math.max(1, Math.min(waitSeconds, 20)),
     }))
     raw = response.Messages ?? []
   } catch (err) {

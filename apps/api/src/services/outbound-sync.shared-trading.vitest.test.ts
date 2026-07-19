@@ -7,7 +7,11 @@ vi.mock('../db.js', () => {
   return {
     default: {
       channelConnection: { findFirst: vi.fn(async () => connection) },
-      sharedListingMembership: { updateMany: vi.fn(async () => ({ count: 1 })) },
+      sharedListingMembership: {
+        updateMany: vi.fn(async () => ({ count: 1 })),
+        // RT.2 debounce read — default: never pushed, no debounce
+        aggregate: vi.fn(async () => ({ _max: { lastPushedAt: null } })),
+      },
       outboundSyncQueue: { update: vi.fn(async () => ({})), findUnique: vi.fn(), findMany: vi.fn() },
       stockLevel: { findMany: vi.fn(async () => []) },
       channelListing: { findUnique: vi.fn(async () => null) },
@@ -53,12 +57,12 @@ describe('syncToEbay TRADING branch', () => {
     },
   }
 
-  it('calls reviseInventoryStatus with itemId/sku/quantity + market and reports SUCCESS', async () => {
-    const spy = vi.spyOn(__ebayTrading, 'reviseInventoryStatus').mockResolvedValue(undefined)
+  it('calls reviseInventoryStatusBatch (RT.2) with the normalized legacy payload and reports SUCCESS', async () => {
+    const spy = vi.spyOn(__ebayTrading, 'reviseInventoryStatusBatch').mockResolvedValue(undefined)
     const svc = new OutboundSyncService()
     const res = await (svc as any).syncToEbay(queueItem)
     expect(spy).toHaveBeenCalledWith(
-      { itemId: '110556677', sku: 'LNR-M', quantity: 7 },
+      { itemId: '110556677', entries: [{ sku: 'LNR-M', quantity: 7 }] },
       { oauthToken: 'TOKEN-XYZ', market: 'IT' },
     )
     expect(res.success).toBe(true)
@@ -74,14 +78,14 @@ describe('syncToEbay TRADING branch', () => {
 
   it('does NOT touch the Inventory-API path (no fetch) for TRADING rows', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch' as any)
-    vi.spyOn(__ebayTrading, 'reviseInventoryStatus').mockResolvedValue(undefined)
+    vi.spyOn(__ebayTrading, 'reviseInventoryStatusBatch').mockResolvedValue(undefined)
     const svc = new OutboundSyncService()
     await (svc as any).syncToEbay(queueItem)
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
   it('reports FAILED + records lastError when reviseInventoryStatus throws', async () => {
-    vi.spyOn(__ebayTrading, 'reviseInventoryStatus').mockRejectedValue(new Error('eBay ReviseInventoryStatus Failure: Item not found'))
+    vi.spyOn(__ebayTrading, 'reviseInventoryStatusBatch').mockRejectedValue(new Error('eBay ReviseInventoryStatus Failure: Item not found'))
     const svc = new OutboundSyncService()
     const res = await (svc as any).syncToEbay(queueItem)
     expect(res.success).toBe(false)
@@ -94,7 +98,7 @@ describe('syncToEbay TRADING branch', () => {
   it('is a dry-run no-op (no call) when EBAY_PUBLISH_MODE is not live', async () => {
     const { getEbayPublishMode } = await import('./ebay-publish-gate.service.js')
     vi.mocked(getEbayPublishMode).mockReturnValue('dry-run')
-    const spy = vi.spyOn(__ebayTrading, 'reviseInventoryStatus').mockResolvedValue(undefined)
+    const spy = vi.spyOn(__ebayTrading, 'reviseInventoryStatusBatch').mockResolvedValue(undefined)
     const svc = new OutboundSyncService()
     const res = await (svc as any).syncToEbay(queueItem)
     expect(spy).not.toHaveBeenCalled()

@@ -45,22 +45,51 @@ async function grantlessPost<T>(token: string, slug: string, path: string, body:
 // Was previously module-private; admin endpoint only created ORDER_CHANGE
 // which meant the 7 new RT.* subscriptions never landed if the boot
 // service didn't run on a deploy.
+//
+// RT.3 — now heals WRONG-DESTINATION subscriptions: an existing sub whose
+// destinationId ≠ ours delivers into the void (our SQS queue measured
+// permanently empty while the poller ran fine, 2026-07-20). When the
+// grantless context is supplied, such a sub is deleted (deleteSubscriptionById
+// is a grantless op) and recreated against our destination.
 export async function ensureSubscriptionForType(
   notifType: string,
   destinationId: string,
+  grantless?: { token: string; slug: string },
 ): Promise<void> {
   const { amazonSpApiClient } = await import('../clients/amazon-sp-api.client.js')
-  // Check existing — return early if active.
+  // Check existing — return early only if active AND pointed at OUR destination.
   try {
     const existingSub = await amazonSpApiClient.request<any>(
       'GET',
       `/notifications/v1/subscriptions/${notifType}`,
     )
-    if (existingSub?.payload?.subscriptionId) {
+    const subId = existingSub?.payload?.subscriptionId
+    const subDest = existingSub?.payload?.destinationId
+    if (subId && subDest === destinationId) {
       logger.info(`[amazon-notifications-boot] ${notifType} subscription already active`, {
-        subscriptionId: existingSub.payload.subscriptionId,
+        subscriptionId: subId,
       })
       return
+    }
+    if (subId && subDest !== destinationId) {
+      if (!grantless) {
+        logger.warn(`[amazon-notifications-boot] ${notifType} points at FOREIGN destination — cannot heal without grantless ctx`, {
+          subscriptionId: subId, foreignDestinationId: subDest, expectedDestinationId: destinationId,
+        })
+        return
+      }
+      logger.warn(`[amazon-notifications-boot] ${notifType} points at FOREIGN destination — deleting + recreating`, {
+        subscriptionId: subId, foreignDestinationId: subDest, expectedDestinationId: destinationId,
+      })
+      const res = await fetch(
+        `https://sellingpartnerapi-${grantless.slug}.amazon.com/notifications/v1/subscriptions/${notifType}/${subId}`,
+        { method: 'DELETE', headers: { 'x-amz-access-token': grantless.token } },
+      )
+      if (!res.ok && res.status !== 404) {
+        const text = await res.text().catch(() => '')
+        throw new Error(`delete foreign ${notifType} sub failed: HTTP ${res.status} — ${text.slice(0, 200)}`)
+      }
+      // fall through to create against OUR destination
     }
   } catch (err: any) {
     if (!String(err?.message).includes('404') && err?.statusCode !== 404) {
@@ -129,7 +158,13 @@ export const NEXUS_SP_API_NOTIFICATION_TYPES = [
  */
 export async function setupAllAmazonNotifications(): Promise<{
   destinationId: string | null
-  perType: Array<{ type: string; status: 'created' | 'already_exists' | 'failed'; error?: string }>
+  perType: Array<{
+    type: string
+    status: 'created' | 'already_exists' | 'healed' | 'failed'
+    subscriptionId?: string
+    destinationId?: string
+    error?: string
+  }>
 }> {
   if (!isSqsConfigured()) {
     return { destinationId: null, perType: [] }
@@ -140,7 +175,10 @@ export async function setupAllAmazonNotifications(): Promise<{
   const [regionHost, accountId, queueName] = [parts[0], parts[1], parts[2]]
   const sqsRegion = regionHost?.replace('sqs.', '').replace('.amazonaws.com', '') ?? 'us-east-1'
   const sqsArn = `arn:aws:sqs:${sqsRegion}:${accountId}:${queueName}`
-  const slug = mapAwsRegionToSpApiSlug(process.env.AMAZON_REGION ?? 'na')
+  // RT.3 — default MUST match the SP-API client's ('eu' for this IT seller;
+  // the old `?? 'na'` divergence pointed grantless destination calls at the
+  // NA endpoint whenever AMAZON_REGION was unset).
+  const slug = mapAwsRegionToSpApiSlug(process.env.AMAZON_REGION || 'eu')
 
   const { amazonSpApiClient } = await import('../clients/amazon-sp-api.client.js')
 
@@ -165,26 +203,45 @@ export async function setupAllAmazonNotifications(): Promise<{
   // 2. Iterate every type. Per-type failures don't abort the loop —
   // they're surfaced in the result so the operator sees which subs
   // need scope adjustments.
-  const perType: Array<{ type: string; status: 'created' | 'already_exists' | 'failed'; error?: string }> = []
+  const perType: Array<{
+    type: string
+    status: 'created' | 'already_exists' | 'healed' | 'failed'
+    subscriptionId?: string
+    destinationId?: string
+    error?: string
+  }> = []
   for (const t of NEXUS_SP_API_NOTIFICATION_TYPES) {
     try {
-      // Probe first so we can distinguish created vs already-exists in the result.
+      // Probe first so we can distinguish created / already-exists / healed.
       let alreadyActive = false
+      let foreignDestination = false
+      let probedSubId: string | undefined
+      let probedDestId: string | undefined
       try {
         const existing = await amazonSpApiClient.request<any>(
           'GET',
           `/notifications/v1/subscriptions/${t}`,
         )
-        if (existing?.payload?.subscriptionId) alreadyActive = true
+        probedSubId = existing?.payload?.subscriptionId
+        probedDestId = existing?.payload?.destinationId
+        if (probedSubId && probedDestId === existingDest.destinationId) alreadyActive = true
+        else if (probedSubId) foreignDestination = true
       } catch {
         /* 404 expected when missing; fall through to create */
       }
       if (alreadyActive) {
-        perType.push({ type: t, status: 'already_exists' })
+        perType.push({ type: t, status: 'already_exists', subscriptionId: probedSubId, destinationId: probedDestId })
         continue
       }
-      await ensureSubscriptionForType(t, existingDest.destinationId)
-      perType.push({ type: t, status: 'created' })
+      await ensureSubscriptionForType(t, existingDest.destinationId, {
+        token: grantlessToken,
+        slug,
+      })
+      perType.push({
+        type: t,
+        status: foreignDestination ? 'healed' : 'created',
+        destinationId: existingDest.destinationId,
+      })
     } catch (err: any) {
       perType.push({
         type: t,
@@ -206,7 +263,17 @@ export function ensureAmazonNotificationSubscription(): void {
 
   void (async () => {
     try {
-      await setupAllAmazonNotifications()
+      // RT.3 — record the per-type result to CronRun so subscription state
+      // is DB-readable (Railway logs required archaeology before; the local
+      // seller refresh-token being stale makes local probing impossible).
+      const { recordCronRun } = await import('../utils/cron-observability.js')
+      await recordCronRun('amazon-notifications-setup', async () => {
+        const result = await setupAllAmazonNotifications()
+        const parts = result.perType.map((p) =>
+          `${p.type}=${p.status}${p.subscriptionId ? `(sub=${p.subscriptionId.slice(0, 8)},dest=${p.destinationId?.slice(0, 8)})` : ''}${p.error ? `(${p.error.slice(0, 80)})` : ''}`,
+        )
+        return `dest=${result.destinationId ?? 'NONE'} ${parts.join(' ')}`
+      })
     } catch (err: any) {
       logger.error('[amazon-notifications-boot] setup failed (non-fatal)', {
         error: err?.message ?? String(err),

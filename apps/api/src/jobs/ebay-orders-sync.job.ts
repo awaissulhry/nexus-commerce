@@ -108,8 +108,11 @@ export function startEbayOrdersCron(): void {
     return
   }
 
-  // Default every 15 min. Override via NEXUS_EBAY_ORDERS_CRON_SCHEDULE.
-  const schedule = process.env.NEXUS_EBAY_ORDERS_CRON_SCHEDULE ?? '*/15 * * * *'
+  // RT.3 — default every 5 min (was 15). eBay has NO reliable order push in
+  // 2026: SOAP Platform Notifications are best-effort (failed deliveries are
+  // never resent; repeated failures make eBay stop sending), so this poll IS
+  // the latency floor for eBay sales. Override via NEXUS_EBAY_ORDERS_CRON_SCHEDULE.
+  const schedule = process.env.NEXUS_EBAY_ORDERS_CRON_SCHEDULE ?? '*/5 * * * *'
 
   if (!cron.validate(schedule)) {
     logger.error('ebay-orders cron: invalid schedule expression', { schedule })
