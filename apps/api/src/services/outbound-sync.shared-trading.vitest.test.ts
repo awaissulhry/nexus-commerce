@@ -45,6 +45,7 @@ describe('syncToEbay TRADING branch', () => {
     vi.clearAllMocks()
     process.env.NEXUS_ENABLE_EBAY_PUBLISH = 'true'
     process.env.EBAY_PUBLISH_MODE = 'live'
+    process.env.NEXUS_SYNC_ORDERING_V2 = '0' // mechanics tests use enqueue-time qty
   })
 
   const queueItem = {

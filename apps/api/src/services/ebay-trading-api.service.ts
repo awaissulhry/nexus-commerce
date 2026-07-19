@@ -302,6 +302,29 @@ export async function reviseInventoryStatus(
   await callTradingApi('ReviseInventoryStatus', xml, { oauthToken: ctx.oauthToken, siteId })
 }
 
+/** RT.4 — minimal GetItem for listing-lifecycle reconcile: only the
+ *  SellingStatus.ListingStatus field is requested/parsed. */
+export function buildGetItemStatusXml(itemId: string): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ItemID>${escapeXml(itemId)}</ItemID>
+  <DetailLevel>ReturnSummary</DetailLevel>
+  <OutputSelector>Item.SellingStatus.ListingStatus</OutputSelector>
+</GetItemRequest>`
+}
+
+export async function getItemListingStatus(
+  itemId: string,
+  ctx: { oauthToken: string; market: string },
+): Promise<string | null> {
+  const siteId = siteIdForMarket(ctx.market)
+  const res = await callTradingApi('GetItem', buildGetItemStatusXml(itemId), {
+    oauthToken: ctx.oauthToken,
+    siteId,
+  })
+  return res.raw.match(/<ListingStatus>([^<]+)<\/ListingStatus>/)?.[1] ?? null
+}
+
 /** RT.2 — batched revise: ≤4 SKUs of ONE ItemID per Trading call. */
 export async function reviseInventoryStatusBatch(
   input: { itemId: string; entries: Array<{ sku: string; quantity: number }> },

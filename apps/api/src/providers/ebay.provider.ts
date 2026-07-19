@@ -21,7 +21,10 @@ interface RateLimitInfo {
   resetAt: Date;
 }
 
-export class eBayAPIProvider implements MarketplaceProvider {
+// RT.4 — `implements MarketplaceProvider` dropped with the dead push methods:
+// the interface has zero polymorphic consumers (grep: only its definition);
+// this class is used concretely by the eBay image publisher alone.
+export class eBayAPIProvider {
   private credentials: eBayCredentials;
   private rateLimitInfo: RateLimitInfo = {
     remaining: 100,
@@ -52,189 +55,12 @@ export class eBayAPIProvider implements MarketplaceProvider {
     return this.rateLimitInfo;
   }
 
-  /**
-   * Update product price on eBay
-   * Uses ReviseInventoryStatus call
-   */
-  async updatePrice(input: UpdatePriceInput): Promise<MarketplaceProviderResponse> {
-    try {
-      if (!this.isConfigured()) {
-        return {
-          success: false,
-          message: 'eBay API not configured',
-          error: 'Missing credentials',
-        };
-      }
-
-      // Check rate limit
-      if (this.rateLimitInfo.remaining <= 0) {
-        return {
-          success: false,
-          message: 'Rate limit exceeded',
-          error: 'Too many requests',
-          retryable: true,
-        };
-      }
-
-      logger.info(`[eBay] Updating price for SKU: ${input.sku} to ${input.price}`);
-
-      // Build ReviseInventoryStatus request
-      const xmlPayload = this.buildReviseInventoryStatusRequest(input.sku, {
-        price: input.price,
-      });
-
-      // T.1 — real Trading API call when credentials + opt-in env are
-      // both set. Otherwise honour the legacy simulate path locally
-      // but FAIL LOUD in production so silent overselling can't
-      // happen. See callTradingApi for the full discipline.
-      await this.callTradingApi('ReviseInventoryStatus', xmlPayload);
-
-      // Decrement rate limit
-      this.rateLimitInfo.remaining--;
-
-      return {
-        success: true,
-        message: `Price updated for SKU ${input.sku}`,
-        data: {
-          sku: input.sku,
-          price: input.price,
-          timestamp: new Date().toISOString(),
-        },
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      logger.error(`[eBay] Price update failed: ${errorMessage}`);
-
-      return {
-        success: false,
-        message: 'Failed to update price',
-        error: errorMessage,
-        retryable: this.isRetryableError(error),
-      };
-    }
-  }
-
-  /**
-   * Update product stock on eBay
-   * Uses ReviseInventoryStatus call
-   */
-  async updateStock(input: UpdateStockInput): Promise<MarketplaceProviderResponse> {
-    try {
-      if (!this.isConfigured()) {
-        return {
-          success: false,
-          message: 'eBay API not configured',
-          error: 'Missing credentials',
-        };
-      }
-
-      // Check rate limit
-      if (this.rateLimitInfo.remaining <= 0) {
-        return {
-          success: false,
-          message: 'Rate limit exceeded',
-          error: 'Too many requests',
-          retryable: true,
-        };
-      }
-
-      logger.info(`[eBay] Updating stock for SKU: ${input.sku} to ${input.quantity}`);
-
-      // Build ReviseInventoryStatus request
-      const xmlPayload = this.buildReviseInventoryStatusRequest(input.sku, {
-        quantity: input.quantity,
-      });
-
-      // T.1 — real Trading API call when credentials + opt-in env are
-      // both set. Otherwise honour the legacy simulate path locally
-      // but FAIL LOUD in production so silent overselling can't
-      // happen. See callTradingApi for the full discipline.
-      await this.callTradingApi('ReviseInventoryStatus', xmlPayload);
-
-      // Decrement rate limit
-      this.rateLimitInfo.remaining--;
-
-      return {
-        success: true,
-        message: `Stock updated for SKU ${input.sku}`,
-        data: {
-          sku: input.sku,
-          quantity: input.quantity,
-          timestamp: new Date().toISOString(),
-        },
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      logger.error(`[eBay] Stock update failed: ${errorMessage}`);
-
-      return {
-        success: false,
-        message: 'Failed to update stock',
-        error: errorMessage,
-        retryable: this.isRetryableError(error),
-      };
-    }
-  }
-
-  /**
-   * Sync full listing to eBay
-   * Uses ReviseItem call for complete listing updates
-   */
-  async syncListing(input: SyncListingInput): Promise<MarketplaceProviderResponse> {
-    try {
-      if (!this.isConfigured()) {
-        return {
-          success: false,
-          message: 'eBay API not configured',
-          error: 'Missing credentials',
-        };
-      }
-
-      // Check rate limit
-      if (this.rateLimitInfo.remaining <= 0) {
-        return {
-          success: false,
-          message: 'Rate limit exceeded',
-          error: 'Too many requests',
-          retryable: true,
-        };
-      }
-
-      logger.info(`[eBay] Syncing listing for SKU: ${input.sku}`);
-
-      // Build ReviseItem request
-      const xmlPayload = this.buildReviseItemRequest(input);
-
-      await this.callTradingApi('ReviseItem', xmlPayload);
-
-      // Decrement rate limit
-      this.rateLimitInfo.remaining--;
-
-      return {
-        success: true,
-        message: `Listing synced for SKU ${input.sku}`,
-        data: {
-          sku: input.sku,
-          timestamp: new Date().toISOString(),
-        },
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      logger.error(`[eBay] Listing sync failed: ${errorMessage}`);
-
-      return {
-        success: false,
-        message: 'Failed to sync listing',
-        error: errorMessage,
-        retryable: this.isRetryableError(error),
-      };
-    }
-  }
-
-  /**
-   * Build ReviseInventoryStatus XML request
-   * Used for price/quantity updates
-   */
+  /* RT.4 dead-path sweep — updatePrice / updateStock / syncListing removed.
+   * They were the pre-OutboundSyncQueue push path (grep-verified zero callers;
+   * the queue's syncToEbay + syncSharedTradingQuantity own quantity/price now).
+   * This provider survives solely for reviseItemImages (eBay image publish).
+   * buildReviseInventoryStatusRequest/buildReviseItemRequest kept: reviseItemImages
+   * shares the XML/escape plumbing. */
   private buildReviseInventoryStatusRequest(
     sku: string,
     updates: { price?: number; quantity?: number }

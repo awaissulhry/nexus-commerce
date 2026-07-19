@@ -1212,13 +1212,60 @@ export class OutboundSyncService {
         let existing: Record<string, any> = {};
         const getRes = await fetch(itemUrl, { method: "GET", headers });
         if (getRes.ok) existing = (await getRes.json().catch(() => ({}))) as Record<string, any>;
-        const putRes = await fetch(itemUrl, {
-          method: "PUT",
-          headers,
-          body: JSON.stringify(mergeEbayInventoryItem(existing, payload)),
-        });
+        const itemBodyJson = JSON.stringify(mergeEbayInventoryItem(existing, payload));
+        const putRes = await fetch(itemUrl, { method: "PUT", headers, body: itemBodyJson });
         if (!(putRes.ok || putRes.status === 204)) {
-          return ebayFail(`inventory_item PUT ${putRes.status}: ${(await putRes.text().catch(() => "")).slice(0, 300)}`, "failed", putRes.status);
+          const errBody = (await putRes.text().catch(() => "")).slice(0, 500);
+          // RT.4 — 25004 self-heal, ported from the manual flat-file push
+          // (ebay-variation-push.service.ts): eBay computes live qty as
+          // min(inventory_item.quantity, offer.availableQuantity); a PUBLISHED
+          // offer parked at availableQuantity:0 floors that min and rejects our
+          // quantity>0 PUT with 25004 — a deadlock, since the offer update
+          // that would raise it only runs on price changes. Break it: raise
+          // the existing offer to the SAME dispatch quantity (pool-capped
+          // upstream — never more than available) and retry the PUT once.
+          if (errBody.includes('"errorId":25004') && payload.quantity !== undefined) {
+            try {
+              const bySku = await fetch(
+                `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
+                { headers },
+              );
+              const offerId = bySku.ok
+                ? ((await bySku.json().catch(() => ({}))) as { offers?: Array<{ offerId?: string }> }).offers?.[0]?.offerId ?? null
+                : null;
+              if (offerId) {
+                const getFull = await fetch(`${apiBase}/sell/inventory/v1/offer/${offerId}`, { headers });
+                if (getFull.ok) {
+                  const fullOffer = (await getFull.json().catch(() => ({}))) as Record<string, unknown>;
+                  const raised = await fetch(`${apiBase}/sell/inventory/v1/offer/${offerId}`, {
+                    method: "PUT",
+                    headers,
+                    body: JSON.stringify({ ...fullOffer, availableQuantity: payload.quantity }),
+                  });
+                  if (raised.ok || raised.status === 204) {
+                    const retryItem = await fetch(itemUrl, { method: "PUT", headers, body: itemBodyJson });
+                    if (retryItem.ok || retryItem.status === 204) {
+                      logger.info("syncToEbay: recovered from 25004 — raised parked offer + retried", {
+                        sku, offerId, quantity: payload.quantity,
+                      });
+                    } else {
+                      return ebayFail(`inventory_item PUT retry after 25004 heal ${retryItem.status}: ${(await retryItem.text().catch(() => "")).slice(0, 300)}`, "failed", retryItem.status);
+                    }
+                  } else {
+                    return ebayFail(`25004 heal offer PUT ${raised.status}: ${(await raised.text().catch(() => "")).slice(0, 300)}`, "failed", raised.status);
+                  }
+                } else {
+                  return ebayFail(`inventory_item PUT ${putRes.status} (25004; offer GET ${getFull.status} blocked heal): ${errBody.slice(0, 200)}`, "failed", putRes.status);
+                }
+              } else {
+                return ebayFail(`inventory_item PUT ${putRes.status}: ${errBody.slice(0, 300)}`, "failed", putRes.status);
+              }
+            } catch (healErr) {
+              return ebayFail(`inventory_item PUT ${putRes.status} (25004 heal threw: ${healErr instanceof Error ? healErr.message : String(healErr)})`, "failed", putRes.status);
+            }
+          } else {
+            return ebayFail(`inventory_item PUT ${putRes.status}: ${errBody.slice(0, 300)}`, "failed", putRes.status);
+          }
         }
       }
 
@@ -1319,6 +1366,47 @@ export class OutboundSyncService {
         });
       } catch { /* writeback is best-effort */ }
     };
+
+    // RT.4 — re-read the pool at dispatch. The row's quantities were computed
+    // at enqueue; the pool may have moved since (order mid-flight, superseded
+    // row that outran coalescing). Recompute available−buffer NOW, and drop
+    // SKUs already sitting at that value — a fully-no-op row returns success
+    // WITHOUT spending a revise against the item's ~250/day budget.
+    if (process.env.NEXUS_SYNC_ORDERING_V2 !== "0" && payload?.productId) {
+      try {
+        const wh = await prisma.stockLevel.findMany({
+          where: { productId: payload.productId, location: { type: "WAREHOUSE" } },
+          select: { available: true },
+        });
+        const fresh = computeAvailableToPublish({
+          fulfillmentMethod: "FBM",
+          warehouseAvailable: wh.reduce((a: number, s: { available: number }) => a + s.available, 0),
+          fbaSellable: 0,
+          stockBuffer: 0,
+        }).available;
+        const mems = await prisma.sharedListingMembership.findMany({
+          where: { marketplace: market, itemId, sku: { in: updates.map((u) => u.sku) } },
+          select: { sku: true, lastQtyPushed: true },
+        });
+        const lastBySku = new Map(mems.map((m: { sku: string; lastQtyPushed: number | null }) => [m.sku, m.lastQtyPushed]));
+        for (const u of updates) u.quantity = fresh;
+        const effective = updates.filter((u) => lastBySku.get(u.sku) !== fresh);
+        if (effective.length === 0) {
+          return {
+            success: true, queueId, channel: "EBAY", status: "SUCCESS",
+            message: `Shared ${itemId}: pool unchanged since last push (qty ${fresh}) — no revise spent`,
+          };
+        }
+        updates.length = 0;
+        updates.push(...effective);
+      } catch (err) {
+        // Re-read is an accuracy upgrade, not a gate — fall back to the
+        // enqueue-time quantities on any read failure.
+        logger.warn("syncSharedTradingQuantity: dispatch re-read failed — using enqueue-time quantities", {
+          itemId, error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
 
     // 1. Feature flag
     const mode = getEbayPublishMode();
@@ -1702,7 +1790,53 @@ export class OutboundSyncService {
     }
 
     // ── Quantity update (existing path) ─────────────────────────────────
-    const newQty: number = payload?.quantity ?? 0;
+    // RT.4 — parity with Amazon/eBay: re-read the live committed quantity at
+    // dispatch (a stale payload from a superseded-but-undelivered row must
+    // not overwrite a fresher value) and clamp to the warehouse pool so
+    // Shopify can never advertise units the pool doesn't have.
+    let newQty: number = payload?.quantity ?? 0;
+    if (process.env.NEXUS_SYNC_ORDERING_V2 !== "0") {
+      const cl = channelListing?.id
+        ? await prisma.channelListing.findUnique({
+            where: { id: channelListing.id },
+            select: { quantity: true, stockBuffer: true, fulfillmentMethod: true },
+          })
+        : null;
+      const resolved = resolveDispatchQuantity(cl?.quantity, payload?.quantity);
+      if (resolved !== undefined) newQty = resolved;
+      if (
+        process.env.NEXUS_OVERSELL_CLAMP !== "0" &&
+        product?.id &&
+        cl?.fulfillmentMethod !== "FBA"
+      ) {
+        const wh = await prisma.stockLevel.findMany({
+          where: { productId: product.id, location: { type: "WAREHOUSE" } },
+          select: { available: true },
+        });
+        const available = computeAvailableToPublish({
+          fulfillmentMethod: "FBM",
+          warehouseAvailable: wh.reduce((a, s) => a + s.available, 0),
+          fbaSellable: 0,
+          stockBuffer: cl?.stockBuffer ?? 0,
+        }).available;
+        const clamp = applyOversellClamp(newQty, available);
+        if (clamp.clamped) {
+          try {
+            publishOrderEvent({
+              type: "sync.oversell.clamped",
+              sku,
+              channel: "SHOPIFY",
+              marketplace: "GLOBAL",
+              requested: newQty,
+              clampedTo: clamp.quantity,
+              available,
+              ts: Date.now(),
+            } as never);
+          } catch { /* observability must never break the sync */ }
+          newQty = clamp.quantity;
+        }
+      }
+    }
 
     if (!inventoryItemId) {
       return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",

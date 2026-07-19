@@ -17,12 +17,17 @@ const connectionFindFirst = vi.fn().mockResolvedValue({ id: 'conn-1' })
 // RT.2 — debounce reads the item's max lastPushedAt; default: never pushed.
 const membershipAggregate = vi.fn().mockResolvedValue({ _max: { lastPushedAt: null } })
 
+const membershipFindMany = vi.fn().mockResolvedValue([])
+const stockLevelFindMany = vi.fn().mockResolvedValue([])
+
 vi.mock('../db.js', () => ({
   default: {
     sharedListingMembership: {
       updateMany: (...a: unknown[]) => membershipUpdateMany(...a),
       aggregate: (...a: unknown[]) => membershipAggregate(...a),
+      findMany: (...a: unknown[]) => membershipFindMany(...a),
     },
+    stockLevel: { findMany: (...a: unknown[]) => stockLevelFindMany(...a) },
     channelConnection: { findFirst: (...a: unknown[]) => connectionFindFirst(...a) },
   },
 }))
@@ -143,6 +148,9 @@ describe('RT.0/RT.2 — Trading branch: auto-heal, batching, debounce', () => {
     membershipAggregate.mockClear()
     membershipAggregate.mockResolvedValue({ _max: { lastPushedAt: null } })
     process.env.NEXUS_ENABLE_EBAY_PUBLISH = 'true'
+    // These cases test dispatch MECHANICS with enqueue-time quantities; the
+    // RT.4 dispatch re-read is covered by its own test below.
+    process.env.NEXUS_SYNC_ORDERING_V2 = '0'
   })
 
   const queueItem = {
@@ -252,6 +260,71 @@ describe('RT.0/RT.2 — Trading branch: auto-heal, batching, debounce', () => {
       expect(result.errorCode).toBe('EBAY_REVISE_DEBOUNCED')
       expect(batchSpy).not.toHaveBeenCalled()
       expect(recordEbayOutcome).not.toHaveBeenCalled()
+    } finally {
+      __ebayTrading.reviseInventoryStatusBatch = original
+    }
+  })
+})
+
+describe('RT.4 — dispatch re-read (shared Trading)', () => {
+  const reReadItem = {
+    id: 'q9',
+    payload: {
+      source: 'STOCK_MOVEMENT_SHARED', pushVia: 'TRADING', itemId: '900',
+      market: 'IT', marketplaceId: 'EBAY_IT', productId: 'p1',
+      updates: [
+        { sku: 'V-S', quantity: 5, oldQuantity: 1 },
+        { sku: 'V-M', quantity: 5, oldQuantity: 2 },
+      ],
+    },
+    externalListingId: '900', retryCount: 0, maxRetries: 3,
+    targetChannel: 'EBAY', syncType: 'QUANTITY_UPDATE',
+  }
+  const svc4 = () =>
+    new OutboundSyncService() as unknown as {
+      syncSharedTradingQuantity: (q: unknown) => Promise<{ success: boolean; message?: string }>
+    }
+
+  beforeEach(() => {
+    membershipUpdateMany.mockClear()
+    membershipAggregate.mockResolvedValue({ _max: { lastPushedAt: null } })
+    process.env.NEXUS_ENABLE_EBAY_PUBLISH = 'true'
+    process.env.NEXUS_SYNC_ORDERING_V2 = '1'
+  })
+
+  it('recomputes quantities from the LIVE pool at dispatch', async () => {
+    stockLevelFindMany.mockResolvedValue([{ available: 3 }, { available: 4 }]) // fresh pool = 7
+    membershipFindMany.mockResolvedValue([
+      { sku: 'V-S', lastQtyPushed: 1 },
+      { sku: 'V-M', lastQtyPushed: 2 },
+    ])
+    const original = __ebayTrading.reviseInventoryStatusBatch
+    const batchSpy = vi.fn().mockResolvedValue(undefined)
+    __ebayTrading.reviseInventoryStatusBatch = batchSpy as never
+    try {
+      const r = await svc4().syncSharedTradingQuantity(reReadItem)
+      expect(r.success).toBe(true)
+      const entries = (batchSpy.mock.calls[0][0] as { entries: Array<{ quantity: number }> }).entries
+      expect(entries.every((e) => e.quantity === 7)).toBe(true) // fresh, not the stale 5
+    } finally {
+      __ebayTrading.reviseInventoryStatusBatch = original
+    }
+  })
+
+  it('fully-no-op row exits SUCCESS without spending a revise', async () => {
+    stockLevelFindMany.mockResolvedValue([{ available: 7 }])
+    membershipFindMany.mockResolvedValue([
+      { sku: 'V-S', lastQtyPushed: 7 },
+      { sku: 'V-M', lastQtyPushed: 7 },
+    ])
+    const original = __ebayTrading.reviseInventoryStatusBatch
+    const batchSpy = vi.fn().mockResolvedValue(undefined)
+    __ebayTrading.reviseInventoryStatusBatch = batchSpy as never
+    try {
+      const r = await svc4().syncSharedTradingQuantity(reReadItem)
+      expect(r.success).toBe(true)
+      expect(r.message).toMatch(/no revise spent/)
+      expect(batchSpy).not.toHaveBeenCalled()
     } finally {
       __ebayTrading.reviseInventoryStatusBatch = original
     }
