@@ -1282,6 +1282,22 @@ export default function AmazonFlatFileClient({
     }, 1000)
   }, [])
 
+  // FFT.2 (Z1) — flush the localStorage draft on pagehide: the 1 s debounced
+  // autosave could lose the last sub-second of edits on a hard reload / close.
+  useEffect(() => {
+    const flush = () => {
+      try {
+        const rows = latestRowsRef.current
+        if (!productTypeRef.current || !rows.length) return
+        saveRows(marketplaceRef.current, storageTypeRef.current, rows)
+        persistSheetComposition(marketplaceRef.current, storageTypeRef.current)
+      } catch { /* best-effort */ }
+    }
+    window.addEventListener('pagehide', flush)
+    return () => window.removeEventListener('pagehide', flush)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // P1.2 — tick every 15 s to keep "saved X ago" label fresh
   useEffect(() => {
     if (!lastLocalSave) return
@@ -2504,6 +2520,9 @@ export default function AmazonFlatFileClient({
         chunksDone++
       }
       setSyncStatus('synced')
+      // FFT.2 (C5 parity with eBay) — the module SWR snapshot predates this
+      // save; a market switch-back within its TTL repainted PRE-save values.
+      try { _swr.delete(cacheKey(marketplace, productType)) } catch { /* best-effort */ }
       localDivergedRef.current = false // FFX.2 — grid is now persisted to the DB
       // FFA.6 — surface per-SKU sync failures instead of silently reporting "synced".
       const syncErrors: Array<{ sku: string; error: string; currentVersion?: number }> = Array.isArray(data?.errors) ? data.errors : []

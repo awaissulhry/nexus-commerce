@@ -67,6 +67,20 @@ export function synonymAspectTarget(header: string, knownColumnIds: Set<string>)
   return canonKey(titleCase(canonicalLower))
 }
 
+/** FFT.2 — canonical (lowercased, underscored) form of an aspect column key
+ *  for save-verification matching: 'aspect_Color' and 'aspect_Colore' fold to
+ *  the same canonical name via the synonym table (the server canonicalizes on
+ *  write, so the read-back key may legitimately differ from the typed one).
+ *  Non-aspect keys just lowercase. */
+export function aspectVerifyKey(key: string): string {
+  const m = /^aspect_(.+)$/i.exec(key.trim())
+  if (!m) return key.trim().toLowerCase()
+  const name = m[1].replace(/_/g, ' ').replace(/\s*⚠$/, '').trim().toLowerCase()
+  const group = IMPORT_ASPECT_SYNONYMS.find((g) => (g as string[]).includes(name))
+  const canonical = group ? group[0] : name
+  return `aspect_${canonical.replace(/ /g, '_')}`
+}
+
 const PAIR_RE = /^(.+?)\s*\((.+?)\)$/
 const WARN_RE = /^(.+?)\s*⚠$/
 const JUNK_RE = /^variantAttributes\s*⚠?$/i

@@ -68,6 +68,7 @@ import { ColumnGroupModal } from '@/components/flat-file/ColumnGroupModal'
 import { EBAY_FILTER_DEFAULT, type EbayFilterDims } from '../_shared/flat-file-filter.types'
 import { isSharedDuplicateAllowed, truthyFlag } from './validateRows.shared'
 import { draftKey, readDraft, writeDraft, clearDraft, mergeDraftRows, removeRowsFromDraft } from './draftStore'
+import { diffSavedRowsAgainstServer } from './saveVerify.pure'
 import { useOrderEventsRefresh } from '@/hooks/use-order-events-refresh'
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -791,6 +792,14 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const latestSelectedRowsRef = useRef<Set<string>>(new Set())
   const latestSetRowsRef = useRef<((rows: BaseRow[]) => void) | null>(null)
   const latestPushHistoryRef = useRef<((rows: BaseRow[]) => void) | null>(null)
+  // FFT.2 (Z1) — flush the draft on pagehide: the 400 ms debounced autosave
+  // could lose the last sub-second of edits on a hard reload / tab close.
+  useEffect(() => {
+    const flush = () => { try { writeDraft(draftKey(marketplaceRef.current, familyId), latestRowsRef.current) } catch { /* best-effort */ } }
+    window.addEventListener('pagehide', flush)
+    return () => window.removeEventListener('pagehide', flush)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [familyId])
   const [publishTargets, setPublishTargets]   = useState<string[]>([marketplace])
   const [descModal, setDescModal]             = useState<{ rowId: string } | null>(null)
   const [categorySearchOpen, setCategorySearchOpen]   = useState(false)
@@ -1629,10 +1638,47 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       }
     }
 
-    // FFP.1 — successful save clears the draft; failed rows stay in it so a
-    // reload after a partial save still restores what didn't persist.
+    // FFP.1 → FFT.2 (Z2) — a clean save clears the draft ONLY after read-back
+    // verification: the exact GET the next reload would issue must return every
+    // saved row as saved. A failed GET keeps the draft (safety net) and never
+    // blocks the save.
     if (errors.length === 0) {
-      clearDraft(draftKey(marketplaceRef.current, familyId))
+      let verdict: 'clean' | 'skipped' | 'mismatch' = 'skipped'
+      let detail = ''
+      try {
+        const vqs = new URLSearchParams()
+        if (familyId) vqs.set('familyId', familyId)
+        vqs.set('scope', scopeRef.current)
+        vqs.set('marketplace', marketplaceRef.current)
+        const vres = await fetch(`${BACKEND}/api/ebay/flat-file/rows?${vqs}`, { signal: AbortSignal.timeout(30000) })
+        if (vres.ok) {
+          const vjson = await vres.json() as { rows?: EbayRow[] }
+          const serverRows = (vjson.rows ?? []) as unknown as Array<Record<string, unknown>>
+          const { mismatches, missingRows } = diffSavedRowsAgainstServer(
+            dirty as unknown as Array<Record<string, unknown>>,
+            serverRows,
+          )
+          if (mismatches.length === 0 && missingRows.length === 0) {
+            verdict = 'clean'
+            // The verify GET is fresh truth — re-seed the SWR snapshot the C5
+            // delete just dropped, so the next visit paints verified data.
+            try { _ebay_swr.set(ebayKey, { rows: vjson.rows ?? [], fetchedAt: Date.now() }) } catch { /* best-effort */ }
+          } else {
+            verdict = 'mismatch'
+            const parts: string[] = []
+            if (missingRows.length) parts.push(`${missingRows.length} row(s) missing from the read-back (${missingRows.slice(0, 3).join(', ')}${missingRows.length > 3 ? '…' : ''})`)
+            if (mismatches.length) parts.push(`${mismatches.length} field(s) read back differently (${mismatches.slice(0, 3).map((m) => `${m.sku}: ${m.field}`).join(', ')}${mismatches.length > 3 ? '…' : ''})`)
+            detail = parts.join(' · ')
+          }
+        }
+      } catch { /* verdict stays 'skipped' */ }
+      if (verdict === 'clean') {
+        clearDraft(draftKey(marketplaceRef.current, familyId))
+      } else if (verdict === 'mismatch') {
+        toast({ title: 'Save verification found differences', description: `${detail} — your typed values are kept in the local draft; reload to inspect what the server returns.`, tone: 'warning' })
+      } else {
+        toast({ title: 'Saved — read-back verification skipped (network)', description: 'The local draft is kept as a safety net; it clears on the next verified save.', tone: 'info' })
+      }
     }
 
     if (errors.length === 0 && savedErrorRows.length > 0) {
