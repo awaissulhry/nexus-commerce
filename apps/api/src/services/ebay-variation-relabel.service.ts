@@ -266,16 +266,28 @@ export async function adoptSkulessVariations(
   }))
 
   let plan = planSkulessAdoption(skulessLive, pool)
-  // Incident #42b — FAMILY LOCK (mirror of reconcile): once ≥1 SKU-less
-  // variation matched unambiguously, restrict the pool to that family's
-  // children and re-match the rest — a single-axis colour value collides
-  // across families in the global pool. Within-family ambiguity still refuses.
-  if (plan.unmatched.length > 0 && plan.entries.length > 0) {
-    const matchedIds = [...new Set(plan.entries.map((e) => e.productId))]
-    const matchedProducts = await prisma.product.findMany({
-      where: { id: { in: matchedIds } },
-      select: { parentId: true },
+  // Incident #42b — FAMILY LOCK (mirror of reconcile): once the family is
+  // known, restrict the pool to its children and re-match — a single-axis
+  // colour value collides across families in the global pool. The family
+  // seeds from THIS pass's unambiguous matches AND from the listing's own
+  // existing linked memberships (a partially-adopted listing has no SKU-less
+  // matches left to seed from, but its live links already pin the family).
+  // Within-family ambiguity still refuses.
+  if (plan.unmatched.length > 0) {
+    const ownLinked = await prisma.sharedListingMembership.findMany({
+      where: { marketplace: market, itemId, productId: { not: null } },
+      select: { productId: true },
     })
+    const matchedIds = [...new Set([
+      ...plan.entries.map((e) => e.productId),
+      ...ownLinked.map((m) => m.productId as string),
+    ])]
+    const matchedProducts = matchedIds.length
+      ? await prisma.product.findMany({
+          where: { id: { in: matchedIds } },
+          select: { parentId: true },
+        })
+      : []
     const parentIds = [...new Set(matchedProducts.map((p) => p.parentId).filter((x): x is string => Boolean(x)))]
     if (parentIds.length === 1) {
       const familyChildren = await prisma.product.findMany({
