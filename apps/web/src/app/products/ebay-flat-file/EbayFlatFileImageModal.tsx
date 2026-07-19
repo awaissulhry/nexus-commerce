@@ -414,6 +414,10 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
     // the operator reviews, swaps the odd image, then Saves/Publishes.
     // Unmatched values are reported, never silently dropped.
     const [copyingFrom, setCopyingFrom] = useState(false)
+    // The section header can sit anywhere in the drawer's scroll area — flip
+    // the menu upward when there's not enough room below (measured at open).
+    const copyMenuWrapRef = useRef<HTMLSpanElement>(null)
+    const [copyMenuUp, setCopyMenuUp] = useState(false)
     const copyFromListing = useCallback(async (src: { productId: string; label: string }) => {
       if (copyingFrom) return
       setCopyingFrom(true)
@@ -730,19 +734,27 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
                 this sheet (near-identical products → start from a sibling's
                 curation, swap the odd image, Save). */}
             {!loading && copySources && copySources.length > 0 && (
-              <Menu
-                className="efx-bucket-menu"
-                label={copyingFrom
-                  ? <span className="inline-flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Copying…</span>
-                  : <span className="inline-flex items-center gap-1"><Copy className="w-3 h-3" />Copy from…</span>}
-                items={copySources.map(s => ({
-                  id: s.productId,
-                  label: s.label,
-                  disabled: copyingFrom || saving || publishing,
-                  onSelect: () => { void copyFromListing(s) },
-                }))}
-                triggerProps={{ 'aria-label': 'Copy saved images from another listing in this sheet' }}
-              />
+              <span
+                ref={copyMenuWrapRef}
+                onClickCapture={() => {
+                  const r = copyMenuWrapRef.current?.getBoundingClientRect()
+                  if (r) setCopyMenuUp(window.innerHeight - r.bottom < 40 + Math.min(copySources.length, 8) * 30)
+                }}
+              >
+                <Menu
+                  className={`efx-bucket-menu efx-copy-menu${copyMenuUp ? ' efx-menu-up' : ''}`}
+                  label={copyingFrom
+                    ? <span className="inline-flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Copying…</span>
+                    : <span className="inline-flex items-center gap-1"><Copy className="w-3 h-3" />Copy from…</span>}
+                  items={copySources.map(s => ({
+                    id: s.productId,
+                    label: s.label,
+                    disabled: copyingFrom || saving || publishing,
+                    onSelect: () => { void copyFromListing(s) },
+                  }))}
+                  triggerProps={{ 'aria-label': 'Copy saved images from another listing in this sheet' }}
+                />
+              </span>
             )}
             {hasDirty && (
               <Button
@@ -1082,6 +1094,7 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
         <style>{`
           .efx-bucket-menu .h10-ds-btn { font-size: 11px; padding: 2px 8px; gap: 4px; }
           .efx-menu-up .h10-ds-menu { top: auto; bottom: calc(100% + 5px); }
+          .efx-copy-menu .h10-ds-menu { max-height: 264px; overflow-y: auto; }
         `}</style>
       </div>
     )

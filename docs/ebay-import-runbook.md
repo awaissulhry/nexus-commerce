@@ -88,3 +88,44 @@ row stamps a per-market file exclusion** on the product
   row is just: add the row (import or type it), Save.
 - A variation child's delete never ends the family's live listing (only a
   parent/standalone row may whole-listing delist).
+
+## Images on multi-listing (shell) families — EB-IMG, 2026-07-19
+
+The extra listings created by the multi-listing import are
+`EBAY_LISTING_SHELL` products: no product children, variants linked through
+`SharedListingMembership` rows, live presence = a Trading ItemID. Two things
+shipped for them:
+
+### Image publish (the "Single-SKU … isn't wired" fix)
+
+`publishEbayImagesViaInventory` now dispatches by listing shape:
+
+- **Real family** (product children, Inventory group) → unchanged
+  `pushVariationGroup` lane.
+- **Shell / no-child family** → `ebay-shared-image-publish.service.ts`:
+  resolves ItemID(s) from ACTIVE memberships (`parentSku = shell SKU`,
+  falling back to `Product.ebayItemId` for plain single-SKU listings),
+  `GetItem`s the live listing, maps the curated axis/values onto the
+  DECLARED variation specifics (`Color` → `Colore` via axisSynonymKey,
+  values case-insensitive; unmatched → warnings, never silent), and sends
+  ONE `ReviseFixedPriceItem` with `<PictureDetails>` + per-value
+  `<VariationSpecificPictureSet>` (12-cap each, gallery-wins dedup,
+  `__shared__` folds everything into the gallery). Same result shape, so
+  the drawer, Images tab, bulk + scheduled publishes all render it.
+- `refreshEbayLiveImages` uses the same membership fallback, so shells'
+  live strips and post-publish read-backs work.
+- Per-SKU image overrides don't exist on Trading listings — warned + skipped.
+
+Verified live 2026-07-19: MOSS-ALT1 (257628770752) went from 1 gallery pic /
+no sets to gallery 3 + Colore Grigio 6 · Verde 4 · Nero 6.
+
+### Copy images from another listing
+
+Each family section in the images drawer has **Copy from…** listing the
+sheet's other families (add one via the family picker if it isn't in the
+sheet). Picking a source loads its SAVED eBay buckets and maps them onto the
+target's axis/values (`copyFromListing.pure.ts`, vitest-covered): Default →
+Default, per-value sets by name; source values missing on the target are
+toasted as skipped; the result lands as UNSAVED buckets — review, swap the
+odd image, Save (or Save & Publish). Verified live: GALE-JACKET →
+GALE-JACKET-ALT1 (256566101420), 16 images, published in one click.
