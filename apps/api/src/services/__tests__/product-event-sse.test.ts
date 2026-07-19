@@ -23,6 +23,8 @@ vi.mock('../../lib/queue.js', () => ({
     // enqueueRefresh ignores the resolve value; just return something.
     add: vi.fn().mockResolvedValue({}),
   },
+  // FFT.6 — enqueueRefresh goes through the hang-proof wrapper now.
+  addJobSafely: vi.fn().mockResolvedValue({ enqueued: true }),
 }))
 
 import { productEventService } from '../product-event.service.js'

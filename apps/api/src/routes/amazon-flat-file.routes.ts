@@ -1501,26 +1501,29 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
           await enqueueContentSyncIfEnabled(listings.map((l) => l.id))
 
           // ES.2 — emit one FLAT_FILE_IMPORTED event per affected product.
+          // FFT.6 — over ALL saved products, not just published+active
+          // listings (the old filter meant DRAFT saves never refreshed the
+          // /products read model). The outbound enqueues above deliberately
+          // keep the published-only filter.
+          const allSavedProducts = await prisma.product.findMany({
+            where: { sku: { in: skus }, deletedAt: null },
+            select: { id: true },
+          })
           void productEventService.emitMany(
-            listings
-              .filter((l) => l.productId)
-              .map((l) => ({
-                aggregateId: l.productId!,
-                aggregateType: 'Product' as const,
-                eventType: 'FLAT_FILE_IMPORTED' as const,
-                data: {
-                  channel: 'AMAZON',
-                  marketplace: mp,
-                  channelListingId: l.id,
-                  price: l.price,
-                  quantity: l.quantity,
-                },
-                metadata: {
-                  source: 'FLAT_FILE_IMPORT' as const,
-                  flatFileType: 'AMAZON_INVENTORY_LOADER',
-                  rowCount: rows.length,
-                },
-              })),
+            allSavedProducts.map((p) => ({
+              aggregateId: p.id,
+              aggregateType: 'Product' as const,
+              eventType: 'FLAT_FILE_IMPORTED' as const,
+              data: {
+                channel: 'AMAZON',
+                marketplace: mp,
+              },
+              metadata: {
+                source: 'FLAT_FILE_IMPORT' as const,
+                flatFileType: 'AMAZON_INVENTORY_LOADER',
+                rowCount: rows.length,
+              },
+            })),
           )
         } catch (err2) {
           request.log.warn({ err: err2 }, 'amazon flat-file: auto-enqueue failed (non-fatal)')

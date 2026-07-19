@@ -37,11 +37,11 @@ export async function runReadCacheReconcile(): Promise<string> {
       const [liveProducts, cacheRows] = await Promise.all([
         prisma.product.findMany({
           where: { deletedAt: null },
-          select: { id: true, totalStock: true, status: true, name: true },
+          select: { id: true, totalStock: true, status: true, name: true, sku: true, basePrice: true, isParent: true, parentId: true, productType: true, fulfillmentMethod: true },
         }),
         prisma.productReadCache.findMany({
           where: { deletedAt: null },
-          select: { id: true, totalStock: true, status: true, name: true },
+          select: { id: true, totalStock: true, status: true, name: true, sku: true, basePrice: true, isParent: true, parentId: true, productType: true, fulfillmentMethod: true },
         }),
       ])
       const cacheById = new Map(cacheRows.map((c) => [c.id, c]))
@@ -56,7 +56,17 @@ export async function runReadCacheReconcile(): Promise<string> {
         if (!c) {
           missing++
           drifted.push(p.id)
-        } else if (c.totalStock !== p.totalStock || c.status !== p.status || c.name !== p.name) {
+        } else if (
+          // FFT.6 — the 3-field diff let price/identity/family drift live
+          // forever; compare the full cheap Product-truth projection.
+          c.totalStock !== p.totalStock || c.status !== p.status || c.name !== p.name ||
+          c.sku !== p.sku ||
+          String(c.basePrice ?? '') !== String(p.basePrice ?? '') ||
+          c.isParent !== p.isParent ||
+          (c.parentId ?? null) !== (p.parentId ?? null) ||
+          (c.productType ?? null) !== (p.productType ?? null) ||
+          (c.fulfillmentMethod ?? null) !== (p.fulfillmentMethod ?? null)
+        ) {
           stale++
           drifted.push(p.id)
         }

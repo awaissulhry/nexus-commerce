@@ -15,7 +15,7 @@
 
 import prisma from '../db.js'
 import type { Prisma } from '@prisma/client'
-import { readCacheQueue, searchIndexQueue } from '../lib/queue.js'
+import { addJobSafely, readCacheQueue, searchIndexQueue } from '../lib/queue.js'
 import { publishListingEvent } from './listing-events.service.js'
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -127,12 +127,21 @@ export class ProductEventService {
     // product, BullMQ silently drops the duplicate. The 2s delay
     // batches rapid successive mutations (e.g. a flat-file row saving
     // title + price + qty in quick succession) into one rebuild.
-    void readCacheQueue
-      .add(
-        'refresh',
-        { productId: input.aggregateId },
-        { jobId: `cache:refresh:${input.aggregateId}`, delay: 2000 },
-      )
+    // FFT.6 — hang-proof enqueue: the raw .add() blocks forever against a
+    // dead/unreachable Redis (the exact silent-refresh-loss the reconcile
+    // cron's header documents). addJobSafely bounds the wait + circuit-opens;
+    // a skipped add is only latency — the 15-min reconcile heals the row.
+    void addJobSafely(
+      readCacheQueue,
+      'refresh',
+      { productId: input.aggregateId },
+      { jobId: `cache:refresh:${input.aggregateId}`, delay: 2000 },
+    )
+      .then((r) => {
+        if (!r.enqueued) {
+          console.warn('[ProductEvent] read-cache refresh deferred to the reconcile cron (queue circuit/timeout)', input.aggregateId)
+        }
+      })
       .catch((err) =>
         console.warn(
           '[ProductEvent] readCacheQueue.add failed:',
