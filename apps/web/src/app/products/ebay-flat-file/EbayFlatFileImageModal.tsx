@@ -22,6 +22,9 @@ import { mergeImageFamilies, type ImageFamilySummary } from './imageFamilies.pur
 // EFX P7 — pure assign/copy/cap semantics (reuse allowed, in-bucket dedup,
 // 12-cap rejection). See imageBuckets.vitest.test.ts for the invariants.
 import { EBAY_BUCKET_CAP, assignImage, copyImageAt, copySetTo, type Buckets } from './imageBuckets.pure'
+// EB-IMG P2 — "Copy images from another listing in this sheet" (pure mapping,
+// applied as ordinary dirty buckets; Save persists).
+import { mapSourceToBuckets } from './copyFromListing.pure'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -167,6 +170,12 @@ interface FamilySectionProps {
   productId: string
   /** Active eBay marketplace — image publish targets ONLY this market. */
   marketplace: string
+  /**
+   * EB-IMG P2 — the OTHER listings in this sheet, offered as copy sources.
+   * The multi-listing sheets are near-identical products, so a new listing
+   * usually starts from another listing's saved buckets and swaps 1-2 images.
+   */
+  copySources?: Array<{ productId: string; label: string }>
   /** Show collapse chevron + independent Save/Publish per section. */
   collapsible?: boolean
   /** Mirrors modal open prop — triggers workspace load on open, reset on close. */
@@ -182,7 +191,7 @@ interface FamilySectionProps {
 }
 
 const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
-  function FamilySection({ productId, marketplace, collapsible = false, open, onSyncColumns, isDraft = false }, ref) {
+  function FamilySection({ productId, marketplace, copySources, collapsible = false, open, onSyncColumns, isDraft = false }, ref) {
     const { toast } = useToast()
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -397,6 +406,56 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
         return next
       })
     }, [buckets, toast, bucketLabel])
+
+    // ── EB-IMG P2 — copy every saved bucket from ANOTHER listing in the
+    // sheet onto this family. Fetches the source's workspace, maps its
+    // saved eBay rows onto THIS family's axis/values (synonym axis names,
+    // case-insensitive values), and lands the result as dirty buckets —
+    // the operator reviews, swaps the odd image, then Saves/Publishes.
+    // Unmatched values are reported, never silently dropped.
+    const [copyingFrom, setCopyingFrom] = useState(false)
+    const copyFromListing = useCallback(async (src: { productId: string; label: string }) => {
+      if (copyingFrom) return
+      setCopyingFrom(true)
+      try {
+        const r = await beFetch(`/api/products/${src.productId}/images-workspace`)
+        if (!r.ok) throw new Error(`Could not load ${src.label}'s images (HTTP ${r.status})`)
+        const data = await r.json() as WorkspaceData
+        const result = mapSourceToBuckets({
+          sourceListing: (data.listing ?? []).map(i => ({
+            platform: i.platform,
+            variationId: i.variationId,
+            variantGroupKey: i.variantGroupKey,
+            variantGroupValue: i.variantGroupValue,
+            url: i.url,
+            position: i.position,
+          })),
+          targetAxis: axis,
+          targetValues: colorValues,
+        })
+        if (result.copiedImages === 0) {
+          toast.info(
+            result.unmatchedSourceValues.length > 0
+              ? `Nothing copied — ${src.label}'s sets (${result.unmatchedSourceValues.join(', ')}) don't match this family's ${axis === SHARED ? 'gallery' : axis} values`
+              : `${src.label} has no saved eBay images to copy — curate + Save that listing first`,
+          )
+          return
+        }
+        setBuckets(result.buckets)
+        toast.success(
+          `Copied ${result.copiedImages} image${result.copiedImages !== 1 ? 's' : ''}` +
+          (result.copiedSets > 0 ? ` across ${result.copiedSets} ${axis} set${result.copiedSets !== 1 ? 's' : ''} + Default` : '') +
+          ` from ${src.label} — review, then Save`,
+        )
+        if (result.unmatchedSourceValues.length > 0) {
+          toast.info(`Skipped (not on this listing): ${result.unmatchedSourceValues.join(', ')}`)
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Copy from listing failed')
+      } finally {
+        setCopyingFrom(false)
+      }
+    }, [copyingFrom, axis, colorValues, toast])
 
     // ── EFX P7 — explicit copy-set actions ('Copy this set to…' / 'Duplicate
     // to all values'). Client-state only; persistence stays with Save.
@@ -667,6 +726,24 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
             </>
           )}
           <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+            {/* EB-IMG P2 — copy every saved bucket from another listing in
+                this sheet (near-identical products → start from a sibling's
+                curation, swap the odd image, Save). */}
+            {!loading && copySources && copySources.length > 0 && (
+              <Menu
+                className="efx-bucket-menu"
+                label={copyingFrom
+                  ? <span className="inline-flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Copying…</span>
+                  : <span className="inline-flex items-center gap-1"><Copy className="w-3 h-3" />Copy from…</span>}
+                items={copySources.map(s => ({
+                  id: s.productId,
+                  label: s.label,
+                  disabled: copyingFrom || saving || publishing,
+                  onSelect: () => { void copyFromListing(s) },
+                }))}
+                triggerProps={{ 'aria-label': 'Copy saved images from another listing in this sheet' }}
+              />
+            )}
             {hasDirty && (
               <Button
                 size="sm" variant="ghost"
@@ -1465,6 +1542,9 @@ export function EbayFlatFileImageDrawer({ open, onClose, marketplace, families: 
                   ref={getRef(f.productId)}
                   productId={f.productId}
                   marketplace={publishMarket}
+                  copySources={families
+                    .filter(o => o.productId !== f.productId)
+                    .map(o => ({ productId: o.productId, label: o.parentSku || o.productId }))}
                   collapsible={isMulti}
                   open={open}
                   isDraft={f.hasEbayListing === false}
