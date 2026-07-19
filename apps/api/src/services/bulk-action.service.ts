@@ -3013,8 +3013,11 @@ export class BulkActionService {
       select: { id: true, channel: true, marketplace: true },
     })
     if (listings.length > 0) {
-      await this.prisma.outboundSyncQueue.createMany({
-        data: listings.map((l) => ({
+      // RT.2 — instant lane (no holdUntil ⇒ delay 0); cron backstops.
+      const { enqueueOutboundRowsInstant } = await import('./outbound-enqueue.js')
+      await enqueueOutboundRowsInstant(
+        this.prisma,
+        listings.map((l) => ({
           productId: item.id,
           channelListingId: l.id,
           // ChannelListing.channel is String; SyncChannel is an enum.
@@ -3037,7 +3040,8 @@ export class BulkActionService {
           } as any,
           syncStatus: 'PENDING',
         })),
-      })
+        { source: 'bulk-action' },
+      )
     }
 
     return { status: 'processed' }
@@ -3082,8 +3086,11 @@ export class BulkActionService {
     if (listings.length === 0) {
       return { status: 'skipped' }
     }
-    await this.prisma.outboundSyncQueue.createMany({
-      data: listings.map((l) => ({
+    // RT.2 — instant lane (no holdUntil ⇒ delay 0); cron backstops.
+    const { enqueueOutboundRowsInstant } = await import('./outbound-enqueue.js')
+    await enqueueOutboundRowsInstant(
+      this.prisma,
+      listings.map((l) => ({
         productId: item.id,
         channelListingId: l.id,
         targetChannel: l.channel as unknown as
@@ -3104,7 +3111,8 @@ export class BulkActionService {
         } as any,
         syncStatus: 'PENDING',
       })),
-    })
+      { source: 'bulk-listing-sync' },
+    )
     return { status: 'processed' }
   }
 

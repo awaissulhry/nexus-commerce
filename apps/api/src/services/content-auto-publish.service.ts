@@ -81,8 +81,13 @@ export async function enqueueContentSyncIfEnabled(listingIds: string[]): Promise
     }
 
     if (rows.length > 0) {
-      await prisma.outboundSyncQueue.createMany({ data: rows as any, skipDuplicates: true })
-      logger.info('[content-auto-publish] enqueued FULL_SYNC', { count: rows.length })
+      // RT.2 — instant lane (10-min content-batch grace honored as job delay).
+      const { enqueueOutboundRowsInstant } = await import('./outbound-enqueue.js')
+      await enqueueOutboundRowsInstant(prisma, rows as any, {
+        source: 'CONTENT_AUTO_PUBLISH',
+        skipDuplicates: true,
+      })
+      logger.info('[content-auto-publish] enqueued FULL_SYNC (instant lane)', { count: rows.length })
     }
   } catch (err) {
     logger.warn('[content-auto-publish] enqueue failed (non-fatal)', {

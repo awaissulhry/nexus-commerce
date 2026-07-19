@@ -1770,6 +1770,9 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const actor = userIdFor(request)
 
+      // RT.2 — delist rows created inside the tx; instant-lane jobs fired
+      // post-commit (see below).
+      const delistFireEntries: Array<{ id: string; productId: string | null; syncType: string }> = []
       const result = await prisma.$transaction(async (tx) => {
         // Rows still present in Product, in the bin (deletedAt != null).
         const eligible = await tx.product.findMany({
@@ -1848,7 +1851,8 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           if (enqueueable.length > 0) {
             const syncType =
               channelAction === 'unpublish' ? 'UNPUBLISH_LISTING' : 'DELETE_LISTING'
-            await tx.outboundSyncQueue.createMany({
+            const delistRows = await tx.outboundSyncQueue.createManyAndReturn({
+              select: { id: true, productId: true },
               data: enqueueable.map((l) => ({
                 productId: l.productId,
                 channelListingId: l.id,
@@ -1865,6 +1869,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
                 },
               })),
             })
+            delistFireEntries.push(...delistRows.map((r) => ({ id: r.id, productId: r.productId, syncType })))
             channelCascadeEnqueued = enqueueable.length
           }
         }
@@ -1965,6 +1970,12 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           },
         }
       })
+
+      // RT.2 — fire the delist jobs post-commit (instant lane; cron backstops).
+      if (delistFireEntries.length > 0) {
+        const { fireOutboundJobs } = await import('../services/outbound-enqueue.js')
+        void fireOutboundJobs(delistFireEntries, { source: 'products-bulk-hard-delete' })
+      }
 
       return { ok: true, ...result }
     } catch (err: any) {

@@ -26,6 +26,7 @@ import { sseResponseHeaders } from '../lib/sse.js'
 import { getAllAmazonCircuitStates, resetAllAmazonCircuits } from '../services/amazon-publish-gate.service.js'
 import { getAllEbayCircuitStates, resetAllEbayCircuits } from '../services/ebay-publish-gate.service.js'
 import { getAllShopifyCircuitStates, resetAllShopifyCircuits } from '../services/shopify-publish-gate.service.js'
+import { fireOutboundJobs } from '../services/outbound-enqueue.js'
 
 type Window = 'today' | '7d' | '30d' | '90d' | 'ytd' | 'custom'
 
@@ -3243,7 +3244,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           0,
           listing.masterQuantity - (listing.stockBuffer ?? 0),
         )
-        await prisma.$transaction(async (tx) => {
+        const qRow = await prisma.$transaction(async (tx) => {
           await tx.channelListing.update({
             where: { id },
             data: {
@@ -3252,7 +3253,8 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
               version: { increment: 1 },
             },
           })
-          await tx.outboundSyncQueue.create({
+          return tx.outboundSyncQueue.create({
+            select: { id: true, productId: true, syncType: true, holdUntil: true },
             data: {
               productId: listing.productId,
               channelListingId: listing.id,
@@ -3266,6 +3268,9 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
             },
           })
         })
+        // RT.2 — instant lane, fired POST-COMMIT (a job inside the tx could
+        // dispatch before the row is visible).
+        void fireOutboundJobs([qRow], { source: 'DASHBOARD_RESYNC' })
         return reply.send({
           success: true,
           kind,
@@ -3291,7 +3296,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
       const newPrice = Number(listing.masterPrice)
-      await prisma.$transaction(async (tx) => {
+      const priceRow = await prisma.$transaction(async (tx) => {
         await tx.channelListing.update({
           where: { id },
           data: {
@@ -3300,7 +3305,8 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
             version: { increment: 1 },
           },
         })
-        await tx.outboundSyncQueue.create({
+        return tx.outboundSyncQueue.create({
+          select: { id: true, productId: true, syncType: true, holdUntil: true },
           data: {
             productId: listing.productId,
             channelListingId: listing.id,
@@ -3314,6 +3320,8 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           },
         })
       })
+      // RT.2 — instant lane, fired post-commit.
+      void fireOutboundJobs([priceRow], { source: 'DASHBOARD_RESYNC' })
       return reply.send({ success: true, kind, newValue: newPrice })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)

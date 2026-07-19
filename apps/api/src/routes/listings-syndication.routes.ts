@@ -17,6 +17,7 @@ import {
 } from '../services/bulk-action.service.js'
 import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
 import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-master.service.js'
+import { fireOutboundJobs } from '../services/outbound-enqueue.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // SYNDICATION — universal /listings workspace endpoints
@@ -3718,10 +3719,11 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           listingId = created.id
         }
 
-        // Enqueue outbound sync for price/qty changes
+        // Enqueue outbound sync for price/qty changes (RT.2 — instant lane)
         const currency = mp === 'UK' ? 'GBP' : 'EUR'
         if ('price' in valueMap && valueMap.price != null && prevPrice !== valueMap.price) {
-          await prisma.outboundSyncQueue.create({
+          const qRow = await prisma.outboundSyncQueue.create({
+            select: { id: true, productId: true, syncType: true, holdUntil: true },
             data: {
               channelListingId: listingId,
               targetChannel: ch as any,
@@ -3732,9 +3734,11 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
               payload: { price: valueMap.price, currency, source: 'CASCADE' },
             } as any,
           })
+          void fireOutboundJobs([qRow], { source: 'CASCADE' })
         }
         if ('quantity' in valueMap && valueMap.quantity != null && prevQty !== valueMap.quantity) {
-          await prisma.outboundSyncQueue.create({
+          const qRow = await prisma.outboundSyncQueue.create({
+            select: { id: true, productId: true, syncType: true, holdUntil: true },
             data: {
               channelListingId: listingId,
               targetChannel: ch as any,
@@ -3745,6 +3749,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
               payload: { quantity: valueMap.quantity, source: 'CASCADE' },
             } as any,
           })
+          void fireOutboundJobs([qRow], { source: 'CASCADE' })
         }
 
         results.push({ productId: sibling.id, sku: sibling.sku })

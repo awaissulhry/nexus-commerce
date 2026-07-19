@@ -8,7 +8,7 @@
 
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
-import { outboundSyncQueue, adsSyncQueue } from '../lib/queue.js'
+import { outboundSyncQueue, adsSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 
 export default async function outboundQueueRoutes(fastify: FastifyInstance) {
@@ -158,9 +158,12 @@ export default async function outboundQueueRoutes(fastify: FastifyInstance) {
         include: { product: { select: { sku: true, name: true } } },
       })
 
-      // Re-enqueue with deterministic jobId (no delay — operator wants it now)
+      // Re-enqueue with deterministic jobId (no delay — operator wants it now).
+      // RT.2 — addJobSafely: a bare .add() against an unreachable Redis blocks
+      // forever (maxRetriesPerRequest null) and would hang this request.
       if (row.channelListingId && row.syncType) {
-        await outboundSyncQueue.add(
+        await addJobSafely(
+          outboundSyncQueue,
           'sync-job',
           {
             queueId: id,
@@ -247,14 +250,17 @@ export default async function outboundQueueRoutes(fastify: FastifyInstance) {
     })
 
     // Re-enqueue all
+    // RT.2 — addJobSafely (bounded, circuit-broken); a bare .add() against an
+    // unreachable Redis blocks forever and would hang the bulk request.
     await Promise.all(
       rows.map((r) =>
         r.channelListingId && r.syncType
-          ? outboundSyncQueue.add(
+          ? addJobSafely(
+              outboundSyncQueue,
               'sync-job',
               { queueId: r.id, productId: r.productId, channelListingId: r.channelListingId, targetChannel: r.targetChannel, syncType: r.syncType },
               { jobId: `${r.channelListingId}:${r.syncType}:retry:${Date.now()}` },
-            ).catch(() => {})
+            )
           : r.syncType?.startsWith('AD_') // B2 — ads rows go on the ads queue
             ? adsSyncQueue.add('ads-sync', { queueId: r.id, syncType: r.syncType }, { jobId: `ads-sync:${r.id}:retry:${Date.now()}` }).catch(() => {})
             : Promise.resolve(),

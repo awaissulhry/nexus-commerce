@@ -61,6 +61,7 @@ import { ServerTiming } from '../utils/server-timing.js'
 import { extractBrowseNodes } from '../services/amazon/browse-nodes.js'
 import { amazonMarketplaceId } from '../services/categories/marketplace-ids.js'
 import { removeAmazonListing } from '../services/amazon/amazon-flat-file-remove.service.js'
+import { enqueueOutboundRowsInstant } from '../services/outbound-enqueue.js'
 
 const amazon = new AmazonService()
 const schemaService = new CategorySchemaService(prisma, amazon)
@@ -1464,37 +1465,36 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
             // dead `rows.find(()=>true)` placeholder was removed (it matched the
             // first row regardless of SKU and was never used).
             if (!listing.productId) continue
-            await prisma.outboundSyncQueue.createMany({
-              data: [
-                {
-                  productId: listing.productId,
-                  channelListingId: listing.id,
-                  targetChannel: 'AMAZON',
-                  targetRegion: listing.region ?? mp,
-                  syncType: 'QUANTITY_UPDATE',
-                  syncStatus: 'PENDING',
-                  payload: { quantity: listing.quantity ?? 0, source: 'AMAZON_FLAT_FILE_SAVE' },
-                  externalListingId: listing.externalListingId ?? undefined,
-                  retryCount: 0,
-                  maxRetries: 3,
-                  holdUntil: new Date(Date.now() + 30_000),
-                },
-                ...(listing.price != null ? [{
-                  productId: listing.productId,
-                  channelListingId: listing.id,
-                  targetChannel: 'AMAZON' as const,
-                  targetRegion: listing.region ?? mp,
-                  syncType: 'PRICE_UPDATE' as const,
-                  syncStatus: 'PENDING' as const,
-                  payload: { price: Number(listing.price), currency: 'EUR', source: 'AMAZON_FLAT_FILE_SAVE' },
-                  externalListingId: listing.externalListingId ?? undefined,
-                  retryCount: 0,
-                  maxRetries: 3,
-                  holdUntil: new Date(Date.now() + 30_000),
-                }] : []),
-              ] as any,
-              skipDuplicates: true,
-            })
+            // RT.2 — instant-lane enqueue; the 30s holdUntil (operator undo
+            // grace + save-burst coalesce window) is honored as the job delay.
+            await enqueueOutboundRowsInstant(prisma, [
+              {
+                productId: listing.productId,
+                channelListingId: listing.id,
+                targetChannel: 'AMAZON',
+                targetRegion: listing.region ?? mp,
+                syncType: 'QUANTITY_UPDATE',
+                syncStatus: 'PENDING',
+                payload: { quantity: listing.quantity ?? 0, source: 'AMAZON_FLAT_FILE_SAVE' },
+                externalListingId: listing.externalListingId ?? undefined,
+                retryCount: 0,
+                maxRetries: 3,
+                holdUntil: new Date(Date.now() + 30_000),
+              },
+              ...(listing.price != null ? [{
+                productId: listing.productId,
+                channelListingId: listing.id,
+                targetChannel: 'AMAZON' as const,
+                targetRegion: listing.region ?? mp,
+                syncType: 'PRICE_UPDATE' as const,
+                syncStatus: 'PENDING' as const,
+                payload: { price: Number(listing.price), currency: 'EUR', source: 'AMAZON_FLAT_FILE_SAVE' },
+                externalListingId: listing.externalListingId ?? undefined,
+                retryCount: 0,
+                maxRetries: 3,
+                holdUntil: new Date(Date.now() + 30_000),
+              }] : []),
+            ] as any, { source: 'AMAZON_FLAT_FILE_SAVE', skipDuplicates: true })
           }
           // Content auto-publish: enqueue FULL_SYNC for listings
           // that have _autoPublishContent=true in platformAttributes.

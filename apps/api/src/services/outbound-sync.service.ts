@@ -532,6 +532,17 @@ export class OutboundSyncService {
         },
       });
 
+      // RT.2 — instant lane (covers every queueProductUpdate caller at once);
+      // dynamic import avoids a static cycle, addJobSafely never hangs.
+      void import("./outbound-enqueue.js")
+        .then(({ fireOutboundJobs }) =>
+          fireOutboundJobs(
+            [{ id: queueEntry.id, productId, syncType, holdUntil: null }],
+            { source: "QUEUE_PRODUCT_UPDATE" },
+          ),
+        )
+        .catch(() => {});
+
       this.stats.queued++;
 
       return {

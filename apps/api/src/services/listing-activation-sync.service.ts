@@ -37,11 +37,17 @@ export async function syncActivatedListings(listingIds: string[]): Promise<void>
 
     // Batch: one StockLevel query per distinct productId
     const productIds = [...new Set(listings.map((l) => l.productId).filter(Boolean))] as string[]
+    // RT.2 — WAREHOUSE-only + SUMMED. The old read was location-unfiltered
+    // (could pick up the AMAZON_FBA mirror row — split-inventory bleed) and
+    // the Map kept only the LAST row per product instead of summing.
     const stockLevels = await prisma.stockLevel.findMany({
-      where: { productId: { in: productIds } },
+      where: { productId: { in: productIds }, location: { type: 'WAREHOUSE' } },
       select: { productId: true, available: true },
     })
-    const availableByProduct = new Map(stockLevels.map((sl) => [sl.productId, sl.available]))
+    const availableByProduct = new Map<string, number>()
+    for (const sl of stockLevels) {
+      availableByProduct.set(sl.productId, (availableByProduct.get(sl.productId) ?? 0) + sl.available)
+    }
 
     const rows: any[] = []
     for (const listing of listings) {
@@ -64,8 +70,10 @@ export async function syncActivatedListings(listingIds: string[]): Promise<void>
     }
 
     if (rows.length > 0) {
-      await prisma.outboundSyncQueue.createMany({ data: rows })
-      logger.info('[listing-activation-sync] enqueued QUANTITY_UPDATE', {
+      // RT.2 — instant lane (5s activation grace honored as job delay).
+      const { enqueueOutboundRowsInstant } = await import('./outbound-enqueue.js')
+      await enqueueOutboundRowsInstant(prisma, rows, { source: 'LISTING_ACTIVATED' })
+      logger.info('[listing-activation-sync] enqueued QUANTITY_UPDATE (instant lane)', {
         count: rows.length,
         listingIds: listingIds.slice(0, 10),
       })

@@ -66,6 +66,7 @@ import { loadSharedMembershipRows } from '../services/ebay-shared-membership-row
 import { buildListingScopeWhere, type ListingScope } from '../services/flat-file/listing-scope.js';
 // EFX P4 — required-aspect push preflight (pure helper; requiredness comes from schemaCache)
 import { findMissingRequiredAspects, type AspectRequirement } from '../services/ebay-aspect-preflight.js';
+import { fireOutboundJobs } from '../services/outbound-enqueue.js';
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com';
 
@@ -944,7 +945,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           const qtyChanged = newQty != null && oldQty !== newQty;
 
           if (priceChanged) {
-            await prisma.outboundSyncQueue.create({
+            const qRow = await prisma.outboundSyncQueue.create({
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               data: {
                 channelListingId: listingId,
@@ -955,11 +956,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                 holdUntil: null,
                 payload: { price: newPrice, currency: mp === 'UK' ? 'GBP' : 'EUR' },
               } as any,
+              select: { id: true, productId: true, syncType: true, holdUntil: true },
             });
+            // RT.2 — instant lane (holdUntil null ⇒ delay 0); cron backstops.
+            void fireOutboundJobs([qRow], { source: 'EBAY_FLAT_FILE_SAVE' })
           }
 
           if (qtyChanged) {
-            await prisma.outboundSyncQueue.create({
+            const qRow = await prisma.outboundSyncQueue.create({
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               data: {
                 channelListingId: listingId,
@@ -970,7 +974,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                 holdUntil: null,
                 payload: { quantity: newQty },
               } as any,
+              select: { id: true, productId: true, syncType: true, holdUntil: true },
             });
+            void fireOutboundJobs([qRow], { source: 'EBAY_FLAT_FILE_SAVE' })
           }
 
           // Content auto-publish: title/description changes

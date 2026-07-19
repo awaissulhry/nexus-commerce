@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { fireOutboundJobs } from '../services/outbound-enqueue.js'
 
 /**
  * /api/catalog/organize — session-based publish + undo.
@@ -170,6 +171,12 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
           },
         })
 
+        // RT.2 — instant lane, post-commit (rows created inside the tx above).
+        void fireOutboundJobs(
+          queueIds.map((id) => ({ id, productId, syncType: 'LISTING_SYNC' })),
+          { source: 'catalog-organize' },
+        )
+
         published++
       } catch (err) {
         fastify.log.error({ err, productId }, '[catalog/organize/publish] change failed')
@@ -267,6 +274,7 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
     sessionId: string,
     now: Date,
   ): Promise<void> {
+    const undoQueueIds: string[] = []
     await prisma.$transaction(async (tx) => {
       await tx.product.update({
         where: { id: change.productId },
@@ -280,7 +288,8 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
         select: { id: true, channel: true, marketplace: true },
       })
       if (listings.length > 0) {
-        await tx.outboundSyncQueue.createMany({
+        const queueRows = await tx.outboundSyncQueue.createManyAndReturn({
+          select: { id: true },
           data: listings.map((cl) => ({
             productId: change.productId,
             channelListingId: cl.id,
@@ -297,12 +306,18 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
             },
           })),
         })
+        undoQueueIds.push(...queueRows.map((r) => r.id))
       }
       await tx.catalogOrganizeChange.update({
         where: { id: change.id },
         data: { status: 'UNDONE', undoneAt: now },
       })
     })
+    // RT.2 — instant lane, post-commit.
+    void fireOutboundJobs(
+      undoQueueIds.map((id) => ({ id, productId: change.productId, syncType: 'LISTING_SYNC' })),
+      { source: 'catalog-organize-undo' },
+    )
   }
 
   // ── POST /api/catalog/organize/undo/:sessionId ───────────────────
