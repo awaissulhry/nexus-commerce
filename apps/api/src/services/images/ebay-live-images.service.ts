@@ -157,9 +157,23 @@ export async function refreshEbayLiveImages(
 
   const product = await prisma.product.findUnique({
     where: { id: productId },
-    select: { id: true, ebayItemId: true },
+    select: { id: true, sku: true, ebayItemId: true },
   })
-  if (!product?.ebayItemId) {
+  if (!product) {
+    return { ...base, itemId: null, skipped: 'NO_ITEM_ID' }
+  }
+  // EB-IMG — listing shells carry no ebayItemId; their live ItemID lives on
+  // the SharedListingMembership rows (parentSku = shell SKU). Fall back so
+  // the drawer's live strip and post-publish read-back work on shells too.
+  let liveItemId = product.ebayItemId
+  if (!liveItemId && product.sku) {
+    const membership = await prisma.sharedListingMembership.findFirst({
+      where: { parentSku: product.sku, status: 'ACTIVE' },
+      select: { itemId: true },
+    })
+    liveItemId = membership?.itemId ?? null
+  }
+  if (!liveItemId) {
     return { ...base, itemId: null, skipped: 'NO_ITEM_ID' }
   }
 
@@ -167,14 +181,14 @@ export async function refreshEbayLiveImages(
   // missing. Caller surfaces the "skipped" code so the FE can show
   // a "configure eBay creds" hint.
   if (!hasRealApi()) {
-    return { ...base, itemId: product.ebayItemId, skipped: 'API_DISABLED' }
+    return { ...base, itemId: liveItemId, skipped: 'API_DISABLED' }
   }
   if (!hasCreds()) {
-    return { ...base, itemId: product.ebayItemId, skipped: 'NO_CREDS' }
+    return { ...base, itemId: liveItemId, skipped: 'NO_CREDS' }
   }
 
   // Real call.
-  const xmlPayload = buildGetItemRequest(product.ebayItemId)
+  const xmlPayload = buildGetItemRequest(liveItemId)
   const compatLevel = process.env.EBAY_COMPAT_LEVEL || '1193'
 
   let body: string
@@ -193,13 +207,13 @@ export async function refreshEbayLiveImages(
       body: xmlPayload,
     })
     if (!res.ok) {
-      return { ...base, itemId: product.ebayItemId, error: `GetItem HTTP ${res.status}` }
+      return { ...base, itemId: liveItemId, error: `GetItem HTTP ${res.status}` }
     }
     body = await res.text()
   } catch (err) {
     return {
       ...base,
-      itemId: product.ebayItemId,
+      itemId: liveItemId,
       error: err instanceof Error ? err.message : 'GetItem failed',
     }
   }
@@ -208,7 +222,7 @@ export async function refreshEbayLiveImages(
   const ackMatch = body.match(/<Ack>([^<]+)<\/Ack>/)
   if (ackMatch?.[1] === 'Failure') {
     const errMatch = body.match(/<ShortMessage>([^<]+)<\/ShortMessage>/)
-    return { ...base, itemId: product.ebayItemId, error: `eBay GetItem Failure: ${errMatch?.[1] ?? 'unknown'}` }
+    return { ...base, itemId: liveItemId, error: `eBay GetItem Failure: ${errMatch?.[1] ?? 'unknown'}` }
   }
 
   const parsed = parseGetItemResponse(body)
@@ -302,7 +316,7 @@ export async function refreshEbayLiveImages(
 
   return {
     ...base,
-    itemId: product.ebayItemId,
+    itemId: liveItemId,
     picturesFetched: parsed.galleryUrls.length,
     variationSetsFetched: parsed.variationSets.length,
     rowsUpserted: upserted,

@@ -28,6 +28,7 @@ import {
 import { renderListingDescriptionSafe } from '../ebay-description-theme.service.js'
 import { logger } from '../../utils/logger.js'
 import { resolveImagePictureAxis } from './ebay-image-axis.pure.js'
+import { publishEbaySharedListingImages } from './ebay-shared-image-publish.service.js'
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
 
@@ -62,9 +63,17 @@ export async function publishEbayImagesViaInventory(
 ): Promise<EbayInventoryPublishResult> {
   const product = await prisma.product.findUnique({
     where: { id: productId },
-    select: { id: true, sku: true, isParent: true, parentId: true, imageAxisPreference: true },
+    select: { id: true, sku: true, isParent: true, parentId: true, imageAxisPreference: true, productType: true },
   })
   if (!product) throw new Error(`Product ${productId} not found`)
+
+  // EB-IMG — LISTING SHELLS (extra flat-file listings) have no product
+  // children; their variants are pooled SKUs via SharedListingMembership and
+  // their live presence is a Trading ItemID. Only a Trading revise can change
+  // their pictures — dispatch before the Inventory family machinery.
+  if (product.productType === 'EBAY_LISTING_SHELL') {
+    return publishEbaySharedListingImages(productId, marketplace, activeAxis)
+  }
 
   // The Images tab can be opened on the parent OR a child — resolve the family
   // root either way so we publish the whole variation group.
@@ -80,10 +89,13 @@ export async function publishEbayImagesViaInventory(
   const groupKey = (parentRow.sku as string) || familyParentId
   const variantRows = rows.filter((r) => !r._isParent)
 
-  // Phase 2 covers the variation-group case (the real curation use case). A
-  // single-SKU eBay listing uses a different Inventory flow on the flat-file page.
+  // EB-IMG — no variant children means this is NOT an Inventory variation
+  // group: a single-SKU listing or an adopted Trading listing. The Trading
+  // lane resolves the live ItemID (memberships → Product.ebayItemId) and
+  // revises its pictures; it returns its own precise error when no live
+  // listing exists. (The old "isn’t wired here yet" dead-end is gone.)
   if (variantRows.length === 0) {
-    return { success: false, message: 'Single-SKU eBay image publish isn’t wired here yet — push from the eBay flat-file page', pictureCount: 0, colorSetCount: 0, error: 'No variant children' }
+    return publishEbaySharedListingImages(productId, marketplace, activeAxis)
   }
 
   // Resolve the markets the VARIANTS are actually listed + priced on. eBay
