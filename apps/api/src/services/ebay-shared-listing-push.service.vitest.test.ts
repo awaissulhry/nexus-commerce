@@ -323,3 +323,24 @@ describe('incident #26 — long list-like specifics become multi-value', () => {
     expect(specs.Stagione).toBe('Tutte le stagioni')
   })
 })
+
+// ── Incident #38 — a catalog CHILD can never become its own listing ─────────
+import { vi as vi38 } from 'vitest'
+describe('incident #38 — DB-truth creation gate', () => {
+  it('refuses to create a listing whose parentSku is a VARIANT in the catalog tree', async () => {
+    const prismaMock = await import('../db.js')
+    const spy = vi38.spyOn(prismaMock.default.product, 'findFirst')
+      // gate lookup: the "parent" is actually a child
+      .mockResolvedValueOnce({ parentId: 'family-1' } as never)
+      // family name lookup
+      .mockResolvedValueOnce({ sku: 'AIREON' } as never)
+    const res = await createSharedListing(
+      { sku: 'AIREON-PANT-NERO-NEO-MEN-5XL', title: 'T', category_id: '9', condition: 'NEW' } as never,
+      [{ sku: 'AIREON-PANT-NERO-NEO-MEN-5XL', it_price: 99, it_qty: 1, aspect_taglia: '5XL', _productId: 'p1' }] as never,
+      { oauthToken: 'tok', market: 'IT', db: { sharedListingMembership: { findFirst: async () => null, create: async () => ({}) }, product: { findMany: async () => [] }, $transaction: async (x: Promise<unknown>[]) => Promise.all(x) } } as never,
+    )
+    expect(res.status).toBe('ERROR')
+    expect(res.message).toContain('VARIANT of family "AIREON"')
+    spy.mockRestore()
+  })
+})

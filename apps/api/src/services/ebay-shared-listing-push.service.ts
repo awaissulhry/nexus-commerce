@@ -271,6 +271,24 @@ export async function createSharedListing(
       }
     }
 
+    // Incident #38 — DB-TRUTH GATE: a product that is a CHILD in the catalog
+    // tree can NEVER become its own listing. At 02:25 the AIREON push arrived
+    // as singleton 'families' (one shared-flagged child row each) and minted a
+    // standalone [1 variante] listing per variant. The tree is the authority.
+    try {
+      const parentProduct = await prisma.product.findFirst({
+        where: { sku: parentSku, deletedAt: null },
+        select: { parentId: true },
+      })
+      if (parentProduct?.parentId) {
+        const realParent = await prisma.product.findFirst({ where: { id: parentProduct.parentId }, select: { sku: true } })
+        return {
+          status: 'ERROR', parentSku, market, memberships: 0,
+          message: `"${parentSku}" is a VARIANT of family "${realParent?.sku ?? parentProduct.parentId}" — a variant never becomes its own listing. Include the family's parent row in the push (grouped as one family).`,
+        }
+      }
+    } catch { /* gate is best-effort; the belts below still apply */ }
+
     const existing = await db.sharedListingMembership.findFirst({ where: { marketplace: market, parentSku } })
     if (existing) {
       const alive = await isListingAlive(String((existing as { itemId?: unknown }).itemId ?? ''))

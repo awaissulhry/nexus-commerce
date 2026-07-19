@@ -2083,6 +2083,21 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             });
             continue;
           }
+          // Incident #38 — DB-TRUTH belt: parentage cells can be blank/wrong;
+          // the catalog tree is the authority. A row whose PRODUCT is a child
+          // never mints a standalone listing.
+          const rowPid = String((row as Record<string, unknown>)._productId ?? '');
+          if (rowPid) {
+            const treeRow = await prisma.product.findFirst({ where: { id: rowPid }, select: { parentId: true } });
+            if (treeRow?.parentId) {
+              const treeParent = await prisma.product.findFirst({ where: { id: treeRow.parentId }, select: { sku: true } });
+              perRowResults.push({
+                sku, market: mp, status: 'ERROR',
+                message: `"${sku}" is a variant of family "${treeParent?.sku ?? 'unknown'}" in the catalog — include that parent row in the push; a variant never publishes standalone`,
+              });
+              continue;
+            }
+          }
         }
 
         const prefix = mp.toLowerCase() as Lowercase<Market>;
