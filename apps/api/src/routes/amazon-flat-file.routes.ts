@@ -32,6 +32,10 @@ import {
   captureTemplateToVault,
   captureFamilyWorkbook,
   detectWorkbookFamilyKey,
+} from '../services/amazon/template-vault.service.js'
+import { stampPendingSync } from '../services/flat-file/pending-sync-stamp.js'
+import { verifySkusAgainstLive } from '../services/amazon/flat-file-verify-live.service.js'
+import {
   listVaultEntries,
   buildAmazonTemplateExport,
 } from '../services/amazon/template-vault.service.js'
@@ -340,6 +344,9 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
 
     try {
       const rows = await flatFileService.getExistingRows(marketplace, productType, productId, scope)
+      // FFT.4 — honest pending/failed outbound state per row (queue lag or a
+      // failed push must never read as "my saved value reverted").
+      await stampPendingSync(prisma, rows as Array<Record<string, unknown>>, { channel: 'AMAZON', marketplace })
       return reply.send({ rows })
     } catch (err: any) {
       request.log.error(err, 'flat-file/rows failed')
@@ -780,6 +787,35 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       request.log.error(err, 'flat-file/preflight failed')
       return reply.code(500).send({ error: err?.message ?? 'Preflight failed' })
+    }
+  })
+
+  // ── POST /api/amazon/flat-file/verify-live ──────────────────────────
+  // FFT.4 — read-only content compare vs the LIVE Amazon listing per SKU
+  // (title/description/brand/bullets/price/qty; FBA qty never counted as
+  // drift). The client renders drifts with adopt-live / keep-mine actions.
+  fastify.post<{
+    Body: { skus: string[]; marketplace?: string }
+  }>('/amazon/flat-file/verify-live', async (request, reply) => {
+    const { skus, marketplace = 'IT' } = request.body
+    if (!Array.isArray(skus) || skus.length === 0) {
+      return reply.code(400).send({ error: 'skus must be non-empty' })
+    }
+    if (skus.length > 50) {
+      return reply.code(400).send({ error: 'Max 50 SKUs per verify — select a family or a smaller batch' })
+    }
+    try {
+      const mp = marketplace.toUpperCase()
+      const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
+      const results = await verifySkusAgainstLive(
+        prisma,
+        (sku, mpId) => amazon.fetchListingForFlatFile(sku, mpId),
+        { skus, marketplace: mp, marketplaceId },
+      )
+      return reply.send({ results })
+    } catch (err: any) {
+      request.log.error(err, 'flat-file/verify-live failed')
+      return reply.code(500).send({ error: err?.message ?? 'Verify against live failed' })
     }
   })
 

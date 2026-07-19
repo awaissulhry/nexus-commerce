@@ -39,6 +39,7 @@ import {
 } from '../services/ebay-flat-file-pull-preview.service.js';
 import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, toListingLanguage, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
 import { parseThemeAxes, canonicalizeRowAspects } from '../services/ebay-theme-axes.js';
+import { stampPendingSync } from '../services/flat-file/pending-sync-stamp.js';
 import { pushSharedListings, POOL_DEFAULT_QTY_SENTINEL, type SharedListingResult } from '../services/ebay-shared-listing-push.service.js';
 import { callTradingApi, siteIdForMarket } from '../services/ebay-trading-api.service.js';
 import { reconcileMembershipsFromEbay, parseLiveVariations } from '../services/ebay-membership-reconcile.service.js';
@@ -454,6 +455,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       } catch (err) {
         request.log.warn(err, 'ebay/flat-file/rows: aspect canonicalization failed (non-fatal)')
       }
+
+      // FFT.4 — honest pending/failed outbound state per row.
+      await stampPendingSync(prisma, rows as Array<Record<string, unknown>>, { channel: 'EBAY', marketplace })
 
       return reply.send({ rows });
     } catch (err: unknown) {
