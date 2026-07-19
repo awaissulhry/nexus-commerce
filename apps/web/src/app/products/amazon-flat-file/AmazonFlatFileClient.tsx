@@ -904,6 +904,21 @@ export default function AmazonFlatFileClient({
   // operator hasn't reviewed the results yet.
   const [pullDiffOpen, setPullDiffOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false) // FX.5b — smart import wizard
+  // FFT.5b / AMX.4 — durable post-apply import report (per market, dismissible).
+  interface ImportReport { at: number; fileName: string; cellCount: number; newRows: number; updatedRows: number; deletes: number; skus: string[] }
+  const [importReport, setImportReport] = useState<ImportReport | null>(null)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`ff-amazon-import-report-${marketplace}`)
+      const rep = raw ? JSON.parse(raw) as ImportReport : null
+      // Reports older than 7 days quietly expire.
+      setImportReport(rep && Date.now() - rep.at < 7 * 24 * 3600_000 ? rep : null)
+    } catch { setImportReport(null) }
+  }, [marketplace])
+  const dismissImportReport = useCallback(() => {
+    try { localStorage.removeItem(`ff-amazon-import-report-${marketplace}`) } catch { /* ignore */ }
+    setImportReport(null)
+  }, [marketplace])
   const [importInitialFile, setImportInitialFile] = useState<File | null>(null) // FX.7 — file dropped on the grid
   const [pullDiffData, setPullDiffData] = useState<{
     pulledRows: Row[]
@@ -3188,6 +3203,27 @@ export default function AmazonFlatFileClient({
       `Imported ${result.cellCount} value${result.cellCount === 1 ? '' : 's'}` +
       `${newCount ? ` · creating ${newCount} product${newCount === 1 ? '' : 's'}` : ''} · saving…`,
     )
+    // FFT.5b / AMX.4 — durable post-apply report ("what did that import do?"):
+    // persists per market, rendered as a banner until dismissed, and the
+    // version history gets a labeled entry naming the file.
+    try {
+      const changedSkus = [
+        ...result.updates.map((u) => String(prev[idxById.get(u.rowId) ?? -1]?.item_sku ?? '')).filter(Boolean),
+        ...result.newRows.map((n) => n.sku),
+      ]
+      const report = {
+        at: Date.now(),
+        fileName: result.fileName ?? '',
+        cellCount: result.cellCount,
+        newRows: result.newRows.length,
+        updatedRows: result.updates.length,
+        deletes: result.deleteSkus?.length ?? 0,
+        skus: changedSkus.slice(0, 500),
+      }
+      localStorage.setItem(`ff-amazon-import-report-${marketplace}`, JSON.stringify(report))
+      setImportReport(report)
+    } catch { /* quota — report is best-effort */ }
+    createVersion(`Import: ${result.fileName || 'file'}`)
     void syncToPlatform(next.filter((r) => !r._ghost), false).catch(() => { /* sync chip shows the failure */ })
     // A3w — ::record_action=delete rows the owner explicitly armed in the wizard
     // (checkbox + typed DELETE) route through the existing market-scoped removal
@@ -3201,7 +3237,7 @@ export default function AmazonFlatFileClient({
       }
       if (rowsToRemove.length > 0) void removeFromAmazon(rowsToRemove)
     }
-  }, [pushSnapshot, setRows, productType, marketplace, syncToPlatform, familyId, removeFromAmazon, toast])
+  }, [pushSnapshot, setRows, productType, marketplace, syncToPlatform, familyId, removeFromAmazon, toast, createVersion])
 
   // FX.1 — export the grid to TSV (Amazon template), CSV, or XLSX. Uses
   // effectiveManifest so a multi-category (MT) union sheet exports every column;
@@ -4486,6 +4522,23 @@ export default function AmazonFlatFileClient({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* FFT.5b / AMX.4 — durable post-apply import report */}
+      {importReport && (
+        <div className="mx-3 mt-2 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/20 px-3 py-1.5 text-[11.5px] text-emerald-800 dark:text-emerald-200 flex items-center gap-2 flex-wrap">
+          <span>
+            Import applied <b>{importReport.cellCount}</b> value{importReport.cellCount !== 1 ? 's' : ''} ·{' '}
+            <b>{importReport.newRows}</b> new · <b>{importReport.updatedRows}</b> updated
+            {importReport.deletes > 0 && <> · <b>{importReport.deletes}</b> removal{importReport.deletes !== 1 ? 's' : ''}</>}
+            {importReport.fileName && <> — <span className="font-mono">{importReport.fileName}</span></>}
+            <span className="text-emerald-600/70 dark:text-emerald-300/60"> · {new Date(importReport.at).toLocaleString()}</span>
+          </span>
+          <span title={importReport.skus.slice(0, 40).join(', ') + (importReport.skus.length > 40 ? '…' : '')}
+            className="underline decoration-dotted underline-offset-2 cursor-help">{importReport.skus.length} SKUs</span>
+          <button type="button" onClick={dismissImportReport}
+            className="ml-auto px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40">Dismiss</button>
         </div>
       )}
 

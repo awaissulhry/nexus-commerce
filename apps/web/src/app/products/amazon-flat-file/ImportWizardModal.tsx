@@ -88,6 +88,8 @@ export interface ImportApplyResult {
    * routes them through the existing market-scoped removeFromAmazon flow.
    */
   deleteSkus?: string[]
+  /** AMX.4 — source filename for the post-apply report + history label. */
+  fileName?: string
 }
 
 export interface ImportWizardModalProps {
@@ -380,6 +382,54 @@ export function ImportWizardModal({
 
   const mappedCount = useMemo(() => [...mapping.values()].filter(Boolean).length, [mapping])
 
+  // FFT.5b / AMX.2 — the FBA belt above strips qty cells SILENTLY; this memo
+  // re-derives who was affected so the preview can say so (count + SKUs).
+  const fbaQtyStripped = useMemo(() => {
+    if (!parsed) return [] as string[]
+    const pairs = [...mapping].filter(([, col]) => col) as Array<[string, string]>
+    const qtyHeaders = pairs.filter(([, col]) => isQtyColumn(col)).map(([h]) => h)
+    if (!qtyHeaders.length) return []
+    const skuHeader = pairs.find(([, col]) => col === 'item_sku')?.[0]
+    const fulfillmentHeader = pairs.find(([, col]) => col.includes('fulfillment_channel_code'))?.[0]
+    if (!fulfillmentHeader) return []
+    const out: string[] = []
+    for (const row of parsed.rows) {
+      const r = row as Record<string, unknown>
+      if (r.__action === 'delete') continue
+      const fulfillment = r[fulfillmentHeader]
+      if (!fulfillment || !FBA_VALUE_HINT.test(String(fulfillment))) continue
+      if (qtyHeaders.some((h) => String(r[h] ?? '').trim() !== '')) {
+        out.push(String(skuHeader ? r[skuHeader] ?? '' : '').trim() || '(no sku)')
+      }
+    }
+    return out
+  }, [parsed, mapping])
+
+  // AMX.2 — flagged coerce issues WITH their locations (sku + column label).
+  const [showFlagged, setShowFlagged] = useState(false)
+  const flaggedIssues = useMemo(() => {
+    if (!coerced) return [] as Array<{ sku: string; label: string; from: string; note?: string }>
+    return coerced.issues
+      .filter((i) => i.status === 'flagged')
+      .map((i) => ({
+        sku: String((coerced.rows[i.rowIndex] as Record<string, unknown> | undefined)?.item_sku ?? `row ${i.rowIndex + 1}`),
+        label: columnLabels.get(i.columnId) ?? i.columnId,
+        from: i.from,
+        note: i.note,
+      }))
+  }, [coerced, columnLabels])
+
+  // AMX.2 — duplicate SKUs merged by the plan, named (was a bare count).
+  const duplicateSkuList = useMemo(() => {
+    if (!coerced) return [] as string[]
+    const seen = new Map<string, number>()
+    for (const r of coerced.rows as Array<Record<string, unknown>>) {
+      const sku = String(r.item_sku ?? '').trim()
+      if (sku) seen.set(sku, (seen.get(sku) ?? 0) + 1)
+    }
+    return [...seen.entries()].filter(([, n]) => n > 1).map(([sku]) => sku)
+  }, [coerced])
+
   // A3w — owner import policies (qty OFF / prices ON by default) applied as a
   // plan-time column allowlist, so excluded columns never even show as diffs.
   const planColumns = useMemo(() => {
@@ -550,8 +600,10 @@ export function ImportWizardModal({
     const updates = plan.updates
       .map((u) => ({ rowId: u.rowId, cells: pick(`upd:${u.rowId}`, u.cells) }))
       .filter((u) => Object.keys(u.cells).length > 0)
-    return { newRows, updates, cellCount, deleteSkus: deletesArmed ? deleteSkus : [] }
-  }, [plan, isOn, deletesArmed, deleteSkus])
+    // AMX.4 — the applying side stamps the report + version-history label with
+    // the source filename.
+    return { newRows, updates, cellCount, deleteSkus: deletesArmed ? deleteSkus : [], fileName }
+  }, [plan, isOn, deletesArmed, deleteSkus, fileName])
 
   if (!open) return null
 
@@ -890,10 +942,20 @@ export function ImportWizardModal({
                 <div className="text-xs text-slate-500 dark:text-slate-400">
                   <span className="font-semibold text-emerald-600 dark:text-emerald-400">{plan.stats.newRows}</span> new ·{' '}
                   <span className="font-semibold text-sky-600 dark:text-sky-400">{plan.stats.updatedRows}</span> updated
-                  {flaggedCount > 0 && <> · <span className="text-amber-600 dark:text-amber-400">{flaggedCount} value{flaggedCount !== 1 ? 's' : ''} flagged</span></>}
+                  {flaggedCount > 0 && (
+                    <> · <button type="button" onClick={() => setShowFlagged((v) => !v)}
+                      className="text-amber-600 dark:text-amber-400 underline decoration-dotted underline-offset-2"
+                      title="Show exactly which cells were flagged">{flaggedCount} value{flaggedCount !== 1 ? 's' : ''} flagged{showFlagged ? ' ▴' : ' ▾'}</button></>
+                  )}
                   {needsRequired > 0 && <> · <span className="text-rose-600 dark:text-rose-400">{needsRequired} missing required</span></>}
-                  {plan.duplicateSkus > 0 && <> · {plan.duplicateSkus} duplicate{plan.duplicateSkus !== 1 ? 's' : ''} merged</>}
+                  {plan.duplicateSkus > 0 && (
+                    <> · <span title={duplicateSkuList.join(', ')} className="underline decoration-dotted underline-offset-2 cursor-help">{plan.duplicateSkus} duplicate{plan.duplicateSkus !== 1 ? 's' : ''} merged</span></>
+                  )}
                   {plan.skippedNoSku > 0 && <> · {plan.skippedNoSku} skipped (no SKU)</>}
+                  {fbaQtyStripped.length > 0 && (
+                    <> · <span title={`FBA quantity is Amazon-managed — file qty ignored for: ${fbaQtyStripped.slice(0, 20).join(', ')}${fbaQtyStripped.length > 20 ? '…' : ''}`}
+                      className="text-slate-500 underline decoration-dotted underline-offset-2 cursor-help">{fbaQtyStripped.length} FBA qty ignored</span></>
+                  )}
                 </div>
                 {busy && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
                 <div className="ml-auto flex items-center gap-1 text-[11px] text-slate-500">
@@ -908,6 +970,20 @@ export function ImportWizardModal({
                   </button>
                 </div>
               </div>
+
+              {/* AMX.2 — flagged values, located (sku + column + original value) */}
+              {showFlagged && flaggedIssues.length > 0 && (
+                <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200 max-h-40 overflow-auto space-y-0.5">
+                  {flaggedIssues.slice(0, 50).map((iss, i) => (
+                    <div key={i} className="flex gap-2 flex-wrap">
+                      <span className="font-mono">{iss.sku}</span>
+                      <span className="font-semibold">{iss.label}</span>
+                      <span className="truncate">&lsquo;{iss.from}&rsquo;{iss.note ? ` — ${iss.note}` : ''}</span>
+                    </div>
+                  ))}
+                  {flaggedIssues.length > 50 && <div>+{flaggedIssues.length - 50} more…</div>}
+                </div>
+              )}
 
               {/* A3w — owner import policies */}
               <div className="flex items-center gap-4 flex-wrap text-xs text-slate-600 dark:text-slate-300">
