@@ -394,8 +394,49 @@ export async function createSharedListing(
           : 'condition')
       }
       if (!input.variations.length) missing.push('variant rows')
+      // Incident #41 (eBay 21919136 on VENTRA-ALT) — a SHELL family's rows carry
+      // no image cells (only real products fan ProductImage URLs into image_1…6),
+      // and `pictureUrls: undefined` slipped past the old Array-only check
+      // straight into a photo-less AddFixedPriceItem. Borrow the POOL's master
+      // gallery — the variants' products (or their pool parent) — so every extra
+      // listing ships the same gallery the primary does.
+      if (!input.pictureUrls?.length) {
+        try {
+          const variantPids = [...new Set(variantRows.map((r) => str(r._productId)).filter(Boolean))]
+          let borrowed: string[] = []
+          if (variantPids.length) {
+            const poolChildren = await prisma.product.findMany({
+              where: { id: { in: variantPids } },
+              select: { parentId: true },
+            })
+            const poolParentIds = [...new Set(poolChildren.map((p) => p.parentId).filter((x): x is string => Boolean(x)))]
+            if (poolParentIds.length) {
+              const masters = await prisma.productImage.findMany({
+                where: { productId: { in: poolParentIds } },
+                orderBy: [{ productId: 'asc' }, { sortOrder: 'asc' }],
+                take: 12,
+                select: { url: true },
+              })
+              borrowed = masters.map((m) => m.url).filter(Boolean)
+            }
+          }
+          if (!borrowed.length) {
+            const ownProduct = await prisma.product.findFirst({ where: { sku: parentSku, deletedAt: null }, select: { id: true } })
+            if (ownProduct) {
+              const masters = await prisma.productImage.findMany({
+                where: { productId: ownProduct.id },
+                orderBy: { sortOrder: 'asc' },
+                take: 12,
+                select: { url: true },
+              })
+              borrowed = masters.map((m) => m.url).filter(Boolean)
+            }
+          }
+          if (borrowed.length) input.pictureUrls = borrowed
+        } catch { /* borrow is best-effort; the pre-flight below still names the gap */ }
+      }
       const pics = (input as { pictureUrls?: unknown[] }).pictureUrls
-      if (Array.isArray(pics) && pics.length === 0) missing.push('images')
+      if (!Array.isArray(pics) || pics.length === 0) missing.push('images')
       if (missing.length > 0) {
         return { status: 'ERROR', parentSku, market, memberships: 0, message: `cannot create the listing — missing: ${missing.join(', ')} (fill these on the parent row, Save, then push again)` }
       }

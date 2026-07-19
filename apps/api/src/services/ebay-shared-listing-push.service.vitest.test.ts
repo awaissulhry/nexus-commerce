@@ -230,10 +230,10 @@ describe('pushSharedListings', () => {
     const db = mockDb(null)
     const addFn = vi.fn(async () => ({ itemId: 'IT-' + Math.random().toString(36).slice(2, 6) }))
     const rows = [
-      { sku: 'A', _isParent: true, platformProductId: 'A', title: 'A', category_id: '1', condition: '1000' },
+      { sku: 'A', _isParent: true, platformProductId: 'A', title: 'A', category_id: '1', condition: '1000', image_1: 'https://img.example/a.jpg' },
       { sku: 'A-M', platformProductId: 'A', it_price: 5, it_qty: 1, aspect_Size: 'M', _productId: 'a1' },
       { sku: 'A-L', platformProductId: 'A', it_price: 5, it_qty: 1, aspect_Size: 'L', _productId: 'a2' },
-      { sku: 'B', _isParent: true, platformProductId: 'B', title: 'B', category_id: '1', condition: '1000' },
+      { sku: 'B', _isParent: true, platformProductId: 'B', title: 'B', category_id: '1', condition: '1000', image_1: 'https://img.example/b.jpg' },
       { sku: 'B-M', platformProductId: 'B', it_price: 7, it_qty: 2, aspect_Size: 'M', _productId: 'b1' },
     ]
     const results = await pushSharedListings(rows, { oauthToken: 'O', market: 'IT', db, addFixedPriceItemFn: addFn })

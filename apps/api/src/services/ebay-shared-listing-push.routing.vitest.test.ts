@@ -23,7 +23,7 @@ function mockDb() {
 // A flagged family exactly as the push handler hands it to pushSharedListings:
 // the full flat rows, parent carrying _isParent + shared_sku_listing.
 const familyRows = [
-  { sku: 'LNR-BLK', _isParent: true, shared_sku_listing: true, platformProductId: 'P', title: 'Inner Liner', category_id: '57988', condition: '1000' },
+  { sku: 'LNR-BLK', _isParent: true, shared_sku_listing: true, platformProductId: 'P', title: 'Inner Liner', category_id: '57988', condition: '1000', image_1: 'https://img.example/liner.jpg' },
   { sku: 'SHARED-M', platformProductId: 'P', it_price: 49.9, it_qty: 9, aspect_Size: 'M', _productId: 'p1' },
   { sku: 'SHARED-L', platformProductId: 'P', it_price: 49.9, it_qty: 9, aspect_Size: 'L', _productId: 'p2' },
 ]
