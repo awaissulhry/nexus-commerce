@@ -262,6 +262,14 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'rfm-scoring': () => runRFMScoringCron(),
   // CI.2 — Segment recount (weekly). Always on.
   'segment-recount': () => runSegmentRecountCron(),
+  // Incident #42 — custom-label guard (both lanes) manual trigger. The
+  // service is called directly (not runEbayLabelGuardOnce) so the trigger
+  // route's recordCronRun wrapper is the single CronRun recorder.
+  'ebay-label-guard': async () => {
+    const { ensureListingLabels } = await import('../services/ebay-label-guard.service.js')
+    const s = await ensureListingLabels()
+    return `checked ${s.checked} · set ${s.set} · kept ${s.kept} · halfAdopted ${s.halfAdopted} · clLinked ${s.clLinked} · unsupported ${s.unsupported} · failed ${s.failed}`
+  },
 }
 
 export function isKnownCron(jobName: string): boolean {

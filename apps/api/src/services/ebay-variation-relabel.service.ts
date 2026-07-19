@@ -144,3 +144,181 @@ export async function relabelListingToPoolSkus(
     membershipsRewritten,
   }
 }
+
+// ── Incident #42 — SKU-less listing adoption ────────────────────────────────
+//
+// A pre-Nexus listing can carry variations with NO SKUs at all (the Saponette
+// case: 8 variations, axis "Color", zero SKUs, zero memberships). Reconcile
+// can't make memberships from them (no key), and relabel above requires
+// memberships. This operation closes the loop in ONE pass:
+//   live SKU-less variations → subset-match specifics onto the pool
+//   (synonym-tolerant: Color:Black ↔ Colore:Nero) → ReviseFixedPriceItem
+//   writes the pool SKUs onto those variations (identified by their
+//   specifics) → memberships created keyed to the pool SKUs, price = the
+//   LIVE variation's own price (per-listing truth).
+// Unmatched/ambiguous variations are never guessed — reported untouched.
+
+import {
+  parseLiveVariations,
+  findPoolMatch,
+  type PoolEntry,
+} from './ebay-membership-reconcile.service.js'
+import { Prisma } from '@prisma/client'
+
+export interface SkulessAdoptEntry {
+  toSku: string
+  productId: string
+  specifics: Record<string, string>
+  price: number | null
+}
+
+/** Pure planner: SKU-less live variations × pool → SKU writes + memberships. */
+export function planSkulessAdoption(
+  live: Array<{ sku: string; specifics: Record<string, string>; price: number | null }>,
+  pool: PoolEntry[],
+): { entries: SkulessAdoptEntry[]; unmatched: string[] } {
+  const entries: SkulessAdoptEntry[] = []
+  const unmatched: string[] = []
+  const takenProducts = new Set<string>()
+  for (const v of live) {
+    if (String(v.sku ?? '').trim()) continue // only SKU-less variations
+    const hit = findPoolMatch(v.specifics, pool)
+    const label = Object.entries(v.specifics).map(([k, val]) => `${k}=${val}`).join(',') || '(no specifics)'
+    if (!hit) {
+      unmatched.push(label)
+      continue
+    }
+    if (takenProducts.has(hit.productId)) {
+      // two SKU-less variations resolving to the SAME product would collide
+      // on the membership key — refuse the second, never guess.
+      unmatched.push(`${label} (duplicate pool match)`)
+      continue
+    }
+    takenProducts.add(hit.productId)
+    entries.push({ toSku: '', productId: hit.productId, specifics: v.specifics, price: v.price })
+  }
+  return { entries, unmatched }
+}
+
+export interface SkulessAdoptionResult {
+  itemId: string
+  marketplace: string
+  liveVariations: number
+  skuless: number
+  adopted: number
+  unmatched: string[]
+  ebayAck: string
+  membershipsCreated: number
+}
+
+/** Write pool SKUs onto a listing's SKU-less variations and create their
+ *  memberships. Reads eBay + pool; writes eBay THEN our DB (nothing persists
+ *  unless eBay acked). */
+export async function adoptSkulessVariations(
+  itemId: string,
+  marketplace: string,
+  ctx: { oauthToken: string },
+  preferredParentSku?: string,
+): Promise<SkulessAdoptionResult> {
+  const market = marketplace.toUpperCase()
+  const getXml = `<?xml version="1.0" encoding="utf-8"?>
+<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${escapeXml(itemId)}</ItemID></GetItemRequest>`
+  const got = await callTradingApi('GetItem', getXml, { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market) })
+  const live = parseLiveVariations(got.raw)
+  // per-variation price (StartPrice) by specifics — parseLiveVariations
+  // doesn't carry it and the membership should record the LIVE price.
+  const priceBySpecs = new Map<string, number>()
+  for (const vm of got.raw.matchAll(/<Variation>([\s\S]*?)<\/Variation>/g)) {
+    const block = vm[1]
+    const price = /<StartPrice[^>]*>([\d.]+)<\/StartPrice>/.exec(block)?.[1]
+    if (price == null) continue
+    const specs: string[] = []
+    const specsBlock = /<VariationSpecifics>([\s\S]*?)<\/VariationSpecifics>/.exec(block)?.[1] ?? ''
+    for (const nv of specsBlock.matchAll(/<NameValueList>[\s\S]*?<Name>([^<]*)<\/Name>[\s\S]*?<Value>([^<]*)<\/Value>[\s\S]*?<\/NameValueList>/g)) {
+      specs.push(`${nv[1].trim().toLowerCase()}=${nv[2].trim().toLowerCase()}`)
+    }
+    priceBySpecs.set(specs.sort().join('|'), Number(price))
+  }
+  const keyOf = (specifics: Record<string, string>) =>
+    Object.entries(specifics).map(([k, v]) => `${k.trim().toLowerCase()}=${String(v).trim().toLowerCase()}`).sort().join('|')
+
+  const skulessLive = live
+    .filter((v) => !String(v.sku ?? '').trim())
+    .map((v) => ({ sku: v.sku, specifics: v.specifics, price: priceBySpecs.get(keyOf(v.specifics)) ?? null }))
+
+  const base: SkulessAdoptionResult = {
+    itemId, marketplace: market, liveVariations: live.length,
+    skuless: skulessLive.length, adopted: 0, unmatched: [], ebayAck: 'NOOP', membershipsCreated: 0,
+  }
+  if (skulessLive.length === 0) return base
+
+  // Pool truth — same sourcing as reconcile: every linked membership in this
+  // market (the primary supplies the aspect-rich set).
+  const allLinked = await prisma.sharedListingMembership.findMany({
+    where: { marketplace: market, productId: { not: null } },
+    select: { productId: true, variationSpecifics: true, price: true },
+    orderBy: { updatedAt: 'desc' },
+  })
+  const pool: PoolEntry[] = allLinked.map((m) => ({
+    productId: m.productId as string,
+    price: m.price != null ? Number(m.price) : null,
+    specifics: (m.variationSpecifics as Record<string, string>) ?? {},
+  }))
+
+  const plan = planSkulessAdoption(skulessLive, pool)
+  base.unmatched = plan.unmatched
+  if (plan.entries.length === 0) return base
+
+  const products = await prisma.product.findMany({
+    where: { id: { in: plan.entries.map((e) => e.productId) } },
+    select: { id: true, sku: true, parentId: true },
+  })
+  const skuById = new Map(products.map((p) => [p.id, p.sku]))
+  const entries: RelabelPlanEntry[] = plan.entries
+    .map((e) => ({ fromSku: '', toSku: skuById.get(e.productId) ?? '', specifics: e.specifics }))
+    .filter((e) => Boolean(e.toSku))
+  if (entries.length === 0) return base
+
+  const res = await callTradingApi('ReviseFixedPriceItem', buildRelabelXml(itemId, entries), {
+    oauthToken: ctx.oauthToken,
+    siteId: siteIdForMarket(market),
+  })
+  base.ebayAck = res.ack
+  base.adopted = entries.length
+
+  // parent SKU for the new memberships: caller's (the shell) > pool family parent > itemId
+  let parentSku = preferredParentSku && !/^\d+$/.test(preferredParentSku) ? preferredParentSku : ''
+  if (!parentSku) {
+    const firstParentId = products.find((p) => p.parentId)?.parentId
+    if (firstParentId) {
+      const poolParent = await prisma.product.findFirst({ where: { id: firstParentId }, select: { sku: true } })
+      if (poolParent?.sku) parentSku = poolParent.sku
+    }
+  }
+  if (!parentSku) parentSku = itemId
+
+  for (const e of plan.entries) {
+    const toSku = skuById.get(e.productId)
+    if (!toSku) continue
+    await prisma.sharedListingMembership.upsert({
+      where: { marketplace_itemId_sku: { marketplace: market, itemId, sku: toSku } },
+      update: {
+        productId: e.productId,
+        variationSpecifics: e.specifics,
+        ...(e.price != null ? { price: new Prisma.Decimal(e.price) } : {}),
+        parentSku,
+        status: 'ACTIVE',
+      },
+      create: {
+        marketplace: market, itemId, sku: toSku,
+        productId: e.productId,
+        variationSpecifics: e.specifics,
+        ...(e.price != null ? { price: new Prisma.Decimal(e.price) } : {}),
+        parentSku,
+        status: 'ACTIVE',
+      },
+    })
+    base.membershipsCreated++
+  }
+  return base
+}

@@ -7,7 +7,9 @@ import {
   specificsKey,
   parseLiveVariations,
   planMembershipReconcile,
+  findPoolMatch,
 } from './ebay-membership-reconcile.service.js'
+import { axisValueSynonymKey } from './ebay-theme-axes.js'
 
 describe('specificsKey', () => {
   it('order/case/space-insensitive', () => {
@@ -33,9 +35,12 @@ describe('parseLiveVariations', () => {
       <Variation><Quantity>1</Quantity></Variation>
     </Variations></Item></GetItemResponse>`
     const live = parseLiveVariations(xml)
-    expect(live).toHaveLength(2) // SKU-less variation skipped
+    // Incident #42 — SKU-less variations are KEPT (sku: '') so the adoption
+    // flow can see and heal them; dropping them hid whole listings.
+    expect(live).toHaveLength(3)
     expect(live[0]).toEqual({ sku: 'T1_Ne_S', quantity: 24, specifics: { Colore: 'Nero', Taglia: 'S' } })
     expect(live[1].specifics.Taglia).toBe('M')
+    expect(live[2]).toEqual({ sku: '', quantity: 1, specifics: {} })
   })
 })
 
@@ -82,5 +87,48 @@ describe('planMembershipReconcile — the GALE shape', () => {
     const plan = planMembershipReconcile(live, dupPool)
     expect(plan.matched).toBe(1)
     expect(plan.entries[0].productId).toBe('pid-BLACK-S')
+  })
+})
+
+
+describe('incident #42 — bilingual synonym matching', () => {
+  it('axisValueSynonymKey folds EN/IT color words to one key', () => {
+    expect(axisValueSynonymKey('Black')).toBe(axisValueSynonymKey('Nero'))
+    expect(axisValueSynonymKey(' BLUE ')).toBe(axisValueSynonymKey('blu'))
+    expect(axisValueSynonymKey('Verde')).toBe('verde')
+    expect(axisValueSynonymKey('XXL')).toBe('xxl') // unknown values key to themselves
+  })
+
+  it('findPoolMatch bridges Color:Black onto pool Colore:Nero', () => {
+    const pool = [
+      { productId: 'p-black', price: 9.9, specifics: { Colore: 'Nero', Marca: 'Xavia' } },
+      { productId: 'p-blue', price: 9.9, specifics: { Colore: 'Blu', Marca: 'Xavia' } },
+    ]
+    expect(findPoolMatch({ Color: 'Black' }, pool)?.productId).toBe('p-black')
+    expect(findPoolMatch({ Color: 'Blue' }, pool)?.productId).toBe('p-blue')
+    expect(findPoolMatch({ Color: 'Purple' }, pool)).toBeNull()
+  })
+
+  it('ambiguity guard survives synonym folding', () => {
+    const pool = [
+      { productId: 'p1', price: null, specifics: { Colore: 'Nero' } },
+      { productId: 'p2', price: null, specifics: { Color: 'Black' } }, // same folded key, DIFFERENT product
+    ]
+    expect(findPoolMatch({ Colore: 'Nero' }, pool)).toBeNull()
+  })
+
+  it('planMembershipReconcile keeps SKU-less rows in entries (skuless handled by caller)', () => {
+    const live = [
+      { sku: '', quantity: 1, specifics: { Color: 'Black' } },
+      { sku: 'REAL-1', quantity: 2, specifics: { Color: 'Blue' } },
+    ]
+    const pool = [
+      { productId: 'p-black', price: null, specifics: { Colore: 'Nero' } },
+      { productId: 'p-blue', price: null, specifics: { Colore: 'Blu' } },
+    ]
+    const plan = planMembershipReconcile(live, pool)
+    expect(plan.matched).toBe(2)
+    expect(plan.entries[0].productId).toBe('p-black')
+    expect(plan.entries[0].liveSku).toBe('')
   })
 })

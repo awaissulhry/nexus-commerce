@@ -21,6 +21,7 @@
 import prisma from '../db.js'
 import { Prisma } from '@prisma/client'
 import { callTradingApi, siteIdForMarket } from './ebay-trading-api.service.js'
+import { axisSynonymKey, axisValueSynonymKey } from './ebay-theme-axes.js'
 
 export interface LiveVariation {
   sku: string
@@ -36,13 +37,16 @@ export function specificsKey(specifics: Record<string, string>): string {
     .join('|')
 }
 
-/** Parse GetItem XML → live variations with SKU + specifics. */
+/** Parse GetItem XML → live variations with SKU + specifics.
+ *  Incident #42 — SKU-LESS variations are KEPT (sku: '') so reconcile can
+ *  COUNT them and the adoption flow can write pool SKUs onto them; dropping
+ *  them here made a fully SKU-less listing look like it had no variations
+ *  at all. Consumers key by real SKUs, so '' rows are inert to them. */
 export function parseLiveVariations(raw: string): LiveVariation[] {
   const out: LiveVariation[] = []
   for (const vm of raw.matchAll(/<Variation>([\s\S]*?)<\/Variation>/g)) {
     const block = vm[1]
     const sku = /<SKU>([^<]*)<\/SKU>/.exec(block)?.[1] ?? ''
-    if (!sku) continue
     const qty = /<Quantity>(\d+)<\/Quantity>/.exec(block)?.[1]
     const specifics: Record<string, string> = {}
     const specsBlock = /<VariationSpecifics>([\s\S]*?)<\/VariationSpecifics>/.exec(block)?.[1] ?? ''
@@ -68,8 +72,6 @@ export interface PoolEntry {
   specifics: Record<string, string>
 }
 
-const norm = (s: string) => s.trim().toLowerCase()
-
 /**
  * Subset match: a live variation carries ONLY its variation AXES
  * ({Colore, Taglia}), while pool specifics may carry EVERY listed aspect
@@ -77,16 +79,24 @@ const norm = (s: string) => s.trim().toLowerCase()
  * axis name+value appears in it (normalized). Ambiguity (two distinct
  * products both containing the live axes) is surfaced as unmatched —
  * a wrong pool link would silently cross-sync stock.
+ *
+ * Incident #42 — names AND values normalize through the synonym tables
+ * (axisSynonymKey / axisValueSynonymKey): pre-Nexus adopted listings
+ * declare English axes (Color: Black) while the pool speaks Italian
+ * (Colore: Nero). Both sides fold to the same deterministic keys; the
+ * ambiguity guard is unchanged.
  */
 export function findPoolMatch(
   liveSpecifics: Record<string, string>,
   pool: PoolEntry[],
 ): PoolEntry | null {
-  const wanted = Object.entries(liveSpecifics).map(([k, v]) => [norm(k), norm(String(v))] as const)
+  const nk = (k: string) => axisSynonymKey(k)
+  const nv = (v: string) => axisValueSynonymKey(v)
+  const wanted = Object.entries(liveSpecifics).map(([k, v]) => [nk(k), nv(String(v))] as const)
   if (wanted.length === 0) return null
   const hits: PoolEntry[] = []
   for (const p of pool) {
-    const have = new Map(Object.entries(p.specifics).map(([k, v]) => [norm(k), norm(String(v))] as const))
+    const have = new Map(Object.entries(p.specifics).map(([k, v]) => [nk(k), nv(String(v))] as const))
     if (wanted.every(([k, v]) => have.get(k) === v)) hits.push(p)
   }
   const distinctProducts = new Set(hits.map((h) => h.productId))
@@ -127,6 +137,12 @@ export interface ReconcileResult {
   rewritten: number
   removedStale: number
   unmatched: string[]
+  /** Incident #42 — live variations that carry NO SKU at all. A membership
+   *  keyed by '' is unusable (and @@unique collapses all of them into one
+   *  row), so they are never written; the count is surfaced so the caller
+   *  can run the SKU-less adoption (write pool SKUs to eBay, then
+   *  re-reconcile). */
+  skuless: number
   /** Incident #33 — listing-level custom label (Item.SKU = parent SKU):
    *  'set' = backfilled by this reconcile; 'kept' = already correct;
    *  'unsupported' = the listing rejects Trading revises (Inventory-managed);
@@ -142,6 +158,11 @@ export async function reconcileMembershipsFromEbay(
   itemId: string,
   marketplace: string,
   ctx: { oauthToken: string },
+  /** Incident #42 — the listing's OWN parent SKU when the caller knows it
+   *  (a CL-linked shell). Without it, first-touch resolution walks pool
+   *  children to the POOL family parent — right for adopted primary
+   *  listings, wrong for ALT shells (their parent SKU is the shell). */
+  preferredParentSku?: string,
 ): Promise<ReconcileResult> {
   const market = marketplace.toUpperCase()
   const xml = `<?xml version="1.0" encoding="utf-8"?>
@@ -182,6 +203,7 @@ export async function reconcileMembershipsFromEbay(
   // parent SKU — a numeric itemId fallback broke family grouping in the grid
   // (audit S6): loadSharedMembershipRows matches by real parent SKUs.
   let parentSku = existing[0]?.parentSku ?? ''
+  if (!parentSku && preferredParentSku && !/^\d+$/.test(preferredParentSku)) parentSku = preferredParentSku
   if (!parentSku) {
     const firstPoolId = plan.entries.find((e) => e.productId)?.productId
     if (firstPoolId) {
@@ -201,7 +223,15 @@ export async function reconcileMembershipsFromEbay(
   if (!parentSku) parentSku = itemId
 
   let rewritten = 0
+  let skuless = 0
   for (const e of plan.entries) {
+    // Incident #42 — a SKU-less live variation can't become a membership
+    // (empty key; @@unique collapses them). Count + skip; the composed
+    // reconcile flow writes pool SKUs to eBay first, then re-reconciles.
+    if (!String(e.liveSku ?? '').trim()) {
+      skuless++
+      continue
+    }
     await prisma.sharedListingMembership.upsert({
       where: { marketplace_itemId_sku: { marketplace: market, itemId, sku: e.liveSku } },
       update: {
@@ -262,6 +292,7 @@ export async function reconcileMembershipsFromEbay(
     rewritten,
     removedStale: stale.length,
     unmatched: plan.unmatched,
+    skuless,
     ...(customLabel ? { customLabel } : {}),
   }
 }

@@ -42,6 +42,7 @@ import { parseThemeAxes, canonicalizeRowAspects } from '../services/ebay-theme-a
 import { pushSharedListings, POOL_DEFAULT_QTY_SENTINEL, type SharedListingResult } from '../services/ebay-shared-listing-push.service.js';
 import { callTradingApi, siteIdForMarket } from '../services/ebay-trading-api.service.js';
 import { reconcileMembershipsFromEbay, parseLiveVariations } from '../services/ebay-membership-reconcile.service.js';
+import { adoptSkulessVariations } from '../services/ebay-variation-relabel.service.js';
 import { relabelListingToPoolSkus } from '../services/ebay-variation-relabel.service.js';
 import { addVariationsToListing } from '../services/ebay-variation-add.service.js';
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot, buildBestOfferTerms, resolveQuantityLimitPerBuyer, resolvePerMarketContent } from '../services/ebay-variation-push.service.js';
@@ -1075,12 +1076,55 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           // Incident #36 — a save that CREATED memberships may have just
           // adopted a live listing; guarantee its custom label without any
           // operator action (fire-and-forget; the cron is the backstop).
-          if ((sharedMemberships?.created ?? 0) > 0) {
-            setImmediate(() => {
-              void import('../services/ebay-label-guard.service.js')
-                .then(({ ensureListingLabels }) => ensureListingLabels())
-                .catch((err) => request.log.warn({ err }, 'label-guard post-adopt failed (cron will heal)'))
-            })
+          // Incident #42 — widened: ANY live ItemID the saved rows carry gets
+          // its label ensured (scoped — the owner touching an existing
+          // listing via the flat file IS the adoption moment), and a live
+          // listing with ZERO memberships auto-heals through the composed
+          // reconcile (SKU-less adoption included) — the Saponette state
+          // never needs a manual backfill again.
+          {
+            const mpPrefix = activeMp.toLowerCase()
+            const savedItemIds = [...new Set(rows
+              .flatMap((r) => {
+                const rec = r as Record<string, unknown>
+                return [String(rec[`${mpPrefix}_item_id`] ?? ''), String(rec.ebay_item_id ?? '')]
+              })
+              .map((v) => v.trim())
+              .filter((v) => /^\d+$/.test(v)),
+            )]
+            if ((sharedMemberships?.created ?? 0) > 0 || savedItemIds.length > 0) {
+              const scope = savedItemIds.map((itemId) => ({ marketplace: activeMp, itemId }))
+              setImmediate(() => {
+                void (async () => {
+                  const { ensureListingLabels } = await import('../services/ebay-label-guard.service.js')
+                  await ensureListingLabels(scope.length ? scope : undefined)
+                  // half-adopted heal: saved live ItemIDs with no memberships
+                  for (const itemId of savedItemIds) {
+                    const memCount = await prisma.sharedListingMembership.count({ where: { itemId } })
+                    if (memCount > 0) continue
+                    const shellCl = await prisma.channelListing.findFirst({
+                      where: { channel: 'EBAY', externalListingId: itemId, product: { deletedAt: null, parentId: null, productType: 'EBAY_LISTING_SHELL' } },
+                      select: { product: { select: { sku: true } } },
+                    })
+                    if (!shellCl?.product?.sku) continue // only unambiguous shells auto-heal
+                    const connection = await prisma.channelConnection.findFirst({
+                      where: { channelType: 'EBAY', isActive: true }, select: { id: true },
+                    })
+                    if (!connection) continue
+                    const token = await ebayAuthService.getValidToken(connection.id)
+                    const { reconcileMembershipsFromEbay: reconcileFn } = await import('../services/ebay-membership-reconcile.service.js')
+                    const { adoptSkulessVariations: adoptFn } = await import('../services/ebay-variation-relabel.service.js')
+                    let rec = await reconcileFn(itemId, activeMp, { oauthToken: token }, shellCl.product.sku)
+                    if (rec.skuless > 0) {
+                      const adopted = await adoptFn(itemId, activeMp, { oauthToken: token }, shellCl.product.sku)
+                      if (adopted.adopted > 0) rec = await reconcileFn(itemId, activeMp, { oauthToken: token }, shellCl.product.sku)
+                      request.log.info({ itemId, adopted: adopted.adopted, unmatched: adopted.unmatched }, 'ebay/save: SKU-less shell listing auto-adopted')
+                    }
+                    request.log.info({ itemId, matched: rec.matched, rewritten: rec.rewritten }, 'ebay/save: half-adopted shell listing auto-reconciled')
+                  }
+                })().catch((err) => request.log.warn({ err }, 'label-guard post-save heal failed (cron will heal)'))
+              })
+            }
           }
         } catch (err) {
           // Audit R9 — a swallowed failure here meant the save LOOKED complete
@@ -2732,9 +2776,32 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         return reply.code(503).send({ error: `Failed to get eBay token: ${err instanceof Error ? err.message : String(err)}` })
       }
       try {
-        const result = await reconcileMembershipsFromEbay(itemId, marketplace, { oauthToken: token })
+        // Incident #42 — the listing's OWN parent SKU (its CL product) beats
+        // pool-derived resolution: an ALT shell's memberships must group
+        // under the SHELL, not the pool family's primary parent.
+        let preferredParentSku: string | undefined
+        try {
+          const ownerCl = await prisma.channelListing.findFirst({
+            where: { channel: 'EBAY', externalListingId: itemId, product: { deletedAt: null, parentId: null } },
+            select: { product: { select: { sku: true } } },
+          })
+          if (ownerCl?.product?.sku && !/^\d+$/.test(ownerCl.product.sku)) preferredParentSku = ownerCl.product.sku
+        } catch { /* preferred parent is best-effort */ }
+
+        let result = await reconcileMembershipsFromEbay(itemId, marketplace, { oauthToken: token }, preferredParentSku)
+        // Incident #42 — SKU-less variations (the Saponette case) can't become
+        // memberships until pool SKUs exist on eBay. Adopt them (write pool
+        // SKUs onto the live variations by specifics match), then reconcile
+        // again so the final state is ordinary: one operation for the operator.
+        let skulessAdoption: Awaited<ReturnType<typeof adoptSkulessVariations>> | undefined
+        if (result.skuless > 0) {
+          skulessAdoption = await adoptSkulessVariations(itemId, marketplace, { oauthToken: token }, preferredParentSku)
+          if (skulessAdoption.adopted > 0) {
+            result = await reconcileMembershipsFromEbay(itemId, marketplace, { oauthToken: token }, preferredParentSku)
+          }
+        }
         await clearFileExclusionForItem(itemId, marketplace, request.log)
-        return reply.send(result)
+        return reply.send({ ...result, ...(skulessAdoption ? { skulessAdoption } : {}) })
       } catch (err: unknown) {
         request.log.error(err, 'reconcile-item failed')
         return reply.code(502).send({ error: err instanceof Error ? err.message : 'Reconcile failed' })

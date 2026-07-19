@@ -1069,8 +1069,14 @@ async function start() {
     // Gated behind NEXUS_ENABLE_EBAY_STATUS_RECONCILE_CRON=1 (default OFF).
     if (process.env.NEXUS_ENABLE_EBAY_STATUS_RECONCILE_CRON === '1') {
       startEbayStatusReconcileCron();
-      startEbayLabelGuardCron();
     }
+
+    // Incident #42 — the label guard was nested under the status-reconcile
+    // gate above (default OFF, unset on prod) so its own default-ON gate was
+    // never even evaluated: ZERO CronRun rows since ship. It self-gates
+    // (NEXUS_ENABLE_EBAY_LABEL_GUARD_CRON, default ON with NEXUS_EBAY_REAL_API)
+    // and must register unconditionally.
+    startEbayLabelGuardCron();
 
     // IS.2 — Real-time Amazon order detection via SQS (~30-90 second latency).
     // Runs every 30s when NEXUS_ENABLE_AMAZON_SQS_POLL=1 and AMAZON_SQS_QUEUE_URL is set.

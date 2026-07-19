@@ -207,3 +207,46 @@ export function selfHealAxisSortOrder(
   }
   return out
 }
+
+/**
+ * Incident #42 — bilingual VALUE synonyms for axis matching.
+ *
+ * Adopted listings from the pre-Nexus era declare English axes with English
+ * values (Color: Black) while the pool's specifics are Italian (Colore:
+ * Nero). Subset matching (reconcile / SKU-less adoption) bridges them via
+ * this table: EXACT curated word pairs only — deterministic, never fuzzy.
+ * APPEND-ONLY: removing or reordering entries changes match keys.
+ */
+export const AXIS_VALUE_SYNONYM_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
+  ['nero', 'black'],
+  ['blu', 'blue'],
+  ['verde', 'green'],
+  ['rosso', 'red'],
+  ['giallo', 'yellow'],
+  ['bianco', 'white'],
+  ['arancione', 'orange'],
+  ['rosa', 'pink'],
+  ['grigio', 'grey', 'gray'],
+  ['marrone', 'brown'],
+  ['viola', 'purple'],
+  ['argento', 'silver'],
+  ['oro', 'gold'],
+  ['uomo', 'men', 'man'],
+  ['donna', 'women', 'woman'],
+  ['unisex adulto', 'unisex'],
+]
+
+const VALUE_SYNONYM_KEY_BY_WORD: Map<string, string> = (() => {
+  const m = new Map<string, string>()
+  for (const group of AXIS_VALUE_SYNONYM_GROUPS) {
+    for (const word of group) m.set(word, group[0])
+  }
+  return m
+})()
+
+/** Canonical synonym key for an axis VALUE ('Black' and 'Nero' → 'nero').
+ *  Unknown values key to their own lowercase-trimmed form. */
+export function axisValueSynonymKey(value: string): string {
+  const v = String(value ?? '').trim().toLowerCase()
+  return VALUE_SYNONYM_KEY_BY_WORD.get(v) ?? v
+}
