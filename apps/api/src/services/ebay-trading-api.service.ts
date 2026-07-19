@@ -77,6 +77,10 @@ export interface AddFixedPriceItemInput {
   itemSpecifics?: Record<string, string | string[]>
   listingDuration?: string
   variationSpecificNames: string[]
+  /** Incident #39 — pre-ordered axis value sets (operator order → canonical
+   *  size order → locale alphabetical). When present, the XML emits EXACTLY
+   *  this order instead of first-seen variation order. */
+  variationSpecificsSet?: Record<string, string[]>
   variations: TradingVariation[]
   pictureUrls?: string[]
   variationPictures?: { axisName: string; byValue: Record<string, string[]> }
@@ -107,9 +111,13 @@ export function buildAddFixedPriceItemXml(input: AddFixedPriceItemInput): string
     })
     .join('\n')
 
-  // VariationSpecificsSet: distinct values per axis, preserving first-seen order.
+  // VariationSpecificsSet: the pre-ordered set when provided (incident #39 —
+  // deterministic operator/canonical order); else distinct values per axis in
+  // first-seen order (legacy callers).
   const setXml = input.variationSpecificNames
     .map((n) => {
+      const preOrdered = input.variationSpecificsSet?.[n]
+      if (preOrdered?.length) return `        ${nameValueList(n, preOrdered)}`
       const seen: string[] = []
       for (const v of input.variations) {
         const val = v.specifics[n]

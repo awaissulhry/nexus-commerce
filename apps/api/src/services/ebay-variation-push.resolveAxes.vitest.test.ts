@@ -264,11 +264,12 @@ describe('buildVariesBySpecifications', () => {
     expect(out[0].values).toEqual(['S', 'M', 'XL'])
   })
 
-  it('preserves whitespace/case-distinct values (no dedup here)', () => {
+  it('preserves whitespace/case-distinct values, locale-alphabetical (incident #39: never first-seen order)', () => {
     const specs = [mkSpec('Colore', ['Nero', 'nero', 'Blu '])]
     const out = buildVariesBySpecifications(specs, {}, [])
-    // Colore is not a size dimension → values pass through unsorted & unmodified.
-    expect(out[0].values).toEqual(['Nero', 'nero', 'Blu '])
+    // No dedup — but order is DETERMINISTIC (locale alphabetical), not
+    // first-seen: grid re-sorts must never change the pushed value order.
+    expect(out[0].values).toEqual(['Blu ', 'Nero', 'nero'])
   })
 
   it('falls back to a single Custom Bundle spec of SKUs when no valid spec', () => {

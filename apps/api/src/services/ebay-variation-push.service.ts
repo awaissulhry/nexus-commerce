@@ -114,7 +114,11 @@ export function sortAxisValues(
     }
   }
 
-  return values
+  // Incident #39 — DETERMINISTIC fallback. First-seen row order depended on
+  // grid sorting / caller row source, so two no-change pushes (or an image
+  // publish vs a flat-file push) could emit DIFFERENT value order. With no
+  // operator order and no size semantics: locale-stable alphabetical.
+  return [...values].sort((a, b) => a.localeCompare(b, 'it'))
 }
 
 /**

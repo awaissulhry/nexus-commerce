@@ -45,3 +45,23 @@ describe('AXIS_SYNONYM_GROUPS parity (client ↔ server)', () => {
     })
   })
 })
+
+
+// Incident #39 — REAL parity: read the server source text so a server-only
+// edit to AXIS_SYNONYM_GROUPS can never silently desync the client.
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+describe('AXIS_SYNONYM_GROUPS — source-level parity with the server', () => {
+  it('client groups match apps/api/src/services/ebay-theme-axes.ts verbatim', () => {
+    const serverSrc = readFileSync(
+      join(__dirname, '../../../../../../apps/api/src/services/ebay-theme-axes.ts'),
+      'utf8',
+    )
+    const m = /export const AXIS_SYNONYM_GROUPS[^=]*=\s*\[([\s\S]*?)\n\]/.exec(serverSrc)
+    expect(m).toBeTruthy()
+    const serverGroups = [...m![1].matchAll(/\[([^\]]+)\]/g)].map((g) =>
+      [...g[1].matchAll(/'([^']+)'/g)].map((x) => x[1]),
+    )
+    expect(serverGroups).toEqual(CLIENT_GROUPS.map((g) => [...g]))
+  })
+})

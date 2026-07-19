@@ -37,6 +37,9 @@ export function parseThemeAxes(theme: unknown): string[] {
 // there for back-compat) so the pure create-logic module can consume
 // axisSynonymKey WITHOUT importing the push service (which would create a
 // create.logic → push-service import cycle).
+// ⚠ APPEND-ONLY: __dimN__ keys stored in _axisValueOrder/_axisSortOrder are
+// ARRAY-POSITION-derived. Inserting or reordering groups shifts every stored
+// order's key. New groups go at the END; existing groups gain entries only.
 export const AXIS_SYNONYM_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
   ['colore', 'color', 'colour', 'color name', 'color_name', 'couleur', 'farbe', 'kleur', 'colour name', 'colori'],
   ['taglia', 'size', 'size name', 'size_name', 'misura', 'größe', 'grosse', 'taille', 'maat', 'maten', 'koko'],

@@ -49,6 +49,7 @@ import { renderListingDescriptionSafe } from '../services/ebay-description-theme
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
 import { decideEbayPushMode } from '../services/ebay-push-mode.js';
 import { publishOrderEvent } from '../services/order-events.service.js';
+import { computeCuratedImageOverrides } from '../services/images/ebay-inventory-image-publish.service.js';
 import { renderExport } from '../services/export/renderers.js';
 import { parseCsv, parseFile, sniffDelimiter, detectFileKind, type ParsedFile } from '../services/import/parsers.js';
 import { detectAmazonTemplate, parseOoxmlSheet, listOoxmlSheets } from '../services/amazon/template-workbook.js';
@@ -1957,6 +1958,24 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           // rather than the internal UUID platformProductId.
           const parentRowForKey = familyRows.find(r => r._isParent) ?? familyRows[0]
           const resolvedGroupKey = (parentRowForKey.sku as string) || familyKey
+          // Incident #40 — curated ListingImage overrides for this family (the
+          // same resolution the image-tab publish uses). Absent curation, the
+          // legacy row/ProductImage sourcing applies unchanged.
+          let curatedOverrides: Awaited<ReturnType<typeof computeCuratedImageOverrides>> | undefined
+          try {
+            const famParentPid = String((parentRowForKey as Record<string, unknown>)._productId ?? '')
+            if (famParentPid) {
+              const famParentMeta = await prisma.product.findFirst({ where: { id: famParentPid }, select: { imageAxisPreference: true } })
+              const co = await computeCuratedImageOverrides(
+                famParentPid,
+                familyRows.filter((r) => (r as Record<string, unknown>)._isParent !== true) as Array<Record<string, unknown>>,
+                famParentMeta?.imageAxisPreference,
+              )
+              if (co.hasCuration) curatedOverrides = co
+            }
+          } catch (err) {
+            request.log.warn({ err, familyKey }, 'ebay/push: curated-image override resolution failed — row images apply')
+          }
 
           // EFX P9e — per-market FAMILY content. A variation listing carries ONE
           // title/subtitle/description at the PARENT level (children differ only
@@ -2006,11 +2025,15 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             EBAY_API_BASE,
             marketplaceId,
             capToFbm,
-            undefined, // imageOverrideByColor
-            undefined, // pictureAxisOverride
-            undefined, // imageOverrideBySku
-            undefined, // groupImageOverride
-            { warningsSink: axisWarnings, parentContent: themedParentContent }, // EFX D7 warnings + P9e per-market parent content (ED.2: theme-rendered)
+            // Incident #40 — the flat-file push HONORS curated images: with no
+            // overrides it re-sent row/ProductImage sets and clobbered the
+            // images-manager's live carousel on every push (the next drawer
+            // publish flipped it back). Curation, when present, always wins.
+            curatedOverrides?.imageOverrideByColor,
+            curatedOverrides?.pictureAxis,
+            curatedOverrides?.imageOverrideBySku,
+            curatedOverrides?.groupImageOverride,
+            { warningsSink: axisWarnings, parentContent: themedParentContent, ...(curatedOverrides?.omitImageVariesBy ? { omitImageVariesBy: true } : {}) }, // EFX D7 warnings + P9e per-market parent content (ED.2: theme-rendered)
           );
           perRowResults.push(...groupResults);
 

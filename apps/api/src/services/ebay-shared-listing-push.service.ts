@@ -1,6 +1,7 @@
 import type { AddFixedPriceItemInput, TradingVariation } from './ebay-trading-api.service.js'
 import { toTradingConditionId } from './ebay-condition.js'
-import { aspectCanonicalName, ASPECT_SYNONYM_GROUPS, AXIS_SYNONYM_GROUPS } from './ebay-theme-axes.js'
+import { aspectCanonicalName, ASPECT_SYNONYM_GROUPS, AXIS_SYNONYM_GROUPS, axisSynonymKey } from './ebay-theme-axes.js'
+import { orderAxisValues } from './ebay-value-order.js'
 
 /** Incident #21 — "blank qty on a shared listing = whatever the pool allows".
  *  Callers' capQty implementations recognize this sentinel and return the pool
@@ -27,6 +28,9 @@ export function buildSharedListingInput(
   variantRows: SharedRow[],
   market: string,
   capQty?: CapQtyFn,
+  /** Incident #39 — the operator's stored value order per axis synonym key
+   *  (_axisValueOrder from the parent ChannelListing). Always wins. */
+  valueOrderByAxis?: Record<string, string[]>,
 ): SharedListingInput {
   const mkt = market.toUpperCase()
   const prefix = mkt.toLowerCase()
@@ -210,6 +214,19 @@ export function buildSharedListingInput(
     itemSpecifics,
     currency: CURRENCY_BY_MARKET[mkt] ?? 'EUR',
     variationSpecificNames,
+    // Incident #39 — deterministic axis value order for the declared set:
+    // operator's stored order (per synonym key) → canonical size order →
+    // locale alphabetical. Never first-seen row order.
+    variationSpecificsSet: Object.fromEntries(
+      variationSpecificNames.map((n) => {
+        const seen: string[] = []
+        for (const v of variations) {
+          const val = v.specifics[n]
+          if (val != null && !seen.includes(val)) seen.push(val)
+        }
+        return [n, orderAxisValues(n, seen, valueOrderByAxis?.[axisSynonymKey(n)])]
+      }),
+    ),
     variations,
     pictureUrls: pictureUrls.length ? pictureUrls : undefined,
     policies,
@@ -324,7 +341,23 @@ export async function createSharedListing(
       // dead row-carried ItemID — ignore it and create fresh (self-heal).
     }
 
-    const input = buildSharedListingInput(parentRow, variantRows, market, ctx.capQty)
+    // Incident #39 — the operator's saved value order (the value-order modal
+    // writes _axisValueOrder on the parent CL) governs the Trading set too.
+    let valueOrderByAxis: Record<string, string[]> | undefined
+    try {
+      const parentProductRow = await prisma.product.findFirst({ where: { sku: parentSku, deletedAt: null }, select: { id: true } })
+      if (parentProductRow) {
+        const parentCl = await prisma.channelListing.findFirst({
+          where: { productId: parentProductRow.id, channel: 'EBAY', marketplace: market },
+          select: { platformAttributes: true },
+        })
+        const pa = (parentCl?.platformAttributes ?? {}) as Record<string, unknown>
+        const stored = (pa._axisValueOrder ?? pa._axisSortOrder) as Record<string, string[]> | undefined
+        if (stored && typeof stored === 'object') valueOrderByAxis = stored
+      }
+    } catch { /* order fallback remains deterministic without it */ }
+
+    const input = buildSharedListingInput(parentRow, variantRows, market, ctx.capQty, valueOrderByAxis)
 
     // ED.2 — dynamic description: wrap the body in this listing's assigned theme
     // (shared-SKU listings are per-parent, so each gets its own render). Inert

@@ -368,3 +368,95 @@ export async function publishEbayImagesViaInventory(
     ...(success ? {} : { error: errors[0]?.message }),
   }
 }
+
+/**
+ * Incident #40 — curated-image overrides for ANY group push.
+ *
+ * The flat-file push used to send row/ProductImage images with NO overrides,
+ * clobbering the images-manager's curated live carousel on every push (and
+ * the next drawer publish flipped it back). This resolver reads the same
+ * curated ListingImage state the image-tab publish uses and returns the
+ * override args for pushVariationGroup — so EVERY push path honors curation.
+ * Mirrors the construction inside publishEbayImagesViaInventory (kept
+ * verbatim there — that path is audited-correct); keep the two in sync.
+ */
+export async function computeCuratedImageOverrides(
+  productId: string,
+  variantRows: Array<Record<string, unknown>>,
+  imageAxisPreference?: string | null,
+): Promise<{
+  hasCuration: boolean
+  imageOverrideByColor?: Map<string, string[]>
+  pictureAxis?: string
+  imageOverrideBySku?: Map<string, string[]>
+  groupImageOverride?: string[]
+  omitImageVariesBy?: boolean
+}> {
+  const curatedRows = await prisma.listingImage.findMany({
+    where: { productId, platform: 'EBAY', mediaType: 'IMAGE' },
+    orderBy: { position: 'asc' },
+    select: { variantGroupKey: true, variantGroupValue: true, variationId: true, url: true },
+  })
+  if (curatedRows.length === 0) return { hasCuration: false }
+
+  const axisInfo = (() => {
+    const found = new Map<string, { label: string; values: Set<string> }>()
+    for (const r of variantRows) {
+      for (const [k, v] of Object.entries(r)) {
+        if (!k.startsWith('aspect_') || typeof v !== 'string' || !v.trim()) continue
+        const label = k.slice('aspect_'.length).replace(/_/g, ' ')
+        const syn = axisSynonymKey(label)
+        const e = found.get(syn) ?? { label, values: new Set<string>() }
+        if (/[A-Z]/.test(label[0] ?? '') && !/[A-Z]/.test(e.label[0] ?? '')) e.label = label
+        e.values.add(v.trim().toLowerCase())
+        found.set(syn, e)
+      }
+    }
+    return [...found.values()]
+  })()
+  const { pictureAxis, sharedGallery } = resolveImagePictureAxis(axisInfo, undefined, imageAxisPreference ?? undefined)
+
+  const variationIds = [...new Set(curatedRows.map((r) => r.variationId).filter((v): v is string => !!v))]
+  const skuByVariationId = new Map<string, string>()
+  if (variationIds.length > 0) {
+    const vprods = await prisma.product.findMany({ where: { id: { in: variationIds } }, select: { id: true, sku: true } })
+    for (const pr of vprods) skuByVariationId.set(pr.id, pr.sku)
+  }
+  const sharedUrls: string[] = []
+  const imageOverrideByColor = new Map<string, string[]>()
+  const imageOverrideBySku = new Map<string, string[]>()
+  for (const r of curatedRows) {
+    if (r.variationId) {
+      const sku = skuByVariationId.get(r.variationId)
+      if (!sku) continue
+      if (!imageOverrideBySku.has(sku)) imageOverrideBySku.set(sku, [])
+      imageOverrideBySku.get(sku)!.push(r.url)
+    } else if (r.variantGroupKey && pictureAxis && axisSynonymKey(r.variantGroupKey) === axisSynonymKey(pictureAxis)) {
+      const key = String(r.variantGroupValue ?? '').toLowerCase()
+      if (!key) continue
+      if (!imageOverrideByColor.has(key)) imageOverrideByColor.set(key, [])
+      imageOverrideByColor.get(key)!.push(r.url)
+    } else if (!r.variantGroupKey && !r.variationId) {
+      sharedUrls.push(r.url)
+    }
+  }
+  if (sharedUrls.length > 0) {
+    const sharedSet = new Set(sharedUrls)
+    for (const [k, urls] of imageOverrideByColor) imageOverrideByColor.set(k, urls.filter((u) => !sharedSet.has(u)))
+    for (const [k, urls] of imageOverrideBySku) imageOverrideBySku.set(k, urls.filter((u) => !sharedSet.has(u)))
+  }
+  if (sharedGallery) {
+    for (const urls of imageOverrideByColor.values()) {
+      for (const u of urls) if (!sharedUrls.includes(u)) sharedUrls.push(u)
+    }
+  }
+
+  return {
+    hasCuration: true,
+    imageOverrideByColor: imageOverrideByColor.size > 0 ? imageOverrideByColor : undefined,
+    pictureAxis: pictureAxis ?? undefined,
+    imageOverrideBySku: imageOverrideBySku.size > 0 ? imageOverrideBySku : undefined,
+    groupImageOverride: sharedUrls.length > 0 ? sharedUrls : undefined,
+    omitImageVariesBy: sharedGallery,
+  }
+}
