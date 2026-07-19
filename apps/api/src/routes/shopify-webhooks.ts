@@ -433,58 +433,25 @@ async function handleOrderCreate(payload: ShopifyWebhookPayload): Promise<void> 
       }
     }
 
-    // IS.1 — cascade available-qty snapshot to other channels.
-    // reserveOpenOrder reduces available but doesn't call applyStockMovement,
-    // so OutboundSyncQueue never fires. We snapshot the updated available qty
-    // and enqueue QUANTITY_UPDATE for all active eBay/Amazon listings.
+    // IS.1 → RT.2 — run the CANONICAL cascade after reserving (the old
+    // hand-rolled row loop missed shared-eBay fan-out, Follow/FBA filtering,
+    // coalescing, and the ChannelListing.quantity write, and carried a 30s
+    // hold). reason ORDER_PLACED ⇒ 0-hold, priority-1 instant dispatch (~2s).
     void (async () => {
       try {
+        const { recascadeProduct } = await import('../services/stock-movement.service.js');
         for (const it of createdItems) {
           if (!it.productId) continue;
-          // Get fresh available qty after reservation
-          // Warehouse (FBM) pool only — never push Amazon-managed FBA stock to
-          // merchant channels (the split-inventory bleed). Mirrors the cascade.
-          const whRows = await prisma.stockLevel.findMany({
-            where: { productId: it.productId, location: { type: 'WAREHOUSE' } },
-            select: { available: true },
+          const res = await recascadeProduct(it.productId, {
+            reason: 'ORDER_PLACED',
+            referenceType: 'ORDER',
+            referenceId: order?.id ? String(order.id) : undefined,
+            actor: 'shopify-webhooks:IS.1',
           });
-          if (whRows.length === 0) continue;
-          const availableQty = whRows.reduce((a, s) => a + s.available, 0);
-
-          // Find all active ChannelListings for this product on OTHER channels
-          const listings = await prisma.channelListing.findMany({
-            where: {
+          if (res.ok === false) {
+            logger.warn('[ShopifyWebhooks] IS.1 recascade refused (NO_LEDGER) — backfill needed', {
               productId: it.productId,
-              channel: { not: 'SHOPIFY' },
-              isPublished: true,
-              offerActive: true,
-            },
-            select: { id: true, channel: true, region: true, stockBuffer: true, externalListingId: true },
-          });
-
-          for (const listing of listings) {
-            const bufferedQty = Math.max(0, availableQty - (listing.stockBuffer ?? 0));
-            const targetChannel = listing.channel as 'AMAZON' | 'EBAY' | 'SHOPIFY';
-            if (!(['AMAZON', 'EBAY'] as string[]).includes(targetChannel)) continue;
-            await prisma.outboundSyncQueue.create({
-              data: {
-                productId: it.productId,
-                channelListingId: listing.id,
-                targetChannel,
-                targetRegion: listing.region ?? undefined,
-                syncType: 'QUANTITY_UPDATE',
-                syncStatus: 'PENDING',
-                payload: {
-                  quantity: bufferedQty,
-                  marketplaceId: listing.channel === 'EBAY'
-                    ? `EBAY_${(listing.region ?? 'IT').toUpperCase().replace('GB', 'GB')}`
-                    : (listing.region ?? 'IT').toUpperCase(),
-                },
-                externalListingId: listing.externalListingId ?? undefined,
-                retryCount: 0,
-                maxRetries: 3,
-                holdUntil: new Date(Date.now() + 30_000), // 30s grace (faster than applyStockMovement's 5min for orders)
-              } as any,
+              totalStock: res.totalStock,
             });
           }
         }

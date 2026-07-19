@@ -223,3 +223,34 @@ describe('addFixedPriceItem / reviseInventoryStatus (dry-run composition)', () =
     ).rejects.toThrow(/unknown eBay market/i)
   })
 })
+
+// RT.2 — batched ReviseInventoryStatus (≤4 InventoryStatus nodes per call)
+import { buildReviseInventoryStatusBatchXml, REVISE_INVENTORY_STATUS_MAX_ENTRIES } from './ebay-trading-api.service.js'
+
+describe('RT.2 — buildReviseInventoryStatusBatchXml', () => {
+  it('emits one InventoryStatus node per entry, same ItemID', () => {
+    const xml = buildReviseInventoryStatusBatchXml({
+      itemId: '900',
+      entries: [
+        { sku: 'A', quantity: 3 },
+        { sku: 'B', quantity: 0 },
+        { sku: 'C&D', quantity: 7.9 },
+      ],
+    })
+    expect(xml.match(/<InventoryStatus>/g)).toHaveLength(3)
+    expect(xml.match(/<ItemID>900<\/ItemID>/g)).toHaveLength(3)
+    expect(xml).toContain('<SKU>C&amp;D</SKU>') // escaped
+    expect(xml).toContain('<Quantity>7</Quantity>') // truncated
+    expect(xml).toContain('<Quantity>0</Quantity>') // zero preserved
+  })
+
+  it('rejects empty and >4-entry batches (eBay hard limit)', () => {
+    expect(() => buildReviseInventoryStatusBatchXml({ itemId: '1', entries: [] })).toThrow()
+    expect(() =>
+      buildReviseInventoryStatusBatchXml({
+        itemId: '1',
+        entries: Array.from({ length: REVISE_INVENTORY_STATUS_MAX_ENTRIES + 1 }, (_, i) => ({ sku: `S${i}`, quantity: 1 })),
+      }),
+    ).toThrow()
+  })
+})

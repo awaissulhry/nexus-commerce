@@ -67,8 +67,12 @@ interface RateBucket {
   lastRefillAt: number
 }
 
-const RATE_TOKENS_PER_SECOND = 2
-const RATE_BURST_SIZE = 20
+// RT.2 — match SP-API's published patchListingsItem plan exactly: 5 req/s,
+// burst 10 (was a self-imposed 2/s with burst 20 — the sub-limit throttled
+// bulk drains to ~30min/1000 rows, and a 20-burst would overrun Amazon's
+// 10-token bucket and eat 429s).
+const RATE_TOKENS_PER_SECOND = 5
+const RATE_BURST_SIZE = 10
 const RATE_MAX_WAIT_MS = 30_000
 
 const rateBuckets = new Map<string, RateBucket>()

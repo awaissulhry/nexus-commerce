@@ -79,7 +79,7 @@ export async function handleOrderCancelled(
     { publishOrderEvent },
     { auditLogService },
     sendcloud,
-    { applyStockMovement },
+    { applyStockMovement, recascadeProduct },
     { releaseOpenOrder },
   ] = await Promise.all([
     import('../outbound-events.service.js'),
@@ -155,52 +155,30 @@ export async function handleOrderCancelled(
     })
     result.reservationsReleased = released
 
-    // IS.2 — reservation path doesn't go through applyStockMovement so
-    // OutboundSyncQueue never fires automatically. After releasing, snapshot
-    // the updated available qty and push QUANTITY_UPDATE to all other-channel
-    // active listings so eBay/Shopify/Amazon see the restocked units immediately.
+    // IS.2 → RT.2 — reservation release doesn't go through applyStockMovement,
+    // so run the CANONICAL cascade instead of the old hand-rolled row loop
+    // (which read a single un-location-filtered StockLevel row — latent FBA
+    // bleed — and skipped shared-eBay fan-out, Follow/FBA filtering, the
+    // ChannelListing.quantity write, and coalescing; 15s hold).
+    // reason ORDER_CANCELLED ⇒ 0-hold, priority-1 instant dispatch (~2s).
     if (released > 0) {
       void (async () => {
         try {
           for (const it of orderItemsForCascade) {
             if (!it.productId) continue
-            const sl = await prisma.stockLevel.findFirst({
-              where: { productId: it.productId },
-              select: { available: true },
+            const res = await recascadeProduct(it.productId, {
+              reason: 'ORDER_CANCELLED',
+              referenceType: 'ORDER',
+              referenceId: orderId,
+              actor: 'order-cancellation:IS.2',
             })
-            if (!sl) continue
-            const availableQty = sl.available
-
-            const listings = await prisma.channelListing.findMany({
-              where: {
-                productId: it.productId,
-                isPublished: true,
-                offerActive: true,
-              },
-              select: { id: true, channel: true, region: true, stockBuffer: true, externalListingId: true },
-            })
-            for (const listing of listings) {
-              if (!(['AMAZON', 'EBAY', 'SHOPIFY'] as string[]).includes(listing.channel)) continue
-              const bufferedQty = Math.max(0, availableQty - (listing.stockBuffer ?? 0))
-              await prisma.outboundSyncQueue.create({
-                data: {
-                  productId: it.productId,
-                  channelListingId: listing.id,
-                  targetChannel: listing.channel as any,
-                  targetRegion: listing.region ?? undefined,
-                  syncType: 'QUANTITY_UPDATE',
-                  syncStatus: 'PENDING',
-                  payload: {
-                    quantity: bufferedQty,
-                    source: 'ORDER_CANCELLED',
-                    orderId,
-                  },
-                  externalListingId: listing.externalListingId ?? undefined,
-                  retryCount: 0,
-                  maxRetries: 3,
-                  holdUntil: new Date(Date.now() + 15_000),
-                } as any,
-              })
+            if (res.ok === false) {
+              auditLogService.write({
+                entityType: 'Order',
+                entityId: orderId,
+                action: 'IS2-recascade-refused-no-ledger',
+                metadata: { productId: it.productId, totalStock: res.totalStock },
+              }).catch(() => {})
             }
           }
         } catch (err) {

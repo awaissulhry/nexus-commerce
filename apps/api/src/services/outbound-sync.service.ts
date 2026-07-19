@@ -30,13 +30,39 @@ import { resolveComplianceById, buildShopifyComplianceMetafields } from "./compl
 import { computeAvailableToPublish } from "./available-to-publish.service.js";
 import { publishOrderEvent } from "./order-events.service.js";
 import { productEventService } from "./product-event.service.js";
-import { reviseInventoryStatus as ebayReviseInventoryStatus } from "./ebay-trading-api.service.js";
+import {
+  reviseInventoryStatus as ebayReviseInventoryStatus,
+  reviseInventoryStatusBatch as ebayReviseInventoryStatusBatch,
+  REVISE_INVENTORY_STATUS_MAX_ENTRIES,
+} from "./ebay-trading-api.service.js";
 import { toListingLanguage } from "./ebay-variation-push.service.js";
 
 // Phase 3 — test seam for the Trading-API network call.
 // Overridable in unit tests; defaults to the real Phase-1 fn.
 export const __ebayTrading = {
   reviseInventoryStatus: ebayReviseInventoryStatus,
+  reviseInventoryStatusBatch: ebayReviseInventoryStatusBatch,
+}
+
+// RT.2 — per-item revise pacing. eBay hard-caps ~250 revises per listing per
+// CALENDAR DAY (each ReviseInventoryStatus CALL counts once, hence the ≤4-SKU
+// batching). The debounce spaces successive revises of one ItemID; a debounced
+// row re-arms via the deferral disposition WITHOUT consuming retry budget, and
+// coalescing usually replaces it with a fresher row before it re-fires.
+const EBAY_REVISE_MIN_INTERVAL_MS = Number(process.env.NEXUS_EBAY_REVISE_MIN_INTERVAL_MS ?? 15_000);
+const EBAY_REVISE_DAILY_WARN = Number(process.env.NEXUS_EBAY_REVISE_DAILY_WARN ?? 150);
+const _reviseDayCounts = new Map<string, { day: string; count: number }>();
+
+/** Count a Trading revise call for an item; returns today's total (UTC day). */
+export function countEbayReviseCall(itemId: string, now: number = Date.now()): number {
+  const day = new Date(now).toISOString().slice(0, 10);
+  const cur = _reviseDayCounts.get(itemId);
+  if (!cur || cur.day !== day) {
+    _reviseDayCounts.set(itemId, { day, count: 1 });
+    return 1;
+  }
+  cur.count += 1;
+  return cur.count;
 }
 
 // Advertising mutations (bids/budgets/state) ride the same OutboundSyncQueue
@@ -87,7 +113,9 @@ export function computeFailureDisposition(
     opts?.errorCode === "EBAY_CIRCUIT_OPEN" || /circuit open/i.test(errorMessage);
   const isRateLimited =
     opts?.errorCode === "EBAY_RATE_LIMITED" || /rate limit/i.test(errorMessage);
-  if (isCircuitOpen || isRateLimited) {
+  // RT.2 — a debounced revise is episode-style too: re-arm shortly, no budget.
+  const isDebounced = opts?.errorCode === "EBAY_REVISE_DEBOUNCED";
+  if (isCircuitOpen || isRateLimited || isDebounced) {
     const defer = isCircuitOpen ? CIRCUIT_DEFER_MS : RATE_LIMIT_DEFER_MS;
     return {
       kind: "deferral",
@@ -1249,17 +1277,33 @@ export class OutboundSyncService {
    */
   private async syncSharedTradingQuantity(queueItem: any): Promise<SyncResult> {
     const { payload, id: queueId } = queueItem;
-    const sku: string = payload?.sku ?? "(unknown sku)";
     const itemId: string = payload?.itemId ?? queueItem.externalListingId ?? "";
     const market: string = payload?.market ?? "IT";
     const marketplaceId: string = payload?.marketplaceId ?? `EBAY_${market}`;
-    const quantity: number = Math.max(0, Math.trunc(Number(payload?.quantity ?? 0)));
-    const digest = digestPayload({ quantity });
 
-    const writeMembership = async (data: Record<string, unknown>) => {
+    // RT.2 — batched payloads carry ALL changed SKUs for the item in
+    // `updates[]`; legacy rows (pre-deploy PENDING) carry a single
+    // sku/quantity pair. Normalize both to one updates list.
+    const updates: Array<{ sku: string; quantity: number }> = Array.isArray(payload?.updates)
+      ? payload.updates
+          .map((u: { sku?: unknown; quantity?: unknown }) => ({
+            sku: String(u.sku ?? ""),
+            quantity: Math.max(0, Math.trunc(Number(u.quantity ?? 0))),
+          }))
+          .filter((u: { sku: string }) => u.sku.length > 0)
+      : [{
+          sku: String(payload?.sku ?? "(unknown sku)"),
+          quantity: Math.max(0, Math.trunc(Number(payload?.quantity ?? 0))),
+        }];
+    const sku: string = updates[0]?.sku ?? "(unknown sku)";
+    const digest = digestPayload({ updates });
+
+    const writeMembership = async (data: Record<string, unknown>, skuScope?: string) => {
       try {
         await prisma.sharedListingMembership.updateMany({
-          where: { marketplace: market, itemId, sku },
+          where: skuScope
+            ? { marketplace: market, itemId, sku: skuScope }
+            : { marketplace: market, itemId, sku: { in: updates.map((u) => u.sku) } },
           data,
         });
       } catch { /* writeback is best-effort */ }
@@ -1296,6 +1340,26 @@ export class OutboundSyncService {
         message: "Circuit open", error: circuit.error ?? "Circuit open",
         errorCode: "EBAY_CIRCUIT_OPEN",
       };
+    }
+
+    // 3b. RT.2 — per-item revise debounce (250/day cap defense). A row that
+    // fires within the min interval of the item's last revise re-arms via the
+    // deferral disposition (no retry budget consumed); coalescing usually
+    // replaces it with a fresher row before it re-fires.
+    if (EBAY_REVISE_MIN_INTERVAL_MS > 0) {
+      const last = await prisma.sharedListingMembership.aggregate({
+        where: { marketplace: market, itemId },
+        _max: { lastPushedAt: true },
+      });
+      const lastAt = last._max.lastPushedAt?.getTime() ?? 0;
+      if (lastAt && Date.now() - lastAt < EBAY_REVISE_MIN_INTERVAL_MS) {
+        return {
+          success: false, queueId, channel: "EBAY", status: "FAILED",
+          message: "Revise debounced (item revised moments ago)",
+          error: `debounced: last revise ${Math.round((Date.now() - lastAt) / 1000)}s ago (< ${Math.round(EBAY_REVISE_MIN_INTERVAL_MS / 1000)}s min interval)`,
+          errorCode: "EBAY_REVISE_DEBOUNCED",
+        };
+      }
     }
 
     // 4. Rate limiter
@@ -1346,9 +1410,30 @@ export class OutboundSyncService {
       return { success: false, queueId, channel: "EBAY", status: "FAILED", message, error: message };
     }
 
-    // 8. The Trading-API call (Phase 1)
+    // 8. The Trading-API call — RT.2: ≤4 SKUs per call (each CALL counts once
+    //    against the item's ~250/day revise budget), per-chunk membership
+    //    writeback so a mid-loop failure only re-pushes unfinished SKUs on
+    //    retry (revise is absolute-qty idempotent regardless).
     try {
-      await __ebayTrading.reviseInventoryStatus({ itemId, sku, quantity }, { oauthToken: token, market });
+      for (let i = 0; i < updates.length; i += REVISE_INVENTORY_STATUS_MAX_ENTRIES) {
+        const chunk = updates.slice(i, i + REVISE_INVENTORY_STATUS_MAX_ENTRIES);
+        await __ebayTrading.reviseInventoryStatusBatch(
+          { itemId, entries: chunk },
+          { oauthToken: token, market },
+        );
+        const dayCount = countEbayReviseCall(itemId);
+        if (dayCount === EBAY_REVISE_DAILY_WARN) {
+          logger.warn("syncSharedTradingQuantity: item nearing eBay's ~250 revises/day cap", {
+            itemId, market, revisesToday: dayCount,
+          });
+        }
+        for (const u of chunk) {
+          await writeMembership(
+            { lastQtyPushed: u.quantity, lastPushedAt: new Date(), lastError: null },
+            u.sku,
+          );
+        }
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
 
@@ -1403,17 +1488,17 @@ export class OutboundSyncService {
       };
     }
 
-    // 9. Success — record outcome, log, write back the membership
+    // 9. Success — record outcome + log (membership writeback already done
+    //    per-chunk inside the loop).
     recordEbayOutcome(connection.id, marketplaceId, true);
     writeAttemptLog({
       channel: "EBAY", marketplace: marketplaceId, sellerId: connection.id, sku,
       productId: payload?.productId ?? null, mode, outcome: "success",
       payloadDigest: digest, durationMs: Date.now() - t0,
     });
-    await writeMembership({ lastQtyPushed: quantity, lastPushedAt: new Date(), lastError: null });
     return {
       success: true, queueId, channel: "EBAY", status: "SUCCESS",
-      message: `Shared ${sku} qty ${quantity} pushed to ItemID ${itemId} (${market})`,
+      message: `Shared ${updates.length} SKU(s) pushed to ItemID ${itemId} (${market}) in ${Math.ceil(updates.length / REVISE_INVENTORY_STATUS_MAX_ENTRIES)} call(s)`,
     };
   }
 

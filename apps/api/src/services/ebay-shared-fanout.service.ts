@@ -22,16 +22,24 @@ export function ebayMarketplaceIdForMarket(market: string): string {
   return m === 'UK' ? 'EBAY_GB' : `EBAY_${m}`
 }
 
+export interface SharedFanoutUpdate {
+  sku: string
+  quantity: number
+  oldQuantity: number | null
+}
+
 export interface SharedFanoutPayload {
   source: 'STOCK_MOVEMENT_SHARED'
   pushVia: 'TRADING'
-  sku: string
   itemId: string
   market: string         // 2-letter, for reviseInventoryStatus
   marketplaceId: string  // 'EBAY_xx', for logging/circuit/rate-limit
-  quantity: number
-  oldQuantity: number | null
   productId: string | null
+  /** RT.2 — ALL changed SKUs for this ItemID in one row. The dispatcher
+   *  chunks these ≤4 per ReviseInventoryStatus call. One pool change on a
+   *  40-variation listing = 1 row / 10 Trading calls instead of 40 rows /
+   *  40 calls — essential under eBay's ~250 revises/listing/DAY cap. */
+  updates: SharedFanoutUpdate[]
 }
 
 export interface SharedFanoutRow {
@@ -48,40 +56,51 @@ export interface SharedFanoutRow {
 }
 
 /**
- * Pure builder: one OutboundSyncQueue create-input per membership.
- * `cappedQtyFor(m)` returns the already-pool-capped quantity for that membership
- * (caller computes it from warehouse-available − buffer); rows whose qty equals
- * `lastQtyPushed` (passed per row) are dropped as no-ops.
+ * Pure builder: one OutboundSyncQueue create-input per ITEM ID (RT.2 —
+ * was one per membership). `cappedQtyFor(m)` returns the already-pool-capped
+ * quantity for that membership; SKUs whose qty equals `lastQtyPushed` are
+ * dropped as no-ops, and items with zero changed SKUs emit no row at all.
  */
 export function buildSharedFanoutRows(
   memberships: Array<SharedMembershipRow & { lastQtyPushed: number | null }>,
   cappedQtyFor: (m: SharedMembershipRow) => number,
   holdUntil: Date,
 ): SharedFanoutRow[] {
-  const rows: SharedFanoutRow[] = []
+  const byItem = new Map<string, Array<SharedMembershipRow & { lastQtyPushed: number | null }>>()
   for (const m of memberships) {
-    const quantity = Math.max(0, Math.trunc(cappedQtyFor(m)))
-    if (m.lastQtyPushed != null && quantity === m.lastQtyPushed) continue // no-op
+    const list = byItem.get(m.itemId)
+    if (list) list.push(m)
+    else byItem.set(m.itemId, [m])
+  }
+
+  const rows: SharedFanoutRow[] = []
+  for (const [itemId, members] of byItem) {
+    const updates: SharedFanoutUpdate[] = []
+    for (const m of members) {
+      const quantity = Math.max(0, Math.trunc(cappedQtyFor(m)))
+      if (m.lastQtyPushed != null && quantity === m.lastQtyPushed) continue // no-op
+      updates.push({ sku: m.sku, quantity, oldQuantity: m.lastQtyPushed })
+    }
+    if (updates.length === 0) continue
+    const first = members[0]
     rows.push({
-      productId: m.productId,
+      productId: first.productId,
       channelListingId: null,
       targetChannel: 'EBAY',
-      targetRegion: m.marketplace,
+      targetRegion: first.marketplace,
       syncStatus: 'PENDING',
       syncType: 'QUANTITY_UPDATE',
       holdUntil,
-      externalListingId: m.itemId,
+      externalListingId: itemId,
       maxRetries: 3,
       payload: {
         source: 'STOCK_MOVEMENT_SHARED',
         pushVia: 'TRADING',
-        sku: m.sku,
-        itemId: m.itemId,
-        market: m.marketplace,
-        marketplaceId: ebayMarketplaceIdForMarket(m.marketplace),
-        quantity,
-        oldQuantity: m.lastQtyPushed,
-        productId: m.productId,
+        itemId,
+        market: first.marketplace,
+        marketplaceId: ebayMarketplaceIdForMarket(first.marketplace),
+        productId: first.productId,
+        updates,
       },
     })
   }

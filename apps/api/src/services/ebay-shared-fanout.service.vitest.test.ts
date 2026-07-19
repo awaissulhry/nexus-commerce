@@ -17,32 +17,60 @@ describe('ebayMarketplaceIdForMarket', () => {
   })
 })
 
-describe('buildSharedFanoutRows', () => {
-  it('emits one TRADING row per membership, itemId in externalListingId + payload', () => {
+describe('buildSharedFanoutRows (RT.2 — one row per ITEM, updates[] batched)', () => {
+  it('emits one TRADING row per ItemID with all changed SKUs in updates[]', () => {
     const rows = buildSharedFanoutRows(members, () => 4, hold)
-    expect(rows).toHaveLength(3)
+    expect(rows).toHaveLength(3) // three distinct itemIds here
     expect(rows[0]).toMatchObject({
       productId: 'p1', channelListingId: null, targetChannel: 'EBAY',
       targetRegion: 'IT', syncType: 'QUANTITY_UPDATE', externalListingId: '110',
       holdUntil: hold, maxRetries: 3,
     })
     expect(rows[0].payload).toMatchObject({
-      source: 'STOCK_MOVEMENT_SHARED', pushVia: 'TRADING', sku: 'LNR-M', itemId: '110',
-      market: 'IT', marketplaceId: 'EBAY_IT', quantity: 4, oldQuantity: 9,
+      source: 'STOCK_MOVEMENT_SHARED', pushVia: 'TRADING', itemId: '110',
+      market: 'IT', marketplaceId: 'EBAY_IT',
     })
+    expect(rows[0].payload.updates).toEqual([{ sku: 'LNR-M', quantity: 4, oldQuantity: 9 }])
     expect(rows[2].payload).toMatchObject({ market: 'DE', marketplaceId: 'EBAY_DE', itemId: '330' })
   })
 
-  it('drops no-op rows where capped qty equals lastQtyPushed', () => {
-    // cap returns each membership's lastQtyPushed -> all no-ops
+  it('groups MULTIPLE SKUs of one ItemID into a single row (the 250/day-cap fix)', () => {
+    const multi = [
+      { sku: 'V-S', itemId: '900', marketplace: 'IT', productId: 'p1', lastQtyPushed: 1 },
+      { sku: 'V-M', itemId: '900', marketplace: 'IT', productId: 'p1', lastQtyPushed: 2 },
+      { sku: 'V-L', itemId: '900', marketplace: 'IT', productId: 'p1', lastQtyPushed: 3 },
+      { sku: 'V-XL', itemId: '900', marketplace: 'IT', productId: 'p1', lastQtyPushed: 4 },
+      { sku: 'V-2XL', itemId: '900', marketplace: 'IT', productId: 'p1', lastQtyPushed: 5 },
+    ]
+    const rows = buildSharedFanoutRows(multi, () => 7, hold)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].externalListingId).toBe('900')
+    expect(rows[0].payload.updates).toHaveLength(5)
+    expect(rows[0].payload.updates.map((u) => u.sku)).toEqual(['V-S', 'V-M', 'V-L', 'V-XL', 'V-2XL'])
+    expect(rows[0].payload.updates.every((u) => u.quantity === 7)).toBe(true)
+  })
+
+  it('drops no-op SKUs inside an item; item with zero changed SKUs emits no row', () => {
     const rows = buildSharedFanoutRows(members, (m) =>
       (members.find((x) => x.itemId === m.itemId)?.lastQtyPushed ?? -1), hold)
     expect(rows).toHaveLength(0)
   })
 
+  it('mixed item: only the CHANGED SKUs appear in updates[]', () => {
+    const mixed = [
+      { sku: 'K-A', itemId: '77', marketplace: 'IT', productId: 'p', lastQtyPushed: 6 }, // no-op at cap 6
+      { sku: 'K-B', itemId: '77', marketplace: 'IT', productId: 'p', lastQtyPushed: 2 }, // changes
+    ]
+    const rows = buildSharedFanoutRows(mixed, () => 6, hold)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].payload.updates).toEqual([{ sku: 'K-B', quantity: 6, oldQuantity: 2 }])
+  })
+
   it('emits a row when lastQtyPushed is null (never pushed)', () => {
     const fresh = [{ sku: 'X', itemId: '1', marketplace: 'IT', productId: 'p', lastQtyPushed: null }]
-    expect(buildSharedFanoutRows(fresh, () => 0, hold)).toHaveLength(1) // 0 !== null
+    const rows = buildSharedFanoutRows(fresh, () => 0, hold)
+    expect(rows).toHaveLength(1) // 0 !== null
+    expect(rows[0].payload.updates).toEqual([{ sku: 'X', quantity: 0, oldQuantity: null }])
   })
 })
 
@@ -64,7 +92,7 @@ function mockDb(members: any[]) {
 describe('enqueueSharedTradingFanout', () => {
   const hold = new Date('2026-06-27T00:00:00Z')
 
-  it('enqueues one row per ACTIVE membership, capped by warehouse-available − buffer', async () => {
+  it('enqueues one row per ITEM (RT.2), capped by warehouse-available − buffer', async () => {
     const db = mockDb([
       { sku: 'A', itemId: '1', marketplace: 'IT', productId: 'p', lastQtyPushed: 0 },
       { sku: 'A', itemId: '2', marketplace: 'IT', productId: 'p', lastQtyPushed: 0 },
@@ -73,8 +101,8 @@ describe('enqueueSharedTradingFanout', () => {
     expect(db.sharedListingMembership.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { productId: 'p', status: 'ACTIVE' } }),
     )
-    expect(db.created).toHaveLength(2)
-    expect(db.created[0].payload.quantity).toBe(8) // 10 − 2 buffer
+    expect(db.created).toHaveLength(2) // two distinct itemIds
+    expect(db.created[0].payload.updates).toEqual([{ sku: 'A', quantity: 8, oldQuantity: 0 }]) // 10 − 2 buffer
     expect(db.created[0].externalListingId).toBe('1')
     expect(db.created[0].payload.pushVia).toBe('TRADING')
     expect(ids).toEqual(['q0', 'q1'])

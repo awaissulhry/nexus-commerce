@@ -14,10 +14,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const membershipUpdateMany = vi.fn().mockResolvedValue({ count: 24 })
 const connectionFindFirst = vi.fn().mockResolvedValue({ id: 'conn-1' })
+// RT.2 — debounce reads the item's max lastPushedAt; default: never pushed.
+const membershipAggregate = vi.fn().mockResolvedValue({ _max: { lastPushedAt: null } })
 
 vi.mock('../db.js', () => ({
   default: {
-    sharedListingMembership: { updateMany: (...a: unknown[]) => membershipUpdateMany(...a) },
+    sharedListingMembership: {
+      updateMany: (...a: unknown[]) => membershipUpdateMany(...a),
+      aggregate: (...a: unknown[]) => membershipAggregate(...a),
+    },
     channelConnection: { findFirst: (...a: unknown[]) => connectionFindFirst(...a) },
   },
 }))
@@ -131,10 +136,12 @@ describe('RT.0 — matchEbayEndedListingCode', () => {
   })
 })
 
-describe('RT.0 — ended-listing auto-heal (Trading branch)', () => {
+describe('RT.0/RT.2 — Trading branch: auto-heal, batching, debounce', () => {
   beforeEach(() => {
     membershipUpdateMany.mockClear()
     recordEbayOutcome.mockClear()
+    membershipAggregate.mockClear()
+    membershipAggregate.mockResolvedValue({ _max: { lastPushedAt: null } })
     process.env.NEXUS_ENABLE_EBAY_PUBLISH = 'true'
   })
 
@@ -151,18 +158,20 @@ describe('RT.0 — ended-listing auto-heal (Trading branch)', () => {
     syncType: 'QUANTITY_UPDATE',
   }
 
+  const svc = () =>
+    new OutboundSyncService() as unknown as {
+      syncSharedTradingQuantity: (q: unknown) => Promise<{
+        success: boolean; errorCode?: string; retryable?: boolean; message?: string
+      }>
+    }
+
   it('auto-ENDs memberships, returns terminal non-retryable, never touches the circuit', async () => {
-    const original = __ebayTrading.reviseInventoryStatus
-    __ebayTrading.reviseInventoryStatus = vi.fn().mockRejectedValue(
+    const original = __ebayTrading.reviseInventoryStatusBatch
+    __ebayTrading.reviseInventoryStatusBatch = vi.fn().mockRejectedValue(
       new Error('eBay ReviseInventoryStatus Failure: Non puoi modificare un\'inserzione scaduta "256552369326". (code 21916750)'),
     ) as never
     try {
-      const svc = new OutboundSyncService() as unknown as {
-        syncSharedTradingQuantity: (q: unknown) => Promise<{
-          success: boolean; errorCode?: string; retryable?: boolean
-        }>
-      }
-      const result = await svc.syncSharedTradingQuantity(queueItem)
+      const result = await svc().syncSharedTradingQuantity(queueItem)
 
       expect(result.success).toBe(false)
       expect(result.errorCode).toBe('EBAY_LISTING_ENDED')
@@ -177,20 +186,17 @@ describe('RT.0 — ended-listing auto-heal (Trading branch)', () => {
       // the decisive invariant: a dead listing never records a circuit outcome
       expect(recordEbayOutcome).not.toHaveBeenCalled()
     } finally {
-      __ebayTrading.reviseInventoryStatus = original
+      __ebayTrading.reviseInventoryStatusBatch = original
     }
   })
 
   it('a NON-ended Trading failure still records the circuit outcome (unchanged behavior)', async () => {
-    const original = __ebayTrading.reviseInventoryStatus
-    __ebayTrading.reviseInventoryStatus = vi.fn().mockRejectedValue(
+    const original = __ebayTrading.reviseInventoryStatusBatch
+    __ebayTrading.reviseInventoryStatusBatch = vi.fn().mockRejectedValue(
       new Error('eBay ReviseInventoryStatus Failure: internal error (code 10007)'),
     ) as never
     try {
-      const svc = new OutboundSyncService() as unknown as {
-        syncSharedTradingQuantity: (q: unknown) => Promise<{ success: boolean; errorCode?: string }>
-      }
-      const result = await svc.syncSharedTradingQuantity(queueItem)
+      const result = await svc().syncSharedTradingQuantity(queueItem)
       expect(result.success).toBe(false)
       expect(result.errorCode).toBeUndefined()
       // the legacy path writes lastError via updateMany — but must NEVER end memberships
@@ -200,7 +206,66 @@ describe('RT.0 — ended-listing auto-heal (Trading branch)', () => {
       expect(endedCalls).toHaveLength(0)
       expect(recordEbayOutcome).toHaveBeenCalledWith('conn-1', 'EBAY_IT', false)
     } finally {
-      __ebayTrading.reviseInventoryStatus = original
+      __ebayTrading.reviseInventoryStatusBatch = original
     }
+  })
+
+  it('RT.2 — batched payload: 9 SKUs dispatch in 3 calls of ≤4, per-chunk writeback', async () => {
+    const original = __ebayTrading.reviseInventoryStatusBatch
+    const batchSpy = vi.fn().mockResolvedValue(undefined)
+    __ebayTrading.reviseInventoryStatusBatch = batchSpy as never
+    try {
+      const updates = Array.from({ length: 9 }, (_, i) => ({ sku: `V-${i}`, quantity: 7, oldQuantity: 1 }))
+      const batched = {
+        ...queueItem,
+        payload: {
+          source: 'STOCK_MOVEMENT_SHARED', pushVia: 'TRADING', itemId: '900',
+          market: 'IT', marketplaceId: 'EBAY_IT', productId: 'p1', updates,
+        },
+        externalListingId: '900',
+      }
+      const result = await svc().syncSharedTradingQuantity(batched)
+      expect(result.success).toBe(true)
+      expect(batchSpy).toHaveBeenCalledTimes(3)
+      expect(batchSpy.mock.calls[0][0]).toMatchObject({ itemId: '900' })
+      expect((batchSpy.mock.calls[0][0] as { entries: unknown[] }).entries).toHaveLength(4)
+      expect((batchSpy.mock.calls[2][0] as { entries: unknown[] }).entries).toHaveLength(1)
+      // per-SKU writeback: one updateMany per SKU
+      const writebacks = membershipUpdateMany.mock.calls.filter(
+        (c) => (c[0] as { data?: { lastQtyPushed?: number } })?.data?.lastQtyPushed !== undefined,
+      )
+      expect(writebacks).toHaveLength(9)
+      expect(recordEbayOutcome).toHaveBeenCalledWith('conn-1', 'EBAY_IT', true)
+    } finally {
+      __ebayTrading.reviseInventoryStatusBatch = original
+    }
+  })
+
+  it('RT.2 — debounce: a revise within the min interval defers WITHOUT calling eBay', async () => {
+    const original = __ebayTrading.reviseInventoryStatusBatch
+    const batchSpy = vi.fn().mockResolvedValue(undefined)
+    __ebayTrading.reviseInventoryStatusBatch = batchSpy as never
+    membershipAggregate.mockResolvedValue({ _max: { lastPushedAt: new Date(Date.now() - 3_000) } })
+    try {
+      const result = await svc().syncSharedTradingQuantity(queueItem)
+      expect(result.success).toBe(false)
+      expect(result.errorCode).toBe('EBAY_REVISE_DEBOUNCED')
+      expect(batchSpy).not.toHaveBeenCalled()
+      expect(recordEbayOutcome).not.toHaveBeenCalled()
+    } finally {
+      __ebayTrading.reviseInventoryStatusBatch = original
+    }
+  })
+})
+
+describe('RT.2 — disposition treats EBAY_REVISE_DEBOUNCED as budget-free deferral', () => {
+  it('deferral, retryCount untouched semantics', () => {
+    const d = computeFailureDisposition(
+      { retryCount: 2, maxRetries: 3 },
+      'debounced: last revise 3s ago',
+      { errorCode: 'EBAY_REVISE_DEBOUNCED' },
+      1_700_000_000_000,
+    )
+    expect(d.kind).toBe('deferral')
   })
 })

@@ -36,6 +36,7 @@ import {
   consumeOpenOrder,
   resolveLocationByCode,
 } from './stock-level.service.js'
+import { recascadeProduct } from './stock-movement.service.js'
 
 const amazonService = new AmazonService()
 
@@ -951,52 +952,27 @@ export class AmazonOrdersService {
       }
     }
 
-    // IS.2 — after reserving, cascade the new available qty to eBay/Shopify so
-    // they don't oversell the same units. Mirrors the Shopify IS.1 block.
+    // IS.2 → RT.2 — after reserving, run the CANONICAL cascade so eBay/Shopify
+    // can't oversell the reserved units. Replaces a hand-rolled row loop that
+    // missed shared-eBay fan-out, FBA/Follow filtering, coalescing, and the
+    // ChannelListing.quantity write (dispatch re-reads it), and carried a 30s
+    // hold. reason ORDER_PLACED ⇒ 0-hold, priority-1 instant dispatch (~2s).
     // Fire-and-forget; a cascade failure must not roll back the order ingestion.
     void (async () => {
       try {
         for (const it of args.items) {
           if (!it.productId) continue
-          // Warehouse (FBM) pool only — FBA stock is Amazon-managed and must not
-          // be pushed to merchant channels (the split-inventory bleed). Mirrors
-          // the canonical cascade's warehouse-available pool.
-          const whRows = await prisma.stockLevel.findMany({
-            where: { productId: it.productId, location: { type: 'WAREHOUSE' } },
-            select: { available: true },
+          const res = await recascadeProduct(it.productId, {
+            reason: 'ORDER_PLACED',
+            referenceType: 'ORDER',
+            referenceId: args.orderId,
+            actor: 'amazon-orders:IS.2',
           })
-          if (whRows.length === 0) continue
-          const availableQty = whRows.reduce((a, s) => a + s.available, 0)
-
-          const listings = await prisma.channelListing.findMany({
-            where: {
+          if (res.ok === false) {
+            logger.warn('amazon-orders: IS.2 recascade refused (NO_LEDGER) — backfill needed', {
+              orderId: args.orderId,
               productId: it.productId,
-              isPublished: true,
-              offerActive: true,
-            },
-            select: { id: true, channel: true, region: true, stockBuffer: true, externalListingId: true },
-          })
-          for (const listing of listings) {
-            if (!(['AMAZON', 'EBAY', 'SHOPIFY'] as string[]).includes(listing.channel)) continue
-            const bufferedQty = Math.max(0, availableQty - (listing.stockBuffer ?? 0))
-            await prisma.outboundSyncQueue.create({
-              data: {
-                productId: it.productId,
-                channelListingId: listing.id,
-                targetChannel: listing.channel as any,
-                targetRegion: listing.region ?? undefined,
-                syncType: 'QUANTITY_UPDATE',
-                syncStatus: 'PENDING',
-                payload: {
-                  quantity: bufferedQty,
-                  source: 'AMAZON_ORDER_PLACED',
-                  orderId: args.orderId,
-                },
-                externalListingId: listing.externalListingId ?? undefined,
-                retryCount: 0,
-                maxRetries: 3,
-                holdUntil: new Date(Date.now() + 30_000),
-              } as any,
+              totalStock: res.totalStock,
             })
           }
         }

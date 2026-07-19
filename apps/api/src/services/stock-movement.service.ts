@@ -835,10 +835,22 @@ export async function listStockMovements(opts: {
  * rows) is REFUSED, because the warehouse-only recompute would zero it.
  * Backfill the ledger first (see _rt0-ledger-backfill.mts).
  */
-export async function recascadeProduct(productId: string): Promise<
+export async function recascadeProduct(
+  productId: string,
+  opts?: {
+    /** Drives holdUntil + instant-lane delay + priority via ORDER_DRIVEN_REASONS.
+     *  Default SYNC_RECONCILIATION (30s grace). Order paths (RT.2) pass
+     *  ORDER_PLACED / ORDER_CANCELLED → 0-hold, priority-1 instant dispatch. */
+    reason?: MovementReason
+    referenceType?: string
+    referenceId?: string
+    actor?: string
+  },
+): Promise<
   | { ok: true; cascade: CascadeResult; newTotalStock: number }
   | { ok: false; reason: 'NO_LEDGER'; totalStock: number }
 > {
+  const reason: MovementReason = opts?.reason ?? 'SYNC_RECONCILIATION'
   const product = await prisma.product.findUnique({
     where: { id: productId },
     select: { totalStock: true },
@@ -855,19 +867,21 @@ export async function recascadeProduct(productId: string): Promise<
     const cascade = await cascadeQuantityToListings(tx, {
       productId,
       newTotalStock,
-      reason: 'SYNC_RECONCILIATION',
+      reason,
       change: 0,
-      referenceType: 'RECASCADE',
-      actor: 'system:recascade',
+      referenceType: opts?.referenceType ?? 'RECASCADE',
+      referenceId: opts?.referenceId,
+      actor: opts?.actor ?? 'system:recascade',
     })
     return { cascade, newTotalStock }
   })
 
   // Post-commit: same instant-lane + read-cache pattern as applyStockMovement.
+  const enqueueDelay = ORDER_DRIVEN_REASONS.has(reason) ? 0 : DEFAULT_HOLD_MS
   const priority =
     process.env.NEXUS_OUTBOUND_PRIORITY === '0'
       ? undefined
-      : outboundEnqueuePriority('SYNC_RECONCILIATION')
+      : outboundEnqueuePriority(reason)
   for (const queueId of result.cascade.queuedSyncIds) {
     await addJobSafely(
       outboundSyncQueue,
@@ -877,10 +891,10 @@ export async function recascadeProduct(productId: string): Promise<
         productId,
         syncType: 'QUANTITY_UPDATE',
         source: 'RECASCADE',
-        reason: 'SYNC_RECONCILIATION',
+        reason,
       },
       {
-        delay: DEFAULT_HOLD_MS,
+        delay: enqueueDelay,
         jobId: queueId,
         ...(priority !== undefined ? { priority } : {}),
       },

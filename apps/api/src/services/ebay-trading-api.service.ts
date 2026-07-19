@@ -45,6 +45,35 @@ export function buildReviseInventoryStatusXml(input: {
 </ReviseInventoryStatusRequest>`
 }
 
+/** RT.2 — batched form: eBay allows up to FOUR InventoryStatus nodes per
+ *  ReviseInventoryStatus call, and each CALL (not each SKU) counts toward the
+ *  ~250 revises/listing/day cap. Callers chunk to ≤4. */
+export const REVISE_INVENTORY_STATUS_MAX_ENTRIES = 4
+
+export function buildReviseInventoryStatusBatchXml(input: {
+  itemId: string
+  entries: Array<{ sku: string; quantity: number }>
+}): string {
+  if (input.entries.length === 0 || input.entries.length > REVISE_INVENTORY_STATUS_MAX_ENTRIES) {
+    throw new Error(
+      `buildReviseInventoryStatusBatchXml: entries must be 1..${REVISE_INVENTORY_STATUS_MAX_ENTRIES}, got ${input.entries.length}`,
+    )
+  }
+  const nodes = input.entries
+    .map(
+      (e) => `  <InventoryStatus>
+    <ItemID>${escapeXml(input.itemId)}</ItemID>
+    <SKU>${escapeXml(e.sku)}</SKU>
+    <Quantity>${Math.max(0, Math.trunc(e.quantity))}</Quantity>
+  </InventoryStatus>`,
+    )
+    .join('\n')
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<ReviseInventoryStatusRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+${nodes}
+</ReviseInventoryStatusRequest>`
+}
+
 export interface TradingVariation {
   sku: string
   price: number
@@ -270,6 +299,16 @@ export async function reviseInventoryStatus(
 ): Promise<void> {
   const siteId = siteIdForMarket(ctx.market)
   const xml = buildReviseInventoryStatusXml(input)
+  await callTradingApi('ReviseInventoryStatus', xml, { oauthToken: ctx.oauthToken, siteId })
+}
+
+/** RT.2 — batched revise: ≤4 SKUs of ONE ItemID per Trading call. */
+export async function reviseInventoryStatusBatch(
+  input: { itemId: string; entries: Array<{ sku: string; quantity: number }> },
+  ctx: { oauthToken: string; market: string },
+): Promise<void> {
+  const siteId = siteIdForMarket(ctx.market)
+  const xml = buildReviseInventoryStatusBatchXml(input)
   await callTradingApi('ReviseInventoryStatus', xml, { oauthToken: ctx.oauthToken, siteId })
 }
 
