@@ -105,17 +105,37 @@ export default function MasterPanel({
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  // IE.1.3 — Near-duplicate confirmation state. Set when the backend
-  // responds 409 NEAR_DUPLICATE; cleared on either "use existing" or
-  // "upload anyway" (the latter re-runs the upload with ?force=true).
-  const [nearDup, setNearDup] = useState<{
+  // IE.14 — Near-duplicate review queue. A 409 never halts the batch:
+  // each conflicted file lands here with a preview object-URL, the rest
+  // of the drop keeps uploading, and the operator resolves the queue in
+  // one modal afterwards (per-file or all at once). `scope` is carried
+  // for variant-targeted uploads so a resolution can still fan the
+  // image into pending channel rows.
+  type DupConflict = {
+    key: number
     file: File
+    previewUrl: string
     type: ImageType
     hammingDistance: number
-    threshold: number
+    dhash256Distance: number | null
     candidate: { id: string; url: string; type: string; alt: string | null; width: number | null; height: number | null }
-  } | null>(null)
-  const [forcingUpload, setForcingUpload] = useState(false)
+    scope: ScopeChoice | null
+  }
+  const [conflicts, setConflicts] = useState<DupConflict[]>([])
+  const [resolvingKey, setResolvingKey] = useState<number | 'all' | null>(null)
+  const conflictKeyRef = useRef(0)
+  const conflictsRef = useRef<DupConflict[]>([])
+  conflictsRef.current = conflicts
+  // IE.14 — exact-duplicate feedback: scroll to + flash the card that
+  // already holds these bytes instead of leaving the operator guessing
+  // why no new card appeared.
+  const [flashId, setFlashId] = useState<string | null>(null)
+  const cardRefs = useRef(new Map<string, HTMLDivElement>())
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Always-current gallery view for async flows (batch loops + queued
+  // conflict resolutions) that outlive the render they started in.
+  const imagesRef = useRef(images)
+  imagesRef.current = images
   // IE.10 — staged files awaiting scope selection. Set when the
   // operator hits "Upload to variant…"; the modal reads from here and
   // calls handleScopedUpload(scope) on confirm.
@@ -206,47 +226,93 @@ export default function MasterPanel({
   const tooFew = images.length > 0 && images.length < 3
 
   // ── Upload ────────────────────────────────────────────────────────────
+  // IE.14 — batch-safe: every file gets a verdict. Near-dups queue for
+  // review instead of halting the loop (the old `break` silently dropped
+  // the rest of a multi-file drop on the floor). Sequential on purpose:
+  // the server assigns sortOrder from the row count, and later files of
+  // the same batch must near-dup-scan against the earlier ones.
+  function enqueueConflict(
+    file: File,
+    type: ImageType,
+    result: Extract<UploadOutcome, { outcome: 'near-duplicate' }>,
+    scope: ScopeChoice | null,
+  ) {
+    const key = ++conflictKeyRef.current
+    setConflicts((prev) => [...prev, {
+      key,
+      file,
+      previewUrl: URL.createObjectURL(file),
+      type,
+      hammingDistance: result.hammingDistance,
+      dhash256Distance: result.dhash256Distance,
+      candidate: result.candidate,
+      scope,
+    }])
+  }
+
+  function flashCard(id: string) {
+    setFlashId(id)
+    cardRefs.current.get(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current)
+    flashTimerRef.current = setTimeout(() => setFlashId(null), 2200)
+  }
+
+  // Revoke queued preview object-URLs if the panel unmounts mid-review.
+  useEffect(() => () => {
+    conflictsRef.current.forEach((c) => URL.revokeObjectURL(c.previewUrl))
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current)
+  }, [])
+
+  type BatchTally = { uploaded: number; reused: number; queued: number; skipped: string[]; errors: string[] }
+
+  function summarizeBatch(s: BatchTally) {
+    const parts: string[] = []
+    if (s.uploaded) parts.push(t('products.edit.images.masterPanel.batchUploaded', { count: s.uploaded }))
+    if (s.reused) parts.push(t('products.edit.images.masterPanel.batchReused', { count: s.reused }))
+    if (s.queued) parts.push(t('products.edit.images.masterPanel.batchQueued', { count: s.queued }))
+    if (s.skipped.length) parts.push(t('products.edit.images.masterPanel.batchSkipped', { count: s.skipped.length }))
+    if (parts.length) onToast?.(parts.join(' · '))
+    if (s.errors.length) {
+      setUploadError(s.errors.join(' · '))
+    } else if (s.skipped.length) {
+      setUploadError(t('products.edit.images.masterPanel.batchSkippedDetail', { names: s.skipped.join(', ') }))
+    }
+  }
+
   async function handleFiles(files: File[]) {
     if (!files.length) return
     setUploading(true)
     setUploadError(null)
-    // Accumulate created rows locally so a multi-file drop only fires
-    // a single onImagesChange — important so the React-Query cache
-    // doesn't refetch between files.
-    let next = images
+    const tally: BatchTally = { uploaded: 0, reused: 0, queued: 0, skipped: [], errors: [] }
+    let lastReusedId: string | null = null
     try {
       for (const file of files) {
         // IM.10 — file size guard (Shopify max 20 MB; Amazon max 10 MB)
         if (file.size > 20 * 1024 * 1024) {
-          setUploadError(`${file.name} exceeds 20 MB — too large for any channel`)
+          tally.skipped.push(file.name)
           continue
         }
-        const result = await uploadOne(file, newTypeRef.current, false)
-        if (result.outcome === 'created') {
-          next = [...next, result.image]
-        } else if (result.outcome === 'reused') {
-          // Already in the gallery — surface a toast but don't add a
-          // duplicate card to the grid.
-          onToast?.(t('products.edit.images.masterPanel.duplicateReused', {
-            type: result.image.type,
-          }))
-        } else if (result.outcome === 'near-duplicate') {
-          // Halt the loop and pop the confirmation modal. Operator
-          // either accepts the existing candidate (no further upload)
-          // or chooses to upload anyway (force=true re-runs this file).
-          setNearDup({
-            file,
-            type: newTypeRef.current,
-            hammingDistance: result.hammingDistance,
-            threshold: result.threshold,
-            candidate: result.candidate,
-          })
-          break
+        try {
+          const result = await uploadOne(file, newTypeRef.current, false)
+          if (result.outcome === 'created') {
+            tally.uploaded++
+            imagesRef.current = [...imagesRef.current, result.image]
+            onImagesChange(imagesRef.current)
+          } else if (result.outcome === 'reused') {
+            // Already in the gallery — no new card; flash the existing
+            // one so the operator sees where their image lives.
+            tally.reused++
+            lastReusedId = result.image.id
+          } else {
+            tally.queued++
+            enqueueConflict(file, newTypeRef.current, result, null)
+          }
+        } catch (err) {
+          tally.errors.push(`${file.name}: ${err instanceof Error ? err.message : 'upload failed'}`)
         }
       }
-      if (next !== images) onImagesChange(next)
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Upload failed')
+      summarizeBatch(tally)
+      if (lastReusedId) flashCard(lastReusedId)
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -260,6 +326,7 @@ export default function MasterPanel({
         outcome: 'near-duplicate'
         hammingDistance: number
         threshold: number
+        dhash256Distance: number | null
         candidate: { id: string; url: string; type: string; alt: string | null; width: number | null; height: number | null }
       }
 
@@ -280,6 +347,7 @@ export default function MasterPanel({
           outcome: 'near-duplicate',
           hammingDistance: body.hammingDistance,
           threshold: body.threshold,
+          dhash256Distance: body.dhash256Distance ?? null,
           candidate: body.candidate,
         }
       }
@@ -293,15 +361,70 @@ export default function MasterPanel({
     return { outcome: 'created', image: json }
   }
 
-  // IE.1.3 — Near-dup modal actions. "use existing" is a no-op (the
-  // candidate is already in the gallery); "upload anyway" re-runs the
-  // POST with ?force=true so the dedup gate accepts it.
-  async function handleNearDupUseExisting() {
-    if (!nearDup) return
-    onToast?.(t('products.edit.images.masterPanel.duplicateReused', {
-      type: nearDup.candidate.type,
-    }))
-    setNearDup(null)
+  // IE.14 — Conflict resolutions. "Use existing" keeps the candidate
+  // that's already in the gallery (and fans it into the variant scope
+  // when one is attached); "Upload anyway" re-runs the POST with
+  // ?force=true. Both drop the row from the queue and revoke its
+  // preview object-URL.
+  function removeConflict(key: number) {
+    setConflicts((prev) => {
+      const gone = prev.find((c) => c.key === key)
+      if (gone) URL.revokeObjectURL(gone.previewUrl)
+      return prev.filter((c) => c.key !== key)
+    })
+  }
+
+  async function resolveConflict(c: DupConflict, action: 'use-existing' | 'force'): Promise<boolean> {
+    if (action === 'use-existing') {
+      if (c.scope) {
+        fanScopedImage({ id: c.candidate.id, url: c.candidate.url, type: c.candidate.type } as ProductImage, c.scope)
+      }
+      flashCard(c.candidate.id)
+      removeConflict(c.key)
+      return true
+    }
+    try {
+      const result = await uploadOne(c.file, c.type, true)
+      if (result.outcome === 'created') {
+        imagesRef.current = [...imagesRef.current, result.image]
+        onImagesChange(imagesRef.current)
+        if (c.scope) fanScopedImage(result.image, c.scope)
+      } else if (result.outcome === 'reused') {
+        // Race: someone else uploaded the same bytes between the 409
+        // and the force retry. Surface as a duplicate, not an error.
+        onToast?.(t('products.edit.images.masterPanel.duplicateReused', { type: result.image.type }))
+        if (c.scope) fanScopedImage(result.image, c.scope)
+      }
+      removeConflict(c.key)
+      return true
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed')
+      return false
+    }
+  }
+
+  async function handleConflictAction(key: number, action: 'use-existing' | 'force') {
+    const c = conflicts.find((x) => x.key === key)
+    if (!c || resolvingKey !== null) return
+    setResolvingKey(key)
+    try {
+      await resolveConflict(c, action)
+    } finally {
+      setResolvingKey(null)
+    }
+  }
+
+  async function handleResolveAll(action: 'use-existing' | 'force') {
+    if (resolvingKey !== null) return
+    setResolvingKey('all')
+    try {
+      for (const c of [...conflictsRef.current]) {
+        const ok = await resolveConflict(c, action)
+        if (!ok) break // leave the rest queued; the error banner explains
+      }
+    } finally {
+      setResolvingKey(null)
+    }
   }
 
   // IE.10 — Variant-targeted upload entrypoint. The hidden input fires
@@ -355,127 +478,109 @@ export default function MasterPanel({
     return (max + 1) * 10 + 10
   }
 
+  // IE.10 — Fan a master image into pending ListingImage rows for each
+  // selected channel + the chosen variant axis value. The PT cursor
+  // advances per fanned file so a 3-file batch lands in PT01/PT02/PT03
+  // without colliding; it survives into conflict resolutions from the
+  // same session (queued rows fan after the batch) and resets when the
+  // next scoped batch starts.
+  const amazonPtCursorRef = useRef(0)
+  function fanScopedImage(masterImage: ProductImage, scope: ScopeChoice) {
+    if (scope.kind !== 'variant' || !addPendingUpsert) return
+    for (const channel of scope.channels) {
+      if (channel === 'amazon') {
+        const baseSlot = nextAmazonSlotForType(scope.type, scope.axis, scope.value)
+        const slot = baseSlot.startsWith('PT')
+          ? `PT0${Math.min(8, parseInt(baseSlot.slice(2), 10) + amazonPtCursorRef.current)}`
+          : baseSlot
+        if (baseSlot.startsWith('PT')) amazonPtCursorRef.current++
+        addPendingUpsert({
+          scope: 'PLATFORM',
+          platform: 'AMAZON',
+          marketplace: null,
+          amazonSlot: slot,
+          variantGroupKey: scope.axis,
+          variantGroupValue: scope.value,
+          url: masterImage.url,
+          sourceProductImageId: masterImage.id,
+          role: slot === 'MAIN' ? 'MAIN' : slot === 'SWCH' ? 'SWATCH' : 'GALLERY',
+          position: slot === 'MAIN' ? 0 : slot === 'SWCH' ? 9 : parseInt(slot.slice(2), 10),
+        })
+      } else if (channel === 'ebay') {
+        addPendingUpsert({
+          scope: 'PLATFORM',
+          platform: 'EBAY',
+          marketplace: null,
+          variantGroupKey: scope.axis,
+          variantGroupValue: scope.value,
+          url: masterImage.url,
+          sourceProductImageId: masterImage.id,
+          role: 'GALLERY',
+          position: nextEbayPosition(),
+        })
+      } else if (channel === 'shopify') {
+        addPendingUpsert({
+          scope: 'PLATFORM',
+          platform: 'SHOPIFY',
+          marketplace: null,
+          variantGroupKey: scope.axis,
+          variantGroupValue: scope.value,
+          url: masterImage.url,
+          sourceProductImageId: masterImage.id,
+          role: 'GALLERY',
+          position: nextShopifyPosition(),
+        })
+      }
+    }
+  }
+
   async function handleScopedUpload(scope: ScopeChoice) {
     const files = scopedFiles
     setScopedFiles([])
     if (files.length === 0) return
     setUploading(true)
     setUploadError(null)
-    let next = images
-    let amazonSlotCursor = 0
+    amazonPtCursorRef.current = 0
+    const tally: BatchTally = { uploaded: 0, reused: 0, queued: 0, skipped: [], errors: [] }
     try {
       for (const file of files) {
         if (file.size > 20 * 1024 * 1024) {
-          setUploadError(`${file.name} exceeds 20 MB — too large for any channel`)
+          tally.skipped.push(file.name)
           continue
         }
-        const result = await uploadOne(file, scope.type, false)
-        let masterImage: ProductImage | null = null
-        if (result.outcome === 'created') {
-          masterImage = result.image
-          next = [...next, result.image]
-        } else if (result.outcome === 'reused') {
-          masterImage = result.image
-          onToast?.(t('products.edit.images.masterPanel.duplicateReused', { type: result.image.type }))
-        } else if (result.outcome === 'near-duplicate') {
-          // For variant uploads we don't gate on near-dup; treat the
-          // existing candidate as the master and continue. This matches
-          // the "I know this is similar — use it for the variant" intent.
-          masterImage = {
-            id: result.candidate.id,
-            url: result.candidate.url,
-            type: result.candidate.type,
-          } as ProductImage
-          onToast?.(t('products.edit.images.masterPanel.duplicateReused', { type: result.candidate.type }))
-        }
-
-        if (!masterImage || scope.kind === 'master' || !addPendingUpsert) continue
-
-        // IE.10 — Fan the master image into pending ListingImage rows
-        // for each selected channel + the chosen variant axis value.
-        // Amazon slot advances per file so a 3-file PT-batch lands in
-        // PT01, PT02, PT03 without colliding on the same row.
-        for (const channel of scope.channels) {
-          if (channel === 'amazon') {
-            const baseSlot = nextAmazonSlotForType(scope.type, scope.axis, scope.value)
-            const slot = baseSlot.startsWith('PT')
-              ? `PT0${Math.min(8, parseInt(baseSlot.slice(2), 10) + amazonSlotCursor)}`
-              : baseSlot
-            if (baseSlot.startsWith('PT')) amazonSlotCursor++
-            addPendingUpsert({
-              scope: 'PLATFORM',
-              platform: 'AMAZON',
-              marketplace: null,
-              amazonSlot: slot,
-              variantGroupKey: scope.axis,
-              variantGroupValue: scope.value,
-              url: masterImage.url,
-              sourceProductImageId: masterImage.id,
-              role: slot === 'MAIN' ? 'MAIN' : slot === 'SWCH' ? 'SWATCH' : 'GALLERY',
-              position: slot === 'MAIN' ? 0 : slot === 'SWCH' ? 9 : parseInt(slot.slice(2), 10),
-            })
-          } else if (channel === 'ebay') {
-            addPendingUpsert({
-              scope: 'PLATFORM',
-              platform: 'EBAY',
-              marketplace: null,
-              variantGroupKey: scope.axis,
-              variantGroupValue: scope.value,
-              url: masterImage.url,
-              sourceProductImageId: masterImage.id,
-              role: 'GALLERY',
-              position: nextEbayPosition(),
-            })
-          } else if (channel === 'shopify') {
-            addPendingUpsert({
-              scope: 'PLATFORM',
-              platform: 'SHOPIFY',
-              marketplace: null,
-              variantGroupKey: scope.axis,
-              variantGroupValue: scope.value,
-              url: masterImage.url,
-              sourceProductImageId: masterImage.id,
-              role: 'GALLERY',
-              position: nextShopifyPosition(),
-            })
+        try {
+          const result = await uploadOne(file, scope.type, false)
+          if (result.outcome === 'created') {
+            tally.uploaded++
+            imagesRef.current = [...imagesRef.current, result.image]
+            onImagesChange(imagesRef.current)
+            fanScopedImage(result.image, scope)
+          } else if (result.outcome === 'reused') {
+            tally.reused++
+            fanScopedImage(result.image, scope)
+            flashCard(result.image.id)
+          } else {
+            // IE.14 — near-dups are no longer silently collapsed into
+            // the existing candidate (that dropped operator files on the
+            // floor); they queue for explicit review like master uploads,
+            // carrying the scope for the eventual fan-out.
+            tally.queued++
+            enqueueConflict(file, scope.type, result, scope)
           }
+        } catch (err) {
+          tally.errors.push(`${file.name}: ${err instanceof Error ? err.message : 'upload failed'}`)
         }
       }
-      if (next !== images) onImagesChange(next)
-      if (scope.kind === 'variant') {
+      summarizeBatch(tally)
+      if (scope.kind === 'variant' && tally.uploaded + tally.reused > 0) {
         onToast?.(t('products.edit.images.scopeUpload.applied', {
-          count: files.length,
+          count: tally.uploaded + tally.reused,
           axis: scope.axis,
           value: scope.value,
         }))
       }
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
       setUploading(false)
-    }
-  }
-
-  async function handleNearDupForce() {
-    if (!nearDup) return
-    setForcingUpload(true)
-    setUploadError(null)
-    try {
-      const result = await uploadOne(nearDup.file, nearDup.type, true)
-      if (result.outcome === 'created') {
-        onImagesChange([...images, result.image])
-      } else if (result.outcome === 'reused') {
-        // Race: someone else uploaded the same bytes between the 409
-        // and the force retry. Surface as a duplicate, not an error.
-        onToast?.(t('products.edit.images.masterPanel.duplicateReused', {
-          type: result.image.type,
-        }))
-      }
-      setNearDup(null)
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Upload failed')
-    } finally {
-      setForcingUpload(false)
     }
   }
 
@@ -913,6 +1018,10 @@ export default function MasterPanel({
               {images.map((img, index) => (
                 <div
                   key={img.id}
+                  ref={(el) => {
+                    if (el) cardRefs.current.set(img.id, el)
+                    else cardRefs.current.delete(img.id)
+                  }}
                   draggable
                   onDragStart={(e) => onDragStart(e, index)}
                   onDragOver={(e) => onDragOver(e, index)}
@@ -933,6 +1042,10 @@ export default function MasterPanel({
                   // image will land. Like macOS Finder reorder.
                   className={cn(
                     'group relative rounded-xl border bg-slate-50 dark:bg-slate-800 overflow-hidden transition-all cursor-grab active:cursor-grabbing',
+                    // IE.14 — flash ring: after an exact-duplicate upload we
+                    // scroll here and pulse so the operator sees which card
+                    // already holds their file.
+                    flashId === img.id && 'ring-4 ring-amber-400 dark:ring-amber-500 border-amber-400 animate-pulse',
                     selectedIds.has(img.id)
                       ? 'border-blue-500 ring-2 ring-blue-300 dark:ring-blue-600'
                       : dragOverIndex === index
@@ -1229,84 +1342,113 @@ export default function MasterPanel({
         />
       )}
 
-      {/* IE.1.3 — Near-duplicate confirmation modal. Triggers when the
-          upload endpoint returns 409 NEAR_DUPLICATE. Shows the
-          candidate side-by-side and lets the operator either keep
-          the existing image or force-upload the new one. */}
-      {nearDup && (
+      {/* IE.14 — Near-duplicate review queue. Every 409 from the batch
+          lands here; the operator resolves per-file (side-by-side
+          compare) or all at once. Uploads already succeeded for the
+          rest of the batch — nothing is lost while this is open. */}
+      {conflicts.length > 0 && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 dark:bg-slate-950/70 flex items-center justify-center px-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-default dark:border-slate-700 max-w-2xl w-full p-6 space-y-5">
-            <div className="flex items-start gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-default dark:border-slate-700 max-w-3xl w-full p-6 space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-start gap-3 flex-shrink-0">
               <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
               <div className="space-y-1">
                 <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  {t('products.edit.images.masterPanel.nearDupTitle')}
+                  {t('products.edit.images.masterPanel.conflictTitle', { count: conflicts.length })}
                 </h2>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  {t('products.edit.images.masterPanel.nearDupHint', {
-                    distance: nearDup.hammingDistance,
-                    threshold: nearDup.threshold,
-                  })}
+                  {t('products.edit.images.masterPanel.conflictHint')}
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                  {t('products.edit.images.masterPanel.nearDupExisting')}
-                </p>
-                <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden border border-default dark:border-slate-700">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={nearDup.candidate.url}
-                    alt={nearDup.candidate.alt ?? ''}
-                    className="w-full h-full object-cover"
-                  />
+            <div className="overflow-y-auto flex-1 space-y-3 pr-1">
+              {conflicts.map((c) => (
+                <div
+                  key={c.key}
+                  className="flex items-center gap-4 p-3 rounded-xl border border-default dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50"
+                >
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="space-y-1 text-center">
+                      <div className="w-24 h-24 rounded-lg bg-slate-100 dark:bg-slate-800 overflow-hidden border border-default dark:border-slate-700">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={c.candidate.url} alt={c.candidate.alt ?? ''} className="w-full h-full object-contain" />
+                      </div>
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        {t('products.edit.images.masterPanel.nearDupExisting')}
+                      </p>
+                    </div>
+                    <div className="space-y-1 text-center">
+                      <div className="w-24 h-24 rounded-lg bg-slate-100 dark:bg-slate-800 overflow-hidden border border-default dark:border-slate-700">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={c.previewUrl} alt="" className="w-full h-full object-contain" />
+                      </div>
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        {t('products.edit.images.masterPanel.nearDupNew')}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-0.5">
+                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate" title={c.file.name}>
+                      {c.file.name}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {c.candidate.type}
+                      {c.candidate.width && c.candidate.height ? ` · ${c.candidate.width}×${c.candidate.height}` : ''}
+                    </p>
+                    {c.scope?.kind === 'variant' && (
+                      <p className="text-xs text-blue-600 dark:text-blue-400">
+                        {c.scope.axis}: {c.scope.value} → {c.scope.channels.join(', ')}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5 flex-shrink-0">
+                    <Button
+                      size="sm"
+                      onClick={() => handleConflictAction(c.key, 'force')}
+                      disabled={resolvingKey !== null}
+                      className="text-xs gap-1.5 h-7"
+                    >
+                      {resolvingKey === c.key
+                        ? <Loader2 className="w-3 h-3 animate-spin" />
+                        : <Upload className="w-3 h-3" />}
+                      {t('products.edit.images.masterPanel.nearDupForce')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleConflictAction(c.key, 'use-existing')}
+                      disabled={resolvingKey !== null}
+                      className="text-xs h-7"
+                    >
+                      {t('products.edit.images.masterPanel.nearDupUseExisting')}
+                    </Button>
+                  </div>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {nearDup.candidate.type}
-                  {nearDup.candidate.width && nearDup.candidate.height
-                    ? ` · ${nearDup.candidate.width}×${nearDup.candidate.height}`
-                    : ''}
-                </p>
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                  {t('products.edit.images.masterPanel.nearDupNew')}
-                </p>
-                <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden border border-default dark:border-slate-700">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={URL.createObjectURL(nearDup.file)}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 truncate" title={nearDup.file.name}>
-                  {nearDup.file.name}
-                </p>
-              </div>
+              ))}
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-subtle dark:border-slate-800">
+            {uploadError && (
+              <p className="text-xs text-red-600 dark:text-red-400 flex-shrink-0">{uploadError}</p>
+            )}
+
+            <div className="flex items-center justify-between gap-2 pt-3 border-t border-subtle dark:border-slate-800 flex-shrink-0">
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={handleNearDupUseExisting}
-                disabled={forcingUpload}
+                onClick={() => handleResolveAll('use-existing')}
+                disabled={resolvingKey !== null}
                 className="text-xs"
               >
-                {t('products.edit.images.masterPanel.nearDupUseExisting')}
+                {t('products.edit.images.masterPanel.conflictUseAllExisting')}
               </Button>
               <Button
                 size="sm"
-                onClick={handleNearDupForce}
-                disabled={forcingUpload}
+                onClick={() => handleResolveAll('force')}
+                disabled={resolvingKey !== null}
                 className="text-xs gap-1.5"
               >
-                {forcingUpload ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                {t('products.edit.images.masterPanel.nearDupForce')}
+                {resolvingKey === 'all' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                {t('products.edit.images.masterPanel.conflictUploadAll', { count: conflicts.length })}
               </Button>
             </div>
           </div>
