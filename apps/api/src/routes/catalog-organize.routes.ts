@@ -134,6 +134,36 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
             })
           }
 
+          // FFT.3c — the Amazon flat-file grid reads snapshot.parent_sku
+          // AUTHORITATIVELY (applySnapshotOverlay returns the snapshot
+          // verbatim): a DB re-parent that leaves the child's snapshots stale
+          // re-creates the AIREON phantom-family trap. Rewrite them in the
+          // same transaction (eBay reasserts parentage from the tree on read,
+          // but its raw snapshot self-heals here too).
+          const newParent = await tx.product.findUnique({ where: { id: toParentId }, select: { sku: true } })
+          if (newParent?.sku) {
+            const listingsWithSnap = await tx.channelListing.findMany({
+              where: { productId },
+              select: { id: true, flatFileSnapshot: true },
+            })
+            for (const cl of listingsWithSnap) {
+              const snap = cl.flatFileSnapshot as Record<string, unknown> | null
+              if (!snap || typeof snap !== 'object' || Array.isArray(snap) || Object.keys(snap).length === 0) continue
+              if (!('parent_sku' in snap) && !('parentage_level' in snap) && !('parentage' in snap)) continue
+              await tx.channelListing.update({
+                where: { id: cl.id },
+                data: {
+                  flatFileSnapshot: {
+                    ...snap,
+                    ...('parent_sku' in snap ? { parent_sku: newParent.sku } : {}),
+                    ...('parentage_level' in snap ? { parentage_level: 'child' } : {}),
+                    ...('parentage' in snap ? { parentage: 'child' } : {}),
+                  } as never,
+                },
+              })
+            }
+          }
+
           // 3. Enqueue OutboundSyncQueue for every active channel listing.
           if (product.channelListings.length > 0) {
             const queueRows = await tx.outboundSyncQueue.createManyAndReturn({

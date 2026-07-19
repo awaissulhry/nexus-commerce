@@ -1985,6 +1985,32 @@ export async function pushVariationGroup(
           skipDuplicates: true,
         })
       }
+      // FFT.3c — Lane-A parity with the shared lane: snapshot-less CLs (incl.
+      // the ones this publish just created) persist the PUSHED row as their
+      // snapshot, so a reload shows exactly what went live. Existing snapshots
+      // are never overwritten here — the save owns them (pushes are pre-saved).
+      try {
+        const rowByProductId = new Map<string, Record<string, unknown>>()
+        for (const r of variantRows) {
+          const pid = r._productId as string | undefined
+          if (pid && !rowByProductId.has(pid)) rowByProductId.set(pid, r as Record<string, unknown>)
+        }
+        if (rowByProductId.size > 0) {
+          const snapState = await prisma.channelListing.findMany({
+            where: { productId: { in: allIds }, channel: 'EBAY', region },
+            select: { id: true, productId: true, flatFileSnapshot: true },
+          })
+          for (const cl of snapState) {
+            const has = cl.flatFileSnapshot && typeof cl.flatFileSnapshot === 'object' && !Array.isArray(cl.flatFileSnapshot) && Object.keys(cl.flatFileSnapshot as object).length > 0
+            if (has) continue
+            const row = cl.productId ? rowByProductId.get(cl.productId) : undefined
+            if (!row) continue
+            const snap = Object.fromEntries(Object.entries(row).filter(([k]) => !k.startsWith('_')))
+            if (!Object.keys(snap).length) continue
+            await prisma.channelListing.update({ where: { id: cl.id }, data: { flatFileSnapshot: snap as never } }).catch(() => null)
+          }
+        }
+      } catch { /* parity is best-effort — the publish itself already succeeded */ }
       const activated = await prisma.channelListing.findMany({
         where: { productId: { in: allIds }, channel: 'EBAY', region },
         select: { id: true },
