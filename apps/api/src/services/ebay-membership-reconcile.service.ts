@@ -196,7 +196,30 @@ export async function reconcileMembershipsFromEbay(
       specifics: (m.variationSpecifics as Record<string, string>) ?? {},
     }))
 
-  const plan = planMembershipReconcile(live, pool)
+  let plan = planMembershipReconcile(live, pool)
+  // Incident #42b — FAMILY LOCK: a single-axis listing ({Colore: Verde})
+  // subset-matched against the WHOLE market's memberships collides with any
+  // other family carrying the same colour → the ambiguity guard refuses.
+  // When at least one variation matched unambiguously, the family is known:
+  // restrict the pool to that family's children and re-match the remainder.
+  // Within-family ambiguity is still refused — never guessed.
+  if (plan.unmatched.length > 0 && plan.matched > 0) {
+    const matchedIds = [...new Set(plan.entries.filter((e) => e.productId).map((e) => e.productId as string))]
+    const matchedProducts = await prisma.product.findMany({
+      where: { id: { in: matchedIds } },
+      select: { parentId: true },
+    })
+    const parentIds = [...new Set(matchedProducts.map((p) => p.parentId).filter((x): x is string => Boolean(x)))]
+    if (parentIds.length === 1) {
+      const familyChildren = await prisma.product.findMany({
+        where: { parentId: parentIds[0], deletedAt: null },
+        select: { id: true },
+      })
+      const familyIds = new Set(familyChildren.map((c) => c.id))
+      const lockedPool = pool.filter((p) => familyIds.has(p.productId))
+      if (lockedPool.length > 0) plan = planMembershipReconcile(live, lockedPool)
+    }
+  }
 
   // parentSku continuity: keep whatever this listing's memberships used.
   // First-touch listings (no memberships yet) resolve the POOL family's real

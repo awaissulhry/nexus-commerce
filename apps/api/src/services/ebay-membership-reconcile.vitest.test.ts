@@ -132,3 +132,19 @@ describe('incident #42 — bilingual synonym matching', () => {
     expect(plan.entries[0].liveSku).toBe('')
   })
 })
+
+
+describe('incident #42b — family lock (pure planner semantics)', () => {
+  it('global-pool ambiguity refuses; family-scoped pool resolves the same variation', () => {
+    const live = [{ sku: '', quantity: 1, specifics: { Color: 'Verde' } }]
+    const globalPool = [
+      { productId: 'knee-green', price: null, specifics: { Colore: 'Verde' } },
+      { productId: 'jacket-green', price: null, specifics: { Colore: 'Verde' } }, // other family
+    ]
+    expect(planMembershipReconcile(live, globalPool).matched).toBe(0)
+    const lockedPool = [globalPool[0]]
+    const locked = planMembershipReconcile(live, lockedPool)
+    expect(locked.matched).toBe(1)
+    expect(locked.entries[0].productId).toBe('knee-green')
+  })
+})

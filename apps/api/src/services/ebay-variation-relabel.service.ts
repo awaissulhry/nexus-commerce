@@ -265,7 +265,28 @@ export async function adoptSkulessVariations(
     specifics: (m.variationSpecifics as Record<string, string>) ?? {},
   }))
 
-  const plan = planSkulessAdoption(skulessLive, pool)
+  let plan = planSkulessAdoption(skulessLive, pool)
+  // Incident #42b — FAMILY LOCK (mirror of reconcile): once ≥1 SKU-less
+  // variation matched unambiguously, restrict the pool to that family's
+  // children and re-match the rest — a single-axis colour value collides
+  // across families in the global pool. Within-family ambiguity still refuses.
+  if (plan.unmatched.length > 0 && plan.entries.length > 0) {
+    const matchedIds = [...new Set(plan.entries.map((e) => e.productId))]
+    const matchedProducts = await prisma.product.findMany({
+      where: { id: { in: matchedIds } },
+      select: { parentId: true },
+    })
+    const parentIds = [...new Set(matchedProducts.map((p) => p.parentId).filter((x): x is string => Boolean(x)))]
+    if (parentIds.length === 1) {
+      const familyChildren = await prisma.product.findMany({
+        where: { parentId: parentIds[0], deletedAt: null },
+        select: { id: true },
+      })
+      const familyIds = new Set(familyChildren.map((c) => c.id))
+      const lockedPool = pool.filter((p) => familyIds.has(p.productId))
+      if (lockedPool.length > 0) plan = planSkulessAdoption(skulessLive, lockedPool)
+    }
+  }
   base.unmatched = plan.unmatched
   if (plan.entries.length === 0) return base
 
