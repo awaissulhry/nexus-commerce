@@ -3281,7 +3281,15 @@ export default function AmazonFlatFileClient({
       a.click()
       URL.revokeObjectURL(url)
       const mapped = res.headers.get('X-Export-Mapped-Headers')
-      toast.success(`Exported ${outRows.length} row${outRows.length === 1 ? '' : 's'} into the Amazon template${mapped ? ` (${mapped} columns mapped)` : ''}`)
+      // FFT.5b — provenance: which base produced this file (the family's own
+      // uploaded workbook vs the market template fallback).
+      const baseKind = res.headers.get('X-Export-Base')
+      const baseFamily = res.headers.get('X-Export-Family')
+      const baseFile = res.headers.get('X-Export-Source-File')
+      const baseNote = baseKind === 'family'
+        ? ` — based on your own ${baseFamily ? decodeURIComponent(baseFamily) : 'family'} file${baseFile ? ` (${decodeURIComponent(baseFile)})` : ''}`
+        : baseFile ? ` — based on the ${marketplace} template (${decodeURIComponent(baseFile)})` : ''
+      toast.success(`Exported ${outRows.length} row${outRows.length === 1 ? '' : 's'} into the Amazon template${mapped ? ` (${mapped} columns mapped)` : ''}${baseNote}`)
     } catch {
       toast.error('Export for Amazon failed')
     }

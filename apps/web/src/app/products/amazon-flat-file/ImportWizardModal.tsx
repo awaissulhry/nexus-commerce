@@ -45,6 +45,8 @@ interface TemplateInfo {
   productTypes: string[]
   actions: { replace: number; partial: number; delete: number; unknown: number }
   labels?: Record<string, string>
+  /** FFT.5b — set when this FILLED file was captured as the family's export base. */
+  familyWorkbook?: { familyKey: string } | null
 }
 
 // Owner policy (2026-07-16): quantities default OFF (the shared pool + Follow
@@ -601,6 +603,11 @@ export function ImportWizardModal({
                       {template.actions.replace} create/replace · {template.actions.partial} partial update · {template.actions.delete} delete
                     </span>
                   </div>
+                  {template.familyWorkbook?.familyKey && template.marketplace && (
+                    <div className="text-emerald-700 dark:text-emerald-300">
+                      This file is now the <b>Export for Amazon</b> base for <b>{template.familyWorkbook.familyKey}</b> on <b>{template.marketplace}</b> — future exports of this family rebuild on it exactly.
+                    </div>
+                  )}
                   {template.marketplace && template.marketplace !== marketplace && (
                     <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
                       <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
