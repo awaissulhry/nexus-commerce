@@ -58,3 +58,20 @@ describe('planFamilyImport', () => {
     expect(actions[0]).toMatchObject({ kind: 'update', targetRowId: 'r-P1' })
   })
 })
+
+// ── Incident #38 — a grid CHILD can never be classified as a file parent ────
+describe('incident #38 — grid-truth parent classification', () => {
+  it('a SKU existing in the grid as a child is never marked isParent', () => {
+    const grid = [
+      { _rowId: 'p0', sku: 'AIREON', _isParent: true, parentage: 'parent' },
+      { _rowId: 'c1', sku: 'AIREON-PANT-NERO-NEO-MEN-5XL', parentage: 'child', parent_sku: 'AIREON' },
+    ]
+    const file = [
+      { sku: 'AIREON-PANT-NERO-NEO-MEN-5XL', parentage: 'parent', title: 'row wrongly marked parent in the file' },
+    ]
+    const actions = planFamilyImport(file as never, grid as never)
+    const act = actions.find((a) => String(a.imp.sku) === 'AIREON-PANT-NERO-NEO-MEN-5XL')
+    expect(act?.kind).toBe('update')       // matches its existing child row
+    expect(act?.isParent ?? false).toBe(false)
+  })
+})

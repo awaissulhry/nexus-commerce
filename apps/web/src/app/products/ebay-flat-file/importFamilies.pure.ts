@@ -44,10 +44,22 @@ const str = (v: unknown): string => (v == null ? '' : String(v)).trim()
 export function planFamilyImport(imported: Row[], gridRows: Row[]): ImportAction[] {
   // Parents present in the FILE: explicit parentage, or referenced as parent_sku.
   const referencedAsParent = new Set(imported.map((r) => str(r.parent_sku)).filter(Boolean))
+  // Incident #38 — GRID-TRUTH belt: a SKU that already exists in the grid as
+  // a CHILD can never be classified as a parent, whatever the file says. The
+  // AIREON import marked variant rows as parents and the push minted a
+  // standalone listing per variant (the server-side DB gate now also refuses,
+  // but the import must classify correctly in the first place).
+  const gridChildSkus = new Set(
+    gridRows
+      .filter((g) => str(g.parentage) === 'child' || (str(g.parent_sku) !== '' && g._isParent !== true))
+      .map((g) => str(g.sku))
+      .filter(Boolean),
+  )
   const importedParentBySku = new Map<string, Row>()
   for (const r of imported) {
     const sku = str(r.sku)
     if (!sku) continue
+    if (gridChildSkus.has(sku)) continue
     if (str(r.parentage) === 'parent' || r._isParent === true || (referencedAsParent.has(sku) && !str(r.parent_sku))) {
       importedParentBySku.set(sku, r)
     }
