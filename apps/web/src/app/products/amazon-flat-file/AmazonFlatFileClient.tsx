@@ -29,6 +29,7 @@ import {
 } from './gridAdapter'
 import { AMAZON_FILTER_DEFAULT, type AmazonFilterDims } from '../_shared/flat-file-filter.types'
 import { type PullDiffApplyResult } from './PullDiffModal'
+import { chunkRowsParentsFirst } from './saveChunks.pure'
 import { type ImportApplyResult } from './ImportWizardModal'
 import { PendingPullBanner } from '../_shared/PendingPullBanner'
 import { TbBtn as SharedTbBtn } from '@/components/flat-file/FlatFileToolbar'
@@ -2456,23 +2457,56 @@ export default function AmazonFlatFileClient({
     }
     setSyncStatus('syncing')
     try {
-      const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/sync-rows`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rows: rowsToSync,
-          marketplace,
-          productType,
-          expandedFields: effectiveManifest?.expandedFields ?? {},
-          isPublished,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Sync failed')
+      // FFT.1 — chunked saves, parents first (parity with the eBay #28b save):
+      // one giant POST 413'd above 1 MB (prod-confirmed) and a single network
+      // blip lost the whole save. Each chunk retries once and failures are
+      // classified honestly; already-saved chunks persist (idempotent upserts).
+      const chunks = chunkRowsParentsFirst(rowsToSync)
+      const data: { synced: number; created: number; errors: Array<{ sku: string; error: string; currentVersion?: number }>; versions: Record<string, number> } =
+        { synced: 0, created: 0, errors: [], versions: {} }
+      let chunksDone = 0
+      for (const chunk of chunks) {
+        const postChunk = (rowsPayload: Row[]) => fetch(`${getBackendUrl()}/api/amazon/flat-file/sync-rows`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rows: rowsPayload,
+            marketplace,
+            productType,
+            expandedFields: effectiveManifest?.expandedFields ?? {},
+            isPublished,
+          }),
+        })
+        let res: Response
+        try {
+          res = await postChunk(chunk)
+        } catch {
+          await new Promise((r) => setTimeout(r, 2000))
+          const reachable = await fetch(`${getBackendUrl()}/api/health`, { signal: AbortSignal.timeout(4000) }).then((h) => h.ok).catch(() => false)
+          if (!reachable) {
+            throw new Error(`the server is unreachable (likely a deploy restart) — ${chunksDone > 0 ? `${chunksDone * chunks[0].length} row(s) from earlier chunks persisted; the rest were` : 'nothing was'} not saved. Your edits are safe in the local draft; wait ~1 minute and Save again`)
+          }
+          try {
+            // Retry WITHOUT _version: our own first attempt may have landed and
+            // bumped versions, which would false-conflict the CAS. Within this
+            // 2 s window the retry deliberately overwrites with OUR OWN payload.
+            res = await postChunk(chunk.map((r) => { const { _version, ...rest } = r as Row & { _version?: unknown }; return rest as Row }))
+          } catch {
+            throw new Error('the connection dropped mid-save — already-saved chunks persisted; your edits are safe in the local draft. Save again to complete the rest')
+          }
+        }
+        const part = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(part?.error ?? `Sync failed (HTTP ${res.status})`)
+        data.synced += Number(part?.synced ?? 0)
+        data.created += Number(part?.created ?? 0)
+        if (Array.isArray(part?.errors)) data.errors.push(...part.errors)
+        if (part?.versions && typeof part.versions === 'object') Object.assign(data.versions, part.versions)
+        chunksDone++
+      }
       setSyncStatus('synced')
       localDivergedRef.current = false // FFX.2 — grid is now persisted to the DB
       // FFA.6 — surface per-SKU sync failures instead of silently reporting "synced".
-      const syncErrors: Array<{ sku: string; error: string }> = Array.isArray(data?.errors) ? data.errors : []
+      const syncErrors: Array<{ sku: string; error: string; currentVersion?: number }> = Array.isArray(data?.errors) ? data.errors : []
       if (syncErrors.length) {
         const sample = syncErrors.slice(0, 3).map((e) => e.sku).filter(Boolean).join(', ')
         toast.warning(`${syncErrors.length} row${syncErrors.length === 1 ? '' : 's'} didn't save${sample ? `: ${sample}${syncErrors.length > 3 ? '…' : ''}` : ''} — ${syncErrors[0]?.error ?? 'see details'}`)
@@ -2485,6 +2519,24 @@ export default function AmazonFlatFileClient({
       const newVersions: Record<string, number> =
         data?.versions && typeof data.versions === 'object' ? data.versions : {}
       const errorSkus = new Set(syncErrors.map((e) => String(e.sku ?? '')).filter(Boolean))
+      // FFT.1 — conflict rows adopt the server's CURRENT version (row stays
+      // dirty): the operator's next Save then passes CAS and their data wins
+      // knowingly, instead of the "Changed elsewhere" dead-end loop.
+      const conflictVersions: Record<string, number> = {}
+      for (const e of syncErrors) {
+        if (e.sku && e.currentVersion != null && Number.isFinite(Number(e.currentVersion))) {
+          conflictVersions[String(e.sku)] = Number(e.currentVersion)
+        }
+      }
+      // FFT.1 — versions merge SYNCHRONOUSLY too: the deferred pass below can
+      // lose the race when a reload replaces the row array before it fires.
+      if (Object.keys(newVersions).length > 0 || Object.keys(conflictVersions).length > 0) {
+        setRows((prev) => prev.map((r) => {
+          const sku = String(r.item_sku ?? '')
+          const v = conflictVersions[sku] ?? newVersions[sku]
+          return v != null && !r._ghost ? { ...r, _version: v } : r
+        }))
+      }
       // FB2 — never apply Follow/Buffer for a row whose CONTENT save failed. Map the
       // failed SKUs back to their productIds and drop them from the apply sets (if a
       // set empties out, it's skipped below).
@@ -2512,7 +2564,7 @@ export default function AmazonFlatFileClient({
       // land AFTER that so failed rows stay dirty and _needsPublish arms Submit.
       setTimeout(() => setRows((prev) => prev.map((r) => {
         const sku = String(r.item_sku ?? '')
-        const v = newVersions[sku]
+        const v = conflictVersions[sku] ?? newVersions[sku]
         const withVersion = v != null ? { ...r, _version: v } : r
         if (!r._ghost && errorSkus.has(sku)) {
           // FFA.6 — failed rows keep their unsaved state for a retry.

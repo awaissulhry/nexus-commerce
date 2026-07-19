@@ -1561,6 +1561,16 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         result.createResult!.warnings.push(...(part.createResult.warnings ?? []))
         if (part.createResult.collapsedSkus?.length) result.createResult!.collapsedSkus!.push(...part.createResult.collapsedSkus)
       }
+      // FFT.1 (Z3) — route-level per-row errors (rows the save could not
+      // resolve to a product; previously a SILENT skip) join the same
+      // failed-row protection as create errors: kept dirty, kept in the
+      // draft, named in the toast. Deduped — the deleted-SKU case reports
+      // through both layers.
+      const rowErrs = (part as { errors?: Array<{ sku?: string; rowId?: string; error?: string }> }).errors ?? []
+      for (const e of rowErrs) {
+        const dup = result.createResult!.errors.some((x) => (e.sku && x.sku === e.sku) || (e.rowId && x.tempRowId === e.rowId))
+        if (!dup) result.createResult!.errors.push({ sku: e.sku, tempRowId: e.rowId, reason: e.error ?? 'Row not saved' })
+      }
       if (part.sharedMemberships) {
         const agg = result.sharedMemberships ?? { families: 0, created: 0, updated: 0, skipped: [], qtyPoolGoverned: 0 }
         agg.families += part.sharedMemberships.families ?? 0
