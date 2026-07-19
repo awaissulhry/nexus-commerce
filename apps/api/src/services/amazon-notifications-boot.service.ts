@@ -100,13 +100,27 @@ export async function ensureSubscriptionForType(
     }
     // 404 → no sub yet, fall through to create.
   }
-  // The URL path already specifies the notification type — the
-  // redundant processingDirective.eventFilter.eventFilterType is
-  // ACCEPTED by some types (ORDER_CHANGE, ANY_OFFER_CHANGED) but
-  // REJECTED by newer ones (ORDER_STATUS_CHANGE, FBA_*, LISTINGS_*,
-  // FEED_PROCESSING_FINISHED, ACCOUNT_STATUS_CHANGED). First production
-  // run created only 2/8 subscriptions because of this. Body trimmed
-  // to the minimum spec-required shape so all types accept it.
+  // Type-specific body (RT.3, learned the hard way in BOTH directions):
+  //  - newer types (ORDER_STATUS_CHANGE, FBA_*, FEED_*, ACCOUNT_*) REJECT
+  //    a processingDirective (first production run created only 2/8).
+  //  - ORDER_CHANGE REQUIRES processingDirective.eventFilter — the bare
+  //    minimum body got HTTP 400 InvalidInput on the 2026-07-20 recycle.
+  const processingDirective =
+    notifType === 'ORDER_CHANGE'
+      ? {
+          processingDirective: {
+            eventFilter: {
+              eventFilterType: 'ORDER_CHANGE',
+              // OrderStatusChange covers order creation + every status
+              // transition — the inventory-relevant subset (SP-API
+              // ORDER_CHANGE subscription tutorial shape).
+              orderChangeTypes: ['OrderStatusChange'],
+            },
+          },
+        }
+      : notifType === 'ANY_OFFER_CHANGED'
+        ? { processingDirective: { eventFilter: { eventFilterType: 'ANY_OFFER_CHANGED' } } }
+        : {}
   const subResp = await amazonSpApiClient.request<any>(
     'POST',
     `/notifications/v1/subscriptions/${notifType}`,
@@ -114,6 +128,7 @@ export async function ensureSubscriptionForType(
       body: {
         payloadVersion: '1.0',
         destinationId,
+        ...processingDirective,
       },
     },
   ).catch((err: any) => {
