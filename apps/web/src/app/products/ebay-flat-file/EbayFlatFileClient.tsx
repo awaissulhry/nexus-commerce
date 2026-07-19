@@ -69,6 +69,7 @@ import { EBAY_FILTER_DEFAULT, type EbayFilterDims } from '../_shared/flat-file-f
 import { isSharedDuplicateAllowed, truthyFlag } from './validateRows.shared'
 import { draftKey, readDraft, writeDraft, clearDraft, mergeDraftRows, removeRowsFromDraft } from './draftStore'
 import { diffSavedRowsAgainstServer } from './saveVerify.pure'
+import { computePendingSyncSummary, type PendingSyncSummary } from '@/components/flat-file/pendingSync.pure'
 import { useOrderEventsRefresh } from '@/hooks/use-order-events-refresh'
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -792,6 +793,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const latestSelectedRowsRef = useRef<Set<string>>(new Set())
   const latestSetRowsRef = useRef<((rows: BaseRow[]) => void) | null>(null)
   const latestPushHistoryRef = useRef<((rows: BaseRow[]) => void) | null>(null)
+  // FFT.4 — pending/failed outbound-sync strip (computed at every server load).
+  const [pendingSync, setPendingSync] = useState<PendingSyncSummary | null>(null)
   // FFT.2 (Z1) — flush the draft on pagehide: the 400 ms debounced autosave
   // could lose the last sub-second of edits on a hard reload / tab close.
   useEffect(() => {
@@ -1011,6 +1014,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       .then((json: { rows: EbayRow[] }) => {
         const rows = json.rows ?? []
         _ebay_swr.set(ebayKey, { rows, fetchedAt: Date.now() })
+        setPendingSync(computePendingSyncSummary(rows as unknown as Array<Record<string, unknown>>)) // FFT.4
         setClientRows(rows)
       })
       .catch(() => { setClientRows([]) })
@@ -1393,6 +1397,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     }
 
     _ebay_swr.set(ebayKey, { rows, fetchedAt: Date.now() })
+    setPendingSync(computePendingSyncSummary(rows as unknown as Array<Record<string, unknown>>)) // FFT.4
 
     // FFP.1 — restore pending drafts exactly once per mount / market switch.
     // Explicit "Discard" / "Reload from server" leave the flag false, so those
@@ -2942,6 +2947,20 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             >
               Discard drafts
             </button>
+          </Banner>
+        )}
+        {pendingSync && (pendingSync.pending > 0 || pendingSync.failed > 0) && (
+          <Banner tone={pendingSync.failed > 0 ? 'warning' : 'info'}>
+            {pendingSync.pending > 0 && (
+              <span title={pendingSync.pendingSkus.slice(0, 30).join(', ')}>
+                ⏳ {pendingSync.pending} row{pendingSync.pending === 1 ? '' : 's'} with changes still syncing to eBay…{' '}
+              </span>
+            )}
+            {pendingSync.failed > 0 && (
+              <span className="font-medium" title={pendingSync.failedSkus.slice(0, 30).join(', ')}>
+                ⚠ {pendingSync.failed} row{pendingSync.failed === 1 ? '' : 's'} with a FAILED sync — {pendingSync.failedSkus.slice(0, 3).join(', ')}{pendingSync.failedSkus.length > 3 ? '…' : ''}
+              </span>
+            )}
           </Banner>
         )}
         {saveReport && (

@@ -30,6 +30,7 @@ import {
 import { AMAZON_FILTER_DEFAULT, type AmazonFilterDims } from '../_shared/flat-file-filter.types'
 import { type PullDiffApplyResult } from './PullDiffModal'
 import { chunkRowsParentsFirst } from './saveChunks.pure'
+import { computePendingSyncSummary, type PendingSyncSummary } from '@/components/flat-file/pendingSync.pure'
 import { type ImportApplyResult } from './ImportWizardModal'
 import { PendingPullBanner } from '../_shared/PendingPullBanner'
 import { TbBtn as SharedTbBtn } from '@/components/flat-file/FlatFileToolbar'
@@ -919,6 +920,11 @@ export default function AmazonFlatFileClient({
     try { localStorage.removeItem(`ff-amazon-import-report-${marketplace}`) } catch { /* ignore */ }
     setImportReport(null)
   }, [marketplace])
+  // FFT.4 — pending/failed outbound-sync strip (computed at every server load).
+  const [pendingSync, setPendingSync] = useState<PendingSyncSummary | null>(null)
+  // FFT.4 — Verify-against-live results modal.
+  interface VerifyLiveRow { sku: string; status: 'match' | 'drift' | 'missing-on-amazon' | 'error'; drifts: Array<{ field: string; mine: string; live: string }>; error?: string }
+  const [verifyLive, setVerifyLive] = useState<{ busy: boolean; results: VerifyLiveRow[] | null }>({ busy: false, results: null })
   const [importInitialFile, setImportInitialFile] = useState<File | null>(null) // FX.7 — file dropped on the grid
   const [pullDiffData, setPullDiffData] = useState<{
     pulledRows: Row[]
@@ -1580,6 +1586,7 @@ export default function AmazonFlatFileClient({
         setManifest(manifest)
         const freshRows: Row[] = rRes.ok ? mergeAsinCache((await rRes.json()).rows ?? [], mp) : []
         _swr.set(cacheKey(mp, pt), { manifest, rows: freshRows, fetchedAt: Date.now() })
+        setPendingSync(computePendingSyncSummary(freshRows as Array<Record<string, unknown>>)) // FFT.4
         saveCachedManifest(mp, pt, manifest)
         if (fromDB) {
           // Push server-fresh rows into the mounted grid + reset the draft so
@@ -1666,6 +1673,7 @@ export default function AmazonFlatFileClient({
     const freshRows = mergeAsinCache(d.rows ?? [], mp)
     const prev = _swr.get(cacheKey(mp, pt))
     if (prev) _swr.set(cacheKey(mp, pt), { ...prev, rows: freshRows, fetchedAt: Date.now() })
+    setPendingSync(computePendingSyncSummary(freshRows as Array<Record<string, unknown>>)) // FFT.4
     // A server reload resets the draft to match the DB (the autosave loop
     // would rewrite it from the fresh rows anyway). UFX P4b — the composition
     // pointer resets with it (single-type fresh rows remove it).
@@ -2793,7 +2801,16 @@ export default function AmazonFlatFileClient({
                     return raw ? JSON.parse(raw) as Row[] : []
                   } catch { return [] }
                 })()
-            void syncToPlatform(mpRows, true).catch(() => { /* status chip shows the failure */ })
+            // FFT.4 — feed-FAILED SKUs are NOT published: excluded from the
+            // isPublished resync so they keep _needsPublish (Submit stays armed
+            // with exactly them) and their DB row is never stamped SYNCED.
+            const feedFailedSkus = new Set(
+              (entry.results as FeedResult[]).filter((r) => r.status === 'error').map((r) => r.sku),
+            )
+            const okRows = feedFailedSkus.size
+              ? (mpRows as Row[]).filter((r) => !feedFailedSkus.has(String(r.item_sku ?? '')))
+              : mpRows
+            if (okRows.length) void syncToPlatform(okRows as Row[], true).catch(() => { /* status chip shows the failure */ })
           }
         } else {
           updateSubmissionRecord(entry.feedId, { status: entry.status as SubmissionRecord['status'] })
@@ -3644,6 +3661,61 @@ export default function AmazonFlatFileClient({
   }, [showOverrideBadges, showCascadeButtons, scope, familyId, marketplace, reloadGridFromServer])
 
   // ── File menu extras (grid already has Reload + workbook) ────────────────
+  // ── FFT.4 — Verify against the LIVE Amazon listing ────────────────────────
+  const runVerifyLive = useCallback(async (skus: string[]) => {
+    if (!skus.length) { toast.warning('Select rows to verify (max 50)'); return }
+    if (skus.length > 50) { toast.warning(`Max 50 SKUs per verify — ${skus.length} selected; verify a family at a time`); return }
+    setVerifyLive({ busy: true, results: null })
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/verify-live`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skus, marketplace }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`)
+      setVerifyLive({ busy: false, results: data.results ?? [] })
+    } catch (e) {
+      setVerifyLive({ busy: false, results: null })
+      toast.error(`Verify against live failed — ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }, [marketplace, toast])
+
+  /** Drift field → grid column id (the verify endpoint's field vocabulary). */
+  const VERIFY_FIELD_TO_COLUMN: Record<string, string> = useMemo(() => ({
+    title: 'item_name', description: 'product_description', brand: 'brand',
+    price: 'purchasable_offer__our_price', quantity: 'fulfillment_availability__quantity',
+    bullet_1: 'bullet_point_1', bullet_2: 'bullet_point_2', bullet_3: 'bullet_point_3',
+    bullet_4: 'bullet_point_4', bullet_5: 'bullet_point_5',
+  }), [])
+
+  const adoptLiveValues = useCallback(() => {
+    const results = verifyLive.results ?? []
+    const drifted = results.filter((r) => r.status === 'drift')
+    if (!drifted.length) return
+    const bySku = new Map(drifted.map((r) => [r.sku, r.drifts]))
+    setRows((prev) => prev.map((r) => {
+      const drifts = bySku.get(String(r.item_sku ?? ''))
+      if (!drifts) return r
+      const next: Row = { ...r, _dirty: true }
+      for (const d of drifts) {
+        const col = VERIFY_FIELD_TO_COLUMN[d.field]
+        if (col) (next as Record<string, unknown>)[col] = d.live
+      }
+      return next
+    }))
+    setVerifyLive({ busy: false, results: null })
+    toast.success(`Adopted live values on ${drifted.length} row${drifted.length === 1 ? '' : 's'} — review, then Save`)
+  }, [verifyLive.results, setRows, VERIFY_FIELD_TO_COLUMN, toast])
+
+  const keepMineRearm = useCallback(() => {
+    const results = verifyLive.results ?? []
+    const target = new Set(results.filter((r) => r.status === 'drift' || r.status === 'missing-on-amazon').map((r) => r.sku))
+    if (!target.size) return
+    setRows((prev) => prev.map((r) => target.has(String(r.item_sku ?? '')) ? { ...r, _needsPublish: true } : r))
+    setVerifyLive({ busy: false, results: null })
+    toast.success(`Submit armed with ${target.size} row${target.size === 1 ? '' : 's'} — your version pushes on the next Submit`)
+  }, [verifyLive.results, setRows, toast])
+
   const fileMenuItems = useMemo(() => [
     { label: 'Smart import (CSV/Excel/JSON)…', icon: <Wand2 className="w-3.5 h-3.5" />, onClick: () => { setImportInitialFile(null); setImportOpen(true) }, disabled: !effectiveManifest },
     { label: 'Import TSV…', icon: <Upload className="w-3.5 h-3.5" />, onClick: () => { fileInputRef.current?.click() } },
@@ -3675,6 +3747,14 @@ export default function AmazonFlatFileClient({
       (String(r.follow) === 'Follow' || String(r.follow) === 'Pinned') && !isFbaRow(r)).length
     const pinnedCount = rows.filter((r) => !r._ghost && r.follow === 'Pinned').length
     return [
+      { separator: true },
+      // FFT.4 — read-only content compare vs the LIVE listing (selection, ≤50).
+      {
+        label: `Verify vs Amazon (live)${selected.length ? ` (${selected.length})` : ''}`,
+        icon: <Activity className="w-3.5 h-3.5" />,
+        onClick: () => void runVerifyLive(selected.map((r) => String(r.item_sku ?? '')).filter(Boolean)),
+        disabled: selected.length === 0 || selected.length > 50 || verifyLive.busy,
+      },
       { separator: true },
       { label: 'Copy to market…', icon: <Copy className="w-3.5 h-3.5" />, onClick: () => setPushPanel((p) => p ? null : { tab: 'copy' }), disabled: !manifest || !rows.length },
       { label: 'Translate values…', icon: <ArrowRightLeft className="w-3.5 h-3.5" />, onClick: () => setPushPanel((p) => p ? null : { tab: 'translate' }), disabled: !manifest || !rows.length },
@@ -4520,6 +4600,92 @@ export default function AmazonFlatFileClient({
                 className="inline-flex items-center gap-1.5 h-7 px-3 rounded text-[12px] font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
                 <Send className="w-3.5 h-3.5" />Publish to {reviewModal.data.markets.join(', ')}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FFT.4 — honest pending/failed outbound-sync strip */}
+      {pendingSync && (pendingSync.pending > 0 || pendingSync.failed > 0) && (
+        <div className={cn('mx-3 mt-2 rounded-lg border px-3 py-1.5 text-[11.5px] flex items-center gap-3 flex-wrap',
+          pendingSync.failed > 0
+            ? 'border-rose-200 dark:border-rose-800 bg-rose-50/70 dark:bg-rose-950/20 text-rose-800 dark:text-rose-200'
+            : 'border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/20 text-amber-800 dark:text-amber-200')}>
+          {pendingSync.pending > 0 && (
+            <span title={pendingSync.pendingSkus.slice(0, 30).join(', ')}>
+              ⏳ {pendingSync.pending} row{pendingSync.pending === 1 ? '' : 's'} with changes still syncing to Amazon — the grid shows them once pushed
+            </span>
+          )}
+          {pendingSync.failed > 0 && (
+            <span className="font-semibold" title={pendingSync.failedSkus.slice(0, 30).join(', ')}>
+              ⚠ {pendingSync.failed} row{pendingSync.failed === 1 ? '' : 's'} with a FAILED sync — {pendingSync.failedSkus.slice(0, 3).join(', ')}{pendingSync.failedSkus.length > 3 ? '…' : ''}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* FFT.4 — Verify-vs-live results modal */}
+      {(verifyLive.busy || verifyLive.results) && (
+        <div className="fixed inset-0 z-[80] flex items-start justify-center bg-black/40 pt-16 px-4"
+          onClick={(e) => { if (e.target === e.currentTarget && !verifyLive.busy) setVerifyLive({ busy: false, results: null }) }}>
+          <div role="dialog" aria-modal="true" aria-label="Verify against live Amazon"
+            className="w-[760px] max-w-full max-h-[80vh] bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+            <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-800 dark:text-slate-100">
+              Verify vs Amazon (live) — {marketplace}
+            </div>
+            <div className="p-4 overflow-auto text-xs space-y-2 flex-1">
+              {verifyLive.busy && <div className="text-slate-500">Checking live listings… (read-only, one SKU at a time)</div>}
+              {verifyLive.results?.map((r) => (
+                <div key={r.sku} className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-slate-700 dark:text-slate-200">{r.sku}</span>
+                    {r.status === 'match' && <span className="text-emerald-600 dark:text-emerald-400">✓ matches live</span>}
+                    {r.status === 'drift' && <span className="text-amber-600 dark:text-amber-400">{r.drifts.length} field{r.drifts.length === 1 ? '' : 's'} differ</span>}
+                    {r.status === 'missing-on-amazon' && <span className="text-rose-600 dark:text-rose-400">not found on Amazon {marketplace}</span>}
+                    {r.status === 'error' && <span className="text-slate-500" title={r.error}>check failed — {r.error}</span>}
+                  </div>
+                  {r.drifts.length > 0 && (
+                    <table className="mt-1.5 w-full text-[11px]">
+                      <thead><tr className="text-slate-400 text-left"><th className="pr-2 font-medium">Field</th><th className="pr-2 font-medium">Mine (grid)</th><th className="font-medium">Live (Amazon)</th></tr></thead>
+                      <tbody>
+                        {r.drifts.map((d, i) => (
+                          <tr key={i} className="align-top">
+                            <td className="pr-2 py-0.5 font-mono text-slate-500">{d.field}</td>
+                            <td className="pr-2 py-0.5 text-slate-700 dark:text-slate-200 break-words max-w-[260px]">{d.mine}</td>
+                            <td className="py-0.5 text-slate-700 dark:text-slate-200 break-words max-w-[260px]">{d.live}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              ))}
+              {verifyLive.results && verifyLive.results.length === 0 && <div className="text-slate-500">No SKUs verified.</div>}
+            </div>
+            <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2">
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                {verifyLive.results && <>
+                  {verifyLive.results.filter((r) => r.status === 'match').length} match ·{' '}
+                  {verifyLive.results.filter((r) => r.status === 'drift').length} drift ·{' '}
+                  {verifyLive.results.filter((r) => r.status === 'missing-on-amazon').length} missing
+                </>}
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                {verifyLive.results && verifyLive.results.some((r) => r.status === 'drift') && (
+                  <>
+                    <button type="button" onClick={adoptLiveValues}
+                      className="inline-flex items-center h-7 px-3 rounded text-[12px] border border-default dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
+                      Adopt live values
+                    </button>
+                    <button type="button" onClick={keepMineRearm}
+                      className="inline-flex items-center h-7 px-3 rounded text-[12px] font-medium text-white bg-blue-600 hover:bg-blue-700">
+                      Keep mine — arm Submit
+                    </button>
+                  </>
+                )}
+                <button type="button" onClick={() => setVerifyLive({ busy: false, results: null })} disabled={verifyLive.busy}
+                  className="inline-flex items-center h-7 px-3 rounded text-[12px] border border-default dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Close</button>
+              </div>
             </div>
           </div>
         </div>
