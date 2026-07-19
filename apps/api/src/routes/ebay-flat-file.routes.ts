@@ -1071,6 +1071,16 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       if (activeMp && rows.some(r => (r as Record<string, unknown>).shared_sku_listing === true || (r as Record<string, unknown>)._shared === true)) {
         try {
           sharedMemberships = await upsertSharedMembershipsFromRows(rows, activeMp)
+          // Incident #36 — a save that CREATED memberships may have just
+          // adopted a live listing; guarantee its custom label without any
+          // operator action (fire-and-forget; the cron is the backstop).
+          if ((sharedMemberships?.created ?? 0) > 0) {
+            setImmediate(() => {
+              void import('../services/ebay-label-guard.service.js')
+                .then(({ ensureListingLabels }) => ensureListingLabels())
+                .catch((err) => request.log.warn({ err }, 'label-guard post-adopt failed (cron will heal)'))
+            })
+          }
         } catch (err) {
           // Audit R9 — a swallowed failure here meant the save LOOKED complete
           // while the shared model (memberships → _shared rows → fan-out)

@@ -207,6 +207,7 @@ import { startLatencyWatchdogCron } from "./jobs/latency-watchdog.job.js";
 import { startAmazonOrderItemsRetryCron } from "./jobs/amazon-order-items-retry.job.js";
 import { startEbayOrdersCron } from "./jobs/ebay-orders-sync.job.js";
 import { startEbayStatusReconcileCron } from "./jobs/ebay-status-reconcile.job.js";
+import { startEbayLabelGuardCron } from "./jobs/ebay-label-guard.job.js";
 import { startAmazonFinancialSyncCron } from "./jobs/amazon-financial-sync.job.js";
 import { startEbayFinancialSyncCron } from "./jobs/ebay-financial-sync.job.js";
 import { startAmazonInventoryCron } from "./jobs/amazon-inventory-sync.job.js";
@@ -1068,6 +1069,7 @@ async function start() {
     // Gated behind NEXUS_ENABLE_EBAY_STATUS_RECONCILE_CRON=1 (default OFF).
     if (process.env.NEXUS_ENABLE_EBAY_STATUS_RECONCILE_CRON === '1') {
       startEbayStatusReconcileCron();
+      startEbayLabelGuardCron();
     }
 
     // IS.2 — Real-time Amazon order detection via SQS (~30-90 second latency).
