@@ -70,6 +70,110 @@ export async function captureTemplateToVault(
   })
 }
 
+// ── FFT.5a — per-(family, marketplace) FILLED workbook base ──────────────────
+
+const SKU_HEADER_RE = /(^|[.#\]])(item_sku|contribution_sku)$/i
+const PARENT_SKU_HEADER_RE = /(^|[.#\]])parent_sku$/i
+
+/**
+ * Family key of a FILLED per-family workbook: the single distinct non-blank
+ * parent SKU across the data rows (child rows name it; the parent row's own
+ * SKU equals it), else the lone SKU of a standalone one-product file.
+ * Multi-family files → null (template-only capture; per-family base needs one
+ * family per file — the owner's per-product-per-market workflow).
+ */
+export function detectWorkbookFamilyKey(
+  headers: string[],
+  rows: Array<Record<string, unknown>>,
+): string | null {
+  if (!rows.length) return null
+  const parentHeader = headers.find((h) => PARENT_SKU_HEADER_RE.test(h.trim()))
+  const skuHeader = headers.find((h) => SKU_HEADER_RE.test(h.trim()))
+  const parents = new Set<string>()
+  const skus = new Set<string>()
+  for (const row of rows) {
+    if (parentHeader) {
+      const p = String(row[parentHeader] ?? '').trim()
+      if (p) parents.add(p)
+    }
+    if (skuHeader) {
+      const s = String(row[skuHeader] ?? '').trim()
+      if (s) skus.add(s)
+    }
+  }
+  if (parents.size === 1) return [...parents][0]
+  if (parents.size === 0 && skus.size === 1) return [...skus][0]
+  return null
+}
+
+/** Same idea for GRID rows (canonical column ids) — used by the export route to
+ *  auto-resolve the family base with zero operator configuration. */
+export function deriveFamilyKeyFromGridRows(rows: Array<Record<string, unknown>>): string | null {
+  const parents = new Set<string>()
+  const skus = new Set<string>()
+  for (const row of rows) {
+    const p = String(row.parent_sku ?? '').trim()
+    if (p) parents.add(p)
+    const s = String(row.item_sku ?? '').trim()
+    if (s) skus.add(s)
+  }
+  if (parents.size === 1) return [...parents][0]
+  if (parents.size === 0 && skus.size === 1) return [...skus][0]
+  return null
+}
+
+/** Capture the FILLED workbook as the family's export base (fire-and-forget,
+ *  like the template capture — a vault hiccup must never fail an import). */
+export async function captureFamilyWorkbook(
+  prisma: PrismaClient,
+  bytes: Uint8Array,
+  meta: AmazonTemplateMeta,
+  filename: string,
+  headers: string[],
+  rows: Array<Record<string, unknown>>,
+): Promise<{ captured: boolean; familyKey?: string }> {
+  const marketplace = meta.marketplace
+  if (!marketplace) return { captured: false }
+  const familyKey = detectWorkbookFamilyKey(headers, rows)
+  if (!familyKey) return { captured: false }
+  const data = {
+    templateIdentifier: vaultKeyFor(meta, filename),
+    filename,
+    bytes: Buffer.from(bytes),
+    rowCount: rows.length,
+  }
+  await prisma.amazonFamilyWorkbook.upsert({
+    where: { familyKey_marketplace: { familyKey, marketplace } },
+    create: { familyKey, marketplace, ...data },
+    update: data,
+  })
+  return { captured: true, familyKey }
+}
+
+/** FFT.5a — export-base resolution order: explicit template id → the family's
+ *  own filled workbook (exact market) → most-recent market template. Exported
+ *  for tests (prisma injectable). */
+export async function resolveExportBase(
+  prisma: PrismaClient,
+  opts: { marketplace: string; templateIdentifier?: string; familyKey?: string | null },
+): Promise<{ source: 'template' | 'family'; entry: { templateIdentifier: string; filename: string; bytes: Buffer; marketplace: string } } | null> {
+  if (opts.templateIdentifier) {
+    const t = await prisma.amazonTemplateVault.findUnique({ where: { templateIdentifier: opts.templateIdentifier } })
+    return t ? { source: 'template', entry: t as never } : null
+  }
+  if (opts.familyKey) {
+    const f = await prisma.amazonFamilyWorkbook.findUnique({
+      where: { familyKey_marketplace: { familyKey: opts.familyKey, marketplace: opts.marketplace } },
+    })
+    if (f) return { source: 'family', entry: f as never }
+  }
+  const t = await prisma.amazonTemplateVault.findFirst({
+    where: { marketplace: opts.marketplace },
+    orderBy: { updatedAt: 'desc' },
+  })
+  return t ? { source: 'template', entry: t as never } : null
+}
+
 export interface VaultEntrySummary {
   id: string
   templateIdentifier: string
@@ -157,6 +261,9 @@ export interface TemplateExportResult {
   mappedHeaders: number
   totalHeaders: number
   skippedEmptyRows: number
+  /** FFT.5a — which base produced this export. */
+  base: 'template' | 'family'
+  familyKey: string | null
 }
 
 /**
@@ -173,17 +280,20 @@ export async function buildAmazonTemplateExport(
     rows: Array<Record<string, unknown>>
   },
 ): Promise<TemplateExportResult> {
-  const entry = opts.templateIdentifier
-    ? await prisma.amazonTemplateVault.findUnique({ where: { templateIdentifier: opts.templateIdentifier } })
-    : await prisma.amazonTemplateVault.findFirst({
-        where: { marketplace: opts.marketplace },
-        orderBy: { updatedAt: 'desc' },
-      })
-  if (!entry) {
+  // FFT.5a — when the exported rows are one family, that family's own uploaded
+  // workbook (exact market) is the base; the market template is the fallback.
+  const familyKey = deriveFamilyKeyFromGridRows(opts.rows)
+  const resolved = await resolveExportBase(prisma, {
+    marketplace: opts.marketplace,
+    templateIdentifier: opts.templateIdentifier,
+    familyKey,
+  })
+  if (!resolved) {
     throw new Error(
       `No Amazon template in the vault for ${opts.marketplace} — import an Amazon-downloaded template (.xlsm) once and it becomes the export base automatically`,
     )
   }
+  const { entry, source } = resolved
 
   const bytes = new Uint8Array(entry.bytes)
   const parsed = await detectAmazonTemplate(bytes)
@@ -207,5 +317,7 @@ export async function buildAmazonTemplateExport(
     mappedHeaders,
     totalHeaders: parsed.headers.length,
     skippedEmptyRows,
+    base: source,
+    familyKey: source === 'family' ? familyKey : null,
   }
 }

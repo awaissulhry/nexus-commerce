@@ -14209,3 +14209,23 @@ model AmazonTemplateVault {
 
   @@index([marketplace])
 }
+
+// FFT.5a — the operator's own FILLED Amazon workbook, captured per
+// (familyKey, marketplace). It becomes THE Export-for-Amazon base for that
+// family on that market; the blank category template above stays the
+// market-wide fallback. familyKey = the file's single dominant parent SKU
+// (or the lone standalone SKU). Multi-family files are not family-captured.
+model AmazonFamilyWorkbook {
+  id                 String   @id @default(cuid())
+  familyKey          String
+  marketplace        String
+  templateIdentifier String
+  filename           String
+  bytes              Bytes
+  rowCount           Int      @default(0)
+  capturedAt         DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([familyKey, marketplace])
+  @@index([marketplace])
+}

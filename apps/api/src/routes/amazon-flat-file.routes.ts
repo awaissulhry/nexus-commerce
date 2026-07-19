@@ -30,6 +30,8 @@ import { detectAmazonTemplate, parseOoxmlSheet, listOoxmlSheets } from '../servi
 import { suggestFlatFileMapping } from '../services/amazon/flat-file-mapping.js'
 import {
   captureTemplateToVault,
+  captureFamilyWorkbook,
+  detectWorkbookFamilyKey,
   listVaultEntries,
   buildAmazonTemplateExport,
 } from '../services/amazon/template-vault.service.js'
@@ -918,12 +920,21 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
           void captureTemplateToVault(prisma, bytes, template.meta, filename ?? 'template.xlsm').catch(
             (err) => request.log.warn({ err }, 'A7 template vault capture failed'),
           )
+          // FFT.5a — a FILLED single-family workbook additionally becomes THAT
+          // family's export base on THIS market (fire-and-forget, like A7).
+          const familyKey = detectWorkbookFamilyKey(template.headers, template.rows as Array<Record<string, unknown>>)
+          if (familyKey) {
+            void captureFamilyWorkbook(
+              prisma, bytes, template.meta, filename ?? 'template.xlsm',
+              template.headers, template.rows as Array<Record<string, unknown>>,
+            ).catch((err) => request.log.warn({ err }, 'FFT.5a family workbook capture failed'))
+          }
           return reply.send({
             kind,
             headers: template.headers,
             rows: template.rows,
             count: template.rows.length,
-            template: { ...template.meta, labels: template.labels },
+            template: { ...template.meta, labels: template.labels, familyWorkbook: familyKey ? { familyKey } : null },
             workbook: {
               sheets: (await listOoxmlSheets(bytes)) ?? [template.meta.sheet],
               sheet: template.meta.sheet,
@@ -1265,6 +1276,11 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       )
       reply.header('X-Export-Rows', String(result.rowsWritten))
       reply.header('X-Export-Mapped-Headers', `${result.mappedHeaders}/${result.totalHeaders}`)
+      // FFT.5a — provenance: which base produced this file (the family's own
+      // uploaded workbook vs the market template fallback).
+      reply.header('X-Export-Base', result.base)
+      if (result.familyKey) reply.header('X-Export-Family', encodeURIComponent(result.familyKey))
+      reply.header('X-Export-Source-File', encodeURIComponent(result.sourceFilename))
       return reply.send(result.bytes)
     } catch (err: any) {
       const msg = err?.message ?? 'Template export failed'
