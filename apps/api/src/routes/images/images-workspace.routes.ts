@@ -199,9 +199,55 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
         }),
       ])
 
+      // Incident #37 — EXTRA-LISTING SHELLS have no product children and no
+      // master images of their own: their variants are pool products linked
+      // via SharedListingMemberships, and their natural master-image source is
+      // the POOL family. Source both so the images drawer works on shells
+      // exactly like on real families (curation still saves under the shell,
+      // publishing still targets the shell's own listing).
+      let effectiveMaster = master
+      let effectiveChildren = childProducts
+      if (product.productType === 'EBAY_LISTING_SHELL' && childProducts.length === 0) {
+        try {
+          const memberships = await prisma.sharedListingMembership.findMany({
+            where: { parentSku: product.sku ?? '' },
+            select: { productId: true },
+          })
+          const poolIds = [...new Set(memberships.map((mm) => mm.productId).filter((v): v is string => Boolean(v)))]
+          if (poolIds.length > 0) {
+            const poolChildren = await prisma.product.findMany({
+              where: { id: { in: poolIds }, deletedAt: null },
+              orderBy: { sku: 'asc' },
+              select: {
+                id: true,
+                sku: true,
+                name: true,
+                variantAttributes: true,
+                categoryAttributes: true,
+                amazonAsin: true,
+                parentId: true,
+              },
+            })
+            if (poolChildren.length > 0) {
+              effectiveChildren = poolChildren.map(({ parentId: _p, ...rest }) => rest) as typeof childProducts
+              const poolParentId = poolChildren.find((c) => c.parentId)?.parentId
+              if (poolParentId && effectiveMaster.length === 0) {
+                effectiveMaster = await prisma.productImage.findMany({
+                  where: { productId: poolParentId },
+                  orderBy: { sortOrder: 'asc' },
+                })
+              }
+            }
+          }
+        } catch (err) {
+          request.log.warn({ err, productId }, 'images-workspace: shell pool resolution failed (drawer shows own data)')
+        }
+      }
+
+
       // Prefer child Products if they exist; fall back to ProductVariation records.
-      const rawVariants = childProducts.length > 0
-        ? childProducts.map((c) => {
+      const rawVariants = effectiveChildren.length > 0
+        ? effectiveChildren.map((c) => {
             // variantAttributes is canonical; fall back to categoryAttributes.variations
             // for products created via the old bulk-create route that left variantAttributes null.
             const catVars = (c.categoryAttributes as Record<string, unknown> | null)?.variations
@@ -251,8 +297,8 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
       const { availableAxes, axisValueCounts } = deriveWorkspaceAxes(
-        childProducts.length > 0
-          ? childProducts.map((c) => ({
+        effectiveChildren.length > 0
+          ? effectiveChildren.map((c) => ({
               variantAttributes: c.variantAttributes as Record<string, unknown> | null,
               categoryAttributes: c.categoryAttributes,
               ebayItemSpecifics: ebaySpecsByChild.get(c.id) ?? null,
@@ -266,7 +312,7 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
       // that are mirrored in the DAM library. Single batched query
       // keyed on Cloudinary publicId, so the FE can render "Linked to
       // DAM" badges + disable Push-to-DAM when already pushed.
-      const publicIds = master
+      const publicIds = effectiveMaster
         .map((m) => m.publicId)
         .filter((v): v is string => !!v)
       const damLinks: Record<string, string> = {}
@@ -323,7 +369,7 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
 
       return {
         product,
-        master,
+        master: effectiveMaster,
         listing,
         variants: rawVariants,
         availableAxes,

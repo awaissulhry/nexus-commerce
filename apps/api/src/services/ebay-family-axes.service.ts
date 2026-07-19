@@ -156,6 +156,8 @@ export async function resolveFamilyAxes(
     where: { id: parentProductId },
     select: {
       id: true,
+      sku: true,
+      productType: true,
       variationTheme: true,
       variationAxes: true,
       imageAxisPreference: true,
@@ -168,7 +170,37 @@ export async function resolveFamilyAxes(
   // exactly. Drop the parent container row (buildFlatRow sets _isParent from
   // !parentId); fall back to the full set if nothing else is present.
   const familyRows = await buildEbayFamilyRows(parentProductId)
-  const variantRows = familyRows.filter((r) => r._isParent !== true)
+  let variantRows = familyRows.filter((r) => r._isParent !== true)
+
+  // Incident #37 — EXTRA-LISTING SHELLS have no product children: their
+  // variants live as SharedListingMemberships (Lane B). Product-tree-based
+  // resolution saw an EMPTY family and warned 'axis has no values on any
+  // variant' on every shell (pre-publish dialog + images drawer). Source the
+  // variant rows from the memberships' flatFileSnapshots (the operator's
+  // pushed rows — same aspect_* shape as buildFlatRow output).
+  if (variantRows.length === 0 && parent.sku) {
+    const memberships = await prisma.sharedListingMembership.findMany({
+      where: { parentSku: parent.sku, ...(marketplace ? { marketplace: marketplace.toUpperCase() } : {}) },
+      select: { sku: true, flatFileSnapshot: true, variationSpecifics: true },
+    })
+    if (memberships.length > 0) {
+      variantRows = memberships.map((m) => {
+        const snap = m.flatFileSnapshot && typeof m.flatFileSnapshot === 'object'
+          ? { ...(m.flatFileSnapshot as Record<string, unknown>) }
+          : {}
+        // Belt: live variation identity fills the axis aspects even when the
+        // snapshot predates aspect capture.
+        const specs = (m.variationSpecifics ?? {}) as Record<string, string>
+        for (const [name, value] of Object.entries(specs)) {
+          const key = `aspect_${name.replace(/\s+/g, '_')}`
+          if (!(key in snap) || String(snap[key] ?? '').trim() === '') snap[key] = value
+        }
+        snap.sku = m.sku
+        snap._isParent = false
+        return snap
+      })
+    }
+  }
   const rowsForAxes = variantRows.length > 0 ? variantRows : familyRows
 
   // Parent listing platformAttributes (marketplace-specific) → the SAME label /
