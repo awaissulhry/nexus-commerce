@@ -14,6 +14,7 @@ import { beFetch } from './api'
 import {
   AlertTriangle,
   CheckSquare,
+  Copy,
   Image as ImageIcon,
   Library,
   Loader2,
@@ -33,6 +34,7 @@ import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import ScopeUploadModal, { type ScopeChoice } from './ScopeUploadModal'
 import BulkApplyModal from './BulkApplyModal'
+import FindDuplicatesModal from './FindDuplicatesModal'
 import { Listbox } from '@/design-system/components/Listbox'
 import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct } from './types'
 
@@ -142,6 +144,8 @@ export default function MasterPanel({
   const [scopedFiles, setScopedFiles] = useState<File[]>([])
   // IE.12 — master image awaiting bulk-apply target selection.
   const [bulkApplyImage, setBulkApplyImage] = useState<ProductImage | null>(null)
+  // IE.16 — hash-powered duplicate review modal.
+  const [showDupFinder, setShowDupFinder] = useState(false)
   // IR.8.3 — apply-to-children flow state.
   const [applyConfirm, setApplyConfirm] = useState(false)
   const [applying, setApplying] = useState(false)
@@ -902,6 +906,19 @@ export default function MasterPanel({
                 {t('products.edit.images.scopeUpload.buttonLabel')}
               </Button>
             )}
+            {images.length > 1 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="gap-1.5"
+                onClick={() => setShowDupFinder(true)}
+                disabled={uploading}
+                title={t('products.edit.images.dupGroups.hint')}
+              >
+                <Copy className="w-3.5 h-3.5" />
+                {t('products.edit.images.masterPanel.findDuplicates')}
+              </Button>
+            )}
             {onOpenDamPicker && (
               <Button
                 size="sm"
@@ -1341,6 +1358,22 @@ export default function MasterPanel({
           onToast={onToast}
         />
       )}
+
+      {/* IE.16 — Hash-powered duplicate review */}
+      <FindDuplicatesModal
+        open={showDupFinder}
+        productId={product.id}
+        onClose={() => setShowDupFinder(false)}
+        onDeleted={(imageId) => {
+          imagesRef.current = imagesRef.current.filter((i) => i.id !== imageId)
+          onImagesChange(imagesRef.current)
+        }}
+        onLocate={(imageId) => {
+          setShowDupFinder(false)
+          flashCard(imageId)
+        }}
+        onToast={onToast}
+      />
 
       {/* IE.14 — Near-duplicate review queue. Every 409 from the batch
           lands here; the operator resolves per-file (side-by-side

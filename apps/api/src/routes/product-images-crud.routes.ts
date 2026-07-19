@@ -116,6 +116,65 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── GET /api/products/:id/images/duplicate-groups ────────────────────
+  // IE.16 — Hash-powered duplicate review. Clusters this product's
+  // images by exact bytes (same contentHash) and by visual match (the
+  // same dual-hash rule as the upload gate: aHash ≤ 6 AND dhash256
+  // ≤ 26) so the operator can prune re-uploads that predate the gate.
+  // Read-only — deleting a member goes through the normal DELETE route.
+  fastify.get<{ Params: { id: string } }>(
+    '/products/:id/images/duplicate-groups',
+    async (req, reply) => {
+      const images = await prisma.productImage.findMany({
+        where: { productId: req.params.id, mediaType: 'IMAGE' },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+      })
+
+      // Union-find over edges: exact byte match OR dual-hash near match.
+      const parent = images.map((_, i) => i)
+      function find(i: number): number {
+        while (parent[i] !== i) {
+          parent[i] = parent[parent[i]]
+          i = parent[i]
+        }
+        return i
+      }
+      const union = (a: number, b: number) => { parent[find(a)] = find(b) }
+
+      for (let i = 0; i < images.length; i++) {
+        for (let j = i + 1; j < images.length; j++) {
+          const a = images[i]
+          const b = images[j]
+          const exact = !!a.contentHash && a.contentHash === b.contentHash
+          const near =
+            !!a.perceptualHash && !!b.perceptualHash && !!a.dhash256 && !!b.dhash256 &&
+            hammingHex(a.perceptualHash, b.perceptualHash) <= NEAR_DUP_HAMMING_THRESHOLD &&
+            hammingHex(a.dhash256, b.dhash256) <= DHASH256_NEAR_DUP_THRESHOLD
+          if (exact || near) union(i, j)
+        }
+      }
+
+      const clusters = new Map<number, number[]>()
+      for (let i = 0; i < images.length; i++) {
+        const root = find(i)
+        const list = clusters.get(root) ?? []
+        list.push(i)
+        clusters.set(root, list)
+      }
+
+      const groups = [...clusters.values()]
+        .filter((members) => members.length > 1)
+        .map((members) => {
+          const rows = members.map((i) => images[i])
+          const allExact = rows.every((r) => !!r.contentHash && r.contentHash === rows[0].contentHash)
+          return { kind: allExact ? 'exact' as const : 'near' as const, images: rows }
+        })
+        .sort((a, b) => (a.kind === b.kind ? b.images.length - a.images.length : a.kind === 'exact' ? -1 : 1))
+
+      return reply.send({ groups, totalImages: images.length })
+    },
+  )
+
   // ── POST /api/products/:id/images (multipart upload) ─────────────────
   fastify.post<{
     Params: { id: string }
