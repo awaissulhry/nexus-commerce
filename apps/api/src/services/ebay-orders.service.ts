@@ -60,14 +60,17 @@ export function ebayAmountCurrency(raw: EbayAmountLike): string | null {
 interface EbayOrder {
   orderId: string
   creationDate: string
-  lastModifiedDate: string
-  orderStatus: string
-  fulfillmentStatus: string
+  // AS.3c — these four were imagined; live Fulfillment API payloads carry
+  // orderFulfillmentStatus / orderPaymentStatus / cancelStatus and ship-to
+  // under fulfillmentStartInstructions (normalized in processOrder).
+  lastModifiedDate?: string
+  orderStatus?: string
+  fulfillmentStatus?: string
   buyer: {
     username: string
     email?: string
   }
-  shippingAddress: {
+  shippingAddress?: {
     addressLine1: string
     addressLine2?: string
     city: string
@@ -325,12 +328,45 @@ export class EbayOrdersService {
       )
     }
 
+    // AS.3c — the REAL Fulfillment API carries ship-to + statuses under
+    // fulfillmentStartInstructions[0].shippingStep.shipTo and
+    // orderFulfillmentStatus / orderPaymentStatus / cancelStatus.cancelState;
+    // the imagined top-level orderStatus / fulfillmentStatus /
+    // shippingAddress fields are absent on live payloads. shippingAddress is
+    // a REQUIRED Json column, so it must never reach Prisma as undefined —
+    // that was the `Invalid prisma.order.create()` failure on the first
+    // parseable tick.
+    const raw = order as unknown as {
+      orderFulfillmentStatus?: string
+      orderPaymentStatus?: string
+      cancelStatus?: { cancelState?: string }
+      fulfillmentStartInstructions?: Array<{
+        shippingStep?: {
+          shipTo?: { fullName?: string; email?: string; contactAddress?: Record<string, unknown> }
+        }
+      }>
+    }
+    const shipTo = raw.fulfillmentStartInstructions?.[0]?.shippingStep?.shipTo
+    const cancelState = raw.cancelStatus?.cancelState ?? ''
+    const statusForMap =
+      order.orderStatus ??
+      (/^CANCEL/i.test(cancelState) && !/^NONE/i.test(cancelState)
+        ? 'CANCELLED'
+        : raw.orderPaymentStatus === 'PAID'
+          ? 'COMPLETED'
+          : 'PENDING')
+    const fulfillmentForMap = order.fulfillmentStatus ?? raw.orderFulfillmentStatus ?? ''
+    const shippingAddress: object =
+      (order.shippingAddress as unknown as object | undefined) ??
+      (shipTo ? { fullName: shipTo.fullName ?? null, ...(shipTo.contactAddress ?? {}) } : {})
+
     // eBay's Fulfillment API sometimes omits buyer.email (anonymized
     // for guest checkout). The Order schema requires customerEmail,
     // so synthesise a placeholder using the public username — kept
     // distinct from real addresses with the .invalid suffix.
     const customerEmail =
       (order.buyer.email ?? '').trim() ||
+      (shipTo?.email ?? '').trim() ||
       `${(order.buyer.username || 'unknown').replace(/[^a-zA-Z0-9._-]/g, '')}@buyer.ebay.invalid`
 
     const orderData = {
@@ -340,13 +376,13 @@ export class EbayOrdersService {
       // marketplace code that doesn't exist.
       marketplace: 'EBAY-GLOBAL',
       channelOrderId: order.orderId,
-      status: this.mapOrderStatus(order.orderStatus, order.fulfillmentStatus),
+      status: this.mapOrderStatus(statusForMap, fulfillmentForMap),
       totalPrice,
       currencyCode:
         ebayAmountCurrency(order.pricingSummary.total) ?? order.pricingSummary.currency ?? 'EUR',
-      customerName: order.buyer.username || 'eBay Buyer',
+      customerName: order.buyer.username || shipTo?.fullName || 'eBay Buyer',
       customerEmail,
-      shippingAddress: order.shippingAddress as unknown as object,
+      shippingAddress,
       purchaseDate: new Date(order.creationDate),
       // eBay is always merchant-fulfilled.
       fulfillmentMethod: 'MFN',
@@ -358,9 +394,11 @@ export class EbayOrdersService {
       fulfillmentLatency: 1,
       shipByDate: new Date(new Date(order.creationDate).getTime() + 24 * 60 * 60 * 1000),
       ebayMetadata: {
-        orderStatus: order.orderStatus,
-        fulfillmentStatus: order.fulfillmentStatus,
-        lastModifiedDate: order.lastModifiedDate,
+        orderStatus: statusForMap,
+        fulfillmentStatus: fulfillmentForMap,
+        orderPaymentStatus: raw.orderPaymentStatus ?? null,
+        cancelState: cancelState || null,
+        lastModifiedDate: order.lastModifiedDate ?? null,
       },
     }
 

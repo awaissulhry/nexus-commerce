@@ -100,7 +100,15 @@ async function runOrdersPoll(): Promise<void> {
     // AS.3 — surface the first failure reason in the CronRun summary. The
     // getValidToken defect failed every tick for 7+ days as a bare
     // `failed=1` because per-connection errors only went to logs.
-    const errNote = firstError ? ` err="${firstError.slice(0, 120)}"` : ''
+    // AS.3c — Prisma validation errors bury the interesting `Argument …`
+    // line under a multi-line data dump; extract it so 120 chars of summary
+    // actually says what's wrong.
+    const compactError = (msg: string): string => {
+      const arg = msg.match(/(Argument `[^`]+`[^\n]*|Unknown argument[^\n]*|Invalid value[^\n]*)/)?.[1]
+      const flat = msg.replace(/\s+/g, ' ').trim()
+      return arg ? `${arg.trim()} [${flat.slice(0, 100)}…]` : flat.slice(0, 240)
+    }
+    const errNote = firstError ? ` err="${compactError(firstError)}"` : ''
     return `connections=${totals.connectionsTried} ok=${totals.connectionsOk} partial=${totals.connectionsPartial} failed=${totals.connectionsFailed} fetched=${totals.ordersFetched} created=${totals.ordersCreated}${errNote}`
   }).catch((err) => {
     logger.error('ebay-orders cron: top-level failure', {
