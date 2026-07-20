@@ -325,6 +325,80 @@ export async function getItemListingStatus(
   return res.raw.match(/<ListingStatus>([^<]+)<\/ListingStatus>/)?.[1] ?? null
 }
 
+/** AS.4a — GetItem for the Trading-lane quantity read-back. Narrow
+ *  OutputSelectors (no description payload); IncludeVariations so each
+ *  variation's Quantity + SellingStatus.QuantitySold comes back. */
+export function buildGetItemQuantitiesXml(itemId: string): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ItemID>${escapeXml(itemId)}</ItemID>
+  <IncludeVariations>true</IncludeVariations>
+  <OutputSelector>Item.Quantity</OutputSelector>
+  <OutputSelector>Item.SellingStatus</OutputSelector>
+  <OutputSelector>Item.Variations</OutputSelector>
+</GetItemRequest>`
+}
+
+function unescapeXml(s: string): string {
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&')
+}
+
+export interface ItemQuantityReadback {
+  listingStatus: string | null
+  /** SKU → remaining available. eBay's GetItem Quantity is the LIFETIME total
+   *  (available + sold); remaining = Quantity − SellingStatus.QuantitySold. */
+  variations: Array<{ sku: string; available: number }>
+  /** Item-level remaining for non-variation listings; null when variations exist. */
+  itemAvailable: number | null
+}
+
+/** Pure XML extraction — exported for tests. Variation blocks are parsed
+ *  first and removed so item-level Quantity/QuantitySold regexes can never
+ *  match inside them. */
+export function parseGetItemQuantities(rawXml: string): ItemQuantityReadback {
+  const varBlock = rawXml.match(/<Variations>([\s\S]*?)<\/Variations>/)
+  const variations: Array<{ sku: string; available: number }> = []
+  if (varBlock) {
+    for (const v of varBlock[1].matchAll(/<Variation>([\s\S]*?)<\/Variation>/g)) {
+      const block = v[1]
+      const sku = block.match(/<SKU>([^<]*)<\/SKU>/)?.[1]
+      if (!sku) continue
+      const qty = Number(block.match(/<Quantity>(\d+)<\/Quantity>/)?.[1] ?? Number.NaN)
+      if (!Number.isFinite(qty)) continue
+      const sold = Number(block.match(/<QuantitySold>(\d+)<\/QuantitySold>/)?.[1] ?? 0)
+      variations.push({ sku: unescapeXml(sku), available: Math.max(0, qty - sold) })
+    }
+  }
+  const rest = varBlock ? rawXml.replace(varBlock[0], '') : rawXml
+  const listingStatus = rest.match(/<ListingStatus>([^<]+)<\/ListingStatus>/)?.[1] ?? null
+  let itemAvailable: number | null = null
+  if (variations.length === 0) {
+    const qty = Number(rest.match(/<Quantity>(\d+)<\/Quantity>/)?.[1] ?? Number.NaN)
+    if (Number.isFinite(qty)) {
+      const sold = Number(rest.match(/<QuantitySold>(\d+)<\/QuantitySold>/)?.[1] ?? 0)
+      itemAvailable = Math.max(0, qty - sold)
+    }
+  }
+  return { listingStatus, variations, itemAvailable }
+}
+
+export async function getItemQuantities(
+  itemId: string,
+  ctx: { oauthToken: string; market: string },
+): Promise<ItemQuantityReadback> {
+  const siteId = siteIdForMarket(ctx.market)
+  const res = await callTradingApi('GetItem', buildGetItemQuantitiesXml(itemId), {
+    oauthToken: ctx.oauthToken,
+    siteId,
+  })
+  return parseGetItemQuantities(res.raw)
+}
+
 /** RT.2 — batched revise: ≤4 SKUs of ONE ItemID per Trading call. */
 export async function reviseInventoryStatusBatch(
   input: { itemId: string; entries: Array<{ sku: string; quantity: number }> },

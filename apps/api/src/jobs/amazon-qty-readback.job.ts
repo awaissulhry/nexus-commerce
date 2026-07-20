@@ -25,12 +25,23 @@ import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 
 const JOB_NAME = 'amazon-qty-readback'
-const MARKETS = ['IT', 'DE', 'FR', 'ES'] as const
 const MP_IDS: Record<string, string> = {
   IT: 'APJ6JRA9NG5V4',
   DE: 'A1PA6795UKMFR9',
   FR: 'A13V1IB3VIYZZH',
   ES: 'A1RKKUPIHCS9HS',
+}
+// AS.4b — markets are config, not code. Unknown codes are dropped with a warn
+// so a typo narrows coverage visibly instead of crashing the loop.
+function readbackMarkets(): string[] {
+  const raw = process.env.NEXUS_QTY_READBACK_MARKETS ?? 'IT,DE,FR,ES'
+  const wanted = raw.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
+  const known = wanted.filter((m) => MP_IDS[m])
+  const unknown = wanted.filter((m) => !MP_IDS[m])
+  if (unknown.length) {
+    logger.warn(`[${JOB_NAME}] unknown market code(s) in NEXUS_QTY_READBACK_MARKETS ignored`, { unknown })
+  }
+  return known.length ? known : ['IT', 'DE', 'FR', 'ES']
 }
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
@@ -82,7 +93,7 @@ export async function runAmazonQtyReadback(): Promise<string> {
   let logged = 0
   const marketSummaries: string[] = []
 
-  for (const mp of MARKETS) {
+  for (const mp of readbackMarkets()) {
     let catalog
     try {
       catalog = await amazon.fetchActiveCatalog(MP_IDS[mp])
@@ -104,7 +115,10 @@ export async function runAmazonQtyReadback(): Promise<string> {
         channel: 'AMAZON',
         marketplace: mp,
         isPublished: true,
-        followMasterQuantity: true,
+        // AS.4b — pinned listings are verified too: after any write (cascade
+        // for followers, pin-apply for pinned) cl.quantity IS the intent, so
+        // the follow flag must not gate the comparison. Pre-AS.4b the ~260
+        // pinned FBM listings were never reconciled against Amazon at all.
         listingStatus: { notIn: ['ENDED', 'REMOVED'] },
         // canonical FBA exclusion — explicit FBM or unresolved-with-FBM-product
         OR: [{ fulfillmentMethod: 'FBM' }, { fulfillmentMethod: null, product: { fulfillmentMethod: { not: 'FBA' } } }],
