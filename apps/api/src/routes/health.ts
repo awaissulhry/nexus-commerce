@@ -18,6 +18,30 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
       const redisConnected = redisInfo.status === 'ready'
       const workersEnabled = process.env.ENABLE_QUEUE_WORKERS === '1'
 
+      // AS.2-lite — the alarm state, on the one URL everyone already checks.
+      // SyncHealthLog rows were write-only (no UI reader anywhere), so the
+      // 2026-07-20 403 outage was invisible outside the DB. Fail-open: alert
+      // lookup errors never break health.
+      let alerts: Record<string, number> | undefined
+      try {
+        const dayAgo = new Date(Date.now() - 24 * 3600e3)
+        const [authFailures, publishFailureRate, qtyMismatches, deadLetters24h] = await Promise.all([
+          prisma.syncHealthLog.count({
+            where: { conflictType: 'CHANNEL_AUTH_FAILURE', resolutionStatus: 'UNRESOLVED', createdAt: { gte: dayAgo } },
+          }),
+          prisma.syncHealthLog.count({
+            where: { conflictType: 'PUBLISH_FAILURE_RATE', resolutionStatus: 'UNRESOLVED', createdAt: { gte: dayAgo } },
+          }),
+          prisma.syncHealthLog.count({
+            where: { conflictType: 'CHANNEL_QTY_READBACK', resolutionStatus: 'UNRESOLVED', createdAt: { gte: dayAgo } },
+          }),
+          prisma.outboundSyncQueue.count({ where: { isDead: true, diedAt: { gte: dayAgo } } }),
+        ])
+        alerts = { authFailures, publishFailureRate, qtyMismatches, deadLetters24h }
+      } catch {
+        alerts = undefined
+      }
+
       return {
         status: 'healthy',
         // Deploy/version markers — so we can verify which build + which Amazon
@@ -31,6 +55,8 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
         queueWorkers: workersEnabled ? 'enabled' : 'disabled',
         dispatchPath: workersEnabled && redisConnected ? 'immediate-bullmq' : 'cron-60s-only',
         timestamp: new Date().toISOString(),
+        // AS.2-lite — non-zero numbers here mean "open the sync-health data".
+        ...(alerts ? { alerts } : {}),
         services: {
           database: 'connected',
           redis: redisConnected
