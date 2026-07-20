@@ -115,7 +115,9 @@ export class AmazonCatalogService {
       const response = await fetch(endpoint, {
         method: "GET",
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          // AS.0 — same wrong-header bug as the listings write client:
+          // SP-API wants x-amz-access-token, not Authorization:Bearer.
+          'x-amz-access-token': accessToken,
           "Content-Type": "application/json",
         },
       });

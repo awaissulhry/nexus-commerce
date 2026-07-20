@@ -602,7 +602,13 @@ export class AmazonSpApiClient {
           headers: {
             'Content-Type': 'application/json',
             'x-amzn-requestid': `nexus-${Date.now()}`,
-            Authorization: `Bearer ${accessToken}`,
+            // AS.0 ROOT CAUSE (2026-07-20): SP-API takes the LWA token in
+            // x-amz-access-token — Authorization:Bearer means "no token" to
+            // Amazon ("Access token is missing…" → 403 denied). The read
+            // methods were fixed earlier (see getListingsItem); these write
+            // methods kept the wrong header, which was the ENTIRE
+            // zero-inventory 403 saga. Roles/tokens were never the problem.
+            'x-amz-access-token': accessToken,
           },
           body: JSON.stringify(payload),
         },
@@ -763,7 +769,13 @@ export class AmazonSpApiClient {
           headers: {
             'Content-Type': 'application/json',
             'x-amzn-requestid': `nexus-${Date.now()}`,
-            Authorization: `Bearer ${accessToken}`,
+            // AS.0 ROOT CAUSE (2026-07-20): SP-API takes the LWA token in
+            // x-amz-access-token — Authorization:Bearer means "no token" to
+            // Amazon ("Access token is missing…" → 403 denied). The read
+            // methods were fixed earlier (see getListingsItem); these write
+            // methods kept the wrong header, which was the ENTIRE
+            // zero-inventory 403 saga. Roles/tokens were never the problem.
+            'x-amz-access-token': accessToken,
           },
           body: JSON.stringify({ productType, patches }),
         },
@@ -907,7 +919,13 @@ export class AmazonSpApiClient {
           headers: {
             'Content-Type': 'application/json',
             'x-amzn-requestid': `nexus-${Date.now()}`,
-            Authorization: `Bearer ${accessToken}`,
+            // AS.0 ROOT CAUSE (2026-07-20): SP-API takes the LWA token in
+            // x-amz-access-token — Authorization:Bearer means "no token" to
+            // Amazon ("Access token is missing…" → 403 denied). The read
+            // methods were fixed earlier (see getListingsItem); these write
+            // methods kept the wrong header, which was the ENTIRE
+            // zero-inventory 403 saga. Roles/tokens were never the problem.
+            'x-amz-access-token': accessToken,
           },
           body: JSON.stringify(body),
         },
@@ -1037,7 +1055,13 @@ export class AmazonSpApiClient {
           headers: {
             'Content-Type': 'application/json',
             'x-amzn-requestid': `nexus-vp-${Date.now()}`,
-            Authorization: `Bearer ${accessToken}`,
+            // AS.0 ROOT CAUSE (2026-07-20): SP-API takes the LWA token in
+            // x-amz-access-token — Authorization:Bearer means "no token" to
+            // Amazon ("Access token is missing…" → 403 denied). The read
+            // methods were fixed earlier (see getListingsItem); these write
+            // methods kept the wrong header, which was the ENTIRE
+            // zero-inventory 403 saga. Roles/tokens were never the problem.
+            'x-amz-access-token': accessToken,
           },
           body: JSON.stringify(body),
         },
