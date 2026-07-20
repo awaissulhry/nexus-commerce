@@ -1539,6 +1539,15 @@ model ChannelListing {
   followMasterDescription  Boolean @default(true)
   followMasterPrice        Boolean @default(true)
   followMasterQuantity     Boolean @default(true)
+
+  // SC.0 — Sync Control (2026-07-21). syncPaused wins over Follow/Pinned:
+  // a paused listing sends NO outbound quantity pushes at all until resumed
+  // (read-backs report it, self-heal never touches it). sourceLocationCodes
+  // is the per-listing routing override (empty = all locations routed to
+  // this listing's channel+market via StockLocation.servesMarketplaces) —
+  // schema-dark until a real case wires it (proposal D4).
+  syncPaused          Boolean  @default(false)
+  sourceLocationCodes String[] @default([])
   followMasterImages       Boolean @default(true)
   followMasterBulletPoints Boolean @default(true)
 
@@ -7311,6 +7320,14 @@ model StockLocation {
   isActive           Boolean  @default(true)
   // Marketplaces this location can fulfil (capability, not commitment)
   servesMarketplaces String[] @default([])
+  // SC.0 — Sync Control routing (push layer). Deliberately SEPARATE from
+  // servesMarketplaces, which belongs to the ATP/promise layer with bare
+  // market-code semantics (["IT","DE",…]) — overloading it would corrupt ATP
+  // the moment channel-prefixed tokens appear (shadow-diff finding,
+  // 2026-07-21). Grammar: 'MARKET' (any channel), 'CHANNEL' (whole channel),
+  // 'CHANNEL:MARKET'. Empty = routes to ALL channel-markets (today's
+  // behavior for every location).
+  syncRoutes         String[] @default([])
 
   // S.22 — channel-side mapping. SHOPIFY_LOCATION rows carry the
   // Shopify Location ID; AMAZON_FBA rows can carry the marketplace
@@ -14160,6 +14177,12 @@ model SharedListingMembership {
   variationSpecifics Json // { "Size": "M", "Color": "Nero" }
   price              Decimal?  @db.Decimal(10, 2) // per-listing price; null → fall back to child Product price
   status             String    @default("ACTIVE") // ACTIVE | ENDED
+  // SC.0 — per-variant control on shared (multi-listing) eBay: followPool=false
+  // excludes exactly this variant of this listing from the pool fan-out
+  // ("everything real-time except one variant"). stockBuffer mirrors the
+  // ChannelListing concept for the shared lane (field now, UI later — D3).
+  followPool         Boolean @default(true)
+  stockBuffer        Int     @default(0)
   lastQtyPushed      Int?
   lastPushedAt       DateTime?
   lastError          String?
@@ -14175,6 +14198,41 @@ model SharedListingMembership {
   @@unique([marketplace, itemId, sku])
   @@index([sku, marketplace])
   @@index([productId])
+}
+
+// ── SC.0 — Sync Control (2026-07-21) ─────────────────────────────────────
+// Layer C: per channel-market master policy. pushesPaused is the operator
+// kill-switch (mutes ALL outbound quantity pushes for that channel+market);
+// newListingDefaultMode decides how listings are born there
+// ('FOLLOW' | 'PAUSED'). Absent row = FOLLOW + not paused (today's behavior).
+model SyncChannelPolicy {
+  id                    String   @id @default(cuid())
+  channel               String // 'AMAZON' | 'EBAY' | 'SHOPIFY' | ...
+  marketplace           String // 'IT', 'DE', ... or '*' for channel-wide
+  pushesPaused          Boolean  @default(false)
+  newListingDefaultMode String   @default("FOLLOW") // FOLLOW | PAUSED
+  updatedAt             DateTime @updatedAt
+  createdAt             DateTime @default(now())
+
+  @@unique([channel, marketplace])
+}
+
+// Every Sync Control mutation (routing, mode, buffer, policy) lands here —
+// actor + scope + before/after. The tab's History drawer reads this.
+model SyncControlAudit {
+  id        String   @id @default(cuid())
+  actor     String // user email / 'system' / job name
+  scopeType String // 'LOCATION' | 'LISTING' | 'MEMBERSHIP' | 'POLICY'
+  scopeId   String // StockLocation.id / ChannelListing.id / membership id / policy id
+  scopeName String? // human label (location code, sku@market) for display
+  field     String // e.g. 'servesMarketplaces', 'syncPaused', 'followPool', 'stockBuffer'
+  before    Json?
+  after     Json?
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([scopeType, scopeId, createdAt])
+  @@index([createdAt])
 }
 
 // ── ED.1 (eBay dynamic descriptions) ─────────────────────────────────────────
