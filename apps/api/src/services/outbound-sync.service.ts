@@ -282,7 +282,11 @@ export function buildAmazonListingPatch(
   // managed quantity. So only emit a merchant quantity for FBM (or unknown — the
   // common, safe default). For FBA we leave fulfillment untouched (handled upstream).
   if (payload.quantity !== undefined && !isFba) {
-    attrs.fulfillment_availability = [{ fulfillment_channel_code: "DEFAULT", quantity: payload.quantity, marketplace_id: marketplaceId }];
+    // P0b — canonical schema shape: fulfillment_availability entries carry
+    // fulfillment_channel_code + quantity ONLY (channel-scoped, not
+    // marketplace-scoped; the marketplace comes from the ?marketplaceIds
+    // query param). The stray marketplace_id predates the incident.
+    attrs.fulfillment_availability = [{ fulfillment_channel_code: "DEFAULT", quantity: payload.quantity }];
   }
 
   return {
@@ -936,7 +940,13 @@ export class OutboundSyncService {
           ? { id: sellerId }
           : { error: "AMAZON_SELLER_ID is not configured. Set the env var before enabling outbound sync." },
       execute: async ({ sellerId: sid }) => {
-        const res = await amazonSpApiClient.submitListingPayload({ sellerId: sid, sku, payload: amazonPayload });
+        const res = await amazonSpApiClient.submitListingPayload({
+          sellerId: sid,
+          sku,
+          payload: amazonPayload,
+          // P0b — REQUIRED patchListingsItem query param; per-market row targets its own market.
+          marketplaceId: resolveAmazonMarketplaceId(marketplaceId),
+        });
         return { ok: res.success, error: res.error };
       },
     });

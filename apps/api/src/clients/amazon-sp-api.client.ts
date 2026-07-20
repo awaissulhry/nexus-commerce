@@ -52,6 +52,11 @@ interface SubmitListingPayloadOptions {
   sellerId: string
   sku: string
   payload: any
+  /** P0b 2026-07-20 — REQUIRED query param for patchListingsItem. Omitting it
+   *  made SP-API 400 every call while the old error handling (issues-only)
+   *  reported success — the false-green zero-inventory incident. Defaults to
+   *  the client's home marketplace when a caller doesn't pass one. */
+  marketplaceId?: string
 }
 
 interface PutListingsItemOptions {
@@ -536,6 +541,12 @@ export class AmazonSpApiClient {
    * Submit listing payload to Amazon SP-API
    * Listings Items v2021-08-01 endpoint
    */
+  /** P0b — home marketplace fallback (IT for this seller) when a caller
+   *  doesn't thread one through. */
+  private defaultMarketplaceId(): string {
+    return process.env.AMAZON_MARKETPLACE_ID || 'APJ6JRA9NG5V4'
+  }
+
   async submitListingPayload(options: SubmitListingPayloadOptions): Promise<{
     success: boolean
     sku: string
@@ -574,8 +585,9 @@ export class AmazonSpApiClient {
       })
 
       // Submit to SP-API (with retry/backoff on 429/5xx + network errors)
+      const marketplaceId = options.marketplaceId ?? this.defaultMarketplaceId()
       const response = await this.fetchWithRetry(
-        `https://sellingpartnerapi-${this.region}.amazon.com/listings/2021-08-01/items/${sellerId}/${sku}`,
+        `https://sellingpartnerapi-${this.region}.amazon.com/listings/2021-08-01/items/${sellerId}/${sku}?marketplaceIds=${encodeURIComponent(marketplaceId)}&issueLocale=en_US`,
         {
           method: 'PATCH',
           headers: {
@@ -596,6 +608,20 @@ export class AmazonSpApiClient {
         hasIssues: !!data.issues,
         issueCount: data.issues?.length || 0,
       })
+
+      // P0b — an HTTP failure is a FAILURE. SP-API error bodies carry a
+      // top-level `errors[]` (not `issues[]`); the old flow only read issues,
+      // so 400s (e.g. the missing-marketplaceIds era) fell through to
+      // success:true while Amazon applied nothing.
+      if (!response.ok) {
+        const topErrors = Array.isArray((data as { errors?: Array<{ code?: string; message?: string }> }).errors)
+          ? (data as { errors: Array<{ code?: string; message?: string }> }).errors
+              .map((e) => `${e.code ?? 'ERROR'}: ${e.message ?? ''}`)
+              .join(' | ')
+          : `HTTP ${response.status}`
+        logger.warn('SP-API PATCH failed', { sku, httpStatus: response.status, errors: topErrors.slice(0, 400) })
+        return { success: false, sku, error: `HTTP ${response.status} — ${topErrors.slice(0, 400)}`, rawResponse: data }
+      }
 
       // Check for errors in issues array (SP-API returns 200/207 even on errors)
       const errorMessage = this.parseErrors(data)
