@@ -44,6 +44,34 @@ export interface LabelGuardSummary {
  *  the guard walked memberships only, so a listing adopted as a plain CL
  *  (no memberships) never got its label — invisible to all three call
  *  sites. The universe is now BOTH lanes. */
+/** FFT-I2 — self-healing pool links: any membership whose productId is NULL
+ *  relinks by EXACT sku to an alive product (deterministic post-relabel; a
+ *  membership sku IS the pool child sku). 196 estate-wide null links collapsed
+ *  the family file to one group on 2026-07-20; the reconcile writer is fixed,
+ *  and this sweep guarantees any future regression heals within one cron tick.
+ *  Never overwrites a non-null link. */
+export async function relinkNullPoolMemberships(): Promise<{ scanned: number; relinked: number }> {
+  const prisma = (await import('../db.js')).default
+  const broken = await prisma.sharedListingMembership.findMany({
+    where: { productId: null },
+    select: { id: true, sku: true },
+  })
+  if (!broken.length) return { scanned: 0, relinked: 0 }
+  const skus = [...new Set(broken.map((m) => m.sku).filter(Boolean))]
+  const products = skus.length
+    ? await prisma.product.findMany({ where: { sku: { in: skus }, deletedAt: null }, select: { id: true, sku: true } })
+    : []
+  const bySku = new Map(products.map((p) => [p.sku, p.id]))
+  let relinked = 0
+  for (const m of broken) {
+    const pid = m.sku ? bySku.get(m.sku) : undefined
+    if (!pid) continue
+    await prisma.sharedListingMembership.update({ where: { id: m.id }, data: { productId: pid } }).catch(() => null)
+    relinked++
+  }
+  return { scanned: broken.length, relinked }
+}
+
 export async function ensureListingLabels(scope?: Array<{ marketplace: string; itemId: string }>): Promise<LabelGuardSummary> {
   const summary: LabelGuardSummary = { checked: 0, set: 0, kept: 0, unsupported: 0, failed: 0, halfAdopted: 0, clLinked: 0 }
 

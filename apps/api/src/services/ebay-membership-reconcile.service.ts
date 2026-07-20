@@ -112,19 +112,27 @@ export function findPoolMatch(
 export function planMembershipReconcile(
   live: LiveVariation[],
   pool: PoolEntry[],
+  /** FFT-I2 — exact-SKU pool link fallback: live SKU → pool product id.
+   *  Since the relabel, live variation SKUs ARE the pool child SKUs, so the
+   *  SKU is a deterministic join. Specifics-matching alone cascaded link
+   *  loss: it matched only against ALREADY-LINKED memberships, so one null
+   *  pass made every later pass null too (196 links lost estate-wide,
+   *  repaired 2026-07-20 — the family file collapsed to one group). */
+  skuToProductId?: ReadonlyMap<string, string>,
 ): { entries: ReconcilePlanEntry[]; matched: number; unmatched: string[] } {
   const entries: ReconcilePlanEntry[] = []
   const unmatched: string[] = []
   for (const v of live) {
     const hit = findPoolMatch(v.specifics, pool)
+    const skuLink = !hit && v.sku ? skuToProductId?.get(v.sku) ?? null : null
     entries.push({
       liveSku: v.sku,
-      productId: hit?.productId ?? null,
+      productId: hit?.productId ?? skuLink,
       specifics: v.specifics,
       price: hit?.price ?? null,
-      matched: Boolean(hit),
+      matched: Boolean(hit) || Boolean(skuLink),
     })
-    if (!hit) unmatched.push(v.sku)
+    if (!hit && !skuLink) unmatched.push(v.sku)
   }
   return { entries, matched: entries.length - unmatched.length, unmatched }
 }
@@ -196,7 +204,16 @@ export async function reconcileMembershipsFromEbay(
       specifics: (m.variationSpecifics as Record<string, string>) ?? {},
     }))
 
-  let plan = planMembershipReconcile(live, pool)
+  // FFT-I2 — exact-SKU pool links: since the relabel, live variation SKUs ARE
+  // the pool child SKUs — the deterministic fallback when specifics-matching
+  // misses (which previously wrote productId:null and cascaded link loss).
+  const poolLinkSkus = [...new Set(live.map((v) => v.sku).filter(Boolean))]
+  const skuProducts = poolLinkSkus.length
+    ? await prisma.product.findMany({ where: { sku: { in: poolLinkSkus }, deletedAt: null }, select: { id: true, sku: true } })
+    : []
+  const skuToProductId = new Map(skuProducts.map((p) => [p.sku, p.id]))
+
+  let plan = planMembershipReconcile(live, pool, skuToProductId)
   // Incident #42b — FAMILY LOCK: a single-axis listing ({Colore: Verde})
   // subset-matched against the WHOLE market's memberships collides with any
   // other family carrying the same colour → the ambiguity guard refuses.
@@ -217,7 +234,7 @@ export async function reconcileMembershipsFromEbay(
       })
       const familyIds = new Set(familyChildren.map((c) => c.id))
       const lockedPool = pool.filter((p) => familyIds.has(p.productId))
-      if (lockedPool.length > 0) plan = planMembershipReconcile(live, lockedPool)
+      if (lockedPool.length > 0) plan = planMembershipReconcile(live, lockedPool, skuToProductId)
     }
   }
 

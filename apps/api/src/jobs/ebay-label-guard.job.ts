@@ -22,8 +22,13 @@ let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
 export async function runEbayLabelGuardOnce(): Promise<void> {
   await recordCronRun(JOB_NAME, async () => {
-    const { ensureListingLabels } = await import('../services/ebay-label-guard.service.js')
+    const { ensureListingLabels, relinkNullPoolMemberships } = await import('../services/ebay-label-guard.service.js')
+    // FFT-I2 — pool-link self-heal rides the same tick (cheap when clean).
+    const relink = await relinkNullPoolMemberships()
     const summary = await ensureListingLabels()
+    if (relink.relinked > 0) {
+      return `relinked ${relink.relinked}/${relink.scanned} null pool links · labels: ${JSON.stringify(summary)}`
+    }
     logger.info('ebay-label-guard: run complete', summary as unknown as Record<string, unknown>)
     return { summary: `checked ${summary.checked} · set ${summary.set} · kept ${summary.kept} · unsupported ${summary.unsupported} · failed ${summary.failed}` }
   })

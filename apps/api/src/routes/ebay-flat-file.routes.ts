@@ -125,6 +125,11 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             OR: [
               { productId: { in: [...ids] } },
               ...(famSkus.length ? [{ parentSku: { in: famSkus } }] : []),
+              // FFT-I2 — SKU join: membership SKUs ARE pool child SKUs (post-
+              // relabel), so the cluster survives even when productId links
+              // are lost (196 estate-wide nulls collapsed the family file to
+              // ONE group on 2026-07-20 — never again by construction).
+              ...(famSkus.length ? [{ sku: { in: famSkus } }] : []),
             ],
           },
           select: { parentSku: true, productId: true },
