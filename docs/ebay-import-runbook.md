@@ -129,3 +129,30 @@ Default, per-value sets by name; source values missing on the target are
 toasted as skipped; the result lands as UNSAVED buckets — review, swap the
 odd image, Save (or Save & Publish). Verified live: GALE-JACKET →
 GALE-JACKET-ALT1 (256566101420), 16 images, published in one click.
+
+## Variation order on LIVE listings without a publish — 2026-07-20
+
+The Variation-order modal (eBay flat file → Variation order) now has
+**Save & apply to live…** next to the plain Save. Mechanism: eBay's buyer-facing
+dropdown order IS the sequence of `NameValueList`/`Value` nodes in
+`VariationSpecificsSet`, and that set can be revised alone —
+`ReviseFixedPriceItem` carrying ONLY the reordered set (same axis names, same
+values, a pure permutation; ordering byte-identical to what a full push would
+emit, same `orderAxisValues` + `_axisValueOrder ?? _axisSortOrder` authority).
+
+Flow: Save persists the config as before → dry-run shows the per-listing plan
+(axes/value order, before → after) → operator confirms → one revise per listing
+→ read-back GetItem verifies the live order matches (`✓ verified`).
+
+- `POST /api/ebay/flat-file/apply-variation-order` `{parentProductId,
+  marketplace, dryRun}` — enumerates Lane A (`externalListingId`) ∪ Lane B
+  (memberships by productId OR sku, the FFT-I2 double key). ZERO DB writes
+  either way; the flat file/snapshots/memberships are untouched by construction.
+- Inventory-API-managed listings (a real family's primary) reject Trading
+  revises → typed `inventory-managed`, "applies on next publish" (EB-IMG split).
+- Plan safety: permutation guard (a live axis with trim/case-colliding values
+  keeps live order; values are emitted as the EXACT live strings), Active-only,
+  unchanged listings are skipped.
+- Service: `ebay-variation-order-apply.service.ts` (planner pure + tested);
+  read-only prod probe: `scripts/_variation-order-dryrun-probe.mts` (needs
+  `NEXUS_EBAY_REAL_API=true` for real GetItem reads; never revises).

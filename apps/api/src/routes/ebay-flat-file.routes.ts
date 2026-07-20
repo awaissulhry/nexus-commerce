@@ -46,6 +46,7 @@ import { reconcileMembershipsFromEbay, parseLiveVariations } from '../services/e
 import { adoptSkulessVariations } from '../services/ebay-variation-relabel.service.js';
 import { relabelListingToPoolSkus } from '../services/ebay-variation-relabel.service.js';
 import { addVariationsToListing } from '../services/ebay-variation-add.service.js';
+import { applyVariationOrderForFamily } from '../services/ebay-variation-order-apply.service.js';
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot, buildBestOfferTerms, resolveQuantityLimitPerBuyer, resolvePerMarketContent } from '../services/ebay-variation-push.service.js';
 import { renderListingDescriptionSafe } from '../services/ebay-description-theme.service.js';
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
@@ -2914,6 +2915,40 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       } catch (err: unknown) {
         request.log.error(err, 'relabel-item failed')
         return reply.code(502).send({ error: err instanceof Error ? err.message : 'Relabel failed' })
+      }
+    },
+  )
+
+  // ── POST /api/ebay/flat-file/apply-variation-order ──────────────────
+  // Variation ORDER without a full publish: metadata-only ReviseFixedPriceItem
+  // per live listing carrying just the reordered VariationSpecificsSet (same
+  // names, same values — a pure permutation; ordering byte-identical to the
+  // push). dryRun returns the per-listing plan without touching eBay. ZERO
+  // writes to our DB either way — the flat file is untouched by construction.
+  fastify.post<{ Body: { parentProductId?: string; marketplace?: string; dryRun?: boolean } }>(
+    '/ebay/flat-file/apply-variation-order',
+    async (request, reply) => {
+      const parentProductId = String(request.body?.parentProductId ?? '').trim()
+      const marketplace = String(request.body?.marketplace ?? 'IT').toUpperCase()
+      const dryRun = request.body?.dryRun === true
+      if (!parentProductId) return reply.code(400).send({ error: 'parentProductId required' })
+      const connection = await prisma.channelConnection.findFirst({
+        where: { channelType: 'EBAY', isActive: true },
+        select: { id: true },
+      })
+      if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
+      let token: string
+      try {
+        token = await ebayAuthService.getValidToken(connection.id)
+      } catch (err: unknown) {
+        return reply.code(503).send({ error: `Failed to get eBay token: ${err instanceof Error ? err.message : String(err)}` })
+      }
+      try {
+        const result = await applyVariationOrderForFamily(parentProductId, marketplace, { oauthToken: token }, { dryRun })
+        return reply.send(result)
+      } catch (err: unknown) {
+        request.log.error(err, 'apply-variation-order failed')
+        return reply.code(502).send({ error: err instanceof Error ? err.message : 'Apply variation order failed' })
       }
     },
   )

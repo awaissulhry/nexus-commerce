@@ -10,6 +10,72 @@ import { deriveAxes, shouldInitModal } from './variationValueOrder.pure'
 import { intersectPickedWithResolved, type ResolvedAxis } from './resolvedAxes.pure'
 import { AxisValueOrderEditor, type AxisEntry } from '@/components/ebay/AxisValueOrderEditor'
 
+// ── Apply-to-live types (mirror the API's ApplyOrderListingResult) ────────
+
+interface ApplyListingResult {
+  itemId: string
+  title?: string
+  status: 'applied' | 'unchanged' | 'dry-run' | 'not-active' | 'no-variations' | 'inventory-managed' | 'error'
+  verified?: boolean
+  axisOrder?: { from: string[]; to: string[] }
+  valueChanges?: Array<{ axis: string; from: string[]; to: string[] }>
+  message?: string
+}
+
+interface ApplyFamilyResult {
+  listings: ApplyListingResult[]
+}
+
+const APPLY_CHIP: Record<ApplyListingResult['status'], { label: string; cls: string }> = {
+  'dry-run': { label: 'Will change', cls: 'bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300' },
+  applied: { label: 'Applied', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' },
+  unchanged: { label: 'Already in order', cls: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
+  'inventory-managed': { label: 'On next publish', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300' },
+  'not-active': { label: 'Not active', cls: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
+  'no-variations': { label: 'No variations', cls: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
+  error: { label: 'Error', cls: 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300' },
+}
+
+function ApplyResultList({ listings }: { listings: ApplyListingResult[] }) {
+  return (
+    <ul className="space-y-2">
+      {listings.map((l) => {
+        const chip = APPLY_CHIP[l.status]
+        const axisChanged =
+          l.axisOrder && l.axisOrder.from.join('') !== l.axisOrder.to.join('')
+        return (
+          <li
+            key={l.itemId}
+            className="rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs"
+          >
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-slate-500 dark:text-slate-400">{l.itemId}</span>
+              <span className="truncate flex-1 text-slate-700 dark:text-slate-200">{l.title ?? ''}</span>
+              <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${chip.cls}`}>
+                {chip.label}
+                {l.status === 'applied' && l.verified ? ' ✓ verified' : ''}
+              </span>
+            </div>
+            {axisChanged && l.axisOrder && (
+              <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                Axes: {l.axisOrder.from.join(' · ')} → <span className="text-slate-700 dark:text-slate-200">{l.axisOrder.to.join(' · ')}</span>
+              </div>
+            )}
+            {(l.valueChanges ?? []).map((c) => (
+              <div key={c.axis} className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                {c.axis}: {c.from.join(', ')} → <span className="text-slate-700 dark:text-slate-200">{c.to.join(', ')}</span>
+              </div>
+            ))}
+            {l.message && (
+              <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{l.message}</div>
+            )}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
 // ── Main modal ────────────────────────────────────────────────────────────
 
 export interface VariationValueOrderModalProps {
@@ -54,6 +120,13 @@ export function VariationValueOrderModal({
   )
   const [saving, setSaving] = useState(false)
 
+  // Apply-to-live (surgical VariationSpecificsSet revise — no full publish).
+  // 'edit' → editor; 'preview' → dry-run plan awaiting confirm; 'done' → results.
+  const [phase, setPhase] = useState<'edit' | 'preview' | 'done'>('edit')
+  const [preview, setPreview] = useState<ApplyFamilyResult | null>(null)
+  const [results, setResults] = useState<ApplyFamilyResult | null>(null)
+  const [applying, setApplying] = useState(false)
+
   // FFP.8 — axis ORDER: which dropdown the buyer picks first on the listing.
   // Persists as _variationAxes (same key the cockpit's Variations card writes);
   // the push now orders variesBy.specifications by it.
@@ -79,6 +152,9 @@ export function VariationValueOrderModal({
       // derivedAxes until (and unless) the fetch returns the authoritative list.
       setResolvedAxes(null)
       setAxisWarnings([])
+      setPhase('edit')
+      setPreview(null)
+      setResults(null)
       setAxisOrder(Object.fromEntries(derivedAxes.map((a) => [a.key, a.values])))
       setAxisSeq(derivedAxes.map((a) => a.displayName))
       // EFX D1/D9 — seed BOTH the axis order (pickedAxes) and the per-axis value
@@ -144,9 +220,10 @@ export function VariationValueOrderModal({
     setAxisOrder((prev) => ({ ...prev, [key]: newValues }))
   }, [])
 
-  const handleSave = useCallback(async () => {
-    if (!parentProductId) return
-    setSaving(true)
+  // Persist the order config (parent CL _variationAxes/_axisValueOrder).
+  // Shared by plain Save and Save-&-apply; returns success (errors toasted).
+  const saveOrder = useCallback(async (): Promise<boolean> => {
+    if (!parentProductId) return false
     try {
       const res = await fetch(`${BACKEND}/api/ebay/cockpit/variation-matrix`, {
         method: 'PATCH',
@@ -166,35 +243,142 @@ export function VariationValueOrderModal({
         const err = await res.json().catch(() => ({})) as { error?: string }
         throw new Error(err.error ?? `HTTP ${res.status}`)
       }
+      return true
+    } catch (e) {
+      toast.error(`Failed to save: ${e instanceof Error ? e.message : String(e)}`)
+      return false
+    }
+  }, [parentProductId, marketplace, axisOrder, axisSeq, BACKEND, toast])
+
+  const handleSave = useCallback(async () => {
+    setSaving(true)
+    try {
+      if (!(await saveOrder())) return
       toast.success('Variation order saved — applies on next push')
       onSaved?.()
       onClose()
-    } catch (e) {
-      toast.error(`Failed to save: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setSaving(false)
     }
-  }, [parentProductId, marketplace, axisOrder, axisSeq, BACKEND, toast, onSaved, onClose])
+  }, [saveOrder, toast, onSaved, onClose])
+
+  // Save, then dry-run the surgical live apply — the operator confirms the
+  // per-listing plan before anything is revised on eBay.
+  const handleSaveAndPreview = useCallback(async () => {
+    if (!parentProductId) return
+    setApplying(true)
+    try {
+      if (!(await saveOrder())) return
+      onSaved?.()
+      const res = await fetch(`${BACKEND}/api/ebay/flat-file/apply-variation-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentProductId, marketplace, dryRun: true }),
+      })
+      const data = (await res.json().catch(() => null)) as (ApplyFamilyResult & { error?: string }) | null
+      if (!res.ok || !data || !Array.isArray(data.listings)) {
+        throw new Error(data?.error ?? `HTTP ${res.status}`)
+      }
+      setPreview(data)
+      setPhase('preview')
+    } catch (e) {
+      toast.error(`Preview failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setApplying(false)
+    }
+  }, [parentProductId, marketplace, BACKEND, saveOrder, toast, onSaved])
+
+  const handleApplyLive = useCallback(async () => {
+    if (!parentProductId) return
+    setApplying(true)
+    try {
+      const res = await fetch(`${BACKEND}/api/ebay/flat-file/apply-variation-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentProductId, marketplace, dryRun: false }),
+      })
+      const data = (await res.json().catch(() => null)) as (ApplyFamilyResult & { error?: string }) | null
+      if (!res.ok || !data || !Array.isArray(data.listings)) {
+        throw new Error(data?.error ?? `HTTP ${res.status}`)
+      }
+      setResults(data)
+      setPhase('done')
+      const applied = data.listings.filter((l) => l.status === 'applied').length
+      const failed = data.listings.filter((l) => l.status === 'error').length
+      if (failed === 0) toast.success(`Variation order applied to ${applied} live listing${applied === 1 ? '' : 's'}`)
+      else toast.error(`${failed} listing${failed === 1 ? '' : 's'} failed — details in the list`)
+    } catch (e) {
+      toast.error(`Apply failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setApplying(false)
+    }
+  }, [parentProductId, marketplace, BACKEND, toast])
 
   return (
     <Modal
       open={open}
       onClose={onClose}
       title="Variation order"
-      subtitle="Order the axes (which dropdown comes first) and the values within each. Applies on next push."
+      subtitle="Order the axes (which dropdown comes first) and the values within each. Save for next push — or apply to the live listings now, without a publish."
       size="md"
       footer={
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={() => void handleSave()} disabled={saving || !parentProductId}>
-            {saving ? 'Saving…' : 'Save order'}
-          </Button>
-        </div>
+        phase === 'edit' ? (
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={onClose} disabled={saving || applying}>
+              Cancel
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => void handleSave()} disabled={saving || applying || !parentProductId}>
+              {saving ? 'Saving…' : 'Save order'}
+            </Button>
+            <Button size="sm" onClick={() => void handleSaveAndPreview()} disabled={saving || applying || !parentProductId}>
+              {applying ? 'Checking live listings…' : 'Save & apply to live…'}
+            </Button>
+          </div>
+        ) : phase === 'preview' ? (
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setPhase('edit')} disabled={applying}>
+              Back
+            </Button>
+            {(preview?.listings.filter((l) => l.status === 'dry-run').length ?? 0) > 0 ? (
+              <Button size="sm" onClick={() => void handleApplyLive()} disabled={applying}>
+                {applying
+                  ? 'Applying…'
+                  : `Apply to ${preview!.listings.filter((l) => l.status === 'dry-run').length} listing${preview!.listings.filter((l) => l.status === 'dry-run').length === 1 ? '' : 's'}`}
+              </Button>
+            ) : (
+              <Button size="sm" onClick={onClose}>
+                Close
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="flex justify-end gap-2">
+            <Button size="sm" onClick={onClose}>
+              Done
+            </Button>
+          </div>
+        )
       }
     >
-      {axes.length === 0 ? (
+      {phase === 'preview' && preview ? (
+        <div className="py-2">
+          <p className="mb-2 text-xs text-slate-600 dark:text-slate-300">
+            Order saved. This is exactly what a surgical update would change on each live
+            listing — same values, only the order. Nothing has been sent to eBay yet.
+          </p>
+          {preview.listings.length === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">
+              No live eBay listings found for this family.
+            </p>
+          ) : (
+            <ApplyResultList listings={preview.listings} />
+          )}
+        </div>
+      ) : phase === 'done' && results ? (
+        <div className="py-2">
+          <ApplyResultList listings={results.listings} />
+        </div>
+      ) : axes.length === 0 ? (
         <p className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">
           No variation axes detected.
           <br />
