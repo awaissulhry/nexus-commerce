@@ -171,6 +171,7 @@ import pushLatencyRoutes from "./routes/push-latency.routes.js";
 import outboundLatencyRoutes from "./routes/outbound-latency.routes.js";
 import inventorySyncDiagnosticsRoutes from "./routes/inventory-sync-diagnostics.routes.js";
 import amazonAuthProbeRoutes from "./routes/amazon-auth-probe.routes.js";
+import syncControlRoutes from "./routes/sync-control.routes.js";
 import controlTowerRoutes from "./routes/control-tower.routes.js";
 import shopifySetupRoutes from "./routes/shopify-setup.routes.js";
 import { startAmazonSqsPollCron } from "./jobs/amazon-sqs-poll.job.js";
@@ -727,6 +728,7 @@ app.register(outboundLatencyRoutes, { prefix: '/api' });
 // Phase 0 — consolidated inventory-sync diagnostics.
 app.register(inventorySyncDiagnosticsRoutes, { prefix: '/api' });
 app.register(amazonAuthProbeRoutes, { prefix: '/api' });
+app.register(syncControlRoutes, { prefix: '/api' });
 // Phase 6 Task 2 — control-tower aggregation + delta-preview.
 app.register(controlTowerRoutes, { prefix: '/api' });
 // RT.11 — Shopify webhook registration helper. POST /api/admin/

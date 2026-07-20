@@ -4662,6 +4662,7 @@
   "channelDrift.dashboard.seeAll": "see all",
   "channelDrift.subnav": "Channel drift",
   "controlTower.subnav": "Control Tower",
+  "syncControl.subnav": "Sync Control",
   "poolDrift.subnav": "Pool drift",
   "poolDrift.pageTitle": "Pool drift",
   "poolDrift.pageDescription": "Active listings publishing more than their stock pool can fulfil — fix before they oversell.",
