@@ -1,6 +1,17 @@
 import type { FastifyPluginAsync } from 'fastify'
+import { createHash } from 'node:crypto'
 import prisma from '../db.js'
 import { getRedisRuntimeStatus } from '../lib/queue.js'
+
+// AS.0 debugging — a stable, non-reversible fingerprint of the Amazon refresh
+// token the RUNNING process actually holds (first 8 hex of sha256). Lets us
+// verify remotely that a Railway variable change was truly applied, without
+// exposing anything about the secret itself.
+function amazonTokenFingerprint(): string {
+  const t = process.env.AMAZON_REFRESH_TOKEN ?? ''
+  if (!t) return 'unset'
+  return createHash('sha256').update(t).digest('hex').slice(0, 8)
+}
 
 const healthRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/health', async (request, reply) => {
@@ -53,6 +64,7 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
         // RT.1 — remotely-verifiable dispatch mode: 'immediate-bullmq' means
         // the instant lane is genuinely live (workers on AND Redis connected).
         queueWorkers: workersEnabled ? 'enabled' : 'disabled',
+        amazonTokenFp: amazonTokenFingerprint(),
         dispatchPath: workersEnabled && redisConnected ? 'immediate-bullmq' : 'cron-60s-only',
         timestamp: new Date().toISOString(),
         // AS.2-lite — non-zero numbers here mean "open the sync-health data".
