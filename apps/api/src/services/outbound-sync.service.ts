@@ -630,7 +630,17 @@ export class OutboundSyncService {
         return { success: false, queueId, channel: item.targetChannel, status: "SKIPPED", message: "Offer suppressed (offerActive=false)", error: "offer-suppressed" }
       }
     }
-    await prisma.outboundSyncQueue.update({ where: { id: item.id }, data: { syncStatus: "IN_PROGRESS" } });
+    // AS.5 — atomic claim (compare-and-swap on status). The 60s cron backstop
+    // and this BullMQ path can race the same row: buildBullMQSkip is TOCTOU
+    // and fails open on Redis timeouts. Whoever loses the CAS walks away
+    // instead of double-dispatching a duplicate marketplace write.
+    const claimed = await prisma.outboundSyncQueue.updateMany({
+      where: { id: item.id, syncStatus: "PENDING" },
+      data: { syncStatus: "IN_PROGRESS" },
+    });
+    if (claimed.count === 0) {
+      return { success: false, queueId, channel: item.targetChannel, status: "SKIPPED", message: "Lost dispatch claim (already being processed)", error: "claim-lost" };
+    }
     try {
       return await withTimeout(this.dispatchSync(item), DISPATCH_TIMEOUT_MS, `dispatchSync(${item.targetChannel}/${item.id})`);
     } catch (err) {
@@ -686,11 +696,16 @@ export class OutboundSyncService {
           continue;
         }
         try {
-          // Mark as in progress
-          await prisma.outboundSyncQueue.update({
-            where: { id: item.id },
+          // AS.5 — atomic claim (see processSingle): only proceed if this
+          // loop wins the PENDING→IN_PROGRESS compare-and-swap.
+          const claimed = await prisma.outboundSyncQueue.updateMany({
+            where: { id: item.id, syncStatus: "PENDING" },
             data: { syncStatus: "IN_PROGRESS" },
           });
+          if (claimed.count === 0) {
+            stats.skipped++;
+            continue;
+          }
 
           // PD-Q — a hung SP-API/Redis call must not deadlock the whole loop.
           const result = await withTimeout(
@@ -761,11 +776,16 @@ export class OutboundSyncService {
           continue;
         }
         try {
-          // Mark as in progress
-          await prisma.outboundSyncQueue.update({
-            where: { id: item.id },
+          // AS.5 — atomic claim from FAILED (retry lane); mirrors the
+          // PENDING-lane compare-and-swap above.
+          const claimed = await prisma.outboundSyncQueue.updateMany({
+            where: { id: item.id, syncStatus: "FAILED" },
             data: { syncStatus: "IN_PROGRESS" },
           });
+          if (claimed.count === 0) {
+            stats.skipped++;
+            continue;
+          }
 
           // PD-Q — a hung SP-API/Redis call must not deadlock the whole loop.
           const result = await withTimeout(

@@ -12,6 +12,8 @@ const db = vi.hoisted(() => ({
     findUnique: vi.fn(),
     findMany: vi.fn(async () => [] as any[]),
     update: vi.fn(async () => ({})),
+    // AS.5 — the IN_PROGRESS transition is an atomic claim now.
+    updateMany: vi.fn(async () => ({ count: 1 })),
   },
 }))
 vi.mock('../db.js', () => ({ default: db }))
@@ -26,11 +28,13 @@ beforeEach(() => {
   db.outboundSyncQueue.findUnique.mockReset()
   db.outboundSyncQueue.findMany.mockReset().mockResolvedValue([])
   db.outboundSyncQueue.update.mockReset().mockResolvedValue({})
+  db.outboundSyncQueue.updateMany.mockReset().mockResolvedValue({ count: 1 })
   delete process.env.NEXUS_ENABLE_AMAZON_PUBLISH // → Amazon gate = 'gated'
 })
 
+// AS.5 — claims are id-scoped updateMany CAS ({id, syncStatus} guard).
 const inProgressUpdates = () =>
-  db.outboundSyncQueue.update.mock.calls.filter((c: any) => c[0]?.data?.syncStatus === 'IN_PROGRESS')
+  db.outboundSyncQueue.updateMany.mock.calls.filter((c: any) => c[0]?.data?.syncStatus === 'IN_PROGRESS')
 
 describe('A2.1 — processSingle touches only its own row', () => {
   it('not-found → FAILED, no IN_PROGRESS update, no table drain', async () => {
@@ -70,10 +74,21 @@ describe('A2.1 — processSingle touches only its own row', () => {
     })
     const r = await outboundSync.processSingle('Q1')
     expect(db.outboundSyncQueue.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'Q1' } }))
-    expect(inProgressUpdates().some((c: any) => c[0].where.id === 'Q1')).toBe(true)
+    expect(inProgressUpdates().some((c: any) => c[0].where.id === 'Q1' && c[0].where.syncStatus === 'PENDING')).toBe(true)
     expect(db.outboundSyncQueue.findMany).not.toHaveBeenCalled() // ONLY this row, no drain
     expect(r.channel).toBe('AMAZON')
     expect(r.success).toBe(false) // gated, no network
+  })
+
+  it('AS.5 — lost claim (another worker won the CAS) → SKIPPED, no dispatch', async () => {
+    db.outboundSyncQueue.findUnique.mockResolvedValue({
+      id: 'Q1', syncStatus: 'PENDING', targetChannel: 'AMAZON',
+      product: { sku: 'X', id: 'p1' }, payload: { price: 10 },
+    })
+    db.outboundSyncQueue.updateMany.mockResolvedValue({ count: 0 })
+    const r = await outboundSync.processSingle('Q1')
+    expect(r.status).toBe('SKIPPED')
+    expect(r.error).toBe('claim-lost')
   })
 })
 

@@ -28,7 +28,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import prisma from '../db.js'
-import { resolveListingFulfillmentMethod } from './stock-movement.service.js'
+import { resolveListingFulfillmentMethod, resolveCascadePushMethod } from './stock-movement.service.js'
 import { coalescePendingQuantityRows } from './sync-coalesce.js'
 import { computeAvailableToPublish } from './available-to-publish.service.js'
 import { buildSharedFanoutRows, type SharedMembershipRow } from './ebay-shared-fanout.service.js'
@@ -1056,7 +1056,9 @@ async function executeApplyImport(args: {
 
     for (const listing of listingsByProduct.get(productId) ?? []) {
       if (explicitIds.has(listing.id)) continue // explicit value wins (BOTH)
-      const method = resolveListingFulfillmentMethod({
+      // AS.5 — cascade parity: same dispatch-guard-aligned resolver as
+      // cascadeQuantityToListings (FBA-signal veto for AMAZON listings).
+      const method = resolveCascadePushMethod({
         listingFulfillmentMethod: listing.fulfillmentMethod,
         channel: listing.channel,
         fbaBucket,

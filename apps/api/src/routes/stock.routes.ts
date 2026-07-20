@@ -3676,6 +3676,23 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         ttlMs: body.ttlMs,
         actor: 'manual-reserve',
       })
+      // AS.5 — a reservation changes StockLevel.available but (unlike
+      // movements) never ran the cascade, so Following FBM listings kept
+      // advertising the reserved units until the next movement or the 30-min
+      // drift heal. Fire-and-forget recascade closes that window.
+      void (async () => {
+        try {
+          const { recascadeProduct } = await import('../services/stock-movement.service.js')
+          await recascadeProduct(body.productId!, {
+            reason: 'MANUAL_ADJUSTMENT',
+            referenceType: 'RESERVATION',
+            referenceId: reservation.id,
+            actor: 'manual-reserve',
+          })
+        } catch (err) {
+          fastify.log.warn({ err }, '[stock/reserve] recascade failed (non-fatal)')
+        }
+      })()
       return { ok: true, reservation }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/reserve] failed')
@@ -3690,6 +3707,27 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       const updated = await releaseReservation(reservationId, {
         actor: 'manual-release',
       })
+      // AS.5 — mirror of /stock/reserve: releasing frees `available`, so
+      // re-advertise it promptly instead of waiting for the drift heal.
+      void (async () => {
+        try {
+          const sl = await prisma.stockLevel.findUnique({
+            where: { id: (updated as { stockLevelId: string }).stockLevelId },
+            select: { productId: true },
+          })
+          if (sl?.productId) {
+            const { recascadeProduct } = await import('../services/stock-movement.service.js')
+            await recascadeProduct(sl.productId, {
+              reason: 'MANUAL_ADJUSTMENT',
+              referenceType: 'RESERVATION',
+              referenceId: reservationId,
+              actor: 'manual-release',
+            })
+          }
+        } catch (err) {
+          fastify.log.warn({ err }, '[stock/release] recascade failed (non-fatal)')
+        }
+      })()
       return { ok: true, reservation: updated }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/release] failed')

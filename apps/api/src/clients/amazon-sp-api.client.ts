@@ -560,9 +560,18 @@ export class AmazonSpApiClient {
 
     // A1.1 — gate at the client layer so no caller can write when publishing is
     // disabled/dry-run (previously only the caller gated this method).
+    // AS.5 — 'sandbox' included: this PATCH path has no sandbox-host swap
+    // (unlike the create path), so sandbox mode used to fire a REAL
+    // production PATCH while callers labeled the row dry-run/SKIPPED — a
+    // live write masquerading as a no-op. Until a sandbox host exists here,
+    // sandbox behaves as dry-run and says so.
     const mode = getAmazonPublishMode()
-    if (mode === 'gated' || mode === 'dry-run') {
-      logger.info(`SP-API submitListingPayload (mode=${mode}, no HTTP)`, { sku, sellerId })
+    if (mode === 'gated' || mode === 'dry-run' || mode === 'sandbox') {
+      if (mode === 'sandbox') {
+        logger.warn('SP-API submitListingPayload: sandbox mode has no sandbox host on this path — treating as dry-run (no HTTP)', { sku, sellerId })
+      } else {
+        logger.info(`SP-API submitListingPayload (mode=${mode}, no HTTP)`, { sku, sellerId })
+      }
       return { success: true, sku, status: 'ACCEPTED', dryRun: true }
     }
 

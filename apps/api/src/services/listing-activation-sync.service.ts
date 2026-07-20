@@ -50,8 +50,16 @@ export async function syncActivatedListings(listingIds: string[]): Promise<void>
     }
 
     const rows: any[] = []
+    let uncountedSkips = 0
     for (const listing of listings) {
       if (!listing.productId || !VALID_CHANNELS.has(listing.channel)) continue
+      // AS.5 — P0-guard parity: a product with ZERO warehouse ledger rows is
+      // UNCOUNTED, not zero. Activation must not manufacture a 0-quantity
+      // push from that state (the cascade already refuses; this path didn't).
+      if (!availableByProduct.has(listing.productId)) {
+        uncountedSkips++
+        continue
+      }
       const available = availableByProduct.get(listing.productId) ?? 0
       const bufferedQty = Math.max(0, available - (listing.stockBuffer ?? 0))
       rows.push({
@@ -75,6 +83,7 @@ export async function syncActivatedListings(listingIds: string[]): Promise<void>
       await enqueueOutboundRowsInstant(prisma, rows, { source: 'LISTING_ACTIVATED' })
       logger.info('[listing-activation-sync] enqueued QUANTITY_UPDATE (instant lane)', {
         count: rows.length,
+        uncountedSkips,
         listingIds: listingIds.slice(0, 10),
       })
     }

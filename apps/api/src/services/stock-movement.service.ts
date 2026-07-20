@@ -51,6 +51,35 @@ export function resolveListingFulfillmentMethod(args: {
   return args.fbaBucket > 0 || args.productFulfillmentMethod === 'FBA' ? 'FBA' : 'FBM'
 }
 
+/**
+ * AS.5 — cascade-side method with dispatch-guard alignment. outbound-sync's
+ * isFbaListing is fail-closed on ANY FBA signal, so an AMAZON listing
+ * explicitly marked FBM on a product carrying FBA signals (product method
+ * FBA, or FBA stock on hand) would enqueue quantity rows the dispatcher then
+ * guard-skips forever — pure churn that also fed fba-flip-guard's candidate
+ * set (the GALE listing.fm=FBM / product.fm=FBA residuals). Cascade writers
+ * use THIS resolver so those listings stay snapshot-only; the dispatch guard
+ * remains authoritative for its rarer signals (active FBA offer,
+ * platform-attribute channel code). Import-eligibility filters deliberately
+ * keep the plain resolver.
+ */
+export function resolveCascadePushMethod(args: {
+  listingFulfillmentMethod: string | null
+  channel: string
+  fbaBucket: number
+  productFulfillmentMethod: string | null
+}): 'FBA' | 'FBM' {
+  const resolved = resolveListingFulfillmentMethod(args)
+  if (
+    resolved === 'FBM' &&
+    args.channel === 'AMAZON' &&
+    (args.productFulfillmentMethod === 'FBA' || args.fbaBucket > 0)
+  ) {
+    return 'FBA'
+  }
+  return resolved
+}
+
 // B.1/B.2 — single entrypoint for every stock change.
 // Anyone touching Product.totalStock or ProductVariation.stock MUST go
 // through here so the StockMovement audit log captures balanceAfter,
@@ -661,7 +690,9 @@ async function cascadeQuantityToListings(
   )
 
   for (const listing of listings) {
-    const method = resolveListingFulfillmentMethod({
+    // AS.5 — resolveCascadePushMethod = plain resolver + dispatch-guard
+    // alignment (FBA-signal veto for AMAZON); see its doc comment.
+    const method = resolveCascadePushMethod({
       listingFulfillmentMethod: listing.fulfillmentMethod,
       channel: listing.channel,
       fbaBucket,
