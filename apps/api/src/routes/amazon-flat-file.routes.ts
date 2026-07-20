@@ -34,6 +34,7 @@ import {
   detectWorkbookFamilyKey,
 } from '../services/amazon/template-vault.service.js'
 import { stampPendingSync } from '../services/flat-file/pending-sync-stamp.js'
+import { clampFollowingQtyRowsForFeed } from '../services/available-to-publish.service.js'
 import { verifySkusAgainstLive } from '../services/amazon/flat-file-verify-live.service.js'
 import {
   listVaultEntries,
@@ -582,6 +583,17 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         code: 'FBA_MERCHANT_QUANTITY_BLOCKED',
         skus: fbaViolations.map((v) => v.sku),
       })
+    }
+
+    // FFT-I3 (GAP 1) — Following FBM rows feed POOL truth, never a typed cell
+    // (mirrors the dispatch-time clamp; the feed path previously had none).
+    // Pinned rows keep their typed value — that is the explicit override.
+    const followClamps = await clampFollowingQtyRowsForFeed(prisma, rows, mp).catch((err) => {
+      request.log.warn({ err }, 'flat-file/submit: following-qty clamp failed (feed proceeds unclamped)')
+      return [] as Array<{ sku: string; from: string; to: string }>
+    })
+    if (followClamps.length > 0) {
+      request.log.info({ followClamps }, 'flat-file/submit: Following rows clamped to pool quantity')
     }
 
     // UFX P6d — WithReport: a row with no resolvable product type (own cell →
@@ -1495,31 +1507,42 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
               quantity: true,
               externalListingId: true,
               region: true,
+              product: { select: { sku: true } },
             },
           })
+
+          // FFT-I3 (GAP 2) — enqueue only what THIS save actually carried:
+          // untouched rows no longer get churn pushes on every save (the
+          // dispatch-time re-read + pool clamp remains the backstop).
+          const rowBySku = new Map(rows.map((r: any) => [String(r.item_sku ?? '').trim(), r]))
 
           for (const listing of listings) {
             // FFA.6 — enqueue from the listing's own (already-synced) qty/price; the
             // dead `rows.find(()=>true)` placeholder was removed (it matched the
             // first row regardless of SKU and was never used).
             if (!listing.productId) continue
+            const savedRow = rowBySku.get(listing.product.sku)
+            const rowHasQty = !!savedRow && String(savedRow.fulfillment_availability__quantity ?? '').trim() !== ''
+            const rowHasFollowIntent = !!savedRow && (savedRow.follow === 'Follow' || savedRow.follow === 'Pinned')
+            const rowHasPrice = !!savedRow && String(savedRow.purchasable_offer__our_price ?? '').trim() !== ''
+            if (!rowHasQty && !rowHasFollowIntent && !(listing.price != null && rowHasPrice)) continue
             // RT.2 — instant-lane enqueue; the 30s holdUntil (operator undo
             // grace + save-burst coalesce window) is honored as the job delay.
             await enqueueOutboundRowsInstant(prisma, [
-              {
+              ...((rowHasQty || rowHasFollowIntent) ? [{
                 productId: listing.productId,
                 channelListingId: listing.id,
-                targetChannel: 'AMAZON',
+                targetChannel: 'AMAZON' as const,
                 targetRegion: listing.region ?? mp,
-                syncType: 'QUANTITY_UPDATE',
-                syncStatus: 'PENDING',
+                syncType: 'QUANTITY_UPDATE' as const,
+                syncStatus: 'PENDING' as const,
                 payload: { quantity: listing.quantity ?? 0, source: 'AMAZON_FLAT_FILE_SAVE' },
                 externalListingId: listing.externalListingId ?? undefined,
                 retryCount: 0,
                 maxRetries: 3,
                 holdUntil: new Date(Date.now() + 30_000),
-              },
-              ...(listing.price != null ? [{
+              }] : []),
+              ...(listing.price != null && rowHasPrice ? [{
                 productId: listing.productId,
                 channelListingId: listing.id,
                 targetChannel: 'AMAZON' as const,

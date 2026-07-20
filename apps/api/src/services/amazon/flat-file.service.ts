@@ -1288,9 +1288,12 @@ export function buildFollowQuantityPatch(
   qty: number | null,
 ): { quantity?: number; followMasterQuantity?: boolean } {
   if (qty === null || Number.isNaN(qty)) return {}
-  // Legacy client: the Follow column is entirely absent.
+  // Legacy client: the Follow column is entirely absent. FFT-I3 (GAP 3) — the
+  // historical pin-on-qty conversion is RETIRED: an absent column is NO SIGNAL
+  // (a stale bundle or external caller must never silently flip a Following
+  // listing to Pinned). Quantity still writes; the follow flag stays untouched.
   if (follow === undefined || follow === null) {
-    return { quantity: qty, followMasterQuantity: false }
+    return { quantity: qty }
   }
   // Follow column present. Only the exact enum is a real signal; every other
   // string (including '') is treated as no signal → quantity only, no pin.
@@ -1354,6 +1357,14 @@ export function applySnapshotOverlay(
     // content — the live DB value is only a fallback when no snapshot exists yet.
     bullet_point: '',
     bullet_point_1: snapshot['bullet_point_1'] || snapshot['bullet_point'] || (liveRow as any)['bullet_point_1'] || '',
+    // FFT-I3 — currency is marketplace-implied and NEVER legitimately blank:
+    // Amazon's template downloads have no currency column, so imported rows
+    // saved '' into the snapshot and (with no live overlay) the blank was
+    // sticky forever. Default from the live literal (CURRENCY_MAP); the next
+    // save persists it forward.
+    purchasable_offer__currency:
+      String(snapshot['purchasable_offer__currency'] ?? '').trim() ||
+      String((liveRow as any)['purchasable_offer__currency'] ?? ''),
     ...(isFba ? { fulfillment_availability__quantity: '' } : {}),
     // FM Phase 2b — the Follow control is a LIVE value derived from the DB
     // followMasterQuantity flag, not snapshot content, so it must always come from

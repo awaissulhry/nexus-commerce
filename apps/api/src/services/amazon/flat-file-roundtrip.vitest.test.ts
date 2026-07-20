@@ -529,11 +529,14 @@ describe('FB1 — buildFollowQuantityPatch (Follow column garbage must not force
   it("empty string is NO SIGNAL → quantity only, no followMasterQuantity", () => {
     expect(buildFollowQuantityPatch('', 12)).toEqual({ quantity: 12 })
   })
-  it('undefined (legacy client, no Follow column) → the historical pin-on-qty', () => {
-    expect(buildFollowQuantityPatch(undefined, 12)).toEqual({ quantity: 12, followMasterQuantity: false })
+  // FFT-I3 (GAP 3) — the historical pin-on-qty for an ABSENT Follow column is
+  // RETIRED: a stale bundle or external caller must never silently flip a
+  // Following listing to Pinned. Absent = no signal; quantity still writes.
+  it('undefined (legacy client, no Follow column) → quantity only, NEVER a silent pin', () => {
+    expect(buildFollowQuantityPatch(undefined, 12)).toEqual({ quantity: 12 })
   })
-  it('null (legacy client, no Follow column) → the historical pin-on-qty', () => {
-    expect(buildFollowQuantityPatch(null, 12)).toEqual({ quantity: 12, followMasterQuantity: false })
+  it('null (legacy client, no Follow column) → quantity only, NEVER a silent pin', () => {
+    expect(buildFollowQuantityPatch(null, 12)).toEqual({ quantity: 12 })
   })
   it('a null quantity writes nothing at all (no quantity, no pin)', () => {
     expect(buildFollowQuantityPatch(undefined, null)).toEqual({})

@@ -55,6 +55,8 @@ import {
   skippedRowIndexes,
   type AmazonImportFamily,
 } from './importFamiliesAmazon.pure'
+// FFT-I3 — family-uniform gap fill
+import { computeFamilyUniformFills, type FamilyFillSummary } from './familyFill.pure'
 
 // Owner policy (2026-07-16): quantities default OFF (the shared pool + Follow
 // columns stay authoritative; the file's qty was for the initial listing),
@@ -586,6 +588,30 @@ export function ImportWizardModal({
     })
   }, [isOn])
 
+  // FFT-I3 — family-uniform gap fill: Amazon's template downloads carry values
+  // only where AMAZON has them, so never-listed sizes arrive blank for columns
+  // the family agrees on (product_tax_code was the reported case). Propose the
+  // family's uniform value for those blanks — visible, counted, toggleable.
+  const [familyFillOn, setFamilyFillOn] = useState(true)
+  const familyFills = useMemo(() => {
+    if (!plan) return { cells: [], byColumn: {} } as FamilyFillSummary
+    const planByRowId = new Map(plan.updates.map((u) => [u.rowId, u.cells]))
+    const effective: Array<{ rowKey: string; row: Record<string, unknown> }> = []
+    for (const r of currentRows) {
+      const overlay: Record<string, unknown> = { ...r }
+      const cells = planByRowId.get(String(r._rowId))
+      if (cells) for (const c of cells) { if (isOn(`upd:${r._rowId}`, c)) overlay[c.columnId] = c.to }
+      effective.push({ rowKey: `upd:${r._rowId}`, row: overlay })
+    }
+    for (const n of plan.newRows) {
+      const overlay: Record<string, unknown> = { item_sku: n.sku }
+      for (const c of n.cells) if (isOn(`new:${n.sku}`, c)) overlay[c.columnId] = c.to
+      effective.push({ rowKey: `new:${n.sku}`, row: overlay })
+    }
+    const columnIds = [...new Set(effective.flatMap(({ row }) => Object.keys(row).filter((k) => !k.startsWith('_'))))]
+    return computeFamilyUniformFills(effective, columnIds)
+  }, [plan, currentRows, isOn])
+
   const applyResult = useMemo<ImportApplyResult>(() => {
     if (!plan) return { newRows: [], updates: [], cellCount: 0 }
     let cellCount = 0
@@ -600,10 +626,25 @@ export function ImportWizardModal({
     const updates = plan.updates
       .map((u) => ({ rowId: u.rowId, cells: pick(`upd:${u.rowId}`, u.cells) }))
       .filter((u) => Object.keys(u.cells).length > 0)
+    // FFT-I3 — merge the family-uniform fills (never overriding a plan cell).
+    if (familyFillOn) {
+      for (const f of familyFills.cells) {
+        if (f.rowKey.startsWith('upd:')) {
+          const rowId = f.rowKey.slice(4)
+          let u = updates.find((x) => x.rowId === rowId)
+          if (!u) { u = { rowId, cells: {} }; updates.push(u) }
+          if (!(f.columnId in u.cells)) { u.cells[f.columnId] = f.value; cellCount++ }
+        } else {
+          const sku = f.rowKey.slice(4)
+          const n = newRows.find((x) => x.sku === sku)
+          if (n && !(f.columnId in n.cells)) { n.cells[f.columnId] = f.value; cellCount++ }
+        }
+      }
+    }
     // AMX.4 — the applying side stamps the report + version-history label with
     // the source filename.
     return { newRows, updates, cellCount, deleteSkus: deletesArmed ? deleteSkus : [], fileName }
-  }, [plan, isOn, deletesArmed, deleteSkus, fileName])
+  }, [plan, isOn, deletesArmed, deleteSkus, fileName, familyFillOn, familyFills])
 
   if (!open) return null
 
@@ -999,6 +1040,14 @@ export function ImportWizardModal({
                     onChange={(e) => void changePolicy('prices', e.target.checked)} className="w-3.5 h-3.5 accent-violet-600" />
                   Import prices
                 </label>
+                {familyFills.cells.length > 0 && (
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer"
+                    title={`Amazon's template carries values only where Amazon has them — these blanks get the family's uniform value:\n${Object.entries(familyFills.byColumn).map(([c, i]) => `${label(c)} → ${i.value} (${i.count} row${i.count !== 1 ? 's' : ''})`).join('\n')}`}>
+                    <input type="checkbox" checked={familyFillOn} disabled={busy}
+                      onChange={(e) => setFamilyFillOn(e.target.checked)} className="w-3.5 h-3.5 accent-emerald-600" />
+                    Fill family-uniform gaps ({familyFills.cells.length} cell{familyFills.cells.length !== 1 ? 's' : ''}: {Object.keys(familyFills.byColumn).slice(0, 3).map((c) => label(c)).join(', ')}{Object.keys(familyFills.byColumn).length > 3 ? '…' : ''})
+                  </label>
+                )}
               </div>
 
               {/* A3w — ::record_action=delete rows: excluded by default, explicit owner override */}
