@@ -35,6 +35,28 @@ import { applyStockMovement } from './stock-movement.service.js'
 import { recordApiCall } from './outbound-api-call-log.service.js'
 import { recordOrderItem } from './sales-aggregate.service.js'
 
+/** eBay money fields: the live Fulfillment API sends { value, currency };
+ *  older code/fixtures assumed bare strings. */
+export type EbayAmountLike = string | number | { value?: string | number; currency?: string } | null | undefined
+
+/** Pure — returns a finite number or null (never NaN). Exported for tests. */
+export function parseEbayAmount(raw: EbayAmountLike): number | null {
+  if (raw === null || raw === undefined) return null
+  const candidate =
+    typeof raw === 'object' ? (raw as { value?: string | number }).value : raw
+  if (candidate === null || candidate === undefined || candidate === '') return null
+  const n = Number(candidate)
+  return Number.isFinite(n) ? n : null
+}
+
+/** Currency code from an Amount-like, when present. */
+export function ebayAmountCurrency(raw: EbayAmountLike): string | null {
+  if (raw && typeof raw === 'object' && typeof raw.currency === 'string' && raw.currency) {
+    return raw.currency
+  }
+  return null
+}
+
 interface EbayOrder {
   orderId: string
   creationDate: string
@@ -54,20 +76,25 @@ interface EbayOrder {
     countryCode: string
   }
   pricingSummary: {
-    total: string
-    currency: string
+    // AS.3b — the REAL Fulfillment API returns Amount objects
+    // ({ value, currency }), not bare strings. The old string-typed shape
+    // made Number(total) = NaN → every real order threw
+    // "invalid pricingSummary.total [object Object]" and no eBay sale ever
+    // reached the pool. parseEbayAmount accepts every historical shape.
+    total: EbayAmountLike
+    currency?: string
   }
   lineItems: Array<{
     lineItemId: string
     sku: string
     title: string
     quantity: number
-    lineItemCost: string
-    taxes?: {
-      taxAmount: string
-    }
+    lineItemCost: EbayAmountLike
+    /** Real API: array of { amount: {value,currency} }; legacy fixtures used
+     *  { taxAmount: string }. Both accepted. */
+    taxes?: Array<{ amount?: EbayAmountLike; taxAmount?: EbayAmountLike }> | { taxAmount?: EbayAmountLike }
     discounts?: Array<{
-      discountAmount: string
+      discountAmount: EbayAmountLike
     }>
   }>
 }
@@ -291,10 +318,10 @@ export class EbayOrdersService {
    * Quantity and the cross-channel sync queue both update).
    */
   private async processOrder(order: EbayOrder, _connectionId: string) {
-    const totalPrice = Number(order.pricingSummary.total)
-    if (!Number.isFinite(totalPrice)) {
+    const totalPrice = parseEbayAmount(order.pricingSummary.total)
+    if (totalPrice === null) {
       throw new Error(
-        `eBay order ${order.orderId}: invalid pricingSummary.total ${order.pricingSummary.total}`,
+        `eBay order ${order.orderId}: invalid pricingSummary.total ${JSON.stringify(order.pricingSummary.total)}`,
       )
     }
 
@@ -315,7 +342,8 @@ export class EbayOrdersService {
       channelOrderId: order.orderId,
       status: this.mapOrderStatus(order.orderStatus, order.fulfillmentStatus),
       totalPrice,
-      currencyCode: order.pricingSummary.currency ?? 'EUR',
+      currencyCode:
+        ebayAmountCurrency(order.pricingSummary.total) ?? order.pricingSummary.currency ?? 'EUR',
       customerName: order.buyer.username || 'eBay Buyer',
       customerEmail,
       shippingAddress: order.shippingAddress as unknown as object,
@@ -466,21 +494,28 @@ export class EbayOrdersService {
       const isNewLine = !seenLineItemIds.has(lineItem.lineItemId)
       if (!isNewLine) continue // already booked on a prior sync
 
-      const itemPrice = Number(lineItem.lineItemCost)
-      if (!Number.isFinite(itemPrice)) {
+      const itemPrice = parseEbayAmount(lineItem.lineItemCost)
+      if (itemPrice === null) {
+        // AS.3b — this branch used to swallow EVERY real line item (Amount
+        // object → NaN → skip), which also skipped the stock deduction. The
+        // parser now handles all shapes; hitting this means a genuinely
+        // malformed payload, so it must stay loud.
         logger.warn('eBay line item: non-numeric lineItemCost — skipping', {
           orderId: order.orderId,
           lineItemId: lineItem.lineItemId,
-          raw: lineItem.lineItemCost,
+          raw: JSON.stringify(lineItem.lineItemCost)?.slice(0, 120),
         })
         continue
       }
 
       const product = await this.findProductBySku(lineItem.sku, lineItem.lineItemId)
-      const taxAmount = lineItem.taxes ? Number(lineItem.taxes.taxAmount) : 0
+      const taxesRaw = lineItem.taxes
+      const taxAmount = Array.isArray(taxesRaw)
+        ? taxesRaw.reduce((sum, t) => sum + (parseEbayAmount(t.amount ?? t.taxAmount) ?? 0), 0)
+        : (parseEbayAmount(taxesRaw?.taxAmount) ?? 0)
       const discountAmount = lineItem.discounts
         ? lineItem.discounts.reduce(
-            (sum, d) => sum + (Number(d.discountAmount) || 0),
+            (sum, d) => sum + (parseEbayAmount(d.discountAmount) ?? 0),
             0,
           )
         : 0
