@@ -493,6 +493,8 @@ model StockImportJob {
   processedRows Int       @default(0)
   // IM.3.3 — who applied the import (session email; null = pre-IM.3.3 or script)
   createdBy     String?
+  // IM.3.4 — batch revert: id of the revert job that undid this import
+  revertedByJobId String?
 
   @@index([status, createdAt(sort: Desc)])
   @@index([locationCode])

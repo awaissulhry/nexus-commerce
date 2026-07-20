@@ -104,6 +104,8 @@ interface PreviewRow extends ResolvedRow {
   channelListings: ChannelListingPreview[]
   warnings: string[]
   error: string | null
+  /** IM.3.4 — stable client index (rowKey + inline-edit identity). */
+  _idx?: number
 }
 
 interface ApplyResult {
@@ -112,7 +114,12 @@ interface ApplyResult {
   failed: number
   skipped: number
   total: number
-  results: Array<{ sku: string; raw: string; applied: boolean; error?: string }>
+  results: Array<{
+    sku: string; raw: string; applied: boolean; error?: string
+    warehouseApplied?: boolean; channelApplied?: boolean
+    // IM.3.4 — original inputs echoed back so failed rows can be retried
+    quantity?: number; channel?: string; marketplace?: string
+  }>
 }
 
 interface ImportHistory {
@@ -135,6 +142,8 @@ interface ImportHistory {
   processedRows?: number | null
   // IM.3.3 — actor attribution
   createdBy?: string | null
+  // IM.3.4 — batch revert linkage
+  revertedByJobId?: string | null
 }
 
 // IM.3.2 — async apply: the POST returns immediately; this is the polled state.
@@ -398,6 +407,15 @@ function ImportWizardInner() {
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([])
   // DRAFT StockImportJob backing this preview — apply consumes it exactly once
   const [draftJobId, setDraftJobId] = useState<string | null>(null)
+  // IM.3.4 — the exact rows payload behind the current preview (inline qty
+  // edits mutate this and re-run the server preview, so preview = apply).
+  // Only functional updates read it, hence the elided first tuple element.
+  const [, setPreviewPayloadRows] = useState<ResolvedRow[]>([])
+  const [previewDirty, setPreviewDirty] = useState(false)
+  const previewEditTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // IM.3.4 — batch revert confirm
+  const [revertConfirm, setRevertConfirm] = useState<null | { jobId: string; label: string }>(null)
+  const [reverting, setReverting] = useState(false)
 
   // ── Step: APPLY ───────────────────────────────────────────────────────
   const [applyResult, setApplyResult] = useState<ApplyResult | null>(null)
@@ -416,7 +434,7 @@ function ImportWizardInner() {
   const [history, setHistory] = useState<ImportHistory[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyDetail, setHistoryDetail] = useState<{
-    job: ImportHistory & { results?: Array<{ sku: string; raw: string; applied: boolean; warehouseApplied?: boolean; channelApplied?: boolean; error?: string }> }
+    job: ImportHistory & { results?: ApplyResult['results'] }
   } | null>(null)
   const [historyDetailLoading, setHistoryDetailLoading] = useState(false)
 
@@ -560,27 +578,109 @@ function ImportWizardInner() {
       }
     }
 
+    setPreviewPayloadRows(rows)
     setBusy(true)
     try {
-      const res = await fetch(`${getBackendUrl()}/api/stock/import/preview`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rows, locationCode, mode, target,
-          filename: parsedFile?.filename,
-          fileKind: parsedFile?.kind,
-          jobId: draftJobId ?? undefined,
-        }),
-      })
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`) }
-      const data = await res.json()
-      setPreviewRows(data.rows)
-      setDraftJobId(data.jobId ?? null)
+      await refreshPreview(rows)
       setStep('PREVIEW')
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), 'danger')
     } finally {
       setBusy(false)
+    }
+  }
+
+  // IM.3.4 — shared preview fetch: first entry into PREVIEW and every
+  // inline-edit refresh go through the same server call (preview = apply).
+  async function refreshPreview(rows: ResolvedRow[]) {
+    const res = await fetch(`${getBackendUrl()}/api/stock/import/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rows, locationCode, mode, target,
+        filename: parsedFile?.filename,
+        fileKind: parsedFile?.kind,
+        jobId: draftJobId ?? undefined,
+      }),
+    })
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`) }
+    const data = await res.json()
+    setPreviewRows((data.rows as PreviewRow[]).map((r, i) => ({ ...r, _idx: i })))
+    setDraftJobId(data.jobId ?? null)
+    setPreviewDirty(false)
+  }
+
+  // IM.3.4 — inline quantity edit in the preview grid. Optimistic local
+  // update, then a debounced server re-preview recomputes would-be values;
+  // Apply stays disabled until the refresh lands (no stale applies).
+  function editPreviewQty(idx: number, qty: number) {
+    setPreviewDirty(true)
+    setPreviewRows((prev) => prev.map((r) => (r._idx === idx ? { ...r, quantity: qty } : r)))
+    setPreviewPayloadRows((prev) => {
+      const next = prev.map((r, i) => (i === idx ? { ...r, quantity: qty } : r))
+      if (previewEditTimer.current) clearTimeout(previewEditTimer.current)
+      previewEditTimer.current = setTimeout(() => {
+        refreshPreview(next).catch((err) => {
+          toast(err instanceof Error ? err.message : String(err), 'danger')
+        })
+      }, 600)
+      return next
+    })
+  }
+
+  // IM.3.4 — rebuild the wizard from the failed rows of a finished import
+  // and jump to RESOLVE (full re-validation through the normal pipeline).
+  async function retryFailedRows(results: ApplyResult['results'], job?: { mode?: string; target?: string; locationCode?: string }) {
+    const failedRows = results.filter((r) => !r.applied && typeof r.quantity === 'number')
+    if (failedRows.length === 0) return
+    if (job?.mode === 'ADJUST' || job?.mode === 'SET') setMode(job.mode)
+    if (job?.target === 'WAREHOUSE' || job?.target === 'CHANNEL' || job?.target === 'BOTH') setTarget(job.target)
+    if (job?.locationCode) setLocationCode(job.locationCode)
+    setBusy(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/stock/import/resolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rows: failedRows.map((r) => ({
+            raw: r.raw, quantity: r.quantity,
+            ...(r.channel ? { channel: r.channel } : {}),
+            ...(r.marketplace ? { marketplace: r.marketplace } : {}),
+          })),
+        }),
+      })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`) }
+      const data = await res.json()
+      setResolvedRows(data.rows)
+      setApplyResult(null)
+      setApplyProgress(null)
+      setDraftJobId(null)
+      setHistoryDetail(null)
+      setMainTab('wizard')
+      setStep('RESOLVE')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), 'danger')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // IM.3.4 — one-click batch revert (confirmed via modal).
+  async function doRevert() {
+    if (!revertConfirm) return
+    setReverting(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/stock/import/jobs/${revertConfirm.jobId}/revert`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      toast(t('stock.import.revert.done', { n: data.warehouse?.succeeded ?? 0, c: data.channel?.restored ?? 0 }), 'success')
+      setRevertConfirm(null)
+      setHistoryDetail(null)
+      void loadHistory()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), 'danger')
+    } finally {
+      setReverting(false)
     }
   }
 
@@ -791,6 +891,7 @@ function ImportWizardInner() {
     setColMap({}); setMode('ADJUST'); setTarget('WAREHOUSE'); setPinOverride(false)
     setResolvedRows([]); setPreviewRows([]); setApplyResult(null); setDraftJobId(null)
     setApplyProgress(null); setCancelling(false)
+    setPreviewPayloadRows([]); setPreviewDirty(false)
   }
 
   // ── Step breadcrumb ───────────────────────────────────────────────────
@@ -1241,7 +1342,7 @@ function ImportWizardInner() {
 
                 <DataGrid<PreviewRow>
                   rows={previewRows}
-                  rowKey={(r) => `${r.raw}-${r.productId ?? 'u'}`}
+                  rowKey={(r) => String(r._idx ?? `${r.raw}-${r.productId ?? 'u'}`)}
                   maxHeight={480}
                   columns={[
                     {
@@ -1257,6 +1358,22 @@ function ImportWizardInner() {
                       render: (r) => r.productName
                         ? <span className="text-sm">{r.productName} <span className="text-tertiary text-xs ml-1">{r.resolvedSku}</span></span>
                         : <span className="text-tertiary text-sm">—</span>,
+                    },
+                    {
+                      // IM.3.4 — inline quantity editing; a debounced server
+                      // re-preview recomputes the would-be columns.
+                      key: 'qty', label: t('stock.import.preview.colQty'), width: 100, align: 'right' as const,
+                      render: (r) => r.productId && r._idx !== undefined ? (
+                        <input
+                          inputMode="numeric"
+                          value={String(r.quantity)}
+                          onChange={(e) => {
+                            const v = Number(e.target.value)
+                            if (Number.isFinite(v) && r._idx !== undefined) editPreviewQty(r._idx, Math.trunc(v))
+                          }}
+                          className="w-20 h-7 text-right text-sm tabular-nums border border-default dark:border-slate-700 rounded bg-white dark:bg-slate-900 px-1.5"
+                        />
+                      ) : <span className="tabular-nums text-sm">{r.quantity}</span>,
                     },
                     ...(target !== 'CHANNEL' ? [
                       {
@@ -1311,10 +1428,12 @@ function ImportWizardInner() {
                     variant="primary"
                     size="sm"
                     onClick={applyImport}
-                    disabled={busy || previewRows.filter((r) => !r.error && r.productId).length === 0}
+                    disabled={busy || previewDirty || previewRows.filter((r) => !r.error && r.productId).length === 0}
                   >
-                    {busy ? <Spinner size={14} /> : <CheckCircle2 size={14} />}
-                    Apply {previewRows.filter((r) => !r.error && r.productId).length} changes
+                    {busy || previewDirty ? <Spinner size={14} /> : <CheckCircle2 size={14} />}
+                    {previewDirty
+                      ? t('stock.import.preview.recalculating')
+                      : <>Apply {previewRows.filter((r) => !r.error && r.productId).length} changes</>}
                   </Button>
                 </div>
               </div>
@@ -1392,7 +1511,53 @@ function ImportWizardInner() {
                       <p className="text-xs text-secondary mt-2 max-w-md">{applyProgress.errorSummary}</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-3">
+
+                  {/* IM.3.4 — failed/skipped rows, right here on the Done screen */}
+                  {applyResult.results.some((r) => !r.applied) && (
+                    <div className="w-full max-w-2xl text-left">
+                      <p className="text-sm font-semibold mb-2">
+                        {t('stock.import.apply.notAppliedRows', { n: applyResult.results.filter((r) => !r.applied).length })}
+                      </p>
+                      <div className="overflow-x-auto overflow-y-auto max-h-64 rounded-lg border border-default">
+                        <table className="w-full text-xs">
+                          <thead className="bg-surface-2 sticky top-0">
+                            <tr>
+                              <th className="px-2 py-1.5 text-left font-medium text-secondary">Input</th>
+                              <th className="px-2 py-1.5 text-left font-medium text-secondary">SKU</th>
+                              <th className="px-2 py-1.5 text-right font-medium text-secondary">Qty</th>
+                              <th className="px-2 py-1.5 text-left font-medium text-secondary">Error</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {applyResult.results.filter((r) => !r.applied).map((r, i) => (
+                              <tr key={i} className="border-t border-default">
+                                <td className="px-2 py-1.5 font-mono">{r.raw}</td>
+                                <td className="px-2 py-1.5 font-mono">{r.sku}</td>
+                                <td className="px-2 py-1.5 text-right tabular-nums">{r.quantity ?? '—'}</td>
+                                <td className="px-2 py-1.5 text-rose-600">{r.error ?? '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-3 flex-wrap justify-center">
+                    {applyResult.results.some((r) => !r.applied && typeof r.quantity === 'number') && (
+                      <Button variant="secondary" size="sm" disabled={busy} onClick={() => retryFailedRows(applyResult.results)}>
+                        <RefreshCw size={14} /> {t('stock.import.apply.retryFailed')}
+                      </Button>
+                    )}
+                    {applyResult.succeeded > 0 && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setRevertConfirm({ jobId: applyResult.jobId, label: parsedFile?.filename ?? applyResult.jobId.slice(-8) })}
+                      >
+                        <ArrowLeft size={14} /> {t('stock.import.revert.button')}
+                      </Button>
+                    )}
                     <Button variant="secondary" size="sm" onClick={() => { setMainTab('history'); loadHistory() }}>
                       <History size={14} /> {t('stock.import.apply.viewHistory')}
                     </Button>
@@ -1533,9 +1698,14 @@ function ImportWizardInner() {
                         <span className="text-[10px] text-secondary tabular-nums">{r.processedRows ?? 0}/{r.totalRows}</span>
                       </div>
                     ) : (
-                      <Pill tone={r.status === 'APPLIED' ? 'success' : r.status === 'PARTIAL' ? 'warning' : r.status === 'FAILED' ? 'danger' : 'neutral'}>
-                        {r.status}
-                      </Pill>
+                      <div className="flex items-center gap-1">
+                        <Pill tone={r.status === 'APPLIED' ? 'success' : r.status === 'PARTIAL' ? 'warning' : r.status === 'FAILED' ? 'danger' : 'neutral'}>
+                          {r.status}
+                        </Pill>
+                        {r.revertedByJobId && r.revertedByJobId !== 'PENDING' && (
+                          <span className="text-amber-600 text-xs" title={t('stock.import.revert.reverted')}>↩</span>
+                        )}
+                      </div>
                     ),
                   },
                   {
@@ -1558,6 +1728,28 @@ function ImportWizardInner() {
         </Card>
       )}
 
+      {/* ═══ Revert Confirm Modal (IM.3.4) ═══════════════════════════════════ */}
+      <Modal
+        open={revertConfirm !== null}
+        onClose={() => setRevertConfirm(null)}
+        title={t('stock.import.revert.confirmTitle')}
+        size="sm"
+      >
+        {revertConfirm && (
+          <div className="flex flex-col gap-4 p-1">
+            <p className="text-sm text-secondary">{t('stock.import.revert.confirmBody', { f: revertConfirm.label })}</p>
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setRevertConfirm(null)} disabled={reverting}>
+                {t('common.cancel')}
+              </Button>
+              <Button variant="primary" size="sm" onClick={doRevert} disabled={reverting}>
+                {reverting ? <Spinner size={14} /> : <ArrowLeft size={14} />} {t('stock.import.revert.confirm')}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {/* ═══ History Detail Modal ════════════════════════════════════════════ */}
       <Modal
         open={historyDetail !== null}
@@ -1573,6 +1765,24 @@ function ImportWizardInner() {
               <span className="text-secondary">{historyDetail.job.locationCode}</span>
               {historyDetail.job.createdBy && (
                 <span className="text-secondary">{t('stock.import.history.by', { u: historyDetail.job.createdBy })}</span>
+              )}
+              {historyDetail.job.revertedByJobId && historyDetail.job.revertedByJobId !== 'PENDING' && (
+                <Tag tone="warning">{t('stock.import.revert.reverted')}</Tag>
+              )}
+              <span className="flex-1" />
+              {(historyDetail.job.results ?? []).some((r) => !r.applied && typeof r.quantity === 'number') && (
+                <Button variant="secondary" size="sm" disabled={busy} onClick={() => retryFailedRows(historyDetail.job.results ?? [], historyDetail.job)}>
+                  <RefreshCw size={12} /> {t('stock.import.apply.retryFailed')}
+                </Button>
+              )}
+              {['APPLIED', 'PARTIAL', 'CANCELLED'].includes(historyDetail.job.status) && !historyDetail.job.revertedByJobId && historyDetail.job.succeeded > 0 && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setRevertConfirm({ jobId: historyDetail.job.id, label: historyDetail.job.filename ?? historyDetail.job.id.slice(-8) })}
+                >
+                  <ArrowLeft size={12} /> {t('stock.import.revert.button')}
+                </Button>
               )}
               <span className="text-emerald-600 font-medium">{historyDetail.job.succeeded} ok</span>
               {historyDetail.job.failed > 0 && <span className="text-rose-600 font-medium">{historyDetail.job.failed} failed</span>}

@@ -9,6 +9,8 @@ import {
   beginApplyImport,
   ensureDraftImportJob,
   recoverStuckImportJobs,
+  revertImport,
+  RevertNotAllowedError,
   ImportAlreadyAppliedError,
   normalizeAlias,
   bulkCreateAliases,
@@ -3486,6 +3488,26 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── POST /api/stock/import/jobs/:id/revert ──────────────────────
+  // IM.3.4 — one-click batch revert: warehouse net inverted through the
+  // normal engine (full audit + cascade + sync), channel writes restored
+  // from recorded before-state. At most once per job.
+  fastify.post<{ Params: { id: string } }>(
+    '/stock/import/jobs/:id/revert',
+    async (request, reply) => {
+      try {
+        const result = await revertImport(request.params.id, request.authUser?.email ?? null)
+        return result
+      } catch (error: any) {
+        if (error instanceof RevertNotAllowedError) {
+          return reply.code(409).send({ error: error.message })
+        }
+        fastify.log.error({ err: error }, '[stock/import/jobs/:id/revert] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
   // ── GET /api/stock/import/history ───────────────────────────────
   // Past import jobs (most recent first, limit 50).
   fastify.get('/stock/import/history', async (_request, reply) => {
@@ -3500,7 +3522,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           failed: true, skipped: true, status: true, appliedAt: true,
           createdAt: true, errorSummary: true,
           startedAt: true, progressAt: true, processedRows: true,
-          createdBy: true,
+          createdBy: true, revertedByJobId: true,
         },
       })
       return { jobs }

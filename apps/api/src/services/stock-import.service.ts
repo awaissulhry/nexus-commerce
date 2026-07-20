@@ -111,6 +111,11 @@ export interface ApplyResult {
     warehouseApplied?: boolean
     channelApplied?: boolean
     error?: string
+    /** IM.3.4 — original row inputs, so failed rows can be retried and
+     *  history drill-downs show what was asked for. */
+    quantity?: number
+    channel?: string
+    marketplace?: string
   }>
 }
 
@@ -1160,6 +1165,13 @@ async function executeApplyImport(args: {
           reason: 'MANUAL_ADJUSTMENT',
           referenceType: 'BulkImport',
           referenceId: jobId,
+          // IM.3.4 — full before-state so a batch revert can restore the
+          // listing exactly (incl. pin state) instead of guessing.
+          prior: {
+            quantity: t.listing.quantity,
+            quantityOverride: t.listing.quantityOverride,
+            followMasterQuantity: t.listing.followMasterQuantity,
+          },
         },
       },
     })
@@ -1469,9 +1481,14 @@ async function executeApplyImport(args: {
   let failed = 0
   let skipped = 0
   const results: ApplyResult['results'] = slots.map((s) => {
+    const inputs = {
+      quantity: s.row.quantity,
+      ...(s.row.channel ? { channel: s.row.channel } : {}),
+      ...(s.row.marketplace ? { marketplace: s.row.marketplace } : {}),
+    }
     if (s.skipped) {
       skipped++
-      return { sku: s.row.resolvedSku ?? '?', raw: s.row.raw, applied: false, error: s.error }
+      return { sku: s.row.resolvedSku ?? '?', raw: s.row.raw, applied: false, error: s.error, ...inputs }
     }
     if (s.error) {
       failed++
@@ -1482,6 +1499,7 @@ async function executeApplyImport(args: {
         warehouseApplied: s.warehouseApplied,
         channelApplied: s.channelApplied,
         error: s.error,
+        ...inputs,
       }
     }
     succeeded++
@@ -1491,6 +1509,7 @@ async function executeApplyImport(args: {
       applied: true,
       warehouseApplied: s.warehouseApplied,
       channelApplied: s.channelApplied,
+      ...inputs,
     }
   })
 
@@ -1546,6 +1565,274 @@ export async function recoverStuckImportJobs(staleMs = 5 * 60_000): Promise<numb
   }
   if (healed > 0) logger.warn('stock-import: healed stuck APPLYING jobs', { healed })
   return healed
+}
+
+// ── Batch revert (IM.3.4) ────────────────────────────────────────────────────
+
+export class RevertNotAllowedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'RevertNotAllowedError'
+  }
+}
+
+export interface RevertResult {
+  revertJobId: string
+  warehouse: { products: number; succeeded: number; failed: number }
+  channel: { restored: number; skippedNoPrior: number }
+}
+
+/**
+ * IM.3.4 — one-click revert of an applied import.
+ *
+ * Warehouse side is EXACT: the net change per product is read back from the
+ * movement ledger (referenceType=BulkImport, referenceId=jobId) and inverted
+ * through the normal apply engine — full audit trail, cascade, outbound
+ * sync, stockout + read-cache handling for free. The revert shows up in
+ * history as its own job ("↩ revert of …").
+ *
+ * Channel side restores each explicitly-written listing from the import's
+ * own queue-row payloads: `prior` (IM.3.4+ imports — exact, incl. pin
+ * state) or `oldQuantity` (older imports). Listings without recorded
+ * before-state are skipped and reported, never guessed.
+ *
+ * Guards: only finished jobs; at most once (atomic claim on
+ * revertedByJobId); a product whose inverse would drive stock negative
+ * fails its row through the engine's normal guard (honest partial revert).
+ */
+export async function revertImport(jobId: string, actor?: string | null): Promise<RevertResult> {
+  const job = await prisma.stockImportJob.findUnique({ where: { id: jobId } })
+  if (!job) throw new RevertNotAllowedError('Import not found')
+  if (!['APPLIED', 'PARTIAL', 'CANCELLED'].includes(job.status)) {
+    throw new RevertNotAllowedError('Only finished imports can be reverted')
+  }
+
+  // Atomic claim — two concurrent reverts can never both run.
+  const claim = await prisma.stockImportJob.updateMany({
+    where: { id: jobId, revertedByJobId: null },
+    data: { revertedByJobId: 'PENDING' },
+  })
+  if (claim.count !== 1) throw new RevertNotAllowedError('This import was already reverted')
+
+  try {
+    // ── Warehouse: exact net per product from the ledger ──
+    const movements = await prisma.stockMovement.findMany({
+      where: { referenceType: 'BulkImport', referenceId: jobId },
+      select: { productId: true, change: true },
+    })
+    const netByProduct = new Map<string, number>()
+    for (const m of movements) {
+      netByProduct.set(m.productId, (netByProduct.get(m.productId) ?? 0) + m.change)
+    }
+    for (const [pid, net] of [...netByProduct]) if (net === 0) netByProduct.delete(pid)
+
+    const productMeta = netByProduct.size > 0
+      ? await prisma.product.findMany({
+          where: { id: { in: [...netByProduct.keys()] } },
+          select: { id: true, sku: true, name: true },
+        })
+      : []
+    const metaById = new Map(productMeta.map((p) => [p.id, p] as const))
+
+    // ── Channel: explicit writes recorded by the import itself ──
+    const queueRows = await prisma.outboundSyncQueue.findMany({
+      where: { syncType: 'QUANTITY_UPDATE', payload: { path: ['referenceId'], equals: jobId } },
+      select: {
+        channelListingId: true, targetChannel: true, targetRegion: true,
+        externalListingId: true, payload: true, productId: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    })
+    interface ExplicitRestore {
+      listingId: string
+      prior: { quantity: number | null; quantityOverride: number | null; followMasterQuantity: boolean } | null
+      oldQuantity: number | null
+      channel: string
+      region: string | null
+      externalListingId: string | null
+      productId: string | null
+    }
+    const explicitRestores = new Map<string, ExplicitRestore>()
+    for (const q of queueRows) {
+      const payload = q.payload as Record<string, unknown> | null
+      // Cascade rows also carry referenceId — only explicit channel writes
+      // (source STOCK_IMPORT) are restored; the warehouse inverse re-runs
+      // the cascade for followed listings anyway.
+      if (payload?.source !== 'STOCK_IMPORT' || !q.channelListingId) continue
+      if (!explicitRestores.has(q.channelListingId)) {
+        explicitRestores.set(q.channelListingId, {
+          listingId: q.channelListingId,
+          prior: (payload.prior as ExplicitRestore['prior']) ?? null,
+          oldQuantity: (payload.oldQuantity as number | null) ?? null,
+          channel: String(q.targetChannel),
+          region: q.targetRegion,
+          externalListingId: q.externalListingId,
+          productId: q.productId,
+        })
+      }
+    }
+
+    if (netByProduct.size === 0 && explicitRestores.size === 0) {
+      throw new RevertNotAllowedError('Nothing to revert — the import recorded no stock or listing changes')
+    }
+
+    const revertName = `↩ revert of ${job.filename ?? jobId.slice(-8)}`
+    let revertJobId: string | null = null
+    let warehouse = { products: 0, succeeded: 0, failed: 0 }
+
+    if (netByProduct.size > 0) {
+      const rows: PreviewRow[] = [...netByProduct].map(([productId, net]) => ({
+        raw: metaById.get(productId)?.sku ?? productId,
+        quantity: -net,
+        productId,
+        productName: metaById.get(productId)?.name ?? null,
+        resolvedSku: metaById.get(productId)?.sku ?? '?',
+        tier: 'EXACT' as const,
+        candidates: [],
+        currentWarehouseQty: null,
+        wouldBeWarehouseQty: null,
+        currentChannelQty: null,
+        wouldBeChannelQty: null,
+        channelListings: [],
+        warnings: [],
+        error: null,
+        notes: `[REVERT ${jobId}]`,
+      }))
+      const res = await applyImport({
+        rows,
+        locationCode: job.locationCode,
+        mode: 'ADJUST',
+        target: 'WAREHOUSE',
+        filename: revertName,
+        actor,
+      })
+      revertJobId = res.jobId
+      warehouse = { products: rows.length, succeeded: res.succeeded, failed: res.failed }
+    }
+
+    // ── Channel restore writes ──
+    let restored = 0
+    let skippedNoPrior = 0
+    if (explicitRestores.size > 0) {
+      if (!revertJobId) {
+        const rj = await prisma.stockImportJob.create({
+          data: {
+            filename: revertName,
+            locationCode: job.locationCode,
+            mode: 'ADJUST',
+            target: 'CHANNEL',
+            totalRows: 0,
+            status: 'APPLYING',
+            startedAt: new Date(),
+            progressAt: new Date(),
+            ...(actor ? { createdBy: actor } : {}),
+          },
+          select: { id: true },
+        })
+        revertJobId = rj.id
+      }
+      const holdUntil = new Date(Date.now() + IMPORT_HOLD_MS)
+      const restoreResults: ApplyResult['results'] = []
+      const restoreQueue: Array<{ id: string; productId: string | null }> = []
+      for (const r of explicitRestores.values()) {
+        const targetQty = r.prior ? r.prior.quantity : r.oldQuantity
+        if (targetQty == null) {
+          skippedNoPrior++
+          restoreResults.push({ sku: r.externalListingId ?? r.listingId, raw: `listing:${r.channel}`, applied: false, error: 'No before-state recorded (pre-IM.3.4 import) — restore manually' })
+          continue
+        }
+        const qid = randomUUID()
+        try {
+          await prisma.$transaction(async (tx) => {
+            await coalescePendingQuantityRows(tx, [r.listingId])
+            await tx.channelListing.update({
+              where: { id: r.listingId },
+              data: {
+                quantity: targetQty,
+                lastSyncStatus: 'PENDING',
+                lastSyncedAt: null,
+                version: { increment: 1 },
+                ...(r.prior
+                  ? { quantityOverride: r.prior.quantityOverride, followMasterQuantity: r.prior.followMasterQuantity }
+                  : {}),
+              },
+            })
+            await tx.outboundSyncQueue.create({
+              data: {
+                id: qid,
+                productId: r.productId,
+                channelListingId: r.listingId,
+                targetChannel: r.channel as any,
+                targetRegion: r.region,
+                syncStatus: 'PENDING' as any,
+                syncType: 'QUANTITY_UPDATE',
+                holdUntil,
+                externalListingId: r.externalListingId,
+                maxRetries: 3,
+                payload: {
+                  source: 'STOCK_IMPORT',
+                  productId: r.productId,
+                  channel: r.channel,
+                  quantity: targetQty,
+                  reason: 'MANUAL_ADJUSTMENT',
+                  referenceType: 'BulkImportRevert',
+                  referenceId: revertJobId,
+                },
+              },
+            })
+          })
+          restoreQueue.push({ id: qid, productId: r.productId })
+          restored++
+          restoreResults.push({ sku: r.externalListingId ?? r.listingId, raw: `listing:${r.channel}`, applied: true, channelApplied: true, quantity: targetQty })
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          restoreResults.push({ sku: r.externalListingId ?? r.listingId, raw: `listing:${r.channel}`, applied: false, error: msg })
+        }
+      }
+      for (const q of restoreQueue) {
+        await addJobSafely(
+          outboundSyncQueue,
+          'sync-job',
+          { queueId: q.id, productId: q.productId ?? undefined, syncType: 'QUANTITY_UPDATE', source: 'STOCK_IMPORT' },
+          { delay: IMPORT_HOLD_MS, jobId: q.id },
+        )
+      }
+      // Fold channel outcomes into the revert job row honestly.
+      const existing = await prisma.stockImportJob.findUnique({
+        where: { id: revertJobId },
+        select: { results: true, succeeded: true, failed: true, skipped: true, totalRows: true, processedRows: true },
+      })
+      const channelFailed = restoreResults.filter((r) => !r.applied && !/No before-state/.test(r.error ?? '')).length
+      const succeededAll = (existing?.succeeded ?? 0) + restored
+      const failedAll = (existing?.failed ?? 0) + channelFailed
+      await prisma.stockImportJob.update({
+        where: { id: revertJobId },
+        data: {
+          results: ([...((existing?.results as ApplyResult['results']) ?? []), ...restoreResults]) as any,
+          succeeded: succeededAll,
+          failed: failedAll,
+          skipped: (existing?.skipped ?? 0) + skippedNoPrior,
+          totalRows: (existing?.totalRows ?? 0) + restoreResults.length,
+          processedRows: (existing?.processedRows ?? 0) + restoreResults.length,
+          status: failedAll === 0 ? 'APPLIED' : succeededAll > 0 ? 'PARTIAL' : 'FAILED',
+          appliedAt: new Date(),
+          progressAt: new Date(),
+        },
+      })
+    }
+
+    await prisma.stockImportJob.update({
+      where: { id: jobId },
+      data: { revertedByJobId: revertJobId! },
+    })
+    return { revertJobId: revertJobId!, warehouse, channel: { restored, skippedNoPrior } }
+  } catch (err) {
+    // Release the claim so a failed revert attempt can be retried.
+    await prisma.stockImportJob
+      .updateMany({ where: { id: jobId, revertedByJobId: 'PENDING' }, data: { revertedByJobId: null } })
+      .catch(() => {})
+    throw err
+  }
 }
 
 // ── Alias CRUD ────────────────────────────────────────────────────────────────
