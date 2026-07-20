@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { Listbox } from '@/design-system/components/Listbox'
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? ''
 
@@ -153,24 +154,32 @@ export default function SyncControlClient() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
-        <select className={inputCls} value={channel} onChange={(e) => { setPage(1); setChannel(e.target.value) }} aria-label="Channel">
-          <option value="">All channels</option>
-          <option value="AMAZON">Amazon</option>
-          <option value="EBAY">eBay</option>
-          <option value="SHOPIFY">Shopify</option>
-        </select>
-        <select className={inputCls} value={market} onChange={(e) => { setPage(1); setMarket(e.target.value) }} aria-label="Market">
-          <option value="">All markets</option>
-          {['IT', 'DE', 'FR', 'ES', 'DEFAULT'].map((m) => (
-            <option key={m} value={m}>{m}</option>
-          ))}
-        </select>
-        <select className={inputCls} value={mode} onChange={(e) => { setPage(1); setMode(e.target.value) }} aria-label="Mode">
-          <option value="">All modes</option>
-          {(Object.keys(MODE_LABEL) as Mode[]).map((m) => (
-            <option key={m} value={m}>{MODE_LABEL[m]}</option>
-          ))}
-        </select>
+        <Listbox
+          ariaLabel="Channel"
+          className="w-40"
+          value={channel}
+          onChange={(v) => { setPage(1); setChannel(v) }}
+          options={[
+            { value: '', label: 'All channels' },
+            { value: 'AMAZON', label: 'Amazon' },
+            { value: 'EBAY', label: 'eBay' },
+            { value: 'SHOPIFY', label: 'Shopify' },
+          ]}
+        />
+        <Listbox
+          ariaLabel="Market"
+          className="w-36"
+          value={market}
+          onChange={(v) => { setPage(1); setMarket(v) }}
+          options={[{ value: '', label: 'All markets' }, ...['IT', 'DE', 'FR', 'ES', 'DEFAULT'].map((m) => ({ value: m, label: m }))]}
+        />
+        <Listbox
+          ariaLabel="Mode"
+          className="w-44"
+          value={mode}
+          onChange={(v) => { setPage(1); setMode(v) }}
+          options={[{ value: '', label: 'All modes' }, ...(Object.keys(MODE_LABEL) as Mode[]).map((m) => ({ value: m, label: MODE_LABEL[m] }))]}
+        />
         <input
           className={`${inputCls} w-56`}
           placeholder="Search SKU…"
