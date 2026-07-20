@@ -121,6 +121,59 @@ export async function runLatencyWatchdog(): Promise<void> {
           ? 'Outbound queue workers are OFF (ENABLE_QUEUE_WORKERS !== "1") — cross-channel push bounded by 60s cron, not real-time'
           : 'Redis not configured (REDIS_URL / REDIS_HOST unset) — BullMQ workers cannot start'
         try {
+        // P0c — publish-health tripwires (per channel, last hour).
+        // (a) failure-rate breach: ≥20 attempts AND >20% failed.
+        // (b) auth-class failures (403/Unauthorized/invalid_grant): the
+        //     silent-credential-degradation class — fires from the FIRST few.
+        try {
+          const oneHourAgo = new Date(Date.now() - 3600e3)
+          const attempts = await prisma.channelPublishAttempt.findMany({
+            where: { attemptedAt: { gte: oneHourAgo }, outcome: { in: ['success', 'failed'] } },
+            select: { channel: true, outcome: true, errorMessage: true },
+          })
+          const byChannel = new Map<string, { ok: number; fail: number; auth: number }>()
+          for (const a of attempts) {
+            const b = byChannel.get(a.channel) ?? { ok: 0, fail: 0, auth: 0 }
+            if (a.outcome === 'success') b.ok++
+            else {
+              b.fail++
+              if (/HTTP 403|Unauthorized|invalid_grant/i.test(a.errorMessage ?? '')) b.auth++
+            }
+            byChannel.set(a.channel, b)
+          }
+          const { syncHealthService } = await import('../services/sync-health.service.js')
+          for (const [channel, b] of byChannel) {
+            const total = b.ok + b.fail
+            const dedupe = async (conflictType: 'PUBLISH_FAILURE_RATE' | 'CHANNEL_AUTH_FAILURE') =>
+              prisma.syncHealthLog.findFirst({
+                where: { channel, conflictType, resolutionStatus: 'UNRESOLVED', createdAt: { gte: new Date(Date.now() - 6 * 3600e3) } },
+                select: { id: true },
+              })
+            if (b.auth >= 3 && !(await dedupe('CHANNEL_AUTH_FAILURE'))) {
+              await syncHealthService.logConflict({
+                channel,
+                conflictType: 'CHANNEL_AUTH_FAILURE',
+                message: `${b.auth} auth-class publish failures (403/Unauthorized/invalid_grant) in the last hour — check the channel authorization/roles/refresh token`,
+                localData: { authFailures: b.auth, windowHours: 1 },
+                remoteData: { source: 'latency-watchdog' },
+              })
+            }
+            if (total >= 20 && b.fail / total > 0.2 && !(await dedupe('PUBLISH_FAILURE_RATE'))) {
+              await syncHealthService.logConflict({
+                channel,
+                conflictType: 'PUBLISH_FAILURE_RATE',
+                message: `publish failure rate ${Math.round((b.fail / total) * 100)}% (${b.fail}/${total}) in the last hour`,
+                localData: { failed: b.fail, total, windowHours: 1 },
+                remoteData: { source: 'latency-watchdog' },
+              })
+            }
+          }
+        } catch (healthErr) {
+          logger.warn('[latency-watchdog] publish-health tripwires failed', {
+            error: healthErr instanceof Error ? healthErr.message : String(healthErr),
+          })
+        }
+
           publishOrderEvent({ type: 'sync.realtime.degraded', reason, ts: Date.now() })
           degradedCount++
         } catch (emitErr) {

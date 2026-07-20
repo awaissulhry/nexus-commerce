@@ -29,7 +29,14 @@ export type ConflictType =
   | 'DUPLICATE_SKU'
   | 'DUPLICATE_ASIN'
   // RT.7 — persisted outbound-latency SLO breach (was SSE-only, died with the process)
-  | 'LATENCY_BREACH';
+  | 'LATENCY_BREACH'
+  // P0c — Amazon's actual quantity diverges from intended (read-back reconcile)
+  | 'CHANNEL_QTY_READBACK'
+  // P0c — per-channel publish failure-rate breach (last hour)
+  | 'PUBLISH_FAILURE_RATE'
+  // P0c — auth-class publish failures (403/Unauthorized/invalid_grant): the
+  // silent-credential-degradation tripwire (the 2026-07-20 incident class)
+  | 'CHANNEL_AUTH_FAILURE';
 
 export type ResolutionStatus = 'UNRESOLVED' | 'AUTO_RESOLVED' | 'MANUAL_RESOLVED' | 'IGNORED';
 

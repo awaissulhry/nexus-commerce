@@ -215,6 +215,7 @@ import { startReservationSweepCron } from "./jobs/reservation-sweep.job.js";
 import { startReservationReconcileCron } from "./jobs/reservation-reconcile.job.js";
 import { startOutboundQueueJanitorCron } from "./jobs/outbound-queue-janitor.job.js";
 import { startEbayItemStatusReconcileCron } from "./jobs/ebay-item-status-reconcile.job.js";
+import { startAmazonQtyReadbackCron } from "./jobs/amazon-qty-readback.job.js";
 import { startEbayReadbackCron } from "./jobs/ebay-readback.job.js";
 import { startEbayAdsSyncCrons } from "./jobs/ebay-ads-sync.job.js";
 import { startReconcileCron } from "./jobs/reconcile-cron.job.js";
@@ -1161,6 +1162,10 @@ async function start() {
     // listings that ended on eBay without a push ever hitting them.
     // Default-ON; opt out via NEXUS_EBAY_ITEM_RECONCILE=0.
     startEbayItemStatusReconcileCron();
+    // P0c — Amazon quantity READ-BACK reconcile (closed loop: Amazon's actual
+    // vs intended; the check that would have caught the 403 era in hours).
+    // Default-ON; opt out via NEXUS_QTY_READBACK=0.
+    startAmazonQtyReadbackCron();
     // P5.2 — eBay inventory read-back → ChannelStockEvent (NEXUS_EBAY_READBACK=0 to disable)
     startEbayReadbackCron();
     // E2 eBay Ads read-side sync (prod default-ON; NEXUS_ENABLE_EBAY_ADS_SYNC gates)
