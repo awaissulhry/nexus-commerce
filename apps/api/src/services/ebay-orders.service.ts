@@ -89,7 +89,10 @@ interface EbayOrder {
   }
   lineItems: Array<{
     lineItemId: string
-    sku: string
+    /** Absent on non-SKU/pre-relabel listings — resolved via legacyItemId
+     *  membership lookup in processOrder (AS.3d). */
+    sku?: string
+    legacyItemId?: string
     title: string
     quantity: number
     lineItemCost: EbayAmountLike
@@ -546,7 +549,44 @@ export class EbayOrdersService {
         continue
       }
 
-      const product = await this.findProductBySku(lineItem.sku, lineItem.lineItemId)
+      // AS.3d — real line items may carry NO sku (pre-relabel listings /
+      // non-SKU lines); OrderItem.sku is a required column and the product
+      // link + stock deduction need a real identity. legacyItemId (the eBay
+      // ItemID) resolves via SharedListingMembership when unambiguous
+      // (exactly one ACTIVE membership). Ambiguous/unknown lines are
+      // recorded product-less with a loud warn — never a guessed deduction.
+      const legacyItemId = (lineItem as { legacyItemId?: string }).legacyItemId
+      let effectiveSku = lineItem.sku ?? null
+      let membershipProductId: string | null = null
+      if (!effectiveSku && legacyItemId) {
+        const members = await (prisma as any).sharedListingMembership.findMany({
+          where: { itemId: legacyItemId, status: 'ACTIVE' },
+          select: { sku: true, productId: true },
+          take: 2,
+        })
+        if (members.length === 1) {
+          effectiveSku = members[0].sku
+          membershipProductId = members[0].productId ?? null
+          logger.info('eBay line item without sku resolved via shared membership', {
+            orderId: order.orderId,
+            legacyItemId,
+            sku: effectiveSku,
+          })
+        }
+      }
+      if (!effectiveSku) {
+        effectiveSku = legacyItemId ? `EBAY-ITEM-${legacyItemId}` : `EBAY-LINE-${lineItem.lineItemId}`
+        logger.warn('eBay line item has no sku and no unambiguous membership — recorded without product link', {
+          orderId: order.orderId,
+          lineItemId: lineItem.lineItemId,
+          legacyItemId: legacyItemId ?? null,
+          title: lineItem.title?.slice(0, 80),
+        })
+      }
+
+      const product = membershipProductId
+        ? await (prisma as any).product.findUnique({ where: { id: membershipProductId } })
+        : await this.findProductBySku(effectiveSku, lineItem.lineItemId)
       const taxesRaw = lineItem.taxes
       const taxAmount = Array.isArray(taxesRaw)
         ? taxesRaw.reduce((sum, t) => sum + (parseEbayAmount(t.amount ?? t.taxAmount) ?? 0), 0)
@@ -568,11 +608,13 @@ export class EbayOrdersService {
           orderId: dbOrder.id,
           productId: product?.id ?? null,
           externalLineItemId: lineItem.lineItemId,
-          sku: lineItem.sku,
+          sku: effectiveSku,
           quantity: lineItem.quantity,
           price: itemPrice,
           ebayMetadata: {
             lineItemId: lineItem.lineItemId,
+            legacyItemId: legacyItemId ?? null,
+            rawSku: lineItem.sku ?? null,
             title: lineItem.title,
             taxAmount,
             discountAmount,
@@ -593,13 +635,27 @@ export class EbayOrdersService {
 
       if (!product) {
         logger.warn('Could not link eBay line item to a Nexus product', {
-          sku: lineItem.sku,
+          sku: effectiveSku,
           ebayItemId: lineItem.lineItemId,
           orderId: order.orderId,
         })
         continue
       }
       this.stats.itemsLinked++
+
+      // AS.3d — an order that ARRIVES already cancelled never shipped; its
+      // units never left the pool, so deducting would be a phantom sale
+      // (there is no prior deduction for the cancellation cascade to undo).
+      // Live orders that cancel AFTER ingestion keep the existing
+      // newlyCancelled → handleOrderCancelled path.
+      if (orderData.status === 'CANCELLED') {
+        logger.info('eBay order arrived already CANCELLED — line recorded, no stock deduction', {
+          orderId: order.orderId,
+          lineItemId: lineItem.lineItemId,
+          sku: effectiveSku,
+        })
+        continue
+      }
 
       // Inventory deduction routes through applyStockMovement so the
       // StockLevel ledger, ChannelListing.masterQuantity, and the
