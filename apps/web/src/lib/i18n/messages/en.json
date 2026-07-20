@@ -22,7 +22,6 @@
   "common.searchPlaceholder": "Search…",
   "common.noResults": "No results",
   "common.tryAgain": "Try again",
-
   "nav.products": "Products",
   "nav.listings": "Listings",
   "nav.orders": "Orders",
@@ -39,7 +38,6 @@
   "nav.dashboard": "Dashboard",
   "nav.activity": "Activity",
   "nav.health": "Health",
-
   "products.title": "Products",
   "products.live": "Live",
   "products.polling": "Polling",
@@ -50,7 +48,6 @@
   "products.exportCsv": "Export CSV",
   "products.noResults": "No products match these filters",
   "products.adjustFilters": "Adjust filters or import products.",
-
   "drafts.title": "Listing wizard drafts",
   "drafts.description": "In-progress wizards that haven't been submitted yet. Click any row to resume where you left off. Wizards expire after 30 days of inactivity.",
   "drafts.staleOnly": "Stale only",
@@ -144,7 +141,6 @@
   "drafts.aiSuggestApplied": "Suggestion applied",
   "drafts.aiSuggestApplyFailed": "Apply failed",
   "drafts.aiSuggestFailed": "AI suggest failed",
-
   "organize.title": "Catalog Organization",
   "organize.description": "Promote standalones to parents, attach orphans to existing parents, and approve auto-detected variation groups. Multi-channel awareness throughout.",
   "organize.tab.groups": "Suggested Groups",
@@ -157,12 +153,10 @@
   "organize.detach": "Detach",
   "organize.bulkAttachN": "Attach {n} to parent",
   "organize.bulkPromoteN": "Promote {n} to parents",
-
   "wizard.stepOf": "Step {current} of {total}",
   "wizard.saveAndExit": "Save & exit",
   "wizard.saveFailed": "Save failed",
   "wizard.finalStep": "Final step",
-
   "analytics.title": "Outbound analytics",
   "analytics.description": "Cycle time, cost, late rate, and carrier performance across the selected window.",
   "analytics.days": "{n}d",
@@ -195,7 +189,6 @@
   "analytics.picker.medianCycle": "Median cycle",
   "analytics.insights.title": "Insights",
   "analytics.insights.subtitle": "Cost + reliability recommendations from current data",
-
   "pack.printPackSlip": "Print pack slip",
   "pack.weightCheck.expected": "Expected ~{expected} kg from product master",
   "pack.weightCheck.ok": "Weight matches expected ({declared} kg vs {expected} kg, {pct}% variance)",
@@ -237,12 +230,10 @@
   "outbound.alerts.comparison.CHANGE_ABS": "Notify on change of ±",
   "outbound.alerts.comparison.CHANGE_PCT": "Notify on % change of ±",
   "common.add": "Add",
-
   "outbound.title": "Outbound",
   "outbound.description": "Pick, pack, and ship orders across all channels. Pending = needs a shipment created. Shipments = mid-flight or done.",
   "outbound.tab.pending": "Pending",
   "outbound.tab.shipments": "Shipments",
-
   "outbound.pending.urgency.all": "All",
   "outbound.pending.urgency.overdue": "Overdue",
   "outbound.pending.urgency.today": "Today",
@@ -282,7 +273,6 @@
   "outbound.onboarding.connectCarrier": "Connect Sendcloud",
   "outbound.onboarding.defineRules": "Define shipping rules",
   "outbound.onboarding.warehouseRouting": "Set warehouse routing",
-
   "outbound.shipments.pipeline.all": "All",
   "outbound.shipments.pipeline.draft": "Draft",
   "outbound.shipments.pipeline.ready": "Ready",
@@ -319,7 +309,6 @@
   "outbound.shipments.toast.bulkVoidCap": "Pick at most {cap} shipments per bulk-void (carrier API is per-parcel).",
   "outbound.shipments.empty.title": "No shipments here",
   "outbound.shipments.empty.description": "Shipments get created from the Pending tab, or via bulk-create from the orders page.",
-
   "outbound.recycleBin.label": "Recycle bin",
   "outbound.recycleBin.enter": "Open recycle bin",
   "outbound.recycleBin.exit": "Back to active shipments",
@@ -337,7 +326,6 @@
   "outbound.bulk.confirmHardDelete.confirm": "Delete {n} permanently",
   "outbound.bulk.confirmHardDelete.labelWarningTitle": "{n} of these had labels printed",
   "outbound.bulk.confirmHardDelete.labelWarningBody": "Labels were already printed; cancelling them is a carrier operation, not a database operation. Deleting locally won't void the label or refund the carrier charge.",
-
   "outbound.shipments.col.order": "Order",
   "outbound.shipments.col.status": "Status",
   "outbound.shipments.col.items": "Items",
@@ -357,7 +345,6 @@
   "outbound.shipments.toast.printedPartial": "Printed {ok} of {total} labels",
   "outbound.shipments.toast.markedAll": "Marked shipped {n} {label}",
   "outbound.shipments.toast.exportedAll": "Exported {n} {label}",
-
   "outbound.drawer.shipBy": "Ship by",
   "outbound.drawer.customer": "Customer",
   "outbound.drawer.shipTo": "Ship to",
@@ -463,7 +450,6 @@
   "outbound.drawer.urgency.overdue": "Overdue",
   "outbound.drawer.urgency.today": "Today",
   "outbound.drawer.urgency.tomorrow": "Tomorrow",
-
   "pack.title": "Pack station",
   "pack.scanItems": "Scan each item",
   "pack.scanPlaceholder": "Scan SKU or barcode…",
@@ -492,7 +478,6 @@
   "pack.customs.total": "Total",
   "pack.customs.hsMissing": "MISSING",
   "pack.customs.hint": "Set HS codes on the affected products before printing the label — Sendcloud will reject otherwise.",
-
   "rules.title": "Shipping rules",
   "rules.description": "WHEN ⟨conditions⟩ THEN ⟨actions⟩. Walked in priority ASC; first match wins. Applies at shipment creation.",
   "rules.newRule": "New rule",
@@ -564,7 +549,6 @@
   "rules.simulator.matched": "Rule \"{name}\" matched (priority {priority})",
   "rules.simulator.noMatch": "No rule matched. Walked {n} active rule(s); fallback to SENDCLOUD default.",
   "rules.simulator.trace": "Trace ({n} rules evaluated)",
-
   "listings.lens.grid": "Grid",
   "listings.lens.health": "Health",
   "listings.lens.matrix": "Matrix",
@@ -579,7 +563,6 @@
   "listings.wizard.toast.failed": "⚠ Listing submission failed — open /products/drafts to retry",
   "listings.stats.total": "total",
   "listings.stats.errors": "errors",
-
   "listings.matrix.coverage": "Coverage:",
   "listings.matrix.sort": "Sort:",
   "listings.matrix.coverage.all": "All products",
@@ -601,7 +584,6 @@
   "listings.matrix.empty.title": "No matches",
   "listings.matrix.empty.descriptionFiltered": "No products match \"{label}\".",
   "listings.matrix.empty.description": "No products available.",
-
   "listings.bulk.publish": "Publish",
   "listings.bulk.unpublish": "Unpublish",
   "listings.bulk.resync": "Resync",
@@ -615,7 +597,6 @@
   "listings.bulk.unpublishConfirm.title": "Unpublish {count} listing?",
   "listings.bulk.unpublishConfirm.titlePlural": "Unpublish {count} listings?",
   "listings.bulk.unpublishConfirm.description": "These listings will go offline on their marketplaces. You can republish from the success banner within 30 seconds.",
-
   "listings.savedViews.button": "Views",
   "listings.savedViews.heading": "Saved views",
   "listings.savedViews.empty": "No saved views yet",
@@ -625,7 +606,6 @@
   "listings.savedViews.deleteConfirm.title": "Delete view \"{name}\"?",
   "listings.savedViews.deleteConfirm.description": "This view will be removed permanently.",
   "listings.savedViews.saveFailed": "Save failed",
-
   "listings.drawer.combosCount": "This product is on {count} channel/marketplace combo. Each card below shows drift vs master.",
   "listings.drawer.combosCountPlural": "This product is on {count} channel/marketplace combos. Each card below shows drift vs master.",
   "listings.drawer.empty": "No other channel listings for this product yet.",
@@ -639,7 +619,6 @@
   "listings.drawer.override": "override",
   "listings.drawer.unfollowed": "unfollowed",
   "listings.drawer.master": "Master",
-
   "carriers.title": "Carriers",
   "carriers.description": "Connect shipping providers. Sendcloud aggregates BRT, GLS, Poste, DHL, UPS, FedEx and more in one integration. Amazon Buy Shipping covers FBM-via-Amazon at discounted rates.",
   "carriers.search.placeholder": "Search carriers…",
@@ -661,7 +640,7 @@
   "carriers.action.connect": "Connect",
   "carriers.action.update": "Update credentials",
   "carriers.action.disconnect": "Disconnect",
-  "carriers.action.test": "Test connection",
+  "carriers.action.test": "Test",
   "carriers.action.docs": "API docs",
   "carriers.field.publicKey": "Public key",
   "carriers.field.privateKey": "Private key",
@@ -689,7 +668,6 @@
   "carriers.test.success": "Verified — connected as {username}",
   "carriers.test.failed": "Test failed: {reason}",
   "carriers.test.dryRun": "Sandbox mode (mock — no real Sendcloud call)",
-
   "carriers.drawer.loading": "Loading…",
   "carriers.drawer.loadingRules": "Loading rules…",
   "carriers.drawer.loadingMetrics": "Loading metrics…",
@@ -698,7 +676,6 @@
   "carriers.drawer.discardTitle": "Discard unsaved changes?",
   "carriers.drawer.discardDescription": "Your credential changes will be lost.",
   "carriers.drawer.discardConfirm": "Discard",
-
   "carriers.col.label": "Label",
   "carriers.col.mode": "Mode",
   "carriers.col.status": "Status",
@@ -713,7 +690,6 @@
   "carriers.col.triggers": "Triggers",
   "carriers.col.date": "Date",
   "carriers.col.ref": "Ref",
-
   "carriers.badge.active": "Active",
   "carriers.badge.error": "Error",
   "carriers.badge.noCreds": "No creds",
@@ -723,7 +699,6 @@
   "carriers.badge.failed": "Failed",
   "carriers.badge.dryRun": "dryRun",
   "carriers.badge.purged": "purged",
-
   "carriers.field.label": "Label",
   "carriers.field.mode": "Mode",
   "carriers.field.notes": "Notes",
@@ -733,8 +708,6 @@
   "carriers.field.integrationDefault": "— integration default —",
   "carriers.field.primaryAccount": "— primary account —",
   "carriers.field.pickService": "— pick —",
-
-  "carriers.action.test": "Test",
   "carriers.action.testConnection": "Test connection",
   "carriers.action.removeAccount": "Remove account",
   "carriers.action.removeMapping": "Remove mapping",
@@ -754,7 +727,6 @@
   "carriers.action.purge": "Purge",
   "carriers.action.rotateSecret": "Rotate webhook secret",
   "carriers.action.hideSecret": "Done — hide secret",
-
   "carriers.empty.noMappings": "No mappings yet. Add one below.",
   "carriers.empty.noPickups": "No active pickups.",
   "carriers.empty.noWarehouses": "No warehouses configured. Add one at /fulfillment/stock first.",
@@ -764,7 +736,6 @@
   "carriers.empty.noServices": "No services available. Connect the carrier first or click Refresh catalog.",
   "carriers.empty.noSenderAddresses": "No sender addresses available. Connect Sendcloud first, then add a sender address in panel.sendcloud.sc → Settings → Addresses.",
   "carriers.empty.activityForUnconnected": "Activity log appears after the carrier is connected.",
-
   "carriers.kpi.shipments": "Shipments",
   "carriers.kpi.avgCost": "Avg cost",
   "carriers.kpi.onTime": "On-time",
@@ -773,7 +744,6 @@
   "carriers.kpi.byMarketplace": "By marketplace",
   "carriers.kpi.deliveredHint": "{n} delivered",
   "carriers.kpi.onTimeHint": "{onTime} of {total}",
-
   "carriers.tab.credentials": "Credentials",
   "carriers.tab.services": "Services",
   "carriers.tab.warehouses": "Warehouses",
@@ -783,7 +753,6 @@
   "carriers.tab.performance": "Performance",
   "carriers.tab.activity": "Activity",
   "carriers.tab.webhooks": "Webhooks",
-
   "stock.title": "Stock",
   "stock.description": "Multi-location inventory ledger across Riccione, Amazon FBA, and per-channel allocations.",
   "stock.action.cycleCounts": "Cycle counts",
@@ -919,6 +888,15 @@
   "stock.import.apply.skipped": "{n} skipped",
   "stock.import.apply.viewHistory": "View import history",
   "stock.import.apply.importAgain": "Import another file",
+  "stock.import.apply.applying": "Applying import…",
+  "stock.import.apply.rowsPerSec": "{n} rows/s",
+  "stock.import.apply.eta": "~{s}s remaining",
+  "stock.import.apply.backgroundNote": "You can leave this page — the import keeps running on the server.",
+  "stock.import.apply.cancel": "Cancel import",
+  "stock.import.apply.cancelRequested": "Cancel requested — finishing the current batch",
+  "stock.import.apply.donePartial": "Import completed with errors",
+  "stock.import.apply.doneFailed": "Import failed",
+  "stock.import.apply.doneCancelled": "Import cancelled",
   "stock.import.history.title": "Import history",
   "stock.import.history.colFile": "File",
   "stock.import.history.colDate": "Date",
@@ -1266,7 +1244,6 @@
   "stock.costLayers.col.source": "Source",
   "stock.costLayers.empty": "No cost layers yet — they'll appear once the product receives stock through inbound or transfer.",
   "stock.costLayers.seedNote": "Seed (S.20 backfill)",
-
   "cycleCount.list.statusAll": "All",
   "cycleCount.list.statusDraft": "Draft",
   "cycleCount.list.statusInProgress": "In Progress",
@@ -1356,20 +1333,17 @@
   "cycleCount.session.reasonModal.back": "Back",
   "cycleCount.session.reasonModal.cancelConfirm": "Cancel count",
   "cycleCount.session.reasonModal.ignoreConfirm": "Ignore variance",
-
   "orders.title": "Orders",
   "orders.subtitle": "Multi-channel order command center",
   "orders.action.reviewRules": "Review rules",
   "orders.action.refresh": "Refresh",
   "orders.action.exportCsv": "Export CSV",
   "customers.action.exportCsv": "Export CSV",
-
   "orders.lens.grid": "Grid",
   "orders.lens.customer": "Customers",
   "orders.lens.financials": "Financials",
   "orders.lens.returns": "Returns",
   "orders.lens.reviews": "Reviews",
-
   "orders.search.placeholder": "Search order ID, customer, email, SKU…",
   "orders.search.customerEmail": "Search customer email…",
   "orders.filter.label": "Filters",
@@ -1382,7 +1356,6 @@
   "orders.filter.toggle.hasReturn": "Has return",
   "orders.filter.toggle.hasRefund": "Has refund",
   "orders.filter.toggle.reviewEligible": "Review-eligible (delivered, no return/refund, no prior request)",
-
   "orders.empty.grid.title": "No orders match these filters",
   "orders.empty.grid.description": "Adjust filters or wait for new orders to ingest.",
   "orders.empty.customers.title": "No customers",
@@ -1392,7 +1365,6 @@
   "orders.empty.reviews.title": "No review requests yet",
   "orders.empty.reviews.description": "Create a rule, run it, or send manually from an order detail.",
   "orders.empty.reviews.action": "Manage rules",
-
   "orders.table.header.customer": "Customer",
   "orders.table.header.orders": "Orders",
   "orders.table.header.ltv": "LTV",
@@ -1407,19 +1379,15 @@
   "orders.table.header.rule": "Rule",
   "orders.table.header.sentScheduled": "Sent / Scheduled",
   "orders.table.header.reason": "Reason",
-
   "orders.table.viewOrder": "View order",
   "orders.table.manage": "Manage",
-
   "orders.bulk.selected": "{n} selected",
   "orders.bulk.createShipments": "Create shipments",
   "orders.bulk.markShipped": "Mark shipped",
   "orders.bulk.requestReviews": "Request reviews",
-
   "orders.bulk.creatingShipments": "Creating shipments…",
   "orders.bulk.markingShipped": "Marking shipped…",
   "orders.bulk.requestingReviews": "Requesting reviews…",
-
   "orders.bulk.delete": "Delete",
   "orders.bulk.restore": "Restore",
   "orders.bulk.permanentlyDelete": "Permanently delete",
@@ -1434,26 +1402,20 @@
   "orders.bulk.confirmHardDelete.channelWarningTitle": "{n} of these were imported from a channel",
   "orders.bulk.confirmHardDelete.channelWarningBody": "The source-of-truth lives on the channel (Amazon, eBay, Shopify). Deleting locally won't remove the order from the channel — and the next sync may re-import it.",
   "orders.bulk.confirmHardDelete.confirm": "Delete {n} permanently",
-
   "orders.recycleBin.label": "Recycle bin",
   "orders.recycleBin.enter": "Open recycle bin",
   "orders.recycleBin.exit": "Back to active orders",
-
   "orders.pagination.summary": "{total} orders · page {page} of {totalPages}",
   "orders.pagination.pageSize": "{n}/page",
   "orders.pagination.previous": "Previous",
   "orders.pagination.next": "Next",
   "orders.pagination.pageOf": "Page {page} of {totalPages}",
-
   "orders.columns.button": "Columns ({n})",
-
   "orders.financials.pageTotal": "Page total",
   "orders.financials.note": "Gross only — fees + net are computed per order on the detail page. Channel-level fee aggregation will land on the dashboard once FinancialTransaction rows are seeded by the SP-API + eBay sync.",
-
   "orders.reviews.manageRules": "Manage rules",
   "orders.reviews.runEngine": "Run engine now",
   "orders.reviews.engineResult": "Engine ran: {processed} processed · {sent} sent · {failed} failed · {suppressed} suppressed",
-
   "customers.title": "Customers",
   "customers.subtitle.count": "{total} customers across all channels",
   "customers.subtitle.empty": "Customer-360 view aggregated across channels",
@@ -1500,10 +1462,8 @@
   "customers.risk.recompute": "Re-score",
   "customers.risk.recomputed": "Risk re-scored",
   "customers.risk.reviewSaved": "Review state saved",
-
   "common.previous": "Previous",
   "common.next": "Next",
-
   "pricing.title": "Pricing",
   "pricing.subtitle": "Per-marketplace prices resolved by the engine. Click any cell to edit, click a row for full breakdown + history.",
   "pricing.shellSubtitle": "Master prices, rules, promotions, Buy Box tracking, and engine alerts.",
@@ -1537,11 +1497,9 @@
   "pricing.error.title": "Failed to load pricing",
   "pricing.error.retry": "Retry",
   "pricing.crumb.root": "Pricing",
-
   "pricing.alerts.title": "Pricing alerts",
   "pricing.alerts.subtitle": "Engine resolution issues + master-cascade drift detected in the last 24 hours.",
   "pricing.alerts.crumb": "Alerts",
-
   "pricing.rules.title": "Pricing rules",
   "pricing.rules.subtitle": "Engine-level rules — match-low, percentage-below, cost-plus margin, fixed price, dynamic margin. Evaluated as PRICING_RULE source in the resolver chain.",
   "pricing.rules.crumb": "Rules",
@@ -1579,7 +1537,6 @@
   "pricing.rules.pagination.previous": "Previous",
   "pricing.rules.pagination.next": "Next",
   "pricing.rules.deleteFailed": "Failed to deactivate rule: {error}",
-
   "pricing.rules.modal.editTitle": "Edit pricing rule",
   "pricing.rules.modal.createTitle": "Create pricing rule",
   "pricing.rules.modal.name": "Rule name",
@@ -1620,19 +1577,15 @@
   "pricing.rules.modal.errors.createFailed": "Failed to create rule",
   "pricing.rules.modal.errors.updateFailed": "Failed to update rule",
   "pricing.rules.modal.errors.simulateFailed": "Failed to simulate rule",
-
   "pricing.promotions.title": "Promotions",
   "pricing.promotions.subtitle": "Scheduled retail events + price actions. Hourly cron materializes ChannelListing.salePrice for active windows; engine reads as SCHEDULED_SALE source.",
   "pricing.promotions.crumb": "Promotions",
-
   "pricing.buybox.title": "Buy Box",
   "pricing.buybox.subtitle": "Per-marketplace win rate + top competitors. Powered by BuyBoxHistory rows written on every SP-API getItemOffersBatch refresh.",
   "pricing.buybox.crumb": "Buy Box",
-
   "pricing.action.refresh": "Refresh",
   "pricing.action.recomputeAll": "Recompute all",
   "pricing.action.recomputing": "Recomputing…",
-
   "pricing.kpi.drift": "Drift",
   "pricing.kpi.driftHint": "Listing.price ≠ master",
   "pricing.kpi.alerts": "Alerts",
@@ -1646,7 +1599,6 @@
   "pricing.kpi.buyBox": "Buy Box",
   "pricing.kpi.buyBoxHintEmpty": "No SP-API observations yet",
   "pricing.kpi.buyBoxHint": "{wins}/{obs} obs · 7d",
-
   "pricing.alerts.empty": "No pricing alerts",
   "pricing.alerts.emptyHint": "Every snapshot resolved cleanly within its constraints.",
   "pricing.alerts.bucket.drift": "Drift",
@@ -1683,20 +1635,17 @@
   "pricing.alerts.fallbackReason": "Engine returned 0 — no master / variant / rule found",
   "pricing.alerts.clampedReason": "Clamped from {from} to {to} {currency}",
   "pricing.alerts.loading": "Loading alerts…",
-
   "pricing.search.placeholder": "Search SKU…",
   "pricing.filter.allChannels": "All channels",
   "pricing.filter.allMarketplaces": "All marketplaces",
   "pricing.filter.allSources": "All sources",
   "pricing.filter.clampedOnly": "Clamped only",
-
   "pricing.table.sku": "SKU",
   "pricing.table.channelMarketplace": "Channel · Marketplace",
   "pricing.table.fulfillmentMethod": "FM",
   "pricing.table.price": "Price",
   "pricing.table.source": "Source",
   "pricing.table.warnings": "Warnings",
-
   "pricing.source.SCHEDULED_SALE": "Sale",
   "pricing.source.OFFER_OVERRIDE": "Offer",
   "pricing.source.CHANNEL_OVERRIDE": "Manual",
@@ -1704,7 +1653,6 @@
   "pricing.source.PRICING_RULE": "Engine rule",
   "pricing.source.MASTER_INHERIT": "Master",
   "pricing.source.FALLBACK": "Fallback",
-
   "pricing.bulk.selected": "{n} row{s} selected",
   "pricing.bulk.setFixed": "Set fixed price",
   "pricing.bulk.percentDiscount": "Discount %",
@@ -1723,7 +1671,6 @@
   "pricing.bulk.confirm.audit": "Writes one ChannelListingOverride row per snapshot for audit. Pushes happen out-of-band via the outbound queue.",
   "pricing.bulk.confirm.cancel": "Cancel",
   "pricing.bulk.confirm.apply": "Apply to {n} snapshot{s}",
-
   "pricing.grid.col.product": "Product",
   "pricing.grid.col.productSub": "Name · SKU · ASIN",
   "pricing.grid.col.price": "Price",
@@ -1745,7 +1692,6 @@
   "pricing.grid.chipClamped": "clamped from {from}",
   "pricing.grid.chipWarnings": "{n} warning{s}",
   "pricing.grid.primaryCheckboxAria": "Select primary {channel} {marketplace} snapshot for bulk override",
-
   "pricing.drawer.resolvedPrice": "Resolved price",
   "pricing.drawer.source": "Source",
   "pricing.drawer.clampedFrom": "clamped from {value}",
@@ -1769,7 +1715,6 @@
   "pricing.drawer.pushButton": "Push price",
   "pricing.drawer.pushing": "Pushing…",
   "pricing.drawer.lastComputed": "Last computed {when}",
-
   "pricing.promotions.loading": "Loading promotions…",
   "pricing.promotions.empty": "No retail events yet",
   "pricing.promotions.emptyHint": "Create RetailEvent + RetailEventPriceAction rows to schedule sales. The hourly G.5.2 scheduler materializes ChannelListing.salePrice when their window opens; the engine reads it as SCHEDULED_SALE source.",
@@ -1818,7 +1763,6 @@
   "pricing.promotions.form.fixedPriceOption": "Fixed price",
   "pricing.promotions.form.percentOffLabel": "% off",
   "pricing.promotions.form.fixedPriceLabel": "Fixed price",
-
   "pricing.buybox.loading": "Loading Buy Box stats…",
   "pricing.buybox.empty": "No Buy Box observations yet",
   "pricing.buybox.emptyHint": "The daily SP-API competitive-pricing cron writes BuyBoxHistory rows for every Amazon listing it polls. Once SP-API creds are configured and the cron runs, win-rate trends appear here.",
@@ -1843,7 +1787,6 @@
   "pricing.buybox.table.fulfillment": "Fulfillment",
   "pricing.buybox.table.timesWon": "Times won the box",
   "pricing.buybox.unknownSeller": "(unknown)",
-
   "overview.title": "Command Center",
   "overview.subtitle": "Real-time operations across every channel and marketplace.",
   "overview.window.today": "Today",
@@ -1906,7 +1849,6 @@
   "overview.alerts.activeCount": "{n} active",
   "overview.alerts.empty": "Nothing requires attention right now.",
   "overview.alerts.dismiss": "Dismiss",
-
   "overview.alerts.impact.outOfStock": "Lost sales until restocked",
   "overview.alerts.impact.lowStock": "Will stock out soon at current velocity",
   "overview.alerts.impact.failedListings": "Listings not visible to buyers",
@@ -1917,7 +1859,6 @@
   "overview.alerts.impact.returnsBacklog": "Refund clock running",
   "overview.alerts.impact.syncFailures": "Channels falling out of sync",
   "overview.alerts.impact.rateLimitHits": "API throttling — slow the cron cadence",
-
   "overview.alerts.action.replenish": "Replenish",
   "overview.alerts.action.review": "Review",
   "overview.alerts.action.resolve": "Resolve",
@@ -1941,12 +1882,10 @@
   "overview.alerts.disconnected": "disconnected",
   "overview.alerts.liveListings": "Live listings",
   "overview.alerts.variants": "Variants",
-
   "overview.exportPdf": "Download PDF snapshot",
   "overview.exportPdf.daily": "Today's snapshot",
   "overview.exportPdf.weekly": "Last 7 days",
   "overview.exportPdf.monthly": "Last 30 days",
-
   "overview.reports.heading": "Scheduled email reports",
   "overview.reports.empty": "No scheduled reports yet.",
   "overview.reports.emailPlaceholder": "you@xavia.it",
@@ -1961,7 +1900,6 @@
   "overview.reports.frequency.daily": "Daily",
   "overview.reports.frequency.weekly": "Weekly",
   "overview.reports.frequency.monthly": "Monthly",
-
   "overview.views.aria": "Saved view",
   "overview.views.live": "Live (no view)",
   "overview.views.saveLabel": "Save current as a new view",
@@ -1969,7 +1907,6 @@
   "overview.views.saveAs": "Save as view",
   "overview.views.saveLiveOnly": "Save (live only)",
   "overview.views.updateThisView": "Update {name}",
-
   "overview.customize.title": "Customise dashboard",
   "overview.customize.description": "Show, hide, or reorder individual sections. KPI strip and Alerts panel are always visible. Drag the grip handle to reorder within a column.",
   "overview.customize.column.left": "Main column",
@@ -1999,7 +1936,6 @@
   "overview.customize.widget.catalog": "Catalog snapshot",
   "overview.customize.widget.activity": "Activity feed",
   "overview.customize.widget.quickActions": "Quick actions",
-
   "overview.goals.heading": "Goals",
   "overview.goals.type.revenue": "Revenue",
   "overview.goals.type.orders": "Orders",
@@ -2011,7 +1947,6 @@
   "overview.goals.period.monthly": "this month",
   "overview.goals.period.quarterly": "this quarter",
   "overview.goals.period.yearly": "this year",
-
   "overview.predictive.heading": "Forecast & risk",
   "overview.predictive.openAll": "Replenishment",
   "overview.predictive.forecast7d": "Next 7 days",
@@ -2020,7 +1955,6 @@
   "overview.predictive.stockoutRisk": "At-risk SKUs",
   "overview.predictive.stockoutHint": "forecast > current stock (7d)",
   "overview.predictive.generatedAt": "Forecast generated {date}",
-
   "overview.financial.heading": "Financial overview",
   "overview.financial.margin": "Estimated margin",
   "overview.financial.lowCoverage": "{pct}% cost data",
@@ -2029,14 +1963,12 @@
   "overview.financial.refundCountHint": "Count of Refund records in window",
   "overview.financial.taxCollected": "Tax collected",
   "overview.financial.taxHint": "Sum of OrderItem VAT in window",
-
   "overview.customers.heading": "Customers",
   "overview.customers.openAll": "All customers",
   "overview.customers.new": "New",
   "overview.customers.returning": "Returning",
   "overview.customers.topLtv": "Top by lifetime value",
   "overview.customers.byCountry": "Top countries",
-
   "overview.catalog.heading": "Catalog snapshot",
   "overview.catalog.products": "Products",
   "overview.catalog.parents": "Parents",
@@ -2059,7 +1991,6 @@
   "overview.relTime.minutes": "{n}m ago",
   "overview.relTime.hours": "{n}h ago",
   "overview.relTime.days": "{n}d ago",
-
   "overview.channels.openAria": "Open {channel} listings",
   "overview.channels.health.ok": "Healthy",
   "overview.channels.health.warn": "Warning",
@@ -2069,7 +2000,6 @@
   "overview.channels.buyBox": "Buy Box {rate}",
   "overview.channels.lastSync": "synced {ago}",
   "overview.channels.errors24h": "{n} errors 24h",
-
   "overview.live.on": "Live",
   "overview.live.off": "Live off",
   "overview.activity.live": "live",
@@ -2084,7 +2014,6 @@
   "overview.activity.cat.listing": "Listings",
   "overview.activity.cat.inbound": "Inbound",
   "overview.activity.cat.sync": "Sync",
-
   "overview.event.orderCreated": "New order on {channel}",
   "overview.event.orderUpdated": "Order updated to {status}",
   "overview.event.orderCancelled": "Order cancelled",
@@ -2108,7 +2037,6 @@
   "overview.event.inboundCancelled": "Inbound shipment cancelled",
   "overview.event.apiOk": "{channel} {op} OK",
   "overview.event.apiFailed": "{channel} {op} failed",
-
   "overview.compare.aria": "Comparison period",
   "overview.compare.prefix": "vs",
   "overview.compare.prev": "previous period",
@@ -2116,7 +2044,6 @@
   "overview.compare.wow": "previous week",
   "overview.compare.mom": "previous month",
   "overview.compare.yoy": "previous year",
-
   "syncLogs.hub.title": "Sync Logs",
   "syncLogs.hub.subtitle": "Channel sync health · cron execution · audit trail · outbound queue",
   "syncLogs.hub.refresh": "Refresh",
@@ -2176,7 +2103,6 @@
   "syncLogs.hub.row.totalLine": "{total} total · {failed} failed · {rate}% error rate",
   "syncLogs.hub.footer.generated": "Generated {time} · polls every 30 seconds",
   "syncLogs.hub.footer.generatedDash": "—",
-
   "syncLogs.apiCalls.title": "Outbound API Calls",
   "syncLogs.apiCalls.subtitle": "Every Amazon SP-API / eBay / Shopify request — latency, status, error",
   "syncLogs.apiCalls.filter.window": "Window",
@@ -2220,7 +2146,6 @@
   "syncLogs.apiCalls.detail.product": "Product {id}…",
   "syncLogs.apiCalls.detail.listing": "Listing {id}…",
   "syncLogs.apiCalls.detail.order": "Order {id}…",
-
   "syncLogs.errors.title": "Error Groups",
   "syncLogs.errors.subtitle": "Rolled-up sync errors with first/last seen, count, and resolution workflow",
   "syncLogs.errors.filter.status": "Status",
@@ -2240,7 +2165,6 @@
   "syncLogs.errors.meta.first": "first {when}",
   "syncLogs.errors.meta.last": "last {when}",
   "syncLogs.errors.meta.resolvedBy": "resolved by {who}",
-
   "syncLogs.webhooks.title": "Inbound Webhooks",
   "syncLogs.webhooks.subtitle": "Every webhook received from Shopify / WooCommerce / Etsy with payload + processing state",
   "syncLogs.webhooks.filter.channel": "Channel",
@@ -2272,7 +2196,6 @@
   "syncLogs.webhooks.detail.replayInfo": "Re-dispatches the saved payload through the original handler. Signature check is skipped (already authenticated at receipt). The processed flag flips to true on success, error on failure.",
   "syncLogs.webhooks.detail.replayUnsupported": "Replay isn't supported for {channel} channel yet.",
   "syncLogs.webhooks.detail.replayed": "Replayed successfully",
-
   "syncLogs.alerts.title": "Alerts",
   "syncLogs.alerts.subtitle": "Rule-based alerts on error rate, latency, queue depth, error groups, and stale crons",
   "syncLogs.alerts.refresh": "Refresh",
@@ -2312,29 +2235,24 @@
   "syncLogs.alerts.events.resolve": "Resolve",
   "syncLogs.alerts.events.markedAcknowledged": "Marked acknowledged",
   "syncLogs.alerts.events.markedResolved": "Marked resolved",
-
   "syncLogs.metric.errorRate": "Error rate",
   "syncLogs.metric.latencyP95": "Latency p95",
   "syncLogs.metric.queueDepth": "Queue depth",
   "syncLogs.metric.activeErrorGroups": "Active error groups",
   "syncLogs.metric.staleCrons": "Stale RUNNING crons",
-
   "syncLogs.operator.gt": ">",
   "syncLogs.operator.gte": "≥",
   "syncLogs.operator.lt": "<",
   "syncLogs.operator.lte": "≤",
-
   "syncLogs.alertStatus.TRIGGERED": "TRIGGERED",
   "syncLogs.alertStatus.ACKNOWLEDGED": "ACKNOWLEDGED",
   "syncLogs.alertStatus.RESOLVED": "RESOLVED",
   "syncLogs.alertStatus.ALL": "ALL",
-
   "syncLogs.errorStatus.ACTIVE": "ACTIVE",
   "syncLogs.errorStatus.RESOLVED": "RESOLVED",
   "syncLogs.errorStatus.MUTED": "MUTED",
   "syncLogs.errorStatus.IGNORED": "IGNORED",
   "syncLogs.errorStatus.ALL": "ALL",
-
   "syncLogs.savedSearch.saved": "Saved",
   "syncLogs.savedSearch.save": "Save",
   "syncLogs.savedSearch.savePromptHeading": "Save current filters",
@@ -2349,7 +2267,6 @@
   "syncLogs.savedSearch.noFiltersSet": "(no filters set)",
   "syncLogs.savedSearch.savedToast": "Saved \"{name}\"",
   "syncLogs.savedSearch.deletedToast": "Deleted \"{name}\"",
-
   "syncLogs.breadcrumb.monitoring": "Monitoring",
   "syncLogs.breadcrumb.apiCalls": "API Calls",
   "syncLogs.breadcrumb.errors": "Errors",
@@ -3008,11 +2925,11 @@
   "products.drawer.variations.matrixLink": "the matrix view",
   "products.drawer.variations.priceEditAria": "price for {sku}",
   "products.drawer.variations.stockEditAria": "stock for {sku}",
-  "stock.recallDetail.title": "Recall \u00b7 {lot}",
-  "stock.recallDetail.loading": "Loading\u2026",
+  "stock.recallDetail.title": "Recall · {lot}",
+  "stock.recallDetail.loading": "Loading…",
   "stock.recallDetail.notFound": "Recall not found",
   "stock.recallDetail.expires": "expires {when}",
-  "stock.recallDetail.closing": "Closing\u2026",
+  "stock.recallDetail.closing": "Closing…",
   "stock.recallDetail.backwardTitle": "Provenance",
   "stock.recallDetail.backwardDescription": "Where this lot came from. Use this to confirm with the supplier whether the affected batch was ever received.",
   "stock.recallDetail.originReceive": "Origin receive",
@@ -3020,19 +2937,19 @@
   "stock.recallDetail.originInbound": "Inbound shipment",
   "stock.recallDetail.supplierLotRef": "Supplier lot ref",
   "stock.recallDetail.forwardTitle": "Affected orders ({n})",
-  "stock.recallDetail.forwardDescription": "Every movement that touched this lot \u2014 orders shipped, returns received, transfers. Copy the order IDs to send recall notices under GPSR Article 19.",
+  "stock.recallDetail.forwardDescription": "Every movement that touched this lot — orders shipped, returns received, transfers. Copy the order IDs to send recall notices under GPSR Article 19.",
   "stock.recallDetail.copyOrderIds": "Copy order IDs",
   "stock.recallDetail.copiedToast": "Copied {n} order IDs",
   "stock.recallDetail.copyFailed": "Copy failed",
-  "stock.recallDetail.noMovements": "This lot has no movements yet \u2014 the recall opened before any units shipped.",
+  "stock.recallDetail.noMovements": "This lot has no movements yet — the recall opened before any units shipped.",
   "stock.recallDetail.col.when": "When",
-  "stock.recallDetail.col.change": "\u0394",
+  "stock.recallDetail.col.change": "Δ",
   "stock.recallDetail.col.reason": "Reason",
   "stock.recallDetail.col.ref": "Ref",
   "stock.recallDetail.col.actor": "Actor",
-  "stock.recallDetail.openNote": "While this recall is OPEN, FEFO consume skips this lot. In-flight orders are not auto-cancelled \u2014 review the affected orders above and decide what to do (cancel + refund, ship + offer return, or ship + recall notice).",
-  "products.drawer.translations.loading": "Loading\u2026",
-  "products.drawer.translations.error.primaryLang": "{code} is the primary language \u2014 edit the master fields directly",
+  "stock.recallDetail.openNote": "While this recall is OPEN, FEFO consume skips this lot. In-flight orders are not auto-cancelled — review the affected orders above and decide what to do (cancel + refund, ship + offer return, or ship + recall notice).",
+  "products.drawer.translations.loading": "Loading…",
+  "products.drawer.translations.error.primaryLang": "{code} is the primary language — edit the master fields directly",
   "products.drawer.translations.delete.title": "Delete the {language} translation?",
   "products.drawer.translations.delete.body": "The translation row will be removed; the master content stays intact.",
   "products.drawer.translations.delete.label": "Delete",
@@ -3044,14 +2961,14 @@
   "products.drawer.translations.codePlaceholder": "or type code",
   "products.drawer.translations.cancel": "Cancel",
   "products.drawer.translations.create": "Create",
-  "products.drawer.translations.aiNote": "AI-generated translations stay marked \"unreviewed\" until you confirm them. Generation happens via /products bulk AI fill \u2014 pick a non-{primary} marketplace and the result lands here.",
-  "products.drawer.translations.row.aiReview": "AI \u00b7 review",
+  "products.drawer.translations.aiNote": "AI-generated translations stay marked \"unreviewed\" until you confirm them. Generation happens via /products bulk AI fill — pick a non-{primary} marketplace and the result lands here.",
+  "products.drawer.translations.row.aiReview": "AI · review",
   "products.drawer.translations.row.name": "Name",
   "products.drawer.translations.row.description": "Description",
-  "products.drawer.translations.row.bullets": "Bullets \u00b7 one per line",
-  "products.drawer.translations.row.keywords": "Keywords \u00b7 comma-separated",
+  "products.drawer.translations.row.bullets": "Bullets · one per line",
+  "products.drawer.translations.row.keywords": "Keywords · comma-separated",
   "products.drawer.translations.row.source": "Source: ",
-  "products.drawer.translations.row.reviewedOn": " \u00b7 reviewed {date}",
+  "products.drawer.translations.row.reviewedOn": " · reviewed {date}",
   "products.drawer.translations.row.markReviewed": "Mark reviewed",
   "products.drawer.translations.row.delete": "Delete",
   "products.drawer.translations.row.save": "Save",
@@ -3181,7 +3098,7 @@
   "replenishment.automation.recentExecutions.triggerData": "Trigger payload",
   "replenishment.automation.recentExecutions.actionResults": "Action results",
   "replenishment.automation.editTooltip": "Edit rule",
-  "replenishment.automation.editAriaLabel": "Edit rule {name}",
+  "replenishment.automation.editAriaLabel": "Edit {name}",
   "replenishment.automation.edit.title": "Edit rule",
   "replenishment.automation.edit.nameLabel": "Name",
   "replenishment.automation.edit.descriptionLabel": "Description",
@@ -3536,8 +3453,6 @@
   "routingRules.field.notesPlaceholder": "Why this rule exists, edge cases, etc.",
   "routingRules.field.activeLabel": "Active (rule will be evaluated)",
   "routingRules.create": "Create rule",
-  "replenishment.automation.editTooltip": "Edit rule",
-  "replenishment.automation.editAriaLabel": "Edit {name}",
   "products.grid.action.matrix": "Matrix",
   "products.grid.action.matrixTitle": "Open the variant matrix editor",
   "products.edit.back": "Back to products",
@@ -4605,7 +4520,6 @@
   "inbound.pagination.page": "Page {page} of {total}",
   "inbound.pagination.previous": "Previous",
   "inbound.pagination.next": "Next",
-
   "inbound.recycleBin.label": "Recycle bin",
   "inbound.recycleBin.enter": "Open recycle bin",
   "inbound.recycleBin.exit": "Back to active inbound shipments",
@@ -4623,7 +4537,6 @@
   "inbound.bulk.confirmHardDelete.confirm": "Delete {n} permanently",
   "inbound.bulk.confirmHardDelete.fbaWarningTitle": "{n} of these are FBA shipments",
   "inbound.bulk.confirmHardDelete.fbaWarningBody": "The FBA shipment plan on Amazon is unaffected. Deleting locally only removes the Nexus tracking record — Amazon will continue to receive units against the original FBA plan.",
-
   "po.detail.notFound": "Purchase order not found",
   "po.filter.all": "All",
   "po.filter.active": "Active",
@@ -4699,7 +4612,6 @@
   "po.create.error.noLines": "Add at least one line with SKU + quantity > 0.",
   "po.pageTitle": "Purchase Orders",
   "po.pageDescription": "Approval workflow for supplier orders · Click any PO for transitions + audit trail",
-
   "purchaseOrders.recycleBin.label": "Recycle bin",
   "purchaseOrders.recycleBin.enter": "Open recycle bin",
   "purchaseOrders.recycleBin.exit": "Back to active purchase orders",
@@ -4717,14 +4629,13 @@
   "purchaseOrders.bulk.confirmHardDelete.confirm": "Delete {n} permanently",
   "purchaseOrders.bulk.linkedInboundsErrorTitle": "Cannot delete — linked inbound shipments",
   "purchaseOrders.bulk.linkedInboundsErrorBody": "This PO has linked inbound shipments ({n}). Delete the inbound shipments first, then retry.",
-
   "channelDrift.dashboard.openCount": "{n} open",
   "channelDrift.dashboard.openTriage": "Open triage",
-  "channelDrift.dashboard.loading": "Loading drift…",
-  "channelDrift.dashboard.loadFailed": "Couldn't load drift: {error}",
-  "channelDrift.dashboard.allSynced": "Channels and local stock are in sync.",
-  "channelDrift.dashboard.topOfTotal": "Showing {shown} of {total}",
-  "channelDrift.dashboard.seeAll": "See all",
+  "channelDrift.dashboard.loading": "Loading drift events…",
+  "channelDrift.dashboard.loadFailed": "Failed to load: {error}",
+  "channelDrift.dashboard.allSynced": "Channels and local stock in sync. Nothing to triage.",
+  "channelDrift.dashboard.topOfTotal": "Showing top {shown} of {total} drifting events (sorted by largest drift)",
+  "channelDrift.dashboard.seeAll": "see all",
   "channelDrift.subnav": "Channel drift",
   "controlTower.subnav": "Control Tower",
   "poolDrift.subnav": "Pool drift",
@@ -4803,19 +4714,15 @@
   "products.datasheetHub.variants.summary.other": "{count} variants",
   "products.datasheetHub.variants.summary.axes": "Detected axes: {axes}",
   "products.datasheetHub.variants.summary.noAxes": "No clear variation axes detected — review on the edit page.",
-  "products.datasheetHub.variants.summary.lowConfidence": "Low-confidence rollup — some attributes may be inferred.",
+  "products.datasheetHub.variants.summary.lowConfidence": "Axes inferred from categoryAttributes — set a variation theme in /settings/pim/families for higher trust.",
   "products.datasheetHub.variants.layout.aria": "Variants layout",
   "products.datasheetHub.variants.col.markets": "Markets",
   "products.datasheetHub.variants.col.variant": "Variant",
-  "products.datasheetHub.variants.cell.empty": "Not configured",
+  "products.datasheetHub.variants.cell.empty": "No variant for this combination",
   "products.datasheetHub.variants.markets.one": "{count} market",
   "products.datasheetHub.variants.markets.other": "{count} markets",
   "products.datasheetHub.variants.markets.none": "—",
   "products.datasheetHub.variants.openVariant": "Open variant datasheet",
-  "products.datasheetHub.variants.col.variant": "Variant",
-  "products.datasheetHub.variants.cell.empty": "No variant for this combination",
-  "products.datasheetHub.variants.summary.lowConfidence": "Axes inferred from categoryAttributes — set a variation theme in /settings/pim/families for higher trust.",
-  "products.datasheetHub.variants.layout.aria": "Variants layout",
   "products.datasheetHub.variants.layout.matrix": "Matrix",
   "products.datasheetHub.variants.layout.flat": "Flat list",
   "products.datasheetHub.coverage.title": "Channel coverage",
@@ -5137,7 +5044,6 @@
   "products.datasheet.coverage.live.one": "{count} live listing",
   "products.datasheet.coverage.live.other": "{count} live listings",
   "products.datasheet.coverage.none": "Not yet published",
-
   "recover.title": "Recover listing",
   "recover.back": "Back to product",
   "recover.empty.noListings": "This product has no channel listings yet — nothing to recover. Use the wizard to publish first.",
@@ -5164,7 +5070,6 @@
   "recover.error.unreachableTitle": "Couldn't reach the API",
   "recover.error.unreachableDetail": "The recovery flow couldn't load because the API server is unreachable. Try again in a moment.",
   "recover.error.loadFailedTitle": "Couldn't load the product",
-
   "recover.action.REPUBLISH_IN_PLACE.title": "Republish in place",
   "recover.action.REPUBLISH_IN_PLACE.summary": "Re-send the current payload without deleting. Keeps ASIN, SKU and reviews. Best first attempt for most errors.",
   "recover.action.DELETE_RELIST_SAME.title": "Delete & relist (same ASIN + SKU)",
@@ -5175,14 +5080,6 @@
   "recover.action.NEW_ASIN_SAME_SKU.summary": "Lets Amazon mint a new ASIN against the same SKU. Reviews on the old ASIN are lost. Useful when the existing ASIN is permanently blocked.",
   "recover.action.FULL_RESET.title": "Full reset (new ASIN + new SKU)",
   "recover.action.FULL_RESET.summary": "Cleanest break — new identifiers everywhere. All reviews lost. Use only when both ASIN and SKU are toxic.",
-  "channelDrift.dashboard.openCount": "{n} open",
-  "channelDrift.dashboard.openTriage": "Open triage",
-  "channelDrift.dashboard.loading": "Loading drift events…",
-  "channelDrift.dashboard.loadFailed": "Failed to load: {error}",
-  "channelDrift.dashboard.allSynced": "Channels and local stock in sync. Nothing to triage.",
-  "channelDrift.dashboard.topOfTotal": "Showing top {shown} of {total} drifting events (sorted by largest drift)",
-  "channelDrift.dashboard.seeAll": "see all",
-
   "listWizard.stepper.aria.steps": "Listing wizard steps",
   "listWizard.stepper.aria.step": "Step {n} of {total}: {title}",
   "listWizard.stepper.aria.completedSuffix": " (completed)",
@@ -5194,7 +5091,6 @@
   "listWizard.stepper.title.withBlockerOther": "Step {id}: {title} — {n} blockers",
   "listWizard.stepper.title.plain": "Step {id}: {title}",
   "listWizard.stepper.mobileProgress": "Step {current} of {total}",
-
   "listWizard.nav.saveExit": "Save draft & close",
   "listWizard.nav.discard": "Discard",
   "listWizard.nav.discardTooltip": "Discard this draft (the wizard will be removed)",
@@ -5213,14 +5109,12 @@
   "listWizard.nav.blockerSummaryNoReasons": "{count} prevent Continue.",
   "listWizard.nav.blockerSummaryWithTop": "{count}: {reasons}.",
   "listWizard.nav.blockerSummaryWithTopAndMore": "{count}: {reasons} and {more} more.",
-
   "listWizard.header.backToProduct": "Back to product",
   "listWizard.header.closeWizard": "Close wizard",
   "listWizard.header.noChannels": "No channels picked yet",
   "listWizard.header.listingOn": "Listing on",
   "listWizard.header.channelsCount": "{n} channels:",
   "listWizard.header.overflow": "+{n} more",
-
   "listWizard.resume.resuming": "Resuming",
   "listWizard.resume.fromConnector": "from",
   "listWizard.resume.stepLabel": "Step {n}",
@@ -5235,14 +5129,12 @@
   "listWizard.resume.weekOne": "{n} week ago",
   "listWizard.resume.weekOther": "{n} weeks ago",
   "listWizard.resume.dismiss": "Dismiss resume banner",
-
   "listWizard.blocker.countOne": "{n} blocker",
   "listWizard.blocker.countOther": "{n} blockers",
   "listWizard.blocker.andMore": " and {n} more",
   "listWizard.blocker.showMe": "Show me",
   "listWizard.blocker.jumpAriaOne": "Jump to first of {n} blocker",
   "listWizard.blocker.jumpAriaOther": "Jump to first of {n} blockers",
-
   "listWizard.client.discardConfirmTitle": "Discard this draft?",
   "listWizard.client.discardConfirmDesc": "The wizard's progress on this product will be removed. This can't be undone.",
   "listWizard.client.discardConfirmAction": "Discard draft",
@@ -5253,7 +5145,6 @@
   "listWizard.client.needsChannelsTitle": "Pick channels first",
   "listWizard.client.needsChannelsDesc": "The rest of the wizard adapts to your channel selection. Head back to Step 1 and pick at least one (platform, marketplace) to keep going.",
   "listWizard.client.needsChannelsAction": "Go to Step 1",
-
   "listWizard.steps.1.title": "Channels & Markets",
   "listWizard.steps.1.shortLabel": "Channels",
   "listWizard.steps.1.description": "Pick the platforms and marketplaces to publish to",
@@ -5281,7 +5172,6 @@
   "listWizard.steps.9.title": "Submit",
   "listWizard.steps.9.shortLabel": "Submit",
   "listWizard.steps.9.description": "Parallel publish with retry-failed-only",
-
   "products.hardDelete.title.one": "Permanently delete 1 product?",
   "products.hardDelete.title.other": "Permanently delete {count} products?",
   "products.hardDelete.body": "Local rows + every dependent (channel listings, sync history, stock log, FBA shipment lines) are wiped. Pick how you want the channel side handled below — undoable on the local side only when you choose \"Local-only\".",
@@ -5320,7 +5210,6 @@
   "products.restore.title.one": "Restored 1 product",
   "products.restore.title.other": "Restored {count} products",
   "products.restore.body": "Channel listings were not touched by the soft-delete — your products are still live on Amazon, eBay, and Shopify exactly as they were.",
-
   "products.bulkImages.buttonLabel": "Bulk images",
   "products.bulkImages.buttonTooltip": "Mirror a source product's master gallery onto every selected target",
   "products.bulkImages.title": "Mirror images across products",
@@ -5340,7 +5229,6 @@
   "products.bulkImages.appliedWithErrors": "Applied to {updated}/{total} products · {created} images written · {errors} errors",
   "products.bulkImages.selectAllMatching": "Select all {total} matching",
   "products.bulkImages.selectingAll": "Fetching matching ids…",
-
   "listWizard.aiComplete.button": "AI: Complete wizard",
   "listWizard.aiComplete.buttonShort": "AI",
   "listWizard.aiComplete.modalTitle": "AI: Complete entire wizard",
@@ -5377,7 +5265,6 @@
   "listWizard.aiComplete.fieldBullets": "Bullets",
   "listWizard.aiComplete.fieldDescription": "Description",
   "listWizard.aiComplete.fieldKeywords": "Keywords",
-
   "listWizard.aiSuggestChannels.button": "AI: suggest channels",
   "listWizard.aiSuggestChannels.busy": "Asking AI…",
   "listWizard.aiSuggestChannels.title": "AI recommendations",
@@ -5389,7 +5276,6 @@
   "listWizard.aiSuggestChannels.applyAll": "Apply high-fit picks",
   "listWizard.aiSuggestChannels.error": "Couldn't get recommendations",
   "listWizard.aiSuggestChannels.toastApplied": "Applied {n} AI pick{plural}",
-
   "listWizard.aiSuggestTheme.button": "AI: pick a theme",
   "listWizard.aiSuggestTheme.recommends": "AI recommends:",
   "listWizard.aiSuggestTheme.applyButton": "Apply",
@@ -5397,7 +5283,6 @@
   "listWizard.aiSuggestTheme.applied": "Applied AI theme: {theme}",
   "listWizard.aiSuggestTheme.alternativesLabel": "Alternatives:",
   "listWizard.aiSuggestTheme.error": "Couldn't get a recommendation",
-
   "listWizard.aiSuggestPricing.button": "AI: recommend prices",
   "listWizard.aiSuggestPricing.busy": "Asking AI…",
   "listWizard.aiSuggestPricing.title": "AI pricing recommendations",
@@ -5412,7 +5297,6 @@
   "listWizard.aiScoreQuality.busy": "Scoring listing quality…",
   "listWizard.aiScoreQuality.error": "Couldn't score listing quality",
   "listWizard.aiScoreQuality.topImprovementsLabel": "Top improvements",
-
   "marketingContent.title": "Content Hub",
   "marketingContent.description": "Master library for product imagery, video, A+ content, and brand assets",
   "marketingContent.kpi.totalAssets": "Total assets",
@@ -5433,20 +5317,20 @@
   "marketingContent.altHelper.title": "{marketplace} · {language} glossary",
   "marketingContent.altHelper.loading": "Loading terminology…",
   "marketingContent.altHelper.empty": "No terminology rows yet. Add them under Settings → Terminology.",
-  "marketingHome.title": "Marketing",
-  "marketingHome.description": "DAM, A+ Content, Brand Story, Brand Kit, Automation, and channel publish — all in one place.",
-  "marketingHome.surface.content": "Content Hub",
-  "marketingHome.surface.contentSub": "{videos} videos · {storage} stored",
+  "marketingHome.title": "Marketing Hub",
+  "marketingHome.description": "Content, A+ pages, brand story, brand kit, and automation — all in one place.",
+  "marketingHome.surface.content": "Content Library",
+  "marketingHome.surface.contentSub": "{videos} videos · {storage} used",
   "marketingHome.surface.aplus": "A+ Content",
   "marketingHome.surface.brandStory": "Brand Story",
-  "marketingHome.surface.brandKit": "Brand Kits",
-  "marketingHome.surface.automation": "Automation rules",
+  "marketingHome.surface.brandKit": "Brand Kit",
+  "marketingHome.surface.automation": "Automation",
   "marketingHome.shortcuts": "Quick actions",
-  "marketingHome.shortcut.publish": "Channel publish dashboard",
-  "marketingHome.shortcut.analytics": "Storage analytics",
+  "marketingHome.shortcut.publish": "Publish to channels",
+  "marketingHome.shortcut.analytics": "Content analytics",
   "marketingHome.shortcut.automationHistory": "Automation history",
-  "marketingHome.shortcut.templates": "Image templates",
-  "marketingHome.tip": "Press",
+  "marketingHome.shortcut.templates": "Templates",
+  "marketingHome.tip": "Tip:",
   "marketingHome.openHub": "Open Content Hub",
   "marketingContent.overlays.label": "Locale overlays",
   "marketingContent.overlays.title": "Locale overlays ({n})",
@@ -5703,7 +5587,6 @@
   "bulkOps.queue.completed": "Completed",
   "bulkOps.queue.failed": "Failed",
   "bulkOps.queue.delayed": "Delayed",
-
   "aplus.title": "A+ Content",
   "aplus.description": "Amazon Brand Registry A+ Content documents — modules, ASIN attachments, localization siblings, submission status",
   "aplus.createNew": "New A+ Content",
@@ -5862,7 +5745,6 @@
   "aplus.schedule.submittedAt": "Submitted {when}",
   "aplus.schedule.publishedAt": "Published {when}",
   "aplus.schedule.notSubmitted": "Not yet submitted",
-
   "brandStory.title": "Brand Story",
   "brandStory.description": "Brand-level Amazon Brand Registry stories — applies to every product under a brand within a marketplace.",
   "brandStory.createNew": "New Brand Story",
@@ -5982,7 +5864,6 @@
   "brandStory.schedule.submittedAt": "Submitted {when}",
   "brandStory.schedule.publishedAt": "Published {when}",
   "brandStory.schedule.notSubmitted": "Not yet submitted",
-
   "brandKit.title": "Brand Kit",
   "brandKit.description": "Per-brand identity bundle — colors, fonts, logos, voice. Drives auto-defaults across A+ Content, Brand Story, and watermark templates.",
   "brandKit.error.listTitle": "Brand Kits couldn't load",
@@ -6156,20 +6037,5 @@
   "publishDashboard.publishedAs": "Published as {id}",
   "publishDashboard.modeLabel": "{mode}",
   "publishDashboard.publishedCount": "Published to {n} channel(s)",
-  "publishDashboard.failedCount": "{n} channel(s) failed — see per-channel detail",
-  "marketingHome.title": "Marketing Hub",
-  "marketingHome.description": "Content, A+ pages, brand story, brand kit, and automation — all in one place.",
-  "marketingHome.shortcuts": "Quick actions",
-  "marketingHome.tip": "Tip:",
-  "marketingHome.openHub": "Open Content Hub",
-  "marketingHome.surface.content": "Content Library",
-  "marketingHome.surface.contentSub": "{videos} videos · {storage} used",
-  "marketingHome.surface.aplus": "A+ Content",
-  "marketingHome.surface.brandStory": "Brand Story",
-  "marketingHome.surface.brandKit": "Brand Kit",
-  "marketingHome.surface.automation": "Automation",
-  "marketingHome.shortcut.publish": "Publish to channels",
-  "marketingHome.shortcut.analytics": "Content analytics",
-  "marketingHome.shortcut.automationHistory": "Automation history",
-  "marketingHome.shortcut.templates": "Templates"
+  "publishDashboard.failedCount": "{n} channel(s) failed — see per-channel detail"
 }

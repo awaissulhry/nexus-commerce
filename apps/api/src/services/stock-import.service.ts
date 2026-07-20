@@ -622,7 +622,7 @@ interface ProductPlan {
   queueRows: PlannedQueueRow[]
 }
 
-export async function applyImport(opts: {
+export interface ApplyImportOptions {
   rows: PreviewRow[]
   locationCode: string
   mode: ImportMode
@@ -647,8 +647,25 @@ export async function applyImport(opts: {
    * errors in the callback never affect the apply.
    */
   onProgress?: (p: ApplyProgress) => void | Promise<void>
-}): Promise<ApplyResult> {
-  const { rows, locationCode, mode, target, filename, fileKind, pinOverride = false, onProgress } = opts
+  /**
+   * IM.3.2 — cooperative cancel. Checked between chunks; already-committed
+   * chunks stay committed, unwritten rows finalize as 'Cancelled before
+   * write' and the job closes as CANCELLED.
+   */
+  shouldAbort?: () => boolean
+}
+
+/**
+ * IM.3.2 — validate + claim the job, then hand back a `run` closure so the
+ * route can respond immediately and execute the engine detached (async
+ * apply). Early failures (unknown location, FBA guard, already-applied
+ * draft) throw HERE, synchronously in the request. `run` finalizes the job
+ * row on every path — success, partial, cancel, or crash.
+ */
+export async function beginApplyImport(
+  opts: ApplyImportOptions,
+): Promise<{ jobId: string; totalRows: number; run: () => Promise<ApplyResult> }> {
+  const { rows, locationCode, mode, target, filename, fileKind, pinOverride = false, onProgress, shouldAbort } = opts
 
   const location = await prisma.stockLocation.findUnique({
     where: { code: locationCode },
@@ -669,6 +686,9 @@ export async function applyImport(opts: {
         mode,
         target,
         totalRows: rows.length,
+        startedAt: new Date(),
+        progressAt: new Date(),
+        processedRows: 0,
         ...(filename !== undefined ? { filename } : {}),
         ...(fileKind !== undefined ? { fileKind } : {}),
       },
@@ -684,11 +704,50 @@ export async function applyImport(opts: {
         mode,
         target,
         totalRows: rows.length,
-        status: 'PENDING',
+        status: 'APPLYING',
+        startedAt: new Date(),
+        progressAt: new Date(),
       },
     })
     jobId = job.id
   }
+
+  const run = async (): Promise<ApplyResult> => {
+    try {
+      return await executeApplyImport({ rows, mode, target, pinOverride, jobId, location, onProgress, shouldAbort })
+    } catch (err) {
+      // Unexpected crash — finalize honestly so the job can never stick in
+      // APPLYING (boot sweep + progress-poll heal are the backstops).
+      const msg = err instanceof Error ? err.message : String(err)
+      await prisma.stockImportJob
+        .updateMany({
+          where: { id: jobId, status: 'APPLYING' },
+          data: { status: 'FAILED', errorSummary: msg.slice(0, 500), appliedAt: new Date() },
+        })
+        .catch(() => {})
+      throw err
+    }
+  }
+  return { jobId, totalRows: rows.length, run }
+}
+
+/** Sync entrypoint (scripts/tests): begin + run in one call. */
+export async function applyImport(opts: ApplyImportOptions): Promise<ApplyResult> {
+  const { run } = await beginApplyImport(opts)
+  return run()
+}
+
+async function executeApplyImport(args: {
+  rows: PreviewRow[]
+  mode: ImportMode
+  target: ImportTarget
+  pinOverride: boolean
+  jobId: string
+  location: { id: string; type: string }
+  onProgress?: (p: ApplyProgress) => void | Promise<void>
+  shouldAbort?: () => boolean
+}): Promise<ApplyResult> {
+  const { rows, mode, target, pinOverride, jobId, location, onProgress, shouldAbort } = args
 
   // ── Row slots (original order — results are emitted in file order) ──────────
   const slots: RowSlot[] = rows.map((row) => {
@@ -1203,7 +1262,13 @@ export async function applyImport(opts: {
   }
   await report()
 
+  let cancelled = false
+  const writtenPlans = new Set<ProductPlan>()
   for (let i = 0; i < planList.length; i += CHUNK_PRODUCTS) {
+    if (shouldAbort?.()) {
+      cancelled = true
+      break
+    }
     const chunk = planList.slice(i, i + CHUNK_PRODUCTS)
     try {
       await prisma.$transaction((tx) => writeChunk(tx, chunk), { timeout: 30_000, maxWait: 10_000 })
@@ -1232,11 +1297,34 @@ export async function applyImport(opts: {
       }
     }
     for (const plan of chunk) {
+      writtenPlans.add(plan)
       processedRows += plan.rowSlots.length
       doneSucceeded += plan.rowSlots.filter((s) => !s.error).length
       doneFailed += plan.rowSlots.filter((s) => Boolean(s.error)).length
     }
     await report()
+    // Durable live progress — the poll endpoint reads this row when the
+    // in-memory registry has no entry (different process, or post-restart).
+    await prisma.stockImportJob
+      .update({
+        where: { id: jobId },
+        data: { processedRows, succeeded: doneSucceeded, failed: doneFailed, skipped: skippedCount, progressAt: new Date() },
+      })
+      .catch(() => {})
+  }
+  if (cancelled) {
+    // Committed chunks stay committed; unwritten rows are closed honestly.
+    for (const plan of planList) {
+      if (writtenPlans.has(plan)) continue
+      failedProducts.add(plan.productId)
+      for (const slot of plan.rowSlots) {
+        if (!slot.error) {
+          slot.error = 'Cancelled before write'
+          slot.warehouseApplied = false
+          slot.channelApplied = false
+        }
+      }
+    }
   }
 
   // ── After: BullMQ enqueue (bounded + circuit-broken adds; DB rows stay
@@ -1345,13 +1433,51 @@ export async function applyImport(opts: {
       succeeded,
       failed,
       skipped,
-      status: failed === 0 ? 'APPLIED' : succeeded > 0 ? 'PARTIAL' : 'FAILED',
+      status: cancelled ? 'CANCELLED' : failed === 0 ? 'APPLIED' : succeeded > 0 ? 'PARTIAL' : 'FAILED',
       appliedAt: new Date(),
+      processedRows,
+      progressAt: new Date(),
+      ...(cancelled ? { errorSummary: 'Cancelled by operator — rows not yet written were left unapplied.' } : {}),
       results: results as any,
     },
   })
 
   return { jobId, succeeded, failed, skipped, total: rows.length, results }
+}
+
+/**
+ * IM.3.2 — close any StockImportJob stuck in APPLYING (server restarted or
+ * crashed mid-apply). Committed chunks are already durable; the row is
+ * finalized as PARTIAL with an honest summary. Called at API boot and lazily
+ * from the progress endpoint when it polls a stale APPLYING row.
+ */
+export async function recoverStuckImportJobs(staleMs = 5 * 60_000): Promise<number> {
+  const cutoff = new Date(Date.now() - staleMs)
+  const stuck = await prisma.stockImportJob.findMany({
+    where: {
+      status: 'APPLYING',
+      OR: [
+        { progressAt: { lt: cutoff } },
+        { progressAt: null, createdAt: { lt: cutoff } },
+      ],
+    },
+    select: { id: true },
+  })
+  let healed = 0
+  for (const job of stuck) {
+    const res = await prisma.stockImportJob.updateMany({
+      where: { id: job.id, status: 'APPLYING' },
+      data: {
+        status: 'PARTIAL',
+        errorSummary:
+          'Interrupted — the server restarted mid-apply. Counts reflect rows recorded before the interruption.',
+        appliedAt: new Date(),
+      },
+    })
+    healed += res.count
+  }
+  if (healed > 0) logger.warn('stock-import: healed stuck APPLYING jobs', { healed })
+  return healed
 }
 
 // ── Alias CRUD ────────────────────────────────────────────────────────────────

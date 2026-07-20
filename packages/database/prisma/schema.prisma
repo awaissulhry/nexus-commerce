@@ -482,11 +482,15 @@ model StockImportJob {
   succeeded    Int       @default(0)
   failed       Int       @default(0)
   skipped      Int       @default(0)
-  status       String    @default("PENDING") // PENDING | APPLIED | PARTIAL | FAILED
+  status       String    @default("PENDING") // DRAFT | PENDING | APPLYING | APPLIED | PARTIAL | FAILED | CANCELLED
   appliedAt    DateTime?
   createdAt    DateTime  @default(now())
   errorSummary String?
   results      Json?     // per-row outcome snapshot for history drill-down
+  // IM.3.2 — async apply live progress (updated per chunk while APPLYING)
+  startedAt     DateTime?
+  progressAt    DateTime?
+  processedRows Int       @default(0)
 
   @@index([status, createdAt(sort: Desc)])
   @@index([locationCode])

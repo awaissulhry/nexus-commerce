@@ -6,8 +6,9 @@ import { summarizeProductStock } from '../services/stock-summary.js'
 import {
   resolveRows,
   previewImport,
-  applyImport,
+  beginApplyImport,
   ensureDraftImportJob,
+  recoverStuckImportJobs,
   ImportAlreadyAppliedError,
   normalizeAlias,
   bulkCreateAliases,
@@ -16,6 +17,14 @@ import {
   type ImportMode,
   type ImportTarget,
 } from '../services/stock-import.service.js'
+import {
+  trackImportStart,
+  updateImportProgress,
+  finishImport,
+  getImportState,
+  requestImportCancel,
+  isImportCancelRequested,
+} from '../services/stock-import-progress.js'
 import { detectFileKind, parseCsv, parseJson, parseXlsx, sniffDelimiterSmart } from '../services/import/parsers.js'
 import {
   reserveStock,
@@ -3299,8 +3308,25 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const { rows, locationCode, mode, target, filename, fileKind, pinOverride, jobId } = request.body ?? {}
       if (!rows?.length) return reply.code(400).send({ error: 'rows[] required' })
-      const result = await applyImport({ rows, locationCode, mode, target, filename, fileKind, pinOverride, jobId })
-      return result
+      // IM.3.2 — async apply. Validation + draft claim run synchronously (so
+      // unknown-location / FBA / already-applied errors surface here); the
+      // engine itself is detached and polled via /stock/import/jobs/:id/progress.
+      let startedJobId: string | null = null
+      const { jobId: newJobId, totalRows, run } = await beginApplyImport({
+        rows, locationCode, mode, target, filename, fileKind, pinOverride, jobId,
+        onProgress: (p) => { if (startedJobId) updateImportProgress(startedJobId, p) },
+        shouldAbort: () => (startedJobId ? isImportCancelRequested(startedJobId) : false),
+      })
+      startedJobId = newJobId
+      trackImportStart(newJobId, totalRows)
+      void run()
+        .then(() => finishImport(newJobId))
+        .catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err)
+          finishImport(newJobId, msg)
+          fastify.log.error({ err }, '[stock/import/apply] detached run failed')
+        })
+      return reply.code(202).send({ jobId: newJobId, async: true, total: totalRows })
     } catch (error: any) {
       if (error instanceof ImportAlreadyAppliedError) {
         return reply.code(409).send({ error: error.message })
@@ -3309,6 +3335,103 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: error?.message ?? String(error) })
     }
   })
+
+  // ── GET /api/stock/import/jobs/:id/progress ─────────────────────
+  // IM.3.2 — live progress for an async apply. Registry-fresh while the
+  // import runs in this process; falls back to the per-chunk DB row after a
+  // restart, and lazily heals a stale APPLYING row into PARTIAL.
+  fastify.get<{ Params: { id: string } }>(
+    '/stock/import/jobs/:id/progress',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        const mem = getImportState(id)
+        let job = await prisma.stockImportJob.findUnique({
+          where: { id },
+          select: {
+            id: true, status: true, totalRows: true, processedRows: true,
+            succeeded: true, failed: true, skipped: true,
+            startedAt: true, progressAt: true, appliedAt: true, errorSummary: true,
+          },
+        })
+        if (!job) return reply.code(404).send({ error: 'Job not found' })
+
+        // Stale APPLYING with no in-process runner → the server restarted
+        // mid-apply. Heal on sight so the poller gets a terminal answer.
+        const progressTs = job.progressAt ?? job.startedAt
+        const stale = !mem && job.status === 'APPLYING' &&
+          (!progressTs || Date.now() - progressTs.getTime() > 90_000)
+        if (stale) {
+          await recoverStuckImportJobs(90_000)
+          job = (await prisma.stockImportJob.findUnique({
+            where: { id },
+            select: {
+              id: true, status: true, totalRows: true, processedRows: true,
+              succeeded: true, failed: true, skipped: true,
+              startedAt: true, progressAt: true, appliedAt: true, errorSummary: true,
+            },
+          }))!
+        }
+
+        // Registry counts are fresher than the per-chunk DB writes while the
+        // import is live in this process.
+        const live = mem && job.status === 'APPLYING'
+        const processed = live ? mem.processed : job.processedRows
+        const total = job.totalRows
+        const startedMs = live ? mem.startedAt : job.startedAt?.getTime()
+        const elapsedSec = startedMs ? Math.max(0.001, (Date.now() - startedMs) / 1000) : null
+        const rowsPerSec = elapsedSec && processed > 0 ? processed / elapsedSec : null
+        const etaSeconds = rowsPerSec && rowsPerSec > 0 && total > processed
+          ? Math.round((total - processed) / rowsPerSec)
+          : null
+        return {
+          job: {
+            id: job.id,
+            status: job.status,
+            totalRows: total,
+            processed,
+            succeeded: live ? mem.succeeded : job.succeeded,
+            failed: live ? mem.failed : job.failed,
+            skipped: live ? mem.skipped : job.skipped,
+            startedAt: job.startedAt,
+            progressAt: job.progressAt,
+            appliedAt: job.appliedAt,
+            errorSummary: job.errorSummary,
+          },
+          rowsPerSec: rowsPerSec ? Math.round(rowsPerSec * 10) / 10 : null,
+          etaSeconds,
+          cancelRequested: mem?.cancelRequested ?? false,
+        }
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[stock/import/jobs/:id/progress] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
+  // ── POST /api/stock/import/jobs/:id/cancel ──────────────────────
+  // IM.3.2 — cooperative cancel: committed chunks stay committed, unwritten
+  // rows close as 'Cancelled before write', job finalizes as CANCELLED.
+  fastify.post<{ Params: { id: string } }>(
+    '/stock/import/jobs/:id/cancel',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        if (requestImportCancel(id)) return { ok: true, accepted: true }
+        // Not running in this process — heal if it's a stale APPLYING row.
+        const healed = await recoverStuckImportJobs(90_000)
+        const job = await prisma.stockImportJob.findUnique({ where: { id }, select: { status: true } })
+        if (!job) return reply.code(404).send({ error: 'Job not found' })
+        if (job.status === 'APPLYING') {
+          return reply.code(409).send({ error: 'Import is running but not cancellable from here — try again shortly' })
+        }
+        return { ok: true, accepted: false, status: job.status, healed }
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[stock/import/jobs/:id/cancel] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
 
   // ── GET /api/stock/import/aliases ───────────────────────────────
   // List all SKU aliases with product info.
@@ -3373,6 +3496,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           mode: true, target: true, totalRows: true, succeeded: true,
           failed: true, skipped: true, status: true, appliedAt: true,
           createdAt: true, errorSummary: true,
+          startedAt: true, progressAt: true, processedRows: true,
         },
       })
       return { jobs }

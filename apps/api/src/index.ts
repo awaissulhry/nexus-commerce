@@ -769,6 +769,17 @@ async function start() {
       });
     }
 
+    // IM.3.2 — close any stock-import job left in APPLYING by a restart
+    // mid-apply. Committed chunks are durable; the row finalizes as PARTIAL
+    // with an honest summary. Fire-and-forget: never blocks startup.
+    void import('./services/stock-import.service.js')
+      .then((m) => m.recoverStuckImportJobs())
+      .catch((err) => {
+        logger.warn('stock-import stuck-job sweep failed on boot (non-fatal)', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+
     // ── BullMQ queue workers (outbound sync, channel sync, bulk list) ──
     // Opt-in via ENABLE_QUEUE_WORKERS=1. Requires REDIS_URL or REDIS_HOST.
     // Fire-and-forget: this MUST NOT block startup. An unreachable Redis used to

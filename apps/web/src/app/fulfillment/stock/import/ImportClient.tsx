@@ -35,6 +35,7 @@ import { Pill } from '@/design-system/primitives/Pill'
 import { Tag } from '@/design-system/primitives/Tag'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { Spinner } from '@/design-system/primitives/Spinner'
+import { ProgressBar } from '@/design-system/components/ProgressBar'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
@@ -128,7 +129,27 @@ interface ImportHistory {
   status: string
   appliedAt: string | null
   createdAt: string
+  // IM.3.2 — async apply live progress
+  startedAt?: string | null
+  progressAt?: string | null
+  processedRows?: number | null
 }
+
+// IM.3.2 — async apply: the POST returns immediately; this is the polled state.
+interface ApplyProgressState {
+  jobId: string
+  status: string
+  total: number
+  processed: number
+  succeeded: number
+  failed: number
+  skipped: number
+  rowsPerSec: number | null
+  etaSeconds: number | null
+  errorSummary?: string | null
+}
+
+const TERMINAL_IMPORT_STATUSES = new Set(['APPLIED', 'PARTIAL', 'FAILED', 'CANCELLED'])
 
 interface AliasRow {
   id: string
@@ -378,6 +399,8 @@ function ImportWizardInner() {
 
   // ── Step: APPLY ───────────────────────────────────────────────────────
   const [applyResult, setApplyResult] = useState<ApplyResult | null>(null)
+  const [applyProgress, setApplyProgress] = useState<ApplyProgressState | null>(null)
+  const [cancelling, setCancelling] = useState(false)
 
   // ── Aliases tab ──────────────────────────────────────────────────────
   const [aliases, setAliases] = useState<AliasRow[]>([])
@@ -580,12 +603,97 @@ function ImportWizardInner() {
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`) }
       const data = await res.json()
-      setApplyResult(data)
+      // IM.3.2 — the server responds immediately (202) and runs the engine
+      // detached; we poll progress below. Leaving the page no longer kills
+      // the import — it keeps running on the server.
+      setApplyResult(null)
+      setApplyProgress({
+        jobId: data.jobId,
+        status: 'APPLYING',
+        total: data.total ?? previewRows.length,
+        processed: 0,
+        succeeded: 0,
+        failed: 0,
+        skipped: 0,
+        rowsPerSec: null,
+        etaSeconds: null,
+      })
       setStep('APPLY')
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), 'danger')
     } finally {
       setBusy(false)
+    }
+  }
+
+  // IM.3.2 — poll the async apply until terminal, then pull full per-row
+  // results from history for the Done screen.
+  const applyJobId = applyProgress?.jobId ?? null
+  const applyTerminal = applyProgress ? TERMINAL_IMPORT_STATUSES.has(applyProgress.status) : true
+  useEffect(() => {
+    if (!applyJobId || applyTerminal) return
+    let alive = true
+    const tick = async () => {
+      try {
+        const res = await fetch(`${getBackendUrl()}/api/stock/import/jobs/${applyJobId}/progress`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (!alive || !data.job) return
+        setApplyProgress((prev) => (prev && prev.jobId === data.job.id ? {
+          ...prev,
+          status: data.job.status,
+          total: data.job.totalRows,
+          processed: data.job.processed,
+          succeeded: data.job.succeeded,
+          failed: data.job.failed,
+          skipped: data.job.skipped,
+          rowsPerSec: data.rowsPerSec ?? null,
+          etaSeconds: data.etaSeconds ?? null,
+          errorSummary: data.job.errorSummary ?? null,
+        } : prev))
+        if (TERMINAL_IMPORT_STATUSES.has(data.job.status)) {
+          const dres = await fetch(`${getBackendUrl()}/api/stock/import/history/${applyJobId}`)
+          const detail = await dres.json().catch(() => null)
+          if (alive && detail?.job) {
+            setApplyResult({
+              jobId: detail.job.id,
+              succeeded: detail.job.succeeded,
+              failed: detail.job.failed,
+              skipped: detail.job.skipped,
+              total: detail.job.totalRows,
+              results: detail.job.results ?? [],
+            })
+          }
+        }
+      } catch { /* transient poll errors — next tick retries */ }
+    }
+    void tick()
+    const iv = setInterval(tick, 1000)
+    return () => { alive = false; clearInterval(iv) }
+  }, [applyJobId, applyTerminal])
+
+  // IM.3.2 — while any history row is APPLYING, refresh the list so its
+  // progress advances without a manual reload.
+  const historyHasApplying = history.some((h) => h.status === 'APPLYING')
+  useEffect(() => {
+    if (mainTab !== 'history' || !historyHasApplying) return
+    const iv = setInterval(() => { void loadHistory() }, 4000)
+    return () => clearInterval(iv)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mainTab, historyHasApplying])
+
+  async function cancelApply() {
+    if (!applyProgress) return
+    setCancelling(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/stock/import/jobs/${applyProgress.jobId}/cancel`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      toast(t('stock.import.apply.cancelRequested'), 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), 'danger')
+    } finally {
+      setCancelling(false)
     }
   }
 
@@ -680,6 +788,7 @@ function ImportWizardInner() {
     setParsedFile(null); setUploadError(null)
     setColMap({}); setMode('ADJUST'); setTarget('WAREHOUSE'); setPinOverride(false)
     setResolvedRows([]); setPreviewRows([]); setApplyResult(null); setDraftJobId(null)
+    setApplyProgress(null); setCancelling(false)
   }
 
   // ── Step breadcrumb ───────────────────────────────────────────────────
@@ -1210,32 +1319,89 @@ function ImportWizardInner() {
             </Card>
           )}
 
-          {/* ─── APPLY ─────────────────────────────────────────────────── */}
-          {step === 'APPLY' && applyResult && (
+          {/* ─── APPLY (running — IM.3.2 async with live progress) ──────── */}
+          {step === 'APPLY' && applyProgress && !applyResult && (
             <Card elevated>
               <div className="p-8 flex flex-col items-center gap-6 text-center">
-                <div className="rounded-full bg-emerald-100 dark:bg-emerald-900/30 p-4">
-                  <CheckCircle2 size={36} className="text-emerald-600 dark:text-emerald-400" />
+                <div className="rounded-full bg-sky-100 dark:bg-sky-900/30 p-4">
+                  <RefreshCw size={36} className="text-sky-600 dark:text-sky-400 animate-spin" />
                 </div>
-                <div>
-                  <p className="text-xl font-bold">{t('stock.import.apply.done')}</p>
-                  <div className="flex items-center justify-center gap-4 mt-3 text-sm">
-                    <span className="text-emerald-600 font-semibold">{t('stock.import.apply.succeeded', { n: applyResult.succeeded })}</span>
-                    {applyResult.failed > 0 && <span className="text-rose-600 font-semibold">{t('stock.import.apply.failed', { n: applyResult.failed })}</span>}
-                    {applyResult.skipped > 0 && <span className="text-secondary">{t('stock.import.apply.skipped', { n: applyResult.skipped })}</span>}
+                <div className="w-full max-w-md flex flex-col gap-3">
+                  <p className="text-xl font-bold">{t('stock.import.apply.applying')}</p>
+                  <ProgressBar
+                    value={applyProgress.total > 0 ? (applyProgress.processed / applyProgress.total) * 100 : 0}
+                    height={10}
+                  />
+                  <div className="flex items-center justify-center gap-4 text-sm tabular-nums">
+                    <span className="font-semibold">{applyProgress.processed}/{applyProgress.total}</span>
+                    <span className="text-emerald-600 font-semibold">{t('stock.import.apply.succeeded', { n: applyProgress.succeeded })}</span>
+                    {applyProgress.failed > 0 && (
+                      <span className="text-rose-600 font-semibold">{t('stock.import.apply.failed', { n: applyProgress.failed })}</span>
+                    )}
                   </div>
+                  {(applyProgress.rowsPerSec != null || applyProgress.etaSeconds != null) && (
+                    <div className="flex items-center justify-center gap-4 text-xs text-secondary tabular-nums">
+                      {applyProgress.rowsPerSec != null && <span>{t('stock.import.apply.rowsPerSec', { n: applyProgress.rowsPerSec })}</span>}
+                      {applyProgress.etaSeconds != null && <span>{t('stock.import.apply.eta', { s: applyProgress.etaSeconds })}</span>}
+                    </div>
+                  )}
+                  <p className="text-xs text-tertiary">{t('stock.import.apply.backgroundNote')}</p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Button variant="secondary" size="sm" onClick={() => { setMainTab('history'); loadHistory() }}>
-                    <History size={14} /> {t('stock.import.apply.viewHistory')}
-                  </Button>
-                  <Button variant="primary" size="sm" onClick={resetWizard}>
-                    <Upload size={14} /> {t('stock.import.apply.importAgain')}
-                  </Button>
-                </div>
+                <Button variant="ghost" size="sm" onClick={cancelApply} disabled={cancelling}>
+                  {cancelling ? <Spinner size={14} /> : <Trash2 size={14} />} {t('stock.import.apply.cancel')}
+                </Button>
               </div>
             </Card>
           )}
+
+          {/* ─── APPLY (done) ────────────────────────────────────────────── */}
+          {step === 'APPLY' && applyResult && (() => {
+            const doneStatus = applyProgress?.status && TERMINAL_IMPORT_STATUSES.has(applyProgress.status)
+              ? applyProgress.status
+              : applyResult.failed > 0 ? 'PARTIAL' : 'APPLIED'
+            const tone = doneStatus === 'APPLIED'
+              ? { bg: 'bg-emerald-100 dark:bg-emerald-900/30', fg: 'text-emerald-600 dark:text-emerald-400' }
+              : doneStatus === 'PARTIAL'
+                ? { bg: 'bg-amber-100 dark:bg-amber-900/30', fg: 'text-amber-600 dark:text-amber-400' }
+                : { bg: 'bg-rose-100 dark:bg-rose-900/30', fg: 'text-rose-600 dark:text-rose-400' }
+            const title = doneStatus === 'APPLIED'
+              ? t('stock.import.apply.done')
+              : doneStatus === 'PARTIAL'
+                ? t('stock.import.apply.donePartial')
+                : doneStatus === 'CANCELLED'
+                  ? t('stock.import.apply.doneCancelled')
+                  : t('stock.import.apply.doneFailed')
+            return (
+              <Card elevated>
+                <div className="p-8 flex flex-col items-center gap-6 text-center">
+                  <div className={`rounded-full p-4 ${tone.bg}`}>
+                    {doneStatus === 'APPLIED'
+                      ? <CheckCircle2 size={36} className={tone.fg} />
+                      : <AlertTriangle size={36} className={tone.fg} />}
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold">{title}</p>
+                    <div className="flex items-center justify-center gap-4 mt-3 text-sm">
+                      <span className="text-emerald-600 font-semibold">{t('stock.import.apply.succeeded', { n: applyResult.succeeded })}</span>
+                      {applyResult.failed > 0 && <span className="text-rose-600 font-semibold">{t('stock.import.apply.failed', { n: applyResult.failed })}</span>}
+                      {applyResult.skipped > 0 && <span className="text-secondary">{t('stock.import.apply.skipped', { n: applyResult.skipped })}</span>}
+                    </div>
+                    {applyProgress?.errorSummary && (
+                      <p className="text-xs text-secondary mt-2 max-w-md">{applyProgress.errorSummary}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Button variant="secondary" size="sm" onClick={() => { setMainTab('history'); loadHistory() }}>
+                      <History size={14} /> {t('stock.import.apply.viewHistory')}
+                    </Button>
+                    <Button variant="primary" size="sm" onClick={resetWizard}>
+                      <Upload size={14} /> {t('stock.import.apply.importAgain')}
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            )
+          })()}
         </>
       )}
 
@@ -1357,8 +1523,14 @@ function ImportWizardInner() {
                     ),
                   },
                   {
-                    key: 'status', label: 'Status', width: 100,
-                    render: (r) => (
+                    key: 'status', label: 'Status', width: 110,
+                    render: (r) => r.status === 'APPLYING' ? (
+                      // IM.3.2 — async apply in flight: live mini progress
+                      <div className="flex flex-col gap-1 min-w-[80px]">
+                        <ProgressBar value={r.totalRows > 0 ? ((r.processedRows ?? 0) / r.totalRows) * 100 : 0} height={5} />
+                        <span className="text-[10px] text-secondary tabular-nums">{r.processedRows ?? 0}/{r.totalRows}</span>
+                      </div>
+                    ) : (
                       <Pill tone={r.status === 'APPLIED' ? 'success' : r.status === 'PARTIAL' ? 'warning' : r.status === 'FAILED' ? 'danger' : 'neutral'}>
                         {r.status}
                       </Pill>
