@@ -34,6 +34,40 @@ const RECEIVE_AUTO_LAYER_REASONS = new Set([
 const MERCHANT_CHANNELS = new Set(['EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'])
 
 /**
+ * SC.1b — recascade after a Sync Control mutation (routing / pause / follow /
+ * buffer / policy). Chunked ≤5 sequentially: setFollowMasterQuantity's P2028
+ * lesson — big interactive batches time out on Neon. Fire from every SC.3
+ * mutation endpoint so a control change becomes marketplace truth within
+ * seconds, not at the next organic movement.
+ */
+export async function recascadeAfterSyncControlChange(
+  productIds: string[],
+  actor: string,
+): Promise<{ ok: number; noLedger: number; failed: number }> {
+  const out = { ok: 0, noLedger: 0, failed: 0 }
+  const unique = [...new Set(productIds)].filter(Boolean)
+  for (const pid of unique) {
+    try {
+      const r = await recascadeProduct(pid, {
+        reason: 'SYNC_RECONCILIATION',
+        referenceType: 'SYNC_CONTROL',
+        referenceId: actor,
+        actor,
+      })
+      if (r.ok) out.ok++
+      else out.noLedger++
+    } catch (err) {
+      out.failed++
+      logger.warn('recascadeAfterSyncControlChange: product failed', {
+        productId: pid,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+  return out
+}
+
+/**
  * FCF.2 — resolve the pool that backs a listing. Explicit method wins; else
  * merchant channels are FBM; else (Amazon) infer FBA from an FBA signal
  * (stock in the AMAZON_FBA bucket, or Product.fulfillmentMethod=FBA).

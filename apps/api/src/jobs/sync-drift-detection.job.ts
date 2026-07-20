@@ -209,7 +209,8 @@ export async function runSyncDriftDetection(): Promise<SyncDriftDetectionResult>
   // isFbaListing. Neither fact expresses cleanly in SQL, so we fetch the following
   // candidates + their stock and compute expected in JS.
   const followingCandidates = await prisma.channelListing.findMany({
-    where: { followMasterQuantity: true },
+    // SC.1b — PAUSED listings are operator-frozen: not drift, not healable.
+    where: { followMasterQuantity: true, syncPaused: false },
     select: {
       id: true,
       productId: true,

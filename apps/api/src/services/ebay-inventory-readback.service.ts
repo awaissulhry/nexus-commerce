@@ -210,6 +210,8 @@ export interface TradingReadbackEntry {
   marketplace: string
   productId: string | null
   lastPushedAt: Date | null
+  /** SC.1b — per-membership overselling buffer, subtracted from intended. */
+  stockBuffer?: number
 }
 
 export interface TradingMismatch {
@@ -244,8 +246,9 @@ export function diffTradingReadback(
     if (!e.productId) continue
     const observed = observedByItemSku.get(obsKey(e.itemId, e.sku))
     if (observed === undefined) continue
-    const intended = intendedByProduct.get(e.productId)
-    if (intended === undefined) continue
+    const intendedBase = intendedByProduct.get(e.productId)
+    if (intendedBase === undefined) continue
+    const intended = Math.max(0, intendedBase - Math.max(0, e.stockBuffer ?? 0))
     if (e.lastPushedAt && now - e.lastPushedAt.getTime() < settleMs) continue
     if (observed !== intended) {
       out.push({
@@ -313,6 +316,7 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
       marketplace: m.marketplace,
       productId: m.productId,
       lastPushedAt: m.lastPushedAt,
+      stockBuffer: (m as { stockBuffer?: number }).stockBuffer ?? 0,
     })
     byItem.set(key, g)
   }

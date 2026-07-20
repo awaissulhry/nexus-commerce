@@ -12,6 +12,8 @@
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { resolveIntendedQuantity } from './sync-control-core.js'
+import { loadChannelPolicies, policyFor } from './sync-control-policy.service.js'
 
 const VALID_CHANNELS = new Set(['AMAZON', 'EBAY', 'SHOPIFY'])
 
@@ -30,8 +32,14 @@ export async function syncActivatedListings(listingIds: string[]): Promise<void>
         productId: true,
         channel: true,
         region: true,
+        marketplace: true,
         stockBuffer: true,
         externalListingId: true,
+        followMasterQuantity: true,
+        fulfillmentMethod: true,
+        syncPaused: true,
+        sourceLocationCodes: true,
+        product: { select: { fulfillmentMethod: true } },
       },
     })
 
@@ -42,26 +50,44 @@ export async function syncActivatedListings(listingIds: string[]): Promise<void>
     // the Map kept only the LAST row per product instead of summing.
     const stockLevels = await prisma.stockLevel.findMany({
       where: { productId: { in: productIds }, location: { type: 'WAREHOUSE' } },
-      select: { productId: true, available: true },
+      select: { productId: true, available: true, location: { select: { code: true, syncRoutes: true } } },
     })
     const availableByProduct = new Map<string, number>()
+    const ledgerByProduct = new Map<string, { locationCode: string; available: number; syncRoutes: string[] }[]>()
     for (const sl of stockLevels) {
       availableByProduct.set(sl.productId, (availableByProduct.get(sl.productId) ?? 0) + sl.available)
+      const arr = ledgerByProduct.get(sl.productId) ?? []
+      arr.push({ locationCode: sl.location?.code ?? '?', available: sl.available, syncRoutes: sl.location?.syncRoutes ?? [] })
+      ledgerByProduct.set(sl.productId, arr)
     }
+    const scPolicies = await loadChannelPolicies()
 
     const rows: any[] = []
     let uncountedSkips = 0
     for (const listing of listings) {
       if (!listing.productId || !VALID_CHANNELS.has(listing.channel)) continue
-      // AS.5 — P0-guard parity: a product with ZERO warehouse ledger rows is
-      // UNCOUNTED, not zero. Activation must not manufacture a 0-quantity
-      // push from that state (the cascade already refuses; this path didn't).
-      if (!availableByProduct.has(listing.productId)) {
-        uncountedSkips++
+      // SC.1b — full core derivation (routing + pause + policy + pin + FBA);
+      // non-FOLLOW resolutions (incl. the AS.5 UNCOUNTED guard) enqueue nothing.
+      const scRes = resolveIntendedQuantity({
+        channel: listing.channel,
+        marketplace: (listing as { marketplace?: string }).marketplace ?? 'DEFAULT',
+        isFba:
+          (listing as { fulfillmentMethod?: string | null }).fulfillmentMethod === 'FBA' ||
+          ((listing as { fulfillmentMethod?: string | null }).fulfillmentMethod == null &&
+            (listing as { product?: { fulfillmentMethod?: string | null } }).product?.fulfillmentMethod === 'FBA'),
+        followMasterQuantity: (listing as { followMasterQuantity?: boolean }).followMasterQuantity ?? true,
+        syncPaused: (listing as { syncPaused?: boolean }).syncPaused ?? false,
+        pinnedQuantity: null,
+        stockBuffer: listing.stockBuffer ?? 0,
+        sourceLocationCodes: (listing as { sourceLocationCodes?: string[] }).sourceLocationCodes ?? [],
+        channelPolicy: policyFor(scPolicies, listing.channel, (listing as { marketplace?: string }).marketplace ?? 'DEFAULT'),
+        ledger: ledgerByProduct.get(listing.productId) ?? [],
+      })
+      if (scRes.kind !== 'FOLLOW') {
+        if (scRes.kind === 'UNCOUNTED') uncountedSkips++
         continue
       }
-      const available = availableByProduct.get(listing.productId) ?? 0
-      const bufferedQty = Math.max(0, available - (listing.stockBuffer ?? 0))
+      const bufferedQty = scRes.quantity
       rows.push({
         productId: listing.productId,
         channelListingId: listing.id,

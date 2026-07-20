@@ -29,6 +29,8 @@ import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { resolveListingFulfillmentMethod, resolveCascadePushMethod } from './stock-movement.service.js'
+import { resolveIntendedQuantity, resolveMembershipIntended } from './sync-control-core.js'
+import { loadChannelPolicies, policyFor } from './sync-control-policy.service.js'
 import { coalescePendingQuantityRows } from './sync-coalesce.js'
 import { computeAvailableToPublish } from './available-to-publish.service.js'
 import { buildSharedFanoutRows, type SharedMembershipRow } from './ebay-shared-fanout.service.js'
@@ -821,7 +823,8 @@ async function executeApplyImport(args: {
           where: { productId: { in: productIds } },
           select: {
             id: true, productId: true, locationId: true, variationId: true,
-            quantity: true, available: true, location: { select: { type: true } },
+            quantity: true, available: true,
+            location: { select: { type: true, code: true, syncRoutes: true } },
           },
         })
       : [],
@@ -838,14 +841,14 @@ async function executeApplyImport(args: {
             id: true, productId: true, channel: true, region: true, marketplace: true,
             externalListingId: true, quantity: true, masterQuantity: true, stockBuffer: true,
             followMasterQuantity: true, fulfillmentMethod: true, quantityOverride: true,
-            listingStatus: true,
+            listingStatus: true, syncPaused: true, sourceLocationCodes: true,
           },
         })
       : [],
     wantsWarehouse && productIds.length > 0
       ? prisma.sharedListingMembership.findMany({
           where: { productId: { in: productIds }, status: 'ACTIVE' },
-          select: { sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true },
+          select: { sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true, followPool: true, stockBuffer: true },
         })
       : [],
   ])
@@ -1020,6 +1023,9 @@ async function executeApplyImport(args: {
 
   const holdUntil = new Date(Date.now() + IMPORT_HOLD_MS)
 
+  // SC.1b — channel policies once per apply run.
+  const scPoliciesImport = await loadChannelPolicies()
+
   // ── Plan: ONE cascade per product at FINAL state ────────────────────────────
   for (const plan of plans.values()) {
     if (!wantsWarehouse || plan.movements.length === 0) continue
@@ -1033,6 +1039,8 @@ async function executeApplyImport(args: {
     let total = 0
     let warehouseAvailable = 0
     let fbaBucket = 0
+    // SC.1b — routed-ledger rows (import-substituted) for the derivation core.
+    const scLedger: { locationCode: string; available: number; syncRoutes: string[] }[] = []
     let sawImportRow = false
     for (const lvl of levelsByProduct.get(productId) ?? []) {
       const isImportRow = lvl.locationId === location.id && lvl.variationId === null
@@ -1042,6 +1050,11 @@ async function executeApplyImport(args: {
       if (lvl.location?.type === 'WAREHOUSE') {
         total += qty
         warehouseAvailable += avail
+        scLedger.push({
+          locationCode: (lvl.location as { code?: string })?.code ?? '?',
+          available: avail,
+          syncRoutes: (lvl.location as { syncRoutes?: string[] })?.syncRoutes ?? [],
+        })
       } else if (lvl.location?.type === 'AMAZON_FBA') {
         fbaBucket += lvl.quantity
       }
@@ -1050,6 +1063,11 @@ async function executeApplyImport(args: {
       // Level row doesn't exist yet — the chunk write will create it.
       total += plan.finalQty
       warehouseAvailable += plan.finalQty
+      scLedger.push({
+        locationCode: (location as { code?: string })?.code ?? '?',
+        available: plan.finalQty,
+        syncRoutes: (location as { syncRoutes?: string[] })?.syncRoutes ?? [],
+      })
     }
     plan.newTotalStock = total
     const netChange = plan.finalQty - plan.baseQty
@@ -1064,15 +1082,22 @@ async function executeApplyImport(args: {
         fbaBucket,
         productFulfillmentMethod: meta?.fulfillmentMethod ?? null,
       })
-      const newListingQty =
-        listing.followMasterQuantity && method === 'FBM'
-          ? computeAvailableToPublish({
-              fulfillmentMethod: 'FBM',
-              warehouseAvailable,
-              fbaSellable: 0,
-              stockBuffer: listing.stockBuffer ?? 0,
-            }).available
-          : null
+      // SC.1b — the derivation core is the quantity authority here too
+      // (routing + pause + policy + pin + FBA precedence, import-substituted
+      // ledger). PAUSED/UNCOUNTED/PINNED/FBA → no cascade write from import.
+      const scRes = resolveIntendedQuantity({
+        channel: listing.channel,
+        marketplace: listing.marketplace,
+        isFba: method === 'FBA',
+        followMasterQuantity: listing.followMasterQuantity,
+        syncPaused: (listing as { syncPaused?: boolean }).syncPaused ?? false,
+        pinnedQuantity: listing.quantity,
+        stockBuffer: listing.stockBuffer ?? 0,
+        sourceLocationCodes: (listing as { sourceLocationCodes?: string[] }).sourceLocationCodes ?? [],
+        channelPolicy: policyFor(scPoliciesImport, listing.channel, listing.marketplace),
+        ledger: scLedger,
+      })
+      const newListingQty = scRes.kind === 'FOLLOW' ? scRes.quantity : null
       if (newListingQty != null && newListingQty !== listing.quantity) {
         plan.cascadeWrites.push({ listingId: listing.id, masterQuantity: total, quantity: newListingQty })
         if (VALID_SYNC_TARGETS.has(listing.channel)) {
@@ -1117,13 +1142,22 @@ async function executeApplyImport(args: {
     // made the extras harmless but wasteful).
     const shared = membershipsByProduct.get(productId) ?? []
     if (shared.length > 0) {
-      const capped = computeAvailableToPublish({
-        fulfillmentMethod: 'FBM',
-        warehouseAvailable,
-        fbaSellable: 0,
-        stockBuffer: 0, // shared listings have no per-listing ChannelListing buffer (yet)
-      }).available
-      for (const fanoutRow of buildSharedFanoutRows(shared as Array<SharedMembershipRow & { lastQtyPushed: number | null }>, () => capped, holdUntil)) {
+      // SC.1b — per-membership derivation (followPool / routing / buffer /
+      // policy); non-FOLLOW members never fan out from imports either.
+      const scQty = new Map<string, number>()
+      const scEligible = shared.filter((m) => {
+        const r = resolveMembershipIntended({
+          marketplace: (m as { marketplace: string }).marketplace,
+          followPool: (m as { followPool?: boolean }).followPool ?? true,
+          stockBuffer: (m as { stockBuffer?: number }).stockBuffer ?? 0,
+          channelPolicy: policyFor(scPoliciesImport, 'EBAY', (m as { marketplace: string }).marketplace),
+          ledger: scLedger,
+        })
+        if (r.kind !== 'FOLLOW') return false
+        scQty.set(`${(m as { itemId: string }).itemId} ${(m as { sku: string }).sku}`, r.quantity)
+        return true
+      })
+      for (const fanoutRow of buildSharedFanoutRows(scEligible as Array<SharedMembershipRow & { lastQtyPushed: number | null }>, (m) => scQty.get(`${m.itemId} ${m.sku}`) ?? 0, holdUntil)) {
         plan.queueRows.push({
           id: randomUUID(),
           kind: 'CASCADE',
