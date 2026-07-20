@@ -9,8 +9,9 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Listbox } from '@/design-system/components/Listbox'
+import { getBackendUrl } from '@/lib/backend-url'
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? ''
+const API = getBackendUrl()
 
 type Mode = 'FOLLOW' | 'PINNED' | 'PAUSED' | 'PAUSED_POLICY' | 'UNCOUNTED' | 'FBA' | 'EXCLUDED'
 
