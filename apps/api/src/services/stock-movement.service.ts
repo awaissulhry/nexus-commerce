@@ -31,6 +31,26 @@ const RECEIVE_AUTO_LAYER_REASONS = new Set([
 // signal is present (an explicit ChannelListing.fulfillmentMethod always wins).
 const MERCHANT_CHANNELS = new Set(['EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'])
 
+/**
+ * FCF.2 — resolve the pool that backs a listing. Explicit method wins; else
+ * merchant channels are FBM; else (Amazon) infer FBA from an FBA signal
+ * (stock in the AMAZON_FBA bucket, or Product.fulfillmentMethod=FBA).
+ * Exported so batched writers (stock-import apply engine) share the exact
+ * cascade semantics instead of re-deriving them.
+ */
+export function resolveListingFulfillmentMethod(args: {
+  listingFulfillmentMethod: string | null
+  channel: string
+  fbaBucket: number
+  productFulfillmentMethod: string | null
+}): 'FBA' | 'FBM' {
+  if (args.listingFulfillmentMethod === 'FBA' || args.listingFulfillmentMethod === 'FBM') {
+    return args.listingFulfillmentMethod
+  }
+  if (MERCHANT_CHANNELS.has(args.channel)) return 'FBM'
+  return args.fbaBucket > 0 || args.productFulfillmentMethod === 'FBA' ? 'FBA' : 'FBM'
+}
+
 // B.1/B.2 — single entrypoint for every stock change.
 // Anyone touching Product.totalStock or ProductVariation.stock MUST go
 // through here so the StockMovement audit log captures balanceAfter,
@@ -635,17 +655,12 @@ async function cascadeQuantityToListings(
   )
 
   for (const listing of listings) {
-    // FCF.2 — resolve the pool that backs THIS listing. Explicit method wins;
-    // else merchant channels are FBM; else (Amazon) infer FBA from an FBA
-    // signal (stock in the AMAZON_FBA bucket, or Product.fulfillmentMethod=FBA).
-    const method: 'FBA' | 'FBM' =
-      listing.fulfillmentMethod === 'FBA' || listing.fulfillmentMethod === 'FBM'
-        ? listing.fulfillmentMethod
-        : MERCHANT_CHANNELS.has(listing.channel)
-          ? 'FBM'
-          : fbaBucket > 0 || productFulfillment === 'FBA'
-            ? 'FBA'
-            : 'FBM'
+    const method = resolveListingFulfillmentMethod({
+      listingFulfillmentMethod: listing.fulfillmentMethod,
+      channel: listing.channel,
+      fbaBucket,
+      productFulfillmentMethod: productFulfillment,
+    })
 
     // FBM follows the warehouse pool (reserved-adjusted available − buffer).
     // FBA is Amazon-managed: snapshot its master but never cascade/push a

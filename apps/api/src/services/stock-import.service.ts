@@ -25,9 +25,15 @@
  *   BOTH      — warehouse + channel
  */
 
+import { randomUUID } from 'node:crypto'
+import type { Prisma } from '@prisma/client'
 import prisma from '../db.js'
-import { applyStockMovement } from './stock-movement.service.js'
+import { resolveListingFulfillmentMethod } from './stock-movement.service.js'
 import { coalescePendingQuantityRows } from './sync-coalesce.js'
+import { computeAvailableToPublish } from './available-to-publish.service.js'
+import { buildSharedFanoutRows, type SharedMembershipRow } from './ebay-shared-fanout.service.js'
+import { handleMovementStockoutTransition } from './stockout-detector.service.js'
+import { productReadCacheService } from './product-read-cache.service.js'
 import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 
@@ -130,9 +136,33 @@ interface ProductLookup {
   amazonAsin: string | null
 }
 
-export async function resolveRows(rows: ImportRow[]): Promise<ResolvedRow[]> {
-  const raws = rows.map((r) => r.raw.trim()).filter(Boolean)
-  if (raws.length === 0) return []
+interface ResolutionIndex {
+  products: ProductLookup[]
+  bySku: Map<string, ProductLookup>
+  bySkuLower: Map<string, ProductLookup>
+  byEan: Map<string, ProductLookup>
+  byUpc: Map<string, ProductLookup>
+  byAlias: Map<string, string>
+  byChannelId: Map<string, string>
+  productById: Map<string, ProductLookup>
+}
+
+// IM.3.1 — the wizard calls /resolve and then /preview (which re-resolves)
+// back to back, so the full catalog + alias + channel-identity load ran twice
+// per import. A short-TTL cache makes the second build free while keeping
+// staleness bounded; alias writes invalidate it explicitly.
+const RESOLUTION_INDEX_TTL_MS = 30 * 1000
+let cachedIndex: { index: ResolutionIndex; builtAt: number } | null = null
+
+export function invalidateResolutionIndex(): void {
+  cachedIndex = null
+}
+
+async function buildResolutionIndex(): Promise<ResolutionIndex> {
+  const now = Date.now()
+  if (cachedIndex && now - cachedIndex.builtAt < RESOLUTION_INDEX_TTL_MS) {
+    return cachedIndex.index
+  }
 
   // Load all products (small catalog, ~279 for Xavia — single query is fine)
   const products = await prisma.product.findMany({
@@ -184,6 +214,18 @@ export async function resolveRows(rows: ImportRow[]): Promise<ResolvedRow[]> {
     addChannelId(cl.externalListingId, cl.productId) // child ASIN
     addChannelId(cl.platformProductId, cl.productId) // analytics ASIN key
   }
+
+  const index: ResolutionIndex = { products, bySku, bySkuLower, byEan, byUpc, byAlias, byChannelId, productById }
+  cachedIndex = { index, builtAt: now }
+  return index
+}
+
+export async function resolveRows(rows: ImportRow[]): Promise<ResolvedRow[]> {
+  const raws = rows.map((r) => r.raw.trim()).filter(Boolean)
+  if (raws.length === 0) return []
+
+  const { products, bySku, bySkuLower, byEan, byUpc, byAlias, byChannelId, productById } =
+    await buildResolutionIndex()
 
   return rows.map((row): ResolvedRow => {
     const raw = row.raw.trim()
@@ -497,7 +539,88 @@ export async function ensureDraftImportJob(opts: {
   return job.id
 }
 
-// ── Apply ─────────────────────────────────────────────────────────────────────
+// ── Apply (IM.3.1 — batched set-based engine) ────────────────────────────────
+//
+// The IM.1/IM.2 engine applied rows one at a time: each row opened its own
+// transaction and re-ran the full per-product cascade (~15-17 queries/row —
+// a 500-row file cost ~8,500 sequential queries inside one HTTP request).
+// This engine plans everything in memory from batched pre-reads, then writes
+// in chunked transactions with set-based (unnest) updates:
+//
+//   plan  — per-product movement chains (dup-SKU rows stay sequentially
+//           correct), negative guards, channel-listing arithmetic, and ONE
+//           cascade per product computed at FINAL state (not one per row).
+//   write — chunks of NEXUS_IMPORT_CHUNK_PRODUCTS products (default 50);
+//           per chunk one transaction. A failed chunk falls back to
+//           per-product transactions so one bad product fails alone and
+//           per-row error reporting survives.
+//   after — one BullMQ enqueue pass, one stockout check and one read-cache
+//           refresh per product (not per row).
+//
+// Semantics preserved from the per-row engine: movement audit chain
+// (quantityBefore/balanceAfter per row), SET-as-delta vs live base, ADJUST
+// cumulative with the same negative-guard error text, channel clamp at 0,
+// pinOverride, ENDED exclusion, coalesce-before-insert, hold windows and
+// payload shapes. Deliberate improvements: BOTH-target listings are written
+// ONCE (the explicit channel value wins — the old engine wrote them twice
+// and the second write won), and only the FINAL queue row per listing is
+// inserted (the old engine inserted N and cancelled N−1 via coalesce).
+
+// Mirrors stock-movement.service DEFAULT_HOLD_MS for cascade-sourced rows.
+const CASCADE_HOLD_MS = 30 * 1000
+// SyncChannel enum values OutboundSyncQueue.targetChannel accepts.
+const VALID_SYNC_TARGETS = new Set(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE'])
+// Channels the explicit CHANNEL/BOTH writer targets (parity with IM.2).
+const EXPLICIT_CHANNELS = new Set(['AMAZON', 'EBAY', 'SHOPIFY'])
+
+export interface ApplyProgress {
+  total: number
+  processed: number
+  succeeded: number
+  failed: number
+  skipped: number
+}
+
+interface RowSlot {
+  row: PreviewRow
+  skipped: boolean
+  warehouseApplied: boolean
+  channelApplied: boolean
+  error?: string
+}
+
+interface PlannedMovement {
+  change: number
+  quantityBefore: number
+  balanceAfter: number
+  notes: string
+}
+
+interface PlannedQueueRow {
+  id: string
+  /** IMPORT rows enqueue with source STOCK_IMPORT; CASCADE rows (incl.
+   *  shared-SKU fanout) with source STOCK_MOVEMENT — parity with IM.2. */
+  kind: 'IMPORT' | 'CASCADE'
+  productId: string
+  data: Prisma.OutboundSyncQueueCreateManyInput
+}
+
+interface ProductPlan {
+  productId: string
+  sku: string
+  rowSlots: RowSlot[]
+  movements: PlannedMovement[]
+  stockLevelId: string | null
+  baseQty: number
+  reserved: number
+  /** Effective warehouse qty as the movement chain advances (= final qty). */
+  finalQty: number
+  newTotalStock: number | null
+  cascadeWrites: Array<{ listingId: string; masterQuantity: number; quantity: number }>
+  snapshotWrites: Array<{ listingId: string; masterQuantity: number }>
+  explicitWrites: Array<{ listingId: string; quantity: number; masterQuantity: number | null }>
+  queueRows: PlannedQueueRow[]
+}
 
 export async function applyImport(opts: {
   rows: PreviewRow[]
@@ -518,8 +641,14 @@ export async function applyImport(opts: {
    * draft throws ImportAlreadyAppliedError instead of double-writing stock.
    */
   jobId?: string
+  /**
+   * IM.3.1 — chunk-level progress hook (feeds the IM.3.2 async progress
+   * endpoint). Called after planning and after each committed chunk;
+   * errors in the callback never affect the apply.
+   */
+  onProgress?: (p: ApplyProgress) => void | Promise<void>
 }): Promise<ApplyResult> {
-  const { rows, locationCode, mode, target, filename, fileKind, pinOverride = false } = opts
+  const { rows, locationCode, mode, target, filename, fileKind, pinOverride = false, onProgress } = opts
 
   const location = await prisma.stockLocation.findUnique({
     where: { code: locationCode },
@@ -561,212 +690,653 @@ export async function applyImport(opts: {
     jobId = job.id
   }
 
-  // IM.2 P4 — batched pre-reads. SET-mode warehouse bases and channel
-  // listings load in two queries instead of two per row; duplicate-SKU rows
-  // stay sequentially correct via in-memory effective state (same model the
-  // preview uses).
-  const applicable = rows.filter((r) => !r.error && r.productId && r.resolvedSku)
-  const applicableProductIds = [...new Set(applicable.map((r) => r.productId as string))]
-  const warehouseQtyByProduct = new Map<string, number>()
-  if (target !== 'CHANNEL' && mode === 'SET' && applicableProductIds.length > 0) {
-    const sls = await prisma.stockLevel.findMany({
-      where: { locationId: location.id, productId: { in: applicableProductIds } },
-      select: { productId: true, quantity: true },
-    })
-    for (const sl of sls) warehouseQtyByProduct.set(sl.productId, sl.quantity)
-  }
-  type ApplyListing = {
-    id: string
-    productId: string
-    channel: string
-    region: string
-    marketplace: string
-    quantity: number | null
-    quantityOverride: number | null
-    externalListingId: string | null
-  }
-  const listingsByProduct = new Map<string, ApplyListing[]>()
-  const listingEffectiveQty = new Map<string, number>()
-  if (target !== 'WAREHOUSE' && applicableProductIds.length > 0) {
-    const cls = await prisma.channelListing.findMany({
-      where: {
-        productId: { in: applicableProductIds },
-        listingStatus: { not: 'ENDED' },
-        channel: { in: ['AMAZON', 'EBAY', 'SHOPIFY'] },
-      },
-      select: {
-        id: true, productId: true, channel: true, region: true, marketplace: true,
-        quantity: true, quantityOverride: true, externalListingId: true,
-      },
-    })
-    for (const cl of cls) {
-      const arr = listingsByProduct.get(cl.productId) ?? []
-      arr.push(cl)
-      listingsByProduct.set(cl.productId, arr)
-    }
-  }
-
-  let succeeded = 0, failed = 0, skipped = 0
-  const results: ApplyResult['results'] = []
-  // BullMQ jobs are added AFTER each row's transaction commits (rows stay
-  // PENDING for the cron drain if Redis is down — same as stock movements).
-  const queuedJobIds: Array<{ queueId: string; productId: string }> = []
-
-  for (const row of rows) {
+  // ── Row slots (original order — results are emitted in file order) ──────────
+  const slots: RowSlot[] = rows.map((row) => {
     if (row.error || !row.productId || !row.resolvedSku) {
-      skipped++
-      results.push({ sku: row.resolvedSku ?? '?', raw: row.raw, applied: false, error: row.error ?? 'unresolved' })
-      continue
+      return { row, skipped: true, warehouseApplied: false, channelApplied: false, error: row.error ?? 'unresolved' }
     }
+    if (!Number.isFinite(row.quantity) || !Number.isInteger(row.quantity)) {
+      return { row, skipped: false, warehouseApplied: false, channelApplied: false, error: `Quantity must be a whole number (got ${row.quantity})` }
+    }
+    return { row, skipped: false, warehouseApplied: false, channelApplied: false }
+  })
+  const applicable = slots.filter((s) => !s.skipped && !s.error)
+  const productIds = [...new Set(applicable.map((s) => s.row.productId as string))]
 
-    let warehouseApplied = false
-    let channelApplied = false
-    let rowError: string | undefined
+  const wantsWarehouse = target !== 'CHANNEL'
+  const wantsChannel = target !== 'WAREHOUSE'
 
-    // ── Warehouse ──
-    if (target !== 'CHANNEL') {
-      try {
-        if (mode === 'SET') {
-          // Delta vs the batched base, kept sequentially correct for
-          // duplicate-SKU rows via the in-memory effective map.
-          const current = warehouseQtyByProduct.get(row.productId) ?? 0
-          const delta = row.quantity - current
-          if (delta !== 0) {
-            await applyStockMovement({
-              productId: row.productId,
-              locationId: location.id,
-              change: delta,
-              reason: 'MANUAL_ADJUSTMENT',
-              referenceType: 'BulkImport',
-              referenceId: jobId,
-              actor: 'bulk-import',
-              notes: row.notes ?? `[SET ${row.quantity}] ${row.raw}`,
-            })
-          }
-          warehouseQtyByProduct.set(row.productId, row.quantity)
-          warehouseApplied = true
-        } else if (row.quantity !== 0) {
-          await applyStockMovement({
-            productId: row.productId,
-            locationId: location.id,
-            change: row.quantity,
-            reason: 'MANUAL_ADJUSTMENT',
-            referenceType: 'BulkImport',
-            referenceId: jobId,
-            actor: 'bulk-import',
-            notes: row.notes ?? `[ADJUST ${row.quantity > 0 ? '+' : ''}${row.quantity}] ${row.raw}`,
-          })
-          warehouseApplied = true
-        }
-        // ADJUST of 0 is a valid no-op (applyStockMovement rejects change=0)
-      } catch (err) {
-        rowError = err instanceof Error ? err.message : String(err)
-        logger.error('stock-import: warehouse apply failed', { sku: row.resolvedSku, error: rowError })
+  // ── Batched pre-reads (fixed query count regardless of row count) ───────────
+  const [locLevels, allLevels, productMeta, allListings, memberships] = await Promise.all([
+    wantsWarehouse && productIds.length > 0
+      ? prisma.stockLevel.findMany({
+          where: { locationId: location.id, productId: { in: productIds }, variationId: null },
+          select: { id: true, productId: true, quantity: true, reserved: true },
+        })
+      : [],
+    wantsWarehouse && productIds.length > 0
+      ? prisma.stockLevel.findMany({
+          where: { productId: { in: productIds } },
+          select: {
+            id: true, productId: true, locationId: true, variationId: true,
+            quantity: true, available: true, location: { select: { type: true } },
+          },
+        })
+      : [],
+    productIds.length > 0
+      ? prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, sku: true, fulfillmentMethod: true },
+        })
+      : [],
+    productIds.length > 0
+      ? prisma.channelListing.findMany({
+          where: { productId: { in: productIds } },
+          select: {
+            id: true, productId: true, channel: true, region: true, marketplace: true,
+            externalListingId: true, quantity: true, masterQuantity: true, stockBuffer: true,
+            followMasterQuantity: true, fulfillmentMethod: true, quantityOverride: true,
+            listingStatus: true,
+          },
+        })
+      : [],
+    wantsWarehouse && productIds.length > 0
+      ? prisma.sharedListingMembership.findMany({
+          where: { productId: { in: productIds }, status: 'ACTIVE' },
+          select: { sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true },
+        })
+      : [],
+  ])
+
+  const locLevelByProduct = new Map(locLevels.map((l) => [l.productId, l] as const))
+  const metaByProduct = new Map(productMeta.map((p) => [p.id, p] as const))
+  const levelsByProduct = new Map<string, typeof allLevels>()
+  for (const lvl of allLevels) {
+    const arr = levelsByProduct.get(lvl.productId)
+    if (arr) arr.push(lvl)
+    else levelsByProduct.set(lvl.productId, [lvl])
+  }
+  const listingsByProduct = new Map<string, typeof allListings>()
+  for (const cl of allListings) {
+    const arr = listingsByProduct.get(cl.productId)
+    if (arr) arr.push(cl)
+    else listingsByProduct.set(cl.productId, [cl])
+  }
+  const membershipsByProduct = new Map<string, typeof memberships>()
+  for (const m of memberships) {
+    if (!m.productId) continue
+    const arr = membershipsByProduct.get(m.productId)
+    if (arr) arr.push(m)
+    else membershipsByProduct.set(m.productId, [m])
+  }
+
+  // ── Plan: per-product movement chains + channel arithmetic (in memory) ──────
+  const plans = new Map<string, ProductPlan>()
+  const planFor = (productId: string): ProductPlan => {
+    let plan = plans.get(productId)
+    if (!plan) {
+      const lvl = locLevelByProduct.get(productId)
+      plan = {
+        productId,
+        sku: metaByProduct.get(productId)?.sku ?? '?',
+        rowSlots: [],
+        movements: [],
+        stockLevelId: lvl?.id ?? null,
+        baseQty: lvl?.quantity ?? 0,
+        reserved: lvl?.reserved ?? 0,
+        finalQty: lvl?.quantity ?? 0,
+        newTotalStock: null,
+        cascadeWrites: [],
+        snapshotWrites: [],
+        explicitWrites: [],
+        queueRows: [],
       }
+      plans.set(productId, plan)
     }
+    return plan
+  }
 
-    // ── Channel listing quantity (IM.2 P3) ──
-    // Per-listing arithmetic, ENDED listings skipped, quantity + sync-state
-    // written and an OutboundSyncQueue row enqueued so the marketplace push
-    // actually happens. followMasterQuantity flips ONLY behind pinOverride.
-    if (target !== 'WAREHOUSE' && !rowError) {
-      try {
-        const cls = (listingsByProduct.get(row.productId) ?? [])
-          .filter((cl) => !row.channel || cl.channel === row.channel)
-          .filter((cl) => !row.marketplace || cl.marketplace === row.marketplace)
+  // Explicit CHANNEL/BOTH targets: listingId → owning plan + listing row.
+  // Populated in file order; the FINAL effective value per listing is what
+  // gets written and enqueued (the per-row engine wrote every intermediate
+  // value and coalesced the queue rows — same net outcome, one write).
+  const listingEffectiveQty = new Map<string, number>()
+  const explicitTargets = new Map<string, { plan: ProductPlan; listing: (typeof allListings)[number] }>()
 
-        if (cls.length === 0) {
-          const filterDesc = [row.channel, row.marketplace].filter(Boolean).join('/')
-          const msg = `No active channel listing matches${filterDesc ? ` (${filterDesc})` : ''}`
-          if (target === 'CHANNEL') {
-            rowError = msg
-          }
-          // BOTH: warehouse already applied — surfaced via channelApplied=false
-        } else {
-          const validTargets = new Set(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE'])
-          const holdUntil = new Date(Date.now() + IMPORT_HOLD_MS)
-          const createdQueueIds = await prisma.$transaction(async (tx) => {
-            const ids: string[] = []
-            // Cancel superseded PENDING quantity pushes for these listings —
-            // only the freshest imported value should dispatch.
-            await coalescePendingQuantityRows(tx, cls.map((c) => c.id))
-            for (const cl of cls) {
-              const current = listingEffectiveQty.get(cl.id) ?? cl.quantityOverride ?? cl.quantity ?? 0
-              const newQty = Math.max(0, mode === 'SET' ? row.quantity : current + row.quantity)
-              listingEffectiveQty.set(cl.id, newQty)
-              await tx.channelListing.update({
-                where: { id: cl.id },
-                data: {
-                  quantity: newQty,
-                  lastSyncStatus: 'PENDING',
-                  lastSyncedAt: null,
-                  version: { increment: 1 },
-                  ...(pinOverride ? { quantityOverride: newQty, followMasterQuantity: false } : {}),
-                },
-              })
-              if (validTargets.has(cl.channel)) {
-                const qRow = await tx.outboundSyncQueue.create({
-                  data: {
-                    productId: row.productId!,
-                    channelListingId: cl.id,
-                    targetChannel: cl.channel as any,
-                    targetRegion: cl.region,
-                    syncStatus: 'PENDING' as any,
-                    syncType: 'QUANTITY_UPDATE',
-                    holdUntil,
-                    externalListingId: cl.externalListingId,
-                    maxRetries: 3,
-                    payload: {
-                      source: 'STOCK_IMPORT',
-                      productId: row.productId,
-                      channel: cl.channel,
-                      marketplace: cl.marketplace,
-                      quantity: newQty,
-                      oldQuantity: cl.quantity,
-                      pinOverride,
-                      reason: 'MANUAL_ADJUSTMENT',
-                      referenceType: 'BulkImport',
-                      referenceId: jobId,
-                    },
-                  },
-                  select: { id: true },
-                })
-                ids.push(qRow.id)
-              }
-            }
-            return ids
-          })
-          for (const queueId of createdQueueIds) {
-            queuedJobIds.push({ queueId, productId: row.productId })
-          }
-          channelApplied = true
+  for (const slot of slots) {
+    if (slot.skipped || slot.error) continue
+    const row = slot.row
+    const productId = row.productId as string
+    const plan = planFor(productId)
+    plan.rowSlots.push(slot)
+
+    // ── Warehouse chain (dup-SKU rows stay sequentially correct) ──
+    if (wantsWarehouse) {
+      if (mode === 'SET') {
+        const delta = row.quantity - plan.finalQty
+        if (row.quantity < 0) {
+          slot.error =
+            `applyStockMovement: would drive StockLevel quantity negative ` +
+            `(product=${productId} location=${location.id} ` +
+            `before=${plan.finalQty} change=${delta})`
+          continue
         }
-      } catch (err) {
-        rowError = err instanceof Error ? err.message : String(err)
-        logger.error('stock-import: channel apply failed', { sku: row.resolvedSku, error: rowError })
+        if (delta !== 0) {
+          plan.movements.push({
+            change: delta,
+            quantityBefore: plan.finalQty,
+            balanceAfter: row.quantity,
+            notes: row.notes ?? `[SET ${row.quantity}] ${row.raw}`,
+          })
+          plan.finalQty = row.quantity
+        }
+        slot.warehouseApplied = true
+      } else if (row.quantity !== 0) {
+        const next = plan.finalQty + row.quantity
+        if (next < 0) {
+          slot.error =
+            `applyStockMovement: would drive StockLevel quantity negative ` +
+            `(product=${productId} location=${location.id} ` +
+            `before=${plan.finalQty} change=${row.quantity})`
+          continue
+        }
+        plan.movements.push({
+          change: row.quantity,
+          quantityBefore: plan.finalQty,
+          balanceAfter: next,
+          notes: row.notes ?? `[ADJUST ${row.quantity > 0 ? '+' : ''}${row.quantity}] ${row.raw}`,
+        })
+        plan.finalQty = next
+        slot.warehouseApplied = true
       }
+      // ADJUST of 0 is a valid no-op (parity: no movement, row still succeeds)
     }
 
-    if (rowError) {
-      failed++
-      results.push({ sku: row.resolvedSku, raw: row.raw, applied: false, warehouseApplied, channelApplied, error: rowError })
-    } else {
-      succeeded++
-      results.push({ sku: row.resolvedSku, raw: row.raw, applied: true, warehouseApplied, channelApplied })
+    // ── Channel listing arithmetic (explicit CHANNEL/BOTH writes) ──
+    if (wantsChannel) {
+      const cls = (listingsByProduct.get(productId) ?? [])
+        .filter((cl) => cl.listingStatus !== 'ENDED')
+        .filter((cl) => EXPLICIT_CHANNELS.has(cl.channel))
+        .filter((cl) => !row.channel || cl.channel === row.channel)
+        .filter((cl) => !row.marketplace || cl.marketplace === row.marketplace)
+      if (cls.length === 0) {
+        const filterDesc = [row.channel, row.marketplace].filter(Boolean).join('/')
+        const msg = `No active channel listing matches${filterDesc ? ` (${filterDesc})` : ''}`
+        if (target === 'CHANNEL') slot.error = msg
+        // BOTH: warehouse already applied — surfaced via channelApplied=false
+      } else {
+        for (const cl of cls) {
+          const current = listingEffectiveQty.get(cl.id) ?? cl.quantityOverride ?? cl.quantity ?? 0
+          const newQty = Math.max(0, mode === 'SET' ? row.quantity : current + row.quantity)
+          listingEffectiveQty.set(cl.id, newQty)
+          explicitTargets.set(cl.id, { plan, listing: cl })
+        }
+        slot.channelApplied = true
+      }
     }
   }
 
-  // BullMQ enqueue AFTER commits. addJobSafely is bounded + circuit-broken, so
-  // an unreachable Redis can never hang the apply loop — the DB rows stay
-  // PENDING and the drain cron picks them up (Redis-down degrades to cron).
-  for (const { queueId, productId } of queuedJobIds) {
-    await addJobSafely(
-      outboundSyncQueue,
-      'sync-job',
-      { queueId, productId, syncType: 'QUANTITY_UPDATE', source: 'STOCK_IMPORT' },
-      { delay: IMPORT_HOLD_MS, jobId: queueId },
+  // Per-product explicit-listing id set (the cascade must not double-write
+  // these — the explicit channel value wins, exactly like the old engine's
+  // channel block overwriting the cascade's value).
+  const explicitIdsByProduct = new Map<string, Set<string>>()
+  for (const [listingId, t] of explicitTargets) {
+    const set = explicitIdsByProduct.get(t.plan.productId) ?? new Set<string>()
+    set.add(listingId)
+    explicitIdsByProduct.set(t.plan.productId, set)
+  }
+
+  const holdUntil = new Date(Date.now() + IMPORT_HOLD_MS)
+
+  // ── Plan: ONE cascade per product at FINAL state ────────────────────────────
+  for (const plan of plans.values()) {
+    if (!wantsWarehouse || plan.movements.length === 0) continue
+    const { productId } = plan
+    const meta = metaByProduct.get(productId)
+    const explicitIds = explicitIdsByProduct.get(productId) ?? new Set<string>()
+
+    // Recompute totalStock + pools in memory, substituting this import's
+    // final qty for the import-location row (recomputeProductTotalStock /
+    // cascadeQuantityToListings parity: WAREHOUSE-only pool, FBA bucket).
+    let total = 0
+    let warehouseAvailable = 0
+    let fbaBucket = 0
+    let sawImportRow = false
+    for (const lvl of levelsByProduct.get(productId) ?? []) {
+      const isImportRow = lvl.locationId === location.id && lvl.variationId === null
+      if (isImportRow) sawImportRow = true
+      const qty = isImportRow ? plan.finalQty : lvl.quantity
+      const avail = isImportRow ? plan.finalQty - plan.reserved : lvl.available
+      if (lvl.location?.type === 'WAREHOUSE') {
+        total += qty
+        warehouseAvailable += avail
+      } else if (lvl.location?.type === 'AMAZON_FBA') {
+        fbaBucket += lvl.quantity
+      }
+    }
+    if (!sawImportRow && location.type === 'WAREHOUSE') {
+      // Level row doesn't exist yet — the chunk write will create it.
+      total += plan.finalQty
+      warehouseAvailable += plan.finalQty
+    }
+    plan.newTotalStock = total
+    const netChange = plan.finalQty - plan.baseQty
+
+    for (const listing of listingsByProduct.get(productId) ?? []) {
+      if (explicitIds.has(listing.id)) continue // explicit value wins (BOTH)
+      const method = resolveListingFulfillmentMethod({
+        listingFulfillmentMethod: listing.fulfillmentMethod,
+        channel: listing.channel,
+        fbaBucket,
+        productFulfillmentMethod: meta?.fulfillmentMethod ?? null,
+      })
+      const newListingQty =
+        listing.followMasterQuantity && method === 'FBM'
+          ? computeAvailableToPublish({
+              fulfillmentMethod: 'FBM',
+              warehouseAvailable,
+              fbaSellable: 0,
+              stockBuffer: listing.stockBuffer ?? 0,
+            }).available
+          : null
+      if (newListingQty != null && newListingQty !== listing.quantity) {
+        plan.cascadeWrites.push({ listingId: listing.id, masterQuantity: total, quantity: newListingQty })
+        if (VALID_SYNC_TARGETS.has(listing.channel)) {
+          plan.queueRows.push({
+            id: randomUUID(),
+            kind: 'CASCADE',
+            productId,
+            data: {
+              productId,
+              channelListingId: listing.id,
+              targetChannel: listing.channel as any,
+              targetRegion: listing.region,
+              syncStatus: 'PENDING' as any,
+              syncType: 'QUANTITY_UPDATE',
+              holdUntil,
+              externalListingId: listing.externalListingId,
+              maxRetries: 3,
+              payload: {
+                source: 'STOCK_MOVEMENT',
+                productId,
+                channel: listing.channel,
+                marketplace: listing.marketplace,
+                quantity: newListingQty,
+                oldQuantity: listing.quantity,
+                masterQuantity: total,
+                stockBuffer: listing.stockBuffer ?? 0,
+                reason: 'MANUAL_ADJUSTMENT',
+                change: netChange,
+                referenceType: 'BulkImport',
+                referenceId: jobId,
+              },
+            },
+          })
+        }
+      } else if (listing.masterQuantity !== total) {
+        plan.snapshotWrites.push({ listingId: listing.id, masterQuantity: total })
+      }
+    }
+
+    // Shared-SKU eBay fan-out — once per product at the final pool value (the
+    // per-row engine enqueued one batch per row; the dispatcher's no-op guard
+    // made the extras harmless but wasteful).
+    const shared = membershipsByProduct.get(productId) ?? []
+    if (shared.length > 0) {
+      const capped = computeAvailableToPublish({
+        fulfillmentMethod: 'FBM',
+        warehouseAvailable,
+        fbaSellable: 0,
+        stockBuffer: 0, // shared listings have no per-listing ChannelListing buffer (yet)
+      }).available
+      for (const fanoutRow of buildSharedFanoutRows(shared as Array<SharedMembershipRow & { lastQtyPushed: number | null }>, () => capped, holdUntil)) {
+        plan.queueRows.push({
+          id: randomUUID(),
+          kind: 'CASCADE',
+          productId,
+          data: { ...fanoutRow, payload: fanoutRow.payload as unknown as Prisma.InputJsonValue } as Prisma.OutboundSyncQueueCreateManyInput,
+        })
+      }
+    }
+  }
+
+  // ── Plan: explicit CHANNEL/BOTH writes — final effective value per listing ──
+  for (const [listingId, t] of explicitTargets) {
+    const finalQty = listingEffectiveQty.get(listingId)
+    if (finalQty === undefined) continue
+    // BOTH folds the cascade's masterQuantity snapshot into the explicit
+    // write; CHANNEL-only never touches masterQuantity (parity with IM.2).
+    const masterQuantity = target === 'BOTH' ? t.plan.newTotalStock : null
+    t.plan.explicitWrites.push({ listingId, quantity: finalQty, masterQuantity })
+    t.plan.queueRows.push({
+      id: randomUUID(),
+      kind: 'IMPORT',
+      productId: t.plan.productId,
+      data: {
+        productId: t.plan.productId,
+        channelListingId: listingId,
+        targetChannel: t.listing.channel as any,
+        targetRegion: t.listing.region,
+        syncStatus: 'PENDING' as any,
+        syncType: 'QUANTITY_UPDATE',
+        holdUntil,
+        externalListingId: t.listing.externalListingId,
+        maxRetries: 3,
+        payload: {
+          source: 'STOCK_IMPORT',
+          productId: t.plan.productId,
+          channel: t.listing.channel,
+          marketplace: t.listing.marketplace,
+          quantity: finalQty,
+          oldQuantity: t.listing.quantity,
+          pinOverride,
+          reason: 'MANUAL_ADJUSTMENT',
+          referenceType: 'BulkImport',
+          referenceId: jobId,
+        },
+      },
+    })
+  }
+
+  // ── Write: chunked transactions with set-based updates ──────────────────────
+  const planList = [...plans.values()]
+  const failedProducts = new Set<string>()
+  const CHUNK_PRODUCTS = Math.max(1, Math.min(200, Number(process.env.NEXUS_IMPORT_CHUNK_PRODUCTS) || 50))
+
+  const writeChunk = async (tx: Prisma.TransactionClient, chunk: ProductPlan[]) => {
+    // 1. StockLevel — set-based update for existing rows, createMany for new
+    const slUpdates = chunk.filter((p) => p.movements.length > 0 && p.stockLevelId)
+    if (slUpdates.length > 0) {
+      const ids = slUpdates.map((p) => p.stockLevelId as string)
+      const qtys = slUpdates.map((p) => p.finalQty)
+      await tx.$executeRaw`
+        UPDATE "StockLevel" AS sl
+        SET quantity = u.qty,
+            available = u.qty - sl.reserved,
+            "lastSyncedAt" = now(),
+            "lastUpdatedAt" = now()
+        FROM (SELECT unnest(${ids}::text[]) AS id, unnest(${qtys}::int[]) AS qty) AS u
+        WHERE sl.id = u.id`
+    }
+    const slCreates = chunk.filter((p) => p.movements.length > 0 && !p.stockLevelId)
+    if (slCreates.length > 0) {
+      await tx.stockLevel.createMany({
+        data: slCreates.map((p) => ({
+          locationId: location.id,
+          productId: p.productId,
+          variationId: null,
+          quantity: p.finalQty,
+          reserved: 0,
+          available: p.finalQty,
+          syncStatus: 'SYNCED',
+          lastSyncedAt: new Date(),
+        })),
+      })
+    }
+
+    // 2. StockMovement audit rows — one per applied row, chain preserved
+    const movementRows = chunk.flatMap((p) =>
+      p.movements.map((m) => ({
+        productId: p.productId,
+        variationId: null,
+        warehouseId: null,
+        locationId: location.id,
+        change: m.change,
+        balanceAfter: m.balanceAfter,
+        quantityBefore: m.quantityBefore,
+        reason: 'MANUAL_ADJUSTMENT' as const,
+        referenceType: 'BulkImport',
+        referenceId: jobId,
+        notes: m.notes,
+        actor: 'bulk-import',
+      })),
+    )
+    if (movementRows.length > 0) await tx.stockMovement.createMany({ data: movementRows })
+
+    // 3. Product.totalStock (recomputed in memory — WAREHOUSE-only sum)
+    const totals = chunk.filter((p) => p.movements.length > 0 && p.newTotalStock != null)
+    if (totals.length > 0) {
+      const ids = totals.map((p) => p.productId)
+      const values = totals.map((p) => p.newTotalStock as number)
+      await tx.$executeRaw`
+        UPDATE "Product" AS p
+        SET "totalStock" = u.total, "updatedAt" = now()
+        FROM (SELECT unnest(${ids}::text[]) AS id, unnest(${values}::int[]) AS total) AS u
+        WHERE p.id = u.id`
+    }
+
+    // 4. ChannelListing writes — cascade / snapshot-only / explicit
+    const cascades = chunk.flatMap((p) => p.cascadeWrites)
+    if (cascades.length > 0) {
+      const ids = cascades.map((c) => c.listingId)
+      const mqs = cascades.map((c) => c.masterQuantity)
+      const qtys = cascades.map((c) => c.quantity)
+      await tx.$executeRaw`
+        UPDATE "ChannelListing" AS cl
+        SET "masterQuantity" = u.mq,
+            quantity = u.qty,
+            "lastSyncStatus" = 'PENDING',
+            "lastSyncedAt" = NULL,
+            version = cl.version + 1,
+            "updatedAt" = now()
+        FROM (SELECT unnest(${ids}::text[]) AS id, unnest(${mqs}::int[]) AS mq, unnest(${qtys}::int[]) AS qty) AS u
+        WHERE cl.id = u.id`
+    }
+    const snapshots = chunk.flatMap((p) => p.snapshotWrites)
+    if (snapshots.length > 0) {
+      const ids = snapshots.map((s) => s.listingId)
+      const mqs = snapshots.map((s) => s.masterQuantity)
+      await tx.$executeRaw`
+        UPDATE "ChannelListing" AS cl
+        SET "masterQuantity" = u.mq, "updatedAt" = now()
+        FROM (SELECT unnest(${ids}::text[]) AS id, unnest(${mqs}::int[]) AS mq) AS u
+        WHERE cl.id = u.id`
+    }
+    const explicits = chunk.flatMap((p) => p.explicitWrites)
+    if (explicits.length > 0) {
+      const ids = explicits.map((e) => e.listingId)
+      const qtys = explicits.map((e) => e.quantity)
+      const mqs = explicits.map((e) => e.masterQuantity)
+      if (pinOverride) {
+        await tx.$executeRaw`
+          UPDATE "ChannelListing" AS cl
+          SET quantity = u.qty,
+              "masterQuantity" = COALESCE(u.mq, cl."masterQuantity"),
+              "quantityOverride" = u.qty,
+              "followMasterQuantity" = false,
+              "lastSyncStatus" = 'PENDING',
+              "lastSyncedAt" = NULL,
+              version = cl.version + 1,
+              "updatedAt" = now()
+          FROM (SELECT unnest(${ids}::text[]) AS id, unnest(${qtys}::int[]) AS qty, unnest(${mqs}::int[]) AS mq) AS u
+          WHERE cl.id = u.id`
+      } else {
+        await tx.$executeRaw`
+          UPDATE "ChannelListing" AS cl
+          SET quantity = u.qty,
+              "masterQuantity" = COALESCE(u.mq, cl."masterQuantity"),
+              "lastSyncStatus" = 'PENDING',
+              "lastSyncedAt" = NULL,
+              version = cl.version + 1,
+              "updatedAt" = now()
+          FROM (SELECT unnest(${ids}::text[]) AS id, unnest(${qtys}::int[]) AS qty, unnest(${mqs}::int[]) AS mq) AS u
+          WHERE cl.id = u.id`
+      }
+    }
+
+    // 5. Coalesce superseded PENDING quantity pushes, then insert fresh rows.
+    // Queue-row ids are pre-generated so no read-back query is needed.
+    const queueRows = chunk.flatMap((p) => p.queueRows)
+    const coalesceIds = queueRows
+      .map((q) => q.data.channelListingId)
+      .filter((id): id is string => Boolean(id))
+    if (coalesceIds.length > 0) await coalescePendingQuantityRows(tx, coalesceIds)
+    if (queueRows.length > 0) {
+      await tx.outboundSyncQueue.createMany({
+        data: queueRows.map((q) => ({ ...q.data, id: q.id })),
+      })
+    }
+  }
+
+  const skippedCount = slots.filter((s) => s.skipped).length
+  // Rows rejected by the integer precheck never enter a plan, so the chunk
+  // loop can't count them — fold them into the baseline so progress reaches
+  // total. (Planning-stage errors DO sit inside plan.rowSlots.)
+  const plannedSlots = new Set(planList.flatMap((p) => p.rowSlots))
+  const precheckFailed = slots.filter((s) => !s.skipped && s.error && !plannedSlots.has(s)).length
+  let processedRows = skippedCount + precheckFailed
+  let doneSucceeded = 0
+  let doneFailed = precheckFailed
+  const report = async () => {
+    if (!onProgress) return
+    try {
+      await onProgress({
+        total: rows.length,
+        processed: processedRows,
+        succeeded: doneSucceeded,
+        failed: doneFailed,
+        skipped: skippedCount,
+      })
+    } catch {
+      /* progress must never affect the apply */
+    }
+  }
+  await report()
+
+  for (let i = 0; i < planList.length; i += CHUNK_PRODUCTS) {
+    const chunk = planList.slice(i, i + CHUNK_PRODUCTS)
+    try {
+      await prisma.$transaction((tx) => writeChunk(tx, chunk), { timeout: 30_000, maxWait: 10_000 })
+    } catch (chunkErr) {
+      // Isolate: retry each product alone so one bad product fails alone and
+      // per-row error reporting survives (the batch tx rolled back atomically).
+      logger.warn('stock-import: chunk write failed — retrying per product', {
+        products: chunk.length,
+        error: chunkErr instanceof Error ? chunkErr.message : String(chunkErr),
+      })
+      for (const plan of chunk) {
+        try {
+          await prisma.$transaction((tx) => writeChunk(tx, [plan]), { timeout: 15_000, maxWait: 10_000 })
+        } catch (productErr) {
+          const msg = productErr instanceof Error ? productErr.message : String(productErr)
+          failedProducts.add(plan.productId)
+          for (const slot of plan.rowSlots) {
+            if (!slot.error) {
+              slot.error = msg
+              slot.warehouseApplied = false
+              slot.channelApplied = false
+            }
+          }
+          logger.error('stock-import: product write failed', { productId: plan.productId, sku: plan.sku, error: msg })
+        }
+      }
+    }
+    for (const plan of chunk) {
+      processedRows += plan.rowSlots.length
+      doneSucceeded += plan.rowSlots.filter((s) => !s.error).length
+      doneFailed += plan.rowSlots.filter((s) => Boolean(s.error)).length
+    }
+    await report()
+  }
+
+  // ── After: BullMQ enqueue (bounded + circuit-broken adds; DB rows stay
+  // PENDING for the drain cron when Redis is down — work is never lost) ──────
+  const enqueueable = planList
+    .filter((p) => !failedProducts.has(p.productId))
+    .flatMap((p) => p.queueRows)
+  const ENQUEUE_BATCH = 25
+  for (let i = 0; i < enqueueable.length; i += ENQUEUE_BATCH) {
+    await Promise.all(
+      enqueueable.slice(i, i + ENQUEUE_BATCH).map((q) =>
+        q.kind === 'IMPORT'
+          ? addJobSafely(
+              outboundSyncQueue,
+              'sync-job',
+              { queueId: q.id, productId: q.productId, syncType: 'QUANTITY_UPDATE', source: 'STOCK_IMPORT' },
+              { delay: IMPORT_HOLD_MS, jobId: q.id },
+            )
+          : addJobSafely(
+              outboundSyncQueue,
+              'sync-job',
+              { queueId: q.id, productId: q.productId, syncType: 'QUANTITY_UPDATE', source: 'STOCK_MOVEMENT', reason: 'MANUAL_ADJUSTMENT' },
+              { delay: CASCADE_HOLD_MS, jobId: q.id },
+            ),
+      ),
     )
   }
+
+  // ── After: stockout transitions — once per product (initial → final
+  // available); a momentary mid-file dip no longer opens a phantom stockout.
+  for (const plan of planList) {
+    if (failedProducts.has(plan.productId) || plan.movements.length === 0) continue
+    try {
+      await handleMovementStockoutTransition({
+        productId: plan.productId,
+        sku: plan.sku,
+        locationId: location.id,
+        prevAvailable: plan.baseQty - plan.reserved,
+        nextAvailable: plan.finalQty - plan.reserved,
+      })
+    } catch (err) {
+      logger.warn('stock-import: stockout hook failed', {
+        productId: plan.productId,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  // ── After: read-cache refresh — once per product, bounded concurrency,
+  // fire-and-forget (ES.4 parity: the reconcile cron heals any miss). ────────
+  const refreshIds = planList
+    .filter((p) => !failedProducts.has(p.productId) && p.movements.length > 0)
+    .map((p) => p.productId)
+  if (refreshIds.length > 0) {
+    void (async () => {
+      const pending = [...refreshIds]
+      await Promise.all(
+        Array.from({ length: Math.min(4, pending.length) }, async () => {
+          for (let id = pending.shift(); id !== undefined; id = pending.shift()) {
+            await productReadCacheService.refresh(id).catch((err) =>
+              logger.warn('stock-import: read-cache refresh failed (reconcile cron will heal)', {
+                productId: id,
+                err: err instanceof Error ? err.message : String(err),
+              }),
+            )
+          }
+        }),
+      )
+    })()
+  }
+
+  // ── Finalize ────────────────────────────────────────────────────────────────
+  let succeeded = 0
+  let failed = 0
+  let skipped = 0
+  const results: ApplyResult['results'] = slots.map((s) => {
+    if (s.skipped) {
+      skipped++
+      return { sku: s.row.resolvedSku ?? '?', raw: s.row.raw, applied: false, error: s.error }
+    }
+    if (s.error) {
+      failed++
+      return {
+        sku: s.row.resolvedSku as string,
+        raw: s.row.raw,
+        applied: false,
+        warehouseApplied: s.warehouseApplied,
+        channelApplied: s.channelApplied,
+        error: s.error,
+      }
+    }
+    succeeded++
+    return {
+      sku: s.row.resolvedSku as string,
+      raw: s.row.raw,
+      applied: true,
+      warehouseApplied: s.warehouseApplied,
+      channelApplied: s.channelApplied,
+    }
+  })
 
   // Close job
   await prisma.stockImportJob.update({
@@ -804,5 +1374,7 @@ export async function bulkCreateAliases(
       // skip duplicates silently
     }
   }
+  // New aliases must be visible to the next resolve/preview immediately.
+  if (created > 0) invalidateResolutionIndex()
   return created
 }

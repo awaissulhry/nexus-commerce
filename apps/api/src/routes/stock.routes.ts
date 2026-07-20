@@ -11,6 +11,7 @@ import {
   ImportAlreadyAppliedError,
   normalizeAlias,
   bulkCreateAliases,
+  invalidateResolutionIndex,
   type ImportRow,
   type ImportMode,
   type ImportTarget,
@@ -3349,6 +3350,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const { id } = request.params
         await prisma.skuAlias.delete({ where: { id } })
+        invalidateResolutionIndex()
         return { ok: true }
       } catch (error: any) {
         if (error?.code === 'P2025') return reply.code(404).send({ error: 'Alias not found' })
