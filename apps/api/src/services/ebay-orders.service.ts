@@ -602,7 +602,11 @@ export class EbayOrdersService {
       }
 
       const authService = new EbayAuthService()
-      const accessToken = await authService.getValidToken(connection)
+      // AS.3 — getValidToken takes the CONNECTION ID, not the row. Passing the
+      // object (hidden by the `as any` prisma cast) made the inner findUnique
+      // throw before any HTTP call — every poll tick failed for 7+ days with
+      // fetched=0 and zero OutboundApiCallLog rows.
+      const accessToken = await authService.getValidToken(connection.id)
 
       const orders = await this.fetchEbayOrders(accessToken)
       this.stats.ordersFetched = orders.length
@@ -687,7 +691,8 @@ export class EbayOrdersService {
       }
 
       const authService = new EbayAuthService()
-      const accessToken = await authService.getValidToken(connection)
+      // AS.3 — connection ID, not the row (same defect as syncEbayOrders).
+      const accessToken = await authService.getValidToken(connection.id)
 
       const orders = await this.fetchEbayOrdersInRange(accessToken, from, to)
       this.stats.ordersFetched = orders.length

@@ -63,6 +63,7 @@ async function runOrdersPoll(): Promise<void> {
       inventoryDeducted: 0,
     }
 
+    let firstError: string | null = null
     for (const conn of connections) {
       try {
         const result = await ebayOrdersService.syncEbayOrders(conn.id)
@@ -76,6 +77,7 @@ async function runOrdersPoll(): Promise<void> {
         else totals.connectionsFailed++
 
         if (result.status !== 'SUCCESS') {
+          firstError ??= result.errors[0]?.error ?? null
           logger.warn('ebay-orders cron: connection completed with errors', {
             connectionId: conn.id,
             displayName: conn.displayName,
@@ -85,6 +87,7 @@ async function runOrdersPoll(): Promise<void> {
         }
       } catch (err) {
         totals.connectionsFailed++
+        firstError ??= err instanceof Error ? err.message : String(err)
         logger.error('ebay-orders cron: connection threw', {
           connectionId: conn.id,
           displayName: conn.displayName,
@@ -94,7 +97,11 @@ async function runOrdersPoll(): Promise<void> {
     }
 
     logger.info('ebay-orders cron: tick complete', totals)
-    return `connections=${totals.connectionsTried} ok=${totals.connectionsOk} partial=${totals.connectionsPartial} failed=${totals.connectionsFailed} fetched=${totals.ordersFetched} created=${totals.ordersCreated}`
+    // AS.3 — surface the first failure reason in the CronRun summary. The
+    // getValidToken defect failed every tick for 7+ days as a bare
+    // `failed=1` because per-connection errors only went to logs.
+    const errNote = firstError ? ` err="${firstError.slice(0, 120)}"` : ''
+    return `connections=${totals.connectionsTried} ok=${totals.connectionsOk} partial=${totals.connectionsPartial} failed=${totals.connectionsFailed} fetched=${totals.ordersFetched} created=${totals.ordersCreated}${errNote}`
   }).catch((err) => {
     logger.error('ebay-orders cron: top-level failure', {
       error: err instanceof Error ? err.message : String(err),

@@ -194,6 +194,14 @@ export class EbayAuthService {
    */
   async getValidToken(connectionId: string): Promise<string> {
     try {
+      // AS.3 — callers passed the whole connection row here for weeks (hidden
+      // by `as any` prisma casts); the Prisma error it produced was cryptic
+      // and per-tick-swallowed. Fail loud and precise instead.
+      if (typeof connectionId !== "string" || !connectionId) {
+        throw new Error(
+          `getValidToken expects a connection id string, got ${typeof connectionId} — pass connection.id, not the row`,
+        );
+      }
       // Fetch the connection from database
       const connection = await prisma.channelConnection.findUnique({
         where: { id: connectionId },
