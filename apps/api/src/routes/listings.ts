@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
 import { AmazonService } from "../services/marketplaces/amazon.service.js";
-import { runSync } from "../jobs/sync.job.js";
 import { GeminiService } from "../services/ai/gemini.service.js";
 import { AiListingService } from "../services/ai/ai-listing.service.js";
 import { EbayCategoryService } from "../services/ebay-category.service.js";
@@ -147,22 +146,17 @@ export async function listingsRoutes(app: FastifyInstance) {
   });
 
   // POST /listings/force-sync-ebay
-  // Manually triggers the Amazon → eBay sync without waiting for the cron schedule.
-  app.post("/listings/force-sync-ebay", async (request, reply) => {
-    try {
-      await runSync();
-      return reply.send({
-        success: true,
-        message: "Manual eBay sync executed",
-      });
-    } catch (error: any) {
-      request.log.error(error, "force-sync-ebay failed");
-      return reply.status(500).send({
-        success: false,
-        error: "Manual eBay sync failed",
-        message: error?.message ?? "Unknown error",
-      });
-    }
+  // RT.7 — RETIRED. This invoked the legacy pre-queue orchestrator
+  // (unified-sync-orchestrator → marketplace.service direct pushes), which
+  // bypassed the publish gates, circuits, FBA guards, and rate limiters the
+  // real-time program enforces. All pushes ride OutboundSyncQueue now;
+  // trigger a resync from the Control Tower / per-listing resync instead.
+  app.post("/listings/force-sync-ebay", async (_request, reply) => {
+    return reply.status(410).send({
+      success: false,
+      error: "Retired endpoint",
+      message: "force-sync-ebay used the legacy gate-bypassing push stack. Use the Control Tower resync (OutboundSyncQueue) instead.",
+    });
   });
 
   // POST /listings/generate

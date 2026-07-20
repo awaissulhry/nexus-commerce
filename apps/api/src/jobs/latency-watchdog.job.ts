@@ -68,6 +68,17 @@ export async function runLatencyWatchdog(): Promise<void> {
 
         for (const { channel, p95Ms } of breaches) {
           try {
+            // RT.7 — persist the breach (the SSE ring buffer dies with the
+            // process; operators need breaches to survive restarts).
+            void import('../services/sync-health.service.js').then(({ syncHealthService }) =>
+              syncHealthService.logConflict({
+                channel,
+                conflictType: 'LATENCY_BREACH',
+                message: `outbound p95 ${Math.round(p95Ms / 1000)}s > ${Math.round(thresholdMs / 1000)}s threshold`,
+                localData: { p95Ms, thresholdMs },
+                remoteData: { source: 'latency-watchdog', window: '24h' },
+              }),
+            ).catch(() => {})
             publishOrderEvent({
               type: 'sync.latency.breach',
               channel,

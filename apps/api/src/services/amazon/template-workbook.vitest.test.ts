@@ -482,9 +482,35 @@ describe('A7 — buildTemplateDataRows (grid → template rows)', () => {
     expect(skippedEmptyRows).toBe(1)
     expect(dataRows).toHaveLength(1)
     expect(dataRows[0]['contribution_sku#1.value']).toBe('SKU-1')
-    expect(dataRows[0]['fulfillment_availability#1.quantity']).toBe('7') // FBM keeps qty
+    // RT.6/D8 — FBM quantity is BLANK by default (real-time sync owns qty;
+    // a stale exported number uploaded later would overwrite the live value).
+    expect(dataRows[0]['fulfillment_availability#1.quantity']).toBeUndefined()
     expect(dataRows[0][`item_name[marketplace_id=${MP}][language_tag=it_IT]#1.value`]).toBe('Giacca Moto Uomo')
     expect(dataRows[0]['::record_action']).toBeUndefined()
+  })
+
+  it('RT.6/D8 — includeQuantities:true exports FBM qty (deliberate snapshot)', async () => {
+    const { buildTemplateDataRows } = await import('./template-vault.service.js')
+    const { dataRows } = buildTemplateDataRows(HEADERS, COLUMNS, [
+      {
+        item_sku: 'SKU-1',
+        quantity: '7',
+        fulfillment_availability__fulfillment_channel_code: 'DEFAULT',
+      },
+    ], { includeQuantities: true })
+    expect(dataRows[0]['fulfillment_availability#1.quantity']).toBe('7')
+  })
+
+  it('RT.6/D8 — includeQuantities:true STILL never exports FBA qty', async () => {
+    const { buildTemplateDataRows } = await import('./template-vault.service.js')
+    const { dataRows } = buildTemplateDataRows(HEADERS, COLUMNS, [
+      {
+        item_sku: 'SKU-FBA',
+        quantity: '99',
+        fulfillment_availability__fulfillment_channel_code: 'AMAZON_EU',
+      },
+    ], { includeQuantities: true })
+    expect(dataRows[0]['fulfillment_availability#1.quantity']).toBeUndefined()
   })
 
   it('NEVER exports FBA quantity (Amazon-managed — Follow Master invariant)', async () => {

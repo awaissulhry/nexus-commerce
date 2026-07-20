@@ -17,8 +17,10 @@ export default async function outboundLatencyRoutes(app: FastifyInstance): Promi
   app.get('/admin/outbound-latency', async (req, reply) => {
     reply.header('Cache-Control', 'private, max-age=30')
     const q = req.query as { window?: string; syncType?: string }
-    const window = q.window === '7d' ? '7d' : '24h'
-    const sinceMs = window === '7d' ? 7 * 24 * 60 * 60_000 : 24 * 60 * 60_000
+    // RT.7 — 1h window added for post-realtime SLO checks (sub-minute p95s
+    // drown inside a 24h view that still contains pre-fix history).
+    const window = q.window === '7d' ? '7d' : q.window === '1h' ? '1h' : '24h'
+    const sinceMs = window === '7d' ? 7 * 24 * 60 * 60_000 : window === '1h' ? 60 * 60_000 : 24 * 60 * 60_000
     const since = new Date(Date.now() - sinceMs)
 
     try {

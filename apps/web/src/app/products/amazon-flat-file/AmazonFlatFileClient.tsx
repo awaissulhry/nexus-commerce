@@ -357,6 +357,11 @@ function makeEmptyRow(productType: string, _marketplace: string, parentage = '')
     parentage_level: parentage,
     parent_sku: '',
     variation_theme: '',
+    // RT.6 — new rows are FOLLOWERS from birth: a row carrying a Follow value
+    // routes the save through the qty-only branch (no legacy pin), so a
+    // wizard import with quantities ON can never silently detach a new
+    // listing from the shared pool.
+    follow: 'Follow',
   }
 }
 
@@ -3314,7 +3319,7 @@ export default function AmazonFlatFileClient({
     return () => { cancelled = true }
   }, [marketplace])
 
-  const exportAmazonTemplate = useCallback(async () => {
+  const exportAmazonTemplate = useCallback(async (includeQuantities = false) => {
     const mf = effectiveManifest ?? manifest
     if (!mf) return
     const selectedRows = latestSelectedRowsRef.current
@@ -3325,7 +3330,10 @@ export default function AmazonFlatFileClient({
     try {
       const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/export-template`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ manifest: mf, rows: outRows, marketplace }),
+        // RT.6/D8 — FBM quantity cells are BLANK by default (the real-time
+        // sync owns quantities; a stale exported number uploaded later would
+        // overwrite the live value). The with-quantities variant opts in.
+        body: JSON.stringify({ manifest: mf, rows: outRows, marketplace, includeQuantities }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => null)
@@ -3737,6 +3745,12 @@ export default function AmazonFlatFileClient({
         : 'Export for Amazon (.xlsm) — import an Amazon template first',
       icon: <Download className="w-3.5 h-3.5" />,
       onClick: () => void exportAmazonTemplate(),
+      disabled: !manifest || templateVault.length === 0,
+    },
+    {
+      label: 'Export for Amazon (.xlsm) WITH quantities — snapshot; sync owns qty normally',
+      icon: <Download className="w-3.5 h-3.5" />,
+      onClick: () => void exportAmazonTemplate(true),
       disabled: !manifest || templateVault.length === 0,
     },
     { separator: true, label: '' },

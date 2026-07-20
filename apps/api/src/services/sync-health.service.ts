@@ -27,7 +27,9 @@ export type ConflictType =
   | 'INVENTORY_MISMATCH'
   | 'ATTRIBUTE_MISMATCH'
   | 'DUPLICATE_SKU'
-  | 'DUPLICATE_ASIN';
+  | 'DUPLICATE_ASIN'
+  // RT.7 — persisted outbound-latency SLO breach (was SSE-only, died with the process)
+  | 'LATENCY_BREACH';
 
 export type ResolutionStatus = 'UNRESOLVED' | 'AUTO_RESOLVED' | 'MANUAL_RESOLVED' | 'IGNORED';
 

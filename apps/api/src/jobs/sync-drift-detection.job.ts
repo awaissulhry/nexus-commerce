@@ -321,6 +321,49 @@ export async function runSyncDriftDetection(): Promise<SyncDriftDetectionResult>
     }
   }
 
+  // ── RT.5 — drift SELF-HEAL (owner-approved 2026-07-20) ─────────────────
+  // Detection alone let drift persist until a stock movement happened to
+  // recascade the product. Now every drifted Following-FBM listing's product
+  // gets a canonical recascade (writes cl.quantity + enqueues instant-lane
+  // pushes; FBA/Pinned skipped inside; NO_LEDGER refused fail-closed).
+  // Bounded per run; opt out with NEXUS_DRIFT_SELF_HEAL=0.
+  let healed = 0
+  let healRefused = 0
+  if (process.env.NEXUS_DRIFT_SELF_HEAL !== '0' && qtyDrift.length > 0) {
+    const healMax = Number(process.env.NEXUS_DRIFT_HEAL_MAX ?? 25)
+    const productIds = [...new Set(qtyDrift.map((d) => d.product_id))].slice(0, healMax)
+    const { recascadeProduct } = await import('../services/stock-movement.service.js')
+    for (const pid of productIds) {
+      try {
+        const res = await recascadeProduct(pid, {
+          reason: 'SYNC_RECONCILIATION',
+          referenceType: 'DRIFT_SELF_HEAL',
+          actor: 'sync-drift-detection',
+        })
+        if (res.ok === false) {
+          healRefused++
+          logger.warn('sync-drift-detection: self-heal refused (NO_LEDGER) — backfill needed', {
+            productId: pid, totalStock: res.totalStock,
+          })
+        } else {
+          healed++
+        }
+      } catch (err) {
+        errors++
+        logger.warn('sync-drift-detection: self-heal recascade failed', {
+          productId: pid,
+          err: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+    if (qtyDrift.length > 0) {
+      logger.info('sync-drift-detection: self-heal pass', {
+        driftedListings: qtyDrift.length, productsHealed: healed, refused: healRefused,
+        capped: productIds.length < new Set(qtyDrift.map((d) => d.product_id)).size,
+      })
+    }
+  }
+
   const durationMs = Date.now() - startedAt
   const result: SyncDriftDetectionResult = {
     scanned: priceDrift.length + qtyDrift.length,

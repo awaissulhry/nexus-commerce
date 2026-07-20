@@ -214,6 +214,13 @@ export function buildTemplateDataRows(
   templateHeaders: string[],
   columns: FlatFileMappableColumn[],
   gridRows: Array<Record<string, unknown>>,
+  opts?: {
+    /** RT.6 (owner decision D8, 2026-07-20): FBM quantity cells are BLANK by
+     *  default — the real-time sync owns quantities in both directions, and a
+     *  stale exported number uploaded hours later would overwrite the live
+     *  value on Seller Central. Pass true for a deliberate full snapshot. */
+    includeQuantities?: boolean
+  },
 ): { dataRows: Array<Record<string, string>>; mappedHeaders: number; skippedEmptyRows: number } {
   const { mappings } = suggestFlatFileMapping(templateHeaders, columns)
   const colIdByHeader = new Map<string, string>()
@@ -233,6 +240,8 @@ export function buildTemplateDataRows(
     for (const header of templateHeaders) {
       if (header === '::record_action') continue // always blank — operator picks in Excel
       if (isFbaRow && FULFILLMENT_QTY_HEADER_RE.test(header)) continue // FBA qty is Amazon-managed
+      // RT.6/D8 — FBM qty blank by default too (sync owns quantities).
+      if (!opts?.includeQuantities && FULFILLMENT_QTY_HEADER_RE.test(header)) continue
       const colId = colIdByHeader.get(header)
       if (!colId) continue
       const raw = row[colId]
@@ -278,6 +287,8 @@ export async function buildAmazonTemplateExport(
     templateIdentifier?: string
     columns: FlatFileMappableColumn[]
     rows: Array<Record<string, unknown>>
+    /** RT.6/D8 — default false: FBM qty cells exported blank (sync owns qty). */
+    includeQuantities?: boolean
   },
 ): Promise<TemplateExportResult> {
   // FFT.5a — when the exported rows are one family, that family's own uploaded
@@ -305,6 +316,7 @@ export async function buildAmazonTemplateExport(
     parsed.headers,
     opts.columns,
     opts.rows,
+    { includeQuantities: opts.includeQuantities === true },
   )
   const rewritten = await rewriteTemplateDataRows(bytes, dataRows)
 

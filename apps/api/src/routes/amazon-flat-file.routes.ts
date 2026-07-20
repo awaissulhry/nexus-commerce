@@ -1291,7 +1291,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Body: { manifest: any; rows: any[]; marketplace?: string; templateIdentifier?: string }
   }>('/amazon/flat-file/export-template', { bodyLimit: FX_BODY_LIMIT }, async (request, reply) => {
-    const { manifest, rows, marketplace, templateIdentifier } = request.body
+    const { manifest, rows, marketplace, templateIdentifier, includeQuantities } = request.body as typeof request.body & { includeQuantities?: boolean }
     if (!manifest || !Array.isArray(rows) || rows.length === 0) {
       return reply.code(400).send({ error: 'manifest and rows (non-empty) required' })
     }
@@ -1304,6 +1304,8 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         templateIdentifier: templateIdentifier || undefined,
         columns,
         rows,
+        // RT.6/D8 — FBM quantities blank by default; explicit opt-in only.
+        includeQuantities: includeQuantities === true,
       })
       const base = result.sourceFilename.replace(/\.(xlsm|xlsx)$/i, '').replace(/[^\w.() +-]+/g, '_')
       reply.header('Content-Type', 'application/vnd.ms-excel.sheet.macroEnabled.12')

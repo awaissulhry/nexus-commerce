@@ -28,7 +28,7 @@ All default ON unless noted. Set to `0` to disable and redeploy.
 | `NEXUS_EBAY_READBACK_MAX` | Max SKUs polled per read-back run. | `200` | Prevents eBay API exhaustion; tune for account's call limits. |
 | `NEXUS_RECONCILE_CRON` | Daily (03:45 UTC) Amazon reconciliation: reads `GetInventorySupply`, compares FBA qty vs DB, emits drift alerts. | ON | Primary Amazon ground-truth check. |
 | `NEXUS_DRIFT_ALERTS` | Within reconcile cron: cumulative-bleed and stale-conflict alerts. | ON | If OFF, reconcile runs silent. |
-| `ENABLE_QUEUE_WORKERS` | (Pre-existing) Activates BullMQ worker for immediate dispatch; if `0`, only 60s cron path active. | `1` | If `0`, all pushes delayed to cron cadence. |
+| `ENABLE_QUEUE_WORKERS` | (Pre-existing) Activates BullMQ workers AND instant-lane producers (RT.1: addJobSafely skips when off, so jobs never pile up unconsumed). NO code default — must be explicitly `1` (it is, on Railway). | **unset** (Railway: `1`) | If unset/`0`, all pushes ride the 60s cron drain. |
 
 ---
 
@@ -41,7 +41,7 @@ Emitted on `/api/orders/events` (order-events SSE bus). Surfaced in RT alerting 
 | `sync.oversell.clamped` | A push to Amazon FBM or eBay was clamped below the requested quantity (e.g., customer edited stock to 500 but only 200 available). | INFO | Normal guard firing; check that listing quantity buffer is realistic. |
 | `sync.latency.breach` | A channel's p95 push latency exceeded `NEXUS_LATENCY_P95_BREACH_MS`. | WARN | Check channel API health, network, queue backlog via diagnostics endpoint. |
 | `sync.realtime.degraded` | Sync is on 60s-cron path instead of BullMQ immediate (i.e., `ENABLE_QUEUE_WORKERS=0` or eBay notifications inactive). | WARN | Restarts delayed 60s; redeploy or re-enable eBay Platform Notifications. |
-| `sync.reconcile.drift` | Amazon daily reconcile found FBA quantity drift exceeding cumulative threshold (default 5 units over 24h). | WARN | Run control-tower delta-preview for the SKU; if persistent, investigate SP-API feed processing. |
+| `sync.reconcile.drift` | Amazon daily reconcile found FBA quantity drift exceeding cumulative threshold (defaults: `NEXUS_CUMULATIVE_DRIFT_UNITS=25` over `NEXUS_DRIFT_WINDOW_HOURS=168`). | WARN | Run control-tower delta-preview for the SKU; if persistent, investigate SP-API feed processing. |
 | `sync.drift.cumulative` | Repeated small auto-applies or clamping events summed over threshold (slow bleed detected). | WARN | Audit manual stock edits; check if buffer is too narrow. |
 | `sync.conflict.stale` | `SyncHealthLog` conflict record unresolved for >7 days (e.g., a push succeeded on one channel but failed on another). | WARN | Review conflict via admin endpoint; may need manual sync reset on failed channel. |
 
@@ -58,8 +58,8 @@ Emitted on `/api/orders/events` (order-events SSE bus). Surfaced in RT alerting 
 | `sync-drift-detection` | Every 30 min | (Pre-existing) Detect slow bleed via cumulative drift & conflicts. |
 | `fba-flip-guard` | Every 10 min | Detect FBA←→FBM quantity flips (guard against Marketplace API misfire). |
 | `reservation-sweep` | Every 5 min | Clean up expired reservations (TTL-based). |
-| `amazon-sqs-poll` | ~30s | Poll SQS for SP-API ORDER_CHANGE webhooks (live order events). |
-| `amazon-inventory-sync` | Every 15 min | Poll `GetInventorySupply` for FBA (backstop to daily reconcile). |
+| `amazon-sqs-poll` | continuous (20s long-polls, ~55s/min coverage — RT.3) | Drain SQS for SP-API ORDER_CHANGE / ORDER_STATUS_CHANGE (+6 more types). Gate `NEXUS_ENABLE_AMAZON_SQS_POLL=1` + `AMAZON_SQS_QUEUE_URL` (both set on Railway). |
+| `amazon-inventory-sync` | Every 15 min | Poll `GetInventorySupply` for FBA (backstop to daily reconcile). Gate `NEXUS_ENABLE_AMAZON_INVENTORY_CRON=1` (set on Railway). |
 
 ---
 
@@ -75,7 +75,7 @@ Returns: is sync real-time right now?
 - `cronLastRuns`: last run timestamp for each scheduled job + any error
 - `warnings`: array of operational issues (e.g., "eBay notifications inactive", "BullMQ worker unavailable")
 
-**`GET /api/admin/outbound-latency?window=24h&syncType=QUANTITY_UPDATE`**
+**`GET /api/admin/outbound-latency?window=1h|24h|7d&syncType=QUANTITY_UPDATE`** (1h added in RT.7 for SLO checks)
 
 Returns per-channel push latency metrics (JSON):
 - `channel`: (AMAZON_FBM, AMAZON_FBA, EBAY, SHOPIFY)
@@ -222,3 +222,40 @@ After deploying or restarting the sync system:
 - `/fulfillment/stock/control-tower`: Real-time sync status grid (operator headquarters).
 - `TECH_DEBT.md`: Inventory sync backlog items.
 - `docs/edit-ux.md`: Product editor stock field behavior.
+
+
+## RT program (2026-07-19/20) — real-time FBM sync
+
+The RT series (RT.0–RT.7, `docs/superpowers/plans/2026-07-19-realtime-fbm-sync-perfection.md`)
+made FBM quantity sync real-time end-to-end. Operational summary:
+
+- **Instant lane**: Railway Redis + `ENABLE_QUEUE_WORKERS=1`; dispatch ≈2s after a
+  row's grace window. `/api/health` exposes `dispatchPath` (must be
+  `immediate-bullmq`) and REAL redis state.
+- **Order cascades** (Amazon FBM / Shopify / cancellations) run the canonical
+  `recascadeProduct(reason ORDER_PLACED|ORDER_CANCELLED)` — 0-hold, priority-1.
+- **eBay Trading lane**: one queue row per ItemID with `payload.updates[]`,
+  ≤4 SKUs per ReviseInventoryStatus call, 15s per-item debounce, dispatch-time
+  pool re-read (no-op rows spend NO revise — eBay caps ~250 revises/listing/day).
+  Ended listings auto-END their memberships (dispatch heal + daily
+  `ebay-item-status-reconcile` GetItem cron).
+- **SP-API notifications**: destination + 7 subscriptions self-heal at boot and
+  self-report to CronRun `amazon-notifications-setup` (also in
+  `/api/admin/inventory-sync/diagnostics` → `amazonNotifications`). One-shot
+  full recycle: insert a CronRun row jobName `amazon-notifications-recycle-request`
+  status RUNNING and redeploy/restart.
+- **Self-heal**: `sync-drift-detection` (30 min) recascades drifted Following-FBM
+  products (`NEXUS_DRIFT_SELF_HEAL=0` to disable, cap `NEXUS_DRIFT_HEAL_MAX=25`).
+  Queue janitor (15 min) reclaims crashed IN_PROGRESS rows, expires stale
+  PENDING, dead-letters invisible terminals.
+- **Follow policy (owner, 2026-07-20)**: ALL FBM listings follow the pool; pins
+  are reserved for deliberate exceptions. FBA quantity remains untouchable
+  (fail-closed guards unchanged). Excel exports carry BLANK FBM quantities by
+  default (sync owns qty); the "WITH quantities" File-menu variant is a
+  deliberate snapshot.
+- **Latency SLO**: p95 breaches persist to SyncHealthLog (`LATENCY_BREACH`)
+  via the hourly watchdog; probe scripts `_rtq/_rt0.._rt5-*.mts` are the
+  regression battery.
+- **Retired**: `POST /listings/force-sync-ebay` (410) + the legacy
+  `jobs/sync.job.ts` / `unified-sync-orchestrator` stack (gate-bypassing
+  pre-queue pushes) — deleted.

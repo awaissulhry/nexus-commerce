@@ -61,6 +61,21 @@ export default async function inventorySyncDiagnosticsRoutes(app: FastifyInstanc
       const ebayNotificationsActive: boolean | null =
         activeEbay > 0 ? Boolean(process.env.EBAY_NOTIFICATION_VERIFICATION_TOKEN) : null
 
+      // RT.7 — SP-API notification pipe state, DB-readable (boot self-report
+      // from the RT.3 recycle mechanism + last poll summary).
+      const [notifSetup, lastPoll] = await Promise.all([
+        prisma.cronRun.findFirst({
+          where: { jobName: 'amazon-notifications-setup' },
+          orderBy: { startedAt: 'desc' },
+          select: { startedAt: true, status: true, outputSummary: true },
+        }),
+        prisma.cronRun.findFirst({
+          where: { jobName: 'amazon-sqs-poll', status: { not: 'RUNNING' } },
+          orderBy: { startedAt: 'desc' },
+          select: { startedAt: true, outputSummary: true },
+        }),
+      ])
+
       const input: DiagnosticsInput = {
         queueWorkersEnabled,
         redisConfigured,
@@ -71,6 +86,14 @@ export default async function inventorySyncDiagnosticsRoutes(app: FastifyInstanc
         outboundOldestPendingAgeMs: oldestPending ? now - oldestPending.createdAt.getTime() : null,
         dlqDepth,
         crons: cronRows,
+      }
+
+      const amazonNotifications = {
+        lastSetupAt: notifSetup?.startedAt?.toISOString() ?? null,
+        setupStatus: notifSetup?.status ?? null,
+        setupSummary: notifSetup?.outputSummary?.slice(0, 500) ?? null,
+        lastPollAt: lastPoll?.startedAt?.toISOString() ?? null,
+        lastPollSummary: lastPoll?.outputSummary ?? null,
       }
 
       return reply.send(summarizeDiagnostics(input, new Date().toISOString()))
