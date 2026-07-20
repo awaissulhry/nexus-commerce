@@ -48,11 +48,14 @@ async function lwaAccessToken(): Promise<{ token?: string; error?: string }> {
 
 export default async function amazonAuthProbeRoutes(app: FastifyInstance): Promise<void> {
   app.get('/admin/amazon-auth-probe', async (request, reply) => {
-    // Self-gate (route is PUBLIC in the manifest): key = AWS_ROLE_ARN's last
-    // 6 chars — server-verifiable, never printed by this endpoint.
+    // Self-gate (route is PUBLIC in the manifest): key = AMAZON_SELLER_ID's
+    // last 6 chars — provably identical local↔prod (all working reads target
+    // this account), never printed raw by this endpoint. (First attempt used
+    // AWS_ROLE_ARN's suffix; prod's ARN differs from the local copy — itself
+    // a finding for the census.)
     const k = (request.query as { k?: string }).k
-    const arn = process.env.AWS_ROLE_ARN ?? ''
-    if (!arn || !k || k !== arn.slice(-6)) {
+    const gateSeller = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+    if (!gateSeller || !k || k !== gateSeller.slice(-6)) {
       return reply.code(404).send({ error: 'not found' })
     }
     const write = (request.query as { write?: string }).write === '1'
