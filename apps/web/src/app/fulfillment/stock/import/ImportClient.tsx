@@ -286,6 +286,10 @@ function saveMapping(headers: string[], colMap: Record<string, string>, filename
 // IM.3.5 — refresh-proof wizard session (sessionStorage snapshot).
 const WIZARD_SESSION_KEY = 'nexus.stockImport.session'
 
+// IM.3.6 — review grids window their rows so a 5000-row file renders
+// instantly; filters jump straight to the rows that need attention.
+const REVIEW_PAGE_SIZE = 200
+
 function autoMapHeaders(headers: string[]): Record<string, string> {
   const result: Record<string, string> = {}
   const taken = new Set<string>()
@@ -449,6 +453,11 @@ function ImportWizardInner() {
   // IM.3.4 — batch revert confirm
   const [revertConfirm, setRevertConfirm] = useState<null | { jobId: string; label: string }>(null)
   const [reverting, setReverting] = useState(false)
+  // IM.3.6 — review-grid filters + windowing
+  const [resolveFilter, setResolveFilter] = useState<'all' | 'attention' | 'skipped'>('all')
+  const [resolvePage, setResolvePage] = useState(0)
+  const [previewFilter, setPreviewFilter] = useState<'all' | 'ready' | 'warnings' | 'errors'>('all')
+  const [previewPage, setPreviewPage] = useState(0)
 
   // ── Step: APPLY ───────────────────────────────────────────────────────
   const [applyResult, setApplyResult] = useState<ApplyResult | null>(null)
@@ -494,9 +503,19 @@ function ImportWizardInner() {
       .catch(() => {})
   }, [])
 
+  // IM.3.6 — tab data cached 30s: bouncing between tabs doesn't refetch.
+  const aliasesLoadedAt = useRef(0)
+  const historyLoadedAt = useRef(0)
   useEffect(() => {
-    if (mainTab === 'aliases') loadAliases()
-    else if (mainTab === 'history') loadHistory()
+    const now = Date.now()
+    if (mainTab === 'aliases' && (aliases.length === 0 || now - aliasesLoadedAt.current > 30_000)) {
+      aliasesLoadedAt.current = now
+      loadAliases()
+    } else if (mainTab === 'history' && (history.length === 0 || now - historyLoadedAt.current > 30_000)) {
+      historyLoadedAt.current = now
+      loadHistory()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mainTab])
 
   // IM.3.5 — refresh-proof wizard: restore an unfinished session once on
@@ -633,6 +652,10 @@ function ImportWizardInner() {
     // same headers.
     saveMapping(parsedFile.headers, colMap, parsedFile.filename)
 
+    // IM.3.6 — fresh review-grid state for the new row set
+    setResolveFilter('all'); setResolvePage(0)
+    setPreviewFilter('all'); setPreviewPage(0)
+
     setBusy(true)
     try {
       const res = await fetch(`${getBackendUrl()}/api/stock/import/resolve`, {
@@ -664,7 +687,9 @@ function ImportWizardInner() {
         return r
       })
 
-    // Save aliases for fuzzy/override rows if checked
+    // IM.3.6 — the spinner covers the alias save too (it must complete
+    // BEFORE preview so overridden rows re-resolve via the fresh aliases).
+    setBusy(true)
     if (saveAliasesChecked) {
       const toSave = rows.filter((r) => (r.tier === 'FUZZY_NAME' || r._override) && r.productId)
       if (toSave.length > 0) {
@@ -677,7 +702,6 @@ function ImportWizardInner() {
     }
 
     setPreviewPayloadRows(rows)
-    setBusy(true)
     try {
       await refreshPreview(rows)
       setStep('PREVIEW')
@@ -791,7 +815,19 @@ function ImportWizardInner() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          rows: previewRows,
+          // IM.3.6 — slim payload: the server re-validates identity and
+          // re-reads live state, so candidates/listings/would-be values are
+          // dead weight (they were the bulk of the old apply body).
+          rows: previewRows.map((r) => ({
+            raw: r.raw,
+            quantity: r.quantity,
+            productId: r.productId,
+            resolvedSku: r.resolvedSku,
+            error: r.error,
+            ...(r.channel ? { channel: r.channel } : {}),
+            ...(r.marketplace ? { marketplace: r.marketplace } : {}),
+            ...(r.notes ? { notes: r.notes } : {}),
+          })),
           locationCode,
           mode,
           target,
@@ -901,14 +937,24 @@ function ImportWizardInner() {
 
   // ── Assign modal ──────────────────────────────────────────────────────
 
-  async function searchProducts(q: string) {
+  // IM.3.6 — debounced + abortable: fast typing fires ONE request and a
+  // stale response can never overwrite a newer one.
+  const assignSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const assignSearchAbort = useRef<AbortController | null>(null)
+  function searchProducts(q: string) {
     if (!q.trim()) { setAssignResults([]); return }
-    try {
-      // /api/products/search contract: `search=` param, rows under `items`
-      const res = await fetch(`${getBackendUrl()}/api/products/search?search=${encodeURIComponent(q)}&limit=10`)
-      const data = await res.json()
-      setAssignResults((data.items ?? []).map((p: any) => ({ id: p.id, sku: p.sku, name: p.name })))
-    } catch { setAssignResults([]) }
+    if (assignSearchTimer.current) clearTimeout(assignSearchTimer.current)
+    assignSearchTimer.current = setTimeout(async () => {
+      assignSearchAbort.current?.abort()
+      const ctrl = new AbortController()
+      assignSearchAbort.current = ctrl
+      try {
+        // /api/products/search contract: `search=` param, rows under `items`
+        const res = await fetch(`${getBackendUrl()}/api/products/search?search=${encodeURIComponent(q)}&limit=10`, { signal: ctrl.signal })
+        const data = await res.json()
+        setAssignResults((data.items ?? []).map((p: any) => ({ id: p.id, sku: p.sku, name: p.name })))
+      } catch { /* aborted or transient — keep current results */ }
+    }, 250)
   }
 
   function assignRow(rowIdx: number, productId: string, sku: string, name: string) {
@@ -944,32 +990,51 @@ function ImportWizardInner() {
   }
 
   async function deleteAlias(id: string) {
-    await fetch(`${getBackendUrl()}/api/stock/import/aliases/${id}`, { method: 'DELETE' })
-    toast(t('stock.import.aliases.deleted'), 'success')
-    setDeletingAliasId(null)
-    loadAliases()
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/stock/import/aliases/${id}`, { method: 'DELETE' })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`) }
+      toast(t('stock.import.aliases.deleted'), 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), 'danger')
+    } finally {
+      setDeletingAliasId(null)
+      loadAliases()
+    }
   }
 
   async function saveNewAlias() {
     if (!aliasForm.raw.trim() || !aliasForm.productId) return
-    await fetch(`${getBackendUrl()}/api/stock/import/aliases`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ entries: [{ productId: aliasForm.productId, raw: aliasForm.raw, source: 'MANUAL' }] }),
-    })
-    toast(t('stock.import.aliases.saved'), 'success')
-    setAddAliasModal(false)
-    setAliasForm({ raw: '', productSearch: '', productId: '', sku: '' })
-    loadAliases()
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/stock/import/aliases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries: [{ productId: aliasForm.productId, raw: aliasForm.raw, source: 'MANUAL' }] }),
+      })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`) }
+      toast(t('stock.import.aliases.saved'), 'success')
+      setAddAliasModal(false)
+      setAliasForm({ raw: '', productSearch: '', productId: '', sku: '' })
+      loadAliases()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), 'danger')
+    }
   }
 
-  async function searchAliasProduct(q: string) {
+  const aliasSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const aliasSearchAbort = useRef<AbortController | null>(null)
+  function searchAliasProduct(q: string) {
     if (!q.trim()) { setAliasSearchResults([]); return }
-    try {
-      const res = await fetch(`${getBackendUrl()}/api/products/search?search=${encodeURIComponent(q)}&limit=10`)
-      const data = await res.json()
-      setAliasSearchResults((data.items ?? []).map((p: any) => ({ id: p.id, sku: p.sku, name: p.name })))
-    } catch { setAliasSearchResults([]) }
+    if (aliasSearchTimer.current) clearTimeout(aliasSearchTimer.current)
+    aliasSearchTimer.current = setTimeout(async () => {
+      aliasSearchAbort.current?.abort()
+      const ctrl = new AbortController()
+      aliasSearchAbort.current = ctrl
+      try {
+        const res = await fetch(`${getBackendUrl()}/api/products/search?search=${encodeURIComponent(q)}&limit=10`, { signal: ctrl.signal })
+        const data = await res.json()
+        setAliasSearchResults((data.items ?? []).map((p: any) => ({ id: p.id, sku: p.sku, name: p.name })))
+      } catch { /* aborted or transient — keep current results */ }
+    }, 250)
   }
 
   // ── History tab ───────────────────────────────────────────────────────
@@ -1345,6 +1410,44 @@ function ImportWizardInner() {
                   </div>
                 </div>
 
+                {(() => {
+                  // IM.3.6 — filter + window: original indices preserved so
+                  // assign/skip actions target the right row.
+                  const entries = resolvedRows
+                    .map((row, idx) => ({ row, idx }))
+                    .filter(({ row }) =>
+                      resolveFilter === 'all' ? true :
+                      resolveFilter === 'skipped' ? Boolean(row._skipped) :
+                      !row._skipped && !row._override && (row.tier === 'UNRESOLVED' || row.tier === 'FUZZY_NAME'))
+                  const pageCount = Math.max(1, Math.ceil(entries.length / REVIEW_PAGE_SIZE))
+                  const page = Math.min(resolvePage, pageCount - 1)
+                  const pageEntries = entries.slice(page * REVIEW_PAGE_SIZE, (page + 1) * REVIEW_PAGE_SIZE)
+                  const attentionCount = resolvedRows.filter((r) => !r._skipped && !r._override && (r.tier === 'UNRESOLVED' || r.tier === 'FUZZY_NAME')).length
+                  const skippedCount = resolvedRows.filter((r) => r._skipped).length
+                  const chip = (active: boolean) => [
+                    'px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
+                    active ? 'bg-blue-600 text-white' : 'bg-surface-2 text-secondary hover:text-primary',
+                  ].join(' ')
+                  return (
+                <>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button type="button" className={chip(resolveFilter === 'all')} onClick={() => { setResolveFilter('all'); setResolvePage(0) }}>
+                    {t('stock.import.filter.all')} ({resolvedRows.length})
+                  </button>
+                  <button type="button" className={chip(resolveFilter === 'attention')} onClick={() => { setResolveFilter('attention'); setResolvePage(0) }}>
+                    {t('stock.import.filter.attention')} ({attentionCount})
+                  </button>
+                  <button type="button" className={chip(resolveFilter === 'skipped')} onClick={() => { setResolveFilter('skipped'); setResolvePage(0) }}>
+                    {t('stock.import.filter.skipped')} ({skippedCount})
+                  </button>
+                  {pageCount > 1 && (
+                    <span className="ml-auto flex items-center gap-2 text-xs text-secondary tabular-nums">
+                      <Button variant="ghost" size="sm" disabled={page === 0} onClick={() => setResolvePage(page - 1)}><ArrowLeft size={12} /></Button>
+                      {t('stock.import.pager', { p: page + 1, n: pageCount })}
+                      <Button variant="ghost" size="sm" disabled={page >= pageCount - 1} onClick={() => setResolvePage(page + 1)}><ArrowRight size={12} /></Button>
+                    </span>
+                  )}
+                </div>
                 <div className="overflow-x-auto rounded-lg border border-default">
                   <table className="w-full text-sm">
                     <thead className="bg-surface-2 border-b border-default">
@@ -1357,7 +1460,7 @@ function ImportWizardInner() {
                       </tr>
                     </thead>
                     <tbody>
-                      {resolvedRows.map((row, idx) => {
+                      {pageEntries.map(({ row, idx }) => {
                         const effective = row._override ?? (row.tier !== 'UNRESOLVED' ? { productId: row.productId, sku: row.resolvedSku, name: row.productName } : null)
                         const tier = row._override ? 'EXACT' as ResolutionTier : row.tier
                         return (
@@ -1420,6 +1523,9 @@ function ImportWizardInner() {
                     </tbody>
                   </table>
                 </div>
+                </>
+                  )
+                })()}
 
                 <div className="flex items-center justify-between gap-2">
                   <Button variant="ghost" size="sm" onClick={() => setStep('MAP')}><ArrowLeft size={14} /> Back</Button>
@@ -1485,8 +1591,49 @@ function ImportWizardInner() {
                   )
                 })()}
 
+                {(() => {
+                  // IM.3.6 — filter chips + windowing (5000-row previews
+                  // render instantly; errors are one click away).
+                  const filtered = previewRows.filter((r) =>
+                    previewFilter === 'all' ? true :
+                    previewFilter === 'errors' ? Boolean(r.error) :
+                    previewFilter === 'warnings' ? !r.error && (r.warnings?.length ?? 0) > 0 :
+                    !r.error && (r.warnings?.length ?? 0) === 0 && Boolean(r.productId))
+                  const pageCount = Math.max(1, Math.ceil(filtered.length / REVIEW_PAGE_SIZE))
+                  const page = Math.min(previewPage, pageCount - 1)
+                  const pageRows = filtered.slice(page * REVIEW_PAGE_SIZE, (page + 1) * REVIEW_PAGE_SIZE)
+                  const errCount = previewRows.filter((r) => r.error).length
+                  const warnCount = previewRows.filter((r) => !r.error && (r.warnings?.length ?? 0) > 0).length
+                  const readyCount = previewRows.filter((r) => !r.error && (r.warnings?.length ?? 0) === 0 && r.productId).length
+                  const chip = (active: boolean) => [
+                    'px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
+                    active ? 'bg-blue-600 text-white' : 'bg-surface-2 text-secondary hover:text-primary',
+                  ].join(' ')
+                  return (
+                <>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button type="button" className={chip(previewFilter === 'all')} onClick={() => { setPreviewFilter('all'); setPreviewPage(0) }}>
+                    {t('stock.import.filter.all')} ({previewRows.length})
+                  </button>
+                  <button type="button" className={chip(previewFilter === 'ready')} onClick={() => { setPreviewFilter('ready'); setPreviewPage(0) }}>
+                    {t('stock.import.filter.ready')} ({readyCount})
+                  </button>
+                  <button type="button" className={chip(previewFilter === 'warnings')} onClick={() => { setPreviewFilter('warnings'); setPreviewPage(0) }}>
+                    {t('stock.import.filter.warnings')} ({warnCount})
+                  </button>
+                  <button type="button" className={chip(previewFilter === 'errors')} onClick={() => { setPreviewFilter('errors'); setPreviewPage(0) }}>
+                    {t('stock.import.filter.errors')} ({errCount})
+                  </button>
+                  {pageCount > 1 && (
+                    <span className="ml-auto flex items-center gap-2 text-xs text-secondary tabular-nums">
+                      <Button variant="ghost" size="sm" disabled={page === 0} onClick={() => setPreviewPage(page - 1)}><ArrowLeft size={12} /></Button>
+                      {t('stock.import.pager', { p: page + 1, n: pageCount })}
+                      <Button variant="ghost" size="sm" disabled={page >= pageCount - 1} onClick={() => setPreviewPage(page + 1)}><ArrowRight size={12} /></Button>
+                    </span>
+                  )}
+                </div>
                 <DataGrid<PreviewRow>
-                  rows={previewRows}
+                  rows={pageRows}
                   rowKey={(r) => String(r._idx ?? `${r.raw}-${r.productId ?? 'u'}`)}
                   maxHeight={480}
                   columns={[
@@ -1566,6 +1713,9 @@ function ImportWizardInner() {
                     },
                   ]}
                 />
+                </>
+                  )
+                })()}
 
                 <div className="flex items-center justify-between gap-2">
                   <Button variant="ghost" size="sm" onClick={() => setStep('RESOLVE')}><ArrowLeft size={14} /> Back</Button>
