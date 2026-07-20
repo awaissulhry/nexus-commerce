@@ -27,6 +27,7 @@ import {
   requestImportCancel,
   isImportCancelRequested,
 } from '../services/stock-import-progress.js'
+import { buildCsv, buildXlsx, buildJobResultsExport, buildStockExport } from '../services/stock-import-export.js'
 import { detectFileKind, parseCsv, parseJson, parseXlsx, sniffDelimiterSmart } from '../services/import/parsers.js'
 import {
   reserveStock,
@@ -3483,6 +3484,68 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       } catch (error: any) {
         if (error?.code === 'P2025') return reply.code(404).send({ error: 'Alias not found' })
         fastify.log.error({ err: error }, '[stock/import/aliases DELETE] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
+  // ── GET /api/stock/import/history/:id/export ────────────────────
+  // IM.3.5 — per-row results as a fix-and-reupload file. scope=failed
+  // (default) exports only not-applied rows; scope=all exports everything.
+  // Headers auto-map on re-import; XLSX text-types the identifier column.
+  fastify.get<{ Params: { id: string }; Querystring: { scope?: string; format?: string } }>(
+    '/stock/import/history/:id/export',
+    async (request, reply) => {
+      try {
+        const scope = request.query.scope === 'all' ? 'all' : 'failed'
+        const format = request.query.format === 'xlsx' ? 'xlsx' : 'csv'
+        const data = await buildJobResultsExport(request.params.id, scope)
+        if (!data) return reply.code(404).send({ error: 'Job not found' })
+        const base = `stock-import-${scope}-${request.params.id.slice(-8)}`
+        if (format === 'csv') {
+          return reply
+            .header('Content-Type', 'text/csv; charset=utf-8')
+            .header('Content-Disposition', `attachment; filename="${base}.csv"`)
+            .send(buildCsv(data.headers, data.rows))
+        }
+        const buf = await buildXlsx(data.headers, data.rows, data.textCols)
+        return reply
+          .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+          .header('Content-Disposition', `attachment; filename="${base}.xlsx"`)
+          .send(buf)
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[stock/import/history/:id/export] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
+  // ── GET /api/stock/export ───────────────────────────────────────
+  // IM.3.5 — current stock as an import-ready file (round-trip: export →
+  // edit in Excel → re-import with mode SET). sku/ean text-typed in XLSX.
+  fastify.get<{ Querystring: { locationCode?: string; format?: string } }>(
+    '/stock/export',
+    async (request, reply) => {
+      try {
+        const locationCode = request.query.locationCode ?? 'IT-MAIN'
+        const format = request.query.format === 'xlsx' ? 'xlsx' : 'csv'
+        const data = await buildStockExport(locationCode)
+        if (!data) return reply.code(404).send({ error: `Location ${locationCode} not found` })
+        const stamp = new Date().toISOString().slice(0, 10)
+        const base = `stock-${locationCode}-${stamp}`
+        if (format === 'csv') {
+          return reply
+            .header('Content-Type', 'text/csv; charset=utf-8')
+            .header('Content-Disposition', `attachment; filename="${base}.csv"`)
+            .send(buildCsv(data.headers, data.rows))
+        }
+        const buf = await buildXlsx(data.headers, data.rows, data.textCols)
+        return reply
+          .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+          .header('Content-Disposition', `attachment; filename="${base}.xlsx"`)
+          .send(buf)
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[stock/export] failed')
         return reply.code(500).send({ error: error?.message ?? String(error) })
       }
     },

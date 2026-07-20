@@ -253,6 +253,39 @@ function downloadBlob(content: string, filename: string, mime = 'text/csv;charse
   URL.revokeObjectURL(url)
 }
 
+/** IM.3.5 — RFC-safe CSV cell (quotes, commas, semicolons, newlines). */
+function csvCell(v: unknown): string {
+  const s = v == null ? '' : String(v)
+  return /[",\n\r;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+// IM.3.5 — saved column mappings, auto-recalled by header signature. A
+// supplier file with the same headers never needs re-mapping.
+const MAPPING_STORE_KEY = 'nexus.stockImport.mappings'
+function headerSignature(headers: string[]): string {
+  return headers.map((h) => h.trim().toLowerCase()).join('')
+}
+function loadSavedMapping(headers: string[]): Record<string, string> | null {
+  try {
+    const store = JSON.parse(localStorage.getItem(MAPPING_STORE_KEY) ?? '{}')
+    return store[headerSignature(headers)]?.colMap ?? null
+  } catch { return null }
+}
+function saveMapping(headers: string[], colMap: Record<string, string>, filename: string | null): void {
+  try {
+    const store = JSON.parse(localStorage.getItem(MAPPING_STORE_KEY) ?? '{}') as Record<
+      string, { colMap: Record<string, string>; savedAt: number; filename: string | null }
+    >
+    store[headerSignature(headers)] = { colMap, savedAt: Date.now(), filename }
+    // LRU cap so localStorage never bloats
+    const entries = Object.entries(store).sort((a, b) => b[1].savedAt - a[1].savedAt).slice(0, 20)
+    localStorage.setItem(MAPPING_STORE_KEY, JSON.stringify(Object.fromEntries(entries)))
+  } catch { /* storage unavailable — non-fatal */ }
+}
+
+// IM.3.5 — refresh-proof wizard session (sessionStorage snapshot).
+const WIZARD_SESSION_KEY = 'nexus.stockImport.session'
+
 function autoMapHeaders(headers: string[]): Record<string, string> {
   const result: Record<string, string> = {}
   const taken = new Set<string>()
@@ -466,6 +499,63 @@ function ImportWizardInner() {
     else if (mainTab === 'history') loadHistory()
   }, [mainTab])
 
+  // IM.3.5 — refresh-proof wizard: restore an unfinished session once on
+  // mount (PREVIEW snapshots restore at RESOLVE — one click re-previews
+  // against live data, so the would-be numbers are never stale).
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(WIZARD_SESSION_KEY)
+      if (!raw) return
+      const s = JSON.parse(raw)
+      if (!s?.step || !s?.parsedFile) return
+      setParsedFile(s.parsedFile)
+      setColMap(s.colMap ?? {})
+      if (s.mode === 'ADJUST' || s.mode === 'SET') setMode(s.mode)
+      if (s.target === 'WAREHOUSE' || s.target === 'CHANNEL' || s.target === 'BOTH') setTarget(s.target)
+      if (s.locationCode) setLocationCode(s.locationCode)
+      setPinOverride(Boolean(s.pinOverride))
+      setResolvedRows(s.resolvedRows ?? [])
+      setStep(s.step === 'RESOLVE' && (s.resolvedRows?.length ?? 0) > 0 ? 'RESOLVE' : 'MAP')
+      toast(t('stock.import.session.restored'), 'success')
+    } catch { /* corrupt snapshot — start fresh */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // IM.3.5 — persist the in-flight wizard (debounced). APPLY and UPLOAD
+  // don't persist; a finished/reset wizard clears the snapshot.
+  useEffect(() => {
+    if (step === 'UPLOAD' || step === 'APPLY' || !parsedFile) return
+    const timer = setTimeout(() => {
+      try {
+        const snapshot = JSON.stringify({
+          step: step === 'PREVIEW' ? 'RESOLVE' : step,
+          parsedFile, colMap, mode, target, locationCode, pinOverride, resolvedRows,
+          savedAt: Date.now(),
+        })
+        // sessionStorage quota guard (~5MB) — very large files simply skip
+        if (snapshot.length < 3_500_000) sessionStorage.setItem(WIZARD_SESSION_KEY, snapshot)
+      } catch { /* quota — skip */ }
+    }, 800)
+    return () => clearTimeout(timer)
+  }, [step, parsedFile, colMap, mode, target, locationCode, pinOverride, resolvedRows])
+
+  // IM.3.5 — authenticated download helper (fetch → blob → save).
+  async function downloadFromApi(path: string, filename: string) {
+    try {
+      const res = await fetch(`${getBackendUrl()}${path}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), 'danger')
+    }
+  }
+
   // ── File handling ─────────────────────────────────────────────────────
 
   const handleFile = useCallback(async (file: File) => {
@@ -485,7 +575,11 @@ function ImportWizardInner() {
       // Server parse is the single source of truth — headers AND rows come
       // from the same pass, so mapped columns always exist on the rows.
       setParsedFile(data)
-      setColMap(autoMapHeaders(data.headers))
+      // IM.3.5 — a previously-confirmed mapping for this exact header set
+      // wins over the auto-suggestion.
+      const saved = loadSavedMapping(data.headers)
+      setColMap(saved ?? autoMapHeaders(data.headers))
+      if (saved) toast(t('stock.import.map.mappingRestored'), 'success')
       setStep('MAP')
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : String(err))
@@ -534,6 +628,10 @@ function ImportWizardInner() {
 
     const rows = builtRows.rows
     if (rows.length === 0) { toast('No valid rows found after mapping — check the dropped-row reasons above', 'danger'); return }
+
+    // IM.3.5 — remember this confirmed mapping for the next file with the
+    // same headers.
+    saveMapping(parsedFile.headers, colMap, parsedFile.filename)
 
     setBusy(true)
     try {
@@ -765,6 +863,8 @@ function ImportWizardInner() {
               total: detail.job.totalRows,
               results: detail.job.results ?? [],
             })
+            // IM.3.5 — the import finished; the refresh-proof snapshot is done.
+            try { sessionStorage.removeItem(WIZARD_SESSION_KEY) } catch { /* unavailable */ }
           }
         }
       } catch { /* transient poll errors — next tick retries */ }
@@ -892,6 +992,7 @@ function ImportWizardInner() {
     setResolvedRows([]); setPreviewRows([]); setApplyResult(null); setDraftJobId(null)
     setApplyProgress(null); setCancelling(false)
     setPreviewPayloadRows([]); setPreviewDirty(false)
+    try { sessionStorage.removeItem(WIZARD_SESSION_KEY) } catch { /* unavailable */ }
   }
 
   // ── Step breadcrumb ───────────────────────────────────────────────────
@@ -993,6 +1094,28 @@ function ImportWizardInner() {
                       <p className="text-sm text-tertiary">{t('stock.import.upload.accepts')}</p>
                     </>
                   )}
+                </div>
+
+                {/* IM.3.5 — round-trip: export current stock, edit in Excel,
+                    re-import with mode SET. sku/ean are text-typed in XLSX. */}
+                <div className="flex items-center justify-between gap-2 flex-wrap rounded-lg bg-surface-2 px-3 py-2">
+                  <p className="text-sm text-secondary">{t('stock.import.export.hint')}</p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => downloadFromApi(`/api/stock/export?locationCode=${encodeURIComponent(locationCode)}&format=csv`, `stock-${locationCode}.csv`)}
+                    >
+                      <Download size={14} /> CSV
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => downloadFromApi(`/api/stock/export?locationCode=${encodeURIComponent(locationCode)}&format=xlsx`, `stock-${locationCode}.xlsx`)}
+                    >
+                      <Download size={14} /> XLSX
+                    </Button>
+                  </div>
                 </div>
 
                 {uploadError && (
@@ -1327,15 +1450,37 @@ function ImportWizardInner() {
                           {err > 0 && <span className="text-rose-600 font-medium ml-3">{err} errors</span>}
                         </p>
                       </div>
-                      {err > 0 && (
+                      <div className="flex items-center gap-2">
+                        {err > 0 && (
+                          <Button variant="ghost" size="sm" onClick={() => {
+                            const errRows = previewRows.filter((r) => r.error)
+                            const csv = ['input,error', ...errRows.map((r) => `${csvCell(r.raw)},${csvCell(r.error)}`)].join('\r\n')
+                            downloadBlob(csv, 'import-errors.csv')
+                          }}>
+                            <Download size={14} /> {t('stock.import.preview.downloadErrors')}
+                          </Button>
+                        )}
+                        {/* IM.3.5 — full preview as CSV (review offline / archive) */}
                         <Button variant="ghost" size="sm" onClick={() => {
-                          const errRows = previewRows.filter((r) => r.error)
-                          const csv = ['input,error', ...errRows.map((r) => `"${r.raw}","${r.error}"`)].join('\n')
-                          downloadBlob(csv, 'import-errors.csv')
+                          const headers = 'input,matched_sku,product,quantity,current_wh,new_wh,channel_changes,status,messages'
+                          const lines = previewRows.map((r) => [
+                            r.raw,
+                            r.resolvedSku ?? '',
+                            r.productName ?? '',
+                            r.quantity,
+                            r.currentWarehouseQty ?? '',
+                            r.wouldBeWarehouseQty ?? '',
+                            (r.channelListings ?? [])
+                              .map((c) => `${c.channel}${c.marketplace && c.marketplace !== 'DEFAULT' ? ':' + c.marketplace : ''} ${c.current}→${c.wouldBe}`)
+                              .join(' | '),
+                            r.error ? 'error' : (r.warnings?.length ?? 0) > 0 ? 'warning' : r.productId ? 'ready' : 'skipped',
+                            [r.error, ...(r.warnings ?? [])].filter(Boolean).join(' | '),
+                          ].map(csvCell).join(','))
+                          downloadBlob([headers, ...lines].join('\r\n'), 'import-preview.csv')
                         }}>
-                          <Download size={14} /> {t('stock.import.preview.downloadErrors')}
+                          <Download size={14} /> {t('stock.import.preview.exportAll')}
                         </Button>
-                      )}
+                      </div>
                     </div>
                   )
                 })()}
@@ -1515,9 +1660,20 @@ function ImportWizardInner() {
                   {/* IM.3.4 — failed/skipped rows, right here on the Done screen */}
                   {applyResult.results.some((r) => !r.applied) && (
                     <div className="w-full max-w-2xl text-left">
-                      <p className="text-sm font-semibold mb-2">
-                        {t('stock.import.apply.notAppliedRows', { n: applyResult.results.filter((r) => !r.applied).length })}
-                      </p>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <p className="text-sm font-semibold">
+                          {t('stock.import.apply.notAppliedRows', { n: applyResult.results.filter((r) => !r.applied).length })}
+                        </p>
+                        {/* IM.3.5 — ready-to-fix re-upload file */}
+                        <div className="flex items-center gap-1.5">
+                          <Button variant="ghost" size="sm" onClick={() => downloadFromApi(`/api/stock/import/history/${applyResult.jobId}/export?scope=failed&format=csv`, 'stock-import-failed.csv')}>
+                            <Download size={12} /> CSV
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => downloadFromApi(`/api/stock/import/history/${applyResult.jobId}/export?scope=failed&format=xlsx`, 'stock-import-failed.xlsx')}>
+                            <Download size={12} /> XLSX
+                          </Button>
+                        </div>
+                      </div>
                       <div className="overflow-x-auto overflow-y-auto max-h-64 rounded-lg border border-default">
                         <table className="w-full text-xs">
                           <thead className="bg-surface-2 sticky top-0">
@@ -1770,6 +1926,19 @@ function ImportWizardInner() {
                 <Tag tone="warning">{t('stock.import.revert.reverted')}</Tag>
               )}
               <span className="flex-1" />
+              {/* IM.3.5 — job results as files (failed = fix-and-reupload) */}
+              {(historyDetail.job.results?.length ?? 0) > 0 && (
+                <>
+                  {historyDetail.job.results!.some((r) => !r.applied) && (
+                    <Button variant="ghost" size="sm" onClick={() => downloadFromApi(`/api/stock/import/history/${historyDetail.job.id}/export?scope=failed&format=csv`, 'stock-import-failed.csv')}>
+                      <Download size={12} /> {t('stock.import.history.downloadFailed')}
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={() => downloadFromApi(`/api/stock/import/history/${historyDetail.job.id}/export?scope=all&format=xlsx`, 'stock-import-rows.xlsx')}>
+                    <Download size={12} /> {t('stock.import.history.downloadAll')}
+                  </Button>
+                </>
+              )}
               {(historyDetail.job.results ?? []).some((r) => !r.applied && typeof r.quantity === 'number') && (
                 <Button variant="secondary" size="sm" disabled={busy} onClick={() => retryFailedRows(historyDetail.job.results ?? [], historyDetail.job)}>
                   <RefreshCw size={12} /> {t('stock.import.apply.retryFailed')}
