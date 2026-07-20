@@ -82,11 +82,14 @@ export async function runOutboundQueueJanitor(): Promise<string> {
   })
 
   // 4. Dead-letter deferral rows stuck for 48h+ (real outage, not an episode).
+  // AS.1 — AUTH_REQUIRED deferrals (credential outage) age out the same way:
+  // after 48h the outage is a standing incident, and the DLQ tab is the
+  // durable surface for it. Retry-after-fix re-drives them.
   const staleDeferrals = await prisma.outboundSyncQueue.updateMany({
     where: {
       syncStatus: 'FAILED',
       isDead: false,
-      errorCode: 'CIRCUIT_OPEN_DEFERRED',
+      errorCode: { in: ['CIRCUIT_OPEN_DEFERRED', 'AUTH_REQUIRED'] },
       updatedAt: { lt: new Date(now - DEAD_LETTER_DEFERRALS_AFTER_MS) },
     },
     data: { isDead: true, diedAt: new Date() },

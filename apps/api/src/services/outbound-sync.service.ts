@@ -93,13 +93,26 @@ const AD_SYNC_TYPES = [
 const RETRY_BACKOFF_MS = [30_000, 120_000, 600_000] as const;
 const CIRCUIT_DEFER_MS = 5 * 60_000;
 const RATE_LIMIT_DEFER_MS = 60_000;
+// AS.1 — auth-class outages (revoked token / missing authorization role) are
+// account-level episodes: no retry can succeed until the credential is fixed,
+// so burning the 3-attempt budget just converts the whole queue into
+// MAX_RETRIES_EXCEEDED dead-letters (812 measured during the 2026-07-20 403
+// incident). Defer longer than a circuit episode; the latency-watchdog
+// tripwire (CHANNEL_AUTH_FAILURE) owns making the outage visible.
+const AUTH_DEFER_MS = 15 * 60_000;
+// Matches the P0b-era honest client messages ("HTTP 403 — Unauthorized:
+// Access to requested resource is denied.") and LWA refresh failures.
+// Deliberately narrow: eBay transient 401s ("Invalid access token") keep
+// their existing transient/circuit classification and self-heal via token
+// refresh.
+const AUTH_CLASS_RE = /Unauthorized|invalid_grant|Access to requested resource is denied/i;
 
 export function withJitter(ms: number): number {
   return Math.round(ms * (1 + Math.random() * 0.2));
 }
 
 export type FailureDisposition =
-  | { kind: "deferral"; nextRetryAt: Date; errorCode: "CIRCUIT_OPEN_DEFERRED" }
+  | { kind: "deferral"; nextRetryAt: Date; errorCode: "CIRCUIT_OPEN_DEFERRED" | "AUTH_REQUIRED" }
   | { kind: "terminal"; errorCode: string }
   | { kind: "retry"; nextRetryAt: Date; errorCode: "RETRY_SCHEDULED" };
 
@@ -121,6 +134,13 @@ export function computeFailureDisposition(
       kind: "deferral",
       nextRetryAt: new Date(now + withJitter(defer)),
       errorCode: "CIRCUIT_OPEN_DEFERRED",
+    };
+  }
+  if (opts?.errorCode === "AUTH_REQUIRED" || AUTH_CLASS_RE.test(errorMessage)) {
+    return {
+      kind: "deferral",
+      nextRetryAt: new Date(now + withJitter(AUTH_DEFER_MS)),
+      errorCode: "AUTH_REQUIRED",
     };
   }
   if (opts?.retryable === false) {

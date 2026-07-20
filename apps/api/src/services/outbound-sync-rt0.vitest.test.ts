@@ -342,3 +342,68 @@ describe('RT.2 — disposition treats EBAY_REVISE_DEBOUNCED as budget-free defer
     expect(d.kind).toBe('deferral')
   })
 })
+
+describe('AS.1 — auth-class failures are budget-free AUTH_REQUIRED deferrals', () => {
+  const NOW = 1_700_000_000_000
+
+  it('the P0b-era honest 403 message defers as AUTH_REQUIRED (~15min) without burning budget', () => {
+    const d = computeFailureDisposition(
+      { retryCount: 2, maxRetries: 3 }, // one attempt left — old code would have gone terminal
+      'HTTP 403 — Unauthorized: Access to requested resource is denied.',
+      undefined,
+      NOW,
+    )
+    expect(d.kind).toBe('deferral')
+    if (d.kind !== 'deferral') return
+    expect(d.errorCode).toBe('AUTH_REQUIRED')
+    const delta = d.nextRetryAt.getTime() - NOW
+    expect(delta).toBeGreaterThanOrEqual(15 * 60_000)
+    expect(delta).toBeLessThanOrEqual(18 * 60_000) // 15min + ≤20% jitter
+  })
+
+  it('LWA refresh failure (invalid_grant) defers as AUTH_REQUIRED', () => {
+    const d = computeFailureDisposition(
+      { retryCount: 0, maxRetries: 3 },
+      'Failed to get access token: {"error":"invalid_grant","error_description":"The request has an invalid grant parameter"}',
+      undefined,
+      NOW,
+    )
+    expect(d.kind).toBe('deferral')
+    if (d.kind !== 'deferral') return
+    expect(d.errorCode).toBe('AUTH_REQUIRED')
+  })
+
+  it('explicit AUTH_REQUIRED errorCode defers regardless of message', () => {
+    const d = computeFailureDisposition({ retryCount: 1 }, 'opaque', { errorCode: 'AUTH_REQUIRED' }, NOW)
+    expect(d.kind).toBe('deferral')
+    if (d.kind !== 'deferral') return
+    expect(d.errorCode).toBe('AUTH_REQUIRED')
+  })
+
+  it('circuit-open still wins over auth wording (episode classification is outermost)', () => {
+    const d = computeFailureDisposition(
+      { retryCount: 0 },
+      'Amazon publish circuit open after 3 consecutive failures. Retry in 117s.',
+      undefined,
+      NOW,
+    )
+    expect(d.kind).toBe('deferral')
+    if (d.kind !== 'deferral') return
+    expect(d.errorCode).toBe('CIRCUIT_OPEN_DEFERRED')
+  })
+
+  it('a plain 500 keeps the normal retry ladder (no auth misfire)', () => {
+    const d = computeFailureDisposition({ retryCount: 0, maxRetries: 3 }, 'HTTP 500 — internal error', undefined, NOW)
+    expect(d.kind).toBe('retry')
+  })
+
+  it('eBay transient invalid-token wording stays NON-auth (token refresh self-heals it)', () => {
+    const d = computeFailureDisposition(
+      { retryCount: 0, maxRetries: 3 },
+      'eBay API error 401: {"errors":[{"errorId":1001,"message":"Invalid access token"}]}',
+      undefined,
+      NOW,
+    )
+    expect(d.kind).toBe('retry')
+  })
+})

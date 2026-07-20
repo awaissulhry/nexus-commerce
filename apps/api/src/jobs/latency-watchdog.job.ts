@@ -37,6 +37,55 @@ import {
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
+// ── P0c/AS.1 — publish-health tripwires (pure) ──────────────────────────────
+// (a) CHANNEL_AUTH_FAILURE: ≥3 auth-class failures (403/Unauthorized/
+//     invalid_grant) in the window — the silent-credential-degradation class.
+// (b) PUBLISH_FAILURE_RATE: ≥20 attempts AND >20% failed.
+// Extracted pure so the decision table is unit-testable; the runner owns
+// dedupe + persistence.
+export type PublishHealthTrip = {
+  channel: string
+  conflictType: 'PUBLISH_FAILURE_RATE' | 'CHANNEL_AUTH_FAILURE'
+  message: string
+  localData: Record<string, number>
+}
+
+export function computePublishHealthTrips(
+  attempts: Array<{ channel: string; outcome: string; errorMessage: string | null }>,
+): PublishHealthTrip[] {
+  const byChannel = new Map<string, { ok: number; fail: number; auth: number }>()
+  for (const a of attempts) {
+    const b = byChannel.get(a.channel) ?? { ok: 0, fail: 0, auth: 0 }
+    if (a.outcome === 'success') b.ok++
+    else {
+      b.fail++
+      if (/HTTP 403|Unauthorized|invalid_grant/i.test(a.errorMessage ?? '')) b.auth++
+    }
+    byChannel.set(a.channel, b)
+  }
+  const trips: PublishHealthTrip[] = []
+  for (const [channel, b] of byChannel) {
+    const total = b.ok + b.fail
+    if (b.auth >= 3) {
+      trips.push({
+        channel,
+        conflictType: 'CHANNEL_AUTH_FAILURE',
+        message: `${b.auth} auth-class publish failures (403/Unauthorized/invalid_grant) in the last hour — check the channel authorization/roles/refresh token`,
+        localData: { authFailures: b.auth, windowHours: 1 },
+      })
+    }
+    if (total >= 20 && b.fail / total > 0.2) {
+      trips.push({
+        channel,
+        conflictType: 'PUBLISH_FAILURE_RATE',
+        message: `publish failure rate ${Math.round((b.fail / total) * 100)}% (${b.fail}/${total}) in the last hour`,
+        localData: { failed: b.fail, total, windowHours: 1 },
+      })
+    }
+  }
+  return trips
+}
+
 export async function runLatencyWatchdog(): Promise<void> {
   try {
     await recordCronRun('latency-watchdog', async () => {
@@ -108,7 +157,53 @@ export async function runLatencyWatchdog(): Promise<void> {
         })
       }
 
-      // --- 2. Realtime-degraded check ---
+      // --- 2. Publish-health tripwires (P0c, un-nested by AS.1) ---
+      // These MUST run every tick regardless of dispatch path. They were
+      // accidentally nested inside the `if (!immediate)` degraded branch, so
+      // on a healthy instant-lane deploy (the normal prod config) they never
+      // executed — the 2026-07-20 403 outage produced zero CHANNEL_AUTH_FAILURE
+      // rows while 14 auth failures sat in the attempts audit.
+      let tripwireCount = 0
+      try {
+        const oneHourAgo = new Date(Date.now() - 3600e3)
+        const attempts = await prisma.channelPublishAttempt.findMany({
+          where: { attemptedAt: { gte: oneHourAgo }, outcome: { in: ['success', 'failed'] } },
+          select: { channel: true, outcome: true, errorMessage: true },
+        })
+        const trips = computePublishHealthTrips(attempts)
+        const { syncHealthService } = await import('../services/sync-health.service.js')
+        for (const trip of trips) {
+          const dupe = await prisma.syncHealthLog.findFirst({
+            where: {
+              channel: trip.channel,
+              conflictType: trip.conflictType,
+              resolutionStatus: 'UNRESOLVED',
+              createdAt: { gte: new Date(Date.now() - 6 * 3600e3) },
+            },
+            select: { id: true },
+          })
+          if (dupe) continue
+          await syncHealthService.logConflict({
+            channel: trip.channel,
+            conflictType: trip.conflictType,
+            message: trip.message,
+            localData: trip.localData,
+            remoteData: { source: 'latency-watchdog' },
+          })
+          tripwireCount++
+          logger.warn('[latency-watchdog] publish-health tripwire fired', {
+            channel: trip.channel,
+            conflictType: trip.conflictType,
+            message: trip.message,
+          })
+        }
+      } catch (healthErr) {
+        logger.warn('[latency-watchdog] publish-health tripwires failed', {
+          error: healthErr instanceof Error ? healthErr.message : String(healthErr),
+        })
+      }
+
+      // --- 3. Realtime-degraded check ---
       // Mirror the exact config reads from inventory-sync-diagnostics.routes.ts.
       let degradedCount = 0
 
@@ -121,59 +216,6 @@ export async function runLatencyWatchdog(): Promise<void> {
           ? 'Outbound queue workers are OFF (ENABLE_QUEUE_WORKERS !== "1") — cross-channel push bounded by 60s cron, not real-time'
           : 'Redis not configured (REDIS_URL / REDIS_HOST unset) — BullMQ workers cannot start'
         try {
-        // P0c — publish-health tripwires (per channel, last hour).
-        // (a) failure-rate breach: ≥20 attempts AND >20% failed.
-        // (b) auth-class failures (403/Unauthorized/invalid_grant): the
-        //     silent-credential-degradation class — fires from the FIRST few.
-        try {
-          const oneHourAgo = new Date(Date.now() - 3600e3)
-          const attempts = await prisma.channelPublishAttempt.findMany({
-            where: { attemptedAt: { gte: oneHourAgo }, outcome: { in: ['success', 'failed'] } },
-            select: { channel: true, outcome: true, errorMessage: true },
-          })
-          const byChannel = new Map<string, { ok: number; fail: number; auth: number }>()
-          for (const a of attempts) {
-            const b = byChannel.get(a.channel) ?? { ok: 0, fail: 0, auth: 0 }
-            if (a.outcome === 'success') b.ok++
-            else {
-              b.fail++
-              if (/HTTP 403|Unauthorized|invalid_grant/i.test(a.errorMessage ?? '')) b.auth++
-            }
-            byChannel.set(a.channel, b)
-          }
-          const { syncHealthService } = await import('../services/sync-health.service.js')
-          for (const [channel, b] of byChannel) {
-            const total = b.ok + b.fail
-            const dedupe = async (conflictType: 'PUBLISH_FAILURE_RATE' | 'CHANNEL_AUTH_FAILURE') =>
-              prisma.syncHealthLog.findFirst({
-                where: { channel, conflictType, resolutionStatus: 'UNRESOLVED', createdAt: { gte: new Date(Date.now() - 6 * 3600e3) } },
-                select: { id: true },
-              })
-            if (b.auth >= 3 && !(await dedupe('CHANNEL_AUTH_FAILURE'))) {
-              await syncHealthService.logConflict({
-                channel,
-                conflictType: 'CHANNEL_AUTH_FAILURE',
-                message: `${b.auth} auth-class publish failures (403/Unauthorized/invalid_grant) in the last hour — check the channel authorization/roles/refresh token`,
-                localData: { authFailures: b.auth, windowHours: 1 },
-                remoteData: { source: 'latency-watchdog' },
-              })
-            }
-            if (total >= 20 && b.fail / total > 0.2 && !(await dedupe('PUBLISH_FAILURE_RATE'))) {
-              await syncHealthService.logConflict({
-                channel,
-                conflictType: 'PUBLISH_FAILURE_RATE',
-                message: `publish failure rate ${Math.round((b.fail / total) * 100)}% (${b.fail}/${total}) in the last hour`,
-                localData: { failed: b.fail, total, windowHours: 1 },
-                remoteData: { source: 'latency-watchdog' },
-              })
-            }
-          }
-        } catch (healthErr) {
-          logger.warn('[latency-watchdog] publish-health tripwires failed', {
-            error: healthErr instanceof Error ? healthErr.message : String(healthErr),
-          })
-        }
-
           publishOrderEvent({ type: 'sync.realtime.degraded', reason, ts: Date.now() })
           degradedCount++
         } catch (emitErr) {
@@ -212,7 +254,7 @@ export async function runLatencyWatchdog(): Promise<void> {
         })
       }
 
-      return `breaches=${breachCount} degraded=${degradedCount} thresholdMs=${thresholdMs}`
+      return `breaches=${breachCount} tripwires=${tripwireCount} degraded=${degradedCount} thresholdMs=${thresholdMs}`
     })
   } catch (err) {
     logger.error('[latency-watchdog] top-level failure', {

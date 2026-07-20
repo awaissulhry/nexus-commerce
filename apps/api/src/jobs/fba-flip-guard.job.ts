@@ -52,19 +52,48 @@ export async function runFbaFlipGuardCron(): Promise<void> {
 
       if (rows.length > 0) {
         const skus = [...new Set(rows.map((r) => r.sku).filter(Boolean))] as string[]
+
+        // AS.1 — a queue row marked SUCCESS is NOT proof anything reached
+        // Amazon: the dispatch-time FBA guard skips the quantity and the row
+        // still completes "successfully" (the P0c-era false-alarm class —
+        // 137 such rows produced 0 real sends on 2026-07-20). Only a SKU with
+        // a real successful live publish attempt in the window can actually
+        // have flipped. Attempt rows are best-effort audit, so the daily
+        // fba-drift-detector (report-based, any-source) remains the backstop.
+        const confirmed = await prisma.channelPublishAttempt.findMany({
+          where: {
+            channel: 'AMAZON',
+            sku: { in: skus },
+            outcome: 'success',
+            mode: 'live',
+            attemptedAt: { gte: new Date(Date.now() - 25 * 60_000) },
+          },
+          select: { sku: true },
+          distinct: ['sku'],
+        })
+        const confirmedSkus = [...new Set(confirmed.map((c) => c.sku).filter(Boolean))] as string[]
+
+        if (confirmedSkus.length === 0) {
+          logger.info('fba-flip-guard: FBA-signal queue rows were dispatch-guard skips (no sends) — no alert', {
+            queueRows: rows.length,
+            skus: skus.slice(0, 25),
+          })
+          return `ok — ${rows.length} FBA-signal queue row(s) guard-skipped, 0 confirmed sends`
+        }
+
         logger.error(
-          '🔴 FBA-FLIP GUARD TRIPPED — a merchant QUANTITY_UPDATE succeeded for FBA SKU(s); the Amazon offer was likely flipped to FBM',
+          '🔴 FBA-FLIP GUARD TRIPPED — a merchant QUANTITY_UPDATE was CONFIRMED SENT for FBA SKU(s); the Amazon offer was likely flipped to FBM',
           {
             critical: true,
-            count: rows.length,
-            skus: skus.slice(0, 25),
+            count: confirmedSkus.length,
+            skus: confirmedSkus.slice(0, 25),
             action: 'Check the fail-closed guard + that the fixed build is live (/api/health). Auto-restore is firing now.',
           },
         )
 
         if (process.env.NEXUS_FBA_AUTO_RESTORE !== '0') {
           try {
-            const summary = await restoreFbaListings({ skus, dryRun: false })
+            const summary = await restoreFbaListings({ skus: confirmedSkus, dryRun: false })
             logger.error('🟡 FBA auto-restore fired by flip-guard', {
               restored: summary.sent,
               processed: summary.processed,
@@ -81,7 +110,7 @@ export async function runFbaFlipGuardCron(): Promise<void> {
           logger.error('fba-flip-guard: auto-restore disabled (NEXUS_FBA_AUTO_RESTORE=0) — run POST /admin/amazon/restore-fba {"dryRun":false} manually')
         }
 
-        return `ALERT: ${rows.length} FBA quantity push(es) across ${skus.length} sku(s)`
+        return `ALERT: ${confirmedSkus.length} CONFIRMED FBA quantity push(es) (${rows.length} queue rows scanned)`
       }
       return 'ok — no FBA quantity pushes in window'
     })

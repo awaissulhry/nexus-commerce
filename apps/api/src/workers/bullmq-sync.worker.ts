@@ -13,7 +13,7 @@ import { prisma } from '@nexus/database'
 import { redis } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { variationSyncProcessor } from '../services/variation-sync-processor.service.js'
-import OutboundSyncService from '../services/outbound-sync.service.js'
+import OutboundSyncService, { computeFailureDisposition } from '../services/outbound-sync.service.js'
 import { dispatchChannelDelist, applyDelistResultToQueue } from '../services/channel-delist.service.js'
 import { calculateTargetPrice } from '../services/repricer.service.js'
 import { productEventService } from '../services/product-event.service.js'
@@ -332,6 +332,43 @@ async function processOutboundSyncJob(job: Job) {
       processedCount++
       return { status: 'SUCCESS', queueId, result: syncResult }
     } else {
+      // AS.1 — episode-class failures (circuit open / rate limited / debounced /
+      // auth outage) must not consume the retry budget on this path either
+      // (RT.0 gave the cron drain this semantics; the worker kept burning
+      // budget on them). Park the row as a deferral and COMPLETE the job —
+      // no BullMQ retry; the 60s cron re-arms the row once nextRetryAt is due.
+      const disposition = computeFailureDisposition(
+        queueRecord,
+        syncResult.error || 'Unknown error',
+        { errorCode: syncResult.errorCode, retryable: syncResult.retryable },
+      )
+      if (disposition.kind === 'deferral') {
+        await prisma.outboundSyncQueue.update({
+          where: { id: queueId },
+          data: {
+            syncStatus: 'FAILED',
+            errorMessage: syncResult.error || 'Unknown error',
+            errorCode: disposition.errorCode,
+            // retryCount deliberately NOT incremented — the failure belongs
+            // to the episode, not to this row.
+            nextRetryAt: disposition.nextRetryAt,
+            payload: {
+              ...(queueRecord.payload as any),
+              processedBy: 'BullMQ',
+              jobId: job.id,
+              lastError: syncResult.error,
+            },
+          },
+        })
+        logger.warn('⏸️ Sync deferred (episode-class failure, no budget spent)', {
+          queueId,
+          productId,
+          errorCode: disposition.errorCode,
+          nextRetryAt: disposition.nextRetryAt,
+        })
+        return { status: 'DEFERRED', queueId, errorCode: disposition.errorCode }
+      }
+
       // Determine if this is a retryable error
       const isRetryable = syncResult.retryable !== false
       const newRetryCount = (queueRecord.retryCount || 0) + 1
