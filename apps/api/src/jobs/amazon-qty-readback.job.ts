@@ -115,6 +115,9 @@ export async function runAmazonQtyReadback(): Promise<string> {
         channel: 'AMAZON',
         marketplace: mp,
         isPublished: true,
+        // SC.1 — PAUSED listings are reported nowhere and healed never: the
+        // operator explicitly froze them; the read-back must not fight that.
+        syncPaused: false,
         // AS.4b — pinned listings are verified too: after any write (cascade
         // for followers, pin-apply for pinned) cl.quantity IS the intent, so
         // the follow flag must not gate the comparison. Pre-AS.4b the ~260

@@ -28,6 +28,8 @@ import { ebayAuthService } from "./ebay-auth.service.js";
 import { listingPublishService } from "./listing-publish.service.js";
 import { resolveComplianceById, buildShopifyComplianceMetafields } from "./compliance-resolver.service.js";
 import { computeAvailableToPublish } from "./available-to-publish.service.js";
+import { resolveMembershipIntended } from "./sync-control-core.js";
+import { loadChannelPolicies, policyFor } from "./sync-control-policy.service.js";
 import { publishOrderEvent } from "./order-events.service.js";
 import { productEventService } from "./product-event.service.js";
 import {
@@ -865,10 +867,22 @@ export class OutboundSyncService {
       cl = await prisma.channelListing
         .findUnique({
           where: { id: queueItem.channelListingId },
-          select: { platformAttributes: true, fulfillmentMethod: true, quantity: true, stockBuffer: true },
+          select: { platformAttributes: true, fulfillmentMethod: true, quantity: true, stockBuffer: true, marketplace: true, syncPaused: true },
         })
         .catch(() => null);
     }
+    // SC.1 — a paused listing (or a policy-paused channel-market) sends
+    // NOTHING until resumed. Dispatch re-checks at send time so a pause set
+    // after enqueue still holds.
+    if (cl?.syncPaused) {
+      return { success: false, queueId, channel: "AMAZON", status: "SKIPPED", message: "Listing sync is PAUSED (Sync Control)", error: "sync-paused" };
+    }
+    try {
+      const scp = policyFor(await loadChannelPolicies(), 'AMAZON', cl?.marketplace ?? marketplaceId);
+      if (scp?.pushesPaused) {
+        return { success: false, queueId, channel: "AMAZON", status: "SKIPPED", message: "Channel-market pushes PAUSED (Sync Control policy)", error: "sync-paused-policy" };
+      }
+    } catch { /* fail-open: policy unreadable = not paused */ }
     if (!productType) productType = String((cl?.platformAttributes as any)?.productType ?? '').toUpperCase();
     if (!productType) productType = String((product as any)?.productType ?? '').toUpperCase();
 
@@ -1038,10 +1052,21 @@ export class OutboundSyncService {
         queueItem.channelListingId
           ? prisma.channelListing.findUnique({
               where: { id: queueItem.channelListingId },
-              select: { stockBuffer: true, fulfillmentMethod: true, quantity: true },
+              select: { stockBuffer: true, fulfillmentMethod: true, quantity: true, marketplace: true, syncPaused: true },
             })
           : Promise.resolve(null),
       ]);
+      // SC.1 — pause guard (listing + channel-market policy), re-checked at
+      // dispatch time like the Amazon lane.
+      if ((cl as { syncPaused?: boolean } | null)?.syncPaused) {
+        return { success: false, queueId, channel: "EBAY", status: "SKIPPED", message: "Listing sync is PAUSED (Sync Control)", error: "sync-paused" };
+      }
+      try {
+        const scp = policyFor(await loadChannelPolicies(), 'EBAY', (cl as { marketplace?: string } | null)?.marketplace ?? 'IT');
+        if (scp?.pushesPaused) {
+          return { success: false, queueId, channel: "EBAY", status: "SKIPPED", message: "Channel-market pushes PAUSED (Sync Control policy)", error: "sync-paused-policy" };
+        }
+      } catch { /* fail-open */ }
       // P1 — base the eBay push on the CURRENT listing quantity, then apply the
       // warehouse cap below. Kill-switch: NEXUS_SYNC_ORDERING_V2=0.
       if (process.env.NEXUS_SYNC_ORDERING_V2 !== '0' && cl && payload.quantity !== undefined) {
@@ -1426,25 +1451,43 @@ export class OutboundSyncService {
       try {
         const wh = await prisma.stockLevel.findMany({
           where: { productId: payload.productId, location: { type: "WAREHOUSE" } },
-          select: { available: true },
+          select: { available: true, location: { select: { code: true, syncRoutes: true } } },
         });
-        const fresh = computeAvailableToPublish({
-          fulfillmentMethod: "FBM",
-          warehouseAvailable: wh.reduce((a: number, s: { available: number }) => a + s.available, 0),
-          fbaSellable: 0,
-          stockBuffer: 0,
-        }).available;
+        // SC.1 — per-membership derivation at dispatch: routing + followPool
+        // + per-membership buffer + channel policy. PAUSED/UNCOUNTED members
+        // are dropped here exactly like at enqueue (controls can change
+        // between the two — dispatch re-checks, never trusts the row).
+        const scLedger = wh.map((s: { available: number; location: { code: string; syncRoutes: string[] } | null }) => ({
+          locationCode: s.location?.code ?? '?',
+          available: s.available,
+          syncRoutes: s.location?.syncRoutes ?? [],
+        }));
+        const scPolicies = await loadChannelPolicies();
         const mems = await prisma.sharedListingMembership.findMany({
           where: { marketplace: market, itemId, sku: { in: updates.map((u) => u.sku) } },
-          select: { sku: true, lastQtyPushed: true },
+          select: { sku: true, lastQtyPushed: true, followPool: true, stockBuffer: true },
         });
-        const lastBySku = new Map(mems.map((m: { sku: string; lastQtyPushed: number | null }) => [m.sku, m.lastQtyPushed]));
-        for (const u of updates) u.quantity = fresh;
-        const effective = updates.filter((u) => lastBySku.get(u.sku) !== fresh);
+        const memBySku = new Map(
+          mems.map((m: { sku: string; lastQtyPushed: number | null; followPool?: boolean; stockBuffer?: number }) => [m.sku, m]),
+        );
+        const effective: typeof updates = [];
+        for (const u of updates) {
+          const m = memBySku.get(u.sku);
+          const r = resolveMembershipIntended({
+            marketplace: market,
+            followPool: m?.followPool ?? true,
+            stockBuffer: m?.stockBuffer ?? 0,
+            channelPolicy: policyFor(scPolicies, 'EBAY', market),
+            ledger: scLedger,
+          });
+          if (r.kind !== 'FOLLOW') continue; // paused/uncounted member — never push
+          u.quantity = r.quantity;
+          if (m?.lastQtyPushed !== r.quantity) effective.push(u);
+        }
         if (effective.length === 0) {
           return {
             success: true, queueId, channel: "EBAY", status: "SUCCESS",
-            message: `Shared ${itemId}: pool unchanged since last push (qty ${fresh}) — no revise spent`,
+            message: `Shared ${itemId}: pool unchanged/controlled since last push — no revise spent`,
           };
         }
         updates.length = 0;

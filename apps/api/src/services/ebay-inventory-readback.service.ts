@@ -23,6 +23,8 @@ import { ebayAuthService } from './ebay-auth.service.js'
 import { getItemQuantities } from './ebay-trading-api.service.js'
 import { computeAvailableToPublish } from './available-to-publish.service.js'
 import { enqueueSharedTradingFanout } from './ebay-shared-fanout.service.js'
+import { policyFor, loadChannelPolicies } from './sync-control-policy.service.js'
+import { resolveMembershipIntended } from './sync-control-core.js'
 
 const DEFAULT_MAX_SKUS = 200
 const DEFAULT_MAX_TRADING_ITEMS = 50
@@ -283,8 +285,10 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
   }
 
   const memberships = await prisma.sharedListingMembership.findMany({
-    where: { status: 'ACTIVE' },
-    select: { itemId: true, marketplace: true, sku: true, productId: true, lastPushedAt: true },
+    // SC.1 — followPool=false members are operator-excluded: never compared,
+    // never healed (their eBay quantity is deliberately theirs to manage).
+    where: { status: 'ACTIVE', followPool: true },
+    select: { itemId: true, marketplace: true, sku: true, productId: true, lastPushedAt: true, stockBuffer: true },
   })
   if (memberships.length === 0) return result
 
@@ -317,30 +321,37 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
   const batch = groups.slice(0, maxItems)
   result.items = batch.length
 
-  // Pool truth per product — exact cascade math (WAREHOUSE available, no
-  // shared-lane buffer). Products with ZERO warehouse rows are UNCOUNTED and
-  // excluded from the intended map entirely (never compared, never healed).
+  // SC.1 — pool truth per (product × marketplace) via the derivation core
+  // (routing + channel policy; per-membership buffers land in SC.1b). Routed-
+  // UNCOUNTED / policy-PAUSED products stay OUT of the intended map entirely
+  // (never compared, never healed) — the pre-SC uncounted exclusion, now
+  // routing-aware.
   const productIds = [...new Set(memberships.map((m) => m.productId).filter((p): p is string => Boolean(p)))]
   const levels = await prisma.stockLevel.findMany({
-    where: { productId: { in: productIds } },
-    select: { productId: true, available: true, location: { select: { type: true } } },
+    where: { productId: { in: productIds }, location: { type: 'WAREHOUSE' } },
+    select: { productId: true, available: true, location: { select: { code: true, syncRoutes: true } } },
   })
+  const ledgerByProduct = new Map<string, { locationCode: string; available: number; syncRoutes: string[] }[]>()
   const warehouseSum = new Map<string, number>()
   for (const l of levels) {
-    if (l.location?.type !== 'WAREHOUSE') continue
+    const arr = ledgerByProduct.get(l.productId) ?? []
+    arr.push({ locationCode: l.location?.code ?? '?', available: l.available, syncRoutes: l.location?.syncRoutes ?? [] })
+    ledgerByProduct.set(l.productId, arr)
     warehouseSum.set(l.productId, (warehouseSum.get(l.productId) ?? 0) + l.available)
   }
+  const scPolicies = await loadChannelPolicies()
+  const marketplaceByProduct = new Map<string, string>()
+  for (const m of memberships) if (m.productId && !marketplaceByProduct.has(m.productId)) marketplaceByProduct.set(m.productId, m.marketplace)
   const intendedByProduct = new Map<string, number>()
-  for (const [pid, warehouseAvailable] of warehouseSum) {
-    intendedByProduct.set(
-      pid,
-      computeAvailableToPublish({
-        fulfillmentMethod: 'FBM',
-        warehouseAvailable,
-        fbaSellable: 0,
-        stockBuffer: 0,
-      }).available,
-    )
+  for (const [pid, ledger] of ledgerByProduct) {
+    const r = resolveMembershipIntended({
+      marketplace: marketplaceByProduct.get(pid) ?? 'EBAY_IT',
+      followPool: true,
+      stockBuffer: 0,
+      channelPolicy: policyFor(scPolicies, 'EBAY', marketplaceByProduct.get(pid) ?? 'EBAY_IT'),
+      ledger,
+    })
+    if (r.kind === 'FOLLOW') intendedByProduct.set(pid, r.quantity)
   }
 
   const observedByItemSku = new Map<string, number>()

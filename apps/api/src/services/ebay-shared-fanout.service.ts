@@ -8,6 +8,8 @@
 // the stock transaction or the network.
 
 import { computeAvailableToPublish } from './available-to-publish.service.js'
+import { resolveMembershipIntended, type RoutedLedgerRow } from './sync-control-core.js'
+import { policyFor, type PolicyMap } from './sync-control-policy.service.js'
 
 export interface SharedMembershipRow {
   sku: string
@@ -127,6 +129,12 @@ export interface SharedFanoutArgs {
   /** Optional: restrict to a single changed SKU (else all of the product's
    *  memberships re-push). */
   sku?: string
+  /** SC.1 — when provided, quantities derive PER MEMBERSHIP via the sync-
+   *  control core (routing + followPool + per-membership buffer); PAUSED and
+   *  UNCOUNTED members are excluded from the fan-out entirely. Without it,
+   *  the legacy uniform pool-capped quantity applies (back-compat callers). */
+  scLedger?: RoutedLedgerRow[]
+  scPolicies?: PolicyMap
 }
 
 /** Returns the OutboundSyncQueue ids enqueued (so the caller adds BullMQ jobs). */
@@ -139,19 +147,45 @@ export async function enqueueSharedTradingFanout(
 
   const memberships = (await db.sharedListingMembership.findMany({
     where,
-    select: { sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true },
-  })) as Array<SharedMembershipRow & { lastQtyPushed: number | null }>
+    select: {
+      sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true,
+      followPool: true, stockBuffer: true,
+    },
+  })) as Array<SharedMembershipRow & { lastQtyPushed: number | null; followPool?: boolean; stockBuffer?: number }>
 
   if (memberships.length === 0) return []
 
-  const capped = computeAvailableToPublish({
-    fulfillmentMethod: 'FBM',
-    warehouseAvailable: args.warehouseAvailable,
-    fbaSellable: 0,
-    stockBuffer: args.stockBuffer ?? 0,
-  }).available
+  let eligible = memberships
+  let qtyFor: (m: SharedMembershipRow) => number
 
-  const rows = buildSharedFanoutRows(memberships, () => capped, args.holdUntil)
+  if (args.scLedger) {
+    // SC.1 — per-membership derivation. followPool=false (PAUSED) and
+    // routed-UNCOUNTED members never receive a push from this fan-out.
+    const resolvedQty = new Map<string, number>()
+    eligible = memberships.filter((m) => {
+      const r = resolveMembershipIntended({
+        marketplace: m.marketplace,
+        followPool: m.followPool ?? true,
+        stockBuffer: m.stockBuffer ?? 0,
+        channelPolicy: args.scPolicies ? policyFor(args.scPolicies, 'EBAY', m.marketplace) : null,
+        ledger: args.scLedger!,
+      })
+      if (r.kind !== 'FOLLOW') return false
+      resolvedQty.set(`${m.itemId} ${m.sku}`, r.quantity)
+      return true
+    })
+    qtyFor = (m) => resolvedQty.get(`${m.itemId} ${m.sku}`) ?? 0
+  } else {
+    const capped = computeAvailableToPublish({
+      fulfillmentMethod: 'FBM',
+      warehouseAvailable: args.warehouseAvailable,
+      fbaSellable: 0,
+      stockBuffer: args.stockBuffer ?? 0,
+    }).available
+    qtyFor = () => capped
+  }
+
+  const rows = buildSharedFanoutRows(eligible, qtyFor, args.holdUntil)
   if (rows.length === 0) return []
 
   await db.outboundSyncQueue.createMany({ data: rows })

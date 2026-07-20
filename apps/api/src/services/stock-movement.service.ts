@@ -6,6 +6,8 @@ import { handleMovementStockoutTransition } from './stockout-detector.service.js
 import { consumeLayersInTx, receiveLayerInTx } from './cost-layers.service.js'
 import { computeAvailableToPublish } from './available-to-publish.service.js'
 import { enqueueSharedTradingFanout } from './ebay-shared-fanout.service.js'
+import { resolveIntendedQuantity } from './sync-control-core.js'
+import { loadChannelPolicies, policyFor } from './sync-control-policy.service.js'
 import { coalescePendingQuantityRows } from './sync-coalesce.js'
 import { outboundEnqueuePriority } from './sync-priority.js'
 import { productReadCacheService } from './product-read-cache.service.js'
@@ -647,6 +649,9 @@ async function cascadeQuantityToListings(
       stockBuffer: true,
       followMasterQuantity: true,
       fulfillmentMethod: true,
+      // SC.1 — Sync Control inputs
+      syncPaused: true,
+      sourceLocationCodes: true,
     },
   })
 
@@ -657,10 +662,21 @@ async function cascadeQuantityToListings(
   // the just-written stock state.
   const stockRows = await tx.stockLevel.findMany({
     where: { productId },
-    select: { quantity: true, available: true, location: { select: { type: true } } },
+    select: {
+      quantity: true,
+      available: true,
+      location: { select: { type: true, code: true, syncRoutes: true } },
+    },
   })
   const warehouseRows = stockRows.filter((s) => s.location?.type === 'WAREHOUSE')
   const warehouseAvailable = warehouseRows.reduce((sum, s) => sum + s.available, 0)
+  // SC.1 — routed-ledger shape for the derivation core + channel policies.
+  const scLedger = warehouseRows.map((s) => ({
+    locationCode: s.location?.code ?? '?',
+    available: s.available,
+    syncRoutes: s.location?.syncRoutes ?? [],
+  }))
+  const scPolicies = await loadChannelPolicies(tx as never)
   // P0 guard (2026-07-20) — an EMPTY ledger (zero WAREHOUSE rows) means the
   // product was never counted, NOT that stock is zero. Pushing 0 over a
   // positive live quantity from that state is exactly the zero-inventory
@@ -668,6 +684,7 @@ async function cascadeQuantityToListings(
   // that's honest.
   const ledgerUncounted = warehouseRows.length === 0
   let uncountedSkips = 0
+  let pausedSkips = 0
   const fbaBucket = stockRows
     .filter((s) => s.location?.type === 'AMAZON_FBA')
     .reduce((sum, s) => sum + s.quantity, 0)
@@ -699,22 +716,35 @@ async function cascadeQuantityToListings(
       productFulfillmentMethod: productFulfillment,
     })
 
-    // FBM follows the warehouse pool (reserved-adjusted available − buffer).
-    // FBA is Amazon-managed: snapshot its master but never cascade/push a
-    // warehouse quantity onto it (outbound-sync's isFbaListing would skip the
-    // push regardless; not enqueuing avoids wasted-job churn).
-    const uncountedSkip =
-      ledgerUncounted && method === 'FBM' && listing.followMasterQuantity && (listing.quantity ?? 0) > 0
+    // SC.1 — the derivation core is THE definition of intended quantity
+    // (FBA_EXCLUDED → policy PAUSED → listing PAUSED → PINNED → routed
+    // FOLLOW / UNCOUNTED). FBA and PAUSED and PINNED all land in the
+    // snapshot-only branch below (masterQuantity recorded, no write, no row).
+    const resolution = resolveIntendedQuantity({
+      channel: listing.channel,
+      marketplace: listing.marketplace,
+      isFba: method === 'FBA',
+      followMasterQuantity: listing.followMasterQuantity,
+      syncPaused: (listing as { syncPaused?: boolean }).syncPaused ?? false,
+      pinnedQuantity: listing.quantity,
+      stockBuffer: listing.stockBuffer ?? 0,
+      sourceLocationCodes: (listing as { sourceLocationCodes?: string[] }).sourceLocationCodes ?? [],
+      channelPolicy: policyFor(scPolicies, listing.channel, listing.marketplace),
+      ledger: scLedger,
+    })
+    const uncountedSkip = resolution.kind === 'UNCOUNTED' && (listing.quantity ?? 0) > 0
     if (uncountedSkip) uncountedSkips++
+    if (resolution.kind === 'PAUSED') pausedSkips++
+    // Legacy-compat (pre-SC identity, proven by the shadow diff): an
+    // UNCOUNTED listing already at qty ≤0/null still cascades 0 — routed
+    // available there IS 0 and writing it is value-neutral; only a positive
+    // live qty is protected (the P0 zero-inventory guard).
     const newListingQty =
-      !uncountedSkip && listing.followMasterQuantity && method === 'FBM'
-        ? computeAvailableToPublish({
-            fulfillmentMethod: 'FBM',
-            warehouseAvailable,
-            fbaSellable: 0,
-            stockBuffer: listing.stockBuffer ?? 0,
-          }).available
-        : null
+      resolution.kind === 'FOLLOW'
+        ? resolution.quantity
+        : resolution.kind === 'UNCOUNTED' && !uncountedSkip
+          ? 0
+          : null
 
     if (newListingQty != null && newListingQty !== listing.quantity) {
       await tx.channelListing.update({
@@ -818,8 +848,11 @@ async function cascadeQuantityToListings(
         {
           productId,
           warehouseAvailable,
-          stockBuffer: 0, // shared listings have no per-listing ChannelListing buffer (yet)
+          stockBuffer: 0, // legacy fallback; per-membership buffer via scLedger path
           holdUntil,
+          // SC.1 — per-membership derivation (routing + followPool + buffer)
+          scLedger,
+          scPolicies,
         },
       )
       if (sharedIds.length > 0) queuedSyncIds = [...queuedSyncIds, ...sharedIds]
@@ -834,6 +867,11 @@ async function cascadeQuantityToListings(
   if (uncountedSkips > 0) {
     logger.warn('cascadeQuantityToListings: uncounted-ledger guard skipped listings (load stock via import to activate)', {
       productId, skipped: uncountedSkips,
+    })
+  }
+  if (pausedSkips > 0) {
+    logger.info('cascadeQuantityToListings: sync-paused listings snapshot-only (SC)', {
+      productId, paused: pausedSkips,
     })
   }
   return { cascadedListingIds, snapshottedListingIds, queuedSyncIds }
