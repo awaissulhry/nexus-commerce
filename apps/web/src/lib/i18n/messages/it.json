@@ -885,6 +885,7 @@
   "stock.import.apply.donePartial": "Importazione completata con errori",
   "stock.import.apply.doneFailed": "Importazione non riuscita",
   "stock.import.apply.doneCancelled": "Importazione annullata",
+  "stock.import.history.by": "di {u}",
   "stock.import.history.title": "Storico importazioni",
   "stock.import.history.colFile": "File",
   "stock.import.history.colDate": "Data",

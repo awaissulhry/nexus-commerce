@@ -367,20 +367,38 @@ export async function previewImport(opts: {
   // Batch-load channel listings for CHANNEL/BOTH targets. One query for all
   // products; per-row channel/marketplace filters (a row's own columns)
   // apply in JS — the SAME filter apply uses, so preview never diverges.
-  let channelListingsByProduct = new Map<string, Array<{ id: string; channel: string; marketplace: string; quantity: number | null; quantityOverride: number | null; listingStatus: string }>>()
+  let channelListingsByProduct = new Map<string, Array<{ id: string; channel: string; marketplace: string; quantity: number | null; quantityOverride: number | null; listingStatus: string; fulfillmentMethod: string | null }>>()
+  // IM.3.3 — preview mirrors apply's FBA exclusion, so what the preview
+  // shows is exactly what apply writes (preview = apply invariant).
+  const previewFbaBucket = new Map<string, number>()
+  const previewProductFulfillment = new Map<string, string | null>()
   if (target !== 'WAREHOUSE') {
-    const cls = await prisma.channelListing.findMany({
-      where: {
-        productId: { in: productIds },
-        channel: { in: ['AMAZON', 'EBAY', 'SHOPIFY'] },
-      },
-      select: { id: true, productId: true, channel: true, marketplace: true, quantity: true, quantityOverride: true, listingStatus: true },
-    })
+    const [cls, fbaLevels, productMeta] = await Promise.all([
+      prisma.channelListing.findMany({
+        where: {
+          productId: { in: productIds },
+          channel: { in: ['AMAZON', 'EBAY', 'SHOPIFY'] },
+        },
+        select: { id: true, productId: true, channel: true, marketplace: true, quantity: true, quantityOverride: true, listingStatus: true, fulfillmentMethod: true },
+      }),
+      prisma.stockLevel.findMany({
+        where: { productId: { in: productIds }, location: { type: 'AMAZON_FBA' } },
+        select: { productId: true, quantity: true },
+      }),
+      prisma.product.findMany({
+        where: { id: { in: productIds } },
+        select: { id: true, fulfillmentMethod: true },
+      }),
+    ])
     for (const cl of cls) {
       const existing = channelListingsByProduct.get(cl.productId) ?? []
       existing.push(cl)
       channelListingsByProduct.set(cl.productId, existing)
     }
+    for (const lvl of fbaLevels) {
+      previewFbaBucket.set(lvl.productId, (previewFbaBucket.get(lvl.productId) ?? 0) + lvl.quantity)
+    }
+    for (const p of productMeta) previewProductFulfillment.set(p.id, p.fulfillmentMethod)
   }
 
   let resolvedCount = 0, fuzzyCount = 0, unresolvedCount = 0, errorCount = 0, wouldUpdateCount = 0
@@ -434,6 +452,13 @@ export async function previewImport(opts: {
     const cls = r.productId ? (channelListingsByProduct.get(r.productId) ?? []) : []
     const matchedCls = cls
       .filter((cl) => cl.listingStatus !== 'ENDED')
+      // IM.3.3 — same FBA exclusion as apply (FBA listings are Amazon-managed)
+      .filter((cl) => !r.productId || resolveListingFulfillmentMethod({
+        listingFulfillmentMethod: cl.fulfillmentMethod,
+        channel: cl.channel,
+        fbaBucket: previewFbaBucket.get(r.productId) ?? 0,
+        productFulfillmentMethod: previewProductFulfillment.get(r.productId) ?? null,
+      }) === 'FBM')
       .filter((cl) => !r.channel || cl.channel === r.channel)
       .filter((cl) => !r.marketplace || cl.marketplace === r.marketplace)
 
@@ -653,6 +678,12 @@ export interface ApplyImportOptions {
    * write' and the job closes as CANCELLED.
    */
   shouldAbort?: () => boolean
+  /**
+   * IM.3.3 — session identity of the operator applying the import (email).
+   * Stored on StockImportJob.createdBy; movement rows keep the stable
+   * 'bulk-import' actor and link back via referenceId=jobId.
+   */
+  actor?: string | null
 }
 
 /**
@@ -665,7 +696,7 @@ export interface ApplyImportOptions {
 export async function beginApplyImport(
   opts: ApplyImportOptions,
 ): Promise<{ jobId: string; totalRows: number; run: () => Promise<ApplyResult> }> {
-  const { rows, locationCode, mode, target, filename, fileKind, pinOverride = false, onProgress, shouldAbort } = opts
+  const { rows, locationCode, mode, target, filename, fileKind, pinOverride = false, onProgress, shouldAbort, actor } = opts
 
   const location = await prisma.stockLocation.findUnique({
     where: { code: locationCode },
@@ -689,6 +720,7 @@ export async function beginApplyImport(
         startedAt: new Date(),
         progressAt: new Date(),
         processedRows: 0,
+        ...(actor ? { createdBy: actor } : {}),
         ...(filename !== undefined ? { filename } : {}),
         ...(fileKind !== undefined ? { fileKind } : {}),
       },
@@ -707,6 +739,7 @@ export async function beginApplyImport(
         status: 'APPLYING',
         startedAt: new Date(),
         progressAt: new Date(),
+        ...(actor ? { createdBy: actor } : {}),
       },
     })
     jobId = job.id
@@ -757,6 +790,9 @@ async function executeApplyImport(args: {
     if (!Number.isFinite(row.quantity) || !Number.isInteger(row.quantity)) {
       return { row, skipped: false, warehouseApplied: false, channelApplied: false, error: `Quantity must be a whole number (got ${row.quantity})` }
     }
+    if (Math.abs(row.quantity) > 1_000_000) {
+      return { row, skipped: false, warehouseApplied: false, channelApplied: false, error: `Quantity out of range (got ${row.quantity})` }
+    }
     return { row, skipped: false, warehouseApplied: false, channelApplied: false }
   })
   const applicable = slots.filter((s) => !s.skipped && !s.error)
@@ -773,7 +809,9 @@ async function executeApplyImport(args: {
           select: { id: true, productId: true, quantity: true, reserved: true },
         })
       : [],
-    wantsWarehouse && productIds.length > 0
+    // IM.3.3 — loaded for CHANNEL targets too: the explicit writer needs the
+    // per-product FBA bucket to resolve (and exclude) FBA-backed listings.
+    productIds.length > 0
       ? prisma.stockLevel.findMany({
           where: { productId: { in: productIds } },
           select: {
@@ -828,6 +866,14 @@ async function executeApplyImport(args: {
     if (arr) arr.push(m)
     else membershipsByProduct.set(m.productId, [m])
   }
+  // IM.3.3 — per-product FBA bucket for listing-method resolution in the
+  // explicit channel path (cascade computes its own inline, unchanged).
+  const fbaBucketByProduct = new Map<string, number>()
+  for (const lvl of allLevels) {
+    if (lvl.location?.type === 'AMAZON_FBA') {
+      fbaBucketByProduct.set(lvl.productId, (fbaBucketByProduct.get(lvl.productId) ?? 0) + lvl.quantity)
+    }
+  }
 
   // ── Plan: per-product movement chains + channel arithmetic (in memory) ──────
   const plans = new Map<string, ProductPlan>()
@@ -866,6 +912,19 @@ async function executeApplyImport(args: {
     if (slot.skipped || slot.error) continue
     const row = slot.row
     const productId = row.productId as string
+
+    // IM.3.3 — server-side identity re-validation. Apply consumes the
+    // client's preview rows; the (productId, resolvedSku) pair must still
+    // match the live catalog or the row is refused (tampered payload, or a
+    // product renamed/deleted since preview).
+    const identity = metaByProduct.get(productId)
+    if (!identity || identity.sku !== row.resolvedSku) {
+      slot.error = identity
+        ? `Row identity mismatch (SKU is now '${identity.sku}') — re-run Preview`
+        : 'Product no longer exists — re-run Preview'
+      continue
+    }
+
     const plan = planFor(productId)
     plan.rowSlots.push(slot)
 
@@ -916,6 +975,15 @@ async function executeApplyImport(args: {
       const cls = (listingsByProduct.get(productId) ?? [])
         .filter((cl) => cl.listingStatus !== 'ENDED')
         .filter((cl) => EXPLICIT_CHANNELS.has(cl.channel))
+        // IM.3.3 — FBA-backed listings are Amazon-managed: never write their
+        // local quantity (the old engine wrote it and relied on the dispatch
+        // guard to block only the marketplace push).
+        .filter((cl) => resolveListingFulfillmentMethod({
+          listingFulfillmentMethod: cl.fulfillmentMethod,
+          channel: cl.channel,
+          fbaBucket: fbaBucketByProduct.get(productId) ?? 0,
+          productFulfillmentMethod: metaByProduct.get(productId)?.fulfillmentMethod ?? null,
+        }) === 'FBM')
         .filter((cl) => !row.channel || cl.channel === row.channel)
         .filter((cl) => !row.marketplace || cl.marketplace === row.marketplace)
       if (cls.length === 0) {

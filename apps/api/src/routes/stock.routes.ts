@@ -3314,6 +3314,9 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       let startedJobId: string | null = null
       const { jobId: newJobId, totalRows, run } = await beginApplyImport({
         rows, locationCode, mode, target, filename, fileKind, pinOverride, jobId,
+        // IM.3.3 — actor attribution from the RBAC session (null for
+        // pre-enforce anonymous traffic and scripts).
+        actor: request.authUser?.email ?? null,
         onProgress: (p) => { if (startedJobId) updateImportProgress(startedJobId, p) },
         shouldAbort: () => (startedJobId ? isImportCancelRequested(startedJobId) : false),
       })
@@ -3497,6 +3500,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           failed: true, skipped: true, status: true, appliedAt: true,
           createdAt: true, errorSummary: true,
           startedAt: true, progressAt: true, processedRows: true,
+          createdBy: true,
         },
       })
       return { jobs }

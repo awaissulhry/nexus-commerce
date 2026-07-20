@@ -491,6 +491,8 @@ model StockImportJob {
   startedAt     DateTime?
   progressAt    DateTime?
   processedRows Int       @default(0)
+  // IM.3.3 — who applied the import (session email; null = pre-IM.3.3 or script)
+  createdBy     String?
 
   @@index([status, createdAt(sort: Desc)])
   @@index([locationCode])

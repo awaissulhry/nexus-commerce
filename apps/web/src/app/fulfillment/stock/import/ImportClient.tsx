@@ -133,6 +133,8 @@ interface ImportHistory {
   startedAt?: string | null
   progressAt?: string | null
   processedRows?: number | null
+  // IM.3.3 — actor attribution
+  createdBy?: string | null
 }
 
 // IM.3.2 — async apply: the POST returns immediately; this is the polled state.
@@ -1569,6 +1571,9 @@ function ImportWizardInner() {
               <Tag tone="neutral">{historyDetail.job.mode}</Tag>
               <Tag tone="neutral">{historyDetail.job.target}</Tag>
               <span className="text-secondary">{historyDetail.job.locationCode}</span>
+              {historyDetail.job.createdBy && (
+                <span className="text-secondary">{t('stock.import.history.by', { u: historyDetail.job.createdBy })}</span>
+              )}
               <span className="text-emerald-600 font-medium">{historyDetail.job.succeeded} ok</span>
               {historyDetail.job.failed > 0 && <span className="text-rose-600 font-medium">{historyDetail.job.failed} failed</span>}
               {historyDetail.job.skipped > 0 && <span className="text-secondary">{historyDetail.job.skipped} skipped</span>}
