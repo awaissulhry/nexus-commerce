@@ -630,9 +630,15 @@ async function cascadeQuantityToListings(
     where: { productId },
     select: { quantity: true, available: true, location: { select: { type: true } } },
   })
-  const warehouseAvailable = stockRows
-    .filter((s) => s.location?.type === 'WAREHOUSE')
-    .reduce((sum, s) => sum + s.available, 0)
+  const warehouseRows = stockRows.filter((s) => s.location?.type === 'WAREHOUSE')
+  const warehouseAvailable = warehouseRows.reduce((sum, s) => sum + s.available, 0)
+  // P0 guard (2026-07-20) — an EMPTY ledger (zero WAREHOUSE rows) means the
+  // product was never counted, NOT that stock is zero. Pushing 0 over a
+  // positive live quantity from that state is exactly the zero-inventory
+  // incident. Counted-to-zero pools (rows exist, sum 0) still cascade 0 —
+  // that's honest.
+  const ledgerUncounted = warehouseRows.length === 0
+  let uncountedSkips = 0
   const fbaBucket = stockRows
     .filter((s) => s.location?.type === 'AMAZON_FBA')
     .reduce((sum, s) => sum + s.quantity, 0)
@@ -666,8 +672,11 @@ async function cascadeQuantityToListings(
     // FBA is Amazon-managed: snapshot its master but never cascade/push a
     // warehouse quantity onto it (outbound-sync's isFbaListing would skip the
     // push regardless; not enqueuing avoids wasted-job churn).
+    const uncountedSkip =
+      ledgerUncounted && method === 'FBM' && listing.followMasterQuantity && (listing.quantity ?? 0) > 0
+    if (uncountedSkip) uncountedSkips++
     const newListingQty =
-      listing.followMasterQuantity && method === 'FBM'
+      !uncountedSkip && listing.followMasterQuantity && method === 'FBM'
         ? computeAvailableToPublish({
             fulfillmentMethod: 'FBM',
             warehouseAvailable,
@@ -767,16 +776,23 @@ async function cascadeQuantityToListings(
   // back the stock movement — the ChannelListing cascade above is the source of
   // truth and these rows are also healed by the next backstop drain.
   try {
-    const sharedIds = await enqueueSharedTradingFanout(
-      tx as unknown as Parameters<typeof enqueueSharedTradingFanout>[0],
-      {
-        productId,
-        warehouseAvailable,
-        stockBuffer: 0, // shared listings have no per-listing ChannelListing buffer (yet)
-        holdUntil,
-      },
-    )
-    if (sharedIds.length > 0) queuedSyncIds = [...queuedSyncIds, ...sharedIds]
+    // P0 guard (2026-07-20) — empty ledger = uncounted, not zero; never fan
+    // a 0 out to shared eBay listings from that state (mirrors the FBM
+    // listing guard above).
+    if (ledgerUncounted) {
+      logger.warn('cascadeQuantityToListings: ledger uncounted — shared eBay fan-out skipped', { productId })
+    } else {
+      const sharedIds = await enqueueSharedTradingFanout(
+        tx as unknown as Parameters<typeof enqueueSharedTradingFanout>[0],
+        {
+          productId,
+          warehouseAvailable,
+          stockBuffer: 0, // shared listings have no per-listing ChannelListing buffer (yet)
+          holdUntil,
+        },
+      )
+      if (sharedIds.length > 0) queuedSyncIds = [...queuedSyncIds, ...sharedIds]
+    }
   } catch (err) {
     logger.warn('cascadeQuantityToListings: shared eBay fan-out enqueue failed (non-fatal)', {
       productId,
@@ -784,6 +800,11 @@ async function cascadeQuantityToListings(
     })
   }
 
+  if (uncountedSkips > 0) {
+    logger.warn('cascadeQuantityToListings: uncounted-ledger guard skipped listings (load stock via import to activate)', {
+      productId, skipped: uncountedSkips,
+    })
+  }
   return { cascadedListingIds, snapshottedListingIds, queuedSyncIds }
 }
 

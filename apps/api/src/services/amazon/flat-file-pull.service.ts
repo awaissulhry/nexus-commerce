@@ -268,14 +268,26 @@ async function runJob(job: PullJob): Promise<void> {
         syncStatus: 'SYNCED',
         lastSyncedAt: new Date(),
         lastSyncStatus: 'SUCCESS',
-        isPublished: listingStatus === 'BUYABLE' || listingStatus === 'ACTIVE',
+        // P0 2026-07-20 — DISCOVERABLE means the listing EXISTS on Amazon
+        // (incomplete offer, but live + manageable); marking it unpublished
+        // made dispatch skip every push (431 blocked rows measured). Any
+        // Amazon-known status is publishable.
+        isPublished: ['BUYABLE', 'ACTIVE', 'DISCOVERABLE'].includes(listingStatus ?? 'ACTIVE'),
         listingStatus: listingStatus ?? 'ACTIVE',
         followMasterTitle: false,
         followMasterDescription: false,
         ...(bullets.length > 0 ? { bulletPointsOverride: bullets, followMasterBulletPoints: false } : {}),
         ...(price !== null && !isNaN(price) ? { price, followMasterPrice: false } : {}),
-        ...(qty !== null && !isNaN(qty) ? { quantity: qty, followMasterQuantity: false } : {}),
       }
+      // P0 2026-07-20 — the pull must NEVER pin quantity. The owner lists on
+      // Amazon at qty 0 (their own Excel upload) and the POOL takes over;
+      // the old `{ quantity, followMasterQuantity: false }` pinned every
+      // pulled listing at Amazon's momentary number (0 at birth) and froze
+      // it off the pool — the exact zero-inventory incident. Observed qty
+      // goes on CREATE only, as an initial value under the schema-default
+      // followMasterQuantity=true (first cascade replaces it with pool
+      // truth); on UPDATE the pool owns ChannelListing.quantity.
+      const createOnlyQty = qty !== null && !isNaN(qty) ? { quantity: qty } : {}
 
       if (existingCl) {
         await prisma.channelListing.update({
@@ -283,6 +295,7 @@ async function runJob(job: PullJob): Promise<void> {
           data: { ...listingPayload, version: { increment: 1 } },
         })
       } else {
+        Object.assign(listingPayload, createOnlyQty)
         await prisma.channelListing.create({
           data: { productId: product.id, ...listingPayload } as any,
         })
