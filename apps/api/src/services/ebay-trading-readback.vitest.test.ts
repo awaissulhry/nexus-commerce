@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { parseGetItemQuantities, buildGetItemQuantitiesXml } from './ebay-trading-api.service.js'
-import { diffTradingReadback, type TradingReadbackEntry } from './ebay-inventory-readback.service.js'
+import { diffTradingReadback, obsKey, type TradingReadbackEntry } from './ebay-inventory-readback.service.js'
 
 const VARIATION_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <GetItemResponse xmlns="urn:ebay:apis:eBLBaseComponents">
@@ -92,36 +92,62 @@ describe('AS.4a — parseGetItemQuantities', () => {
 
 describe('AS.4a — diffTradingReadback (pool is the authority)', () => {
   const NOW = 1_700_000_000_000
-  const entry = (sku: string, productId: string | null, lastPushedAgoMs: number | null = null): TradingReadbackEntry => ({
+  const ITEM = '256552369326'
+  const entry = (
+    sku: string,
+    productId: string | null,
+    lastPushedAgoMs: number | null = null,
+    itemId: string = ITEM,
+  ): TradingReadbackEntry => ({
     sku,
-    itemId: '256552369326',
+    itemId,
     marketplace: 'EBAY_IT',
     productId,
     lastPushedAt: lastPushedAgoMs === null ? null : new Date(NOW - lastPushedAgoMs),
   })
+  const obs = (pairs: Array<[string, string, number]>): Map<string, number> =>
+    new Map(pairs.map(([item, sku, q]) => [obsKey(item, sku), q]))
 
   it('flags observed ≠ intended', () => {
     const diffs = diffTradingReadback(
       [entry('A', 'p1')],
-      new Map([['A', 4]]),
+      obs([[ITEM, 'A', 4]]),
       new Map([['p1', 7]]),
       { now: NOW },
     )
     expect(diffs).toEqual([
-      { sku: 'A', itemId: '256552369326', marketplace: 'EBAY_IT', productId: 'p1', ebayQty: 4, intendedQty: 7 },
+      { sku: 'A', itemId: ITEM, marketplace: 'EBAY_IT', productId: 'p1', ebayQty: 4, intendedQty: 7 },
     ])
   })
 
   it('matching quantities produce no diff', () => {
     expect(
-      diffTradingReadback([entry('A', 'p1')], new Map([['A', 7]]), new Map([['p1', 7]]), { now: NOW }),
+      diffTradingReadback([entry('A', 'p1')], obs([[ITEM, 'A', 7]]), new Map([['p1', 7]]), { now: NOW }),
     ).toEqual([])
+  })
+
+  it('MULTI-LISTING SKU: each listing compares against ITS OWN observation (the owner-observed bug)', () => {
+    // Same pool SKU on two listings: listing 1 already correct, listing 2
+    // drifted. Bare-SKU keying let one overwrite the other; compound keying
+    // must flag EXACTLY listing 2 with listing 2's quantity.
+    const diffs = diffTradingReadback(
+      [entry('A', 'p1', null, 'item-1'), entry('A', 'p1', null, 'item-2')],
+      obs([
+        ['item-1', 'A', 7],
+        ['item-2', 'A', 3],
+      ]),
+      new Map([['p1', 7]]),
+      { now: NOW },
+    )
+    expect(diffs).toEqual([
+      { sku: 'A', itemId: 'item-2', marketplace: 'EBAY_IT', productId: 'p1', ebayQty: 3, intendedQty: 7 },
+    ])
   })
 
   it('skips entries pushed within the settle window (sale→revise transient)', () => {
     const diffs = diffTradingReadback(
       [entry('A', 'p1', 30_000)],
-      new Map([['A', 4]]),
+      obs([[ITEM, 'A', 4]]),
       new Map([['p1', 7]]),
       { now: NOW, settleMs: 90_000 },
     )
@@ -131,7 +157,7 @@ describe('AS.4a — diffTradingReadback (pool is the authority)', () => {
   it('UNCOUNTED products (absent from intended map) are never compared or healed', () => {
     const diffs = diffTradingReadback(
       [entry('A', 'p-uncounted')],
-      new Map([['A', 4]]),
+      obs([[ITEM, 'A', 4]]),
       new Map(),
       { now: NOW },
     )
@@ -140,7 +166,7 @@ describe('AS.4a — diffTradingReadback (pool is the authority)', () => {
 
   it('membership without productId is skipped', () => {
     expect(
-      diffTradingReadback([entry('A', null)], new Map([['A', 4]]), new Map([['p1', 7]]), { now: NOW }),
+      diffTradingReadback([entry('A', null)], obs([[ITEM, 'A', 4]]), new Map([['p1', 7]]), { now: NOW }),
     ).toEqual([])
   })
 

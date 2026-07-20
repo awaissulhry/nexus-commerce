@@ -219,12 +219,19 @@ export interface TradingMismatch {
   intendedQty: number
 }
 
-/** Pure diff — exported for tests. `intendedByProduct` only contains COUNTED
- *  products (uncounted = empty warehouse ledger must never be "healed" to 0,
- *  mirroring the cascade's P0 guard). */
+/** Compound observation key — the same pool SKU lives on up to 5 listings and
+ *  each listing has its OWN quantity on eBay. Keying observations by bare SKU
+ *  let one listing's reading overwrite another's (216 SKUs affected): phantom
+ *  mismatches + mis-targeted heals. Owner-observed 2026-07-20. */
+export const obsKey = (itemId: string, sku: string): string => `${itemId} ${sku}`
+
+/** Pure diff — exported for tests. Each membership entry is compared against
+ *  ITS OWN listing's observation (obsKey). `intendedByProduct` only contains
+ *  COUNTED products (uncounted = empty warehouse ledger must never be
+ *  "healed" to 0, mirroring the cascade's P0 guard). */
 export function diffTradingReadback(
   entries: TradingReadbackEntry[],
-  observedBySku: Map<string, number>,
+  observedByItemSku: Map<string, number>,
   intendedByProduct: Map<string, number>,
   opts: { now?: number; settleMs?: number } = {},
 ): TradingMismatch[] {
@@ -233,7 +240,7 @@ export function diffTradingReadback(
   const out: TradingMismatch[] = []
   for (const e of entries) {
     if (!e.productId) continue
-    const observed = observedBySku.get(e.sku)
+    const observed = observedByItemSku.get(obsKey(e.itemId, e.sku))
     if (observed === undefined) continue
     const intended = intendedByProduct.get(e.productId)
     if (intended === undefined) continue
@@ -336,7 +343,7 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
     )
   }
 
-  const observedBySku = new Map<string, number>()
+  const observedByItemSku = new Map<string, number>()
   const checkedEntries: TradingReadbackEntry[] = []
 
   for (const g of batch) {
@@ -362,10 +369,10 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
       }
 
       if (rb.variations.length > 0) {
-        for (const v of rb.variations) observedBySku.set(v.sku, v.available)
+        for (const v of rb.variations) observedByItemSku.set(obsKey(g.itemId, v.sku), v.available)
       } else if (rb.itemAvailable !== null && g.entries.length === 1) {
         // Single-SKU Trading listing — the item-level pair is that SKU's truth.
-        observedBySku.set(g.entries[0].sku, rb.itemAvailable)
+        observedByItemSku.set(obsKey(g.itemId, g.entries[0].sku), rb.itemAvailable)
       }
       checkedEntries.push(...g.entries)
     } catch (err) {
@@ -379,9 +386,33 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
     await new Promise((r) => setTimeout(r, TRADING_CALL_SPACING_MS))
   }
 
-  result.skusChecked = checkedEntries.filter((e) => observedBySku.has(e.sku)).length
-  const diffs = diffTradingReadback(checkedEntries, observedBySku, intendedByProduct)
+  result.skusChecked = checkedEntries.filter((e) => observedByItemSku.has(obsKey(e.itemId, e.sku))).length
+  const diffs = diffTradingReadback(checkedEntries, observedByItemSku, intendedByProduct)
   result.mismatches = diffs.length
+
+  // Heal penetration (owner-approved 2026-07-20): the corrective fan-out's
+  // no-op drop keys on membership.lastQtyPushed — when that stamp is wrong
+  // (partial batch, eBay silently keeping an old number), every heal for the
+  // SKU builds ZERO revises, forever (measured: mismatch=85 frozen across 8
+  // runs while "healed=25" each time). Correct the stamp to eBay's OWN
+  // answer first; the fan-out then sees a real delta and pushes pool truth.
+  for (const d of diffs) {
+    try {
+      await prisma.sharedListingMembership.updateMany({
+        where: { marketplace: d.marketplace, itemId: d.itemId, sku: d.sku },
+        data: {
+          lastQtyPushed: d.ebayQty,
+          lastError: `readback: eBay showed ${d.ebayQty} vs pool ${d.intendedQty} — stamp corrected so the heal penetrates`,
+        },
+      })
+    } catch (err) {
+      logger.warn('ebay-trading-readback: stamp correction failed', {
+        itemId: d.itemId,
+        sku: d.sku,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
 
   // Persist mismatches (deduped 24h per product, mirroring amazon-qty-readback).
   for (const d of diffs) {
