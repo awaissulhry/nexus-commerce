@@ -47,7 +47,14 @@ async function lwaAccessToken(): Promise<{ token?: string; error?: string }> {
 }
 
 export default async function amazonAuthProbeRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/admin/amazon-auth-probe', async (request) => {
+  app.get('/admin/amazon-auth-probe', async (request, reply) => {
+    // Self-gate (route is PUBLIC in the manifest): key = AWS_ROLE_ARN's last
+    // 6 chars — server-verifiable, never printed by this endpoint.
+    const k = (request.query as { k?: string }).k
+    const arn = process.env.AWS_ROLE_ARN ?? ''
+    if (!arn || !k || k !== arn.slice(-6)) {
+      return reply.code(404).send({ error: 'not found' })
+    }
     const write = (request.query as { write?: string }).write === '1'
     const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
 
@@ -64,7 +71,7 @@ export default async function amazonAuthProbeRoutes(app: FastifyInstance): Promi
       AMAZON_MARKETPLACE_ID: process.env.AMAZON_MARKETPLACE_ID ?? 'unset',
       AWS_ACCESS_KEY_ID: fp(process.env.AWS_ACCESS_KEY_ID),
       AWS_SECRET_ACCESS_KEY: fp(process.env.AWS_SECRET_ACCESS_KEY),
-      AWS_ROLE_ARN: process.env.AWS_ROLE_ARN ?? 'unset',
+      AWS_ROLE_ARN: process.env.AWS_ROLE_ARN ? 'set(masked)' : 'unset',
       AWS_REGION: process.env.AWS_REGION ?? 'unset',
       AMAZON_SQS_QUEUE_URL: process.env.AMAZON_SQS_QUEUE_URL ? 'set' : 'unset',
       NEXUS_ENABLE_AMAZON_PUBLISH: process.env.NEXUS_ENABLE_AMAZON_PUBLISH ?? 'unset',

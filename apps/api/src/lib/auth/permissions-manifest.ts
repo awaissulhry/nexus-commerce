@@ -51,6 +51,9 @@ const RW = (readPerm: RoutePermission, writePerm: RoutePermission, when: Matcher
 const ENTRIES: Entry[] = [
   // ── PUBLIC: health / infra ──────────────────────────────────────
   P(PUBLIC, (_m, p) => p === '/api/health' || p === '/admin/health' || p === '/health'),
+  // AS.0-debug (TEMPORARY): auth-topology probe; endpoint self-gates on a
+  // server-side key (AWS_ROLE_ARN suffix) — remove with the probe route.
+  P(PUBLIC, (_m, p) => p === '/api/admin/amazon-auth-probe'),
   P(PUBLIC, pfx('/api/monitoring')),
   P(PUBLIC, pfx('/monitoring')),
 
