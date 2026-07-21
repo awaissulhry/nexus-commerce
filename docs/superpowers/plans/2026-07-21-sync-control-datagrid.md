@@ -1,4 +1,6 @@
-# Sync Control × DataGrid — SCG series (owner-requested rebuild)
+# Sync Control × DataGrid — SCG series ✅ SHIPPED 2026-07-21
+
+**Status: all three phases live and prod-verified** (b1b910d8c quick fixes; aa4fffced grid+history; ea4e00f3c DS-conformance). Prod walkthrough: Follow-filter → select → toolbar swap → net-zero Exclude/Include cycle (audit rows verified on the new History page), dark mode via `.dark`, all densities, FBA disabled checkboxes, pagination + page size. Learnings now in memory `feedback_tables_use_datagrid`: pages must import ALL FOUR DS stylesheets; raw Listbox needs fixed-width wrapper; DS ratchet blocks inline fontSize/hex.
 
 **Trigger (owner, 2026-07-21):** the Sync Control table is hard to read; rebuild it on the shared component from `/products/next`; dropdowns must follow the design system; long cards must not load everything at once; bulk changes should work like the products grid.
 
