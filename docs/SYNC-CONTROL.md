@@ -12,6 +12,22 @@
 5. **Follow** — listing tracks the routed pool total minus its buffer.
 6. **Uncounted** — a product with an empty ledger pushes **nothing** (never zero).
 
+## Two views: Products (default) and Listings
+
+- **Products** — one row per product family (37 masters, not 1,760 listings): thumbnail, name, family, a **sync rollup** (Follow ×N · Pinned ×M…), **family stock** (units + variants-in-stock), and a **drift** dot (● = a listing's live quantity ≠ intended; ✓ = clean). Small families **expand inline** to their listings; big families (>20 variants) show **"Open ↗"** to a dedicated per-product page in a new tab. Select master rows → a bulk action applies to **all their non-FBA listings**.
+- **Listings** — every listing flat: the finest per-row control (select individual listings).
+- **Per-product page** (`/sync-control/product/<id>`) — one product's full variant→listing tree with per-listing selection + its own Excel export/import.
+
+Use the **Drift only** filter and the family facet to scan for exceptions. The page is live (polls + refreshes on orders/cascades).
+
+## Excel round-trip (dedicated)
+
+On the Products view and per-product page: **Export** downloads a two-sheet workbook —
+- **Listings** sheet: `Mode` (Follow/Pinned/Paused/Excluded — EN or IT), `PinnedQty`, `Buffer` are editable; Product/Pool/Intended/Live/Drift are read-only context. **FBA rows are locked** (greyed, "Amazon-managed") and ignored on import.
+- **Routes** sheet: `Feeds` per location (comma-separated, e.g. `AMAZON:IT, EBAY`).
+
+Edit in Excel → **Import** the file → a **preview** shows exactly what will change (and what's skipped: FBA, invalid mode, unmatched) → **Apply**. Every change is audited and recascaded. Export respects the current filters ("export what you see"). **A control sheet never writes pool quantity** — Amazon/eBay export sheets can't corrupt the pool.
+
 ## Common jobs
 
 ### Route a location to specific markets
