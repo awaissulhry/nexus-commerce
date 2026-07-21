@@ -12,7 +12,7 @@ import { Search } from 'lucide-react'
 import { Listbox } from '@/design-system/components/Listbox'
 import { DataGrid, Pagination, type Column } from '@/design-system/components'
 import { GridToolbar, FilterBar, type FilterDimension } from '@/design-system/patterns'
-import { Button, Input, Pill, SegmentedControl, type Tone, type SegmentedOption } from '@/design-system/primitives'
+import { Button, Input, Pill, SegmentedControl } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 // DS class styles — the Listbox/grid markup is unstyled without these
@@ -22,24 +22,13 @@ import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import '@/design-system/styles/patterns.css'
 import styles from './styles.module.css'
+import SyncProductsGrid from './SyncProductsGrid'
+import {
+  DENSITY_OPTIONS, MODE_TONE, MODE_LABEL,
+  type Mode, type Row, type Density,
+} from './sync-control-shared'
 
 const API = getBackendUrl()
-
-type Mode = 'FOLLOW' | 'PINNED' | 'PAUSED' | 'PAUSED_POLICY' | 'UNCOUNTED' | 'FBA' | 'EXCLUDED'
-
-interface Row {
-  lane: 'LISTING' | 'SHARED'
-  sku: string
-  productId: string | null
-  channel: string
-  marketplace: string
-  mode: Mode
-  intendedQty: number | null
-  liveQty: number | null
-  buffer: number
-  routedLocations: string[]
-  itemId?: string
-}
 
 interface Overview {
   summary: {
@@ -63,33 +52,6 @@ interface Overview {
   policies: Array<{ channel: string; marketplace: string; pushesPaused: boolean; newListingDefaultMode: string }>
   audit: Array<{ id: string; createdAt: string; actor: string; scopeType: string; scopeName: string | null; field: string }>
   uploadVsPool?: Array<{ id: string; createdAt: string; channel: string; errorMessage: string; resolutionStatus: string }>
-}
-
-/** SCG.1 — DS Pill tone per mode (FBA/Uncounted neutral, Excluded danger). */
-const MODE_TONE: Record<Mode, Tone> = {
-  FOLLOW: 'success',
-  PINNED: 'info',
-  PAUSED: 'warning',
-  PAUSED_POLICY: 'warning',
-  UNCOUNTED: 'neutral',
-  FBA: 'neutral',
-  EXCLUDED: 'danger',
-}
-
-const DENSITY_OPTIONS: SegmentedOption[] = [
-  { value: 'compact', label: 'Compact' },
-  { value: 'cozy', label: 'Cozy' },
-  { value: 'spacious', label: 'Spacious' },
-]
-
-const MODE_LABEL: Record<Mode, string> = {
-  FOLLOW: 'Follow',
-  PINNED: 'Pinned',
-  PAUSED: 'Paused',
-  PAUSED_POLICY: 'Paused (policy)',
-  UNCOUNTED: 'Uncounted',
-  FBA: 'FBA',
-  EXCLUDED: 'Excluded',
 }
 
 /** Cap long card tables: render the first `cap` rows with a Show-all toggle.
@@ -140,7 +102,9 @@ export default function SyncControlClient() {
   const [polMarket, setPolMarket] = useState('*')
   const confirm = useConfirm()
   const [pageSize, setPageSize] = useState(50)
-  const [density, setDensity] = useState<'compact' | 'cozy' | 'spacious'>('cozy')
+  const [density, setDensity] = useState<Density>('cozy')
+  const [view, setView] = useState<'products' | 'listings'>('products')
+  const [drift, setDrift] = useState(false)
 
   const rowKey = (r: Row) => `${r.lane}|${r.channel}|${r.marketplace}|${r.sku}|${r.itemId ?? ''}`
 
@@ -386,8 +350,12 @@ export default function SyncControlClient() {
       onChange: (v) => { setPage(1); setMode(v) },
       options: [{ value: '', label: 'All modes' }, ...(Object.keys(MODE_LABEL) as Mode[]).map((m) => ({ value: m, label: MODE_LABEL[m] }))],
     },
+    {
+      key: 'drift', label: 'Drift only', kind: 'toggle', value: drift,
+      onChange: (v) => { setPage(1); setDrift(v) },
+    },
   ]
-  const activeFilterCount = [channel, market, mode].filter(Boolean).length + (q ? 1 : 0)
+  const activeFilterCount = [channel, market, mode].filter(Boolean).length + (q ? 1 : 0) + (drift ? 1 : 0)
   const rangeFrom = total === 0 ? 0 : (page - 1) * pageSize + 1
   const rangeTo = Math.min(page * pageSize, total)
 
@@ -436,13 +404,36 @@ export default function SyncControlClient() {
         </div>
       )}
 
-      {/* SCG.1 — filters (DS FilterBar) + gridcard (GridToolbar + DataGrid) */}
+      {/* SCG.1 — filters (DS FilterBar); SCV.2 — Products | Listings view toggle */}
       <FilterBar
         dimensions={filterDimensions}
         activeCount={activeFilterCount}
-        onClear={() => { setPage(1); setChannel(''); setMarket(''); setMode(''); setQLive(''); setQ('') }}
+        onClear={() => { setPage(1); setChannel(''); setMarket(''); setMode(''); setQLive(''); setQ(''); setDrift(false) }}
       />
 
+      <div className="flex items-center justify-between">
+        <SegmentedControl
+          options={[{ value: 'products', label: 'Products' }, { value: 'listings', label: 'Listings' }]}
+          value={view}
+          onChange={(v) => { setSelected(new Map()); setView(v as 'products' | 'listings') }}
+          size="sm"
+        />
+        <span className="text-xs text-zinc-500">
+          {view === 'products' ? 'One row per product family — expand for listings, bulk-act per product.' : 'Every listing flat — finest per-row control.'}
+        </span>
+      </div>
+
+      {view === 'products' ? (
+        <SyncProductsGrid
+          filters={{ channel, market, mode, q, drift }}
+          density={density}
+          onDensity={setDensity}
+          onChanged={loadOverview}
+          notify={setNotice}
+          search={qLive}
+          onSearch={setQLive}
+        />
+      ) : (
       <div className="h10-ds-gridcard">
         <GridToolbar
           count={
@@ -541,6 +532,7 @@ export default function SyncControlClient() {
           <Pagination page={page} pageCount={pages} onPage={setPage} />
         </div>
       </div>
+      )}
 
       {/* Locations routing + policies + history */}
       <div className="grid gap-4 lg:grid-cols-2">

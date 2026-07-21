@@ -377,13 +377,40 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       buffer?: number
       listings?: ListingTarget[]
       memberships?: MembershipTarget[]
+      // SCV.2 — product-first bulk: expand each master to ALL its listings +
+      // shared memberships server-side (the client may not hold a big family's
+      // children). FBA still excluded downstream by the write primitives.
+      masterIds?: string[]
     }
     const actor = actorOf(request as never)
     const listings = body.listings ?? []
     const memberships = body.memberships ?? []
     if (!body.action) return reply.code(400).send({ error: 'action required' })
+
+    if (body.masterIds?.length) {
+      const variants = await prisma.product.findMany({
+        where: { OR: [{ id: { in: body.masterIds } }, { parentId: { in: body.masterIds } }] },
+        select: { id: true },
+      })
+      const pids = variants.map((v) => v.id)
+      const [cls, mems] = await Promise.all([
+        prisma.channelListing.findMany({
+          where: { productId: { in: pids }, isPublished: true, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
+          select: { productId: true, channel: true, marketplace: true },
+        }),
+        prisma.sharedListingMembership.findMany({
+          where: { productId: { in: pids }, status: 'ACTIVE' },
+          select: { itemId: true, marketplace: true, sku: true },
+        }),
+      ])
+      for (const c of cls) listings.push({ productId: c.productId, channel: c.channel, marketplace: c.marketplace })
+      for (const m of mems) memberships.push({ itemId: m.itemId, marketplace: m.marketplace, sku: m.sku })
+    }
+
     if (listings.length === 0 && memberships.length === 0) return reply.code(400).send({ error: 'no targets' })
-    if (listings.length + memberships.length > 500) return reply.code(400).send({ error: 'max 500 targets per call' })
+    // Master-bulk legitimately expands large (a 49-variant family ≈ 300 rows).
+    const cap = body.masterIds?.length ? 3000 : 500
+    if (listings.length + memberships.length > cap) return reply.code(400).send({ error: `max ${cap} targets per call` })
 
     const result = { updated: 0, skippedFba: 0, unchanged: 0, recascadeQueued: 0 }
     const recascadeProducts = new Set<string>()
