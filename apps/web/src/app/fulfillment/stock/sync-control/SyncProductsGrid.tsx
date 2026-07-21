@@ -280,7 +280,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
       </GridToolbar>
 
       <DensityContext.Provider value={mapDensity(density)}>
-        <div className={[styles.fixedTable, density === 'compact' ? styles.densityCompact : density === 'spacious' ? styles.densitySpacious : ''].filter(Boolean).join(' ')}>
+        <div className={`scv-fixed-grid ${density === 'compact' ? styles.densityCompact : density === 'spacious' ? styles.densitySpacious : ''}`.trim()}>
           <DataGrid<DRow>
             columns={columns}
             rows={displayRows}

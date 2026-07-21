@@ -36,10 +36,10 @@
    header th ≡ body td, so a long product name can never overrun the sticky
    Product column or push Scope/Sync/In-stock off-screen. overflow:hidden clips
    any residual overflow. All Sync Control columns declare explicit widths. */
-.fixedTable :global(.h10-ds-grid) {
+:global(.scv-fixed-grid .h10-ds-grid) {
   table-layout: fixed;
 }
-.fixedTable :global(.h10-ds-grid td),
-.fixedTable :global(.h10-ds-grid th) {
+:global(.scv-fixed-grid .h10-ds-grid td),
+:global(.scv-fixed-grid .h10-ds-grid th) {
   overflow: hidden;
 }
