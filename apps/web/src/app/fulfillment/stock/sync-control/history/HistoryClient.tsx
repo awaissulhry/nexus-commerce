@@ -63,13 +63,13 @@ export default function HistoryClient() {
   useEffect(() => { void load() }, [load])
 
   const columns = useMemo<Array<Column<AuditRow>>>(() => [
-    { key: 'at', label: 'When', width: 150, sortable: true, sortValue: (r) => r.createdAt, render: (r) => <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{new Date(r.createdAt).toLocaleString()}</span> },
-    { key: 'actor', label: 'Actor', width: 160, sortable: true, sortValue: (r) => r.actor, render: (r) => <span style={{ fontSize: 12 }}>{r.actor}</span> },
-    { key: 'scope', label: 'Scope', width: 200, render: (r) => <span style={{ fontSize: 12 }}>{r.scopeType} {r.scopeName ?? ''}</span> },
-    { key: 'field', label: 'Field', width: 150, sortable: true, sortValue: (r) => r.field, render: (r) => <span style={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 12 }}>{r.field}</span> },
-    { key: 'before', label: 'Before', render: (r) => <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{j(r.before)}</span> },
-    { key: 'after', label: 'After', render: (r) => <span style={{ fontSize: 12 }}>{j(r.after)}</span> },
-    { key: 'reason', label: 'Reason', render: (r) => <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{r.reason ?? ''}</span> },
+    { key: 'at', label: 'When', width: 150, sortable: true, sortValue: (r) => r.createdAt, render: (r) => <span className="text-xs text-zinc-500">{new Date(r.createdAt).toLocaleString()}</span> },
+    { key: 'actor', label: 'Actor', width: 160, sortable: true, sortValue: (r) => r.actor, render: (r) => <span className="text-xs">{r.actor}</span> },
+    { key: 'scope', label: 'Scope', width: 200, render: (r) => <span className="text-xs">{r.scopeType} {r.scopeName ?? ''}</span> },
+    { key: 'field', label: 'Field', width: 150, sortable: true, sortValue: (r) => r.field, render: (r) => <span className="font-mono text-xs">{r.field}</span> },
+    { key: 'before', label: 'Before', render: (r) => <span className="text-xs text-zinc-500">{j(r.before)}</span> },
+    { key: 'after', label: 'After', render: (r) => <span className="text-xs">{j(r.after)}</span> },
+    { key: 'reason', label: 'Reason', render: (r) => <span className="text-xs text-zinc-500">{r.reason ?? ''}</span> },
   ], [])
 
   const pages = Math.max(1, Math.ceil(total / pageSize))
@@ -112,8 +112,8 @@ export default function HistoryClient() {
           rowKey={(r) => r.id}
           emptyState={<span style={{ color: 'var(--text-tertiary)' }}>No changes recorded.</span>}
         />
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderTop: '1px solid var(--border-default, #e4e4e7)' }}>
-          <span className="tabular-nums" style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{total} changes · page {page}/{pages}</span>
+        <div className="flex items-center justify-between border-t border-zinc-200 px-3 py-2 dark:border-zinc-800">
+          <span className="tabular-nums text-xs text-zinc-500">{total} changes · page {page}/{pages}</span>
           <Pagination page={page} pageCount={pages} onPage={setPage} />
         </div>
       </div>

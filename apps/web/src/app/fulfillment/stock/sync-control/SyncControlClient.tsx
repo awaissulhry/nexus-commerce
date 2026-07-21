@@ -331,15 +331,15 @@ export default function SyncControlClient() {
       key: 'sku', label: 'SKU', sticky: true, width: 230, sortable: true,
       sortValue: (r) => r.sku,
       render: (r) => (
-        <span style={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 12 }}>
+        <span className="font-mono text-xs">
           {r.sku}
-          {r.itemId ? <span style={{ marginLeft: 4, color: 'var(--text-tertiary)' }}>#{r.itemId}</span> : null}
+          {r.itemId ? <span className="ml-1 text-zinc-400">#{r.itemId}</span> : null}
         </span>
       ),
     },
     { key: 'channel', label: 'Channel', width: 90, sortable: true, sortValue: (r) => r.channel, render: (r) => r.channel },
     { key: 'market', label: 'Market', width: 80, sortable: true, sortValue: (r) => r.marketplace, render: (r) => r.marketplace },
-    { key: 'lane', label: 'Lane', width: 70, render: (r) => <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>{r.lane === 'SHARED' ? 'Shared' : 'Listing'}</span> },
+    { key: 'lane', label: 'Lane', width: 70, render: (r) => <span className="text-xs text-zinc-500">{r.lane === 'SHARED' ? 'Shared' : 'Listing'}</span> },
     {
       key: 'mode', label: 'Mode', width: 130, sortable: true, sortValue: (r) => r.mode,
       render: (r) => <Pill tone={MODE_TONE[r.mode]}>{MODE_LABEL[r.mode]}</Pill>,
@@ -358,7 +358,7 @@ export default function SyncControlClient() {
     {
       key: 'routed', label: 'Routed from',
       render: (r) => (
-        <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>
+        <span className="text-xs text-zinc-500">
           {r.mode === 'FBA' ? 'Amazon-managed' : r.routedLocations.join(', ') || (r.mode === 'FOLLOW' ? '' : '—')}
         </span>
       ),
@@ -486,7 +486,7 @@ export default function SyncControlClient() {
                   {label}
                 </Button>
               ))}
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13 }}>
+              <span className="inline-flex items-center gap-1 text-sm">
                 Buffer
                 <Input
                   inputMode="numeric"
