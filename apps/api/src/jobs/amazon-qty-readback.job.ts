@@ -93,6 +93,8 @@ export async function runAmazonQtyReadback(): Promise<string> {
   let logged = 0
   const marketSummaries: string[] = []
 
+  const comparedProducts = new Set<string>()
+  const mismatchedProducts = new Set<string>()
   for (const mp of readbackMarkets()) {
     let catalog
     try {
@@ -185,9 +187,35 @@ export async function runAmazonQtyReadback(): Promise<string> {
       }
     }
     marketSummaries.push(`${mp}:${mine.length}cmp/${diffs.length}diff`)
+    for (const r of mine) if (r.productId) comparedProducts.add(r.productId)
+    for (const d of diffs) if (d.productId) mismatchedProducts.add(d.productId)
   }
 
-  const summary = `compared=${compared} mismatches=${mismatches} logged=${logged} healEnqueued=${healed} [${marketSummaries.join(' ')}]`
+  // SC.5-fix — convergence auto-resolve (mirror of the eBay trading sweep):
+  // products compared this run and mismatched in NO market clear their
+  // UNRESOLVED readback logs, so /api/health reflects open drift only.
+  let resolved = 0
+  try {
+    const converged = [...comparedProducts].filter((pid) => !mismatchedProducts.has(pid))
+    if (converged.length > 0) {
+      const res = await prisma.syncHealthLog.updateMany({
+        where: {
+          productId: { in: converged },
+          channel: 'AMAZON',
+          conflictType: 'CHANNEL_QTY_READBACK',
+          resolutionStatus: 'UNRESOLVED',
+        },
+        data: {
+          resolutionStatus: 'RESOLVED',
+          resolvedAt: new Date(),
+          resolutionNotes: 'auto-resolved: Amazon read-back matched intent in every compared market',
+        },
+      })
+      resolved = res.count
+    }
+  } catch { /* observability best-effort */ }
+
+  const summary = `compared=${compared} mismatches=${mismatches} logged=${logged} healEnqueued=${healed} resolved=${resolved} [${marketSummaries.join(' ')}]`
   logger.info(`[${JOB_NAME}] ${summary}`)
   return summary
 }

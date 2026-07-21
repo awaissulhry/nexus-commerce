@@ -129,7 +129,10 @@ export function computeFailureDisposition(
   const isRateLimited =
     opts?.errorCode === "EBAY_RATE_LIMITED" || /rate limit/i.test(errorMessage);
   // RT.2 — a debounced revise is episode-style too: re-arm shortly, no budget.
-  const isDebounced = opts?.errorCode === "EBAY_REVISE_DEBOUNCED";
+  // SC.5-fix — ALSO match the message: any path that drops the errorCode
+  // (measured 2026-07-20: 20 debounce dead-letters) must still defer.
+  const isDebounced =
+    opts?.errorCode === "EBAY_REVISE_DEBOUNCED" || /debounced:/i.test(errorMessage);
   if (isCircuitOpen || isRateLimited || isDebounced) {
     const defer = isCircuitOpen ? CIRCUIT_DEFER_MS : RATE_LIMIT_DEFER_MS;
     return {

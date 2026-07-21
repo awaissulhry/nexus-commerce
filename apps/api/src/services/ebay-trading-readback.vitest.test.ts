@@ -176,3 +176,32 @@ describe('AS.4a — diffTradingReadback (pool is the authority)', () => {
     ).toEqual([])
   })
 })
+
+describe('SC.5-fix — computeHealHoldOffsets (heal stagger)', () => {
+  const items = (m: Record<string, string[]>) => new Map(Object.entries(m))
+
+  it('products sharing an item space 16s apart; disjoint products fire immediately', async () => {
+    const { computeHealHoldOffsets } = await import('./ebay-inventory-readback.service.js')
+    const off = computeHealHoldOffsets(
+      ['p1', 'p2', 'p3', 'p4'],
+      items({ p1: ['A'], p2: ['A'], p3: ['A'], p4: ['B'] }),
+      16_000,
+    )
+    expect(off.get('p1')).toBe(0)
+    expect(off.get('p2')).toBe(16_000)
+    expect(off.get('p3')).toBe(32_000)
+    expect(off.get('p4')).toBe(0) // different item — no collision
+  })
+
+  it('a multi-item product takes the max slot and advances ALL its items', async () => {
+    const { computeHealHoldOffsets } = await import('./ebay-inventory-readback.service.js')
+    const off = computeHealHoldOffsets(
+      ['p1', 'p2', 'p3'],
+      items({ p1: ['A'], p2: ['A', 'B'], p3: ['B'] }),
+      16_000,
+    )
+    expect(off.get('p1')).toBe(0)
+    expect(off.get('p2')).toBe(16_000) // collides with p1 on A
+    expect(off.get('p3')).toBe(32_000) // collides with p2 on B (which fired at 16s)
+  })
+})

@@ -41,7 +41,7 @@ export function startEbayReadbackCron(): void {
       if (process.env.NEXUS_EBAY_TRADING_READBACK === '0') return `${inv} · trading off`
       try {
         const t = await readBackEbayTradingQuantities()
-        return `${inv} · trading items=${t.items} skus=${t.skusChecked} mismatch=${t.mismatches} logged=${t.logged} healed=${t.healedProducts} ended=${t.endedMemberships} errors=${t.errors}${t.capped ? ' (capped)' : ''}`
+        return `${inv} · trading items=${t.items} skus=${t.skusChecked} mismatch=${t.mismatches} logged=${t.logged} healed=${t.healedProducts} resolved=${t.resolved} ended=${t.endedMemberships} errors=${t.errors}${t.capped ? ' (capped)' : ''}`
       } catch (err) {
         logger.error('ebay-readback cron: trading pass failed', {
           err: err instanceof Error ? err.message : String(err),

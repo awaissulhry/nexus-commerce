@@ -36,7 +36,7 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
       let alerts: Record<string, number> | undefined
       try {
         const dayAgo = new Date(Date.now() - 24 * 3600e3)
-        const [authFailures, publishFailureRate, qtyMismatches, deadLetters24h] = await Promise.all([
+        const [authFailures, publishFailureRate, qtyMismatches, deadLetters24h, adsDeadLetters24h] = await Promise.all([
           prisma.syncHealthLog.count({
             where: { conflictType: 'CHANNEL_AUTH_FAILURE', resolutionStatus: 'UNRESOLVED', createdAt: { gte: dayAgo } },
           }),
@@ -46,9 +46,13 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
           prisma.syncHealthLog.count({
             where: { conflictType: 'CHANNEL_QTY_READBACK', resolutionStatus: 'UNRESOLVED', createdAt: { gte: dayAgo } },
           }),
-          prisma.outboundSyncQueue.count({ where: { isDead: true, diedAt: { gte: dayAgo } } }),
+          // SC.5-fix — ads-lane corpses (AD_* syncTypes, e.g. bid updates for
+          // Amazon-deleted entities) are not inventory risk: count separately
+          // so the inventory dead-letter tripwire stays meaningful.
+          prisma.outboundSyncQueue.count({ where: { isDead: true, diedAt: { gte: dayAgo }, NOT: { syncType: { startsWith: 'AD_' } } } }),
+          prisma.outboundSyncQueue.count({ where: { isDead: true, diedAt: { gte: dayAgo }, syncType: { startsWith: 'AD_' } } }),
         ])
-        alerts = { authFailures, publishFailureRate, qtyMismatches, deadLetters24h }
+        alerts = { authFailures, publishFailureRate, qtyMismatches, deadLetters24h, adsDeadLetters24h }
       } catch {
         alerts = undefined
       }

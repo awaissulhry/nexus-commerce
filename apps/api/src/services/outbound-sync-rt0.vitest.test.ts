@@ -407,3 +407,15 @@ describe('AS.1 — auth-class failures are budget-free AUTH_REQUIRED deferrals',
     expect(d.kind).toBe('retry')
   })
 })
+
+describe('SC.5-fix — debounce deferral survives a dropped errorCode', () => {
+  it('message-only "debounced:" still defers without budget (never dead-letters)', () => {
+    const row = { retryCount: 2, maxRetries: 3 } // one attempt from death
+    const d = computeFailureDisposition(row, 'debounced: last revise 3s ago (< 15s min interval)')
+    expect(d.kind).toBe('deferral')
+  })
+  it('errorCode EBAY_REVISE_DEBOUNCED path unchanged', () => {
+    const d = computeFailureDisposition({ retryCount: 2, maxRetries: 3 }, 'x', { errorCode: 'EBAY_REVISE_DEBOUNCED' })
+    expect(d.kind).toBe('deferral')
+  })
+})

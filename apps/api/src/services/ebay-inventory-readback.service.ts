@@ -270,10 +270,36 @@ export interface TradingReadBackResult {
   mismatches: number
   logged: number
   healedProducts: number
+  /** SC.5-fix — UNRESOLVED readback logs cleared because the product read back fully in-sync. */
+  resolved: number
   endedMemberships: number
   errors: number
   capped: boolean
 }
+
+/**
+ * SC.5-fix — stagger heal enqueues so corrective rows touching the SAME eBay
+ * item never fire inside the 15s revise debounce window of one another.
+ * Returns per-product holdUntil offsets (ms). Pure for testability.
+ */
+export function computeHealHoldOffsets(
+  productIds: string[],
+  itemIdsByProduct: Map<string, string[]>,
+  spacingMs: number,
+): Map<string, number> {
+  const nextSlotPerItem = new Map<string, number>()
+  const out = new Map<string, number>()
+  for (const pid of productIds) {
+    const items = itemIdsByProduct.get(pid) ?? []
+    let offset = 0
+    for (const it of items) offset = Math.max(offset, nextSlotPerItem.get(it) ?? 0)
+    out.set(pid, offset)
+    for (const it of items) nextSlotPerItem.set(it, offset + spacingMs)
+  }
+  return out
+}
+
+const EBAY_HEAL_STAGGER_MS = 16_000 // just over the 15s revise debounce
 
 export async function readBackEbayTradingQuantities(): Promise<TradingReadBackResult> {
   const result: TradingReadBackResult = {
@@ -282,6 +308,7 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
     mismatches: 0,
     logged: 0,
     healedProducts: 0,
+    resolved: 0,
     endedMemberships: 0,
     errors: 0,
     capped: false,
@@ -459,19 +486,38 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
     }
   }
 
-  // Bounded self-heal: ONE corrective fan-out per mismatched product re-syncs
-  // every listing of that product; dispatch re-reads the pool and drops
-  // no-ops, so a transient mismatch heals for free.
+  // Self-heal: ONE corrective fan-out per mismatched product re-syncs every
+  // listing of that product; dispatch re-reads the pool and drops no-ops.
+  // SC.5-fix — the old default cap (25) with deterministic ordering starved
+  // every product past the cut PERMANENTLY (measured: 60 mismatched, 35 never
+  // healed across days — VENTRA-4XL live oversell). Heal them ALL (safety cap
+  // 200), and stagger same-item rows past the revise debounce so convergence
+  // is one cycle, not one-SKU-per-episode.
   const healEnvMax = Number.parseInt(process.env.NEXUS_EBAY_READBACK_HEAL_MAX ?? '', 10)
-  const healMax = Number.isFinite(healEnvMax) && healEnvMax >= 0 ? healEnvMax : 25
+  const healMax = Number.isFinite(healEnvMax) && healEnvMax >= 0 ? healEnvMax : 200
   const mismatchedProducts = [...new Set(diffs.map((d) => d.productId))]
-  for (const pid of mismatchedProducts.slice(0, healMax)) {
+  if (mismatchedProducts.length > healMax) {
+    logger.warn('ebay-trading-readback: heal cap hit — tail deferred to next run', {
+      mismatched: mismatchedProducts.length,
+      healMax,
+    })
+  }
+  const itemIdsByProduct = new Map<string, string[]>()
+  for (const m of memberships) {
+    if (!m.productId) continue
+    const arr = itemIdsByProduct.get(m.productId) ?? []
+    arr.push(m.itemId)
+    itemIdsByProduct.set(m.productId, arr)
+  }
+  const healTargets = mismatchedProducts.slice(0, healMax)
+  const holdOffsets = computeHealHoldOffsets(healTargets, itemIdsByProduct, EBAY_HEAL_STAGGER_MS)
+  for (const pid of healTargets) {
     try {
       await enqueueSharedTradingFanout(prisma, {
         productId: pid,
         warehouseAvailable: warehouseSum.get(pid) ?? 0,
         stockBuffer: 0,
-        holdUntil: new Date(), // heal rows are dispatch-eligible immediately
+        holdUntil: new Date(Date.now() + (holdOffsets.get(pid) ?? 0)),
       })
       result.healedProducts++
     } catch (err) {
@@ -480,6 +526,52 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
         error: err instanceof Error ? err.message : String(err),
       })
     }
+  }
+
+  // SC.5-fix — convergence auto-resolve: a product whose EVERY followed
+  // listing was read back this run with zero diffs is in sync — clear its
+  // UNRESOLVED readback logs so /api/health counts OPEN drift, not history.
+  try {
+    const batchKeys = new Set(batch.map((g) => `${g.marketplace}:${g.itemId}`))
+    const itemsByProductAll = new Map<string, string[]>()
+    for (const m of memberships) {
+      if (!m.productId) continue
+      const arr = itemsByProductAll.get(m.productId) ?? []
+      arr.push(`${m.marketplace}:${m.itemId}`)
+      itemsByProductAll.set(m.productId, arr)
+    }
+    const mismatchedSet = new Set(diffs.map((d) => d.productId))
+    const checkedProductIds = new Set(
+      checkedEntries
+        .filter((e) => observedByItemSku.has(obsKey(e.itemId, e.sku)))
+        .map((e) => e.productId)
+        .filter((v): v is string => Boolean(v)),
+    )
+    const converged = [...checkedProductIds].filter((pid) => {
+      if (mismatchedSet.has(pid)) return false
+      const keys = itemsByProductAll.get(pid) ?? []
+      return keys.every((k) => batchKeys.has(k)) // partial coverage never resolves
+    })
+    if (converged.length > 0) {
+      const res = await prisma.syncHealthLog.updateMany({
+        where: {
+          productId: { in: converged },
+          channel: 'EBAY',
+          conflictType: 'CHANNEL_QTY_READBACK',
+          resolutionStatus: 'UNRESOLVED',
+        },
+        data: {
+          resolutionStatus: 'RESOLVED',
+          resolvedAt: new Date(),
+          resolutionNotes: 'auto-resolved: trading read-back matched pool intent on every listing',
+        },
+      })
+      result.resolved = res.count
+    }
+  } catch (err) {
+    logger.warn('ebay-trading-readback: convergence auto-resolve failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
   }
 
   logger.info('ebay-trading-readback: sweep complete', { ...result })
