@@ -27,6 +27,8 @@
  */
 
 import prisma from '../../db.js'
+import { callTradingApi, siteIdForMarket } from '../ebay-trading-api.service.js'
+import { ebayAuthService } from '../ebay-auth.service.js'
 
 export interface RefreshEbayLiveImagesResult {
   productId: string
@@ -53,50 +55,26 @@ function hasRealApi(): boolean {
   return process.env.NEXUS_EBAY_REAL_API === 'true'
 }
 
-function hasCreds(): boolean {
-  return !!(
-    process.env.EBAY_APP_ID &&
-    process.env.EBAY_CERT_ID &&
-    process.env.EBAY_DEV_ID &&
-    process.env.EBAY_TOKEN
-  )
-}
-
-function endpoint(): string {
-  return process.env.EBAY_SANDBOX === 'true'
-    ? 'https://api.sandbox.ebay.com/ws/api.dll'
-    : 'https://api.ebay.com/ws/api.dll'
-}
-
 function buildGetItemRequest(itemId: string): string {
-  // IncludeItemSpecifics=true so VariationSpecifics come through;
-  // OutputSelector kept narrow to what we parse so the response
-  // stays small.
+  // OAuth (X-EBAY-API-IAF-TOKEN) is supplied by callTradingApi via header —
+  // NO RequesterCredentials in the body. `Variations.Pictures` returns the
+  // VariationSpecificName (the image axis, e.g. Colore) alongside each
+  // VariationSpecificPictureSet, so we can record which axis the sets vary by.
   return `<?xml version="1.0" encoding="utf-8"?>
 <GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <RequesterCredentials><eBayAuthToken>${process.env.EBAY_TOKEN ?? ''}</eBayAuthToken></RequesterCredentials>
   <ItemID>${itemId}</ItemID>
-  <DetailLevel>ItemReturnAttributes</DetailLevel>
-  <IncludeItemSpecifics>true</IncludeItemSpecifics>
-  <OutputSelector>ItemID</OutputSelector>
-  <OutputSelector>PictureDetails.PictureURL</OutputSelector>
-  <OutputSelector>Variations.VariationSpecificPictureSet</OutputSelector>
+  <OutputSelector>Item.ItemID</OutputSelector>
+  <OutputSelector>Item.PictureDetails.PictureURL</OutputSelector>
+  <OutputSelector>Item.Variations.Pictures</OutputSelector>
 </GetItemRequest>`
 }
 
 function parseGetItemResponse(body: string): ParsedItemImages {
-  const galleryUrls: string[] = []
-  // PictureDetails contains one or more <PictureURL>…</PictureURL>.
-  const picRe = /<PictureURL>([^<]+)<\/PictureURL>/g
-  let match: RegExpExecArray | null
-  while ((match = picRe.exec(body)) !== null) {
-    if (match[1]) galleryUrls.push(match[1])
-  }
-  // Strip duplicates while preserving order — VariationSpecificPictureSet
-  // also contains PictureURL tags, so we need a more targeted parser.
-  // Simpler: re-extract from the PictureDetails block only.
-  const pdMatch = body.match(/<PictureDetails>([\s\S]*?)<\/PictureDetails>/)
+  // Gallery: extract from the PictureDetails block ONLY. A body-wide PictureURL
+  // scan would also pull in the VariationSpecificPictureSet URLs (which live
+  // under <Pictures>), mixing per-variation photos into the shared gallery.
   const galleryFinal: string[] = []
+  const pdMatch = body.match(/<PictureDetails>([\s\S]*?)<\/PictureDetails>/)
   if (pdMatch) {
     const pdRe = /<PictureURL>([^<]+)<\/PictureURL>/g
     let m: RegExpExecArray | null
@@ -166,50 +144,48 @@ export async function refreshEbayLiveImages(
   // the SharedListingMembership rows (parentSku = shell SKU). Fall back so
   // the drawer's live strip and post-publish read-back work on shells too.
   let liveItemId = product.ebayItemId
+  let marketplace = 'IT' // eBay is IT-only today (project_active_channels)
   if (!liveItemId && product.sku) {
     const membership = await prisma.sharedListingMembership.findFirst({
       where: { parentSku: product.sku, status: 'ACTIVE' },
-      select: { itemId: true },
+      select: { itemId: true, marketplace: true },
     })
     liveItemId = membership?.itemId ?? null
+    if (membership?.marketplace) marketplace = membership.marketplace
   }
   if (!liveItemId) {
     return { ...base, itemId: null, skipped: 'NO_ITEM_ID' }
   }
 
-  // Dev guard: dont attempt the call if real-API is off or creds
-  // missing. Caller surfaces the "skipped" code so the FE can show
-  // a "configure eBay creds" hint.
+  // Dev guard: don't attempt the call if the real-API opt-in is off. The FE
+  // surfaces the "skipped" code as a hint.
   if (!hasRealApi()) {
     return { ...base, itemId: liveItemId, skipped: 'API_DISABLED' }
   }
-  if (!hasCreds()) {
+
+  // Auth: the whole system authenticates eBay via the DB channelConnection +
+  // ebayAuthService (OAuth / X-EBAY-API-IAF-TOKEN), NOT the legacy Auth'n'Auth
+  // EBAY_TOKEN. The old legacy path here silently no-op'd on any OAuth
+  // deployment (EBAY_TOKEN unset/stale) — the live image strip was always
+  // empty. Mirror reconcileMembershipsFromEbay / the shared-image push.
+  const conn = await prisma.channelConnection.findFirst({
+    where: { channelType: 'EBAY', isActive: true },
+    select: { id: true },
+  })
+  if (!conn) {
     return { ...base, itemId: liveItemId, skipped: 'NO_CREDS' }
   }
 
-  // Real call.
-  const xmlPayload = buildGetItemRequest(liveItemId)
-  const compatLevel = process.env.EBAY_COMPAT_LEVEL || '1193'
-
   let body: string
   try {
-    const res = await fetch(endpoint(), {
-      method: 'POST',
-      headers: {
-        'X-EBAY-API-CALL-NAME': 'GetItem',
-        'X-EBAY-API-COMPATIBILITY-LEVEL': compatLevel,
-        'X-EBAY-API-DEV-NAME': process.env.EBAY_DEV_ID ?? '',
-        'X-EBAY-API-APP-NAME': process.env.EBAY_APP_ID ?? '',
-        'X-EBAY-API-CERT-NAME': process.env.EBAY_CERT_ID ?? '',
-        'X-EBAY-API-SITEID': process.env.EBAY_SITE_ID ?? '3',
-        'Content-Type': 'text/xml',
-      },
-      body: xmlPayload,
+    const oauthToken = await ebayAuthService.getValidToken(conn.id)
+    // callTradingApi injects the IAF token + throws on HTTP error / Ack=Failure
+    // (surfacing the real LongMessage), so no manual ack check is needed.
+    const res = await callTradingApi('GetItem', buildGetItemRequest(liveItemId), {
+      oauthToken,
+      siteId: siteIdForMarket(marketplace),
     })
-    if (!res.ok) {
-      return { ...base, itemId: liveItemId, error: `GetItem HTTP ${res.status}` }
-    }
-    body = await res.text()
+    body = res.raw
   } catch (err) {
     return {
       ...base,
@@ -218,100 +194,32 @@ export async function refreshEbayLiveImages(
     }
   }
 
-  // Ack check.
-  const ackMatch = body.match(/<Ack>([^<]+)<\/Ack>/)
-  if (ackMatch?.[1] === 'Failure') {
-    const errMatch = body.match(/<ShortMessage>([^<]+)<\/ShortMessage>/)
-    return { ...base, itemId: liveItemId, error: `eBay GetItem Failure: ${errMatch?.[1] ?? 'unknown'}` }
-  }
-
   const parsed = parseGetItemResponse(body)
 
-  // Upsert rows. Use (productId, channel, marketplace=null,
-  // externalSku, slot) as the unique key.
-  const seenKeys = new Set<string>()
-  let upserted = 0
-
-  // Gallery rows: externalSku=null, slot = position
-  for (let i = 0; i < parsed.galleryUrls.length; i++) {
-    const url = parsed.galleryUrls[i]!
-    const slot = String(i)
-    const key = `null|${slot}`
-    seenKeys.add(key)
-    await prisma.channelLiveImage.upsert({
-      where: {
-        productId_channel_marketplace_externalSku_slot: {
-          productId,
-          channel: 'EBAY',
-          marketplace: null,
-          externalSku: null,
-          slot,
-        } as any,
-      },
-      create: {
-        productId,
-        channel: 'EBAY',
-        marketplace: null,
-        externalSku: null,
-        asin: null,
-        slot,
-        url,
-        sortOrder: i,
-      },
-      update: { url, sortOrder: i, fetchedAt: new Date() },
-    })
-    upserted++
-  }
-
-  // Variation-set rows: externalSku=variationValue, slot = position
-  for (const set of parsed.variationSets) {
-    for (let i = 0; i < set.urls.length; i++) {
-      const url = set.urls[i]!
-      const slot = String(i)
-      const key = `${set.variationValue}|${slot}`
-      seenKeys.add(key)
-      await prisma.channelLiveImage.upsert({
-        where: {
-          productId_channel_marketplace_externalSku_slot: {
-            productId,
-            channel: 'EBAY',
-            marketplace: null,
-            externalSku: set.variationValue,
-            slot,
-          } as any,
-        },
-        create: {
-          productId,
-          channel: 'EBAY',
-          marketplace: null,
-          externalSku: set.variationValue,
-          asin: null,
-          slot,
-          url,
-          sortOrder: i,
-        },
-        update: { url, sortOrder: i, fetchedAt: new Date() },
-      })
-      upserted++
-    }
-  }
-
-  // Delete stale rows: anything in DB for this (product, EBAY) that
-  // we didnt re-upsert.
-  const existing = await prisma.channelLiveImage.findMany({
-    where: { productId, channel: 'EBAY' },
-    select: { id: true, externalSku: true, slot: true },
+  // Full-replace the read-replica for this (product, EBAY). We can't per-row
+  // upsert because the composite unique key includes the NULLABLE `marketplace`
+  // (null for eBay) and Prisma rejects null in a composite-unique WHERE — the
+  // latent reason the old upsert threw once auth actually returned data.
+  // Delete-then-create is also the honest model for a live read-replica: it
+  // mirrors exactly what's live right now (rows removed on eBay disappear here).
+  const rows: Array<{
+    productId: string; channel: string; marketplace: null; externalSku: string | null
+    asin: null; slot: string; url: string; sortOrder: number
+  }> = []
+  // Gallery rows: externalSku=null, slot = position.
+  parsed.galleryUrls.forEach((url, i) => {
+    rows.push({ productId, channel: 'EBAY', marketplace: null, externalSku: null, asin: null, slot: String(i), url, sortOrder: i })
   })
-  const toDelete = existing
-    .filter((r) => {
-      const k = `${r.externalSku ?? 'null'}|${r.slot ?? ''}`
-      return !seenKeys.has(k)
+  // Variation-set rows: externalSku=variationValue, slot = position within the set.
+  for (const set of parsed.variationSets) {
+    set.urls.forEach((url, i) => {
+      rows.push({ productId, channel: 'EBAY', marketplace: null, externalSku: set.variationValue, asin: null, slot: String(i), url, sortOrder: i })
     })
-    .map((r) => r.id)
-  let deleted = 0
-  if (toDelete.length > 0) {
-    const res = await prisma.channelLiveImage.deleteMany({ where: { id: { in: toDelete } } })
-    deleted = res.count
+  }
+
+  const delRes = await prisma.channelLiveImage.deleteMany({ where: { productId, channel: 'EBAY' } })
+  if (rows.length > 0) {
+    await prisma.channelLiveImage.createMany({ data: rows })
   }
 
   return {
@@ -319,7 +227,7 @@ export async function refreshEbayLiveImages(
     itemId: liveItemId,
     picturesFetched: parsed.galleryUrls.length,
     variationSetsFetched: parsed.variationSets.length,
-    rowsUpserted: upserted,
-    rowsDeleted: deleted,
+    rowsUpserted: rows.length,
+    rowsDeleted: delRes.count,
   }
 }
