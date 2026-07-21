@@ -1,4 +1,10 @@
-# Sync Control — product-first control surface (SCV series) — PROPOSAL v2
+# Sync Control — product-first control surface (SCV series) — ✅ COMPLETE + PROD-VERIFIED 2026-07-21
+
+**All phases shipped and verified live.** Commits: SCV.1 13a085d81 · SCV.1b de1f3e8c2 · SCV.2 d19e233e3 · SCV.2b 4b11df127 · SCV.3 2ae39f5b5. Prod walkthrough (GALE-JACKET, 41 var / 263 lst): products view showed 37 master rows with real thumbnails, rollup "Follow 171 · FBA 92", stock "675 u · 36/41", drift ● 7, adaptive Open↗/chevron; per-product page rendered the full 263-listing tree; a net-zero Set-Follow returned "updated 0, unchanged 1, FBA skipped 0"; drift ticked 7→5→4 live (polling); Excel export downloaded clean; import preview/apply endpoints live + service round-trip verified on real data. **Runbook: docs/SYNC-CONTROL.md.**
+
+---
+
+# (Original proposal, for reference) Sync Control — product-first control surface (SCV series) — PROPOSAL v2
 
 **Owner (2026-07-21):** the grid alone isn't the point — make it *work* like /products/next (product images, chevrons, grouped rows). "Just reading the SKU list is not really wise." **And** (v2 correction): the product view must carry the FULL control model we built — bulk, import, export, override, Excel round-trip. "I should have proper control over each and everything: Excel imports, exports, all the stuff." Do not lose control; do not forget what the page is for (100% fidelity over what syncs where; FBA untouchable).
 
