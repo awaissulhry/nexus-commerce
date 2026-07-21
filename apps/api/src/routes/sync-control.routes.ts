@@ -25,6 +25,8 @@ import { validateServesTokens } from '../services/sync-control-core.js'
 import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-master.service.js'
 import { recascadeAfterSyncControlChange } from '../services/stock-movement.service.js'
 import { enqueueOutboundRowsInstant } from '../services/outbound-enqueue.js'
+import { summarizeProductSync, marketMatches } from '../services/sync-control-product-view.js'
+import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../services/product-read-cache.service.js'
 
 type Mode = 'FOLLOW' | 'PINNED' | 'PAUSED' | 'PAUSED_POLICY' | 'UNCOUNTED' | 'FBA' | 'EXCLUDED'
 
@@ -214,6 +216,109 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     rows.sort((a, b) => a.sku.localeCompare(b.sku) || a.channel.localeCompare(b.channel) || a.marketplace.localeCompare(b.marketplace))
     const total = rows.length
     return { total, page, pageSize, rows: rows.slice((page - 1) * pageSize, page * pageSize) }
+  })
+
+  // ── SCV.1 — product-first view: the SAME derived rows, grouped by product ──
+  //
+  // One row per product (image · family · pool · sync rollup · drift) with its
+  // per-listing children in the payload (no lazy fetch). Filters select which
+  // PRODUCTS appear (a product qualifies if any of its rows match), but each
+  // product always carries its FULL child set + rollup so the view never lies
+  // about a product's real state. Read-only; inherits inventoryView.
+  app.get('/stock/sync-control/products', async (request) => {
+    const q = request.query as {
+      channel?: string; market?: string; mode?: string; q?: string; drift?: string
+      page?: string; pageSize?: string
+    }
+    const page = Math.max(1, Number.parseInt(q.page ?? '1', 10) || 1)
+    const pageSize = Math.min(200, Math.max(10, Number.parseInt(q.pageSize ?? '50', 10) || 50))
+
+    const rows = await computeRows()
+    const rowPids = [...new Set(rows.map((r) => r.productId).filter((p): p is string => Boolean(p)))]
+
+    // Roll each row up to its MASTER (parentId ?? id): a jacket's 40 variant
+    // rows collapse into ONE master row. Stock lives on variants, so the
+    // master's pool is the SUM across its listed variants (and how many are
+    // in stock) — a single master-level number would always read 0.
+    const rowProducts = await prisma.product.findMany({
+      where: { id: { in: rowPids } },
+      select: { id: true, parentId: true },
+    })
+    const masterOf = new Map(rowProducts.map((p) => [p.id, p.parentId ?? p.id]))
+    const masterIds = [...new Set(rowPids.map((id) => masterOf.get(id) ?? id))]
+
+    const [masterMeta, ledgers] = await Promise.all([
+      prisma.product.findMany({
+        where: { id: { in: masterIds } },
+        select: {
+          id: true, sku: true, name: true,
+          family: { select: { code: true, label: true } },
+          images: { select: FACE_IMAGE_SELECT, orderBy: FACE_IMAGE_ORDER_BY },
+          parent: { select: { images: { select: FACE_IMAGE_SELECT, orderBy: FACE_IMAGE_ORDER_BY } } },
+        },
+      }),
+      buildLedgers(rowPids),
+    ])
+    const metaById = new Map(masterMeta.map((m) => [m.id, m]))
+    const poolOf = (pid: string) => (ledgers.get(pid) ?? []).reduce((s, l) => s + l.available, 0)
+
+    const byMaster = new Map<string, SyncControlRow[]>()
+    for (const r of rows) {
+      if (!r.productId) continue
+      const mid = masterOf.get(r.productId) ?? r.productId
+      const arr = byMaster.get(mid) ?? []
+      arr.push(r)
+      byMaster.set(mid, arr)
+    }
+
+    const all = masterIds.map((mid) => {
+      const children = byMaster.get(mid) ?? []
+      const variantPids = [...new Set(children.map((c) => c.productId).filter((p): p is string => Boolean(p)))]
+      const poolTotal = variantPids.reduce((s, pid) => s + poolOf(pid), 0)
+      const variantsInStock = variantPids.filter((pid) => poolOf(pid) > 0).length
+      const m = metaById.get(mid)
+      const rollup = summarizeProductSync(children)
+      const imageUrl = pickFaceImage(m?.images ?? []) ?? pickFaceImage(m?.parent?.images ?? []) ?? null
+      return {
+        masterId: mid,
+        sku: m?.sku ?? children[0]?.sku ?? '?',
+        name: m?.name ?? '(unknown product)',
+        family: m?.family ?? null,
+        imageUrl,
+        poolTotal,
+        variantsInStock,
+        variantCount: variantPids.length,
+        rollup,
+        children,
+      }
+    })
+
+    const chan = q.channel?.toUpperCase()
+    const mode = q.mode?.toUpperCase()
+    const mkt = q.market
+    const needle = q.q?.trim().toLowerCase()
+    const driftOnly = q.drift === '1' || q.drift === 'true'
+
+    const filtered = all.filter((p) => {
+      if (chan && !p.children.some((c) => c.channel === chan)) return false
+      if (mkt && !p.children.some((c) => marketMatches(c.marketplace, mkt))) return false
+      if (mode && !p.children.some((c) => c.mode === mode)) return false
+      if (needle && !(
+        p.name.toLowerCase().includes(needle) ||
+        p.sku.toLowerCase().includes(needle) ||
+        p.children.some((c) => c.sku.toLowerCase().includes(needle))
+      )) return false
+      if (driftOnly && p.rollup.driftCount === 0) return false
+      return true
+    })
+    filtered.sort((a, b) => a.name.localeCompare(b.name) || a.sku.localeCompare(b.sku))
+
+    return {
+      total: filtered.length,
+      page,
+      pageSize,
+      products: filtered.slice((page - 1) * pageSize, page * pageSize),
+    }
   })
 
   // ── SC.3 — mutations (writes require inventoryAdjust via the manifest) ──
