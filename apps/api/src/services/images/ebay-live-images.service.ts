@@ -231,3 +231,53 @@ export async function refreshEbayLiveImages(
     rowsDeleted: delRes.count,
   }
 }
+
+export interface EbayImageReadbackSummary {
+  scanned: number
+  refreshed: number
+  empty: number
+  skipped: number
+  errored: number
+}
+
+/**
+ * Sweep the live-image read-replica for every eBay-listed PARENT product (the
+ * ones the images panel surfaces): those with an `ebayItemId`, plus the
+ * shared-listing parents (a `parentSku` of any ACTIVE membership). Each is a
+ * GetItem PictureDetails read + a full-replace of that product's
+ * ChannelLiveImage rows — NEVER touches the pool or the live listing. Powers
+ * the "keep the Live-on-eBay strip fresh without a manual Refresh" cron.
+ */
+export async function readbackAllEbayLiveImages(): Promise<EbayImageReadbackSummary> {
+  // Parents/standalone only — the images panel is per-parent; a variant child's
+  // ebayItemId just mirrors its parent's listing, so sweeping children would
+  // make redundant GetItem calls for the same listing.
+  const [withItemId, memberParents] = await Promise.all([
+    prisma.product.findMany({
+      where: { ebayItemId: { not: null }, deletedAt: null, OR: [{ isParent: true }, { parentId: null }] },
+      select: { id: true },
+    }),
+    prisma.sharedListingMembership.findMany({ where: { status: 'ACTIVE' }, select: { parentSku: true }, distinct: ['parentSku'] }),
+  ])
+  const parentSkus = memberParents.map((m) => m.parentSku).filter((s): s is string => !!s)
+  const parents = parentSkus.length
+    ? await prisma.product.findMany({ where: { sku: { in: parentSkus }, deletedAt: null }, select: { id: true } })
+    : []
+  const ids = [...new Set([...withItemId.map((p) => p.id), ...parents.map((p) => p.id)])]
+
+  const summary: EbayImageReadbackSummary = { scanned: ids.length, refreshed: 0, empty: 0, skipped: 0, errored: 0 }
+  // Sequential — ~one GetItem per listing; we favour gentle over fast for a
+  // background sweep (no eBay rate pressure, no thundering herd on deploy).
+  for (const productId of ids) {
+    try {
+      const r = await refreshEbayLiveImages({ productId })
+      if (r.error) summary.errored++
+      else if (r.skipped) summary.skipped++
+      else if (r.rowsUpserted > 0) summary.refreshed++
+      else summary.empty++
+    } catch {
+      summary.errored++
+    }
+  }
+  return summary
+}

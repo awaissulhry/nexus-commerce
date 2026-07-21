@@ -270,6 +270,13 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
     const s = await ensureListingLabels()
     return `checked ${s.checked} · set ${s.set} · kept ${s.kept} · halfAdopted ${s.halfAdopted} · clLinked ${s.clLinked} · unsupported ${s.unsupported} · failed ${s.failed}`
   },
+  // eBay live-image read-back sweep (manual trigger). Read-only vs eBay +
+  // full-replace of the ChannelLiveImage replica; never touches the pool.
+  'ebay-image-readback': async () => {
+    const { readbackAllEbayLiveImages } = await import('../services/images/ebay-live-images.service.js')
+    const s = await readbackAllEbayLiveImages()
+    return `scanned ${s.scanned} · refreshed ${s.refreshed} · empty ${s.empty} · skipped ${s.skipped} · errored ${s.errored}`
+  },
 }
 
 export function isKnownCron(jobName: string): boolean {

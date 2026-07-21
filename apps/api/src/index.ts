@@ -210,6 +210,7 @@ import { startAmazonOrderItemsRetryCron } from "./jobs/amazon-order-items-retry.
 import { startEbayOrdersCron } from "./jobs/ebay-orders-sync.job.js";
 import { startEbayStatusReconcileCron } from "./jobs/ebay-status-reconcile.job.js";
 import { startEbayLabelGuardCron } from "./jobs/ebay-label-guard.job.js";
+import { startEbayImageReadbackCron } from "./jobs/ebay-image-readback.job.js";
 import { startAmazonFinancialSyncCron } from "./jobs/amazon-financial-sync.job.js";
 import { startEbayFinancialSyncCron } from "./jobs/ebay-financial-sync.job.js";
 import { startAmazonInventoryCron } from "./jobs/amazon-inventory-sync.job.js";
@@ -1095,6 +1096,11 @@ async function start() {
     // (NEXUS_ENABLE_EBAY_LABEL_GUARD_CRON, default ON with NEXUS_EBAY_REAL_API)
     // and must register unconditionally.
     startEbayLabelGuardCron();
+
+    // Real-time half of the eBay image read-back: keep the "Live on eBay" strip
+    // fresh without a manual Refresh. Self-gates (default ON with
+    // NEXUS_EBAY_REAL_API), read-only vs eBay + idempotent — register uncond.
+    startEbayImageReadbackCron();
 
     // IS.2 — Real-time Amazon order detection via SQS (~30-90 second latency).
     // Runs every 30s when NEXUS_ENABLE_AMAZON_SQS_POLL=1 and AMAZON_SQS_QUEUE_URL is set.
