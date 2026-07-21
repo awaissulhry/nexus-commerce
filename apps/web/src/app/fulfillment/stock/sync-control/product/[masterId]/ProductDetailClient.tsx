@@ -17,6 +17,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import SyncExcelBar from '../../SyncExcelBar'
 import {
   DENSITY_OPTIONS, MODE_TONE, MODE_LABEL,
   type Density, type Row, type ProductMaster,
@@ -152,6 +153,7 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
           count={selected.size > 0 ? <>Selected <b>{selected.size}</b> {selected.size === 1 ? 'listing' : 'listings'}</> : <>{children.length} listings</>}
           right={
             <>
+              <SyncExcelBar exportQuery={`masterId=${encodeURIComponent(masterId)}`} notify={setNotice} onApplied={() => { /* usePolledList refetches on invalidation */ }} />
               <SegmentedControl options={DENSITY_OPTIONS} value={density} onChange={(v) => setDensity(v as Density)} size="sm" />
               <span style={{ width: 110, display: 'inline-flex' }}>
                 <Listbox ariaLabel="Rows per page" value={String(pageSize)} onChange={(v) => { setPage(1); setPageSize(Number(v)) }} options={[50, 100, 200].map((n) => ({ value: String(n), label: `${n} / page` }))} />

@@ -27,6 +27,7 @@ import { recascadeAfterSyncControlChange } from '../services/stock-movement.serv
 import { enqueueOutboundRowsInstant } from '../services/outbound-enqueue.js'
 import { summarizeProductSync, marketMatches, omitChildrenInList } from '../services/sync-control-product-view.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../services/product-read-cache.service.js'
+import { buildSyncControlWorkbook, parseSyncControlWorkbook, normalizeModeCell } from '../services/sync-control-excel.js'
 
 type Mode = 'FOLLOW' | 'PINNED' | 'PAUSED' | 'PAUSED_POLICY' | 'UNCOUNTED' | 'FBA' | 'EXCLUDED'
 
@@ -720,5 +721,210 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
 
     const policies = await prisma.syncChannelPolicy.findMany({ orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }] })
     return { ok: true, policies, recascadeQueued }
+  })
+
+  // ── SCV.3 — dedicated Excel round-trip (export + import preview/apply) ──
+
+  const rowKeyOf = (r: SyncControlRow) => `${r.lane}|${r.sku}|${r.channel}|${r.marketplace}|${r.itemId ?? ''}`
+  const logicalMode = (m: Mode): 'FOLLOW' | 'PINNED' | 'PAUSED' | 'EXCLUDED' | 'FBA' | 'UNCOUNTED' => {
+    if (m === 'PAUSED_POLICY') return 'PAUSED'
+    return m as never
+  }
+
+  // Resolve which productIds a set of filters selects (mirrors the products view).
+  async function filterExportRows(rows: SyncControlRow[], q: { channel?: string; market?: string; mode?: string; q?: string; drift?: string; masterId?: string }): Promise<SyncControlRow[]> {
+    let masterVariantIds: Set<string> | null = null
+    if (q.masterId) {
+      const variants = await prisma.product.findMany({
+        where: { OR: [{ id: q.masterId }, { parentId: q.masterId }] }, select: { id: true },
+      })
+      masterVariantIds = new Set(variants.map((v) => v.id))
+    }
+    const chan = q.channel?.toUpperCase(); const mode = q.mode?.toUpperCase(); const needle = q.q?.trim().toLowerCase()
+    const driftOnly = q.drift === '1' || q.drift === 'true'
+    return rows.filter((r) => {
+      if (masterVariantIds && !(r.productId && masterVariantIds.has(r.productId))) return false
+      if (chan && r.channel !== chan) return false
+      if (q.market && !marketMatches(r.marketplace, q.market)) return false
+      if (mode && r.mode !== mode) return false
+      if (needle && !r.sku.toLowerCase().includes(needle)) return false
+      if (driftOnly && !(r.intendedQty != null && r.liveQty != null && r.intendedQty !== r.liveQty)) return false
+      return true
+    })
+  }
+
+  app.get('/stock/sync-control/export', async (request, reply) => {
+    const q = request.query as { channel?: string; market?: string; mode?: string; q?: string; drift?: string; masterId?: string }
+    const rows = await filterExportRows(await computeRows(), q)
+    const pids = [...new Set(rows.map((r) => r.productId).filter((p): p is string => Boolean(p)))]
+    const [names, ledgers, locations] = await Promise.all([
+      prisma.product.findMany({ where: { id: { in: pids } }, select: { id: true, name: true } }),
+      buildLedgers(pids),
+      prisma.stockLocation.findMany({ where: { type: 'WAREHOUSE' }, select: { code: true, type: true, syncRoutes: true }, orderBy: { code: 'asc' } }),
+    ])
+    const nameById = new Map(names.map((n) => [n.id, n.name]))
+    const poolOf = (pid: string | null): number | '' => pid ? (ledgers.get(pid) ?? []).reduce((s, l) => s + l.available, 0) : ''
+    const listingRows = rows.map((r) => {
+      const lm = logicalMode(r.mode)
+      const drift = r.mode !== 'FBA' && r.intendedQty != null && r.liveQty != null && r.intendedQty !== r.liveQty
+      return {
+        product: (r.productId ? nameById.get(r.productId) : '') ?? '',
+        sku: r.sku, channel: r.channel, market: r.marketplace, itemId: r.itemId ?? '', lane: r.lane,
+        mode: lm === 'FBA' ? 'Amazon-managed' : lm === 'UNCOUNTED' ? 'Follow' : `${lm.charAt(0)}${lm.slice(1).toLowerCase()}`,
+        pinnedQty: r.mode === 'PINNED' ? (r.intendedQty ?? '') : '' as number | '',
+        buffer: r.buffer,
+        pool: poolOf(r.productId), intended: r.mode === 'FBA' ? '' : (r.intendedQty ?? '') as number | '',
+        live: r.mode === 'FBA' ? '' : (r.liveQty ?? '') as number | '',
+        drift: drift ? 'DRIFT' : '', locked: r.mode === 'FBA' ? 'FBA' : '',
+      }
+    })
+    const routeRows = locations.map((l) => ({ location: l.code, type: l.type, feeds: (l.syncRoutes ?? []).join(', ') }))
+    const buf = await buildSyncControlWorkbook(listingRows, routeRows)
+    reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    reply.header('Content-Disposition', `attachment; filename="sync-control-export.xlsx"`)
+    return reply.send(buf)
+  })
+
+  // Shared: parse a workbook and diff it against current state → changes.
+  async function computeSheetChanges(buf: Buffer) {
+    const { listings: edits, routes: routeEdits } = await parseSyncControlWorkbook(buf)
+    const rows = await computeRows()
+    const byKey = new Map(rows.map((r) => [rowKeyOf(r), r]))
+    const changes: Array<{
+      lane: 'LISTING' | 'SHARED' | 'ROUTE'; key: string; field: string; from: string; to: string
+      productId?: string | null; channel?: string; marketplace?: string; itemId?: string; sku?: string
+      target?: 'FOLLOW' | 'PINNED' | 'PAUSED' | 'EXCLUDED'; buffer?: number; pinnedQty?: number | null
+      locationCode?: string; feeds?: string[]
+    }> = []
+    const skipped: Array<{ key: string; reason: string }> = []
+
+    for (const e of edits) {
+      const key = `${e.channel === 'EBAY' && e.itemId ? 'SHARED' : 'LISTING'}|${e.sku}|${e.channel}|${e.market}|${e.itemId}`
+      // Prefer exact lane match; fall back to either lane by (sku,channel,market).
+      const cur = byKey.get(key) ?? rows.find((r) => r.sku === e.sku && r.channel === e.channel && r.marketplace === e.market && (e.itemId ? r.itemId === e.itemId : true))
+      if (!cur) { skipped.push({ key: `${e.sku}@${e.channel}:${e.market}`, reason: 'no matching listing' }); continue }
+      if (cur.mode === 'FBA' || e.locked) { skipped.push({ key: `${e.sku}@${e.channel}:${e.market}`, reason: 'FBA (Amazon-managed)' }); continue }
+
+      const want = normalizeModeCell(e.mode)
+      if (want === undefined) { skipped.push({ key: `${e.sku}@${e.channel}:${e.market}`, reason: `unrecognized mode "${e.mode}"` }); continue }
+      const curLogical = logicalMode(cur.mode) === 'UNCOUNTED' ? 'FOLLOW' : logicalMode(cur.mode)
+      const label = `${e.sku}@${e.channel}:${e.market}`
+
+      if (want && want !== curLogical) {
+        if (cur.lane === 'SHARED' && (want === 'PINNED' || want === 'PAUSED')) {
+          skipped.push({ key: label, reason: `shared variant can't be ${want} (use Excluded)` }); continue
+        }
+        changes.push({
+          lane: cur.lane, key: label, field: 'mode', from: curLogical, to: want,
+          productId: cur.productId, channel: cur.channel, marketplace: cur.marketplace, itemId: cur.itemId, sku: cur.sku,
+          target: want, pinnedQty: want === 'PINNED' ? e.pinnedQty : undefined,
+        })
+      } else if (want === 'PINNED' && e.pinnedQty != null && e.pinnedQty !== cur.intendedQty) {
+        changes.push({ lane: cur.lane, key: label, field: 'pinnedQty', from: String(cur.intendedQty ?? ''), to: String(e.pinnedQty), productId: cur.productId, channel: cur.channel, marketplace: cur.marketplace, itemId: cur.itemId, sku: cur.sku, target: 'PINNED', pinnedQty: e.pinnedQty })
+      }
+
+      if (e.buffer != null && e.buffer >= 0 && e.buffer !== cur.buffer) {
+        changes.push({ lane: cur.lane, key: label, field: 'buffer', from: String(cur.buffer), to: String(e.buffer), productId: cur.productId, channel: cur.channel, marketplace: cur.marketplace, itemId: cur.itemId, sku: cur.sku, buffer: e.buffer })
+      }
+    }
+
+    if (routeEdits.length > 0) {
+      const locs = await prisma.stockLocation.findMany({ where: { code: { in: routeEdits.map((r) => r.location) } }, select: { code: true, syncRoutes: true } })
+      const locByCode = new Map(locs.map((l) => [l.code, l]))
+      for (const re of routeEdits) {
+        const loc = locByCode.get(re.location)
+        if (!loc) { skipped.push({ key: re.location, reason: 'unknown location' }); continue }
+        const problems = validateServesTokens(re.feeds)
+        if (problems.length > 0) { skipped.push({ key: re.location, reason: `invalid routes: ${problems.map((p) => p.token).join(', ')}` }); continue }
+        const cur = [...(loc.syncRoutes ?? [])].sort().join(',')
+        const next = [...re.feeds].sort().join(',')
+        if (cur !== next) changes.push({ lane: 'ROUTE', key: re.location, field: 'routes', from: cur || '(everywhere)', to: next || '(everywhere)', locationCode: re.location, feeds: re.feeds })
+      }
+    }
+    return { changes, skipped }
+  }
+
+  app.post('/stock/sync-control/import/preview', async (request, reply) => {
+    const data = await request.file()
+    if (!data) return reply.code(400).send({ error: 'No file attached' })
+    try {
+      const buf = await data.toBuffer()
+      const { changes, skipped } = await computeSheetChanges(buf)
+      return { changes, skipped, changeCount: changes.length, skipCount: skipped.length }
+    } catch (err) {
+      logger.error('[sync-control] import preview failed', { error: err instanceof Error ? err.message : String(err) })
+      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) })
+    }
+  })
+
+  app.post('/stock/sync-control/import/apply', async (request, reply) => {
+    const data = await request.file()
+    if (!data) return reply.code(400).send({ error: 'No file attached' })
+    const actor = `excel:${actorOf(request as never)}`
+    try {
+      const buf = await data.toBuffer()
+      const { changes, skipped } = await computeSheetChanges(buf)
+      const recascade = new Set<string>()
+      let applied = 0
+
+      for (const c of changes) {
+        try {
+          if (c.lane === 'ROUTE' && c.locationCode && c.feeds) {
+            const loc = await prisma.stockLocation.findUnique({ where: { code: c.locationCode }, select: { id: true, syncRoutes: true } })
+            if (!loc) continue
+            await prisma.stockLocation.update({ where: { id: loc.id }, data: { syncRoutes: c.feeds } })
+            await audit([{ scopeType: 'LOCATION', scopeId: loc.id, scopeName: c.locationCode, field: 'syncRoutes', before: { syncRoutes: loc.syncRoutes }, after: { syncRoutes: c.feeds } }], actor)
+            const affected = await prisma.stockLevel.findMany({ where: { locationId: loc.id }, select: { productId: true }, distinct: ['productId'] })
+            for (const a of affected) recascade.add(a.productId)
+            applied++
+            continue
+          }
+          if (!c.productId || !c.channel || !c.marketplace) continue
+
+          if (c.field === 'buffer' && c.buffer != null) {
+            if (c.lane === 'SHARED' && c.itemId) {
+              await prisma.sharedListingMembership.updateMany({ where: { itemId: c.itemId, marketplace: c.marketplace, sku: c.sku }, data: { stockBuffer: c.buffer } })
+            } else {
+              await setStockBuffer({ productIds: [c.productId], channel: c.channel as never, markets: [c.marketplace], buffer: c.buffer, actor })
+            }
+            recascade.add(c.productId); applied++
+            await audit([{ scopeType: c.lane === 'SHARED' ? 'MEMBERSHIP' : 'LISTING', scopeId: `${c.productId}:${c.channel}:${c.marketplace}`, scopeName: c.key, field: 'stockBuffer', after: { buffer: c.buffer } }], actor)
+            continue
+          }
+
+          // mode / pinnedQty
+          if (c.target === 'FOLLOW') {
+            if (c.lane === 'SHARED' && c.itemId) {
+              await prisma.sharedListingMembership.updateMany({ where: { itemId: c.itemId, marketplace: c.marketplace, sku: c.sku }, data: { followPool: true } })
+            } else {
+              await prisma.channelListing.updateMany({ where: { productId: c.productId, channel: c.channel, marketplace: c.marketplace, fulfillmentMethod: { not: 'FBA' } }, data: { syncPaused: false } })
+              await setFollowMasterQuantity({ productIds: [c.productId], channel: c.channel as never, markets: [c.marketplace], follow: true, actor })
+            }
+          } else if (c.target === 'PINNED') {
+            await setFollowMasterQuantity({ productIds: [c.productId], channel: c.channel as never, markets: [c.marketplace], follow: false, actor })
+            if (c.pinnedQty != null) {
+              await prisma.channelListing.updateMany({ where: { productId: c.productId, channel: c.channel, marketplace: c.marketplace, fulfillmentMethod: { not: 'FBA' } }, data: { quantity: c.pinnedQty, quantityOverride: c.pinnedQty, followMasterQuantity: false } })
+            }
+          } else if (c.target === 'PAUSED') {
+            await prisma.channelListing.updateMany({ where: { productId: c.productId, channel: c.channel, marketplace: c.marketplace, fulfillmentMethod: { not: 'FBA' } }, data: { syncPaused: true } })
+          } else if (c.target === 'EXCLUDED' && c.itemId) {
+            await prisma.sharedListingMembership.updateMany({ where: { itemId: c.itemId, marketplace: c.marketplace, sku: c.sku }, data: { followPool: false } })
+          }
+          await audit([{ scopeType: c.lane === 'SHARED' ? 'MEMBERSHIP' : 'LISTING', scopeId: `${c.productId}:${c.channel}:${c.marketplace}`, scopeName: c.key, field: 'mode', before: { mode: c.from }, after: { mode: c.to, pinnedQty: c.pinnedQty } }], actor)
+          recascade.add(c.productId); applied++
+        } catch (rowErr) {
+          logger.warn('[sync-control] import apply row failed', { key: c.key, error: rowErr instanceof Error ? rowErr.message : String(rowErr) })
+        }
+      }
+
+      if (recascade.size > 0) {
+        void recascadeAfterSyncControlChange([...recascade], actor).then((r) =>
+          logger.info('[sync-control] recascade after Excel import complete', { ...r, actor }))
+      }
+      return { applied, skipped, recascadeQueued: recascade.size }
+    } catch (err) {
+      logger.error('[sync-control] import apply failed', { error: err instanceof Error ? err.message : String(err) })
+      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) })
+    }
   })
 }

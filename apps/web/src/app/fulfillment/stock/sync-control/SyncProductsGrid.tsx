@@ -24,6 +24,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import SyncExcelBar from './SyncExcelBar'
 import {
   DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, mapDensity,
   type Density, type Mode, type Row, type ProductMaster,
@@ -90,6 +91,18 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
     p.set('pageSize', String(pageSize))
     return `/api/stock/sync-control/products?${p.toString()}`
   }, [filters, page, pageSize])
+
+  // Export mirrors the active filters ("export what you see"). Family narrows
+  // client-side only, so it isn't part of the server export scope.
+  const exportQuery = useMemo(() => {
+    const p = new URLSearchParams()
+    if (filters.channel) p.set('channel', filters.channel)
+    if (filters.market) p.set('market', filters.market)
+    if (filters.mode) p.set('mode', filters.mode)
+    if (filters.q) p.set('q', filters.q)
+    if (filters.drift) p.set('drift', '1')
+    return p.toString()
+  }, [filters])
 
   const { data, loading } = usePolledList<ProductsResponse>({
     url,
@@ -232,6 +245,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
         }
         right={
           <>
+            <SyncExcelBar exportQuery={exportQuery} notify={notify} onApplied={onChanged} />
             {familyOptions.length > 0 && (
               <span style={{ width: 150, display: 'inline-flex' }}>
                 <Listbox ariaLabel="Family" value={family} onChange={setFamily}
