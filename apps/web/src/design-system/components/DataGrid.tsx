@@ -26,6 +26,12 @@ export interface DataGridProps<T> {
   selectable?: boolean
   selected?: Set<string>
   onSelectedChange?: (next: Set<string>) => void
+  /** Per-row selection gate (additive): rows where this returns false render a
+   *  disabled checkbox and are excluded from select-all. Absent = all rows
+   *  selectable (existing behavior — /products/next unchanged). */
+  rowSelectable?: (row: T) => boolean
+  /** Tooltip/aria label for a disabled row checkbox. */
+  rowSelectableHint?: string
   showTotals?: boolean
   emptyState?: ReactNode
   initialSort?: { key: string; dir: 'asc' | 'desc' }
@@ -46,6 +52,8 @@ export function DataGrid<T>({
   selectable,
   selected,
   onSelectedChange,
+  rowSelectable,
+  rowSelectableHint,
   showTotals,
   emptyState,
   initialSort,
@@ -70,9 +78,9 @@ export function DataGrid<T>({
   const toggleSort = (key: string) =>
     setSort((s) => (s?.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' }))
 
-  const allKeys = rows.map(rowKey)
+  const allKeys = (rowSelectable ? rows.filter(rowSelectable) : rows).map(rowKey)
   const selCount = selected?.size ?? 0
-  const allSelected = !!selectable && selCount > 0 && allKeys.every((k) => selected!.has(k))
+  const allSelected = !!selectable && selCount > 0 && allKeys.length > 0 && allKeys.every((k) => selected!.has(k))
   const someSelected = !!selectable && selCount > 0 && !allSelected
 
   const toggleAll = () => onSelectedChange?.(allSelected ? new Set() : new Set(allKeys))
@@ -165,7 +173,11 @@ export function DataGrid<T>({
                 <tr key={k} className={isSel ? 'sel' : undefined}>
                   {selectable && (
                     <td className="ck sticky" style={{ left: 0 }}>
-                      <input type="checkbox" checked={isSel} onChange={() => toggleRow(k)} aria-label="Select row" />
+                      {rowSelectable && !rowSelectable(row) ? (
+                        <input type="checkbox" checked={false} disabled title={rowSelectableHint} aria-label={rowSelectableHint ?? 'Selection unavailable'} />
+                      ) : (
+                        <input type="checkbox" checked={isSel} onChange={() => toggleRow(k)} aria-label="Select row" />
+                      )}
                     </td>
                   )}
                   {columns.map((c) => (

@@ -7,14 +7,21 @@
  * in every future phase.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Search } from 'lucide-react'
 import { Listbox } from '@/design-system/components/Listbox'
+import { DataGrid, Pagination, type Column } from '@/design-system/components'
+import { GridToolbar, FilterBar, type FilterDimension } from '@/design-system/patterns'
+import { Button, Input, Pill, SegmentedControl, type Tone, type SegmentedOption } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 // DS class styles — the Listbox/grid markup is unstyled without these
 // (pages import them directly; see ApiKeysClient for the convention).
 import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
+import '@/design-system/styles/patterns.css'
+import styles from './styles.module.css'
 
 const API = getBackendUrl()
 
@@ -58,15 +65,22 @@ interface Overview {
   uploadVsPool?: Array<{ id: string; createdAt: string; channel: string; errorMessage: string; resolutionStatus: string }>
 }
 
-const MODE_STYLE: Record<Mode, string> = {
-  FOLLOW: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
-  PINNED: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300',
-  PAUSED: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-  PAUSED_POLICY: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
-  UNCOUNTED: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
-  FBA: 'bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500',
-  EXCLUDED: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+/** SCG.1 — DS Pill tone per mode (FBA/Uncounted neutral, Excluded danger). */
+const MODE_TONE: Record<Mode, Tone> = {
+  FOLLOW: 'success',
+  PINNED: 'info',
+  PAUSED: 'warning',
+  PAUSED_POLICY: 'warning',
+  UNCOUNTED: 'neutral',
+  FBA: 'neutral',
+  EXCLUDED: 'danger',
 }
+
+const DENSITY_OPTIONS: SegmentedOption[] = [
+  { value: 'compact', label: 'Compact' },
+  { value: 'cozy', label: 'Cozy' },
+  { value: 'spacious', label: 'Spacious' },
+]
 
 const MODE_LABEL: Record<Mode, string> = {
   FOLLOW: 'Follow',
@@ -125,7 +139,8 @@ export default function SyncControlClient() {
   const [polChannel, setPolChannel] = useState('AMAZON')
   const [polMarket, setPolMarket] = useState('*')
   const confirm = useConfirm()
-  const pageSize = 50
+  const [pageSize, setPageSize] = useState(50)
+  const [density, setDensity] = useState<'compact' | 'cozy' | 'spacious'>('cozy')
 
   const rowKey = (r: Row) => `${r.lane}|${r.channel}|${r.marketplace}|${r.sku}|${r.itemId ?? ''}`
 
@@ -163,7 +178,7 @@ export default function SyncControlClient() {
     } finally {
       if (seq === rowsSeq.current) setLoading(false)
     }
-  }, [channel, market, mode, q, page])
+  }, [channel, market, mode, q, page, pageSize])
 
   useEffect(() => { void loadOverview() }, [loadOverview])
   useEffect(() => { void loadRows() }, [loadRows])
@@ -293,6 +308,89 @@ export default function SyncControlClient() {
   const pages = Math.max(1, Math.ceil(total / pageSize))
   const pausedPolicies = (overview?.policies ?? []).filter((p) => p.pushesPaused)
 
+  // ── SCG.1 — DataGrid plumbing ─────────────────────────────────────────
+  // Selection source of truth stays the Map<string, Row> (runAction needs the
+  // Row objects); the grid speaks Set<string>. Keys picked on other pages
+  // survive toggles (DataGrid copies the set); select-all is page-scoped.
+  const selectedKeys = useMemo(() => new Set(selected.keys()), [selected])
+  const onGridSelect = (next: Set<string>) => {
+    const map = new Map<string, Row>()
+    for (const k of next) {
+      const existing = selected.get(k)
+      if (existing) map.set(k, existing)
+      else {
+        const row = rows.find((r) => rowKey(r) === k)
+        if (row) map.set(k, row)
+      }
+    }
+    setSelected(map)
+  }
+
+  const columns = useMemo<Array<Column<Row>>>(() => [
+    {
+      key: 'sku', label: 'SKU', sticky: true, width: 230, sortable: true,
+      sortValue: (r) => r.sku,
+      render: (r) => (
+        <span style={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 12 }}>
+          {r.sku}
+          {r.itemId ? <span style={{ marginLeft: 4, color: 'var(--text-tertiary)' }}>#{r.itemId}</span> : null}
+        </span>
+      ),
+    },
+    { key: 'channel', label: 'Channel', width: 90, sortable: true, sortValue: (r) => r.channel, render: (r) => r.channel },
+    { key: 'market', label: 'Market', width: 80, sortable: true, sortValue: (r) => r.marketplace, render: (r) => r.marketplace },
+    { key: 'lane', label: 'Lane', width: 70, render: (r) => <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>{r.lane === 'SHARED' ? 'Shared' : 'Listing'}</span> },
+    {
+      key: 'mode', label: 'Mode', width: 130, sortable: true, sortValue: (r) => r.mode,
+      render: (r) => <Pill tone={MODE_TONE[r.mode]}>{MODE_LABEL[r.mode]}</Pill>,
+    },
+    {
+      key: 'intended', label: 'Intended', align: 'right', width: 85, sortable: true,
+      sortValue: (r) => (r.mode === 'FBA' ? -1 : r.intendedQty ?? -1),
+      render: (r) => <span className="tabular-nums">{r.mode === 'FBA' ? '—' : r.intendedQty ?? '—'}</span>,
+    },
+    {
+      key: 'live', label: 'Live', align: 'right', width: 75, sortable: true,
+      sortValue: (r) => (r.mode === 'FBA' ? -1 : r.liveQty ?? -1),
+      render: (r) => <span className="tabular-nums">{r.mode === 'FBA' ? '—' : r.liveQty ?? '—'}</span>,
+    },
+    { key: 'buffer', label: 'Buffer', align: 'right', width: 70, render: (r) => <span className="tabular-nums">{r.mode === 'FBA' ? '—' : r.buffer}</span> },
+    {
+      key: 'routed', label: 'Routed from',
+      render: (r) => (
+        <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>
+          {r.mode === 'FBA' ? 'Amazon-managed' : r.routedLocations.join(', ') || (r.mode === 'FOLLOW' ? '' : '—')}
+        </span>
+      ),
+    },
+  ], [])
+
+  const filterDimensions: FilterDimension[] = [
+    {
+      key: 'channel', label: 'Channel', kind: 'select', value: channel,
+      onChange: (v) => { setPage(1); setChannel(v) },
+      options: [
+        { value: '', label: 'All channels' },
+        { value: 'AMAZON', label: 'Amazon' },
+        { value: 'EBAY', label: 'eBay' },
+        { value: 'SHOPIFY', label: 'Shopify' },
+      ],
+    },
+    {
+      key: 'market', label: 'Market', kind: 'select', value: market,
+      onChange: (v) => { setPage(1); setMarket(v) },
+      options: [{ value: '', label: 'All markets' }, ...['IT', 'DE', 'FR', 'ES', 'DEFAULT'].map((m) => ({ value: m, label: m }))],
+    },
+    {
+      key: 'mode', label: 'Mode', kind: 'select', value: mode,
+      onChange: (v) => { setPage(1); setMode(v) },
+      options: [{ value: '', label: 'All modes' }, ...(Object.keys(MODE_LABEL) as Mode[]).map((m) => ({ value: m, label: MODE_LABEL[m] }))],
+    },
+  ]
+  const activeFilterCount = [channel, market, mode].filter(Boolean).length + (q ? 1 : 0)
+  const rangeFrom = total === 0 ? 0 : (page - 1) * pageSize + 1
+  const rangeTo = Math.min(page * pageSize, total)
+
   return (
     <div className="space-y-4 p-4">
       {/* Summary strip */}
@@ -338,178 +436,110 @@ export default function SyncControlClient() {
         </div>
       )}
 
-      {selected.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-2 dark:border-indigo-900 dark:bg-indigo-950/40">
-          <span className="text-sm font-medium">{selected.size} selected</span>
-          {[
-            ['FOLLOW', 'Set Follow'],
-            ['PIN', 'Set Pinned'],
-            ['PAUSE', 'Pause'],
-            ['RESUME', 'Resume'],
-            ['ZERO_PIN', 'Zero & Pin'],
-            ['EXCLUDE', 'Exclude (shared)'],
-            ['INCLUDE', 'Include (shared)'],
-          ].map(([a, label]) => (
-            <button
-              key={a}
-              disabled={busy}
-              onClick={() => void runAction(a)}
-              className="h-8 rounded-md border border-indigo-300 bg-white px-2 text-sm hover:bg-indigo-100 disabled:opacity-40 dark:border-indigo-800 dark:bg-zinc-900 dark:hover:bg-indigo-900/40"
-            >
-              {label}
-            </button>
-          ))}
-          <span className="ml-2 flex items-center gap-1 text-sm">
-            Buffer
-            <input
-              className={`${inputCls} w-16`}
-              inputMode="numeric"
-              value={bufferVal}
-              onChange={(e) => setBufferVal(e.target.value.replace(/[^0-9]/g, ''))}
-              placeholder="0"
-            />
-            <button
-              disabled={busy || bufferVal === ''}
-              onClick={() => void runAction('BUFFER', { buffer: Number(bufferVal) })}
-              className="h-8 rounded-md border border-indigo-300 bg-white px-2 text-sm hover:bg-indigo-100 disabled:opacity-40 dark:border-indigo-800 dark:bg-zinc-900 dark:hover:bg-indigo-900/40"
-            >
-              Apply
-            </button>
-          </span>
-          <button className="ml-auto h-8 px-2 text-sm text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200" onClick={() => setSelected(new Map())}>
-            Clear
-          </button>
-        </div>
-      )}
+      {/* SCG.1 — filters (DS FilterBar) + gridcard (GridToolbar + DataGrid) */}
+      <FilterBar
+        dimensions={filterDimensions}
+        activeCount={activeFilterCount}
+        onClear={() => { setPage(1); setChannel(''); setMarket(''); setMode(''); setQLive(''); setQ('') }}
+      />
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Listbox
-          ariaLabel="Channel"
-          className="w-40"
-          value={channel}
-          onChange={(v) => { setPage(1); setChannel(v) }}
-          options={[
-            { value: '', label: 'All channels' },
-            { value: 'AMAZON', label: 'Amazon' },
-            { value: 'EBAY', label: 'eBay' },
-            { value: 'SHOPIFY', label: 'Shopify' },
-          ]}
-        />
-        <Listbox
-          ariaLabel="Market"
-          className="w-36"
-          value={market}
-          onChange={(v) => { setPage(1); setMarket(v) }}
-          options={[{ value: '', label: 'All markets' }, ...['IT', 'DE', 'FR', 'ES', 'DEFAULT'].map((m) => ({ value: m, label: m }))]}
-        />
-        <Listbox
-          ariaLabel="Mode"
-          className="w-44"
-          value={mode}
-          onChange={(v) => { setPage(1); setMode(v) }}
-          options={[{ value: '', label: 'All modes' }, ...(Object.keys(MODE_LABEL) as Mode[]).map((m) => ({ value: m, label: MODE_LABEL[m] }))]}
-        />
-        <input
-          className={`${inputCls} w-56`}
-          placeholder="Search SKU…"
-          value={qLive}
-          onChange={(e) => setQLive(e.target.value)}
-        />
-        <div className="ml-auto text-sm text-zinc-500 tabular-nums">
-          {total} rows · page {page}/{pages}
-        </div>
-        <button
-          className="h-8 rounded-md border border-zinc-300 px-2 text-sm disabled:opacity-40 dark:border-zinc-700"
-          disabled={page <= 1}
-          onClick={() => setPage((p) => p - 1)}
-        >
-          ‹
-        </button>
-        <button
-          className="h-8 rounded-md border border-zinc-300 px-2 text-sm disabled:opacity-40 dark:border-zinc-700"
-          disabled={page >= pages}
-          onClick={() => setPage((p) => p + 1)}
-        >
-          ›
-        </button>
-      </div>
-
-      {/* Main table */}
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
-        <table className="w-full text-sm">
-          <thead className="bg-zinc-50 text-left text-[11px] uppercase tracking-wide text-zinc-500 dark:bg-zinc-900">
-            <tr>
-              <th className="px-2 py-2">
-                <input
-                  type="checkbox"
-                  aria-label="Select page"
-                  checked={rows.length > 0 && rows.filter((r) => r.mode !== 'FBA').every((r) => selected.has(rowKey(r)))}
-                  onChange={(e) => {
-                    const next = new Map(selected)
-                    for (const r of rows) {
-                      if (r.mode === 'FBA') continue
-                      if (e.target.checked) next.set(rowKey(r), r)
-                      else next.delete(rowKey(r))
-                    }
-                    setSelected(next)
-                  }}
+      <div className="h10-ds-gridcard">
+        <GridToolbar
+          count={
+            selected.size > 0 ? (
+              <>Selected <b>{selected.size}</b> {selected.size === 1 ? 'row' : 'rows'}</>
+            ) : (
+              <>Viewing <b>{rangeFrom}–{rangeTo}</b> of <b>{total}</b> rows</>
+            )
+          }
+          right={
+            <>
+              <SegmentedControl
+                options={DENSITY_OPTIONS}
+                value={density}
+                onChange={(v) => setDensity(v as 'compact' | 'cozy' | 'spacious')}
+                size="sm"
+              />
+              <span style={{ width: 110, display: 'inline-flex' }}>
+                <Listbox
+                  ariaLabel="Rows per page"
+                  value={String(pageSize)}
+                  onChange={(v) => { setPage(1); setPageSize(Number(v)) }}
+                  options={[50, 100, 200].map((n) => ({ value: String(n), label: `${n} / page` }))}
                 />
-              </th>
-              <th className="px-3 py-2">SKU</th>
-              <th className="px-3 py-2">Channel</th>
-              <th className="px-3 py-2">Market</th>
-              <th className="px-3 py-2">Lane</th>
-              <th className="px-3 py-2">Mode</th>
-              <th className="px-3 py-2 text-right">Intended</th>
-              <th className="px-3 py-2 text-right">Live</th>
-              <th className="px-3 py-2 text-right">Buffer</th>
-              <th className="px-3 py-2">Routed from</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-            {loading && (
-              <tr><td colSpan={10} className="px-3 py-6 text-center text-zinc-500">Loading…</td></tr>
-            )}
-            {!loading && rows.length === 0 && (
-              <tr><td colSpan={10} className="px-3 py-6 text-center text-zinc-500">No rows match the filters.</td></tr>
-            )}
-            {!loading && rows.map((r, i) => {
-              const fba = r.mode === 'FBA'
-              return (
-                <tr key={`${r.sku}-${r.channel}-${r.marketplace}-${r.itemId ?? i}`} className="bg-white dark:bg-zinc-950">
-                  <td className="px-2 py-1.5">
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${r.sku}`}
-                      disabled={fba}
-                      checked={selected.has(rowKey(r))}
-                      onChange={(e) => {
-                        const next = new Map(selected)
-                        if (e.target.checked) next.set(rowKey(r), r)
-                        else next.delete(rowKey(r))
-                        setSelected(next)
-                      }}
-                    />
-                  </td>
-                  <td className="px-3 py-1.5 font-mono text-xs">{r.sku}{r.itemId ? <span className="ml-1 text-zinc-400">#{r.itemId}</span> : null}</td>
-                  <td className="px-3 py-1.5">{r.channel}</td>
-                  <td className="px-3 py-1.5">{r.marketplace}</td>
-                  <td className="px-3 py-1.5 text-xs text-zinc-500">{r.lane === 'SHARED' ? 'Shared' : 'Listing'}</td>
-                  <td className="px-3 py-1.5">
-                    <span className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${MODE_STYLE[r.mode]}`}>
-                      {MODE_LABEL[r.mode]}
-                    </span>
-                  </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">{fba ? '—' : (r.intendedQty ?? '—')}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">{fba ? '—' : (r.liveQty ?? '—')}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">{fba ? '—' : r.buffer}</td>
-                  <td className="px-3 py-1.5 text-xs text-zinc-500">{fba ? 'Amazon-managed' : r.routedLocations.join(', ') || (r.mode === 'FOLLOW' ? '' : '—')}</td>
-                </tr>
+              </span>
+            </>
+          }
+        >
+          {selected.size > 0 ? (
+            <span className={styles.selActions}>
+              {[
+                ['FOLLOW', 'Set Follow'],
+                ['PIN', 'Pin'],
+                ['PAUSE', 'Pause'],
+                ['RESUME', 'Resume'],
+                ['ZERO_PIN', 'Zero & Pin'],
+                ['EXCLUDE', 'Exclude'],
+                ['INCLUDE', 'Include'],
+              ].map(([a, label]) => (
+                <Button key={a} size="sm" disabled={busy} onClick={() => void runAction(a)}>
+                  {label}
+                </Button>
+              ))}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13 }}>
+                Buffer
+                <Input
+                  inputMode="numeric"
+                  value={bufferVal}
+                  onChange={(e) => setBufferVal(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="0"
+                  style={{ width: 56 }}
+                />
+                <Button size="sm" disabled={busy || bufferVal === ''} onClick={() => void runAction('BUFFER', { buffer: Number(bufferVal) })}>
+                  Apply
+                </Button>
+              </span>
+              <Button size="sm" disabled={busy} onClick={() => setSelected(new Map())}>
+                Clear
+              </Button>
+            </span>
+          ) : (
+            <span className={styles.searchField}>
+              <Input
+                leadingIcon={<Search size={13} style={{ color: 'var(--text-tertiary)' }} />}
+                placeholder="Search SKU…"
+                value={qLive}
+                onChange={(e) => setQLive(e.target.value)}
+                style={{ width: '100%' }}
+              />
+            </span>
+          )}
+        </GridToolbar>
+
+        <div className={density === 'compact' ? styles.densityCompact : density === 'spacious' ? styles.densitySpacious : undefined}>
+          <DataGrid<Row>
+            columns={columns}
+            rows={rows}
+            rowKey={rowKey}
+            selectable
+            selected={selectedKeys}
+            onSelectedChange={onGridSelect}
+            rowSelectable={(r) => r.mode !== 'FBA'}
+            rowSelectableHint="Amazon-managed (FBA) — excluded from actions"
+            emptyState={
+              loading ? (
+                <span style={{ color: 'var(--text-tertiary)' }}>Loading…</span>
+              ) : (
+                <span style={{ color: 'var(--text-tertiary)' }}>No rows match the filters.</span>
               )
-            })}
-          </tbody>
-        </table>
+            }
+          />
+        </div>
+
+        <div className={styles.gridFooter}>
+          <span className="tabular-nums">{total} rows · page {page}/{pages}</span>
+          <Pagination page={page} pageCount={pages} onPage={setPage} />
+        </div>
       </div>
 
       {/* Locations routing + policies + history */}
@@ -608,24 +638,26 @@ export default function SyncControlClient() {
               </table>
             )}
             <div className="flex flex-wrap items-center gap-2 border-t border-zinc-200 px-3 py-2 dark:border-zinc-800">
-              <Listbox
-                ariaLabel="Policy channel"
-                className="w-28"
-                value={polChannel}
-                onChange={setPolChannel}
-                options={[
-                  { value: 'AMAZON', label: 'Amazon' },
-                  { value: 'EBAY', label: 'eBay' },
-                  { value: 'SHOPIFY', label: 'Shopify' },
-                ]}
-              />
-              <Listbox
-                ariaLabel="Policy market"
-                className="w-28"
-                value={polMarket}
-                onChange={setPolMarket}
-                options={[{ value: '*', label: 'All markets' }, ...['IT', 'DE', 'FR', 'ES'].map((m) => ({ value: m, label: m }))]}
-              />
+              <span style={{ width: 120, display: 'inline-flex' }}>
+                <Listbox
+                  ariaLabel="Policy channel"
+                  value={polChannel}
+                  onChange={setPolChannel}
+                  options={[
+                    { value: 'AMAZON', label: 'Amazon' },
+                    { value: 'EBAY', label: 'eBay' },
+                    { value: 'SHOPIFY', label: 'Shopify' },
+                  ]}
+                />
+              </span>
+              <span style={{ width: 120, display: 'inline-flex' }}>
+                <Listbox
+                  ariaLabel="Policy market"
+                  value={polMarket}
+                  onChange={setPolMarket}
+                  options={[{ value: '*', label: 'All markets' }, ...['IT', 'DE', 'FR', 'ES'].map((m) => ({ value: m, label: m }))]}
+                />
+              </span>
               <button
                 type="button"
                 disabled={busy}
@@ -676,7 +708,17 @@ export default function SyncControlClient() {
           </div>
 
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-800">
-            <div className="border-b border-zinc-200 px-3 py-2 text-sm font-semibold dark:border-zinc-800">History</div>
+            <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
+              <span className="text-sm font-semibold">History</span>
+              <a
+                href="/fulfillment/stock/sync-control/history"
+                target="_blank"
+                rel="noopener"
+                className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+              >
+                Open full history ↗
+              </a>
+            </div>
             {(overview?.audit?.length ?? 0) === 0 ? (
               <div className="px-3 py-4 text-sm text-zinc-500">No Sync Control changes yet — every mutation will be recorded here (who, what, before → after).</div>
             ) : (

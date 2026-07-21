@@ -450,6 +450,28 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     return { ok: true, location: loc.code, syncRoutes: tokens, recascadeQueued: productIds.length }
   })
 
+  // ── SCG.2 — full audit history (server-paginated; the History card links
+  //    here in a new tab). Read-only; inherits inventoryView via the manifest.
+  app.get('/stock/sync-control/audit', async (request) => {
+    const q = request.query as { page?: string; pageSize?: string; scope?: string; field?: string }
+    const page = Math.max(1, Number.parseInt(q.page ?? '1', 10) || 1)
+    const pageSize = Math.min(200, Math.max(10, Number.parseInt(q.pageSize ?? '50', 10) || 50))
+    const where = {
+      ...(q.scope ? { scopeType: q.scope.toUpperCase() } : {}),
+      ...(q.field ? { field: q.field } : {}),
+    }
+    const [total, rows] = await Promise.all([
+      prisma.syncControlAudit.count({ where }),
+      prisma.syncControlAudit.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ])
+    return { total, page, pageSize, rows }
+  })
+
   // ── SC.5 — channel/market policies (kill-switch + new-listing default) ──
   //
   // Upsert on (channel, marketplace); '*' = channel-wide. A row that ends up
