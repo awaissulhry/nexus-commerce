@@ -6,6 +6,10 @@
 
 Today's grid is **listing-flat**: 1,760 rows for 359 products — every product repeats 4–6× (channel × market × shared listing). You scan SKUs, not products. /products/next already solved this: parent rows (thumbnail + name + chevron), children interleaved on expand, manual sort so groups never scatter. We reuse that shell and change the columns — but the page stays a **control surface**, now product-first.
 
+## Data reality (probed live 2026-07-21 — this shapes the hierarchy)
+
+The 359 productIds behind the rows are **37 masters + 322 variants**. Rolled up to their master (`parentId ?? id`), the whole page becomes **37 master rows**. Distribution is bimodal: ~10 big families carry hundreds of rows (VENTRA = 291 rows across 40 variants; xracing 49 variants; GALE/AIREON/REGAL 40 each), ~27 are simple products (gloves, knee-sliders) with 1–few rows. 66 channel-listing rows sit directly on a master (Amazon variation-parent ASINs). **Stock lives on variants, never the master** — so a single master "pool" number always reads 0; the honest signal is `poolTotal` + `variantsInStock/total` across the master's listed variants (e.g. GALE = 675 units, 36/41 variants in stock). **SCV.1 (server) is built and shipped on this master-grouping.**
+
 ## What it must do — three tiers of control (all reuse existing guarded primitives)
 
 ### 1. Per-listing (finest — unchanged)
@@ -19,19 +23,25 @@ Select product row(s) → apply an action to **all of that product's non-FBA lis
 - **Import** the edited workbook → **preview/diff** (Follow→Paused here; Buffer 0→5 there; FBA rows ignored with a note; malformed cells flagged) → apply atomically → SyncControlAudit (actor `import:<jobId>`) → background recascade. Enforces the SC.4 guarantee: **a control sheet only touches control columns — it never writes pool quantity**, so Amazon/eBay export sheets can't corrupt the pool.
 - **Override** = pin a manual quantity (Pin / Zero-pin) or override routing — exposed at all three levels (listing, product, Excel).
 
-## The product row (Level 1 — ~359 rows, not 1,760)
+## The master row (Level 1 — 37 rows, not 1,760)
 
 | Column | Content |
 |---|---|
-| **Product** (sticky) | chevron · thumbnail (`Thumbnail`, parent-image fallback) · name (editor link + "Open" new-tab) · SKU tag · family tag — the `ProductCell` pattern |
-| **Listings** | "5 listings · 2 channels" chip |
+| **Product** (sticky) | chevron · thumbnail (master image, parent fallback) · name (editor link + "Open" new-tab) · master SKU · family tag — the `ProductCell` pattern |
+| **Scope** | "40 variants · 96 listings · 2 channels" chip |
 | **Sync** | rollup pill: uniform → one chip (`Follow`); mixed → `Follow ×4 · Pinned ×1`; `FBA` chip when Amazon-managed anywhere |
-| **Pool** | warehouse available — the number the cascade uses (never shown here today) |
+| **In stock** | `poolTotal` units · `variantsInStock/total` (family-level; the master holds none itself) |
 | **Drift** | ● amber + count when any listing's live ≠ intended; green check when clean → scan for exceptions at a glance |
 | **Buffer / Routed** | max buffer · routed locations |
-| **⋯** | per-product bulk menu (tier 2) |
+| **⋯** | per-master bulk menu (tier 2) |
 
-Parent checkbox selects the product's non-FBA listings (tier-2 bulk in one click).
+Master checkbox selects the master's non-FBA listing rows (tier-2 bulk in one click).
+
+### Hierarchy depth (the one open client fork)
+
+A master has up to 40 variants × several listings = **up to 291 child rows**. Two ways to render the expand — this is D3 below:
+- **3-tier (recommended):** master → **variant** rows (per-variant thumbnail + mini-rollup + drift) → **listing** rows. Exact /products/next parity; per-variant control; deep families stay navigable.
+- **2-tier:** master → **listing** rows directly, capped at N with "see all N ↗" (the owner's own cap-and-new-tab idea) for the big families.
 
 ## Toolbar / filters
 
@@ -49,10 +59,10 @@ Parent checkbox selects the product's non-FBA listings (tier-2 bulk in one click
 
 ## Phases
 
-- **SCV.1 — server.** `GET /stock/sync-control/products` (grouped: name/image/family/pool/rollup/drift; product-paginated; children in-page ~250 rows so no lazy fetch). Rollup + drift reducers unit-tested.
-- **SCV.2 — client.** Product rows + interleaved children on the DataGrid (manual sort, `initialSort` off), ProductCell, rollup chips, parent-selects-children (FBA-excluded via `rowSelectable`), tier-2 per-product actions, view toggle, drift filter, family facet, clickable tiles. Densities/dark kept.
-- **SCV.3 — Excel round-trip.** Sync Control export (locked FBA, optional Routes sheet) + import with preview/diff → applier reusing SC.3 primitives + SyncControlAudit; "never writes pool" guarantee test battery.
-- **SCV.4 — live + gate.** Polling+invalidation; local preview → both themes/densities → deploy → prod walkthrough incl. one net-zero product-level bulk action AND one net-zero Excel round-trip; docs + memory.
+- **SCV.1 — server. ✅ SHIPPED (13a085d81).** `GET /stock/sync-control/products` master-grouped (image/family/rollup/drift/poolTotal/variantsInStock; children in-payload; master-paginated). Pure `summarizeProductSync` + `marketMatches` unit-tested (7 cases).
+- **SCV.2 — client.** Master rows + expandable children on the DataGrid (manual sort, `initialSort` off), ProductCell, rollup chips, master-selects-children (FBA-excluded via `rowSelectable`), tier-2 per-master actions, view toggle, drift filter, family facet, clickable tiles. Depth per D3. Densities/dark kept.
+- **SCV.3 — Excel round-trip.** Dedicated Sync Control export (locked FBA rows, Routes sheet — D1=dedicated, D2=incl. routing) + import with preview/diff → applier reusing SC.3 primitives + SyncControlAudit; "never writes pool" guarantee test battery.
+- **SCV.4 — live + gate.** Polling+invalidation; local preview → both themes/densities → deploy → prod walkthrough incl. one net-zero master-level bulk action AND one net-zero Excel round-trip; docs + memory.
 
 ## Guardrails (do not lose control)
 
@@ -60,5 +70,6 @@ Presentation + **reuse of existing guarded write primitives** — no change to t
 
 ## Open decisions for the gate
 
-- **D1 — Excel architecture:** dedicated Sync Control import/export (own template + preview, self-contained, leaves the stock wizard alone) vs. extend the existing stock-import wizard's SC.4 columns.
-- **D2 — Excel scope:** per-listing mode+pin+buffer only, vs. also routing (a Routes sheet in the same workbook) for full "each and everything" control.
+- **D1 — Excel architecture:** ✅ dedicated Sync Control import/export (self-contained on the page; stock wizard untouched).
+- **D2 — Excel scope:** ✅ everything incl. routing (Listings sheet + Routes sheet in one workbook).
+- **D3 — hierarchy depth (SCV.2):** 3-tier master→variant→listings (recommended, /products/next parity) vs. 2-tier master→listings capped with "see all." **← awaiting owner.**
