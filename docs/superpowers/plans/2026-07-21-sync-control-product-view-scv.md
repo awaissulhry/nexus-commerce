@@ -37,11 +37,15 @@ Select product row(s) → apply an action to **all of that product's non-FBA lis
 
 Master checkbox selects the master's non-FBA listing rows (tier-2 bulk in one click).
 
-### Hierarchy depth (the one open client fork)
+### Hierarchy depth — RESOLVED: adaptive by family size (owner, 2026-07-21)
 
-A master has up to 40 variants × several listings = **up to 291 child rows**. Two ways to render the expand — this is D3 below:
-- **3-tier (recommended):** master → **variant** rows (per-variant thumbnail + mini-rollup + drift) → **listing** rows. Exact /products/next parity; per-variant control; deep families stay navigable.
-- **2-tier:** master → **listing** rows directly, capped at N with "see all N ↗" (the owner's own cap-and-new-tab idea) for the big families.
+"For 10, 15, 20 variants it's all right [inline]. For more, add a button to open the product-specific page in a new tab where only that product's data is shown — like Amazon." So:
+
+- **Small master (≤ ~20 variants — the ~27 simple products):** chevron **expands inline** to its listing rows (grouped/sorted by variant). Fast, no navigation.
+- **Big master (> ~20 variants — the ~10 jacket/suit families, 30–49 variants, up to 291 rows):** **no inline expand.** An **"Open ↗"** button opens a **dedicated per-product page** (`/fulfillment/stock/sync-control/product/[masterId]`) in a new tab — the full control surface scoped to that one product (variants → listings, bulk actions, and its own Excel export/import). Amazon's variation-page pattern.
+- Threshold is a tunable constant (default 20 variants). Either way the **master row itself always shows the full rollup/drift/stock** (computed server-side, cheap) — only the *child rows* of big families are deferred to their page.
+
+**Performance:** the list endpoint **omits child rows for big masters** (returns `childrenOmitted: true` + counts instead of 291 rows), so the page payload stays ~small even with the big families present. The dedicated page fetches one master's full tree via `?masterId=`.
 
 ## Toolbar / filters
 
@@ -60,9 +64,11 @@ A master has up to 40 variants × several listings = **up to 291 child rows**. T
 ## Phases
 
 - **SCV.1 — server. ✅ SHIPPED (13a085d81).** `GET /stock/sync-control/products` master-grouped (image/family/rollup/drift/poolTotal/variantsInStock; children in-payload; master-paginated). Pure `summarizeProductSync` + `marketMatches` unit-tested (7 cases).
-- **SCV.2 — client.** Master rows + expandable children on the DataGrid (manual sort, `initialSort` off), ProductCell, rollup chips, master-selects-children (FBA-excluded via `rowSelectable`), tier-2 per-master actions, view toggle, drift filter, family facet, clickable tiles. Depth per D3. Densities/dark kept.
-- **SCV.3 — Excel round-trip.** Dedicated Sync Control export (locked FBA rows, Routes sheet — D1=dedicated, D2=incl. routing) + import with preview/diff → applier reusing SC.3 primitives + SyncControlAudit; "never writes pool" guarantee test battery.
-- **SCV.4 — live + gate.** Polling+invalidation; local preview → both themes/densities → deploy → prod walkthrough incl. one net-zero master-level bulk action AND one net-zero Excel round-trip; docs + memory.
+- **SCV.1b — server, child-capping.** Add the big-family cap: omit children (return `childrenOmitted: true` + variant/listing counts) when `variantCount > THRESHOLD`; add `?masterId=` to return one master's FULL tree for the dedicated page. Small tweak; unit-test the cap predicate.
+- **SCV.2 — main client.** 37 master rows on the DataGrid (manual sort, `initialSort` off), ProductCell (thumbnail/name/family/master-SKU), rollup + drift + in-stock columns, master-selects-children (FBA-excluded via `rowSelectable`), tier-2 per-master bulk actions, **adaptive expand** (inline for small, "Open ↗" for big), `Products | Listings` view toggle, drift filter, family facet, clickable KPI tiles. `usePolledList` for live. Densities/dark kept.
+- **SCV.2b — dedicated per-product page.** `/fulfillment/stock/sync-control/product/[masterId]` — master header + variants → listings on the same DataGrid, full bulk actions, and this product's own Excel export/import. Reuses SCV.1 (`?masterId=`) + SC.3 actions. ≤291 rows/page renders fine (no virtualization needed).
+- **SCV.3 — Excel round-trip.** Dedicated Sync Control export (locked FBA rows, Listings + Routes sheets — D1=dedicated, D2=incl. routing), page-level AND per-product-scoped; import with preview/diff → applier reusing SC.3 primitives + SyncControlAudit; "never writes pool" guarantee test battery.
+- **SCV.4 — live + gate.** Polling+invalidation verified; local preview → both themes/densities → deploy → prod walkthrough incl. a big-family "Open ↗" round-trip, one net-zero master-level bulk action, AND one net-zero Excel round-trip; docs + memory.
 
 ## Guardrails (do not lose control)
 
@@ -72,4 +78,6 @@ Presentation + **reuse of existing guarded write primitives** — no change to t
 
 - **D1 — Excel architecture:** ✅ dedicated Sync Control import/export (self-contained on the page; stock wizard untouched).
 - **D2 — Excel scope:** ✅ everything incl. routing (Listings sheet + Routes sheet in one workbook).
-- **D3 — hierarchy depth (SCV.2):** 3-tier master→variant→listings (recommended, /products/next parity) vs. 2-tier master→listings capped with "see all." **← awaiting owner.**
+- **D3 — hierarchy depth (SCV.2):** ✅ **adaptive** — inline expand for small masters (≤ ~20 variants); big families get an "Open ↗" button to a dedicated per-product page in a new tab (Amazon variation-page pattern), with the list endpoint omitting their child rows for speed.
+
+_All gate decisions resolved. SCV.1 shipped. Awaiting the owner's go to build SCV.1b → SCV.4._
