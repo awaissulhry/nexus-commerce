@@ -280,7 +280,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
       </GridToolbar>
 
       <DensityContext.Provider value={mapDensity(density)}>
-        <div className={density === 'compact' ? styles.densityCompact : density === 'spacious' ? styles.densitySpacious : undefined}>
+        <div className={[styles.fixedTable, density === 'compact' ? styles.densityCompact : density === 'spacious' ? styles.densitySpacious : ''].filter(Boolean).join(' ')}>
           <DataGrid<DRow>
             columns={columns}
             rows={displayRows}
@@ -305,37 +305,37 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
 
 // ── cells ───────────────────────────────────────────────────────────────────
 
+// The cell FILLS the column (styles.fixedTable pins the column width) so the
+// long product name truncates at the real column width instead of expanding it.
 function MasterCell({ m, expanded, onToggle }: { m: ProductMaster; expanded: boolean; onToggle: () => void }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex w-full items-center gap-2">
       {m.childrenOmitted ? (
         <Link
           href={`/fulfillment/stock/sync-control/product/${m.masterId}`}
           target="_blank"
           rel="noopener"
-          className="inline-flex h-5 w-5 items-center justify-center rounded text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950"
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950"
           title={`Open ${m.listingCount} listings in a new tab`}
           onClick={(e) => e.stopPropagation()}
         >
           <ExternalLink size={13} />
         </Link>
       ) : m.listingCount > 0 ? (
-        <button type="button" onClick={(e) => { e.stopPropagation(); onToggle() }} aria-label={expanded ? 'Collapse' : 'Expand'} className="inline-flex h-5 w-5 items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+        <button type="button" onClick={(e) => { e.stopPropagation(); onToggle() }} aria-label={expanded ? 'Collapse' : 'Expand'} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
       ) : (
-        <span className="inline-block h-5 w-5" aria-hidden />
+        <span className="inline-block h-5 w-5 shrink-0" aria-hidden />
       )}
-      <Thumbnail src={m.imageUrl} alt={m.name} />
-      <div className="min-w-0">
-        <div className="flex items-center gap-1.5">
-          <Link href={`/products/${m.masterId}/edit`} target="_blank" rel="noopener" className="truncate text-sm font-medium text-zinc-900 hover:underline dark:text-zinc-100" title={m.name} onClick={(e) => e.stopPropagation()}>
-            {m.name}
-          </Link>
-        </div>
+      <span className="shrink-0"><Thumbnail src={m.imageUrl} alt={m.name} /></span>
+      <div className="min-w-0 flex-1">
+        <Link href={`/products/${m.masterId}/edit`} target="_blank" rel="noopener" className="block truncate text-sm font-medium text-zinc-900 hover:underline dark:text-zinc-100" title={m.name} onClick={(e) => e.stopPropagation()}>
+          {m.name}
+        </Link>
         <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-          <span className="font-mono">{m.sku}</span>
-          {m.family && <span className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800">{m.family.label}</span>}
+          <span className="truncate font-mono">{m.sku}</span>
+          {m.family && <span className="shrink-0 rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800">{m.family.label}</span>}
         </div>
       </div>
     </div>
@@ -344,9 +344,9 @@ function MasterCell({ m, expanded, onToggle }: { m: ProductMaster; expanded: boo
 
 function ChildCell({ c }: { c: Row }) {
   return (
-    <div className="flex items-center gap-2 pl-7">
-      <div className="min-w-0">
-        <div className="font-mono text-xs text-zinc-700 dark:text-zinc-300">
+    <div className="flex w-full items-center gap-2 pl-7">
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-mono text-xs text-zinc-700 dark:text-zinc-300">
           {c.sku}{c.itemId ? <span className="ml-1 text-zinc-400">#{c.itemId}</span> : null}
         </div>
         <div className="text-xs text-zinc-500">{c.channel} · {c.marketplace}</div>

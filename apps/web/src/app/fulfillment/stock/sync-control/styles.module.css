@@ -31,3 +31,15 @@
   font-size: 12px;
   color: var(--text-tertiary, #71717a);
 }
+
+/* SCV — pin the products grid to exact column widths. table-layout:fixed makes
+   header th ≡ body td, so a long product name can never overrun the sticky
+   Product column or push Scope/Sync/In-stock off-screen. overflow:hidden clips
+   any residual overflow. All Sync Control columns declare explicit widths. */
+.fixedTable :global(.h10-ds-grid) {
+  table-layout: fixed;
+}
+.fixedTable :global(.h10-ds-grid td),
+.fixedTable :global(.h10-ds-grid th) {
+  overflow: hidden;
+}
