@@ -17,9 +17,14 @@ import { cn } from '@/lib/utils'
 import { beFetch } from '../api'
 import ImagePickerModal from '../ImagePickerModal'
 import ImagePublishHistory from '../ImagePublishHistory'
+import LiveChannelStrip from '../LiveChannelStrip'
 import ChannelImageGrid, { type ImageGridColumn, type ImageGridRow, type GridCellDisplay } from '../ChannelImageGrid'
-import type { ListingImage, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
+import type { ChannelLiveImage, ListingImage, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
 import { axisSynonymKey, SHARED_GALLERY_AXIS } from '@/app/products/ebay-flat-file/variationValueOrder.pure'
+
+// eBay is IT-only today (project_active_channels). The live strip groups by
+// colour, but the shared component still needs a market for its Refresh call.
+const EBAY_MARKETS = ['IT']
 
 // EFX P5 — eBay's REAL limit for this panel's publish path. Per eBay's
 // Inventory API "Managing images" doc: "For multiple-variation listings, a
@@ -74,7 +79,7 @@ interface Props {
   onCopyFromMaster?: () => void
   onCopyFromAmazonGallery?: () => void
   onCopyFromAmazonColorSets?: () => void
-  channelLiveImages?: unknown[]
+  channelLiveImages?: ChannelLiveImage[]
   onAdoptToMaster?: (url: string) => void | Promise<void>
   onOpenRollback?: () => void
   onOpenLightboxForCell?: (id: string | undefined, url: string) => void
@@ -176,7 +181,7 @@ function bucketsDiff(a: Buckets, b: Buckets): number {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export default function EbayPanel({ productId, product, masterImages, listingImages, variants, onReload, onToast, onEbayDirtyChange, registerController }: Props) {
+export default function EbayPanel({ productId, product, masterImages, listingImages, variants, onReload, onToast, onEbayDirtyChange, registerController, channelLiveImages = [] }: Props) {
   const axes = useMemo(() => availableAxes(variants), [variants])
   const [axis, setAxis] = useState<string>(() => defaultAxis(product, axes))
   const [axisOpen, setAxisOpen] = useState(false)
@@ -464,6 +469,19 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
           </div>
         </div>
       )}
+
+      {/* IE.5 — Live on eBay: what's actually published, grouped per colour
+          (read-back). Empty until you hit Refresh (or the cron runs). */}
+      <div className="px-4 pt-3">
+        <LiveChannelStrip
+          productId={productId}
+          channel="EBAY"
+          marketplaces={EBAY_MARKETS}
+          liveImages={channelLiveImages}
+          listingImages={listingImages}
+          onRefreshed={() => { void onReload?.() }}
+        />
+      </div>
 
       {/* The shared grid */}
       <div className="p-4">

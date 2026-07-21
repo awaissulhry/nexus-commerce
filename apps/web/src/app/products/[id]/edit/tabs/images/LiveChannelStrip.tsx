@@ -20,6 +20,10 @@ import { useTranslations } from '@/lib/i18n/use-translations'
 import { beFetch } from './api'
 import type { ChannelLiveImage, ListingImage } from './types'
 
+// eBay's live images vary by the single picture axis (colour), not by
+// marketplace; the shared "Gallery" bucket carries no variation value.
+const EBAY_GALLERY = '__gallery__'
+
 interface Props {
   productId: string
   channel: 'AMAZON' | 'EBAY' | 'SHOPIFY'
@@ -88,6 +92,32 @@ export default function LiveChannelStrip({
     return out
   }, [liveImages, channel])
 
+  // Display groups. Amazon/Shopify: one row per marketplace (unchanged). eBay:
+  // one row per variation VALUE (colour) + a Gallery row — eBay images vary by
+  // the single picture axis, not by marketplace, so per-colour is the natural
+  // grouping. Always yields ≥1 group so the Refresh control stays reachable.
+  const displayGroups = useMemo<Array<{ key: string; label: string; rows: ChannelLiveImage[] }>>(() => {
+    if (channel === 'EBAY') {
+      const byValue = new Map<string, ChannelLiveImage[]>()
+      for (const li of liveImages) {
+        if (li.channel !== 'EBAY') continue
+        const key = li.externalSku ?? EBAY_GALLERY
+        const arr = byValue.get(key) ?? []
+        arr.push(li)
+        byValue.set(key, arr)
+      }
+      const keys = [...byValue.keys()].sort((a, b) =>
+        a === EBAY_GALLERY ? -1 : b === EBAY_GALLERY ? 1 : a.localeCompare(b))
+      const groups = keys.map((k) => ({
+        key: k,
+        label: k === EBAY_GALLERY ? 'Gallery' : k,
+        rows: (byValue.get(k) ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder),
+      }))
+      return groups.length ? groups : [{ key: EBAY_GALLERY, label: 'Gallery', rows: [] }]
+    }
+    return marketplaces.map((mkt) => ({ key: mkt, label: mkt, rows: byMarketplace.get(mkt) ?? [] }))
+  }, [channel, liveImages, marketplaces, byMarketplace])
+
   // Drift map: for each live image, find the matching Nexus
   // ListingImage by (slot, marketplace) and report whether the URL
   // matches. No matching Nexus row → "orphan" (Nexus doesn't know
@@ -125,9 +155,12 @@ export default function LiveChannelStrip({
     }
   }
 
-  // For channels (eBay/Shopify) where IE.4 didn't wire a fetch yet,
-  // render a muted "not yet wired" notice instead of a refresh CTA.
-  const supported = channel === 'AMAZON'
+  // eBay + Amazon both have a working read-back now. (Shopify's fetch isn't
+  // wired yet → muted "not yet wired" notice instead of a refresh CTA.)
+  const supported = channel === 'AMAZON' || channel === 'EBAY'
+  // eBay isn't per-marketplace; one GetItem refreshes every colour set, so use
+  // a single stable refresh key (the market) and show the control once.
+  const ebayRefreshKey = marketplaces[0] ?? 'IT'
 
   return (
     <section className="mb-4 bg-slate-50 dark:bg-slate-900/40 border border-default dark:border-slate-700 rounded-xl overflow-hidden">
@@ -165,14 +198,18 @@ export default function LiveChannelStrip({
           </p>
         )}
 
-        {marketplaces.map((mkt) => {
-          const rows = byMarketplace.get(mkt) ?? []
-          const isRefreshing = !!refreshing[mkt]
+        {displayGroups.map((g, idx) => {
+          const rows = g.rows
+          const refreshKey = channel === 'EBAY' ? ebayRefreshKey : g.key
+          const isRefreshing = !!refreshing[refreshKey]
+          // eBay: one GetItem refreshes every colour set, so show the single
+          // Refresh control on the first row only (never one per colour).
+          const showRefresh = supported && (channel !== 'EBAY' || idx === 0)
           return (
-            <div key={mkt} className="flex items-start gap-3">
-              <div className="w-12 flex-shrink-0 pt-1">
-                <span className="text-[11px] font-mono font-semibold text-slate-500 dark:text-slate-400">
-                  {mkt}
+            <div key={g.key} className="flex items-start gap-3">
+              <div className={cn('flex-shrink-0 pt-1', channel === 'EBAY' ? 'w-20' : 'w-12')}>
+                <span className="text-[11px] font-mono font-semibold text-slate-500 dark:text-slate-400 break-words">
+                  {g.label}
                 </span>
                 {rows.length > 0 && (
                   <span className="block text-[10px] text-tertiary mt-0.5">{elapsed(rows[0].fetchedAt)}</span>
@@ -247,12 +284,12 @@ export default function LiveChannelStrip({
                   })
                 )}
               </div>
-              {supported && (
+              {showRefresh && (
                 <Button
                   size="sm"
                   variant="ghost"
                   className="text-[11px] h-7 gap-1 flex-shrink-0"
-                  onClick={() => void refresh(mkt)}
+                  onClick={() => void refresh(refreshKey)}
                   disabled={isRefreshing}
                 >
                   {isRefreshing
