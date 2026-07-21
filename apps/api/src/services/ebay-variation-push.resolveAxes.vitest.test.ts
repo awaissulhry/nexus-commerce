@@ -19,6 +19,7 @@ import {
   axisSynonymKey,
   type VariationAxisSpec,
 } from './ebay-variation-push.service.js'
+import { buildSharedListingInput } from './ebay-shared-listing-push.service.js'
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -194,14 +195,74 @@ describe('resolveVariationAxes — DECLARED mode (D2/D7/D8)', () => {
     expect(got.warnings).toEqual([]) // suppression is silent (proven duplicate)
   })
 
-  it('undeclared axis with a UNIQUE fingerprint → kept + warning', () => {
+  it('undeclared axis with a UNIQUE fingerprint → DEMOTED to item-specific (whitelist), still warned', () => {
     const rows = [
       row({ Colore: 'Nero', Taglia: 'S' }),
       row({ Colore: 'Blu', Taglia: 'M' }),
     ]
     const got = resolveVariationAxes(rows, ['Colore'])
-    expect(got.validSpecs.map((s) => s.name)).toEqual(['Colore', 'Taglia'])
+    // WHITELIST (read ≡ write): only the DECLARED axis is a variation axis.
+    // Taglia varies but wasn't declared → it stays a listing item specific,
+    // NOT a phantom axis. It is suppressed (so it never renders as an axis on
+    // the read surfaces) but still warned (so the operator sees it).
+    expect(got.validSpecs.map((s) => s.name)).toEqual(['Colore'])
+    expect(got.suppressed).toContain('Taglia')
     expect(got.warnings.some((w) => w.includes('Taglia') && w.includes('not in your Variation Theme'))).toBe(true)
+  })
+
+  it('VENTRA shape: pipe-encoded Colore + satellite specifics → ONLY declared Colore/Taglia (no phantom axes)', () => {
+    const rows = [
+      row({ Colore: 'Rosso | Uomo', Taglia: 'M', 'Colore specifico': 'Rosso', 'Colore esatto': 'Rosso', Genere: 'Uomo', 'Adatto a': 'Uomo' }),
+      row({ Colore: 'Giallo | Donna', Taglia: 'L', 'Colore specifico': 'Giallo', 'Colore esatto': 'Giallo', Genere: 'Donna', 'Adatto a': 'Donna' }),
+    ]
+    const got = resolveVariationAxes(rows, parseThemeAxes('Colore,Taglia'))
+    expect(got.validSpecs.map((s) => s.name)).toEqual(['Colore', 'Taglia'])
+    // the pipe value is preserved WHOLE (never split on ' | ')
+    expect([...got.validSpecs[0].values].sort()).toEqual(['Giallo | Donna', 'Rosso | Uomo'])
+    // every satellite is demoted to a specific, never a phantom axis
+    for (const sat of ['Colore specifico', 'Colore esatto', 'Genere', 'Adatto a']) {
+      expect(got.validSpecs.map((s) => s.name)).not.toContain(sat)
+      expect(got.suppressed).toContain(sat)
+    }
+  })
+
+  it('WHITELIST INVARIANT (never-again): in DECLARED mode no returned axis is outside the theme (unless an explicit pictureAxisOverride)', () => {
+    const rows = [
+      row({ Colore: 'Rosso | Uomo', Taglia: 'M', Genere: 'Uomo', Marca: 'X', Materiale: 'Pelle' }),
+      row({ Colore: 'Giallo | Donna', Taglia: 'L', Genere: 'Donna', Marca: 'X', Materiale: 'Rete' }),
+    ]
+    const declared = parseThemeAxes('Colore,Taglia')
+    const got = resolveVariationAxes(rows, declared)
+    const declaredKeys = new Set(declared.map((d) => axisSynonymKey(d)))
+    // The read resolver can NEVER return an axis the operator didn't declare —
+    // this is the property that keeps read ≡ write and stops the divergence
+    // from ever recurring.
+    for (const s of got.validSpecs) {
+      expect(declaredKeys.has(axisSynonymKey(s.name)) || declaredKeys.has(axisSynonymKey(s.rawName))).toBe(true)
+    }
+  })
+
+  it('PARITY (read ≡ write, the never-again guard): the READ resolver and the Trading WRITE path return the SAME axis names for the VENTRA shape', () => {
+    const variantRows = [
+      row({ Colore: 'Rosso | Uomo', Taglia: 'M', 'Colore specifico': 'Rosso', Genere: 'Uomo' }),
+      row({ Colore: 'Giallo | Donna', Taglia: 'L', 'Colore specifico': 'Giallo', Genere: 'Donna' }),
+    ]
+    const parentRow = { sku: 'VENTRA-JACKET', variation_theme: 'Colore,Taglia' }
+    // WRITE path — the axis names the Trading shared push actually sends to eBay
+    // (declared theme is its whitelist; satellites go to listing-level specifics).
+    const writeInput = buildSharedListingInput(
+      parentRow as unknown as Parameters<typeof buildSharedListingInput>[0],
+      variantRows as unknown as Parameters<typeof buildSharedListingInput>[1],
+      'IT',
+    )
+    const writeAxes = Object.keys(writeInput.variations[0].specifics).sort()
+    // READ path — the axes the variation-order modal / cockpit / images picker show.
+    const readAxes = resolveVariationAxes(variantRows, parseThemeAxes('Colore,Taglia'))
+      .validSpecs.map((s) => s.name).sort()
+    // The whole point of Phase 1: what the UI shows ≡ what eBay receives. If a
+    // future change reintroduces a second axis-decision brain, this goes red.
+    expect(readAxes).toEqual(writeAxes)
+    expect(readAxes).toEqual(['Colore', 'Taglia'])
   })
 
   it('declared axis with a single distinct value → excluded + warning (single value)', () => {

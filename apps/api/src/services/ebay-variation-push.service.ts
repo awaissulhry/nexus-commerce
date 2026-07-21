@@ -381,9 +381,17 @@ export function resolveVariationAxes(
       suppressed.push(s.name)
       continue
     }
-    // 3b — real varying data the operator didn't declare: keep + warn.
-    keptStrays.push(s)
-    warnings.push(`Axis "${s.name}" varies across variants but is not in your Variation Theme — add it to the theme or clear the aspect values.`)
+    // 3b — WHITELIST (read ≡ write): a varying aspect the operator did NOT
+    // declare is a listing-level ITEM SPECIFIC, never a variation axis — exactly
+    // how the Trading shared push already treats it (incident #25 / code 219451
+    // "Colore specifico is not allowed as a variation specific"). Demoting it
+    // here (instead of keeping a phantom axis) is what makes the read surfaces
+    // — variation-order modal, cockpit, images picker — mirror what eBay
+    // actually receives. It is surfaced as a warning so the operator still SEES
+    // it (warn, never silently invent an axis). The declared theme is the SINGLE
+    // source of truth for the axis SET, shared by read and both write paths.
+    suppressed.push(s.name)
+    warnings.push(`"${s.name}" varies across variants but is not in your Variation Theme (${declaredAxes.join(', ')}) — it stays a listing item specific, not a variation axis (matching what eBay receives). Add it to the theme only if it should drive variations or images.`)
   }
 
   const finalSpecs = [...resolved, ...keptStrays]
