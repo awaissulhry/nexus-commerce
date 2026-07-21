@@ -78,6 +78,8 @@ interface ResolvedRow {
   notes?: string
   channel?: string
   marketplace?: string
+  follow?: string
+  buffer?: number
   productId: string | null
   productName: string | null
   resolvedSku: string | null
@@ -208,6 +210,9 @@ const QUANTITY_HEADER_TIERS: string[][] = [
 ]
 const NOTES_HEADERS = ['notes', 'note', 'comment', 'comments', 'remarks', 'memo', 'commento', 'osservazioni']
 const CHANNEL_HEADERS = ['channel', 'canale']
+// SC.4 — sync-control columns (optional)
+const FOLLOW_HEADERS = ['follow', 'sync', 'sync mode', 'mode', 'segui', 'modalità']
+const BUFFER_HEADERS = ['buffer', 'stock buffer', 'riserva', 'scorta di sicurezza']
 const MARKETPLACE_HEADERS = ['marketplace', 'market', 'mercato', 'country', 'paese']
 
 /** Normalize a header for dictionary lookup: lowercase, strip punctuation to spaces. */
@@ -312,6 +317,8 @@ function autoMapHeaders(headers: string[]): Record<string, string> {
   claim('notes', [NOTES_HEADERS])
   claim('channel', [CHANNEL_HEADERS])
   claim('marketplace', [MARKETPLACE_HEADERS])
+  claim('follow', [FOLLOW_HEADERS])
+  claim('buffer', [BUFFER_HEADERS])
   return result
 }
 
@@ -365,7 +372,7 @@ function parseQuantityCell(value: unknown): { qty: number } | { reason: string }
 }
 
 interface BuiltRows {
-  rows: Array<{ raw: string; quantity: number; notes?: string; channel?: string; marketplace?: string }>
+  rows: Array<{ raw: string; quantity: number; notes?: string; channel?: string; marketplace?: string; follow?: string; buffer?: number }>
   dropped: DroppedRow[]
 }
 
@@ -378,6 +385,8 @@ function buildRowsFromParsed(
   const notesCol = Object.entries(colMap).find(([, v]) => v === 'notes')?.[0]
   const channelCol = Object.entries(colMap).find(([, v]) => v === 'channel')?.[0]
   const mpCol = Object.entries(colMap).find(([, v]) => v === 'marketplace')?.[0]
+  const followCol = Object.entries(colMap).find(([, v]) => v === 'follow')?.[0]
+  const bufferCol = Object.entries(colMap).find(([, v]) => v === 'buffer')?.[0]
   if (!idCol || !qtyCol) return { rows: [], dropped: [] }
 
   const rows: BuiltRows['rows'] = []
@@ -402,6 +411,8 @@ function buildRowsFromParsed(
       notes: notesCol ? String(row[notesCol] ?? '').trim() || undefined : undefined,
       channel: channelCol ? String(row[channelCol] ?? '').trim().toUpperCase() || undefined : undefined,
       marketplace: mpCol ? String(row[mpCol] ?? '').trim().toUpperCase() || undefined : undefined,
+      follow: followCol ? String(row[followCol] ?? '').trim() || undefined : undefined,
+      buffer: bufferCol && String(row[bufferCol] ?? '').trim() !== '' ? Number(String(row[bufferCol]).trim()) : undefined,
     })
   })
   return { rows, dropped }
@@ -1229,6 +1240,8 @@ function ImportWizardInner() {
                     { label: t('stock.import.map.fieldNotes'), value: 'notes', required: false },
                     { label: t('stock.import.map.fieldChannel'), value: 'channel', required: false },
                     { label: t('stock.import.map.fieldMarketplace'), value: 'marketplace', required: false },
+                    { label: t('stock.import.map.fieldFollow'), value: 'follow', required: false },
+                    { label: t('stock.import.map.fieldBuffer'), value: 'buffer', required: false },
                   ].map(({ label, value, required }) => {
                     const current = Object.entries(colMap).find(([, v]) => v === value)?.[0] ?? ''
                     return (

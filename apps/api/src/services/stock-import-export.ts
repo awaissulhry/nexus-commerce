@@ -66,6 +66,20 @@ export async function buildJobResultsExport(jobId: string, scope: 'failed' | 'al
  * Excel → re-import with mode SET). Every non-parent product appears, with
  * 0 for products that have no level row yet.
  */
+/** SC.4 — pure: dominant sync-control state across a product's FBM listings.
+ *  Paused wins (any), then Pinned (any), then Follow (all follow), 'Mixed'
+ *  otherwise; empty when the product has no FBM listings. */
+export function summarizeControlState(
+  listings: Array<{ followMasterQuantity: boolean; syncPaused: boolean }>,
+): { follow: string; } {
+  if (listings.length === 0) return { follow: '' }
+  if (listings.some((l) => l.syncPaused)) return { follow: 'Paused' }
+  const pinned = listings.filter((l) => !l.followMasterQuantity).length
+  if (pinned === listings.length) return { follow: 'Pinned' }
+  if (pinned > 0) return { follow: 'Mixed' }
+  return { follow: 'Follow' }
+}
+
 export async function buildStockExport(locationCode: string) {
   const location = await prisma.stockLocation.findUnique({
     where: { code: locationCode },
@@ -84,12 +98,31 @@ export async function buildStockExport(locationCode: string) {
     }),
   ])
   const byProduct = new Map(levels.map((l) => [l.productId, l] as const))
+  // SC.4 — control-state columns so an exported sheet is a faithful snapshot
+  // that round-trips through the import's follow/buffer columns.
+  const controlListings = await prisma.channelListing.findMany({
+    where: {
+      productId: { in: products.map((p) => p.id) },
+      listingStatus: { notIn: ['ENDED', 'REMOVED'] },
+      OR: [{ fulfillmentMethod: 'FBM' }, { fulfillmentMethod: null, product: { fulfillmentMethod: { not: 'FBA' } } }],
+    },
+    select: { productId: true, followMasterQuantity: true, syncPaused: true, stockBuffer: true },
+  })
+  const ctrlByProduct = new Map<string, Array<{ followMasterQuantity: boolean; syncPaused: boolean; stockBuffer: number }>>()
+  for (const cl of controlListings) {
+    const arr = ctrlByProduct.get(cl.productId) ?? []
+    arr.push({ followMasterQuantity: cl.followMasterQuantity, syncPaused: cl.syncPaused, stockBuffer: cl.stockBuffer ?? 0 })
+    ctrlByProduct.set(cl.productId, arr)
+  }
   return {
-    headers: ['sku', 'quantity', 'name', 'ean', 'reserved', 'available'],
-    textCols: [0, 3],
+    headers: ['sku', 'quantity', 'name', 'ean', 'reserved', 'available', 'follow', 'buffer'],
+    textCols: [0, 3, 6],
     rows: products.map((p) => {
       const l = byProduct.get(p.id)
-      return [p.sku, l?.quantity ?? 0, p.name, p.ean ?? '', l?.reserved ?? 0, l?.available ?? 0]
+      const ctrl = ctrlByProduct.get(p.id) ?? []
+      const { follow } = summarizeControlState(ctrl)
+      const buffer = ctrl.reduce((mx, c) => Math.max(mx, c.stockBuffer), 0)
+      return [p.sku, l?.quantity ?? 0, p.name, p.ean ?? '', l?.reserved ?? 0, l?.available ?? 0, follow, buffer]
     }),
   }
 }

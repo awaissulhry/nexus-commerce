@@ -150,7 +150,7 @@ async function computeRows(): Promise<SyncControlRow[]> {
 export default async function syncControlRoutes(app: FastifyInstance): Promise<void> {
   app.get('/stock/sync-control/overview', async () => {
     try {
-      const [rows, locations, policies, audit] = await Promise.all([
+      const [rows, locations, policies, audit, uploadVsPool] = await Promise.all([
         computeRows(),
         prisma.stockLocation.findMany({
           select: {
@@ -162,6 +162,14 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
         }),
         prisma.syncChannelPolicy.findMany({ orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }] }),
         prisma.syncControlAudit.findMany({ orderBy: { createdAt: 'desc' }, take: 50 }),
+        // SC.4 — "your upload vs pool": read-back mismatches are exactly the
+        // moments a Seller-Central/native upload diverged from pool truth.
+        prisma.syncHealthLog.findMany({
+          where: { conflictType: 'CHANNEL_QTY_READBACK', createdAt: { gte: new Date(Date.now() - 24 * 3600e3) } },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+          select: { id: true, createdAt: true, channel: true, errorMessage: true, resolutionStatus: true },
+        }),
       ])
       const byMode: Record<string, number> = {}
       for (const r of rows) byMode[r.mode] = (byMode[r.mode] ?? 0) + 1
@@ -183,6 +191,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
         })),
         policies,
         audit,
+        uploadVsPool,
       }
     } catch (err) {
       logger.error('[sync-control] overview failed', { error: err instanceof Error ? err.message : String(err) })

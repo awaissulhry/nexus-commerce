@@ -847,6 +847,8 @@
   "stock.import.map.fieldNotes": "Notes (optional)",
   "stock.import.map.fieldChannel": "Channel (optional)",
   "stock.import.map.fieldMarketplace": "Marketplace (optional)",
+  "stock.import.map.fieldFollow": "Follow (sync mode)",
+  "stock.import.map.fieldBuffer": "Buffer",
   "stock.import.map.none": "— skip —",
   "stock.import.map.mode": "Update mode",
   "stock.import.map.modeAdjust": "Adjust (add / subtract)",

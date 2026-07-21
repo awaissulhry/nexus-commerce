@@ -51,6 +51,7 @@ interface Overview {
   }>
   policies: Array<{ channel: string; marketplace: string; pushesPaused: boolean; newListingDefaultMode: string }>
   audit: Array<{ id: string; createdAt: string; actor: string; scopeType: string; scopeName: string | null; field: string }>
+  uploadVsPool?: Array<{ id: string; createdAt: string; channel: string; errorMessage: string; resolutionStatus: string }>
 }
 
 const MODE_STYLE: Record<Mode, string> = {
@@ -496,6 +497,28 @@ export default function SyncControlClient() {
                 </tbody>
               </table>
             )}
+          </div>
+
+          <div className="rounded-lg border border-zinc-200 dark:border-zinc-800">
+            <div className="border-b border-zinc-200 px-3 py-2 text-sm font-semibold dark:border-zinc-800">Your upload vs pool (last 24h)</div>
+            {(overview?.uploadVsPool?.length ?? 0) === 0 ? (
+              <div className="px-3 py-4 text-sm text-zinc-500">No divergence detected — marketplace quantities match the pool everywhere the read-backs looked.</div>
+            ) : (
+              <table className="w-full text-sm">
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {overview!.uploadVsPool!.map((u) => (
+                    <tr key={u.id}>
+                      <td className="px-3 py-1.5 text-xs text-zinc-500">{new Date(u.createdAt).toLocaleTimeString()}</td>
+                      <td className="px-3 py-1.5 text-xs">{u.channel}</td>
+                      <td className="px-3 py-1.5 text-xs">{u.errorMessage}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <div className="border-t border-zinc-200 px-3 py-2 text-[11px] text-zinc-500 dark:border-zinc-800">
+              Your own marketplace uploads never overwrite the pool — the sync restores pool truth and logs the difference here.
+            </div>
           </div>
 
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-800">

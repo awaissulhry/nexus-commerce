@@ -61,6 +61,22 @@ export interface ImportRow {
   /** Optional marketplace for CHANNEL target (e.g. 'IT', 'DE') */
   marketplace?: string
   notes?: string
+  /** SC.4 — optional sync-control columns. follow: Follow|Pinned|Paused
+   *  (case-insensitive; Italian segui/bloccato/pausa accepted). Applied to
+   *  the row's channel+marketplace listings when given, else product-wide
+   *  FBM. FBA always skipped. */
+  follow?: string
+  buffer?: number
+}
+
+/** SC.4 — pure: normalize a follow-cell value; null = empty, undefined = invalid. */
+export function parseFollowCell(raw: unknown): 'FOLLOW' | 'PINNED' | 'PAUSED' | null | undefined {
+  const v = String(raw ?? '').trim().toLowerCase()
+  if (!v) return null
+  if (['follow', 'following', 'segui', 'pool'].includes(v)) return 'FOLLOW'
+  if (['pinned', 'pin', 'fixed', 'bloccato', 'fisso'].includes(v)) return 'PINNED'
+  if (['paused', 'pause', 'pausa', 'stop'].includes(v)) return 'PAUSED'
+  return undefined
 }
 
 export interface ResolvedRow extends ImportRow {
@@ -106,6 +122,9 @@ export interface ApplyResult {
   failed: number
   skipped: number
   total: number
+  /** SC.4 — sync-control column application summary (present when the sheet
+   *  carried follow/buffer columns). */
+  controls?: { followSet: number; pinned: number; paused: number; buffered: number; skippedFba: number; invalid: number }
   results: Array<{
     sku: string
     raw: string
@@ -1565,7 +1584,138 @@ async function executeApplyImport(args: {
     },
   })
 
-  return { jobId, succeeded, failed, skipped, total: rows.length, results }
+  // SC.4 — apply sync-control columns (follow/buffer) AFTER stock writes, so
+  // control changes act on the post-import pool state. Same primitives +
+  // audit semantics as the Sync Control tab; FBA always skipped.
+  let controls: ApplyResult['controls']
+  try {
+    controls = await applyControlColumns(rows, jobId)
+  } catch (err) {
+    logger.warn('stock-import: control-column pass failed (stock writes unaffected)', {
+      jobId,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
+  return { jobId, succeeded, failed, skipped, total: rows.length, results, ...(controls ? { controls } : {}) }
+}
+
+/** SC.4 — apply follow/buffer columns from an import sheet. Row scope: the
+ *  row's channel+marketplace listing when given, else ALL of the product's
+ *  listings on AMAZON+EBAY. Values route through the same primitives as the
+ *  Sync Control tab (correct write shapes, FBA fail-closed, enqueue) and land
+ *  in SyncControlAudit with actor import:<jobId>. */
+export async function applyControlColumns(
+  rows: PreviewRow[],
+  jobId: string,
+): Promise<ApplyResult['controls'] | undefined> {
+  const actor = `import:${jobId}`
+  const out = { followSet: 0, pinned: 0, paused: 0, buffered: 0, skippedFba: 0, invalid: 0 }
+  const withControls = rows.filter((r) => (r.follow !== undefined && r.follow !== null && String(r.follow).trim() !== '') || r.buffer !== undefined)
+  if (withControls.length === 0) return undefined
+
+  const { setFollowMasterQuantity, setStockBuffer } = await import('./follow-master.service.js')
+  const resumeProducts = new Set<string>()
+
+  type Group = { productIds: Set<string>; markets: Set<string> }
+  const groups = new Map<string, Group>() // `${mode}|${channel}` → group
+  const pauseTargets: Array<{ productId: string; channel?: string; marketplace?: string }> = []
+  const bufferGroups = new Map<string, Group & { buffer: number }>()
+
+  for (const r of withControls) {
+    if (!r.productId) continue
+    const mode = parseFollowCell(r.follow)
+    if (mode === undefined) {
+      out.invalid++
+      continue
+    }
+    const channels = r.channel ? [r.channel.toUpperCase()] : ['AMAZON', 'EBAY']
+    if (mode === 'PAUSED') {
+      pauseTargets.push({ productId: r.productId, channel: r.channel?.toUpperCase(), marketplace: r.marketplace })
+    } else if (mode === 'FOLLOW' || mode === 'PINNED') {
+      for (const ch of channels) {
+        const key = `${mode}|${ch}`
+        const g = groups.get(key) ?? { productIds: new Set(), markets: new Set() }
+        g.productIds.add(r.productId)
+        if (r.marketplace) g.markets.add(r.marketplace)
+        groups.set(key, g)
+      }
+      resumeProducts.add(r.productId)
+    }
+    if (r.buffer !== undefined && Number.isFinite(r.buffer) && r.buffer >= 0) {
+      for (const ch of channels) {
+        const key = `buf|${ch}|${Math.trunc(r.buffer)}`
+        const g = bufferGroups.get(key) ?? { productIds: new Set(), markets: new Set(), buffer: Math.trunc(r.buffer) }
+        g.productIds.add(r.productId)
+        if (r.marketplace) g.markets.add(r.marketplace)
+        bufferGroups.set(key, g)
+      }
+    }
+  }
+
+  // Explicit FOLLOW/PINNED clears a pause (the sheet states the desired mode).
+  if (resumeProducts.size > 0) {
+    await prisma.channelListing.updateMany({
+      where: { productId: { in: [...resumeProducts] }, syncPaused: true },
+      data: { syncPaused: false },
+    }).catch(() => {})
+  }
+
+  for (const [key, g] of groups) {
+    const [mode, channel] = key.split('|')
+    const r = await setFollowMasterQuantity({
+      productIds: [...g.productIds],
+      channel: channel as never,
+      markets: g.markets.size > 0 ? [...g.markets] : 'ALL',
+      follow: mode === 'FOLLOW',
+      actor,
+    })
+    if (mode === 'FOLLOW') out.followSet += r.updated
+    else out.pinned += r.updated
+    out.skippedFba += r.skippedFba
+  }
+
+  for (const g of bufferGroups.values()) {
+    const r = await setStockBuffer({
+      productIds: [...g.productIds],
+      channel: 'AMAZON' as never,
+      markets: g.markets.size > 0 ? [...g.markets] : 'ALL',
+      buffer: g.buffer,
+      actor,
+    })
+    out.buffered += (r as { updated?: number }).updated ?? 0
+    out.skippedFba += (r as { skippedFba?: number }).skippedFba ?? 0
+  }
+
+  if (pauseTargets.length > 0) {
+    const listings = await prisma.channelListing.findMany({
+      where: { OR: pauseTargets.map((t) => ({
+        productId: t.productId,
+        ...(t.channel ? { channel: t.channel } : {}),
+        ...(t.marketplace ? { marketplace: t.marketplace } : {}),
+      })) },
+      select: { id: true, productId: true, channel: true, marketplace: true, fulfillmentMethod: true, syncPaused: true, product: { select: { fulfillmentMethod: true, sku: true } } },
+    })
+    const eligible = listings.filter((l) => {
+      const fba = l.fulfillmentMethod === 'FBA' || (l.fulfillmentMethod == null && l.product?.fulfillmentMethod === 'FBA') || l.product?.fulfillmentMethod === 'FBA'
+      if (fba) out.skippedFba++
+      return !fba && !l.syncPaused
+    })
+    if (eligible.length > 0) {
+      const u = await prisma.channelListing.updateMany({ where: { id: { in: eligible.map((l) => l.id) } }, data: { syncPaused: true } })
+      out.paused += u.count
+    }
+    await prisma.syncControlAudit.createMany({
+      data: eligible.map((l) => ({
+        actor, scopeType: 'LISTING', scopeId: l.id,
+        scopeName: `${l.product?.sku}@${l.channel}:${l.marketplace}`,
+        field: 'syncPaused', after: { syncPaused: true } as object,
+      })),
+    }).catch(() => {})
+  }
+
+  logger.info('stock-import: sync-control columns applied', { jobId, ...out })
+  return out
 }
 
 /**

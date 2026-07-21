@@ -835,6 +835,8 @@
   "stock.import.map.fieldNotes": "Note (facoltativo)",
   "stock.import.map.fieldChannel": "Canale (facoltativo)",
   "stock.import.map.fieldMarketplace": "Marketplace (facoltativo)",
+  "stock.import.map.fieldFollow": "Segui (modalità sync)",
+  "stock.import.map.fieldBuffer": "Riserva (buffer)",
   "stock.import.map.none": "— ignora —",
   "stock.import.map.mode": "Modalità aggiornamento",
   "stock.import.map.modeAdjust": "Rettifica (aggiungi / sottrai)",
