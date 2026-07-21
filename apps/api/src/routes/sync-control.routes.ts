@@ -25,7 +25,7 @@ import { validateServesTokens } from '../services/sync-control-core.js'
 import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-master.service.js'
 import { recascadeAfterSyncControlChange } from '../services/stock-movement.service.js'
 import { enqueueOutboundRowsInstant } from '../services/outbound-enqueue.js'
-import { summarizeProductSync, marketMatches } from '../services/sync-control-product-view.js'
+import { summarizeProductSync, marketMatches, omitChildrenInList } from '../services/sync-control-product-view.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../services/product-read-cache.service.js'
 
 type Mode = 'FOLLOW' | 'PINNED' | 'PAUSED' | 'PAUSED_POLICY' | 'UNCOUNTED' | 'FBA' | 'EXCLUDED'
@@ -228,10 +228,13 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
   app.get('/stock/sync-control/products', async (request) => {
     const q = request.query as {
       channel?: string; market?: string; mode?: string; q?: string; drift?: string
-      page?: string; pageSize?: string
+      page?: string; pageSize?: string; masterId?: string
     }
     const page = Math.max(1, Number.parseInt(q.page ?? '1', 10) || 1)
     const pageSize = Math.min(200, Math.max(10, Number.parseInt(q.pageSize ?? '50', 10) || 50))
+    // SCV.1b — the dedicated per-product page requests one master's FULL tree
+    // (no filters, no child cap).
+    const singleMasterId = q.masterId?.trim() || null
 
     const rows = await computeRows()
     const rowPids = [...new Set(rows.map((r) => r.productId).filter((p): p is string => Boolean(p)))]
@@ -299,6 +302,16 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     const needle = q.q?.trim().toLowerCase()
     const driftOnly = q.drift === '1' || q.drift === 'true'
 
+    // SCV.1b — single-master fetch (per-product page): full tree, no cap.
+    if (singleMasterId) {
+      const one = all.find((p) => p.masterId === singleMasterId)
+      if (!one) return { total: 0, page: 1, pageSize, products: [] }
+      return {
+        total: 1, page: 1, pageSize,
+        products: [{ ...one, listingCount: one.children.length, childrenOmitted: false }],
+      }
+    }
+
     const filtered = all.filter((p) => {
       if (chan && !p.children.some((c) => c.channel === chan)) return false
       if (mkt && !p.children.some((c) => marketMatches(c.marketplace, mkt))) return false
@@ -313,12 +326,19 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     })
     filtered.sort((a, b) => a.name.localeCompare(b.name) || a.sku.localeCompare(b.sku))
 
-    return {
-      total: filtered.length,
-      page,
-      pageSize,
-      products: filtered.slice((page - 1) * pageSize, page * pageSize),
-    }
+    // SCV.1b — omit child rows for big families (client shows "Open ↗"); the
+    // rollup/pool/drift on the master row stay intact so the overview is whole.
+    const products = filtered.slice((page - 1) * pageSize, page * pageSize).map((p) => {
+      const omitted = omitChildrenInList(p.variantCount)
+      return {
+        ...p,
+        listingCount: p.children.length,
+        childrenOmitted: omitted,
+        children: omitted ? [] : p.children,
+      }
+    })
+
+    return { total: filtered.length, page, pageSize, products }
   })
 
   // ── SC.3 — mutations (writes require inventoryAdjust via the manifest) ──

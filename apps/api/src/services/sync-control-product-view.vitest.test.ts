@@ -80,3 +80,13 @@ describe('SCV.1 — marketMatches (EBAY_ normalization)', () => {
     expect(marketMatches('DE', 'IT')).toBe(false)
   })
 })
+
+describe('SCV.1b — omitChildrenInList (big-family cap)', () => {
+  it('omits above the threshold, keeps at/below', async () => {
+    const { omitChildrenInList } = await import('./sync-control-product-view.js')
+    expect(omitChildrenInList(5, 20)).toBe(false)
+    expect(omitChildrenInList(20, 20)).toBe(false)
+    expect(omitChildrenInList(21, 20)).toBe(true)
+    expect(omitChildrenInList(40, 20)).toBe(true)
+  })
+})

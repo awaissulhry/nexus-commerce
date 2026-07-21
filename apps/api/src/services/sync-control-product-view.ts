@@ -89,3 +89,19 @@ export function summarizeProductSync(rows: SyncRowLike[]): ProductSyncRollup {
 export function marketMatches(rowMarketplace: string, filter: string): boolean {
   return rowMarketplace.toUpperCase().replace(/^EBAY_/, '') === filter.toUpperCase()
 }
+
+/**
+ * SCV.1b — big-family threshold. A master with more than this many listed
+ * variants (jackets/suits: 30–49) does NOT ship its child rows in the list
+ * payload — the client shows an "Open ↗" button to the dedicated per-product
+ * page instead. Keeps the 37-row overview light. Tunable via env.
+ */
+export const BIG_FAMILY_VARIANT_THRESHOLD = Number.parseInt(
+  process.env.NEXUS_SCV_INLINE_VARIANT_MAX ?? '',
+  10,
+) || 20
+
+/** True when a master's children should be omitted from the list payload. */
+export function omitChildrenInList(variantCount: number, threshold = BIG_FAMILY_VARIANT_THRESHOLD): boolean {
+  return variantCount > threshold
+}
