@@ -7,7 +7,7 @@
  * in every future phase.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
@@ -108,8 +108,10 @@ export default function SyncControlClient() {
     }
   }, [])
 
+  const rowsSeq = useRef(0)
   const loadRows = useCallback(async () => {
     setLoading(true)
+    const seq = ++rowsSeq.current
     try {
       const params = new URLSearchParams()
       if (channel) params.set('channel', channel)
@@ -121,13 +123,14 @@ export default function SyncControlClient() {
       const res = await fetch(`${API}/api/stock/sync-control/listings?${params}`, { credentials: 'include' })
       if (!res.ok) throw new Error(`listings ${res.status}`)
       const data = await res.json()
+      if (seq !== rowsSeq.current) return // stale response — a newer request superseded this one
       setRows(data.rows)
       setTotal(data.total)
       setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setLoading(false)
+      if (seq === rowsSeq.current) setLoading(false)
     }
   }, [channel, market, mode, q, page])
 
