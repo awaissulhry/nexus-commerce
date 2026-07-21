@@ -11,6 +11,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Listbox } from '@/design-system/components/Listbox'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+// DS class styles — the Listbox/grid markup is unstyled without these
+// (pages import them directly; see ApiKeysClient for the convention).
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 const API = getBackendUrl()
 
@@ -74,6 +78,29 @@ const MODE_LABEL: Record<Mode, string> = {
   EXCLUDED: 'Excluded',
 }
 
+/** Cap long card tables: render the first `cap` rows with a Show-all toggle.
+ *  All data stays client-side (the server already bounds each list). */
+function CappedRows<T>({ rows, cap = 5, render }: { rows: T[]; cap?: number; render: (visible: T[]) => React.ReactNode }) {
+  const [showAll, setShowAll] = useState(false)
+  const visible = showAll ? rows : rows.slice(0, cap)
+  return (
+    <>
+      {render(visible)}
+      {rows.length > cap && (
+        <div className="border-t border-zinc-200 px-3 py-1.5 dark:border-zinc-800">
+          <button
+            type="button"
+            className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+            onClick={() => setShowAll((v) => !v)}
+          >
+            {showAll ? 'Show fewer' : `Show all ${rows.length}`}
+          </button>
+        </div>
+      )}
+    </>
+  )
+}
+
 const inputCls =
   'h-8 rounded-md border border-zinc-300 bg-white px-2 text-sm text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200'
 
@@ -86,6 +113,7 @@ export default function SyncControlClient() {
   const [market, setMarket] = useState('')
   const [mode, setMode] = useState('')
   const [q, setQ] = useState('')
+  const [qLive, setQLive] = useState('') // input value; q lags 250ms behind
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Map<string, Row>>(new Map())
@@ -139,6 +167,10 @@ export default function SyncControlClient() {
 
   useEffect(() => { void loadOverview() }, [loadOverview])
   useEffect(() => { void loadRows() }, [loadRows])
+  useEffect(() => {
+    const t = setTimeout(() => { setPage(1); setQ(qLive) }, 250)
+    return () => clearTimeout(t)
+  }, [qLive])
 
   const runAction = async (action: string, opts: { buffer?: number } = {}) => {
     const rows = [...selected.values()]
@@ -381,8 +413,8 @@ export default function SyncControlClient() {
         <input
           className={`${inputCls} w-56`}
           placeholder="Search SKU…"
-          value={q}
-          onChange={(e) => { setPage(1); setQ(e.target.value) }}
+          value={qLive}
+          onChange={(e) => setQLive(e.target.value)}
         />
         <div className="ml-auto text-sm text-zinc-500 tabular-nums">
           {total} rows · page {page}/{pages}
@@ -621,17 +653,22 @@ export default function SyncControlClient() {
             {(overview?.uploadVsPool?.length ?? 0) === 0 ? (
               <div className="px-3 py-4 text-sm text-zinc-500">No divergence detected — marketplace quantities match the pool everywhere the read-backs looked.</div>
             ) : (
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {overview!.uploadVsPool!.map((u) => (
-                    <tr key={u.id}>
-                      <td className="px-3 py-1.5 text-xs text-zinc-500">{new Date(u.createdAt).toLocaleTimeString()}</td>
-                      <td className="px-3 py-1.5 text-xs">{u.channel}</td>
-                      <td className="px-3 py-1.5 text-xs">{u.errorMessage}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <CappedRows
+                rows={overview!.uploadVsPool!}
+                render={(visible) => (
+                  <table className="w-full text-sm">
+                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                      {visible.map((u) => (
+                        <tr key={u.id}>
+                          <td className="px-3 py-1.5 text-xs text-zinc-500">{new Date(u.createdAt).toLocaleTimeString()}</td>
+                          <td className="px-3 py-1.5 text-xs">{u.channel}</td>
+                          <td className="px-3 py-1.5 text-xs">{u.errorMessage}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              />
             )}
             <div className="border-t border-zinc-200 px-3 py-2 text-[11px] text-zinc-500 dark:border-zinc-800">
               Your own marketplace uploads never overwrite the pool — the sync restores pool truth and logs the difference here.
@@ -643,18 +680,23 @@ export default function SyncControlClient() {
             {(overview?.audit?.length ?? 0) === 0 ? (
               <div className="px-3 py-4 text-sm text-zinc-500">No Sync Control changes yet — every mutation will be recorded here (who, what, before → after).</div>
             ) : (
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {overview!.audit.map((a) => (
-                    <tr key={a.id}>
-                      <td className="px-3 py-1.5 text-xs text-zinc-500">{new Date(a.createdAt).toLocaleString()}</td>
-                      <td className="px-3 py-1.5 text-xs">{a.actor}</td>
-                      <td className="px-3 py-1.5 text-xs">{a.scopeType} {a.scopeName ?? ''}</td>
-                      <td className="px-3 py-1.5 text-xs font-mono">{a.field}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <CappedRows
+                rows={overview!.audit}
+                render={(visible) => (
+                  <table className="w-full text-sm">
+                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                      {visible.map((a) => (
+                        <tr key={a.id}>
+                          <td className="px-3 py-1.5 text-xs text-zinc-500">{new Date(a.createdAt).toLocaleString()}</td>
+                          <td className="px-3 py-1.5 text-xs">{a.actor}</td>
+                          <td className="px-3 py-1.5 text-xs">{a.scopeType} {a.scopeName ?? ''}</td>
+                          <td className="px-3 py-1.5 text-xs font-mono">{a.field}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              />
             )}
           </div>
         </div>
