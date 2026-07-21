@@ -20,7 +20,7 @@ import {
   resolveMembershipIntended,
   type RoutedLedgerRow,
 } from '../services/sync-control-core.js'
-import { loadChannelPolicies, policyFor } from '../services/sync-control-policy.service.js'
+import { loadChannelPolicies, policyFor, validatePolicyInput, enforceNewListingDefaults } from '../services/sync-control-policy.service.js'
 import { validateServesTokens } from '../services/sync-control-core.js'
 import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-master.service.js'
 import { recascadeAfterSyncControlChange } from '../services/stock-movement.service.js'
@@ -448,5 +448,103 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       logger.info('[sync-control] recascade after routing change complete', { ...r, location: loc.code, actor }),
     )
     return { ok: true, location: loc.code, syncRoutes: tokens, recascadeQueued: productIds.length }
+  })
+
+  // ── SC.5 — channel/market policies (kill-switch + new-listing default) ──
+  //
+  // Upsert on (channel, marketplace); '*' = channel-wide. A row that ends up
+  // all-default is deleted (an all-default row and no row derive identically).
+  // Resume (pushesPaused true→false) recascades every product with listings
+  // in scope so marketplace truth reconverges without waiting for an order.
+  app.post('/stock/sync-control/policies', async (request, reply) => {
+    const body = request.body as {
+      channel?: string
+      marketplace?: string
+      pushesPaused?: boolean
+      newListingDefaultMode?: 'FOLLOW' | 'PAUSED'
+    }
+    const actor = actorOf(request as never)
+    const problem = validatePolicyInput(body ?? {})
+    if (problem) return reply.code(400).send({ error: problem })
+
+    const channel = body.channel!.trim().toUpperCase()
+    const marketplace = body.marketplace!.trim().toUpperCase()
+    const existing = await prisma.syncChannelPolicy.findUnique({
+      where: { channel_marketplace: { channel, marketplace } },
+    })
+
+    const nextPaused = body.pushesPaused ?? existing?.pushesPaused ?? false
+    const nextMode = body.newListingDefaultMode ?? existing?.newListingDefaultMode ?? 'FOLLOW'
+    const modeChanged = nextMode !== (existing?.newListingDefaultMode ?? 'FOLLOW')
+    const pausedChanged = nextPaused !== (existing?.pushesPaused ?? false)
+    const scopeName = `${channel}:${marketplace}`
+
+    // All-default result → drop the row entirely.
+    if (!nextPaused && nextMode === 'FOLLOW') {
+      if (existing) {
+        await prisma.syncChannelPolicy.delete({ where: { id: existing.id } })
+        await audit([{
+          scopeType: 'POLICY', scopeId: existing.id, scopeName, field: 'policy',
+          before: { pushesPaused: existing.pushesPaused, newListingDefaultMode: existing.newListingDefaultMode },
+          after: { removed: true },
+        }], actor)
+      }
+    } else {
+      const saved = await prisma.syncChannelPolicy.upsert({
+        where: { channel_marketplace: { channel, marketplace } },
+        create: {
+          channel, marketplace, pushesPaused: nextPaused, newListingDefaultMode: nextMode,
+          newListingModeSetAt: nextMode === 'PAUSED' ? new Date() : null,
+        },
+        update: {
+          pushesPaused: nextPaused,
+          newListingDefaultMode: nextMode,
+          // Cutoff moves ONLY when the default-mode itself changes.
+          ...(modeChanged ? { newListingModeSetAt: nextMode === 'PAUSED' ? new Date() : null } : {}),
+        },
+      })
+      const entries: Array<{ scopeType: string; scopeId: string; scopeName?: string; field: string; before?: unknown; after?: unknown }> = []
+      if (pausedChanged) entries.push({
+        scopeType: 'POLICY', scopeId: saved.id, scopeName, field: 'pushesPaused',
+        before: { pushesPaused: existing?.pushesPaused ?? false }, after: { pushesPaused: nextPaused },
+      })
+      if (modeChanged) entries.push({
+        scopeType: 'POLICY', scopeId: saved.id, scopeName, field: 'newListingDefaultMode',
+        before: { newListingDefaultMode: existing?.newListingDefaultMode ?? 'FOLLOW' }, after: { newListingDefaultMode: nextMode },
+      })
+      await audit(entries, actor)
+    }
+
+    // PAUSED default takes effect immediately (no watchdog-interval gap).
+    if (modeChanged && nextMode === 'PAUSED') {
+      const swept = await enforceNewListingDefaults().catch((err) => {
+        logger.warn('[sync-control] new-listing sweep failed', { error: err instanceof Error ? err.message : String(err) })
+        return { paused: 0 }
+      })
+      if (swept.paused > 0) logger.info('[sync-control] new-listing sweep', { ...swept, scope: scopeName })
+    }
+
+    // Kill-switch RESUME → recascade everything in scope back to pool truth.
+    let recascadeQueued = 0
+    if (pausedChanged && !nextPaused) {
+      const listings = await prisma.channelListing.findMany({
+        where: { channel, listingStatus: { not: 'ENDED' } },
+        select: { productId: true, marketplace: true },
+      })
+      const inScope = marketplace === '*'
+        ? listings
+        : listings.filter((l) => {
+            const m = (l.marketplace ?? '').toUpperCase().replace(/^EBAY_/, '')
+            return m === marketplace
+          })
+      const productIds = [...new Set(inScope.map((l) => l.productId).filter((v): v is string => !!v))]
+      recascadeQueued = productIds.length
+      void recascadeAfterSyncControlChange(productIds, actor).then((r) =>
+        logger.info('[sync-control] recascade after policy resume complete', { ...r, scope: scopeName, actor }),
+      )
+    }
+
+    const policies = await prisma.syncChannelPolicy.findMany({ orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }] })
+    return { ok: true, policies, recascadeQueued }
   })
 }

@@ -254,7 +254,22 @@ export async function runLatencyWatchdog(): Promise<void> {
         })
       }
 
-      return `breaches=${breachCount} tripwires=${tripwireCount} degraded=${degradedCount} thresholdMs=${thresholdMs}`
+      // --- 4. SC.5: new-listing default enforcement ---
+      // Idempotent + resume-sticky (see enforceNewListingDefaults). One tiny
+      // policy query when no PAUSED-default policy exists.
+      let newListingPaused = 0
+      try {
+        const { enforceNewListingDefaults } = await import('../services/sync-control-policy.service.js')
+        const swept = await enforceNewListingDefaults()
+        newListingPaused = swept.paused
+        if (swept.paused > 0) logger.info('[latency-watchdog] paused new listings per policy', swept)
+      } catch (sweepErr) {
+        logger.error('[latency-watchdog] new-listing sweep failed', {
+          error: sweepErr instanceof Error ? sweepErr.message : String(sweepErr),
+        })
+      }
+
+      return `breaches=${breachCount} tripwires=${tripwireCount} degraded=${degradedCount} newListingPaused=${newListingPaused} thresholdMs=${thresholdMs}`
     })
   } catch (err) {
     logger.error('[latency-watchdog] top-level failure', {

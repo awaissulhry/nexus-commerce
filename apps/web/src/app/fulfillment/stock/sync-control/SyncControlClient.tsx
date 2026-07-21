@@ -94,6 +94,8 @@ export default function SyncControlClient() {
   const [notice, setNotice] = useState<string | null>(null)
   const [editingLoc, setEditingLoc] = useState<string | null>(null)
   const [locDraft, setLocDraft] = useState('')
+  const [polChannel, setPolChannel] = useState('AMAZON')
+  const [polMarket, setPolMarket] = useState('*')
   const confirm = useConfirm()
   const pageSize = 50
 
@@ -214,8 +216,50 @@ export default function SyncControlClient() {
     }
   }
 
+  // SC.5 — kill-switch + new-listing default. The server deletes an
+  // all-default rule, so "resume + FOLLOW" naturally clears the row.
+  const savePolicy = async (
+    channel: string,
+    marketplace: string,
+    patch: { pushesPaused?: boolean; newListingDefaultMode?: 'FOLLOW' | 'PAUSED' },
+  ) => {
+    const scope = `${channel}:${marketplace === '*' ? 'all markets' : marketplace}`
+    const desc =
+      patch.pushesPaused === true
+        ? `KILL-SWITCH: nothing pushes to ${scope} until you resume. Current marketplace quantities freeze as they are.`
+        : patch.pushesPaused === false
+          ? `Pushes to ${scope} resume — every product in scope recascades to pool truth now.`
+          : patch.newListingDefaultMode === 'PAUSED'
+            ? `New listings on ${scope} created from now on start PAUSED (dark) instead of following the pool. Existing listings are untouched.`
+            : `New listings on ${scope} follow the pool from birth again.`
+    const ok = await confirm({
+      title: `Policy — ${scope}`,
+      description: desc,
+      confirmLabel: 'Apply policy',
+    })
+    if (!ok) return
+    setBusy(true)
+    try {
+      const res = await fetch(`${API}/api/stock/sync-control/policies`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel, marketplace, ...patch }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`)
+      setNotice(`Policy saved for ${scope}${data.recascadeQueued ? ` — recascading ${data.recascadeQueued} product(s)` : ''}.`)
+      await Promise.all([loadOverview(), loadRows()])
+    } catch (e) {
+      setNotice(`Policy save failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const s = overview?.summary
   const pages = Math.max(1, Math.ceil(total / pageSize))
+  const pausedPolicies = (overview?.policies ?? []).filter((p) => p.pushesPaused)
 
   return (
     <div className="space-y-4 p-4">
@@ -241,6 +285,18 @@ export default function SyncControlClient() {
       {error && (
         <div className="rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-300">
           Failed to load: {error}
+        </div>
+      )}
+
+      {pausedPolicies.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+          <span className="font-semibold">Pushes paused:</span>
+          {pausedPolicies.map((p) => (
+            <span key={`${p.channel}:${p.marketplace}`} className="rounded bg-amber-100 px-1.5 py-0.5 font-medium dark:bg-amber-900">
+              {p.channel}:{p.marketplace === '*' ? 'ALL' : p.marketplace}
+            </span>
+          ))}
+          <span>— quantities are NOT being sent to these markets. Resume in Channel policies below.</span>
         </div>
       )}
 
@@ -483,20 +539,81 @@ export default function SyncControlClient() {
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-800">
             <div className="border-b border-zinc-200 px-3 py-2 text-sm font-semibold dark:border-zinc-800">Channel policies</div>
             {(overview?.policies?.length ?? 0) === 0 ? (
-              <div className="px-3 py-4 text-sm text-zinc-500">No policies — every channel-market pushes normally, new listings are born Following.</div>
+              <div className="px-3 py-3 text-sm text-zinc-500">No policies — every channel-market pushes normally, new listings are born Following.</div>
             ) : (
               <table className="w-full text-sm">
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                   {overview!.policies.map((p) => (
                     <tr key={`${p.channel}-${p.marketplace}`}>
-                      <td className="px-3 py-1.5">{p.channel}:{p.marketplace}</td>
-                      <td className="px-3 py-1.5">{p.pushesPaused ? <span className="text-amber-600">pushes PAUSED</span> : 'active'}</td>
-                      <td className="px-3 py-1.5 text-xs text-zinc-500">new listings: {p.newListingDefaultMode}</td>
+                      <td className="px-3 py-1.5 font-medium">{p.channel}:{p.marketplace === '*' ? 'ALL' : p.marketplace}</td>
+                      <td className="px-3 py-1.5">
+                        {p.pushesPaused ? <span className="font-semibold text-amber-600">pushes PAUSED</span> : <span className="text-emerald-600">active</span>}
+                      </td>
+                      <td className="px-3 py-1.5 text-xs text-zinc-500">new: {p.newListingDefaultMode === 'PAUSED' ? 'born paused' : 'follow'}</td>
+                      <td className="px-3 py-1.5 text-right">
+                        <div className="inline-flex gap-1">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void savePolicy(p.channel, p.marketplace, { pushesPaused: !p.pushesPaused })}
+                            className="rounded border border-zinc-300 px-1.5 py-0.5 text-xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                          >
+                            {p.pushesPaused ? 'Resume' : 'Pause'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void savePolicy(p.channel, p.marketplace, { newListingDefaultMode: p.newListingDefaultMode === 'PAUSED' ? 'FOLLOW' : 'PAUSED' })}
+                            className="rounded border border-zinc-300 px-1.5 py-0.5 text-xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                          >
+                            {p.newListingDefaultMode === 'PAUSED' ? 'New: follow' : 'New: paused'}
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
+            <div className="flex flex-wrap items-center gap-2 border-t border-zinc-200 px-3 py-2 dark:border-zinc-800">
+              <Listbox
+                ariaLabel="Policy channel"
+                className="w-28"
+                value={polChannel}
+                onChange={setPolChannel}
+                options={[
+                  { value: 'AMAZON', label: 'Amazon' },
+                  { value: 'EBAY', label: 'eBay' },
+                  { value: 'SHOPIFY', label: 'Shopify' },
+                ]}
+              />
+              <Listbox
+                ariaLabel="Policy market"
+                className="w-28"
+                value={polMarket}
+                onChange={setPolMarket}
+                options={[{ value: '*', label: 'All markets' }, ...['IT', 'DE', 'FR', 'ES'].map((m) => ({ value: m, label: m }))]}
+              />
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void savePolicy(polChannel, polMarket, { pushesPaused: true })}
+                className="rounded border border-amber-300 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950"
+              >
+                Pause pushes
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void savePolicy(polChannel, polMarket, { newListingDefaultMode: 'PAUSED' })}
+                className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              >
+                New listings born paused
+              </button>
+            </div>
+            <div className="border-t border-zinc-200 px-3 py-2 text-[11px] text-zinc-500 dark:border-zinc-800">
+              Pause = channel-market kill-switch: quantities freeze on the marketplace until Resume (which recascades pool truth). FBA stays Amazon-managed regardless.
+            </div>
           </div>
 
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-800">
