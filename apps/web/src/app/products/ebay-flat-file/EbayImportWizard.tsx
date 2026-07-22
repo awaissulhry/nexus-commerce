@@ -62,6 +62,7 @@ import {
   type ImportPolicy,
 } from './importPlan.pure'
 import {
+  buildMappedRow,
   deriveAspectMapping,
   auditCategoryIds,
   findMissingRequiredAspectsForImport,
@@ -453,14 +454,10 @@ export function EbayImportWizard({
   const mappedRows = useMemo<Record<string, unknown>[]>(() => {
     if (!parsed) return []
     const pairs = mappedHeaders.map((m) => [m.header, m.target] as const)
-    return parsed.rows.map((src) => {
-      const out: Record<string, unknown> = {}
-      for (const [header, target] of pairs) {
-        // last write wins if two headers map to the same column
-        out[target] = src[header]
-      }
-      return out
-    })
+    // buildMappedRow: when a localized column + its English ⚠ twin map to the
+    // same target, never let a bare English value clobber a localized/pipe-
+    // encoded one (Rosso | Uomo → Red). See importAspects.pure.
+    return parsed.rows.map((src) => buildMappedRow(pairs, src))
   }, [parsed, mappedHeaders])
 
   // EI.1 — typed coercion against the full column metadata.

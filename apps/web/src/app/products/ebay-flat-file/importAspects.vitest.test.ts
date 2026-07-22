@@ -4,6 +4,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
+  buildMappedRow,
   deriveAspectMapping,
   auditCategoryIds,
   findMissingRequiredAspectsForImport,
@@ -64,5 +65,26 @@ describe('findMissingRequiredAspectsForImport', () => {
   })
   it('no numeric categories → no report', () => {
     expect(findMissingRequiredAspectsForImport([{ category_id: 'text' }], columns, new Set())).toEqual([])
+  })
+})
+
+describe('buildMappedRow — import clobber fix (localized/pipe value never clobbered)', () => {
+  it('pipe-encoded axis value is never clobbered by an English ⚠ twin, even when the twin is rightmost', () => {
+    const pairs = [['Colore (Color)', 'aspect_Colore'], ['Color ⚠', 'aspect_Colore']] as const
+    const out = buildMappedRow(pairs, { 'Colore (Color)': 'Rosso | Uomo', 'Color ⚠': 'Red' })
+    expect(out.aspect_Colore).toBe('Rosso | Uomo')
+  })
+  it('localized column beats the English ⚠ twin when neither is piped (order-independent)', () => {
+    const pairs = [['Color ⚠', 'aspect_Colore'], ['Colore (Color)', 'aspect_Colore']] as const
+    const out = buildMappedRow(pairs, { 'Color ⚠': 'Red', 'Colore (Color)': 'Rosso' })
+    expect(out.aspect_Colore).toBe('Rosso')
+  })
+  it('falls back to the English twin only when the localized value is empty', () => {
+    const pairs = [['Colore (Color)', 'aspect_Colore'], ['Color ⚠', 'aspect_Colore']] as const
+    const out = buildMappedRow(pairs, { 'Colore (Color)': '', 'Color ⚠': 'Red' })
+    expect(out.aspect_Colore).toBe('Red')
+  })
+  it('a single header maps straight through (no behaviour change for non-twin columns)', () => {
+    expect(buildMappedRow([['Taglia (Size)', 'aspect_Taglia']], { 'Taglia (Size)': 'M' }).aspect_Taglia).toBe('M')
   })
 })

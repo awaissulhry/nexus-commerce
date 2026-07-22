@@ -81,6 +81,43 @@ export function aspectVerifyKey(key: string): string {
   return `aspect_${canonical.replace(/ /g, '_')}`
 }
 
+/**
+ * Build one mapped eBay row from [header, target] pairs.
+ *
+ * When several headers map to the SAME target column — the localized column
+ * ("Colore (Color)") and its English ⚠ twin ("Color ⚠") both resolve to
+ * `aspect_Colore` — plain last-write-wins let a bare English value silently
+ * clobber a localized/pipe-encoded one (e.g. the operator's `Rosso | Uomo` →
+ * `Red`, destroying a pipe-encoded variation axis). Instead pick the best value
+ * per target: (1) a pipe-encoded axis value is NEVER clobbered; (2) else the
+ * localized (non-⚠) column beats the English ⚠ twin; (3) else the first
+ * non-empty; (4) else the first (order-independent, no silent data loss).
+ */
+export function buildMappedRow(
+  pairs: ReadonlyArray<readonly [string, string]>,
+  src: Record<string, unknown>,
+): Record<string, unknown> {
+  const byTarget = new Map<string, string[]>()
+  for (const [header, target] of pairs) {
+    const arr = byTarget.get(target) ?? []
+    arr.push(header)
+    byTarget.set(target, arr)
+  }
+  const asStr = (v: unknown) => (typeof v === 'string' ? v : v == null ? '' : String(v))
+  const out: Record<string, unknown> = {}
+  for (const [target, headers] of byTarget) {
+    if (headers.length === 1) { out[target] = src[headers[0]]; continue }
+    const cands = headers.map((h) => ({ v: src[h], s: asStr(src[h]).trim(), warn: /⚠/.test(h) }))
+    const nonEmpty = cands.filter((c) => c.s !== '')
+    const chosen =
+      nonEmpty.find((c) => c.s.includes('|')) ?? // never clobber a pipe-encoded axis
+      nonEmpty.find((c) => !c.warn) ??           // localized column beats the English ⚠ twin
+      nonEmpty[0] ?? cands[0]
+    out[target] = chosen.v
+  }
+  return out
+}
+
 const PAIR_RE = /^(.+?)\s*\((.+?)\)$/
 const WARN_RE = /^(.+?)\s*⚠$/
 const JUNK_RE = /^variantAttributes\s*⚠?$/i
