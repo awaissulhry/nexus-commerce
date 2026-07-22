@@ -1,6 +1,6 @@
 import type { AddFixedPriceItemInput, TradingVariation } from './ebay-trading-api.service.js'
 import { toTradingConditionId } from './ebay-condition.js'
-import { aspectCanonicalName, ASPECT_SYNONYM_GROUPS, AXIS_SYNONYM_GROUPS, axisSynonymKey } from './ebay-theme-axes.js'
+import { aspectCanonicalName, ASPECT_SYNONYM_GROUPS, AXIS_SYNONYM_GROUPS, axisSynonymKey, canonicalizeRowAspects } from './ebay-theme-axes.js'
 import { orderAxisValues } from './ebay-value-order.js'
 
 /** Incident #21 — "blank qty on a shared listing = whatever the pool allows".
@@ -484,7 +484,12 @@ export async function createSharedListing(
     const snapshotFor = (vsku: string): Prisma.InputJsonObject | undefined => {
       const r = rowBySku.get(vsku)
       if (!r) return undefined
-      return Object.fromEntries(Object.entries(r).filter(([k]) => !k.startsWith('_'))) as Prisma.InputJsonObject
+      const snap = Object.fromEntries(Object.entries(r).filter(([k]) => !k.startsWith('_'))) as Record<string, unknown>
+      // Belt (P4.2): store aspect keys sentence-cased/canonical — identical to the
+      // main save path (PATCH /rows → canonicalizeRowAspects) — so a fresh create
+      // can never seed case-twins into the membership snapshot.
+      canonicalizeRowAspects(snap)
+      return snap as Prisma.InputJsonObject
     }
     await db.$transaction(input.variations.map((v) =>
       db.sharedListingMembership.create({
