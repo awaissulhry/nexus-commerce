@@ -282,9 +282,11 @@ describe('resolveVariationAxes — DECLARED mode (D2/D7/D8)', () => {
     expect(got.warnings.some((w) => w.includes('Genere') && w.includes('no values'))).toBe(true)
   })
 
-  it('synonym match: declared "colour" + observed "Colore" → included, DISPLAYED as observed "Colore"', () => {
-    const rows = [row({ Colore: 'Nero' }), row({ Colore: 'Blu' })]
-    const got = resolveVariationAxes(rows, ['colour'])
+  it('synonym match: declared "Colore" + observed English "Color" → DISPLAYED as the DECLARED name (operator Italian standard)', () => {
+    const rows = [row({ Color: 'Nero' }), row({ Color: 'Blu' })]
+    const got = resolveVariationAxes(rows, ['Colore'])
+    // The catalog carries the English twin "Color", but the display renders the
+    // operator's declared/standard name "Colore" (Italian everywhere).
     expect(got.validSpecs.map((s) => s.name)).toEqual(['Colore'])
     expect(got.warnings).toEqual([])
   })

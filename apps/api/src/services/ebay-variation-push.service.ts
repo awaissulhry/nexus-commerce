@@ -348,7 +348,13 @@ export function resolveVariationAxes(
   for (const d of declaredAxes) {
     const cand = candidateSpecs.find((s) => !usedSpecs.has(s) && matchesDeclared(s, d))
     if (cand) {
-      resolved.push(cand)
+      // Display the operator's DECLARED axis name (their canonical Italian
+      // standard, e.g. Colore/Taglia), not the row's observed spelling — so an
+      // English twin ("Color") or lowercase ("colore") in the catalog still
+      // renders as the standard on every read surface. Value lookups use
+      // rawName, so only the label changes; the Inventory push is unaffected for
+      // families whose observed name already equals the declared one (GALE).
+      resolved.push({ ...cand, name: nmLabel(d) })
       usedSpecs.add(cand)
       continue
     }

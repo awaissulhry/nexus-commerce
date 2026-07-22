@@ -236,6 +236,34 @@ export async function resolveFamilyAxes(
     pictureAxisOverride,
   })
 
+  // Live-axis DRIFT flag: the display renders the operator's declared/standard
+  // name (Italian Colore/Taglia), but if the LIVE eBay listing uses a different-
+  // LANGUAGE name for the same axis (e.g. live "Color" for declared "Colore"),
+  // warn — so showing the standard never silently mis-portrays an English-live
+  // listing as Italian. Live axis names come from the active memberships'
+  // variationSpecifics (reconciled from GetItem). Case-only differences
+  // (colore→Colore) are NOT drift — those are the display normalising.
+  const driftWarnings: string[] = []
+  if (parent.sku && resolved.validSpecs.length > 0) {
+    const liveMemb = await prisma.sharedListingMembership.findMany({
+      where: { parentSku: parent.sku, status: 'ACTIVE', ...(marketplace ? { marketplace: marketplace.toUpperCase() } : {}) },
+      select: { variationSpecifics: true },
+    })
+    const liveNames = new Set<string>()
+    for (const m of liveMemb) {
+      const vs = m.variationSpecifics
+      if (vs && typeof vs === 'object' && !Array.isArray(vs)) for (const k of Object.keys(vs)) liveNames.add(k)
+    }
+    for (const spec of resolved.validSpecs) {
+      const liveMatch = [...liveNames].find(
+        (ln) => axisSynonymKey(ln) === axisSynonymKey(spec.name) && ln.toLowerCase() !== spec.name.toLowerCase(),
+      )
+      if (liveMatch) {
+        driftWarnings.push(`"${spec.name}" is live on eBay as "${liveMatch}" — the display shows your standard name; convert the live listing to align it.`)
+      }
+    }
+  }
+
   const axes: ResolvedFamilyAxis[] = resolved.validSpecs.map((s) => ({
     name: s.name,
     key: axisSynonymKey(s.name),
@@ -246,7 +274,7 @@ export async function resolveFamilyAxes(
 
   return {
     axes,
-    warnings: resolved.warnings,
+    warnings: [...resolved.warnings, ...driftWarnings],
     suppressed: resolved.suppressed,
     candidates,
   }
