@@ -1,4 +1,10 @@
-# Sync Control — canonical product grouping (SCD series) — PROPOSAL v2
+# Sync Control — canonical product grouping (SCD series) — SHIPPING
+
+**Status (2026-07-25):** SCD.1 pool-derived grouping (b130f6207) + SCD.1b unpooled-duplicate stem fallback (9b8b97953) + SCD.3 group bulk + SCD.4 tooltips + SCD.5 live-creation (091525b43, 41d0f3bd4) all shipped. **37 masters → 15 logical products, prod-verified.** SCD.1b was surfaced by the live grid: pool-derivation folds only inventory-POOLED copies; VENTRA/REGAL ALTs are unpooled duplicate listings, so a safe childless-only SKU-stem fallback folds them (a genuinely-different product owns its own children → never childless → never stem-merged). SCD.6 (materialize canonicalMasterId) deferred. Verification + memory pending below.
+
+---
+
+# (original proposal) Sync Control — canonical product grouping (SCD series) — PROPOSAL v2
 
 **Owner (2026-07-22→25):** the products view shows the same physical product as several rows (GALE-JACKET, GALE-JACKET-ALT1/2/3, IT-GALE-JACKET) because each is a separate product record. Collapse the duplicate family into ONE logical row. **Properly wired to the database** (a real relationship, not a render-time regex), **real time** whenever a product is listed on a market/channel or a family is duplicated. Plus **proper tooltips** on every column/element.
 
