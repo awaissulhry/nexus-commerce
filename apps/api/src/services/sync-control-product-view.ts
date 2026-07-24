@@ -123,6 +123,13 @@ export function resolveCanonicalMap(
   mastersWithChildren: Set<string>,
   itemIdsByMaster: Map<string, string[]>,
   canonicalMasterByItemId: Map<string, string>,
+  // SCD.1b — secondary fallback for a CHILDLESS, unpooled duplicate (a copy
+  // whose listing isn't inventory-pooled, e.g. VENTRA-JACKET-ALT1): fold by
+  // SKU stem into a same-stem canonical. Safe because a genuinely-different
+  // product owns its own children (never childless), so it can never be
+  // stem-merged.
+  canonicalByStem?: Map<string, string>,
+  stemOfMaster?: Map<string, string>,
 ): Map<string, string> {
   const out = new Map<string, string>()
   for (const mid of masterIds) {
@@ -132,7 +139,21 @@ export function resolveCanonicalMap(
       const canonical = canonicalMasterByItemId.get(itemId)
       if (canonical && canonical !== mid) { resolved = canonical; break }
     }
+    if (resolved === mid && canonicalByStem && stemOfMaster) {
+      const canonical = canonicalByStem.get(stemOfMaster.get(mid) ?? '\0')
+      if (canonical && canonical !== mid) resolved = canonical
+    }
     out.set(mid, resolved)
   }
   return out
+}
+
+/** SCD.1b — canonical SKU stem: strip trailing -ALT#/-FBM/-FBA and a leading
+ *  market prefix (IT-/DE-/FR-/ES-). Only the CHILDLESS-master fallback uses it. */
+export function canonicalStem(sku: string): string {
+  let s = sku.trim()
+  s = s.replace(/^(IT|DE|FR|ES|UK|EU)-/i, '')
+  s = s.replace(/-(ALT\d*|FBM|FBA|EBAY|AMZ|AMAZON)$/i, '')
+  s = s.replace(/-(ALT\d*|FBM|FBA)$/i, '')
+  return s.toUpperCase()
 }

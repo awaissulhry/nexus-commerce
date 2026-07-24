@@ -25,7 +25,7 @@ import { validateServesTokens } from '../services/sync-control-core.js'
 import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-master.service.js'
 import { recascadeAfterSyncControlChange } from '../services/stock-movement.service.js'
 import { enqueueOutboundRowsInstant } from '../services/outbound-enqueue.js'
-import { summarizeProductSync, marketMatches, omitChildrenInList, resolveCanonicalMap } from '../services/sync-control-product-view.js'
+import { summarizeProductSync, marketMatches, omitChildrenInList, resolveCanonicalMap, canonicalStem } from '../services/sync-control-product-view.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../services/product-read-cache.service.js'
 import { buildSyncControlWorkbook, parseSyncControlWorkbook, normalizeModeCell } from '../services/sync-control-excel.js'
 
@@ -158,13 +158,22 @@ async function computeRows(): Promise<SyncControlRow[]> {
  */
 async function resolveCanonicalMasters(masterIds: string[]): Promise<Map<string, string>> {
   if (masterIds.length === 0) return new Map()
-  const withChildren = await prisma.product.findMany({
-    where: { parentId: { in: masterIds } },
-    select: { parentId: true },
-    distinct: ['parentId'],
-  })
+  const [withChildren, masterSkus] = await Promise.all([
+    prisma.product.findMany({ where: { parentId: { in: masterIds } }, select: { parentId: true }, distinct: ['parentId'] }),
+    prisma.product.findMany({ where: { id: { in: masterIds } }, select: { id: true, sku: true } }),
+  ])
   const mastersWithChildren = new Set(withChildren.map((p) => p.parentId).filter((x): x is string => Boolean(x)))
   const childless = masterIds.filter((id) => !mastersWithChildren.has(id))
+
+  // SCD.1b — stem-fallback data: map each master's stem, and each CHILD-OWNING
+  // canonical's stem → its id (so an unpooled childless duplicate can fold in).
+  const stemOfMaster = new Map<string, string>()
+  const canonicalByStem = new Map<string, string>()
+  for (const m of masterSkus) {
+    const stem = canonicalStem(m.sku)
+    stemOfMaster.set(m.id, stem)
+    if (mastersWithChildren.has(m.id) && !canonicalByStem.has(stem)) canonicalByStem.set(stem, m.id)
+  }
 
   const itemIdsByMaster = new Map<string, string[]>()
   const canonicalMasterByItemId = new Map<string, string>()
@@ -199,7 +208,7 @@ async function resolveCanonicalMasters(masterIds: string[]): Promise<Map<string,
     }
   }
 
-  return resolveCanonicalMap(masterIds, mastersWithChildren, itemIdsByMaster, canonicalMasterByItemId)
+  return resolveCanonicalMap(masterIds, mastersWithChildren, itemIdsByMaster, canonicalMasterByItemId, canonicalByStem, stemOfMaster)
 }
 
 export default async function syncControlRoutes(app: FastifyInstance): Promise<void> {

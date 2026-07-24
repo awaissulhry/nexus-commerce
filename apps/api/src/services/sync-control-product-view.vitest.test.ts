@@ -119,3 +119,33 @@ describe('SCD.1 — resolveCanonicalMap (pool-derived grouping)', () => {
     expect(map.get('X')).toBe('X')
   })
 })
+
+describe('SCD.1b — canonicalStem + stem fallback', () => {
+  it('canonicalStem strips -ALT#/-FBM/-FBA and leading market prefix', async () => {
+    const { canonicalStem } = await import('./sync-control-product-view.js')
+    expect(canonicalStem('VENTRA-JACKET-ALT1')).toBe('VENTRA-JACKET')
+    expect(canonicalStem('IT-GALE-JACKET')).toBe('GALE-JACKET')
+    expect(canonicalStem('GALE-JACKET-FBM')).toBe('GALE-JACKET')
+    expect(canonicalStem('AIR-MESH-JACKET-MEN')).toBe('AIR-MESH-JACKET-MEN') // -MEN not stripped → stays distinct
+  })
+  it('childless UNPOOLED duplicate folds by stem into a same-stem canonical', () => {
+    const canonByStem = new Map([['VENTRA-JACKET', 'VENTRA']]) // VENTRA owns children
+    const stemOf = new Map([['VENTRA', 'VENTRA-JACKET'], ['VENTRA-ALT1', 'VENTRA-JACKET']])
+    const map = resolveCanonicalMap(['VENTRA', 'VENTRA-ALT1'], new Set(['VENTRA']), new Map(), new Map(), canonByStem, stemOf)
+    expect(map.get('VENTRA')).toBe('VENTRA')
+    expect(map.get('VENTRA-ALT1')).toBe('VENTRA') // unpooled, folds by stem
+  })
+  it('a child-OWNING master never stem-merges (distinct product stays separate)', () => {
+    // AIRMESH-MEN owns its own children → stem fallback never applies to it
+    const canonByStem = new Map([['AIRMESH-JACKET', 'AIRMESH']])
+    const stemOf = new Map([['AIRMESH', 'AIRMESH-JACKET'], ['AIRMESH-MEN', 'AIRMESH-JACKET']])
+    const map = resolveCanonicalMap(['AIRMESH', 'AIRMESH-MEN'], new Set(['AIRMESH', 'AIRMESH-MEN']), new Map(), new Map(), canonByStem, stemOf)
+    expect(map.get('AIRMESH-MEN')).toBe('AIRMESH-MEN') // owns children → stays separate
+  })
+  it('pool wins over stem when both available', () => {
+    const canonByStem = new Map([['X', 'STEM-CANON']])
+    const stemOf = new Map([['DUP', 'X']])
+    const map = resolveCanonicalMap(['DUP'], new Set(), new Map([['DUP', ['i']]]), new Map([['i', 'POOL-CANON']]), canonByStem, stemOf)
+    expect(map.get('DUP')).toBe('POOL-CANON')
+  })
+})
