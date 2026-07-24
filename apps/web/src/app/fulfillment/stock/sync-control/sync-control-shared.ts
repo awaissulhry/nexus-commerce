@@ -73,6 +73,29 @@ export const MODE_LABEL: Record<Mode, string> = {
   EXCLUDED: 'Excluded',
 }
 
+/** SCD.4 — plain-English explanation of each mode, for hover tooltips. */
+export const MODE_HELP: Record<Mode, string> = {
+  FOLLOW: 'Follows the shared stock pool — the marketplace quantity tracks available stock automatically.',
+  PINNED: 'Held at a fixed manual quantity — pool changes never touch it until you set it back to Follow.',
+  PAUSED: 'Frozen — nothing is pushed to the marketplace until you Resume it.',
+  PAUSED_POLICY: 'Paused by a channel/market kill-switch policy (Resume the policy to re-enable pushes).',
+  UNCOUNTED: 'No stock pool yet for this product — nothing is pushed (it never sends a zero).',
+  FBA: 'Amazon-managed (FBA) — Amazon controls the quantity; Sync Control never writes it.',
+  EXCLUDED: 'This shared eBay variant is deliberately left out of the pool (Include it to re-enable).',
+}
+
+/** SCD.4 — plain-English explanation of each grid column, for header tooltips. */
+export const COLUMN_HELP: Record<string, string> = {
+  product: 'One row per real product. Duplicate listings of the same product (its ALT/IT- copies) are folded in automatically via the shared stock pool.',
+  scope: 'How many variants, listings, and sales channels this product spans.',
+  sync: 'How each listing gets its quantity. Hover a mode chip for what it means. A mix shows a count per mode.',
+  intended: 'The quantity Sync Control wants on the marketplace for a listing (pool available minus its buffer).',
+  live: 'The quantity currently live on the marketplace for a listing.',
+  stock: 'Total units in the warehouse pool across this product’s variants, and how many of its variants are in stock.',
+  drift: 'Listings whose live marketplace quantity doesn’t match what Sync Control intends. A green check means everything is in sync.',
+  buffer: 'A safety margin held back from the marketplace — the push is pool available minus the buffer.',
+}
+
 export const DENSITY_OPTIONS: SegmentedOption[] = [
   { value: 'compact', label: 'Compact' },
   { value: 'cozy', label: 'Cozy' },

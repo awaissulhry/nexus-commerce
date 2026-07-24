@@ -24,9 +24,10 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { Tooltip } from '@/components/ui/Tooltip'
 import SyncExcelBar from './SyncExcelBar'
 import {
-  DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, mapDensity,
+  DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP, mapDensity,
   type Density, type Mode, type Row, type ProductMaster,
 } from './sync-control-shared'
 import styles from './styles.module.css'
@@ -107,7 +108,10 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
   const { data, loading } = usePolledList<ProductsResponse>({
     url,
     intervalMs: 30_000,
-    invalidationTypes: ['stock.adjusted', 'listing.updated', 'product.updated'],
+    // SCD.5 — also react to CREATE/DELETE so a freshly-listed or -duplicated
+    // product (which joins its group via the pool) appears live, not on the
+    // next 30s poll. Requires useListingEvents mounted on the page (SCD.5).
+    invalidationTypes: ['stock.adjusted', 'listing.updated', 'product.updated', 'product.created', 'listing.created', 'product.deleted', 'listing.deleted'],
   })
 
   // Family facet — derived from the loaded masters (all 37 fit one page), so
@@ -162,12 +166,19 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
     })
     if (!ok) return
     setBusy(true)
+    // SCD.3 — a group's action must hit ALL its listings: the canonical master
+    // AND the duplicate copies folded into it (memberMasterIds). The server's
+    // masterIds expansion + shared-pool memberships then cover every listing.
+    const expandedMasterIds = [...new Set(selectedMasterIds.flatMap((gid) => {
+      const p = products.find((x) => x.masterId === gid)
+      return [gid, ...(p?.memberMasterIds ?? [])]
+    }))]
     try {
       const res = await fetch(`${API}/api/stock/sync-control/actions`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, masterIds: selectedMasterIds, buffer: opts.buffer }),
+        body: JSON.stringify({ action, masterIds: expandedMasterIds, buffer: opts.buffer }),
       })
       const d = await res.json()
       if (!res.ok) throw new Error(d?.error ?? `HTTP ${res.status}`)
@@ -184,35 +195,35 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
 
   const columns = useMemo<Array<Column<DRow>>>(() => [
     {
-      key: 'product', label: 'Product', sticky: true, width: 340,
+      key: 'product', label: <Hdr k="product" label="Product" />, sticky: true, width: 340,
       render: (r) => r.kind === 'master' ? <MasterCell m={r.m} expanded={expanded.has(r.m.masterId)} onToggle={() => toggleExpand(r.m.masterId)} /> : <ChildCell c={r.c} />,
     },
     {
-      key: 'scope', label: 'Scope', width: 150,
+      key: 'scope', label: <Hdr k="scope" label="Scope" />, width: 150,
       render: (r) => r.kind === 'master'
         ? <span className="text-xs text-zinc-500">{r.m.variantCount} var · {r.m.listingCount} lst · {r.m.rollup.channels.length} ch</span>
         : <span className="text-xs text-zinc-500">{r.c.lane === 'SHARED' ? 'Shared' : 'Listing'}</span>,
     },
     {
-      key: 'sync', label: 'Sync', width: 170,
-      render: (r) => r.kind === 'master' ? <SyncRollup m={r.m} /> : <Pill tone={MODE_TONE[r.c.mode]}>{MODE_LABEL[r.c.mode]}</Pill>,
+      key: 'sync', label: <Hdr k="sync" label="Sync" />, width: 170,
+      render: (r) => r.kind === 'master' ? <SyncRollup m={r.m} /> : <ModePill mode={r.c.mode} />,
     },
     {
-      key: 'intended', label: 'Intended', align: 'right', width: 80,
+      key: 'intended', label: <Hdr k="intended" label="Intended" />, align: 'right', width: 80,
       render: (r) => r.kind === 'child' ? <span className="tabular-nums">{r.c.mode === 'FBA' ? '—' : r.c.intendedQty ?? '—'}</span> : null,
     },
     {
-      key: 'live', label: 'Live', align: 'right', width: 70,
+      key: 'live', label: <Hdr k="live" label="Live" />, align: 'right', width: 70,
       render: (r) => r.kind === 'child' ? <span className="tabular-nums">{r.c.mode === 'FBA' ? '—' : r.c.liveQty ?? '—'}</span> : null,
     },
     {
-      key: 'stock', label: 'In stock', align: 'right', width: 120,
+      key: 'stock', label: <Hdr k="stock" label="In stock" />, align: 'right', width: 120,
       render: (r) => r.kind === 'master'
         ? <span className="text-xs"><span className="tabular-nums font-medium">{r.m.poolTotal}</span> u · <span className="tabular-nums text-zinc-500">{r.m.variantsInStock}/{r.m.variantCount}</span></span>
         : null,
     },
     {
-      key: 'drift', label: 'Drift', width: 90,
+      key: 'drift', label: <Hdr k="drift" label="Drift" />, width: 90,
       render: (r) => {
         if (r.kind === 'master') {
           return r.m.rollup.driftCount > 0
@@ -224,7 +235,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
       },
     },
     {
-      key: 'buffer', label: 'Buffer', align: 'right', width: 70,
+      key: 'buffer', label: <Hdr k="buffer" label="Buffer" />, align: 'right', width: 70,
       render: (r) => r.kind === 'master'
         ? <span className="tabular-nums text-xs text-zinc-500">{r.m.rollup.maxBuffer || '—'}</span>
         : <span className="tabular-nums text-xs">{r.c.mode === 'FBA' ? '—' : r.c.buffer}</span>,
@@ -355,12 +366,20 @@ function ChildCell({ c }: { c: Row }) {
   )
 }
 
+// SCD.4 — tooltipped column header + mode pill.
+function Hdr({ k, label }: { k: string; label: string }) {
+  return <Tooltip content={COLUMN_HELP[k] ?? ''}><span style={{ cursor: 'help' }}>{label}</span></Tooltip>
+}
+function ModePill({ mode }: { mode: Mode }) {
+  return <Tooltip content={MODE_HELP[mode] ?? ''}><Pill tone={MODE_TONE[mode]}>{MODE_LABEL[mode]}</Pill></Tooltip>
+}
+
 function SyncRollup({ m }: { m: ProductMaster }) {
   const { rollup } = m
   if (rollup.uniform && rollup.dominantMode) {
     return (
       <span className="inline-flex items-center gap-1">
-        <Pill tone={MODE_TONE[rollup.dominantMode as Mode] ?? 'neutral'}>{MODE_LABEL[rollup.dominantMode as Mode] ?? rollup.dominantMode}</Pill>
+        <ModePill mode={rollup.dominantMode as Mode} />
       </span>
     )
   }
@@ -369,7 +388,7 @@ function SyncRollup({ m }: { m: ProductMaster }) {
     <span className="inline-flex flex-wrap items-center gap-1 text-xs">
       {entries.map(([mode, n]) => (
         <span key={mode} className="inline-flex items-center gap-0.5">
-          <Pill tone={MODE_TONE[mode as Mode] ?? 'neutral'}>{MODE_LABEL[mode as Mode] ?? mode}</Pill>
+          <ModePill mode={mode as Mode} />
           <span className="tabular-nums text-zinc-500">{n}</span>
         </span>
       ))}

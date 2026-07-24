@@ -14,6 +14,7 @@ import { DataGrid, Pagination, type Column } from '@/design-system/components'
 import { GridToolbar, FilterBar, type FilterDimension } from '@/design-system/patterns'
 import { Button, Input, Pill, SegmentedControl } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 // DS class styles — the Listbox/grid markup is unstyled without these
 // (pages import them directly; see ApiKeysClient for the convention).
@@ -81,6 +82,9 @@ const inputCls =
   'h-8 rounded-md border border-zinc-300 bg-white px-2 text-sm text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200'
 
 export default function SyncControlClient() {
+  // SCD.5 — mount the SSE→invalidation bridge so server-side product/listing
+  // creation reaches the products grid live (it wasn't mounted on this page).
+  useListingEvents()
   const [overview, setOverview] = useState<Overview | null>(null)
   const [rows, setRows] = useState<Row[]>([])
   const [total, setTotal] = useState(0)
