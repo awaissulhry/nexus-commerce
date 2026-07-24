@@ -17,10 +17,11 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { Tooltip } from '@/components/ui/Tooltip'
 import SyncExcelBar from '../../SyncExcelBar'
 import {
-  DENSITY_OPTIONS, MODE_TONE, MODE_LABEL,
-  type Density, type Row, type ProductMaster,
+  DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP,
+  type Density, type Mode, type Row, type ProductMaster,
 } from '../../sync-control-shared'
 import styles from '../../styles.module.css'
 import '@/design-system/styles/tokens.css'
@@ -107,12 +108,12 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
     { key: 'channel', label: 'Channel', width: 90, sortable: true, sortValue: (r) => r.channel, render: (r) => r.channel },
     { key: 'market', label: 'Market', width: 80, sortable: true, sortValue: (r) => r.marketplace, render: (r) => r.marketplace },
     { key: 'lane', label: 'Lane', width: 70, render: (r) => <span className="text-xs text-zinc-500">{r.lane === 'SHARED' ? 'Shared' : 'Listing'}</span> },
-    { key: 'mode', label: 'Mode', width: 130, sortable: true, sortValue: (r) => r.mode, render: (r) => <Pill tone={MODE_TONE[r.mode]}>{MODE_LABEL[r.mode]}</Pill> },
-    { key: 'intended', label: 'Intended', align: 'right', width: 85, sortable: true, sortValue: (r) => (r.mode === 'FBA' ? -1 : r.intendedQty ?? -1),
+    { key: 'mode', label: <Tooltip content={COLUMN_HELP.sync}><span style={{ cursor: 'help' }}>Mode</span></Tooltip>, width: 130, sortable: true, sortValue: (r) => r.mode, render: (r) => <Tooltip content={MODE_HELP[r.mode as Mode] ?? ''}><Pill tone={MODE_TONE[r.mode]}>{MODE_LABEL[r.mode]}</Pill></Tooltip> },
+    { key: 'intended', label: <Tooltip content={COLUMN_HELP.intended}><span style={{ cursor: 'help' }}>Intended</span></Tooltip>, align: 'right', width: 85, sortable: true, sortValue: (r) => (r.mode === 'FBA' ? -1 : r.intendedQty ?? -1),
       render: (r) => <span className="tabular-nums">{r.mode === 'FBA' ? '—' : r.intendedQty ?? '—'}</span> },
-    { key: 'live', label: 'Live', align: 'right', width: 75, sortable: true, sortValue: (r) => (r.mode === 'FBA' ? -1 : r.liveQty ?? -1),
+    { key: 'live', label: <Tooltip content={COLUMN_HELP.live}><span style={{ cursor: 'help' }}>Live</span></Tooltip>, align: 'right', width: 75, sortable: true, sortValue: (r) => (r.mode === 'FBA' ? -1 : r.liveQty ?? -1),
       render: (r) => <span className="tabular-nums">{r.mode === 'FBA' ? '—' : r.liveQty ?? '—'}</span> },
-    { key: 'buffer', label: 'Buffer', align: 'right', width: 70, render: (r) => <span className="tabular-nums">{r.mode === 'FBA' ? '—' : r.buffer}</span> },
+    { key: 'buffer', label: <Tooltip content={COLUMN_HELP.buffer}><span style={{ cursor: 'help' }}>Buffer</span></Tooltip>, align: 'right', width: 70, render: (r) => <span className="tabular-nums">{r.mode === 'FBA' ? '—' : r.buffer}</span> },
     { key: 'drift', label: 'Drift', width: 70, render: (r) => (r.mode !== 'FBA' && r.intendedQty != null && r.liveQty != null && r.intendedQty !== r.liveQty)
       ? <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" title="live ≠ intended" /> : null },
   ], [])
