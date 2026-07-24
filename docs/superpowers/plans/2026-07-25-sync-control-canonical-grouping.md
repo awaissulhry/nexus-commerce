@@ -1,68 +1,62 @@
-# Sync Control — canonical product grouping (SCD series) — PROPOSAL
+# Sync Control — canonical product grouping (SCD series) — PROPOSAL v2
 
-**Owner (2026-07-22→25):** the products view shows the same physical product as several rows — GALE-JACKET, GALE-JACKET-ALT1/2/3, IT-GALE-JACKET, -FBM — because each is a separate product record. Collapse the duplicate family into ONE logical row (like /products). **Properly wired to the database** (not a render-time regex), **updated in real time** whenever a product is listed on a market/channel or a family is duplicated on a channel. Plus **proper tooltips** explaining every column/element. Plan everything first, then work up.
+**Owner (2026-07-22→25):** the products view shows the same physical product as several rows (GALE-JACKET, GALE-JACKET-ALT1/2/3, IT-GALE-JACKET) because each is a separate product record. Collapse the duplicate family into ONE logical row. **Properly wired to the database** (a real relationship, not a render-time regex), **real time** whenever a product is listed on a market/channel or a family is duplicated. Plus **proper tooltips** on every column/element.
 
-## 1. What exists — the data reality (investigated 2026-07-25)
+**Owner's decisive insight (verified 2026-07-25):** *"only the parent SKUs are different; every other copy of a group shares the same child SKUs."* The data confirms this exactly and it changes the whole design for the better.
 
-The catalog has **40 master products** (`parentId = null`). Rolling them up to a logical product needs to handle **three tiers of duplicates**, and this is the crux of the whole plan:
+## 1. The grouping IS an existing database relationship — the shared-inventory pool
 
-1. **Clean `-ALT#` duplicates** — GALE, AIREON, VENTRA, MOSS, both knee-sliders, REGAL. A SKU-stem rule (strip trailing `-ALT#`/`-FBM`/`-FBA`, leading `IT-`/`DE-`/`FR-`/`ES-`) collapses these perfectly: **40 → 17 logical products, 9 clusters, zero false merges.** GALE's 6 masters → 1, knee-slider's 6 → 1, AIREON 4 → 1, MOSS 4 → 1, etc.
-2. **Naming-inconsistent duplicates** — the *same* product under mismatched SKUs the stem rule can't catch: `AIR-MESH-JACKET-MEN` (6 variants) vs `AIRMESH-JACKET` (20 variants); `WATERPROOF-OVERJACKET-BLACK-MEN` and `1-OVERJACKET-BLACK-MEN` (identical product name) and `WATERPROOF-OVERJACKET-ALT1`.
-3. **Genuinely ambiguous** — is `AIR-MESH-JACKET-MEN` a duplicate of `AIRMESH-JACKET`, or a separate men-only product? Only the owner knows.
+I traced it end to end. A duplicate copy has **no child products of its own** — its eBay listing pools the **canonical's** child SKUs via `SharedListingMembership`:
 
-**No single automatic signal groups the messy tiers safely.** I checked shared Amazon ASINs as a robust identity key — the inconsistent pairs are **distinct catalog entries (0 shared ASINs)** — so ASIN doesn't rescue it, and neither does name (marketing-optimized eBay titles differ from the Amazon title within the *same* clean cluster). **Auto-merging tiers 2–3 on a guess would wrongly combine genuinely-distinct products — a data breach the owner's "100% no breach" bar forbids.**
+```
+GALE-JACKET-ALT1 (master, 0 children)
+  → its ChannelListing.externalListingId = item 256566101420
+    → SharedListingMembership(itemId=256566101420, sku=GALE-JACKET-BLACK-MEN-XL)
+      → productId = the product GALE-JACKET-BLACK-MEN-XL
+        → parentId = GALE-JACKET   ← the canonical master
+```
 
-**Design consequence (the key decision):** grouping is a **DB field**, populated two ways —
-- **New duplicates → auto-linked at creation** (accurate, real-time, zero operator effort).
-- **Existing backlog → operator-confirmed**: the system *proposes* groups (stem + name-similarity), the owner *confirms/adjusts* before anything merges. Tier-1 clean clusters can be pre-checked; tiers 2–3 require a click.
+Measured across all **40 masters**: **15 own their children (canonical or standalone) · 19 duplicates resolve to their canonical with certainty via this pool chain · 6 empty orphans** (no listings — never shown in the grid). GALE's 4 duplicates share **20/20** child SKUs with the canonical; AIRMESH's `-ALT1` shares 20/20 — while `AIR-MESH-JACKET-MEN` (its own 6 distinct children, **0 shared**) is correctly a *different* product. **The pool decides, and it's never ambiguous.**
 
-## 2. What exists — how the grid groups today (from code map)
+**⇒ Grouping key = the canonical master, derived from the shared pool:**
+`canonicalMasterOf(M) = ` if M owns children (or is standalone) → M; else resolve M's listing item-ids → `SharedListingMembership.productId` → that product's `parentId`. Fallback for the rare pool-less duplicate → self (harmless; those have no listings). No regex, no name/ASIN matching, no operator confirmation. This supersedes the v1 stem-regex + operator-review design entirely — the shared pool is a stronger, self-evident signal.
 
-- **`GET /stock/sync-control/products`** (sync-control.routes.ts ~229): flat `computeRows()` → per-listing rows carrying the **variant** `productId`; grouped by `masterOf = parentId ?? id`; bucketed into `byMaster`; one row per master with `summarizeProductSync(children)` rollup + variant-derived `poolTotal`/`variantsInStock`/`variantCount`.
-- **Aggregation already works across masters** — `summarizeProductSync`, `poolTotal`, `variantsInStock`, `variantCount`, and `children` all fold *whatever rows are in the bucket*; they don't care how many masters contributed. What assumes **one master per bucket** is only the **metadata + identity**: `masterId`, `sku`, `name`, `family`, `imageUrl`, and the id-typed links (`/products/{id}/edit`), the `masterIds` bulk expansion (`POST /actions`), and the export (`filterExportRows`).
-- **Threshold:** `omitChildrenInList(variantCount>20)` → big groups show "Open ↗". Merged groups exceed 20 more often → more "Open ↗" (design implication, not a bug).
-- **Per-product page mutation path is already master-agnostic** — `runAction` sends explicit `listings[]`/`memberships[]` (child rows), not `masterId`. Only two editor links and the export are id-coupled.
-- **`Product.sku` is globally unique**; there is **no `canonicalGroupKey` field** in the repo — it must be added (indexed).
+## 2. What exists — how the grid groups today (code map)
 
-## 3. What exists — creation paths & real-time (audited 2026-07-25)
+- **`GET /stock/sync-control/products`** (sync-control.routes.ts): flat `computeRows()` → per-listing rows carrying the **variant** `productId`; grouped by `masterOf = parentId ?? id`; one row per master with `summarizeProductSync(children)` rollup + variant-derived `poolTotal`/`variantsInStock`/`variantCount`.
+- **Aggregation already folds across masters** — `summarizeProductSync`, `poolTotal`, `variantsInStock`, `variantCount`, `children` all fold *whatever rows land in the bucket*. Only the **metadata + identity** assume one master per bucket: `masterId`, `sku`, `name`, `family`, `imageUrl`, the `/products/{id}/edit` links, the `masterIds` bulk expansion (`POST /actions`), and `filterExportRows` (`GET /export`).
+- **computeRows already loads all memberships** (the SHARED lane) and the products for `masterOf` — so the canonical-master map can be built in the same pass, cheaply, with no extra round-trips.
+- Note: a duplicate master's own listing shows today as a childless "Uncounted · 1 lst" row (what the owner sees); the canonical's variants' memberships already roll up under the canonical. So folding = attach the duplicate's own listing row into the canonical group.
+- **Per-product page mutation path is already master-agnostic** (`runAction` sends explicit `listings[]`/`memberships[]`, not `masterId`). Only two editor links + the export are id-coupled.
+- **`omitChildrenInList(variantCount>20)`** → big groups show "Open ↗"; merged groups hit it more often (design implication).
 
-Two findings here **changed the mechanism** from my first draft:
+## 3. What exists — real-time (audited)
 
-**(a) There is NO central product-creation hook.** `prisma.product.create/createMany/upsert` is inlined at **~34 sites across ~19 files** — manual CRUD, create-wizard, the `/bulk-duplicate` action (`-COPY-<stamp>`), Amazon/eBay/Shopify/Woo/Etsy sync, catalog import, PIM grouping, launch. There is **no `$extends`/`$use` anywhere**, and there are **several independent `new PrismaClient()` instances** — so a single client extension can't even reach every write without first consolidating clients. Critically: **the `-ALT#` / `IT-` / market-prefixed duplicates are NOT generated by backend code** — they're literal SKUs the operator authors in the uploaded **eBay flat file**, created verbatim by the eBay flat-file path through the pure builder `buildEbayProductCreateInput` (`ebay-flat-file-create.logic.ts:263`). So the *actual duplicate-creation channel the owner means* is exactly one path.
+The Sync Control grid is **not** wired for live *creation*: `usePolledList` refreshes on 30s poll + focus + its `invalidationTypes` (`stock.adjusted`/`listing.updated`/`product.updated`) — but **not** `product.created`/`listing.created`, and the page **doesn't mount `useListingEvents`** (the SSE→invalidation bridge other workspaces mount). So a newly-pooled duplicate reaches the grid only on the next 30s poll. **⇒ add those subscriptions + mount the bridge on `SyncControlClient`, and confirm the server emits `listing.created`/`product.created` on the pool-write path** (memberships are the trigger — a duplicate joins its group the moment its listing is pooled).
 
-**⇒ The robust "properly wired to the database" answer is a Postgres GENERATED column** — the DB itself computes the stem from `sku` on every insert/update, covering all 34 sites, scripts, and any future path, with zero application wiring. The stem rule is expressible with immutable `regexp_replace`. Belt-and-braces, the two flat-file builders (`buildEbayProductCreateInput`, Amazon `buildProductCreateInput`) can also set it, but the generated column makes that redundant. This is strictly better than the app-hook I first proposed.
+## 4. The model (properly wired, minimal)
 
-**(b) The grid isn't wired for real-time *creation*.** `usePolledList` refreshes on 30s poll + focus + its `invalidationTypes` (`stock.adjusted`/`listing.updated`/`product.updated`) — but **not** `product.created`/`listing.created`, and the sync-control page **does not mount `useListingEvents`** (the SSE→invalidation bridge that other workspaces mount). So a newly-listed/duplicated product reaches this grid only on the next 30s poll, not sub-second. Also: `product.created` may not be server-emitted on create (the audit found the type + an SSE test but no create route passing `PRODUCT_CREATED` to `productEventService` — to verify). **⇒ real-time needs: add `product.created`/`listing.created`/`*.deleted` to the grid's subscriptions, mount `useListingEvents()` on `SyncControlClient`, and confirm the server emits `product.created` on create.**
+- **Grouping is derived from the live pool relationship** — no fragile field to seed or keep in sync. The endpoint resolves `canonicalMasterId` from `SharedListingMembership` (which already expresses the shared inventory).
+- **Optional materialization** — a nullable `Product.canonicalMasterId` (FK, indexed), recomputed when a master's memberships change (pool write), if we later want the relationship queryable outside this endpoint or want to avoid the per-request derivation. **Not required for v1** — deriving live is accurate and self-maintaining. This keeps "properly wired to the database" true (it reads the real pool FKs) while staying additive/reversible.
+- **`isCanonicalMaster`** is unnecessary — the canonical is simply the master that owns the child products (has `children`); duplicates have none. The display name/image come from that owning master.
 
-## 4. The grouping model (DB)
-
-Two-field model separating the **DB-computed baseline** from the **operator override** (so tier-1 is automatic and tiers 2–3 are confirmable):
-
-- **`Product.stemKey`** — a **STORED GENERATED column** = `upper(regexp_replace(regexp_replace(sku, '^(IT|DE|FR|ES|UK|EU)-', '', 'i'), '-(ALT[0-9]*|FBM|FBA|EBAY|AMZ|AMAZON)$', '', 'i'))`, indexed. The DB maintains it on every write — the automatic, always-wired, real-time baseline covering tier-1 and every future `-ALT`. Cannot be wrong or stale.
-- **`Product.groupOverrideKey String?`** (indexed) — operator-set, for tiers 2–3 (e.g. confirming `AIR-MESH-JACKET-MEN` joins `AIRMESH-JACKET`). Null = use the stem.
-- **Effective group key = `groupOverrideKey ?? stemKey`** (computed in the endpoint; can also be a second generated/`COALESCE` column if we want it indexable directly).
-- **`Product.isCanonicalMaster Boolean @default(false)`** — marks the ONE display master per group (name/image/family/editor-link). Seed tiebreak: `sku === effectiveKey` → most variants → lexicographically-first sku.
-
-All additive (migration pre-approved). Nothing deleted or merged at the record level — products are only *tagged*; the grid *displays* a group as one row while the products stay intact and separable.
-
-**Endpoint payload change** (`ProductMaster` type): row identity becomes the **effective group key** (stable, URL-safe via `encodeURIComponent`); add `canonicalProductId` (display master's real id, for `/products/{id}/edit`) and `memberMasterIds: string[]` (all masters in the group, for bulk/export expansion). Rollup/pool/children need **no aggregation change** — they already fold whatever rows land in the bucket.
+**Endpoint payload** (`ProductMaster` type): row identity = the **canonical master id** (already a real, URL-safe cuid — no encoding gymnastics); add `memberMasterIds: string[]` (the duplicate masters folded in) for bulk/export expansion. `canonicalProductId` = the canonical master id itself (for `/products/{id}/edit`). Rollup/pool/children need **no aggregation change**.
 
 ## 5. Phases
 
-- **SCD.1 — schema (DB-wired baseline).** Additive migration: `stemKey` STORED GENERATED column (+ index), `groupOverrideKey String?` (+ index), `isCanonicalMaster Boolean`. Export the exact same rule as a pure TS `canonicalStem(sku)` (unit-tested; MUST match the SQL byte-for-byte so server logic and DB agree). The generated column means the baseline is wired to the DB with zero app hooks — a new `-ALT` listing is grouped the instant its row is written, from any path. No UI yet.
-- **SCD.2 — backfill + operator review.** `isCanonicalMaster` seeded per group; tier-1 clusters are already correct via `stemKey` (no data write needed beyond the canonical flag). A **"N possible duplicates — review" banner → modal** on the products view proposes tier-2/3 candidates (stem + name-similarity), and the owner confirms/splits/reassigns → writes `groupOverrideKey` + `isCanonicalMaster`. Nothing merges until confirmed. Audited.
-- **SCD.3 — the grouped grid (server).** Endpoint groups by effective key (`groupOverrideKey ?? stemKey`); canonical-master metadata; `canonicalProductId` + `memberMasterIds` in the payload; `POST /actions` and `filterExportRows` (`GET /export`) accept group keys → member masters → variants; raise the action cap. Regression tests (grouping + bulk expansion + export scope).
-- **SCD.4 — the grouped grid (client).** `SyncProductsGrid` + per-product page use the effective key for identity/selection/detail URL, `canonicalProductId` for `/products/{id}/edit`, `memberMasterIds` for bulk. ~17 rows. Densities/dark/truncation kept; screenshot self-verify.
-- **SCD.5 — tooltips.** Use the portal-positioned `@/components/ui/Tooltip` (content prop, flip/clamp — the DS primitive only opens *above* and clips on top grid rows). `DataGrid` `Column.label` is `ReactNode` rendered into the `<th>`, so tooltips drop into each column's `label` with **no DataGrid change**; wrap the mode `Pill`s, the Open-↗ button, and the drift dot too. Plain operator-English copy for every column/element.
-- **SCD.6 — real-time wiring + proof.** Add `product.created`/`listing.created`/`product.deleted`/`listing.deleted` to the grid's `invalidationTypes`; **mount `useListingEvents()` on `SyncControlClient`** (the SSE→invalidation bridge, absent today); confirm/wire the server to emit `product.created` on Product create. Prove: list/duplicate a family on a channel → the DB computes the group → SSE → the grid re-groups live, no manual step. Prod walkthrough; docs + memory.
+- **SCD.1 — pool-derived grouping (server).** In the `/products` endpoint, build `canonicalMasterOf(masterId)` from the membership pool (reuse the memberships computeRows already loaded; one extra `product.findMany({parentId})` pass to know which masters own children). Group by it; canonical master supplies name/image/family; payload gains `memberMasterIds`. Unit-test the pure resolver (owns-children→self; pooled-duplicate→canonical; orphan→self). No schema change.
+- **SCD.2 — bulk + export expansion (server).** `POST /actions` and `filterExportRows` accept the canonical master id and expand to **all member masters + their variants** (union the folded duplicates' listings). Raise the action cap. Regression tests (a GALE bulk action must hit the canonical's variants AND the duplicate listings).
+- **SCD.3 — the grouped grid (client).** `SyncProductsGrid` + per-product page: identity/selection/detail-URL on the canonical id, `memberMasterIds` for bulk. ~17 rows instead of 37. Densities/dark/truncation kept; screenshot self-verify.
+- **SCD.4 — tooltips.** Portal `@/components/ui/Tooltip` (the DS primitive only opens *above* and clips on top grid rows). `DataGrid` `Column.label` is `ReactNode` → tooltips drop into each column's `label` with no DataGrid change; wrap the mode `Pill`s, Open-↗, drift dot. Plain operator-English for every column/element.
+- **SCD.5 — real-time.** Add `product.created`/`listing.created`/`*.deleted` to the grid's `invalidationTypes`; mount `useListingEvents()` on `SyncControlClient`; confirm the pool-write path emits a listing/product event. Prove: pool a duplicate family → the grid re-groups live, no manual step.
+- **SCD.6 (optional) — materialize `canonicalMasterId`.** Only if per-request derivation proves heavy or another surface needs the relationship: additive FK + recompute-on-membership-write + backfill. Deferred by default.
 
 ## 6. Guardrails
 
-Additive + reversible only (tag, never delete/merge product records — the grid *displays* them as one; the underlying products stay intact and separable). Tiers 2–3 never auto-merge — operator confirms. FBA untouchable everywhere. Every grouping write audited. The flat "Listings" view, policies, routing, Excel round-trip, and derivation core are untouched (presentation + one indexed field + a write-hook).
+Derivation reads the real shared-pool FKs — no heuristic, no auto-merge of distinct products (a different product shares no pool, so it can never be folded in). Additive/reversible only; no product records deleted or merged — the grid *displays* the group as one row while the products stay intact. FBA untouchable everywhere. Flat "Listings" view, policies, routing, Excel round-trip, derivation core untouched.
 
 ## 7. Open decisions for the gate
 
-- **D1 — the stem rule.** Strip trailing `-ALT#`/`-FBM`/`-FBA` and leading `IT-`/`DE-`/`FR-`/`ES-`. Proven: 40 masters → 17, no false merges. Confirm the exact token set (any other suffix/prefix conventions in your SKUs?).
-- **D2 — tiers 2–3 (messy duplicates).** Operator-confirmed grouping (never auto-merge), because no automatic signal (stem/ASIN/name) is safe. Confirm you're OK reviewing ~5–8 candidate pairs once (AIRMESH ×2, WATERPROOF overjacket ×3, and a couple others), after which new duplicates via the clean `-ALT` convention are automatic forever.
-- **D3 — canonical-master pick** (which member supplies the row's name/image): `sku == stem` → most variants → first. Recommend as stated.
-- **D4 — the generated column.** `stemKey` computed by Postgres (maximally "wired to the database", covers every write path). Confirm — the alternative (hooking only the two flat-file builders) is simpler but doesn't cover manual/other paths.
+- **D1** — derive the grouping live from the pool (recommended: no migration, self-maintaining, always accurate) vs. materialize `canonicalMasterId` now (SCD.6). Recommend live first.
+- **D2** — the 6 pool-less orphans (empty products, no listings, e.g. `GALE-JACKET-FBM`): leave as their own (invisible) groups — they never render in the grid. Confirm that's fine (recommend yes).
+- **D3** — canonical display = the child-owning master. Confirm (there's exactly one per group by construction).
