@@ -2,7 +2,7 @@
  * SCV.1 — product rollup reducer (pure).
  */
 import { describe, it, expect } from 'vitest'
-import { summarizeProductSync, marketMatches, type SyncRowLike } from './sync-control-product-view.js'
+import { summarizeProductSync, marketMatches, resolveCanonicalMap, type SyncRowLike } from './sync-control-product-view.js'
 
 const row = (over: Partial<SyncRowLike>): SyncRowLike => ({
   channel: 'EBAY',
@@ -88,5 +88,34 @@ describe('SCV.1b — omitChildrenInList (big-family cap)', () => {
     expect(omitChildrenInList(20, 20)).toBe(false)
     expect(omitChildrenInList(21, 20)).toBe(true)
     expect(omitChildrenInList(40, 20)).toBe(true)
+  })
+})
+
+describe('SCD.1 — resolveCanonicalMap (pool-derived grouping)', () => {
+  it('child-owning master → self; childless duplicate → its pooled canonical', () => {
+    const masters = ['GALE', 'GALE-ALT1', 'GALE-ALT2', 'AIRMESH', 'AIRMESH-MEN']
+    const withChildren = new Set(['GALE', 'AIRMESH', 'AIRMESH-MEN']) // AIRMESH-MEN owns its OWN distinct kids
+    const itemIdsByMaster = new Map([
+      ['GALE-ALT1', ['item-a']],
+      ['GALE-ALT2', ['item-b']],
+    ])
+    // both ALT listings pool GALE's variants
+    const canonicalByItem = new Map([['item-a', 'GALE'], ['item-b', 'GALE']])
+    const map = resolveCanonicalMap(masters, withChildren, itemIdsByMaster, canonicalByItem)
+    expect(map.get('GALE')).toBe('GALE')
+    expect(map.get('GALE-ALT1')).toBe('GALE')
+    expect(map.get('GALE-ALT2')).toBe('GALE')
+    // genuinely-different product that shares no pool stays separate
+    expect(map.get('AIRMESH-MEN')).toBe('AIRMESH-MEN')
+    expect(map.get('AIRMESH')).toBe('AIRMESH')
+  })
+  it('childless master with no pool link → self (harmless orphan)', () => {
+    const map = resolveCanonicalMap(['ORPHAN'], new Set(), new Map(), new Map())
+    expect(map.get('ORPHAN')).toBe('ORPHAN')
+  })
+  it('never folds into a canonical that equals itself', () => {
+    // an itemId that maps back to the same master is ignored
+    const map = resolveCanonicalMap(['X'], new Set(), new Map([['X', ['i']]]), new Map([['i', 'X']]))
+    expect(map.get('X')).toBe('X')
   })
 })

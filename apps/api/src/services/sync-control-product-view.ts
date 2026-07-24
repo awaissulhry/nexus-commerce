@@ -105,3 +105,34 @@ export const BIG_FAMILY_VARIANT_THRESHOLD = Number.parseInt(
 export function omitChildrenInList(variantCount: number, threshold = BIG_FAMILY_VARIANT_THRESHOLD): boolean {
   return variantCount > threshold
 }
+
+/**
+ * SCD.1 — pure canonical-master resolution (the pool-derived grouping).
+ *
+ * The owner's insight, verified in the data: only PARENT skus differ between
+ * duplicate copies; every copy shares the same CHILD skus via the shared
+ * listing pool. So:
+ *   - a master that OWNS child products is canonical → maps to itself;
+ *   - a CHILDLESS master (a pure duplicate listing) folds into the canonical
+ *     master whose variant products its listings pool (`canonicalMasterByItemId`).
+ * A genuinely-different product shares no pool → resolves to self (never
+ * wrongly merged). Deterministic, no regex/name/ASIN guessing.
+ */
+export function resolveCanonicalMap(
+  masterIds: string[],
+  mastersWithChildren: Set<string>,
+  itemIdsByMaster: Map<string, string[]>,
+  canonicalMasterByItemId: Map<string, string>,
+): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const mid of masterIds) {
+    if (mastersWithChildren.has(mid)) { out.set(mid, mid); continue }
+    let resolved = mid
+    for (const itemId of itemIdsByMaster.get(mid) ?? []) {
+      const canonical = canonicalMasterByItemId.get(itemId)
+      if (canonical && canonical !== mid) { resolved = canonical; break }
+    }
+    out.set(mid, resolved)
+  }
+  return out
+}

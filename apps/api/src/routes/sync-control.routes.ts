@@ -25,7 +25,7 @@ import { validateServesTokens } from '../services/sync-control-core.js'
 import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-master.service.js'
 import { recascadeAfterSyncControlChange } from '../services/stock-movement.service.js'
 import { enqueueOutboundRowsInstant } from '../services/outbound-enqueue.js'
-import { summarizeProductSync, marketMatches, omitChildrenInList } from '../services/sync-control-product-view.js'
+import { summarizeProductSync, marketMatches, omitChildrenInList, resolveCanonicalMap } from '../services/sync-control-product-view.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../services/product-read-cache.service.js'
 import { buildSyncControlWorkbook, parseSyncControlWorkbook, normalizeModeCell } from '../services/sync-control-excel.js'
 
@@ -150,6 +150,58 @@ async function computeRows(): Promise<SyncControlRow[]> {
   return rows
 }
 
+/**
+ * SCD.1 — resolve each master to its canonical master via the shared listing
+ * pool (owner's shared-child-SKU insight). Childless duplicate masters fold
+ * into the canonical whose variants their listings pool. Bounded queries (only
+ * childless masters are chased through the pool). Returns Map<masterId, canonicalId>.
+ */
+async function resolveCanonicalMasters(masterIds: string[]): Promise<Map<string, string>> {
+  if (masterIds.length === 0) return new Map()
+  const withChildren = await prisma.product.findMany({
+    where: { parentId: { in: masterIds } },
+    select: { parentId: true },
+    distinct: ['parentId'],
+  })
+  const mastersWithChildren = new Set(withChildren.map((p) => p.parentId).filter((x): x is string => Boolean(x)))
+  const childless = masterIds.filter((id) => !mastersWithChildren.has(id))
+
+  const itemIdsByMaster = new Map<string, string[]>()
+  const canonicalMasterByItemId = new Map<string, string>()
+
+  if (childless.length > 0) {
+    const cls = await prisma.channelListing.findMany({
+      where: { productId: { in: childless }, externalListingId: { not: null } },
+      select: { productId: true, externalListingId: true },
+    })
+    const allItemIds = new Set<string>()
+    for (const c of cls) {
+      if (!c.externalListingId) continue
+      const arr = itemIdsByMaster.get(c.productId) ?? []
+      arr.push(c.externalListingId)
+      itemIdsByMaster.set(c.productId, arr)
+      allItemIds.add(c.externalListingId)
+    }
+    if (allItemIds.size > 0) {
+      const mems = await prisma.sharedListingMembership.findMany({
+        where: { itemId: { in: [...allItemIds] } },
+        select: { itemId: true, productId: true },
+      })
+      const memPids = [...new Set(mems.map((m) => m.productId).filter((x): x is string => Boolean(x)))]
+      const memProducts = await prisma.product.findMany({ where: { id: { in: memPids } }, select: { id: true, parentId: true } })
+      const masterOfProduct = new Map(memProducts.map((p) => [p.id, p.parentId ?? p.id]))
+      for (const m of mems) {
+        if (!m.productId || canonicalMasterByItemId.has(m.itemId)) continue
+        const canonical = masterOfProduct.get(m.productId)
+        // only fold into a canonical that owns children (a real product family)
+        if (canonical && mastersWithChildren.has(canonical)) canonicalMasterByItemId.set(m.itemId, canonical)
+      }
+    }
+  }
+
+  return resolveCanonicalMap(masterIds, mastersWithChildren, itemIdsByMaster, canonicalMasterByItemId)
+}
+
 export default async function syncControlRoutes(app: FastifyInstance): Promise<void> {
   app.get('/stock/sync-control/overview', async () => {
     try {
@@ -251,6 +303,26 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     const masterOf = new Map(rowProducts.map((p) => [p.id, p.parentId ?? p.id]))
     const masterIds = [...new Set(rowPids.map((id) => masterOf.get(id) ?? id))]
 
+    // SCD.1 — pool-derived canonical grouping. A duplicate copy (a childless
+    // master whose eBay listing pools the canonical's child SKUs) folds into
+    // the canonical. Derived from the shared listing pool, not a SKU regex.
+    const canonicalOf = await resolveCanonicalMasters(masterIds)
+    const groupIdOf = (pid: string): string => {
+      const mid = masterOf.get(pid) ?? pid
+      return canonicalOf.get(mid) ?? mid
+    }
+    const groupIds = [...new Set(masterIds.map((mid) => canonicalOf.get(mid) ?? mid))]
+    // members folded into each group (the duplicate masters, excluding the canonical)
+    const membersByGroup = new Map<string, string[]>()
+    for (const mid of masterIds) {
+      const gid = canonicalOf.get(mid) ?? mid
+      if (gid !== mid) {
+        const arr = membersByGroup.get(gid) ?? []
+        arr.push(mid)
+        membersByGroup.set(gid, arr)
+      }
+    }
+
     const [masterMeta, ledgers] = await Promise.all([
       prisma.product.findMany({
         where: { id: { in: masterIds } },
@@ -269,13 +341,13 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     const byMaster = new Map<string, SyncControlRow[]>()
     for (const r of rows) {
       if (!r.productId) continue
-      const mid = masterOf.get(r.productId) ?? r.productId
-      const arr = byMaster.get(mid) ?? []
+      const gid = groupIdOf(r.productId)
+      const arr = byMaster.get(gid) ?? []
       arr.push(r)
-      byMaster.set(mid, arr)
+      byMaster.set(gid, arr)
     }
 
-    const all = masterIds.map((mid) => {
+    const all = groupIds.map((mid) => {
       const children = byMaster.get(mid) ?? []
       const variantPids = [...new Set(children.map((c) => c.productId).filter((p): p is string => Boolean(p)))]
       const poolTotal = variantPids.reduce((s, pid) => s + poolOf(pid), 0)
@@ -284,7 +356,12 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       const rollup = summarizeProductSync(children)
       const imageUrl = pickFaceImage(m?.images ?? []) ?? pickFaceImage(m?.parent?.images ?? []) ?? null
       return {
+        // masterId = the canonical master id (a real product) → editor/detail
+        // links and the ?masterId= single-fetch all still work unchanged.
         masterId: mid,
+        // SCD.1 — the duplicate masters folded into this group (for group-level
+        // bulk/export expansion in SCD.2).
+        memberMasterIds: membersByGroup.get(mid) ?? [],
         sku: m?.sku ?? children[0]?.sku ?? '?',
         name: m?.name ?? '(unknown product)',
         family: m?.family ?? null,

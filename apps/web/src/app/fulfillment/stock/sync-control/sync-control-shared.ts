@@ -36,6 +36,9 @@ export interface ProductRollup {
 
 export interface ProductMaster {
   masterId: string
+  /** SCD.1 — duplicate masters folded into this group (pool-derived), for
+   *  group-level bulk actions/export. Empty for a plain canonical/standalone. */
+  memberMasterIds?: string[]
   sku: string
   name: string
   family: { code: string; label: string } | null
