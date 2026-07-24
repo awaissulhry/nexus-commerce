@@ -2851,6 +2851,51 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
   )
 
 
+  // ── POST /api/ebay/flat-file/convert-axes-italian ───────────────────
+  // Rename a LIVE listing's variation AXIS NAMES to the operator's Italian
+  // standard (Color→Colore, Size→Taglia) via ReviseFixedPriceItem — matched by
+  // SKU, each variation's EAN carried (eBay IT requires it). On success we
+  // reconcile so our store reflects the new names and the drift flag clears.
+  // Inventory-managed listings reject Trading revises and are reported as
+  // needing an Inventory re-publish (the push already emits Italian).
+  fastify.post<{ Body: { itemId?: string; marketplace?: string } }>(
+    '/ebay/flat-file/convert-axes-italian',
+    async (request, reply) => {
+      const itemId = String(request.body?.itemId ?? '').trim()
+      const marketplace = String(request.body?.marketplace ?? 'IT').toUpperCase()
+      if (!/^\d+$/.test(itemId)) return reply.code(400).send({ error: 'numeric itemId required' })
+      const connection = await prisma.channelConnection.findFirst({
+        where: { channelType: 'EBAY', isActive: true },
+        select: { id: true },
+      })
+      if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
+      let token: string
+      try {
+        token = await ebayAuthService.getValidToken(connection.id)
+      } catch (err: unknown) {
+        return reply.code(503).send({ error: `Failed to get eBay token: ${err instanceof Error ? err.message : String(err)}` })
+      }
+      try {
+        const { convertListingAxesToItalian } = await import('../services/ebay-axes-convert.service.js')
+        const result = await convertListingAxesToItalian(itemId, marketplace, { oauthToken: token })
+        // A live rename changes the axis names — reconcile so our store (and the
+        // drift flag that reads it) reflect the new Italian names.
+        if (result.outcome === 'converted') {
+          try {
+            await reconcileMembershipsFromEbay(itemId, marketplace, { oauthToken: token })
+          } catch (e) {
+            request.log.warn({ err: e }, 'post-convert reconcile failed (non-fatal)')
+          }
+        }
+        return reply.send(result)
+      } catch (err: unknown) {
+        request.log.error(err, 'convert-axes-italian failed')
+        return reply.code(502).send({ error: err instanceof Error ? err.message : 'Convert failed' })
+      }
+    },
+  )
+
+
   // Audit R7 — adopting/reconciling a live listing must UN-HIDE its pool
   // products: a file-excluded product whose listing the operator just adopted
   // would stay invisible in GET /rows until an unrelated save cleared the
