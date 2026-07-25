@@ -169,7 +169,15 @@ async function resolveCanonicalMasters(masterIds: string[]): Promise<Map<string,
   // canonical's stem → its id (so an unpooled childless duplicate can fold in).
   const stemOfMaster = new Map<string, string>()
   const canonicalByStem = new Map<string, string>()
-  for (const m of masterSkus) {
+  // Deterministic: prefer the master whose SKU *is* the stem, else the
+  // lexicographically-first SKU. (An unordered findMany would otherwise let the
+  // winner flip between requests and make groups appear to move.)
+  const orderedMasters = [...masterSkus].sort((a, b) => {
+    const [sa, sb] = [canonicalStem(a.sku), canonicalStem(b.sku)]
+    const [ea, eb] = [a.sku.toUpperCase() === sa ? 0 : 1, b.sku.toUpperCase() === sb ? 0 : 1]
+    return ea - eb || a.sku.localeCompare(b.sku)
+  })
+  for (const m of orderedMasters) {
     const stem = canonicalStem(m.sku)
     stemOfMaster.set(m.id, stem)
     if (mastersWithChildren.has(m.id) && !canonicalByStem.has(stem)) canonicalByStem.set(stem, m.id)
@@ -358,7 +366,12 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
 
     const all = groupIds.map((mid) => {
       const children = byMaster.get(mid) ?? []
-      const variantPids = [...new Set(children.map((c) => c.productId).filter((p): p is string => Boolean(p)))]
+      const allPids = [...new Set(children.map((c) => c.productId).filter((p): p is string => Boolean(p)))]
+      // SCD.1c — a folded duplicate MASTER's own listing row carries that
+      // master's id, but a duplicate parent is NOT a variant. Count only real
+      // variants so "N var" matches reality (GALE = 41, not 45).
+      const foldedMasters = new Set(membersByGroup.get(mid) ?? [])
+      const variantPids = allPids.filter((pid) => !foldedMasters.has(pid))
       const poolTotal = variantPids.reduce((s, pid) => s + poolOf(pid), 0)
       const variantsInStock = variantPids.filter((pid) => poolOf(pid) > 0).length
       const m = metaById.get(mid)
@@ -821,10 +834,21 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
   async function filterExportRows(rows: SyncControlRow[], q: { channel?: string; market?: string; mode?: string; q?: string; drift?: string; masterId?: string }): Promise<SyncControlRow[]> {
     let masterVariantIds: Set<string> | null = null
     if (q.masterId) {
-      const variants = await prisma.product.findMany({
-        where: { OR: [{ id: q.masterId }, { parentId: q.masterId }] }, select: { id: true },
-      })
-      masterVariantIds = new Set(variants.map((v) => v.id))
+      // SCD.1c — scope to the WHOLE GROUP, using the same canonical resolution
+      // as the products view: the canonical's variants AND every folded
+      // duplicate copy's listing. (The old OR:[{id},{parentId}] missed the
+      // folded copies, so a per-product export silently omitted those listings
+      // and a re-import could never manage them.)
+      const rowPids = [...new Set(rows.map((r) => r.productId).filter((p): p is string => Boolean(p)))]
+      const rp = await prisma.product.findMany({ where: { id: { in: rowPids } }, select: { id: true, parentId: true } })
+      const masterOf = new Map(rp.map((p) => [p.id, p.parentId ?? p.id]))
+      const canon = await resolveCanonicalMasters([...new Set(rowPids.map((id) => masterOf.get(id) ?? id))])
+      masterVariantIds = new Set(
+        rowPids.filter((pid) => {
+          const mid = masterOf.get(pid) ?? pid
+          return (canon.get(mid) ?? mid) === q.masterId
+        }),
+      )
     }
     const chan = q.channel?.toUpperCase(); const mode = q.mode?.toUpperCase(); const needle = q.q?.trim().toLowerCase()
     const driftOnly = q.drift === '1' || q.drift === 'true'
