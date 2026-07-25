@@ -1004,6 +1004,19 @@ export async function pushVariationGroup(
     ? []
     : (pictureSpec ? [pictureSpec.name] : []).filter(Boolean)
 
+  // NEVER SILENT: the policy above is deliberate, but when it declines to vary
+  // pictures the operator got NO signal — they curated per-value photo sets,
+  // published, and eBay showed ONE shared gallery with nothing explaining why.
+  // (pictureAxis only auto-resolves from 6 hardcoded colour words, so a custom
+  // colour axis name — "Tinta" — silently lands here.) Warn only when curated
+  // sets actually exist, so this can't become noise. Warn, never block.
+  if (!opts?.omitImageVariesBy && !pictureSpec && (imageOverrideByColor?.size ?? 0) > 0) {
+    sinkWarn(
+      `No image axis resolved, so this listing publishes ONE shared gallery — the ${imageOverrideByColor!.size} curated per-value photo set(s) will NOT vary on eBay. `
+      + `Pick the image axis in the images tab (eBay varies pictures by exactly one axis) or rename the axis to a recognised colour name.`,
+    )
+  }
+
   // Row normalisation: write the canonical spec key to any row that only has a
   // synonym alias. Without this, families where existing variants were pushed
   // before the Accept-Language fix (so their itemSpecifics uses English "Color"/
