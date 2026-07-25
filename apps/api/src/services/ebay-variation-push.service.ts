@@ -1307,10 +1307,26 @@ export async function pushVariationGroup(
     const condition = CONDITION_ID_TO_ENUM[rawCondition] ?? (rawCondition || 'NEW')
 
     const pkgSize = buildPackageWeightAndSize(row)
+    // eBay REQUIRES description to be 1–4000 chars on the inventory_item PUT
+    // (25718 "Valore non valido per description") even though a grouped
+    // listing's PER-VARIANT description never surfaces — the GROUP description
+    // is what buyers see. Variant rows legitimately carry no description (the
+    // operator deliberately leaves it blank so each listing keeps its own live
+    // SEO copy), so `?? ''` sent an empty string and 400'd the WHOLE publish
+    // with an error naming a field that is invisible on the listing. Fall back
+    // through the group description → title → SKU: never empty, never a value
+    // a buyer can see. `title` already had this kind of fallback; description
+    // was the one field that could still be empty.
+    const variantDescription = String(
+      (typeof row.description === 'string' && row.description.trim() ? row.description : '')
+      || opts?.parentContent?.description
+      || (typeof row.title === 'string' && row.title.trim() ? row.title : '')
+      || sku,
+    ).slice(0, 4000)
     const itemBody = {
       product: {
         title: row.title ?? sku,
-        description: row.description ?? '',
+        description: variantDescription,
         imageUrls,
         aspects,
         // eBay requires the EAN/GTIN identifier field to be explicitly set.
