@@ -280,11 +280,16 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
       void beFetch(`/api/products/${productId}/images-workspace/axis`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ axis: next }),
+        // PER-MARKET: send the market this modal is editing. Without it the
+        // pick was written to one global Product field, so choosing an axis
+        // while on IT also changed DE/FR/ES — last pick won everywhere. The
+        // server stores it on this market's listing (falling back to the global
+        // field when the market has no listing yet, so nothing is dropped).
+        body: JSON.stringify({ axis: next, marketplace }),
       })
         .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`) })
         .catch(() => toast.error('Could not save the axis preference — this pick still applies to publishes from this modal'))
-    }, [productId, toast])
+    }, [productId, marketplace, toast])
 
     // EAC Layer A — bucket VALUES. Show the resolved CLEAN value list so the
     // picker count and the bucket count finally agree, but SAFETY-union it with

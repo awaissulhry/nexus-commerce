@@ -2083,11 +2083,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           try {
             const famParentPid = String((parentRowForKey as Record<string, unknown>)._productId ?? '')
             if (famParentPid) {
-              const famParentMeta = await prisma.product.findFirst({ where: { id: famParentPid }, select: { imageAxisPreference: true } })
+              // Per-market pick wins over the legacy global column, so the axis
+              // the images tab shows for THIS market is the one we publish by.
+              const { readImageAxisPreference } = await import('../services/ebay-image-axis-preference.service.js')
+              const famImageAxis = await readImageAxisPreference(famParentPid, marketplace)
               const co = await computeCuratedImageOverrides(
                 famParentPid,
                 familyRows.filter((r) => (r as Record<string, unknown>)._isParent !== true) as Array<Record<string, unknown>>,
-                famParentMeta?.imageAxisPreference,
+                famImageAxis,
               )
               if (co.hasCuration) curatedOverrides = co
             }

@@ -36,6 +36,7 @@ import {
   buildEbayFamilyRows,
 } from './ebay-variation-push.service.js'
 import { parseThemeAxes, axisSynonymKey } from './ebay-theme-axes.js'
+import { readImageAxisPreference } from './ebay-image-axis-preference.service.js'
 import { EbayCategoryService } from './ebay-category.service.js'
 
 const ebayCategoryService = new EbayCategoryService()
@@ -228,7 +229,8 @@ export async function resolveFamilyAxes(
 
   // D8 — the operator's explicit image-axis pick (Product.imageAxisPreference),
   // the SAME source the push passes as pictureAxisOverride.
-  const pictureAxisOverride = (parent.imageAxisPreference ?? '') || undefined
+  // Per-market pick wins over the legacy global column (ONE shared definition).
+  const pictureAxisOverride = await readImageAxisPreference(parentProductId, marketplace)
 
   const resolved = resolveVariationAxes(rowsForAxes, declaredAxes, {
     nameLabels,

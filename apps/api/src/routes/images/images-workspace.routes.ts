@@ -390,21 +390,24 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
   // ── PATCH /api/products/:productId/images-workspace/axis ──────────
   fastify.patch<{
     Params: { productId: string }
-    Body: { axis: string }
+    Body: { axis: string; marketplace?: string }
   }>(
     '/products/:productId/images-workspace/axis',
     async (request, reply) => {
       const { productId } = request.params
-      const { axis } = request.body ?? ({} as any)
+      const { axis, marketplace } = request.body ?? ({} as any)
       if (typeof axis !== 'string' || axis.trim().length === 0) {
         return reply.code(400).send({ error: 'axis required' })
       }
-      const updated = await prisma.product.update({
-        where: { id: productId },
-        data: { imageAxisPreference: axis.trim() },
-        select: { id: true, imageAxisPreference: true },
-      })
-      return updated
+      // PER-MARKET: eBay varies pictures by ONE axis and the operator picks it.
+      // This used to write a single global Product column, so choosing an axis
+      // on IT also changed DE/FR/ES — last pick won everywhere. With a
+      // marketplace the pick is stored on THAT market's listing; without one
+      // (or when the market has no listing yet) it falls back to the global
+      // column, so a choice is never silently dropped.
+      const { writeImageAxisPreference } = await import('../../services/ebay-image-axis-preference.service.js')
+      const result = await writeImageAxisPreference(productId, axis, marketplace)
+      return { id: productId, imageAxisPreference: result.axis, ...result }
     },
   )
 
