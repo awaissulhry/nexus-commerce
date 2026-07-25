@@ -25,9 +25,10 @@ import { usePolledList } from '@/lib/sync/use-polled-list'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { Tooltip } from '@/components/ui/Tooltip'
+import { Tip } from './SyncTip'
 import SyncExcelBar from './SyncExcelBar'
 import {
-  DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP, mapDensity,
+  DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP, ACTION_HELP, CONTROL_HELP, PAGE_SIZES, mapDensity,
   type Density, type Mode, type Row, type ProductMaster,
 } from './sync-control-shared'
 import styles from './styles.module.css'
@@ -256,7 +257,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
   const to = Math.min(page * pageSize, total)
 
   return (
-    <div className="h10-ds-gridcard">
+    <div className="h10-ds-gridcard sc-card-pop">
       <GridToolbar
         count={
           selectedMasterIds.length > 0
@@ -267,34 +268,48 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
           <>
             <SyncExcelBar exportQuery={exportQuery} notify={notify} onApplied={onChanged} />
             {familyOptions.length > 0 && (
-              <span style={{ width: 150, display: 'inline-flex' }}>
+              <Tip help={CONTROL_HELP.filterFamily} width={150}>
                 <Listbox ariaLabel="Family" value={family} onChange={setFamily}
                   options={[{ value: '', label: 'All families' }, ...familyOptions.map(([code, label]) => ({ value: code, label }))]} />
-              </span>
+              </Tip>
             )}
-            <SegmentedControl options={DENSITY_OPTIONS} value={density} onChange={(v) => onDensity(v as Density)} size="sm" />
-            <span style={{ width: 110, display: 'inline-flex' }}>
+            <Tip help={CONTROL_HELP.density}>
+              <SegmentedControl options={DENSITY_OPTIONS} value={density} onChange={(v) => onDensity(v as Density)} size="sm" />
+            </Tip>
+            <Tip help={CONTROL_HELP.pageSize} width={110}>
               <Listbox ariaLabel="Rows per page" value={String(pageSize)} onChange={(v) => { setPage(1); setPageSize(Number(v)) }}
-                options={[25, 50, 100].map((n) => ({ value: String(n), label: `${n} / page` }))} />
-            </span>
+                options={PAGE_SIZES.map((n) => ({ value: String(n), label: `${n} / page` }))} />
+            </Tip>
           </>
         }
       >
         {selectedMasterIds.length > 0 ? (
           <span className={styles.selActions}>
             {BULK_ACTIONS.map(([a, label]) => (
-              <Button key={a} size="sm" disabled={busy} onClick={() => void runAction(a)}>{label}</Button>
+              <Tip key={a} help={ACTION_HELP[a]}>
+                <Button size="sm" disabled={busy} onClick={() => void runAction(a)}>{label}</Button>
+              </Tip>
             ))}
             <span className="inline-flex items-center gap-1 text-sm">
-              Buffer
-              <Input inputMode="numeric" value={bufferVal} onChange={(e) => setBufferVal(e.target.value.replace(/[^0-9]/g, ''))} placeholder="0" style={{ width: 56 }} />
-              <Button size="sm" disabled={busy || bufferVal === ''} onClick={() => void runAction('BUFFER', { buffer: Number(bufferVal) })}>Apply</Button>
+              <Tip help={ACTION_HELP.BUFFER}><span style={{ cursor: 'help' }}>Buffer</span></Tip>
+              <Tip help={CONTROL_HELP.bufferInput}>
+                <Input inputMode="numeric" value={bufferVal} onChange={(e) => setBufferVal(e.target.value.replace(/[^0-9]/g, ''))} placeholder="0" style={{ width: 56 }} />
+              </Tip>
+              <Tip help={CONTROL_HELP.bufferApply}>
+                <Button size="sm" disabled={busy || bufferVal === ''} onClick={() => void runAction('BUFFER', { buffer: Number(bufferVal) })}>Apply</Button>
+              </Tip>
             </span>
-            <Button size="sm" disabled={busy} onClick={() => setSelected(new Set())}>Clear</Button>
+            <Tip help={CONTROL_HELP.clearSelection}>
+              <Button size="sm" disabled={busy} onClick={() => setSelected(new Set())}>Clear</Button>
+            </Tip>
           </span>
         ) : (
           <span className={styles.searchField}>
-            <Input leadingIcon={<Search size={13} style={{ color: 'var(--text-tertiary)' }} />} placeholder="Search product or SKU…" value={search} onChange={(e) => onSearch(e.target.value)} style={{ width: '100%' }} />
+            <Tooltip content={CONTROL_HELP.searchProducts}>
+              <span className="inline-flex" style={{ width: '100%' }}>
+                <Input leadingIcon={<Search size={13} style={{ color: 'var(--text-tertiary)' }} />} placeholder="Search product or SKU…" value={search} onChange={(e) => onSearch(e.target.value)} style={{ width: '100%' }} />
+              </span>
+            </Tooltip>
           </span>
         )}
       </GridToolbar>
@@ -309,6 +324,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
             selected={selected}
             onSelectedChange={setSelected}
             rowSelectable={(r) => r.kind === 'master' && !allFba(r.m)}
+            selectAllHint={CONTROL_HELP.selectAll}
             rowSelectableHint="Amazon-managed (FBA) — no non-FBA listings to act on"
             emptyState={loading ? <span style={{ color: 'var(--text-tertiary)' }}>Loading…</span> : <span style={{ color: 'var(--text-tertiary)' }}>No products match the filters.</span>}
           />
@@ -317,7 +333,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
 
       <div className={styles.gridFooter}>
         <span className="tabular-nums">{total} products · page {page}/{pages}</span>
-        <Pagination page={page} pageCount={pages} onPage={setPage} />
+        <Tip help={CONTROL_HELP.pagination}><Pagination page={page} pageCount={pages} onPage={setPage} /></Tip>
       </div>
     </div>
   )
@@ -331,17 +347,21 @@ function MasterCell({ m, expanded, onToggle }: { m: ProductMaster; expanded: boo
   return (
     <div className="flex w-full items-center gap-2">
       {m.listingCount > 0 ? (
-        <button type="button" onClick={(e) => { e.stopPropagation(); onToggle() }} aria-label={expanded ? 'Collapse' : 'Expand'} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">
-          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        </button>
+        <Tooltip content={expanded ? 'Hide this product’s listings.' : CONTROL_HELP.expandRow}>
+          <button type="button" onClick={(e) => { e.stopPropagation(); onToggle() }} aria-label={expanded ? 'Collapse' : 'Expand'} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </button>
+        </Tooltip>
       ) : (
         <span className="inline-block h-5 w-5 shrink-0" aria-hidden />
       )}
       <span className="shrink-0"><Thumbnail src={m.imageUrl} alt={m.name} /></span>
       <div className="min-w-0 flex-1">
-        <Link href={`/products/${m.masterId}/edit`} target="_blank" rel="noopener" className="block truncate text-sm font-medium text-zinc-900 hover:underline dark:text-zinc-100" title={m.name} onClick={(e) => e.stopPropagation()}>
-          {m.name}
-        </Link>
+        <Tooltip content={`${m.name} — ${CONTROL_HELP.productLink}`}>
+          <Link href={`/products/${m.masterId}/edit`} target="_blank" rel="noopener" className="block truncate text-sm font-medium text-zinc-900 hover:underline dark:text-zinc-100" onClick={(e) => e.stopPropagation()}>
+            {m.name}
+          </Link>
+        </Tooltip>
         <div className="flex items-center gap-1.5 text-xs text-zinc-500">
           <span className="truncate font-mono">{m.sku}</span>
           {m.family && <span className="shrink-0 rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800">{m.family.label}</span>}
@@ -350,7 +370,7 @@ function MasterCell({ m, expanded, onToggle }: { m: ProductMaster; expanded: boo
       {/* SCD.5 — every product (not just big families) opens in its own tab:
           the per-product page is where filtering + per-family control live. */}
       {m.listingCount > 0 && (
-        <Tooltip content={`Open ${m.sku} in a new tab — filter, control each family, export`}>
+        <Tooltip content={CONTROL_HELP.openProductTab}>
           <Link
             href={`/fulfillment/stock/sync-control/product/${m.masterId}`}
             target="_blank"
@@ -374,16 +394,17 @@ function MoreCell({ m }: { m: ProductMaster }) {
   const rest = Math.max(0, m.listingCount - shown)
   return (
     <div className="flex w-full items-center gap-2 pl-7">
+      <Tooltip content={CONTROL_HELP.openAllListings}>
       <Link
         href={`/fulfillment/stock/sync-control/product/${m.masterId}`}
         target="_blank"
         rel="noopener"
         className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
-        title={`Open all ${m.listingCount} listings for ${m.name} in a new tab`}
         onClick={(e) => e.stopPropagation()}
       >
         Showing {shown} of {m.listingCount} — open all {rest > 0 ? `(+${rest})` : ''} <ExternalLink size={11} />
       </Link>
+      </Tooltip>
     </div>
   )
 }

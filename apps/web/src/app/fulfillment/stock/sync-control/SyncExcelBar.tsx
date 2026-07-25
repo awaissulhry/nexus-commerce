@@ -12,6 +12,8 @@
 import { useRef, useState } from 'react'
 import { Download, Upload, X } from 'lucide-react'
 import { Button } from '@/design-system/primitives'
+import { CONTROL_HELP } from './sync-control-shared'
+import { Tip } from './SyncTip'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 
@@ -96,8 +98,12 @@ export default function SyncExcelBar({ exportQuery, notify, onApplied }: Props) 
 
   return (
     <>
-      <Button size="sm" disabled={busy} onClick={() => void exportXlsx()}><Download size={13} /> Export</Button>
-      <Button size="sm" disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={13} /> Import</Button>
+      <Tip help={CONTROL_HELP.exportXlsx}>
+        <Button size="sm" disabled={busy} onClick={() => void exportXlsx()}><Download size={13} /> Export</Button>
+      </Tip>
+      <Tip help={CONTROL_HELP.importXlsx}>
+        <Button size="sm" disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={13} /> Import</Button>
+      </Tip>
       <input
         ref={fileRef}
         type="file"
@@ -114,7 +120,9 @@ export default function SyncExcelBar({ exportQuery, notify, onApplied }: Props) 
                 <div className="text-sm font-semibold">Review import — {preview.changeCount} change{preview.changeCount === 1 ? '' : 's'}</div>
                 <div className="text-xs text-zinc-500">{pendingFile?.name} · {preview.skipCount} row(s) skipped</div>
               </div>
-              <button type="button" className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200" onClick={() => { setPreview(null); setPendingFile(null) }} aria-label="Close"><X size={18} /></button>
+              <Tip help={CONTROL_HELP.importClose}>
+                <button type="button" className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200" onClick={() => { setPreview(null); setPendingFile(null) }} aria-label="Close"><X size={18} /></button>
+              </Tip>
             </div>
 
             <div className="max-h-[55vh] overflow-auto">
@@ -149,10 +157,14 @@ export default function SyncExcelBar({ exportQuery, notify, onApplied }: Props) 
             </div>
 
             <div className="flex items-center justify-end gap-2 border-t border-zinc-200 px-4 py-3 dark:border-zinc-800">
-              <Button size="sm" disabled={busy} onClick={() => { setPreview(null); setPendingFile(null) }}>Cancel</Button>
+              <Tip help={CONTROL_HELP.importCancel}>
+                <Button size="sm" disabled={busy} onClick={() => { setPreview(null); setPendingFile(null) }}>Cancel</Button>
+              </Tip>
+              <Tip help={CONTROL_HELP.importApply}>
               <Button size="sm" variant="primary" disabled={busy || preview.changeCount === 0} onClick={() => void applyImport()}>
                 Apply {preview.changeCount} change{preview.changeCount === 1 ? '' : 's'}
               </Button>
+              </Tip>
             </div>
           </div>
         </div>

@@ -32,6 +32,10 @@ export interface DataGridProps<T> {
   rowSelectable?: (row: T) => boolean
   /** Tooltip/aria label for a disabled row checkbox. */
   rowSelectableHint?: string
+  /** SCT.1 — hover help for the select-all checkbox (what "all" means here). */
+  selectAllHint?: string
+  /** SCT.1 — hover help for a row checkbox. */
+  selectRowHint?: string
   showTotals?: boolean
   emptyState?: ReactNode
   initialSort?: { key: string; dir: 'asc' | 'desc' }
@@ -54,6 +58,8 @@ export function DataGrid<T>({
   onSelectedChange,
   rowSelectable,
   rowSelectableHint,
+  selectAllHint,
+  selectRowHint,
   showTotals,
   emptyState,
   initialSort,
@@ -136,6 +142,7 @@ export function DataGrid<T>({
                     if (el) el.indeterminate = someSelected
                   }}
                   onChange={toggleAll}
+                  title={selectAllHint}
                   aria-label="Select all rows"
                 />
               </th>
@@ -176,7 +183,7 @@ export function DataGrid<T>({
                       {rowSelectable && !rowSelectable(row) ? (
                         <input type="checkbox" checked={false} disabled title={rowSelectableHint} aria-label={rowSelectableHint ?? 'Selection unavailable'} />
                       ) : (
-                        <input type="checkbox" checked={isSel} onChange={() => toggleRow(k)} aria-label="Select row" />
+                        <input type="checkbox" checked={isSel} onChange={() => toggleRow(k)} title={selectRowHint} aria-label="Select row" />
                       )}
                     </td>
                   )}

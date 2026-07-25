@@ -305,7 +305,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
   app.get('/stock/sync-control/listings', async (request) => {
     const q = request.query as { channel?: string; market?: string; mode?: string; q?: string; page?: string; pageSize?: string; drift?: string }
     const page = Math.max(1, Number.parseInt(q.page ?? '1', 10) || 1)
-    const pageSize = Math.min(200, Math.max(10, Number.parseInt(q.pageSize ?? '50', 10) || 50))
+    const pageSize = Math.min(500, Math.max(10, Number.parseInt(q.pageSize ?? '50', 10) || 50))
     let rows = await computeRows()
     const lChans = csvFilter(q.channel).map((x) => x.toUpperCase())
     const lMkts = csvFilter(q.market).map((x) => x.toUpperCase())
@@ -341,7 +341,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       page?: string; pageSize?: string; masterId?: string; family?: string
     }
     const page = Math.max(1, Number.parseInt(q.page ?? '1', 10) || 1)
-    const pageSize = Math.min(200, Math.max(10, Number.parseInt(q.pageSize ?? '50', 10) || 50))
+    const pageSize = Math.min(500, Math.max(10, Number.parseInt(q.pageSize ?? '50', 10) || 50))
     // SCV.1b — the dedicated per-product page requests one master's FULL tree
     // (no filters, no child cap).
     const singleMasterId = q.masterId?.trim() || null
@@ -606,7 +606,9 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
 
     if (listings.length === 0 && memberships.length === 0) return reply.code(400).send({ error: 'no targets' })
     // Master-bulk legitimately expands large (a 49-variant family ≈ 300 rows).
-    const cap = body.masterIds?.length ? 3000 : 500
+    // SCT.2 — 500/page is selectable, and the selection survives paging, so a
+    // direct (non-master) selection can legitimately exceed one page.
+    const cap = body.masterIds?.length ? 3000 : 2000
     if (listings.length + memberships.length > cap) return reply.code(400).send({ error: `max ${cap} targets per call` })
 
     const result = { updated: 0, skippedFba: 0, unchanged: 0, recascadeQueued: 0, skippedShared: 0 }
@@ -807,7 +809,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
   app.get('/stock/sync-control/audit', async (request) => {
     const q = request.query as { page?: string; pageSize?: string; scope?: string; field?: string }
     const page = Math.max(1, Number.parseInt(q.page ?? '1', 10) || 1)
-    const pageSize = Math.min(200, Math.max(10, Number.parseInt(q.pageSize ?? '50', 10) || 50))
+    const pageSize = Math.min(500, Math.max(10, Number.parseInt(q.pageSize ?? '50', 10) || 50))
     const where = {
       ...(q.scope ? { scopeType: q.scope.toUpperCase() } : {}),
       ...(q.field ? { field: q.field } : {}),

@@ -25,7 +25,7 @@ export interface FilterBarOption {
 export type FilterDimension =
   | {
       key: string
-      label: string
+      label: ReactNode
       kind: 'multiselect'
       options: FilterBarOption[]
       value: string[]
@@ -36,7 +36,7 @@ export type FilterDimension =
     }
   | {
       key: string
-      label: string
+      label: ReactNode
       kind: 'select'
       options: FilterBarOption[]
       value: string
@@ -46,7 +46,7 @@ export type FilterDimension =
     }
   | {
       key: string
-      label: string
+      label: ReactNode
       kind: 'range'
       min: string
       max: string
@@ -56,7 +56,7 @@ export type FilterDimension =
     }
   | {
       key: string
-      label: string
+      label: ReactNode
       kind: 'toggle'
       value: boolean
       onChange: (next: boolean) => void

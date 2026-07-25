@@ -16,6 +16,7 @@ import { Button, Input, Pill, SegmentedControl } from '@/design-system/primitive
 import { getBackendUrl } from '@/lib/backend-url'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
 import { Tooltip } from '@/components/ui/Tooltip'
+import { Tip, TipText } from './SyncTip'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 // DS class styles — the Listbox/grid markup is unstyled without these
 // (pages import them directly; see ApiKeysClient for the convention).
@@ -26,7 +27,7 @@ import '@/design-system/styles/patterns.css'
 import styles from './styles.module.css'
 import SyncProductsGrid from './SyncProductsGrid'
 import {
-  DENSITY_OPTIONS, MODE_TONE, MODE_LABEL,
+  DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP, ACTION_HELP, CONTROL_HELP, PAGE_SIZES,
   type Mode, type Row, type Density,
 } from './sync-control-shared'
 
@@ -58,6 +59,13 @@ interface Overview {
 
 /** Cap long card tables: render the first `cap` rows with a Show-all toggle.
  *  All data stays client-side (the server already bounds each list). */
+/** SCT.1 — column header with its COLUMN_HELP explanation on hover. */
+function Hdr({ k, label }: { k: string; label: string }) {
+  // cursor inherits: most of these headers are sortable and the grid already
+  // shows a pointer — a help cursor would read as "not clickable".
+  return <TipText help={COLUMN_HELP[k] ?? ''} cursor="inherit">{label}</TipText>
+}
+
 function CappedRows<T>({ rows, cap = 5, render }: { rows: T[]; cap?: number; render: (visible: T[]) => React.ReactNode }) {
   const [showAll, setShowAll] = useState(false)
   const visible = showAll ? rows : rows.slice(0, cap)
@@ -66,13 +74,15 @@ function CappedRows<T>({ rows, cap = 5, render }: { rows: T[]; cap?: number; ren
       {render(visible)}
       {rows.length > cap && (
         <div className="border-t border-zinc-200 px-3 py-1.5 dark:border-zinc-800">
-          <button
-            type="button"
-            className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
-            onClick={() => setShowAll((v) => !v)}
-          >
-            {showAll ? 'Show fewer' : `Show all ${rows.length}`}
-          </button>
+          <Tooltip content={showAll ? CONTROL_HELP.showFewerRows : CONTROL_HELP.showAllRows}>
+            <button
+              type="button"
+              className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+              onClick={() => setShowAll((v) => !v)}
+            >
+              {showAll ? 'Show fewer' : `Show all ${rows.length}`}
+            </button>
+          </Tooltip>
         </div>
       )}
     </>
@@ -298,7 +308,7 @@ export default function SyncControlClient() {
 
   const columns = useMemo<Array<Column<Row>>>(() => [
     {
-      key: 'sku', label: 'SKU', sticky: true, width: 230, sortable: true,
+      key: 'sku', label: <Hdr k="sku" label="SKU" />, sticky: true, width: 230, sortable: true,
       sortValue: (r) => r.sku,
       render: (r) => (
         <span className="font-mono text-xs">
@@ -307,26 +317,30 @@ export default function SyncControlClient() {
         </span>
       ),
     },
-    { key: 'channel', label: 'Channel', width: 90, sortable: true, sortValue: (r) => r.channel, render: (r) => r.channel },
-    { key: 'market', label: 'Market', width: 80, sortable: true, sortValue: (r) => r.marketplace, render: (r) => r.marketplace },
-    { key: 'lane', label: 'Lane', width: 70, render: (r) => <span className="text-xs text-zinc-500">{r.lane === 'SHARED' ? 'Shared' : 'Listing'}</span> },
+    { key: 'channel', label: <Hdr k="channel" label="Channel" />, width: 90, sortable: true, sortValue: (r) => r.channel, render: (r) => r.channel },
+    { key: 'market', label: <Hdr k="market" label="Market" />, width: 80, sortable: true, sortValue: (r) => r.marketplace, render: (r) => r.marketplace },
+    { key: 'lane', label: <Hdr k="lane" label="Lane" />, width: 70, render: (r) => <span className="text-xs text-zinc-500">{r.lane === 'SHARED' ? 'Shared' : 'Listing'}</span> },
     {
-      key: 'mode', label: 'Mode', width: 130, sortable: true, sortValue: (r) => r.mode,
-      render: (r) => <Pill tone={MODE_TONE[r.mode]}>{MODE_LABEL[r.mode]}</Pill>,
+      key: 'mode', label: <Hdr k="mode" label="Mode" />, width: 130, sortable: true, sortValue: (r) => r.mode,
+      render: (r) => (
+        <TipText help={MODE_HELP[r.mode] ?? ''}>
+          <Pill tone={MODE_TONE[r.mode]}>{MODE_LABEL[r.mode]}</Pill>
+        </TipText>
+      ),
     },
     {
-      key: 'intended', label: 'Intended', align: 'right', width: 85, sortable: true,
+      key: 'intended', label: <Hdr k="intended" label="Intended" />, align: 'right', width: 85, sortable: true,
       sortValue: (r) => (r.mode === 'FBA' ? -1 : r.intendedQty ?? -1),
       render: (r) => <span className="tabular-nums">{r.mode === 'FBA' ? '—' : r.intendedQty ?? '—'}</span>,
     },
     {
-      key: 'live', label: 'Live', align: 'right', width: 75, sortable: true,
+      key: 'live', label: <Hdr k="live" label="Live" />, align: 'right', width: 75, sortable: true,
       sortValue: (r) => (r.mode === 'FBA' ? -1 : r.liveQty ?? -1),
       render: (r) => <span className="tabular-nums">{r.mode === 'FBA' ? '—' : r.liveQty ?? '—'}</span>,
     },
-    { key: 'buffer', label: 'Buffer', align: 'right', width: 70, render: (r) => <span className="tabular-nums">{r.mode === 'FBA' ? '—' : r.buffer}</span> },
+    { key: 'buffer', label: <Hdr k="buffer" label="Buffer" />, align: 'right', width: 70, render: (r) => <span className="tabular-nums">{r.mode === 'FBA' ? '—' : r.buffer}</span> },
     {
-      key: 'routed', label: 'Routed from',
+      key: 'routed', label: <Hdr k="routedFrom" label="Routed from" />,
       render: (r) => (
         <span className="text-xs text-zinc-500">
           {r.mode === 'FBA' ? 'Amazon-managed' : r.routedLocations.join(', ') || (r.mode === 'FOLLOW' ? '' : '—')}
@@ -337,7 +351,7 @@ export default function SyncControlClient() {
 
   const filterDimensions: FilterDimension[] = [
     {
-      key: 'channel', label: 'Channel', kind: 'multiselect', value: channels,
+      key: 'channel', label: <TipText help={CONTROL_HELP.filterChannel}>Channel</TipText>, kind: 'multiselect', value: channels,
       onChange: (v) => { setPage(1); setChannels(v) },
       options: [
         { value: 'AMAZON', label: 'Amazon' },
@@ -346,17 +360,17 @@ export default function SyncControlClient() {
       ],
     },
     {
-      key: 'market', label: 'Market', kind: 'multiselect', value: markets,
+      key: 'market', label: <TipText help={CONTROL_HELP.filterMarket}>Market</TipText>, kind: 'multiselect', value: markets,
       onChange: (v) => { setPage(1); setMarkets(v) },
       options: ['IT', 'DE', 'FR', 'ES', 'DEFAULT'].map((m) => ({ value: m, label: m })),
     },
     {
-      key: 'mode', label: 'Mode', kind: 'multiselect', value: modes,
+      key: 'mode', label: <TipText help={CONTROL_HELP.filterMode}>Mode</TipText>, kind: 'multiselect', value: modes,
       onChange: (v) => { setPage(1); setModes(v) },
       options: (Object.keys(MODE_LABEL) as Mode[]).map((m) => ({ value: m, label: MODE_LABEL[m] })),
     },
     {
-      key: 'drift', label: 'Drift only', kind: 'toggle', value: drift,
+      key: 'drift', label: <TipText help={CONTROL_HELP.driftOnly}>Drift only</TipText>, kind: 'toggle', value: drift,
       onChange: (v) => { setPage(1); setDrift(v) },
     },
   ]
@@ -422,12 +436,14 @@ export default function SyncControlClient() {
       />
 
       <div className="flex items-center justify-between">
-        <SegmentedControl
-          options={[{ value: 'products', label: 'Products' }, { value: 'listings', label: 'Listings' }]}
-          value={view}
-          onChange={(v) => { setSelected(new Map()); setView(v as 'products' | 'listings') }}
-          size="sm"
-        />
+        <Tip help={CONTROL_HELP.viewToggle}>
+          <SegmentedControl
+            options={[{ value: 'products', label: 'Products' }, { value: 'listings', label: 'Listings' }]}
+            value={view}
+            onChange={(v) => { setSelected(new Map()); setView(v as 'products' | 'listings') }}
+            size="sm"
+          />
+        </Tip>
         <span className="text-xs text-zinc-500">
           {view === 'products' ? 'One row per product family — expand for listings, bulk-act per product.' : 'Every listing flat — finest per-row control.'}
         </span>
@@ -444,7 +460,7 @@ export default function SyncControlClient() {
           onSearch={setQLive}
         />
       ) : (
-      <div className="h10-ds-gridcard">
+      <div className="h10-ds-gridcard sc-card-pop">
         <GridToolbar
           count={
             selected.size > 0 ? (
@@ -455,20 +471,22 @@ export default function SyncControlClient() {
           }
           right={
             <>
-              <SegmentedControl
-                options={DENSITY_OPTIONS}
-                value={density}
-                onChange={(v) => setDensity(v as 'compact' | 'cozy' | 'spacious')}
-                size="sm"
-              />
-              <span style={{ width: 110, display: 'inline-flex' }}>
+              <Tip help={CONTROL_HELP.density}>
+                <SegmentedControl
+                  options={DENSITY_OPTIONS}
+                  value={density}
+                  onChange={(v) => setDensity(v as 'compact' | 'cozy' | 'spacious')}
+                  size="sm"
+                />
+              </Tip>
+              <Tip help={CONTROL_HELP.pageSize} width={110}>
                 <Listbox
                   ariaLabel="Rows per page"
                   value={String(pageSize)}
                   onChange={(v) => { setPage(1); setPageSize(Number(v)) }}
-                  options={[50, 100, 200].map((n) => ({ value: String(n), label: `${n} / page` }))}
+                  options={PAGE_SIZES.map((n) => ({ value: String(n), label: `${n} / page` }))}
                 />
-              </span>
+              </Tip>
             </>
           }
         >
@@ -483,29 +501,38 @@ export default function SyncControlClient() {
                 ['EXCLUDE', 'Exclude'],
                 ['INCLUDE', 'Include'],
               ].map(([a, label]) => (
-                <Button key={a} size="sm" disabled={busy} onClick={() => void runAction(a)}>
-                  {label}
-                </Button>
+                <Tip key={a} help={ACTION_HELP[a]}>
+                  <Button size="sm" disabled={busy} onClick={() => void runAction(a)}>
+                    {label}
+                  </Button>
+                </Tip>
               ))}
               <span className="inline-flex items-center gap-1 text-sm">
-                Buffer
-                <Input
-                  inputMode="numeric"
-                  value={bufferVal}
-                  onChange={(e) => setBufferVal(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="0"
-                  style={{ width: 56 }}
-                />
-                <Button size="sm" disabled={busy || bufferVal === ''} onClick={() => void runAction('BUFFER', { buffer: Number(bufferVal) })}>
-                  Apply
-                </Button>
+                <TipText help={ACTION_HELP.BUFFER}>Buffer</TipText>
+                <Tip help={CONTROL_HELP.bufferInput}>
+                  <Input
+                    inputMode="numeric"
+                    value={bufferVal}
+                    onChange={(e) => setBufferVal(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="0"
+                    style={{ width: 56 }}
+                  />
+                </Tip>
+                <Tip help={CONTROL_HELP.bufferApply}>
+                  <Button size="sm" disabled={busy || bufferVal === ''} onClick={() => void runAction('BUFFER', { buffer: Number(bufferVal) })}>
+                    Apply
+                  </Button>
+                </Tip>
               </span>
-              <Button size="sm" disabled={busy} onClick={() => setSelected(new Map())}>
-                Clear
-              </Button>
+              <Tip help={CONTROL_HELP.clearSelection}>
+                <Button size="sm" disabled={busy} onClick={() => setSelected(new Map())}>
+                  Clear
+                </Button>
+              </Tip>
             </span>
           ) : (
             <span className={styles.searchField}>
+              <Tip help={CONTROL_HELP.searchRows} style={{ width: '100%' }}>
               <Input
                 leadingIcon={<Search size={13} style={{ color: 'var(--text-tertiary)' }} />}
                 placeholder="Search SKU…"
@@ -513,6 +540,7 @@ export default function SyncControlClient() {
                 onChange={(e) => setQLive(e.target.value)}
                 style={{ width: '100%' }}
               />
+              </Tip>
             </span>
           )}
         </GridToolbar>
@@ -526,6 +554,7 @@ export default function SyncControlClient() {
             selected={selectedKeys}
             onSelectedChange={onGridSelect}
             rowSelectable={(r) => r.mode !== 'FBA'}
+            selectAllHint={CONTROL_HELP.selectAll}
             rowSelectableHint="Amazon-managed (FBA) — excluded from actions"
             emptyState={
               loading ? (
@@ -539,7 +568,7 @@ export default function SyncControlClient() {
 
         <div className={styles.gridFooter}>
           <span className="tabular-nums">{total} rows · page {page}/{pages}</span>
-          <Pagination page={page} pageCount={pages} onPage={setPage} />
+          <Tip help={CONTROL_HELP.pagination}><Pagination page={page} pageCount={pages} onPage={setPage} /></Tip>
         </div>
       </div>
       )}
@@ -568,14 +597,20 @@ export default function SyncControlClient() {
                       <span className="text-zinc-400">not a sync source</span>
                     ) : editingLoc === l.code ? (
                       <span className="flex items-center gap-1">
-                        <input
-                          className={`${inputCls} w-64 font-mono text-[11px]`}
-                          value={locDraft}
-                          onChange={(e) => setLocDraft(e.target.value)}
-                          placeholder="e.g. AMAZON:IT, EBAY — empty = everywhere"
-                        />
-                        <button disabled={busy} className="h-7 rounded border border-emerald-400 px-1.5 text-[11px] text-emerald-700 dark:text-emerald-400" onClick={() => void saveLocRoutes(l.code)}>Save</button>
-                        <button className="h-7 rounded border border-zinc-300 px-1.5 text-[11px] dark:border-zinc-700" onClick={() => setEditingLoc(null)}>Cancel</button>
+                        <Tooltip content={CONTROL_HELP.routeInput}>
+                          <input
+                            className={`${inputCls} w-64 font-mono text-[11px]`}
+                            value={locDraft}
+                            onChange={(e) => setLocDraft(e.target.value)}
+                            placeholder="e.g. AMAZON:IT, EBAY — empty = everywhere"
+                          />
+                        </Tooltip>
+                        <Tooltip content={CONTROL_HELP.routeSave}>
+                          <button disabled={busy} className="h-7 rounded border border-emerald-400 px-1.5 text-[11px] text-emerald-700 dark:text-emerald-400" onClick={() => void saveLocRoutes(l.code)}>Save</button>
+                        </Tooltip>
+                        <Tooltip content={CONTROL_HELP.routeCancel}>
+                          <button className="h-7 rounded border border-zinc-300 px-1.5 text-[11px] dark:border-zinc-700" onClick={() => setEditingLoc(null)}>Cancel</button>
+                        </Tooltip>
                       </span>
                     ) : (
                       <span className="flex items-center gap-1">
@@ -584,12 +619,14 @@ export default function SyncControlClient() {
                               <span key={t} className="inline-block rounded bg-indigo-100 px-1.5 py-0.5 font-mono text-[11px] text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300">{t}</span>
                             ))
                           : <span className="text-emerald-700 dark:text-emerald-400">routes everywhere (default)</span>}
-                        <button
-                          className="ml-1 h-6 rounded border border-zinc-300 px-1.5 text-[11px] text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                          onClick={() => { setEditingLoc(l.code); setLocDraft(l.syncRoutes.join(', ')) }}
-                        >
-                          Edit
-                        </button>
+                        <Tooltip content={CONTROL_HELP.routeEdit}>
+                          <button
+                            className="ml-1 h-6 rounded border border-zinc-300 px-1.5 text-[11px] text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                            onClick={() => { setEditingLoc(l.code); setLocDraft(l.syncRoutes.join(', ')) }}
+                          >
+                            Edit
+                          </button>
+                        </Tooltip>
                       </span>
                     )}
                   </td>
@@ -616,22 +653,26 @@ export default function SyncControlClient() {
                       <td className="px-3 py-1.5 text-xs text-zinc-500">new: {p.newListingDefaultMode === 'PAUSED' ? 'born paused' : 'follow'}</td>
                       <td className="px-3 py-1.5 text-right">
                         <div className="inline-flex gap-1">
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void savePolicy(p.channel, p.marketplace, { pushesPaused: !p.pushesPaused })}
-                            className="rounded border border-zinc-300 px-1.5 py-0.5 text-xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-                          >
-                            {p.pushesPaused ? 'Resume' : 'Pause'}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void savePolicy(p.channel, p.marketplace, { newListingDefaultMode: p.newListingDefaultMode === 'PAUSED' ? 'FOLLOW' : 'PAUSED' })}
-                            className="rounded border border-zinc-300 px-1.5 py-0.5 text-xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-                          >
-                            {p.newListingDefaultMode === 'PAUSED' ? 'New: follow' : 'New: paused'}
-                          </button>
+                          <Tooltip content={p.pushesPaused ? CONTROL_HELP.policyResume : CONTROL_HELP.policyPause}>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void savePolicy(p.channel, p.marketplace, { pushesPaused: !p.pushesPaused })}
+                              className="rounded border border-zinc-300 px-1.5 py-0.5 text-xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                            >
+                              {p.pushesPaused ? 'Resume' : 'Pause'}
+                            </button>
+                          </Tooltip>
+                          <Tooltip content={CONTROL_HELP.policyNewDefault}>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void savePolicy(p.channel, p.marketplace, { newListingDefaultMode: p.newListingDefaultMode === 'PAUSED' ? 'FOLLOW' : 'PAUSED' })}
+                              className="rounded border border-zinc-300 px-1.5 py-0.5 text-xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                            >
+                              {p.newListingDefaultMode === 'PAUSED' ? 'New: follow' : 'New: paused'}
+                            </button>
+                          </Tooltip>
                         </div>
                       </td>
                     </tr>
@@ -640,7 +681,7 @@ export default function SyncControlClient() {
               </table>
             )}
             <div className="flex flex-wrap items-center gap-2 border-t border-zinc-200 px-3 py-2 dark:border-zinc-800">
-              <span style={{ width: 120, display: 'inline-flex' }}>
+              <Tip help={CONTROL_HELP.policyChannelSelect} width={120}>
                 <Listbox
                   ariaLabel="Policy channel"
                   value={polChannel}
@@ -651,31 +692,35 @@ export default function SyncControlClient() {
                     { value: 'SHOPIFY', label: 'Shopify' },
                   ]}
                 />
-              </span>
-              <span style={{ width: 120, display: 'inline-flex' }}>
+              </Tip>
+              <Tip help={CONTROL_HELP.policyMarketSelect} width={120}>
                 <Listbox
                   ariaLabel="Policy market"
                   value={polMarket}
                   onChange={setPolMarket}
                   options={[{ value: '*', label: 'All markets' }, ...['IT', 'DE', 'FR', 'ES'].map((m) => ({ value: m, label: m }))]}
                 />
-              </span>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void savePolicy(polChannel, polMarket, { pushesPaused: true })}
-                className="rounded border border-amber-300 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950"
-              >
-                Pause pushes
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void savePolicy(polChannel, polMarket, { newListingDefaultMode: 'PAUSED' })}
-                className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-              >
-                New listings born paused
-              </button>
+              </Tip>
+              <Tooltip content={CONTROL_HELP.policyAddPause}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void savePolicy(polChannel, polMarket, { pushesPaused: true })}
+                  className="rounded border border-amber-300 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950"
+                >
+                  Pause pushes
+                </button>
+              </Tooltip>
+              <Tooltip content={CONTROL_HELP.policyAddBornPaused}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void savePolicy(polChannel, polMarket, { newListingDefaultMode: 'PAUSED' })}
+                  className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                >
+                  New listings born paused
+                </button>
+              </Tooltip>
             </div>
             <div className="border-t border-zinc-200 px-3 py-2 text-[11px] text-zinc-500 dark:border-zinc-800">
               Pause = channel-market kill-switch: quantities freeze on the marketplace until Resume (which recascades pool truth). FBA stays Amazon-managed regardless.
@@ -712,14 +757,16 @@ export default function SyncControlClient() {
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-800">
             <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
               <span className="text-sm font-semibold">History</span>
-              <a
-                href="/fulfillment/stock/sync-control/history"
-                target="_blank"
-                rel="noopener"
-                className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
-              >
-                Open full history ↗
-              </a>
+              <Tooltip content={CONTROL_HELP.historyLink}>
+                <a
+                  href="/fulfillment/stock/sync-control/history"
+                  target="_blank"
+                  rel="noopener"
+                  className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  Open full history ↗
+                </a>
+              </Tooltip>
             </div>
             {(overview?.audit?.length ?? 0) === 0 ? (
               <div className="px-3 py-4 text-sm text-zinc-500">No Sync Control changes yet — every mutation will be recorded here (who, what, before → after).</div>
