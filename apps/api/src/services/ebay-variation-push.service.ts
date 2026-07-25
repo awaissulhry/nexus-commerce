@@ -239,6 +239,35 @@ export interface ResolvedVariationAxes {
   suppressed: string[]
 }
 
+/**
+ * The value a variant row carries for a given axis — resolved through the
+ * SYNONYM table, not by string-concatenating `aspect_${axis}`.
+ *
+ * Concatenation silently fails whenever the axis NAME and the row KEY are
+ * different spellings of the same dimension. That is exactly how every curated
+ * image went missing: `imageAxisPreference` held the English "Color" while rows
+ * carried `aspect_Colore`, so the key matched nothing, the curated override was
+ * skipped, and all 20 variants fell through to Amazon-CDN fallback images —
+ * while the override-BUILDING side (already synonym-aware) had matched fine.
+ * Two halves of one decision disagreeing.
+ *
+ * Exported so the behaviour is locked by tests: this class of bug is silent by
+ * nature — it produces a wrong-but-plausible listing, never an error.
+ */
+export function axisValueOfRow(row: Record<string, unknown>, axis: string): string {
+  if (!axis) return ''
+  // Fast path: the exact key, so behaviour is unchanged when spellings agree.
+  const direct = row[`aspect_${axis.replace(/ /g, '_')}`]
+  if (typeof direct === 'string' && direct.trim()) return direct.trim().toLowerCase()
+  const want = axisSynonymKey(axis)
+  for (const [k, v] of Object.entries(row)) {
+    if (!k.startsWith('aspect_') || typeof v !== 'string' || !v.trim()) continue
+    const name = k.slice('aspect_'.length).replace(/_/g, ' ')
+    if (axisSynonymKey(name) === want) return v.trim().toLowerCase()
+  }
+  return ''
+}
+
 export function resolveVariationAxes(
   variantRows: Array<Record<string, unknown>>,
   declaredAxes: string[] | null,
@@ -1130,18 +1159,6 @@ export async function pushVariationGroup(
   // already synonym-aware (axisSynonymKey), so only this half was blind.
   // Resolving through the synonym table makes it immune to Colore/Color/Farbe/
   // Taglia and to any future rename.
-  const axisValueOfRow = (row: Record<string, unknown>, axis: string): string => {
-    const direct = row[`aspect_${axis.replace(/ /g, '_')}`]
-    if (typeof direct === 'string' && direct.trim()) return direct.trim().toLowerCase()
-    const want = axisSynonymKey(axis)
-    for (const [k, v] of Object.entries(row)) {
-      if (!k.startsWith('aspect_') || typeof v !== 'string' || !v.trim()) continue
-      const name = k.slice('aspect_'.length).replace(/_/g, ' ')
-      if (axisSynonymKey(name) === want) return v.trim().toLowerCase()
-    }
-    return ''
-  }
-
   const colorRepImages = new Map<string, string[]>() // pictureAxisValue.toLowerCase() → [url, ...]
   if (pictureAxis) {
     for (const row of variantRows) {
