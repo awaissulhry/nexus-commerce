@@ -2451,11 +2451,29 @@ export function buildFlatRow(
      * rows AND no platformAttributes.imageUrls.
      */
     parentImages?: Array<{ url: string; sortOrder: number; type: string }>;
+    /**
+     * ACTIVE MARKET. The "shared" fields below — including the aspect_* columns
+     * derived from platformAttributes.itemSpecifics — were taken from
+     * channelListings[0], an ARBITRARY market. A product listed on both IT and
+     * DE therefore rendered whichever market's specifics happened to sort
+     * first, so the grid could show one market's aspect names while the
+     * operator was looking at another (cross-market bleed). Supply the market
+     * being rendered/pushed and its own listing wins. Omitted = legacy
+     * behaviour (first listing), so existing callers are unchanged.
+     */
+    marketplace?: string | null;
   },
 ): Record<string, unknown> {
-  // Shared fields come from the first listing that has data, or from the product
+  // Shared fields come from the ACTIVE market's listing when one is supplied,
+  // else the first listing that has data, else the product.
   const listings = product.channelListings;
-  const first = listings[0];
+  const wantRegion = (opts?.marketplace ?? '').toUpperCase().replace(/^EBAY[_-]/, '');
+  const first = (wantRegion
+    ? listings.find((l) => {
+        const r = (l.region ?? '').toUpperCase();
+        return r === wantRegion || (wantRegion === 'UK' && r === 'GB') || (wantRegion === 'GB' && r === 'UK');
+      })
+    : undefined) ?? listings[0];
   const firstAttrs = first ? ((first.platformAttributes ?? {}) as Record<string, unknown>) : {};
   const firstImageUrls = (firstAttrs.imageUrls as string[] | undefined) ?? [];
 
@@ -2746,6 +2764,9 @@ export function packSharedFields(row: Record<string, unknown>): {
  */
 export async function buildEbayFamilyRows(
   familyParentId: string,
+  /** Active market — its listing supplies the shared/aspect fields instead of
+   *  an arbitrary channelListings[0] (cross-market bleed). Omitted = legacy. */
+  marketplace?: string | null,
 ): Promise<Array<Record<string, unknown>>> {
   const products = await prisma.product.findMany({
     where: {
@@ -2762,6 +2783,6 @@ export async function buildEbayFamilyRows(
   const imagesByProductId = new Map(products.map((p) => [p.id, p.images ?? []]))
   return products.map((p) => {
     const parentImages = p.parentId ? (imagesByProductId.get(p.parentId) ?? []) : undefined
-    return buildFlatRow(p as Parameters<typeof buildFlatRow>[0], { parentImages })
+    return buildFlatRow(p as Parameters<typeof buildFlatRow>[0], { parentImages, marketplace })
   })
 }

@@ -101,3 +101,48 @@ describe('market purity — the eBay payload speaks the market’s language', ()
     expect(input.variationSpecificNames).not.toContain('Size')
   })
 })
+
+// ── Cross-market bleed: the aspect columns must come from the market being
+// viewed, not from whichever eBay listing happens to sort first. ────────────
+import { buildFlatRow } from './ebay-variation-push.service.js'
+
+const listing = (region: string, specifics: Record<string, string>) => ({
+  id: `cl-${region}`, region, externalListingId: null, title: null, description: null,
+  price: null, quantity: null, listingStatus: '', offerActive: false, syncStatus: '',
+  updatedAt: new Date('2026-01-01T00:00:00Z'),
+  platformAttributes: { itemSpecifics: specifics },
+})
+
+describe('buildFlatRow — aspect columns follow the ACTIVE market', () => {
+  const product = {
+    id: 'p1', sku: 'MULTI-MARKET-SKU', name: 'x', ean: null,
+    images: [],
+    // DE listing sorts FIRST — the old code took listings[0] blindly.
+    channelListings: [
+      listing('DE', { Farbe: 'Schwarz', Größe: 'M' }),
+      listing('IT', { Colore: 'Nero', Taglia: 'M' }),
+    ],
+  }
+
+  it('renders the IT listing’s specifics when IT is the active market', () => {
+    const row = buildFlatRow(product as unknown as Parameters<typeof buildFlatRow>[0], { marketplace: 'IT' })
+    expect(row.aspect_Colore).toBe('Nero')
+    expect(row.aspect_Farbe).toBeUndefined()
+  })
+
+  it('renders the DE listing’s specifics when DE is the active market', () => {
+    const row = buildFlatRow(product as unknown as Parameters<typeof buildFlatRow>[0], { marketplace: 'DE' })
+    expect(row.aspect_Farbe).toBe('Schwarz')
+    expect(row.aspect_Colore).toBeUndefined()
+  })
+
+  it('accepts EBAY_-prefixed market codes', () => {
+    const row = buildFlatRow(product as unknown as Parameters<typeof buildFlatRow>[0], { marketplace: 'EBAY_IT' })
+    expect(row.aspect_Colore).toBe('Nero')
+  })
+
+  it('with NO market supplied falls back to the first listing (legacy callers unchanged)', () => {
+    const row = buildFlatRow(product as unknown as Parameters<typeof buildFlatRow>[0], {})
+    expect(row.aspect_Farbe).toBe('Schwarz') // listings[0] === DE
+  })
+})

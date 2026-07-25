@@ -284,7 +284,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       const imagesByProductId = new Map(products.map((p) => [p.id, p.images ?? []]))
       const rows = products.map((p) => {
         const parentImages = p.parentId ? (imagesByProductId.get(p.parentId) ?? []) : undefined
-        return buildFlatRow(p as Parameters<typeof buildFlatRow>[0], { parentImages })
+        // Market-scoped: the aspect columns must come from the market being
+        // viewed, not from whichever eBay listing sorts first.
+        return buildFlatRow(p as Parameters<typeof buildFlatRow>[0], { parentImages, marketplace })
       });
 
       // P1a — fill parent_sku for each child row (buildFlatRow leaves it '').

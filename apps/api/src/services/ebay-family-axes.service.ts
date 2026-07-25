@@ -169,7 +169,8 @@ export async function resolveFamilyAxes(
   // → buildFlatRow), so this helper's aspect_* construction matches the push
   // exactly. Drop the parent container row (buildFlatRow sets _isParent from
   // !parentId); fall back to the full set if nothing else is present.
-  const familyRows = await buildEbayFamilyRows(parentProductId)
+  // Market-scoped: axis resolution must read the ACTIVE market's specifics.
+  const familyRows = await buildEbayFamilyRows(parentProductId, marketplace)
   let variantRows = familyRows.filter((r) => r._isParent !== true)
 
   // Incident #37 — EXTRA-LISTING SHELLS have no product children: their
