@@ -149,3 +149,46 @@ describe('SCD.1b — canonicalStem + stem fallback', () => {
     expect(map.get('DUP')).toBe('POOL-CANON')
   })
 })
+
+describe('SCD.8 — multi-select filter contract (OR within a dimension)', () => {
+  // The UI sends comma-separated selections. Every surface (products grid,
+  // flat listings, Excel export) MUST parse them the same way — a partial
+  // rollout left /listings and /export on single-value equality, so any
+  // 2-value selection emptied the grid and silently exported a header-only
+  // workbook. This locks the contract.
+  const csvFilter = (v?: string): string[] => (v ?? '').split(',').map((x) => x.trim()).filter(Boolean)
+
+  it('parses CSV, tolerating whitespace, blanks and a lone comma', () => {
+    expect(csvFilter('AMAZON')).toEqual(['AMAZON'])
+    expect(csvFilter('AMAZON,EBAY')).toEqual(['AMAZON', 'EBAY'])
+    expect(csvFilter(' AMAZON , EBAY ')).toEqual(['AMAZON', 'EBAY'])
+    expect(csvFilter(',')).toEqual([])
+    expect(csvFilter('')).toEqual([])
+    expect(csvFilter(undefined)).toEqual([])
+  })
+
+  it('a 2-value selection returns the UNION, never an empty set', () => {
+    const rows = [
+      { channel: 'AMAZON', marketplace: 'IT' },
+      { channel: 'AMAZON', marketplace: 'DE' },
+      { channel: 'EBAY', marketplace: 'IT' },
+      { channel: 'SHOPIFY', marketplace: 'IT' },
+    ]
+    const byChannel = (csv: string) => {
+      const sel = csvFilter(csv).map((x) => x.toUpperCase())
+      return rows.filter((r) => !sel.length || sel.includes(r.channel))
+    }
+    expect(byChannel('AMAZON')).toHaveLength(2)
+    expect(byChannel('EBAY')).toHaveLength(1)
+    // the regression: single-value equality made this 0
+    expect(byChannel('AMAZON,EBAY')).toHaveLength(3)
+    expect(byChannel('')).toHaveLength(4)
+  })
+
+  it('market matching honours both bare and EBAY_-prefixed forms per value', () => {
+    const rows = [{ marketplace: 'IT' }, { marketplace: 'EBAY_IT' }, { marketplace: 'DE' }]
+    const sel = csvFilter('IT,DE')
+    const kept = rows.filter((r) => sel.some((m) => marketMatches(r.marketplace, m) || r.marketplace === m))
+    expect(kept).toHaveLength(3)
+  })
+})

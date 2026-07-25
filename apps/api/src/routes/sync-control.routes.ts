@@ -29,6 +29,14 @@ import { summarizeProductSync, marketMatches, omitChildrenInList, resolveCanonic
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../services/product-read-cache.service.js'
 import { buildSyncControlWorkbook, parseSyncControlWorkbook, normalizeModeCell } from '../services/sync-control-excel.js'
 
+/** SCD.8 — ONE parser for every multi-select filter value. The UI sends
+ *  comma-separated selections; each endpoint must apply OR-within-a-dimension.
+ *  (A partial rollout of this left /listings and /export on single-value
+ *  equality, so any 2-value selection emptied the grid and the workbook.) */
+function csvFilter(v?: string): string[] {
+  return (v ?? '').split(',').map((x) => x.trim()).filter(Boolean)
+}
+
 type Mode = 'FOLLOW' | 'PINNED' | 'PAUSED' | 'PAUSED_POLICY' | 'UNCOUNTED' | 'FBA' | 'EXCLUDED'
 
 interface SyncControlRow {
@@ -72,7 +80,15 @@ function modeOf(r: ReturnType<typeof resolveIntendedQuantity>, isShared: boolean
 async function computeRows(): Promise<SyncControlRow[]> {
   const [listings, memberships, policies] = await Promise.all([
     prisma.channelListing.findMany({
-      where: { isPublished: true, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
+      // SCD.8 — a DELETED product must never appear in the control tower: it is
+      // hidden on /products, so showing it here (75 rows across 21 deleted
+      // products, incl. the stray 'TEST') made the two surfaces disagree and
+      // offered control over something the operator had already removed.
+      where: {
+        isPublished: true,
+        listingStatus: { notIn: ['ENDED', 'REMOVED'] },
+        product: { deletedAt: null },
+      },
       select: {
         productId: true, channel: true, marketplace: true, quantity: true, stockBuffer: true,
         followMasterQuantity: true, fulfillmentMethod: true, syncPaused: true, sourceLocationCodes: true,
@@ -85,10 +101,18 @@ async function computeRows(): Promise<SyncControlRow[]> {
     }),
     loadChannelPolicies(),
   ])
+  // SCD.8 — the shared lane has no product relation to filter on, so drop
+  // memberships whose product was deleted here (same rule as the listing lane).
+  const memPids = [...new Set(memberships.map((m) => m.productId).filter((p): p is string => Boolean(p)))]
+  const liveMemPids = new Set(
+    (await prisma.product.findMany({ where: { id: { in: memPids }, deletedAt: null }, select: { id: true } })).map((p) => p.id),
+  )
+  const liveMemberships = memberships.filter((m) => !m.productId || liveMemPids.has(m.productId))
+
   const productIds = [
     ...new Set([
       ...listings.map((l) => l.productId),
-      ...memberships.map((m) => m.productId).filter((p): p is string => Boolean(p)),
+      ...liveMemberships.map((m) => m.productId).filter((p): p is string => Boolean(p)),
     ]),
   ]
   const ledgers = await buildLedgers(productIds)
@@ -125,7 +149,7 @@ async function computeRows(): Promise<SyncControlRow[]> {
     })
   }
 
-  for (const m of memberships) {
+  for (const m of liveMemberships) {
     const r = resolveMembershipIntended({
       marketplace: m.marketplace,
       followPool: m.followPool ?? true,
@@ -276,9 +300,12 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     const page = Math.max(1, Number.parseInt(q.page ?? '1', 10) || 1)
     const pageSize = Math.min(200, Math.max(10, Number.parseInt(q.pageSize ?? '50', 10) || 50))
     let rows = await computeRows()
-    if (q.channel) rows = rows.filter((r) => r.channel === q.channel!.toUpperCase())
-    if (q.market) rows = rows.filter((r) => r.marketplace.toUpperCase().replace(/^EBAY_/, '') === q.market!.toUpperCase())
-    if (q.mode) rows = rows.filter((r) => r.mode === q.mode!.toUpperCase())
+    const lChans = csvFilter(q.channel).map((x) => x.toUpperCase())
+    const lMkts = csvFilter(q.market).map((x) => x.toUpperCase())
+    const lModes = csvFilter(q.mode).map((x) => x.toUpperCase())
+    if (lChans.length) rows = rows.filter((r) => lChans.includes(r.channel))
+    if (lMkts.length) rows = rows.filter((r) => lMkts.includes(r.marketplace.toUpperCase().replace(/^EBAY_/, '')))
+    if (lModes.length) rows = rows.filter((r) => lModes.includes(r.mode))
     if (q.q) {
       const needle = q.q.toLowerCase()
       rows = rows.filter((r) => r.sku.toLowerCase().includes(needle))
@@ -428,11 +455,9 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       }
     })
 
-    // SCD.6 — multi-select: comma-separated values, OR within a dimension.
-    const listOf = (v?: string) => (v ?? '').split(',').map((x) => x.trim()).filter(Boolean)
-    const chans = listOf(q.channel).map((x) => x.toUpperCase())
-    const modes = listOf(q.mode).map((x) => x.toUpperCase())
-    const mkts = listOf(q.market)
+    const chans = csvFilter(q.channel).map((x) => x.toUpperCase())
+    const modes = csvFilter(q.mode).map((x) => x.toUpperCase())
+    const mkts = csvFilter(q.market)
     const needle = q.q?.trim().toLowerCase()
     const driftOnly = q.drift === '1' || q.drift === 'true'
 
@@ -918,7 +943,12 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
         }),
       )
     }
-    const chan = q.channel?.toUpperCase(); const mode = q.mode?.toUpperCase(); const needle = q.q?.trim().toLowerCase()
+    const xChans = csvFilter(q.channel).map((x) => x.toUpperCase())
+    const xModes = csvFilter(q.mode).map((x) => x.toUpperCase())
+    const xMkts = csvFilter(q.market)
+    const xLanes = csvFilter(q.lane).map((x) => x.toUpperCase())
+    const xFams = csvFilter(q.family)
+    const needle = q.q?.trim().toLowerCase()
     const driftOnly = q.drift === '1' || q.drift === 'true'
     // SCD.4 — the Products grid searches product NAME or SKU; the export only
     // matched a row's own sku, so searching by name exported the wrong set (an
@@ -936,13 +966,12 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     }
     return rows.filter((r) => {
       if (masterVariantIds && !(r.productId && masterVariantIds.has(r.productId))) return false
-      // SCD.3 — a family-scoped export contains ONLY that parent listing's rows
-      if (q.family && familyKeyOf(r) !== q.family) return false
-      // SCD.5 — the per-product page can filter by lane; the export mirrors it
-      if (q.lane && r.lane !== q.lane.toUpperCase()) return false
-      if (chan && r.channel !== chan) return false
-      if (q.market && !marketMatches(r.marketplace, q.market)) return false
-      if (mode && r.mode !== mode) return false
+      // SCD.3/5/8 — every dimension is multi-value: OR within, AND across.
+      if (xFams.length && !xFams.includes(familyKeyOf(r))) return false
+      if (xLanes.length && !xLanes.includes(r.lane)) return false
+      if (xChans.length && !xChans.includes(r.channel)) return false
+      if (xMkts.length && !xMkts.some((m) => marketMatches(r.marketplace, m) || r.marketplace === m)) return false
+      if (xModes.length && !xModes.includes(r.mode)) return false
       if (needle && !(r.sku.toLowerCase().includes(needle) || (r.productId && nameMatchPids?.has(r.productId)))) return false
       if (driftOnly && !(r.intendedQty != null && r.liveQty != null && r.intendedQty !== r.liveQty)) return false
       return true
