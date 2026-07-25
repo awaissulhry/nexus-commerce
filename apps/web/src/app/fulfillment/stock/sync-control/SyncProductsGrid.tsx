@@ -347,6 +347,22 @@ function MasterCell({ m, expanded, onToggle }: { m: ProductMaster; expanded: boo
           {m.family && <span className="shrink-0 rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800">{m.family.label}</span>}
         </div>
       </div>
+      {/* SCD.5 — every product (not just big families) opens in its own tab:
+          the per-product page is where filtering + per-family control live. */}
+      {m.listingCount > 0 && (
+        <Tooltip content={`Open ${m.sku} in a new tab — filter, control each family, export`}>
+          <Link
+            href={`/fulfillment/stock/sync-control/product/${m.masterId}`}
+            target="_blank"
+            rel="noopener"
+            aria-label={`Open ${m.sku} in a new tab`}
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950 dark:hover:text-blue-400"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink size={13} />
+          </Link>
+        </Tooltip>
+      )}
     </div>
   )
 }

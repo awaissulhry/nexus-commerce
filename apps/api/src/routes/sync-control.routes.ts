@@ -897,7 +897,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
   }
 
   // Resolve which productIds a set of filters selects (mirrors the products view).
-  async function filterExportRows(rows: SyncControlRow[], q: { channel?: string; market?: string; mode?: string; q?: string; drift?: string; masterId?: string; family?: string }): Promise<SyncControlRow[]> {
+  async function filterExportRows(rows: SyncControlRow[], q: { channel?: string; market?: string; mode?: string; q?: string; drift?: string; masterId?: string; family?: string; lane?: string }): Promise<SyncControlRow[]> {
     let masterVariantIds: Set<string> | null = null
     if (q.masterId) {
       // SCD.1c — scope to the WHOLE GROUP, using the same canonical resolution
@@ -936,6 +936,8 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       if (masterVariantIds && !(r.productId && masterVariantIds.has(r.productId))) return false
       // SCD.3 — a family-scoped export contains ONLY that parent listing's rows
       if (q.family && familyKeyOf(r) !== q.family) return false
+      // SCD.5 — the per-product page can filter by lane; the export mirrors it
+      if (q.lane && r.lane !== q.lane.toUpperCase()) return false
       if (chan && r.channel !== chan) return false
       if (q.market && !marketMatches(r.marketplace, q.market)) return false
       if (mode && r.mode !== mode) return false
@@ -946,7 +948,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
   }
 
   app.get('/stock/sync-control/export', async (request, reply) => {
-    const q = request.query as { channel?: string; market?: string; mode?: string; q?: string; drift?: string; masterId?: string; family?: string }
+    const q = request.query as { channel?: string; market?: string; mode?: string; q?: string; drift?: string; masterId?: string; family?: string; lane?: string }
     const rows = await filterExportRows(await computeRows(), q)
     const pids = [...new Set(rows.map((r) => r.productId).filter((p): p is string => Boolean(p)))]
     const [names, ledgers, locations] = await Promise.all([

@@ -6,8 +6,8 @@
  * page (server-side FBA exclusion, audit, recascade). Live via usePolledList.
  */
 
-import { useMemo, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { DataGrid, Pagination, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'
@@ -39,6 +39,17 @@ const BULK_ACTIONS: Array<[string, string]> = [
   ['ZERO_PIN', 'Zero & Pin'], ['EXCLUDE', 'Exclude'], ['INCLUDE', 'Include'],
 ]
 
+function FilterSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: Array<{ value: string; label: string }> }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[11px] uppercase tracking-wide text-zinc-500">{label}</span>
+      <span style={{ width: 150, display: 'inline-flex' }}>
+        <Listbox ariaLabel={label} value={value} onChange={onChange} options={options} />
+      </span>
+    </label>
+  )
+}
+
 const rowKey = (r: Row) => `${r.lane}|${r.channel}|${r.marketplace}|${r.sku}|${r.itemId ?? ''}`
 
 export default function ProductDetailClient({ masterId }: { masterId: string }) {
@@ -57,6 +68,8 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
   // SCD.3 — ?family=<key> narrows this page to ONE parent listing, so every
   // action here touches only that family's child SKUs.
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
   const familyKey = searchParams.get('family')
   const url = useMemo(
     () => `/api/stock/sync-control/products?masterId=${encodeURIComponent(masterId)}${familyKey ? `&family=${encodeURIComponent(familyKey)}` : ''}`,
@@ -68,10 +81,77 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
     invalidationTypes: ['stock.adjusted', 'listing.updated', 'product.updated', 'product.created', 'listing.created', 'product.deleted', 'listing.deleted'],
   })
   const master = data?.products?.[0] ?? null
-  const children = useMemo(
+  const allChildren = useMemo(
     () => [...(master?.children ?? [])].sort((a, b) => a.sku.localeCompare(b.sku) || a.channel.localeCompare(b.channel) || a.marketplace.localeCompare(b.marketplace)),
     [master],
   )
+
+  // SCD.5 — filters. Kept in the URL so a filtered view is shareable and
+  // survives a refresh (this page is opened in its own tab). `family` is
+  // server-side scoping; the rest narrow the loaded rows client-side.
+  const fChannel = searchParams.get('channel') ?? ''
+  const fMarket = searchParams.get('market') ?? ''
+  const fMode = searchParams.get('mode') ?? ''
+  const fLane = searchParams.get('lane') ?? ''
+  const fDrift = searchParams.get('drift') === '1'
+  const [qLive, setQLive] = useState('')
+  const [q, setQ] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => { setQ(qLive); setPage(1) }, 250)
+    return () => clearTimeout(t)
+  }, [qLive])
+
+  const setParam = useCallback((key: string, value: string) => {
+    const p = new URLSearchParams(searchParams.toString())
+    if (value) p.set(key, value); else p.delete(key)
+    router.replace(`${pathname}${p.toString() ? `?${p}` : ''}`, { scroll: false })
+  }, [searchParams, router, pathname])
+
+  // Facets derived from the loaded rows, so only real options are offered.
+  const facets = useMemo(() => {
+    const ch = new Set<string>(); const mk = new Set<string>(); const md = new Set<string>()
+    for (const r of allChildren) { ch.add(r.channel); mk.add(r.marketplace); md.add(r.mode) }
+    return { channels: [...ch].sort(), markets: [...mk].sort(), modes: [...md].sort() }
+  }, [allChildren])
+
+  const children = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    return allChildren.filter((r) => {
+      if (fChannel && r.channel !== fChannel) return false
+      if (fMarket && r.marketplace !== fMarket) return false
+      if (fMode && r.mode !== fMode) return false
+      if (fLane && r.lane !== fLane) return false
+      if (fDrift && !(r.mode !== 'FBA' && r.intendedQty != null && r.liveQty != null && r.intendedQty !== r.liveQty)) return false
+      if (needle && !(r.sku.toLowerCase().includes(needle) || (r.itemId ?? '').includes(needle))) return false
+      return true
+    })
+  }, [allChildren, fChannel, fMarket, fMode, fLane, fDrift, q])
+
+  const activeFilters = [fChannel, fMarket, fMode, fLane].filter(Boolean).length + (fDrift ? 1 : 0) + (q ? 1 : 0)
+
+  // SCD.5 — the workbook must match the filtered view exactly.
+  const exportQuery = useMemo(() => {
+    const p = new URLSearchParams({ masterId })
+    if (familyKey) p.set('family', familyKey)
+    if (fChannel) p.set('channel', fChannel)
+    if (fMarket) p.set('market', fMarket)
+    if (fMode) p.set('mode', fMode)
+    if (fLane) p.set('lane', fLane)
+    if (fDrift) p.set('drift', '1')
+    if (q) p.set('q', q)
+    return p.toString()
+  }, [masterId, familyKey, fChannel, fMarket, fMode, fLane, fDrift, q])
+
+  // A hidden row must never be acted on: drop selections that the current
+  // filters exclude, and reset paging when the result set changes.
+  const visibleKeys = useMemo(() => new Set(children.map(rowKey)), [children])
+  useEffect(() => {
+    setSelected((prev) => {
+      const next = new Set([...prev].filter((k) => visibleKeys.has(k)))
+      return next.size === prev.size ? prev : next
+    })
+    setPage((p) => (p > Math.max(1, Math.ceil(children.length / pageSize)) ? 1 : p))
+  }, [visibleKeys, children.length, pageSize])
 
   const rowByKey = useMemo(() => new Map(children.map((r) => [rowKey(r), r])), [children])
 
@@ -233,6 +313,41 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
         </div>
       )}
 
+      {/* SCD.5 — filters for this product's listings (URL-backed, so a filtered
+          view can be shared/bookmarked and survives a refresh). */}
+      <div className="flex flex-wrap items-end gap-2 rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-800">
+        <FilterSelect label="Channel" value={fChannel} onChange={(v) => setParam('channel', v)}
+          options={[{ value: '', label: 'All channels' }, ...facets.channels.map((c) => ({ value: c, label: c }))]} />
+        <FilterSelect label="Market" value={fMarket} onChange={(v) => setParam('market', v)}
+          options={[{ value: '', label: 'All markets' }, ...facets.markets.map((m) => ({ value: m, label: m }))]} />
+        <FilterSelect label="Mode" value={fMode} onChange={(v) => setParam('mode', v)}
+          options={[{ value: '', label: 'All modes' }, ...facets.modes.map((m) => ({ value: m, label: MODE_LABEL[m as Mode] ?? m }))]} />
+        <FilterSelect label="Lane" value={fLane} onChange={(v) => setParam('lane', v)}
+          options={[{ value: '', label: 'All lanes' }, { value: 'LISTING', label: 'Listing' }, { value: 'SHARED', label: 'Shared' }]} />
+        {(master?.families?.length ?? 0) > 1 && (
+          <FilterSelect label="Family" value={familyKey ?? ''} onChange={(v) => setParam('family', v)}
+            options={[{ value: '', label: 'All families' }, ...(master?.families ?? []).map((f) => ({ value: f.key, label: `${f.ownerSku ?? f.channel} · ${f.marketplace}` }))]} />
+        )}
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] uppercase tracking-wide text-zinc-500">Search</span>
+          <Input placeholder="SKU or item id…" value={qLive} onChange={(e) => setQLive(e.target.value)} style={{ width: 190 }} />
+        </label>
+        <label className="mb-1 flex items-center gap-1.5 text-sm">
+          <input type="checkbox" checked={fDrift} onChange={(e) => setParam('drift', e.target.checked ? '1' : '')} />
+          Drift only
+        </label>
+        <div className="mb-1 ml-auto flex items-center gap-2">
+          <span className="text-xs text-zinc-500">
+            {children.length === allChildren.length
+              ? `${allChildren.length} listings`
+              : `${children.length} of ${allChildren.length} listings`}
+          </span>
+          <Button size="sm" disabled={activeFilters === 0 && !familyKey} onClick={() => { setQLive(''); setQ(''); router.replace(pathname, { scroll: false }) }}>
+            Clear
+          </Button>
+        </div>
+      </div>
+
       {notice && <div className="rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-800 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300">{notice}</div>}
 
       <div className="h10-ds-gridcard">
@@ -240,7 +355,7 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
           count={selected.size > 0 ? <>Selected <b>{selected.size}</b> {selected.size === 1 ? 'listing' : 'listings'}</> : <>{children.length} listings</>}
           right={
             <>
-              <SyncExcelBar exportQuery={`masterId=${encodeURIComponent(masterId)}${familyKey ? `&family=${encodeURIComponent(familyKey)}` : ''}`} notify={setNotice} onApplied={() => { /* usePolledList refetches on invalidation */ }} />
+              <SyncExcelBar exportQuery={exportQuery} notify={setNotice} onApplied={() => { /* usePolledList refetches on invalidation */ }} />
               <SegmentedControl options={DENSITY_OPTIONS} value={density} onChange={(v) => setDensity(v as Density)} size="sm" />
               <span style={{ width: 110, display: 'inline-flex' }}>
                 <Listbox ariaLabel="Rows per page" value={String(pageSize)} onChange={(v) => { setPage(1); setPageSize(Number(v)) }} options={[50, 100, 200].map((n) => ({ value: String(n), label: `${n} / page` }))} />
