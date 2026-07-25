@@ -2496,8 +2496,15 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     pushHistory: (rows: BaseRow[]) => void
   }) {
     try {
-      const res = await fetch(`${BACKEND}/api/ebay/flat-file/import-amazon?marketplace=${marketplace}`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      // The route is `amazon-import` — this called `import-amazon` (the two
+      // words transposed), so the button 404'd every time it was pressed.
+      const res = await fetch(`${BACKEND}/api/ebay/flat-file/amazon-import?marketplace=${marketplace}`)
+      if (!res.ok) {
+        // Surface the server's real message — a bare `HTTP 500` turns every
+        // distinct backend failure into the same useless toast.
+        const body = await res.json().catch(() => null) as { error?: string } | null
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
       const json = await res.json() as { rows: EbayRow[] }
       const imported = json.rows.map((r) => ({ ...r, _dirty: true, _isNew: !r._productId }))
       ctx.pushHistory(imported)
