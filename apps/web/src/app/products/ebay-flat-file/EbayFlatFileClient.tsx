@@ -3978,6 +3978,59 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       })
   }
 
+  // eBay WRITES — both revise the LIVE listing, so each is gated behind an
+  // explicit confirm. These endpoints shipped with no UI at all: the axis drift
+  // warning told the operator to "convert the live listing to align it" with no
+  // button anywhere to do it, and relabel-item (the documented last step of
+  // adoption) was unreachable from every screen.
+  const alignAxisNames = async (id: string) => {
+    const ok = await confirm({
+      title: `Align axis names on listing ${id}?`,
+      description: 'Renames this LIVE listing\'s variation axes to your market standard (e.g. Color → Colore, Size → Taglia) on eBay. Variations are matched by SKU and quantities/prices are untouched, but it does revise the live listing.',
+      tone: 'warning',
+      confirmLabel: 'Align on eBay',
+    })
+    if (!ok) return
+    toast.info?.(`Aligning axis names on ${id}…`)
+    try {
+      const res = await fetch(`${BACKEND}/api/ebay/flat-file/convert-axes-italian`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId: id, marketplace: marketplaceRef.current }),
+      })
+      const d = await res.json() as { outcome?: string; renames?: Array<{ from: string; to: string }>; after?: string[]; message?: string; error?: string }
+      if (!res.ok || d.error) { toast.error(`Align ${id}: ${d.error ?? `HTTP ${res.status}`}`); return }
+      const renames = (d.renames ?? []).map((r) => `${r.from}→${r.to}`).join(', ')
+      if (d.outcome === 'converted') toast.success(`Aligned ${id}: ${renames}${d.after ? ` · now ${d.after.join(', ')}` : ''}`)
+      else if (d.outcome === 'already-italian') toast.success(`${id} already matches your standard`)
+      else toast.error(`Align ${id}: ${d.outcome}${d.message ? ` — ${d.message}` : ''}`)
+    } catch (e) {
+      toast.error(`Align ${id} failed: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+  const relabelToPoolSkus = async (id: string) => {
+    const ok = await confirm({
+      title: `Relabel listing ${id} to pool SKUs?`,
+      description: 'Rewrites this LIVE listing\'s variation custom labels to your pool SKUs on eBay, then rewires its memberships to match. Use when a listing\'s live labels differ from the file\'s SKUs. Prices and quantities are preserved.',
+      tone: 'warning',
+      confirmLabel: 'Relabel on eBay',
+    })
+    if (!ok) return
+    toast.info?.(`Relabelling ${id}…`)
+    try {
+      const res = await fetch(`${BACKEND}/api/ebay/flat-file/relabel-item`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId: id, marketplace: marketplaceRef.current }),
+      })
+      const d = await res.json() as Record<string, unknown>
+      if (!res.ok || d.error) { toast.error(`Relabel ${id}: ${String(d.error ?? `HTTP ${res.status}`)}`); return }
+      toast.success(`Relabelled ${id}: ${JSON.stringify(d).slice(0, 180)}`)
+      // Live SKUs changed → pull fresh rows, keeping any unsaved edits.
+      reloadGridPreservingEdits()
+    } catch (e) {
+      toast.error(`Relabel ${id} failed: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
   const renderContextMenu = (ctx: GridContextMenuCtx) => {
     const insertAt = (offset: 0 | 1) => {
       const rows = latestRowsRef.current
@@ -4025,6 +4078,15 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                 {
                   label: `Reconcile ${anchorItemId} from eBay`,
                   onClick: () => reconcileItemId(anchorItemId),
+                } as const,
+                // eBay WRITES — confirmed before anything is revised.
+                {
+                  label: 'Align axis names on eBay…',
+                  onClick: () => { void alignAxisNames(anchorItemId) },
+                } as const,
+                {
+                  label: 'Relabel variations to pool SKUs…',
+                  onClick: () => { void relabelToPoolSkus(anchorItemId) },
                 } as const,
               ]
             : []),
