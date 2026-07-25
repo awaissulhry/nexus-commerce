@@ -51,6 +51,11 @@
    The card's children carry no background of their own, so the corners stay
    rounded without the clip, and the grid's own scroll container is
    .h10-ds-grid-wrap, which keeps its own overflow. */
-:global(.sc-card-pop) {
+/* BOTH classes in one compound selector on purpose: `.sc-card-pop` alone ties
+   `.h10-ds-gridcard` on specificity, and in the PRODUCTION bundle patterns.css
+   loads AFTER this module, so overflow:hidden won and the fix silently did
+   nothing on prod while working in dev. Verified on prod: computed overflow was
+   still 'hidden' with the class applied and the rule present. */
+:global(.h10-ds-gridcard.sc-card-pop) {
   overflow: visible;
 }
