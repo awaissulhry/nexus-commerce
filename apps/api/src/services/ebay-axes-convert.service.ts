@@ -23,7 +23,17 @@ export function italianAxisName(name: string): string {
   return name
 }
 
-export interface LiveVar { sku: string; specifics: Array<[string, string]>; ean: string }
+export interface LiveVar {
+  sku: string
+  specifics: Array<[string, string]>
+  ean: string
+  /** eBay rejects a variation revise that omits price/qty (code 73: "price is
+   *  invalid or below the minimum … quantity must be greater than 0") — a
+   *  <Variation> node is a full definition, not a patch. Echo the LIVE values
+   *  back unchanged so a rename never moves a price or a stock level. */
+  startPrice: string
+  quantity: string
+}
 export interface LiveAxis { name: string; values: string[] }
 
 /** Parse GetItem XML → variations (SKU + specifics + EAN) and the axis set. */
@@ -33,10 +43,12 @@ export function parseVariationsForRename(raw: string): { vars: LiveVar[]; axisSe
     const b = vm[1]
     const sku = /<SKU>([^<]*)<\/SKU>/.exec(b)?.[1] ?? ''
     const ean = /<EAN>([^<]*)<\/EAN>/.exec(b)?.[1] ?? 'Does not apply'
+    const startPrice = /<StartPrice[^>]*>([^<]*)<\/StartPrice>/.exec(b)?.[1] ?? ''
+    const quantity = /<Quantity>([^<]*)<\/Quantity>/.exec(b)?.[1] ?? ''
     const sb = /<VariationSpecifics>([\s\S]*?)<\/VariationSpecifics>/.exec(b)?.[1] ?? ''
     const specs: Array<[string, string]> = []
     for (const nv of sb.matchAll(/<NameValueList>[\s\S]*?<Name>([^<]*)<\/Name>[\s\S]*?<Value>([^<]*)<\/Value>[\s\S]*?<\/NameValueList>/g)) specs.push([nv[1], nv[2]])
-    vars.push({ sku, specifics: specs, ean })
+    vars.push({ sku, specifics: specs, ean, startPrice, quantity })
   }
   const setB = /<VariationSpecificsSet>([\s\S]*?)<\/VariationSpecificsSet>/.exec(raw)?.[1] ?? ''
   const axisSet: LiveAxis[] = []
@@ -54,7 +66,14 @@ export function buildAxisRenameReviseXml(itemId: string, vars: LiveVar[], axisSe
   const newSet = axisSet.map((a) => `<NameValueList><Name>${esc(italianAxisName(a.name))}</Name>${a.values.map((v) => `<Value>${esc(v)}</Value>`).join('')}</NameValueList>`).join('')
   const newVars = vars.map((v) => {
     const nvl = v.specifics.map(([n, val]) => `<NameValueList><Name>${esc(italianAxisName(n))}</Name><Value>${esc(val)}</Value></NameValueList>`).join('')
-    return `<Variation><SKU>${esc(v.sku)}</SKU><VariationSpecifics>${nvl}</VariationSpecifics><VariationProductListingDetails><EAN>${esc(v.ean)}</EAN></VariationProductListingDetails></Variation>`
+    // Price + quantity are echoed from the LIVE listing, unchanged — a
+    // <Variation> is a full definition, so omitting them made eBay read 0 and
+    // reject the whole revise (code 73). This rename must never move money or
+    // stock; if eBay somehow returned neither, the field is omitted rather than
+    // guessed (better a clear eBay error than a fabricated price).
+    const price = v.startPrice ? `<StartPrice>${esc(v.startPrice)}</StartPrice>` : ''
+    const qty = v.quantity ? `<Quantity>${esc(v.quantity)}</Quantity>` : ''
+    return `<Variation><SKU>${esc(v.sku)}</SKU>${price}${qty}<VariationSpecifics>${nvl}</VariationSpecifics><VariationProductListingDetails><EAN>${esc(v.ean)}</EAN></VariationProductListingDetails></Variation>`
   }).join('')
   return `<?xml version="1.0" encoding="utf-8"?><ReviseFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><Item><ItemID>${esc(itemId)}</ItemID><Variations><VariationSpecificsSet>${newSet}</VariationSpecificsSet>${newVars}</Variations></Item></ReviseFixedPriceItemRequest>`
 }
@@ -75,6 +94,8 @@ const GET_XML = (itemId: string) => `<?xml version="1.0" encoding="utf-8"?>
   <ItemID>${esc(itemId)}</ItemID>
   <OutputSelector>Item.Variations.Variation.SKU</OutputSelector>
   <OutputSelector>Item.Variations.Variation.VariationSpecifics</OutputSelector>
+  <OutputSelector>Item.Variations.Variation.StartPrice</OutputSelector>
+  <OutputSelector>Item.Variations.Variation.Quantity</OutputSelector>
   <OutputSelector>Item.Variations.Variation.VariationProductListingDetails</OutputSelector>
   <OutputSelector>Item.Variations.VariationSpecificsSet</OutputSelector>
 </GetItemRequest>`
