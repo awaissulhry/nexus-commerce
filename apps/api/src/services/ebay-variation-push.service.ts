@@ -1120,11 +1120,32 @@ export async function pushVariationGroup(
   //
   // Falls back to per-SKU images when no colour axis is present (single-colour
   // products, bundles, etc.).
+  // SYNONYM-AWARE axis-value lookup. Building `aspect_${pictureAxis}` by string
+  // concatenation silently fails the moment the axis NAME and the row KEY are
+  // different spellings of the same dimension — which is exactly what happened:
+  // imageAxisPreference held the English "Color" while the rows (market-aware
+  // canonicalization) carry `aspect_Colore`, so the key `aspect_Color` matched
+  // NOTHING and all 20 variants fell through to the Amazon-CDN fallback while
+  // the operator's curated sets sat unused. The override-BUILDING side was
+  // already synonym-aware (axisSynonymKey), so only this half was blind.
+  // Resolving through the synonym table makes it immune to Colore/Color/Farbe/
+  // Taglia and to any future rename.
+  const axisValueOfRow = (row: Record<string, unknown>, axis: string): string => {
+    const direct = row[`aspect_${axis.replace(/ /g, '_')}`]
+    if (typeof direct === 'string' && direct.trim()) return direct.trim().toLowerCase()
+    const want = axisSynonymKey(axis)
+    for (const [k, v] of Object.entries(row)) {
+      if (!k.startsWith('aspect_') || typeof v !== 'string' || !v.trim()) continue
+      const name = k.slice('aspect_'.length).replace(/_/g, ' ')
+      if (axisSynonymKey(name) === want) return v.trim().toLowerCase()
+    }
+    return ''
+  }
+
   const colorRepImages = new Map<string, string[]>() // pictureAxisValue.toLowerCase() → [url, ...]
   if (pictureAxis) {
-    const axisKey = `aspect_${pictureAxis.replace(/ /g, '_')}`
     for (const row of variantRows) {
-      const colorVal = String((row as Record<string, unknown>)[axisKey] ?? '').toLowerCase()
+      const colorVal = axisValueOfRow(row as Record<string, unknown>, pictureAxis)
       if (!colorVal || colorRepImages.has(colorVal)) continue
       const sku = row.sku as string
       // Prefer imagesBySku (ProductImage rows + Amazon PA — set in the merge above)
@@ -1273,8 +1294,7 @@ export async function pushVariationGroup(
     if (imageOverrideBySku?.get(sku)?.length) {
       imageUrls.push(...imageOverrideBySku.get(sku)!)
     } else if (pictureAxis) {
-      const axisKey = `aspect_${pictureAxis.replace(/ /g, '_')}`
-      const axisVal = String((row as Record<string, unknown>)[axisKey] ?? '').toLowerCase()
+      const axisVal = axisValueOfRow(row as Record<string, unknown>, pictureAxis)
       // P3 — curated per-axis-value override (operator's master-gallery picks) wins
       // over the ProductImage-derived set; otherwise fall back to the rep-image set.
       if (axisVal && imageOverrideByColor?.get(axisVal)?.length) {
