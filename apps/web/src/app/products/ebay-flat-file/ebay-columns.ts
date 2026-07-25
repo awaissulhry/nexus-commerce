@@ -651,7 +651,15 @@ export const EBAY_COLUMN_GROUPS: EbayColumnGroup[] = [
 
 export interface CategoryAspect {
   id: string          // e.g. 'aspect_Brand'
-  label: string       // e.g. 'Brand'
+  /** Bilingual header: "Color (Colore)" — English first (operators read
+   *  English), the market's own name in parens (that is what eBay receives). */
+  label: string
+  /** The market's own aspect name ("Colore" on IT, "Farbe" on DE). THIS is the
+   *  value persisted as an axis / variation-theme name — never parse it out of
+   *  `label`, whose order is a display choice. */
+  localizedName?: string
+  /** eBay's English name for the same aspect, when it differs. */
+  englishName?: string
   kind: EbayColumnKind
   options?: string[]
   /** Enum strictness from eBay's aspectMode (see EbayColumn.enumMode). */

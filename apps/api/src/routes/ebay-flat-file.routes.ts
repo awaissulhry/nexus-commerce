@@ -525,10 +525,28 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             ? 'strict'
             : 'open'
           : undefined;
-        const label = a.englishName ? `${a.name} (${a.englishName})` : a.name;
+        // BILINGUAL HEADER (operator decision): operators read English, but the
+        // market's OWN name is what eBay receives — so show both, ENGLISH first
+        // for readability with the market language in parens as the "this is
+        // what gets sent" cue: "Color (Colore)", "Color (Farbe)" on DE.
+        // (Was "Colore (Color)" — localized first.) When the two match, or on an
+        // English market, show a single name rather than "Color (Color)".
+        const localizedName = a.name;
+        const englishName = a.englishName || '';
+        const label = englishName && englishName.toLowerCase() !== localizedName.toLowerCase()
+          ? `${englishName} (${localizedName})`
+          : localizedName;
         return {
+          // The id keeps the LOCALIZED name — it is the data contract for the
+          // aspect_* row keys and must not move when the label flips.
           id: `aspect_${a.name.replace(/\s+/g, '_')}`,
           label,
+          // Explicit names so no consumer has to parse the label string. The
+          // axis/theme value we persist must stay the LOCALIZED one (S1) — with
+          // the label order flipped, string-parsing would have silently started
+          // returning English and re-broken that.
+          localizedName,
+          englishName: englishName || undefined,
           kind,
           options: isEnum ? a.values : undefined,
           enumMode,

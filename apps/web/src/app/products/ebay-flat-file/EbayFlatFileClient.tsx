@@ -1330,7 +1330,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         // axis/theme name is localized. Custom axes (no gloss) pass through.
         variantAxisCacheRef.current.set(schemaKey(categoryId), (json.aspects ?? [])
           .filter((a) => a.variantEligible)
-          .map((a) => localizedAxisName(a.label)))
+          // Prefer the EXPLICIT localized name. The header label is now
+          // "Color (Colore)" (English first), so parsing the label would return
+          // English and re-break S1 (new IT families must default to
+          // Colore/Taglia). Parsing stays only as a fallback for older payloads.
+          .map((a) => a.localizedName ?? localizedAxisName(a.label)))
         // EFX P4.5 — schema served from the durable stored copy (eBay down).
         if (json.staleSchema) staleCategoriesRef.current.add(schemaKey(categoryId))
         else staleCategoriesRef.current.delete(schemaKey(categoryId))
