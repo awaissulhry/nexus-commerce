@@ -49,7 +49,7 @@ type DRow =
   | { key: string; kind: 'more'; m: ProductMaster }
 
 interface Props {
-  filters: { channel: string; market: string; mode: string; q: string; drift: boolean }
+  filters: { channels: string[]; markets: string[]; modes: string[]; q: string; drift: boolean }
   density: Density
   onDensity: (d: Density) => void
   onChanged: () => void
@@ -86,9 +86,9 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
 
   const url = useMemo(() => {
     const p = new URLSearchParams()
-    if (filters.channel) p.set('channel', filters.channel)
-    if (filters.market) p.set('market', filters.market)
-    if (filters.mode) p.set('mode', filters.mode)
+    if (filters.channels.length) p.set('channel', filters.channels.join(','))
+    if (filters.markets.length) p.set('market', filters.markets.join(','))
+    if (filters.modes.length) p.set('mode', filters.modes.join(','))
     if (filters.q) p.set('q', filters.q)
     if (filters.drift) p.set('drift', '1')
     p.set('page', String(page))
@@ -100,9 +100,9 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
   // client-side only, so it isn't part of the server export scope.
   const exportQuery = useMemo(() => {
     const p = new URLSearchParams()
-    if (filters.channel) p.set('channel', filters.channel)
-    if (filters.market) p.set('market', filters.market)
-    if (filters.mode) p.set('mode', filters.mode)
+    if (filters.channels.length) p.set('channel', filters.channels.join(','))
+    if (filters.markets.length) p.set('market', filters.markets.join(','))
+    if (filters.modes.length) p.set('mode', filters.modes.join(','))
     if (filters.q) p.set('q', filters.q)
     if (filters.drift) p.set('drift', '1')
     return p.toString()

@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { DataGrid, Pagination, type Column } from '@/design-system/components'
-import { Listbox } from '@/design-system/components/Listbox'
+import { Listbox, MultiSelect } from '@/design-system/components'
 import { GridToolbar } from '@/design-system/patterns'
 import { Button, Input, Pill, SegmentedControl } from '@/design-system/primitives'
 import { Thumbnail, DensityContext } from '@/app/_shared/grid-lens'
@@ -39,16 +39,20 @@ const BULK_ACTIONS: Array<[string, string]> = [
   ['ZERO_PIN', 'Zero & Pin'], ['EXCLUDE', 'Exclude'], ['INCLUDE', 'Include'],
 ]
 
-function FilterSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: Array<{ value: string; label: string }> }) {
+/** SCD.6 — multi-select filter. Several channels/markets/modes at once so a
+ *  change can be made across exactly the slice the operator wants. */
+function FilterMulti({ label, values, onChange, options, placeholder }: { label: string; values: string[]; onChange: (v: string[]) => void; options: Array<{ value: string; label: string }>; placeholder: string }) {
   return (
     <label className="flex flex-col gap-1">
       <span className="text-[11px] uppercase tracking-wide text-zinc-500">{label}</span>
-      <span style={{ width: 150, display: 'inline-flex' }}>
-        <Listbox ariaLabel={label} value={value} onChange={onChange} options={options} />
+      <span style={{ width: 160, display: 'inline-flex' }}>
+        <MultiSelect options={options} value={values} onChange={onChange} placeholder={placeholder} />
       </span>
     </label>
   )
 }
+
+const familyKeyOfRow = (r: Row): string => (r.itemId ? `${r.channel}:${r.marketplace}:${r.itemId}` : `${r.channel}:${r.marketplace}`)
 
 const rowKey = (r: Row) => `${r.lane}|${r.channel}|${r.marketplace}|${r.sku}|${r.itemId ?? ''}`
 
@@ -70,7 +74,14 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
-  const familyKey = searchParams.get('family')
+  const csv = (k: string): string[] => (searchParams.get(k) ?? '').split(',').map((x) => x.trim()).filter(Boolean)
+  const fChannels = csv('channel')
+  const fMarkets = csv('market')
+  const fModes = csv('mode')
+  const fLanes = csv('lane')
+  const fFamilies = csv('family')
+  const fDrift = searchParams.get('drift') === '1'
+  const familyKey = fFamilies.length === 1 ? fFamilies[0] : null
   const url = useMemo(
     () => `/api/stock/sync-control/products?masterId=${encodeURIComponent(masterId)}${familyKey ? `&family=${encodeURIComponent(familyKey)}` : ''}`,
     [masterId, familyKey],
@@ -89,11 +100,6 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
   // SCD.5 — filters. Kept in the URL so a filtered view is shareable and
   // survives a refresh (this page is opened in its own tab). `family` is
   // server-side scoping; the rest narrow the loaded rows client-side.
-  const fChannel = searchParams.get('channel') ?? ''
-  const fMarket = searchParams.get('market') ?? ''
-  const fMode = searchParams.get('mode') ?? ''
-  const fLane = searchParams.get('lane') ?? ''
-  const fDrift = searchParams.get('drift') === '1'
   const [qLive, setQLive] = useState('')
   const [q, setQ] = useState('')
   useEffect(() => {
@@ -117,30 +123,32 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
   const children = useMemo(() => {
     const needle = q.trim().toLowerCase()
     return allChildren.filter((r) => {
-      if (fChannel && r.channel !== fChannel) return false
-      if (fMarket && r.marketplace !== fMarket) return false
-      if (fMode && r.mode !== fMode) return false
-      if (fLane && r.lane !== fLane) return false
+      if (fChannels.length && !fChannels.includes(r.channel)) return false
+      if (fMarkets.length && !fMarkets.includes(r.marketplace)) return false
+      if (fModes.length && !fModes.includes(r.mode)) return false
+      if (fLanes.length && !fLanes.includes(r.lane)) return false
+      // >1 family selected → server returned the whole product; narrow here
+      if (fFamilies.length > 1 && !fFamilies.includes(familyKeyOfRow(r))) return false
       if (fDrift && !(r.mode !== 'FBA' && r.intendedQty != null && r.liveQty != null && r.intendedQty !== r.liveQty)) return false
       if (needle && !(r.sku.toLowerCase().includes(needle) || (r.itemId ?? '').includes(needle))) return false
       return true
     })
-  }, [allChildren, fChannel, fMarket, fMode, fLane, fDrift, q])
+  }, [allChildren, fChannels, fMarkets, fModes, fLanes, fFamilies, fDrift, q])
 
-  const activeFilters = [fChannel, fMarket, fMode, fLane].filter(Boolean).length + (fDrift ? 1 : 0) + (q ? 1 : 0)
+  const activeFilters = fChannels.length + fMarkets.length + fModes.length + fLanes.length + fFamilies.length + (fDrift ? 1 : 0) + (q ? 1 : 0)
 
   // SCD.5 — the workbook must match the filtered view exactly.
   const exportQuery = useMemo(() => {
     const p = new URLSearchParams({ masterId })
-    if (familyKey) p.set('family', familyKey)
-    if (fChannel) p.set('channel', fChannel)
-    if (fMarket) p.set('market', fMarket)
-    if (fMode) p.set('mode', fMode)
-    if (fLane) p.set('lane', fLane)
+    if (fFamilies.length) p.set('family', fFamilies.join(','))
+    if (fChannels.length) p.set('channel', fChannels.join(','))
+    if (fMarkets.length) p.set('market', fMarkets.join(','))
+    if (fModes.length) p.set('mode', fModes.join(','))
+    if (fLanes.length) p.set('lane', fLanes.join(','))
     if (fDrift) p.set('drift', '1')
     if (q) p.set('q', q)
     return p.toString()
-  }, [masterId, familyKey, fChannel, fMarket, fMode, fLane, fDrift, q])
+  }, [masterId, familyKey, fFamilies, fChannels, fMarkets, fModes, fLanes, fDrift, q])
 
   // A hidden row must never be acted on: drop selections that the current
   // filters exclude, and reset paging when the result set changes.
@@ -316,17 +324,17 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
       {/* SCD.5 — filters for this product's listings (URL-backed, so a filtered
           view can be shared/bookmarked and survives a refresh). */}
       <div className="flex flex-wrap items-end gap-2 rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-800">
-        <FilterSelect label="Channel" value={fChannel} onChange={(v) => setParam('channel', v)}
-          options={[{ value: '', label: 'All channels' }, ...facets.channels.map((c) => ({ value: c, label: c }))]} />
-        <FilterSelect label="Market" value={fMarket} onChange={(v) => setParam('market', v)}
-          options={[{ value: '', label: 'All markets' }, ...facets.markets.map((m) => ({ value: m, label: m }))]} />
-        <FilterSelect label="Mode" value={fMode} onChange={(v) => setParam('mode', v)}
-          options={[{ value: '', label: 'All modes' }, ...facets.modes.map((m) => ({ value: m, label: MODE_LABEL[m as Mode] ?? m }))]} />
-        <FilterSelect label="Lane" value={fLane} onChange={(v) => setParam('lane', v)}
-          options={[{ value: '', label: 'All lanes' }, { value: 'LISTING', label: 'Listing' }, { value: 'SHARED', label: 'Shared' }]} />
+        <FilterMulti label="Channel" values={fChannels} placeholder="All channels" onChange={(v) => setParam('channel', v.join(','))}
+          options={facets.channels.map((c) => ({ value: c, label: c }))} />
+        <FilterMulti label="Market" values={fMarkets} placeholder="All markets" onChange={(v) => setParam('market', v.join(','))}
+          options={facets.markets.map((m) => ({ value: m, label: m }))} />
+        <FilterMulti label="Mode" values={fModes} placeholder="All modes" onChange={(v) => setParam('mode', v.join(','))}
+          options={facets.modes.map((m) => ({ value: m, label: MODE_LABEL[m as Mode] ?? m }))} />
+        <FilterMulti label="Lane" values={fLanes} placeholder="All lanes" onChange={(v) => setParam('lane', v.join(','))}
+          options={[{ value: 'LISTING', label: 'Listing' }, { value: 'SHARED', label: 'Shared' }]} />
         {(master?.families?.length ?? 0) > 1 && (
-          <FilterSelect label="Family" value={familyKey ?? ''} onChange={(v) => setParam('family', v)}
-            options={[{ value: '', label: 'All families' }, ...(master?.families ?? []).map((f) => ({ value: f.key, label: `${f.ownerSku ?? f.channel} · ${f.marketplace}` }))]} />
+          <FilterMulti label="Family" values={fFamilies} placeholder="All families" onChange={(v) => setParam('family', v.join(','))}
+            options={(master?.families ?? []).map((f) => ({ value: f.key, label: `${f.ownerSku ?? f.channel} · ${f.marketplace}` }))} />
         )}
         <label className="flex flex-col gap-1">
           <span className="text-[11px] uppercase tracking-wide text-zinc-500">Search</span>

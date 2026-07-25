@@ -428,9 +428,11 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       }
     })
 
-    const chan = q.channel?.toUpperCase()
-    const mode = q.mode?.toUpperCase()
-    const mkt = q.market
+    // SCD.6 — multi-select: comma-separated values, OR within a dimension.
+    const listOf = (v?: string) => (v ?? '').split(',').map((x) => x.trim()).filter(Boolean)
+    const chans = listOf(q.channel).map((x) => x.toUpperCase())
+    const modes = listOf(q.mode).map((x) => x.toUpperCase())
+    const mkts = listOf(q.market)
     const needle = q.q?.trim().toLowerCase()
     const driftOnly = q.drift === '1' || q.drift === 'true'
 
@@ -454,9 +456,9 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     }
 
     const filtered = all.filter((p) => {
-      if (chan && !p.children.some((c) => c.channel === chan)) return false
-      if (mkt && !p.children.some((c) => marketMatches(c.marketplace, mkt))) return false
-      if (mode && !p.children.some((c) => c.mode === mode)) return false
+      if (chans.length && !p.children.some((c) => chans.includes(c.channel))) return false
+      if (mkts.length && !p.children.some((c) => mkts.some((m) => marketMatches(c.marketplace, m) || c.marketplace === m))) return false
+      if (modes.length && !p.children.some((c) => modes.includes(c.mode))) return false
       if (needle && !(
         p.name.toLowerCase().includes(needle) ||
         p.sku.toLowerCase().includes(needle) ||

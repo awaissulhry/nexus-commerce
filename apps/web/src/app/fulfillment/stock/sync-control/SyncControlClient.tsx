@@ -90,9 +90,9 @@ export default function SyncControlClient() {
   const [rows, setRows] = useState<Row[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const [channel, setChannel] = useState('')
-  const [market, setMarket] = useState('')
-  const [mode, setMode] = useState('')
+  const [channels, setChannels] = useState<string[]>([])
+  const [markets, setMarkets] = useState<string[]>([])
+  const [modes, setModes] = useState<string[]>([])
   const [q, setQ] = useState('')
   const [qLive, setQLive] = useState('') // input value; q lags 250ms behind
   const [loading, setLoading] = useState(true)
@@ -129,9 +129,9 @@ export default function SyncControlClient() {
     const seq = ++rowsSeq.current
     try {
       const params = new URLSearchParams()
-      if (channel) params.set('channel', channel)
-      if (market) params.set('market', market)
-      if (mode) params.set('mode', mode)
+      if (channels.length) params.set('channel', channels.join(','))
+      if (markets.length) params.set('market', markets.join(','))
+      if (modes.length) params.set('mode', modes.join(','))
       if (q) params.set('q', q)
       if (drift) params.set('drift', '1')
       params.set('page', String(page))
@@ -148,7 +148,7 @@ export default function SyncControlClient() {
     } finally {
       if (seq === rowsSeq.current) setLoading(false)
     }
-  }, [channel, market, mode, q, drift, page, pageSize])
+  }, [channels, markets, modes, q, drift, page, pageSize])
 
   useEffect(() => { void loadOverview() }, [loadOverview])
   useEffect(() => { void loadRows() }, [loadRows])
@@ -337,31 +337,30 @@ export default function SyncControlClient() {
 
   const filterDimensions: FilterDimension[] = [
     {
-      key: 'channel', label: 'Channel', kind: 'select', value: channel,
-      onChange: (v) => { setPage(1); setChannel(v) },
+      key: 'channel', label: 'Channel', kind: 'multiselect', value: channels,
+      onChange: (v) => { setPage(1); setChannels(v) },
       options: [
-        { value: '', label: 'All channels' },
         { value: 'AMAZON', label: 'Amazon' },
         { value: 'EBAY', label: 'eBay' },
         { value: 'SHOPIFY', label: 'Shopify' },
       ],
     },
     {
-      key: 'market', label: 'Market', kind: 'select', value: market,
-      onChange: (v) => { setPage(1); setMarket(v) },
-      options: [{ value: '', label: 'All markets' }, ...['IT', 'DE', 'FR', 'ES', 'DEFAULT'].map((m) => ({ value: m, label: m }))],
+      key: 'market', label: 'Market', kind: 'multiselect', value: markets,
+      onChange: (v) => { setPage(1); setMarkets(v) },
+      options: ['IT', 'DE', 'FR', 'ES', 'DEFAULT'].map((m) => ({ value: m, label: m })),
     },
     {
-      key: 'mode', label: 'Mode', kind: 'select', value: mode,
-      onChange: (v) => { setPage(1); setMode(v) },
-      options: [{ value: '', label: 'All modes' }, ...(Object.keys(MODE_LABEL) as Mode[]).map((m) => ({ value: m, label: MODE_LABEL[m] }))],
+      key: 'mode', label: 'Mode', kind: 'multiselect', value: modes,
+      onChange: (v) => { setPage(1); setModes(v) },
+      options: (Object.keys(MODE_LABEL) as Mode[]).map((m) => ({ value: m, label: MODE_LABEL[m] })),
     },
     {
       key: 'drift', label: 'Drift only', kind: 'toggle', value: drift,
       onChange: (v) => { setPage(1); setDrift(v) },
     },
   ]
-  const activeFilterCount = [channel, market, mode].filter(Boolean).length + (q ? 1 : 0) + (drift ? 1 : 0)
+  const activeFilterCount = channels.length + markets.length + modes.length + (q ? 1 : 0) + (drift ? 1 : 0)
   const rangeFrom = total === 0 ? 0 : (page - 1) * pageSize + 1
   const rangeTo = Math.min(page * pageSize, total)
 
@@ -419,7 +418,7 @@ export default function SyncControlClient() {
       <FilterBar
         dimensions={filterDimensions}
         activeCount={activeFilterCount}
-        onClear={() => { setPage(1); setChannel(''); setMarket(''); setMode(''); setQLive(''); setQ(''); setDrift(false) }}
+        onClear={() => { setPage(1); setChannels([]); setMarkets([]); setModes([]); setQLive(''); setQ(''); setDrift(false) }}
       />
 
       <div className="flex items-center justify-between">
@@ -436,7 +435,7 @@ export default function SyncControlClient() {
 
       {view === 'products' ? (
         <SyncProductsGrid
-          filters={{ channel, market, mode, q, drift }}
+          filters={{ channels, markets, modes, q, drift }}
           density={density}
           onDensity={setDensity}
           onChanged={loadOverview}
