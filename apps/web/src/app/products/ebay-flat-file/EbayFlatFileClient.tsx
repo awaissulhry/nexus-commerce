@@ -945,6 +945,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // union Item Specifics group (never all-or-nothing: one category failing to
   // load must not drop another category's columns).
   const [categoryColumnsCache, setCategoryColumnsCache] = useState<Map<string, EbayColumnGroup>>(new Map())
+  // MARKET-SPECIFIC SCHEMA KEY. eBay returns aspect names LOCALIZED per
+  // marketplace (Colore on IT, Farbe on DE), so every schema cache must be
+  // keyed by market + category. Keyed by categoryId alone, the FIRST market to
+  // load won: switching to DE found category 177104 already cached and never
+  // fetched the German schema, so the DE grid rendered ITALIAN columns — the
+  // "why do I see columns in several languages" defect.
+  const schemaKey = (categoryId: string) => `${marketplace}:${categoryId}`
   // Distinct category IDs currently present on the sheet's rows.
   const [activeCategoryIds, setActiveCategoryIds] = useState<string[]>([])
   // FF-EN.2 — allowed conditions, unioned across every loaded category
@@ -1110,10 +1117,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // lowercase id, required = any category requires, options unioned).
   const categoryUnionGroup = useMemo(() => {
     const entries = activeCategoryIds
-      .filter((id) => categoryColumnsCache.has(id))
-      .map((id) => ({ categoryId: id, group: categoryColumnsCache.get(id)! }))
+      .filter((id) => categoryColumnsCache.has(schemaKey(id)))
+      .map((id) => ({ categoryId: id, group: categoryColumnsCache.get(schemaKey(id))! }))
     return entries.length ? mergeCategoryGroups(entries) : null
-  }, [activeCategoryIds, categoryColumnsCache])
+    // `marketplace` is load-bearing: schemaKey() scopes the lookup, so the
+    // union must recompute when the operator switches market (otherwise the
+    // previous market's localized columns stay on screen).
+  }, [activeCategoryIds, categoryColumnsCache, marketplace])
 
   // Ghost columns: aspect_* keys with row data that no loaded schema knows.
   // Keyed on the stable signature — recomputes when the key SET changes only.
@@ -1292,7 +1302,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       return
     }
 
-    const toFetch = ids.filter((id) => !categoryColumnsCache.has(id))
+    const toFetch = ids.filter((id) => !categoryColumnsCache.has(schemaKey(id)))
     const failures: Record<string, string> = {}
     if (toFetch.length > 0) {
       setCategoryLoading(true)
@@ -1312,30 +1322,30 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         }
         const { categoryId, json } = r.value
         fetched.push({ categoryId, group: buildCategoryColumns(json.aspects ?? []) })
-        conditionsCacheRef.current.set(categoryId, json.conditions ?? [])
+        conditionsCacheRef.current.set(schemaKey(categoryId), json.conditions ?? [])
         // S1 — variant-eligible axis names: carry the LOCALIZED name (the part
         // before the "(English)" gloss) so a new IT family defaults to
         // Colore/Taglia, not English Color/Size. The full "Name (English)" label
         // is still shown verbatim in UI lists; only the value we persist as the
         // axis/theme name is localized. Custom axes (no gloss) pass through.
-        variantAxisCacheRef.current.set(categoryId, (json.aspects ?? [])
+        variantAxisCacheRef.current.set(schemaKey(categoryId), (json.aspects ?? [])
           .filter((a) => a.variantEligible)
           .map((a) => localizedAxisName(a.label)))
         // EFX P4.5 — schema served from the durable stored copy (eBay down).
-        if (json.staleSchema) staleCategoriesRef.current.add(categoryId)
-        else staleCategoriesRef.current.delete(categoryId)
+        if (json.staleSchema) staleCategoriesRef.current.add(schemaKey(categoryId))
+        else staleCategoriesRef.current.delete(schemaKey(categoryId))
       }
       if (fetched.length > 0) {
         setCategoryColumnsCache((prev) => {
           const next = new Map(prev)
-          for (const f of fetched) next.set(f.categoryId, f.group)
+          for (const f of fetched) next.set(schemaKey(f.categoryId), f.group)
           return next
         })
       }
       setCategoryLoading(false)
     }
     setCategorySchemaErrors(failures)
-    setStaleSchemaCategories(ids.filter((id) => staleCategoriesRef.current.has(id)))
+    setStaleSchemaCategories(ids.filter((id) => staleCategoriesRef.current.has(schemaKey(id))))
 
     // Union the per-category conditions + variant axes across ACTIVE categories.
     const condSeen = new Set<string>()
@@ -1343,10 +1353,10 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     const axisSeen = new Set<string>()
     const axes: string[] = []
     for (const id of ids) {
-      for (const c of conditionsCacheRef.current.get(id) ?? []) {
+      for (const c of conditionsCacheRef.current.get(schemaKey(id)) ?? []) {
         if (!condSeen.has(c.value)) { condSeen.add(c.value); conds.push(c) }
       }
-      for (const a of variantAxisCacheRef.current.get(id) ?? []) {
+      for (const a of variantAxisCacheRef.current.get(schemaKey(id)) ?? []) {
         const k = a.toLowerCase()
         if (!axisSeen.has(k)) { axisSeen.add(k); axes.push(a) }
       }
