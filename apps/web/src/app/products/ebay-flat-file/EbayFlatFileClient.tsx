@@ -3929,6 +3929,55 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // (soft-delete + live delist — never a bare local row removal), and the add
   // flow opens the AddListingPopover. Reads the latest grid ctx via the
   // renderToolbarFetch refs, so actions never see stale rows.
+  // STANDING per-listing actions. Verify / Reconcile used to exist ONLY inside
+  // the post-save banner, driven by transient client state (saveReport): they
+  // vanished on reload, and a listing not adopted in THIS save could never be
+  // verified or reconciled at all. They now live on the row context menu, so
+  // any listed row can be checked against eBay at any time. Context menu =>
+  // NO row-height cost (the compact rows and the View-menu opt-in are untouched).
+  const itemIdOfRow = (r: EbayRow | null | undefined): string => {
+    if (!r) return ''
+    const mp = String(marketplaceRef.current ?? 'IT').toLowerCase()
+    return String((r as Record<string, unknown>)[`${mp}_item_id`] ?? r.ebay_item_id ?? '').trim()
+  }
+  const verifyItemId = (id: string) => {
+    toast.info?.(`Verifying ${id}…`)
+    setVerifyResults((prev) => ({ ...prev, [id]: 'checking…' }))
+    void fetch(`${BACKEND}/api/ebay/flat-file/verify-item?itemId=${id}&marketplace=${marketplaceRef.current}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const msg = d.error
+          ? `error: ${d.error}`
+          : `${d.status} · ${d.matched}/${d.memberships} SKUs matched${d.missingOnEbay?.length ? ` · missing on eBay: ${d.missingOnEbay.slice(0, 3).join(', ')}` : ''}${d.unlinked?.length ? ` · ${d.unlinked.length} not pool-linked` : ''}`
+        setVerifyResults((prev) => ({ ...prev, [id]: msg }))
+        if (d.error) toast.error(`Verify ${id}: ${d.error}`); else toast.success(`Verify ${id} — ${msg}`)
+      })
+      .catch(() => {
+        setVerifyResults((prev) => ({ ...prev, [id]: 'verify failed' }))
+        toast.error(`Verify ${id} failed`)
+      })
+  }
+  const reconcileItemId = (id: string) => {
+    toast.info?.(`Reconciling ${id}…`)
+    setVerifyResults((prev) => ({ ...prev, [id]: 'reconciling…' }))
+    void fetch(`${BACKEND}/api/ebay/flat-file/reconcile-item`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemId: id, marketplace: marketplaceRef.current }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        const msg = d.error
+          ? `reconcile error: ${d.error}`
+          : `reconciled: ${d.matched}/${d.liveVariations} matched · ${d.rewritten} rewired · ${d.removedStale} stale removed${d.customLabel ? ` · custom label ${d.customLabel === 'set' ? 'SET to parent SKU' : d.customLabel}` : ''}${d.unmatched?.length ? ` · unmatched: ${d.unmatched.slice(0, 2).join(', ')}…` : ''}`
+        setVerifyResults((prev) => ({ ...prev, [id]: msg }))
+        if (d.error) toast.error(`Reconcile ${id}: ${d.error}`); else toast.success(`Reconcile ${id} — ${msg}`)
+      })
+      .catch(() => {
+        setVerifyResults((prev) => ({ ...prev, [id]: 'reconcile failed' }))
+        toast.error(`Reconcile ${id} failed`)
+      })
+  }
+
   const renderContextMenu = (ctx: GridContextMenuCtx) => {
     const insertAt = (offset: 0 | 1) => {
       const rows = latestRowsRef.current
@@ -3943,6 +3992,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     // read-only membership rows are only deletable when they're shared memberships).
     const deletable = (ctx.selectionRows as EbayRow[])
       .filter((r) => !!r.sku && !(r._readonly === true && r._shared !== true))
+    // The right-clicked row's live eBay ItemID (active market), if it has one.
+    const anchorItemId = itemIdOfRow(ctx.anchorRow as EbayRow | undefined)
     return (
       <FlatFileContextMenu
         x={ctx.x}
@@ -3963,6 +4014,20 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           },
           { separator: true },
           { label: 'Add listing…', onClick: () => setAddListingOpen(true) },
+          // Live-listing checks, always reachable (were banner-only and lost on reload).
+          ...(anchorItemId
+            ? [
+                { separator: true } as const,
+                {
+                  label: `Verify ${anchorItemId} against eBay`,
+                  onClick: () => verifyItemId(anchorItemId),
+                } as const,
+                {
+                  label: `Reconcile ${anchorItemId} from eBay`,
+                  onClick: () => reconcileItemId(anchorItemId),
+                } as const,
+              ]
+            : []),
           { separator: true },
           { label: 'Group selected…', onClick: ctx.ops.groupFromSelection, disabled: ctx.selRowCount === 0 },
           { label: 'Clear cells', shortcut: 'Del', onClick: ctx.ops.clearCells, disabled: !ctx.hasSelection },
