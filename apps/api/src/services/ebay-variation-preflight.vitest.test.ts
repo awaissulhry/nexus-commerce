@@ -141,12 +141,21 @@ describe('validateVariationFamily — GTIN', () => {
     expect(has(issues, 'GTIN_EXEMPT_ASSUMED')).toBe(false)
   })
 
-  it('GTIN_EXEMPT_ASSUMED: variants with no EAN warn that "Does not apply" will be sent', () => {
+  // Warn on the ANOMALY, not on deliberate configuration.
+  it('GTIN-exempt family (NO variant has a barcode) is SILENT — it is a correct, permanent state', () => {
     const specs = [spec('Taglia', ['M', 'L'])]
     const rows = [row('A', { Taglia: 'M' }), row('B', { Taglia: 'L' })]
     const issues = validateVariationFamily(rows, resolvedFrom(specs), specs, {})
-    expect(has(issues, 'GTIN_EXEMPT_ASSUMED')).toBe(true)
-    expect(get(issues, 'GTIN_EXEMPT_ASSUMED')!.severity).toBe('warn')
+    expect(has(issues, 'GTIN_PARTIAL')).toBe(false)
+    expect(has(issues, 'GTIN_EXEMPT_ASSUMED')).toBe(false)
+  })
+
+  it('GTIN_PARTIAL: a MIXED family (some barcoded, some not) still warns — likely an oversight', () => {
+    const specs = [spec('Taglia', ['M', 'L'])]
+    const rows = [row('A', { Taglia: 'M' }, { ean: '4006381333931' }), row('B', { Taglia: 'L' })]
+    const issues = validateVariationFamily(rows, resolvedFrom(specs), specs, {})
+    expect(has(issues, 'GTIN_PARTIAL')).toBe(true)
+    expect(get(issues, 'GTIN_PARTIAL')!.severity).toBe('warn')
   })
 })
 

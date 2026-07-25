@@ -190,10 +190,19 @@ export function validateVariationFamily(
       noEanSkus.push(skuOf(row))
     }
   }
-  if (noEanSkus.length > 0) {
-    add('warn', 'GTIN_EXEMPT_ASSUMED',
-      `${noEanSkus.length} variant(s) have no EAN/GTIN (${noEanSkus.slice(0, 8).join(', ')}${noEanSkus.length > 8 ? '…' : ''}) — eBay will receive "Does not apply".`,
-      'Add real barcodes where the products have them; otherwise this is expected for GTIN-exempt items.')
+  // Warn on the ANOMALY, not on deliberate configuration. A family where EVERY
+  // variant lacks a barcode is a GTIN-exempt product — a permanent, correct,
+  // operator-known state that eBay accepts via "Does not apply". Warning about
+  // it on EVERY publish is pure noise, and noise on a panel whose job is to
+  // surface real problems trains the operator to ignore all of it (they read
+  // this exact warning as part of a failure while the publish had succeeded).
+  // A MIXED family is different: some variants carry barcodes and some don't,
+  // which is far more likely to be an oversight than a decision — that still warns.
+  const withEanCount = variantRows.length - noEanSkus.length
+  if (noEanSkus.length > 0 && withEanCount > 0) {
+    add('warn', 'GTIN_PARTIAL',
+      `${noEanSkus.length} of ${variantRows.length} variants have no EAN/GTIN (${noEanSkus.slice(0, 8).join(', ')}${noEanSkus.length > 8 ? '…' : ''}) while ${withEanCount} do — eBay will receive "Does not apply" for the rest.`,
+      'Fill in the missing barcodes, or clear them all if this product is GTIN-exempt.')
   }
 
   // ── MIXED_CONDITION (warn) ───────────────────────────────────────────────
