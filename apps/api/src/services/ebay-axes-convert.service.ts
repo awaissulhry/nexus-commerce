@@ -2,14 +2,26 @@
  * Convert a LIVE eBay listing's variation AXIS NAMES to the operator's Italian
  * standard (Color→Colore, Size→Taglia) via ReviseFixedPriceItem.
  *
- * Feasibility (proven live 2026-07): the rename IS allowed — variations are
- * matched by SKU and each carries its EAN (eBay IT code 21919301 requires it,
- * mirror 'Does not apply'). Inventory-API-managed listings (e.g. GALE) REJECT
- * Trading revises ("non consentita per gli oggetti del magazzino") — those are
- * reported as needing an Inventory re-publish (the push already emits Italian).
+ * ⚠️ PROVEN LIVE 2026-07-25: an in-place axis rename is IMPOSSIBLE on a Trading
+ * listing. eBay identifies each variation BY its VariationSpecifics, so changing
+ * Color→Colore makes every variation unmatchable: eBay treats them as NEW
+ * variations, collides with the existing SKUs, and rejects the whole call with
+ * code 21916664 ("Le specifiche delle varianti fornite non corrispondono … |
+ * Etichetta personalizzata della variante duplicata"). The revise is ATOMIC —
+ * read-back confirmed the listing was left byte-identical — but renaming on the
+ * Trading lane would require ending + relisting (losing the ItemID, watchers and
+ * sales history). Do not retry it blindly.
  *
- * Read-back verified: after the revise we GetItem again and confirm the axis
- * names changed with the SAME variation count (no duplication).
+ * Two obstacles were cleared on the way and are still REQUIRED for any variation
+ * revise: per-variation EAN (code 21919301) and per-variation StartPrice +
+ * Quantity (code 73 — a <Variation> is a full definition, not a patch; omitting
+ * them makes eBay read 0 and reject). Both are echoed from the LIVE listing, so
+ * a revise can never move money or stock.
+ *
+ * WHAT DOES WORK: Inventory-API-managed listings reject Trading revises outright
+ * ("non consentita per gli oggetti del magazzino") and are reported as
+ * `inventory-managed`; their axis names are set wholesale by re-publishing the
+ * group, which now emits the market's own names.
  */
 import { callTradingApi, siteIdForMarket } from './ebay-trading-api.service.js'
 
