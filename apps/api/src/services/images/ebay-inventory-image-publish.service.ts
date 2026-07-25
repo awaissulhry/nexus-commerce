@@ -320,9 +320,29 @@ export async function publishEbayImagesViaInventory(
   const errors = allResults.filter((r) => r.status === 'ERROR')
   const success = errors.length === 0 && allResults.length > 0
   const pushedSkus = allResults.filter((r) => r.status === 'PUSHED').length
+  // Count the picture-axis VALUES actually present on the variants — the number
+  // of per-value image sets eBay ends up with.
+  //
+  // This used to read ONLY `aspect_color` / `aspect_Color` — hardcoded ENGLISH.
+  // On an Italian family the rows carry `aspect_Colore`, so the set came out
+  // empty and the operator was told "0 colour sets sent" while eBay had in fact
+  // received them (verified live: GALE had Nero=10 + Giallo=10 picture sets).
+  // A report that says the opposite of the truth is worse than no report — it
+  // sends the operator hunting a bug that isn't there. Follow the RESOLVED
+  // picture axis through the synonym table instead, so Colore / Color / Farbe /
+  // Taglia and any custom axis all count correctly.
   const colours = new Set(
     variantRows
-      .map((r) => String((r as Record<string, unknown>).aspect_color ?? (r as Record<string, unknown>).aspect_Color ?? '').toLowerCase())
+      .map((r) => {
+        const row = r as Record<string, unknown>
+        if (!pictureAxis) return ''
+        for (const [k, v] of Object.entries(row)) {
+          if (!k.startsWith('aspect_') || typeof v !== 'string' || !v.trim()) continue
+          const name = k.slice('aspect_'.length).replace(/_/g, ' ')
+          if (axisSynonymKey(name) === axisSynonymKey(pictureAxis)) return v.trim().toLowerCase()
+        }
+        return ''
+      })
       .filter(Boolean),
   )
 
