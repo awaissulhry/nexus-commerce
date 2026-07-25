@@ -626,3 +626,100 @@ describe('per-target isolation', () => {
     expect(results[1].softDeleted).toEqual(['good-p'])
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════════════
+// remove-channel-listing — NEVER end a listing that still belongs to someone
+// else. A DE row was found carrying the LIVE IT ItemID 257584954808; deleting
+// it would have ended the live IT GALE listing (21 IT rows + 20 ACTIVE IT
+// memberships hang off that ItemID).
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('remove-channel-listing — delist safety guards', () => {
+  const basePrisma = (opts: {
+    parentId?: string | null
+    rowsToDelete: Array<{ externalListingId: string | null }>
+    survivingListings: Array<{ externalListingId: string | null }>
+    activeMemberships?: Array<{ itemId: string }>
+  }) => {
+    let clCalls = 0
+    return {
+      product: {
+        findFirst: async () => ({ id: 'p1', sku: 'SKU1', parentId: opts.parentId ?? null, ebayItemId: null }),
+        findMany: async () => [],
+      },
+      sharedListingMembership: {
+        findMany: async () => opts.activeMemberships ?? [],
+        deleteMany: async () => ({ count: 0 }),
+      },
+      channelListing: {
+        // 1st call = rows about to be deleted; later calls = the guard's
+        // "is this ItemID still referenced by anyone?" probe.
+        findMany: async () => (++clCalls === 1 ? opts.rowsToDelete : opts.survivingListings),
+        deleteMany: async () => ({ count: opts.rowsToDelete.length }),
+      },
+      $transaction: async (fn: any) => fn({
+        product: { update: async () => ({}), updateMany: async () => ({ count: 0 }) },
+        sharedListingMembership: { deleteMany: async () => ({ count: 0 }) },
+        channelListing: { deleteMany: async () => ({ count: opts.rowsToDelete.length }) },
+      }),
+    }
+  }
+
+  it('does NOT end an ItemID still referenced by another market row — reports it instead', async () => {
+    const prisma = basePrisma({
+      rowsToDelete: [{ externalListingId: '257584954808' }],   // the DE row…
+      survivingListings: [{ externalListingId: '257584954808' }], // …still live in IT
+    })
+    const [res] = await runEbayFlatFileDelete(prisma as any, [
+      { sku: 'SKU1', productId: 'p1', marketplace: 'DE', intent: 'remove-channel-listing' },
+    ])
+    expect(mockDispatchChannelDelist).not.toHaveBeenCalled()
+    expect(res.delisted).toBe(false)
+    expect(res.delistSkippedShared).toEqual(['257584954808'])
+  })
+
+  it('does NOT end an ItemID still held by ACTIVE pool memberships', async () => {
+    const prisma = basePrisma({
+      rowsToDelete: [{ externalListingId: 'ITEM-POOLED' }],
+      survivingListings: [],
+      activeMemberships: [{ itemId: 'ITEM-POOLED' }],
+    })
+    const [res] = await runEbayFlatFileDelete(prisma as any, [
+      { sku: 'SKU1', productId: 'p1', marketplace: 'DE', intent: 'remove-channel-listing' },
+    ])
+    expect(mockDispatchChannelDelist).not.toHaveBeenCalled()
+    expect(res.delistSkippedShared).toEqual(['ITEM-POOLED'])
+  })
+
+  it('a VARIATION CHILD never whole-listing delists, even when the caller omits parentSku (DB truth wins)', async () => {
+    const prisma = basePrisma({
+      parentId: 'parent-1',                                  // DB says: child
+      rowsToDelete: [{ externalListingId: 'FAMILY-ITEM' }],
+      survivingListings: [],
+    })
+    const [res] = await runEbayFlatFileDelete(prisma as any, [
+      // caller supplies NO parentSku — this used to arm a whole-listing delist
+      { sku: 'SKU1', productId: 'p1', marketplace: 'IT', intent: 'remove-channel-listing' },
+    ])
+    expect(mockDispatchChannelDelist).not.toHaveBeenCalled()
+    expect(res.delisted).toBe(false)
+  })
+
+  it('STILL delists a genuinely orphaned ItemID (the legitimate path is intact)', async () => {
+    mockDispatchChannelDelist.mockResolvedValue({ success: true })
+    const prisma = basePrisma({
+      rowsToDelete: [{ externalListingId: 'ORPHAN-ITEM' }],
+      survivingListings: [],   // nobody else references it
+    })
+    const [res] = await runEbayFlatFileDelete(prisma as any, [
+      { sku: 'SKU1', productId: 'p1', marketplace: 'IT', intent: 'remove-channel-listing' },
+    ])
+    // The guard's contract is WHETHER we call delist, not whether eBay then
+    // succeeds (that is dispatchChannelDelist's business). Assert the call
+    // reached eBay for the orphaned ItemID and that nothing was skipped.
+    expect(mockDispatchChannelDelist).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(mockDispatchChannelDelist.mock.calls[0])).toContain('ORPHAN-ITEM')
+    expect(res.error).toBeUndefined()
+    expect(res.delistSkippedShared).toBeUndefined()
+  })
+})

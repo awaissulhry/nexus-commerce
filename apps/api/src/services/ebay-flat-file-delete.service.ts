@@ -85,6 +85,11 @@ export interface DeleteTargetResult {
   channelListingsRemoved?: number // NEW
   /** Whether the channel delist call succeeded (false = not implemented yet for eBay). */
   delisted: boolean
+  /** ItemIDs deliberately NOT ended because they are still referenced by
+   *  another market's listing row or by ACTIVE pool memberships — ending them
+   *  would kill a listing that still belongs to someone else. Surfaced so the
+   *  operator sees the row left eBay alone rather than assuming it delisted. */
+  delistSkippedShared?: string[]
   /** Present only when this target errored; other targets are unaffected. */
   error?: string
 }
@@ -604,8 +609,8 @@ async function handleRemoveChannelListing(
 
   const product = (await prisma.product.findFirst({
     where: productId ? { id: productId } : { sku },
-    select: { id: true, sku: true, ebayItemId: true, categoryAttributes: true },
-  } as any)) as { id: string; sku: string; ebayItemId?: string | null; categoryAttributes?: unknown } | null
+    select: { id: true, sku: true, parentId: true, ebayItemId: true, categoryAttributes: true },
+  } as any)) as { id: string; sku: string; parentId?: string | null; ebayItemId?: string | null; categoryAttributes?: unknown } | null
 
   if (!product) {
     return {
@@ -672,8 +677,14 @@ async function handleRemoveChannelListing(
   // delisting it would end the whole multi-variation listing because one row
   // was deleted. Only a parent/standalone target may whole-listing delist;
   // a child target just leaves the file (its live variation stays, pool-fed).
-  const isVariationChild = Boolean(target.parentSku && target.parentSku !== sku)
+  //
+  // GUARD 1 — DB TRUTH, not caller input. `target.parentSku` is supplied by the
+  // CALLER and the route never validates it, so omitting it made this false and
+  // armed a whole-listing delist. Product.parentId is the real answer; the
+  // caller hint is kept only as an extra belt.
+  const isVariationChild = product.parentId != null || Boolean(target.parentSku && target.parentSku !== sku)
   let delisted = false
+  const delistSkippedShared: string[] = []
   if (!isVariationChild) {
     const delistIds = new Set<string>(
       [
@@ -681,9 +692,34 @@ async function handleRemoveChannelListing(
         product.ebayItemId ?? null,
       ].filter((x): x is string => Boolean(x)),
     )
-    for (const iid of delistIds) {
-      const ok = await tryDelist(iid, marketplace, product.id)
-      if (ok) delisted = true
+    // GUARD 2 — CROSS-MARKET / SHARED ItemID. An ItemID can legitimately be
+    // referenced by another market's row or by live pool memberships: a DE row
+    // was found carrying the LIVE IT ItemID 257584954808, so deleting that DE
+    // row would have ENDED the live IT GALE listing (21 IT listing rows + 20
+    // ACTIVE IT memberships hang off it). The target's own rows are already
+    // deleted above, so ANY surviving reference proves the listing still
+    // belongs to someone else — never end it. Reported, never silent.
+    if (delistIds.size > 0) {
+      const ids = [...delistIds]
+      const [stillLinked, stillPooled] = await Promise.all([
+        prisma.channelListing.findMany({
+          where: { channel: 'EBAY', externalListingId: { in: ids } },
+          select: { externalListingId: true },
+        } as any) as Promise<Array<{ externalListingId: string | null }>>,
+        prisma.sharedListingMembership.findMany({
+          where: { itemId: { in: ids }, status: 'ACTIVE' },
+          select: { itemId: true },
+        } as any) as Promise<Array<{ itemId: string }>>,
+      ])
+      const shared = new Set<string>([
+        ...stillLinked.map((l) => l.externalListingId).filter((x): x is string => Boolean(x)),
+        ...stillPooled.map((m) => m.itemId),
+      ])
+      for (const iid of ids) {
+        if (shared.has(iid)) { delistSkippedShared.push(iid); continue }
+        const ok = await tryDelist(iid, marketplace, product.id)
+        if (ok) delisted = true
+      }
     }
   }
 
@@ -693,6 +729,7 @@ async function handleRemoveChannelListing(
     softDeleted: [],
     membershipsRemoved: 0,
     channelListingsRemoved,
+    ...(delistSkippedShared.length > 0 ? { delistSkippedShared } : {}),
     delisted,
     excludedFromFile,
   }
