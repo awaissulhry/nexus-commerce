@@ -1,4 +1,10 @@
-# Sync Control — canonical product grouping (SCD series) — SHIPPING
+# Sync Control — canonical grouping + per-family control (SCD) — ✅ COMPLETE + PROD-VERIFIED 2026-07-25
+
+**All shipped and verified live.** 37 masters → **15 products** (every duplicate folded; AIR-MESH-JACKET-MEN correctly separate). Big families expand inline with a 12-row preview + "Showing 12 of 268 — open all (+256) ↗"; every product opens in its own tab. Per-product page: **11 listing families** listed for GALE, "Open this family" → `?family=` scoped tab (20 listings, scoped banner + actions + export), and URL-backed filters (channel/market/mode/lane/family/search/drift). A 53-agent adversarial audit (wf_ee0c6429) found + fixed a **CRITICAL write-then-400 bulk bug** plus 7 more defects — see memory `project_sync_control_sc_series`. 2,566 tests green.
+
+---
+
+## (superseded status line)
 
 **Status (2026-07-25):** SCD.1 pool-derived grouping (b130f6207) + SCD.1b unpooled-duplicate stem fallback (9b8b97953) + SCD.3 group bulk + SCD.4 tooltips + SCD.5 live-creation (091525b43, 41d0f3bd4) all shipped. **37 masters → 15 logical products, prod-verified.** SCD.1b was surfaced by the live grid: pool-derivation folds only inventory-POOLED copies; VENTRA/REGAL ALTs are unpooled duplicate listings, so a safe childless-only SKU-stem fallback folds them (a genuinely-different product owns its own children → never childless → never stem-merged). SCD.6 (materialize canonicalMasterId) deferred. Verification + memory pending below.
 
