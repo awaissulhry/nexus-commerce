@@ -80,6 +80,11 @@ interface Props {
   onCopyFromAmazonGallery?: () => void
   onCopyFromAmazonColorSets?: () => void
   channelLiveImages?: ChannelLiveImage[]
+  /** Layer-A axis warnings from resolveFamilyAxes (e.g. an axis that is live on
+   *  eBay under a different name, or a varying aspect not in the theme). The
+   *  server always returned these; this tab used to drop them. Warn, never
+   *  block — rendered in the panel, never inside a grid row. */
+  resolvedAxisWarnings?: string[]
   onAdoptToMaster?: (url: string) => void | Promise<void>
   onOpenRollback?: () => void
   onOpenLightboxForCell?: (id: string | undefined, url: string) => void
@@ -181,7 +186,7 @@ function bucketsDiff(a: Buckets, b: Buckets): number {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export default function EbayPanel({ productId, product, masterImages, listingImages, variants, onReload, onToast, onEbayDirtyChange, registerController, channelLiveImages = [] }: Props) {
+export default function EbayPanel({ productId, product, masterImages, listingImages, variants, onReload, onToast, onEbayDirtyChange, registerController, channelLiveImages = [], resolvedAxisWarnings = [] }: Props) {
   const axes = useMemo(() => availableAxes(variants), [variants])
   const [axis, setAxis] = useState<string>(() => defaultAxis(product, axes))
   const [axisOpen, setAxisOpen] = useState(false)
@@ -466,6 +471,24 @@ export default function EbayPanel({ productId, product, masterImages, listingIma
                 <img src={img.url} alt={img.alt ?? ''} draggable={false} className="w-full h-full object-contain" loading="lazy" decoding="async" />
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Axis warnings (Layer A). Previously fetched and dropped on this tab —
+          the operator never saw them. Panel-level strip: warn, never block, and
+          never inside a grid row (row height is untouched). */}
+      {resolvedAxisWarnings.length > 0 && (
+        <div className="px-4 pt-3">
+          <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700/60 dark:bg-amber-900/20 px-3 py-2">
+            <div className="text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+              Variation axes — {resolvedAxisWarnings.length} thing{resolvedAxisWarnings.length === 1 ? '' : 's'} to know
+            </div>
+            <ul className="mt-1 space-y-0.5">
+              {resolvedAxisWarnings.map((w, i) => (
+                <li key={i} className="text-[11px] leading-snug text-amber-800/90 dark:text-amber-200/90">• {w}</li>
+              ))}
+            </ul>
           </div>
         </div>
       )}

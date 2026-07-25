@@ -153,6 +153,12 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
   const damDrift = workspace.data?.damDrift ?? []
   const variants = workspace.data?.variants ?? []
   const channelLiveImages = workspace.data?.channelLiveImages ?? []
+  // Layer-A axis warnings (resolveFamilyAxes). The server has always returned
+  // these and the workspace type declared them, but nothing here read them —
+  // so on this tab they were fetched and silently DROPPED. Surfaced in the eBay
+  // panel (warn, never block). Panel-level only: no grid row is touched, so row
+  // height is unaffected.
+  const resolvedAxisWarnings = workspace.data?.resolvedAxisWarnings ?? []
 
   // IE.5 — Adopt a live channel image into the master gallery. Fetches
   // the live URL bytes, posts through the standard upload pipeline so
@@ -766,6 +772,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange, onPre
               onEbayDirtyChange={setEbayDirty}
               registerController={registerEbayController}
               channelLiveImages={channelLiveImages}
+              resolvedAxisWarnings={resolvedAxisWarnings}
               onReload={workspace.reload}
               onAdoptToMaster={(url) => handleAdoptToMaster(url)}
               onOpenRollback={() => setRollbackTarget({ channel: 'EBAY', marketplace: null })}
