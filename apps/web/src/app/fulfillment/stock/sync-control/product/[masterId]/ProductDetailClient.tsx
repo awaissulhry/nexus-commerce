@@ -7,6 +7,7 @@
  */
 
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { DataGrid, Pagination, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'
@@ -15,8 +16,10 @@ import { Button, Input, Pill, SegmentedControl } from '@/design-system/primitive
 import { Thumbnail, DensityContext } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { ExternalLink } from 'lucide-react'
 import { Tooltip } from '@/components/ui/Tooltip'
 import SyncExcelBar from '../../SyncExcelBar'
 import {
@@ -39,6 +42,9 @@ const BULK_ACTIONS: Array<[string, string]> = [
 const rowKey = (r: Row) => `${r.lane}|${r.channel}|${r.marketplace}|${r.sku}|${r.itemId ?? ''}`
 
 export default function ProductDetailClient({ masterId }: { masterId: string }) {
+  // SCD.4 — this page is usually opened standalone in a new tab, so it needs
+  // its own SSE→invalidation bridge to stay live.
+  useListingEvents()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bufferVal, setBufferVal] = useState('')
   const [busy, setBusy] = useState(false)
@@ -48,11 +54,18 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
   const [pageSize, setPageSize] = useState(50)
   const confirm = useConfirm()
 
-  const url = useMemo(() => `/api/stock/sync-control/products?masterId=${encodeURIComponent(masterId)}`, [masterId])
+  // SCD.3 — ?family=<key> narrows this page to ONE parent listing, so every
+  // action here touches only that family's child SKUs.
+  const searchParams = useSearchParams()
+  const familyKey = searchParams.get('family')
+  const url = useMemo(
+    () => `/api/stock/sync-control/products?masterId=${encodeURIComponent(masterId)}${familyKey ? `&family=${encodeURIComponent(familyKey)}` : ''}`,
+    [masterId, familyKey],
+  )
   const { data, loading } = usePolledList<{ products: ProductMaster[] }>({
     url,
     intervalMs: 30_000,
-    invalidationTypes: ['stock.adjusted', 'listing.updated', 'product.updated'],
+    invalidationTypes: ['stock.adjusted', 'listing.updated', 'product.updated', 'product.created', 'listing.created', 'product.deleted', 'listing.deleted'],
   })
   const master = data?.products?.[0] ?? null
   const children = useMemo(
@@ -108,7 +121,7 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
     { key: 'channel', label: 'Channel', width: 90, sortable: true, sortValue: (r) => r.channel, render: (r) => r.channel },
     { key: 'market', label: 'Market', width: 80, sortable: true, sortValue: (r) => r.marketplace, render: (r) => r.marketplace },
     { key: 'lane', label: 'Lane', width: 70, render: (r) => <span className="text-xs text-zinc-500">{r.lane === 'SHARED' ? 'Shared' : 'Listing'}</span> },
-    { key: 'mode', label: <Tooltip content={COLUMN_HELP.sync}><span style={{ cursor: 'help' }}>Mode</span></Tooltip>, width: 130, sortable: true, sortValue: (r) => r.mode, render: (r) => <Tooltip content={MODE_HELP[r.mode as Mode] ?? ''}><Pill tone={MODE_TONE[r.mode]}>{MODE_LABEL[r.mode]}</Pill></Tooltip> },
+    { key: 'mode', label: <Tooltip content={COLUMN_HELP.sync}><span style={{ cursor: 'help' }}>Mode</span></Tooltip>, width: 130, sortable: true, sortValue: (r) => r.mode, render: (r) => <Tooltip content={MODE_HELP[r.mode as Mode] ?? ''}><span className="inline-flex" style={{ cursor: 'help' }}><Pill tone={MODE_TONE[r.mode]}>{MODE_LABEL[r.mode]}</Pill></span></Tooltip> },
     { key: 'intended', label: <Tooltip content={COLUMN_HELP.intended}><span style={{ cursor: 'help' }}>Intended</span></Tooltip>, align: 'right', width: 85, sortable: true, sortValue: (r) => (r.mode === 'FBA' ? -1 : r.intendedQty ?? -1),
       render: (r) => <span className="tabular-nums">{r.mode === 'FBA' ? '—' : r.intendedQty ?? '—'}</span> },
     { key: 'live', label: <Tooltip content={COLUMN_HELP.live}><span style={{ cursor: 'help' }}>Live</span></Tooltip>, align: 'right', width: 75, sortable: true, sortValue: (r) => (r.mode === 'FBA' ? -1 : r.liveQty ?? -1),
@@ -147,6 +160,79 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
         </div>
       )}
 
+      {/* SCD.3 — the parent listings sharing these child SKUs. Open one to
+          control ONLY its child SKUs, without touching the other copies. */}
+      {master && (master.families?.length ?? 0) > 0 && (
+        <div className="rounded-lg border border-zinc-200 dark:border-zinc-800">
+          <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
+            <span className="text-sm font-semibold">
+              {master.families!.length} {master.families!.length === 1 ? 'listing family' : 'listing families'} share these child SKUs
+            </span>
+            {familyKey && (
+              <Link href={`/fulfillment/stock/sync-control/product/${masterId}`} className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400">
+                ← Show all families
+              </Link>
+            )}
+          </div>
+          <table className="w-full text-sm">
+            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {master.families!.map((f) => {
+                const active = familyKey === f.key
+                return (
+                  <tr key={f.key} className={active ? 'bg-blue-50/60 dark:bg-blue-950/30' : undefined}>
+                    <td className="px-3 py-1.5">
+                      <span className="font-mono text-xs">{f.ownerSku ?? f.channel}</span>
+                      {f.itemId && <span className="ml-1 text-xs text-zinc-400">#{f.itemId}</span>}
+                    </td>
+                    <td className="px-3 py-1.5 text-xs">{f.channel} · {f.marketplace}</td>
+                    <td className="px-3 py-1.5 text-xs text-zinc-500">{f.skus} SKUs · {f.listings} listings</td>
+                    <td className="px-3 py-1.5">
+                      <span className="inline-flex flex-wrap gap-1">
+                        {Object.entries(f.modeCounts).sort((a, b) => b[1] - a[1]).map(([mo, n]) => (
+                          <span key={mo} className="inline-flex items-center gap-0.5 text-xs">
+                            <Pill tone={MODE_TONE[mo as Mode] ?? 'neutral'}>{MODE_LABEL[mo as Mode] ?? mo}</Pill>
+                            <span className="tabular-nums text-zinc-500">{n}</span>
+                          </span>
+                        ))}
+                      </span>
+                    </td>
+                    <td className="px-3 py-1.5 text-xs">
+                      {f.driftCount > 0
+                        ? <span className="font-medium text-amber-600">● {f.driftCount}</span>
+                        : <span className="text-emerald-600">✓</span>}
+                    </td>
+                    <td className="px-3 py-1.5 text-right">
+                      {active ? (
+                        <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Viewing</span>
+                      ) : (
+                        <Link
+                          href={`/fulfillment/stock/sync-control/product/${masterId}?family=${encodeURIComponent(f.key)}`}
+                          target="_blank"
+                          rel="noopener"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+                          title={`Control only this family's child SKUs (${f.channel} · ${f.marketplace})`}
+                        >
+                          Open this family <ExternalLink size={11} />
+                        </Link>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <div className="border-t border-zinc-200 px-3 py-2 text-[11px] text-zinc-500 dark:border-zinc-800">
+            Each family is one parent listing pooling the same child SKUs. Open one to change only its child SKUs — the other copies stay untouched.
+          </div>
+        </div>
+      )}
+
+      {familyKey && (
+        <div className="rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+          Scoped to one family — every action below applies to <b>this family&rsquo;s {children.length} listing(s) only</b>.
+        </div>
+      )}
+
       {notice && <div className="rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-800 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300">{notice}</div>}
 
       <div className="h10-ds-gridcard">
@@ -154,7 +240,7 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
           count={selected.size > 0 ? <>Selected <b>{selected.size}</b> {selected.size === 1 ? 'listing' : 'listings'}</> : <>{children.length} listings</>}
           right={
             <>
-              <SyncExcelBar exportQuery={`masterId=${encodeURIComponent(masterId)}`} notify={setNotice} onApplied={() => { /* usePolledList refetches on invalidation */ }} />
+              <SyncExcelBar exportQuery={`masterId=${encodeURIComponent(masterId)}${familyKey ? `&family=${encodeURIComponent(familyKey)}` : ''}`} notify={setNotice} onApplied={() => { /* usePolledList refetches on invalidation */ }} />
               <SegmentedControl options={DENSITY_OPTIONS} value={density} onChange={(v) => setDensity(v as Density)} size="sm" />
               <span style={{ width: 110, display: 'inline-flex' }}>
                 <Listbox ariaLabel="Rows per page" value={String(pageSize)} onChange={(v) => { setPage(1); setPageSize(Number(v)) }} options={[50, 100, 200].map((n) => ({ value: String(n), label: `${n} / page` }))} />

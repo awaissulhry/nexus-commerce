@@ -25,7 +25,7 @@ import { validateServesTokens } from '../services/sync-control-core.js'
 import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-master.service.js'
 import { recascadeAfterSyncControlChange } from '../services/stock-movement.service.js'
 import { enqueueOutboundRowsInstant } from '../services/outbound-enqueue.js'
-import { summarizeProductSync, marketMatches, omitChildrenInList, resolveCanonicalMap, canonicalStem, INLINE_PREVIEW_ROWS } from '../services/sync-control-product-view.js'
+import { summarizeProductSync, marketMatches, omitChildrenInList, resolveCanonicalMap, canonicalStem, INLINE_PREVIEW_ROWS, summarizeFamilies, familyKeyOf } from '../services/sync-control-product-view.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../services/product-read-cache.service.js'
 import { buildSyncControlWorkbook, parseSyncControlWorkbook, normalizeModeCell } from '../services/sync-control-excel.js'
 
@@ -272,7 +272,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
   })
 
   app.get('/stock/sync-control/listings', async (request) => {
-    const q = request.query as { channel?: string; market?: string; mode?: string; q?: string; page?: string; pageSize?: string }
+    const q = request.query as { channel?: string; market?: string; mode?: string; q?: string; page?: string; pageSize?: string; drift?: string }
     const page = Math.max(1, Number.parseInt(q.page ?? '1', 10) || 1)
     const pageSize = Math.min(200, Math.max(10, Number.parseInt(q.pageSize ?? '50', 10) || 50))
     let rows = await computeRows()
@@ -282,6 +282,12 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     if (q.q) {
       const needle = q.q.toLowerCase()
       rows = rows.filter((r) => r.sku.toLowerCase().includes(needle))
+    }
+    // SCD.4 — the shared FilterBar offers "Drift only" and counted it as an
+    // active filter, but this endpoint ignored it: the Listings view showed
+    // every row while claiming to be filtered.
+    if (q.drift === '1' || q.drift === 'true') {
+      rows = rows.filter((r) => r.intendedQty != null && r.liveQty != null && r.intendedQty !== r.liveQty)
     }
     rows.sort((a, b) => a.sku.localeCompare(b.sku) || a.channel.localeCompare(b.channel) || a.marketplace.localeCompare(b.marketplace))
     const total = rows.length
@@ -298,7 +304,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
   app.get('/stock/sync-control/products', async (request) => {
     const q = request.query as {
       channel?: string; market?: string; mode?: string; q?: string; drift?: string
-      page?: string; pageSize?: string; masterId?: string
+      page?: string; pageSize?: string; masterId?: string; family?: string
     }
     const page = Math.max(1, Number.parseInt(q.page ?? '1', 10) || 1)
     const pageSize = Math.min(200, Math.max(10, Number.parseInt(q.pageSize ?? '50', 10) || 50))
@@ -355,6 +361,22 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     const metaById = new Map(masterMeta.map((m) => [m.id, m]))
     const poolOf = (pid: string) => (ledgers.get(pid) ?? []).reduce((s, l) => s + l.available, 0)
 
+    // SCD.3 — which PARENT listing owns each eBay itemId, so a family can be
+    // labelled by the parent SKU the owner recognises (GALE-JACKET-ALT1).
+    const allItemIds = [...new Set(rows.map((r) => r.itemId).filter((x): x is string => Boolean(x)))]
+    const ownerSkuByItemId = new Map<string, string>()
+    if (allItemIds.length > 0) {
+      const owners = await prisma.channelListing.findMany({
+        where: { externalListingId: { in: allItemIds } },
+        select: { externalListingId: true, product: { select: { sku: true, parentId: true, parent: { select: { sku: true } } } } },
+      })
+      for (const o of owners) {
+        if (!o.externalListingId || ownerSkuByItemId.has(o.externalListingId)) continue
+        // a listing hung off a variant is labelled by its parent family sku
+        ownerSkuByItemId.set(o.externalListingId, o.product?.parent?.sku ?? o.product?.sku ?? '')
+      }
+    }
+
     const byMaster = new Map<string, SyncControlRow[]>()
     for (const r of rows) {
       if (!r.productId) continue
@@ -365,7 +387,14 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     }
 
     const all = groupIds.map((mid) => {
-      const children = byMaster.get(mid) ?? []
+      // SCD.4 — deterministic order. computeRows emits ALL ChannelListing rows
+      // before ANY membership row (both unordered heap scans), so an unsorted
+      // preview slice showed a scrambled set that never included a single
+      // Shared row and could reshuffle between polls. Sort exactly like the
+      // per-product page so both surfaces agree.
+      const children = (byMaster.get(mid) ?? []).slice().sort(
+        (a, b) => a.sku.localeCompare(b.sku) || a.channel.localeCompare(b.channel) || a.marketplace.localeCompare(b.marketplace) || (a.itemId ?? '').localeCompare(b.itemId ?? ''),
+      )
       const allPids = [...new Set(children.map((c) => c.productId).filter((p): p is string => Boolean(p)))]
       // SCD.1c — a folded duplicate MASTER's own listing row carries that
       // master's id, but a duplicate parent is NOT a variant. Count only real
@@ -392,6 +421,9 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
         variantsInStock,
         variantCount: variantPids.length,
         rollup,
+        // SCD.3 — the parent listings ("families") sharing these child SKUs,
+        // so each can be opened and controlled on its own.
+        families: summarizeFamilies(children, ownerSkuByItemId),
         children,
       }
     })
@@ -403,12 +435,21 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     const driftOnly = q.drift === '1' || q.drift === 'true'
 
     // SCV.1b — single-master fetch (per-product page): full tree, no cap.
+    // SCD.3 — optional ?family= narrows to ONE parent listing, so the owner can
+    // control just that family's child SKUs without touching the other copies.
     if (singleMasterId) {
+      // SCD.4 — a FOLDED duplicate's id is a legitimate link target (old
+      // bookmarks, links built elsewhere): resolve it to the group it now
+      // belongs to instead of rendering "product not found" (22 of 37 master
+      // ids are folded members).
       const one = all.find((p) => p.masterId === singleMasterId)
+        ?? all.find((p) => (p.memberMasterIds ?? []).includes(singleMasterId))
       if (!one) return { total: 0, page: 1, pageSize, products: [] }
+      const familyKey = (q as { family?: string }).family?.trim() || null
+      const children = familyKey ? one.children.filter((c) => familyKeyOf(c) === familyKey) : one.children
       return {
         total: 1, page: 1, pageSize,
-        products: [{ ...one, listingCount: one.children.length, childrenOmitted: false }],
+        products: [{ ...one, children, listingCount: children.length, childrenOmitted: false, familyKey }],
       }
     }
 
@@ -490,8 +531,16 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     if (!body.action) return reply.code(400).send({ error: 'action required' })
 
     if (body.masterIds?.length) {
+      // SCD.4 — expand each selected group SERVER-side to every master folded
+      // into it. Previously this trusted the client to send memberMasterIds,
+      // so a stale selection (list refreshed under the operator) silently
+      // skipped the duplicate copies' listings.
+      const allMasters = await prisma.product.findMany({ where: { parentId: null }, select: { id: true } })
+      const canonAll = await resolveCanonicalMasters(allMasters.map((m) => m.id))
+      const groupSet = new Set(body.masterIds)
+      for (const [mid, cid] of canonAll) if (groupSet.has(cid)) groupSet.add(mid)
       const variants = await prisma.product.findMany({
-        where: { OR: [{ id: { in: body.masterIds } }, { parentId: { in: body.masterIds } }] },
+        where: { OR: [{ id: { in: [...groupSet] } }, { parentId: { in: [...groupSet] } }] },
         select: { id: true },
       })
       const pids = variants.map((v) => v.id)
@@ -505,8 +554,20 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
           select: { itemId: true, marketplace: true, sku: true },
         }),
       ])
-      for (const c of cls) listings.push({ productId: c.productId, channel: c.channel, marketplace: c.marketplace })
-      for (const m of mems) memberships.push({ itemId: m.itemId, marketplace: m.marketplace, sku: m.sku })
+      // SCD.4 — expand ONLY the lanes this action can actually write. Pushing
+      // both lanes unconditionally made a listing-lane action (PAUSE/RESUME/
+      // FOLLOW/PIN/ZERO_PIN) commit its writes and THEN hit the shared-lane
+      // "not valid" branch, returning 400 after the fact: the operator was told
+      // it failed while it had already happened (and RESUME skipped its
+      // recascade, ZERO_PIN had already pushed qty 0 live).
+      const LISTING_LANE = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER']
+      const SHARED_LANE = ['EXCLUDE', 'INCLUDE', 'BUFFER']
+      if (LISTING_LANE.includes(body.action)) {
+        for (const c of cls) listings.push({ productId: c.productId, channel: c.channel, marketplace: c.marketplace })
+      }
+      if (SHARED_LANE.includes(body.action)) {
+        for (const m of mems) memberships.push({ itemId: m.itemId, marketplace: m.marketplace, sku: m.sku })
+      }
     }
 
     if (listings.length === 0 && memberships.length === 0) return reply.code(400).send({ error: 'no targets' })
@@ -514,7 +575,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     const cap = body.masterIds?.length ? 3000 : 500
     if (listings.length + memberships.length > cap) return reply.code(400).send({ error: `max ${cap} targets per call` })
 
-    const result = { updated: 0, skippedFba: 0, unchanged: 0, recascadeQueued: 0 }
+    const result = { updated: 0, skippedFba: 0, unchanged: 0, recascadeQueued: 0, skippedShared: 0 }
     const recascadeProducts = new Set<string>()
 
     // ── LISTING lane ──
@@ -663,7 +724,10 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
           field: 'stockBuffer', after: { buffer },
         })), actor)
       } else {
-        return reply.code(400).send({ error: `action ${body.action} is not valid for shared memberships (use EXCLUDE / INCLUDE / BUFFER)` })
+        // SCD.4 — NEVER fail after the listing lane has already written. An
+        // action that can't touch shared variants just reports them as skipped
+        // so the response stays truthful and the recascade below still runs.
+        result.skippedShared += memberships.length
       }
     }
 
@@ -833,7 +897,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
   }
 
   // Resolve which productIds a set of filters selects (mirrors the products view).
-  async function filterExportRows(rows: SyncControlRow[], q: { channel?: string; market?: string; mode?: string; q?: string; drift?: string; masterId?: string }): Promise<SyncControlRow[]> {
+  async function filterExportRows(rows: SyncControlRow[], q: { channel?: string; market?: string; mode?: string; q?: string; drift?: string; masterId?: string; family?: string }): Promise<SyncControlRow[]> {
     let masterVariantIds: Set<string> | null = null
     if (q.masterId) {
       // SCD.1c — scope to the WHOLE GROUP, using the same canonical resolution
@@ -854,19 +918,35 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     }
     const chan = q.channel?.toUpperCase(); const mode = q.mode?.toUpperCase(); const needle = q.q?.trim().toLowerCase()
     const driftOnly = q.drift === '1' || q.drift === 'true'
+    // SCD.4 — the Products grid searches product NAME or SKU; the export only
+    // matched a row's own sku, so searching by name exported the wrong set (an
+    // empty workbook for a name-only match). Resolve name matches to their
+    // products so "export what you see" really does.
+    let nameMatchPids: Set<string> | null = null
+    if (needle) {
+      const hits = await prisma.product.findMany({
+        where: { OR: [{ name: { contains: needle, mode: 'insensitive' } }, { sku: { contains: needle, mode: 'insensitive' } }] },
+        select: { id: true },
+      })
+      const ids = hits.map((h) => h.id)
+      const kids = ids.length ? await prisma.product.findMany({ where: { parentId: { in: ids } }, select: { id: true } }) : []
+      nameMatchPids = new Set([...ids, ...kids.map((k) => k.id)])
+    }
     return rows.filter((r) => {
       if (masterVariantIds && !(r.productId && masterVariantIds.has(r.productId))) return false
+      // SCD.3 — a family-scoped export contains ONLY that parent listing's rows
+      if (q.family && familyKeyOf(r) !== q.family) return false
       if (chan && r.channel !== chan) return false
       if (q.market && !marketMatches(r.marketplace, q.market)) return false
       if (mode && r.mode !== mode) return false
-      if (needle && !r.sku.toLowerCase().includes(needle)) return false
+      if (needle && !(r.sku.toLowerCase().includes(needle) || (r.productId && nameMatchPids?.has(r.productId)))) return false
       if (driftOnly && !(r.intendedQty != null && r.liveQty != null && r.intendedQty !== r.liveQty)) return false
       return true
     })
   }
 
   app.get('/stock/sync-control/export', async (request, reply) => {
-    const q = request.query as { channel?: string; market?: string; mode?: string; q?: string; drift?: string; masterId?: string }
+    const q = request.query as { channel?: string; market?: string; mode?: string; q?: string; drift?: string; masterId?: string; family?: string }
     const rows = await filterExportRows(await computeRows(), q)
     const pids = [...new Set(rows.map((r) => r.productId).filter((p): p is string => Boolean(p)))]
     const [names, ledgers, locations] = await Promise.all([

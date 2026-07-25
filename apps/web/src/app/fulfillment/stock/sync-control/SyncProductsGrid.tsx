@@ -390,7 +390,14 @@ function Hdr({ k, label }: { k: string; label: string }) {
   return <Tooltip content={COLUMN_HELP[k] ?? ''}><span style={{ cursor: 'help' }}>{label}</span></Tooltip>
 }
 function ModePill({ mode }: { mode: Mode }) {
-  return <Tooltip content={MODE_HELP[mode] ?? ''}><Pill tone={MODE_TONE[mode]}>{MODE_LABEL[mode]}</Pill></Tooltip>
+  // The Tooltip clones its child with a ref + mouse handlers; <Pill> is a
+  // function component that drops them, so it must wrap a real DOM node or the
+  // tooltip never fires.
+  return (
+    <Tooltip content={MODE_HELP[mode] ?? ''}>
+      <span className="inline-flex" style={{ cursor: 'help' }}><Pill tone={MODE_TONE[mode]}>{MODE_LABEL[mode]}</Pill></span>
+    </Tooltip>
+  )
 }
 
 function SyncRollup({ m }: { m: ProductMaster }) {

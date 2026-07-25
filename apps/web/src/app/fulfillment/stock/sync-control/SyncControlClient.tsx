@@ -133,6 +133,7 @@ export default function SyncControlClient() {
       if (market) params.set('market', market)
       if (mode) params.set('mode', mode)
       if (q) params.set('q', q)
+      if (drift) params.set('drift', '1')
       params.set('page', String(page))
       params.set('pageSize', String(pageSize))
       const res = await fetch(`${API}/api/stock/sync-control/listings?${params}`, { credentials: 'include' })
@@ -147,7 +148,7 @@ export default function SyncControlClient() {
     } finally {
       if (seq === rowsSeq.current) setLoading(false)
     }
-  }, [channel, market, mode, q, page, pageSize])
+  }, [channel, market, mode, q, drift, page, pageSize])
 
   useEffect(() => { void loadOverview() }, [loadOverview])
   useEffect(() => { void loadRows() }, [loadRows])

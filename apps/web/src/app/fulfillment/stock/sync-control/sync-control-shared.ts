@@ -34,8 +34,25 @@ export interface ProductRollup {
   driftCount: number
 }
 
+/** SCD.3 — one parent listing sharing this product's child SKUs. */
+export interface SyncFamily {
+  key: string
+  channel: string
+  marketplace: string
+  itemId: string | null
+  ownerSku: string | null
+  listings: number
+  skus: number
+  modeCounts: Record<string, number>
+  driftCount: number
+}
+
 export interface ProductMaster {
   masterId: string
+  /** SCD.3 — the parent listings ("families") sharing these child SKUs. */
+  families?: SyncFamily[]
+  /** SCD.3 — set when the payload is narrowed to one family. */
+  familyKey?: string | null
   /** SCD.1 — duplicate masters folded into this group (pool-derived), for
    *  group-level bulk actions/export. Empty for a plain canonical/standalone. */
   memberMasterIds?: string[]

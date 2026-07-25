@@ -115,6 +115,60 @@ export function omitChildrenInList(variantCount: number, threshold = BIG_FAMILY_
 export const INLINE_PREVIEW_ROWS = 12
 
 /**
+ * SCD.3 — the FAMILIES inside one product group.
+ *
+ * The owner's model: several parent listings ("families") share the SAME child
+ * SKUs — e.g. GALE is sold through 5 separate eBay listings, each pooling the
+ * same 20 variant SKUs. Control must be availabe per family (change one
+ * family's child SKUs without pushing to every copy), so we expose the split.
+ *
+ * A family = one eBay listing (itemId), or one channel+market for non-shared
+ * listings (an Amazon marketplace). Pure: fold the group's rows.
+ */
+export interface SyncFamily {
+  key: string
+  channel: string
+  marketplace: string
+  itemId: string | null
+  /** SKU of the parent product that owns this listing, when known. */
+  ownerSku: string | null
+  listings: number
+  skus: number
+  modeCounts: Record<string, number>
+  driftCount: number
+}
+
+export function familyKeyOf(row: { channel: string; marketplace: string; itemId?: string }): string {
+  return row.itemId ? `${row.channel}:${row.marketplace}:${row.itemId}` : `${row.channel}:${row.marketplace}`
+}
+
+export function summarizeFamilies(
+  rows: Array<SyncRowLike & { sku: string; marketplace: string; itemId?: string }>,
+  ownerSkuByItemId: Map<string, string> = new Map(),
+): SyncFamily[] {
+  const byKey = new Map<string, SyncFamily & { _skus: Set<string> }>()
+  for (const r of rows) {
+    const key = familyKeyOf(r)
+    let f = byKey.get(key)
+    if (!f) {
+      f = {
+        key, channel: r.channel, marketplace: r.marketplace, itemId: r.itemId ?? null,
+        ownerSku: r.itemId ? ownerSkuByItemId.get(r.itemId) ?? null : null,
+        listings: 0, skus: 0, modeCounts: {}, driftCount: 0, _skus: new Set<string>(),
+      }
+      byKey.set(key, f)
+    }
+    f.listings++
+    f._skus.add(r.sku)
+    f.modeCounts[r.mode] = (f.modeCounts[r.mode] ?? 0) + 1
+    if (r.intendedQty != null && r.liveQty != null && r.intendedQty !== r.liveQty) f.driftCount++
+  }
+  return [...byKey.values()]
+    .map(({ _skus, ...f }) => ({ ...f, skus: _skus.size }))
+    .sort((a, b) => a.channel.localeCompare(b.channel) || a.marketplace.localeCompare(b.marketplace) || (a.itemId ?? '').localeCompare(b.itemId ?? ''))
+}
+
+/**
  * SCD.1 — pure canonical-master resolution (the pool-derived grouping).
  *
  * The owner's insight, verified in the data: only PARENT skus differ between
