@@ -1101,7 +1101,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         const brandOverride = ((row.brand as string | undefined) ?? '').trim()
         // P2 — variation_theme save: persist axis names back to Product.variationTheme
         const variationThemeOverride = ((row.variation_theme as string | undefined) ?? '').trim()
-        if (brandOverride || variationThemeOverride) {
+        // OPERATOR CONTROL — a theme must be CLEARABLE. `''` is falsy, so an
+        // emptied cell fell through this guard and the write below: the operator
+        // deleted the Variation Theme, saved, and the old theme came back on the
+        // next load with no way to un-declare it. "Field absent from the payload"
+        // and "field present and deliberately emptied" are different intents.
+        const themeCleared = Object.prototype.hasOwnProperty.call(row, 'variation_theme')
+          && variationThemeOverride === ''
+        if (brandOverride || variationThemeOverride || themeCleared) {
           await prisma.product.update({
             where: { id: productId },
             data: {
@@ -1116,7 +1123,12 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               // remapped here (a live-listing rename concern) — deferred to Phase 3.
               ...(variationThemeOverride
                 ? { variationTheme: variationThemeOverride, variationAxes: parseThemeAxes(variationThemeOverride) }
-                : {}),
+                // Cleared on purpose → un-declare it and drop the derived axis
+                // set with it, so resolution falls back to auto-detection
+                // instead of silently keeping a theme the operator deleted.
+                : themeCleared
+                  ? { variationTheme: null, variationAxes: [] }
+                  : {}),
             },
           })
         }
