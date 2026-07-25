@@ -77,6 +77,17 @@ export function buildSharedListingInput(
   //     (AXIS_SYNONYM_GROUPS) — per-variant aspects outside them (Colore
   //     specifico, shade names…) stay listing-level item specifics.
   const displayCase = (n: string) => n.replace(/^\w/, (c) => c.toUpperCase())
+  // MARKET PURITY. aspectCanonicalName() returns the ITALIAN word, so folding a
+  // TRANSMITTED name through it is only correct on the Italian market. Applied
+  // to every market it published a German listing to eBay.de with Italian
+  // aspect names (declared 'Farbe,Größe' → sent 'Colore,Taglia'), breaking the
+  // buyer-facing variation picker. On a non-Italian market we transmit the
+  // operator's OWN spelling — we never invent a translation (eBay's per-market
+  // category schema is the authority for a market's names).
+  // NOTE: this governs DISPLAY/TRANSMISSION only. aspectCanonicalName stays the
+  // market-neutral IDENTITY key for dedup/axis membership below — conflating
+  // those two is the original defect and must not be repeated.
+  const mayCanonicalize = mkt === 'IT'
   const declaredTheme = str(parentRow?.variation_theme) || str(variantRows[0]?.variation_theme)
   let variationSpecificNames: string[]
   if (declaredTheme) {
@@ -85,6 +96,7 @@ export function buildSharedListingInput(
         .map((t) => t.trim())
         .filter(Boolean)
         .map((t) => {
+          if (!mayCanonicalize) return displayCase(t) // operator's own spelling
           const cl = aspectCanonicalName(t)
           return displayCase(t.toLowerCase() === cl ? t : cl)
         }),
@@ -176,9 +188,17 @@ export function buildSharedListingInput(
       if (canonicalLower === 'condizione') continue
       if (axisCanonicals.has(canonicalLower)) continue
       const isLocalized = name.toLowerCase() === canonicalLower
-      const display = (isLocalized ? name : canonicalLower).replace(/^\w/, (c) => c.toUpperCase())
+      // TRANSMITTED name: fold to the Italian canonical only on IT; on any
+      // other market send the operator's own spelling (a DE 'Marke' must not
+      // be published as 'Marca'). The dedup key stays `canonicalLower`, so
+      // language twins still collapse to ONE transmitted specific either way.
+      const display = (mayCanonicalize && !isLocalized ? canonicalLower : name)
+        .replace(/^\w/, (c) => c.toUpperCase())
       const prev = bestByCanonical.get(canonicalLower)
-      if (!prev || (isLocalized && !prev.localized)) {
+      // On IT the localized (Italian) twin wins. Off IT there is no "localized"
+      // twin to prefer — first-seen wins, so we never promote an Italian
+      // spelling over the market's own.
+      if (!prev || (mayCanonicalize && isLocalized && !prev.localized)) {
         bestByCanonical.set(canonicalLower, { display, value: v.trim(), localized: isLocalized })
       }
     }
