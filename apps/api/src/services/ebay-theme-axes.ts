@@ -88,7 +88,27 @@ export function aspectCanonicalName(name: string): string {
  * visible as ghost columns by design (nothing is silently dropped).
  * Returns the number of keys folded.
  */
-export function canonicalizeRowAspects(row: Record<string, unknown>): number {
+export function canonicalizeRowAspects(
+  row: Record<string, unknown>,
+  /** MARKET-AWARENESS. The canonical target (group[0]) is the ITALIAN word, so
+   *  folding language twins is only CORRECT on the Italian market. Applied
+   *  blindly it rewrote a German listing's `aspect_Farbe` to `aspect_Colore`
+   *  and DELETED the original — Italian columns on a German listing, persisted
+   *  on every read AND save. Pass the row's marketplace: language folding runs
+   *  only where the canonical language matches the market. Case folding
+   *  (aspect_colore → aspect_Colore) is language-neutral and always runs.
+   *
+   *  Deliberately NOT inventing per-market canonical words here: eBay's own
+   *  per-market category schema is the authority for a market's aspect names
+   *  (the audit found several existing fold targets don't even exist in eBay's
+   *  schema). Until a market's names come from that schema, a non-Italian
+   *  market keeps its own spellings untouched — never silently translated.
+   *  Omitted = legacy behaviour (fold), so every existing caller is unchanged. */
+  marketplace?: string | null,
+): number {
+  // 'IT' | 'EBAY_IT' | 'it-IT' → IT. Only the Italian market may language-fold.
+  const mkt = String(marketplace ?? '').toUpperCase().replace(/^EBAY[_-]/, '').slice(0, 2)
+  const mayFoldLanguage = mkt === '' || mkt === 'IT'
   let folded = 0
   // Incident #34 (2026-07-19): the canonical KEY matches the schema COLUMN id
   // convention — aspect_ + SentenceCasedName ("aspect_Colore", "aspect_Paese_
@@ -174,6 +194,24 @@ export function canonicalizeRowAspects(row: Record<string, unknown>): number {
       // move the value onto the displayed key unless it already has one.
       if (!existingStr && strValue) row[canonicalKey] = value
       else if (!(canonicalKey in row) && value != null) row[canonicalKey] = value
+    } else if (!mayFoldLanguage) {
+      // Non-Italian market: this is a LANGUAGE twin of the ITALIAN canonical
+      // (e.g. German 'Farbe' folding to 'Colore'). Translating it would rewrite
+      // the market's own aspect name and DELETE its value — a market keeps its
+      // own language. But CASE normalization is language-neutral and still
+      // required, or a lowercase key never matches the schema column id and the
+      // column renders empty. Same rule as unmapped keys: only an ALL-LOWERCASE
+      // key is sentence-cased; one that already carries capitals is left alone
+      // (inner capitals like 'CE' must survive).
+      if (!/[A-Z]/.test(key.slice('aspect_'.length))) {
+        const ownKey = displayKeyFor(rawName.toLowerCase())
+        if (key !== ownKey && !(ownKey in row)) {
+          row[ownKey] = value
+          delete row[key]
+          folded++
+        }
+      }
+      continue
     } else {
       // language twin (Color → Colore): localized value wins; preserve the
       // twin's value only when the localized cell is empty.

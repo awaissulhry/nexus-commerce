@@ -488,7 +488,7 @@ export async function createSharedListing(
       // Belt (P4.2): store aspect keys sentence-cased/canonical — identical to the
       // main save path (PATCH /rows → canonicalizeRowAspects) — so a fresh create
       // can never seed case-twins into the membership snapshot.
-      canonicalizeRowAspects(snap)
+      canonicalizeRowAspects(snap, market)
       return snap as Prisma.InputJsonObject
     }
     await db.$transaction(input.variations.map((v) =>

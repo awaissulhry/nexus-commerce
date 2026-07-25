@@ -456,7 +456,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       // and the next save persists rows canonicalized — snapshots self-heal.
       try {
         let foldedTotal = 0
-        for (const r of rows) foldedTotal += canonicalizeRowAspects(r as Record<string, unknown>)
+        // Market-scoped: language folding is only correct where the canonical
+        // language matches the market (a DE row must never be Italianized).
+        for (const r of rows) foldedTotal += canonicalizeRowAspects(r as Record<string, unknown>, marketplace)
         if (foldedTotal > 0) request.log.info({ foldedTotal }, 'ebay/flat-file/rows: legacy aspect keys folded to localized canonicals')
       } catch (err) {
         request.log.warn(err, 'ebay/flat-file/rows: aspect canonicalization failed (non-fatal)')
@@ -735,7 +737,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       // the Italian twin re-derived a value from live data — the top cause of
       // "my values keep vanishing after a successful save".
       for (const row of rows) {
-        try { canonicalizeRowAspects(row as Record<string, unknown>) } catch { /* never blocks a save */ }
+        try { canonicalizeRowAspects(row as Record<string, unknown>, activeMp) } catch { /* never blocks a save */ }
       }
 
       const laneASeen = new Map<string, number>();

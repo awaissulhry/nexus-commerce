@@ -79,6 +79,47 @@ describe('incident #36b — unmapped case-twins fold to the sentence-cased key',
     expect(row.aspect_certificazione_ce).toBeUndefined()
   })
 
+  // MARKET-AWARENESS: the canonical target is the ITALIAN word, so folding
+  // language twins is only correct on IT. Applied blindly it rewrote a German
+  // listing's aspect_Farbe to aspect_Colore and deleted the original.
+  it('does NOT Italianize a non-Italian market — German keys survive untouched', () => {
+    const row: Record<string, unknown> = { aspect_Farbe: 'Schwarz', aspect_Größe: 'M' }
+    const n = canonicalizeRowAspects(row, 'DE')
+    expect(row.aspect_Farbe).toBe('Schwarz')
+    expect(row.aspect_Colore).toBeUndefined()
+    expect(row.aspect_Taglia).toBeUndefined()
+    expect(n).toBe(0)
+  })
+
+  it('still folds language twins on the IT market (unchanged behaviour)', () => {
+    const row: Record<string, unknown> = { aspect_Color: 'Nero' }
+    canonicalizeRowAspects(row, 'IT')
+    expect(row.aspect_Colore).toBe('Nero')
+    expect(row.aspect_Color).toBeUndefined()
+  })
+
+  it('accepts EBAY_-prefixed market codes', () => {
+    const de: Record<string, unknown> = { aspect_Farbe: 'Schwarz' }
+    canonicalizeRowAspects(de, 'EBAY_DE')
+    expect(de.aspect_Farbe).toBe('Schwarz')
+    const it: Record<string, unknown> = { aspect_Color: 'Nero' }
+    canonicalizeRowAspects(it, 'EBAY_IT')
+    expect(it.aspect_Colore).toBe('Nero')
+  })
+
+  it('CASE folding is language-neutral — it still runs on a non-IT market', () => {
+    const row: Record<string, unknown> = { aspect_farbe: 'Schwarz' }
+    canonicalizeRowAspects(row, 'DE')
+    expect(row.aspect_Farbe).toBe('Schwarz') // sentence-cased, not translated
+    expect(row.aspect_farbe).toBeUndefined()
+  })
+
+  it('omitting the market keeps legacy behaviour (every existing caller unchanged)', () => {
+    const row: Record<string, unknown> = { aspect_Color: 'Nero' }
+    canonicalizeRowAspects(row)
+    expect(row.aspect_Colore).toBe('Nero')
+  })
+
   it('is idempotent — a second pass changes nothing (no key churn on repeated reads)', () => {
     const row: Record<string, unknown> = { aspect_colore: 'Nero', aspect_Color: 'Black', aspect_Certificazione_CE: 'EN 17092' }
     canonicalizeRowAspects(row)
