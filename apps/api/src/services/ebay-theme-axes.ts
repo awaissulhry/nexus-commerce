@@ -130,6 +130,19 @@ export function canonicalizeRowAspects(
     const value = row[key]
     const strValue = typeof value === 'string' ? value.trim() : ''
 
+    // SERIALIZATION JUNK — drop it. `[object Object]` is a JS object stringified
+    // into a cell; it is never legitimate aspect data. Together with the
+    // `variantAttributes` column (junk in the sheet format itself) it had become
+    // a PERMANENT phantom column: the save door persists any aspect_* key
+    // verbatim, no synonym group matches it, so nothing could ever fold it away.
+    // Dropping it here clears the grid immediately and self-heals storage, since
+    // the next save writes the canonicalized row back.
+    if (strValue === '[object Object]' || /^variantattribut/i.test(rawName.replace(/\s+/g, ''))) {
+      delete row[key]
+      folded++
+      continue
+    }
+
     // Condition-group aspects are not specifics — fold into `condition`.
     if (canonicalLower === 'condizione') {
       if (strValue && !String(row.condition ?? '').trim()) row.condition = strValue

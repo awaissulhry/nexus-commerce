@@ -129,3 +129,23 @@ describe('incident #36b — unmapped case-twins fold to the sentence-cased key',
     expect(n2).toBe(0)
   })
 })
+
+describe('canonicalizeRowAspects — serialization junk', () => {
+  it('drops the phantom aspect_Variantattributes column', () => {
+    const row: Record<string, unknown> = { aspect_Variantattributes: '[object Object]', aspect_Colore: 'Nero' }
+    const n = canonicalizeRowAspects(row)
+    expect(row.aspect_Variantattributes).toBeUndefined()
+    expect(row.aspect_Colore).toBe('Nero')   // real data untouched
+    expect(n).toBe(1)
+  })
+  it('drops ANY aspect cell holding a stringified object, whatever its name', () => {
+    const row: Record<string, unknown> = { aspect_Caratteristiche: '[object Object]' }
+    canonicalizeRowAspects(row)
+    expect(row.aspect_Caratteristiche).toBeUndefined()
+  })
+  it('keeps a legitimately-named aspect that merely mentions the word', () => {
+    const row: Record<string, unknown> = { aspect_Colore: 'Nero' }
+    canonicalizeRowAspects(row)
+    expect(row.aspect_Colore).toBe('Nero')
+  })
+})
