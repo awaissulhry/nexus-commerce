@@ -100,6 +100,9 @@ export function canonicalizeRowAspects(row: Record<string, unknown>): number {
   const displayKeyFor = (canonicalLower: string) =>
     `aspect_${(canonicalLower.charAt(0).toUpperCase() + canonicalLower.slice(1)).replace(/ /g, '_')}`
   for (const key of Object.keys(row)) {
+    // Object.keys is a snapshot — a key may already have been folded+deleted
+    // by an earlier iteration (its twin). Never resurrect it.
+    if (!(key in row)) continue
     if (!key.startsWith('aspect_') || key === 'aspect_') continue
     const rawName = key.slice('aspect_'.length).replace(/_/g, ' ').trim()
     if (!rawName) continue
@@ -117,18 +120,46 @@ export function canonicalizeRowAspects(row: Record<string, unknown>): number {
 
     const isKnown = ASPECT_SYNONYM_GROUPS.some((g) => (g as string[]).includes(canonicalLower))
     if (!isKnown) {
-      // Unmapped aspects keep their name — but SAME-NAME case-twins are
-      // unambiguous (aspect_chiusura beside aspect_Chiusura): fold the
-      // lowercase variant into the sentence-cased key so pre-#34 residue
-      // never lingers as duplicate ghost columns.
-      const sentenceKey = displayKeyFor(rawName.toLowerCase())
-      if (key !== sentenceKey && key.toLowerCase() === sentenceKey.toLowerCase()) {
-        const existing = row[sentenceKey]
-        const existingStr = typeof existing === 'string' ? existing.trim() : ''
-        if (!existingStr && strValue) row[sentenceKey] = value
-        else if (!(sentenceKey in row) && value != null) row[sentenceKey] = value
-        delete row[key]
+      // Unmapped aspects keep their name. Fold ONLY a case-twin that ACTUALLY
+      // EXISTS beside this key (aspect_chiusura beside aspect_Chiusura).
+      //
+      // DATA-LOSS FIX: the previous version renamed EVERY unmapped key to a
+      // "sentence-cased" form built from rawName.toLowerCase(), which destroys
+      // INNER capitals — a schema column id like `aspect_Certificazione_CE`
+      // became `aspect_Certificazione_ce` and the original was deleted. The
+      // grid reads the schema-cased id, found nothing, and the column rendered
+      // EMPTY while the value sat under a key nothing displays. A LONE key is
+      // now never renamed; only genuine duplicates are merged, keeping the
+      // more-cased key (closest to the schema column-id convention).
+      const tailOf = (k: string) => k.slice('aspect_'.length)
+      const hasUpper = (k: string) => /[A-Z]/.test(tailOf(k))
+      const twin = Object.keys(row).find((k) => k !== key && k.toLowerCase() === key.toLowerCase())
+      if (twin) {
+        // A real duplicate: merge into the CASED key (it matches the schema
+        // column id, which may carry inner capitals). Tie → keep `key`.
+        const keepKey = hasUpper(key) === hasUpper(twin) ? key : (hasUpper(key) ? key : twin)
+        const dropKey = keepKey === key ? twin : key
+        const keepVal = row[keepKey]
+        const dropVal = row[dropKey]
+        const keepStr = typeof keepVal === 'string' ? keepVal.trim() : ''
+        const dropStr = typeof dropVal === 'string' ? dropVal.trim() : ''
+        if (!keepStr && dropStr) row[keepKey] = dropVal
+        delete row[dropKey]
         folded++
+        continue
+      }
+      // No twin. Self-heal an ALL-LOWERCASE key to the sentence-cased column id
+      // (incidents #34/#36b — pre-#34 saves wrote lowercase keys the grid can't
+      // read). A key that ALREADY carries capitals is schema-shaped
+      // (aspect_Certificazione_CE) — renaming it moved the value to a key
+      // nothing displays and deleted the original. Never rename it.
+      if (!hasUpper(key)) {
+        const sentenceKey = displayKeyFor(rawName.toLowerCase())
+        if (key !== sentenceKey) {
+          if (!(sentenceKey in row) && value != null) row[sentenceKey] = value
+          delete row[key]
+          folded++
+        }
       }
       continue
     }
@@ -146,6 +177,15 @@ export function canonicalizeRowAspects(row: Record<string, unknown>): number {
     } else {
       // language twin (Color → Colore): localized value wins; preserve the
       // twin's value only when the localized cell is empty.
+      // NOTE (measured 2026-07-25, 928 rows / 252 twin pairs): 172 twins hold
+      // the SAME value and 80 differ — and every differing pair is the known
+      // stale brand residue (aspect_Brand 'XAVIA' vs aspect_Marca 'Xavia
+      // Racing', corrected by the owner 2026-07-18). On the IT market the
+      // localized value is the correct one, so folding is right and preserving
+      // the twin would resurrect 80 stale columns. The REAL exposure is a
+      // non-IT market (a German value dropped because an Italian twin exists)
+      // — that is fixed by making this function MARKET-AWARE (it takes no
+      // marketplace today), not by keeping conflicting twins here.
       if (strValue && !existingStr) row[canonicalKey] = strValue
     }
     delete row[key]

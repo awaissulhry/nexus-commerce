@@ -354,7 +354,17 @@ export function resolveVariationAxes(
       // renders as the standard on every read surface. Value lookups use
       // rawName, so only the label changes; the Inventory push is unaffected for
       // families whose observed name already equals the declared one (GALE).
-      resolved.push({ ...cand, name: nmLabel(d) })
+      //
+      // REGRESSION FIX: an explicit operator rename (_axisNameLabels, the only
+      // per-market axis-rename lever) is stored under the OBSERVED key, but the
+      // declared-name display looked it up under the DECLARED key only — so the
+      // rename saved, then silently did nothing anywhere (grid, order modal,
+      // images picker, push). Check BOTH key spaces and let the operator's
+      // explicit label win over the declared default.
+      resolved.push({
+        ...cand,
+        name: nameLabels[d] ?? nameLabels[cand.rawName] ?? nameLabels[cand.name] ?? d,
+      })
       usedSpecs.add(cand)
       continue
     }
@@ -1160,11 +1170,20 @@ export async function pushVariationGroup(
     }
     // Non-variation aspects: operator item-specifics not in the synonym dict.
     // Skip known synonym dimensions (already added above under canonical name).
+    // REGRESSION FIX: this used to skip EVERY known synonym dimension as
+    // "handled above" — true only while undeclared dimensions were kept as
+    // axes. Once the theme whitelist began SUPPRESSING them, a demoted
+    // dimension aspect (e.g. Genere on a Colore,Taglia family) was skipped here
+    // AND absent from validSpecs, so it vanished from the eBay payload
+    // entirely. Demotion must mean "becomes an item specific", never "is
+    // deleted". Skip only dimensions actually covered by a resolved axis.
+    const coveredDims = new Set(validSpecs.map((s) => axisSynonymKey(s.name)))
     for (const [k, v] of Object.entries(row)) {
       if (!k.startsWith('aspect_') || !v) continue
       const aspectName = k.slice('aspect_'.length).replace(/_/g, ' ')
       if (!aspectName) continue
-      if (axisSynonymKey(aspectName).startsWith('__dim')) continue // handled above
+      const dimKey = axisSynonymKey(aspectName)
+      if (dimKey.startsWith('__dim') && coveredDims.has(dimKey)) continue // handled above
       const label = isVarAxis(aspectName) ? nmLabel(aspectName) : aspectName
       if (!label) continue
       if (!aspectsMap.has(label)) aspectsMap.set(label, [vlLabel(aspectName, String(v))])

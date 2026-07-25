@@ -242,6 +242,28 @@ describe('resolveVariationAxes — DECLARED mode (D2/D7/D8)', () => {
     }
   })
 
+  it('operator rename (_axisNameLabels) WINS over the declared name — keyed by the OBSERVED name', () => {
+    // The operator renamed the axis in the cockpit; the label is stored under
+    // the OBSERVED key ("Color"), while the declared theme says "Colore".
+    // Before the fix the lookup used the declared key only, so the rename
+    // saved and then did nothing anywhere — a silently inert control.
+    const rows = [row({ Color: 'Nero', Taglia: 'S' }), row({ Color: 'Giallo', Taglia: 'M' })]
+    const got = resolveVariationAxes(rows, ['Colore', 'Taglia'], { nameLabels: { Color: 'Farbe' } })
+    expect(got.validSpecs.map((s) => s.name)).toEqual(['Farbe', 'Taglia'])
+  })
+
+  it('a rename keyed by the DECLARED name also wins (both key spaces honoured)', () => {
+    const rows = [row({ Colore: 'Nero' }), row({ Colore: 'Giallo' })]
+    const got = resolveVariationAxes(rows, ['Colore'], { nameLabels: { Colore: 'Tinta' } })
+    expect(got.validSpecs.map((s) => s.name)).toEqual(['Tinta'])
+  })
+
+  it('with NO operator rename the declared standard name is still displayed', () => {
+    const rows = [row({ Color: 'Nero' }), row({ Color: 'Giallo' })]
+    const got = resolveVariationAxes(rows, ['Colore'])
+    expect(got.validSpecs.map((s) => s.name)).toEqual(['Colore'])
+  })
+
   it('PARITY (read ≡ write, the never-again guard): the READ resolver and the Trading WRITE path return the SAME axis names for the VENTRA shape', () => {
     const variantRows = [
       row({ Colore: 'Rosso | Uomo', Taglia: 'M', 'Colore specifico': 'Rosso', Genere: 'Uomo' }),

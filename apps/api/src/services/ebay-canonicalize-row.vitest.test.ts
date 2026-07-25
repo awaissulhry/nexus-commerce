@@ -59,4 +59,32 @@ describe('incident #36b — unmapped case-twins fold to the sentence-cased key',
     expect(only.aspect_Team_name).toBe('XAVIA')
     expect(only.aspect_team_name).toBeUndefined()
   })
+
+  // DATA-LOSS REGRESSION: a LONE unmapped key must never be renamed. Schema
+  // column ids carry INNER capitals (aspect_Certificazione_CE); the old code
+  // rebuilt the key from rawName.toLowerCase(), moving the value to
+  // aspect_Certificazione_ce and deleting the original — the grid reads the
+  // schema-cased id, found nothing, and the column rendered EMPTY.
+  it('never renames a LONE unmapped key — inner capitals are preserved', () => {
+    const row: Record<string, unknown> = { aspect_Certificazione_CE: 'EN 17092', aspect_Tipo_di_giacca: 'Da moto' }
+    canonicalizeRowAspects(row)
+    expect(row.aspect_Certificazione_CE).toBe('EN 17092')
+    expect(row.aspect_Certificazione_ce).toBeUndefined()
+  })
+
+  it('still merges a GENUINE case-twin, keeping the more-cased (schema-shaped) key', () => {
+    const row: Record<string, unknown> = { aspect_Certificazione_CE: '', aspect_certificazione_ce: 'EN 17092' }
+    canonicalizeRowAspects(row)
+    expect(row.aspect_Certificazione_CE).toBe('EN 17092') // value rescued onto the schema key
+    expect(row.aspect_certificazione_ce).toBeUndefined()
+  })
+
+  it('is idempotent — a second pass changes nothing (no key churn on repeated reads)', () => {
+    const row: Record<string, unknown> = { aspect_colore: 'Nero', aspect_Color: 'Black', aspect_Certificazione_CE: 'EN 17092' }
+    canonicalizeRowAspects(row)
+    const after = JSON.stringify(row)
+    const n2 = canonicalizeRowAspects(row)
+    expect(JSON.stringify(row)).toBe(after)
+    expect(n2).toBe(0)
+  })
 })
