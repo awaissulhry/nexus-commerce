@@ -25,7 +25,7 @@ import { validateServesTokens } from '../services/sync-control-core.js'
 import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-master.service.js'
 import { recascadeAfterSyncControlChange } from '../services/stock-movement.service.js'
 import { enqueueOutboundRowsInstant } from '../services/outbound-enqueue.js'
-import { summarizeProductSync, marketMatches, omitChildrenInList, resolveCanonicalMap, canonicalStem } from '../services/sync-control-product-view.js'
+import { summarizeProductSync, marketMatches, omitChildrenInList, resolveCanonicalMap, canonicalStem, INLINE_PREVIEW_ROWS } from '../services/sync-control-product-view.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../services/product-read-cache.service.js'
 import { buildSyncControlWorkbook, parseSyncControlWorkbook, normalizeModeCell } from '../services/sync-control-excel.js'
 
@@ -429,12 +429,14 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     // SCV.1b — omit child rows for big families (client shows "Open ↗"); the
     // rollup/pool/drift on the master row stay intact so the overview is whole.
     const products = filtered.slice((page - 1) * pageSize, page * pageSize).map((p) => {
-      const omitted = omitChildrenInList(p.variantCount)
+      // SCD.2 — big families still expand inline, but ship only a PREVIEW of
+      // their listings; the row footer links to the full per-product page.
+      const truncated = omitChildrenInList(p.variantCount)
       return {
         ...p,
         listingCount: p.children.length,
-        childrenOmitted: omitted,
-        children: omitted ? [] : p.children,
+        childrenOmitted: truncated,
+        children: truncated ? p.children.slice(0, INLINE_PREVIEW_ROWS) : p.children,
       }
     })
 

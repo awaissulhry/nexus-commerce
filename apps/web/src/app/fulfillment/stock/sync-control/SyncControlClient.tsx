@@ -15,6 +15,7 @@ import { GridToolbar, FilterBar, type FilterDimension } from '@/design-system/pa
 import { Button, Input, Pill, SegmentedControl } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
+import { Tooltip } from '@/components/ui/Tooltip'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 // DS class styles — the Listbox/grid markup is unstyled without these
 // (pages import them directly; see ApiKeysClient for the convention).
@@ -367,20 +368,25 @@ export default function SyncControlClient() {
     <div className="space-y-4 p-4">
       {/* Summary strip */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
-        {[
-          ['Rows', s?.rows],
-          ['Products', s?.products],
-          ['Follow', s?.byMode?.FOLLOW ?? 0],
-          ['Pinned', s?.byMode?.PINNED ?? 0],
-          ['Paused', (s?.byMode?.PAUSED ?? 0) + (s?.byMode?.PAUSED_POLICY ?? 0) + (s?.byMode?.EXCLUDED ?? 0)],
-          ['FBA (excluded)', s?.byMode?.FBA ?? 0],
-          ['Routed locations', s?.routedLocations],
-          ['Policies', s?.policies],
-        ].map(([label, value]) => (
-          <div key={String(label)} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="text-[11px] uppercase tracking-wide text-zinc-500">{label}</div>
-            <div className="text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{value ?? '…'}</div>
-          </div>
+        {([
+          // SCD.1c — this tile counted every product WITH a listing (mostly
+          // variants), which read as a contradiction next to the Products
+          // view's "15 products". Relabelled to what it actually counts.
+          ['Listed SKUs', s?.products, 'Distinct SKUs that have at least one listing (variants included). The Products view groups these into real products.'],
+          ['Rows', s?.rows, 'Every controllable listing row: each listing per channel and market, plus each shared eBay variant.'],
+          ['Follow', s?.byMode?.FOLLOW ?? 0, 'Listings whose quantity follows the shared stock pool automatically.'],
+          ['Pinned', s?.byMode?.PINNED ?? 0, 'Listings held at a fixed manual quantity — the pool never moves them.'],
+          ['Paused', (s?.byMode?.PAUSED ?? 0) + (s?.byMode?.PAUSED_POLICY ?? 0) + (s?.byMode?.EXCLUDED ?? 0), 'Listings frozen right now: paused individually, paused by a channel policy, or excluded shared variants.'],
+          ['FBA (excluded)', s?.byMode?.FBA ?? 0, 'Amazon-managed (FBA) listings. Amazon owns the quantity — Sync Control never writes them.'],
+          ['Routed locations', s?.routedLocations, 'Warehouse locations restricted to specific channels/markets. 0 means every location feeds everywhere.'],
+          ['Policies', s?.policies, 'Active channel/market rules (push kill-switches and new-listing defaults).'],
+        ] as Array<[string, number | undefined, string]>).map(([label, value, help]) => (
+          <Tooltip key={label} content={help}>
+            <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900" style={{ cursor: 'help' }}>
+              <div className="text-[11px] uppercase tracking-wide text-zinc-500">{label}</div>
+              <div className="text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{value ?? '…'}</div>
+            </div>
+          </Tooltip>
         ))}
       </div>
 

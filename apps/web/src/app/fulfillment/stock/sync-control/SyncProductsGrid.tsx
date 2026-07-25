@@ -44,6 +44,9 @@ interface ProductsResponse {
 type DRow =
   | { key: string; kind: 'master'; m: ProductMaster }
   | { key: string; kind: 'child'; c: Row }
+  // SCD.2 — footer row under a big family's inline preview, linking to the
+  // full per-product page.
+  | { key: string; kind: 'more'; m: ProductMaster }
 
 interface Props {
   filters: { channel: string; market: string; mode: string; q: string; drift: boolean }
@@ -131,10 +134,13 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
     const out: DRow[] = []
     for (const m of products) {
       out.push({ key: `m:${m.masterId}`, kind: 'master', m })
-      if (expanded.has(m.masterId) && !m.childrenOmitted) {
+      // SCD.2 — EVERY family expands inline. Big ones ship a preview slice and
+      // get a footer row linking to the full family in a new tab.
+      if (expanded.has(m.masterId)) {
         m.children.forEach((c, i) =>
           out.push({ key: `c:${m.masterId}:${c.channel}:${c.marketplace}:${c.sku}:${c.itemId ?? i}`, kind: 'child', c }),
         )
+        if (m.childrenOmitted) out.push({ key: `more:${m.masterId}`, kind: 'more', m })
       }
     }
     return out
@@ -196,17 +202,19 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
   const columns = useMemo<Array<Column<DRow>>>(() => [
     {
       key: 'product', label: <Hdr k="product" label="Product" />, sticky: true, width: 340,
-      render: (r) => r.kind === 'master' ? <MasterCell m={r.m} expanded={expanded.has(r.m.masterId)} onToggle={() => toggleExpand(r.m.masterId)} /> : <ChildCell c={r.c} />,
+      render: (r) => r.kind === 'master'
+        ? <MasterCell m={r.m} expanded={expanded.has(r.m.masterId)} onToggle={() => toggleExpand(r.m.masterId)} />
+        : r.kind === 'more' ? <MoreCell m={r.m} /> : <ChildCell c={r.c} />,
     },
     {
       key: 'scope', label: <Hdr k="scope" label="Scope" />, width: 150,
       render: (r) => r.kind === 'master'
         ? <span className="text-xs text-zinc-500">{r.m.variantCount} var · {r.m.listingCount} lst · {r.m.rollup.channels.length} ch</span>
-        : <span className="text-xs text-zinc-500">{r.c.lane === 'SHARED' ? 'Shared' : 'Listing'}</span>,
+        : r.kind === 'child' ? <span className="text-xs text-zinc-500">{r.c.lane === 'SHARED' ? 'Shared' : 'Listing'}</span> : null,
     },
     {
       key: 'sync', label: <Hdr k="sync" label="Sync" />, width: 170,
-      render: (r) => r.kind === 'master' ? <SyncRollup m={r.m} /> : <ModePill mode={r.c.mode} />,
+      render: (r) => r.kind === 'master' ? <SyncRollup m={r.m} /> : r.kind === 'child' ? <ModePill mode={r.c.mode} /> : null,
     },
     {
       key: 'intended', label: <Hdr k="intended" label="Intended" />, align: 'right', width: 80,
@@ -230,6 +238,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
             ? <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600"><span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />{r.m.rollup.driftCount}</span>
             : <span className="text-xs text-emerald-600">✓</span>
         }
+        if (r.kind !== 'child') return null
         const d = r.c.mode !== 'FBA' && r.c.intendedQty != null && r.c.liveQty != null && r.c.intendedQty !== r.c.liveQty
         return d ? <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" /> : null
       },
@@ -238,7 +247,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
       key: 'buffer', label: <Hdr k="buffer" label="Buffer" />, align: 'right', width: 70,
       render: (r) => r.kind === 'master'
         ? <span className="tabular-nums text-xs text-zinc-500">{r.m.rollup.maxBuffer || '—'}</span>
-        : <span className="tabular-nums text-xs">{r.c.mode === 'FBA' ? '—' : r.c.buffer}</span>,
+        : r.kind === 'child' ? <span className="tabular-nums text-xs">{r.c.mode === 'FBA' ? '—' : r.c.buffer}</span> : null,
     },
   ], [expanded, toggleExpand])
 
@@ -321,18 +330,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
 function MasterCell({ m, expanded, onToggle }: { m: ProductMaster; expanded: boolean; onToggle: () => void }) {
   return (
     <div className="flex w-full items-center gap-2">
-      {m.childrenOmitted ? (
-        <Link
-          href={`/fulfillment/stock/sync-control/product/${m.masterId}`}
-          target="_blank"
-          rel="noopener"
-          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950"
-          title={`Open ${m.listingCount} listings in a new tab`}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <ExternalLink size={13} />
-        </Link>
-      ) : m.listingCount > 0 ? (
+      {m.listingCount > 0 ? (
         <button type="button" onClick={(e) => { e.stopPropagation(); onToggle() }} aria-label={expanded ? 'Collapse' : 'Expand'} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
@@ -349,6 +347,27 @@ function MasterCell({ m, expanded, onToggle }: { m: ProductMaster; expanded: boo
           {m.family && <span className="shrink-0 rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800">{m.family.label}</span>}
         </div>
       </div>
+    </div>
+  )
+}
+
+/** SCD.2 — footer under a big family's inline preview: how many more listings
+ *  exist, and a link to the full family in a new tab. */
+function MoreCell({ m }: { m: ProductMaster }) {
+  const shown = m.children.length
+  const rest = Math.max(0, m.listingCount - shown)
+  return (
+    <div className="flex w-full items-center gap-2 pl-7">
+      <Link
+        href={`/fulfillment/stock/sync-control/product/${m.masterId}`}
+        target="_blank"
+        rel="noopener"
+        className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+        title={`Open all ${m.listingCount} listings for ${m.name} in a new tab`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        Showing {shown} of {m.listingCount} — open all {rest > 0 ? `(+${rest})` : ''} <ExternalLink size={11} />
+      </Link>
     </div>
   )
 }

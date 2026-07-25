@@ -101,10 +101,18 @@ export const BIG_FAMILY_VARIANT_THRESHOLD = Number.parseInt(
   10,
 ) || 20
 
-/** True when a master's children should be omitted from the list payload. */
+/** True when a master's children should be TRUNCATED in the list payload. */
 export function omitChildrenInList(variantCount: number, threshold = BIG_FAMILY_VARIANT_THRESHOLD): boolean {
   return variantCount > threshold
 }
+
+/**
+ * SCD.2 — how many listing rows a BIG family ships inline. The row still
+ * expands like every other product (owner's request); the rest live on the
+ * dedicated per-product page, reachable from a line under the preview. Keeps
+ * the list payload light (a 268-listing family ships 12 rows, not 268).
+ */
+export const INLINE_PREVIEW_ROWS = 12
 
 /**
  * SCD.1 — pure canonical-master resolution (the pool-derived grouping).
