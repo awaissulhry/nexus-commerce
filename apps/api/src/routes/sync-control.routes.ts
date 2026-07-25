@@ -87,7 +87,11 @@ async function computeRows(): Promise<SyncControlRow[]> {
       where: {
         isPublished: true,
         listingStatus: { notIn: ['ENDED', 'REMOVED'] },
-        product: { deletedAt: null },
+        // ...and not an orphaned child of a deleted master either: the row's
+        // own product can be alive while its PARENT was deleted (the 'TEST'
+        // case — the listing hangs off TEST-S-Black, whose master TEST is
+        // deleted), and grouping would surface it under the deleted master.
+        product: { deletedAt: null, OR: [{ parentId: null }, { parent: { deletedAt: null } }] },
       },
       select: {
         productId: true, channel: true, marketplace: true, quantity: true, stockBuffer: true,
@@ -105,7 +109,10 @@ async function computeRows(): Promise<SyncControlRow[]> {
   // memberships whose product was deleted here (same rule as the listing lane).
   const memPids = [...new Set(memberships.map((m) => m.productId).filter((p): p is string => Boolean(p)))]
   const liveMemPids = new Set(
-    (await prisma.product.findMany({ where: { id: { in: memPids }, deletedAt: null }, select: { id: true } })).map((p) => p.id),
+    (await prisma.product.findMany({
+      where: { id: { in: memPids }, deletedAt: null, OR: [{ parentId: null }, { parent: { deletedAt: null } }] },
+      select: { id: true },
+    })).map((p) => p.id),
   )
   const liveMemberships = memberships.filter((m) => !m.productId || liveMemPids.has(m.productId))
 
