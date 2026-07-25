@@ -74,13 +74,26 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
-  const csv = (k: string): string[] => (searchParams.get(k) ?? '').split(',').map((x) => x.trim()).filter(Boolean)
-  const fChannels = csv('channel')
-  const fMarkets = csv('market')
-  const fModes = csv('mode')
-  const fLanes = csv('lane')
-  const fFamilies = csv('family')
-  const fDrift = searchParams.get('drift') === '1'
+  // SCD.7 — filter state is LOCAL and authoritative; the URL is written from it.
+  // Deriving the values straight from searchParams raced: router.replace is
+  // async, so two quick clicks in a multi-select both read the pre-update URL
+  // and the second overwrote the first (selecting FBA then Uncounted kept only
+  // Uncounted). Local state compounds correctly and still round-trips to the URL.
+  const csvOf = (v: string | null): string[] => (v ?? '').split(',').map((x) => x.trim()).filter(Boolean)
+  const [filters, setFilters] = useState(() => ({
+    channel: csvOf(searchParams.get('channel')),
+    market: csvOf(searchParams.get('market')),
+    mode: csvOf(searchParams.get('mode')),
+    lane: csvOf(searchParams.get('lane')),
+    family: csvOf(searchParams.get('family')),
+    drift: searchParams.get('drift') === '1',
+  }))
+  const fChannels = filters.channel
+  const fMarkets = filters.market
+  const fModes = filters.mode
+  const fLanes = filters.lane
+  const fFamilies = filters.family
+  const fDrift = filters.drift
   const familyKey = fFamilies.length === 1 ? fFamilies[0] : null
   const url = useMemo(
     () => `/api/stock/sync-control/products?masterId=${encodeURIComponent(masterId)}${familyKey ? `&family=${encodeURIComponent(familyKey)}` : ''}`,
@@ -107,11 +120,29 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
     return () => clearTimeout(t)
   }, [qLive])
 
+  // Write-through: update local state first (so rapid clicks compound), then
+  // mirror the whole filter set into the URL for shareability.
   const setParam = useCallback((key: string, value: string) => {
-    const p = new URLSearchParams(searchParams.toString())
-    if (value) p.set(key, value); else p.delete(key)
-    router.replace(`${pathname}${p.toString() ? `?${p}` : ''}`, { scroll: false })
-  }, [searchParams, router, pathname])
+    setFilters((prev) => {
+      const next = key === 'drift'
+        ? { ...prev, drift: value === '1' }
+        : { ...prev, [key]: csvOf(value) }
+      const p = new URLSearchParams()
+      for (const k of ['channel', 'market', 'mode', 'lane', 'family'] as const) {
+        const arr = next[k] as string[]
+        if (arr.length) p.set(k, arr.join(','))
+      }
+      if (next.drift) p.set('drift', '1')
+      router.replace(`${pathname}${p.toString() ? `?${p}` : ''}`, { scroll: false })
+      return next
+    })
+  }, [router, pathname])
+
+  const clearFilters = useCallback(() => {
+    setFilters({ channel: [], market: [], mode: [], lane: [], family: [], drift: false })
+    setQLive(''); setQ('')
+    router.replace(pathname, { scroll: false })
+  }, [router, pathname])
 
   // Facets derived from the loaded rows, so only real options are offered.
   const facets = useMemo(() => {
@@ -350,7 +381,7 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
               ? `${allChildren.length} listings`
               : `${children.length} of ${allChildren.length} listings`}
           </span>
-          <Button size="sm" disabled={activeFilters === 0 && !familyKey} onClick={() => { setQLive(''); setQ(''); router.replace(pathname, { scroll: false }) }}>
+          <Button size="sm" disabled={activeFilters === 0 && !familyKey} onClick={clearFilters}>
             Clear
           </Button>
         </div>
