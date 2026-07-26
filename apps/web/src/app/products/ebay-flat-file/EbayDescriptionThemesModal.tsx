@@ -16,12 +16,20 @@
  *  - per-theme usage chips from GET /ebay/description-themes/usage;
  *  - themes whose notes carry a ⚠ marker surface that note as a warning banner.
  *
+ * ED v2 P4b — Push tab: description-only push to LIVE listings via
+ * POST /api/ebay/description-push (Lane B ReviseFixedPriceItem per adopted
+ * listing + parity read-back; Lane A honest inventory-managed skip). Gated by
+ * an explicit danger confirm; results render VERBATIM per listing — itemId,
+ * lane, outcome and every warning string, with PARITY MISMATCH warnings in
+ * red. A failed/partial push must look different from a clean one at a glance
+ * — publishes that lied about success cost days here, never again.
+ *
  * Built-in starters are editable but not deletable (the API enforces it);
  * the default theme wraps every listing that hasn't picked its own.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, Plus, Copy, Star, Trash2, RefreshCw, Search, Monitor, Smartphone } from 'lucide-react'
+import { Loader2, Plus, Copy, Star, Trash2, RefreshCw, Search, Monitor, Smartphone, Send, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/design-system/components/Modal'
@@ -52,6 +60,41 @@ interface ThemeUsage {
   byThemeId: Record<string, number>
 }
 
+// ── ED v2 P4b — POST /ebay/description-push shapes (mirror of
+// apps/api/src/services/ebay-description-push.service.ts result types) ───────
+
+interface PushListingResult {
+  itemId: string
+  parentSku: string
+  lane: 'inventory' | 'trading'
+  outcome: 'revised' | 'inventory-managed' | 'skipped-empty-body' | 'dry-run' | 'failed'
+  /** Whether a theme wrapped the body. */
+  themed: boolean
+  themeName?: string
+  bodySource?: 'membership' | 'parent'
+  warnings: string[]
+  message?: string
+}
+
+interface PushProductSummary {
+  productId: string
+  parentSku?: string
+  themePersisted?: boolean
+  listings: number
+  warnings: string[]
+  error?: string
+}
+
+interface PushResult {
+  marketplace: string
+  listings: PushListingResult[]
+  products: PushProductSummary[]
+}
+
+/** Server-side cap (MAX_PRODUCTS_PER_CALL in the route) — mirrored here so the
+ *  picker refuses the 51st product instead of earning a 400. */
+const MAX_PUSH_PRODUCTS = 50
+
 const TOKENS = [
   '{{title}}', '{{subtitle}}', '{{body}}', '{{sku}}', '{{brand}}', '{{market}}',
   '{{gallery}}', '{{gallery_shared}}', '{{specs_table}}', '{{policies}}',
@@ -72,7 +115,7 @@ interface LookupItem {
   hasEbayListing: boolean
 }
 
-export interface PreviewProduct { id: string; sku: string; title?: string }
+export interface PreviewProduct { id: string; sku: string; title?: string; hasEbayListing?: boolean }
 
 function PreviewProductPicker({ selected, onSelect }: {
   selected: PreviewProduct | null
@@ -126,7 +169,7 @@ function PreviewProductPicker({ selected, onSelect }: {
             <button key={it.id} type="button"
               // onMouseDown fires before the input's blur, so the click always lands.
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { onSelect({ id: it.id, sku: it.sku, title: it.title }); setQ('') }}
+              onClick={() => { onSelect({ id: it.id, sku: it.sku, title: it.title, hasEbayListing: it.hasEbayListing }); setQ('') }}
               className="w-full flex items-center gap-2 px-3 py-1.5 text-left border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
               <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 flex-shrink-0">{it.sku}</span>
               {it.title && <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate min-w-0">{it.title}</span>}
@@ -140,6 +183,132 @@ function PreviewProductPicker({ selected, onSelect }: {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ── ED v2 P4b — push results, rendered VERBATIM per listing ──────────────────
+// Every itemId, lane, outcome, message and warning string from the endpoint
+// renders in full. PARITY MISMATCH warnings are red and impossible to miss;
+// nothing is ever folded away into a bare success toast.
+
+const OUTCOME_CHIP: Record<PushListingResult['outcome'], string> = {
+  revised: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+  'dry-run': 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+  'inventory-managed': 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+  'skipped-empty-body': 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+}
+
+function PushResults({ res, themeName, at }: { res: PushResult; themeName: string; at: string }) {
+  const { listings, products } = res
+  const count = (o: PushListingResult['outcome']) => listings.filter((l) => l.outcome === o).length
+  const revised = count('revised')
+  const invManaged = count('inventory-managed')
+  const emptySkipped = count('skipped-empty-body')
+  const dryRun = count('dry-run')
+  const failed = count('failed')
+  const parityMismatches = listings.filter((l) => l.warnings.some((w) => w.includes('PARITY MISMATCH'))).length
+  const listingWarnings = listings.reduce((n, l) => n + l.warnings.length, 0)
+  const productIssues = products.filter((p) => p.error || p.warnings.length > 0 || p.themePersisted === false)
+  const productErrors = products.filter((p) => p.error).length
+
+  const hasProblems = failed > 0 || parityMismatches > 0 || productErrors > 0
+  const clean = listings.length > 0 && revised === listings.length && listingWarnings === 0 && productIssues.length === 0
+  const allDryRun = listings.length > 0 && dryRun === listings.length && productErrors === 0
+
+  const summaryLine = `${listings.length} listing${listings.length === 1 ? '' : 's'} — ${revised} revised · ${invManaged} inventory-managed (need Full Publish) · ${emptySkipped} skipped (empty body) · ${dryRun} dry-run · ${failed} failed`
+
+  return (
+    <div className="flex flex-col gap-2" data-testid="description-push-results">
+      {hasProblems ? (
+        <Banner tone="danger" title={`Push finished WITH PROBLEMS — ${failed} failed · ${parityMismatches} parity mismatch${parityMismatches === 1 ? '' : 'es'} · ${productErrors} product error${productErrors === 1 ? '' : 's'}`}>
+          {summaryLine}. Do not trust any listing until you have read its row below.
+        </Banner>
+      ) : clean ? (
+        <Banner tone="success" title={`Clean push — all ${revised} listing${revised === 1 ? '' : 's'} revised, parity verified`}>
+          {summaryLine}
+        </Banner>
+      ) : allDryRun ? (
+        <Banner tone="info" title="Dry run — nothing was sent to eBay">
+          NEXUS_EBAY_REAL_API is not enabled, so every revise was skipped. {summaryLine}
+        </Banner>
+      ) : (
+        <Banner tone="warning" title="Partial push — not every listing was revised">
+          {summaryLine}. Every skipped or warned listing is listed below with the exact reason.
+        </Banner>
+      )}
+      <p className="text-[10px] text-slate-400">
+        Pushed at {at} · theme "{themeName}" · market {res.marketplace}
+      </p>
+
+      {productIssues.length > 0 && (
+        <div className="rounded border border-amber-300 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20 px-2 py-1.5 flex flex-col gap-1">
+          <p className="text-[11px] font-semibold text-amber-800 dark:text-amber-300">Per-product notes ({productIssues.length})</p>
+          {productIssues.map((p) => (
+            <div key={p.productId} className="flex flex-col gap-0.5">
+              <p className="text-[11px] font-medium text-slate-700 dark:text-slate-200">
+                {p.parentSku ?? p.productId} — {p.listings} listing{p.listings === 1 ? '' : 's'}
+                {p.themePersisted === false ? ' · theme NOT persisted' : ''}
+              </p>
+              {p.error && <p className="text-[11px] text-red-600 dark:text-red-400 whitespace-pre-wrap">✗ {p.error}</p>}
+              {p.warnings.map((w, i) => (
+                <p key={i} className="text-[11px] text-amber-700 dark:text-amber-300 whitespace-pre-wrap">⚠ {w}</p>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1.5">
+        {listings.map((l) => {
+          const parity = l.warnings.some((w) => w.includes('PARITY MISMATCH'))
+          const rowBorder = l.outcome === 'failed' || parity
+            ? 'border-red-300 dark:border-red-800'
+            : l.warnings.length > 0 || l.outcome === 'skipped-empty-body'
+              ? 'border-amber-300 dark:border-amber-800'
+              : 'border-slate-200 dark:border-slate-700'
+          return (
+            <div key={l.itemId} className={cn('rounded border bg-white dark:bg-slate-900 px-2 py-1.5 flex flex-col gap-1', rowBorder)}>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="font-mono text-xs font-semibold text-slate-900 dark:text-slate-100">{l.itemId}</span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400">{l.parentSku}</span>
+                <span className="text-[9px] uppercase px-1 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">{l.lane}</span>
+                <span className={cn('text-[9px] uppercase px-1 rounded font-semibold', OUTCOME_CHIP[l.outcome])}>{l.outcome}</span>
+                {l.themed
+                  ? <span className="text-[9px] px-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">theme: {l.themeName ?? 'themed'}</span>
+                  : l.outcome !== 'inventory-managed' && (
+                    <span className="text-[9px] px-1 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">raw body (no theme)</span>
+                  )}
+                {l.bodySource && (
+                  <span className="text-[9px] px-1 rounded bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                    title="Where the body copy came from: the listing's own saved membership row, or the family parent's per-market content">
+                    body: {l.bodySource === 'membership' ? "listing's own" : 'family parent'}
+                  </span>
+                )}
+              </div>
+              {l.message && (
+                <p className={cn('text-[11px] whitespace-pre-wrap', l.outcome === 'failed' ? 'font-medium text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400')}>
+                  {l.message}
+                </p>
+              )}
+              {l.warnings.map((w, i) => (
+                <p key={i} className={cn('text-[11px] whitespace-pre-wrap rounded border px-2 py-1',
+                  w.includes('PARITY MISMATCH')
+                    ? 'font-semibold bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800 text-red-700 dark:text-red-300'
+                    : 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300')}>
+                  ⚠ {w}
+                </p>
+              ))}
+            </div>
+          )
+        })}
+        {listings.length === 0 && (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            No live listings were found for the selected products — nothing was revised. The per-product notes above say why.
+          </p>
+        )}
+      </div>
     </div>
   )
 }
@@ -162,7 +331,7 @@ export function EbayDescriptionThemesModal({ open, onClose, marketplace, sampleP
   const [dirty, setDirty] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<'edit' | 'preview'>('edit')
+  const [tab, setTab] = useState<'edit' | 'preview' | 'push'>('edit')
   const [preview, setPreview] = useState<{ html: string; warnings: string[] } | null>(null)
   const [previewBusy, setPreviewBusy] = useState(false)
   const [previewProduct, setPreviewProduct] = useState<PreviewProduct | null>(null)
@@ -170,6 +339,11 @@ export function EbayDescriptionThemesModal({ open, onClose, marketplace, sampleP
   const [previewWidth, setPreviewWidth] = useState<'desktop' | 'mobile'>('desktop')
   const [refreshTick, setRefreshTick] = useState(0)
   const [usage, setUsage] = useState<ThemeUsage | null>(null)
+  // ── ED v2 P4b — push tab state ──
+  const [pushList, setPushList] = useState<PreviewProduct[]>([])
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushError, setPushError] = useState<string | null>(null)
+  const [pushResult, setPushResult] = useState<{ res: PushResult; themeName: string; at: string } | null>(null)
   const htmlRef = useRef<HTMLTextAreaElement>(null)
   const previewBoxRef = useRef<HTMLDivElement>(null)
   const [previewBoxW, setPreviewBoxW] = useState(0)
@@ -205,6 +379,11 @@ export function EbayDescriptionThemesModal({ open, onClose, marketplace, sampleP
       setError(null); setTab('edit'); setPreview(null)
       setPreviewMarket(EBAY_MARKETPLACES.includes(marketplace) ? marketplace : 'IT')
       setPreviewProduct(sampleProductId ? { id: sampleProductId, sku: sampleProductSku ?? 'Current grid family' } : null)
+      // Push tab starts from the same grid family the preview does — one seed,
+      // never re-added behind the operator's back after they remove it.
+      setPushList(sampleProductId ? [{ id: sampleProductId, sku: sampleProductSku ?? 'Current grid family' }] : [])
+      setPushResult(null)
+      setPushError(null)
       void load()
       void loadUsage()
     }
@@ -287,6 +466,84 @@ export function EbayDescriptionThemesModal({ open, onClose, marketplace, sampleP
     } finally { setBusy(false) }
   }
 
+  // ── ED v2 P4b — description-only push to LIVE listings ─────────────────────
+  // Pushes the SAVED theme (never unsaved edits) for every selected family:
+  // Lane B adopted listings get a Description-only ReviseFixedPriceItem +
+  // parity read-back; Lane A inventory-managed primaries report an honest skip.
+  const pushDraftCopy = !!selected?.notes?.includes('⚠')
+  const pushBlockReason = isNew
+    ? 'Save the theme first — the push sends a SAVED theme, and this new theme has no saved version yet.'
+    : dirty
+      ? `Unsaved edits — the push would send the last SAVED version of "${selected?.name ?? draft.name}", not what the editor shows. Save (or discard) your edits first.`
+      : selected && !selected.active
+        ? 'This theme is inactive — inactive themes never render. Activate and save it before pushing.'
+        : pushList.length === 0
+          ? 'Add at least one product to enable the push.'
+          : null
+
+  const addPushProduct = (p: PreviewProduct) => {
+    setPushList((list) =>
+      list.some((x) => x.id === p.id) || list.length >= MAX_PUSH_PRODUCTS ? list : [...list, p])
+  }
+  const removePushProduct = (id: string) => setPushList((list) => list.filter((p) => p.id !== id))
+
+  const runPush = async () => {
+    if (!selected || dirty || pushList.length === 0 || pushBusy) return
+    const skus = pushList.map((p) => p.sku)
+    const shownSkus = skus.slice(0, 8).join(', ') + (skus.length > 8 ? ` … and ${skus.length - 8} more` : '')
+    const ok = await confirm({
+      title: `Revise LIVE eBay descriptions on ${previewMarket}?`,
+      description: (
+        <div className="space-y-2">
+          <p>
+            This revises the description of EVERY live eBay listing (primary + adopted shared listings) of{' '}
+            {pushList.length} product famil{pushList.length === 1 ? 'y' : 'ies'} on {previewMarket}:{' '}
+            <span className="font-medium">{shownSkus}</span>.
+          </p>
+          <p>
+            Theme "{selected.name}" is assigned to each family and wraps each listing's own body copy. Only the
+            description changes — price, quantity, title and variations are untouched. Each revise is read back
+            from eBay (parity check) and reported per listing.
+          </p>
+          {pushDraftCopy && (
+            <p className="font-semibold text-amber-600 dark:text-amber-400">
+              ⚠ DRAFT COPY: this theme's notes are flagged "{selected.notes}" — draft legal text without operator
+              sign-off would go live on real listings.
+            </p>
+          )}
+        </div>
+      ),
+      confirmLabel: pushDraftCopy ? 'Push DRAFT copy to live listings' : 'Revise live descriptions',
+      tone: 'danger',
+    })
+    if (!ok) return
+    setPushBusy(true)
+    setPushError(null)
+    setPushResult(null)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/ebay/description-push`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productIds: pushList.map((p) => p.id),
+          marketplace: previewMarket,
+          themeId: selected.id,
+        }),
+      })
+      const d = (await res.json().catch(() => null)) as (PushResult & { error?: string }) | null
+      if (!res.ok || !d || !Array.isArray(d.listings)) {
+        throw new Error(d?.error ?? `Push failed (HTTP ${res.status})`)
+      }
+      setPushResult({ res: d, themeName: selected.name, at: new Date().toLocaleTimeString() })
+      void loadUsage() // theme assignments were persisted server-side
+      onChanged?.()
+    } catch (e) {
+      setPushError(e instanceof Error ? e.message : 'Push request failed')
+    } finally {
+      setPushBusy(false)
+    }
+  }
+
   // ── Live preview — debounced auto-render on ANY input change (ED v2 P3) ────
   // theme html edits, product picks, market switches and manual Refresh all
   // funnel through this one effect; the AbortController drops stale renders.
@@ -353,15 +610,15 @@ export function EbayDescriptionThemesModal({ open, onClose, marketplace, sampleP
   return (
     <Modal
       open
-      onClose={() => !busy && onClose()}
+      onClose={() => !busy && !pushBusy && onClose()}
       title="Description Themes"
       subtitle="Themes wrap each market's description body at push time — galleries, specs and policies fill in automatically."
       size="xl"
       footer={
         <>
           {error && <span className="mr-auto text-xs text-red-600 dark:text-red-400">{error}</span>}
-          <Button size="sm" variant="ghost" onClick={onClose} disabled={busy}>Close</Button>
-          <Button size="sm" onClick={() => void save()} disabled={busy || !dirty} loading={busy}>
+          <Button size="sm" variant="ghost" onClick={onClose} disabled={busy || pushBusy}>Close</Button>
+          <Button size="sm" onClick={() => void save()} disabled={busy || pushBusy || !dirty} loading={busy}>
             {isNew ? 'Create theme' : 'Save changes'}
           </Button>
         </>
@@ -470,12 +727,12 @@ export function EbayDescriptionThemesModal({ open, onClose, marketplace, sampleP
 
           {/* tabs */}
           <div className="flex items-center gap-1 border-b border-slate-200 dark:border-slate-700">
-            {(['edit', 'preview'] as const).map((t) => (
+            {(['edit', 'preview', 'push'] as const).map((t) => (
               <button key={t} type="button"
                 onClick={() => setTab(t)}
                 className={cn('px-3 py-1.5 text-xs font-medium capitalize rounded-t transition-colors',
                   tab === t ? 'text-blue-700 dark:text-blue-300 border-b-2 border-blue-500' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300')}>
-                {t === 'preview' ? 'Preview (as pushed)' : 'Edit HTML'}
+                {t === 'preview' ? 'Preview (as pushed)' : t === 'push' ? 'Push to eBay' : 'Edit HTML'}
               </button>
             ))}
             {tab === 'preview' && (
@@ -502,7 +759,7 @@ export function EbayDescriptionThemesModal({ open, onClose, marketplace, sampleP
                 className="flex-1 min-h-[300px] w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-xs font-mono resize-none focus:outline-none focus:border-blue-400 dark:text-slate-100"
                 placeholder="Theme HTML with {{tokens}}…" />
             </>
-          ) : (
+          ) : tab === 'preview' ? (
             <div className="flex-1 min-h-[380px] flex flex-col gap-2">
               {/* preview controls: product × market × width */}
               <div className="flex items-center gap-2">
@@ -556,6 +813,81 @@ export function EbayDescriptionThemesModal({ open, onClose, marketplace, sampleP
               {frameScale < 1 && srcDoc && (
                 <p className="text-[10px] text-slate-400 text-center">Desktop frame is {frameW}px, scaled to {Math.round(frameScale * 100)}% to fit.</p>
               )}
+            </div>
+          ) : (
+            /* ── ED v2 P4b — Push tab ── */
+            <div className="flex-1 min-h-[380px] flex flex-col gap-2 overflow-y-auto pr-1">
+              {/* The theme's ⚠ draft-copy note repeats HERE, inside the push flow. */}
+              {selected && pushDraftCopy && (
+                <Banner tone="warning" title={`Draft copy — theme "${selected.name}" is flagged ⚠ in its notes`}>
+                  {selected.notes} — pushing puts this DRAFT text on live listings. The confirmation step repeats
+                  this warning before anything is sent.
+                </Banner>
+              )}
+
+              <div className="flex items-center gap-2">
+                <PreviewProductPicker selected={null} onSelect={addPushProduct} />
+                <Select value={previewMarket} onChange={(e) => setPreviewMarket(e.target.value)}
+                  aria-label="Push market" title="Push market — descriptions revise on this market's listings">
+                  {EBAY_MARKETPLACES.map((m) => <option key={m} value={m}>{m}</option>)}
+                </Select>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Each added product resolves to its whole family: the push revises the description of EVERY live eBay
+                listing of that family on {previewMarket} — the primary listing plus adopted shared listings. Price,
+                quantity, title and variations never change. Max {MAX_PUSH_PRODUCTS} products per push.
+              </p>
+
+              {pushList.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {pushList.map((p) => (
+                    <span key={p.id}
+                      className="inline-flex items-center gap-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 pl-2 pr-1 py-0.5 text-xs text-slate-700 dark:text-slate-200">
+                      <span className="font-semibold">{p.sku}</span>
+                      {p.hasEbayListing === false && (
+                        <span className="text-[9px] uppercase px-1 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                          title="No eBay listing yet — the push will report this honestly, it cannot create one">
+                          no listing
+                        </span>
+                      )}
+                      <button type="button" onClick={() => removePushProduct(p.id)} disabled={pushBusy}
+                        title={`Remove ${p.sku} from this push`}
+                        className="p-0.5 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  No products selected — search above to add the families whose descriptions you want to push.
+                </p>
+              )}
+
+              <div className="mt-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3 flex flex-col gap-1.5">
+                {pushBlockReason ? (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">{pushBlockReason}</p>
+                ) : (
+                  <>
+                    <Button variant="danger" size="sm" className="self-start" loading={pushBusy} disabled={pushBusy}
+                      icon={<Send className="w-3.5 h-3.5" />} onClick={() => void runPush()}>
+                      {`Push descriptions — ${pushList.length} product${pushList.length === 1 ? '' : 's'} → all live listings · theme "${selected?.name}" · ${previewMarket}`}
+                    </Button>
+                    <p className="text-[10px] text-slate-400">
+                      Revises LIVE listings after an explicit confirmation. The exact listing count is resolved at
+                      push time — every ItemID then appears below with its outcome and every warning, verbatim.
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {pushError && (
+                <Banner tone="danger" title="Push request failed">
+                  {pushError}
+                </Banner>
+              )}
+
+              {pushResult && <PushResults res={pushResult.res} themeName={pushResult.themeName} at={pushResult.at} />}
             </div>
           )}
         </div>
