@@ -3826,12 +3826,14 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           />
         )}
 
-        {/* ED.4 — theme manager; sample product = first real row for live previews */}
+        {/* ED.4 + ED v2 P3 — theme manager; first real row seeds the preview
+            picker (the modal's own product search can swap it for any family) */}
         <EbayDescriptionThemesModal
           open={themesModalOpen}
           onClose={() => setThemesModalOpen(false)}
           marketplace={marketplace}
           sampleProductId={String((rows.find((r) => !r._ghost && r._productId) as EbayRow | undefined)?._productId ?? '') || undefined}
+          sampleProductSku={(rows.find((r) => !r._ghost && r._productId) as EbayRow | undefined)?.sku}
           onChanged={loadDescThemes}
         />
 

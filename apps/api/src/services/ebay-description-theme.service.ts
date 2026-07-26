@@ -217,7 +217,15 @@ export async function renderListingDescriptionSafe(
     if (!theme && !args.themeIdOverride && !args.themeHtmlOverride) {
       theme = await prisma.ebayDescriptionTheme.findFirst({ where: { isDefault: true, active: true } })
     }
-    if (!theme || !(theme as { active: boolean }).active) return raw
+    // D7 (ED v2 P3) — an assigned-but-INACTIVE theme behaves exactly like a
+    // deleted one: fall back to the DEFAULT theme when an active default
+    // exists, raw body otherwise. (It used to drop straight to the raw body
+    // even when a default existed, contradicting the theme manager's
+    // "listings fall back to the default" copy.)
+    if (theme && !(theme as { active: boolean }).active) {
+      theme = await prisma.ebayDescriptionTheme.findFirst({ where: { isDefault: true, active: true } })
+    }
+    if (!theme) return raw
 
     const galleries = await loadGalleries(prisma, args.productId, args.sku, args.marketplace)
     const data: DescriptionRenderData = {
