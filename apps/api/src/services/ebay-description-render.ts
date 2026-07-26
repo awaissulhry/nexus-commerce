@@ -110,12 +110,27 @@ function specsTable(aspects: Array<{ name: string; value: string }>): string {
   return `<table style="border-collapse:collapse;width:100%;max-width:640px;">${trs}</table>`
 }
 
-function policiesBlock(p?: DescriptionRenderData['policies']): string {
+/** Section labels in the MARKET'S language — an eBay IT buyer must never see
+ *  'Shipping:'/'Returns:' (market purity applies to description content too).
+ *  Falls back to English for markets without a dictionary. */
+const SECTION_LABELS: Record<string, { shipping: string; returns: string; payment: string; specs: string; features: string }> = {
+  IT: { shipping: 'Spedizione', returns: 'Resi', payment: 'Pagamento', specs: 'Specifiche', features: 'Caratteristiche' },
+  ES: { shipping: 'Envío', returns: 'Devoluciones', payment: 'Pago', specs: 'Especificaciones', features: 'Características' },
+  DE: { shipping: 'Versand', returns: 'Rückgabe', payment: 'Zahlung', specs: 'Spezifikationen', features: 'Merkmale' },
+  FR: { shipping: 'Livraison', returns: 'Retours', payment: 'Paiement', specs: 'Spécifications', features: 'Caractéristiques' },
+}
+export function sectionLabels(market?: string): { shipping: string; returns: string; payment: string; specs: string; features: string } {
+  const m = String(market ?? '').toUpperCase().replace(/^EBAY[_-]/, '').slice(0, 2)
+  return SECTION_LABELS[m] ?? { shipping: 'Shipping', returns: 'Returns', payment: 'Payment', specs: 'Specifications', features: 'Features' }
+}
+
+function policiesBlock(p?: DescriptionRenderData['policies'], market?: string): string {
   if (!p) return ''
+  const L = sectionLabels(market)
   const items: string[] = []
-  if (p.shipping) items.push(`<li><strong>Shipping:</strong> ${esc(p.shipping)}</li>`)
-  if (p.returns) items.push(`<li><strong>Returns:</strong> ${esc(p.returns)}</li>`)
-  if (p.payment) items.push(`<li><strong>Payment:</strong> ${esc(p.payment)}</li>`)
+  if (p.shipping) items.push(`<li><strong>${L.shipping}:</strong> ${esc(p.shipping)}</li>`)
+  if (p.returns) items.push(`<li><strong>${L.returns}:</strong> ${esc(p.returns)}</li>`)
+  if (p.payment) items.push(`<li><strong>${L.payment}:</strong> ${esc(p.payment)}</li>`)
   if (items.length === 0) return ''
   return `<ul style="list-style:none;padding:0;margin:0;font-size:13px;color:#374151;">${items.join('')}</ul>`
 }
@@ -129,6 +144,14 @@ function policiesBlock(p?: DescriptionRenderData['policies']): string {
 export function sanitizeEbayHtml(input: string): { html: string; warnings: string[] } {
   const warnings: string[] = []
   let html = input
+
+  // eBay error 21919490: any http:// resource in the description fails the
+  // listing. Our images are https (Cloudinary/eBay-hosted) — an http:// src is
+  // always a stale/hand-typed link. Upgrade in place + warn (never silent).
+  if (/\s(src|href)\s*=\s*(["'])http:\/\//i.test(html)) {
+    html = html.replace(/(\s(?:src|href)\s*=\s*["'])http:\/\//gi, '$1https://')
+    warnings.push('upgraded http:// resources to https:// (eBay rejects non-secure content, error 21919490)')
+  }
 
   const paired = /<\s*(script|iframe|object|embed|form|link|meta|base)\b[^>]*>[\s\S]*?<\/\s*\1\s*>/gi
   if (paired.test(html)) {
@@ -179,7 +202,7 @@ export function renderDescriptionTheme(themeHtml: string, data: DescriptionRende
     gallery: galleryHtml,
     gallery_shared: galleryGrid(data.sharedImages.slice(0, MAX_GALLERY_IMAGES)),
     specs_table: specsTable(data.aspects),
-    policies: policiesBlock(data.policies),
+    policies: policiesBlock(data.policies, data.market),
     policy_shipping: esc(data.policies?.shipping ?? ''),
     policy_returns: esc(data.policies?.returns ?? ''),
     policy_payment: esc(data.policies?.payment ?? ''),

@@ -86,7 +86,7 @@ export async function setDefaultTheme(prisma: PrismaClient, id: string | null) {
  * variantGroupValue; per-SKU pins via variationId. Falls back to the master
  * ProductImage gallery when nothing is curated.
  */
-async function loadGalleries(prisma: PrismaClient, productId: string, sku?: string): Promise<{
+async function loadGalleries(prisma: PrismaClient, productId: string, sku?: string, marketplace?: string): Promise<{
   shared: string[]
   byGroup: DescriptionGalleryGroup[]
   rowImages?: string[]
@@ -96,6 +96,23 @@ async function loadGalleries(prisma: PrismaClient, productId: string, sku?: stri
     orderBy: { position: 'asc' },
     select: { variantGroupKey: true, variantGroupValue: true, variationId: true, url: true },
   })
+  // AXIS-AWARE grouping (ED v2 P1). This was a hand-rolled mirror of the push's
+  // curation resolution that ignored variantGroupKey entirely — on a family
+  // with buckets under more than one key (Color residue beside Colore, or a
+  // per-market axis pick) the description's per-colour sections could mix or
+  // mis-bucket. Use the SAME authorities as the push: the per-market image
+  // axis (readImageAxisPreference) + synonym matching (axisSynonymKey), so
+  // Color/Colore/Farbe spellings can never split a bucket. No preference or no
+  // key-match → legacy accept-all (fail-open, never an empty description).
+  let pictureAxis: string | undefined
+  try {
+    const { readImageAxisPreference } = await import('./ebay-image-axis-preference.service.js')
+    pictureAxis = await readImageAxisPreference(productId, marketplace)
+  } catch { /* fail-open */ }
+  const { axisSynonymKey } = await import('./ebay-theme-axes.js')
+  const keyMatches = (k: string) => !pictureAxis || axisSynonymKey(k) === axisSynonymKey(pictureAxis)
+  const anyKeyMatched = curated.some((r) => !r.variationId && r.variantGroupKey && keyMatches(r.variantGroupKey))
+
   const shared: string[] = []
   const groups = new Map<string, string[]>()
   const byVariationId = new Map<string, string[]>()
@@ -104,6 +121,7 @@ async function loadGalleries(prisma: PrismaClient, productId: string, sku?: stri
       if (!byVariationId.has(r.variationId)) byVariationId.set(r.variationId, [])
       byVariationId.get(r.variationId)!.push(r.url)
     } else if (r.variantGroupKey && r.variantGroupValue) {
+      if (anyKeyMatched && !keyMatches(r.variantGroupKey)) continue // other-axis residue
       const key = r.variantGroupValue
       if (!groups.has(key)) groups.set(key, [])
       groups.get(key)!.push(r.url)
@@ -114,14 +132,22 @@ async function loadGalleries(prisma: PrismaClient, productId: string, sku?: stri
 
   let rowImages: string[] | undefined
   if (sku) {
-    const variant = await prisma.product.findFirst({ where: { sku }, select: { id: true, variantAttributes: true } })
+    const variant = await prisma.product.findFirst({ where: { sku }, select: { id: true, variantAttributes: true, categoryAttributes: true } })
     if (variant && byVariationId.has(variant.id)) {
       rowImages = byVariationId.get(variant.id)
     } else if (variant) {
-      // match the variant's own group by any axis value it carries
-      const attrs = (variant.variantAttributes ?? {}) as Record<string, unknown>
+      // Match the variant's own bucket by any axis value it carries.
+      // variantAttributes ?? categoryAttributes.variations is the CANONICAL
+      // variant-attr resolution (old bulk-create products store axes ONLY in
+      // categoryAttributes.variations — missing it meant their per-colour
+      // section never matched); compare case-insensitively so "nero" finds
+      // the "Nero" bucket.
+      const ca = (variant.categoryAttributes ?? {}) as Record<string, unknown>
+      const caVar = ca && typeof ca.variations === 'object' && ca.variations !== null ? ca.variations as Record<string, unknown> : {}
+      const attrs = { ...(caVar), ...((variant.variantAttributes ?? {}) as Record<string, unknown>) }
+      const byLower = new Map([...groups.entries()].map(([k, v]) => [k.toLowerCase(), v]))
       for (const v of Object.values(attrs)) {
-        const hit = typeof v === 'string' ? groups.get(v) : undefined
+        const hit = typeof v === 'string' ? byLower.get(v.toLowerCase()) : undefined
         if (hit && hit.length > 0) {
           rowImages = hit
           break
@@ -193,7 +219,7 @@ export async function renderListingDescriptionSafe(
     }
     if (!theme || !(theme as { active: boolean }).active) return raw
 
-    const galleries = await loadGalleries(prisma, args.productId, args.sku)
+    const galleries = await loadGalleries(prisma, args.productId, args.sku, args.marketplace)
     const data: DescriptionRenderData = {
       market: args.marketplace.toUpperCase(),
       title: args.title ?? listing?.title ?? '',
