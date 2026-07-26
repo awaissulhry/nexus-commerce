@@ -1610,7 +1610,8 @@ export async function applyControlColumns(
   jobId: string,
 ): Promise<ApplyResult['controls'] | undefined> {
   const actor = `import:${jobId}`
-  const out = { followSet: 0, pinned: 0, paused: 0, buffered: 0, skippedFba: 0, invalid: 0 }
+  const out: { followSet: number; pinned: number; paused: number; buffered: number; skippedFba: number; invalid: number; partialError?: string } =
+    { followSet: 0, pinned: 0, paused: 0, buffered: 0, skippedFba: 0, invalid: 0 }
   const withControls = rows.filter((r) => (r.follow !== undefined && r.follow !== null && String(r.follow).trim() !== '') || r.buffer !== undefined)
   if (withControls.length === 0) return undefined
 
@@ -1673,6 +1674,9 @@ export async function applyControlColumns(
     if (mode === 'FOLLOW') out.followSet += r.updated
     else out.pinned += r.updated
     out.skippedFba += r.skippedFba
+    // SCT.3 — the chunked service can stop mid-bulk after commits; the import
+    // summary must not report a half-applied Follow as clean.
+    if (r.error) out.partialError = out.partialError ? `${out.partialError} · ${r.error}` : `${mode} ${channel}: ${r.error}`
   }
 
   for (const g of bufferGroups.values()) {
@@ -1685,6 +1689,8 @@ export async function applyControlColumns(
     })
     out.buffered += (r as { updated?: number }).updated ?? 0
     out.skippedFba += (r as { skippedFba?: number }).skippedFba ?? 0
+    const be = (r as { error?: string }).error
+    if (be) out.partialError = out.partialError ? `${out.partialError} · ${be}` : `BUFFER: ${be}`
   }
 
   if (pauseTargets.length > 0) {

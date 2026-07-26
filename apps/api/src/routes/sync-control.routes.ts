@@ -25,7 +25,7 @@ import { validateServesTokens } from '../services/sync-control-core.js'
 import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-master.service.js'
 import { recascadeAfterSyncControlChange } from '../services/stock-movement.service.js'
 import { enqueueOutboundRowsInstant } from '../services/outbound-enqueue.js'
-import { summarizeProductSync, marketMatches, omitChildrenInList, resolveCanonicalMap, canonicalStem, INLINE_PREVIEW_ROWS, summarizeFamilies, familyKeyOf } from '../services/sync-control-product-view.js'
+import { summarizeProductSync, marketMatches, omitChildrenInList, resolveCanonicalMap, canonicalStem, INLINE_PREVIEW_ROWS, summarizeFamilies, familyKeyOf, rowMatchesScope, type SyncScope } from '../services/sync-control-product-view.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../services/product-read-cache.service.js'
 import { buildSyncControlWorkbook, parseSyncControlWorkbook, normalizeModeCell } from '../services/sync-control-excel.js'
 
@@ -487,16 +487,22 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       }
     }
 
+    // SCT.3 — ONE row-level predicate (rowMatchesScope) decides both which
+    // families show AND which of their children display, and POST /actions
+    // narrows a bulk expansion with the SAME function. The old per-dimension
+    // .some() checks could match DIFFERENT children (channel via child A,
+    // market via child B) and the displayed family then shipped ALL children —
+    // so "filter Market=IT → act" touched DE/ES rows the filter implied were
+    // out of scope.
+    const scopeNorm: SyncScope = { channels: chans, markets: mkts, modes, drift: driftOnly }
+    const hasScope = chans.length > 0 || mkts.length > 0 || modes.length > 0 || driftOnly
     const filtered = all.filter((p) => {
-      if (chans.length && !p.children.some((c) => chans.includes(c.channel))) return false
-      if (mkts.length && !p.children.some((c) => mkts.some((m) => marketMatches(c.marketplace, m) || c.marketplace === m))) return false
-      if (modes.length && !p.children.some((c) => modes.includes(c.mode))) return false
+      if (hasScope && !p.children.some((c) => rowMatchesScope(c, scopeNorm))) return false
       if (needle && !(
         p.name.toLowerCase().includes(needle) ||
         p.sku.toLowerCase().includes(needle) ||
         p.children.some((c) => c.sku.toLowerCase().includes(needle))
       )) return false
-      if (driftOnly && p.rollup.driftCount === 0) return false
       return true
     })
     filtered.sort((a, b) => a.name.localeCompare(b.name) || a.sku.localeCompare(b.sku))
@@ -504,14 +510,28 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     // SCV.1b — omit child rows for big families (client shows "Open ↗"); the
     // rollup/pool/drift on the master row stay intact so the overview is whole.
     const products = filtered.slice((page - 1) * pageSize, page * pageSize).map((p) => {
+      // SCT.3 — with filters active, the family row shows/counts ONLY the
+      // matching listings (and its Sync/Drift rollup re-derives from them), so
+      // the grid displays exactly what a bulk action will touch. Pool/stock
+      // stay family-wide — stock is per-product, not per-listing.
+      const kids = hasScope ? p.children.filter((c) => rowMatchesScope(c, scopeNorm)) : p.children
       // SCD.2 — big families still expand inline, but ship only a PREVIEW of
       // their listings; the row footer links to the full per-product page.
-      const truncated = omitChildrenInList(p.variantCount)
+      // childrenOmitted stays HONEST under scope: if the narrowed set fits the
+      // preview, nothing is omitted and the footer must not claim it is.
+      const truncated = omitChildrenInList(p.variantCount) && kids.length > INLINE_PREVIEW_ROWS
+      // families chips mirror the scope too — a family whose every row is
+      // filtered out must not render as an actionable chip.
+      const fams = hasScope && p.families
+        ? p.families.filter((f) => rowMatchesScope({ channel: f.channel, marketplace: f.marketplace, mode: 'FOLLOW' }, { channels: scopeNorm.channels, markets: scopeNorm.markets }))
+        : p.families
       return {
         ...p,
-        listingCount: p.children.length,
+        families: fams,
+        rollup: hasScope ? summarizeProductSync(kids) : p.rollup,
+        listingCount: kids.length,
         childrenOmitted: truncated,
-        children: truncated ? p.children.slice(0, INLINE_PREVIEW_ROWS) : p.children,
+        children: truncated ? kids.slice(0, INLINE_PREVIEW_ROWS) : kids,
       }
     })
 
@@ -558,155 +578,239 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       // shared memberships server-side (the client may not hold a big family's
       // children). FBA still excluded downstream by the write primitives.
       masterIds?: string[]
+      // SCT.3 — the products view's active filters. The expansion is narrowed
+      // to rows matching them (act-on-what-you-see): without this, "filter
+      // Market=IT → Set Follow" flipped the family's DE/ES listings too.
+      scope?: SyncScope
     }
     const actor = actorOf(request as never)
     const listings = body.listings ?? []
     const memberships = body.memberships ?? []
     if (!body.action) return reply.code(400).send({ error: 'action required' })
-
-    if (body.masterIds?.length) {
-      // SCD.4 — expand each selected group SERVER-side to every master folded
-      // into it. Previously this trusted the client to send memberMasterIds,
-      // so a stale selection (list refreshed under the operator) silently
-      // skipped the duplicate copies' listings.
-      const allMasters = await prisma.product.findMany({ where: { parentId: null }, select: { id: true } })
-      const canonAll = await resolveCanonicalMasters(allMasters.map((m) => m.id))
-      const groupSet = new Set(body.masterIds)
-      for (const [mid, cid] of canonAll) if (groupSet.has(cid)) groupSet.add(mid)
-      const variants = await prisma.product.findMany({
-        where: { OR: [{ id: { in: [...groupSet] } }, { parentId: { in: [...groupSet] } }] },
-        select: { id: true },
-      })
-      const pids = variants.map((v) => v.id)
-      const [cls, mems] = await Promise.all([
-        prisma.channelListing.findMany({
-          where: { productId: { in: pids }, isPublished: true, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
-          select: { productId: true, channel: true, marketplace: true },
-        }),
-        prisma.sharedListingMembership.findMany({
-          where: { productId: { in: pids }, status: 'ACTIVE' },
-          select: { itemId: true, marketplace: true, sku: true },
-        }),
-      ])
-      // SCD.4 — expand ONLY the lanes this action can actually write. Pushing
-      // both lanes unconditionally made a listing-lane action (PAUSE/RESUME/
-      // FOLLOW/PIN/ZERO_PIN) commit its writes and THEN hit the shared-lane
-      // "not valid" branch, returning 400 after the fact: the operator was told
-      // it failed while it had already happened (and RESUME skipped its
-      // recascade, ZERO_PIN had already pushed qty 0 live).
-      const LISTING_LANE = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER']
-      const SHARED_LANE = ['EXCLUDE', 'INCLUDE', 'BUFFER']
-      if (LISTING_LANE.includes(body.action)) {
-        for (const c of cls) listings.push({ productId: c.productId, channel: c.channel, marketplace: c.marketplace })
-      }
-      if (SHARED_LANE.includes(body.action)) {
-        for (const m of mems) memberships.push({ itemId: m.itemId, marketplace: m.marketplace, sku: m.sku })
-      }
-    }
-
-    if (listings.length === 0 && memberships.length === 0) return reply.code(400).send({ error: 'no targets' })
-    // Master-bulk legitimately expands large (a 49-variant family ≈ 300 rows).
-    // SCT.2 — 500/page is selectable, and the selection survives paging, so a
-    // direct (non-master) selection can legitimately exceed one page.
-    const cap = body.masterIds?.length ? 3000 : 2000
-    if (listings.length + memberships.length > cap) return reply.code(400).send({ error: `max ${cap} targets per call` })
-
-    const result = { updated: 0, skippedFba: 0, unchanged: 0, recascadeQueued: 0, skippedShared: 0 }
+    const result: {
+      updated: number; skippedFba: number; unchanged: number; recascadeQueued: number
+      skippedShared: number; scopedOut: number; error?: string; partial?: boolean
+    } = { updated: 0, skippedFba: 0, unchanged: 0, recascadeQueued: 0, skippedShared: 0, scopedOut: 0 }
     const recascadeProducts = new Set<string>()
+    // SCT.3 — no more bare 500s: any throw below is caught, logged, and
+    // reported with the REAL message. If rows were already written, the
+    // response says exactly how far it got instead of pretending total
+    // failure (the old handler returned Fastify's naked 'Internal Server
+    // Error' — the P2028 incident shipped zero information to the operator).
+    try {
+      if (body.masterIds?.length) {
+        // SCD.4 — expand each selected group SERVER-side to every master folded
+        // into it. Previously this trusted the client to send memberMasterIds,
+        // so a stale selection (list refreshed under the operator) silently
+        // skipped the duplicate copies' listings.
+        const allMasters = await prisma.product.findMany({ where: { parentId: null }, select: { id: true } })
+        const canonAll = await resolveCanonicalMasters(allMasters.map((m) => m.id))
+        const groupSet = new Set(body.masterIds)
+        for (const [mid, cid] of canonAll) if (groupSet.has(cid)) groupSet.add(mid)
+        const variants = await prisma.product.findMany({
+          where: {
+            OR: [{ id: { in: [...groupSet] } }, { parentId: { in: [...groupSet] } }],
+            // SCD.8/8b parity — an action must never expand into DELETED
+            // products (or live children of a deleted master): the view hides
+            // them, so acting on them would write outside what any view shows.
+            deletedAt: null,
+            AND: [{ OR: [{ parentId: null }, { parent: { deletedAt: null } }] }],
+          },
+          select: { id: true },
+        })
+        const pids = variants.map((v) => v.id)
+        const [cls, mems] = await Promise.all([
+          prisma.channelListing.findMany({
+            where: { productId: { in: pids }, isPublished: true, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
+            select: { productId: true, channel: true, marketplace: true },
+          }),
+          prisma.sharedListingMembership.findMany({
+            where: { productId: { in: pids }, status: 'ACTIVE' },
+            select: { itemId: true, marketplace: true, sku: true },
+          }),
+        ])
+        // SCT.3 — act-on-what-you-see: narrow the expansion to the rows the
+        // active products-view filters show, with the SAME predicate the
+        // /products endpoint uses to display them.
+        let clsT = cls
+        let memsT = mems
+        const sc = body.scope
+        const hasScope = !!sc && ((sc.channels?.length ?? 0) > 0 || (sc.markets?.length ?? 0) > 0 || (sc.modes?.length ?? 0) > 0 || !!sc.drift)
+        if (hasScope) {
+          const norm: SyncScope = {
+            channels: sc!.channels?.map((x) => x.toUpperCase()),
+            markets: sc!.markets,
+            modes: sc!.modes?.map((x) => x.toUpperCase()),
+            drift: sc!.drift,
+          }
+          const scopeRows = await computeRows()
+          const allowedListing = new Set(
+            scopeRows.filter((r) => r.lane === 'LISTING' && rowMatchesScope(r, norm)).map((r) => `${r.productId}|${r.channel}|${r.marketplace}`),
+          )
+          const allowedShared = new Set(
+            scopeRows.filter((r) => r.lane === 'SHARED' && rowMatchesScope(r, norm)).map((r) => `${r.itemId}|${r.sku}|${r.marketplace}`),
+          )
+          clsT = cls.filter((c) => allowedListing.has(`${c.productId}|${c.channel}|${c.marketplace}`))
+          memsT = mems.filter((m) => allowedShared.has(`${m.itemId}|${m.sku}|${m.marketplace}`))
+          // Count scoped-out rows only for the lane(s) this action writes —
+          // EXCLUDE narrowing 200 listing rows it would never touch anyway
+          // must not inflate the "outside filters untouched" toast.
+          const LANE_L = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER'].includes(body.action)
+          const LANE_S = ['EXCLUDE', 'INCLUDE', 'BUFFER'].includes(body.action)
+          result.scopedOut = (LANE_L ? cls.length - clsT.length : 0) + (LANE_S ? mems.length - memsT.length : 0)
+        }
 
-    // ── LISTING lane ──
-    if (listings.length > 0) {
-      const byChannel = new Map<string, ListingTarget[]>()
-      for (const t of listings) {
-        const arr = byChannel.get(t.channel) ?? []
-        arr.push(t)
-        byChannel.set(t.channel, arr)
+        // SCD.4 — expand ONLY the lanes this action can actually write. Pushing
+        // both lanes unconditionally made a listing-lane action (PAUSE/RESUME/
+        // FOLLOW/PIN/ZERO_PIN) commit its writes and THEN hit the shared-lane
+        // "not valid" branch, returning 400 after the fact: the operator was told
+        // it failed while it had already happened (and RESUME skipped its
+        // recascade, ZERO_PIN had already pushed qty 0 live).
+        const LISTING_LANE = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER']
+        const SHARED_LANE = ['EXCLUDE', 'INCLUDE', 'BUFFER']
+        if (LISTING_LANE.includes(body.action)) {
+          for (const c of clsT) listings.push({ productId: c.productId, channel: c.channel, marketplace: c.marketplace })
+        }
+        if (SHARED_LANE.includes(body.action)) {
+          for (const m of memsT) memberships.push({ itemId: m.itemId, marketplace: m.marketplace, sku: m.sku })
+        }
       }
 
-      for (const [channel, targets] of byChannel) {
-        const productIds = [...new Set(targets.map((t) => t.productId))]
-        const markets = [...new Set(targets.map((t) => t.marketplace))]
+      if (listings.length === 0 && memberships.length === 0) {
+        return reply.code(400).send({
+          error: result.scopedOut > 0
+            ? `0 rows match your filters right now (${result.scopedOut} filtered out — drift may have converged since the page rendered). Nothing was written.`
+            : 'no targets',
+        })
+      }
+      // Master-bulk legitimately expands large (a 49-variant family ≈ 300 rows).
+      // SCT.2 — 500/page is selectable, and the selection survives paging, so a
+      // direct (non-master) selection can legitimately exceed one page.
+      const cap = body.masterIds?.length ? 3000 : 2000
+      if (listings.length + memberships.length > cap) return reply.code(400).send({ error: `max ${cap} targets per call` })
 
-        if (body.action === 'FOLLOW' || body.action === 'PIN') {
-          const r = await setFollowMasterQuantity({
-            productIds, channel: channel as never, markets, follow: body.action === 'FOLLOW', actor,
-          })
-          result.updated += r.updated
-          result.skippedFba += r.skippedFba
-          result.unchanged += r.unchanged
-          await audit(
-            targets.map((t) => ({
-              scopeType: 'LISTING', scopeId: `${t.productId}:${t.channel}:${t.marketplace}`,
-              scopeName: `${t.channel}:${t.marketplace}`, field: 'followMasterQuantity',
-              after: { follow: body.action === 'FOLLOW' },
-            })), actor)
-          continue
+
+      // ── LISTING lane ──
+      if (listings.length > 0) {
+        // SCT.3-CRITICAL — group by (channel, MARKET), not just channel. The
+        // old channel-only grouping collapsed targets into productIds × markets
+        // and the service wrote every EXISTING pair in that Cartesian product:
+        // acting on (P1,IT)+(P2,DE) also flipped (P1,DE)+(P2,IT). A market-
+        // scoped drift selection would silently widen to unselected markets.
+        const byChannel = new Map<string, ListingTarget[]>()
+        for (const t of listings) {
+          const k = `${t.channel}|${t.marketplace}`
+          const arr = byChannel.get(k) ?? []
+          arr.push(t)
+          byChannel.set(k, arr)
         }
 
-        if (body.action === 'BUFFER') {
-          const buffer = Math.max(0, Math.trunc(body.buffer ?? 0))
-          const r = await setStockBuffer({ productIds, channel: channel as never, markets, buffer, actor })
-          result.updated += (r as { updated?: number }).updated ?? 0
-          result.skippedFba += (r as { skippedFba?: number }).skippedFba ?? 0
-          await audit(
-            targets.map((t) => ({
-              scopeType: 'LISTING', scopeId: `${t.productId}:${t.channel}:${t.marketplace}`,
-              scopeName: `${t.channel}:${t.marketplace}`, field: 'stockBuffer', after: { buffer },
-            })), actor)
-          continue
-        }
+        for (const [groupKey, targets] of byChannel) {
+          const channel = groupKey.split('|')[0]
+          const productIds = [...new Set(targets.map((t) => t.productId))]
+          const markets = [...new Set(targets.map((t) => t.marketplace))]
 
-        // PAUSE / RESUME / ZERO_PIN — resolve rows, fail-closed FBA exclusion.
-        const rows = await prisma.channelListing.findMany({
-          where: {
-            OR: targets.map((t) => ({ productId: t.productId, channel: t.channel, marketplace: t.marketplace })),
-          },
-          select: {
-            id: true, productId: true, channel: true, marketplace: true, region: true,
-            externalListingId: true, syncPaused: true, fulfillmentMethod: true, quantity: true,
-            product: { select: { fulfillmentMethod: true, sku: true } },
-          },
-        })
-        const eligible = rows.filter((r) => {
-          const fba = r.fulfillmentMethod === 'FBA' || (r.fulfillmentMethod == null && r.product?.fulfillmentMethod === 'FBA') || r.product?.fulfillmentMethod === 'FBA'
-          if (fba) result.skippedFba++
-          return !fba
-        })
-
-        if (body.action === 'PAUSE') {
-          const ids = eligible.filter((r) => !r.syncPaused).map((r) => r.id)
-          result.unchanged += eligible.length - ids.length
-          if (ids.length) {
-            const u = await prisma.channelListing.updateMany({ where: { id: { in: ids } }, data: { syncPaused: true } })
-            result.updated += u.count
-          }
-          await audit(eligible.map((r) => ({
-            scopeType: 'LISTING', scopeId: r.id, scopeName: `${r.product?.sku}@${r.channel}:${r.marketplace}`,
-            field: 'syncPaused', before: { syncPaused: r.syncPaused }, after: { syncPaused: true },
-          })), actor)
-        } else if (body.action === 'RESUME') {
-          const ids = eligible.filter((r) => r.syncPaused).map((r) => r.id)
-          result.unchanged += eligible.length - ids.length
-          if (ids.length) {
-            const u = await prisma.channelListing.updateMany({ where: { id: { in: ids } }, data: { syncPaused: false } })
-            result.updated += u.count
-            for (const r of eligible) if (r.syncPaused) recascadeProducts.add(r.productId)
-          }
-          await audit(eligible.map((r) => ({
-            scopeType: 'LISTING', scopeId: r.id, scopeName: `${r.product?.sku}@${r.channel}:${r.marketplace}`,
-            field: 'syncPaused', before: { syncPaused: r.syncPaused }, after: { syncPaused: false },
-          })), actor)
-        } else if (body.action === 'ZERO_PIN') {
-          // Safe-stop: pin at 0 and push the 0 — the listing stops selling
-          // NOW and stays stopped (visible as Pinned@0; resume via Set Follow).
-          const queueRows: Array<Record<string, unknown>> = []
-          for (const r of eligible) {
-            await prisma.channelListing.update({
-              where: { id: r.id },
-              data: { quantity: 0, quantityOverride: 0, followMasterQuantity: false, syncPaused: false, lastSyncStatus: 'PENDING' },
+          if (body.action === 'FOLLOW' || body.action === 'PIN') {
+            const r = await setFollowMasterQuantity({
+              productIds, channel: channel as never, markets, follow: body.action === 'FOLLOW', actor,
             })
-            result.updated++
-            queueRows.push({
+            result.updated += r.updated
+            result.skippedFba += r.skippedFba
+            result.unchanged += r.unchanged
+            if (r.error) {
+              // Mid-bulk chunk failure AFTER commits — report it, never pretend.
+              result.partial = true
+              const msg = `${body.action} stopped after ${r.updated} update(s) in ${groupKey}: ${r.error}` +
+                (r.remaining ? ` — ${r.remaining} row(s) not attempted; re-run the same action to continue (committed rows are no-ops)` : '')
+              result.error = result.error ? `${result.error} · ${msg}` : msg
+            }
+            // Audit what actually COMMITTED (r.results), not the requested
+            // targets — a mid-bulk failure must not log never-attempted rows.
+            await audit(
+              r.results
+                .filter((x) => x.action === 'FOLLOW' || x.action === 'PIN')
+                .map((x) => ({
+                  scopeType: 'LISTING', scopeId: `${x.listingId}`,
+                  scopeName: `${x.sku ?? '?'}@${x.channel}:${x.marketplace}`, field: 'followMasterQuantity',
+                  after: { follow: body.action === 'FOLLOW', quantity: x.quantity },
+                })), actor)
+            continue
+          }
+
+          if (body.action === 'BUFFER') {
+            const buffer = Math.max(0, Math.trunc(body.buffer ?? 0))
+            const r = await setStockBuffer({ productIds, channel: channel as never, markets, buffer, actor })
+            result.updated += r.updated
+            result.skippedFba += r.skippedFba
+            if (r.error) {
+              result.partial = true
+              const msg = `BUFFER stopped after ${r.updated} update(s) in ${groupKey}: ${r.error}` +
+                (r.remaining ? ` — ${r.remaining} row(s) not attempted; re-run to continue` : '')
+              result.error = result.error ? `${result.error} · ${msg}` : msg
+            }
+            await audit(
+              r.results
+                .filter((x) => x.action === 'BUFFER')
+                .map((x) => ({
+                  scopeType: 'LISTING', scopeId: `${x.listingId}`,
+                  scopeName: `${x.sku ?? '?'}@${x.channel}:${x.marketplace}`, field: 'stockBuffer', after: { buffer },
+                })), actor)
+            continue
+          }
+
+          // PAUSE / RESUME / ZERO_PIN — resolve rows, fail-closed FBA exclusion.
+          const rows = await prisma.channelListing.findMany({
+            where: {
+              OR: targets.map((t) => ({ productId: t.productId, channel: t.channel, marketplace: t.marketplace })),
+            },
+            select: {
+              id: true, productId: true, channel: true, marketplace: true, region: true,
+              externalListingId: true, syncPaused: true, fulfillmentMethod: true, quantity: true,
+              product: { select: { fulfillmentMethod: true, sku: true } },
+            },
+          })
+          const eligible = rows.filter((r) => {
+            const fba = r.fulfillmentMethod === 'FBA' || (r.fulfillmentMethod == null && r.product?.fulfillmentMethod === 'FBA') || r.product?.fulfillmentMethod === 'FBA'
+            if (fba) result.skippedFba++
+            return !fba
+          })
+
+          if (body.action === 'PAUSE') {
+            const ids = eligible.filter((r) => !r.syncPaused).map((r) => r.id)
+            result.unchanged += eligible.length - ids.length
+            if (ids.length) {
+              const u = await prisma.channelListing.updateMany({ where: { id: { in: ids } }, data: { syncPaused: true } })
+              result.updated += u.count
+            }
+            await audit(eligible.map((r) => ({
+              scopeType: 'LISTING', scopeId: r.id, scopeName: `${r.product?.sku}@${r.channel}:${r.marketplace}`,
+              field: 'syncPaused', before: { syncPaused: r.syncPaused }, after: { syncPaused: true },
+            })), actor)
+          } else if (body.action === 'RESUME') {
+            const ids = eligible.filter((r) => r.syncPaused).map((r) => r.id)
+            result.unchanged += eligible.length - ids.length
+            if (ids.length) {
+              const u = await prisma.channelListing.updateMany({ where: { id: { in: ids } }, data: { syncPaused: false } })
+              result.updated += u.count
+              for (const r of eligible) if (r.syncPaused) recascadeProducts.add(r.productId)
+            }
+            await audit(eligible.map((r) => ({
+              scopeType: 'LISTING', scopeId: r.id, scopeName: `${r.product?.sku}@${r.channel}:${r.marketplace}`,
+              field: 'syncPaused', before: { syncPaused: r.syncPaused }, after: { syncPaused: false },
+            })), actor)
+          } else if (body.action === 'ZERO_PIN') {
+            // Safe-stop: pin at 0 and push the 0 — the listing stops selling
+            // NOW and stays stopped (visible as Pinned@0; resume via Set Follow).
+            // One updateMany — the write is identical for every row, and N
+            // sequential round-trips made a 500-row Zero & Pin needlessly slow.
+            if (eligible.length) {
+              const u = await prisma.channelListing.updateMany({
+                where: { id: { in: eligible.map((r) => r.id) } },
+                data: { quantity: 0, quantityOverride: 0, followMasterQuantity: false, syncPaused: false, lastSyncStatus: 'PENDING' },
+              })
+              result.updated += u.count
+            }
+            const queueRows: Array<Record<string, unknown>> = eligible.map((r) => ({
               productId: r.productId,
               channelListingId: r.id,
               targetChannel: r.channel,
@@ -717,65 +821,86 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
               externalListingId: r.externalListingId ?? undefined,
               maxRetries: 3,
               holdUntil: new Date(),
-            })
+            }))
+            if (queueRows.length) {
+              await enqueueOutboundRowsInstant(prisma as never, queueRows as never, { source: 'SYNC_CONTROL_ZERO_PIN' })
+            }
+            await audit(eligible.map((r) => ({
+              scopeType: 'LISTING', scopeId: r.id, scopeName: `${r.product?.sku}@${r.channel}:${r.marketplace}`,
+              field: 'zeroPin', before: { quantity: r.quantity }, after: { quantity: 0, follow: false },
+            })), actor)
           }
-          if (queueRows.length) {
-            await enqueueOutboundRowsInstant(prisma as never, queueRows as never, { source: 'SYNC_CONTROL_ZERO_PIN' })
+        }
+      }
+
+      // ── SHARED lane (memberships) ──
+      if (memberships.length > 0) {
+        const or = memberships.map((t) => ({ itemId: t.itemId, marketplace: t.marketplace, sku: t.sku }))
+        const rows = await prisma.sharedListingMembership.findMany({
+          where: { OR: or },
+          select: { id: true, itemId: true, marketplace: true, sku: true, productId: true, followPool: true },
+        })
+        if (body.action === 'EXCLUDE' || body.action === 'INCLUDE') {
+          const want = body.action === 'INCLUDE'
+          const ids = rows.filter((r) => r.followPool !== want).map((r) => r.id)
+          result.unchanged += rows.length - ids.length
+          if (ids.length) {
+            const u = await prisma.sharedListingMembership.updateMany({ where: { id: { in: ids } }, data: { followPool: want } })
+            result.updated += u.count
+            if (want) for (const r of rows) if (r.productId) recascadeProducts.add(r.productId)
           }
-          await audit(eligible.map((r) => ({
-            scopeType: 'LISTING', scopeId: r.id, scopeName: `${r.product?.sku}@${r.channel}:${r.marketplace}`,
-            field: 'zeroPin', before: { quantity: r.quantity }, after: { quantity: 0, follow: false },
+          await audit(rows.map((r) => ({
+            scopeType: 'MEMBERSHIP', scopeId: r.id, scopeName: `${r.sku}@${r.itemId}`,
+            field: 'followPool', before: { followPool: r.followPool }, after: { followPool: want },
           })), actor)
-        }
-      }
-    }
-
-    // ── SHARED lane (memberships) ──
-    if (memberships.length > 0) {
-      const or = memberships.map((t) => ({ itemId: t.itemId, marketplace: t.marketplace, sku: t.sku }))
-      const rows = await prisma.sharedListingMembership.findMany({
-        where: { OR: or },
-        select: { id: true, itemId: true, marketplace: true, sku: true, productId: true, followPool: true },
-      })
-      if (body.action === 'EXCLUDE' || body.action === 'INCLUDE') {
-        const want = body.action === 'INCLUDE'
-        const ids = rows.filter((r) => r.followPool !== want).map((r) => r.id)
-        result.unchanged += rows.length - ids.length
-        if (ids.length) {
-          const u = await prisma.sharedListingMembership.updateMany({ where: { id: { in: ids } }, data: { followPool: want } })
+        } else if (body.action === 'BUFFER') {
+          const buffer = Math.max(0, Math.trunc(body.buffer ?? 0))
+          const u = await prisma.sharedListingMembership.updateMany({ where: { id: { in: rows.map((r) => r.id) } }, data: { stockBuffer: buffer } })
           result.updated += u.count
-          if (want) for (const r of rows) if (r.productId) recascadeProducts.add(r.productId)
+          for (const r of rows) if (r.productId) recascadeProducts.add(r.productId)
+          await audit(rows.map((r) => ({
+            scopeType: 'MEMBERSHIP', scopeId: r.id, scopeName: `${r.sku}@${r.itemId}`,
+            field: 'stockBuffer', after: { buffer },
+          })), actor)
+        } else {
+          // SCD.4 — NEVER fail after the listing lane has already written. An
+          // action that can't touch shared variants just reports them as skipped
+          // so the response stays truthful and the recascade below still runs.
+          result.skippedShared += memberships.length
         }
-        await audit(rows.map((r) => ({
-          scopeType: 'MEMBERSHIP', scopeId: r.id, scopeName: `${r.sku}@${r.itemId}`,
-          field: 'followPool', before: { followPool: r.followPool }, after: { followPool: want },
-        })), actor)
-      } else if (body.action === 'BUFFER') {
-        const buffer = Math.max(0, Math.trunc(body.buffer ?? 0))
-        const u = await prisma.sharedListingMembership.updateMany({ where: { id: { in: rows.map((r) => r.id) } }, data: { stockBuffer: buffer } })
-        result.updated += u.count
-        for (const r of rows) if (r.productId) recascadeProducts.add(r.productId)
-        await audit(rows.map((r) => ({
-          scopeType: 'MEMBERSHIP', scopeId: r.id, scopeName: `${r.sku}@${r.itemId}`,
-          field: 'stockBuffer', after: { buffer },
-        })), actor)
-      } else {
-        // SCD.4 — NEVER fail after the listing lane has already written. An
-        // action that can't touch shared variants just reports them as skipped
-        // so the response stays truthful and the recascade below still runs.
-        result.skippedShared += memberships.length
       }
-    }
 
-    // Control change → marketplace truth, immediately (background; sequential
-    // per the P2028 lesson).
-    if (recascadeProducts.size > 0) {
-      result.recascadeQueued = recascadeProducts.size
-      void recascadeAfterSyncControlChange([...recascadeProducts], actor).then((r) =>
-        logger.info('[sync-control] recascade after action complete', { ...r, actor }),
-      )
+      // Control change → marketplace truth, immediately (background; sequential
+      // per the P2028 lesson).
+      if (recascadeProducts.size > 0) {
+        result.recascadeQueued = recascadeProducts.size
+        void recascadeAfterSyncControlChange([...recascadeProducts], actor).then((r) =>
+          logger.info('[sync-control] recascade after action complete', { ...r, actor }),
+        )
+      }
+      return result
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      request.log.error({ err: e, action: body.action }, 'sync-control action failed')
+      if (result.updated > 0) {
+        // Writes already committed — never report them as a total failure, and
+        // still reconverge them: a RESUME that committed its updateMany but
+        // failed later must not strand its products un-recascaded (re-running
+        // would see them !syncPaused → unchanged → the recascade never fires).
+        if (recascadeProducts.size > 0) {
+          result.recascadeQueued = recascadeProducts.size
+          void recascadeAfterSyncControlChange([...recascadeProducts], actor).then((r) =>
+            logger.info('[sync-control] recascade after PARTIAL action', { ...r, actor }),
+          )
+        }
+        return {
+          ...result,
+          partial: true,
+          error: `${body.action} stopped after ${result.updated} update(s): ${msg} — re-run the same action to continue (already-written rows are no-ops)`,
+        }
+      }
+      return reply.code(500).send({ error: `${body.action} failed: ${msg}` })
     }
-    return result
   })
 
   app.post('/stock/sync-control/location-routes', async (request, reply) => {
@@ -1100,6 +1225,9 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       const { changes, skipped } = await computeSheetChanges(buf)
       const recascade = new Set<string>()
       let applied = 0
+      // SCT.3 — row failures must reach the operator, not just the server log:
+      // "42 applied" while 3 silently failed reads as everything-worked.
+      const failed: Array<{ key: string; error: string }> = []
 
       for (const c of changes) {
         try {
@@ -1131,23 +1259,25 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
             if (c.lane === 'SHARED' && c.itemId) {
               await prisma.sharedListingMembership.updateMany({ where: { itemId: c.itemId, marketplace: c.marketplace, sku: c.sku }, data: { followPool: true } })
             } else {
-              await prisma.channelListing.updateMany({ where: { productId: c.productId, channel: c.channel, marketplace: c.marketplace, fulfillmentMethod: { not: 'FBA' } }, data: { syncPaused: false } })
+              await prisma.channelListing.updateMany({ where: { productId: c.productId, channel: c.channel, marketplace: c.marketplace, OR: [{ fulfillmentMethod: null }, { fulfillmentMethod: { not: 'FBA' } }] }, data: { syncPaused: false } })
               await setFollowMasterQuantity({ productIds: [c.productId], channel: c.channel as never, markets: [c.marketplace], follow: true, actor })
             }
           } else if (c.target === 'PINNED') {
             await setFollowMasterQuantity({ productIds: [c.productId], channel: c.channel as never, markets: [c.marketplace], follow: false, actor })
             if (c.pinnedQty != null) {
-              await prisma.channelListing.updateMany({ where: { productId: c.productId, channel: c.channel, marketplace: c.marketplace, fulfillmentMethod: { not: 'FBA' } }, data: { quantity: c.pinnedQty, quantityOverride: c.pinnedQty, followMasterQuantity: false } })
+              await prisma.channelListing.updateMany({ where: { productId: c.productId, channel: c.channel, marketplace: c.marketplace, OR: [{ fulfillmentMethod: null }, { fulfillmentMethod: { not: 'FBA' } }] }, data: { quantity: c.pinnedQty, quantityOverride: c.pinnedQty, followMasterQuantity: false } })
             }
           } else if (c.target === 'PAUSED') {
-            await prisma.channelListing.updateMany({ where: { productId: c.productId, channel: c.channel, marketplace: c.marketplace, fulfillmentMethod: { not: 'FBA' } }, data: { syncPaused: true } })
+            await prisma.channelListing.updateMany({ where: { productId: c.productId, channel: c.channel, marketplace: c.marketplace, OR: [{ fulfillmentMethod: null }, { fulfillmentMethod: { not: 'FBA' } }] }, data: { syncPaused: true } })
           } else if (c.target === 'EXCLUDED' && c.itemId) {
             await prisma.sharedListingMembership.updateMany({ where: { itemId: c.itemId, marketplace: c.marketplace, sku: c.sku }, data: { followPool: false } })
           }
           await audit([{ scopeType: c.lane === 'SHARED' ? 'MEMBERSHIP' : 'LISTING', scopeId: `${c.productId}:${c.channel}:${c.marketplace}`, scopeName: c.key, field: 'mode', before: { mode: c.from }, after: { mode: c.to, pinnedQty: c.pinnedQty } }], actor)
           recascade.add(c.productId); applied++
         } catch (rowErr) {
-          logger.warn('[sync-control] import apply row failed', { key: c.key, error: rowErr instanceof Error ? rowErr.message : String(rowErr) })
+          const msg = rowErr instanceof Error ? rowErr.message : String(rowErr)
+          failed.push({ key: c.key, error: msg })
+          logger.warn('[sync-control] import apply row failed', { key: c.key, error: msg })
         }
       }
 
@@ -1155,7 +1285,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
         void recascadeAfterSyncControlChange([...recascade], actor).then((r) =>
           logger.info('[sync-control] recascade after Excel import complete', { ...r, actor }))
       }
-      return { applied, skipped, recascadeQueued: recascade.size }
+      return { applied, skipped, recascadeQueued: recascade.size, failed }
     } catch (err) {
       logger.error('[sync-control] import apply failed', { error: err instanceof Error ? err.message : String(err) })
       return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) })

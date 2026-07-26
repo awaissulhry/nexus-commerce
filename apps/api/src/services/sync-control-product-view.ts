@@ -142,6 +142,30 @@ export function familyKeyOf(row: { channel: string; marketplace: string; itemId?
   return row.itemId ? `${row.channel}:${row.marketplace}:${row.itemId}` : `${row.channel}:${row.marketplace}`
 }
 
+/** SCT.3 — the single act-on-what-you-see predicate. The /products endpoint
+ *  narrows each family's displayed children with it, and POST /actions narrows
+ *  a masterIds expansion with the SAME function — so a bulk action touches
+ *  exactly the rows the filtered view shows, never a hidden market. (Before
+ *  this, "filter Market=IT → Set Follow" silently flipped the family's DE/ES
+ *  listings too — a stealth refill right after an owner zeroes them.) */
+export interface SyncScope {
+  channels?: string[]
+  markets?: string[]
+  modes?: string[]
+  drift?: boolean
+}
+
+export function rowMatchesScope(
+  r: { channel: string; marketplace: string; mode: string; intendedQty?: number | null; liveQty?: number | null },
+  s: SyncScope,
+): boolean {
+  if (s.channels?.length && !s.channels.includes(r.channel)) return false
+  if (s.markets?.length && !s.markets.some((m) => marketMatches(r.marketplace, m) || r.marketplace === m)) return false
+  if (s.modes?.length && !s.modes.includes(r.mode)) return false
+  if (s.drift && !(r.mode !== 'FBA' && r.intendedQty != null && r.liveQty != null && r.intendedQty !== r.liveQty)) return false
+  return true
+}
+
 export function summarizeFamilies(
   rows: Array<SyncRowLike & { sku: string; marketplace: string; itemId?: string }>,
   ownerSkuByItemId: Map<string, string> = new Map(),

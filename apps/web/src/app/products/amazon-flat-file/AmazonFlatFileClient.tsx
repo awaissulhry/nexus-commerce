@@ -1423,14 +1423,18 @@ export default function AmazonFlatFileClient({
   // Live sync: reload rows from DB when the Matrix or another tab updates
   // channel prices. Skip if the user has unsaved edits — their work takes
   // priority and will overwrite the external change on next Save.
-  useInvalidationChannel('channel-pricing.updated', (event) => {
+  // SCT.3 — also listen for listing.updated: a Sync Control action (Pause /
+  // Zero & Pin / Follow) changes state this grid displays; without this the
+  // editor kept a stale Follow and a later Save could re-push the old intent.
+  // Same guards as below: self-emits ignored, dirty grids never clobbered.
+  useInvalidationChannel(['channel-pricing.updated', 'listing.updated'], (event) => {
     if (!productType) return
     // FFX.1 — ignore our OWN sync emit. syncToPlatform (Save / feed-DONE) fires
     // channel-pricing.updated; reacting to it here ran loadData(fromDB=true),
     // which overwrote a just-pulled grid + localStorage with the DB
     // representation (the "previous version") — worst after Publish, which
     // clears _dirty so the guard below no longer protects.
-    if ((event?.meta as { source?: string } | undefined)?.source === 'amazon-flat-file') return
+    if ((event?.meta as { source?: string } | undefined)?.source?.startsWith('amazon-flat-file')) return
     // FFX.2 — never force-overwrite local work. _dirty covers unsaved edits;
     // localDivergedRef covers a pulled-but-not-round-tripped grid even after
     // Publish clears _dirty. Surface the external change instead of clobbering.
@@ -2670,6 +2674,8 @@ export default function AmazonFlatFileClient({
               const body = await fr.json().catch(() => ({}))
               followChanged += body?.updated ?? 0
               matchedTotal += body?.matched ?? 0
+              // SCT.3 — the chunked endpoint can stop mid-bulk after commits.
+              if (body?.error) toast.warning(`Follow partially applied: ${body.error}${body?.remaining ? ` — ${body.remaining} row(s) left; save again to continue` : ''}`)
             } else throw new Error(`follow apply HTTP ${fr.status}`)
           }
           if (followChanged > 0) {
@@ -2712,6 +2718,12 @@ export default function AmazonFlatFileClient({
           parts.push('no matching live listing yet for the rows you edited')
         }
         toast.warning(`Follow/Buffer not applied to ${parts.join(' · ')}`)
+      }
+      // SCT.3 — the earlier emits fired BEFORE the Follow/Buffer applies, so a
+      // Sync Control tab refetched PRE-apply state and sat stale until its 30s
+      // poll. Emit once more now that every apply above has settled.
+      if (sentAnyApply) {
+        emitInvalidation({ type: 'listing.updated', meta: { source: 'amazon-flat-file-follow-apply', marketplace } })
       }
       return { errorSkus: [...errorSkus] }
     } catch (err) {

@@ -84,7 +84,11 @@ export default function SyncExcelBar({ exportQuery, notify, onApplied }: Props) 
       const res = await fetch(`${API}/api/stock/sync-control/import/apply`, { method: 'POST', credentials: 'include', body: fd })
       const d = await res.json()
       if (!res.ok) throw new Error(d?.error ?? `HTTP ${res.status}`)
-      notify(`Import applied: ${d.applied} change(s)${d.skipped?.length ? `, ${d.skipped.length} skipped` : ''}${d.recascadeQueued ? `, recascading ${d.recascadeQueued} product(s)` : ''}`)
+      if (d.failed?.length) {
+        notify(`Import PARTIAL: ${d.applied} applied, ${d.failed.length} FAILED — ${d.failed.slice(0, 3).map((f: { key: string; error: string }) => `${f.key}: ${f.error}`).join(' · ')}${d.failed.length > 3 ? ` · +${d.failed.length - 3} more (see server log)` : ''}`)
+      } else {
+        notify(`Import applied: ${d.applied} change(s)${d.skipped?.length ? `, ${d.skipped.length} skipped` : ''}${d.recascadeQueued ? `, recascading ${d.recascadeQueued} product(s)` : ''}`)
+      }
       emitInvalidation({ type: 'listing.updated', meta: { source: 'sync-control-excel-import', applied: d.applied } })
       setPreview(null)
       setPendingFile(null)

@@ -2,7 +2,7 @@
  * SCV.1 — product rollup reducer (pure).
  */
 import { describe, it, expect } from 'vitest'
-import { summarizeProductSync, marketMatches, resolveCanonicalMap, type SyncRowLike } from './sync-control-product-view.js'
+import { summarizeProductSync, marketMatches, resolveCanonicalMap, type SyncRowLike, rowMatchesScope } from './sync-control-product-view.js'
 
 const row = (over: Partial<SyncRowLike>): SyncRowLike => ({
   channel: 'EBAY',
@@ -190,5 +190,48 @@ describe('SCD.8 — multi-select filter contract (OR within a dimension)', () =>
     const sel = csvFilter('IT,DE')
     const kept = rows.filter((r) => sel.some((m) => marketMatches(r.marketplace, m) || r.marketplace === m))
     expect(kept).toHaveLength(3)
+  })
+})
+
+describe('rowMatchesScope — SCT.3 act-on-what-you-see (display ≡ action)', () => {
+  const row = (over: Partial<{ channel: string; marketplace: string; mode: string; intendedQty: number | null; liveQty: number | null }> = {}) => ({
+    channel: 'AMAZON', marketplace: 'IT', mode: 'FOLLOW', intendedQty: 5, liveQty: 5, ...over,
+  })
+
+  it('empty scope matches everything', () => {
+    expect(rowMatchesScope(row(), {})).toBe(true)
+  })
+
+  it('channel narrows', () => {
+    expect(rowMatchesScope(row(), { channels: ['AMAZON'] })).toBe(true)
+    expect(rowMatchesScope(row(), { channels: ['EBAY'] })).toBe(false)
+  })
+
+  it("market 'IT' matches both plain IT and EBAY_IT (normalisation)", () => {
+    expect(rowMatchesScope(row({ marketplace: 'IT' }), { markets: ['IT'] })).toBe(true)
+    expect(rowMatchesScope(row({ channel: 'EBAY', marketplace: 'EBAY_IT' }), { markets: ['IT'] })).toBe(true)
+    expect(rowMatchesScope(row({ marketplace: 'DE' }), { markets: ['IT'] })).toBe(false)
+  })
+
+  it('mode narrows', () => {
+    expect(rowMatchesScope(row({ mode: 'PINNED' }), { modes: ['PINNED'] })).toBe(true)
+    expect(rowMatchesScope(row({ mode: 'FOLLOW' }), { modes: ['PINNED'] })).toBe(false)
+  })
+
+  it('dimensions AND together on the SAME row — the old per-dimension .some() let different children satisfy different filters', () => {
+    // channel matches, market does not → the ROW must not match.
+    expect(rowMatchesScope(row({ marketplace: 'DE' }), { channels: ['AMAZON'], markets: ['IT'] })).toBe(false)
+    expect(rowMatchesScope(row(), { channels: ['AMAZON'], markets: ['IT'] })).toBe(true)
+  })
+
+  it('drift matches only real drift, and never an FBA row', () => {
+    expect(rowMatchesScope(row({ intendedQty: 5, liveQty: 3 }), { drift: true })).toBe(true)
+    expect(rowMatchesScope(row(), { drift: true })).toBe(false)
+    expect(rowMatchesScope(row({ mode: 'FBA', intendedQty: 5, liveQty: 3 }), { drift: true })).toBe(false)
+    expect(rowMatchesScope(row({ intendedQty: null, liveQty: 3 }), { drift: true })).toBe(false)
+  })
+
+  it('multi-select is a union within a dimension', () => {
+    expect(rowMatchesScope(row({ marketplace: 'DE' }), { markets: ['IT', 'DE'] })).toBe(true)
   })
 })

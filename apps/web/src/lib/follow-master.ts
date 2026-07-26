@@ -16,6 +16,9 @@ import { getBackendUrl } from './backend-url'
 export type FollowChannel = 'AMAZON' | 'EBAY'
 
 export interface FollowApplyResult {
+  /** Partial-failure contract (SCT.3): a later chunk failed after commits. */
+  error?: string
+  remaining?: number
   updated: number
   skippedFba: number
   unchanged: number
@@ -63,17 +66,26 @@ export async function applyBulkFollow(opts: ApplyBulkFollowOpts): Promise<Follow
       const body = await res.json().catch(() => ({}))
       throw new Error(body?.error ?? `Follow apply failed (HTTP ${res.status})`)
     }
-    const r = (await res.json()) as FollowApplyResult
+    const r = (await res.json()) as FollowApplyResult & { error?: string; remaining?: number }
     agg.updated += r.updated ?? 0
     agg.skippedFba += r.skippedFba ?? 0
     agg.unchanged += r.unchanged ?? 0
     agg.matched += r.matched ?? 0
     if (Array.isArray(r.results)) agg.results!.push(...r.results)
+    // SCT.3 — the chunked service can stop mid-bulk AFTER committing rows.
+    // Swallowing that here made a half-applied Follow look fully applied.
+    if (r.error) {
+      agg.error = agg.error ? `${agg.error} · ${r.error}` : r.error
+      agg.remaining = (agg.remaining ?? 0) + (r.remaining ?? 0)
+    }
   }
   return agg
 }
 
 export interface StockBufferResult {
+  /** Partial-failure contract (SCT.3): a later chunk failed after commits. */
+  error?: string
+  remaining?: number
   updated: number
   skippedFba: number
   unchanged: number
@@ -108,12 +120,16 @@ export async function applyBulkBuffer(opts: {
       const body = await res.json().catch(() => ({}))
       throw new Error(body?.error ?? `Buffer apply failed (HTTP ${res.status})`)
     }
-    const r = (await res.json()) as StockBufferResult
+    const r = (await res.json()) as StockBufferResult & { error?: string; remaining?: number }
     agg.updated += r.updated ?? 0
     agg.skippedFba += r.skippedFba ?? 0
     agg.unchanged += r.unchanged ?? 0
     agg.matched += r.matched ?? 0
     if (Array.isArray(r.results)) agg.results!.push(...r.results)
+    if (r.error) {
+      agg.error = agg.error ? `${agg.error} · ${r.error}` : r.error
+      agg.remaining = (agg.remaining ?? 0) + (r.remaining ?? 0)
+    }
   }
   return agg
 }

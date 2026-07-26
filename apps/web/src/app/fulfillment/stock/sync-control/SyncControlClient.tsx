@@ -15,6 +15,7 @@ import { GridToolbar, FilterBar, type FilterDimension } from '@/design-system/pa
 import { Button, Input, Pill, SegmentedControl } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { Tip, TipText } from './SyncTip'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
@@ -162,6 +163,35 @@ export default function SyncControlClient() {
 
   useEffect(() => { void loadOverview() }, [loadOverview])
   useEffect(() => { void loadRows() }, [loadRows])
+
+  // SCT.3 — the flat Listings view + summary tiles must track reality exactly
+  // like the Products grid (usePolledList) does: refetch on cross-tab
+  // invalidation (flat-file saves, stock imports, actions in other tabs),
+  // every 30s, and when the tab regains focus. Before this they loaded once
+  // per filter change and went stale until the operator touched something.
+  const refetchDebounce = useRef<number | null>(null)
+  const refetchAll = useCallback(() => {
+    if (refetchDebounce.current) window.clearTimeout(refetchDebounce.current)
+    refetchDebounce.current = window.setTimeout(() => {
+      refetchDebounce.current = null
+      void loadRows()
+      void loadOverview()
+    }, 200)
+  }, [loadRows, loadOverview])
+  useInvalidationChannel(
+    ['stock.adjusted', 'listing.updated', 'product.updated', 'product.created', 'listing.created', 'product.deleted', 'listing.deleted'],
+    refetchAll,
+  )
+  useEffect(() => {
+    const t = window.setInterval(refetchAll, 30_000)
+    const onVis = () => { if (!document.hidden) refetchAll() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.clearInterval(t)
+      document.removeEventListener('visibilitychange', onVis)
+      if (refetchDebounce.current) window.clearTimeout(refetchDebounce.current)
+    }
+  }, [refetchAll])
   useEffect(() => {
     const t = setTimeout(() => { setPage(1); setQ(qLive) }, 250)
     return () => clearTimeout(t)
@@ -202,9 +232,14 @@ export default function SyncControlClient() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`)
-      setNotice(`${action}: updated ${data.updated}, unchanged ${data.unchanged ?? 0}, FBA skipped ${data.skippedFba ?? 0}${data.recascadeQueued ? `, recascading ${data.recascadeQueued} product(s)` : ''}`)
-      setSelected(new Map())
+      if (!res.ok) throw new Error(data?.error ?? data?.message ?? `HTTP ${res.status}`)
+      if (data.error) {
+        // Keep the selection — "re-run to continue" must be one click.
+        setNotice(`${action} PARTIAL — ${data.error}`)
+      } else {
+        setNotice(`${action}: updated ${data.updated}, unchanged ${data.unchanged ?? 0}, FBA skipped ${data.skippedFba ?? 0}${data.recascadeQueued ? `, recascading ${data.recascadeQueued} product(s)` : ''}`)
+        setSelected(new Map())
+      }
       await Promise.all([loadRows(), loadOverview()])
     } catch (e) {
       setNotice(`${action} failed: ${e instanceof Error ? e.message : String(e)}`)

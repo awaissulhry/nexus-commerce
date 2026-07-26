@@ -37,6 +37,7 @@ import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { Spinner } from '@/design-system/primitives/Spinner'
 import { ProgressBar } from '@/design-system/components/ProgressBar'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import '@/design-system/styles/tokens.css'
@@ -912,6 +913,10 @@ function ImportWizardInner() {
             })
             // IM.3.5 — the import finished; the refresh-proof snapshot is done.
             try { sessionStorage.removeItem(WIZARD_SESSION_KEY) } catch { /* unavailable */ }
+            // SCT.3 — a stock import moves the pool AND may set Follow/Buffer
+            // control columns; an open Sync Control tab must reflect it now,
+            // not at its next 30s poll.
+            emitInvalidation({ type: 'stock.adjusted', meta: { source: 'stock-import-apply', jobId: detail.job.id } })
           }
         }
       } catch { /* transient poll errors — next tick retries */ }

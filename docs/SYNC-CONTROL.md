@@ -14,7 +14,7 @@
 
 ## Two views: Products (default) and Listings
 
-- **Products** — one row per product family (37 masters, not 1,760 listings): thumbnail, name, family, a **sync rollup** (Follow ×N · Pinned ×M…), **family stock** (units + variants-in-stock), and a **drift** dot (● = a listing's live quantity ≠ intended; ✓ = clean). Small families **expand inline** to their listings; big families (>20 variants) show **"Open ↗"** to a dedicated per-product page in a new tab. Select master rows → a bulk action applies to **all their non-FBA listings**.
+- **Products** — one row per product family (37 masters, not 1,760 listings): thumbnail, name, family, a **sync rollup** (Follow ×N · Pinned ×M…), **family stock** (units + variants-in-stock), and a **drift** dot (● = a listing's live quantity ≠ intended; ✓ = clean). Small families **expand inline** to their listings; big families (>20 variants) show **"Open ↗"** to a dedicated per-product page in a new tab. Select master rows → a bulk action applies to their non-FBA listings — **narrowed to the active filters** (SCT.3 act-on-what-you-see): with *Market = IT* set, Set Follow touches only IT rows and reports the rest as "outside filters untouched". With no filters it means the whole family, and the confirm dialog says which.
 - **Listings** — every listing flat: the finest per-row control (select individual listings).
 - **Per-product page** (`/sync-control/product/<id>`) — one product's full variant→listing tree with per-listing selection + its own Excel export/import.
 
@@ -60,3 +60,18 @@ Channel policies card → **New listings born paused**: listings created *after*
 - Controls changed here converge the marketplace immediately (background recascade), not on the next order.
 
 Scenario battery: `sync-control-scenarios.vitest.test.ts` (owner examples, permanent). API: `GET/POST /api/stock/sync-control/*`.
+
+## Bulk-write contract (SCT.3, 2026-07-26)
+
+- **Chunked transactions.** `setFollowMasterQuantity` / `setStockBuffer` process bulk targets in
+  chunks of 25, each its own transaction with an explicit 15s timeout. The old single giant
+  interactive tx hit Prisma's 5s P2028 timeout above ~10 products — every large FOLLOW from the
+  500/page UI died with a bare "Internal Server Error" (incident 2026-07-26).
+- **Partial honesty.** A chunk failing mid-bulk keeps the committed chunks and the response says
+  exactly how far it got (`error` + `remaining`); the UI shows "PARTIAL — … re-run to continue".
+  Re-running is safe: already-written rows are no-ops. A first-chunk failure is a clean 500 with
+  the real message — never Fastify's naked "Internal Server Error".
+- **Rolled-back chunks leak nothing** — counts and BullMQ enqueues merge only after commit.
+- **Act-on-what-you-see.** One predicate (`rowMatchesScope`) decides what the filtered Products
+  view displays *and* what a bulk action touches; the flat Listings view always sends explicit
+  row targets. 500/page + select-all + one action = one call (target cap 2000, master-bulk 3000).

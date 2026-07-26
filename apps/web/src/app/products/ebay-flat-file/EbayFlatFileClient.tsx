@@ -1481,7 +1481,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       const result = await applyBulkFollow({ productIds, channel: 'EBAY', markets: [mp], follow })
       const parts = [`${result.updated} → ${verb}`]
       if (result.unchanged) parts.push(`${result.unchanged} already ${follow ? 'following' : 'pinned'}`)
-      toast.success(parts.join(' · '))
+      if (result.error) {
+        // SCT.3 — chunked service stopped mid-bulk after commits: say so.
+        toast.warning(`Partially applied: ${result.error}${result.remaining ? ` — ${result.remaining} row(s) left; run again to continue` : ''}`)
+      } else {
+        toast.success(parts.join(' · '))
+      }
+      emitInvalidation({ type: 'listing.updated', meta: { source: 'ebay-flat-file-follow-apply' } })
       reloadGridPreservingEdits()
     } catch (e) {
       toast.error(`Couldn't apply Follow/Pinned — ${e instanceof Error ? e.message : String(e)}`)
@@ -1509,7 +1515,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       const res = await applyBulkBuffer({ productIds: bufferModal.productIds, channel: 'EBAY', markets: [mp], buffer })
       const parts = [`${res.updated} → buffer ${buffer}`]
       if (res.unchanged) parts.push(`${res.unchanged} already ${buffer}`)
-      toast.success(parts.join(' · '))
+      if (res.error) {
+        toast.warning(`Partially applied: ${res.error}${res.remaining ? ` — ${res.remaining} row(s) left; run again to continue` : ''}`)
+      } else {
+        toast.success(parts.join(' · '))
+      }
+      emitInvalidation({ type: 'listing.updated', meta: { source: 'ebay-flat-file-follow-apply' } })
       setBufferModal(null)
       reloadGridPreservingEdits()
     } catch (e) {

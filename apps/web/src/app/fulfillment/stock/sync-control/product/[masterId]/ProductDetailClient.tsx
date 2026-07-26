@@ -224,9 +224,14 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
         }),
       })
       const d = await res.json()
-      if (!res.ok) throw new Error(d?.error ?? `HTTP ${res.status}`)
-      setNotice(`${action}: updated ${d.updated}, unchanged ${d.unchanged ?? 0}, FBA skipped ${d.skippedFba ?? 0}${d.recascadeQueued ? `, recascading ${d.recascadeQueued} product(s)` : ''}`)
-      setSelected(new Set())
+      if (!res.ok) throw new Error(d?.error ?? d?.message ?? `HTTP ${res.status}`)
+      if (d.error) {
+        // Keep the selection — "re-run to continue" must be one click.
+        setNotice(`${action} PARTIAL — ${d.error}`)
+      } else {
+        setNotice(`${action}: updated ${d.updated}, unchanged ${d.unchanged ?? 0}, FBA skipped ${d.skippedFba ?? 0}${d.recascadeQueued ? `, recascading ${d.recascadeQueued} product(s)` : ''}`)
+        setSelected(new Set())
+      }
       emitInvalidation({ type: 'listing.updated', meta: { source: 'sync-control-product', masterId } })
     } catch (e) {
       setNotice(`${action} failed: ${e instanceof Error ? e.message : String(e)}`)

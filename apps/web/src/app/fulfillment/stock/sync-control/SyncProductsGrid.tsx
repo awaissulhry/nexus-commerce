@@ -12,7 +12,7 @@
  * refresh.
  */
 
-import { useCallback, useMemo, useState } from 'react'
+import { useEffect, useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Search, ChevronRight, ChevronDown, ExternalLink } from 'lucide-react'
 import { DataGrid, Pagination, type Column } from '@/design-system/components'
@@ -83,6 +83,11 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
   const [bufferVal, setBufferVal] = useState('')
   const [busy, setBusy] = useState(false)
   const [family, setFamily] = useState('')
+
+  // SCT.3 — search + family narrow the product LIST but are not part of the
+  // server-side action scope; a selection made before typing a search could
+  // still be acted on while hidden. Narrowing the list clears the selection.
+  useEffect(() => { setSelected(new Set()) }, [search, family])
   const confirm = useConfirm()
 
   const url = useMemo(() => {
@@ -162,11 +167,20 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
 
   const runAction = async (action: string, opts: { buffer?: number } = {}) => {
     if (selectedMasterIds.length === 0) { notify(`Select one or more products first.`); return }
+    // SCT.3 — the action is narrowed server-side to the rows the active
+    // filters show; the confirm dialog must say the same thing.
+    const scopeBits = [
+      filters.channels.length ? `channel ${filters.channels.join('/')}` : '',
+      filters.markets.length ? `market ${filters.markets.join('/')}` : '',
+      filters.modes.length ? `mode ${filters.modes.join('/')}` : '',
+      filters.drift ? 'drifted rows only (evaluated at apply time — drift moves as syncs converge)' : '',
+    ].filter(Boolean)
     const ok = await confirm({
       title: `${action.replace('_', ' ')} — ${selectedMasterIds.length} product${selectedMasterIds.length === 1 ? '' : 's'}`,
       description:
         `Applies to every non-FBA listing across ${selectedMasterIds.length} product${selectedMasterIds.length === 1 ? '' : 's'}` +
-        ` (all channels + markets). FBA stays Amazon-managed.` +
+        (scopeBits.length ? ` matching your filters (${scopeBits.join(', ')}) — other markets/listings stay untouched.` : ` (all channels + markets).`) +
+        ` FBA stays Amazon-managed.` +
         (action === 'ZERO_PIN' ? ' · pushes quantity 0 NOW and pins there.' : '') +
         (action === 'PAUSE' ? ' · freezes current quantities; nothing pushes until Resume.' : ''),
       confirmLabel: 'Apply',
@@ -185,12 +199,24 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, masterIds: expandedMasterIds, buffer: opts.buffer }),
+        body: JSON.stringify({
+          action, masterIds: expandedMasterIds, buffer: opts.buffer,
+          // Act-on-what-you-see: the server narrows the family expansion to
+          // rows matching these filters with the same predicate the grid uses.
+          scope: { channels: filters.channels, markets: filters.markets, modes: filters.modes, drift: filters.drift },
+        }),
       })
       const d = await res.json()
-      if (!res.ok) throw new Error(d?.error ?? `HTTP ${res.status}`)
-      notify(`${action}: updated ${d.updated}, unchanged ${d.unchanged ?? 0}, FBA skipped ${d.skippedFba ?? 0}${d.recascadeQueued ? `, recascading ${d.recascadeQueued} product(s)` : ''}`)
-      setSelected(new Set())
+      if (!res.ok) throw new Error(d?.error ?? d?.message ?? `HTTP ${res.status}`)
+      if (d.error) {
+        // Partial: some rows committed, then a later chunk failed. KEEP the
+        // selection — the message says "re-run to continue", so the re-run
+        // must be one click, not a re-hunt for the same products.
+        notify(`${action} PARTIAL — ${d.error}`)
+      } else {
+        notify(`${action}: updated ${d.updated}, unchanged ${d.unchanged ?? 0}, FBA skipped ${d.skippedFba ?? 0}${d.scopedOut ? `, ${d.scopedOut} outside filters untouched` : ''}${d.recascadeQueued ? `, recascading ${d.recascadeQueued} product(s)` : ''}`)
+        setSelected(new Set())
+      }
       emitInvalidation({ type: 'listing.updated', meta: { source: 'sync-control-products', masters: selectedMasterIds.length } })
       onChanged()
     } catch (e) {

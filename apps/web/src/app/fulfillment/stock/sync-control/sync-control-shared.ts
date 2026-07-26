@@ -155,7 +155,7 @@ export const CONTROL_HELP: Record<string, string> = {
   density: 'Row height only — Compact fits the most rows on screen, Spacious is easiest to read. It changes nothing about the data.',
   pageSize: 'How many rows to load at once. Large pages mean far fewer clicks when bulk-editing (500 shows nearly every listing on one page, so one Select all covers it); small pages render faster.',
   pagination: 'Move between pages. Your selection is kept when you change page, so you can gather rows across pages and act on them together.',
-  viewToggle: 'Products shows one row per real product family — expand it for its listings and act on the whole family at once. Listings shows every listing flat, for the finest per-row control.',
+  viewToggle: 'Products shows one row per real product family — expand it for its listings and bulk-act per product. With filters active, a bulk action touches only the listings matching them (never a hidden market). Listings shows every listing flat, for the finest per-row control.',
   selectAll: 'Select every row on this page. Amazon FBA rows cannot be selected: Amazon owns their quantity and Sync Control never writes it.',
   selectRow: 'Select this row for the bulk actions above.',
   // filters
