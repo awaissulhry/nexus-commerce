@@ -262,3 +262,39 @@ async function fetchLocations(
 }
 
 export const ebayAccountService = new EbayAccountService()
+
+/**
+ * ED v2 polish — business-policy DISPLAY names for the description theme's
+ * {{policies}} block. Mirrors the offer policy waterfall's final step: each
+ * candidate id is validated against THIS market's snapshot, and a missing or
+ * unknown id resolves to the market's first policy — exactly the id the offer
+ * ends up carrying after the 25007 guard's replacement. Display-only and
+ * fail-open: any error → undefined, so the theme simply renders without a
+ * policies block. NEVER throws and NEVER blocks a push.
+ */
+export async function resolvePolicyDisplayNames(
+  connectionId: string,
+  marketplaceId: string,
+  candidates: { fulfillmentId?: string; paymentId?: string; returnId?: string },
+  provider: Pick<EbayAccountService, 'getSnapshot'> = ebayAccountService,
+): Promise<{ shipping?: string; returns?: string; payment?: string } | undefined> {
+  try {
+    const snap = await provider.getSnapshot(connectionId, marketplaceId)
+    const nameFor = (list: EbayPolicySummary[], id?: string): string | undefined => {
+      const hit = (id ? list.find((p) => p.id === id) : undefined) ?? list[0]
+      const name = hit?.name?.trim()
+      return name || undefined
+    }
+    const shipping = nameFor(snap.fulfillmentPolicies, candidates.fulfillmentId)
+    const returns = nameFor(snap.returnPolicies, candidates.returnId)
+    const payment = nameFor(snap.paymentPolicies, candidates.paymentId)
+    if (!shipping && !returns && !payment) return undefined
+    return {
+      ...(shipping ? { shipping } : {}),
+      ...(returns ? { returns } : {}),
+      ...(payment ? { payment } : {}),
+    }
+  } catch {
+    return undefined
+  }
+}

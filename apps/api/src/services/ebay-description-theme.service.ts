@@ -95,6 +95,68 @@ async function loadGalleries(prisma: PrismaClient, productId: string, sku?: stri
   byGroup: DescriptionGalleryGroup[]
   rowImages?: string[]
 }> {
+  const first = await loadGalleriesForProduct(prisma, productId, sku, marketplace)
+  const isEmpty = (g: { shared: string[]; byGroup: DescriptionGalleryGroup[]; rowImages?: string[] }) =>
+    g.shared.length === 0 && g.byGroup.length === 0 && (!g.rowImages || g.rowImages.length === 0)
+  if (!isEmpty(first)) return first
+  // ED v2 polish — SHELL pool-parent gallery borrow (mirrors the Incident #41
+  // pictureUrls borrow in ebay-shared-listing-push.service.ts): a shell/
+  // childless product fronting a shared pool has no curated rows and no master
+  // gallery of its own, so its description gallery resolves against the POOL's
+  // parent instead — one extra pass of the same curated-then-master resolution,
+  // never recursive. Fail-open: any error keeps the empty-gallery result.
+  try {
+    const poolParentId = await findShellPoolParentId(prisma, productId)
+    if (poolParentId && poolParentId !== productId) {
+      const borrowed = await loadGalleriesForProduct(prisma, poolParentId, sku, marketplace)
+      if (!isEmpty(borrowed)) return borrowed
+    }
+  } catch { /* fail-open — empty gallery stays the answer */ }
+  return first
+}
+
+/**
+ * ED v2 polish — resolve the pool parent a SHELL product fronts: the product
+ * must be childless, its sku must appear as parentSku on ACTIVE
+ * SharedListingMembership rows, and those member products' common parent (the
+ * most-represented one when data is mixed) is the borrow target. Returns null
+ * whenever the product isn't a shell or no pool parent is resolvable.
+ */
+async function findShellPoolParentId(prisma: PrismaClient, productId: string): Promise<string | null> {
+  const self = await prisma.product.findFirst({ where: { id: productId }, select: { sku: true } })
+  if (!self?.sku) return null
+  const childCount = await prisma.product.count({ where: { parentId: productId, deletedAt: null } })
+  if (childCount > 0) return null
+  const memberships = await prisma.sharedListingMembership.findMany({
+    where: { parentSku: self.sku, status: 'ACTIVE' },
+    select: { productId: true },
+  })
+  const memberIds = [...new Set(memberships.map((m) => m.productId).filter((x): x is string => Boolean(x)))]
+  if (memberIds.length === 0) return null
+  const members = await prisma.product.findMany({
+    where: { id: { in: memberIds } },
+    select: { parentId: true },
+  })
+  const counts = new Map<string, number>()
+  for (const m of members) {
+    if (!m.parentId || m.parentId === productId) continue
+    counts.set(m.parentId, (counts.get(m.parentId) ?? 0) + 1)
+  }
+  let best: string | null = null
+  let bestN = 0
+  for (const [id, n] of counts) {
+    if (n > bestN) { best = id; bestN = n }
+  }
+  return best
+}
+
+/** One pass of the curated-then-master resolution for ONE product id (the
+ *  pre-borrow body of loadGalleries, unchanged in behaviour). */
+async function loadGalleriesForProduct(prisma: PrismaClient, productId: string, sku?: string, marketplace?: string): Promise<{
+  shared: string[]
+  byGroup: DescriptionGalleryGroup[]
+  rowImages?: string[]
+}> {
   const curated = await prisma.listingImage.findMany({
     where: { productId, platform: 'EBAY', mediaType: 'IMAGE' },
     orderBy: { position: 'asc' },

@@ -17,7 +17,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 import { ebayAuthService } from '../services/ebay-auth.service.js';
-import { ebayAccountService } from '../services/ebay-account.service.js';
+import { ebayAccountService, resolvePolicyDisplayNames } from '../services/ebay-account.service.js';
 import { EbayCategoryService } from '../services/ebay-category.service.js';
 import { syncActivatedListings } from '../services/listing-activation-sync.service.js';
 import { enqueueContentSyncIfEnabled } from '../services/content-auto-publish.service.js';
@@ -2180,6 +2180,18 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           // ONE description at the group level, so the theme renders per-group
           // (colour-sectioned) galleries into it. Inert without a theme; render
           // errors fall back to the raw body — never blocks a push.
+          // ED v2 polish — {{policies}}: the same candidate ids pushVariationGroup
+          // resolves for the offers below (parent row → connection default →
+          // this market's snapshot guard), mapped to display names. Display-only,
+          // fail-open, and a cache warm-up for the push's own snapshot call.
+          const famConnPolicies = (((connection.connectionMetadata ?? {}) as Record<string, unknown>).ebayPolicies ?? {}) as {
+            fulfillmentPolicyId?: string; paymentPolicyId?: string; returnPolicyId?: string;
+          }
+          const famPolicyNames = await resolvePolicyDisplayNames(connection.id, marketplaceId, {
+            fulfillmentId: (parentRowForKey.fulfillment_policy_id as string | undefined) || famConnPolicies.fulfillmentPolicyId,
+            paymentId: (parentRowForKey.payment_policy_id as string | undefined) || famConnPolicies.paymentPolicyId,
+            returnId: (parentRowForKey.return_policy_id as string | undefined) || famConnPolicies.returnPolicyId,
+          })
           const themedFamily = await renderListingDescriptionSafe(prisma, {
             productId: String(parentRowForKey._productId ?? ''),
             marketplace: mp,
@@ -2187,6 +2199,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             body: parentContent.description ?? '',
             title: parentContent.title ?? String(parentRowForKey.title ?? ''),
             subtitle: parentContent.subtitle,
+            policies: famPolicyNames,
           })
           if (themedFamily.warnings.length > 0) {
             request.log.info({ family: resolvedGroupKey, mp, warnings: themedFamily.warnings }, 'ebay-push description-theme warnings')
@@ -2539,6 +2552,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             // ED.2 — dynamic description: wrap this market's body in its assigned
             // theme (auto gallery/specs/policy blocks). Inert without a theme;
             // any render error falls back to the raw body — never blocks a push.
+            // ED v2 polish — {{policies}}: display names for the very ids this
+            // offer carries (snapshot is 5-min cached, so this is a cache hit
+            // after the waterfall above). Display-only; absent on any failure.
+            const singlePolicyNames = await resolvePolicyDisplayNames(connection.id, marketplaceId, {
+              fulfillmentId: sFulfillmentId || undefined,
+              paymentId: sPaymentId || undefined,
+              returnId: sReturnId || undefined,
+            })
             const themedSingle = await renderListingDescriptionSafe(prisma, {
               productId: String(row._productId ?? ''),
               marketplace: mp,
@@ -2547,6 +2568,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               body: marketContent.description ?? '',
               title: marketContent.title ?? String(row.title ?? ''),
               subtitle: marketContent.subtitle,
+              policies: singlePolicyNames,
             })
             if (themedSingle.warnings.length > 0) {
               request.log.info({ sku, mp, warnings: themedSingle.warnings }, 'ebay-push description-theme warnings')
