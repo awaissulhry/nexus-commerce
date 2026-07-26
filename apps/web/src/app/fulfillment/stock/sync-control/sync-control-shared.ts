@@ -125,15 +125,15 @@ export const COLUMN_HELP: Record<string, string> = {
  *  because these buttons move live marketplace quantities within seconds. */
 export const ACTION_HELP: Record<string, string> = {
   FOLLOW:
-    'Set Follow — the marketplace quantity starts tracking the shared warehouse pool. Every later stock change (a sale, a restock, a stock import) is pushed automatically within seconds, and any pinned number is cleared. Amazon FBA rows are always skipped. This is the normal hands-off mode, and it is also how you undo Pin or Zero & Pin.',
+    'Set Follow — the marketplace quantity starts tracking the shared warehouse pool. Every later stock change (a sale, a restock, a stock import) is pushed automatically within seconds, and any pinned number is cleared. Amazon FBA rows are always skipped. This is the normal hands-off mode, and it is also how you undo Pin or Zero & Pin. Amazon EU note: Amazon keeps ONE quantity per SKU across IT/DE/FR/ES, so Follow must cover every EU market of a SKU — a mixed follow/pin split is refused.',
   PIN:
-    'Pin — freeze each selected listing at the quantity that is live right now. The pool can move freely; the marketplace number will not follow it again until you press Set Follow. Use it to hold a listing at a number you chose by hand, e.g. reserving units for a wholesale order. Nothing is pushed at the moment you pin.',
+    'Pin — freeze each selected listing at the quantity that is live right now. The pool can move freely; the marketplace number will not follow it again until you press Set Follow. Use it to hold a listing at a number you chose by hand, e.g. reserving units for a wholesale order. Nothing is pushed at the moment you pin. Amazon EU note: one quantity per SKU across IT/DE/FR/ES — a pin must cover every EU market of the SKU or it is refused.',
   PAUSE:
     'Pause — stop sending any quantity to the marketplace for the selected rows. Whatever is live stays live and untouched, and no push happens until you Resume. It does not delist, hide, or zero the listing, and it does not change warehouse stock. Use it while investigating a problem or during a stocktake.',
   RESUME:
     'Resume — undo Pause. Pushing restarts and each row is re-cascaded immediately, so the live quantity is brought back in line with the pool (or with its pinned number) on the next push, normally within seconds. Safe to press on rows that were never paused.',
   ZERO_PIN:
-    'Zero & Pin — pushes quantity 0 to the marketplace NOW and pins it there, so the listing becomes unbuyable within seconds. It does not delist the listing and it does not touch warehouse stock. Use it only to stop sales instantly: a safety recall, a wrong price, a confirmed oversell. Undo with Set Follow, which lets the pool refill the quantity.',
+    'Zero & Pin — pushes quantity 0 to the marketplace NOW and pins it there, so the listing becomes unbuyable within seconds. It does not delist the listing and it does not touch warehouse stock. Use it only to stop sales instantly: a safety recall, a wrong price, a confirmed oversell. Undo with Set Follow, which lets the pool refill the quantity. Amazon EU note: Amazon keeps ONE quantity per SKU across IT/DE/FR/ES — zeroing one market zeroes them all, so a partial-market Zero & Pin is refused; to stop selling in a single market, close that offer in Seller Central.',
   EXCLUDE:
     'Exclude — leave the selected shared eBay variants out of the pooled quantity, so their units stop counting toward that eBay item’s advertised stock. Applies only to shared-SKU rows (one eBay item selling several variants); ordinary listing rows are skipped and reported back as skipped.',
   INCLUDE:

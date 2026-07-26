@@ -28,6 +28,7 @@ import { ebayAuthService } from "./ebay-auth.service.js";
 import { listingPublishService } from "./listing-publish.service.js";
 import { resolveComplianceById, buildShopifyComplianceMetafields } from "./compliance-resolver.service.js";
 import { computeAvailableToPublish } from "./available-to-publish.service.js";
+import { detectEuIntentConflict, AMAZON_EU_SHARED_MARKETS, EU_GUARD_REMEDY } from "./amazon-eu-quantity-guard.js";
 import { resolveMembershipIntended } from "./sync-control-core.js";
 import { loadChannelPolicies, policyFor } from "./sync-control-policy.service.js";
 import { publishOrderEvent } from "./order-events.service.js";
@@ -959,6 +960,63 @@ export class OutboundSyncService {
             ts: Date.now(),
           })
         } catch { /* observability must never break the sync */ }
+      }
+    }
+    // SCT.4 — Amazon EU SHARED-QUANTITY belt (kill-switch: NEXUS_EU_SHARED_QTY_GUARD=0).
+    // Amazon keeps ONE merchant quantity per SKU across EU marketplaces (proved
+    // 2026-07-26: 302 market-scoped Zero&Pins blanked the whole IT storefront).
+    // If this SKU's sibling EU rows disagree on the shared number, pushing ANY
+    // side would silently overwrite the other market's intent — refuse, log a
+    // conflict, and let the operator align the modes instead.
+    if (
+      process.env.NEXUS_EU_SHARED_QTY_GUARD !== '0' &&
+      !isFba &&
+      payload.quantity !== undefined &&
+      product?.id &&
+      AMAZON_EU_SHARED_MARKETS.has(String(cl?.marketplace ?? '').toUpperCase())
+    ) {
+      try {
+        const siblings = await prisma.channelListing.findMany({
+          where: {
+            productId: product.id,
+            channel: 'AMAZON',
+            isPublished: true,
+            listingStatus: { notIn: ['ENDED', 'REMOVED'] },
+          },
+          select: {
+            marketplace: true, followMasterQuantity: true, quantityOverride: true,
+            quantity: true, syncPaused: true, fulfillmentMethod: true,
+          },
+        })
+        const euRows = siblings.map((sib) => ({
+          marketplace: sib.marketplace,
+          followMasterQuantity: sib.followMasterQuantity,
+          quantityOverride: sib.quantityOverride,
+          quantity: sib.quantity,
+          syncPaused: sib.syncPaused,
+          isFba: sib.fulfillmentMethod === 'FBA',
+        }))
+        const verdict = detectEuIntentConflict(euRows)
+        if (verdict.conflict) {
+          const message = `EU shared-quantity conflict for ${sku}: ${verdict.detail}. Push refused so no market's intent is silently overwritten. ${EU_GUARD_REMEDY}`
+          try {
+            const { syncHealthService } = await import('./sync-health.service.js')
+            await syncHealthService.logConflict({
+              channel: 'AMAZON',
+              conflictType: 'EU_SHARED_QTY_CONFLICT',
+              message,
+              productId: product.id,
+              localData: { rows: euRows },
+              remoteData: { attemptedQuantity: payload.quantity, marketplace: cl?.marketplace ?? marketplaceId },
+            })
+          } catch { /* observability best-effort */ }
+          return { success: false, queueId, channel: "AMAZON", status: "SKIPPED", message, error: "eu-shared-qty-conflict" };
+        }
+      } catch (guardErr) {
+        // Guard infrastructure failing must not stop legitimate pushes — but say so.
+        logger.warn('[outbound-sync] EU shared-qty guard check failed (push allowed)', {
+          sku, error: guardErr instanceof Error ? guardErr.message : String(guardErr),
+        })
       }
     }
     const amazonPayload = buildAmazonListingPatch(payload, marketplaceId, productType, isFba ? "FBA" : "FBM");

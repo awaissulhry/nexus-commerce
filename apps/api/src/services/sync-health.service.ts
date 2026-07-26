@@ -32,6 +32,9 @@ export type ConflictType =
   | 'LATENCY_BREACH'
   // P0c — Amazon's actual quantity diverges from intended (read-back reconcile)
   | 'CHANNEL_QTY_READBACK'
+  // SCT.4 — Amazon EU rows disagree on the ONE shared merchant quantity; a
+  // push was refused so no market's intent got silently overwritten.
+  | 'EU_SHARED_QTY_CONFLICT'
   // P0c — per-channel publish failure-rate breach (last hour)
   | 'PUBLISH_FAILURE_RATE'
   // P0c — auth-class publish failures (403/Unauthorized/invalid_grant): the

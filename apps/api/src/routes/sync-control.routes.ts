@@ -26,6 +26,7 @@ import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-mast
 import { recascadeAfterSyncControlChange } from '../services/stock-movement.service.js'
 import { enqueueOutboundRowsInstant } from '../services/outbound-enqueue.js'
 import { summarizeProductSync, marketMatches, omitChildrenInList, resolveCanonicalMap, canonicalStem, INLINE_PREVIEW_ROWS, summarizeFamilies, familyKeyOf, rowMatchesScope, type SyncScope } from '../services/sync-control-product-view.js'
+import { projectActionAndDetect, AMAZON_EU_SHARED_MARKETS, EU_GUARD_REMEDY } from '../services/amazon-eu-quantity-guard.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../services/product-read-cache.service.js'
 import { buildSyncControlWorkbook, parseSyncControlWorkbook, normalizeModeCell } from '../services/sync-control-excel.js'
 
@@ -684,6 +685,58 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
         })
       }
       // Master-bulk legitimately expands large (a 49-variant family ≈ 300 rows).
+      // SCT.4 — Amazon EU shared-quantity PRE-WRITE guard. Amazon keeps ONE
+      // merchant quantity per SKU across EU marketplaces (proved 2026-07-26:
+      // 302 market-scoped Zero&Pins blanked the whole IT storefront). Refuse,
+      // BEFORE anything is written, any action that would leave a product's
+      // Amazon EU rows intending different numbers.
+      if (['FOLLOW', 'PIN', 'ZERO_PIN'].includes(body.action)) {
+        const euTargets = listings.filter(
+          (t) => t.channel === 'AMAZON' && AMAZON_EU_SHARED_MARKETS.has(t.marketplace.toUpperCase()),
+        )
+        if (euTargets.length > 0) {
+          const pids = [...new Set(euTargets.map((t) => t.productId))]
+          const euRows = await prisma.channelListing.findMany({
+            where: { productId: { in: pids }, channel: 'AMAZON', isPublished: true, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
+            select: {
+              productId: true, marketplace: true, followMasterQuantity: true, quantityOverride: true,
+              quantity: true, syncPaused: true, fulfillmentMethod: true,
+              product: { select: { sku: true } },
+            },
+          })
+          const targetsByPid = new Map<string, Set<string>>()
+          for (const t of euTargets) {
+            const set = targetsByPid.get(t.productId) ?? new Set<string>()
+            set.add(t.marketplace.toUpperCase())
+            targetsByPid.set(t.productId, set)
+          }
+          const conflicts: string[] = []
+          for (const [pid, mkts] of targetsByPid) {
+            const prodRows = euRows
+              .filter((r) => r.productId === pid)
+              .map((r) => ({
+                marketplace: r.marketplace,
+                followMasterQuantity: r.followMasterQuantity,
+                quantityOverride: r.quantityOverride,
+                quantity: r.quantity,
+                syncPaused: r.syncPaused,
+                isFba: r.fulfillmentMethod === 'FBA',
+              }))
+            const v = projectActionAndDetect(prodRows, mkts, body.action as 'FOLLOW' | 'PIN' | 'ZERO_PIN')
+            if (v.conflict) conflicts.push(`${euRows.find((r) => r.productId === pid)?.product?.sku ?? pid}: ${v.detail}`)
+          }
+          if (conflicts.length > 0) {
+            return reply.code(400).send({
+              error:
+                `${body.action} refused — it would leave ${conflicts.length} SKU(s) with contradictory Amazon EU ` +
+                `quantity intents. e.g. ${conflicts.slice(0, 2).join(' · ')}. ${EU_GUARD_REMEDY}`,
+              euConflict: true,
+              conflicts: conflicts.slice(0, 20),
+            })
+          }
+        }
+      }
+
       // SCT.2 — 500/page is selectable, and the selection survives paging, so a
       // direct (non-master) selection can legitimately exceed one page.
       const cap = body.masterIds?.length ? 3000 : 2000

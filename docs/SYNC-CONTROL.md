@@ -75,3 +75,21 @@ Scenario battery: `sync-control-scenarios.vitest.test.ts` (owner examples, perma
 - **Act-on-what-you-see.** One predicate (`rowMatchesScope`) decides what the filtered Products
   view displays *and* what a bulk action touches; the flat Listings view always sends explicit
   row targets. 500/page + select-all + one action = one call (target cap 2000, master-bulk 3000).
+
+## Amazon EU shared quantity (SCT.4, 2026-07-26)
+
+**Amazon keeps ONE merchant-fulfilled quantity per SKU across the EU marketplaces**
+(IT/DE/FR/ES…). Proved twice on 2026-07-26: the single-SKU DE pilot (zeroing DE
+zeroed IT live within a minute) and the 18:42 incident (302 market-scoped
+Zero & Pins on DE/ES/FR blanked the whole IT storefront; restored 302→Follow).
+
+Two guards now make contradictory per-market intents unrepresentable:
+- **Pre-write (route):** FOLLOW/PIN/ZERO_PIN on Amazon EU rows is refused with a
+  400 if it would leave any SKU's EU rows intending different numbers. Aligned
+  actions (all markets together) pass.
+- **Push belt (outbound sync):** any quantity push for a SKU whose EU rows
+  currently disagree is SKIPPED and logged as `EU_SHARED_QTY_CONFLICT` in sync
+  health — imports, heals, cascades and stale queue rows can't sneak past.
+  Kill-switch: `NEXUS_EU_SHARED_QTY_GUARD=0`.
+
+Per-market suppression is a **Seller Central offer-close**, never a quantity.
