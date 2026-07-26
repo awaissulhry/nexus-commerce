@@ -1285,11 +1285,69 @@ export class OutboundSyncService {
         !!payload.title ||
         !!payload.description ||
         !!(payload.images && payload.images.length > 0);
-      if (touchesItem) {
+      // ── THE IMAGE REVERTER, FOUND 2026-07-26 ─────────────────────────────
+      // A QUANTITY-ONLY sync used GET-merge-PUT: it round-tripped the ENTIRE
+      // inventory_item through eBay's EVENTUALLY-CONSISTENT read to change one
+      // number. When it ran seconds after an image publish (which it always
+      // did — the publish itself triggers the stock fan-out), the GET returned
+      // the PRE-publish item (old Amazon-CDN images) and the PUT wrote that
+      // stale snapshot back, silently reinstating the old images. Every image
+      // publish scheduled its own destruction; the operator watched curated
+      // photos "revert" within minutes, with zero errors anywhere.
+      //
+      // Quantity-only updates now use eBay's DEDICATED endpoint,
+      // bulk_update_price_quantity: it changes quantity (and the offer floor)
+      // WITHOUT replacing the item — no GET, no merge, no stale replay. A
+      // quantity sync is now STRUCTURALLY INCAPABLE of touching images. The
+      // offer's availableQuantity rides the same call, which retires the 25004
+      // parked-offer deadlock for this path too.
+      const contentTouched =
+        !!payload.title || !!payload.description || !!(payload.images && payload.images.length > 0);
+      if (payload.quantity !== undefined && !contentTouched) {
+        // Offer id (read of the OFFER, never the item — zero image risk).
+        let offerId: string | null = null;
+        try {
+          const bySku = await fetch(
+            `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
+            { headers },
+          );
+          if (bySku.ok) offerId = ((await bySku.json().catch(() => ({}))) as { offers?: Array<{ offerId?: string }> }).offers?.[0]?.offerId ?? null;
+        } catch { /* unpublished listing — item-level quantity alone is fine */ }
+        const bulkBody = {
+          requests: [{
+            sku,
+            shipToLocationAvailability: { quantity: payload.quantity },
+            ...(offerId ? { offers: [{ offerId, availableQuantity: payload.quantity }] } : {}),
+          }],
+        };
+        const bulkRes = await fetch(`${apiBase}/sell/inventory/v1/bulk_update_price_quantity`, {
+          method: "POST", headers, body: JSON.stringify(bulkBody),
+        });
+        const bulkJson = bulkRes.ok
+          ? ((await bulkRes.json().catch(() => ({}))) as { responses?: Array<{ statusCode?: number; errors?: Array<{ message?: string }> }> })
+          : null;
+        const rowStatus = bulkJson?.responses?.[0]?.statusCode ?? (bulkRes.ok ? 200 : bulkRes.status);
+        if (!bulkRes.ok || rowStatus >= 300) {
+          const detail = bulkJson?.responses?.[0]?.errors?.map((e) => e.message).join(" | ")
+            ?? (await bulkRes.text().catch(() => "")).slice(0, 300);
+          return ebayFail(`bulk_update_price_quantity ${rowStatus}: ${detail}`, "failed", rowStatus);
+        }
+        // fall through to 7b (price/offer handling) below — item untouched.
+      } else if (touchesItem) {
         const itemUrl = `${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
         let existing: Record<string, any> = {};
         const getRes = await fetch(itemUrl, { method: "GET", headers });
         if (getRes.ok) existing = (await getRes.json().catch(() => ({}))) as Record<string, any>;
+        // WIPE GUARD: createOrReplace REPLACES the whole item. If the GET
+        // failed (rate-limit, blip) `existing` is {}, and a content PUT built
+        // from it would DELETE the listing's product data (images included).
+        // Never write a full replacement assembled from an empty read.
+        if (!existing.product && !(payload.title && payload.description)) {
+          return ebayFail(
+            `inventory_item GET ${getRes.status} — refusing content PUT built from an empty read (would wipe product data)`,
+            "failed", getRes.status,
+          );
+        }
         const itemBodyJson = JSON.stringify(mergeEbayInventoryItem(existing, payload));
         const putRes = await fetch(itemUrl, { method: "PUT", headers, body: itemBodyJson });
         if (!(putRes.ok || putRes.status === 204)) {
