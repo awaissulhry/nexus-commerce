@@ -134,8 +134,15 @@ export async function closeMarketOffers(opts: {
         offerValue = offerInstancesFor(raw?.attributes, marketplaceId)
         const liveType = raw?.summaries?.[0]?.productType
         if (liveType) productType = String(liveType).toUpperCase()
-      } catch { /* snapshot best-effort — DB fallback below */ }
+      } catch (snapErr) {
+        logger.warn('market-offer close: live snapshot read failed (DB fallback)', {
+          sku, marketplaceId, error: snapErr instanceof Error ? snapErr.message : String(snapErr),
+        })
+      }
       if (offerValue.length === 0) {
+        // Diagnostic (SCT.6 pilot found 'db' fallback on a healthy listing):
+        // record WHAT the live read returned so snapshot fidelity is provable.
+        logger.warn('market-offer close: no live purchasable_offer instance — using DB price snapshot', { sku, marketplaceId })
         snapshotSource = 'db'
         offerValue = [{
           marketplace_id: marketplaceId,
