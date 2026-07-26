@@ -218,6 +218,45 @@ export default function SyncControlClient() {
     })
     if (!ok) return
     setBusy(true)
+
+    // SCT.6b — Close/Reopen make 1-2 Amazon API calls PER ROW; a big selection
+    // on one HTTP request outlives the browser timeout and false-reports
+    // "Failed to fetch" while the server keeps going (the 302-row close DID
+    // fully succeed behind exactly that error). Batch client-side with live
+    // progress so what you see is always what happened.
+    if (action === 'CLOSE_OFFER' || action === 'REOPEN_OFFER') {
+      const targets = l.map((r) => ({ productId: r.productId, channel: r.channel, marketplace: r.marketplace }))
+      const BATCH = 20
+      const agg = { updated: 0, skippedFba: 0, unchanged: 0 }
+      try {
+        for (let i = 0; i < targets.length; i += BATCH) {
+          setNotice(`${action.replace('_', ' ')}: ${i}/${targets.length} done — working…`)
+          const res = await fetch(`${API}/api/stock/sync-control/actions`, {
+            method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, listings: targets.slice(i, i + BATCH) }),
+          })
+          const d = await res.json()
+          if (!res.ok) {
+            setNotice(`${action} stopped at ${i}/${targets.length}: ${d?.error ?? `HTTP ${res.status}`} — selection kept, run again to continue (done rows are skipped automatically)`)
+            return
+          }
+          agg.updated += d.updated ?? 0; agg.skippedFba += d.skippedFba ?? 0; agg.unchanged += d.unchanged ?? 0
+          if (d.error) {
+            setNotice(`${action} PARTIAL at ~${Math.min(i + BATCH, targets.length)}/${targets.length} — ${d.error}`)
+            return
+          }
+        }
+        setNotice(`${action}: updated ${agg.updated}, unchanged ${agg.unchanged}, FBA skipped ${agg.skippedFba}`)
+        setSelected(new Map())
+        await Promise.all([loadRows(), loadOverview()])
+      } catch (e) {
+        setNotice(`${action} stopped: ${e instanceof Error ? e.message : String(e)} — selection kept, run again to continue`)
+      } finally {
+        setBusy(false)
+      }
+      return
+    }
+
     setNotice(null)
     try {
       const res = await fetch(`${API}/api/stock/sync-control/actions`, {

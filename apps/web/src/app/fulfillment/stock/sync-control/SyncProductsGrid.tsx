@@ -189,6 +189,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
     })
     if (!ok) return
     setBusy(true)
+
     // SCD.3 — a group's action must hit ALL its listings: the canonical master
     // AND the duplicate copies folded into it (memberMasterIds). The server's
     // masterIds expansion + shared-pool memberships then cover every listing.
@@ -196,6 +197,44 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
       const p = products.find((x) => x.masterId === gid)
       return [gid, ...(p?.memberMasterIds ?? [])]
     }))]
+
+    // SCT.6b — Close/Reopen run one FAMILY per request (1-2 Amazon calls per
+    // row): one long request would outlive the browser timeout and
+    // false-report failure while the server kept working.
+    if (action === 'CLOSE_OFFER' || action === 'REOPEN_OFFER') {
+      const agg = { updated: 0, skippedFba: 0, unchanged: 0 }
+      try {
+        for (let i = 0; i < expandedMasterIds.length; i++) {
+          notify(`${action.replace('_', ' ')}: product ${i + 1}/${expandedMasterIds.length}…`)
+          const res = await fetch(`${API}/api/stock/sync-control/actions`, {
+            method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action, masterIds: [expandedMasterIds[i]],
+              scope: { channels: filters.channels, markets: filters.markets, modes: filters.modes, drift: filters.drift },
+            }),
+          })
+          const d = await res.json()
+          if (!res.ok) {
+            notify(`${action} stopped at product ${i + 1}/${expandedMasterIds.length}: ${d?.error ?? `HTTP ${res.status}`} — selection kept, run again to continue`)
+            return
+          }
+          agg.updated += d.updated ?? 0; agg.skippedFba += d.skippedFba ?? 0; agg.unchanged += d.unchanged ?? 0
+          if (d.error) {
+            notify(`${action} PARTIAL at product ${i + 1}/${expandedMasterIds.length} — ${d.error}`)
+            return
+          }
+        }
+        notify(`${action}: updated ${agg.updated}, unchanged ${agg.unchanged}, FBA skipped ${agg.skippedFba}`)
+        setSelected(new Set())
+        emitInvalidation({ type: 'listing.updated', meta: { source: 'sync-control-products', masters: expandedMasterIds.length } })
+        onChanged()
+      } catch (e) {
+        notify(`${action} stopped: ${e instanceof Error ? e.message : String(e)} — selection kept, run again to continue`)
+      } finally {
+        setBusy(false)
+      }
+      return
+    }
     try {
       const res = await fetch(`${API}/api/stock/sync-control/actions`, {
         method: 'POST',
