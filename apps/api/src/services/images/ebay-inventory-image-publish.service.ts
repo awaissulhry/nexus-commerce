@@ -25,7 +25,7 @@ import {
   resolvePerMarketContent,
   type Market,
 } from '../ebay-variation-push.service.js'
-import { renderListingDescriptionSafe } from '../ebay-description-theme.service.js'
+import { renderListingDescriptionSafe, stampDescriptionPushSafe } from '../ebay-description-theme.service.js'
 import { logger } from '../../utils/logger.js'
 import { resolveImagePictureAxis } from './ebay-image-axis.pure.js'
 import { publishEbaySharedListingImages } from './ebay-shared-image-publish.service.js'
@@ -315,6 +315,20 @@ export async function publishEbayImagesViaInventory(
       },
     )
     allResults.push(...groupResults)
+
+    // ED v2 P5 — a clean image publish RE-DELIVERED the themed description
+    // (rendered above with the just-saved galleries): stamp it fire-and-forget
+    // so the staleness badge clears. Any ERROR in this market → no stamp.
+    if (
+      groupResults.some((r) => r.status === 'PUSHED') &&
+      groupResults.every((r) => r.status !== 'ERROR')
+    ) {
+      stampDescriptionPushSafe(
+        prisma,
+        { productId: familyParentId, marketplace: mp, themeId: themed.themeId, themeVersion: themed.themeVersion },
+        (msg) => logger.warn(`[ebay-image-publish] ${msg}`),
+      )
+    }
   }
 
   // ── POST-PUBLISH PARITY ASSERTION (the never-again guard) ─────────────────

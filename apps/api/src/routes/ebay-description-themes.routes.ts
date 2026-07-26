@@ -11,6 +11,8 @@ import {
   listThemes,
   setDefaultTheme,
   renderListingDescriptionSafe,
+  galleryHashOfRows,
+  evaluateDescriptionStaleness,
 } from '../services/ebay-description-theme.service.js'
 
 export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstance) {
@@ -43,6 +45,109 @@ export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstan
     }
     return reply.send({ total: listings.length, default: usingDefault, raw, byThemeId })
   })
+
+  // ── ED v2 P5 — description STALENESS, read-only (operator decision D8) ────
+  // eBay HTML is static: a push renders theme+curation ONCE and the live
+  // description never follows later edits. This endpoint compares each family's
+  // descriptionPush stamp (written on successful deliveries) against the
+  // CURRENT curated gallery + assigned theme version, so the modal can show a
+  // stale badge with one-click re-push. Batch DB reads only — no eBay calls,
+  // no writes, never an automatic re-push.
+  fastify.get<{ Querystring: { productIds?: string; marketplace?: string } }>(
+    '/ebay/description-themes/staleness',
+    async (request, reply) => {
+      const idsRaw = (request.query.productIds ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      if (idsRaw.length === 0) {
+        return reply.code(400).send({ error: 'productIds required (comma-separated product ids)' })
+      }
+      const MAX_IDS = 200
+      const ids = [...new Set(idsRaw)].slice(0, MAX_IDS)
+      const marketplace = (request.query.marketplace ?? 'IT').toUpperCase()
+      const region = marketplace === 'UK' ? 'GB' : marketplace
+
+      // Resolve each requested id to its FAMILY ROOT (stamps live on the
+      // parent's ChannelListing) — batch walk, ≤3 hops like the push service.
+      const parentOf = new Map<string, string | null>()
+      let frontier = ids
+      for (let hop = 0; hop < 3 && frontier.length > 0; hop++) {
+        const prods = await prisma.product.findMany({
+          where: { id: { in: frontier } },
+          select: { id: true, parentId: true },
+        })
+        for (const p of prods) parentOf.set(p.id, p.parentId)
+        frontier = [...new Set(
+          prods
+            .map((p) => p.parentId)
+            .filter((pid): pid is string => !!pid && !parentOf.has(pid)),
+        )]
+      }
+      const rootOf = (id: string): string => {
+        let cur = id
+        for (let hop = 0; hop < 3; hop++) {
+          const up = parentOf.get(cur)
+          if (!up) break
+          cur = up
+        }
+        return cur
+      }
+      const roots = [...new Set(ids.map(rootOf))]
+
+      const [listings, imageRows, themes] = await Promise.all([
+        prisma.channelListing.findMany({
+          where: { productId: { in: roots }, channel: 'EBAY', region },
+          select: { productId: true, platformAttributes: true },
+        }),
+        prisma.listingImage.findMany({
+          where: { productId: { in: roots }, platform: 'EBAY', mediaType: 'IMAGE' },
+          select: { productId: true, variantGroupKey: true, variantGroupValue: true, url: true, position: true, publishStatus: true },
+        }),
+        prisma.ebayDescriptionTheme.findMany({
+          select: { id: true, name: true, version: true, active: true, isDefault: true },
+        }),
+      ])
+
+      const clByProduct = new Map<string, Record<string, unknown>>()
+      for (const l of listings) {
+        if (!clByProduct.has(l.productId)) {
+          clByProduct.set(l.productId, (l.platformAttributes ?? {}) as Record<string, unknown>)
+        }
+      }
+      const rowsByProduct = new Map<string, typeof imageRows>()
+      for (const r of imageRows) {
+        if (!rowsByProduct.has(r.productId)) rowsByProduct.set(r.productId, [])
+        rowsByProduct.get(r.productId)!.push(r)
+      }
+
+      // Mirror of renderListingDescriptionSafe's theme resolution (incl. D7:
+      // deleted/inactive assignment falls back to the active default).
+      const defaultTheme = themes.find((t) => t.isDefault && t.active) ?? null
+      const currentThemeFor = (attrs: Record<string, unknown>) => {
+        const v = typeof attrs.descriptionThemeId === 'string' ? attrs.descriptionThemeId : ''
+        if (v === 'none') return null
+        const picked = v ? themes.find((t) => t.id === v) : undefined
+        return picked && picked.active ? picked : defaultTheme
+      }
+
+      const products = ids.map((productId) => {
+        const root = rootOf(productId)
+        const attrs = clByProduct.get(root)
+        const rows = rowsByProduct.get(root) ?? []
+        const result = evaluateDescriptionStaleness({
+          hasListing: !!attrs,
+          stamp: attrs?.descriptionPush,
+          currentGalleryHash: galleryHashOfRows(rows),
+          currentTheme: attrs ? currentThemeFor(attrs) : null,
+          hasDraftImageRows: rows.some((r) => r.publishStatus === 'DRAFT'),
+        })
+        return { productId, rootProductId: root, ...result }
+      })
+
+      return reply.send({ marketplace, products })
+    },
+  )
 
   fastify.post<{ Body: { name?: string; html?: string; notes?: string } }>(
     '/ebay/description-themes',

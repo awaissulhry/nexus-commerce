@@ -34,7 +34,7 @@
 import { createHash } from 'node:crypto'
 import type { PrismaClient } from '@prisma/client'
 import { callTradingApi, siteIdForMarket, escapeXml } from './ebay-trading-api.service.js'
-import { renderListingDescriptionSafe } from './ebay-description-theme.service.js'
+import { renderListingDescriptionSafe, stampDescriptionPushSafe } from './ebay-description-theme.service.js'
 import { resolvePerMarketContent } from './ebay-variation-push.service.js'
 
 // Same detector the axes-convert service proved live: eBay rejects Trading
@@ -316,6 +316,11 @@ export async function pushDescriptions(
 
       const mode: 'group' | 'single' = children.length > 0 ? 'group' : 'single'
 
+      // ED v2 P5 — after ANY listing of this family is actually revised, stamp
+      // the delivery (fire-and-forget) so the staleness badge clears.
+      let anyRevised = false
+      let revisedThemeInfo: { themeId?: string; themeVersion?: number } = {}
+
       for (const itemId of itemIds) {
         if (processedItemIds.has(itemId)) continue
         processedItemIds.add(itemId)
@@ -406,6 +411,8 @@ export async function pushDescriptions(
             )
           }
 
+          anyRevised = true
+          revisedThemeInfo = { themeId: rendered.themeId, themeVersion: rendered.themeVersion }
           listings.push({
             itemId,
             parentSku: root.sku,
@@ -452,6 +459,17 @@ export async function pushDescriptions(
           }
         }
         if (sleepMs > 0) await new Promise((r) => setTimeout(r, sleepMs)) // rate-limit courtesy
+      }
+
+      // ED v2 P5 — staleness stamp (D8). One stamp per family × market, only
+      // when a live description actually changed; fire-and-forget so a stamp
+      // problem can never fail (or delay) the push result.
+      if (anyRevised) {
+        stampDescriptionPushSafe(
+          prisma,
+          { productId: root.id, marketplace, ...revisedThemeInfo },
+          (msg) => ctx.log?.warn({ productId: root.id, parentSku: root.sku, marketplace }, `ebay-description-push: ${msg}`),
+        )
       }
     } catch (err) {
       summary.error = err instanceof Error ? err.message : String(err)

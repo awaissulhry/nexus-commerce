@@ -32,10 +32,12 @@ vi.mock('./ebay-trading-api.service.js', () => ({
       .replace(/'/g, '&apos;'),
 }))
 
-// ── Mock the theme renderer ────────────────────────────────────────────────
+// ── Mock the theme renderer + the ED v2 P5 staleness stamp ─────────────────
 const mockRender = vi.fn()
+const mockStamp = vi.fn()
 vi.mock('./ebay-description-theme.service.js', () => ({
   renderListingDescriptionSafe: (...args: unknown[]) => mockRender(...args),
+  stampDescriptionPushSafe: (...args: unknown[]) => mockStamp(...args),
 }))
 
 // ── Mock the per-market content resolver (heavy module; pure echo here) ────
@@ -98,6 +100,7 @@ function echoRender() {
     themed: true,
     themeId: 'theme-1',
     themeName: 'Classic',
+    themeVersion: 3,
     warnings: [],
   }))
 }
@@ -283,6 +286,16 @@ describe('pushDescriptions', () => {
     const getCalls = mockCallTradingApi.mock.calls.filter((c) => c[0] === 'GetItem')
     expect(getCalls).toHaveLength(2)
     expect(getCalls[0][1]).toContain('<OutputSelector>Item.Description</OutputSelector>')
+
+    // ED v2 P5 — ONE staleness stamp per family × market after a real revise,
+    // carrying the rendered theme id + version.
+    expect(mockStamp).toHaveBeenCalledTimes(1)
+    expect(mockStamp.mock.calls[0][1]).toEqual({
+      productId: 'p1',
+      marketplace: 'IT',
+      themeId: 'theme-1',
+      themeVersion: 3,
+    })
   })
 
   it('Lane A: Inventory-managed primary (__offerIds) is SKIPPED honestly; adopted sibling still revised', async () => {
@@ -371,6 +384,8 @@ describe('pushDescriptions', () => {
     // The theme write is DB-only — the Inventory-managed primary still gets no trading call.
     expect(res.listings[0]).toMatchObject({ lane: 'inventory', outcome: 'inventory-managed' })
     expect(mockCallTradingApi).not.toHaveBeenCalled()
+    // ED v2 P5 — nothing was delivered, so nothing is stamped.
+    expect(mockStamp).not.toHaveBeenCalled()
   })
 
   it('surfaces renderer/sanitizer warnings on the per-listing result', async () => {
@@ -432,6 +447,8 @@ describe('pushDescriptions', () => {
     const res = await pushDescriptions({ productIds: ['p1'] }, ctxWith(prisma))
     expect(res.listings[0].outcome).toBe('failed')
     expect(res.listings[0].message).toContain('listing ended')
+    // ED v2 P5 — a failed revise delivered nothing: no staleness stamp.
+    expect(mockStamp).not.toHaveBeenCalled()
   })
 
   it('dev dry-run (empty raw from the gate) reports dry-run and skips parity', async () => {
@@ -446,6 +463,8 @@ describe('pushDescriptions', () => {
     const res = await pushDescriptions({ productIds: ['p1'] }, ctxWith(prisma))
     expect(res.listings[0].outcome).toBe('dry-run')
     expect(mockCallTradingApi.mock.calls.filter((c) => c[0] === 'GetItem')).toHaveLength(0)
+    // ED v2 P5 — a dry-run delivered nothing: no staleness stamp.
+    expect(mockStamp).not.toHaveBeenCalled()
   })
 
   it('child product id resolves up to the family root; unknown product reports a per-product error', async () => {

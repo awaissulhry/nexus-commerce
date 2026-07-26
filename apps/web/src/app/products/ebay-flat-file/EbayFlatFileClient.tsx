@@ -873,6 +873,40 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   })
   useEffect(() => { try { localStorage.setItem('ff-ebay-view-statuschips', showStatusChips ? '1' : '0') } catch {} }, [showStatusChips])
 
+  // ED v2 P5 — 'Description sync' (View-menu opt-in, DEFAULT OFF — rows stay
+  // ~25px compact; the signal is a 6px dot in the existing row-meta cluster,
+  // family rows only). Amber = live description is behind the curation/theme
+  // (stale stamp), green = in sync with the last push. Read-only; re-push
+  // happens from the Description Themes modal (D8: badge + manual re-push).
+  const [showDescSync, setShowDescSync] = useState<boolean>(() => {
+    try { return localStorage.getItem('ff-ebay-view-descsync') === '1' } catch { return false }
+  })
+  useEffect(() => { try { localStorage.setItem('ff-ebay-view-descsync', showDescSync ? '1' : '0') } catch {} }, [showDescSync])
+  const [descSync, setDescSync] = useState<Record<string, { stale: boolean; reasons: string[] }>>({})
+  useEffect(() => {
+    if (!showDescSync) return
+    const ids = [...new Set(
+      initialRows
+        .filter((r) => r._isParent === true && r.platformProductId)
+        .map((r) => String(r.platformProductId)),
+    )].slice(0, 200) // server cap
+    if (ids.length === 0) { setDescSync({}); return }
+    const ctrl = new AbortController()
+    fetch(
+      `${BACKEND}/api/ebay/description-themes/staleness?productIds=${encodeURIComponent(ids.join(','))}&marketplace=${encodeURIComponent(marketplace)}`,
+      { signal: ctrl.signal },
+    )
+      .then((r) => (r.ok ? (r.json() as Promise<{ products: Array<{ productId: string; stale: boolean; reasons: string[] }> }>) : null))
+      .then((d) => {
+        if (!d?.products) return
+        const next: Record<string, { stale: boolean; reasons: string[] }> = {}
+        for (const p of d.products) next[p.productId] = { stale: p.stale, reasons: p.reasons }
+        setDescSync(next)
+      })
+      .catch(() => { /* dots just stay hidden — never blocks the grid */ })
+    return () => ctrl.abort()
+  }, [showDescSync, initialRows, marketplace, BACKEND])
+
   const [showCascadeButtons, setShowCascadeButtons] = useState<boolean>(() => {
     try { return localStorage.getItem('ff-show-cascade') !== '0' } catch { return true }
   })
@@ -4383,9 +4417,27 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         { separator: true as const },
         { label: 'Override badges', checked: showOverrideBadges, onClick: () => setShowOverrideBadges((v) => !v) },
         { label: 'Cascade buttons', checked: showCascadeButtons, onClick: () => setShowCascadeButtons((v) => !v) },
+        { separator: true as const },
+        // ED v2 P5 — amber/green dot on family rows: is the LIVE eBay
+        // description in sync with the last push (images + theme)?
+        { label: 'Description sync (stale dot on family rows)', checked: showDescSync, onClick: () => setShowDescSync((v) => !v) },
       ]}
       renderRowMeta={(row) => (
         <div className="flex items-center gap-0.5">
+          {/* ED v2 P5 — description-sync dot (View-menu opt-in, family rows
+              only; 6px, adds no row height). Re-push via Description Themes. */}
+          {showDescSync && row._isParent === true && (() => {
+            const entry = descSync[String(row.platformProductId ?? row._productId ?? '')]
+            if (!entry) return null
+            return (
+              <span
+                title={entry.stale
+                  ? `Description stale — ${entry.reasons.join(' · ')}\nRe-push from the Description Themes modal (Push tab).`
+                  : 'Description in sync with the last push'}
+                className={cn('w-1.5 h-1.5 rounded-full shrink-0', entry.stale ? 'bg-amber-400' : 'bg-emerald-400')}
+              />
+            )
+          })()}
           {showOverrideBadges && (
             <OverrideBadge
               listingId={row._listingId as string | null | undefined}

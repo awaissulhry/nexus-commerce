@@ -48,7 +48,7 @@ import { relabelListingToPoolSkus } from '../services/ebay-variation-relabel.ser
 import { addVariationsToListing } from '../services/ebay-variation-add.service.js';
 import { applyVariationOrderForFamily } from '../services/ebay-variation-order-apply.service.js';
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot, buildBestOfferTerms, resolveQuantityLimitPerBuyer, resolvePerMarketContent } from '../services/ebay-variation-push.service.js';
-import { renderListingDescriptionSafe } from '../services/ebay-description-theme.service.js';
+import { renderListingDescriptionSafe, stampDescriptionPushSafe } from '../services/ebay-description-theme.service.js';
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
 import { decideEbayPushMode } from '../services/ebay-push-mode.js';
 import { publishOrderEvent } from '../services/order-events.service.js';
@@ -2215,6 +2215,24 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           );
           perRowResults.push(...groupResults);
 
+          // ED v2 P5 — a clean family push delivered the themed description:
+          // stamp it (fire-and-forget) so the staleness badge clears. Any ERROR
+          // in the group → no stamp (stale-until-clean is the safe direction).
+          {
+            const famStampPid = String(parentRowForKey._productId ?? '')
+            if (
+              famStampPid &&
+              groupResults.some((g) => g.status === 'PUSHED') &&
+              groupResults.every((g) => g.status !== 'ERROR')
+            ) {
+              stampDescriptionPushSafe(
+                prisma,
+                { productId: famStampPid, marketplace: mp, themeId: themedFamily.themeId, themeVersion: themedFamily.themeVersion },
+                (msg) => request.log.warn({ family: resolvedGroupKey, mp }, msg),
+              )
+            }
+          }
+
           // Post-publish PARITY GUARD (GALE incident 2026-07-18: 19/20
           // variations live, 367 vs 398 units — silent for weeks). Read the
           // live listing back and compare against this push's child rows;
@@ -2618,6 +2636,16 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                     select: { id: true },
                   });
                   void syncActivatedListings(activated.map((l) => l.id));
+                }
+
+                // ED v2 P5 — single-SKU delivery carried the themed description
+                // too: stamp it (fire-and-forget; never blocks the push).
+                if (productId) {
+                  stampDescriptionPushSafe(
+                    prisma,
+                    { productId, marketplace: mp, themeId: themedSingle.themeId, themeVersion: themedSingle.themeVersion },
+                    (msg) => request.log.warn({ sku, mp }, msg),
+                  )
                 }
 
                 perRowResults.push({ sku, market: mp, status: 'PUSHED', message: 'Listed', itemId });

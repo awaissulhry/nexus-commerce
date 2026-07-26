@@ -29,7 +29,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, Plus, Copy, Star, Trash2, RefreshCw, Search, Monitor, Smartphone, Send, X } from 'lucide-react'
+import { Loader2, Plus, Copy, Star, Trash2, RefreshCw, Search, Monitor, Smartphone, Send, X, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/design-system/components/Modal'
@@ -94,6 +94,72 @@ interface PushResult {
 /** Server-side cap (MAX_PRODUCTS_PER_CALL in the route) — mirrored here so the
  *  picker refuses the 51st product instead of earning a 400. */
 const MAX_PUSH_PRODUCTS = 50
+
+// ── ED v2 P5 — description staleness (D8: badge + manual re-push, never auto) ─
+
+interface StalenessEntry {
+  productId: string
+  stale: boolean
+  reasons: string[]
+  stampedAt?: string
+}
+
+/**
+ * Amber "stale" / green "in sync" pill for a set of products. eBay HTML is
+ * static — this is the operator's only signal that the live description has
+ * drifted behind the Image-Manager curation or a theme edit. Clicking a stale
+ * pill runs `onClickStale` (the one-click re-push wiring) and expands the
+ * per-product reasons; it NEVER pushes anything by itself.
+ */
+function StalenessPill({ entries, skuById, onClickStale }: {
+  entries: StalenessEntry[]
+  skuById: Record<string, string>
+  onClickStale?: () => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  if (entries.length === 0) return null
+  const staleEntries = entries.filter((e) => e.stale)
+
+  if (staleEntries.length === 0) {
+    const at = entries.map((e) => e.stampedAt).filter(Boolean)[0]
+    return (
+      <span
+        className="inline-flex items-center gap-1 self-start rounded-full border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300"
+        title={at ? `Last description push stamped ${new Date(at).toLocaleString()}` : 'Images and theme match the last description push'}
+        data-testid="description-staleness-fresh"
+      >
+        <CheckCircle2 className="w-3 h-3" /> In sync with last push
+      </span>
+    )
+  }
+
+  const reasonLines = staleEntries.map(
+    (e) => `${skuById[e.productId] ?? e.productId}: ${e.reasons.join('; ')}`,
+  )
+  return (
+    <span className="flex flex-col gap-1 self-start" data-testid="description-staleness-stale">
+      <button
+        type="button"
+        onClick={() => { setExpanded((v) => !v); onClickStale?.() }}
+        title={`${reasonLines.join('\n')}\n\nClick to ${onClickStale ? 're-push from the Push tab' : expanded ? 'collapse the reasons' : 'see the reasons'}`}
+        className="inline-flex items-center gap-1 self-start rounded-full border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+      >
+        <AlertTriangle className="w-3 h-3" />
+        Description stale — images or theme changed since last push
+        {entries.length > 1 && <span className="font-normal">({staleEntries.length}/{entries.length} products)</span>}
+      </button>
+      {expanded && (
+        <span className="flex flex-col gap-0.5 rounded border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20 px-2 py-1">
+          {staleEntries.map((e) => (
+            <span key={e.productId} className="text-[10px] text-amber-800 dark:text-amber-300">
+              <span className="font-semibold">{skuById[e.productId] ?? e.productId}</span> — {e.reasons.join(' · ')}
+            </span>
+          ))}
+        </span>
+      )}
+    </span>
+  )
+}
 
 const TOKENS = [
   '{{title}}', '{{subtitle}}', '{{body}}', '{{sku}}', '{{brand}}', '{{market}}',
@@ -344,6 +410,8 @@ export function EbayDescriptionThemesModal({ open, onClose, marketplace, sampleP
   const [pushBusy, setPushBusy] = useState(false)
   const [pushError, setPushError] = useState<string | null>(null)
   const [pushResult, setPushResult] = useState<{ res: PushResult; themeName: string; at: string } | null>(null)
+  // ── ED v2 P5 — staleness by productId (push-tab selection + preview product) ──
+  const [staleness, setStaleness] = useState<Record<string, StalenessEntry>>({})
   const htmlRef = useRef<HTMLTextAreaElement>(null)
   const previewBoxRef = useRef<HTMLDivElement>(null)
   const [previewBoxW, setPreviewBoxW] = useState(0)
@@ -543,6 +611,39 @@ export function EbayDescriptionThemesModal({ open, onClose, marketplace, sampleP
       setPushBusy(false)
     }
   }
+
+  // ── ED v2 P5 — fetch staleness for the push selection + preview product ────
+  // Read-only batch endpoint (no eBay calls). Refetches when the selection,
+  // market or theme list changes, and after every push/save so the pill flips
+  // green the moment a re-push lands (the push stamps server-side).
+  useEffect(() => {
+    if (!open) return
+    const ids = [...new Set([...pushList.map((p) => p.id), ...(previewProduct?.id ? [previewProduct.id] : [])])]
+    if (ids.length === 0) { setStaleness({}); return }
+    const ctrl = new AbortController()
+    const t = setTimeout(() => {
+      fetch(
+        `${getBackendUrl()}/api/ebay/description-themes/staleness?productIds=${encodeURIComponent(ids.join(','))}&marketplace=${encodeURIComponent(previewMarket)}`,
+        { signal: ctrl.signal },
+      )
+        .then((r) => (r.ok ? (r.json() as Promise<{ products: StalenessEntry[] }>) : null))
+        .then((d) => {
+          if (!d?.products) return
+          const next: Record<string, StalenessEntry> = {}
+          for (const p of d.products) next[p.productId] = p
+          setStaleness(next)
+        })
+        .catch(() => { /* pill just stays hidden — never blocks the modal */ })
+    }, 300)
+    return () => { clearTimeout(t); ctrl.abort() }
+  }, [open, pushList, previewProduct, previewMarket, pushResult, themes])
+
+  const skuById = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const p of pushList) map[p.id] = p.sku
+    if (previewProduct) map[previewProduct.id] = previewProduct.sku
+    return map
+  }, [pushList, previewProduct])
 
   // ── Live preview — debounced auto-render on ANY input change (ED v2 P3) ────
   // theme html edits, product picks, market switches and manual Refresh all
@@ -788,6 +889,15 @@ export function EbayDescriptionThemesModal({ open, onClose, marketplace, sampleP
               {!previewProduct && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">Pick a product above — previews render with a real product's images, specs and content.</p>
               )}
+              {/* ED v2 P5 — staleness for the previewed family: clicking a stale
+                  pill jumps to the Push tab with this product pre-selected. */}
+              {previewProduct && (
+                <StalenessPill
+                  entries={staleness[previewProduct.id] ? [staleness[previewProduct.id]] : []}
+                  skuById={skuById}
+                  onClickStale={() => { addPushProduct(previewProduct); setTab('push') }}
+                />
+              )}
               {preview && preview.warnings.length > 0 && (
                 <p className="text-[11px] text-amber-600 dark:text-amber-400" title={preview.warnings.join('\n')}>⚠ {preview.warnings.length} render warning{preview.warnings.length !== 1 ? 's' : ''}</p>
               )}
@@ -843,6 +953,15 @@ export function EbayDescriptionThemesModal({ open, onClose, marketplace, sampleP
                   {pushList.map((p) => (
                     <span key={p.id}
                       className="inline-flex items-center gap-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 pl-2 pr-1 py-0.5 text-xs text-slate-700 dark:text-slate-200">
+                      {/* ED v2 P5 — per-product staleness dot */}
+                      {staleness[p.id] && (
+                        <span
+                          title={staleness[p.id].stale
+                            ? `Stale: ${staleness[p.id].reasons.join(' · ')}`
+                            : 'In sync with the last description push'}
+                          className={cn('w-1.5 h-1.5 rounded-full shrink-0', staleness[p.id].stale ? 'bg-amber-400' : 'bg-emerald-400')}
+                        />
+                      )}
                       <span className="font-semibold">{p.sku}</span>
                       {p.hasEbayListing === false && (
                         <span className="text-[9px] uppercase px-1 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
@@ -863,6 +982,13 @@ export function EbayDescriptionThemesModal({ open, onClose, marketplace, sampleP
                   No products selected — search above to add the families whose descriptions you want to push.
                 </p>
               )}
+
+              {/* ED v2 P5 — aggregate staleness for the selection (D8: badge +
+                  manual re-push; the button below IS the re-push). */}
+              <StalenessPill
+                entries={pushList.map((p) => staleness[p.id]).filter((e): e is StalenessEntry => !!e)}
+                skuById={skuById}
+              />
 
               <div className="mt-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3 flex flex-col gap-1.5">
                 {pushBlockReason ? (
