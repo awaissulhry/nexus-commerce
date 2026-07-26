@@ -317,6 +317,43 @@ export async function publishEbayImagesViaInventory(
     allResults.push(...groupResults)
   }
 
+  // ── POST-PUBLISH PARITY ASSERTION (the never-again guard) ─────────────────
+  // A publish reported SUCCESS for days while eBay held the wrong images (the
+  // curated lookup missed; later, a racing quantity sync replayed a stale item
+  // snapshot). The only defence against that CLASS — including causes we have
+  // not met yet — is to READ EBAY BACK after publishing and compare against
+  // intent, loudly. One sample SKU per curated value; a short delayed re-read
+  // absorbs eventual consistency before declaring a mismatch.
+  if (imageOverrideByColor.size > 0 && allResults.some((r) => r.status === 'PUSHED')) {
+    const { axisValueOfRow } = await import('../ebay-variation-push.service.js')
+    const wait = (ms: number) => new Promise((ok) => setTimeout(ok, ms))
+    for (const [colourKey, intended] of imageOverrideByColor) {
+      const sample = variantRows.find((r) =>
+        pictureAxis && axisValueOfRow(r as Record<string, unknown>, pictureAxis) === colourKey
+        && allResults.some((res) => res.sku === (r as Record<string, unknown>).sku && res.status === 'PUSHED'))
+      const sku = sample ? String((sample as Record<string, unknown>).sku) : null
+      if (!sku || intended.length === 0) continue
+      try {
+        const read = async () => {
+          const res = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, {
+            headers: { Authorization: `Bearer ${token}`, 'Accept-Language': 'it-IT', 'Content-Language': 'it-IT' },
+          })
+          if (!res.ok) return null
+          const j = (await res.json().catch(() => null)) as { product?: { imageUrls?: string[] } } | null
+          return j?.product?.imageUrls ?? []
+        }
+        let live = await read()
+        const matches = (l: string[] | null) => l !== null && intended.every((u) => l.includes(u)) && l.length === intended.length
+        if (!matches(live)) { await wait(4000); live = await read() } // eventual consistency
+        if (!matches(live)) {
+          const w = `⚠ PARITY MISMATCH after publish — "${colourKey}" (${sku}): eBay holds ${live === null ? 'unreadable' : live.length} image(s), you curated ${intended.length}. The publish reported success but LIVE DOES NOT MATCH YOUR CURATION — do not trust this result; re-publish and investigate before assuming eBay is correct.`
+          pushWarnings.push(w)
+          logger.warn('[ebay-image-publish] parity mismatch', { sku, colourKey, intended: intended.length, live: live?.length ?? null })
+        }
+      } catch { /* verification must never break the publish result itself */ }
+    }
+  }
+
   const errors = allResults.filter((r) => r.status === 'ERROR')
   const success = errors.length === 0 && allResults.length > 0
   const pushedSkus = allResults.filter((r) => r.status === 'PUSHED').length
