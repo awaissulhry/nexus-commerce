@@ -231,20 +231,41 @@ export default function SyncControlClient() {
           memberships: m.map((r) => ({ itemId: r.itemId, marketplace: r.marketplace, sku: r.sku })),
         }),
       })
-      const data = await res.json()
-      if (!res.ok && data?.euConflict) {
-        // SCT.5a — the EU shared-quantity guard blocked the write to protect
-        // the other markets. This is guidance, not failure: nothing was
-        // written, the selection is kept, and the message says what works.
-        setNotice(`⚠ Blocked to protect your other Amazon markets — nothing was written. ${data.error}`)
-        return
+      let data = await res.json()
+      if (res.status === 409 && data?.euExpandRequired) {
+        const d = data
+        // SCT.5b — Amazon shares ONE EU quantity per SKU; the server answered
+        // with the TRUE scope. One honest confirm, then it executes.
+        const okEu = await confirm({
+          title: 'This covers ALL Amazon EU markets',
+          description:
+            `${d.error} Example: ${(d.preview ?? []).slice(0, 3).map((p2: { sku: string; addedMarkets: string[] }) => `${p2.sku} → also ${p2.addedMarkets.join('/')}`).join(' · ')}` +
+            `${(d.preview ?? []).length > 3 ? ` · +${(d.preview ?? []).length - 3} more` : ''}. Proceed with the full EU scope?`,
+          confirmLabel: `${action.replace('_', ' ')} on all EU markets`,
+        })
+        if (!okEu) { return }
+        const res2 = await fetch(`${API}/api/stock/sync-control/actions`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action,
+            buffer: opts.buffer,
+            listings: l.map((r) => ({ productId: r.productId, channel: r.channel, marketplace: r.marketplace })),
+            memberships: m.map((r) => ({ itemId: r.itemId, marketplace: r.marketplace, sku: r.sku })),
+            expandEuAligned: true,
+          }),
+        })
+        data = await res2.json()
+        if (!res2.ok) throw new Error(data?.error ?? data?.message ?? `HTTP ${res2.status}`)
+      } else if (!res.ok) {
+        throw new Error(data?.error ?? data?.message ?? `HTTP ${res.status}`)
       }
-      if (!res.ok) throw new Error(data?.error ?? data?.message ?? `HTTP ${res.status}`)
       if (data.error) {
         // Keep the selection — "re-run to continue" must be one click.
         setNotice(`${action} PARTIAL — ${data.error}`)
       } else {
-        setNotice(`${action}: updated ${data.updated}, unchanged ${data.unchanged ?? 0}, FBA skipped ${data.skippedFba ?? 0}${data.recascadeQueued ? `, recascading ${data.recascadeQueued} product(s)` : ''}`)
+        setNotice(`${action}: updated ${data.updated}, unchanged ${data.unchanged ?? 0}, FBA skipped ${data.skippedFba ?? 0}${data.euExpanded ? `, incl. ${data.euExpanded} sibling EU row(s)` : ''}${data.recascadeQueued ? `, recascading ${data.recascadeQueued} product(s)` : ''}`)
         setSelected(new Map())
       }
       await Promise.all([loadRows(), loadOverview()])

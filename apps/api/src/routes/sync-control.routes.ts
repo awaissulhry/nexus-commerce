@@ -583,6 +583,12 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       // to rows matching them (act-on-what-you-see): without this, "filter
       // Market=IT → Set Follow" flipped the family's DE/ES listings too.
       scope?: SyncScope
+      // SCT.5b — informed consent for Amazon EU: when a quantity action covers
+      // only SOME EU markets of a SKU, the server answers 409 with the TRUE
+      // scope (Amazon holds one EU quantity per SKU); the client confirms and
+      // resends with this flag, and the action is EXPANDED to all EU rows so
+      // platform state ≡ Amazon state. No refusals — one honest confirm.
+      expandEuAligned?: boolean
     }
     const actor = actorOf(request as never)
     const listings = body.listings ?? []
@@ -685,11 +691,13 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
         })
       }
       // Master-bulk legitimately expands large (a 49-variant family ≈ 300 rows).
-      // SCT.4 — Amazon EU shared-quantity PRE-WRITE guard. Amazon keeps ONE
-      // merchant quantity per SKU across EU marketplaces (proved 2026-07-26:
-      // 302 market-scoped Zero&Pins blanked the whole IT storefront). Refuse,
-      // BEFORE anything is written, any action that would leave a product's
-      // Amazon EU rows intending different numbers.
+      // SCT.4/5b — Amazon EU shared-quantity gate. Amazon keeps ONE merchant
+      // quantity per SKU across EU marketplaces (proved 2026-07-26: 302
+      // market-scoped Zero&Pins blanked the whole IT storefront). A partial-
+      // market quantity action is never refused any more — but it can't be
+      // half-done either. Without expandEuAligned we answer 409 + the TRUE
+      // scope (nothing written); with it, the action expands to every EU row
+      // of the affected SKUs so platform state ≡ Amazon state.
       if (['FOLLOW', 'PIN', 'ZERO_PIN'].includes(body.action)) {
         const euTargets = listings.filter(
           (t) => t.channel === 'AMAZON' && AMAZON_EU_SHARED_MARKETS.has(t.marketplace.toUpperCase()),
@@ -710,7 +718,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
             set.add(t.marketplace.toUpperCase())
             targetsByPid.set(t.productId, set)
           }
-          const conflicts: string[] = []
+          const conflictedPids: string[] = []
           for (const [pid, mkts] of targetsByPid) {
             const prodRows = euRows
               .filter((r) => r.productId === pid)
@@ -723,16 +731,42 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
                 isFba: r.fulfillmentMethod === 'FBA',
               }))
             const v = projectActionAndDetect(prodRows, mkts, body.action as 'FOLLOW' | 'PIN' | 'ZERO_PIN')
-            if (v.conflict) conflicts.push(`${euRows.find((r) => r.productId === pid)?.product?.sku ?? pid}: ${v.detail}`)
+            if (v.conflict) conflictedPids.push(pid)
           }
-          if (conflicts.length > 0) {
-            return reply.code(400).send({
-              error:
-                `${body.action} refused — it would leave ${conflicts.length} SKU(s) with contradictory Amazon EU ` +
-                `quantity intents. e.g. ${conflicts.slice(0, 2).join(' · ')}. ${EU_GUARD_REMEDY}`,
-              euConflict: true,
-              conflicts: conflicts.slice(0, 20),
-            })
+          if (conflictedPids.length > 0) {
+            // The extra rows the TRUE (EU-wide) action covers.
+            const additions: Array<{ productId: string; channel: string; marketplace: string }> = []
+            const previews: Array<{ sku: string; addedMarkets: string[] }> = []
+            for (const pid of conflictedPids) {
+              const targeted = targetsByPid.get(pid) ?? new Set<string>()
+              const extra = euRows.filter(
+                (r) => r.productId === pid && r.fulfillmentMethod !== 'FBA' &&
+                  AMAZON_EU_SHARED_MARKETS.has(r.marketplace.toUpperCase()) &&
+                  !targeted.has(r.marketplace.toUpperCase()),
+              )
+              for (const r of extra) additions.push({ productId: pid, channel: 'AMAZON', marketplace: r.marketplace })
+              previews.push({
+                sku: euRows.find((r) => r.productId === pid)?.product?.sku ?? pid,
+                addedMarkets: [...new Set(extra.map((r) => r.marketplace.toUpperCase()))],
+              })
+            }
+            if (!body.expandEuAligned) {
+              // NOTHING written — tell the operator the true scope and let
+              // them proceed with one confirm (409 preview, not a refusal).
+              return reply.code(409).send({
+                euExpandRequired: true,
+                error:
+                  `Amazon keeps ONE quantity per SKU across EU markets, so this ${body.action} really covers ` +
+                  `${additions.length} more row(s) on ${[...new Set(additions.map((a) => a.marketplace))].sort().join('/')} ` +
+                  `for ${conflictedPids.length} SKU(s).`,
+                preview: previews.slice(0, 30),
+                addedRowCount: additions.length,
+              })
+            }
+            // Informed consent given — expand so the platform state matches
+            // what Amazon will actually hold. Audited like any other target.
+            listings.push(...additions)
+            ;(result as { euExpanded?: number }).euExpanded = additions.length
           }
         }
       }

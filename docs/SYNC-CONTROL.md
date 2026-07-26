@@ -84,9 +84,12 @@ zeroed IT live within a minute) and the 18:42 incident (302 market-scoped
 Zero & Pins on DE/ES/FR blanked the whole IT storefront; restored 302→Follow).
 
 Two guards now make contradictory per-market intents unrepresentable:
-- **Pre-write (route):** FOLLOW/PIN/ZERO_PIN on Amazon EU rows is refused with a
-  400 if it would leave any SKU's EU rows intending different numbers. Aligned
-  actions (all markets together) pass.
+- **Pre-write (route, SCT.5b consent flow):** a FOLLOW/PIN/ZERO_PIN that covers
+  only SOME EU markets of a SKU answers **409 + the true scope** (nothing
+  written); the UI shows ONE confirm ("this covers all Amazon EU markets…")
+  and resends with `expandEuAligned: true`, which expands the action to every
+  EU row of the affected SKUs. No refusals — but no silently half-done writes
+  either: platform state always equals what Amazon will actually hold.
 - **Push belt (outbound sync):** any quantity push for a SKU whose EU rows
   currently disagree is SKIPPED and logged as `EU_SHARED_QTY_CONFLICT` in sync
   health — imports, heals, cascades and stale queue rows can't sneak past.

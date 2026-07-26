@@ -223,17 +223,36 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
           memberships: m.map((r) => ({ itemId: r.itemId, marketplace: r.marketplace, sku: r.sku })),
         }),
       })
-      const d = await res.json()
-      if (!res.ok && d?.euConflict) {
-        setNotice(`⚠ Blocked to protect your other Amazon markets — nothing was written. ${d.error}`)
-        return
+      let d = await res.json()
+      if (res.status === 409 && d?.euExpandRequired) {
+        // SCT.5b — one honest confirm with the true EU scope, then execute.
+        const okEu = await confirm({
+          title: 'This covers ALL Amazon EU markets',
+          description:
+            `${d.error} Example: ${(d.preview ?? []).slice(0, 3).map((p2: { sku: string; addedMarkets: string[] }) => `${p2.sku} → also ${p2.addedMarkets.join('/')}`).join(' · ')}` +
+            `${(d.preview ?? []).length > 3 ? ` · +${(d.preview ?? []).length - 3} more` : ''}. Proceed with the full EU scope?`,
+          confirmLabel: `${action.replace('_', ' ')} on all EU markets`,
+        })
+        if (!okEu) { setBusy(false); return }
+        const res2 = await fetch(`${API}/api/stock/sync-control/actions`, {
+          method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action, buffer: opts.buffer,
+            listings: l.map((r) => ({ productId: r.productId, channel: r.channel, marketplace: r.marketplace })),
+            memberships: m.map((r) => ({ itemId: r.itemId, marketplace: r.marketplace, sku: r.sku })),
+            expandEuAligned: true,
+          }),
+        })
+        d = await res2.json()
+        if (!res2.ok) throw new Error(d?.error ?? d?.message ?? `HTTP ${res2.status}`)
+      } else if (!res.ok) {
+        throw new Error(d?.error ?? d?.message ?? `HTTP ${res.status}`)
       }
-      if (!res.ok) throw new Error(d?.error ?? d?.message ?? `HTTP ${res.status}`)
       if (d.error) {
         // Keep the selection — "re-run to continue" must be one click.
         setNotice(`${action} PARTIAL — ${d.error}`)
       } else {
-        setNotice(`${action}: updated ${d.updated}, unchanged ${d.unchanged ?? 0}, FBA skipped ${d.skippedFba ?? 0}${d.recascadeQueued ? `, recascading ${d.recascadeQueued} product(s)` : ''}`)
+        setNotice(`${action}: updated ${d.updated}, unchanged ${d.unchanged ?? 0}, FBA skipped ${d.skippedFba ?? 0}${d.euExpanded ? `, incl. ${d.euExpanded} sibling EU row(s)` : ''}${d.recascadeQueued ? `, recascading ${d.recascadeQueued} product(s)` : ''}`)
         setSelected(new Set())
       }
       emitInvalidation({ type: 'listing.updated', meta: { source: 'sync-control-product', masterId } })

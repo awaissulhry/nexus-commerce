@@ -206,19 +206,40 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
           scope: { channels: filters.channels, markets: filters.markets, modes: filters.modes, drift: filters.drift },
         }),
       })
-      const d = await res.json()
-      if (!res.ok && d?.euConflict) {
-        notify(`⚠ Blocked to protect your other Amazon markets — nothing was written. ${d.error}`)
-        return
+      let d = await res.json()
+      if (res.status === 409 && d?.euExpandRequired) {
+        // SCT.5b — Amazon shares ONE EU quantity per SKU; one honest confirm
+        // with the true scope, then it executes. No refusals.
+        const okEu = await confirm({
+          title: 'This covers ALL Amazon EU markets',
+          description:
+            `${d.error} Example: ${(d.preview ?? []).slice(0, 3).map((p2: { sku: string; addedMarkets: string[] }) => `${p2.sku} → also ${p2.addedMarkets.join('/')}`).join(' · ')}` +
+            `${(d.preview ?? []).length > 3 ? ` · +${(d.preview ?? []).length - 3} more` : ''}. Proceed with the full EU scope?`,
+          confirmLabel: `${action.replace('_', ' ')} on all EU markets`,
+        })
+        if (!okEu) { setBusy(false); return }
+        const res2 = await fetch(`${API}/api/stock/sync-control/actions`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action, masterIds: expandedMasterIds, buffer: opts.buffer,
+            scope: { channels: filters.channels, markets: filters.markets, modes: filters.modes, drift: filters.drift },
+            expandEuAligned: true,
+          }),
+        })
+        d = await res2.json()
+        if (!res2.ok) throw new Error(d?.error ?? d?.message ?? `HTTP ${res2.status}`)
+      } else if (!res.ok) {
+        throw new Error(d?.error ?? d?.message ?? `HTTP ${res.status}`)
       }
-      if (!res.ok) throw new Error(d?.error ?? d?.message ?? `HTTP ${res.status}`)
       if (d.error) {
         // Partial: some rows committed, then a later chunk failed. KEEP the
         // selection — the message says "re-run to continue", so the re-run
         // must be one click, not a re-hunt for the same products.
         notify(`${action} PARTIAL — ${d.error}`)
       } else {
-        notify(`${action}: updated ${d.updated}, unchanged ${d.unchanged ?? 0}, FBA skipped ${d.skippedFba ?? 0}${d.scopedOut ? `, ${d.scopedOut} outside filters untouched` : ''}${d.recascadeQueued ? `, recascading ${d.recascadeQueued} product(s)` : ''}`)
+        notify(`${action}: updated ${d.updated}, unchanged ${d.unchanged ?? 0}, FBA skipped ${d.skippedFba ?? 0}${d.euExpanded ? `, incl. ${d.euExpanded} sibling EU row(s)` : ''}${d.scopedOut ? `, ${d.scopedOut} outside filters untouched` : ''}${d.recascadeQueued ? `, recascading ${d.recascadeQueued} product(s)` : ''}`)
         setSelected(new Set())
       }
       emitInvalidation({ type: 'listing.updated', meta: { source: 'sync-control-products', masters: selectedMasterIds.length } })
