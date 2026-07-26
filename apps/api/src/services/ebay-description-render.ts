@@ -203,6 +203,13 @@ export function renderDescriptionTheme(themeHtml: string, data: DescriptionRende
     gallery_shared: galleryGrid(data.sharedImages.slice(0, MAX_GALLERY_IMAGES)),
     specs_table: specsTable(data.aspects),
     policies: policiesBlock(data.policies, data.market),
+    // eBay mobile summary (the ONLY lever over what the app shows before "see
+    // full description"): plain text, ≤800 chars INCLUDING markup — we render
+    // title + de-tagged body, truncated at a word boundary to stay well under.
+    mobile_summary: esc(
+      `${data.title ?? ''} — ${String(data.body ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()}`
+        .slice(0, 640).replace(/\s\S*$/, ''),
+    ),
     policy_shipping: esc(data.policies?.shipping ?? ''),
     policy_returns: esc(data.policies?.returns ?? ''),
     policy_payment: esc(data.policies?.payment ?? ''),
@@ -228,7 +235,45 @@ export function renderDescriptionTheme(themeHtml: string, data: DescriptionRende
 
 // ── Built-in starter themes (owner-editable via the themes CRUD) ─────────────
 
+// ── ED v2 — "Xavia Pro Clean" (operator-approved design, 2026-07-27) ────────
+// Tab-STYLED stacked sections (real click-tabs are impossible: eBay strips the
+// form elements CSS tabs need, and :target breaks in the app webview). All
+// styling inline; system font stack; single column ≤920px; hidden schema.org
+// mobile summary; NO outbound links (banned), NO http:// resources, NO EU ODR
+// reference (platform retired 2025-07-20). Italian legal copy (Resi 14-day
+// withdrawal, Garanzia 2-year conformity) is DRAFT — operator sign-off (D10)
+// required before this theme is assigned to live listings; until then it is
+// seeded but NOT default, so nothing on eBay changes.
+const XPC_FONT = `-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif`
+const xpcTab = (label: string, body: string) => `
+  <div style="margin:18px 0 0;">
+    <div style="display:inline-block;background:#111827;color:#ffffff;font-size:14px;font-weight:600;letter-spacing:.3px;padding:8px 18px;border-radius:10px 10px 0 0;">${label}</div>
+    <div style="border:1px solid #e5e7eb;border-radius:0 10px 10px 10px;padding:16px 18px;font-size:15px;line-height:1.6;color:#374151;background:#ffffff;">${body}</div>
+  </div>`
+
+const XAVIA_PRO_CLEAN_HTML = `<div vocab="https://schema.org/" typeof="Product" style="display:none;"><span property="description">{{mobile_summary}}</span></div>
+<div style="font-family:${XPC_FONT};max-width:920px;margin:0 auto;color:#111827;font-size:16px;line-height:1.6;">
+  <div style="text-align:center;padding:6px 0 2px;">
+    <div style="font-size:12px;font-weight:700;letter-spacing:2.5px;color:#9ca3af;">XAVIA RACING</div>
+    <h1 style="font-size:23px;margin:6px 0 2px;font-weight:700;">{{title}}</h1>
+    <p style="margin:0 0 6px;color:#6b7280;font-size:15px;">{{subtitle}}</p>
+  </div>
+  <div style="margin:14px 0;">{{body}}</div>
+  <div style="margin:18px 0;">{{gallery}}</div>
+  ${xpcTab('Specifiche', '{{specs_table}}')}
+  ${xpcTab('Spedizione', `<p style="margin:0;">Spedizione rapida e tracciata dall'Italia. {{policy_shipping}}</p>`)}
+  ${xpcTab('Resi e diritto di recesso', `<p style="margin:0;">Hai il diritto di recedere dall'acquisto entro <strong>14 giorni</strong> dalla consegna, senza doverne indicare il motivo, ai sensi del Codice del Consumo. Il prodotto va restituito integro, non utilizzato e nella confezione originale. {{policy_returns}}</p>`)}
+  ${xpcTab('Garanzia', `<p style="margin:0;">Tutti i nostri prodotti sono coperti dalla <strong>garanzia legale di conformità di 2 anni</strong> prevista dalla normativa europea.</p>`)}
+  ${xpcTab('Sicurezza prodotto', `<p style="margin:0;">Abbigliamento tecnico motociclistico con marcatura <strong>CE</strong>. Verifica sempre l'etichetta del prodotto per la certificazione specifica (es. EN 17092) e le istruzioni di manutenzione.</p>`)}
+  <div style="text-align:center;margin:26px 0 4px;padding-top:14px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:12px;letter-spacing:1.5px;">XAVIA — PROTEZIONE E STILE</div>
+</div>`
+
 export const BUILT_IN_THEMES: Array<{ name: string; notes: string; html: string }> = [
+  {
+    name: 'Xavia Pro Clean',
+    notes: 'ED v2 flagship (2026-07-27): tab-styled sections (Specifiche · Spedizione · Resi · Garanzia · Sicurezza), system font, mobile summary. ⚠ Italian legal copy is DRAFT pending operator sign-off (D10) — do not set as default until approved.',
+    html: XAVIA_PRO_CLEAN_HTML,
+  },
   {
     name: 'Nexus Clean',
     notes: 'Minimal single-column: title, body, gallery, specs, policies.',
