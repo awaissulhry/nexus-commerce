@@ -224,6 +224,10 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
         }),
       })
       const d = await res.json()
+      if (!res.ok && d?.euConflict) {
+        setNotice(`⚠ Blocked to protect your other Amazon markets — nothing was written. ${d.error}`)
+        return
+      }
       if (!res.ok) throw new Error(d?.error ?? d?.message ?? `HTTP ${res.status}`)
       if (d.error) {
         // Keep the selection — "re-run to continue" must be one click.

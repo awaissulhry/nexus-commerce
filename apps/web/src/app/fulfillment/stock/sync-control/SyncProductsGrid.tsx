@@ -207,6 +207,10 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
         }),
       })
       const d = await res.json()
+      if (!res.ok && d?.euConflict) {
+        notify(`⚠ Blocked to protect your other Amazon markets — nothing was written. ${d.error}`)
+        return
+      }
       if (!res.ok) throw new Error(d?.error ?? d?.message ?? `HTTP ${res.status}`)
       if (d.error) {
         // Partial: some rows committed, then a later chunk failed. KEEP the

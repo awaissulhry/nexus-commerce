@@ -232,6 +232,13 @@ export default function SyncControlClient() {
         }),
       })
       const data = await res.json()
+      if (!res.ok && data?.euConflict) {
+        // SCT.5a — the EU shared-quantity guard blocked the write to protect
+        // the other markets. This is guidance, not failure: nothing was
+        // written, the selection is kept, and the message says what works.
+        setNotice(`⚠ Blocked to protect your other Amazon markets — nothing was written. ${data.error}`)
+        return
+      }
       if (!res.ok) throw new Error(data?.error ?? data?.message ?? `HTTP ${res.status}`)
       if (data.error) {
         // Keep the selection — "re-run to continue" must be one click.
