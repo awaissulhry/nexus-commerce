@@ -51,6 +51,7 @@ import amazonPreflightRoutes from "./routes/amazon-preflight.routes.js";
 import cockpitTelemetryRoutes from "./routes/cockpit-telemetry.routes.js";
 import ebayFlatFileRoutes from "./routes/ebay-flat-file.routes.js";
 import ebayDescriptionThemesRoutes from "./routes/ebay-description-themes.routes.js";
+import ebayDescriptionPushRoutes from "./routes/ebay-description-push.routes.js";
 import ebayCockpitRoutes from "./routes/ebay-cockpit.routes.js";
 import ebayVolumePricingRoutes from "./routes/ebay-volume-pricing.routes.js";
 import flatFilePullHistoryRoutes from "./routes/flat-file-pull-history.routes.js";
@@ -608,6 +609,7 @@ app.register(amazonPreflightRoutes, { prefix: '/api' });
 app.register(cockpitTelemetryRoutes, { prefix: '/api' });
 app.register(ebayFlatFileRoutes, { prefix: '/api' });
 app.register(ebayDescriptionThemesRoutes, { prefix: '/api' }); // ED — dynamic description themes
+app.register(ebayDescriptionPushRoutes, { prefix: '/api' }); // ED v2 P4a — description-only push (both lanes) + parity read-back
 app.register(ebayCockpitRoutes, { prefix: '/api' });
 app.register(ebayVolumePricingRoutes, { prefix: '/api' });
 app.register(flatFilePullHistoryRoutes, { prefix: '/api' });
