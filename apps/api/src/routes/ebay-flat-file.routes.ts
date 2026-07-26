@@ -466,6 +466,63 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         request.log.warn(err, 'ebay/flat-file/rows: aspect canonicalization failed (non-fatal)')
       }
 
+      // ── IMAGE MANAGER = SINGLE SOURCE OF TRUTH (operator architecture) ────
+      // Images are managed ONLY in the Image Manager; the grid manages DATA.
+      // The image_1..6 columns are therefore a LIVE MIRROR of curation: when a
+      // family has curated ListingImage rows, every outgoing row's image links
+      // are rewritten from them (parent row = the Default/cover bucket, child
+      // rows = their colour's curated set). This kills the stale-links class:
+      // a row saved or pushed after any detail edit carries the CURATED urls,
+      // never links frozen at listing time — so editing product data can no
+      // longer replay old images. Families with no curation keep today's
+      // derivation (nothing invented, nothing hidden).
+      try {
+        const { axisValueOfRow } = await import('../services/ebay-variation-push.service.js')
+        const rowPids = [...new Set(rows.map((r) => String((r as Record<string, unknown>)._productId ?? '')).filter(Boolean))]
+        if (rowPids.length > 0) {
+          const prods = await prisma.product.findMany({
+            where: { id: { in: rowPids } }, select: { id: true, parentId: true },
+          })
+          const parentOf = new Map(prods.map((p) => [p.id, p.parentId ?? p.id]))
+          const familyIds = [...new Set([...parentOf.values()])]
+          const curated = await prisma.listingImage.findMany({
+            where: { productId: { in: familyIds }, platform: 'EBAY', mediaType: 'IMAGE' },
+            orderBy: { position: 'asc' },
+            select: { productId: true, variantGroupKey: true, variantGroupValue: true, variationId: true, url: true },
+          })
+          // per family: shared/default bucket + per-value buckets (+ axis key)
+          const fam = new Map<string, { shared: string[]; byValue: Map<string, string[]>; axis: string | null }>()
+          for (const c of curated) {
+            if (c.variationId) continue
+            let f = fam.get(c.productId)
+            if (!f) { f = { shared: [], byValue: new Map(), axis: null }; fam.set(c.productId, f) }
+            if (!c.variantGroupKey) { f.shared.push(c.url); continue }
+            f.axis = f.axis ?? c.variantGroupKey
+            const k = String(c.variantGroupValue ?? '').toLowerCase()
+            if (!k) continue
+            f.byValue.set(k, [...(f.byValue.get(k) ?? []), c.url])
+          }
+          let mirrored = 0
+          for (const r of rows) {
+            const rec = r as Record<string, unknown>
+            const pid = String(rec._productId ?? '')
+            const famId = parentOf.get(pid)
+            const f = famId ? fam.get(famId) : undefined
+            if (!f) continue // no curation → leave the row's links untouched
+            const isParent = rec._isParent === true || rec.parentage === 'parent' || rec.parentage === ''
+            const urls = isParent
+              ? f.shared
+              : (f.axis ? f.byValue.get(axisValueOfRow(rec, f.axis)) ?? [] : [])
+            if (urls.length === 0) continue
+            for (let i = 1; i <= 6; i++) rec[`image_${i}`] = urls[i - 1] ?? ''
+            mirrored++
+          }
+          if (mirrored > 0) request.log.info({ mirrored }, 'ebay/flat-file/rows: image columns mirrored from Image Manager curation')
+        }
+      } catch (err) {
+        request.log.warn(err, 'ebay/flat-file/rows: image-mirror overlay failed (non-fatal)')
+      }
+
       // FFT.4 — honest pending/failed outbound state per row.
       await stampPendingSync(prisma, rows as Array<Record<string, unknown>>, { channel: 'EBAY', marketplace })
 
