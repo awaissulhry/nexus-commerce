@@ -685,6 +685,7 @@ async function cascadeQuantityToListings(
       fulfillmentMethod: true,
       // SC.1 — Sync Control inputs
       syncPaused: true,
+      offerClosedAt: true,
       sourceLocationCodes: true,
     },
   })
@@ -758,6 +759,7 @@ async function cascadeQuantityToListings(
       channel: listing.channel,
       marketplace: listing.marketplace,
       isFba: method === 'FBA',
+      offerClosed: !!(listing as { offerClosedAt?: Date | null }).offerClosedAt,
       followMasterQuantity: listing.followMasterQuantity,
       syncPaused: (listing as { syncPaused?: boolean }).syncPaused ?? false,
       pinnedQuantity: listing.quantity,

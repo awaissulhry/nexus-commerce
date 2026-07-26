@@ -66,6 +66,8 @@ const BULK_ACTIONS: Array<[string, string]> = [
   ['PAUSE', 'Pause'],
   ['RESUME', 'Resume'],
   ['ZERO_PIN', 'Zero & Pin'],
+  ['CLOSE_OFFER', 'Close offer'],
+  ['REOPEN_OFFER', 'Reopen offer'],
   ['EXCLUDE', 'Exclude'],
   ['INCLUDE', 'Include'],
 ]

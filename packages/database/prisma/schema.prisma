@@ -1493,6 +1493,16 @@ model ChannelListing {
   // columns above + are overlaid on read so they stay authoritative.
   flatFileSnapshot Json?
 
+  // SCT.6 — per-market Amazon offer close (reversible, Amazon-documented
+  // purchasable_offer removal). CLOSED is a first-class state: zero pushes for
+  // this market, siblings unaffected, reviews/ASIN untouched. Snapshot holds
+  // the verbatim purchasable_offer (+productType +control state) frozen at
+  // close so Reopen replays it exactly.
+  offerClosedAt      DateTime?
+  offerClosedBy      String?
+  offerCloseReason   String?
+  offerCloseSnapshot Json?
+
   // ── PIM A.1 — Channel-level master attribute overrides ─────────
   // JSONB bag of overrides for master Product attributes (categoryAttributes,
   // localizedContent keys). Distinct from platformAttributes:

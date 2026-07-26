@@ -6,7 +6,7 @@
 import type { Tone } from '@/design-system/primitives'
 import type { SegmentedOption } from '@/design-system/primitives'
 
-export type Mode = 'FOLLOW' | 'PINNED' | 'PAUSED' | 'PAUSED_POLICY' | 'UNCOUNTED' | 'FBA' | 'EXCLUDED'
+export type Mode = 'FOLLOW' | 'PINNED' | 'PAUSED' | 'PAUSED_POLICY' | 'UNCOUNTED' | 'FBA' | 'EXCLUDED' | 'CLOSED'
 
 export interface Row {
   lane: 'LISTING' | 'SHARED'
@@ -78,6 +78,7 @@ export const MODE_TONE: Record<Mode, Tone> = {
   UNCOUNTED: 'neutral',
   FBA: 'neutral',
   EXCLUDED: 'danger',
+  CLOSED: 'warning',
 }
 
 export const MODE_LABEL: Record<Mode, string> = {
@@ -88,6 +89,7 @@ export const MODE_LABEL: Record<Mode, string> = {
   UNCOUNTED: 'Uncounted',
   FBA: 'FBA',
   EXCLUDED: 'Excluded',
+  CLOSED: 'Closed',
 }
 
 /** SCD.4 — plain-English explanation of each mode, for hover tooltips. */
@@ -99,6 +101,7 @@ export const MODE_HELP: Record<Mode, string> = {
   UNCOUNTED: 'No stock pool yet for this product — nothing is pushed (it never sends a zero).',
   FBA: 'Amazon-managed (FBA) — Amazon controls the quantity; Sync Control never writes it.',
   EXCLUDED: 'This shared eBay variant is deliberately left out of the pool (Include it to re-enable).',
+  CLOSED: 'This market\'s Amazon offer is CLOSED (SCT.6): the price/offer was removed for this marketplace only, so customers there cannot buy it. The SKU, content, ASIN, reviews and every other market are untouched, and this row receives no pushes of any kind. Reopen offer restores it exactly as it was and sets it back to Follow.',
 }
 
 /** SCD.4 — plain-English explanation of each grid column, for header tooltips. */
@@ -140,6 +143,10 @@ export const ACTION_HELP: Record<string, string> = {
     'Include — put previously excluded shared eBay variants back into the pooled quantity, so their units count again on the next push. Applies only to shared-SKU eBay rows.',
   BUFFER:
     'Buffer — hold back a fixed number of units from the marketplace. The pushed quantity becomes pool available minus the buffer, never below zero. Use it as a safety margin against oversell on a slow-syncing channel. Set it to 0 to remove the margin. Applies to every selected row.',
+  CLOSE_OFFER:
+    'Close offer — removes THIS market\'s Amazon offer (Amazon\'s documented per-market close), so customers in that marketplace can no longer buy the SKU. It does NOT touch: reviews or ratings (they live on the ASIN), the product content, other markets\' offers or prices, the shared EU quantity, or warehouse stock. Amazon FBA rows are always refused — Amazon manages their logistics. Pending pushes for the closed row are cancelled and nothing (flat files, imports, heals) can silently reopen it. Undo with Reopen offer. This is the RIGHT tool for "stop selling in DE/FR/ES while IT keeps selling" — unlike quantity, it truly is per-market.',
+  REOPEN_OFFER:
+    'Reopen offer — restores the market\'s Amazon offer exactly as it was when closed (the price and offer details were snapshotted at close time) and sets the row back to Follow, so the shared pool quantity flows to it immediately. Use it when you restock or want to sell in that market again. Only works on rows that are currently Closed; FBA rows are never touched.',
 }
 
 /** SCT.1 — explanation of every non-action control (toolbars, filters, Excel,

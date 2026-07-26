@@ -51,6 +51,8 @@ export interface SyncControlInputs {
   marketplace: string
   /** Canonical fail-closed FBA evaluation (isFbaListing-class signals), computed by the caller. */
   isFba: boolean
+  /** SCT.6 — this market's offer is CLOSED (purchasable_offer removed): zero pushes. */
+  offerClosed?: boolean
   followMasterQuantity: boolean
   syncPaused: boolean
   /** Listing's current pinned value (ChannelListing.quantity when pinned). */
@@ -64,6 +66,7 @@ export interface SyncControlInputs {
 
 export type IntendedResolution =
   | { kind: 'FBA_EXCLUDED' }
+  | { kind: 'CLOSED' }
   | { kind: 'PAUSED'; via: 'POLICY' | 'LISTING' }
   | { kind: 'UNCOUNTED' }
   | { kind: 'PINNED'; quantity: number | null }
@@ -144,6 +147,10 @@ export function resolveIntendedQuantity(i: SyncControlInputs): IntendedResolutio
   // 1 — FBA beats everything. No pause, pin, routing, or policy may ever
   //     turn an FBA listing into a quantity push.
   if (i.isFba) return { kind: 'FBA_EXCLUDED' }
+
+  // 1b — SCT.6: a CLOSED market offer gets ZERO pushes of any kind. Sibling
+  //      markets keep following the pool; Reopen is the only way back.
+  if (i.offerClosed) return { kind: 'CLOSED' }
 
   // 2 — channel/market kill-switch.
   if (i.channelPolicy?.pushesPaused) return { kind: 'PAUSED', via: 'POLICY' }

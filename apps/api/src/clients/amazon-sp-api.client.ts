@@ -806,6 +806,77 @@ export class AmazonSpApiClient {
   }
 
   /**
+   * SCT.6 — close/reopen ONE marketplace's offer for a SKU.
+   *
+   * Amazon's documented "close a listing": delete the purchasable_offer
+   * attribute INSTANCE for that marketplace (selector = marketplace_id +
+   * currency), scoped again by the marketplaceIds query param. The listing
+   * goes Inactive (no offer) in that marketplace only — SKU record, content,
+   * ASIN, reviews, sibling markets and the shared EU quantity are untouched.
+   * Sub-attribute deletes are NOT supported by SP-API (whole-instance only).
+   *
+   * Reopen replays the verbatim purchasable_offer value array captured at
+   * close time (op:replace — also correct when the attribute is absent).
+   */
+  async patchPurchasableOffer(options: {
+    sellerId: string
+    sku: string
+    marketplaceId: string
+    productType: string
+    /** 'delete' closes the market's offer; 'replace' reopens it. */
+    op: 'delete' | 'replace'
+    /** Verbatim purchasable_offer value array (required for both ops:
+     *  delete uses it as the instance SELECTOR, replace as the new value). */
+    value: Array<Record<string, unknown>>
+  }): Promise<{
+    success: boolean
+    sku: string
+    status?: string
+    submissionId?: string
+    error?: string
+    issues?: SPAPIResponse['issues']
+    dryRun?: boolean
+  }> {
+    const { sellerId, sku, marketplaceId, productType, op, value } = options
+    const mode = getAmazonPublishMode()
+    if (mode === 'gated' || mode === 'dry-run') {
+      logger.info(`SP-API patchPurchasableOffer (mode=${mode}, no HTTP)`, { sku, marketplaceId, op })
+      return { success: true, sku, status: 'ACCEPTED', submissionId: `dry-run-${Date.now()}`, dryRun: true }
+    }
+    try {
+      const accessToken = await this.getAccessToken()
+      const patches = [{ op, path: '/attributes/purchasable_offer', value }]
+      const url = new URL(
+        `https://sellingpartnerapi-${this.region}.amazon.com/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(sku)}`,
+      )
+      url.searchParams.set('marketplaceIds', marketplaceId)
+      logger.info('SP-API: patchPurchasableOffer', { sku, marketplaceId, op })
+      const response = await this.fetchWithRetry(
+        url.toString(),
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-amz-access-token': accessToken,
+          },
+          body: JSON.stringify({ productType, patches }),
+        },
+        `patchPurchasableOffer(${sku}:${marketplaceId}:${op})`,
+      )
+      const data = (await response.json()) as SPAPIResponse
+      const errorMessage = this.parseErrors(data)
+      if (errorMessage) {
+        return { success: false, sku, error: errorMessage, issues: data.issues }
+      }
+      return { success: true, sku, status: data.status, submissionId: data.submissionId }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logger.error('SP-API patchPurchasableOffer failed', { sku, marketplaceId, op, error: errorMessage })
+      return { success: false, sku, error: errorMessage }
+    }
+  }
+
+  /**
    * E.8 — putListingsItem (full create-or-replace).
    *
    * Listings Items v2021-08-01 PUT endpoint. Use for first-time publish; the

@@ -37,7 +37,7 @@ const API = getBackendUrl()
 
 const BULK_ACTIONS: Array<[string, string]> = [
   ['FOLLOW', 'Set Follow'], ['PIN', 'Pin'], ['PAUSE', 'Pause'], ['RESUME', 'Resume'],
-  ['ZERO_PIN', 'Zero & Pin'], ['EXCLUDE', 'Exclude'], ['INCLUDE', 'Include'],
+  ['ZERO_PIN', 'Zero & Pin'], ['CLOSE_OFFER', 'Close offer'], ['REOPEN_OFFER', 'Reopen offer'], ['EXCLUDE', 'Exclude'], ['INCLUDE', 'Include'],
 ]
 
 /** SCD.6 — multi-select filter. Several channels/markets/modes at once so a
@@ -199,7 +199,7 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
     const rows = [...selected].map((k) => rowByKey.get(k)).filter((r): r is Row => Boolean(r))
     const listings = rows.filter((r) => r.lane === 'LISTING' && r.mode !== 'FBA' && r.productId)
     const memberships = rows.filter((r) => r.lane === 'SHARED')
-    const listingActs = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER']
+    const listingActs = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER', 'CLOSE_OFFER', 'REOPEN_OFFER']
     const sharedActs = ['EXCLUDE', 'INCLUDE', 'BUFFER']
     const l = listingActs.includes(action) ? listings : []
     const m = sharedActs.includes(action) ? memberships : []

@@ -38,6 +38,7 @@ export async function syncActivatedListings(listingIds: string[]): Promise<void>
         followMasterQuantity: true,
         fulfillmentMethod: true,
         syncPaused: true,
+        offerClosedAt: true,
         sourceLocationCodes: true,
         product: { select: { fulfillmentMethod: true } },
       },
@@ -71,6 +72,7 @@ export async function syncActivatedListings(listingIds: string[]): Promise<void>
       const scRes = resolveIntendedQuantity({
         channel: listing.channel,
         marketplace: (listing as { marketplace?: string }).marketplace ?? 'DEFAULT',
+        offerClosed: !!(listing as { offerClosedAt?: Date | null }).offerClosedAt,
         isFba:
           (listing as { fulfillmentMethod?: string | null }).fulfillmentMethod === 'FBA' ||
           ((listing as { fulfillmentMethod?: string | null }).fulfillmentMethod == null &&

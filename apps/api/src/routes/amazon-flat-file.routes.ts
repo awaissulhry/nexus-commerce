@@ -380,6 +380,37 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'Max 2000 rows per submission' })
     }
 
+    // SCT.6 — a CLOSED market offer must never be resurrected by a flat-file
+    // submit (the feed re-adds price/offer data). Closed SKUs for THIS
+    // marketplace are dropped from the feed and reported per-row.
+    let closedSkipped: string[] = []
+    try {
+      const skus = rows.map((r: { item_sku?: string }) => String(r.item_sku ?? '')).filter(Boolean)
+      const closedRows = await prisma.channelListing.findMany({
+        where: {
+          channel: 'AMAZON',
+          marketplace: { equals: mp, mode: 'insensitive' },
+          offerClosedAt: { not: null },
+          product: { sku: { in: skus } },
+        },
+        select: { product: { select: { sku: true } } },
+      })
+      const closedSet = new Set(closedRows.map((r) => r.product?.sku).filter(Boolean))
+      if (closedSet.size > 0) {
+        closedSkipped = [...closedSet] as string[]
+        const before = rows.length
+        const kept = rows.filter((r: { item_sku?: string }) => !closedSet.has(String(r.item_sku ?? '')))
+        rows.length = 0
+        rows.push(...kept)
+        request.log.warn({ mp, closedSkipped }, 'flat-file/submit: dropped CLOSED-market rows')
+        if (rows.length === 0) {
+          return reply.code(400).send({ error: `All ${before} row(s) are CLOSED in ${mp} — use Reopen offer in Sync Control first`, closedSkipped })
+        }
+      }
+    } catch (err) {
+      request.log.warn({ err: err instanceof Error ? err.message : String(err) }, 'flat-file/submit: closed-market check failed (fail-open)')
+    }
+
     // A5 — pre-flight: surface missing-required / invalid-GTIN / missing-image as a
     // per-row checklist alongside the feedId (warn, not block). C1 adds the EU
     // compliance issues (PPE/CE/GPSR/hazmat) per row's product+market. Computed

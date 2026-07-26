@@ -26,7 +26,7 @@ const SURFACES = [
   'SyncProductsGrid.tsx',
   'product/[masterId]/ProductDetailClient.tsx',
 ]
-const ACTIONS = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'EXCLUDE', 'INCLUDE', 'BUFFER']
+const ACTIONS = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'EXCLUDE', 'INCLUDE', 'BUFFER', 'CLOSE_OFFER', 'REOPEN_OFFER']
 
 describe('SCT.1 — action help', () => {
   it('covers every bulk action on every surface', () => {
@@ -41,6 +41,13 @@ describe('SCT.1 — action help', () => {
     expect(ACTION_HELP.ZERO_PIN).toMatch(/Set Follow/)
     expect(ACTION_HELP.PIN).toMatch(/Set Follow/)
     expect(ACTION_HELP.PAUSE).toMatch(/Resume/)
+  })
+
+  it('Close offer states the reviews/ASIN/other-markets safety + FBA refusal (SCT.6)', () => {
+    expect(ACTION_HELP.CLOSE_OFFER).toMatch(/reviews/i)
+    expect(ACTION_HELP.CLOSE_OFFER).toMatch(/FBA/)
+    expect(ACTION_HELP.CLOSE_OFFER).toMatch(/Reopen offer/)
+    expect(ACTION_HELP.REOPEN_OFFER).toMatch(/Follow/)
   })
 
   it('states what Zero & Pin does NOT touch, so it is not mistaken for a delist', () => {

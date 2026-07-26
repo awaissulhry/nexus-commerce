@@ -201,7 +201,7 @@ export default function SyncControlClient() {
     const rows = [...selected.values()]
     const listings = rows.filter((r) => r.lane === 'LISTING' && r.mode !== 'FBA' && r.productId)
     const memberships = rows.filter((r) => r.lane === 'SHARED')
-    const listingActions = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER']
+    const listingActions = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER', 'CLOSE_OFFER', 'REOPEN_OFFER']
     const sharedActions = ['EXCLUDE', 'INCLUDE', 'BUFFER']
     const l = listingActions.includes(action) ? listings : []
     const m = sharedActions.includes(action) ? memberships : []
@@ -561,6 +561,8 @@ export default function SyncControlClient() {
                 ['PAUSE', 'Pause'],
                 ['RESUME', 'Resume'],
                 ['ZERO_PIN', 'Zero & Pin'],
+                ['CLOSE_OFFER', 'Close offer'],
+                ['REOPEN_OFFER', 'Reopen offer'],
                 ['EXCLUDE', 'Exclude'],
                 ['INCLUDE', 'Include'],
               ].map(([a, label]) => (

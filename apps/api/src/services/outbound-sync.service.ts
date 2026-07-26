@@ -871,7 +871,7 @@ export class OutboundSyncService {
       cl = await prisma.channelListing
         .findUnique({
           where: { id: queueItem.channelListingId },
-          select: { platformAttributes: true, fulfillmentMethod: true, quantity: true, stockBuffer: true, marketplace: true, syncPaused: true },
+          select: { platformAttributes: true, fulfillmentMethod: true, quantity: true, stockBuffer: true, marketplace: true, syncPaused: true, offerClosedAt: true },
         })
         .catch(() => null);
     }
@@ -880,6 +880,11 @@ export class OutboundSyncService {
     // after enqueue still holds.
     if (cl?.syncPaused) {
       return { success: false, queueId, channel: "AMAZON", status: "SKIPPED", message: "Listing sync is PAUSED (Sync Control)", error: "sync-paused" };
+    }
+    // SCT.6 — a CLOSED market offer receives NO pushes of any kind. Reopen is
+    // the only way back; a stray queue row must never resurrect the offer.
+    if ((cl as { offerClosedAt?: Date | null } | null)?.offerClosedAt) {
+      return { success: false, queueId, channel: "AMAZON", status: "SKIPPED", message: "Market offer is CLOSED (Sync Control) — no pushes until Reopen", error: "market-offer-closed" };
     }
     try {
       const scp = policyFor(await loadChannelPolicies(), 'AMAZON', cl?.marketplace ?? marketplaceId);

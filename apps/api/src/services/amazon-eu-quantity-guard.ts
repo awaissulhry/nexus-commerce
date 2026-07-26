@@ -36,6 +36,8 @@ export interface EuIntentRow {
   syncPaused?: boolean | null
   /** FBA rows are Amazon-managed and never participate. */
   isFba?: boolean
+  /** SCT.6 — a CLOSED market offer expresses NO quantity intent. */
+  offerClosed?: boolean
 }
 
 export interface EuIntent {
@@ -47,7 +49,7 @@ export interface EuIntent {
 
 /** The quantity a row intends on the SHARED EU number. */
 export function intentOf(row: EuIntentRow): EuIntent | null {
-  if (row.isFba || row.syncPaused) return null
+  if (row.isFba || row.syncPaused || row.offerClosed) return null
   const mkt = row.marketplace.toUpperCase()
   if (!AMAZON_EU_SHARED_MARKETS.has(mkt)) return null
   if (row.followMasterQuantity === false) {

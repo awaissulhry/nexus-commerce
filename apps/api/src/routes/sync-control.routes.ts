@@ -27,6 +27,7 @@ import { recascadeAfterSyncControlChange } from '../services/stock-movement.serv
 import { enqueueOutboundRowsInstant } from '../services/outbound-enqueue.js'
 import { summarizeProductSync, marketMatches, omitChildrenInList, resolveCanonicalMap, canonicalStem, INLINE_PREVIEW_ROWS, summarizeFamilies, familyKeyOf, rowMatchesScope, type SyncScope } from '../services/sync-control-product-view.js'
 import { projectActionAndDetect, AMAZON_EU_SHARED_MARKETS, EU_GUARD_REMEDY } from '../services/amazon-eu-quantity-guard.js'
+import { closeMarketOffers, reopenMarketOffers } from '../services/amazon-market-offer.service.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../services/product-read-cache.service.js'
 import { buildSyncControlWorkbook, parseSyncControlWorkbook, normalizeModeCell } from '../services/sync-control-excel.js'
 
@@ -38,7 +39,7 @@ function csvFilter(v?: string): string[] {
   return (v ?? '').split(',').map((x) => x.trim()).filter(Boolean)
 }
 
-type Mode = 'FOLLOW' | 'PINNED' | 'PAUSED' | 'PAUSED_POLICY' | 'UNCOUNTED' | 'FBA' | 'EXCLUDED'
+type Mode = 'FOLLOW' | 'PINNED' | 'PAUSED' | 'PAUSED_POLICY' | 'UNCOUNTED' | 'FBA' | 'EXCLUDED' | 'CLOSED'
 
 interface SyncControlRow {
   lane: 'LISTING' | 'SHARED'
@@ -71,6 +72,7 @@ async function buildLedgers(productIds: string[]): Promise<Map<string, RoutedLed
 function modeOf(r: ReturnType<typeof resolveIntendedQuantity>, isShared: boolean): Mode {
   switch (r.kind) {
     case 'FBA_EXCLUDED': return 'FBA'
+    case 'CLOSED': return 'CLOSED'
     case 'PAUSED': return r.via === 'POLICY' ? 'PAUSED_POLICY' : isShared ? 'EXCLUDED' : 'PAUSED'
     case 'PINNED': return 'PINNED'
     case 'UNCOUNTED': return 'UNCOUNTED'
@@ -96,7 +98,7 @@ async function computeRows(): Promise<SyncControlRow[]> {
       },
       select: {
         productId: true, channel: true, marketplace: true, quantity: true, stockBuffer: true,
-        followMasterQuantity: true, fulfillmentMethod: true, syncPaused: true, sourceLocationCodes: true,
+        followMasterQuantity: true, fulfillmentMethod: true, syncPaused: true, sourceLocationCodes: true, offerClosedAt: true,
         product: { select: { sku: true, fulfillmentMethod: true } },
       },
     }),
@@ -135,6 +137,7 @@ async function computeRows(): Promise<SyncControlRow[]> {
       channel: cl.channel,
       marketplace: cl.marketplace,
       isFba,
+      offerClosed: !!cl.offerClosedAt,
       followMasterQuantity: cl.followMasterQuantity,
       syncPaused: cl.syncPaused,
       pinnedQuantity: cl.quantity,
@@ -571,7 +574,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
 
   app.post('/stock/sync-control/actions', async (request, reply) => {
     const body = request.body as {
-      action: 'FOLLOW' | 'PIN' | 'PAUSE' | 'RESUME' | 'ZERO_PIN' | 'EXCLUDE' | 'INCLUDE' | 'BUFFER'
+      action: 'FOLLOW' | 'PIN' | 'PAUSE' | 'RESUME' | 'ZERO_PIN' | 'EXCLUDE' | 'INCLUDE' | 'BUFFER' | 'CLOSE_OFFER' | 'REOPEN_OFFER'
       buffer?: number
       listings?: ListingTarget[]
       memberships?: MembershipTarget[]
@@ -673,7 +676,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
         // "not valid" branch, returning 400 after the fact: the operator was told
         // it failed while it had already happened (and RESUME skipped its
         // recascade, ZERO_PIN had already pushed qty 0 live).
-        const LISTING_LANE = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER']
+        const LISTING_LANE = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER', 'CLOSE_OFFER', 'REOPEN_OFFER']
         const SHARED_LANE = ['EXCLUDE', 'INCLUDE', 'BUFFER']
         if (LISTING_LANE.includes(body.action)) {
           for (const c of clsT) listings.push({ productId: c.productId, channel: c.channel, marketplace: c.marketplace })
@@ -708,7 +711,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
             where: { productId: { in: pids }, channel: 'AMAZON', isPublished: true, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
             select: {
               productId: true, marketplace: true, followMasterQuantity: true, quantityOverride: true,
-              quantity: true, syncPaused: true, fulfillmentMethod: true,
+              quantity: true, syncPaused: true, fulfillmentMethod: true, offerClosedAt: true,
               product: { select: { sku: true } },
             },
           })
@@ -729,6 +732,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
                 quantity: r.quantity,
                 syncPaused: r.syncPaused,
                 isFba: r.fulfillmentMethod === 'FBA',
+                offerClosed: !!r.offerClosedAt,
               }))
             const v = projectActionAndDetect(prodRows, mkts, body.action as 'FOLLOW' | 'PIN' | 'ZERO_PIN')
             if (v.conflict) conflictedPids.push(pid)
@@ -741,6 +745,9 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
               const targeted = targetsByPid.get(pid) ?? new Set<string>()
               const extra = euRows.filter(
                 (r) => r.productId === pid && r.fulfillmentMethod !== 'FBA' &&
+                  // SCT.6 — NEVER expand into a CLOSED market: consenting to an
+                  // EU-wide quantity action must not reopen a closed offer.
+                  !r.offerClosedAt &&
                   AMAZON_EU_SHARED_MARKETS.has(r.marketplace.toUpperCase()) &&
                   !targeted.has(r.marketplace.toUpperCase()),
               )
@@ -796,6 +803,43 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
           const channel = groupKey.split('|')[0]
           const productIds = [...new Set(targets.map((t) => t.productId))]
           const markets = [...new Set(targets.map((t) => t.marketplace))]
+
+          // SCT.6 — per-market offer CLOSE/REOPEN (Amazon only; eBay has real
+          // per-listing quantities and never needs this).
+          if (body.action === 'CLOSE_OFFER' || body.action === 'REOPEN_OFFER') {
+            if (channel !== 'AMAZON') {
+              result.unchanged += targets.length
+              continue
+            }
+            const svcTargets = targets.map((t) => ({ productId: t.productId, marketplace: t.marketplace }))
+            const r = body.action === 'CLOSE_OFFER'
+              ? await closeMarketOffers({ targets: svcTargets, actor })
+              : await reopenMarketOffers({ targets: svcTargets, actor })
+            result.updated += r.updated
+            result.skippedFba += r.skippedFba
+            result.unchanged += r.unchanged
+            if (r.failed > 0) {
+              result.partial = true
+              const failures = r.results.filter((x) => x.action === 'FAILED').slice(0, 3)
+                .map((x) => `${x.sku ?? x.productId}@${x.marketplace}: ${x.detail ?? 'failed'}`)
+              const msg = `${body.action}: ${r.failed} row(s) failed — ${failures.join(' · ')}${r.failed > 3 ? ` · +${r.failed - 3} more` : ''}`
+              result.error = result.error ? `${result.error} · ${msg}` : msg
+            }
+            if (r.error) {
+              result.partial = true
+              const msg = `${body.action} stopped after ${r.updated} update(s): ${r.error}${r.remaining ? ` — ${r.remaining} row(s) not attempted; re-run to continue` : ''}`
+              result.error = result.error ? `${result.error} · ${msg}` : msg
+            }
+            await audit(
+              r.results
+                .filter((x) => x.action === 'CLOSED' || x.action === 'REOPENED')
+                .map((x) => ({
+                  scopeType: 'LISTING', scopeId: `${x.productId}:AMAZON:${x.marketplace}`,
+                  scopeName: `${x.sku ?? '?'}@AMAZON:${x.marketplace}`, field: 'offerClosed',
+                  after: { closed: x.action === 'CLOSED' },
+                })), actor)
+            continue
+          }
 
           if (body.action === 'FOLLOW' || body.action === 'PIN') {
             const r = await setFollowMasterQuantity({
@@ -1249,6 +1293,9 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       // Prefer exact lane match; fall back to either lane by (sku,channel,market).
       const cur = byKey.get(key) ?? rows.find((r) => r.sku === e.sku && r.channel === e.channel && r.marketplace === e.market && (e.itemId ? r.itemId === e.itemId : true))
       if (!cur) { skipped.push({ key: `${e.sku}@${e.channel}:${e.market}`, reason: 'no matching listing' }); continue }
+      // SCT.6 — a CLOSED market offer is never modified via Excel: reopening
+      // is a deliberate action, not an import side effect.
+      if (cur.mode === 'CLOSED') { skipped.push({ key: `${e.sku}@${e.channel}:${e.market}`, reason: 'market offer CLOSED — use Reopen offer' }); continue }
       if (cur.mode === 'FBA' || e.locked) { skipped.push({ key: `${e.sku}@${e.channel}:${e.market}`, reason: 'FBA (Amazon-managed)' }); continue }
 
       const want = normalizeModeCell(e.mode)

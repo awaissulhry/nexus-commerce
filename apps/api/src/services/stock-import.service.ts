@@ -860,7 +860,7 @@ async function executeApplyImport(args: {
             id: true, productId: true, channel: true, region: true, marketplace: true,
             externalListingId: true, quantity: true, masterQuantity: true, stockBuffer: true,
             followMasterQuantity: true, fulfillmentMethod: true, quantityOverride: true,
-            listingStatus: true, syncPaused: true, sourceLocationCodes: true,
+            listingStatus: true, syncPaused: true, sourceLocationCodes: true, offerClosedAt: true,
           },
         })
       : [],
@@ -1108,6 +1108,7 @@ async function executeApplyImport(args: {
         channel: listing.channel,
         marketplace: listing.marketplace,
         isFba: method === 'FBA',
+        offerClosed: !!(listing as { offerClosedAt?: Date | null }).offerClosedAt,
         followMasterQuantity: listing.followMasterQuantity,
         syncPaused: (listing as { syncPaused?: boolean }).syncPaused ?? false,
         pinnedQuantity: listing.quantity,
