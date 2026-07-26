@@ -1275,6 +1275,46 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
               where: { id },
               data: directData,
             })
+
+            // SCT.6c — fulfillment method CASCADES to variants. The AIREON
+            // FBA→FBM conversion stalled because the edit page changed the
+            // MASTER while all 24 variants kept fulfillmentMethod='FBA', and
+            // the fail-closed FBA guard reads the VARIANT — with no UI path
+            // to fix it. Going FBM, a variant with LIVE FBA evidence (FBA
+            // stock on hand or an active FBA offer) is held back fail-closed;
+            // going FBA cascades plainly (locking harder is always safe).
+            if (directData.fulfillmentMethod !== undefined) {
+              const kids = await tx.product.findMany({
+                where: { parentId: id, deletedAt: null },
+                select: { id: true },
+              })
+              if (kids.length > 0) {
+                let targetIds = kids.map((k) => k.id)
+                if (String(directData.fulfillmentMethod).toUpperCase() === 'FBM') {
+                  const held = new Set<string>()
+                  const fbaStock = await tx.stockLevel.findMany({
+                    where: { productId: { in: targetIds }, location: { code: 'AMAZON-EU-FBA' }, quantity: { gt: 0 } },
+                    select: { productId: true },
+                  })
+                  for (const r of fbaStock) held.add(r.productId)
+                  const fbaOffers = await tx.offer.findMany({
+                    where: { channelListing: { productId: { in: targetIds } }, fulfillmentMethod: 'FBA', isActive: true },
+                    select: { channelListing: { select: { productId: true } } },
+                  }).catch(() => [] as Array<{ channelListing: { productId: string } | null }>)
+                  for (const o of fbaOffers) if (o.channelListing?.productId) held.add(o.channelListing.productId)
+                  targetIds = targetIds.filter((kid) => !held.has(kid))
+                  if (held.size > 0) {
+                    request.log.warn({ productId: id, held: held.size }, 'fulfillmentMethod cascade: variants with live FBA evidence held back')
+                  }
+                }
+                if (targetIds.length > 0) {
+                  await tx.product.updateMany({
+                    where: { id: { in: targetIds } },
+                    data: { fulfillmentMethod: directData.fulfillmentMethod },
+                  })
+                }
+              }
+            }
           }
         })
       } catch (err: any) {

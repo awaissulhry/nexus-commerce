@@ -99,7 +99,7 @@ export const MODE_HELP: Record<Mode, string> = {
   PAUSED: 'Frozen — nothing is pushed to the marketplace until you Resume it.',
   PAUSED_POLICY: 'Paused by a channel/market kill-switch policy (Resume the policy to re-enable pushes).',
   UNCOUNTED: 'No stock pool yet for this product — nothing is pushed (it never sends a zero).',
-  FBA: 'Amazon-managed (FBA) — Amazon controls the quantity; Sync Control never writes it.',
+  FBA: 'Amazon-managed (FBA) — Amazon controls the quantity; Sync Control never writes it. If you have CONVERTED this SKU to FBM and it still shows FBA, one of five safety signals is still latched — most often the VARIANT product\'s fulfillment method: edit the MASTER product, set fulfillment to FBM, and it now cascades to every variant (variants with live FBA stock or an active FBA offer are held back for safety). Then Set Follow to push immediately.',
   EXCLUDED: 'This shared eBay variant is deliberately left out of the pool (Include it to re-enable).',
   CLOSED: 'This market\'s Amazon offer is CLOSED (SCT.6): the price/offer was removed for this marketplace only, so customers there cannot buy it. The SKU, content, ASIN, reviews and every other market are untouched, and this row receives no pushes of any kind. Reopen offer restores it exactly as it was and sets it back to Follow.',
 }
