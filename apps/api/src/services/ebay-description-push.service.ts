@@ -317,7 +317,7 @@ export async function pushDescriptions(
       const mode: 'group' | 'single' = children.length > 0 ? 'group' : 'single'
 
       // ED v2 P5 — after ANY listing of this family is actually revised, stamp
-      // the delivery (fire-and-forget) so the staleness badge clears.
+      // the delivery (awaited below, DS-0) so the staleness badge clears.
       let anyRevised = false
       let revisedThemeInfo: { themeId?: string; themeVersion?: number } = {}
 
@@ -462,14 +462,21 @@ export async function pushDescriptions(
       }
 
       // ED v2 P5 — staleness stamp (D8). One stamp per family × market, only
-      // when a live description actually changed; fire-and-forget so a stamp
-      // problem can never fail (or delay) the push result.
+      // when a live description actually changed. DS-0: AWAITED so the stamp
+      // is committed before this service returns — the client's post-push
+      // staleness refetch reads state, never races it. Still guarded by its
+      // own try/catch (and the stamp helper never rejects): a stamp problem
+      // can never fail the push result.
       if (anyRevised) {
-        stampDescriptionPushSafe(
-          prisma,
-          { productId: root.id, marketplace, ...revisedThemeInfo },
-          (msg) => ctx.log?.warn({ productId: root.id, parentSku: root.sku, marketplace }, `ebay-description-push: ${msg}`),
-        )
+        try {
+          await stampDescriptionPushSafe(
+            prisma,
+            { productId: root.id, marketplace, ...revisedThemeInfo },
+            (msg) => ctx.log?.warn({ productId: root.id, parentSku: root.sku, marketplace }, `ebay-description-push: ${msg}`),
+          )
+        } catch {
+          /* stamp failure never fails (or errors) the push */
+        }
       }
     } catch (err) {
       summary.error = err instanceof Error ? err.message : String(err)

@@ -15,6 +15,29 @@ import {
   evaluateDescriptionStaleness,
 } from '../services/ebay-description-theme.service.js'
 
+/**
+ * DS-0 — resolve a product id to its FAMILY ROOT (mirror of the push
+ * service's walk in ebay-description-push.service.ts: ≤3 hops, deleted
+ * parents stop the walk). Unknown ids resolve to themselves so existing
+ * behaviour (render/lookup against the given id) is preserved.
+ */
+async function resolveFamilyRootId(productId: string): Promise<string> {
+  let node = await prisma.product.findFirst({
+    where: { id: productId, deletedAt: null },
+    select: { id: true, parentId: true },
+  })
+  if (!node) return productId
+  for (let hop = 0; node.parentId && hop < 3; hop++) {
+    const parent = await prisma.product.findFirst({
+      where: { id: node.parentId, deletedAt: null },
+      select: { id: true, parentId: true },
+    })
+    if (!parent) break
+    node = parent
+  }
+  return node.id
+}
+
 export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstance) {
   // ── List (seeds the built-in starters on first call) ─────────────────────
   fastify.get('/ebay/description-themes', async (_request, reply) => {
@@ -28,23 +51,86 @@ export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstan
   // any other string → that theme id. The column is untyped JSON, so grouping
   // happens in JS — the whole eBay listing set is small enough to scan on a
   // modal open. No eBay calls, no writes.
-  fastify.get('/ebay/description-themes/usage', async (_request, reply) => {
-    const listings = await prisma.channelListing.findMany({
-      where: { channel: 'EBAY' },
-      select: { platformAttributes: true },
-    })
-    const byThemeId: Record<string, number> = {}
-    let usingDefault = 0
-    let raw = 0
-    for (const l of listings) {
-      const attrs = (l.platformAttributes ?? {}) as Record<string, unknown>
-      const v = typeof attrs.descriptionThemeId === 'string' ? attrs.descriptionThemeId : ''
-      if (v === '') usingDefault += 1
-      else if (v === 'none') raw += 1
-      else byThemeId[v] = (byThemeId[v] ?? 0) + 1
-    }
-    return reply.send({ total: listings.length, default: usingDefault, raw, byThemeId })
-  })
+  //
+  // DS-0 — optional ?marketplace= narrows to that market's region AND counts
+  // by FAMILY ROOT (child listings don't inflate counts; the root's own row
+  // wins because assignment lives on the family parent's CL). Absent param =
+  // exactly the legacy all-listings behaviour.
+  fastify.get<{ Querystring: { marketplace?: string } }>(
+    '/ebay/description-themes/usage',
+    async (request, reply) => {
+      const marketplace = request.query.marketplace?.trim().toUpperCase() || undefined
+
+      const countAssignments = (attrsList: Iterable<Record<string, unknown>>) => {
+        const byThemeId: Record<string, number> = {}
+        let usingDefault = 0
+        let raw = 0
+        let total = 0
+        for (const attrs of attrsList) {
+          total += 1
+          const v = typeof attrs.descriptionThemeId === 'string' ? attrs.descriptionThemeId : ''
+          if (v === '') usingDefault += 1
+          else if (v === 'none') raw += 1
+          else byThemeId[v] = (byThemeId[v] ?? 0) + 1
+        }
+        return { total, default: usingDefault, raw, byThemeId }
+      }
+
+      if (!marketplace) {
+        // Legacy: every eBay listing row, all markets, no root-resolve.
+        const listings = await prisma.channelListing.findMany({
+          where: { channel: 'EBAY' },
+          select: { platformAttributes: true },
+        })
+        return reply.send(
+          countAssignments(listings.map((l) => (l.platformAttributes ?? {}) as Record<string, unknown>)),
+        )
+      }
+
+      const region = marketplace === 'UK' ? 'GB' : marketplace
+      const listings = await prisma.channelListing.findMany({
+        where: { channel: 'EBAY', region },
+        select: { productId: true, platformAttributes: true },
+      })
+
+      // Batch FAMILY-ROOT resolve (same walk as the staleness endpoint, ≤3 hops).
+      const parentOf = new Map<string, string | null>()
+      let frontier = [...new Set(listings.map((l) => l.productId))]
+      for (let hop = 0; hop < 3 && frontier.length > 0; hop++) {
+        const prods = await prisma.product.findMany({
+          where: { id: { in: frontier } },
+          select: { id: true, parentId: true },
+        })
+        for (const p of prods) parentOf.set(p.id, p.parentId)
+        frontier = [...new Set(
+          prods
+            .map((p) => p.parentId)
+            .filter((pid): pid is string => !!pid && !parentOf.has(pid)),
+        )]
+      }
+      const rootOf = (id: string): string => {
+        let cur = id
+        for (let hop = 0; hop < 3; hop++) {
+          const up = parentOf.get(cur)
+          if (!up) break
+          cur = up
+        }
+        return cur
+      }
+
+      // ONE entry per family root: the root's own listing row wins (that is
+      // the row the renderer reads the assignment from); a child row only
+      // stands in when the root has no row for this market.
+      const attrsByRoot = new Map<string, Record<string, unknown>>()
+      for (const l of listings) {
+        const root = rootOf(l.productId)
+        if (l.productId === root || !attrsByRoot.has(root)) {
+          attrsByRoot.set(root, (l.platformAttributes ?? {}) as Record<string, unknown>)
+        }
+      }
+      return reply.send({ marketplace, ...countAssignments(attrsByRoot.values()) })
+    },
+  )
 
   // ── ED v2 P5 — description STALENESS, read-only (operator decision D8) ────
   // eBay HTML is static: a push renders theme+curation ONCE and the live
@@ -168,13 +254,20 @@ export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstan
     },
   )
 
-  fastify.put<{ Params: { id: string }; Body: { name?: string; html?: string; notes?: string; active?: boolean } }>(
+  fastify.put<{ Params: { id: string }; Body: { name?: string; html?: string; notes?: string; active?: boolean; expectedVersion?: number } }>(
     '/ebay/description-themes/:id',
     async (request, reply) => {
       const { id } = request.params
-      const { name, html, notes, active } = request.body ?? {}
+      const { name, html, notes, active, expectedVersion } = request.body ?? {}
       const existing = await prisma.ebayDescriptionTheme.findUnique({ where: { id } })
       if (!existing) return reply.code(404).send({ error: 'Theme not found' })
+      // DS-0 — optimistic concurrency (opt-in): a stale editor's save loses
+      // loudly instead of silently clobbering. Absent = legacy last-write-wins.
+      if (typeof expectedVersion === 'number' && expectedVersion !== existing.version) {
+        return reply
+          .code(409)
+          .send({ error: 'version conflict — theme was modified elsewhere', currentVersion: existing.version })
+      }
       const theme = await prisma.ebayDescriptionTheme.update({
         where: { id },
         data: {
@@ -226,20 +319,31 @@ export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstan
   }>('/ebay/description-preview', async (request, reply) => {
     const { productId, marketplace = 'IT', sku, mode = 'group', body, title, themeId, themeHtml } = request.body ?? {}
     if (!productId) return reply.code(400).send({ error: 'productId required' })
+    // DS-0 — a child-row seed previews its FAMILY (per-market content, theme
+    // assignment and galleries all live on the root's listing row, which is
+    // exactly what a push renders). Root products resolve to themselves.
+    const rootProductId = await resolveFamilyRootId(productId)
     const listing = await prisma.channelListing.findFirst({
-      where: { productId, channel: 'EBAY', region: marketplace.toUpperCase() === 'UK' ? 'GB' : marketplace.toUpperCase() },
+      where: { productId: rootProductId, channel: 'EBAY', region: marketplace.toUpperCase() === 'UK' ? 'GB' : marketplace.toUpperCase() },
       select: { description: true, title: true },
     })
+    const resolvedBody = body ?? listing?.description ?? ''
     const result = await renderListingDescriptionSafe(prisma, {
-      productId,
+      productId: rootProductId,
       marketplace,
       mode,
       sku,
-      body: body ?? listing?.description ?? '',
+      body: resolvedBody,
       title: title ?? listing?.title ?? undefined,
       themeIdOverride: themeId,
       themeHtmlOverride: themeHtml,
     })
+    // DS-0 — an empty per-market body is a WARNING, never an error: the theme
+    // shell still renders so the operator sees the truth of what a push would
+    // send (the push itself refuses empty bodies — see the push service).
+    if (!resolvedBody.trim()) {
+      result.warnings.push(`body: empty — no ${marketplace.toUpperCase()} listing content for this product`)
+    }
     return reply.send(result)
   })
 }

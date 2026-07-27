@@ -467,6 +467,50 @@ describe('pushDescriptions', () => {
     expect(mockStamp).not.toHaveBeenCalled()
   })
 
+  it('DS-0: AWAITS the staleness stamp — the stamp write completes before the service resolves', async () => {
+    echoRender()
+    tradingEcho()
+    let stampCompleted = false
+    mockStamp.mockImplementation(
+      () =>
+        new Promise<void>((resolve) =>
+          setTimeout(() => {
+            stampCompleted = true
+            resolve()
+          }, 25),
+        ),
+    )
+    const prisma = mockPrisma({
+      products: [{ id: 'p1', sku: 'FAM-1', parentId: null }],
+      parentCl: { id: 'cl-1', externalListingId: '2220000001', title: 'T', description: 'Body', platformAttributes: {}, flatFileSnapshot: null },
+      familyCls: [{ platformAttributes: {} }],
+    })
+
+    const res = await pushDescriptions({ productIds: ['p1'] }, ctxWith(prisma))
+
+    // Before DS-0 the stamp was fire-and-forget: the service resolved while
+    // the stamp write was still in flight and the client's post-push staleness
+    // refetch could read the PRE-stamp state. Now the commit happens first.
+    expect(stampCompleted).toBe(true)
+    expect(mockStamp).toHaveBeenCalledTimes(1)
+    expect(res.listings[0].outcome).toBe('revised')
+  })
+
+  it('DS-0: a stamp failure never fails the push (awaited but guarded)', async () => {
+    echoRender()
+    tradingEcho()
+    mockStamp.mockRejectedValue(new Error('stamp exploded'))
+    const prisma = mockPrisma({
+      products: [{ id: 'p1', sku: 'FAM-1', parentId: null }],
+      parentCl: { id: 'cl-1', externalListingId: '2220000001', title: 'T', description: 'Body', platformAttributes: {}, flatFileSnapshot: null },
+      familyCls: [{ platformAttributes: {} }],
+    })
+
+    const res = await pushDescriptions({ productIds: ['p1'] }, ctxWith(prisma))
+    expect(res.listings[0].outcome).toBe('revised')
+    expect(res.products[0].error).toBeUndefined()
+  })
+
   it('child product id resolves up to the family root; unknown product reports a per-product error', async () => {
     echoRender()
     tradingEcho()

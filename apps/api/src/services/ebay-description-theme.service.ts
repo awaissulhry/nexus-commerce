@@ -415,16 +415,19 @@ export async function stampDescriptionPush(
 }
 
 /**
- * FIRE-AND-FORGET stamp for push sites: computes the current gallery hash,
- * stamps, and reports any problem through `warn` — it never throws and never
- * blocks the push that calls it.
+ * SAFE stamp for push sites: computes the current gallery hash, stamps, and
+ * reports any problem through `warn` — the returned promise NEVER rejects, so
+ * a stamp failure can never fail the push that calls it. DS-0: the promise is
+ * returned (instead of swallowed) so a caller can AWAIT commit — the client's
+ * post-push staleness refetch must read committed state, not race the write.
+ * Fire-and-forget call sites may still ignore the return value unchanged.
  */
 export function stampDescriptionPushSafe(
   prisma: PrismaClient,
   args: { productId: string; marketplace: string; themeId?: string | null; themeVersion?: number | null },
   warn?: (msg: string) => void,
-): void {
-  void computeDescriptionGalleryHash(prisma, args.productId)
+): Promise<void> {
+  return computeDescriptionGalleryHash(prisma, args.productId)
     .then((galleryHash) => stampDescriptionPush(prisma, { ...args, galleryHash }))
     .then((stamped) => {
       if (!stamped) warn?.(`description-push stamp skipped — no eBay ChannelListing for ${args.productId} on ${args.marketplace}`)
