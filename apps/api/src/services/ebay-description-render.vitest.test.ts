@@ -417,10 +417,58 @@ describe('Xavia Modernist — operator design, token-driven, sanitizer-proof', (
     expect(html).not.toMatch(/<details>\s*<summary/) // none bare/closed — every match above is "open"
   })
 
-  it(':has()-less fallback keeps the default policy tab visible even where the verbatim :has() rule is dropped', () => {
-    const { html } = renderDescriptionTheme(modernist, data)
-    expect(html).toContain('.ebd .tabpanel--1{ display:block; }')
-    expect(html).toContain('.ebd .tabwrap:has(.tabpanel:target) .tabpanel--1:not(:target){ display:none; }')
+  // Operator-reported 2026-07-27: on a phone you could not tell which policy
+  // tab you were on, and the tab bar's separator lines broke once it wrapped.
+  // Root cause was the mechanism, not the paint: :target styled the PANEL and
+  // nothing marked the TAB, and deriving the active tab from :target needs
+  // :has() — the one feature that vanishes on eBay's embedded WebViews.
+  describe('policy tabs run WITHOUT :has() or :target (mobile active-state regression)', () => {
+    it('drives panel AND active tab from the same :checked ~ state', () => {
+      const { html } = renderDescriptionTheme(modernist, data)
+      // one radio per tab, first pre-checked so the recesso copy is visible cold
+      expect(html).toContain('<input class="tabradio" type="radio" name="xvpol" id="xvpol-ship" checked>')
+      expect(html).toContain('<label for="xvpol-ship">Spedizione</label>')
+      // panel visibility
+      expect(html).toContain('.ebd #xvpol-ship:checked ~ .tabpanel--1,')
+      // active-tab highlight — the thing that was missing entirely
+      expect(html).toContain('.ebd #xvpol-ship:checked ~ .tabbar label[for="xvpol-ship"],')
+      expect(html).toContain('background:var(--ink); color:#fff;')
+    })
+
+    it('no policy-tab rule depends on :has() or :target any more', () => {
+      const { html } = renderDescriptionTheme(modernist, data)
+      // Selector lines only — the rationale comment legitimately NAMES both
+      // features while explaining why they were dropped, and comments ship
+      // inside the description HTML.
+      const selectorLines = html.split('\n').filter((l) => l.trimStart().startsWith('.ebd '))
+      expect(selectorLines.filter((l) => l.includes(':target'))).toEqual([])
+      // The ONLY surviving :has() is the Colori auto-hide — no CSS-only
+      // equivalent exists, and it is a documented, non-legal degradation.
+      const hasRules = selectorLines.filter((l) => l.includes(':has('))
+      expect(hasRules).toHaveLength(1)
+      expect(hasRules[0]).toContain('.sec--colours')
+    })
+
+    it('tab separators survive wrapping — every label carries its own lines, no :last-child exception', () => {
+      const { html } = renderDescriptionTheme(modernist, data)
+      expect(html).toContain('border-right:1px solid var(--line); border-bottom:1px solid var(--line);')
+      // the exact rule that broke row 2 at 375px
+      expect(html).not.toContain('.ebd .tabbar a:last-child{ border-right:0; }')
+    })
+
+    // The standing guard, so this class of bug cannot silently return: ANY
+    // built-in theme that ships a tab bar must mark its active tab. A theme
+    // whose tabs can only be told apart by :hover is unusable on a phone.
+    it('EVERY built-in theme with a .tabbar also ships an active-tab rule', () => {
+      const withTabs = BUILT_IN_THEMES.filter((t) => t.html.includes('.tabbar'))
+      expect(withTabs.length).toBeGreaterThan(0)
+      for (const t of withTabs) {
+        const marksActive =
+          /:checked\s*~\s*\.tabbar\s+label/.test(t.html) ||
+          /\.tabbar\s+[^{]*(?:\[aria-selected="true"\]|\.is-active)/.test(t.html)
+        expect(marksActive, `theme "${t.name}" has tabs but no active-tab styling`).toBe(true)
+      }
+    })
   })
 
   it('section-toggle contract extends to the two XAVIA-added sections (no-body/no-colours)', () => {

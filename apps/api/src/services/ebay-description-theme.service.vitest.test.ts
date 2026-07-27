@@ -410,7 +410,10 @@ describe('ensureBuiltInThemes — upgrade guard', () => {
 // first one — this proves BOTH Modernist predecessors upgrade correctly.
 describe('ensureBuiltInThemes — Xavia Modernist upgrade chain (prod incident regression)', () => {
   const MODERNIST = BUILT_IN_THEMES.find((t) => t.name === 'Xavia Modernist')!
-  const [MOD_V1_HTML, MOD_V2_HTML] = BUILT_IN_PREVIOUS['Xavia Modernist']
+  const MOD_PREV = BUILT_IN_PREVIOUS['Xavia Modernist']
+  const [MOD_V1_HTML, MOD_V2_HTML] = MOD_PREV
+  /** Always the version shipped immediately before the current constant. */
+  const MOD_LATEST_PREV_HTML = MOD_PREV[MOD_PREV.length - 1]
   const otherRows = BUILT_IN_THEMES.filter((t) => t.name !== MODERNIST.name).map((t) => ({
     name: t.name,
     html: t.html,
@@ -428,13 +431,28 @@ describe('ensureBuiltInThemes — Xavia Modernist upgrade chain (prod incident r
   }
   const asClient = (m: ReturnType<typeof seedPrisma>) => m as unknown as Parameters<typeof ensureBuiltInThemes>[0]
 
-  it('BUILT_IN_PREVIOUS carries BOTH predecessors, and neither equals the current html', () => {
-    expect(BUILT_IN_PREVIOUS['Xavia Modernist']).toHaveLength(2)
-    expect(MOD_V1_HTML).toBeTruthy()
-    expect(MOD_V2_HTML).toBeTruthy()
-    expect(MOD_V1_HTML).not.toBe(MODERNIST.html)
-    expect(MOD_V2_HTML).not.toBe(MODERNIST.html)
-    expect(MOD_V1_HTML).not.toBe(MOD_V2_HTML)
+  // Deliberately NOT a fixed count: every future edit to XAVIA_MODERNIST_HTML
+  // must append its predecessor here, and a hard-coded length would fail as a
+  // chore rather than catching the thing that actually matters — that every
+  // registered version is distinct and none of them equals the current html.
+  it('BUILT_IN_PREVIOUS carries every predecessor, all distinct, none equal to the current html', () => {
+    expect(MOD_PREV.length).toBeGreaterThanOrEqual(2)
+    for (const html of MOD_PREV) {
+      expect(html).toBeTruthy()
+      expect(html).not.toBe(MODERNIST.html)
+    }
+    expect(new Set(MOD_PREV).size).toBe(MOD_PREV.length)
+  })
+
+  // The prod incident in one line: whatever shipped last must be recognized,
+  // or the live row silently stays on the previous design forever.
+  it('a row on the IMMEDIATELY previous shipped version upgrades to current', async () => {
+    const prisma = seedPrisma([{ name: MODERNIST.name, html: MOD_LATEST_PREV_HTML, builtIn: true }, ...otherRows])
+    await ensureBuiltInThemes(asClient(prisma))
+    expect(prisma.ebayDescriptionTheme.update).toHaveBeenCalledWith({
+      where: { name: MODERNIST.name },
+      data: { html: MODERNIST.html, notes: MODERNIST.notes, version: { increment: 1 } },
+    })
   })
 
   it('a row stuck at v1 (the exact prod incident) upgrades straight to current', async () => {
