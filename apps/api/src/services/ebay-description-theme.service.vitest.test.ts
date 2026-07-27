@@ -400,3 +400,58 @@ describe('ensureBuiltInThemes — upgrade guard', () => {
     expect(prisma.ebayDescriptionTheme.update).not.toHaveBeenCalled()
   })
 })
+
+// Regression for a real prod incident (2026-07-27): Xavia Modernist shipped
+// three times (design conversion, then two content-fix commits) but only the
+// FIRST version ever reached BUILT_IN_PREVIOUS — the seeded DB row stayed
+// frozen at v1 through both later deploys because ensureBuiltInThemes had no
+// prior version to recognize it against. Every theme with a post-launch fix
+// history needs ALL its prior shipped versions registered, not just its
+// first one — this proves BOTH Modernist predecessors upgrade correctly.
+describe('ensureBuiltInThemes — Xavia Modernist upgrade chain (prod incident regression)', () => {
+  const MODERNIST = BUILT_IN_THEMES.find((t) => t.name === 'Xavia Modernist')!
+  const [MOD_V1_HTML, MOD_V2_HTML] = BUILT_IN_PREVIOUS['Xavia Modernist']
+  const otherRows = BUILT_IN_THEMES.filter((t) => t.name !== MODERNIST.name).map((t) => ({
+    name: t.name,
+    html: t.html,
+    builtIn: true,
+  }))
+
+  function seedPrisma(rows: Array<{ name: string; html: string; builtIn: boolean }>) {
+    return {
+      ebayDescriptionTheme: {
+        findMany: vi.fn(async () => rows),
+        create: vi.fn(async () => ({})),
+        update: vi.fn(async () => ({})),
+      },
+    }
+  }
+  const asClient = (m: ReturnType<typeof seedPrisma>) => m as unknown as Parameters<typeof ensureBuiltInThemes>[0]
+
+  it('BUILT_IN_PREVIOUS carries BOTH predecessors, and neither equals the current html', () => {
+    expect(BUILT_IN_PREVIOUS['Xavia Modernist']).toHaveLength(2)
+    expect(MOD_V1_HTML).toBeTruthy()
+    expect(MOD_V2_HTML).toBeTruthy()
+    expect(MOD_V1_HTML).not.toBe(MODERNIST.html)
+    expect(MOD_V2_HTML).not.toBe(MODERNIST.html)
+    expect(MOD_V1_HTML).not.toBe(MOD_V2_HTML)
+  })
+
+  it('a row stuck at v1 (the exact prod incident) upgrades straight to current', async () => {
+    const prisma = seedPrisma([{ name: MODERNIST.name, html: MOD_V1_HTML, builtIn: true }, ...otherRows])
+    await ensureBuiltInThemes(asClient(prisma))
+    expect(prisma.ebayDescriptionTheme.update).toHaveBeenCalledWith({
+      where: { name: MODERNIST.name },
+      data: { html: MODERNIST.html, notes: MODERNIST.notes, version: { increment: 1 } },
+    })
+  })
+
+  it('a row stuck at v2 (the intermediate fix commit) also upgrades to current', async () => {
+    const prisma = seedPrisma([{ name: MODERNIST.name, html: MOD_V2_HTML, builtIn: true }, ...otherRows])
+    await ensureBuiltInThemes(asClient(prisma))
+    expect(prisma.ebayDescriptionTheme.update).toHaveBeenCalledWith({
+      where: { name: MODERNIST.name },
+      data: { html: MODERNIST.html, notes: MODERNIST.notes, version: { increment: 1 } },
+    })
+  })
+})
