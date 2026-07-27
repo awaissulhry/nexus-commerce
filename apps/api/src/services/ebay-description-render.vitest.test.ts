@@ -456,9 +456,29 @@ describe('Xavia Modernist — operator design, token-driven, sanitizer-proof', (
       expect(html).not.toContain('.ebd .tabbar a:last-child{ border-right:0; }')
     })
 
-    // The standing guard, so this class of bug cannot silently return: ANY
-    // built-in theme that ships a tab bar must mark its active tab. A theme
-    // whose tabs can only be told apart by :hover is unusable on a phone.
+    // Regression (self-inflicted, 2026-07-27): a CSS COMMENT added to this
+    // section wrote "{{gallery_hero}}" verbatim while explaining the mechanism.
+    // Token substitution runs over the entire theme string — comments and
+    // <style> included — so it minted a SECOND hero gallery inside the <style>
+    // block, whose s1..s8 element ids collided with the real one and tore the
+    // rendered gallery apart. It slipped through because the render fixture had
+    // NO images, so the duplicate expanded to nothing. These guard the class,
+    // not just the instance.
+    it('no built-in theme repeats an id-minting token (a duplicate hero collides its element ids)', () => {
+      for (const t of BUILT_IN_THEMES) {
+        const heroes = t.html.match(/\{\{\s*gallery_hero\s*\}\}/g) ?? []
+        expect(heroes.length, `theme "${t.name}" references gallery_hero ${heroes.length}x`).toBeLessThanOrEqual(1)
+      }
+    })
+
+    it('no built-in theme hides a {{token}} inside its <style> block (comments included)', () => {
+      for (const t of BUILT_IN_THEMES) {
+        for (const style of t.html.match(/<style[^>]*>[\s\S]*?<\/style>/g) ?? []) {
+          const stray = style.match(/\{\{\s*[a-z0-9_]+\s*\}\}/gi) ?? []
+          expect(stray, `theme "${t.name}" has ${stray.join(', ')} inside <style>`).toEqual([])
+        }
+      }
+    })
     it('EVERY built-in theme with a .tabbar also ships an active-tab rule', () => {
       const withTabs = BUILT_IN_THEMES.filter((t) => t.html.includes('.tabbar'))
       expect(withTabs.length).toBeGreaterThan(0)

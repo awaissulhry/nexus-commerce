@@ -656,7 +656,10 @@ const XAVIA_MODERNIST_HTML = `<div vocab="https://schema.org/" typeof="Product" 
 .ebd .box .it b{ display:block; margin-top:4px; font-size:.9em; }
 
 /* ── 7 · policies tabs (radio + :checked ~ — NO :has(), NO :target) ────────
-   Mechanism deliberately matches {{gallery_hero}}: hidden same-name radios
+   Mechanism deliberately matches the hero gallery token (named WITHOUT its
+   braces here on purpose: token substitution runs over the whole theme,
+   comments included, so writing it verbatim would mint a SECOND hero and
+   collide its element ids): hidden same-name radios
    driven by sibling combinators. Rationale (operator-reported on mobile,
    2026-07-27):
      - :target styled the PANEL only. Nothing ever marked the active TAB, so on
@@ -2245,7 +2248,443 @@ const XAVIA_MODERNIST_V3_HTML = `<div vocab="https://schema.org/" typeof="Produc
 
 </div>`
 
+// v4 = as shipped in d8ab08e49 and briefly LIVE on prod: the radio-tab
+// rebuild, but with '{{gallery_hero}}' written verbatim inside a CSS
+// comment. Token substitution runs over comments too, so the hero's own
+// <style></style> terminated the main stylesheet early and the rest of the
+// theme CSS spilled into the body — the whole design collapsed. Registered
+// ONLY so the guard can lift prod off it. NEVER edit — historical record.
+const XAVIA_MODERNIST_V4_HTML = `<div vocab="https://schema.org/" typeof="Product" style="display:none;"><span property="description">{{mobile_summary}}</span></div>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap');
+
+/* ┌──────────────────────────────────────────────────────────────────────┐
+   │  TOKEN LAYER — edit these to re-skin every listing. Nothing below      │
+   │  this block uses a raw value; it all reads from these variables.       │
+   └──────────────────────────────────────────────────────────────────────┘ */
+.ebd{
+  /* — colour — */
+  --bg:        #ffffff;   /* page background                    */
+  --surface:   #f3f2f2;   /* tinted panels, table zebra         */
+  --surface-2: #eae9e9;   /* deeper panel / hover               */
+  --ink:       #201e1d;   /* body + heading text                */
+  --muted:     #605d5d;   /* secondary text                     */
+  --faint:     #9b9797;   /* captions, meta                     */
+  --accent:    #ff6600;   /* fluo orange (operator call 2026-07-27 — was the demo red) */
+  --accent-ink:#b34700;   /* accent text on tint (readable)     */
+  --accent-bg: #fff3e9;   /* accent tint fill                   */
+  --line:      rgba(32,30,29,.85); /* strong 2px section rules  */
+  --hair:      rgba(32,30,29,.16); /* hairline dividers         */
+
+  /* — type — */
+  --font:  "Archivo","Helvetica Neue",Arial,sans-serif;
+  --base:  16px;   /* body size — scales the whole doc           */
+  --h1:    2.35em;
+  --h2:    1.5em;
+  --h3:    1.05em;
+  --kicker:.72em;
+
+  /* — layout — */
+  --max:   1000px; /* content width on desktop                   */
+  --gap:   24px;   /* base rhythm                                */
+  --radius:0px;    /* Modernist = flat. Bump to soften corners.  */
+  --img-tone: none; /* photo treatment — OFF so product colours read true (demo used grayscale(1) contrast(1.06)) */
+}
+
+/* ── reset + base (scoped) ─────────────────────────────────────────────── */
+.ebd,.ebd *,.ebd *::before,.ebd *::after{ box-sizing:border-box; }
+.ebd{
+  max-width:var(--max); margin:0 auto; background:var(--bg); color:var(--ink);
+  font-family:var(--font); font-size:var(--base); line-height:1.6; font-weight:400;
+  -webkit-font-smoothing:antialiased; text-align:left;
+}
+.ebd img{ display:block; max-width:100%; }
+.ebd p{ margin:0 0 .8em; }
+.ebd h1,.ebd h2,.ebd h3,.ebd h4{ font-weight:800; line-height:1.1; letter-spacing:-.015em; margin:0; }
+.ebd a{ color:var(--accent-ink); }
+
+/* ── shared bits ───────────────────────────────────────────────────────── */
+.ebd .kicker{ font-size:var(--kicker); font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:var(--accent); margin:0 0 6px; }
+.ebd .muted{ color:var(--muted); }
+.ebd .rule{ height:2px; border:0; margin:0; background:var(--line); }
+.ebd .wrap{ padding:36px 32px; }
+.ebd .frame{ position:relative; overflow:hidden; background:var(--surface-2); border-radius:var(--radius); }
+.ebd .frame > img{ width:100%; height:100%; object-fit:cover; filter:var(--img-tone); }
+.ebd .ph{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  background:
+    repeating-linear-gradient(-45deg, transparent 0 11px, rgba(32,30,29,.05) 11px 12px),
+    var(--surface-2);
+  color:var(--faint); font-size:.72em; font-weight:800; letter-spacing:.14em; text-transform:uppercase; text-align:center; padding:12px; }
+.ebd .chip{ display:inline-flex; align-items:center; gap:6px; font-size:.72em; font-weight:800;
+  letter-spacing:.06em; text-transform:uppercase; padding:6px 11px; border-radius:var(--radius);
+  background:var(--surface); color:var(--ink); border:1px solid var(--hair); }
+.ebd .chip.on{ background:var(--accent-bg); color:var(--accent-ink); border-color:transparent; }
+
+/* ── section header pattern ────────────────────────────────────────────── */
+.ebd .sec{ padding:34px 32px; border-top:2px solid var(--line); }
+.ebd .sec > .kicker + h2{ margin:0 0 20px; }
+.ebd .sec h2{ font-size:var(--h2); }
+
+/* ── 1 · brand bar ─────────────────────────────────────────────────────── */
+.ebd .brand{ display:flex; align-items:center; gap:16px; padding:18px 32px; border-bottom:2px solid var(--line); flex-wrap:wrap; }
+.ebd .brand .mark{ width:44px; height:44px; flex:none; display:flex; align-items:center; justify-content:center;
+  background:var(--accent); color:#fff; font-weight:800; font-size:1.15em; letter-spacing:-.03em; border-radius:var(--radius); }
+.ebd .brand .name{ font-weight:800; font-size:1.15em; letter-spacing:-.01em; line-height:1.1; }
+.ebd .brand .tag{ font-size:.74em; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+.ebd .brand .trust{ margin-left:auto; display:flex; gap:22px; }
+.ebd .brand .trust .t{ text-align:left; }
+.ebd .brand .trust .t b{ display:block; font-size:1.05em; }
+.ebd .brand .trust .t span{ font-size:.66em; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+
+/* ── 2 · hero ──────────────────────────────────────────────────────────── */
+.ebd .hero{ display:grid; grid-template-columns:1fr 1fr; gap:40px; padding:40px 32px; }
+
+/* gallery (CSS-only radio swap — per-image rules are generated with the markup) */
+.ebd .gallery input{ position:absolute; opacity:0; width:0; height:0; }
+/* 1/1, not the design's 4/5 — operator instruction 2026-07-27: every Xavia
+   photo is shot square, so a taller frame would crop it. */
+.ebd .stage .shot{ display:none; aspect-ratio:1/1; }
+.ebd .gallery .frame{ height:100%; }
+.ebd .thumbs{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px; }
+.ebd .thumbs label{ display:block; aspect-ratio:1; cursor:pointer; border:2px solid transparent; }
+.ebd .thumbs label:hover{ border-color:var(--hair); }
+
+/* summary column */
+.ebd .summary .meta{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 18px; }
+.ebd .summary h1{ font-size:var(--h1); margin:0 0 10px; }
+.ebd .summary .sub{ font-size:1.02em; color:var(--muted); margin:0 0 22px; }
+.ebd .summary .price{ display:flex; align-items:baseline; gap:12px; padding:16px 0; border-top:2px solid var(--line); border-bottom:2px solid var(--line); margin-bottom:22px; }
+.ebd .summary .price b{ font-size:2em; letter-spacing:-.02em; }
+.ebd .summary .price s{ color:var(--faint); font-weight:600; }
+.ebd .summary .price .save{ margin-left:auto; font-size:.74em; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#fff; background:var(--accent); padding:5px 10px; }
+.ebd .assure{ display:grid; grid-template-columns:repeat(3,1fr); gap:0; border:1px solid var(--hair); }
+.ebd .assure .a{ padding:14px; border-right:1px solid var(--hair); }
+.ebd .assure .a:last-child{ border-right:0; }
+.ebd .assure .a b{ display:block; font-size:.82em; }
+.ebd .assure .a span{ font-size:.66em; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+
+/* ── 3 · features ──────────────────────────────────────────────────────── */
+.ebd .feat{ display:grid; grid-template-columns:1fr 1fr; gap:2px 32px; }
+.ebd .feat li{ list-style:none; display:flex; gap:12px; padding:14px 0; border-bottom:1px solid var(--hair); }
+.ebd .feat ul{ margin:0; padding:0; }
+.ebd .feat .n{ flex:none; font-weight:800; color:var(--accent); font-variant-numeric:tabular-nums; }
+
+/* ── 4 · specs table ───────────────────────────────────────────────────── */
+.ebd .spectbl{ width:100%; border-collapse:collapse; font-size:.95em; }
+.ebd .spectbl th{ text-align:left; font-size:.7em; letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
+  padding:10px 14px; border-bottom:2px solid var(--line); }
+.ebd .spectbl td{ padding:11px 14px; border-bottom:1px solid var(--hair); vertical-align:top; }
+.ebd .spectbl tr:nth-child(even) td{ background:var(--surface); }
+.ebd .spectbl td:first-child{ font-weight:800; width:38%; }
+
+/* ── 5 · condition meter ───────────────────────────────────────────────── */
+.ebd .cond{ display:grid; grid-template-columns:1.1fr 1fr; gap:36px; align-items:start; }
+.ebd .scale{ display:flex; flex-direction:column; gap:0; border:1px solid var(--hair); }
+.ebd .scale .lvl{ display:flex; align-items:center; gap:12px; padding:12px 14px; border-bottom:1px solid var(--hair); }
+.ebd .scale .lvl:last-child{ border-bottom:0; }
+.ebd .scale .lvl .dot{ width:12px; height:12px; flex:none; border:1.5px solid var(--faint); border-radius:50%; }
+.ebd .scale .lvl.is-here{ background:var(--accent-bg); }
+.ebd .scale .lvl.is-here .dot{ background:var(--accent); border-color:var(--accent); box-shadow:inset 0 0 0 3px var(--accent-bg); }
+.ebd .scale .lvl.is-here b{ color:var(--accent-ink); }
+.ebd .scale .lvl b{ font-size:.9em; }
+.ebd .scale .lvl span{ margin-left:auto; font-size:.66em; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); }
+
+/* ── 6 · in the box ────────────────────────────────────────────────────── */
+.ebd .box{ display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+.ebd .box .it{ border:1px solid var(--hair); padding:16px; }
+.ebd .box .it .qty{ font-size:.66em; font-weight:800; letter-spacing:.1em; color:var(--accent); }
+.ebd .box .it b{ display:block; margin-top:4px; font-size:.9em; }
+
+/* ── 7 · policies tabs (radio + :checked ~ — NO :has(), NO :target) ────────
+   Mechanism deliberately matches {{gallery_hero}}: hidden same-name radios
+   driven by sibling combinators. Rationale (operator-reported on mobile,
+   2026-07-27):
+     - :target styled the PANEL only. Nothing ever marked the active TAB, so on
+       touch (where :hover does not exist) you could not tell which tab you were
+       reading. Deriving the active tab from :target requires :has() — exactly
+       the feature that vanishes on the old WebViews eBay's own app embeds.
+     - :checked ~ is CSS3, supported everywhere eBay renders, and drives the
+       panel AND the highlight from ONE state, so they can never disagree.
+     - Bonus: no anchor jump, so tapping a tab no longer scrolls eBay's
+       description iframe.
+   Borders are wrap-proof: EVERY label carries right + bottom lines with no
+   :last-child exception. The old rule dropped the right border on the last
+   label only, so once the bar wrapped (at 375px: two labels, then one) row 1
+   kept a stray line at the container edge and row 2 lost its separators. */
+.ebd .tabradio{ position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+.ebd .tabwrap{ border:1px solid var(--line); }
+.ebd .tabbar{ display:flex; flex-wrap:wrap; gap:0; }
+.ebd .tabbar label{ flex:1 1 auto; box-sizing:border-box; text-align:center; cursor:pointer;
+  padding:12px 16px; font-size:.78em; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
+  color:var(--muted); background:var(--surface);
+  border-right:1px solid var(--line); border-bottom:1px solid var(--line);
+  -webkit-user-select:none; user-select:none; }
+.ebd .tabbar label:hover{ color:var(--ink); }
+/* ACTIVE TAB — inverted fill: unmissable on a phone, and it survives the
+   forced-colour treatments some clients apply to description HTML. */
+.ebd #xvpol-ship:checked ~ .tabbar label[for="xvpol-ship"],
+.ebd #xvpol-ret:checked ~ .tabbar label[for="xvpol-ret"],
+.ebd #xvpol-pay:checked ~ .tabbar label[for="xvpol-pay"]{
+  background:var(--ink); color:#fff; border-bottom-color:var(--ink); }
+.ebd .tabpanel{ display:none; padding:24px 20px; }
+.ebd #xvpol-ship:checked ~ .tabpanel--1,
+.ebd #xvpol-ret:checked ~ .tabpanel--2,
+.ebd #xvpol-pay:checked ~ .tabpanel--3{ display:block; }
+.ebd .tabgrid{ display:grid; grid-template-columns:1fr 1fr; gap:24px 40px; }
+.ebd .tabgrid h4{ font-size:.95em; margin:0 0 6px; }
+.ebd .tabgrid .row{ display:flex; justify-content:space-between; gap:16px; padding:9px 0; border-bottom:1px solid var(--hair); font-size:.9em; }
+.ebd .tabgrid .row span:last-child{ font-weight:800; text-align:right; }
+
+/* ── 8 · FAQ accordion (<details>) ─────────────────────────────────────── */
+.ebd .faq details{ border-bottom:1px solid var(--hair); }
+.ebd .faq details:first-child{ border-top:1px solid var(--hair); }
+.ebd .faq summary{ list-style:none; cursor:pointer; padding:16px 40px 16px 0; position:relative; font-weight:800; font-size:.98em; }
+.ebd .faq summary::-webkit-details-marker{ display:none; }
+.ebd .faq summary::after{ content:"+"; position:absolute; right:6px; top:12px; font-size:1.4em; font-weight:400; color:var(--accent); line-height:1; }
+.ebd .faq details[open] summary::after{ content:"–"; }
+.ebd .faq .ans{ padding:0 40px 18px 0; color:var(--muted); font-size:.94em; }
+
+/* ── 9 · seller ────────────────────────────────────────────────────────── */
+.ebd .seller{ display:grid; grid-template-columns:200px 1fr; gap:32px; align-items:center; }
+.ebd .seller .stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:0; border:1px solid var(--hair); margin-top:14px; }
+.ebd .seller .stats .s{ padding:14px; border-right:1px solid var(--hair); }
+.ebd .seller .stats .s:last-child{ border-right:0; }
+.ebd .seller .stats .s b{ display:block; font-size:1.3em; letter-spacing:-.02em; }
+.ebd .seller .stats .s span{ font-size:.64em; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+
+/* ── 10 · cross-sell ───────────────────────────────────────────────────── */
+.ebd .cross{ display:grid; grid-template-columns:repeat(4,1fr); gap:20px; }
+.ebd .cross .card{ display:block; text-decoration:none; color:var(--ink); }
+.ebd .cross .card .frame{ aspect-ratio:1; margin-bottom:10px; }
+.ebd .cross .card .frame > img{ transition:filter .2s; }
+.ebd .cross .card:hover .frame > img{ filter:none; }
+.ebd .cross .card .t{ font-weight:800; font-size:.9em; line-height:1.25; }
+.ebd .cross .card .pr{ font-size:.88em; color:var(--muted); margin-top:2px; }
+
+/* ── footer ────────────────────────────────────────────────────────────── */
+.ebd .foot{ padding:26px 32px 36px; border-top:2px solid var(--line); font-size:.78em; color:var(--faint); }
+.ebd .foot .big{ font-size:1.9em; font-weight:800; letter-spacing:-.02em; color:var(--ink); margin:0 0 10px; }
+
+/* ── SECTION TOGGLES ───────────────────────────────────────────────────── */
+/* Add a class to the .ebd wrapper to drop any section — no markup edits:   */
+/* class="ebd no-crosssell no-faq" etc.                                     */
+.ebd.no-features .sec--features,
+.ebd.no-specs .sec--specs,
+.ebd.no-condition .sec--condition,
+.ebd.no-box .sec--box,
+.ebd.no-policies .sec--policies,
+.ebd.no-faq .sec--faq,
+.ebd.no-seller .sec--seller,
+.ebd.no-crosssell .sec--crosssell{ display:none; }
+
+/* ── RESPONSIVE (mobile) — no viewport meta required ───────────────────── */
+@media (max-width:720px){
+  .ebd{ --base:15px; }
+  .ebd .wrap,.ebd .sec,.ebd .hero,.ebd .brand,.ebd .foot{ padding-left:18px; padding-right:18px; }
+  .ebd .hero{ grid-template-columns:1fr; gap:26px; padding-top:26px; padding-bottom:26px; }
+  .ebd .brand{ gap:12px; }
+  .ebd .brand .trust{ margin-left:0; width:100%; justify-content:flex-start; gap:26px; border-top:1px solid var(--hair); padding-top:12px; }
+  .ebd .feat,.ebd .cond,.ebd .seller,.ebd .tabgrid{ grid-template-columns:1fr; gap:0; }
+  .ebd .cond,.ebd .seller,.ebd .tabgrid{ gap:24px; }
+  .ebd .box{ grid-template-columns:1fr 1fr; }
+  .ebd .cross{ grid-template-columns:1fr 1fr; }
+  .ebd .seller{ grid-template-columns:1fr; }
+  .ebd .seller .portrait{ max-width:200px; }
+  .ebd .summary h1{ font-size:1.9em; }
+  /* stack the spec table into label/value cards */
+  .ebd .spectbl,.ebd .spectbl tbody,.ebd .spectbl tr,.ebd .spectbl td{ display:block; width:auto; }
+  .ebd .spectbl thead{ display:none; }
+  .ebd .spectbl tr{ border-bottom:2px solid var(--line); padding:6px 0; }
+  .ebd .spectbl tr:nth-child(even) td{ background:transparent; }
+  .ebd .spectbl td{ border:0; padding:3px 0; }
+  .ebd .spectbl td:first-child{ width:auto; color:var(--muted); font-size:.7em; letter-spacing:.08em; text-transform:uppercase; }
+  .ebd .tabbar a{ flex:1 1 auto; text-align:left; }
+}
+
+/* ── XAVIA additions — live-data widgets the static mock-up didn't model ── */
+.ebd .brand .logo{ height:34px; width:auto; }
+.ebd .sec--colours .ggroup{ margin:0 0 26px; }
+.ebd .sec--colours .ggroup:last-child{ margin-bottom:0; }
+.ebd .gg-title{ font-size:var(--h3); margin:0 0 10px; text-transform:uppercase; letter-spacing:.08em; }
+.ebd .gg-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+.ebd .gg-grid img{ width:100%; aspect-ratio:1; object-fit:cover; background:var(--surface-2); filter:var(--img-tone); }
+.ebd .sec--colours:not(:has(.ggroup)){ display:none; }
+.ebd .foot .foot-sku{ margin:8px 0 0; letter-spacing:.08em; text-transform:uppercase; }
+@media (max-width:720px){ .ebd .gg-grid{ grid-template-columns:repeat(2,1fr); } }
+/* Extends the verbatim SECTION TOGGLES contract ("no markup edits") to the two
+   sections XAVIA added in place of features/box/seller/crosssell. */
+.ebd.no-body .sec--body,
+.ebd.no-colours .sec--colours{ display:none; }
+
+/* :has()-less posture (older Android/iOS WebViews eBay's own app embeds).
+   The policy tabs NO LONGER depend on :has() at all — they run on radios +
+   :checked ~ (section 7), so the legally-required 14-day recesso copy is
+   visible by default and the active tab is always marked, even where :has()
+   is dropped wholesale. The only remaining :has() rule is the Colori
+   auto-hide, which has no CSS-only equivalent (nothing else can detect "no
+   .ggroup children" without JS); on those engines a single-variation listing
+   shows one empty "Colori disponibili" heading — an accepted, non-legal
+   degradation recorded in the theme notes. */
+</style>
+
+<div class="ebd">
+
+  <!-- 1 · BRAND BAR -->
+  <div class="brand">
+    <img class="logo" src="https://cdn.shopify.com/s/files/1/0729/9186/7207/files/XAVIA_LOGO_06c286e9-0256-470d-bb70-b8df768bd1d0.png?v=1760139325" alt="XAVIA">
+    <div class="tag">Abbigliamento tecnico moto</div>
+    <div class="trust">
+      <div class="t"><b>Italia</b><span>Spediamo da</span></div>
+      <div class="t"><b>eBay</b><span>Garanzia cliente</span></div>
+    </div>
+  </div>
+
+  <!-- 2 · HERO -->
+  <div class="hero">
+    {{gallery_hero}}
+    <div class="summary">
+      <div class="meta">
+        <span class="chip on">Nuovo con etichette</span>
+        <span class="chip">Spedizione tracciata</span>
+      </div>
+      <p class="kicker">{{brand}}</p>
+      <h1>{{title}}</h1>
+      <p class="sub">{{subtitle}}</p>
+      <div class="assure">
+        <div class="a"><b>Reso facile</b><span>14 giorni</span></div>
+        <div class="a"><b>Spedizione rapida</b><span>Tracciata</span></div>
+        <div class="a"><b>Garanzia legale</b><span>2 anni</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 · DESCRIZIONE (the operator's body copy — may embed any token) -->
+  <section class="sec sec--body">
+    <p class="kicker">Descrizione</p>
+    <h2>Il prodotto</h2>
+    <div class="body-copy">{{body}}</div>
+  </section>
+
+  <!-- 4 · SPECIFICHE -->
+  <section class="sec sec--specs">
+    <p class="kicker">Dati tecnici</p>
+    <h2>Specifiche</h2>
+    <table class="spectbl">
+      <thead><tr><th>Attributo</th><th>Dettaglio</th></tr></thead>
+      <tbody>{{specs_rows}}</tbody>
+    </table>
+  </section>
+
+  <!-- 5 · COLORI (auto-hides when the listing has no per-colour galleries) -->
+  <section class="sec sec--colours">
+    <p class="kicker">Varianti</p>
+    <h2>Colori disponibili</h2>
+    {{gallery_groups}}
+  </section>
+
+  <!-- 6 · CONDIZIONE -->
+  <section class="sec sec--condition">
+    <p class="kicker">Valutato con onestà</p>
+    <h2>Condizione</h2>
+    <div class="cond">
+      <div class="scale">
+        <div class="lvl is-here"><span class="dot"></span><b>Nuovo con etichette</b><span>Questo articolo</span></div>
+        <div class="lvl"><span class="dot"></span><b>Nuovo senza etichette</b><span>Mai indossato</span></div>
+        <div class="lvl"><span class="dot"></span><b>Eccellente</b><span>Usato</span></div>
+        <div class="lvl"><span class="dot"></span><b>Buono</b><span>Usura leggera</span></div>
+        <div class="lvl"><span class="dot"></span><b>Discreto</b><span>Usura visibile</span></div>
+      </div>
+      <div>
+        <p>Articolo nuovo, spedito con tutte le etichette nella confezione originale.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 · POLICIES (tabs) -->
+  <section class="sec sec--policies">
+    <p class="kicker">Acquista con fiducia</p>
+    <h2>Spedizione, resi e pagamento</h2>
+    <div class="tabwrap">
+      <input class="tabradio" type="radio" name="xvpol" id="xvpol-ship" checked>
+      <input class="tabradio" type="radio" name="xvpol" id="xvpol-ret">
+      <input class="tabradio" type="radio" name="xvpol" id="xvpol-pay">
+      <div class="tabbar">
+        <label for="xvpol-ship">Spedizione</label>
+        <label for="xvpol-ret">Resi e garanzia</label>
+        <label for="xvpol-pay">Pagamento</label>
+      </div>
+      <div class="tabpanel tabpanel--1">
+        <div class="tabgrid">
+          <div>
+            <h4>Spedizione</h4>
+            <p class="muted">Spedizione rapida e tracciata dall'Italia. I tempi di consegna stimati sono indicati da eBay nella parte alta dell'inserzione.</p>
+            <p class="muted">{{policy_shipping}}</p>
+          </div>
+          <div>
+            <h4>Imballaggio</h4>
+            <p class="muted">Ogni capo viene controllato e imballato con cura prima della spedizione.</p>
+          </div>
+        </div>
+      </div>
+      <div class="tabpanel tabpanel--2">
+        <div class="tabgrid">
+          <div>
+            <h4>Diritto di recesso</h4>
+            <p class="muted">Hai il diritto di recedere dall'acquisto entro <b>14 giorni</b> dalla consegna, senza doverne indicare il motivo, ai sensi del Codice del Consumo. Il prodotto va restituito integro, non utilizzato e nella confezione originale.</p>
+            <p class="muted">{{policy_returns}}</p>
+          </div>
+          <div>
+            <h4>Garanzia</h4>
+            <p class="muted">Tutti i nostri prodotti sono coperti dalla <b>garanzia legale di conformità di 2 anni</b> prevista dalla normativa europea. Acquisto protetto dalla Garanzia cliente eBay.</p>
+          </div>
+        </div>
+      </div>
+      <div class="tabpanel tabpanel--3">
+        <div class="tabgrid">
+          <div>
+            <h4>Metodi accettati</h4>
+            <p class="muted">Tutti i metodi di pagamento offerti dal checkout di eBay, tra cui carte, PayPal, Apple Pay e Google Pay.</p>
+            <p class="muted">{{policy_payment}}</p>
+          </div>
+          <div>
+            <h4>Sicurezza</h4>
+            <p class="muted">Il pagamento avviene interamente sulla piattaforma eBay: non riceviamo mai i dati della tua carta.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 · FAQ -->
+  <section class="sec sec--faq">
+    <p class="kicker">Prima di chiedere</p>
+    <h2>Domande frequenti</h2>
+    <div class="faq">
+      <details open>
+        <summary>Come scelgo la taglia giusta?</summary>
+        <div class="ans">Confronta le misure nella sezione Specifiche con un capo che già possiedi. Se hai dubbi, scrivici tramite i messaggi eBay: ti aiutiamo volentieri a scegliere.</div>
+      </details>
+      <details open>
+        <summary>Posso restituire l'articolo se la taglia non va bene?</summary>
+        <div class="ans">Sì. Hai 14 giorni dalla consegna per il reso: il capo va restituito integro, non utilizzato e nella confezione originale.</div>
+      </details>
+      <details open>
+        <summary>Le foto corrispondono al prodotto?</summary>
+        <div class="ans">Sì: le immagini mostrano il prodotto in vendita nelle varianti disponibili, così come lo riceverai.</div>
+      </details>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <div class="foot">
+    <p class="big">Grazie.</p>
+    <p>I colori possono variare leggermente in base allo schermo. Per qualsiasi domanda scrivici tramite i messaggi eBay: rispondiamo il prima possibile. © XAVIA.</p>
+    <p class="foot-sku">{{sku}}</p>
+  </div>
+
+</div>`
+
 export const BUILT_IN_PREVIOUS: Record<string, string[]> = {
   'Xavia Pro Clean': [XAVIA_PRO_CLEAN_V1_HTML, XAVIA_PRO_CLEAN_V2_HTML],
-  'Xavia Modernist': [XAVIA_MODERNIST_V1_HTML, XAVIA_MODERNIST_V2_HTML, XAVIA_MODERNIST_V3_HTML],
+  'Xavia Modernist': [XAVIA_MODERNIST_V1_HTML, XAVIA_MODERNIST_V2_HTML, XAVIA_MODERNIST_V3_HTML, XAVIA_MODERNIST_V4_HTML],
 }
