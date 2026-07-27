@@ -19,10 +19,51 @@ import { ebayAuthService } from '../services/ebay-auth.service.js'
 import { siteIdForMarket } from '../services/ebay-trading-api.service.js'
 import { pushDescriptions } from '../services/ebay-description-push.service.js'
 import { collectInventoryDrift } from '../services/ebay-inventory-drift.service.js'
+import { relinkEbayItemId } from '../services/ebay-itemid-relink.service.js'
 
 const MAX_PRODUCTS_PER_CALL = 50
 
 export default async function ebayDescriptionPushRoutes(fastify: FastifyInstance) {
+  // ── ItemID re-link: verify against eBay, then repair ChannelListing AND
+  // SharedListingMembership together. DRY RUN unless apply:true — the response
+  // shows the verdict and the exact diff first. See the service header for the
+  // VENTRA incident that made stored ItemIDs un-correctable.
+  fastify.post<{
+    Body: { parentSku?: string; marketplace?: string; itemId?: string; apply?: boolean; acknowledgeUnverifiable?: boolean }
+  }>('/ebay/relink-item-id', async (request, reply) => {
+    const { parentSku, marketplace = 'IT', itemId, apply, acknowledgeUnverifiable } = request.body ?? {}
+    if (!parentSku?.trim()) return reply.code(400).send({ error: 'parentSku required' })
+    if (!itemId) return reply.code(400).send({ error: 'itemId required' })
+    const mp = String(marketplace).toUpperCase()
+    try {
+      siteIdForMarket(mp)
+    } catch {
+      return reply.code(400).send({ error: `unknown marketplace: ${mp}` })
+    }
+    const connection = await prisma.channelConnection.findFirst({
+      where: { channelType: 'EBAY', isActive: true },
+      select: { id: true },
+    })
+    if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
+    let token: string
+    try {
+      token = await ebayAuthService.getValidToken(connection.id)
+    } catch (err: unknown) {
+      return reply.code(503).send({ error: `Failed to get eBay token: ${err instanceof Error ? err.message : String(err)}` })
+    }
+    try {
+      const result = await relinkEbayItemId(
+        prisma,
+        { parentSku: parentSku.trim(), marketplace: mp, itemId: String(itemId), apply: apply === true, acknowledgeUnverifiable: acknowledgeUnverifiable === true },
+        { oauthToken: token },
+      )
+      return reply.send(result)
+    } catch (err: unknown) {
+      request.log.error(err, 'ebay/relink-item-id failed')
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'relink failed' })
+    }
+  })
+
   // ── READ-ONLY diagnostic: how far has each Inventory-managed family's live
   // inventory_item_group drifted from what a Full Publish would re-assert?
   // Lane A can't take a description-only revise, so operators are sent to Full
