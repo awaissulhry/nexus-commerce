@@ -35,6 +35,7 @@ import { planFamilyImport } from './importFamilies.pure'
 // DS-2 — Description Studio replaces EbayDescriptionThemesModal (old modal kept
 // in-tree for instant revert: swap this import back).
 import { EbayDescriptionStudio } from './DescriptionStudio'
+import { RelinkItemIdModal } from './RelinkItemIdModal'
 import { Listbox } from '@/design-system/components/Listbox'
 import { EbayFlatFileImageDrawer } from './EbayFlatFileImageModal'
 import { deriveImageFamilies, type FamilyDeriveRow, type ImageFamilySummary } from './imageFamilies.pure'
@@ -1182,6 +1183,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   useEffect(() => { loadDescThemes() }, [loadDescThemes])
   // ED.4 — theme manager modal (File → Description themes…).
   const [themesModalOpen, setThemesModalOpen] = useState(false)
+  // Repair a family's stored eBay ItemID after listings are ended/rebuilt.
+  const [relinkOpen, setRelinkOpen] = useState(false)
   // ED.5b — bulk "Set description theme…" (Edit menu, selected rows).
   const [themeBulk, setThemeBulk] = useState<null | {
     rows: EbayRow[]
@@ -3470,6 +3473,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       icon: <FileText className="w-3.5 h-3.5" />,
       onClick: () => setThemesModalOpen(true),
     },
+    {
+      // The Item ID column is read-only on purpose — re-pointing a family at a
+      // listing is verified against eBay, never typed straight into a save.
+      label: 'Re-link Item ID…',
+      icon: <FileText className="w-3.5 h-3.5" />,
+      onClick: () => setRelinkOpen(true),
+    },
   ], [exportEbay])
 
   // FM Phase 3/4 — bulk Follow/Buffer, injected into the shared grid's Edit menu
@@ -3931,6 +3941,14 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             sheet (isDescSyncEligible, same as the dots); sampleProductId keeps
             seeding the STAR within that set (first parent row with a real
             SKU), and stays the lone fallback chip if the sheet has no rows. */}
+        <RelinkItemIdModal
+          open={relinkOpen}
+          onClose={() => setRelinkOpen(false)}
+          defaultSku={studioSeed?.sku}
+          defaultMarketplace={marketplace}
+          onApplied={reloadGridPreservingEdits}
+        />
+
         <EbayDescriptionStudio
           open={themesModalOpen}
           onClose={() => setThemesModalOpen(false)}
