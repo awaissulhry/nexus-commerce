@@ -783,7 +783,6 @@ const XAVIA_MODERNIST_HTML = `<div vocab="https://schema.org/" typeof="Product" 
     <div class="summary">
       <div class="meta">
         <span class="chip on">Nuovo con etichette</span>
-        <span class="chip">Marcatura CE</span>
         <span class="chip">Spedizione tracciata</span>
       </div>
       <p class="kicker">{{brand}}</p>
@@ -835,7 +834,6 @@ const XAVIA_MODERNIST_HTML = `<div vocab="https://schema.org/" typeof="Product" 
       </div>
       <div>
         <p>Articolo nuovo, spedito con tutte le etichette nella confezione originale.</p>
-        <p class="muted">Abbigliamento tecnico motociclistico con marcatura <b>CE</b>. Verifica sempre l'etichetta del prodotto per la certificazione specifica (es. EN 17092) e le istruzioni di manutenzione.</p>
       </div>
     </div>
   </section>

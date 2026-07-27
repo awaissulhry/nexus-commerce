@@ -379,10 +379,13 @@ describe('Xavia Modernist — operator design, token-driven, sanitizer-proof', (
     expect(modernist).not.toContain('aspect-ratio:4/5')
   })
 
-  it('no CE-certification claim in the trust bar or FAQ (operator correction 2026-07-27: the product itself is not what is certified)', () => {
+  it('no CE-certification/marking claim anywhere (operator correction 2026-07-27: the product itself is not what is certified)', () => {
     expect(modernist).not.toContain('Certificato')
     expect(modernist).not.toContain('I prodotti sono certificati')
     expect(modernist).not.toContain('La certificazione specifica')
+    expect(modernist).not.toContain('Marcatura CE')
+    expect(modernist).not.toMatch(/marcatura <b>CE<\/b>/)
+    expect(modernist).not.toContain('EN 17092')
   })
 
   it('accent is the fluo orange, not the design demo red; no demo content leaks (Northvane/Loro Piana/price)', () => {
