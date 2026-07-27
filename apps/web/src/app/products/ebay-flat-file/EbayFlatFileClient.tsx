@@ -156,6 +156,26 @@ function deriveSheetParents(rows: BaseRow[]) {
     }))
 }
 
+// ── DS-3 — description-sync dot eligibility ───────────────────────────────
+// ONE predicate shared by the staleness fetch and renderRowMeta: family
+// PARENT rows plus STANDALONE root products (a real sku + product id that is
+// neither a parent container nor a variant child). Synthesized shared-
+// membership rows and ghost rows never carry a dot. The staleness endpoint
+// resolves every id to its family root, so both kinds key their entry by the
+// row's own product id.
+
+/** Server-side MAX_IDS of GET /ebay/description-themes/staleness. */
+const DESC_SYNC_PAGE = 200
+
+function isDescSyncEligible(row: EbayRow): boolean {
+  const pid = row.platformProductId ?? row._productId
+  if (!pid || !String(row.sku ?? '').trim()) return false
+  if (row._shared || row._ghost) return false
+  if (row._isParent === true || row.parentage === 'parent') return true
+  // Standalone root: not flagged a parent, but linked under no parent either.
+  return row._isParent !== false && row.parentage !== 'child' && !String(row.parent_sku ?? '').trim()
+}
+
 // ── Validation ────────────────────────────────────────────────────────────
 
 export { isSharedDuplicateAllowed } from './validateRows.shared'
@@ -876,41 +896,20 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   useEffect(() => { try { localStorage.setItem('ff-ebay-view-statuschips', showStatusChips ? '1' : '0') } catch {} }, [showStatusChips])
 
   // ED v2 P5 — 'Description sync' (View-menu opt-in, DEFAULT OFF — rows stay
-  // ~25px compact; the signal is a 6px dot in the existing row-meta cluster,
-  // family rows only). Amber = live description is behind the curation/theme
-  // (stale stamp), green = in sync with the last push. Read-only; re-push
-  // happens from the Description Themes modal (D8: badge + manual re-push).
+  // ~25px compact; the signal is a 6px dot in the existing row-meta cluster).
+  // DS-3: family parents AND standalone root products. Amber = live
+  // description is behind the curation/theme (stale stamp), green = in sync
+  // with the last push. Read-only; re-push happens from the Description
+  // Studio's push dock. The fetch itself lives below the clientRows loader —
+  // it reads the rows the grid actually renders.
   const [showDescSync, setShowDescSync] = useState<boolean>(() => {
     try { return localStorage.getItem('ff-ebay-view-descsync') === '1' } catch { return false }
   })
   useEffect(() => { try { localStorage.setItem('ff-ebay-view-descsync', showDescSync ? '1' : '0') } catch {} }, [showDescSync])
   const [descSync, setDescSync] = useState<Record<string, { stale: boolean; reasons: string[] }>>({})
   // DS-2 — bumped by the Description Studio's onPushed so the staleness fetch
-  // below re-runs and the amber dots refresh right after a modal push.
+  // re-runs and the amber dots refresh right after a Studio push.
   const [descSyncTick, setDescSyncTick] = useState(0)
-  useEffect(() => {
-    if (!showDescSync) return
-    const ids = [...new Set(
-      initialRows
-        .filter((r) => r._isParent === true && r.platformProductId)
-        .map((r) => String(r.platformProductId)),
-    )].slice(0, 200) // server cap
-    if (ids.length === 0) { setDescSync({}); return }
-    const ctrl = new AbortController()
-    fetch(
-      `${BACKEND}/api/ebay/description-themes/staleness?productIds=${encodeURIComponent(ids.join(','))}&marketplace=${encodeURIComponent(marketplace)}`,
-      { signal: ctrl.signal },
-    )
-      .then((r) => (r.ok ? (r.json() as Promise<{ products: Array<{ productId: string; stale: boolean; reasons: string[] }> }>) : null))
-      .then((d) => {
-        if (!d?.products) return
-        const next: Record<string, { stale: boolean; reasons: string[] }> = {}
-        for (const p of d.products) next[p.productId] = { stale: p.stale, reasons: p.reasons }
-        setDescSync(next)
-      })
-      .catch(() => { /* dots just stay hidden — never blocks the grid */ })
-    return () => ctrl.abort()
-  }, [showDescSync, initialRows, marketplace, BACKEND, descSyncTick])
 
   const [showCascadeButtons, setShowCascadeButtons] = useState<boolean>(() => {
     try { return localStorage.getItem('ff-show-cascade') !== '0' } catch { return true }
@@ -1067,6 +1066,44 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       .finally(() => setRowsReady(true))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // ED v2 P5 + DS-3 — the staleness fetch feeding the description-sync dots.
+  // Reads clientRows (the rows the grid actually renders) — the initialRows
+  // prop has been an empty SSR shell since the client-fetch swap, so keying
+  // the fetch off it left the dots permanently dark. DS-3 additions:
+  //  - standalone root products are eligible alongside family parents
+  //    (isDescSyncEligible — the SAME predicate gates the dot render);
+  //  - the endpoint caps productIds at 200 per request, so ids are chunked
+  //    into pages and the pages merged instead of silently truncating.
+  useEffect(() => {
+    if (!showDescSync) return
+    const ids = [...new Set(
+      clientRows.filter(isDescSyncEligible).map((r) => String(r.platformProductId ?? r._productId)),
+    )]
+    if (ids.length === 0) { setDescSync({}); return }
+    const ctrl = new AbortController()
+    void (async () => {
+      try {
+        const pages: string[][] = []
+        for (let i = 0; i < ids.length; i += DESC_SYNC_PAGE) pages.push(ids.slice(i, i + DESC_SYNC_PAGE))
+        const results = await Promise.all(pages.map(async (page) => {
+          const res = await fetch(
+            `${BACKEND}/api/ebay/description-themes/staleness?productIds=${encodeURIComponent(page.join(','))}&marketplace=${encodeURIComponent(marketplace)}`,
+            { signal: ctrl.signal },
+          )
+          if (!res.ok) return null
+          return res.json() as Promise<{ products: Array<{ productId: string; stale: boolean; reasons: string[] }> }>
+        }))
+        const next: Record<string, { stale: boolean; reasons: string[] }> = {}
+        for (const d of results) {
+          if (!d?.products) continue
+          for (const p of d.products) next[p.productId] = { stale: p.stale, reasons: p.reasons }
+        }
+        setDescSync(next)
+      } catch { /* dots just stay hidden — never blocks the grid */ }
+    })()
+    return () => ctrl.abort()
+  }, [showDescSync, clientRows, marketplace, BACKEND, descSyncTick])
 
   // Task 4 — sync scope ref + localStorage; reload when scope changes
   useEffect(() => {
@@ -4431,21 +4468,31 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         { label: 'Override badges', checked: showOverrideBadges, onClick: () => setShowOverrideBadges((v) => !v) },
         { label: 'Cascade buttons', checked: showCascadeButtons, onClick: () => setShowCascadeButtons((v) => !v) },
         { separator: true as const },
-        // ED v2 P5 — amber/green dot on family rows: is the LIVE eBay
-        // description in sync with the last push (images + theme)?
-        { label: 'Description sync (stale dot on family rows)', checked: showDescSync, onClick: () => setShowDescSync((v) => !v) },
+        // ED v2 P5 + DS-3 — amber/green dot on family-parent and standalone
+        // rows: is the LIVE eBay description in sync with the last push
+        // (images + theme)?
+        { label: 'Description sync (stale dot on family + standalone rows)', checked: showDescSync, onClick: () => setShowDescSync((v) => !v) },
       ]}
       renderRowMeta={(row) => (
         <div className="flex items-center gap-0.5">
-          {/* ED v2 P5 — description-sync dot (View-menu opt-in, family rows
-              only; 6px, adds no row height). Re-push via Description Themes. */}
-          {showDescSync && row._isParent === true && (() => {
+          {/* ED v2 P5 + DS-3 — description-sync dot (View-menu opt-in; 6px,
+              adds no row height). Family parents AND standalone roots — the
+              SAME predicate as the staleness fetch. Re-push via the
+              Description Studio's push dock. */}
+          {showDescSync && isDescSyncEligible(row as EbayRow) && (() => {
             const entry = descSync[String(row.platformProductId ?? row._productId ?? '')]
             if (!entry) return null
+            // DS-3 — reason-aware tooltip, matching StalenessPill's header
+            // logic: a family that was simply never pushed is not the same
+            // story as drift after a push.
+            const neverPushed = entry.stale && entry.reasons.length > 0 &&
+              entry.reasons.every((r) => /never (been )?pushed/i.test(r))
             return (
               <span
                 title={entry.stale
-                  ? `Description stale — ${entry.reasons.join(' · ')}\nRe-push from the Description Themes modal (Push tab).`
+                  ? `${neverPushed
+                    ? 'Description never pushed to this market yet'
+                    : 'Description stale — images or theme changed since last push'} — ${entry.reasons.join(' · ')}\nRe-push from the Description Studio (push dock).`
                   : 'Description in sync with the last push'}
                 className={cn('w-1.5 h-1.5 rounded-full shrink-0', entry.stale ? 'bg-amber-400' : 'bg-emerald-400')}
               />

@@ -42,7 +42,7 @@ import { ProductLookup } from './ProductLookup'
 import { PushResults } from './PushResults'
 import { StalenessPill } from './StalenessPill'
 import { StatusStrip, type RenderStatus } from './StatusStrip'
-import { THEME_TOKENS } from './tokens'
+import { THEME_TOKEN_INFO, THEME_TOKENS } from './tokens'
 import {
   MAX_PUSH_PRODUCTS,
   type PreviewProduct,
@@ -549,7 +549,9 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, sampleProduc
       setPushError(r.ok ? 'Push returned an unexpected payload (no listings array)' : r.error)
       return
     }
-    setPushResult({ res: r.data, themeName: selected.name, at: new Date().toLocaleTimeString() })
+    // DS-4 — full date + time: push results persist until the drawer closes,
+    // so a bare time ("14:03") loses its meaning across day boundaries.
+    setPushResult({ res: r.data, themeName: selected.name, at: new Date().toLocaleString() })
     refetchAll('mutation') // theme assignments + staleness stamps changed server-side
     onChanged?.()
     onPushed?.()
@@ -801,7 +803,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, sampleProduc
             <div className="flex flex-wrap gap-1">
               {THEME_TOKENS.map((t) => (
                 <button key={t} type="button" onClick={() => insertToken(t)}
-                  title="Insert at cursor"
+                  title={`${THEME_TOKEN_INFO[t]}\n\nClick to insert at the cursor.`}
                   className="px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 text-[10px] font-mono hover:bg-violet-100 dark:hover:bg-violet-900/40">
                   {t}
                 </button>
