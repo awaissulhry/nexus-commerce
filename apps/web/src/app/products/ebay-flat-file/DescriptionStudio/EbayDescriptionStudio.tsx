@@ -735,6 +735,21 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
       const parity = ls.filter((l) => l.warnings.some((w) => w.includes('PARITY MISMATCH'))).length
       const prodErr = pushResult.res.products.filter((p) => p.error).length
       if (failed + parity + prodErr > 0) return { tone: 'danger' as const, label: `last push: ${failed} failed · ${parity} parity · ${prodErr} product errors` }
+      // A listing handed off to Full Publish, or skipped for an empty body, is
+      // NOT "clean" — it still needs the operator. Saying "clean" here while
+      // the body says "1 needs a Full Publish" is the exact kind of glance-lie
+      // this dock exists to prevent.
+      const revised = ls.filter((l) => l.outcome === 'revised').length
+      const needsFullPublish = ls.filter((l) => l.outcome === 'inventory-managed').length
+      const emptyBody = ls.filter((l) => l.outcome === 'skipped-empty-body').length
+      if (needsFullPublish + emptyBody > 0) {
+        return {
+          tone: 'warning' as const,
+          label: `last push: ${revised} revised`
+            + (needsFullPublish > 0 ? ` · ${needsFullPublish} need${needsFullPublish === 1 ? 's' : ''} Full Publish` : '')
+            + (emptyBody > 0 ? ` · ${emptyBody} skipped (empty body)` : ''),
+        }
+      }
       return { tone: 'success' as const, label: `last push clean — ${ls.length} listing${ls.length === 1 ? '' : 's'}` }
     }
     if (products.length === 0) return null
