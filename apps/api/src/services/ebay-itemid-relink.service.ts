@@ -124,8 +124,15 @@ export async function relinkEbayItemId(
   }
 
   // ── refuse an ItemID another family already owns ──
+  // Scope the exclusion to the WHOLE family, not just the root: a family's
+  // child ChannelListings legitimately carry the parent's ItemID, so
+  // `productId != root.id` flagged a family as its own impostor and rejected
+  // a correct re-link (caught by the VENTRA dry run before any UI existed).
+  const familyProductIds = [root.id, ...(await prisma.product.findMany({
+    where: { parentId: root.id, deletedAt: null }, select: { id: true },
+  })).map((p) => p.id)]
   const clsElsewhere = await prisma.channelListing.findMany({
-    where: { channel: 'EBAY', externalListingId: itemId, productId: { not: root.id } },
+    where: { channel: 'EBAY', externalListingId: itemId, productId: { notIn: familyProductIds } },
     select: { productId: true },
   })
   const memsElsewhere = await prisma.sharedListingMembership.findMany({
