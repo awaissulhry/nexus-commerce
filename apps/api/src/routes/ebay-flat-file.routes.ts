@@ -53,6 +53,7 @@ import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
 import { decideEbayPushMode } from '../services/ebay-push-mode.js';
 import { publishOrderEvent } from '../services/order-events.service.js';
 import { computeCuratedImageOverrides } from '../services/images/ebay-inventory-image-publish.service.js';
+import { relinkEbayItemId } from '../services/ebay-itemid-relink.service.js';
 import { renderExport } from '../services/export/renderers.js';
 import { parseCsv, parseFile, sniffDelimiter, detectFileKind, type ParsedFile } from '../services/import/parsers.js';
 import { detectAmazonTemplate, parseOoxmlSheet, listOoxmlSheets } from '../services/amazon/template-workbook.js';
@@ -772,6 +773,21 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     // response accounting: every skip lands here and the client keeps the row
     // dirty + draft-protected (battery check E-ACCT-DELETED-SKU).
     const rowErrors: Array<{ sku: string; rowId?: string; error: string }> = [];
+    // Verified ItemID re-link (operator can edit the Item ID cell). A typed ID
+    // is NEVER written on trust: it is proven against eBay first and the write
+    // covers BOTH stores (ChannelListing + SharedListingMembership), which is
+    // what drifted apart in the VENTRA incident. Token is fetched lazily — only
+    // a row that actually CHANGES an ItemID pays for it.
+    let _relinkToken: string | null = null;
+    const getRelinkToken = async (): Promise<string> => {
+      if (_relinkToken) return _relinkToken;
+      const conn = await prisma.channelConnection.findFirst({
+        where: { channelType: 'EBAY', isActive: true }, select: { id: true },
+      });
+      if (!conn) throw new Error('No active eBay connection');
+      _relinkToken = await ebayAuthService.getValidToken(conn.id);
+      return _relinkToken;
+    };
 
     // FM Phase 1 — the flat-file save no longer writes the shared warehouse pool.
     // The old StockLevel/Product.totalStock write here was the AIRMESH clobber: a
@@ -937,6 +953,47 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           // fields match the old per-row findFirst exactly.
           const existing = clByProductRegion.get(`${productId}::${region}`) ?? null;
 
+          // ── VERIFIED ItemID RE-LINK ────────────────────────────────────────
+          // The Item ID cell is editable, but CHANGING an established link is
+          // the dangerous case: point a family at the wrong listing and the
+          // next push overwrites someone else's item. So a change is routed
+          // through eBay verification instead of the plain write below, and a
+          // refusal is REPORTED on the row (never silently discarded — which is
+          // exactly what the old shared_sku_listing suppression did).
+          // Scope is deliberately narrow: only an ItemID that REPLACES an
+          // existing one. First-time linking keeps its legacy path untouched.
+          const storedItemId = existing?.externalListingId ?? null;
+          const isRelink = !!itemId && !!storedItemId && itemId !== storedItemId;
+          let relinkHandled = false;
+          if (isRelink) {
+            relinkHandled = true; // never fall through to the unverified write
+            const rowId = String((row as Record<string, unknown>)._rowId ?? '') || undefined;
+            const isParentRow =
+              Boolean((row as Record<string, unknown>)._isParent) ||
+              String((row as Record<string, unknown>).parentage ?? '') === 'parent';
+            if (!isParentRow) {
+              rowErrors.push({ sku, rowId, error: `${mp} Item ID belongs to the family parent row — change it there. Not applied.` });
+            } else {
+              try {
+                const relink = await relinkEbayItemId(
+                  prisma,
+                  { parentSku: sku, marketplace: mp, itemId, apply: true },
+                  { oauthToken: await getRelinkToken() },
+                );
+                if (!relink.applied) {
+                  rowErrors.push({ sku, rowId, error: `${mp} Item ID ${itemId} NOT applied (${relink.verdict}): ${relink.reason}` });
+                } else {
+                  request.log.info({ sku, mp, itemId, changes: relink.changes }, 'ebay/flat-file: verified ItemID re-link applied');
+                }
+              } catch (err) {
+                rowErrors.push({
+                  sku, rowId,
+                  error: `${mp} Item ID ${itemId} NOT applied — verification failed: ${err instanceof Error ? err.message : String(err)}`,
+                });
+              }
+            }
+          }
+
           const oldPrice = existing?.price?.toNumber() ?? null;
           const oldQty = existing?.quantity ?? null;
 
@@ -978,7 +1035,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             // listing's identity lives on its SharedListingMembership, and the
             // established Lane-A linkage is the primary listing's (row-order
             // independent complement to the first-occurrence dedupe above).
-            ...(itemId &&
+            ...(itemId && !relinkHandled &&
             !(Boolean((row as Record<string, unknown>).shared_sku_listing) &&
               existing?.externalListingId &&
               existing.externalListingId !== itemId)
