@@ -601,7 +601,7 @@ const XAVIA_MODERNIST_HTML = `<div vocab="https://schema.org/" typeof="Product" 
 
 /* gallery (CSS-only radio swap — per-image rules are generated with the markup) */
 .ebd .gallery input{ position:absolute; opacity:0; width:0; height:0; }
-.ebd .stage .shot{ display:none; aspect-ratio:4/5; }
+.ebd .stage .shot{ display:none; aspect-ratio:1; }
 .ebd .gallery .frame{ height:100%; }
 .ebd .thumbs{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px; }
 .ebd .thumbs label{ display:block; aspect-ratio:1; cursor:pointer; border:2px solid transparent; }
@@ -770,7 +770,6 @@ const XAVIA_MODERNIST_HTML = `<div vocab="https://schema.org/" typeof="Product" 
     <img class="logo" src="https://cdn.shopify.com/s/files/1/0729/9186/7207/files/XAVIA_LOGO_06c286e9-0256-470d-bb70-b8df768bd1d0.png?v=1760139325" alt="XAVIA">
     <div class="tag">Abbigliamento tecnico moto</div>
     <div class="trust">
-      <div class="t"><b>CE</b><span>Certificato</span></div>
       <div class="t"><b>Italia</b><span>Spediamo da</span></div>
       <div class="t"><b>eBay</b><span>Garanzia cliente</span></div>
     </div>
