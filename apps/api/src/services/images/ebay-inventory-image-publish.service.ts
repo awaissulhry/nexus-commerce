@@ -30,6 +30,29 @@ import { logger } from '../../utils/logger.js'
 import { resolveImagePictureAxis } from './ebay-image-axis.pure.js'
 import { publishEbaySharedListingImages } from './ebay-shared-image-publish.service.js'
 
+/**
+ * PURE — the per-variation gallery a publish sends for one curated row.
+ *
+ * OPERATOR RULE (2026-07-27, explicit): images from the shared "cover & common"
+ * pool may be reused in ANY row and ANY position. What is curated in Nexus is
+ * what goes to eBay, verbatim and in order.
+ *
+ * This used to subtract the shared pool from every per-colour/per-SKU set (the
+ * old "P5 de-dupe"), on the theory that eBay would otherwise show a photo
+ * twice. That theory was wrong for variation listings — the group gallery and
+ * a variation's gallery are separate strips — and it silently corrupted live
+ * listings: GALE-JACKET-ALT2 curated 7 photos per colour and published 6,
+ * because each colour's hero was also the cover shot. eBay then promoted a
+ * "LEVEL 2 PROTECTORS" marketing tile to Principale.
+ *
+ * Kept as a named, tested function (rather than deleting the call site) so the
+ * guarantee "curation is sent verbatim" has somewhere to be asserted, and so a
+ * future filter cannot be reintroduced without failing a test.
+ */
+export function galleryForCuratedRow(urls: string[]): string[] {
+  return [...urls]
+}
+
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
 
 export interface EbayInventoryPublishResult {
@@ -242,13 +265,13 @@ export async function publishEbayImagesViaInventory(
       sharedUrls.push(r.url)
     }
   }
-  // P5 — de-dupe: a photo in the cover/common gallery must NOT also appear in a
-  // per-colour or per-SKU set, or eBay shows it twice. The shared gallery wins.
-  if (sharedUrls.length > 0) {
-    const sharedSet = new Set(sharedUrls)
-    for (const [k, urls] of imageOverrideByColor) imageOverrideByColor.set(k, urls.filter((u) => !sharedSet.has(u)))
-    for (const [k, urls] of imageOverrideBySku) imageOverrideBySku.set(k, urls.filter((u) => !sharedSet.has(u)))
-  }
+  // Curation is sent VERBATIM — shared-pool photos may be reused in any row and
+  // any position (operator rule, 2026-07-27). See galleryForCuratedRow for the
+  // incident this replaced. The snapshot below is the parity baseline: it is
+  // what the OPERATOR curated, and it is what live eBay is checked against.
+  const curatedByColor = new Map([...imageOverrideByColor].map(([k, v]) => [k, [...v]]))
+  for (const [k, urls] of imageOverrideByColor) imageOverrideByColor.set(k, galleryForCuratedRow(urls))
+  for (const [k, urls] of imageOverrideBySku) imageOverrideBySku.set(k, galleryForCuratedRow(urls))
 
   // FFP.15 — shared-gallery mode: the curated set IS the listing gallery.
   // Fold the single-value axis set into the listing-level urls (cover/common
@@ -360,7 +383,13 @@ export async function publishEbayImagesViaInventory(
         const matches = (l: string[] | null) => l !== null && intended.every((u) => l.includes(u)) && l.length === intended.length
         if (!matches(live)) { await wait(4000); live = await read() } // eventual consistency
         if (!matches(live)) {
-          const w = `⚠ PARITY MISMATCH after publish — "${colourKey}" (${sku}): eBay holds ${live === null ? 'unreadable' : live.length} image(s), you curated ${intended.length}. The publish reported success but LIVE DOES NOT MATCH YOUR CURATION — do not trust this result; re-publish and investigate before assuming eBay is correct.`
+          // Report against what the OPERATOR curated, not only what the pipeline
+          // chose to send. The previous message quoted `intended` — the
+          // POST-dedup set — so when the pipeline itself dropped a photo, live
+          // and intended agreed and this guard stayed silent. It could never
+          // catch a reduction it had already been fed.
+          const curated = curatedByColor.get(colourKey)?.length ?? intended.length
+          const w = `⚠ PARITY MISMATCH after publish — "${colourKey}" (${sku}): eBay holds ${live === null ? 'unreadable' : live.length} image(s), you curated ${curated}. The publish reported success but LIVE DOES NOT MATCH YOUR CURATION — do not trust this result; re-publish and investigate before assuming eBay is correct.`
           pushWarnings.push(w)
           logger.warn('[ebay-image-publish] parity mismatch', { sku, colourKey, intended: intended.length, live: live?.length ?? null })
         }
@@ -511,11 +540,13 @@ export async function computeCuratedImageOverrides(
       sharedUrls.push(r.url)
     }
   }
-  if (sharedUrls.length > 0) {
-    const sharedSet = new Set(sharedUrls)
-    for (const [k, urls] of imageOverrideByColor) imageOverrideByColor.set(k, urls.filter((u) => !sharedSet.has(u)))
-    for (const [k, urls] of imageOverrideBySku) imageOverrideBySku.set(k, urls.filter((u) => !sharedSet.has(u)))
-  }
+  // Same verbatim-curation rule as the Image-Manager publish above. This copy
+  // feeds the flat-file FULL PUBLISH path (ebay-flat-file.routes.ts), which is
+  // exactly the route Inventory-managed families must use — so leaving the old
+  // subtract-the-shared-pool filter here would have kept the GALE-JACKET-ALT2
+  // bug alive on the one path those listings depend on.
+  for (const [k, urls] of imageOverrideByColor) imageOverrideByColor.set(k, galleryForCuratedRow(urls))
+  for (const [k, urls] of imageOverrideBySku) imageOverrideBySku.set(k, galleryForCuratedRow(urls))
   if (sharedGallery) {
     for (const urls of imageOverrideByColor.values()) {
       for (const u of urls) if (!sharedUrls.includes(u)) sharedUrls.push(u)
