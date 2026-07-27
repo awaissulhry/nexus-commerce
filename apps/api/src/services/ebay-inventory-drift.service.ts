@@ -19,7 +19,7 @@
  * re-deriving them here would risk a diff that lies in either direction.
  */
 import type { PrismaClient } from '@prisma/client'
-import { resolvePerMarketContent } from './ebay-variation-push.service.js'
+import { resolvePerMarketContent, toListingLanguage } from './ebay-variation-push.service.js'
 
 export interface DriftField {
   field: string
@@ -90,7 +90,20 @@ export async function collectInventoryDrift(
   const marketplace = opts.marketplace.toUpperCase()
   const region = marketplace === 'UK' ? 'GB' : marketplace
   const apiBase = opts.apiBase ?? process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
-  const headers = { Authorization: `Bearer ${opts.oauthToken}`, 'Content-Type': 'application/json' }
+  // The Sell Inventory API requires BOTH Content-Language AND Accept-Language;
+  // sending neither (or only one) returns 25709 "Invalid value for header
+  // Accept-Language" — which reads like a bad group key but is not. Mirrors the
+  // header set pushVariationGroup already uses (see its note at the headers
+  // object), so this reader authenticates exactly like the writer.
+  const lang = toListingLanguage(marketplace)
+  const headers = {
+    Authorization: `Bearer ${opts.oauthToken}`,
+    'Content-Type': 'application/json',
+    'Content-Language': lang,
+    'Accept-Language': lang,
+    Accept: 'application/json',
+    'X-EBAY-C-MARKETPLACE-ID': `EBAY_${marketplace === 'UK' ? 'GB' : marketplace}`,
+  }
 
   const roots = await prisma.product.findMany({
     where: { parentId: null, deletedAt: null },
