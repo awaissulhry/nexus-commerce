@@ -374,6 +374,17 @@ describe('Xavia Modernist — operator design, token-driven, sanitizer-proof', (
     expect(html).toContain('property="description"') // hidden mobile summary
   })
 
+  it('hero stage is square (1/1), not the design demo\'s 4/5 — Xavia photography is shot square', () => {
+    expect(modernist).toContain('aspect-ratio:1/1')
+    expect(modernist).not.toContain('aspect-ratio:4/5')
+  })
+
+  it('no CE-certification claim in the trust bar or FAQ (operator correction 2026-07-27: the product itself is not what is certified)', () => {
+    expect(modernist).not.toContain('Certificato')
+    expect(modernist).not.toContain('I prodotti sono certificati')
+    expect(modernist).not.toContain('La certificazione specifica')
+  })
+
   it('accent is the fluo orange, not the design demo red; no demo content leaks (Northvane/Loro Piana/price)', () => {
     expect(modernist).toContain('--accent:    #ff6600')
     expect(modernist).not.toContain('#ec3013')
@@ -399,7 +410,7 @@ describe('Xavia Modernist — operator design, token-driven, sanitizer-proof', (
     // also contains the literal substring "<details>", so real FAQ items are
     // counted by the pattern that can only match an actual element: a details
     // tag immediately followed by its <summary> (comments never are).
-    expect(html.match(/<details[^>]*>\s*<summary/g)).toHaveLength(4)
+    expect(html.match(/<details[^>]*>\s*<summary/g)).toHaveLength(3) // certification Q&A removed 2026-07-27
     expect(html).not.toMatch(/<details>\s*<summary/) // none bare/closed — every match above is "open"
   })
 

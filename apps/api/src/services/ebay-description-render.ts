@@ -601,7 +601,9 @@ const XAVIA_MODERNIST_HTML = `<div vocab="https://schema.org/" typeof="Product" 
 
 /* gallery (CSS-only radio swap — per-image rules are generated with the markup) */
 .ebd .gallery input{ position:absolute; opacity:0; width:0; height:0; }
-.ebd .stage .shot{ display:none; aspect-ratio:4/5; }
+/* 1/1, not the design's 4/5 — operator instruction 2026-07-27: every Xavia
+   photo is shot square, so a taller frame would crop it. */
+.ebd .stage .shot{ display:none; aspect-ratio:1/1; }
 .ebd .gallery .frame{ height:100%; }
 .ebd .thumbs{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px; }
 .ebd .thumbs label{ display:block; aspect-ratio:1; cursor:pointer; border:2px solid transparent; }
@@ -770,7 +772,6 @@ const XAVIA_MODERNIST_HTML = `<div vocab="https://schema.org/" typeof="Product" 
     <img class="logo" src="https://cdn.shopify.com/s/files/1/0729/9186/7207/files/XAVIA_LOGO_06c286e9-0256-470d-bb70-b8df768bd1d0.png?v=1760139325" alt="XAVIA">
     <div class="tag">Abbigliamento tecnico moto</div>
     <div class="trust">
-      <div class="t"><b>CE</b><span>Certificato</span></div>
       <div class="t"><b>Italia</b><span>Spediamo da</span></div>
       <div class="t"><b>eBay</b><span>Garanzia cliente</span></div>
     </div>
@@ -899,10 +900,6 @@ const XAVIA_MODERNIST_HTML = `<div vocab="https://schema.org/" typeof="Product" 
       <details open>
         <summary>Come scelgo la taglia giusta?</summary>
         <div class="ans">Confronta le misure nella sezione Specifiche con un capo che già possiedi. Se hai dubbi, scrivici tramite i messaggi eBay: ti aiutiamo volentieri a scegliere.</div>
-      </details>
-      <details open>
-        <summary>I prodotti sono certificati?</summary>
-        <div class="ans">Sì: abbigliamento tecnico motociclistico con marcatura CE. La certificazione specifica (es. EN 17092) è riportata sull'etichetta di ogni capo.</div>
       </details>
       <details open>
         <summary>Posso restituire l'articolo se la taglia non va bene?</summary>
