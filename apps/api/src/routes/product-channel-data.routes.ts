@@ -419,7 +419,40 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
     })
 
     await Promise.allSettled(ops)
-    return reply.send({ ok: true, updated: updates.length })
+
+    // SCT.6d — COMPLETE an FBA→FBM conversion from the Matrix tab. The toggle
+    // above writes the LISTING-level method, but the fail-closed FBA guard
+    // also reads the VARIANT product's flag — which stranded the AIREON
+    // conversion (24 variants stayed product.fm='FBA' with no UI path to fix
+    // it). When a variant is toggled FBM and EVERY other FBA signal is clear
+    // (no other FBA listing, no FBA stock on hand, no active FBA offer), the
+    // product flag now follows automatically — the same fail-safe predicate
+    // as the master-edit cascade. Toggling FBA locks the product flag
+    // immediately (locking harder is always safe).
+    const conversions: string[] = []
+    for (const u of updates) {
+      const productId = u.variantId ?? id
+      if (u.fulfillmentMethod === 'FBA') {
+        await prisma.product.updateMany({ where: { id: productId, fulfillmentMethod: { not: 'FBA' } }, data: { fulfillmentMethod: 'FBA' } })
+        continue
+      }
+      if (u.fulfillmentMethod !== 'FBM') continue
+      const prod = await prisma.product.findUnique({ where: { id: productId }, select: { fulfillmentMethod: true } })
+      if (String(prod?.fulfillmentMethod ?? '').toUpperCase() !== 'FBA') continue
+      const [otherFbaListing, fbaStock, fbaOffer] = await Promise.all([
+        prisma.channelListing.findFirst({ where: { productId, fulfillmentMethod: 'FBA' }, select: { id: true } }),
+        prisma.stockLevel.aggregate({ where: { productId, location: { code: 'AMAZON-EU-FBA' } }, _sum: { quantity: true } }),
+        prisma.offer.findFirst({ where: { channelListing: { productId }, fulfillmentMethod: 'FBA', isActive: true }, select: { id: true } }).catch(() => null),
+      ])
+      if (!otherFbaListing && (fbaStock._sum.quantity ?? 0) === 0 && !fbaOffer) {
+        await prisma.product.update({ where: { id: productId }, data: { fulfillmentMethod: 'FBM' } })
+        conversions.push(productId)
+      } else {
+        request.log.warn({ productId, otherFbaListing: !!otherFbaListing, fbaStock: fbaStock._sum.quantity ?? 0, fbaOffer: !!fbaOffer },
+          'fulfillment toggle: product flag HELD (live FBA evidence remains)')
+      }
+    }
+    return reply.send({ ok: true, updated: updates.length, productConversions: conversions.length })
   })
 
   // ── GET /api/products/:id/listings ──────────────────────────────────────
