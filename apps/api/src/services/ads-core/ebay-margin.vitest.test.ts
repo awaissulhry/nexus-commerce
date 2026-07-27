@@ -1,6 +1,6 @@
 /** E2 — margin math: the guardrail formulas (pure). */
 import { describe, it, expect } from 'vitest'
-import { computeEconomics, computeBreakEvenCpcCents, estimateEbayFeesCents } from './ebay-margin.js'
+import { computeEconomics, computeBreakEvenCpcCents, estimateEbayFeesCents, adFeeBaseCents } from './ebay-margin.js'
 
 describe('computeEconomics', () => {
   it('computes margin + break-even rate on the ad-fee base', () => {
@@ -50,5 +50,69 @@ describe('estimateEbayFeesCents', () => {
   it('FVF% + fixed, labeled estimate at call sites', () => {
     // defaults: 11.5% + 35c → €109.99 → 1265 + 35 = 1300
     expect(estimateEbayFeesCents(10999)).toBe(1300)
+  })
+  it('charges FVF on the ad-fee base, so buyer-paid shipping raises the fee', () => {
+    // eBay bills FVF on the total sale amount, not the bare item price.
+    // 11.5% of €118.99 = 1368 (rounded) + 35 fixed = 1403.
+    expect(estimateEbayFeesCents(adFeeBaseCents(10999, 900))).toBe(1403)
+    expect(estimateEbayFeesCents(adFeeBaseCents(10999, 900))).toBeGreaterThan(estimateEbayFeesCents(10999))
+  })
+})
+
+// ── E8.0-5 — corrected CPS fee base A = P + S + T ───────────────────────────
+describe('adFeeBaseCents (E8.0-5)', () => {
+  it('A == price when no buyer-paid shipping (today’s data)', () => {
+    expect(adFeeBaseCents(10999)).toBe(10999)
+    expect(adFeeBaseCents(10999, 0)).toBe(10999)
+  })
+  it('A includes buyer-paid shipping', () => {
+    expect(adFeeBaseCents(10999, 900)).toBe(11899)
+  })
+})
+
+describe('computeEconomics with buyer-paid shipping (E8.0-5)', () => {
+  it('counts shipping on BOTH sides — revenue and fee base', () => {
+    // €109.99 + €9.00 shipping, €45 COGS, fees on the €118.99 base, €7 to ship.
+    const base = adFeeBaseCents(10999, 900)
+    const e = computeEconomics({
+      priceCents: 10999,
+      cogsCents: 4500,
+      ebayFeesCents: estimateEbayFeesCents(base),
+      shippingCostCents: 700,
+      shippingChargedCents: 900,
+    })
+    expect(e.adFeeBaseCents).toBe(11899)
+    // 10999 + 900 − 4500 − 1403 − 700
+    expect(e.contributionMarginCents).toBe(5296)
+    expect(e.breakEvenAdRatePct).toBeCloseTo(44.51, 2)
+  })
+
+  it('ignoring shipping in the BASE overstates the affordable rate', () => {
+    // A €20 item with €9 shipping — the heavy, low-ASP shape where this bites.
+    const e = computeEconomics({
+      priceCents: 2000, cogsCents: 800, ebayFeesCents: 265,
+      shippingCostCents: 700, shippingChargedCents: 900,
+    })
+    // Hold the margin constant and vary only the divisor: the old code divided
+    // by the bare item price, the corrected code divides by A = P + S.
+    const naiveRatePct = (e.contributionMarginCents! / 2000) * 100
+    const correctedRatePct = e.breakEvenAdRatePct!
+
+    expect(correctedRatePct).toBeLessThan(naiveRatePct)
+    expect(naiveRatePct).toBeCloseTo(56.75, 2)   // what we used to permit
+    expect(correctedRatePct).toBeCloseTo(39.14, 2) // what the margin truly affords
+  })
+
+  it('exposes the base so callers never re-derive it', () => {
+    const e = computeEconomics({ priceCents: 5000, cogsCents: 1000, ebayFeesCents: 600, shippingCostCents: 0 })
+    expect(e.adFeeBaseCents).toBe(5000)
+  })
+
+  it('VAT_on_fees defaults to 0 — this correction moves no live guardrail', () => {
+    // Pinned deliberately: enabling VAT is an operator decision, not a silent
+    // side-effect of shipping the corrected formula.
+    expect(process.env.NEXUS_EBAY_VAT_ON_FEES_PCT).toBeUndefined()
+    const e = computeEconomics({ priceCents: 10999, cogsCents: 4500, ebayFeesCents: 1300, shippingCostCents: 0 })
+    expect(e.breakEvenAdRatePct).toBeCloseTo(47.27, 2)
   })
 })

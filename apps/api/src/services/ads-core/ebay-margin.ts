@@ -2,16 +2,30 @@
  * E2 (eBay Ads) — margin math (pure, unit-tested) + the EbayListingEconomics
  * materializer. THE guardrail source: break-even ad rate per listing.
  *
- * Definitions (E0-ARCHITECTURE §4, verified fee base):
- *   adFeeBase            ≈ listing price (VAT-inclusive) + shipping charged.
- *                          eBay charges the ad rate on the TOTAL sale amount
- *                          (item + shipping + taxes); our listed price is
- *                          VAT-inclusive and shipping is predominantly free
- *                          on these listings, so base = price is the honest
- *                          approximation until per-order shipping lands.
- *   contributionMargin   = price − COGS − eBay fees − shipping cost.
- *   breakEvenAdRatePct   = contributionMargin ÷ adFeeBase × 100.
+ * Definitions (E8.0-5 — closes the ⚠️VERIFY marker on adFeeBase in
+ * E0-ARCHITECTURE §4, using the fee base confirmed by the EA-series research):
+ *
+ *   A (adFeeBase)        = item price + buyer-paid shipping + tax.
+ *                          eBay widened the base from item-price-only on
+ *                          2022-06-01. Our listed price is VAT-inclusive, so T
+ *                          is already inside P for IT; S is the term that was
+ *                          missing. Charging the ad rate on P alone
+ *                          UNDERSTATES the fee and therefore OVERSTATES the
+ *                          affordable rate — worst on heavy, low-ASP items.
+ *   contributionMargin   = price + shipping charged − COGS − eBay fees
+ *                          − shipping cost.
+ *   breakEvenAdRatePct   = contributionMargin ÷ (A × (1 + VAT_on_fees)) × 100.
  *   breakEvenCpcCents    = contributionMargin × trailing CVR (≥ MIN_CLICKS).
+ *
+ * VAT_on_fees: eBay adds VAT to seller fees unless the seller is VAT-registered
+ * and reverse-charged. We cannot infer which applies, so it is env-tunable and
+ * DEFAULTS TO 0 — i.e. today's behaviour is preserved exactly. Set
+ * NEXUS_EBAY_VAT_ON_FEES_PCT=0.22 if eBay does add Italian VAT to our ad fees;
+ * every break-even then tightens, which is the conservative direction.
+ *
+ * Buyer-paid shipping is likewise 0 until per-listing shipping lands in
+ * EbayListingIndex (no shipping column exists yet), so A == price today. The
+ * arithmetic is correct and inert rather than correct and wrong.
  *
  * Fees: no per-listing fee actuals exist in the DB yet, so v1 uses a
  * CATEGORY_ESTIMATE (env-tunable FVF% + fixed) and LABELS it as such
@@ -28,31 +42,53 @@ export interface EconomicsInput {
   cogsCents: number | null
   ebayFeesCents: number | null
   shippingCostCents: number
+  /** Buyer-paid shipping (S). Part of the ad-fee base AND of revenue. */
+  shippingChargedCents?: number
 }
 
 export interface EconomicsResult {
   contributionMarginCents: number | null
   contributionMarginPct: number | null // vs the ad-fee base
   breakEvenAdRatePct: number | null
+  /** A = price + buyer-paid shipping (+ tax, already inside our VAT-inclusive price). */
+  adFeeBaseCents: number | null
   dataStatus: 'ESTIMATED' | 'OK' | 'MISSING_COGS' | 'MISSING_PRICE'
+}
+
+/**
+ * VAT eBay adds on top of seller fees. 0 = reverse-charged / no VAT on fees.
+ * See the header — deliberately defaults to 0 so this correction does not
+ * silently move live guardrails.
+ */
+const VAT_ON_FEES = Number(process.env.NEXUS_EBAY_VAT_ON_FEES_PCT ?? 0)
+
+/** A = item price + buyer-paid shipping + tax (tax already inside our price). */
+export function adFeeBaseCents(priceCents: number, shippingChargedCents = 0): number {
+  return priceCents + shippingChargedCents
 }
 
 /** Pure economics — the single formula every surface and guardrail uses. */
 export function computeEconomics(i: EconomicsInput, feesAreEstimate = true): EconomicsResult {
   if (i.priceCents == null || i.priceCents <= 0) {
-    return { contributionMarginCents: null, contributionMarginPct: null, breakEvenAdRatePct: null, dataStatus: 'MISSING_PRICE' }
+    return { contributionMarginCents: null, contributionMarginPct: null, breakEvenAdRatePct: null, adFeeBaseCents: null, dataStatus: 'MISSING_PRICE' }
   }
   if (i.cogsCents == null) {
-    return { contributionMarginCents: null, contributionMarginPct: null, breakEvenAdRatePct: null, dataStatus: 'MISSING_COGS' }
+    return { contributionMarginCents: null, contributionMarginPct: null, breakEvenAdRatePct: null, adFeeBaseCents: null, dataStatus: 'MISSING_COGS' }
   }
-  const adFeeBase = i.priceCents // + shipping charged (0 today; see header)
-  const margin = i.priceCents - i.cogsCents - (i.ebayFeesCents ?? 0) - i.shippingCostCents
-  const pct = (margin / adFeeBase) * 100
+  const shipCharged = i.shippingChargedCents ?? 0
+  const base = adFeeBaseCents(i.priceCents, shipCharged)
+  // Buyer-paid shipping is revenue as well as fee base — count it on both
+  // sides, or a listing with paid shipping looks artificially unprofitable.
+  const margin = i.priceCents + shipCharged - i.cogsCents - (i.ebayFeesCents ?? 0) - i.shippingCostCents
+  // The ad fee is charged on A and then itself carries VAT, so the rate the
+  // margin can absorb is m ÷ (A × (1 + VAT_on_fees)).
+  const pct = (margin / (base * (1 + VAT_ON_FEES))) * 100
   return {
     contributionMarginCents: margin,
     contributionMarginPct: round2(pct),
     // Never negative: a loss-making listing has a 0% break-even (any ad fee deepens the loss).
     breakEvenAdRatePct: round2(Math.max(0, pct)),
+    adFeeBaseCents: base,
     dataStatus: feesAreEstimate ? 'ESTIMATED' : 'OK',
   }
 }
@@ -69,8 +105,13 @@ const round2 = (n: number) => Math.round(n * 100) / 100
 const FVF_PCT = Number(process.env.NEXUS_EBAY_FVF_PCT ?? 0.115) // motor-gear IT typical
 const FEE_FIXED_CENTS = Number(process.env.NEXUS_EBAY_FEE_FIXED_CENTS ?? 35)
 
-export function estimateEbayFeesCents(priceCents: number): number {
-  return Math.round(priceCents * FVF_PCT) + FEE_FIXED_CENTS
+/**
+ * Final-value fee estimate. eBay charges FVF on the SAME total sale amount the
+ * ad rate uses (item + shipping + tax), so pass the ad-fee base A, not the
+ * bare item price. Identical while buyer-paid shipping is 0. (E8.0-5)
+ */
+export function estimateEbayFeesCents(adFeeBaseCentsValue: number): number {
+  return Math.round(adFeeBaseCentsValue * FVF_PCT) + FEE_FIXED_CENTS
 }
 
 // ── Materializer ─────────────────────────────────────────────────────────────
@@ -110,8 +151,13 @@ export async function rebuildEbayListingEconomics(): Promise<EconomicsRebuildRep
       if (p?.costPrice != null) cogsCents = Math.round(Number(p.costPrice.toString()) * 100)
       else if ((p?.weightedAvgCostCents ?? 0) > 0) cogsCents = p!.weightedAvgCostCents!
     }
-    const fees = priceCents != null ? estimateEbayFeesCents(priceCents) : null
-    const eco = computeEconomics({ priceCents, cogsCents, ebayFeesCents: fees, shippingCostCents: 0 }, true)
+    // Buyer-paid shipping is not yet captured per listing (no shipping column
+    // on EbayListingIndex), so S = 0 and A == price for now. When it lands,
+    // feed it here and both the fee estimate and the break-even tighten.
+    const shippingChargedCents = 0
+    const base = priceCents != null ? adFeeBaseCents(priceCents, shippingChargedCents) : null
+    const fees = base != null ? estimateEbayFeesCents(base) : null
+    const eco = computeEconomics({ priceCents, cogsCents, ebayFeesCents: fees, shippingCostCents: 0, shippingChargedCents }, true)
 
     let breakEvenCpcCents: number | null = null
     if (eco.contributionMarginCents != null) {
