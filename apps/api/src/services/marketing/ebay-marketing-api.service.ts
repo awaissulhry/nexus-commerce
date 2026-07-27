@@ -17,8 +17,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { EbayAuthService } from '../ebay-auth.service.js'
-
-const API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
+import { fetchCampaigns } from './ebay-ads-api.service.js'
 
 interface EbayAdCampaignDTO {
   campaignId: string
@@ -58,61 +57,53 @@ export async function syncEbayCampaigns(): Promise<EbaySyncReport> {
       report.errors.push(`conn ${conn.id}: token ${(e as Error).message}`)
       continue
     }
-    let offset = 0
-    const limit = 100
-    for (let page = 0; page < 20; page++) {
-      let res: Response
-      try {
-        res = await fetch(`${API_BASE}/sell/marketing/v1/ad_campaign?limit=${limit}&offset=${offset}`, {
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        })
-      } catch (e) {
-        report.errors.push(`conn ${conn.id}: fetch ${(e as Error).message}`)
-        break
-      }
-      if (res.status === 403) {
-        report.errors.push(`conn ${conn.id}: 403 — token likely missing sell.marketing scope (re-authorize)`)
-        break
-      }
-      if (!res.ok) {
-        report.errors.push(`conn ${conn.id}: HTTP ${res.status}`)
-        break
-      }
-      const body = (await res.json()) as { campaigns?: EbayAdCampaignDTO[]; total?: number }
-      const campaigns = body.campaigns ?? []
-      report.pulled += campaigns.length
-      for (const c of campaigns) {
-        if (!c.campaignId) { report.skipped++; continue }
-        const advanced = c.fundingStrategy?.fundingModel === 'COST_PER_CLICK'
-        const dailyVal = c.budget?.daily?.amount?.value
-        await prisma.ebayCampaign.upsert({
-          where: { channelConnectionId_externalCampaignId: { channelConnectionId: conn.id, externalCampaignId: c.campaignId } },
-          create: {
-            channelConnectionId: conn.id,
-            externalCampaignId: c.campaignId,
-            marketplace: c.marketplaceId ?? conn.marketplace ?? 'EBAY_IT',
-            name: c.campaignName ?? c.campaignId,
-            fundingStrategy: advanced ? 'ADVANCED' : 'STANDARD',
-            bidPercentage: c.fundingStrategy?.bidPercentage ? c.fundingStrategy.bidPercentage : null,
-            dailyBudget: dailyVal ?? null,
-            budgetCurrency: c.budget?.daily?.amount?.currency ?? 'EUR',
-            status: c.campaignStatus ?? 'DRAFT',
-            startDate: c.startDate ? new Date(c.startDate) : new Date(),
-            endDate: c.endDate ? new Date(c.endDate) : null,
-          },
-          update: {
-            name: c.campaignName ?? c.campaignId,
-            fundingStrategy: advanced ? 'ADVANCED' : 'STANDARD',
-            bidPercentage: c.fundingStrategy?.bidPercentage ?? null,
-            dailyBudget: dailyVal ?? null,
-            status: c.campaignStatus ?? 'DRAFT',
-            endDate: c.endDate ? new Date(c.endDate) : null,
-          },
-        })
-        report.upserted++
-      }
-      if (campaigns.length < limit) break
-      offset += limit
+    // E8.0-2 — this used to run its own raw fetch/pagination loop (up to 20
+    // pages per connection) straight at eBay, with NO quota accounting, while
+    // drawing on the very same Marketing "Ads" 10k/day pool the E2 client
+    // budgets. Reuse the metered client so every call is counted once.
+    let campaigns: EbayAdCampaignDTO[]
+    try {
+      campaigns = (await fetchCampaigns(token)) as unknown as EbayAdCampaignDTO[]
+    } catch (e) {
+      const msg = (e as Error).message
+      report.errors.push(
+        msg.includes('403')
+          ? `conn ${conn.id}: 403 — token likely missing sell.marketing scope (re-authorize)`
+          : `conn ${conn.id}: ${msg}`,
+      )
+      continue
+    }
+    report.pulled += campaigns.length
+
+    for (const c of campaigns) {
+      if (!c.campaignId) { report.skipped++; continue }
+      const advanced = c.fundingStrategy?.fundingModel === 'COST_PER_CLICK'
+      const dailyVal = c.budget?.daily?.amount?.value
+      await prisma.ebayCampaign.upsert({
+        where: { channelConnectionId_externalCampaignId: { channelConnectionId: conn.id, externalCampaignId: c.campaignId } },
+        create: {
+          channelConnectionId: conn.id,
+          externalCampaignId: c.campaignId,
+          marketplace: c.marketplaceId ?? conn.marketplace ?? 'EBAY_IT',
+          name: c.campaignName ?? c.campaignId,
+          fundingStrategy: advanced ? 'ADVANCED' : 'STANDARD',
+          bidPercentage: c.fundingStrategy?.bidPercentage ? c.fundingStrategy.bidPercentage : null,
+          dailyBudget: dailyVal ?? null,
+          budgetCurrency: c.budget?.daily?.amount?.currency ?? 'EUR',
+          status: c.campaignStatus ?? 'DRAFT',
+          startDate: c.startDate ? new Date(c.startDate) : new Date(),
+          endDate: c.endDate ? new Date(c.endDate) : null,
+        },
+        update: {
+          name: c.campaignName ?? c.campaignId,
+          fundingStrategy: advanced ? 'ADVANCED' : 'STANDARD',
+          bidPercentage: c.fundingStrategy?.bidPercentage ?? null,
+          dailyBudget: dailyVal ?? null,
+          status: c.campaignStatus ?? 'DRAFT',
+          endDate: c.endDate ? new Date(c.endDate) : null,
+        },
+      })
+      report.upserted++
     }
   }
   logger.info('[UM][ebay-marketing] sync complete', report)
