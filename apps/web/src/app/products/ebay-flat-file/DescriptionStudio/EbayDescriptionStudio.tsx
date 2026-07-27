@@ -584,6 +584,24 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
     return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><style>html,body{margin:0;padding:0;background:#ffffff;}body{padding:12px;font-family:Arial,Helvetica,sans-serif;color:#111827;}img{max-width:100%;}</style></head><body>${render.html}</body></html>`
   }, [render.html])
 
+  /** Where the caret must land once React has committed an inserted token. */
+  const pendingCaretRef = useRef<number | null>(null)
+
+  // The caret is restored in an EFFECT, not a rAF: the textarea is controlled,
+  // so React re-assigns `.value` on commit and that moves the caret. A rAF can
+  // fire before that commit, in which case the restore is overwritten and the
+  // next insert reads a caret of 0 — tokens then pile up at the start of the
+  // theme instead of landing where the operator clicked.
+  useEffect(() => {
+    const pos = pendingCaretRef.current
+    if (pos == null) return
+    pendingCaretRef.current = null
+    const el = editorBoxRef.current?.querySelector<HTMLTextAreaElement>('textarea[data-role="theme-html"]')
+    if (!el) return
+    el.focus()
+    el.selectionStart = el.selectionEnd = pos
+  }, [draft.html])
+
   const insertToken = (token: string) => {
     // DS Textarea doesn't forward refs (React 18) — reach the element through
     // the wrapper so insert-at-cursor keeps working on the DS primitive. The
@@ -593,10 +611,9 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
     if (!el) return
     const start = el.selectionStart ?? draft.html.length
     const end = el.selectionEnd ?? start
-    const next = draft.html.slice(0, start) + token + draft.html.slice(end)
-    setDraft((d) => ({ ...d, html: next }))
+    pendingCaretRef.current = start + token.length
+    setDraft((d) => ({ ...d, html: d.html.slice(0, start) + token + d.html.slice(end) }))
     setDirty(true)
-    requestAnimationFrame(() => { el.focus(); el.selectionStart = el.selectionEnd = start + token.length })
   }
 
   const frameW = previewWidth === 'desktop' ? DESKTOP_W : MOBILE_W
@@ -998,6 +1015,9 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
             <div className="shrink-0 flex flex-wrap gap-1">
               {THEME_TOKENS.map((t) => (
                 <button key={t} type="button" onClick={() => insertToken(t)}
+                  // Keep the textarea focused so "insert at the cursor" means
+                  // the operator's cursor, not wherever a blur left it.
+                  onMouseDown={(e) => e.preventDefault()}
                   title={`${THEME_TOKEN_INFO[t]}\n\nClick to insert at the cursor.`}
                   className="px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 text-[10px] font-mono hover:bg-violet-100 dark:hover:bg-violet-900/40">
                   {t}
