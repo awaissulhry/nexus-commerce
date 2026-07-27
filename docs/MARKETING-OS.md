@@ -97,10 +97,11 @@ Bodyless POSTs: do **not** send `Content-Type: application/json` (Fastify reject
 5. Now cockpit pause/budget + automation drive live Amazon. Re-check `/cutover/amazon/status` → `ready: true`.
 
 ### eBay (P9 live)
-1. **Re-authorize eBay** so the token gains `sell.marketing`: Settings → Channels → reconnect eBay (approve the consent), **or** `curl -X POST .../api/ebay/auth/initiate` → open `authUrl` → approve.
-   *(If the consent errors on the scope, enable the Marketing API on your eBay developer keyset.)*
-2. **Sync campaigns:** `curl -X POST "$BASE/sync/ebay"` → `sync.upserted > 0`, eBay campaigns appear under the eBay lens. *(Before re-auth this returns the `403 sell.marketing` hint — that's expected.)*
-3. **(Writes)** set `NEXUS_MARKETING_WRITES_EBAY=1` on Railway → cockpit pause/bid/budget push live to eBay.
+> **Status (2026-07-27):** steps 1–2 are **DONE**. The operator re-consented on 2026-07-03 and `GET /sell/marketing/v1/ad_campaign` returned HTTP 200, discovering 11 existing Seller Hub campaigns (`docs/ads-ebay/E2-DATA-LAYER.md`). Step 3 is asserted done by `docs/ads-ebay/RUNBOOK.md` but is not verifiable from the repo — confirm with `GET /api/ebay-ads/write-mode`.
+
+1. ~~**Re-authorize eBay** so the token gains `sell.marketing`~~ — **done 2026-07-03.** Settings → Channels → reconnect eBay re-grants it automatically; all five scopes are in `ebay-auth.service.ts`.
+2. ~~**Sync campaigns**~~ — **done.** Note this legacy `POST /sync/ebay` path is now superseded by the E2 hourly entity sync; it shares the same quota ledger since E8.0-2.
+3. **(Writes)** set `NEXUS_MARKETING_WRITES_EBAY=1` on Railway → cockpit pause/bid/budget push live to eBay. Strictly `1` — `true`/`yes` do **not** open the gate.
 
 ### Shopify / Google / Meta / TikTok
 Sandbox stubs registered (cockpit lenses + create work). Going live = provision each platform's OAuth app + credentials, then graduate its stub adapter (pull + write). Not yet built — needs creds.
