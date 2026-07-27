@@ -96,7 +96,14 @@ describe('buildSharedPicturePayload', () => {
     expect(out.byValue.Nero).toEqual(['https://c/nero.jpg'])
   })
 
-  it('gallery wins over sets (dedup) and both respect the 12 cap', () => {
+  // BEHAVIOUR CHANGE 2026-07-27 (GALE-JACKET-ALT2). These two tests previously
+  // asserted "gallery wins over sets" — that a photo in the cover/common
+  // gallery was subtracted from every variation set. That rule silently shipped
+  // 6 of 7 curated photos per colour and let eBay promote a marketing tile to
+  // the main image, because each colour's HERO was the cover shot. Operator
+  // rule: shared-pool photos may be reused in any row and any position, and
+  // curation goes to eBay verbatim. Only eBay's hard cap may reduce a set.
+  it('KEEPS a photo reused from the cover gallery in the set; only the 12 cap reduces it', () => {
     const shared = row('https://c/shared.jpg')
     const dupInSet = row('https://c/shared.jpg', 'Color', 'Nero')
     const many = Array.from({ length: 14 }, (_, i) => row(`https://c/n${i}.jpg`, 'Color', 'Nero'))
@@ -105,19 +112,19 @@ describe('buildSharedPicturePayload', () => {
       liveSpecificsSet: LIVE_IT,
       requestedAxis: 'Color',
     })
-    expect(out.byValue.Nero).toHaveLength(12)
-    expect(out.byValue.Nero).not.toContain('https://c/shared.jpg')
+    expect(out.byValue.Nero).toHaveLength(12)              // cap still enforced
+    expect(out.byValue.Nero[0]).toBe('https://c/shared.jpg') // hero survives, in position
     expect(out.warnings.some((w) => w.includes('caps variation sets'))).toBe(true)
   })
 
-  it('drops a set that dedup empties entirely', () => {
+  it('KEEPS a set whose photos are all reused from the gallery (it used to be deleted)', () => {
     const out = buildSharedPicturePayload({
       curated: [row('https://c/x.jpg'), row('https://c/x.jpg', 'Color', 'Verde')],
       liveSpecificsSet: LIVE_IT,
       requestedAxis: 'Color',
     })
-    expect(out.byValue).toEqual({})
-    expect(out.axisName).toBeNull()
+    expect(out.byValue).toEqual({ Verde: ['https://c/x.jpg'] })
+    expect(out.axisName).toBe('Colore')
   })
 })
 

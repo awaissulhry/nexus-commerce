@@ -135,18 +135,22 @@ export function buildSharedPicturePayload(opts: {
     }
   }
 
-  // Gallery wins over sets (same rule as the Inventory path) + caps.
-  const gallerySet = new Set(gallery)
+  // Curation is sent VERBATIM (operator rule, 2026-07-27) — a photo in the
+  // cover/common gallery may ALSO be reused in any variation set, at any
+  // position. Only eBay's hard per-set cap may reduce a set.
+  //
+  // This used to subtract the gallery from every set ("gallery wins over
+  // sets"), and it is the copy that governs ADOPTED TRADING listings — the
+  // path GALE-JACKET-ALT2 actually publishes through. Both colours curated 7
+  // photos whose hero was also the cover shot, so both went live with 6 and
+  // eBay promoted a "LEVEL 2 PROTECTORS" tile to the main image. Worse, a set
+  // whose photos were ALL reused was deleted outright (the `filtered.length
+  // === 0` branch), silently removing that variation's pictures entirely.
   for (const [val, urls] of Object.entries(byValue)) {
-    const filtered = urls.filter((u) => !gallerySet.has(u))
-    if (filtered.length === 0) {
-      delete byValue[val]
-      continue
+    if (urls.length > TRADING_PICTURE_CAP) {
+      warnings.push(`${val}: ${urls.length} pictures — eBay caps variation sets at ${TRADING_PICTURE_CAP}, extra ones dropped`)
     }
-    if (filtered.length > TRADING_PICTURE_CAP) {
-      warnings.push(`${val}: ${filtered.length} pictures — eBay caps variation sets at ${TRADING_PICTURE_CAP}, extra ones dropped`)
-    }
-    byValue[val] = filtered.slice(0, TRADING_PICTURE_CAP)
+    byValue[val] = urls.slice(0, TRADING_PICTURE_CAP)
   }
   if (gallery.length > TRADING_PICTURE_CAP) {
     warnings.push(`Gallery: ${gallery.length} pictures — eBay caps the listing gallery at ${TRADING_PICTURE_CAP}, extra ones dropped`)
