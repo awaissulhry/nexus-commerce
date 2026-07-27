@@ -5,8 +5,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   renderDescriptionTheme,
+  renderDescriptionBodyOnly,
   sanitizeEbayHtml,
   BUILT_IN_THEMES,
+  BUILT_IN_PREVIOUS,
   type DescriptionRenderData,
 } from './ebay-description-render.js'
 
@@ -174,7 +176,48 @@ describe('Xavia Pro Clean v2 — info-first layout + clickable accordions', () =
     expect(section('Spedizione')).toContain('PayPal e carte') // {{policy_payment}}
     expect(section('Resi e diritto di recesso')).toContain('Reso 30 giorni') // {{policy_returns}}
     expect(html).toContain('letter-spacing:3px;color:#9ca3af;">Xavia</div>') // {{brand}}, not hardcoded
-    expect(html).toContain('Cod. articolo: AIR-M') // {{sku}}
+    expect(html).toContain('letter-spacing:.5px;">AIR-M</span>') // {{sku}} footer, label-free
+  })
+
+  it('footer {{sku}} is LABEL-FREE — family listings (no sku) render no dangling "Cod. articolo:"', () => {
+    // v2.1: group-mode call sites pass no sku, so a hardcoded label would
+    // dangle on every family listing. Same pattern as the policy lines.
+    expect(xavia).not.toContain('Cod. articolo')
+    const { html } = renderDescriptionTheme(xavia, { ...data, sku: undefined })
+    expect(html).toContain('letter-spacing:.5px;"></span>') // collapses to invisible empty markup
+  })
+})
+
+describe('renderDescriptionBodyOnly — raw-mode (unthemed) body-token rendering', () => {
+  it('resolves body tokens with no theme wrapper, sanitized', () => {
+    const { html, warnings } = renderDescriptionBodyOnly({
+      ...base,
+      body: '<p>Misure:</p>{{specs_table}}<img src="http://cdn.example.com/a.jpg" />',
+    })
+    expect(html.startsWith('<p>Misure:</p>')).toBe(true) // no theme wrapper
+    expect(html).toContain('Taglia') // live specs table
+    expect(html).toContain('src="https://cdn.example.com/a.jpg"') // sanitizer ran
+    expect(warnings.some((w) => w.includes('https://'))).toBe(true)
+  })
+
+  it('the forbidden-token guard applies in raw mode too', () => {
+    const { html, warnings } = renderDescriptionBodyOnly({ ...base, body: 'a {{body}} b' })
+    expect(html).toBe('a  b')
+    expect(warnings).toEqual(['token {{body}}/{{mobile_summary}} is not allowed inside the description body'])
+  })
+})
+
+describe('BUILT_IN_PREVIOUS — Xavia Pro Clean upgrade chain', () => {
+  it('carries BOTH shipped versions (v1, v2) so unedited rows on either auto-upgrade to current', () => {
+    const chain = BUILT_IN_PREVIOUS['Xavia Pro Clean']
+    expect(chain).toHaveLength(2)
+    const current = BUILT_IN_THEMES.find((t) => t.name === 'Xavia Pro Clean')!.html
+    // frozen v2 is the current html with ONLY the footer label edit reversed
+    expect(chain[1]).toContain('Cod. articolo: {{sku}}')
+    expect(chain[1]).not.toBe(current)
+    expect(chain[1].replace('Cod. articolo: {{sku}}', '{{sku}}')).toBe(current)
+    // no frozen entry equals the live html (an equal entry would mask real edits)
+    for (const prev of chain) expect(prev).not.toBe(current)
   })
 })
 

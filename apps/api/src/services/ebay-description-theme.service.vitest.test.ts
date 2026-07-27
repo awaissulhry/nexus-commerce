@@ -176,6 +176,59 @@ describe('renderListingDescriptionSafe — {{policies}} wiring', () => {
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 2b. Raw-mode (unthemed) pushes still render body tokens (v2.1)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('renderListingDescriptionSafe — raw mode renders body tokens', () => {
+  it("theme 'none' + token-bearing body: tokens resolve live, themed stays false", async () => {
+    const prisma = mockPrisma({})
+    const policies = await resolvePolicyDisplayNames('conn-1', 'EBAY_IT', { fulfillmentId: 'F1' }, okProvider)
+    const res = await renderListingDescriptionSafe(asPrisma(prisma), {
+      productId: 'prod-1',
+      marketplace: 'IT',
+      mode: 'single',
+      sku: 'SKU-1',
+      body: '<p>Servizio: {{policy_shipping}}</p>{{specs_table}}',
+      themeIdOverride: 'none',
+      policies,
+    })
+    expect(res.themed).toBe(false)
+    expect(res.html).toContain('Spedizione 24/48h') // live policy name, no theme wrapper
+    expect(res.html).not.toContain('{{') // buyer never sees a literal token
+    expect(res.warnings).toEqual([])
+  })
+
+  it("theme 'none' + plain-prose body: byte-identical raw return, galleries never loaded (fast path)", async () => {
+    const prisma = mockPrisma({})
+    const res = await renderListingDescriptionSafe(asPrisma(prisma), {
+      productId: 'prod-1',
+      marketplace: 'IT',
+      mode: 'single',
+      sku: 'SKU-1',
+      body: '<p>Corpo semplice</p>',
+      themeIdOverride: 'none',
+    })
+    expect(res).toEqual({ html: '<p>Corpo semplice</p>', themed: false, warnings: [] })
+    expect(prisma.listingImage.findMany).not.toHaveBeenCalled()
+  })
+
+  it('raw mode enforces the forbidden-token guard — {{body}} never recurses', async () => {
+    const prisma = mockPrisma({})
+    const res = await renderListingDescriptionSafe(asPrisma(prisma), {
+      productId: 'prod-1',
+      marketplace: 'IT',
+      mode: 'single',
+      sku: 'SKU-1',
+      body: 'a {{body}} b',
+      themeIdOverride: 'none',
+    })
+    expect(res.themed).toBe(false)
+    expect(res.html).toBe('a  b')
+    expect(res.warnings).toEqual(['token {{body}}/{{mobile_summary}} is not allowed inside the description body'])
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 3. SHELL pool-parent gallery borrow
 // ═══════════════════════════════════════════════════════════════════════════
 

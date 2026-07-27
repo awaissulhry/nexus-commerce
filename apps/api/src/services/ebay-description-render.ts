@@ -261,6 +261,15 @@ export function renderDescriptionTheme(themeHtml: string, data: DescriptionRende
   return { html, warnings }
 }
 
+/** Raw-mode render: resolves {{tokens}} INSIDE the operator's body without any
+ *  theme wrapper (equivalent to a '{{body}}'-only theme, so the forbidden-token
+ *  guard, sanitizer and size warning all apply). Used when a push has no theme
+ *  ('none' assignment / no default) but the description column embeds tokens —
+ *  a buyer must never see a literal {{specs_table}}. */
+export function renderDescriptionBodyOnly(data: DescriptionRenderData): RenderedDescription {
+  return renderDescriptionTheme('{{body}}', data)
+}
+
 // ── Built-in starter themes (owner-editable via the themes CRUD) ─────────────
 
 // ── "Xavia Pro Clean" v1 (seeded 2026-07-27, c1b355354) — FROZEN ────────────
@@ -303,9 +312,10 @@ const XAVIA_PRO_CLEAN_V1_HTML = `<div vocab="https://schema.org/" typeof="Produc
 // Fully token-driven: every content-bearing region renders live data at push
 // time ({{brand}} hero mark, per-section {{policy_*}} names, {{sku}} footer);
 // the only hardcoded prose is the legally-reviewed Italian copy (D10 — DRAFT,
-// verbatim from v1, do not reword) and the brand tagline. Policy tokens sit on
-// label-free muted lines so an unresolved name collapses to an invisible empty
-// <p> instead of a dangling label. Still: all styling inline, single column
+// verbatim from v1, do not reword) and the brand tagline. Policy tokens AND
+// the footer {{sku}} sit on label-free muted lines so an unresolved value
+// collapses to invisible empty markup instead of a dangling label (family
+// listings have no single sku). Still: all styling inline, single column
 // ≤920px, hidden schema.org mobile summary, NO outbound links, NO http://
 // resources, NO EU ODR reference (platform retired 2025-07-20).
 const XPC_FONT = `-apple-system,BlinkMacSystemFont,'Segoe UI Variable Text','Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif`
@@ -334,8 +344,17 @@ const XAVIA_PRO_CLEAN_HTML = `<div vocab="https://schema.org/" typeof="Product" 
   ${xpcSection('Sicurezza prodotto', `<p style="margin:0;">Abbigliamento tecnico motociclistico con marcatura <strong>CE</strong>. Verifica sempre l'etichetta del prodotto per la certificazione specifica (es. EN 17092) e le istruzioni di manutenzione.</p>`)}
   <h2 style="font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:#111827;margin:28px 0 10px;padding-top:18px;border-top:1px solid #e5e7eb;">Dettagli prodotto</h2>
   <div style="margin:0 0 18px;">{{gallery}}</div>
-  <div style="text-align:center;margin:26px 0 4px;padding-top:14px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:12px;letter-spacing:1.5px;">XAVIA — PROTEZIONE E STILE<br /><span style="font-size:11px;letter-spacing:.5px;">Cod. articolo: {{sku}}</span></div>
+  <div style="text-align:center;margin:26px 0 4px;padding-top:14px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:12px;letter-spacing:1.5px;">XAVIA — PROTEZIONE E STILE<br /><span style="font-size:11px;letter-spacing:.5px;">{{sku}}</span></div>
 </div>`
+
+// v2 as shipped in 9a6910f03, FROZEN for the upgrade guard. The v2 → v2.1
+// delta is ONLY the footer sku line ('Cod. articolo: {{sku}}' dangled its
+// label on family listings, which pass no sku — now label-free like the
+// policy lines), so the frozen copy is derived by reversing that one edit.
+const XAVIA_PRO_CLEAN_V2_HTML = XAVIA_PRO_CLEAN_HTML.replace(
+  '<span style="font-size:11px;letter-spacing:.5px;">{{sku}}</span>',
+  '<span style="font-size:11px;letter-spacing:.5px;">Cod. articolo: {{sku}}</span>',
+)
 
 export const BUILT_IN_THEMES: Array<{ name: string; notes: string; html: string }> = [
   {
@@ -399,5 +418,5 @@ export const BUILT_IN_THEMES: Array<{ name: string; notes: string; html: string 
  * Append here whenever a built-in theme's html changes; never rewrite entries.
  */
 export const BUILT_IN_PREVIOUS: Record<string, string[]> = {
-  'Xavia Pro Clean': [XAVIA_PRO_CLEAN_V1_HTML],
+  'Xavia Pro Clean': [XAVIA_PRO_CLEAN_V1_HTML, XAVIA_PRO_CLEAN_V2_HTML],
 }

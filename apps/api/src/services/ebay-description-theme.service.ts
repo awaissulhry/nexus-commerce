@@ -18,6 +18,7 @@ import { createHash } from 'node:crypto'
 import type { PrismaClient } from '@prisma/client'
 import {
   renderDescriptionTheme,
+  renderDescriptionBodyOnly,
   BUILT_IN_THEMES,
   BUILT_IN_PREVIOUS,
   type DescriptionRenderData,
@@ -295,8 +296,38 @@ export async function renderListingDescriptionSafe(
     const attrs = (listing?.platformAttributes ?? {}) as Record<string, unknown>
     const assigned = typeof attrs.descriptionThemeId === 'string' ? attrs.descriptionThemeId : undefined
 
+    const buildData = async (): Promise<DescriptionRenderData> => {
+      const galleries = await loadGalleries(prisma, args.productId, args.sku, args.marketplace)
+      return {
+        market: args.marketplace.toUpperCase(),
+        title: args.title ?? listing?.title ?? '',
+        subtitle: args.subtitle ?? (typeof attrs.subtitle === 'string' ? attrs.subtitle : undefined),
+        body: args.body ?? listing?.description ?? '',
+        sku: args.sku,
+        brand: aspectsFromSnapshot(listing?.flatFileSnapshot).find((a) =>
+          ['marca', 'marke', 'marque', 'brand'].includes(a.name.toLowerCase()),
+        )?.value,
+        mode: args.mode,
+        sharedImages: galleries.shared,
+        imagesByGroup: galleries.byGroup,
+        rowImages: galleries.rowImages,
+        aspects: aspectsFromSnapshot(listing?.flatFileSnapshot),
+        policies: args.policies,
+      }
+    }
+    // The description column is token-aware: even an UNTHEMED push ('none'
+    // assignment, or no theme and no default) must resolve {{tokens}} embedded
+    // in the body — a buyer must never see a literal {{specs_table}}. Bodies
+    // without token syntax skip the gallery/spec loads entirely (the unchanged
+    // fast path for plain-prose descriptions).
+    const rawResolved = async (): Promise<RenderListingDescriptionResult> => {
+      if (!/\{\{\s*[a-z0-9_]+\s*\}\}/i.test(raw.html)) return raw
+      const rendered = renderDescriptionBodyOnly(await buildData())
+      return { html: rendered.html, themed: false, warnings: rendered.warnings }
+    }
+
     let themeId = args.themeIdOverride ?? assigned
-    if (themeId === 'none' && !args.themeHtmlOverride) return raw
+    if (themeId === 'none' && !args.themeHtmlOverride) return rawResolved()
     let theme = args.themeHtmlOverride
       ? ({ id: '__draft__', name: 'Draft preview', html: args.themeHtmlOverride, active: true } as never)
       : themeId
@@ -313,26 +344,9 @@ export async function renderListingDescriptionSafe(
     if (theme && !(theme as { active: boolean }).active) {
       theme = await prisma.ebayDescriptionTheme.findFirst({ where: { isDefault: true, active: true } })
     }
-    if (!theme) return raw
+    if (!theme) return rawResolved()
 
-    const galleries = await loadGalleries(prisma, args.productId, args.sku, args.marketplace)
-    const data: DescriptionRenderData = {
-      market: args.marketplace.toUpperCase(),
-      title: args.title ?? listing?.title ?? '',
-      subtitle: args.subtitle ?? (typeof attrs.subtitle === 'string' ? attrs.subtitle : undefined),
-      body: args.body ?? listing?.description ?? '',
-      sku: args.sku,
-      brand: aspectsFromSnapshot(listing?.flatFileSnapshot).find((a) =>
-        ['marca', 'marke', 'marque', 'brand'].includes(a.name.toLowerCase()),
-      )?.value,
-      mode: args.mode,
-      sharedImages: galleries.shared,
-      imagesByGroup: galleries.byGroup,
-      rowImages: galleries.rowImages,
-      aspects: aspectsFromSnapshot(listing?.flatFileSnapshot),
-      policies: args.policies,
-    }
-    const rendered = renderDescriptionTheme(theme.html, data)
+    const rendered = renderDescriptionTheme(theme.html, await buildData())
     const themeVersion = (theme as { version?: number }).version
     return {
       html: rendered.html,
