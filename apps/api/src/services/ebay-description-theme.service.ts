@@ -19,6 +19,7 @@ import type { PrismaClient } from '@prisma/client'
 import {
   renderDescriptionTheme,
   BUILT_IN_THEMES,
+  BUILT_IN_PREVIOUS,
   type DescriptionRenderData,
   type DescriptionGalleryGroup,
 } from './ebay-description-render.js'
@@ -57,15 +58,36 @@ const regionOf = (mp: string): string => (mp.toUpperCase() === 'UK' ? 'GB' : mp.
 
 // ── Theme CRUD ───────────────────────────────────────────────────────────────
 
-/** Insert the starter themes that don't exist yet (never overwrites edits). */
+/**
+ * Insert the starter themes that don't exist yet (never overwrites edits) and
+ * SAFELY auto-upgrade seeded rows the operator never touched: when an existing
+ * built-in row's html byte-equals a PREVIOUS shipped version of that theme
+ * (BUILT_IN_PREVIOUS), the constant was revised after seeding and the row is
+ * brought up to date (html + notes, version incremented so the D8 staleness
+ * badge flags listings still live with the old design). Any html that differs
+ * from both the current constant and every previous version is an operator
+ * edit and is never modified — both directions unit-tested.
+ */
 export async function ensureBuiltInThemes(prisma: PrismaClient): Promise<void> {
-  const existing = await prisma.ebayDescriptionTheme.findMany({ select: { name: true } })
-  const have = new Set(existing.map((t) => t.name))
+  const existing = await prisma.ebayDescriptionTheme.findMany({
+    select: { name: true, html: true, builtIn: true },
+  })
+  const byName = new Map(existing.map((t) => [t.name, t]))
   for (const t of BUILT_IN_THEMES) {
-    if (have.has(t.name)) continue
-    await prisma.ebayDescriptionTheme.create({
-      data: { name: t.name, notes: t.notes, html: t.html, builtIn: true },
-    })
+    const row = byName.get(t.name)
+    if (!row) {
+      await prisma.ebayDescriptionTheme.create({
+        data: { name: t.name, notes: t.notes, html: t.html, builtIn: true },
+      })
+      continue
+    }
+    const isUneditedPrevious = row.builtIn && row.html !== t.html && (BUILT_IN_PREVIOUS[t.name] ?? []).includes(row.html)
+    if (isUneditedPrevious) {
+      await prisma.ebayDescriptionTheme.update({
+        where: { name: t.name },
+        data: { html: t.html, notes: t.notes, version: { increment: 1 } },
+      })
+    }
   }
 }
 

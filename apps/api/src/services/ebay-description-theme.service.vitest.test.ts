@@ -21,7 +21,8 @@ vi.mock('./ebay-image-axis-preference.service.js', () => ({
 }))
 
 import { resolvePolicyDisplayNames } from './ebay-account.service.js'
-import { renderListingDescriptionSafe } from './ebay-description-theme.service.js'
+import { renderListingDescriptionSafe, ensureBuiltInThemes } from './ebay-description-theme.service.js'
+import { BUILT_IN_THEMES, BUILT_IN_PREVIOUS } from './ebay-description-render.js'
 
 // ── Fixtures ───────────────────────────────────────────────────────────────
 
@@ -273,5 +274,76 @@ describe('loadGalleries — shell pool-parent borrow (via renderListingDescripti
     expect(res.themed).toBe(true)
     expect(res.warnings).toEqual([])
     expect(res.html).not.toContain('<img')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4. ensureBuiltInThemes — safe auto-upgrade of UNEDITED built-in rows (v2)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ensureBuiltInThemes — upgrade guard', () => {
+  const XAVIA = BUILT_IN_THEMES.find((t) => t.name === 'Xavia Pro Clean')!
+  const V1_HTML = BUILT_IN_PREVIOUS['Xavia Pro Clean'][0]
+  const otherRows = BUILT_IN_THEMES.filter((t) => t.name !== XAVIA.name).map((t) => ({
+    name: t.name,
+    html: t.html,
+    builtIn: true,
+  }))
+
+  function seedPrisma(rows: Array<{ name: string; html: string; builtIn: boolean }>) {
+    return {
+      ebayDescriptionTheme: {
+        findMany: vi.fn(async () => rows),
+        create: vi.fn(async () => ({})),
+        update: vi.fn(async () => ({})),
+      },
+    }
+  }
+  const asClient = (m: ReturnType<typeof seedPrisma>) => m as unknown as Parameters<typeof ensureBuiltInThemes>[0]
+
+  it('the frozen v1 html really is a previous version of the CURRENT v2 (guard preconditions)', () => {
+    expect(V1_HTML).toBeTruthy()
+    expect(V1_HTML).not.toBe(XAVIA.html)
+  })
+
+  it('missing themes are still inserted (existing behaviour unchanged)', async () => {
+    const prisma = seedPrisma([])
+    await ensureBuiltInThemes(asClient(prisma))
+    expect(prisma.ebayDescriptionTheme.create).toHaveBeenCalledTimes(BUILT_IN_THEMES.length)
+    expect(prisma.ebayDescriptionTheme.update).not.toHaveBeenCalled()
+  })
+
+  it('an UNEDITED seeded row (html byte-equals the frozen v1) is upgraded: html + notes, version incremented', async () => {
+    const prisma = seedPrisma([{ name: XAVIA.name, html: V1_HTML, builtIn: true }, ...otherRows])
+    await ensureBuiltInThemes(asClient(prisma))
+    expect(prisma.ebayDescriptionTheme.create).not.toHaveBeenCalled()
+    expect(prisma.ebayDescriptionTheme.update).toHaveBeenCalledTimes(1)
+    expect(prisma.ebayDescriptionTheme.update).toHaveBeenCalledWith({
+      where: { name: XAVIA.name },
+      data: { html: XAVIA.html, notes: XAVIA.notes, version: { increment: 1 } },
+    })
+  })
+
+  it('an OPERATOR-EDITED row is NEVER touched, even though the built-in constant moved on', async () => {
+    const prisma = seedPrisma([
+      { name: XAVIA.name, html: V1_HTML + '<!-- operator tweak -->', builtIn: true },
+      ...otherRows,
+    ])
+    await ensureBuiltInThemes(asClient(prisma))
+    expect(prisma.ebayDescriptionTheme.update).not.toHaveBeenCalled()
+    expect(prisma.ebayDescriptionTheme.create).not.toHaveBeenCalled()
+  })
+
+  it('rows already at the CURRENT html are left alone — no useless version bumps', async () => {
+    const prisma = seedPrisma(BUILT_IN_THEMES.map((t) => ({ name: t.name, html: t.html, builtIn: true })))
+    await ensureBuiltInThemes(asClient(prisma))
+    expect(prisma.ebayDescriptionTheme.update).not.toHaveBeenCalled()
+    expect(prisma.ebayDescriptionTheme.create).not.toHaveBeenCalled()
+  })
+
+  it('a same-named NON-built-in (operator-created) theme is never upgraded, even at v1 html', async () => {
+    const prisma = seedPrisma([{ name: XAVIA.name, html: V1_HTML, builtIn: false }, ...otherRows])
+    await ensureBuiltInThemes(asClient(prisma))
+    expect(prisma.ebayDescriptionTheme.update).not.toHaveBeenCalled()
   })
 })

@@ -60,7 +60,7 @@ const esc = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 const IMG_STYLE = 'max-width:100%;height:auto;border-radius:6px;display:block;'
-const CELL_STYLE = 'padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:14px;'
+const CELL_STYLE = 'padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:15px;'
 
 function imgTag(url: string): string {
   return `<img src="${esc(url)}" alt="" style="${IMG_STYLE}" />`
@@ -100,10 +100,12 @@ function groupedGallery(shared: string[], groups: DescriptionGalleryGroup[], war
 function specsTable(aspects: Array<{ name: string; value: string }>): string {
   const rows = aspects.filter((a) => a.name && a.value).slice(0, MAX_SPEC_ROWS)
   if (rows.length === 0) return ''
+  // Typography v2: 15px cells, subtle zebra striping, 600-weight label column.
   const trs = rows
     .map(
-      (a) =>
-        `<tr><td style="${CELL_STYLE}color:#6b7280;white-space:nowrap;">${esc(a.name)}</td>` +
+      (a, i) =>
+        `<tr${i % 2 === 1 ? ' style="background:#f9fafb;"' : ''}>` +
+        `<td style="${CELL_STYLE}color:#6b7280;font-weight:600;white-space:nowrap;">${esc(a.name)}</td>` +
         `<td style="${CELL_STYLE}color:#111827;">${esc(a.value)}</td></tr>`,
     )
     .join('')
@@ -183,6 +185,12 @@ export function sanitizeEbayHtml(input: string): { html: string; warnings: strin
   return { html, warnings }
 }
 
+/** Tokens FORBIDDEN inside the operator's body copy: {{body}} would recurse
+ *  into itself and {{mobile_summary}} derives FROM the body. Stripped with a
+ *  warning instead of recursing. */
+const BODY_FORBIDDEN_TOKENS = new Set(['body', 'mobile_summary'])
+const BODY_FORBIDDEN_WARNING = 'token {{body}}/{{mobile_summary}} is not allowed inside the description body'
+
 /** Resolve every {{token}} in a theme against the listing's render data. */
 export function renderDescriptionTheme(themeHtml: string, data: DescriptionRenderData): RenderedDescription {
   const warnings: string[] = []
@@ -192,10 +200,12 @@ export function renderDescriptionTheme(themeHtml: string, data: DescriptionRende
       ? groupedGallery(data.sharedImages, data.imagesByGroup, warnings)
       : galleryGrid((data.rowImages ?? data.sharedImages).slice(0, MAX_GALLERY_IMAGES))
 
-  const tokens: Record<string, string> = {
+  // Tokens resolvable everywhere — INCLUDING inside the operator's body copy
+  // (the flat-file description column), so a body containing {{specs_table}}
+  // or {{policy_shipping}} always renders live data at push time.
+  const baseTokens: Record<string, string> = {
     title: esc(data.title ?? ''),
     subtitle: esc(data.subtitle ?? ''),
-    body: data.body ?? '',
     sku: esc(data.sku ?? ''),
     brand: esc(data.brand ?? ''),
     market: esc(data.market ?? ''),
@@ -203,24 +213,42 @@ export function renderDescriptionTheme(themeHtml: string, data: DescriptionRende
     gallery_shared: galleryGrid(data.sharedImages.slice(0, MAX_GALLERY_IMAGES)),
     specs_table: specsTable(data.aspects),
     policies: policiesBlock(data.policies, data.market),
-    // eBay mobile summary (the ONLY lever over what the app shows before "see
-    // full description"): plain text, ≤800 chars INCLUDING markup — we render
-    // title + de-tagged body, truncated at a word boundary to stay well under.
-    mobile_summary: esc(
-      `${data.title ?? ''} — ${String(data.body ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()}`
-        .slice(0, 640).replace(/\s\S*$/, ''),
-    ),
     policy_shipping: esc(data.policies?.shipping ?? ''),
     policy_returns: esc(data.policies?.returns ?? ''),
     policy_payment: esc(data.policies?.payment ?? ''),
   }
 
-  let html = themeHtml.replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, (whole, name: string) => {
-    const key = name.toLowerCase()
-    if (key in tokens) return tokens[key]
-    warnings.push(`unknown token ${whole.trim()} removed`)
-    return ''
-  })
+  const interpolate = (input: string, map: Record<string, string>, forbidden?: Set<string>): string =>
+    input.replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, (whole, name: string) => {
+      const key = name.toLowerCase()
+      if (forbidden?.has(key)) {
+        if (!warnings.includes(BODY_FORBIDDEN_WARNING)) warnings.push(BODY_FORBIDDEN_WARNING)
+        return ''
+      }
+      if (key in map) return map[key]
+      warnings.push(`unknown token ${whole.trim()} removed`)
+      return ''
+    })
+
+  // ONE interpolation pass over the body, BEFORE the theme pass. Replacement
+  // strings are never rescanned (String.replace semantics), so token output is
+  // inert — no nested re-interpolation is possible.
+  const bodyResolved = interpolate(data.body ?? '', baseTokens, BODY_FORBIDDEN_TOKENS)
+
+  const tokens: Record<string, string> = {
+    ...baseTokens,
+    body: bodyResolved,
+    // eBay mobile summary (the ONLY lever over what the app shows before "see
+    // full description"): plain text, ≤800 chars INCLUDING markup — we render
+    // title + de-tagged RESOLVED body (so body tokens reflect live data here
+    // too), truncated at a word boundary to stay well under.
+    mobile_summary: esc(
+      `${data.title ?? ''} — ${bodyResolved.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()}`
+        .slice(0, 640).replace(/\s\S*$/, ''),
+    ),
+  }
+
+  let html = interpolate(themeHtml, tokens)
 
   const sanitized = sanitizeEbayHtml(html)
   html = sanitized.html
@@ -235,24 +263,20 @@ export function renderDescriptionTheme(themeHtml: string, data: DescriptionRende
 
 // ── Built-in starter themes (owner-editable via the themes CRUD) ─────────────
 
-// ── ED v2 — "Xavia Pro Clean" (operator-approved design, 2026-07-27) ────────
-// Tab-STYLED stacked sections (real click-tabs are impossible: eBay strips the
-// form elements CSS tabs need, and :target breaks in the app webview). All
-// styling inline; system font stack; single column ≤920px; hidden schema.org
-// mobile summary; NO outbound links (banned), NO http:// resources, NO EU ODR
-// reference (platform retired 2025-07-20). Italian legal copy (Resi 14-day
-// withdrawal, Garanzia 2-year conformity) is DRAFT — operator sign-off (D10)
-// required before this theme is assigned to live listings; until then it is
-// seeded but NOT default, so nothing on eBay changes.
-const XPC_FONT = `-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif`
-const xpcTab = (label: string, body: string) => `
+// ── "Xavia Pro Clean" v1 (seeded 2026-07-27, c1b355354) — FROZEN ────────────
+// Byte-exact copy of the html the v1 seed wrote to the DB. ensureBuiltInThemes
+// compares an existing row against BUILT_IN_PREVIOUS to recognize an UNEDITED
+// seeded row and auto-upgrade it; any operator-edited copy is never touched.
+// NEVER edit these constants — they are a historical record, not a design.
+const XPC_V1_FONT = `-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif`
+const xpcV1Tab = (label: string, body: string) => `
   <div style="margin:18px 0 0;">
     <div style="display:inline-block;background:#111827;color:#ffffff;font-size:14px;font-weight:600;letter-spacing:.3px;padding:8px 18px;border-radius:10px 10px 0 0;">${label}</div>
     <div style="border:1px solid #e5e7eb;border-radius:0 10px 10px 10px;padding:16px 18px;font-size:15px;line-height:1.6;color:#374151;background:#ffffff;">${body}</div>
   </div>`
 
-const XAVIA_PRO_CLEAN_HTML = `<div vocab="https://schema.org/" typeof="Product" style="display:none;"><span property="description">{{mobile_summary}}</span></div>
-<div style="font-family:${XPC_FONT};max-width:920px;margin:0 auto;color:#111827;font-size:16px;line-height:1.6;">
+const XAVIA_PRO_CLEAN_V1_HTML = `<div vocab="https://schema.org/" typeof="Product" style="display:none;"><span property="description">{{mobile_summary}}</span></div>
+<div style="font-family:${XPC_V1_FONT};max-width:920px;margin:0 auto;color:#111827;font-size:16px;line-height:1.6;">
   <div style="text-align:center;padding:6px 0 2px;">
     <div style="font-size:12px;font-weight:700;letter-spacing:2.5px;color:#9ca3af;">XAVIA RACING</div>
     <h1 style="font-size:23px;margin:6px 0 2px;font-weight:700;">{{title}}</h1>
@@ -260,18 +284,67 @@ const XAVIA_PRO_CLEAN_HTML = `<div vocab="https://schema.org/" typeof="Product" 
   </div>
   <div style="margin:14px 0;">{{body}}</div>
   <div style="margin:18px 0;">{{gallery}}</div>
-  ${xpcTab('Specifiche', '{{specs_table}}')}
-  ${xpcTab('Spedizione', `<p style="margin:0;">Spedizione rapida e tracciata dall'Italia. {{policy_shipping}}</p>`)}
-  ${xpcTab('Resi e diritto di recesso', `<p style="margin:0;">Hai il diritto di recedere dall'acquisto entro <strong>14 giorni</strong> dalla consegna, senza doverne indicare il motivo, ai sensi del Codice del Consumo. Il prodotto va restituito integro, non utilizzato e nella confezione originale. {{policy_returns}}</p>`)}
-  ${xpcTab('Garanzia', `<p style="margin:0;">Tutti i nostri prodotti sono coperti dalla <strong>garanzia legale di conformità di 2 anni</strong> prevista dalla normativa europea.</p>`)}
-  ${xpcTab('Sicurezza prodotto', `<p style="margin:0;">Abbigliamento tecnico motociclistico con marcatura <strong>CE</strong>. Verifica sempre l'etichetta del prodotto per la certificazione specifica (es. EN 17092) e le istruzioni di manutenzione.</p>`)}
+  ${xpcV1Tab('Specifiche', '{{specs_table}}')}
+  ${xpcV1Tab('Spedizione', `<p style="margin:0;">Spedizione rapida e tracciata dall'Italia. {{policy_shipping}}</p>`)}
+  ${xpcV1Tab('Resi e diritto di recesso', `<p style="margin:0;">Hai il diritto di recedere dall'acquisto entro <strong>14 giorni</strong> dalla consegna, senza doverne indicare il motivo, ai sensi del Codice del Consumo. Il prodotto va restituito integro, non utilizzato e nella confezione originale. {{policy_returns}}</p>`)}
+  ${xpcV1Tab('Garanzia', `<p style="margin:0;">Tutti i nostri prodotti sono coperti dalla <strong>garanzia legale di conformità di 2 anni</strong> prevista dalla normativa europea.</p>`)}
+  ${xpcV1Tab('Sicurezza prodotto', `<p style="margin:0;">Abbigliamento tecnico motociclistico con marcatura <strong>CE</strong>. Verifica sempre l'etichetta del prodotto per la certificazione specifica (es. EN 17092) e le istruzioni di manutenzione.</p>`)}
   <div style="text-align:center;margin:26px 0 4px;padding-top:14px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:12px;letter-spacing:1.5px;">XAVIA — PROTEZIONE E STILE</div>
+</div>`
+
+// ── "Xavia Pro Clean" v2 (operator-approved overhaul, 2026-07-27) ───────────
+// Typography v2 (refined system stack — eBay strips webfonts, so modern =
+// treatment, not fonts) + information-first layout (specs promoted above the
+// policy sections, gallery moved to the BOTTOM — the PDP gallery already shows
+// the product) + REAL clickable accordions: <details open>/<summary>, which
+// sanitizeEbayHtml verifiably preserves. Every section carries the `open`
+// attribute so if any engine (or a future eBay filter) drops details/summary
+// the content degrades to always-visible stacked sections — nothing hidden.
+// Fully token-driven: every content-bearing region renders live data at push
+// time ({{brand}} hero mark, per-section {{policy_*}} names, {{sku}} footer);
+// the only hardcoded prose is the legally-reviewed Italian copy (D10 — DRAFT,
+// verbatim from v1, do not reword) and the brand tagline. Policy tokens sit on
+// label-free muted lines so an unresolved name collapses to an invisible empty
+// <p> instead of a dangling label. Still: all styling inline, single column
+// ≤920px, hidden schema.org mobile summary, NO outbound links, NO http://
+// resources, NO EU ODR reference (platform retired 2025-07-20).
+const XPC_FONT = `-apple-system,BlinkMacSystemFont,'Segoe UI Variable Text','Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif`
+// Accordion: summary styled as the v1 tab-look pill. inline-flex + list-style:
+// none hides the disclosure marker in modern engines; older WebKit keeps its
+// default marker (accepted — ::-webkit-details-marker can't be styled inline).
+const xpcSection = (label: string, body: string) => `
+  <details open style="margin:18px 0 0;">
+    <summary style="display:inline-flex;align-items:center;list-style:none;cursor:pointer;background:#111827;color:#ffffff;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;padding:9px 18px;border-radius:10px 10px 0 0;">${label}</summary>
+    <div style="border:1px solid #e5e7eb;border-radius:0 10px 10px 10px;padding:16px 18px;font-size:16px;line-height:1.65;color:#374151;background:#ffffff;">${body}</div>
+  </details>`
+const XPC_MUTED_LINE = 'color:#6b7280;font-size:14px;'
+
+const XAVIA_PRO_CLEAN_HTML = `<div vocab="https://schema.org/" typeof="Product" style="display:none;"><span property="description">{{mobile_summary}}</span></div>
+<div style="font-family:${XPC_FONT};max-width:920px;margin:0 auto;color:#111827;font-size:16px;line-height:1.65;">
+  <div style="text-align:center;padding:6px 0 2px;">
+    <div style="font-size:11px;font-weight:700;letter-spacing:3px;color:#9ca3af;">{{brand}}</div>
+    <h1 style="font-size:27px;margin:8px 0 2px;font-weight:700;letter-spacing:-0.02em;">{{title}}</h1>
+    <p style="margin:0 0 6px;color:#6b7280;font-size:15px;">{{subtitle}}</p>
+  </div>
+  <div style="margin:14px 0;color:#374151;">{{body}}</div>
+  ${xpcSection('Specifiche', '{{specs_table}}')}
+  ${xpcSection('Spedizione', `<p style="margin:0;">Spedizione rapida e tracciata dall'Italia.</p><p style="margin:8px 0 0;${XPC_MUTED_LINE}">{{policy_shipping}}</p><p style="margin:2px 0 0;${XPC_MUTED_LINE}">{{policy_payment}}</p>`)}
+  ${xpcSection('Resi e diritto di recesso', `<p style="margin:0;">Hai il diritto di recedere dall'acquisto entro <strong>14 giorni</strong> dalla consegna, senza doverne indicare il motivo, ai sensi del Codice del Consumo. Il prodotto va restituito integro, non utilizzato e nella confezione originale.</p><p style="margin:8px 0 0;${XPC_MUTED_LINE}">{{policy_returns}}</p>`)}
+  ${xpcSection('Garanzia', `<p style="margin:0;">Tutti i nostri prodotti sono coperti dalla <strong>garanzia legale di conformità di 2 anni</strong> prevista dalla normativa europea.</p>`)}
+  ${xpcSection('Sicurezza prodotto', `<p style="margin:0;">Abbigliamento tecnico motociclistico con marcatura <strong>CE</strong>. Verifica sempre l'etichetta del prodotto per la certificazione specifica (es. EN 17092) e le istruzioni di manutenzione.</p>`)}
+  <h2 style="font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:#111827;margin:28px 0 10px;padding-top:18px;border-top:1px solid #e5e7eb;">Dettagli prodotto</h2>
+  <div style="margin:0 0 18px;">{{gallery}}</div>
+  <div style="text-align:center;margin:26px 0 4px;padding-top:14px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:12px;letter-spacing:1.5px;">XAVIA — PROTEZIONE E STILE<br /><span style="font-size:11px;letter-spacing:.5px;">Cod. articolo: {{sku}}</span></div>
 </div>`
 
 export const BUILT_IN_THEMES: Array<{ name: string; notes: string; html: string }> = [
   {
     name: 'Xavia Pro Clean',
-    notes: 'ED v2 flagship (2026-07-27): tab-styled sections (Specifiche · Spedizione · Resi · Garanzia · Sicurezza), system font, mobile summary. ⚠ Italian legal copy is DRAFT pending operator sign-off (D10) — do not set as default until approved.',
+    notes:
+      'v2 flagship (2026-07-27): info-first layout — specs before the policy sections, gallery at the bottom under "Dettagli prodotto"; clickable <details> accordions (all start open, degrade to always-visible); refined system-stack typography. ' +
+      'Fully token-driven — every section renders live data at push time; nothing content-bearing is hardcoded except the legally-reviewed copy (D10). ' +
+      'Token choices: {{policies}} unused (would duplicate the per-section {{policy_shipping}}/{{policy_returns}}/{{policy_payment}}); {{gallery_shared}} unused ({{gallery}} already includes shared + per-colour sections); {{market}} unused (no visual role). ' +
+      '⚠ Italian legal copy is DRAFT pending operator sign-off (D10) — do not set as default until approved.',
     html: XAVIA_PRO_CLEAN_HTML,
   },
   {
@@ -317,3 +390,14 @@ export const BUILT_IN_THEMES: Array<{ name: string; notes: string; html: string 
 </tr></table>`,
   },
 ]
+
+/**
+ * Byte-exact html of every PREVIOUS shipped version of a built-in theme, keyed
+ * by theme name. ensureBuiltInThemes auto-upgrades an existing seeded row ONLY
+ * when its stored html equals one of these strings — proof the operator never
+ * edited it. Edited copies (and same-named custom themes) are never touched.
+ * Append here whenever a built-in theme's html changes; never rewrite entries.
+ */
+export const BUILT_IN_PREVIOUS: Record<string, string[]> = {
+  'Xavia Pro Clean': [XAVIA_PRO_CLEAN_V1_HTML],
+}
