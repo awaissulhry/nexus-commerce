@@ -60,6 +60,25 @@
   opacity: 0.5;
 }
 
+/* Irreversible / live-write actions (e.g. "revise LIVE listings"). Opaque red
+   fill in BOTH themes — a destructive action must never read as a plain
+   secondary button, and must never be transparent over unrelated content. */
+.h10-ds-btn.danger {
+  background: var(--status-danger-strong);
+  border-color: var(--status-danger-strong);
+  color: var(--h10-text-inverse);
+}
+.h10-ds-btn.danger:hover {
+  filter: brightness(0.92);
+}
+.h10-ds-btn.danger:disabled {
+  background: var(--status-danger-strong);
+  border-color: var(--status-danger-strong);
+  color: var(--h10-text-inverse);
+  opacity: 0.5;
+  filter: none;
+}
+
 .h10-ds-btn.ghost {
   background: var(--surface-card);
   border-color: var(--h10-primary-ghost-border);

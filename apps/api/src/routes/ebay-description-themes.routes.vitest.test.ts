@@ -19,6 +19,7 @@ import Fastify, { type FastifyInstance } from 'fastify'
 
 const productFindFirst = vi.fn()
 const productFindMany = vi.fn()
+const productCount = vi.fn()
 const clFindFirst = vi.fn()
 const clFindMany = vi.fn()
 const themeFindUnique = vi.fn()
@@ -30,6 +31,7 @@ vi.mock('../db.js', () => ({
     product: {
       findFirst: (...args: unknown[]) => productFindFirst(...args),
       findMany: (...args: unknown[]) => productFindMany(...args),
+      count: (...args: unknown[]) => productCount(...args),
     },
     channelListing: {
       findFirst: (...args: unknown[]) => clFindFirst(...args),
@@ -67,6 +69,7 @@ beforeEach(() => {
   // Default: no products, no listings, render echoes the body it was given.
   productFindFirst.mockResolvedValue(null)
   productFindMany.mockResolvedValue([])
+  productCount.mockResolvedValue(0)
   clFindFirst.mockResolvedValue(null)
   clFindMany.mockResolvedValue([])
   mockRender.mockImplementation(async (_prisma: unknown, args: { body: string }) => ({
@@ -157,6 +160,38 @@ describe('POST /ebay/description-preview (DS-0)', () => {
     clFindFirst.mockResolvedValue(null)
     const res2 = await preview({ productId: 'root-1', body: 'Draft body' })
     expect(res2.json().warnings).toEqual([])
+  })
+
+  // DS-6 — the Studio calls the preview "exactly what a push would send", so
+  // the render MODE has to be derived the way pushDescriptions derives it
+  // (children → 'group', else 'single'). The route used to default to 'group'
+  // unconditionally, which rendered per-colour gallery sections for standalone
+  // products whose push renders in single mode.
+  describe('render mode parity with the push service', () => {
+    beforeEach(() => {
+      productFindFirst.mockResolvedValue({ id: 'root-1', parentId: null })
+      clFindFirst.mockResolvedValue({ description: 'Body', title: 'T' })
+    })
+
+    it('a family WITH children renders in group mode', async () => {
+      productCount.mockResolvedValue(4)
+      await preview({ productId: 'root-1' })
+      expect(productCount).toHaveBeenCalledWith({ where: { parentId: 'root-1', deletedAt: null } })
+      expect((mockRender.mock.calls[0][1] as { mode: string }).mode).toBe('group')
+    })
+
+    it('a STANDALONE product renders in single mode', async () => {
+      productCount.mockResolvedValue(0)
+      await preview({ productId: 'root-1' })
+      expect((mockRender.mock.calls[0][1] as { mode: string }).mode).toBe('single')
+    })
+
+    it('an explicit mode from the caller still wins (legacy callers unchanged)', async () => {
+      productCount.mockResolvedValue(0)
+      await preview({ productId: 'root-1', mode: 'group' })
+      expect((mockRender.mock.calls[0][1] as { mode: string }).mode).toBe('group')
+      expect(productCount).not.toHaveBeenCalled()
+    })
   })
 })
 

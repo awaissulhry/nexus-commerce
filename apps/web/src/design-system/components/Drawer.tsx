@@ -19,10 +19,18 @@ export interface DrawerProps {
    * (max-width: 100% stays in CSS).
    */
   width?: number | string
+  /**
+   * A modal surface rendered INSIDE the panel, covering header, body and
+   * footer. Drawers sit at z-61; the app's Modal/ConfirmDialog sits lower, so
+   * a confirmation spawned from a drawer used to open BEHIND it (invisible
+   * until the drawer was closed). Anything a drawer must confirm goes here
+   * instead — one surface, nothing hidden, no separate pop-up.
+   */
+  overlay?: ReactNode
 }
 
 /** Right-side slide-over panel. Portaled to <body>; Esc + backdrop close. */
-export function Drawer({ open, onClose, title, subtitle, footer, children, className, width }: DrawerProps) {
+export function Drawer({ open, onClose, title, subtitle, footer, children, className, width, overlay }: DrawerProps) {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
@@ -54,6 +62,7 @@ export function Drawer({ open, onClose, title, subtitle, footer, children, class
         </div>
         <div className="h10-ds-drawer-b">{children}</div>
         {footer != null && <div className="h10-ds-drawer-f">{footer}</div>}
+        {overlay != null && <div className="h10-ds-drawer-ov">{overlay}</div>}
       </div>
     </>,
     document.body,

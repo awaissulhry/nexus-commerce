@@ -40,13 +40,14 @@ import { Select } from '@/design-system/primitives/Select'
 import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { Textarea } from '@/design-system/primitives/Textarea'
 import { getBackendUrl } from '@/lib/backend-url'
-import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { EBAY_MARKETPLACES } from '../ebay-columns'
 import { fetchJson } from './fetchJson'
 import { ProductLookup } from './ProductLookup'
 import { PushResults } from './PushResults'
 import { StalenessPill } from './StalenessPill'
 import { StatusStrip, type RenderStatus } from './StatusStrip'
+import { useStudioConfirm } from './StudioConfirm'
+import { noteIsFlagged, splitThemeNote, ThemeNote } from './ThemeNote'
 import { THEME_TOKEN_INFO, THEME_TOKENS } from './tokens'
 import {
   MAX_PUSH_PRODUCTS,
@@ -82,7 +83,10 @@ export interface EbayDescriptionStudioProps {
 }
 
 export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts, sampleProductId, sampleProductSku, onChanged, onPushed }: EbayDescriptionStudioProps) {
-  const confirm = useConfirm()
+  // DS-6 — every confirmation renders INSIDE this drawer (see StudioConfirm):
+  // the app-wide confirm portals a z-50 Modal, which the z-61 drawer panel
+  // covered, so discard / delete / reload / push gates were all invisible.
+  const { confirm, overlay: confirmOverlay, isOpen: confirmOpen, cancel: cancelConfirm } = useStudioConfirm()
 
   // ── theme rail ──
   const [themes, setThemes] = useState<Theme[] | null>(null) // null = loading
@@ -121,6 +125,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
 
   const editorBoxRef = useRef<HTMLDivElement>(null)
   const previewBoxRef = useRef<HTMLDivElement>(null)
+  const pushOutcomeRef = useRef<HTMLDivElement>(null)
   const [previewBox, setPreviewBox] = useState({ w: 0, h: 0 })
 
   const selected = useMemo(() => themes?.find((t) => t.id === selectedId) ?? null, [themes, selectedId])
@@ -318,9 +323,10 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
         + (dropped.length > 6 ? ` … and ${dropped.length - 6} more` : '')
       const ok = await confirm({
         title: 'Reload families from the flat file?',
-        description: `Re-syncing replaces the chip set with the sheet's ${Math.min(total, MAX_PUSH_PRODUCTS)} eligible famil${Math.min(total, MAX_PUSH_PRODUCTS) === 1 ? 'y' : 'ies'} and removes ${dropped.length} chip${dropped.length === 1 ? '' : 's'} not in that set (manually added, or beyond the ${MAX_PUSH_PRODUCTS}-family cap): ${shown}.`,
+        body: `Re-syncing replaces the chip set with the sheet's ${Math.min(total, MAX_PUSH_PRODUCTS)} eligible famil${Math.min(total, MAX_PUSH_PRODUCTS) === 1 ? 'y' : 'ies'} and removes ${dropped.length} chip${dropped.length === 1 ? '' : 's'} not in that set (manually added, or beyond the ${MAX_PUSH_PRODUCTS}-family cap): ${shown}.`,
         confirmLabel: 'Reload & replace',
         tone: 'warning',
+        testId: 'studio-confirm-reload',
       })
       if (!ok) return
     }
@@ -337,19 +343,24 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
     if (!dirty) return true
     return confirm({
       title: 'Discard unsaved changes?',
-      description: `"${draft.name || 'New theme'}" has unsaved edits.`,
-      confirmLabel: 'Discard',
+      body: `"${draft.name || 'New theme'}" has unsaved edits. Discarding throws away the editor's HTML, name, notes and Active flag — the saved version stays exactly as it is.`,
+      confirmLabel: 'Discard edits',
+      cancelLabel: 'Keep editing',
       tone: 'warning',
+      testId: 'studio-confirm-discard',
     })
   }, [dirty, draft.name, confirm])
 
   // Esc, backdrop and the drawer's × all land here (Drawer calls onClose).
   const requestClose = useCallback(() => {
+    // A pending in-drawer confirmation owns the panel: Esc/backdrop cancels
+    // THAT, never the whole Studio out from under it.
+    if (confirmOpen) { cancelConfirm(); return }
     if (busy || pushBusy) return
     void (async () => {
       if (await guardDirty()) onClose()
     })()
-  }, [busy, pushBusy, guardDirty, onClose])
+  }, [confirmOpen, cancelConfirm, busy, pushBusy, guardDirty, onClose])
 
   const selectTheme = async (t: Theme) => {
     if (t.id === selectedId) return
@@ -429,11 +440,27 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
   }
 
   const remove = async (t: Theme) => {
+    const assigned = usage?.byThemeId[t.id] ?? 0
     const ok = await confirm({
       title: `Delete theme "${t.name}"?`,
-      description: 'Listings assigned to it fall back to the default theme at the next push. This cannot be undone.',
+      body: (
+        <div className="flex flex-col gap-2">
+          <p>
+            Listings assigned to it fall back to the default theme at their next push. Live descriptions
+            already on eBay are NOT changed by this — they keep the HTML that was pushed until something
+            re-pushes them.
+          </p>
+          {assigned > 0 && (
+            <p className="font-semibold text-amber-700 dark:text-amber-400">
+              {assigned} {market} listing famil{assigned === 1 ? 'y is' : 'ies are'} currently assigned to this theme.
+            </p>
+          )}
+          <p className="font-semibold">This cannot be undone.</p>
+        </div>
+      ),
       confirmLabel: 'Delete theme',
       tone: 'danger',
+      testId: 'studio-confirm-delete',
     })
     if (!ok) return
     setBusy(true); setActionError(null)
@@ -453,12 +480,13 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
         e.preventDefault()
-        if (dirty && !busy) void save()
+        // A pending confirmation owns the panel — never save behind it.
+        if (dirty && !busy && !pushBusy && !confirmOpen) void save()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, dirty, busy, save])
+  }, [open, dirty, busy, pushBusy, confirmOpen, save])
 
   // ── unified chip set — add / remove / star (never a silent no-op) ──────────
   const addProduct = useCallback((p: PreviewProduct) => {
@@ -509,8 +537,12 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
     const t = setTimeout(async () => {
       setRender((prev) => ({ ...prev, phase: 'rendering' }))
       const r = await fetchJson<PreviewResponse>(`${getBackendUrl()}/api/ebay/description-preview`, {
+        // `mode` is deliberately NOT sent: the endpoint derives it from the
+        // family exactly as the push service does (children → 'group', else
+        // 'single'). Hardcoding 'group' made the preview of a standalone
+        // product render gallery sections the push would never send.
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: previewProduct.id, marketplace: market, mode: 'group', themeHtml: draftHtml }),
+        body: JSON.stringify({ productId: previewProduct.id, marketplace: market, themeHtml: draftHtml }),
         signal: ctrl.signal,
       })
       if (!r.ok) {
@@ -554,8 +586,10 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
 
   const insertToken = (token: string) => {
     // DS Textarea doesn't forward refs (React 18) — reach the element through
-    // the wrapper so insert-at-cursor keeps working on the DS primitive.
-    const el = editorBoxRef.current?.querySelector('textarea')
+    // the wrapper so insert-at-cursor keeps working on the DS primitive. The
+    // [data-role] is required: the notes field is a <textarea> too, and the
+    // bare tag selector would target THAT one.
+    const el = editorBoxRef.current?.querySelector<HTMLTextAreaElement>('textarea[data-role="theme-html"]')
     if (!el) return
     const start = el.selectionStart ?? draft.html.length
     const end = el.selectionEnd ?? start
@@ -570,7 +604,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
   const frameH = Math.max(360, previewBox.h - 24)
 
   // ── push — the SAVED theme only, danger-gated (verbatim from the modal) ────
-  const pushDraftCopy = !!selected?.notes?.includes('⚠')
+  const pushDraftCopy = noteIsFlagged(selected?.notes)
   const pushBlockReason = isNew
     ? 'Save the theme first — the push sends a SAVED theme, and this new theme has no saved version yet.'
     : dirty
@@ -581,34 +615,69 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
           ? 'Add at least one product to enable the push.'
           : null
 
+  /** Staleness across the whole chip set — drives the dock pill AND the
+   *  "already in sync" line in the confirmation. */
+  const staleSummary = useMemo(() => {
+    const entries = products.map((p) => staleness[p.id]).filter((e): e is StalenessEntry => !!e)
+    return { total: entries.length, stale: entries.filter((e) => e.stale).length }
+  }, [products, staleness])
+
   const runPush = async () => {
     if (!selected || dirty || products.length === 0 || pushBusy) return
-    const skus = products.map((p) => p.sku)
-    const shownSkus = skus.slice(0, 8).join(', ') + (skus.length > 8 ? ` … and ${skus.length - 8} more` : '')
+    // The confirmation lives INSIDE the drawer (DS-6) and scrolls, so the full
+    // family list is shown — no "… and N more" the operator can't inspect.
     const ok = await confirm({
       title: `Revise LIVE eBay descriptions on ${market}?`,
-      description: (
-        <div className="space-y-2">
+      tone: 'danger',
+      testId: 'studio-confirm-push',
+      confirmLabel: pushDraftCopy
+        ? `Push DRAFT copy to ${market} live listings`
+        : `Revise ${market} live descriptions`,
+      cancelLabel: 'Cancel — send nothing',
+      acknowledge: pushDraftCopy
+        ? 'I have read the draft-copy warning and accept putting this text on live listings'
+        : undefined,
+      body: (
+        <div className="flex flex-col gap-2.5">
           <p>
-            This revises the description of EVERY live eBay listing (primary + adopted shared listings) of{' '}
-            {products.length} product famil{products.length === 1 ? 'y' : 'ies'} on {market}:{' '}
-            <span className="font-medium">{shownSkus}</span>.
+            This revises the description of <span className="font-semibold">EVERY live eBay listing</span> (primary
+            + adopted shared listings) of these {products.length} product famil
+            {products.length === 1 ? 'y' : 'ies'} on {market}:
           </p>
+          <div className="max-h-40 overflow-y-auto rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1.5 flex flex-wrap gap-1">
+            {products.map((p) => (
+              <span key={p.id}
+                className="inline-flex items-center gap-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-0.5 text-[11px] font-medium">
+                {p.sku}
+                {p.hasEbayListing === false && (
+                  <span className="text-[9px] uppercase text-amber-700 dark:text-amber-400"
+                    title="No eBay listing yet — the push reports this honestly, it cannot create one">
+                    no listing
+                  </span>
+                )}
+              </span>
+            ))}
+          </div>
           <p>
-            Theme "{selected.name}" is assigned to each family and wraps each listing's own body copy. Only the
-            description changes — price, quantity, title and variations are untouched. Each revise is read back
-            from eBay (parity check) and reported per listing.
+            Theme <span className="font-semibold">"{selected.name}"</span> (v{selected.version}) is assigned to each
+            family and wraps each listing's own body copy. Only the description changes —{' '}
+            <span className="font-semibold">price, quantity, title and variations are untouched</span>. Each revise
+            is read back from eBay (parity check) and reported per listing below.
           </p>
-          {pushDraftCopy && (
-            <p className="font-semibold text-amber-600 dark:text-amber-400">
-              ⚠ DRAFT COPY: this theme's notes are flagged "{selected.notes}" — draft legal text without operator
-              sign-off would go live on real listings.
+          {staleSummary.total > 0 && staleSummary.stale === 0 && (
+            <p className="text-slate-500 dark:text-slate-400">
+              All {staleSummary.total} checked famil{staleSummary.total === 1 ? 'y is' : 'ies are'} already in sync
+              with the last push — re-pushing is safe but may be unnecessary.
             </p>
+          )}
+          {pushDraftCopy && (
+            <div className="rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-2 text-amber-900 dark:text-amber-200">
+              <p className="text-[12px] font-bold mb-1">⚠ DRAFT COPY — not signed off</p>
+              <ThemeNote notes={selected.notes} />
+            </div>
           )}
         </div>
       ),
-      confirmLabel: pushDraftCopy ? 'Push DRAFT copy to live listings' : 'Revise live descriptions',
-      tone: 'danger',
     })
     if (!ok) return
     setPushBusy(true)
@@ -632,6 +701,15 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
     onPushed?.()
   }
 
+  // A finished push reports per ItemID inside a scrolling dock — bring the
+  // outcome into view so nobody reads "Pushing…" turning back into a button
+  // and assumes silence meant success.
+  useEffect(() => {
+    if (!pushResult && !pushError) return
+    const t = setTimeout(() => pushOutcomeRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 60)
+    return () => clearTimeout(t)
+  }, [pushResult, pushError])
+
   // Collapsed-dock aggregate pill: last push outcome wins; else selection staleness.
   const dockPill = useMemo(() => {
     if (pushResult) {
@@ -644,13 +722,11 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
     }
     if (products.length === 0) return null
     if (stalenessError) return { tone: 'neutral' as const, label: 'staleness unknown' }
-    const entries = products.map((p) => staleness[p.id]).filter((e): e is StalenessEntry => !!e)
-    if (entries.length === 0) return null
-    const stale = entries.filter((e) => e.stale).length
-    return stale > 0
-      ? { tone: 'warning' as const, label: `${stale}/${entries.length} stale` }
+    if (staleSummary.total === 0) return null
+    return staleSummary.stale > 0
+      ? { tone: 'warning' as const, label: `${staleSummary.stale}/${staleSummary.total} stale` }
       : { tone: 'success' as const, label: 'in sync' }
-  }, [pushResult, products, staleness, stalenessError])
+  }, [pushResult, products.length, staleSummary, stalenessError])
 
   if (!open) return null
   return (
@@ -660,11 +736,15 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
       title="Description Studio"
       subtitle="Themes wrap each market's description body at push time — galleries, specs and policies fill in automatically."
       width="min(1440px, 96vw)"
+      // DS-6 — confirmations render inside the panel instead of behind it.
+      overlay={confirmOverlay}
       footer={
         <>
-          <span className="mr-auto text-[10.5px] text-slate-400">⌘S / Ctrl+S saves</span>
-          <Button size="sm" variant="ghost" onClick={requestClose} disabled={busy || pushBusy}>Close</Button>
-          <Button size="sm" variant="primary" onClick={() => void save()} disabled={busy || pushBusy || !dirty}>
+          <span className="mr-auto text-[10.5px] text-slate-400">
+            {pushBusy ? 'Pushing to eBay — the Studio stays open until every listing has reported.' : '⌘S / Ctrl+S saves'}
+          </span>
+          <Button size="sm" variant="ghost" onClick={requestClose} disabled={busy || pushBusy || confirmOpen}>Close</Button>
+          <Button size="sm" variant="primary" onClick={() => void save()} disabled={busy || pushBusy || confirmOpen || !dirty}>
             {busy
               ? <span className="flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" />Saving…</span>
               : isNew ? 'Create theme' : 'Save changes'}
@@ -797,7 +877,14 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
                         {t.isDefault && <span className="text-[9px] uppercase px-1 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">Default</span>}
                         {t.builtIn && <span className="text-[9px] uppercase px-1 rounded bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">Built-in</span>}
                         {!t.active && <span className="text-[9px] uppercase px-1 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Inactive</span>}
-                        {t.notes?.includes('⚠') && <span className="text-[9px] px-1 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" title={t.notes ?? undefined}>⚠ draft copy</span>}
+                        {/* Tooltip carries the ⚠ FLAGS, not the whole note — a
+                            2,000-character native tooltip is unreadable. */}
+                        {noteIsFlagged(t.notes) && (
+                          <span className="text-[9px] px-1 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                            title={splitThemeNote(t.notes).flags.map((f) => `⚠ ${f}`).join('\n\n')}>
+                            ⚠ draft copy
+                          </span>
+                        )}
                         {usage && (
                           <span className="text-[9px] px-1 rounded bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300"
                             title={`eBay listing families on ${market} explicitly assigned to this theme`}>
@@ -830,9 +917,16 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
             ) : null}
           </div>
 
-          {/* CENTER — editor */}
-          <div ref={editorBoxRef} className="flex-1 min-w-0 flex flex-col gap-2 min-h-0">
-            <div className="flex items-center gap-2">
+          {/* CENTER — editor.
+              The scroll container is load-bearing: a long theme note (the
+              built-in "Xavia Modernist" note is ~2,000 chars) used to grow the
+              banners past this column's height and, with nothing clipping it,
+              paint straight over the push dock below — two texts on top of each
+              other, neither readable. `overflow-y-auto` (not `hidden`) so that
+              when the push dock expands and squeezes this column, the editor
+              SCROLLS instead of losing its bottom half. */}
+          <div ref={editorBoxRef} className="flex-1 min-w-0 flex flex-col gap-2 min-h-0 overflow-y-auto overflow-x-hidden">
+            <div className="shrink-0 flex items-center gap-2">
               <Input value={draft.name} placeholder="Theme name…" aria-label="Theme name"
                 onChange={(e) => { setDraft((d) => ({ ...d, name: e.target.value })); setDirty(true) }}
                 fieldClassName="flex-1 min-w-0" />
@@ -863,30 +957,45 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
                 </>
               )}
             </div>
-            <Input value={draft.notes} placeholder="Notes (optional)…" aria-label="Theme notes"
+            {/* Notes hold multi-paragraph design/compliance records — a
+                single-line Input made them unreadable and unreviewable. */}
+            <Textarea value={draft.notes} rows={2} spellCheck={false}
+              placeholder="Notes (optional)… a ⚠ marks copy that still needs operator sign-off"
+              aria-label="Theme notes"
+              className="shrink-0 w-full text-[11.5px] leading-5 resize-y"
+              // The DS textarea floors at 168px — right for a paste box, far
+              // too tall for a 2-line notes field. Inline so it beats the
+              // stylesheet regardless of CSS load order.
+              style={{ minHeight: 52 }}
               onChange={(e) => { setDraft((d) => ({ ...d, notes: e.target.value })); setDirty(true) }} />
 
-            {/* a ⚠ in the notes marks copy pending operator sign-off */}
-            {draft.notes.includes('⚠') && (
-              <Banner tone="warning" title="Draft copy — operator sign-off required before assigning to live listings">
-                {draft.notes}
-              </Banner>
-            )}
-            {actionError && (
-              <Banner tone="danger" title="Action failed" onDismiss={() => setActionError(null)}>
-                {actionError}
-              </Banner>
-            )}
-            {conflict && (
-              <Banner tone="danger"
-                title={`Save conflict — this theme was modified elsewhere${conflict.currentVersion != null ? ` (now v${conflict.currentVersion})` : ''}`}
-                action={<Button size="sm" onClick={() => void reloadTheme()}>Reload theme (discards draft)</Button>}>
-                Nothing was saved; the editor still shows YOUR draft. Reload to take the other session's version, or
-                copy your HTML out before reloading.
-              </Banner>
-            )}
+            {/* Bounded, scrollable banner stack — see the column comment above. */}
+            <div className="shrink-0 max-h-[32vh] overflow-y-auto flex flex-col gap-2 empty:hidden">
+              {/* a ⚠ in the notes marks copy pending operator sign-off */}
+              {noteIsFlagged(draft.notes) && (
+                <Banner tone="warning" title="Draft copy — operator sign-off required before assigning to live listings">
+                  <ThemeNote notes={draft.notes} />
+                </Banner>
+              )}
+              {actionError && (
+                <Banner tone="danger" title="Action failed" onDismiss={() => setActionError(null)}>
+                  {actionError}
+                </Banner>
+              )}
+              {conflict && (
+                <Banner tone="danger"
+                  title={`Save conflict — this theme was modified elsewhere${conflict.currentVersion != null ? ` (now v${conflict.currentVersion})` : ''}`}
+                  action={<Button size="sm" onClick={() => void reloadTheme()}>Reload theme (discards draft)</Button>}>
+                  Nothing was saved; the editor still shows YOUR draft. Reload to take the other session's version, or
+                  copy your HTML out before reloading.
+                </Banner>
+              )}
+            </div>
 
-            <div className="flex flex-wrap gap-1">
+            {/* Fixed-size palette (17 tokens) — never capped: clipping a token
+                row mid-glyph reads as a rendering fault, and the list can't
+                grow at runtime. */}
+            <div className="shrink-0 flex flex-wrap gap-1">
               {THEME_TOKENS.map((t) => (
                 <button key={t} type="button" onClick={() => insertToken(t)}
                   title={`${THEME_TOKEN_INFO[t]}\n\nClick to insert at the cursor.`}
@@ -896,13 +1005,22 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
               ))}
             </div>
             <Textarea value={draft.html} spellCheck={false} aria-label="Theme HTML"
+              // insertToken() finds THIS textarea by role — the notes field is
+              // also a <textarea> now, and a bare querySelector('textarea')
+              // would paste tokens into the notes instead of the HTML.
+              data-role="theme-html"
               onChange={(e) => { setDraft((d) => ({ ...d, html: e.target.value })); setDirty(true) }}
-              className="flex-1 min-h-[240px] w-full text-xs font-mono resize-none"
+              className="flex-1 w-full text-xs font-mono resize-none"
+              // Overrides the DS 168px floor so the editor can give height back
+              // to the banner stack instead of overflowing the pane.
+              style={{ minHeight: 150 }}
               placeholder="Theme HTML with {{tokens}}…" />
           </div>
 
-          {/* RIGHT — always-mounted preview + status strip */}
-          <div className="flex-1 min-w-0 flex flex-col gap-2 min-h-0">
+          {/* RIGHT — always-mounted preview + status strip. Same rule as the
+              editor: contained, and scrolls rather than clipping the status
+              strip away when the dock takes the height. */}
+          <div className="flex-1 min-w-0 flex flex-col gap-2 min-h-0 overflow-y-auto overflow-x-hidden">
             <div className="shrink-0 flex items-center justify-between gap-2">
               <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
                 Preview (as pushed){previewProduct ? ` — ★ ${previewProduct.sku} · ${market}` : ''}
@@ -912,7 +1030,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
                 <RefreshCw className={cn('w-3 h-3', render.phase === 'rendering' && 'animate-spin')} /> Refresh
               </button>
             </div>
-            <div ref={previewBoxRef} className="flex-1 min-h-[240px] overflow-auto rounded border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/60 p-3">
+            <div ref={previewBoxRef} className="flex-1 min-h-[180px] overflow-auto rounded border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/60 p-3">
               {srcDoc ? (
                 // A FAILED render dims the last good frame — never blanks it.
                 <div className={cn('mx-auto overflow-hidden rounded shadow-sm transition-opacity', render.phase === 'failed' && 'opacity-40')}
@@ -954,8 +1072,11 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
           </div>
         </div>
 
-        {/* ── push dock (collapsible) ── */}
-        <div className="shrink-0 border-t border-slate-200 dark:border-slate-700 pt-1.5 flex flex-col">
+        {/* ── push dock (collapsible).
+            Opaque, and stacked above the panes: this is the surface that gets
+            read while a live write is being decided, so nothing may ever show
+            through it. */}
+        <div className="shrink-0 relative z-[1] bg-[var(--surface-card)] border-t border-slate-200 dark:border-slate-700 pt-1.5 flex flex-col">
           <button type="button" onClick={() => setDockOpen((v) => !v)}
             className="w-full flex items-center gap-2 px-1 py-1 text-left rounded hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
             aria-expanded={dockOpen}>
@@ -969,11 +1090,16 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
 
           {dockOpen && (
             <div className="max-h-[42vh] overflow-y-auto pr-1 mt-1.5 flex flex-col gap-2">
-              {/* The theme's ⚠ draft-copy note repeats HERE, inside the push flow. */}
+              {/* The theme's ⚠ draft-copy note repeats HERE, inside the push
+                  flow — the flags in full, the long-form record one click away
+                  (ThemeNote). Dumping the whole note inline is what buried this
+                  dock under a wall of amber text. */}
               {selected && pushDraftCopy && (
                 <Banner tone="warning" title={`Draft copy — theme "${selected.name}" is flagged ⚠ in its notes`}>
-                  {selected.notes} — pushing puts this DRAFT text on live listings. The confirmation step repeats
-                  this warning before anything is sent.
+                  <div className="flex flex-col gap-1.5">
+                    <p>Pushing puts this DRAFT text on live listings. The confirmation step repeats it before anything is sent.</p>
+                    <ThemeNote notes={selected.notes} />
+                  </div>
                 </Banner>
               )}
               <p className="text-[11px] text-slate-400">
@@ -986,15 +1112,17 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
                 skuById={skuById}
                 checkError={products.length > 0 ? stalenessError : null}
               />
-              <div className="rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3 flex flex-col gap-1.5">
-                {/* Always-present push button — blocked states DISABLE it with the reason underneath, never hide it. */}
-                <Button size="sm" variant="primary"
-                  className="self-start !bg-red-600 !border-red-600 hover:!bg-red-700 hover:!border-red-700 disabled:!bg-red-600 disabled:!border-red-600 disabled:opacity-50"
-                  disabled={!!pushBlockReason || pushBusy}
+              <div className="rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3 flex flex-col gap-1.5">
+                {/* Always-present push button — blocked states DISABLE it with the reason underneath, never hide it.
+                    `variant="danger"` is the DS token now; this used to carry a
+                    stack of !important red overrides that no theme could touch. */}
+                <Button size="sm" variant="danger" className="self-start max-w-full"
+                  disabled={!!pushBlockReason || pushBusy || confirmOpen}
+                  data-testid="description-push-button"
                   onClick={() => void runPush()}>
                   {pushBusy
                     ? <span className="flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" />Pushing…</span>
-                    : <><Send className="w-3.5 h-3.5" />{`Push descriptions — ${products.length} product${products.length === 1 ? '' : 's'} → all live listings · theme "${selected?.name ?? (draft.name || '—')}" · ${market}`}</>}
+                    : <><Send className="w-3.5 h-3.5" /><span className="truncate">{`Push descriptions — ${products.length} product${products.length === 1 ? '' : 's'} → all live listings · theme "${selected?.name ?? (draft.name || '—')}" · ${market}`}</span></>}
                 </Button>
                 {pushBlockReason ? (
                   <p className="text-xs text-amber-600 dark:text-amber-400">{pushBlockReason}</p>
@@ -1005,13 +1133,18 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
                   </p>
                 )}
               </div>
-              {pushError && (
-                <Banner tone="danger" title="Push request failed">
-                  {pushError}
-                </Banner>
-              )}
-              {/* Results persist until the drawer closes. */}
-              {pushResult && <PushResults res={pushResult.res} themeName={pushResult.themeName} at={pushResult.at} />}
+              {/* Outcome lands here — scrolled into view automatically, because
+                  the dock scrolls and a per-listing report the operator never
+                  sees is the same as no report. */}
+              <div ref={pushOutcomeRef} className="flex flex-col gap-2 empty:hidden">
+                {pushError && (
+                  <Banner tone="danger" title="Push request failed — nothing was confirmed as revised">
+                    {pushError}
+                  </Banner>
+                )}
+                {/* Results persist until the drawer closes. */}
+                {pushResult && <PushResults res={pushResult.res} themeName={pushResult.themeName} at={pushResult.at} />}
+              </div>
             </div>
           )}
         </div>

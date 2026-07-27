@@ -1,10 +1,12 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost'
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 export type ButtonSize = 'md' | 'sm'
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  /** `secondary` (white + border) is the base look; `primary` = blue fill; `ghost` = blue outline. */
+  /** `secondary` (white + border) is the base look; `primary` = blue fill; `ghost` = blue outline;
+   *  `danger` = red fill for irreversible/live-write actions (call sites were hand-rolling
+   *  `!bg-red-600` overrides, which drifted apart and beat every token). */
   variant?: ButtonVariant
   size?: ButtonSize
   children?: ReactNode

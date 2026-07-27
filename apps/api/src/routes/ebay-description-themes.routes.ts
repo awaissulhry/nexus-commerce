@@ -317,12 +317,22 @@ export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstan
       themeHtml?: string
     }
   }>('/ebay/description-preview', async (request, reply) => {
-    const { productId, marketplace = 'IT', sku, mode = 'group', body, title, themeId, themeHtml } = request.body ?? {}
+    const { productId, marketplace = 'IT', sku, mode, body, title, themeId, themeHtml } = request.body ?? {}
     if (!productId) return reply.code(400).send({ error: 'productId required' })
     // DS-0 — a child-row seed previews its FAMILY (per-market content, theme
     // assignment and galleries all live on the root's listing row, which is
     // exactly what a push renders). Root products resolve to themselves.
     const rootProductId = await resolveFamilyRootId(productId)
+    // DS-6 — when the caller doesn't force a mode, derive it the way the PUSH
+    // service does (children → 'group', else 'single'). The old `= 'group'`
+    // default made the Studio preview a standalone product with per-colour
+    // gallery sections that its push would never send — a preview that lies
+    // about what goes live is worse than no preview.
+    const resolvedMode: 'single' | 'group' =
+      mode ??
+      ((await prisma.product.count({ where: { parentId: rootProductId, deletedAt: null } })) > 0
+        ? 'group'
+        : 'single')
     const listing = await prisma.channelListing.findFirst({
       where: { productId: rootProductId, channel: 'EBAY', region: marketplace.toUpperCase() === 'UK' ? 'GB' : marketplace.toUpperCase() },
       select: { description: true, title: true },
@@ -331,7 +341,7 @@ export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstan
     const result = await renderListingDescriptionSafe(prisma, {
       productId: rootProductId,
       marketplace,
-      mode,
+      mode: resolvedMode,
       sku,
       body: resolvedBody,
       title: title ?? listing?.title ?? undefined,

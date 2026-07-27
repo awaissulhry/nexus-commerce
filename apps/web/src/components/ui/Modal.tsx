@@ -82,6 +82,13 @@ interface ModalProps {
   dismissOnEscape?: boolean
   /** Extra class for the inner panel. */
   className?: string
+  /**
+   * Lift the overlay above z-60 surfaces. The DS Drawer panel is z-61, so a
+   * default z-50 modal opened FROM a drawer renders behind it and looks like
+   * nothing happened (the click appears to do nothing until the drawer is
+   * closed). Confirmations set this — they must always be the topmost surface.
+   */
+  elevated?: boolean
   children: ReactNode
 }
 
@@ -96,6 +103,7 @@ export function Modal({
   dismissOnBackdrop = true,
   dismissOnEscape = true,
   className,
+  elevated = false,
   children,
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null)
@@ -237,7 +245,8 @@ export function Modal({
       className={cn(
         // U.16 — backdrop fades in to soften the focus shift away
         // from the underlying page.
-        'fixed inset-0 z-50 flex bg-slate-900/40 backdrop-blur-[1px] animate-fade-in',
+        'fixed inset-0 flex bg-slate-900/40 backdrop-blur-[1px] animate-fade-in',
+        elevated ? 'z-[200]' : 'z-50',
         justify,
       )}
     >

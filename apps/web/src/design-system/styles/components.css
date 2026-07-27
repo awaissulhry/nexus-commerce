@@ -318,6 +318,20 @@
   padding: 12px 18px;
   border-top: 1px solid var(--border-subtle);
 }
+/* In-drawer modal surface (see Drawer's `overlay` prop). Covers the whole
+   panel — header, body AND footer — so no background action stays clickable
+   behind a pending confirmation. The scrim is opaque enough that panel text
+   never reads through it. */
+.h10-ds-drawer-ov {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(var(--h10-shadow-rgb) / 0.68);
+}
 
 /* ── Menu (anchored dropdown) ────────────────────────────────────── */
 .h10-ds-menu-wrap {

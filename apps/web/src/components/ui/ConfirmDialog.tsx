@@ -105,11 +105,19 @@ export function ConfirmDialog({
       open={open}
       onClose={busy ? () => {} : onClose}
       title={title}
-      description={description}
+      // `description` is NOT forwarded to Modal: the header is flex-shrink-0,
+      // so a long/rich description rendered there grows past the panel's
+      // max-height and paints over the backdrop with no background of its own —
+      // pushing the Cancel/Confirm row off-screen entirely. The description
+      // belongs in the scrollable ModalBody below (where it always was, hence
+      // the duplicate render this removes).
       size="sm"
       placement="centered"
       dismissOnBackdrop={!busy}
       dismissOnEscape={!busy}
+      // A confirmation must outrank every surface that can spawn it — the DS
+      // Drawer is z-61, this used to be z-50 (invisible until the drawer closed).
+      elevated
     >
       <ModalBody>
         <div className="flex items-start gap-3">
