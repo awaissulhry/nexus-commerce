@@ -1,13 +1,17 @@
 /**
- * E2 (eBay Ads) — typed Sell Marketing API client: entity reads + the async
- * report-task calls. READ SIDE ONLY plus report-task creation (report tasks
- * change nothing on the live account — they are how reads work). Campaign/
- * ad/keyword WRITES are E4 and do not exist here.
+ * E2 (eBay Ads) — typed Sell Marketing API client: entity reads, the async
+ * report-task calls, and (since E4) the thin write wrappers. Callers must
+ * route writes through ebay-ads-write.service.ts, which owns the write gate,
+ * the guardrails and the CampaignAction audit.
  *
- * Every call is budgeted through the ads-core QuotaLedger against the
- * verified quotas: report methods 200/hr/seller (we reserve under 180),
- * Marketing "Ads" API 10k/day/app. Reads fail OPEN on Redis outage
- * (degraded, logged); report-task creation fails CLOSED.
+ * Every outbound request is budgeted through the ads-core QuotaLedger against
+ * the verified quotas: report methods 200/hr/seller (we reserve under 180),
+ * Marketing "Ads" API 10k/day/app shared by reads AND writes.
+ *
+ * Fail modes: reads fail OPEN on a store outage (a lost read costs one wasted
+ * call); writes and report-task creation fail CLOSED (an unmetered write can
+ * breach the account quota and mutate the live account). One unit is reserved
+ * per outbound HTTP request, including each retry.
  *
  * 429 handling reuses channel-batch/rate-limit.ts (Retry-After ladder).
  */
@@ -21,8 +25,13 @@ import { defaultRateLimitBackoffMs } from '../channel-batch/rate-limit.js'
 const API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
 
 // ── Quota ledgers (lazy Redis; memory fallback keeps dev/tests working) ────
-let _ledgers: { reads: QuotaLedger; reports: QuotaLedger } | null = null
-async function ledgers(): Promise<{ reads: QuotaLedger; reports: QuotaLedger }> {
+// Three ledgers, two budgets. Reads and writes share the SAME daily budget key
+// (they are the same eBay "Ads" 10k/day pool) but differ in fail mode: a read
+// that slips through on a Redis outage costs a wasted call, whereas an
+// unmetered WRITE can breach the account's quota and mutate the live account.
+// So writes fail CLOSED, exactly like report-task creation. (E8.0-1)
+let _ledgers: { reads: QuotaLedger; writes: QuotaLedger; reports: QuotaLedger } | null = null
+async function ledgers(): Promise<{ reads: QuotaLedger; writes: QuotaLedger; reports: QuotaLedger }> {
   if (_ledgers) return _ledgers
   let store: QuotaStore
   try {
@@ -33,12 +42,14 @@ async function ledgers(): Promise<{ reads: QuotaLedger; reports: QuotaLedger }> 
   }
   _ledgers = {
     reads: new QuotaLedger(store, { failMode: 'open' }),
+    writes: new QuotaLedger(store, { failMode: 'closed' }),
     reports: new QuotaLedger(store, { failMode: 'closed' }),
   }
   return _ledgers
 }
 
-const READS_BUDGET = { key: 'ebay:mkt:ads-daily', limit: Number(process.env.NEXUS_EBAY_ADS_DAILY_CALL_BUDGET ?? 9000), windowSec: 86_400 }
+/** The eBay Marketing "Ads" 10k/day/app pool — reads AND writes draw on it. */
+const ADS_DAILY_BUDGET = { key: 'ebay:mkt:ads-daily', limit: Number(process.env.NEXUS_EBAY_ADS_DAILY_CALL_BUDGET ?? 9000), windowSec: 86_400 }
 const REPORTS_BUDGET = { key: 'ebay:mkt:reports-hourly', limit: Number(process.env.NEXUS_EBAY_REPORTS_HOURLY_BUDGET ?? 180), windowSec: 3600 }
 
 export class EbayAdsQuotaError extends Error {
@@ -66,20 +77,33 @@ export async function getActiveEbayAdsAuth(): Promise<{ connectionId: string; to
 }
 
 // ── HTTP core ────────────────────────────────────────────────────────────────
+export type MarketingCallKind = 'read' | 'write' | 'report'
+
+/**
+ * Reserve exactly one unit for one outbound HTTP request. Called per retry
+ * attempt, not per logical call: the 429/5xx ladder issues up to 4 requests
+ * and eBay counts every one of them. (E8.0-3)
+ */
+async function reserveOne(kind: MarketingCallKind): Promise<void> {
+  if (quotaBypassed()) return
+  const l = await ledgers()
+  const res =
+    kind === 'report' ? await l.reports.reserve(REPORTS_BUDGET)
+    : kind === 'write' ? await l.writes.reserve(ADS_DAILY_BUDGET)
+    : await l.reads.reserve(ADS_DAILY_BUDGET)
+  if (!res.ok) throw new EbayAdsQuotaError(res.retryAfterSec, res.degraded)
+  if (res.degraded) logger.warn(`[E2][ebay-ads] quota ledger degraded (store unavailable) — ${kind} allowed fail-open`)
+}
+
 async function marketingFetch(
   path: string,
   token: string,
-  opts: { method?: 'GET' | 'POST'; body?: unknown; kind?: 'read' | 'report' } = {},
+  opts: { method?: 'GET' | 'POST'; body?: unknown; kind?: MarketingCallKind } = {},
 ): Promise<Response> {
   const kind = opts.kind ?? 'read'
-  if (!quotaBypassed()) {
-    const l = await ledgers()
-    const res = kind === 'report' ? await l.reports.reserve(REPORTS_BUDGET) : await l.reads.reserve(READS_BUDGET)
-    if (!res.ok) throw new EbayAdsQuotaError(res.retryAfterSec, res.degraded)
-    if (res.degraded) logger.warn('[E2][ebay-ads] quota ledger degraded (store unavailable)')
-  }
 
   for (let attempt = 0; attempt < 4; attempt++) {
+    await reserveOne(kind)
     const r = await fetch(`${API_BASE}${path}`, {
       method: opts.method ?? 'GET',
       headers: {
@@ -215,11 +239,7 @@ export async function downloadReport(token: string, reportHref: string): Promise
   // eBay hands the href back as http:// — Node fetch drops Authorization on
   // the 301 to https ("Missing access token"). Normalize the scheme first.
   const url = (reportHref.startsWith('http') ? reportHref : `${API_BASE}${reportHref}`).replace(/^http:\/\//, 'https://')
-  if (!quotaBypassed()) {
-    const l = await ledgers()
-    const res = await l.reports.reserve(REPORTS_BUDGET)
-    if (!res.ok) throw new EbayAdsQuotaError(res.retryAfterSec, res.degraded)
-  }
+  await reserveOne('report')
   const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
   if (!r.ok) throw new Error(`downloadReport → HTTP ${r.status}`)
   return Buffer.from(await r.arrayBuffer())
@@ -230,8 +250,13 @@ export async function downloadReport(token: string, reportHref: string): Promise
 // (gate + guardrails + CampaignAction audit); these are thin typed wrappers.
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function marketingPost(path: string, token: string, body?: unknown): Promise<Response> {
-  return marketingFetch(path, token, { method: 'POST', body })
+/**
+ * POST helper. Defaults to kind:'write' — the fail-CLOSED ledger — so that a
+ * newly added mutating endpoint is metered safely even if the author forgets
+ * to say so. The four read-only suggest_* POSTs opt back down to 'read'.
+ */
+async function marketingPost(path: string, token: string, body?: unknown, kind: MarketingCallKind = 'write'): Promise<Response> {
+  return marketingFetch(path, token, { method: 'POST', body, kind })
 }
 
 function idFromLocation(r: Response, what: string): string {
@@ -292,20 +317,41 @@ export const updateCampaignIdentificationApi = async (token: string, campaignId:
 /** Bulk per-item results normalized to { key, ok, id?, error? }. */
 export interface BulkItemResult { key: string; ok: boolean; id?: string | null; error?: string | null; statusCode?: number }
 
-function parseBulkResponses(items: Array<Record<string, unknown>> | undefined, keyField: string, idField: string): BulkItemResult[] {
-  return (items ?? []).map((it) => {
-    const status = Number(it.statusCode ?? 200)
+/**
+ * Normalize eBay's 207 Multi-Status `responses[]`.
+ *
+ * Fails CLOSED on an unreadable item (E8.0-4). Previously a missing
+ * `statusCode` was coerced to 200, so a malformed or empty multi-status body
+ * was reported as all-OK — the write would be mirrored locally as successful
+ * while nothing had happened on eBay, which is precisely the drift the
+ * reconciliation job then has to discover. eBay does sometimes omit
+ * `statusCode` on success, so absence alone is not treated as failure: an item
+ * with no status, no errors and a resolvable id is still a success. An item
+ * with none of the three is ambiguous, and ambiguous means failed.
+ */
+export function parseBulkResponses(items: Array<Record<string, unknown>> | undefined, keyField: string, idField: string): BulkItemResult[] {
+  if (items === undefined) {
+    logger.warn('[E2][ebay-ads] bulk response had no `responses[]` array — treating as zero successes')
+    return []
+  }
+  return items.map((it) => {
+    const hasStatus = it.statusCode !== undefined && it.statusCode !== null
+    const status = hasStatus ? Number(it.statusCode) : undefined
     const errors = it.errors as Array<{ errorId?: number; message?: string; longMessage?: string }> | undefined
     const href = typeof it.href === 'string' ? it.href : undefined
-    return {
-      key: String(it[keyField] ?? ''),
-      ok: status >= 200 && status < 300,
-      id: (it[idField] as string | undefined) ?? (href ? href.split('/').filter(Boolean).pop() ?? null : null),
-      error: errors?.length
-        ? errors.map((e) => e.message ?? e.longMessage ?? `error ${e.errorId ?? '?'}`).join('; ').slice(0, 400)
-        : status >= 300 ? `HTTP ${status}` : null,
-      statusCode: status,
-    }
+    const id = (it[idField] as string | undefined) ?? (href ? href.split('/').filter(Boolean).pop() ?? null : null)
+
+    const ok = hasStatus
+      ? Number.isFinite(status) && status! >= 200 && status! < 300
+      : !errors?.length && !!id
+
+    const error = errors?.length
+      ? errors.map((e) => e.message ?? e.longMessage ?? `error ${e.errorId ?? '?'}`).join('; ').slice(0, 400)
+      : ok ? null
+      : hasStatus ? `HTTP ${status}`
+      : 'eBay returned no statusCode, no id and no errors for this item — treated as failed'
+
+    return { key: String(it[keyField] ?? ''), ok, id, error, statusCode: status }
   })
 }
 
@@ -353,21 +399,21 @@ export const bulkCreateNegativeKeywordApi = async (token: string, negatives: Arr
 // ER2 — campaign budget suggestion (verified to exist in the method index;
 // response shape handled defensively at the caller: best-effort passthrough).
 export const suggestBudgetApi = async (token: string, body: Record<string, unknown>): Promise<Record<string, unknown>> => {
-  const r = await expectOk(await marketingPost('/sell/marketing/v1/ad_campaign/suggest_budget', token, body), 'suggestBudget')
+  const r = await expectOk(await marketingPost('/sell/marketing/v1/ad_campaign/suggest_budget', token, body, 'read'), 'suggestBudget')
   return (await r.json().catch(() => ({}))) as Record<string, unknown>
 }
 
 // Suggestion endpoints (read-side; require full sell.marketing — verified)
 export const suggestMaxCpcApi = async (token: string, body: Record<string, unknown>): Promise<Record<string, unknown>> => {
-  const r = await expectOk(await marketingPost('/sell/marketing/v1/ad_campaign/suggest_max_cpc', token, body), 'suggestMaxCpc')
+  const r = await expectOk(await marketingPost('/sell/marketing/v1/ad_campaign/suggest_max_cpc', token, body, 'read'), 'suggestMaxCpc')
   return (await r.json()) as Record<string, unknown>
 }
 export const suggestKeywordsApi = async (token: string, campaignId: string, adGroupId: string, listingIds: string[]): Promise<Record<string, unknown>> => {
-  const r = await expectOk(await marketingPost(`/sell/marketing/v1/ad_campaign/${campaignId}/ad_group/${adGroupId}/suggest_keywords`, token, { listingIds }), 'suggestKeywords')
+  const r = await expectOk(await marketingPost(`/sell/marketing/v1/ad_campaign/${campaignId}/ad_group/${adGroupId}/suggest_keywords`, token, { listingIds }, 'read'), 'suggestKeywords')
   return (await r.json()) as Record<string, unknown>
 }
 export const suggestBidsApi = async (token: string, campaignId: string, adGroupId: string, keywords: Array<{ keywordText: string; matchType: string }>): Promise<Record<string, unknown>> => {
-  const r = await expectOk(await marketingPost(`/sell/marketing/v1/ad_campaign/${campaignId}/ad_group/${adGroupId}/suggest_bids`, token, { keywords }), 'suggestBids')
+  const r = await expectOk(await marketingPost(`/sell/marketing/v1/ad_campaign/${campaignId}/ad_group/${adGroupId}/suggest_bids`, token, { keywords }, 'read'), 'suggestBids')
   return (await r.json()) as Record<string, unknown>
 }
 
