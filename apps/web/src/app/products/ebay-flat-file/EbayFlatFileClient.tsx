@@ -1105,6 +1105,24 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     return () => ctrl.abort()
   }, [showDescSync, clientRows, marketplace, BACKEND, descSyncTick])
 
+  // DS-5 — Studio auto-discovery: every description-eligible family on the
+  // open sheet (family parents + standalone roots), in row order, deduped by
+  // product id. REUSES isDescSyncEligible — the SAME predicate that gates the
+  // staleness dots — and the SAME id resolution as the dot fetch above, so the
+  // Studio's seeded chip set and the grid's dots agree forever.
+  const studioFamilies = useMemo(() => {
+    const seen = new Set<string>()
+    const out: Array<{ productId: string; sku: string }> = []
+    for (const r of clientRows) {
+      if (!isDescSyncEligible(r)) continue
+      const pid = String(r.platformProductId ?? r._productId)
+      if (seen.has(pid)) continue
+      seen.add(pid)
+      out.push({ productId: pid, sku: String(r.sku) })
+    }
+    return out
+  }, [clientRows])
+
   // Task 4 — sync scope ref + localStorage; reload when scope changes
   useEffect(() => {
     scopeRef.current = scope
@@ -3909,12 +3927,15 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         )}
 
         {/* DS-2 — Description Studio (supersedes EbayDescriptionThemesModal).
-            First parent row with a real SKU seeds the starred chip (the
-            Studio's own product search can swap it for any family). */}
+            DS-5 — seedProducts auto-discovers EVERY eligible family on the
+            sheet (isDescSyncEligible, same as the dots); sampleProductId keeps
+            seeding the STAR within that set (first parent row with a real
+            SKU), and stays the lone fallback chip if the sheet has no rows. */}
         <EbayDescriptionStudio
           open={themesModalOpen}
           onClose={() => setThemesModalOpen(false)}
           marketplace={marketplace}
+          seedProducts={studioFamilies}
           sampleProductId={String(studioSeed?._productId ?? '') || undefined}
           sampleProductSku={studioSeed?.sku}
           onChanged={loadDescThemes}

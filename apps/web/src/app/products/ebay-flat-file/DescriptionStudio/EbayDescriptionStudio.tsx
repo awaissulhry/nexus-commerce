@@ -18,6 +18,11 @@
  * confirmed before every destructive path; open-reset fires only on the
  * false→true open transition. Built complete but wired into no page — DS-2
  * swaps the entry point.
+ *
+ * DS-5: seedProducts auto-discovers the whole flat file's eligible families
+ * into the chip set on open (capped at MAX_PUSH_PRODUCTS with an honest amber
+ * note), and 'Reload families' re-syncs on demand — never dropping chips
+ * without a confirm.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -60,7 +65,13 @@ export interface EbayDescriptionStudioProps {
   open: boolean
   onClose: () => void
   marketplace: string
-  /** A real product from the grid seeding the chip set (first loaded family). */
+  /** DS-5 — auto-discovered families from the open flat file (grid row order,
+   *  deduped by product id, isDescSyncEligible-gated by the caller). Seeds the
+   *  whole chip set on open, capped at MAX_PUSH_PRODUCTS with an HONEST amber
+   *  note — never silent truncation. */
+  seedProducts?: Array<{ productId: string; sku: string }>
+  /** A real product from the grid seeding the STAR within seedProducts (and
+   *  the lone fallback chip when seedProducts is absent/empty). */
   sampleProductId?: string
   /** SKU label for that product, shown on the chip until the operator changes it. */
   sampleProductSku?: string
@@ -70,7 +81,7 @@ export interface EbayDescriptionStudioProps {
   onPushed?: () => void
 }
 
-export function EbayDescriptionStudio({ open, onClose, marketplace, sampleProductId, sampleProductSku, onChanged, onPushed }: EbayDescriptionStudioProps) {
+export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts, sampleProductId, sampleProductSku, onChanged, onPushed }: EbayDescriptionStudioProps) {
   const confirm = useConfirm()
 
   // ── theme rail ──
@@ -87,6 +98,8 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, sampleProduc
   const [products, setProducts] = useState<PreviewProduct[]>([])
   const [starredId, setStarredId] = useState<string | null>(null)
   const [addFeedback, setAddFeedback] = useState<{ text: string; tone: 'info' | 'warn' } | null>(null)
+  /** DS-5 — persistent honest-truncation note when seedProducts exceeds the cap. */
+  const [seedCapNote, setSeedCapNote] = useState<string | null>(null)
   // ── market + preview width ──
   const [market, setMarket] = useState('IT')
   const [previewWidth, setPreviewWidth] = useState<'desktop' | 'mobile'>('desktop')
@@ -233,17 +246,52 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, sampleProduc
     }
   }, [open, refetchAll])
 
+  // ── DS-5 — seed derivation: auto-discovered families → chips ───────────────
+  // Dedupes defensively (the caller already dedupes), caps at the push limit
+  // and reports the TRUE total so truncation is always announced. Falls back
+  // to the single sampleProductId chip when no seedProducts arrive (old
+  // callers / an empty sheet).
+  const deriveSeed = useCallback((): { chips: PreviewProduct[]; total: number } => {
+    const seen = new Set<string>()
+    const all: PreviewProduct[] = []
+    for (const p of seedProducts ?? []) {
+      if (!p.productId || seen.has(p.productId)) continue
+      seen.add(p.productId)
+      all.push({ id: p.productId, sku: p.sku })
+    }
+    if (all.length === 0 && sampleProductId) {
+      all.push({ id: sampleProductId, sku: sampleProductSku ?? 'Current grid family' })
+    }
+    return { chips: all.slice(0, MAX_PUSH_PRODUCTS), total: all.length }
+  }, [seedProducts, sampleProductId, sampleProductSku])
+
+  /** Current seed snapshot — 'Reload families (N)' shows the TRUE family count. */
+  const seedInfo = useMemo(() => deriveSeed(), [deriveSeed])
+
+  const capNoteFor = (total: number): string | null =>
+    total > MAX_PUSH_PRODUCTS
+      ? `Showing the first ${MAX_PUSH_PRODUCTS} of ${total} families — remove some or add specific ones via search`
+      : null
+
+  // Star seed: the grid's sampleProductId if it made the chip set, else chip #1.
+  const starFor = (chips: PreviewProduct[], preferred?: string | null): string | null =>
+    preferred && chips.some((p) => p.id === preferred)
+      ? preferred
+      : sampleProductId && chips.some((p) => p.id === sampleProductId)
+        ? sampleProductId
+        : chips[0]?.id ?? null
+
   // ── open-reset — keyed ONLY on the false→true transition ───────────────────
   const wasOpen = useRef(false)
   useEffect(() => {
     if (open && !wasOpen.current) {
       setActionError(null); setConflict(null)
       setMarket(EBAY_MARKETPLACES.includes(marketplace) ? marketplace : 'IT')
-      const seed: PreviewProduct[] = sampleProductId
-        ? [{ id: sampleProductId, sku: sampleProductSku ?? 'Current grid family' }]
-        : []
-      setProducts(seed)
-      setStarredId(seed[0]?.id ?? null)
+      // DS-5 — the WHOLE flat file's eligible families seed the chip set.
+      const { chips, total } = deriveSeed()
+      setProducts(chips)
+      setStarredId(starFor(chips))
+      setSeedCapNote(capNoteFor(total))
       setAddFeedback(null)
       setDockOpen(false); setPushResult(null); setPushError(null)
       setRender({ phase: 'idle', warnings: [] })
@@ -255,7 +303,34 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, sampleProduc
       void loadThemes(false)
     }
     wasOpen.current = open
-  }, [open, marketplace, sampleProductId, sampleProductSku, loadThemes])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, marketplace, deriveSeed, loadThemes])
+
+  // ── DS-5 — 'Reload families' re-syncs chips from seedProducts (same cap
+  // rule). Chips the reload would drop — manually-added ones, or seeded ones
+  // beyond the cap — are NEVER wiped silently: a confirm lists them first. ────
+  const reloadFamilies = useCallback(async () => {
+    const { chips, total } = deriveSeed()
+    const nextIds = new Set(chips.map((c) => c.id))
+    const dropped = products.filter((p) => !nextIds.has(p.id))
+    if (dropped.length > 0) {
+      const shown = dropped.slice(0, 6).map((p) => p.sku).join(', ')
+        + (dropped.length > 6 ? ` … and ${dropped.length - 6} more` : '')
+      const ok = await confirm({
+        title: 'Reload families from the flat file?',
+        description: `Re-syncing replaces the chip set with the sheet's ${Math.min(total, MAX_PUSH_PRODUCTS)} eligible famil${Math.min(total, MAX_PUSH_PRODUCTS) === 1 ? 'y' : 'ies'} and removes ${dropped.length} chip${dropped.length === 1 ? '' : 's'} not in that set (manually added, or beyond the ${MAX_PUSH_PRODUCTS}-family cap): ${shown}.`,
+        confirmLabel: 'Reload & replace',
+        tone: 'warning',
+      })
+      if (!ok) return
+    }
+    setProducts(chips)
+    setStarredId((cur) => starFor(chips, cur))
+    setSeedCapNote(capNoteFor(total))
+    setAddFeedback(null)
+    refetchAll('selection')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deriveSeed, products, confirm, sampleProductId, refetchAll])
 
   // ── dirty guard — confirmed before EVERY destructive path ──────────────────
   const guardDirty = useCallback(async (): Promise<boolean> => {
@@ -607,6 +682,13 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, sampleProduc
               <span className="shrink-0 text-[10px] text-slate-400" title={`Server cap: ${MAX_PUSH_PRODUCTS} products per push`}>
                 {products.length}/{MAX_PUSH_PRODUCTS}
               </span>
+              {(seedProducts?.length ?? 0) > 0 && (
+                <button type="button" onClick={() => void reloadFamilies()} disabled={pushBusy}
+                  title="Re-sync the chip set with the flat file's current eligible families (asks first if any chip would be removed)"
+                  className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">
+                  <RefreshCw className="w-3 h-3" /> Reload families ({seedInfo.total})
+                </button>
+              )}
             </div>
             {products.length > 0 ? (
               <div className="flex flex-wrap items-center gap-1">
@@ -653,6 +735,10 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, sampleProduc
               <p className="text-xs text-amber-600 dark:text-amber-400">
                 No products selected — search above. The ★ chip drives the preview; ALL chips are pushed.
               </p>
+            )}
+            {/* DS-5 — honest truncation: the cap note persists (no silent cut). */}
+            {seedCapNote && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400">{seedCapNote}</p>
             )}
             {addFeedback && (
               <p className={cn('text-[11px]', addFeedback.tone === 'warn' ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400')}>
