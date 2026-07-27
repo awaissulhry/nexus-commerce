@@ -126,6 +126,7 @@ async function marketingFetch(
 async function pagedGet<T>(pathBase: string, token: string, itemsKey: string, limit = 200, hardCap = 50): Promise<T[]> {
   const out: T[] = []
   let offset = 0
+  let complete = false
   for (let page = 0; page < hardCap; page++) {
     const sep = pathBase.includes('?') ? '&' : '?'
     const r = await marketingFetch(`${pathBase}${sep}limit=${limit}&offset=${offset}`, token)
@@ -133,8 +134,13 @@ async function pagedGet<T>(pathBase: string, token: string, itemsKey: string, li
     const body = (await r.json()) as Record<string, unknown>
     const items = (body[itemsKey] as T[] | undefined) ?? []
     out.push(...items)
-    if (items.length < limit) break
+    if (items.length < limit) { complete = true; break }
     offset += limit
+  }
+  // E8.0-6 — a silent cap reads downstream as "that is all there is", which is
+  // how a partial entity sync turns into spurious STALE marking.
+  if (!complete) {
+    logger.error(`[E2][ebay-ads] TRUNCATED: ${pathBase} hit the ${hardCap}-page cap at ${out.length} rows — result is PARTIAL`)
   }
   return out
 }

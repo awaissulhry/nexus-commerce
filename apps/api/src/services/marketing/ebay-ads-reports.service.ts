@@ -162,6 +162,12 @@ export interface ScheduleReport { created: number; skippedOpen: number; errors: 
 
 /** eBay hard limit (error 35090): a report task spans at most 7 days. */
 export function chunkDateWindow(fromYmd: string, toYmd: string, maxDays = 7): { from: string; to: string }[] {
+  // maxDays < 1 makes the cursor fail to advance and the loop spin forever.
+  // Currently unreachable (SEARCH_QUERY declares chunkDays: 0 but takes the
+  // perCampaign branch); guard it so that stays a bug we cannot ship. (E8.0-6)
+  if (!Number.isFinite(maxDays) || maxDays < 1) {
+    throw new Error(`chunkDateWindow: maxDays must be >= 1, got ${maxDays}`)
+  }
   const chunks: { from: string; to: string }[] = []
   let cursor = new Date(`${fromYmd}T00:00:00Z`)
   const end = new Date(`${toYmd}T00:00:00Z`)

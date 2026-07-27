@@ -33,6 +33,8 @@ export interface DiscoveryReport {
   ended: number
   membershipsEnded: number
   skippedEndFlip: boolean
+  /** True when the ActiveList sweep hit its page cap — the item set is partial. */
+  truncated: boolean
   errors: string[]
 }
 
@@ -143,11 +145,13 @@ async function resolveProducts(marketplace: string, itemId: string, variationSku
 }
 
 const DETAIL_MAX = Number(process.env.NEXUS_EBAY_DISCOVERY_DETAIL_MAX ?? 50)
+/** ActiveList pages per sweep (200 items each). Truncation suppresses end-flips. */
+const ACTIVE_LIST_PAGE_CAP = Number(process.env.NEXUS_EBAY_ACTIVE_LIST_PAGE_CAP ?? 25)
 
 export async function discoverEbayListings(): Promise<DiscoveryReport> {
   const report: DiscoveryReport = {
     fetchedActive: 0, upserted: 0, detailFetched: 0, matched: 0, ended: 0,
-    membershipsEnded: 0, skippedEndFlip: false, errors: [],
+    membershipsEnded: 0, skippedEndFlip: false, truncated: false, errors: [],
   }
   const conn = await prisma.channelConnection.findFirst({
     where: { channelType: 'EBAY', isActive: true, managedBy: 'oauth' },
@@ -159,7 +163,7 @@ export async function discoverEbayListings(): Promise<DiscoveryReport> {
   // 1. Active list (paginated, deduped)
   const items = new Map<string, ActiveItem>()
   try {
-    for (let page = 1; page <= 25; page++) {
+    for (let page = 1; page <= ACTIVE_LIST_PAGE_CAP; page++) {
       const xml = await tradingCall('GetMyeBaySelling', `
   <ActiveList><Include>true</Include>
     <Pagination><EntriesPerPage>200</EntriesPerPage><PageNumber>${page}</PageNumber></Pagination>
@@ -167,6 +171,13 @@ export async function discoverEbayListings(): Promise<DiscoveryReport> {
       for (const it of parseActiveList(xml)) items.set(it.itemId, it)
       const totalPages = Number(xml.match(/<TotalNumberOfPages>(\d+)<\/TotalNumberOfPages>/)?.[1] ?? 1)
       if (page >= totalPages) break
+      // E8.0-6 — we are about to stop with pages still outstanding. Record it:
+      // an incomplete item set must never drive end-flips (see step 3).
+      if (page === ACTIVE_LIST_PAGE_CAP) {
+        report.truncated = true
+        report.errors.push(`TRUNCATED: ActiveList stopped at the ${ACTIVE_LIST_PAGE_CAP}-page cap with ${totalPages} pages reported — raise NEXUS_EBAY_ACTIVE_LIST_PAGE_CAP`)
+        logger.error(`[E2][ebay-ads] ActiveList TRUNCATED at page ${page}/${totalPages} — end-flips suppressed this sweep`)
+      }
     }
   } catch (e) {
     // fetch-success gating: no upserts, no end-flips on a failed sweep
@@ -229,7 +240,14 @@ export async function discoverEbayListings(): Promise<DiscoveryReport> {
   const live = await prisma.ebayListingIndex.findMany({ where: { endedAt: null }, select: { id: true, itemId: true } })
   const goneRows = live.filter((r) => !items.has(r.itemId))
   if (goneRows.length) {
-    if (shouldSkipEndFlip(live.length, live.length - goneRows.length)) {
+    if (report.truncated) {
+      // A partial sweep makes every unseen listing look dead. Ending them
+      // would set endedAt, flip memberships to ENDED and stale live ads for
+      // listings that are perfectly healthy — the same reason a FAILED fetch
+      // never drives end-flips.
+      report.skippedEndFlip = true
+      logger.error(`[E2][ebay-ads] sweep TRUNCATED — ${goneRows.length} apparently-gone listings NOT ended (would be false positives)`)
+    } else if (shouldSkipEndFlip(live.length, live.length - goneRows.length)) {
       report.skippedEndFlip = true
       logger.error(`[E2][ebay-ads] CIRCUIT BREAKER: ${goneRows.length}/${live.length} indexed listings vanished in one sweep — end flip SKIPPED`)
     } else {

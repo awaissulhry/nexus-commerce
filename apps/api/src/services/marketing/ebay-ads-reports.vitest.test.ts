@@ -1,6 +1,6 @@
 /** E2 — TSV report parser + guards: the pure heart of the eBay pipeline. */
 import { describe, it, expect } from 'vitest'
-import { parseReportTsv, moneyToCents } from './ebay-ads-reports.service.js'
+import { parseReportTsv, moneyToCents, chunkDateWindow } from './ebay-ads-reports.service.js'
 import { shouldSkipStaleFlip } from './ebay-ads-entity-sync.service.js'
 import { shouldSkipEndFlip, parseItemDetail } from './ebay-listing-index.service.js'
 
@@ -94,6 +94,33 @@ describe('reconciliation circuit breakers', () => {
   it('end flip uses the tighter 40% threshold', () => {
     expect(shouldSkipEndFlip(20, 13)).toBe(false) // 35% → allowed
     expect(shouldSkipEndFlip(20, 11)).toBe(true) // 45% → breaker
+  })
+
+  it('the 40% breaker does NOT cover a modest truncation — hence the truncated flag', () => {
+    // A sweep that stops one page early can hide, say, 30% of the account.
+    // That slips under the breaker and would end perfectly healthy listings,
+    // which is why discoverEbayListings suppresses end-flips on truncation
+    // rather than relying on this threshold. (E8.0-6)
+    expect(shouldSkipEndFlip(100, 70)).toBe(false)
+  })
+})
+
+describe('chunkDateWindow (E8.0-6 — cannot spin forever)', () => {
+  it('chunks a window into ≤maxDays slices', () => {
+    const c = chunkDateWindow('2026-07-01', '2026-07-16', 7)
+    expect(c).toEqual([
+      { from: '2026-07-01', to: '2026-07-07' },
+      { from: '2026-07-08', to: '2026-07-14' },
+      { from: '2026-07-15', to: '2026-07-16' },
+    ])
+  })
+  it('a single-day window yields one chunk', () => {
+    expect(chunkDateWindow('2026-07-01', '2026-07-01', 1)).toEqual([{ from: '2026-07-01', to: '2026-07-01' }])
+  })
+  it('throws on maxDays < 1 instead of looping forever', () => {
+    expect(() => chunkDateWindow('2026-07-01', '2026-07-16', 0)).toThrow(/maxDays must be >= 1/)
+    expect(() => chunkDateWindow('2026-07-01', '2026-07-16', -3)).toThrow(/maxDays must be >= 1/)
+    expect(() => chunkDateWindow('2026-07-01', '2026-07-16', NaN)).toThrow(/maxDays must be >= 1/)
   })
 })
 
