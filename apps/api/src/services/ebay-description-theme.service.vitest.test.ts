@@ -224,7 +224,7 @@ describe('renderListingDescriptionSafe — raw mode renders body tokens', () => 
     })
     expect(res.themed).toBe(false)
     expect(res.html).toBe('a  b')
-    expect(res.warnings).toEqual(['token {{body}}/{{mobile_summary}} is not allowed inside the description body'])
+    expect(res.warnings).toEqual(['token {{body}}/{{mobile_summary}}/{{gallery_hero}} is not allowed inside the description body'])
   })
 })
 
