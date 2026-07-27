@@ -18,10 +18,48 @@ import prisma from '../db.js'
 import { ebayAuthService } from '../services/ebay-auth.service.js'
 import { siteIdForMarket } from '../services/ebay-trading-api.service.js'
 import { pushDescriptions } from '../services/ebay-description-push.service.js'
+import { collectInventoryDrift } from '../services/ebay-inventory-drift.service.js'
 
 const MAX_PRODUCTS_PER_CALL = 50
 
 export default async function ebayDescriptionPushRoutes(fastify: FastifyInstance) {
+  // ── READ-ONLY diagnostic: how far has each Inventory-managed family's live
+  // inventory_item_group drifted from what a Full Publish would re-assert?
+  // Lane A can't take a description-only revise, so operators are sent to Full
+  // Publish — which rewrites the whole group. This measures whether that is a
+  // real risk before anyone touches that write path. GETs only; no writes to
+  // eBay or the DB. Maps to listingsView under the /api/ebay RBAC prefix.
+  fastify.get<{ Querystring: { marketplace?: string } }>(
+    '/ebay/inventory-drift',
+    async (request, reply) => {
+      const marketplace = (request.query.marketplace ?? 'IT').toUpperCase()
+      try {
+        siteIdForMarket(marketplace)
+      } catch {
+        return reply.code(400).send({ error: `unknown marketplace: ${marketplace}` })
+      }
+      const connection = await prisma.channelConnection.findFirst({
+        where: { channelType: 'EBAY', isActive: true },
+        select: { id: true },
+      })
+      if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
+      let token: string
+      try {
+        token = await ebayAuthService.getValidToken(connection.id)
+      } catch (err: unknown) {
+        return reply
+          .code(503)
+          .send({ error: `Failed to get eBay token: ${err instanceof Error ? err.message : String(err)}` })
+      }
+      try {
+        return reply.send(await collectInventoryDrift(prisma, { marketplace, oauthToken: token }))
+      } catch (err: unknown) {
+        request.log.error(err, 'ebay/inventory-drift failed')
+        return reply.code(502).send({ error: err instanceof Error ? err.message : 'drift check failed' })
+      }
+    },
+  )
+
   fastify.post<{ Body: { productIds?: unknown; marketplace?: string; themeId?: string } }>(
     '/ebay/description-push',
     async (request, reply) => {
