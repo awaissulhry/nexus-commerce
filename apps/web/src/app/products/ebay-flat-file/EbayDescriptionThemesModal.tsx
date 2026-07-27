@@ -1,5 +1,7 @@
 'use client'
 
+// SUPERSEDED by DescriptionStudio/ (DS-2) — delete after prod verification.
+
 /**
  * ED.4 + ED v2 P3 — Description Theme manager. Two-pane modal on the eBay flat
  * file: theme list (starters + custom, with live usage counts) on the left,

@@ -32,7 +32,9 @@ import { PrePublishWarningModal } from './PrePublishWarningModal'
 import { EbayImportWizard, type WizardColumn } from './EbayImportWizard'
 import { stampUnderParent } from './importUnderParent'
 import { planFamilyImport } from './importFamilies.pure'
-import { EbayDescriptionThemesModal } from './EbayDescriptionThemesModal'
+// DS-2 — Description Studio replaces EbayDescriptionThemesModal (old modal kept
+// in-tree for instant revert: swap this import back).
+import { EbayDescriptionStudio } from './DescriptionStudio'
 import { Listbox } from '@/design-system/components/Listbox'
 import { EbayFlatFileImageDrawer } from './EbayFlatFileImageModal'
 import { deriveImageFamilies, type FamilyDeriveRow, type ImageFamilySummary } from './imageFamilies.pure'
@@ -883,6 +885,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   })
   useEffect(() => { try { localStorage.setItem('ff-ebay-view-descsync', showDescSync ? '1' : '0') } catch {} }, [showDescSync])
   const [descSync, setDescSync] = useState<Record<string, { stale: boolean; reasons: string[] }>>({})
+  // DS-2 — bumped by the Description Studio's onPushed so the staleness fetch
+  // below re-runs and the amber dots refresh right after a modal push.
+  const [descSyncTick, setDescSyncTick] = useState(0)
   useEffect(() => {
     if (!showDescSync) return
     const ids = [...new Set(
@@ -905,7 +910,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       })
       .catch(() => { /* dots just stay hidden — never blocks the grid */ })
     return () => ctrl.abort()
-  }, [showDescSync, initialRows, marketplace, BACKEND])
+  }, [showDescSync, initialRows, marketplace, BACKEND, descSyncTick])
 
   const [showCascadeButtons, setShowCascadeButtons] = useState<boolean>(() => {
     try { return localStorage.getItem('ff-show-cascade') !== '0' } catch { return true }
@@ -3822,6 +3827,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     const aspectsRow = aspectsPanelRowId ? rows.find((r) => r._rowId === aspectsPanelRowId) ?? null : null
     const parentRow = (rows as EbayRow[]).find((r) => r._isParent === true)
     const parentProductId = String(parentRow?._productId ?? parentRow?.platformProductId ?? familyId ?? '')
+    // DS-2 — Studio seed: first PARENT row with a real SKU and a product id.
+    // (The old modal seeded the first row with any _productId — often a child
+    // row, whose family-root-less preview rendered empty.)
+    const studioSeed = (rows as EbayRow[]).find(
+      (r) => !r._ghost && r._isParent === true && String(r.sku ?? '').trim() !== '' && r._productId,
+    )
     return (
       <>
         {/* EFF.4 — Aspects side panel (EFX P4 — union group incl. ghost columns) */}
@@ -3860,15 +3871,17 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           />
         )}
 
-        {/* ED.4 + ED v2 P3 — theme manager; first real row seeds the preview
-            picker (the modal's own product search can swap it for any family) */}
-        <EbayDescriptionThemesModal
+        {/* DS-2 — Description Studio (supersedes EbayDescriptionThemesModal).
+            First parent row with a real SKU seeds the starred chip (the
+            Studio's own product search can swap it for any family). */}
+        <EbayDescriptionStudio
           open={themesModalOpen}
           onClose={() => setThemesModalOpen(false)}
           marketplace={marketplace}
-          sampleProductId={String((rows.find((r) => !r._ghost && r._productId) as EbayRow | undefined)?._productId ?? '') || undefined}
-          sampleProductSku={(rows.find((r) => !r._ghost && r._productId) as EbayRow | undefined)?.sku}
+          sampleProductId={String(studioSeed?._productId ?? '') || undefined}
+          sampleProductSku={studioSeed?.sku}
           onChanged={loadDescThemes}
+          onPushed={() => setDescSyncTick((t) => t + 1)}
         />
 
         {desc && descModal && (
