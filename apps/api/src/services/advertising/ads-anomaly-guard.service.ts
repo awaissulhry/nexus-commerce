@@ -24,6 +24,13 @@ export interface AnomalyGuardResult {
 }
 
 export async function runAnomalyGuardOnce(): Promise<AnomalyGuardResult> {
+  // AX2.9 — ride this cron to self-check the sync spine (report-only; a stale
+  // sync must never halt automation the way a spend runaway does). Failures
+  // here can never break the guard itself.
+  void import('./ads-sync-integrity.service.js')
+    .then((m) => m.runSyncIntegrityCheck())
+    .catch(() => { /* integrity reporting is best-effort */ })
+
   const state = await getAutomationState()
   const maxActions = state.maxActionsPerHour ?? DEFAULT_MAX_ACTIONS_PER_HOUR
   const maxSpend = state.maxHourlySpendCentsEur ?? DEFAULT_MAX_HOURLY_SPEND_CENTS

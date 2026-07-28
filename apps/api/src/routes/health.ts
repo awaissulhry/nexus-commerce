@@ -34,6 +34,7 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
       // 2026-07-20 403 outage was invisible outside the DB. Fail-open: alert
       // lookup errors never break health.
       let alerts: Record<string, number> | undefined
+      let adsIntegrity: { severity: string; findings: Array<{ code: string; severity: string; message: string; action: string }> } | undefined
       try {
         const dayAgo = new Date(Date.now() - 24 * 3600e3)
         const [authFailures, publishFailureRate, qtyMismatches, deadLetters24h, adsDeadLetters24h] = await Promise.all([
@@ -53,6 +54,15 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
           prisma.outboundSyncQueue.count({ where: { isDead: true, diedAt: { gte: dayAgo }, syncType: { startsWith: 'AD_' } } }),
         ])
         alerts = { authFailures, publishFailureRate, qtyMismatches, deadLetters24h, adsDeadLetters24h }
+        // AX2.9 — the ads spine self-reports so nobody has to check it daily.
+        try {
+          const { runSyncIntegrityCheck } = await import('../services/advertising/ads-sync-integrity.service.js')
+          const integrity = await runSyncIntegrityCheck()
+          adsIntegrity = {
+            severity: integrity.severity,
+            findings: integrity.findings.map((f) => ({ code: f.code, severity: f.severity, message: f.message, action: f.action })),
+          }
+        } catch { adsIntegrity = undefined }
       } catch {
         alerts = undefined
       }
@@ -73,6 +83,10 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
         timestamp: new Date().toISOString(),
         // AS.2-lite — non-zero numbers here mean "open the sync-health data".
         ...(alerts ? { alerts } : {}),
+        // AX2.9 — the Amazon ads spine self-reports. severity 'OK' with no
+        // findings is the steady state; anything else names the problem AND the
+        // next step, so this never needs a daily manual check.
+        ...(adsIntegrity ? { adsIntegrity } : {}),
         services: {
           database: 'connected',
           redis: redisConnected

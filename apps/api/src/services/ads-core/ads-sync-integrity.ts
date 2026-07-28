@@ -1,0 +1,143 @@
+/**
+ * AX2.9 — does the Amazon ads spine still work? Answered automatically.
+ *
+ * Every fix in the AX2 series left behind a fact that needs to STAY true:
+ * dead letters stopped, orphans get marked instead of retried forever, the
+ * settings sync keeps stamping read-freshness, AMS keeps ingesting, writes keep
+ * landing. Checking those by hand every morning is exactly the maintenance
+ * burden the work was supposed to remove — so each one is a signal here, and
+ * silence means healthy.
+ *
+ * Deliberately REPORT-ONLY. The anomaly guard halts automation on a spend
+ * runaway because money is burning; a stalled sync is not that, and halting on
+ * it would turn a data-freshness blip into an outage. These surface instead.
+ *
+ * Pure: takes a snapshot, returns findings. Unit-tested.
+ */
+
+export type IntegritySeverity = 'OK' | 'WARN' | 'CRITICAL'
+
+export interface IntegritySnapshot {
+  /** AD_* queue rows that dead-lettered in the last hour. */
+  deadLettersLastHour: number
+  /** AD_* rows dead-lettered in the last 24h. */
+  deadLetters24h: number
+  /** AdTargets currently marked orphaned (Amazon no longer has them). */
+  orphanedTargets: number
+  /** Orphans newly marked in the last 24h — a rising count is drift, a flat one is history. */
+  orphanedLast24h: number
+  /** Minutes since the settings sync last verified ANY campaign against Amazon. */
+  minutesSinceSettingsSync: number | null
+  /** Minutes since the newest AMS hourly row was ingested. */
+  minutesSinceAmsIngest: number | null
+  /** Campaigns whose last write to Amazon failed. */
+  campaignsFailedWrite: number
+  /** Campaigns in a market with no writable production connection. */
+  campaignsInUnwritableMarket: number
+}
+
+export interface IntegrityFinding {
+  code: string
+  severity: 'WARN' | 'CRITICAL'
+  message: string
+  /** What to do. Empty when the system self-heals and this is informational. */
+  action: string
+}
+
+export interface IntegrityReport {
+  severity: IntegritySeverity
+  findings: IntegrityFinding[]
+  snapshot: IntegritySnapshot
+}
+
+/** Thresholds are generous — this must not cry wolf, or it becomes noise to ignore. */
+export const INTEGRITY_THRESHOLDS = {
+  /** The settings sync runs every 20 min; 3 missed passes is a real stall. */
+  settingsSyncStaleMinutes: 70,
+  /**
+   * AMS only sends when there is traffic. A small account genuinely has hours
+   * with zero impressions overnight, so a 3h threshold fired most nights —
+   * and a check that cries wolf nightly is one you learn to ignore, which is
+   * the exact maintenance burden this file exists to remove. 8h still catches
+   * a real multi-day stall by the next morning without firing on a quiet night.
+   */
+  amsStaleMinutes: 480,
+  /** Post-AX2.0 the steady state is zero. Any new one is signal. */
+  deadLettersLastHour: 0,
+}
+
+export function evaluateIntegrity(s: IntegritySnapshot): IntegrityReport {
+  const findings: IntegrityFinding[] = []
+
+  // The AX2.0 regression test. Before that fix this ran at ~23/day forever.
+  if (s.deadLettersLastHour > INTEGRITY_THRESHOLDS.deadLettersLastHour) {
+    findings.push({
+      code: 'ADS_DEAD_LETTERS_RISING',
+      severity: 'CRITICAL',
+      message: `${s.deadLettersLastHour} Amazon ad write(s) dead-lettered in the last hour (${s.deadLetters24h} in 24h).`,
+      action: 'Check /api/advertising/… queue errors. If they are entityNotFoundError the orphan guard should have caught them — that guard has regressed.',
+    })
+  }
+
+  // Orphans are expected to exist (Amazon deletes keywords); they are only a
+  // problem if they keep APPEARING, which means something upstream is deleting
+  // entities we still think we own.
+  if (s.orphanedLast24h > 0) {
+    findings.push({
+      code: 'ADS_ORPHANS_APPEARING',
+      severity: 'WARN',
+      message: `${s.orphanedLast24h} ad target(s) were newly orphaned in the last 24h (${s.orphanedTargets} total).`,
+      action: 'Normal after deleting keywords on Amazon. Investigate only if it keeps rising with no deletions on your side.',
+    })
+  }
+
+  if (s.minutesSinceSettingsSync == null) {
+    findings.push({
+      code: 'ADS_SETTINGS_SYNC_NEVER',
+      severity: 'CRITICAL',
+      message: 'No campaign has ever been verified against Amazon.',
+      action: 'The 20-minute settings sync is not running — check NEXUS_ENABLE_AMAZON_ADS_CRON and the ads-campaign-settings-sync CronRun rows.',
+    })
+  } else if (s.minutesSinceSettingsSync > INTEGRITY_THRESHOLDS.settingsSyncStaleMinutes) {
+    findings.push({
+      code: 'ADS_SETTINGS_SYNC_STALE',
+      severity: 'CRITICAL',
+      message: `The settings sync last verified a campaign ${s.minutesSinceSettingsSync} minutes ago (expected every 20).`,
+      action: 'The console is showing stale Amazon state. Check the ads-campaign-settings-sync cron.',
+    })
+  }
+
+  if (s.minutesSinceAmsIngest != null && s.minutesSinceAmsIngest > INTEGRITY_THRESHOLDS.amsStaleMinutes) {
+    findings.push({
+      code: 'AMS_INGEST_STALLED',
+      severity: 'WARN',
+      message: `No Marketing Stream data ingested for ${Math.round(s.minutesSinceAmsIngest / 60)}h.`,
+      action: 'Longer than a quiet overnight. Intraday figures are stale — check the AMS subscription and the SQS→Lambda forwarder.',
+    })
+  }
+
+  if (s.campaignsFailedWrite > 0) {
+    findings.push({
+      code: 'ADS_WRITES_FAILING',
+      severity: 'WARN',
+      message: `${s.campaignsFailedWrite} campaign(s) have a FAILED last write to Amazon.`,
+      action: 'The auto-reconcile sweep retries transient failures. A count that persists across days is a permanent rejection needing attention.',
+    })
+  }
+
+  if (s.campaignsInUnwritableMarket > 0) {
+    findings.push({
+      code: 'ADS_CAMPAIGNS_IN_UNWRITABLE_MARKET',
+      severity: 'WARN',
+      message: `${s.campaignsInUnwritableMarket} campaign(s) live in a marketplace with no writable production connection — edits to them stay local.`,
+      action: 'Either graduate that marketplace’s Amazon Ads connection to production, or stop editing those campaigns.',
+    })
+  }
+
+  const severity: IntegritySeverity =
+    findings.some((f) => f.severity === 'CRITICAL') ? 'CRITICAL'
+    : findings.length ? 'WARN'
+    : 'OK'
+
+  return { severity, findings, snapshot: s }
+}
