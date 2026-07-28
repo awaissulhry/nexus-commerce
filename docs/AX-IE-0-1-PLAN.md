@@ -163,7 +163,8 @@ The whole phase is rollback-safe because nothing in it writes to Gen A and nothi
 
 `advertising.routes.ts:4074`: `isAuto = /\bauto|close match|loose match|substitute|complement/i.test(name)`.
 
-**Measured impact: 26 of 196 campaigns (13%) currently export as `auto` on name alone.**
+**Measured impact: 26 of 196 campaigns export as `auto` on name alone.** (Graded against
+Amazon's real values after the fix shipped: the regex was **wrong on 12 of 176** — see §5.)
 
 **The audit says "read the real field." There is no real field:**
 
@@ -247,10 +248,21 @@ Source is authoritative; these are the disagreements.
 
 ### Blocks AX-IE.0
 
-| | Item | How to close |
-|---|---|---|
-| **B1** | Does v3 `POST /sp/campaigns/list` return `targetingType` for this account? | **One read-only live probe** against the IT production profile. `listCampaignsV3` already exists — log the raw response. Blocks §3.2 only. |
-| **B2** | Do pre-2026-07-30 refresh tokens get 365 days from consent, or from the policy date? | *Soft block.* Changes the alert date, not the design. Proceed on the conservative floor and revise when known. |
+| | Item | How to close | Status |
+|---|---|---|---|
+| **B1** | Does v3 `POST /sp/campaigns/list` return `targetingType` for this account? | Made a **non-gate** instead: 0.d captures the field when present, stores null when absent, and exports blank either way — correct under both answers. The deployed sync then answered it empirically. | ✅ **YES.** First cycle after deploy populated **176 of 196** (140 MANUAL, 36 AUTO). The 20 nulls are all ARCHIVED — outside the sync's ENABLED+PAUSED scope, so they correctly export blank rather than a guess. |
+| **B2** | Do pre-2026-07-30 refresh tokens get 365 days from consent, or from the policy date? | *Soft block.* Changes the alert date, not the design. Proceeded on the conservative floor. | ⏳ Open. All 10 connections now read 292 days left, flagged `isEstimate`. Revise the window if Amazon clarifies. |
+
+**E4, now scored against ground truth.** With Amazon's real values in hand, the old
+name-regex can be graded rather than estimated: over the 176 campaigns Amazon reports,
+it was **wrong on 12 (6.8%)** — 11 genuinely-AUTO campaigns exported as `manual`, and 1
+genuinely-MANUAL exported as `auto`.
+
+The failure mode is worth recording: the misses are named `DE_Auto_Close`,
+`ES_Auto_Loose`, `FR_Auto_Close` and so on. `\bauto` requires a word boundary, and `_`
+is a word character — so `DE_Auto_Close` never matched, and every underscore-separated
+auto campaign in the account was silently exported as manual. A heuristic that reads as
+obviously-correct failed on the account's dominant naming convention.
 
 ### Blocks AX-IE.1
 
