@@ -229,33 +229,60 @@ export async function validateBulksheet(buf: Buffer): Promise<ValidationResult> 
   if (!sheet) return { ...empty, structuralError: 'No data sheet found. Expected a sheet of bulksheet rows alongside README/Dictionary.' }
 
   const meta = readMeta(sheets)
+  const issues: CellIssue[] = []
+  let truncated = false
   const result: ValidationResult = {
     ...empty, sheet: sheet.name, meta, headers: sheet.headers,
     ignoredSheets: collectIgnoredSheets(sheets, sheet),
   }
 
+  // AX-IE.2 — a real bulksheet has MORE THAN ONE data sheet.
+  //
+  // Amazon ships Portfolios, Sponsored Brands (two variants) and Sponsored
+  // Display alongside Sponsored Products. Validating only the best-scoring sheet
+  // silently dropped every row on the others — no error, no warning, nothing
+  // applied. That is the ZD.8 silent no-op again, and it got worse the moment
+  // Portfolios stopped reporting itself as ignored.
+  //
+  // A sheet counts as data if it has an Entity column; anything else is an
+  // analyst's scratch tab and is left alone.
+  const dataSheets = [sheet, ...sheets.filter((s) =>
+    s !== sheet
+    && !NON_DATA_SHEETS.has(normHeader(s.name))
+    && s.headers.some((h) => h && resolveColumn(h)?.header === 'Entity'))]
+
+  for (const active of dataSheets) {
+  const isPrimary = active === sheet
   // ── Structural, all-or-nothing ──────────────────────────────────────
   // Columns are matched by NAME (slug + alias table), never by position:
   // analysts reorder columns and insert scratch ones, and punishing that makes
   // the file hostile to work in. Extra columns are allowed and reported.
   const resolved = new Map<string, string>() // canonical header → the sheet's own header
   const unknown: string[] = []
-  for (const h of sheet.headers) {
+  for (const h of active.headers) {
     if (!h) continue
     if (h === ROW_KEY_HEADER || h === BASELINE_HEADER) { resolved.set(h, h); continue }
     if (ANNOTATION_HEADERS.has(normHeader(h))) continue
     const col = resolveColumn(h)
     if (col) { if (!resolved.has(col.header)) resolved.set(col.header, h) } else unknown.push(h)
   }
-  result.unknownColumns = unknown
+  // Reported from the primary sheet only: an extra sheet legitimately carries a
+  // different column set, and listing SD's columns as "unknown" on an SP file
+  // would be noise, not information.
+  if (isPrimary) result.unknownColumns = unknown
 
   if (!resolved.has('Entity')) {
-    return {
-      ...result,
-      structuralError: `This does not look like a bulksheet: no "Entity" column. Found: ${sheet.headers.filter(Boolean).slice(0, 12).join(', ') || '(none)'}. Download a fresh template and edit that.`,
+    // Only the primary sheet can condemn the file; an extra sheet without an
+    // Entity column was already filtered out above.
+    if (isPrimary) {
+      return {
+        ...result,
+        structuralError: `This does not look like a bulksheet: no "Entity" column. Found: ${active.headers.filter(Boolean).slice(0, 12).join(', ') || '(none)'}. Download a fresh template and edit that.`,
+      }
     }
+    continue
   }
-  result.missingColumns = HEADERS.filter((h) => !resolved.has(h))
+  if (isPrimary) result.missingColumns = HEADERS.filter((h) => !resolved.has(h))
 
   if (meta.schemaVersion && meta.schemaVersion !== BULKSHEET_SCHEMA_VERSION) {
     // A warning, not a rejection: columns are matched by name, so an older file
@@ -263,21 +290,19 @@ export async function validateBulksheet(buf: Buffer): Promise<ValidationResult> 
     result.schemaMismatch = `File was produced with schema ${meta.schemaVersion}; current is ${BULKSHEET_SCHEMA_VERSION}. Columns are matched by name, so this usually still works.`
   }
 
-  if (sheet.rows.length > MAX_ROWS) {
-    return { ...result, structuralError: `File has ${sheet.rows.length} rows; the limit is ${MAX_ROWS}. Split it by campaign type or date range.` }
+  if (active.rows.length > MAX_ROWS) {
+    return { ...result, structuralError: `File has ${active.rows.length} rows on "${active.name}"; the limit is ${MAX_ROWS}. Split it by campaign type or date range.` }
   }
 
   // ── Row validation, never fail fast ─────────────────────────────────
-  const headerIndex = new Map(sheet.headers.map((h, i) => [h, i]))
-  const issues: CellIssue[] = []
-  let truncated = false
+  const headerIndex = new Map(active.headers.map((h, i) => [h, i]))
   const addr = (own: string | undefined, rowNumber: number): string | undefined => {
     if (!own) return undefined
     const i = headerIndex.get(own)
-    return i == null ? undefined : `${sheet.name}!${columnLetter(i)}${rowNumber}`
+    return i == null ? undefined : `${active.name}!${columnLetter(i)}${rowNumber}`
   }
 
-  for (const r of sheet.rows) {
+  for (const r of active.rows) {
     // Accessor over CANONICAL headers, resolving whatever the sheet actually calls them.
     const get = (canonical: string): string => {
       const own = resolved.get(canonical)
@@ -288,7 +313,7 @@ export async function validateBulksheet(buf: Buffer): Promise<ValidationResult> 
     const rowIssues: CellIssue[] = verdict.issues.map((i) => {
       const own = i.column ? resolved.get(i.column) ?? i.column : undefined
       return {
-        sheet: sheet.name,
+        sheet: active.name,
         rowNumber: r.rowNumber,
         column: i.column,
         cellAddress: addr(own, r.rowNumber),
@@ -318,7 +343,7 @@ export async function validateBulksheet(buf: Buffer): Promise<ValidationResult> 
       : 'READY'
 
     result.rows.push({
-      sheet: sheet.name,
+      sheet: active.name,
       rowNumber: r.rowNumber,
       entity: verdict.entity,
       operation: verdict.operation,
@@ -328,6 +353,8 @@ export async function validateBulksheet(buf: Buffer): Promise<ValidationResult> 
       status,
       issues: rowIssues,
     })
+  }
+
   }
 
   const c = result.counts

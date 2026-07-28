@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest'
 import ExcelJS from 'exceljs'
 import { createWriter, escapeFormulaInjection, widthFor } from './spreadsheet-adapter.js'
-import { ignoredSheetReason } from './import-validate.js'
+import { ignoredSheetReason, validateBulksheet } from './import-validate.js'
 
 const ENTITY_VALUES = [
   'Campaign', 'Ad group', 'Product ad', 'Keyword', 'Negative keyword',
@@ -179,5 +179,43 @@ describe('AX-ZD.10 — the streaming writer produces the same workbook', () => {
     expect(widthFor('Entity', [])).toBeGreaterThanOrEqual('Entity'.length)
     expect(widthFor('E', ['x'.repeat(500)])).toBeLessThanOrEqual(60)
     expect(widthFor('E', ['abcdefgh'])).toBe(10) // value length + 2
+  })
+})
+
+describe('AX-IE.2 — every data sheet is read, not just the best-scoring one', () => {
+  const sheet = (name: string, cols: string[]) => ({ name, columns: cols.map((h) => ({ header: h, type: 'text' as const, width: 18 })) })
+
+  async function twoSheetWorkbook(): Promise<Buffer> {
+    const w = await createWriter()
+    w.addSheet(sheet('Sponsored Products Campaigns', ['Product', 'Entity', 'Operation', 'Campaign ID']))
+    await w.addRow('Sponsored Products Campaigns', ['Sponsored Products', 'Campaign', 'Update', '111'])
+    w.addSheet(sheet('Portfolios', ['Product', 'Entity', 'Operation', 'Portfolio ID', 'Portfolio name']))
+    await w.addRow('Portfolios', ['Portfolios', 'Portfolio', 'Update', '999', 'Moto Core'])
+    w.addSheet(sheet('Analyst scratch', ['Notes', 'Ideas']))
+    await w.addRow('Analyst scratch', ['try this', 'or that'])
+    return w.toBuffer()
+  }
+
+  it('stages rows from a second data sheet, not only the primary', async () => {
+    // The regression: Portfolios left NON_DATA_SHEETS but pickDataSheet returns
+    // ONE sheet, so its rows were neither read nor reported as ignored — the
+    // silent no-op, reintroduced through a different door.
+    const res = await validateBulksheet(await twoSheetWorkbook())
+    const entities = res.rows.map((r) => r.entity).sort()
+    expect(entities).toEqual(['Campaign', 'Portfolio'])
+  })
+
+  it('tags each staged row with the sheet it came from', async () => {
+    const res = await validateBulksheet(await twoSheetWorkbook())
+    expect(res.rows.find((r) => r.entity === 'Portfolio')!.sheet).toBe('Portfolios')
+    expect(res.rows.find((r) => r.entity === 'Campaign')!.sheet).toBe('Sponsored Products Campaigns')
+  })
+
+  it('ignores a sheet with no Entity column instead of trying to parse it', async () => {
+    // An analyst's scratch tab must not become rows, and must not be an error.
+    const res = await validateBulksheet(await twoSheetWorkbook())
+    expect(res.rows.some((r) => r.sheet === 'Analyst scratch')).toBe(false)
+    expect(res.structuralError).toBeUndefined()
+    expect(res.ok).toBe(true)
   })
 })
