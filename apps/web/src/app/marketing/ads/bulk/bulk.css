@@ -1,0 +1,369 @@
+/**
+ * AX-IE.8 — Bulk operations.
+ *
+ * Everything here is tokenised: no hard-coded colours, so the page follows the
+ * console's theme rather than pinning its own. Density matches the rest of the
+ * cockpit (Salesforce/Airtable-ish) — a bulk review screen is a working surface,
+ * not a marketing page, and an operator scanning 200 diffs wants rows close
+ * together.
+ *
+ * Edge insets are deliberately symmetric: the panel pads 20px on all four sides,
+ * and every card matches it, so nothing looks nudged.
+ */
+
+.bulk-wrap {
+  /* .h10-main already pads 26px 30px. Adding our own horizontal padding pushed
+     every card 24px inboard of the page header, which reads as a misaligned
+     column. Vertical only here; the page owns the side insets. */
+  padding: 0 0 32px;
+}
+
+.bulk-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bulk-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+/* ── cards ─────────────────────────────────────────────────────── */
+.bulk-card {
+  background: var(--ds-surface, #fff);
+  border: 1px solid var(--ds-border, #e2e8f0);
+  border-radius: 10px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bulk-card-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ds-text, #0f172a);
+}
+
+.bulk-card-p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ds-text-secondary, #475569);
+  /* Long enough to stay readable, wide enough not to leave the banner beneath it
+     looking like a different column. */
+  max-width: 104ch;
+}
+
+.bulk-hint {
+  font-size: 12px;
+  color: var(--ds-text-tertiary, #94a3b8);
+}
+
+.bulk-banner { margin-top: 2px; }
+
+.bulk-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.bulk-row--between { justify-content: space-between; }
+
+.bulk-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ds-text-secondary, #475569);
+}
+
+.bulk-select { width: auto; min-width: 168px; }
+
+.bulk-ok { color: var(--ds-success, #16a34a); }
+
+.bulk-spin { animation: bulk-spin 1s linear infinite; }
+@keyframes bulk-spin { to { transform: rotate(360deg); } }
+
+/* ── the staircase ─────────────────────────────────────────────── */
+.bulk-steps {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex-wrap: wrap;
+}
+
+.bulk-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ds-text-tertiary, #94a3b8);
+  padding: 5px 12px 5px 5px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.bulk-step span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--ds-surface-muted, #f1f5f9);
+  color: var(--ds-text-tertiary, #94a3b8);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.bulk-step.is-active {
+  color: var(--ds-text, #0f172a);
+  border-color: var(--ds-border, #e2e8f0);
+  background: var(--ds-surface, #fff);
+}
+.bulk-step.is-active span {
+  background: var(--ds-primary, #2563eb);
+  color: #fff;
+}
+.bulk-step.is-done span {
+  background: var(--ds-success-soft, #dcfce7);
+  color: var(--ds-success, #16a34a);
+}
+
+/* ── the numbers ───────────────────────────────────────────────── */
+.bulk-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 10px;
+}
+
+.bulk-metric {
+  background: var(--ds-surface, #fff);
+  border: 1px solid var(--ds-border, #e2e8f0);
+  border-radius: 9px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.bulk-metric-v {
+  font-size: 21px;
+  font-weight: 650;
+  line-height: 1.1;
+  color: var(--ds-text, #0f172a);
+  font-variant-numeric: tabular-nums;
+}
+
+.bulk-metric-l {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ds-text-tertiary, #94a3b8);
+}
+
+.bulk-metric.is-danger .bulk-metric-v { color: var(--ds-danger, #dc2626); }
+.bulk-metric.is-warn .bulk-metric-v { color: var(--ds-warning, #d97706); }
+
+/* ── budget delta: the single number people actually fear ──────── */
+.bulk-budget {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 13px 16px;
+  border-radius: 9px;
+  border: 1px solid var(--ds-border, #e2e8f0);
+  background: var(--ds-surface-muted, #f8fafc);
+}
+
+.bulk-budget-l {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ds-text-tertiary, #94a3b8);
+}
+
+.bulk-budget-v {
+  font-size: 16px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--ds-text, #0f172a);
+}
+.bulk-budget-v.is-up { color: var(--ds-danger, #dc2626); }
+.bulk-budget-v.is-down { color: var(--ds-success, #16a34a); }
+
+.bulk-budget-arrow { color: var(--ds-text-tertiary, #94a3b8); }
+
+.bulk-budget-d {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+.bulk-budget-d.is-up { color: var(--ds-danger, #dc2626); background: var(--ds-danger-soft, #fee2e2); }
+.bulk-budget-d.is-down { color: var(--ds-success, #16a34a); background: var(--ds-success-soft, #dcfce7); }
+
+.bulk-budget-n {
+  font-size: 12px;
+  color: var(--ds-text-secondary, #475569);
+  margin-left: auto;
+}
+
+/* ── diff table ────────────────────────────────────────────────── */
+.bulk-tablewrap {
+  overflow-x: auto;
+  border: 1px solid var(--ds-border, #e2e8f0);
+  border-radius: 8px;
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.bulk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  table-layout: auto;
+}
+
+.bulk-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--ds-surface-muted, #f8fafc);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ds-text-tertiary, #94a3b8);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ds-border, #e2e8f0);
+  white-space: nowrap;
+}
+
+.bulk-table tbody td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--ds-border-subtle, #f1f5f9);
+  vertical-align: top;
+  color: var(--ds-text, #0f172a);
+}
+
+.bulk-table tbody tr:hover { background: var(--ds-surface-hover, #f8fafc); }
+.bulk-table tbody tr.is-conflict { background: var(--ds-warning-soft, #fffbeb); }
+.bulk-table tbody tr.is-archive { background: var(--ds-danger-soft, #fef2f2); }
+
+.bulk-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bulk-num.is-danger { color: var(--ds-danger, #dc2626); font-weight: 600; }
+.bulk-when { white-space: nowrap; color: var(--ds-text-secondary, #475569); }
+
+/* Long campaign names must not push the diff column off screen. */
+.bulk-name {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bulk-diff {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 10px 3px 0;
+  font-variant-numeric: tabular-nums;
+}
+.bulk-diff-f {
+  font-size: 11px;
+  color: var(--ds-text-tertiary, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.bulk-diff-o { color: var(--ds-text-secondary, #475569); text-decoration: line-through; }
+.bulk-diff-n { color: var(--ds-text, #0f172a); font-weight: 600; }
+
+.bulk-note {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ds-text-secondary, #475569);
+  margin-top: 3px;
+  max-width: 72ch;
+}
+
+.bulk-pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: lowercase;
+  white-space: nowrap;
+  background: var(--ds-surface-muted, #f1f5f9);
+  color: var(--ds-text-secondary, #475569);
+}
+.bulk-pill.is-update, .bulk-pill.is-info { background: var(--ds-info-soft, #dbeafe); color: var(--ds-info, #1d4ed8); }
+.bulk-pill.is-create, .bulk-pill.is-ok { background: var(--ds-success-soft, #dcfce7); color: var(--ds-success, #16a34a); }
+.bulk-pill.is-archive, .bulk-pill.is-bad { background: var(--ds-danger-soft, #fee2e2); color: var(--ds-danger, #dc2626); }
+.bulk-pill.is-conflict, .bulk-pill.is-warn { background: var(--ds-warning-soft, #fef3c7); color: var(--ds-warning, #b45309); }
+
+/* ── warnings ──────────────────────────────────────────────────── */
+.bulk-warnlist {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ── apply bar ─────────────────────────────────────────────────── */
+.bulk-actions {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  /* The console's floating Ask-AI widget sits bottom-right and needs ~150px of
+     clearance, or it lands on top of the primary button — which here is the one
+     that applies live changes. Documented console gotcha. */
+  padding: 16px 172px 16px 20px;
+  border: 1px solid var(--ds-border, #e2e8f0);
+  border-radius: 10px;
+  background: var(--ds-surface, #fff);
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  box-shadow: 0 -2px 10px rgb(15 23 42 / 5%);
+}
+
+.bulk-actions-opts { display: flex; flex-direction: column; gap: 9px; }
+.bulk-actions-btns { display: flex; gap: 9px; align-items: center; }
+
+.bulk-opt {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12.5px;
+  color: var(--ds-text-secondary, #475569);
+}
+.bulk-opt--check { cursor: pointer; }
+.bulk-opt--check em { font-style: normal; color: var(--ds-text-tertiary, #94a3b8); }
+.bulk-opt input[type='checkbox'] { width: 15px; height: 15px; accent-color: var(--ds-danger, #dc2626); cursor: pointer; }
+
+.bulk-rowacts { display: flex; gap: 6px; white-space: nowrap; }
+
+@media (max-width: 720px) {
+  .bulk-actions { position: static; padding-right: 20px; }
+}

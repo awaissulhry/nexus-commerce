@@ -219,7 +219,14 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
       // Match type is IMMUTABLE on Amazon. If the file asks to change it, say so
       // here — otherwise the row reports "unchanged" and the operator believes
       // they made an edit that silently did nothing.
-      const askedMt = v['Match type']
+      //
+      // Positive keyword targets only, and never on an Archive. A NEGATIVE's
+      // match type is derived on export (the DB stores PHRASE / _PHRASE, the
+      // sheet says "Negative phrase"), so comparing the two shapes flagged every
+      // negative row — including rows being archived, where match type is not
+      // even in play. That is noise on the exact screen whose whole job is to be
+      // trusted.
+      const askedMt = !t.isNegative && op !== 'Archive' ? v['Match type'] : ''
       if (askedMt) {
         const wanted = parseVocabulary('matchType', askedMt)
         const held = parseVocabulary('matchType', t.expressionType ?? '')

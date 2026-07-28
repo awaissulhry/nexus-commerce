@@ -4725,6 +4725,24 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { importJobId: id, changeSetId: `import:${id}`, ...outcome }
   })
 
+  // ── GET /advertising/bulk/imports — AX-IE.8, history for the bulk page ──
+  fastify.get('/advertising/bulk/imports', async (request, reply) => {
+    const q = request.query as { limit?: string }
+    const take = Math.max(1, Math.min(100, Number(q.limit ?? 25)))
+    const jobs = await prisma.importJob.findMany({
+      where: { targetEntity: 'adsBulksheet' },
+      orderBy: { createdAt: 'desc' },
+      take,
+      select: {
+        id: true, filename: true, status: true, totalRows: true, successRows: true,
+        failedRows: true, skippedRows: true, errorSummary: true, createdBy: true,
+        createdAt: true, completedAt: true, planSummary: true, planComputedAt: true,
+      },
+    })
+    reply.header('Cache-Control', 'private, max-age=5')
+    return { items: jobs, count: jobs.length }
+  })
+
   // ── GET /advertising/bulk/import/:id/annotated — AX-IE.7 ──────────
   // The uploaded file handed back marked up: _status / _errors / _applied_at,
   // the offending CELL filled red with the message on it, and an Errors sheet
