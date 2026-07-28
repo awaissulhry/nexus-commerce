@@ -37,7 +37,7 @@ import { recordCronRun } from '../utils/cron-observability.js'
 import { evaluateAllRulesForTrigger } from '../services/automation-rule.service.js'
 import { microsToCents } from '../services/ads-core/metrics-math.js'
 import cron from 'node-cron'
-import { ruleWindowBounds } from '../services/ads-core/data-vintage.js'
+import { ruleWindowBounds } from '@nexus/shared/data-vintage'
 
 // Trigger thresholds — env-tunable for testing.
 const FBA_AGE_DAYS_LTE = Number(process.env.NEXUS_AD_FBA_AGE_DAYS_LTE ?? 30)

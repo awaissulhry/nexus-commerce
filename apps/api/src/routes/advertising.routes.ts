@@ -4285,7 +4285,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const perfDays = Math.max(1, Math.min(180, Number((request.query as { days?: string }).days ?? 30)))
     const perfSince = new Date(Date.now() - perfDays * 86400_000)
     const { AMS_DAILY_MARKER } = await import('../services/ads-core/ams-daily.js')
-    const vintageMod = await import('../services/ads-core/data-vintage.js')
+    const vintageMod = await import('@nexus/shared/data-vintage')
     const perfGrains: string[] = []
     const perfGrainRows = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['entityType'],
@@ -4790,7 +4790,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/advertising/data-vintage', async (request, reply) => {
     const q = request.query as { days?: string; from?: string; to?: string; date?: string }
     const { vintageOf, describeWindow, attributionWindowDays, VINTAGE_STATES } =
-      await import('../services/ads-core/data-vintage.js')
+      await import('@nexus/shared/data-vintage')
     const now = new Date()
 
     // A single date, for badging one row.
