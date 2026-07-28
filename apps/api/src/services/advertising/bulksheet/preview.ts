@@ -146,44 +146,73 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
   const targetIds = new Set<string>()
   const pfIds = new Set<string>()
   const adIds = new Set<string>()
+  // The LOCAL ids carried in _row_key, collected per entity kind.
+  //
+  // Without these the row-key fallback below is unreachable, because a row can
+  // only be looked up by its local id if that record was already loaded — and
+  // every load was keyed on the external id column alone. So the exact rows the
+  // row key exists to rescue (id column blank, or rewritten by Excel as
+  // 2.04055E+14) were never in the map to be found. Proved on prod: a campaign
+  // negative keyword with a valid _row_key and no external id previewed as
+  // UNRESOLVED, and all 20 in this account are that shape.
+  const campLocal = new Set<string>()
+  const agLocal = new Set<string>()
+  const targetLocal = new Set<string>()
+  const pfLocal = new Set<string>()
+  const adLocal = new Set<string>()
+  const localFrom = (p: StagedParsed): string | null => {
+    if (!p.entity || !rowKeyMatchesEntity(p.rowKey, p.entity)) return null
+    return parseRowKey(p.rowKey)?.localId ?? null
+  }
   for (const { p } of actionable) {
     const v = p.values
-    if (p.entity === 'Campaign' || p.entity === 'Bidding adjustment') { if (v['Campaign ID']) campIds.add(v['Campaign ID']) }
-    else if (p.entity === 'Portfolio') { if (v['Portfolio ID']) pfIds.add(v['Portfolio ID']) }
-    else if (p.entity === 'Ad group') { if (v['Ad group ID']) agIds.add(v['Ad group ID']) }
-    else if (p.entity === 'Product ad') { if (v['Ad ID']) adIds.add(v['Ad ID']) }
+    const local = localFrom(p)
+    if (p.entity === 'Campaign' || p.entity === 'Bidding adjustment') { if (v['Campaign ID']) campIds.add(v['Campaign ID']); if (local) campLocal.add(local) }
+    else if (p.entity === 'Portfolio') { if (v['Portfolio ID']) pfIds.add(v['Portfolio ID']); if (local) pfLocal.add(local) }
+    else if (p.entity === 'Ad group') { if (v['Ad group ID']) agIds.add(v['Ad group ID']); if (local) agLocal.add(local) }
+    else if (p.entity === 'Product ad') { if (v['Ad ID']) adIds.add(v['Ad ID']); if (local) adLocal.add(local) }
     else {
       const id = v['Keyword ID'] || v['Product Targeting ID']
       if (id) targetIds.add(id)
+      if (local) targetLocal.add(local)
     }
   }
 
+  /** Match on either key. Purely additive — anything the id column found, it still finds. */
+  const eitherKey = (col: string, ext: Set<string>, local: Set<string>): { OR: object[] } => ({
+    OR: [{ [col]: { in: [...ext] } }, { id: { in: [...local] } }],
+  })
+
   const [camps, ags, targets, portfolios, productAds] = await Promise.all([
-    campIds.size ? prisma.campaign.findMany({
-      where: { externalCampaignId: { in: [...campIds] } },
+    campIds.size || campLocal.size ? prisma.campaign.findMany({
+      where: eitherKey('externalCampaignId', campIds, campLocal),
       select: { id: true, externalCampaignId: true, name: true, status: true, dailyBudget: true, biddingStrategy: true, portfolioId: true },
     }) : Promise.resolve([]),
-    agIds.size ? prisma.adGroup.findMany({
-      where: { externalAdGroupId: { in: [...agIds] } },
+    agIds.size || agLocal.size ? prisma.adGroup.findMany({
+      where: eitherKey('externalAdGroupId', agIds, agLocal),
       select: { id: true, externalAdGroupId: true, name: true, status: true, defaultBidCents: true },
     }) : Promise.resolve([]),
-    targetIds.size ? prisma.adTarget.findMany({
-      where: { externalTargetId: { in: [...targetIds] } },
+    targetIds.size || targetLocal.size ? prisma.adTarget.findMany({
+      where: eitherKey('externalTargetId', targetIds, targetLocal),
       select: { id: true, externalTargetId: true, expressionValue: true, expressionType: true, status: true, bidCents: true, isNegative: true },
     }) : Promise.resolve([]),
-    pfIds.size ? prisma.amazonAdsPortfolio.findMany({
-      where: { externalPortfolioId: { in: [...pfIds] } },
+    pfIds.size || pfLocal.size ? prisma.amazonAdsPortfolio.findMany({
+      where: eitherKey('externalPortfolioId', pfIds, pfLocal),
       select: { id: true, externalPortfolioId: true, name: true, budgetAmount: true, budgetCurrencyCode: true, budgetPolicy: true, startDate: true, endDate: true },
     }) : Promise.resolve([]),
-    adIds.size ? prisma.adProductAd.findMany({
-      where: { externalAdId: { in: [...adIds] } },
+    adIds.size || adLocal.size ? prisma.adProductAd.findMany({
+      where: eitherKey('externalAdId', adIds, adLocal),
       select: { id: true, externalAdId: true, sku: true, asin: true, status: true },
     }) : Promise.resolve([]),
   ])
-  const campBy = new Map(camps.map((c) => [c.externalCampaignId!, c]))
-  const agBy = new Map(ags.map((a) => [a.externalAdGroupId!, a]))
-  const tgtBy = new Map(targets.map((t) => [t.externalTargetId!, t]))
-  const adBy = new Map(productAds.map((a) => [a.externalAdId!, a]))
+  // Keyed by external id, so records loaded by local id alone (which have none)
+  // are filtered out rather than entered under a null key.
+  const byExternal = <T, K extends keyof T>(list: T[], key: K): Map<string, T> =>
+    new Map(list.filter((r) => r[key] != null).map((r) => [String(r[key]), r]))
+  const campBy = byExternal(camps, 'externalCampaignId')
+  const agBy = byExternal(ags, 'externalAdGroupId')
+  const tgtBy = byExternal(targets, 'externalTargetId')
+  const adBy = byExternal(productAds, 'externalAdId')
 
   // AX-ZD.9 — resolve by _row_key first, ID column second.
   //
@@ -193,6 +222,11 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
   // one as a number writes back `2.04055E+14`, after which the row cannot be
   // matched and silently previews as UNRESOLVED. The local id inside the row key
   // survives all of that, because nothing in Excel has a reason to touch it.
+  //
+  // These maps only mean something because the queries above now also SELECT by
+  // local id. Until they did, this fallback could not fire in precisely the case
+  // it was written for: the record had to be found by external id before its
+  // local id could be looked up, so a broken id column defeated both paths.
   const campById = new Map(camps.map((c) => [c.id, c]))
   const agById = new Map(ags.map((a) => [a.id, a]))
   const tgtById = new Map(targets.map((t) => [t.id, t]))
