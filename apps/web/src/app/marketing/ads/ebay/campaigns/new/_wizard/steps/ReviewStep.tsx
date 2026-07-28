@@ -7,12 +7,12 @@
  * over-break-even rates (X4: no window.prompt), readiness score, rule packs,
  * launch → per-item results + "what happens next" timeline.
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2 } from 'lucide-react'
 import { money, pct } from '../../../../../campaigns/_grid/format'
 import { H10Select } from '../../../../../campaigns/FilterDropdown'
-import { postEbayAds } from '../../../../_lib'
+import { postEbayAds, getEbayAds } from '../../../../_lib'
 import { OverrideReasonModal } from '../../../../_modals/OverrideReasonModal'
 import { effRate, includedListings, type CampaignPlan, type PlanListing } from '../plan'
 import { clearDraft } from '../draft'
@@ -41,6 +41,16 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
   const [error, setError] = useState<string | null>(null)
   const [launched, setLaunched] = useState<LaunchOut | null>(null)
   const [overrideOpen, setOverrideOpen] = useState(false)
+  // Pre-flight: an account below Above Standard fails EVERY ads write with
+  // 409/35077. Ask eBay up front rather than after a full wizard + a 500.
+  const [health, setHealth] = useState<{ blocked: boolean; message: string | null } | null>(null)
+  useEffect(() => {
+    let live = true
+    void getEbayAds<{ blocked: boolean; message: string | null }>(`/account-health?marketplace=${plan.marketplace}`)
+      .then((h) => { if (live) setHealth(h) })
+      .catch(() => { /* never block the wizard on the pre-flight itself */ })
+    return () => { live = false }
+  }, [plan.marketplace])
 
   const isGen = plan.type === 'general'
   const isRules = isGen && plan.targetingMode === 'rules'
@@ -55,7 +65,8 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
   const todayISO = new Date().toISOString().slice(0, 10)
 
   // ── gaps (blocking) + advisories (acknowledge) ─────────────────────────
-  const gaps: Array<{ text: string; step: string }> = []
+  const gaps: Array<{ text: string; step?: string }> = []
+  if (health?.blocked && health.message) gaps.push({ text: health.message })
   if (!plan.name.trim()) gaps.push({ text: 'Campaign name is required', step: 'setup' })
   if (plan.startDate && plan.startDate < todayISO) gaps.push({ text: 'Start date is in the past — clear it (launch now) or pick a future date', step: 'setup' })
   if (plan.startDate && plan.endDate && plan.endDate <= plan.startDate) gaps.push({ text: 'End date must be after the start date', step: 'setup' })
@@ -254,7 +265,7 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
       <div className="h10-cd-card pad">
         {gaps.length > 0 && (
           <ul className="eb-results" style={{ marginBottom: advisories.length ? 8 : 0 }}>
-            {gaps.map((g) => <li key={g.text} className="err">{g.text} — <button type="button" className="h10-am-link" onClick={() => goTo(g.step)}>fix</button></li>)}
+            {gaps.map((g) => <li key={g.text} className="err">{g.text}{g.step && <> — <button type="button" className="h10-am-link" onClick={() => goTo(g.step!)}>fix</button></>}</li>)}
           </ul>
         )}
         {advisories.length > 0 && (

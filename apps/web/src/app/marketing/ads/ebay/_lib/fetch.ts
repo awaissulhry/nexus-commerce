@@ -40,6 +40,23 @@ export function useEbayAdsFetch<T>(path: string, market: string, window: EbayAds
   return { data, error, loading, reload: load }
 }
 
+/**
+ * Pick the informative half of an error body.
+ *
+ * Fastify's default error envelope is
+ * `{ statusCode, error: "Internal Server Error", message: "<the real cause>" }`
+ * — so preferring `error` showed operators the useless half of every failure.
+ * Our own ads handler puts the real sentence in `error`; this prefers whichever
+ * is not a bare HTTP status title.
+ */
+const GENERIC_TITLE = /^(internal server error|bad request|unauthorized|forbidden|not found|conflict|unprocessable entity|too many requests)$/i
+export function errorTextFrom(body: { error?: string; message?: string }, status: number): string {
+  const { error, message } = body
+  if (error && !GENERIC_TITLE.test(error.trim())) return error
+  if (message && !GENERIC_TITLE.test(message.trim())) return message
+  return error ?? message ?? `HTTP ${status}`
+}
+
 export async function postEbayAds<T>(path: string, body: unknown, method: 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'POST'): Promise<T> {
   const r = await fetch(`${getBackendUrl()}/api/ebay-ads${path}`, {
     method,
@@ -48,13 +65,13 @@ export async function postEbayAds<T>(path: string, body: unknown, method: 'POST'
     body: JSON.stringify(body),
   })
   const j = (await r.json().catch(() => ({}))) as T & { error?: string; message?: string }
-  if (!r.ok) throw new Error(j.error ?? j.message ?? `HTTP ${r.status}`)
+  if (!r.ok) throw new Error(errorTextFrom(j, r.status))
   return j
 }
 
 export async function getEbayAds<T>(path: string): Promise<T> {
   const r = await fetch(`${getBackendUrl()}/api/ebay-ads${path}`, { credentials: 'include' })
   const j = (await r.json().catch(() => ({}))) as T & { error?: string; message?: string }
-  if (!r.ok) throw new Error(j.error ?? j.message ?? `HTTP ${r.status}`)
+  if (!r.ok) throw new Error(errorTextFrom(j, r.status))
   return j
 }

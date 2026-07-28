@@ -18,7 +18,9 @@ import { exportAdsCsv, parseAdsOpsCsv, diffOps, applyOps } from '../services/mar
 import { getLiveEbayItemIds } from '../services/marketing/ebay-listing-index.service.js'
 import { rebuildEbayListingEconomics } from '../services/ads-core/ebay-margin.js'
 import { BUILDER_TEMPLATES, buildListingPlan, mineKeywordSeeds, suggestBudgetLocal, suggestName } from '../services/marketing/ebay-ads-builder.service.js'
-import { getActiveEbayAdsAuth, suggestMaxCpcApi, suggestKeywordsApi, suggestBidsApi, suggestBudgetApi } from '../services/marketing/ebay-ads-api.service.js'
+import { getActiveEbayAdsAuth, suggestMaxCpcApi, suggestKeywordsApi, suggestBidsApi, suggestBudgetApi, fetchAdvertisingEligibility, EbayAdsQuotaError } from '../services/marketing/ebay-ads-api.service.js'
+import { EbayApiError } from '../services/ads-core/ebay-error.js'
+import { logger } from '../utils/logger.js'
 
 const SHORT_BY_MKT: Record<string, string> = { EBAY_IT: 'IT', EBAY_DE: 'DE', EBAY_FR: 'FR', EBAY_ES: 'ES', EBAY_GB: 'UK' }
 
@@ -70,7 +72,48 @@ async function freshness() {
   }
 }
 
+/** Account-health cache: eligibility changes on eBay's timescale, not ours. */
+const ACCOUNT_HEALTH_TTL_MS = 5 * 60_000
+const accountHealthCache = new Map<string, { at: number; value: Record<string, unknown> }>()
+
 const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
+  /**
+   * Nothing on this surface may reach an operator as "Internal Server Error".
+   *
+   * A blocked eBay account answers every ads call with 409/35077 and a clear
+   * sentence; before this handler that sentence was thrown as a bare Error and
+   * rendered as a generic 500, so the campaign builder told the operator
+   * nothing at all. Scoped to this plugin, so the app-wide behaviour of every
+   * other route is untouched.
+   */
+  app.setErrorHandler((err, req, reply) => {
+    if (err instanceof EbayApiError) {
+      logger.warn(`[ebay-ads] ${req.method} ${req.url} → eBay ${err.ebayStatus} ${err.errorIds.join(',') || '-'} (${err.kind})`)
+      return reply.code(err.httpStatus).send({
+        error: err.message,
+        source: 'ebay',
+        kind: err.kind,
+        errorIds: err.errorIds,
+        terminal: err.terminal,
+      })
+    }
+    if (err instanceof EbayAdsQuotaError) {
+      return reply.code(429).send({ error: err.message, source: 'quota', kind: 'RATE_LIMITED', terminal: false })
+    }
+    // Fastify's own validation / 4xx errors keep their status and message.
+    const e = err as { statusCode?: unknown; stack?: string; message?: string }
+    const status = typeof e.statusCode === 'number' && e.statusCode >= 400 && e.statusCode < 500 ? e.statusCode : 500
+    if (status === 500) logger.error(`[ebay-ads] ${req.method} ${req.url} → ${e.stack ?? e.message}`)
+    // Even a genuine bug reports its message rather than a blank 500 — this
+    // surface is operator-facing and an opaque 500 costs a debugging session.
+    return reply.code(status).send({
+      error: e.message || 'Unexpected error',
+      source: status === 500 ? 'nexus' : 'request',
+      kind: status === 500 ? 'INTERNAL' : 'BAD_REQUEST',
+      terminal: status !== 500,
+    })
+  })
+
   // ── Summary KPIs (+ vs-previous-period deltas) ─────────────────────────
   app.get<{ Querystring: WindowQuery }>('/ebay-ads/summary', async (req) => {
     const r = resolveRange(req.query)
@@ -903,6 +946,49 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       }
     } catch { /* eBay suggest_budget is best-effort — the local formula always answers */ }
     return { ...local, ebaySuggestedCents }
+  })
+
+  /**
+   * Pre-flight: can this account run ads at all right now?
+   *
+   * Exists because an account below Above Standard fails EVERY ads write with
+   * 409/35077 — and the only way an operator used to discover that was to
+   * build an entire campaign and hit a 500 on Launch. Cached briefly so the
+   * wizard can poll it freely without spending quota per keystroke.
+   */
+  app.get<{ Querystring: { marketplace?: string } }>('/ebay-ads/account-health', async (req) => {
+    const marketplace = req.query.marketplace ?? 'EBAY_IT'
+    const cached = accountHealthCache.get(marketplace)
+    if (cached && Date.now() - cached.at < ACCOUNT_HEALTH_TTL_MS) return cached.value
+
+    const auth = await getActiveEbayAdsAuth()
+    if (!auth) {
+      const value = { ok: false, blocked: true, reason: 'NO_CONNECTION', programs: [] as unknown[], message: 'No active eBay connection — reconnect eBay in Settings → Channels.' }
+      accountHealthCache.set(marketplace, { at: Date.now(), value })
+      return value
+    }
+
+    const programs = await fetchAdvertisingEligibility(auth.token, marketplace)
+    const standard = programs.find((p) => p.programType === 'PROMOTED_LISTINGS_STANDARD')
+    const advanced = programs.find((p) => p.programType === 'PROMOTED_LISTINGS_ADVANCED')
+    const anyEligible = programs.some((p) => p.status === 'ELIGIBLE')
+    const reason = standard?.reason ?? advanced?.reason ?? null
+
+    const value = {
+      ok: anyEligible,
+      blocked: !anyEligible,
+      reason,
+      programs,
+      message: anyEligible
+        ? null
+        : reason === 'NOT_IN_GOOD_STANDING'
+          ? 'eBay has suspended Promoted Listings for this account: your seller level is below Above Standard. '
+            + 'Every campaign, ad and rate change will be rejected until standing recovers, and eBay has already set existing campaigns to SYSTEM_PAUSED. '
+            + 'Fix this in Seller Hub → Performance → Seller level; nothing in Nexus can bypass it.'
+          : `eBay reports this account is not eligible for Promoted Listings${reason ? ` (${reason})` : ''}.`,
+    }
+    accountHealthCache.set(marketplace, { at: Date.now(), value })
+    return value
   })
 
   app.post<{ Body: {

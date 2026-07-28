@@ -21,6 +21,15 @@ import { EbayAuthService } from '../ebay-auth.service.js'
 import prisma from '../../db.js'
 import { QuotaLedger, MemoryQuotaStore, RedisQuotaStore, type QuotaStore } from '../ads-core/quota-ledger.js'
 import { defaultRateLimitBackoffMs } from '../channel-batch/rate-limit.js'
+import { EbayApiError, parseEbayErrors } from '../ads-core/ebay-error.js'
+
+export { EbayApiError } from '../ads-core/ebay-error.js'
+
+/** Build a classified error from a failed Response, preserving eBay's words. */
+async function ebayError(what: string, r: Response): Promise<EbayApiError> {
+  const body = await r.text().catch(() => '')
+  return new EbayApiError(what, r.status, parseEbayErrors(body), body)
+}
 
 const API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
 
@@ -98,7 +107,7 @@ async function reserveOne(kind: MarketingCallKind): Promise<void> {
 async function marketingFetch(
   path: string,
   token: string,
-  opts: { method?: 'GET' | 'POST'; body?: unknown; kind?: MarketingCallKind } = {},
+  opts: { method?: 'GET' | 'POST'; body?: unknown; kind?: MarketingCallKind; headers?: Record<string, string> } = {},
 ): Promise<Response> {
   const kind = opts.kind ?? 'read'
 
@@ -110,6 +119,7 @@ async function marketingFetch(
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
         Accept: 'application/json',
+        ...opts.headers,
       },
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     })
@@ -130,7 +140,7 @@ async function pagedGet<T>(pathBase: string, token: string, itemsKey: string, li
   for (let page = 0; page < hardCap; page++) {
     const sep = pathBase.includes('?') ? '&' : '?'
     const r = await marketingFetch(`${pathBase}${sep}limit=${limit}&offset=${offset}`, token)
-    if (!r.ok) throw new Error(`GET ${pathBase} → HTTP ${r.status}: ${(await r.text()).slice(0, 300)}`)
+    if (!r.ok) throw await ebayError(`GET ${pathBase}`, r)
     const body = (await r.json()) as Record<string, unknown>
     const items = (body[itemsKey] as T[] | undefined) ?? []
     out.push(...items)
@@ -143,6 +153,30 @@ async function pagedGet<T>(pathBase: string, token: string, itemsKey: string, li
     logger.error(`[E2][ebay-ads] TRUNCATED: ${pathBase} hit the ${hardCap}-page cap at ${out.length} rows — result is PARTIAL`)
   }
   return out
+}
+
+// ── Account-level advertising eligibility ───────────────────────────────────
+/**
+ * The purpose-built pre-flight eBay gives us. Cheap (HTTP 200 even when the
+ * answer is "no") and, unlike every ads endpoint, it explains WHY.
+ *
+ * Verified live 2026-07-28 — an account below Above Standard answers:
+ *   {"advertisingEligibility":[{"programType":"PROMOTED_LISTINGS_STANDARD",
+ *     "status":"INELIGIBLE","reason":"NOT_IN_GOOD_STANDING"}, …]}
+ *
+ * This is the Sell **Account** API, a different quota pool from Marketing
+ * "Ads". We still meter it as a read so the client keeps ONE chokepoint;
+ * over-counting by one call is the safe direction.
+ */
+export interface EbayEligibilityEntry { programType: string; status: string; reason?: string }
+
+export async function fetchAdvertisingEligibility(token: string, marketplaceId = 'EBAY_IT'): Promise<EbayEligibilityEntry[]> {
+  const r = await marketingFetch('/sell/account/v1/advertising_eligibility', token, {
+    headers: { 'X-EBAY-C-MARKETPLACE-ID': marketplaceId },
+  })
+  if (!r.ok) throw await ebayError('getAdvertisingEligibility', r)
+  const body = (await r.json()) as { advertisingEligibility?: EbayEligibilityEntry[] }
+  return body.advertisingEligibility ?? []
 }
 
 // ── Entity DTOs (defensive — only fields we read) ───────────────────────────
@@ -236,7 +270,7 @@ export interface EbayReportTaskDTO { reportTaskId: string; reportTaskStatus?: st
 
 export async function getReportTask(token: string, taskId: string): Promise<EbayReportTaskDTO> {
   const r = await marketingFetch(`/sell/marketing/v1/ad_report_task/${taskId}`, token, { kind: 'report' })
-  if (!r.ok) throw new Error(`getReportTask ${taskId} → HTTP ${r.status}: ${(await r.text()).slice(0, 300)}`)
+  if (!r.ok) throw await ebayError(`getReportTask ${taskId}`, r)
   return (await r.json()) as EbayReportTaskDTO
 }
 
@@ -247,7 +281,7 @@ export async function downloadReport(token: string, reportHref: string): Promise
   const url = (reportHref.startsWith('http') ? reportHref : `${API_BASE}${reportHref}`).replace(/^http:\/\//, 'https://')
   await reserveOne('report')
   const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-  if (!r.ok) throw new Error(`downloadReport → HTTP ${r.status}`)
+  if (!r.ok) throw await ebayError('downloadReport', r)
   return Buffer.from(await r.arrayBuffer())
 }
 
@@ -274,7 +308,9 @@ function idFromLocation(r: Response, what: string): string {
 
 async function expectOk(r: Response, what: string): Promise<Response> {
   if (r.status >= 200 && r.status < 300) return r
-  throw new Error(`${what} → HTTP ${r.status}: ${(await r.text()).slice(0, 400)}`)
+  // Classified, not flattened: a 409/35077 must reach the operator as "eBay is
+  // blocking this account", never as "Internal Server Error". (EA-500 fix)
+  throw await ebayError(what, r)
 }
 
 export interface CreateCampaignPayload {
