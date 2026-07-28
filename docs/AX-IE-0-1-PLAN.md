@@ -17,7 +17,8 @@ Evidence harnesses (read-only, untracked): `apps/api/scripts/_axie1-model-census
 | **AX-IE.3** exporter rewrite | ◐ **mostly done** — all 9 SP entity types, Portfolios, README, `_meta`, `_row_key`, `_baseline`, and the SP sheet now matches Amazon's **real 53-column layout column-for-column** after the owner supplied two genuine bulksheets (see `docs/AMAZON-BULKSHEET-SCHEMA.md`). Remaining: emit the **SB / SB-multi / SD sheets** — no longer blocked, their column sets are now known |
 | **AX-IE.4** importer | ✅ shipped 2026-07-28 — `POST /advertising/bulk/upload` takes a real file, streams it, validates every row, stages into `ImportJob`/`ImportJobRow`, writes nothing. 202 + poll |
 | **AX-IE.5** dry-run preview | ✅ shipped 2026-07-28 — field-level diff, blast radius, per-field conflict detection, `planToken` handshake. `POST /advertising/bulk/import/:id/preview` |
-| AX-IE.6+ | not started — next is apply + rollback |
+| **AX-IE.6** apply + rollback | ✅ shipped 2026-07-28 — planToken handshake, writes only through `ads-write-gate`, whole-upload rollback via `rollbackByChangeSetId`. Verified: 9 applied → 9 reversed → 0 failed |
+| AX-IE.7+ | not started — next is the annotated error workbook |
 
 ### Measured, and what it changed
 
@@ -42,6 +43,17 @@ both only showed up end to end:
 
 The third was found because the settings-sync cron genuinely moved `Bidding strategy`
 between an export and its preview — real drift, correctly detected, wrong response.
+
+**AX-IE.6 design notes.** `AdvertisingActionLog.executionId` is an indexed column with
+**no foreign key** — rule executions were simply its first user — so it takes any
+change-set id. That let apply reuse the existing `reverseOne` inversion logic instead of
+building a second rollback path; `rollbackByChangeSetId` is a sibling of
+`rollbackByExecutionId`, not a replacement. Idempotency uses `ImportJobRow.status`
+rather than the spec's proposed `import_operation` table — the staging row already
+records what happened, and a second table would be a second truth.
+
+Reversal runs **newest-first** so a field written twice inside one change set lands back
+on its original value rather than an intermediate one.
 
 The rest of this document is the original .0/.1 plan, kept as the evidence record,
 with corrections marked inline where implementation proved something different.
