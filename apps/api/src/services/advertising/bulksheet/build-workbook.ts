@@ -25,7 +25,7 @@ import {
   META_HEADERS, ROW_KEY_HEADER, BASELINE_HEADER, computeBaseline, BULKSHEET_SCHEMA_VERSION, toAmazonDate,
   type BulksheetColumn,
 } from '@nexus/shared/ads-bulksheet'
-import { createWriter, type CellValue, type SheetColumnSpec } from './spreadsheet-adapter.js'
+import { createWriter, widthFor, type CellValue, type SheetColumnSpec } from './spreadsheet-adapter.js'
 
 export const SP_SHEET = 'Sponsored Products Campaigns'
 export const PORTFOLIOS_SHEET = 'Portfolios'
@@ -167,9 +167,24 @@ export async function buildBulksheetWorkbook(input: BuildInput): Promise<BuildRe
   }
 
   // 2 ── the editable grid
+  // AX-ZD.10 — widths are computed from the data BEFORE the sheet is opened,
+  // because a streamed sheet cannot be resized once its rows are flushed. The
+  // rows are already an array here, so this pre-pass costs nothing and keeps the
+  // data-driven sizing the in-memory writer used to do at finalise.
+  //
+  // `rows` is an Iterable, not an array, precisely so a future caller can stream
+  // it — and a pre-pass would CONSUME a generator, leaving nothing to write. So
+  // sizing samples the data only when it is safely re-iterable; otherwise the
+  // header alone sets the width. Losing a little column polish is the right
+  // trade against silently exporting an empty sheet.
+  const sizingRows: BulksheetRow[] | null = Array.isArray(rows) ? rows : null
+  const specsWithWidth = columnSpecs().map((c) => ({
+    ...c,
+    width: widthFor(c.header, sizingRows ? sizingRows.map((r) => r[c.header]) : []),
+  }))
   writer.addSheet({
     name: SP_SHEET,
-    columns: columnSpecs(),
+    columns: specsWithWidth,
     // Header row plus Product/Entity/Operation, so scrolling right never orphans
     // a row. Numbers only supports freezing leading rows/columns, so keep it small.
     freeze: { rows: 1, columns: 3 },
@@ -187,7 +202,14 @@ export async function buildBulksheetWorkbook(input: BuildInput): Promise<BuildRe
   }
 
   // 3 ── portfolios
-  writer.addSheet({ name: PORTFOLIOS_SHEET, columns: PORTFOLIO_COLUMNS, freeze: { rows: 1, columns: 2 } })
+  writer.addSheet({
+    name: PORTFOLIOS_SHEET,
+    columns: PORTFOLIO_COLUMNS.map((c) => ({
+      ...c,
+      width: widthFor(c.header, Array.isArray(portfolios) ? portfolios.map((p) => p[c.header]) : []),
+    })),
+    freeze: { rows: 1, columns: 2 },
+  })
   let portfolioCount = 0
   for (const p of portfolios ?? []) {
     await writer.addRow(PORTFOLIOS_SHEET, PORTFOLIO_COLUMNS.map((c) => coerceCellRaw(c.type, p[c.header])))

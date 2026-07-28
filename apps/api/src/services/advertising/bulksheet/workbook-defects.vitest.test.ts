@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import ExcelJS from 'exceljs'
-import { createWriter, escapeFormulaInjection } from './spreadsheet-adapter.js'
+import { createWriter, escapeFormulaInjection, widthFor } from './spreadsheet-adapter.js'
 import { ignoredSheetReason } from './import-validate.js'
 
 const ENTITY_VALUES = [
@@ -22,12 +22,14 @@ const ENTITY_VALUES = [
 /** Build a small real workbook through the production writer. */
 async function build(rows: Array<Array<string | number>>): Promise<ExcelJS.Workbook> {
   const writer = await createWriter()
+  // Mirrors the real callers: widths are computed from the data BEFORE the
+  // sheet opens, because a streamed sheet cannot be resized afterwards.
   writer.addSheet({
     name: 'Sponsored Products Campaigns',
     columns: [
-      { header: 'Entity', allowedValues: ENTITY_VALUES },
-      { header: 'Operation', allowedValues: ['Create', 'Update', 'Archive'] },
-      { header: 'Campaign name' },
+      { header: 'Entity', allowedValues: ENTITY_VALUES, width: widthFor('Entity', rows.map((r) => r[0])) },
+      { header: 'Operation', allowedValues: ['Create', 'Update', 'Archive'], width: widthFor('Operation', rows.map((r) => r[1])) },
+      { header: 'Campaign name', width: widthFor('Campaign name', rows.map((r) => r[2])) },
     ],
   })
   for (const r of rows) await writer.addRow('Sponsored Products Campaigns', r)
@@ -148,5 +150,35 @@ describe('AX-ZD.8 — a sheet that is not an input must say so', () => {
   it('a real data sheet is never reported as ignored', () => {
     expect(ignoredSheetReason('Sponsored Products Campaigns')).toBeNull()
     expect(ignoredSheetReason('Some Analyst Tab')).toBeNull()
+  })
+})
+
+describe('AX-ZD.10 — the streaming writer produces the same workbook', () => {
+  it('column widths are set, and set from the DATA not just the header', async () => {
+    // The regression this guards: with WorkbookWriter a width set after rows are
+    // committed silently does not persist, so sizing had to move ahead of the
+    // rows. If that ever regresses, widths come back undefined.
+    const wb = await build([['Campaign', 'Update', 'A very considerably longer campaign name']])
+    const ws = wb.getWorksheet('Sponsored Products Campaigns')!
+    const nameCol = ws.getColumn(3).width
+    expect(nameCol).toBeGreaterThan('Campaign name'.length)
+  })
+
+  it('a long value is capped, so one outlier cannot blow out the layout', async () => {
+    const wb = await build([['Campaign', 'Update', 'x'.repeat(300)]])
+    const ws = wb.getWorksheet('Sponsored Products Campaigns')!
+    expect(ws.getColumn(3).width).toBeLessThanOrEqual(60)
+  })
+
+  it('autoFilter still covers the exact used range', async () => {
+    const wb = await build([['Campaign', 'Update', 'A'], ['Campaign', 'Update', 'B']])
+    const ws = wb.getWorksheet('Sponsored Products Campaigns')!
+    expect(ws.autoFilter).toBe('A1:C3') // header + 2 rows, 3 columns
+  })
+
+  it('widthFor is bounded and never narrower than the header', () => {
+    expect(widthFor('Entity', [])).toBeGreaterThanOrEqual('Entity'.length)
+    expect(widthFor('E', ['x'.repeat(500)])).toBeLessThanOrEqual(60)
+    expect(widthFor('E', ['abcdefgh'])).toBe(10) // value length + 2
   })
 })

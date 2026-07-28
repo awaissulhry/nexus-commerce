@@ -21,7 +21,7 @@ import type { PrismaClient } from '@prisma/client'
 import {
   COLUMNS, ROW_KEY_HEADER, BASELINE_HEADER, computeBaseline, parseVocabulary,
 } from '@nexus/shared/ads-bulksheet'
-import { createWriter, type RowCell, type SheetColumnSpec } from './spreadsheet-adapter.js'
+import { createWriter, widthFor, type RowCell, type SheetColumnSpec } from './spreadsheet-adapter.js'
 import { coerceCell, SP_SHEET } from './build-workbook.js'
 
 export const STATUS_HEADER = '_status'
@@ -141,7 +141,18 @@ export async function buildAnnotatedWorkbook(prisma: PrismaClient, jobId: string
     { header: ERRORS_HEADER, type: 'text' as const, headerNote: 'What went wrong on this row, and what to do about it.' },
     { header: APPLIED_AT_HEADER, type: 'text' as const },
   ]
-  writer.addSheet({ name: SP_SHEET, columns, freeze: { rows: 1, columns: 3 } })
+  // AX-ZD.10 — size from the staged values before the sheet opens; a streamed
+  // sheet cannot be resized after its rows are flushed. `staged` is already an
+  // array here, so this is a cheap pre-pass and keeps the widths the in-memory
+  // writer produced at finalise.
+  writer.addSheet({
+    name: SP_SHEET,
+    columns: columns.map((c) => ({
+      ...c,
+      width: widthFor(c.header, staged.map((r) => (r.parsedValues as Record<string, unknown> | null)?.[c.header])),
+    })),
+    freeze: { rows: 1, columns: 3 },
+  })
 
   const familyCounts = new Map<string, { count: number; fix: string; example: string }>()
   let errors = 0

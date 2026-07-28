@@ -21,6 +21,10 @@
  */
 
 import type { Readable } from 'node:stream'
+import { readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { NUM_FMT, type BulksheetCellType } from '@nexus/shared/ads-bulksheet'
 
 /** A value the writer knows how to place in a cell. `null` writes a blank. */
@@ -38,6 +42,27 @@ export interface AnnotatedCell {
   note?: string
 }
 export type RowCell = CellValue | AnnotatedCell
+
+/**
+ * AX-ZD.10 — how wide a column should be, decided BEFORE any row is written.
+ *
+ * Measured: with WorkbookWriter, setting a width after rows are committed does
+ * not throw — it silently does not persist, because `<cols>` is emitted before
+ * `<sheetData>` and that part of the sheet has already been flushed. That is
+ * precisely why the old in-memory writer sized columns at finalise from cells it
+ * had already written, and why streaming needs the width up front.
+ */
+export function widthFor(header: string, sample: Iterable<unknown>): number {
+  let widest = header.length
+  let seen = 0
+  for (const v of sample) {
+    if (seen++ > 500) break // p95-ish without sorting every column
+    const len = cellToString(v).length
+    // One 300-character search term must not blow out the layout.
+    if (len > widest && len <= 60) widest = len
+  }
+  return Math.min(60, widest + 2)
+}
 
 const FILL_ARGB: Record<NonNullable<AnnotatedCell['fill']>, string> = {
   error: 'FFFDE7E9',    // soft red — readable behind black text, unlike a saturated fill
@@ -58,6 +83,8 @@ export interface SheetColumnSpec {
   headerNote?: string
   /** Hidden column: present for the round trip, out of the operator's way. */
   hidden?: boolean
+  /** Set BEFORE rows are written; a late width silently does not persist. */
+  width?: number
 }
 
 export interface SheetSpec {
@@ -164,13 +191,24 @@ class ExcelJsWriter implements SpreadsheetWriter {
   /** D5 — enum values already given a defined name, keyed by their joined value. */
   private listNames = new Map<string, string>()
   private listCol = 0
+  private formulaCache = new Map<string, string>()
+  /**
+   * AX-ZD.10 — our own row tally per sheet.
+   *
+   * A streaming worksheet does not keep `rowCount` once rows are flushed, so
+   * reading it back at finalise gave 0 and autoFilter was silently never
+   * applied. Counting on the way past is the only reliable source.
+   */
+  private rowCounts = new Map<string, number>()
   // Deliberately NOT in `sheets`: that map is the DATA-sheet registry and
   // toBuffer() resolves a SheetSpec for every entry. Lists has no spec.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private listsWs: any = null
+  private finalised = false
+  private tmpPath: string | null = null
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(wb: any) { this.wb = wb }
+  constructor(wb: any, tmpPath: string | null = null) { this.wb = wb; this.tmpPath = tmpPath }
 
   /**
    * D5 — park an enum on a hidden `Lists` sheet and return a defined-name
@@ -182,6 +220,15 @@ class ExcelJsWriter implements SpreadsheetWriter {
    * enum-columns), ~93k objects at current volume — where a named range is
    * built once and referenced.
    */
+  /** D5 — named range when the inline list would exceed Excel's 255-char cap. */
+  private validationFormula(header: string, values: readonly string[]): string {
+    const cached = this.formulaCache.get(header)
+    if (cached) return cached
+    const formula = this.listRangeFor(header, values) ?? `"${values.join(',')}"`
+    this.formulaCache.set(header, formula)
+    return formula
+  }
+
   private listRangeFor(header: string, values: readonly string[]): string | null {
     const inlineLength = values.join(',').length + 2
     if (inlineLength <= 255) return null // short enough; no sheet clutter
@@ -225,6 +272,9 @@ class ExcelJsWriter implements SpreadsheetWriter {
       const fmt = NUM_FMT[c.type]
       if (fmt) col.numFmt = fmt
       if (c.hidden) col.hidden = true
+      // Width must be set before any row is committed — see widthFor.
+      // Hidden columns are left alone: sizing one un-hides it in some readers.
+      if (!c.hidden && c.width) col.width = c.width
     })
     if (spec.freeze) {
       ws.views = [{ state: 'frozen', xSplit: spec.freeze.columns, ySplit: spec.freeze.rows, activeCell: 'A2' }]
@@ -268,7 +318,22 @@ class ExcelJsWriter implements SpreadsheetWriter {
       if (c.fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FILL_ARGB[c.fill] } }
       if (c.note) cell.note = c.note
     })
+    // AX-ZD.10 — validation is applied HERE, not at finalise. A streamed row is
+    // flushed on commit and can never be revisited, so the dropdown has to be on
+    // the cell before it goes out. The formula itself is resolved once per
+    // column (listRangeFor memoises), not once per cell.
+    const spec = this.specs.get(sheet)
+    spec?.columns.forEach((c, i) => {
+      if (!c.allowedValues?.length) return
+      row.getCell(i + 1).dataValidation = {
+        type: 'list', allowBlank: true,
+        formulae: [this.validationFormula(c.header, c.allowedValues)],
+        showErrorMessage: true, errorTitle: c.header,
+        error: `Must be one of: ${c.allowedValues.join(', ')}`,
+      }
+    })
     if (typeof row.commit === 'function') row.commit()
+    this.rowCounts.set(sheet, (this.rowCounts.get(sheet) ?? 1) + 1)
     await this.maybeDrain()
   }
 
@@ -289,59 +354,71 @@ class ExcelJsWriter implements SpreadsheetWriter {
   }
 
   /**
-   * Finalise. Dropdowns and autofilter are applied here, from the schema, once —
-   * never carried over from a read workbook, because ExcelJS duplicates
-   * dataValidations on round-trip write.
+   * Finalise.
+   *
+   * AX-ZD.10 — dropdowns and column widths are NOT applied here any more. Both
+   * need to touch cells that a streaming writer has already flushed, so they
+   * moved to write time (see addRow and widthFor). What is left is autoFilter,
+   * which only needs the final row count and must still be set before the sheet
+   * commits.
+   *
+   * Validations are always rebuilt from the schema and never read-then-rewritten,
+   * because ExcelJS duplicates dataValidations on a round-trip write.
    */
   async toBuffer(): Promise<Buffer> {
+    await this.finalise()
+    const buf = await readFile(this.tmpPath!)
+    await rm(this.tmpPath!, { force: true })
+    return buf
+  }
+
+  /** Commit every sheet and the workbook, leaving the finished file on disk. */
+  private async finalise(): Promise<void> {
+    if (this.finalised) return
+    this.finalised = true
     for (const [name, ws] of this.sheets) {
       const spec = this.specs.get(name)!
-      const lastRow = ws.rowCount ?? 1
+      const lastRow = this.rowCounts.get(name) ?? 1
       const lastCol = spec.columns.length
       if (lastCol > 0 && lastRow > 1) {
         // Exact used range — never whole columns; Excel and Numbers both mishandle those.
         ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: lastRow, column: lastCol } }
       }
-      spec.columns.forEach((c, i) => {
-        if (!c.allowedValues?.length) return
-        // D5 — an inline `"a,b,c…"` list is capped at 255 characters by Excel.
-        // The 16 Entity values produce 278, so Excel REPAIRED the workbook on
-        // open — and a repair prompt taints the whole file. A defined name has
-        // no length limit. Falls back to inline only for short lists, so a new
-        // enum cannot silently reintroduce the ceiling.
-        const named = this.listRangeFor(c.header, c.allowedValues)
-        const inline = `"${c.allowedValues.join(',')}"`
-        const formula = named ?? inline
-        for (let r = 2; r <= lastRow; r++) {
-          ws.getCell(r, i + 1).dataValidation = {
-            type: 'list', allowBlank: true, formulae: [formula], showErrorMessage: true,
-            errorTitle: c.header, error: `Must be one of: ${c.allowedValues.join(', ')}`,
-          }
-        }
-      })
-      // Width from the header and a sample of the data, capped. p95-ish without
-      // sorting every column: one 300-character search term must not blow out the layout.
-      spec.columns.forEach((c, i) => {
-        if (c.hidden) return // sizing a hidden column would un-hide it in some readers
-        const col = ws.getColumn(i + 1)
-        let widest = c.header.length
-        let seen = 0
-        col.eachCell?.({ includeEmpty: false }, (cell: { value: unknown }) => {
-          if (seen++ > 500) return
-          const len = cellToString(cell.value).length
-          if (len > widest && len <= 60) widest = len
-        })
-        col.width = Math.min(60, widest + 2)
-      })
+      if (typeof ws.commit === 'function') ws.commit()
     }
-    const buf = await this.wb.xlsx.writeBuffer()
-    return Buffer.from(buf)
+    // Committed last: it is created lazily by the first column that needs a
+    // named range, which can happen on any row of any sheet.
+    if (this.listsWs && typeof this.listsWs.commit === 'function') this.listsWs.commit()
+    await this.wb.commit()
   }
 }
 
+/**
+ * AX-ZD.10 — a STREAMING writer.
+ *
+ * Was `new ExcelJS.Workbook()`: the whole workbook model lived in memory until
+ * `writeBuffer()`, and every cell is an object carrying style references, so the
+ * model dominates peak RSS well before the source rows do. It also made
+ * `maybeDrain`'s backpressure branch unreachable — a plain Workbook has no
+ * `.stream` — so the drain it advertised never happened.
+ *
+ * WorkbookWriter flushes each committed row to a temp file instead. Verified
+ * against this ExcelJS build before switching, because three things had to
+ * survive or the file would get worse: `definedNames` + the veryHidden Lists
+ * sheet (D5 — without them Excel REPAIRS the workbook), per-cell
+ * `dataValidation`, and `autoFilter`. All three round-trip correctly.
+ *
+ * `useStyles` and `useSharedStrings` are required: the header fill, the error /
+ * conflict fills and the number formats are all styles, and without shared
+ * strings a file of repeated campaign names grows several times over.
+ */
 export async function createWriter(): Promise<SpreadsheetWriter> {
   const ExcelJS = await loadExcelJS()
-  return new ExcelJsWriter(new ExcelJS.Workbook())
+  const tmpPath = join(tmpdir(), `nexus-bulksheet-${randomUUID()}.xlsx`)
+  const wb = new ExcelJS.stream.xlsx.WorkbookWriter({
+    filename: tmpPath, useStyles: true, useSharedStrings: true,
+  })
+  return new ExcelJsWriter(wb, tmpPath)
 }
 
 class ExcelJsReader implements SpreadsheetReader {
