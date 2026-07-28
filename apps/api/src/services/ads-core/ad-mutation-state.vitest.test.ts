@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest'
 import {
   AD_MUTATION_STATES, IN_FLIGHT_STATES, TERMINAL_STATES,
   PENDING_TRUST_WINDOW_MS, SERIALISE_BLOCK_WINDOW_MS,
-  isBelievablyPending, isBlockingWrite, isTerminal, stateForQueueStatus,
+  classifyCrashedWrite, isBelievablyPending, isBlockingWrite, isTerminal, stateForQueueStatus,
 } from './ad-mutation-state.js'
 
 describe('the defect: a campaign-wide pending lookup hides real external edits', () => {
@@ -109,6 +109,41 @@ describe('per-entity serialisation — the HTTP 423 guard', () => {
     // write is more urgent than suppressing a drift signal, so the write
     // unblocks in minutes while drift stays suppressed for hours.
     expect(SERIALISE_BLOCK_WINDOW_MS).toBeLessThan(PENDING_TRUST_WINDOW_MS)
+  })
+})
+
+describe('crashed ad writes — reclaim the fresh, dead-letter the stale', () => {
+  const now = new Date('2026-07-28T12:00:00Z')
+  const ago = (ms: number) => new Date(now.getTime() - ms)
+  const MIN = 60_000, HOUR = 60 * MIN, DAY = 24 * HOUR
+  const th = { reclaimAfterMs: 30 * MIN, staleAfterMs: 7 * DAY }
+  const classify = (createdMsAgo: number, updatedMsAgo: number) =>
+    classifyCrashedWrite({ createdAt: ago(createdMsAgo), updatedAt: ago(updatedMsAgo) }, th, now)
+
+  it('a row that may still be running is left alone', () => {
+    expect(classify(5 * MIN, 1 * MIN)).toBe('LEAVE')
+  })
+
+  it('a recent crash is reclaimed — the intent is still current', () => {
+    expect(classify(2 * HOUR, 45 * MIN)).toBe('RECLAIM')
+  })
+
+  it('the 26-day prod row is dead-lettered, not re-applied', () => {
+    // The row measured on prod 2026-07-28: IN_PROGRESS for 26 days, no error,
+    // no retry, invisible to the Dead Letters tab. Reclaiming it would push a
+    // month-old bid onto a campaign spending money today.
+    expect(classify(26 * DAY, 26 * DAY)).toBe('DEAD_LETTER')
+  })
+
+  it('staleness is judged on the INTENT, not on the latest attempt', () => {
+    // A row retried recently still carries a month-old decision. Judging by
+    // updatedAt would let it look fresh forever and be re-applied.
+    expect(classify(30 * DAY, 1 * MIN)).toBe('DEAD_LETTER')
+  })
+
+  it('dead-letter wins over reclaim — the two can never both fire on one row', () => {
+    const both = classify(30 * DAY, 10 * HOUR)
+    expect(both).toBe('DEAD_LETTER')
   })
 })
 

@@ -77,6 +77,38 @@ export function isBlockingWrite(
   return now.getTime() - row.updatedAt.getTime() < SERIALISE_BLOCK_WINDOW_MS
 }
 
+/**
+ * What to do with an ad write found stuck IN_PROGRESS.
+ *
+ * The OutboundSyncQueue janitor sweeps this class of row but skips AD_* types,
+ * on the grounds that ads rows are owned by the ads-sync drain. They were not:
+ * that drain only selected PENDING rows, so a crashed ad dispatch had no owner
+ * (prod 2026-07-28: oldest IN_PROGRESS 26 days, no error, no retry — an
+ * operator's bid change that silently never landed).
+ *
+ * The split that matters is STALE vs RECENT, and it is not the janitor's:
+ *
+ * - RECLAIM  a recent crash. The intent is still current, so retrying is right.
+ * - DEAD_LETTER  an old one. Re-dispatching a month-old bid would move real
+ *   money against a decision nobody is making today. Dead-lettering makes it
+ *   visible rather than silently applying it or silently dropping it.
+ * - LEAVE  still plausibly running. Not every IN_PROGRESS row is crashed.
+ */
+export type CrashedWriteAction = 'RECLAIM' | 'DEAD_LETTER' | 'LEAVE'
+
+export function classifyCrashedWrite(
+  row: { createdAt: Date; updatedAt: Date },
+  thresholds: { reclaimAfterMs: number; staleAfterMs: number },
+  now: Date = new Date(),
+): CrashedWriteAction {
+  // Age is measured from creation: how old the INTENT is, not how long this
+  // attempt has been running. A row retried for a week still carries a
+  // week-old decision.
+  if (now.getTime() - row.createdAt.getTime() >= thresholds.staleAfterMs) return 'DEAD_LETTER'
+  if (now.getTime() - row.updatedAt.getTime() >= thresholds.reclaimAfterMs) return 'RECLAIM'
+  return 'LEAVE'
+}
+
 export function isBelievablyPending(
   row: { state: string; createdAt: Date },
   now: Date = new Date(),

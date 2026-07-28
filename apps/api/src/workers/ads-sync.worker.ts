@@ -18,6 +18,7 @@
 import { Worker, type Job } from 'bullmq'
 import prisma from '../db.js'
 import { entityWriteInFlightElsewhere, settleAdMutations } from '../services/advertising/ads-mutation.service.js'
+import { classifyCrashedWrite } from '../services/ads-core/ad-mutation-state.js'
 import { redis } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { isEntityGoneError, orphanReasonFrom } from '../services/ads-core/amazon-entity-gone.js'
@@ -460,10 +461,91 @@ export function stopAdsSyncWorker(): void {
 
 // Exposed for tests + the manual /api/advertising/cron/drain-ads-sync
 // endpoint (mounts under cron triggers).
+const AD_SYNC_TYPE_LIST = [
+  'AD_BID_UPDATE', 'AD_BUDGET_UPDATE', 'AD_ENTITY_STATE_UPDATE', 'AD_BIDDING_STRATEGY_UPDATE',
+]
+
+/**
+ * AX-ZD.1 — reclaim ad writes orphaned by a crashed dispatch.
+ *
+ * The OutboundSyncQueue janitor sweeps exactly this class of row but skips
+ * AD_* types, on the stated grounds that ads rows are "owned by the dedicated
+ * ads-sync drain and have their own lifecycle". They were not: this drain only
+ * ever selected `syncStatus: 'PENDING'`, so an ad row that died in IN_PROGRESS
+ * had no owner at all. Measured on prod 2026-07-28: two stuck rows, the oldest
+ * IN_PROGRESS for 26 days with no error and no retry — an operator's bid change
+ * that silently never landed and surfaced nowhere, because isDead=false keeps it
+ * out of the Dead Letters tab too. This makes the janitor's assumption true.
+ *
+ * A stale intent is DEAD-LETTERED, not retried. That is the deliberate
+ * difference from the janitor's generic reclaim: re-dispatching a 26-day-old bid
+ * would push a number the operator chose last month onto a live campaign
+ * spending money today. The janitor applies the same reasoning to stale PENDING
+ * rows ("intent has long been superseded"), and it matters more here, not less.
+ * Dead-lettering makes it visible instead of silently applying or silently
+ * dropping it.
+ */
+export async function reclaimCrashedAdWrites(
+  now: Date = new Date(),
+): Promise<{ reclaimed: number; deadLettered: number }> {
+  const { RECLAIM_IN_PROGRESS_AFTER_MS, EXPIRE_PENDING_AFTER_MS } =
+    await import('../jobs/outbound-queue-janitor.job.js')
+
+  // The stuck set is inherently tiny, so classify per row rather than encoding
+  // the decision in query filters where it cannot be tested.
+  const stuck = await prisma.outboundSyncQueue.findMany({
+    where: { syncType: { in: AD_SYNC_TYPE_LIST }, syncStatus: 'IN_PROGRESS' },
+    select: { id: true, createdAt: true, updatedAt: true },
+    take: 500,
+  })
+  const thresholds = {
+    reclaimAfterMs: RECLAIM_IN_PROGRESS_AFTER_MS,
+    staleAfterMs: EXPIRE_PENDING_AFTER_MS,
+  }
+  const stale = stuck.filter((r) => classifyCrashedWrite(r, thresholds, now) === 'DEAD_LETTER')
+  const fresh = stuck.filter((r) => classifyCrashedWrite(r, thresholds, now) === 'RECLAIM')
+
+  if (stale.length) {
+    const reason = 'ads-drain: crashed mid-dispatch and the intent is now stale — not re-applied'
+    await prisma.outboundSyncQueue.updateMany({
+      where: { id: { in: stale.map((r) => r.id) } },
+      data: {
+        syncStatus: 'FAILED', isDead: true, diedAt: now,
+        errorCode: 'ADS_STALE_IN_PROGRESS', errorMessage: reason,
+      },
+    })
+    for (const r of stale) await settleAdMutations(r.id, 'FAILED', { isDead: true, error: reason })
+    logger.warn('[ads-sync.worker] dead-lettered stale IN_PROGRESS ad writes', { count: stale.length })
+  }
+
+  if (fresh.length) {
+    await prisma.outboundSyncQueue.updateMany({
+      where: { id: { in: fresh.map((r) => r.id) } },
+      data: {
+        syncStatus: 'PENDING',
+        errorCode: 'ADS_RECLAIMED',
+        errorMessage: 'ads-drain: reclaimed stale IN_PROGRESS (dispatch crashed or timed out)',
+      },
+    })
+    // Back to PENDING means back in flight, so the typed rows must follow or
+    // the drift check would treat a live write as finished.
+    for (const r of fresh) await settleAdMutations(r.id, 'PENDING')
+    logger.info('[ads-sync.worker] reclaimed crashed ad writes', { count: fresh.length })
+  }
+  return { reclaimed: fresh.length, deadLettered: stale.length }
+}
+
 export async function drainAdsSyncOnce(limit = 50): Promise<{ processed: number; results: Array<{ status: string; queueId: string }> }> {
+  await reclaimCrashedAdWrites().catch((err) => {
+    // Reclaim is maintenance; a failure here must not stop the drain from
+    // dispatching the writes that are ready.
+    logger.warn('[ads-sync.worker] reclaim failed; draining anyway', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  })
   const candidates = await prisma.outboundSyncQueue.findMany({
     where: {
-      syncType: { in: ['AD_BID_UPDATE', 'AD_BUDGET_UPDATE', 'AD_ENTITY_STATE_UPDATE', 'AD_BIDDING_STRATEGY_UPDATE'] },
+      syncType: { in: AD_SYNC_TYPE_LIST },
       syncStatus: 'PENDING',
       OR: [{ holdUntil: null }, { holdUntil: { lte: new Date() } }],
     },

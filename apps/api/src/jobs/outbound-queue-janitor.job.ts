@@ -11,6 +11,14 @@
  * Ads rows (AD_*) are excluded — they are owned by the dedicated
  * ads-sync drain and have their own lifecycle.
  *
+ * AX-ZD.1: that ownership was an assumption, not a fact. The ads drain only
+ * ever selected PENDING rows, so a crashed AD_* dispatch left an IN_PROGRESS
+ * row nobody swept (prod 2026-07-28: oldest 26 days). `reclaimCrashedAdWrites`
+ * in ads-sync.worker.ts now makes it true, reusing the two thresholds below so
+ * both sides age rows out on the same clock. It deliberately dead-letters a
+ * stale ad write rather than reclaiming it: re-dispatching a month-old bid
+ * would move real money against a decision nobody is making today.
+ *
  * Gate: default ON; opt out with NEXUS_QUEUE_JANITOR=0.
  * Schedule: every 15 min; override NEXUS_QUEUE_JANITOR_SCHEDULE.
  */
