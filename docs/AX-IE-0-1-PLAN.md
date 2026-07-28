@@ -3,9 +3,22 @@
 Date: 2026-07-28 · Scope: **AX-IE.0 (P0 correctness) and AX-IE.1 (canonical model) only.**
 Brief: `obsidian-vault/30 - Amazon Ads Platform Audit.md`, `31 - Competitor Teardown`, `32 - Import-Export & Sync Spec`.
 
-**Nothing has been implemented.** Everything below is read-only diagnosis plus a proposal.
-Evidence harnesses written (read-only, untracked): `apps/api/scripts/_axie1-model-census.mts`,
-`_axie0-conn-probe.mts`, `_axie0-export-blast.mts`.
+Evidence harnesses (read-only, untracked): `apps/api/scripts/_axie1-model-census.mts`,
+`_axie0-conn-probe.mts`, `_axie0-export-blast.mts`, `_axie0-e4-proof.mts`,
+`_axie1-metric-collision.mts`.
+
+## Status
+
+| Phase | State |
+|---|---|
+| **AX-IE.0** P0 correctness | ✅ shipped 2026-07-28, verified on prod |
+| **AX-IE.1** canonical model | ✅ shipped 2026-07-28, parity green |
+| **AX-IE.2** schema + adapter | ✅ shipped 2026-07-28 — one schema in `@nexus/shared/ads-bulksheet` drives export, Dictionary and validation on both server and browser; ExcelJS behind `SpreadsheetWriter`/`SpreadsheetReader` |
+| **AX-IE.3** exporter rewrite | ◐ **partial** — all 9 SP entity types, Portfolios, README, `_meta`, `_row_key`, `_baseline` shipped (3,318 → 9,291 rows). **SB/SD sheets blocked** on the bulksheet download; **streaming/async job deferred** (the account is 9.3k rows; the buffered path is well inside budget, and the job substrate belongs with AX-IE.4) |
+| AX-IE.4+ | not started |
+
+The rest of this document is the original .0/.1 plan, kept as the evidence record,
+with corrections marked inline where implementation proved something different.
 
 ---
 
