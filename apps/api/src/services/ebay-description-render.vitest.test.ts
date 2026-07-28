@@ -11,6 +11,9 @@ import {
   BUILT_IN_PREVIOUS,
   type DescriptionRenderData,
 } from './ebay-description-render.js'
+// The publish side's export of the shared verbatim rule — imported through the
+// publish service on purpose, so this test also pins that re-export.
+import { galleryForCuratedRow } from './images/ebay-inventory-image-publish.service.js'
 
 const base: DescriptionRenderData = {
   market: 'IT',
@@ -55,8 +58,11 @@ describe('renderDescriptionTheme — tokens', () => {
     expect(group.html).toContain('>Rosso</h3>')
     expect(group.html).toContain('>Nero</h3>')
     expect(group.html).toContain('r1.jpg')
-    // shared image is not repeated inside the Rosso section
-    expect(group.html.split('shared1.jpg').length - 1).toBe(1)
+    // VERBATIM (ebay-gallery-verbatim.pure.ts): Rosso curated shared1.jpg, so
+    // Rosso SHOWS shared1.jpg — twice on the page, once as cover and once as
+    // that colour's photo. Subtracting it here is the bug that hid a quarter of
+    // every family's curated colour images.
+    expect(group.html.split('shared1.jpg').length - 1).toBe(2)
   })
 
   it('strips unknown tokens with a warning', () => {
@@ -251,16 +257,58 @@ describe('classed tokens — {{specs_rows}} / {{gallery_hero}} / {{gallery_group
     expect(capped.warnings.some((w) => w.includes('first 8 of 11'))).toBe(true)
   })
 
-  it('{{gallery_groups}} emits one classed section per group, dedups shared, and is empty in single mode', () => {
+  it('{{gallery_groups}} emits one classed section per group, VERBATIM, and is empty in single mode', () => {
     const { html, warnings } = renderDescriptionTheme('{{gallery_groups}}', { ...base, mode: 'group' })
     expect(html).toContain('<div class="ggroup"><h3 class="gg-title">Rosso</h3>')
     expect(html).toContain('<h3 class="gg-title">Nero</h3>')
     expect(html).toContain('r1.jpg')
-    expect(html).not.toContain('shared1.jpg') // shared image not repeated inside Rosso
+    expect(html).toContain('shared1.jpg') // curated into Rosso → Rosso shows it
     expect(html).not.toContain('style=') // classed markup only — theme CSS owns the look
     expect(warnings).toEqual([])
 
     expect(renderDescriptionTheme('{{gallery_groups}}', base).html).toBe('')
+  })
+
+  /** The regression this file exists to prevent. "Colori disponibili" is the
+   *  per-colour TRUTH: every curated photo of a colour appears under that
+   *  colour, in order, even when it is also the listing's cover shot. This is
+   *  REGAL-JACKET's shape — 3 photos per colour, #1 the cover and #3 a common
+   *  shot — which rendered as 1 photo before 2026-07-28. */
+  it('a colour section shows its cover/common photos too — the shared pool is NEVER subtracted', () => {
+    const cover = 'https://cdn.example.com/nero-hero.jpg'
+    const common = 'https://cdn.example.com/size-chart.jpg'
+    const nero = [cover, 'https://cdn.example.com/nero-2.jpg', common]
+    const { html } = renderDescriptionTheme('{{gallery_groups}}', {
+      ...base,
+      mode: 'group',
+      sharedImages: [cover, common],
+      imagesByGroup: [{ value: 'Nero', urls: nero }],
+    })
+    for (const u of nero) expect(html).toContain(u)
+    expect(html.match(/<img /g)).toHaveLength(3) // all three, not one
+    // …and the same holds for the {{gallery}} token's group sections.
+    const legacy = renderDescriptionTheme('{{gallery}}', {
+      ...base,
+      mode: 'group',
+      sharedImages: [cover, common],
+      imagesByGroup: [{ value: 'Nero', urls: nero }],
+    })
+    for (const u of nero) expect(legacy.html).toContain(u)
+  })
+
+  /** Publish and description must render a curated bucket the same way — one
+   *  rule, one module. If someone reintroduces a filter on either side, the
+   *  identity below breaks before a listing does. */
+  it('the description renderer uses the SAME verbatim rule as the eBay image publish', () => {
+    const urls = ['https://cdn.example.com/a.jpg', 'https://cdn.example.com/b.jpg']
+    expect(galleryForCuratedRow(urls)).toEqual(urls)
+    const { html } = renderDescriptionTheme('{{gallery_groups}}', {
+      ...base,
+      mode: 'group',
+      sharedImages: urls, // every colour photo is also a shared/cover photo
+      imagesByGroup: [{ value: 'Nero', urls }],
+    })
+    for (const u of galleryForCuratedRow(urls)) expect(html).toContain(u)
   })
 
   it('{{gallery_hero}} generated CSS is scoped under its OWN .gallery wrapper, not .ebd — usable in any theme', () => {
@@ -313,7 +361,7 @@ describe('classed tokens — {{specs_rows}} / {{gallery_hero}} / {{gallery_group
     expect(warnings).toEqual([])
   })
 
-  it('groupsGallery warns AT MOST ONCE, and never for a budget exhausted only by shared-duplicate/empty groups', () => {
+  it('groupsGallery warns AT MOST ONCE, and never for a budget exhausted only by EMPTY groups', () => {
     // Filtered to the NEW function's exact wording ("group galleries capped")
     // — the pre-existing, out-of-scope {{gallery}} token also processes
     // imagesByGroup unconditionally and has its own "gallery capped" warning
@@ -330,16 +378,33 @@ describe('classed tokens — {{specs_rows}} / {{gallery_hero}} / {{gallery_group
     })
     expect(capped.filter((w) => w.includes('group galleries capped'))).toHaveLength(1) // not twice
 
+    // A colour that curates NOTHING is the only remaining non-cap: the budget
+    // ran out but no real image was withheld. (A group whose photos are also
+    // shared/cover shots is NOT this case any more — since 2026-07-28 those
+    // render verbatim, so dropping them IS a real cap.)
     const { warnings: falsePositive } = renderDescriptionTheme('{{gallery_groups}}', {
       ...base,
       mode: 'group',
       sharedImages: ['https://c/shared.jpg'],
       imagesByGroup: [
         { value: 'Nero', urls: Array(36).fill('https://c/x.jpg').map((u, i) => `${u}?${i}`) },
-        { value: 'Rosso', urls: ['https://c/shared.jpg'] }, // ENTIRELY shared-duplicate — nothing real dropped
+        { value: 'Rosso', urls: [] }, // curates nothing — nothing real dropped
       ],
     })
     expect(falsePositive.some((w) => w.includes('group galleries capped'))).toBe(false)
+
+    // …and the shared-duplicate shape now DOES warn, because those photos are
+    // genuine content the cap withheld.
+    const { warnings: realCap } = renderDescriptionTheme('{{gallery_groups}}', {
+      ...base,
+      mode: 'group',
+      sharedImages: ['https://c/shared.jpg'],
+      imagesByGroup: [
+        { value: 'Nero', urls: Array(36).fill('https://c/x.jpg').map((u, i) => `${u}?${i}`) },
+        { value: 'Rosso', urls: ['https://c/shared.jpg'] },
+      ],
+    })
+    expect(realCap.filter((w) => w.includes('group galleries capped'))).toHaveLength(1)
   })
 
   it('mobile_summary strips <style> TAG CONTENT, not just the tags, so leaked CSS never reaches buyer-facing summary text', () => {

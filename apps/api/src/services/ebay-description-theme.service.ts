@@ -139,6 +139,69 @@ async function loadGalleries(prisma: PrismaClient, productId: string, sku?: stri
 }
 
 /**
+ * PURE — group mode or single mode for one product's description.
+ *
+ * The old rule was `children > 0 ? 'group' : 'single'`, which is wrong for a
+ * POOL SHELL: an adopted/shared-pool listing (REGAL-JACKET-ALT1,
+ * GALE-JACKET-ALT1/ALT2, xavia-knee-slider-ALT1, VENTRA/AIRMESH/IT-MOSS-ALT1 …)
+ * has ZERO children of its own while fronting 20–40 pool members and carrying
+ * real per-colour curation. Those listings scored 'single', and single mode
+ * hard-blanks {{gallery_groups}} — so their "Colori disponibili" section was
+ * absent entirely, even though ebay-shared-listing-push.service.ts publishes
+ * them with mode 'group'. The preview and the push disagreed about the same
+ * listing, which is exactly what DS-6 set out to prevent.
+ *
+ * Curated colour buckets are therefore a group signal in their own right: if a
+ * family has per-colour image sets, its description has colours to show.
+ */
+export function descriptionModeFor(input: { childCount: number; colourBucketCount: number }): 'single' | 'group' {
+  return input.childCount > 0 || input.colourBucketCount > 0 ? 'group' : 'single'
+}
+
+/**
+ * The DB-backed resolution of {@link descriptionModeFor} — the ONE derivation
+ * the Studio preview and every description push share, so a listing can never
+ * preview one way and publish another. Counts the product's own colour buckets
+ * and, for a childless shell, the pool parent it borrows galleries from (same
+ * borrow loadGalleries performs). Fail-open: any error keeps the child-count
+ * answer, never blocks a push.
+ */
+export async function resolveDescriptionMode(
+  prisma: PrismaClient,
+  productId: string,
+  childCount?: number,
+): Promise<'single' | 'group'> {
+  const children = childCount ?? (await prisma.product.count({ where: { parentId: productId, deletedAt: null } }))
+  if (children > 0) return 'group'
+  try {
+    let colourBucketCount = await countColourBuckets(prisma, productId)
+    if (colourBucketCount === 0) {
+      const poolParentId = await findShellPoolParentId(prisma, productId)
+      if (poolParentId && poolParentId !== productId) colourBucketCount = await countColourBuckets(prisma, poolParentId)
+    }
+    return descriptionModeFor({ childCount: children, colourBucketCount })
+  } catch {
+    return descriptionModeFor({ childCount: children, colourBucketCount: 0 })
+  }
+}
+
+/** Distinct curated per-colour buckets (group rows only — per-SKU pins and the
+ *  shared cover pool are not colours). */
+async function countColourBuckets(prisma: PrismaClient, productId: string): Promise<number> {
+  const rows = await prisma.listingImage.findMany({
+    where: {
+      productId,
+      platform: 'EBAY',
+      mediaType: 'IMAGE',
+      variationId: null,
+      NOT: [{ variantGroupKey: null }, { variantGroupValue: null }],
+    },
+    select: { variantGroupKey: true, variantGroupValue: true },
+  })
+  return new Set(rows.map((r) => `${r.variantGroupKey}::${r.variantGroupValue}`)).size
+}
+
+/**
  * ED v2 polish — resolve the pool parent a SHELL product fronts: the product
  * must be childless, its sku must appear as parentSku on ACTIVE
  * SharedListingMembership rows, and those member products' common parent (the

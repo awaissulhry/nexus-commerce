@@ -25,6 +25,7 @@ const clFindMany = vi.fn()
 const themeFindUnique = vi.fn()
 const themeUpdate = vi.fn()
 const mockRender = vi.fn()
+const mockResolveMode = vi.fn()
 
 vi.mock('../db.js', () => ({
   default: {
@@ -49,6 +50,7 @@ vi.mock('../services/ebay-description-theme.service.js', () => ({
   renderListingDescriptionSafe: (...args: unknown[]) => mockRender(...args),
   galleryHashOfRows: vi.fn(() => 'hash'),
   evaluateDescriptionStaleness: vi.fn(() => ({ stale: false, reasons: [] })),
+  resolveDescriptionMode: (...args: unknown[]) => mockResolveMode(...args),
 }))
 
 import ebayDescriptionThemesRoutes from './ebay-description-themes.routes.js'
@@ -163,34 +165,36 @@ describe('POST /ebay/description-preview (DS-0)', () => {
   })
 
   // DS-6 — the Studio calls the preview "exactly what a push would send", so
-  // the render MODE has to be derived the way pushDescriptions derives it
-  // (children → 'group', else 'single'). The route used to default to 'group'
-  // unconditionally, which rendered per-colour gallery sections for standalone
-  // products whose push renders in single mode.
+  // the render MODE has to be the one pushDescriptions uses. The route used to
+  // default to 'group' unconditionally (per-colour sections for standalone
+  // products), then briefly counted children itself — which scored every
+  // adopted/pool-shell listing 'single' and hid its Colori section. Both sides
+  // now delegate to resolveDescriptionMode, so parity is structural: the route's
+  // job is to CALL it with the family root and pass the answer through.
   describe('render mode parity with the push service', () => {
     beforeEach(() => {
       productFindFirst.mockResolvedValue({ id: 'root-1', parentId: null })
       clFindFirst.mockResolvedValue({ description: 'Body', title: 'T' })
     })
 
-    it('a family WITH children renders in group mode', async () => {
-      productCount.mockResolvedValue(4)
+    it('delegates to the shared resolver, keyed on the FAMILY ROOT', async () => {
+      mockResolveMode.mockResolvedValue('group')
       await preview({ productId: 'root-1' })
-      expect(productCount).toHaveBeenCalledWith({ where: { parentId: 'root-1', deletedAt: null } })
+      expect(mockResolveMode).toHaveBeenCalledWith(expect.anything(), 'root-1')
       expect((mockRender.mock.calls[0][1] as { mode: string }).mode).toBe('group')
     })
 
-    it('a STANDALONE product renders in single mode', async () => {
-      productCount.mockResolvedValue(0)
+    it('passes the resolver\'s single-mode answer straight through', async () => {
+      mockResolveMode.mockResolvedValue('single')
       await preview({ productId: 'root-1' })
       expect((mockRender.mock.calls[0][1] as { mode: string }).mode).toBe('single')
     })
 
     it('an explicit mode from the caller still wins (legacy callers unchanged)', async () => {
-      productCount.mockResolvedValue(0)
+      mockResolveMode.mockResolvedValue('single')
       await preview({ productId: 'root-1', mode: 'group' })
       expect((mockRender.mock.calls[0][1] as { mode: string }).mode).toBe('group')
-      expect(productCount).not.toHaveBeenCalled()
+      expect(mockResolveMode).not.toHaveBeenCalled()
     })
   })
 })

@@ -39,6 +39,8 @@
  *                        colour/variant group; '' in single mode
  */
 
+import { galleryForCuratedRow } from './images/ebay-gallery-verbatim.pure.js'
+
 export interface DescriptionGalleryGroup {
   /** The group key — an image-axis value like "Rosso" (the owner's "groups"). */
   value: string
@@ -97,7 +99,11 @@ function galleryGrid(urls: string[]): string {
   return `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;">${cells}</div>`
 }
 
-/** Group-mode gallery: shared images first, then one titled section per group. */
+/** Group-mode gallery: shared images first, then one titled section per group.
+ *  Each group renders VERBATIM (galleryForCuratedRow) — a colour's photo is not
+ *  suppressed just because it is also the cover shot. See the pure module for
+ *  the operator rule; this used to subtract `shared` and silently hid a quarter
+ *  of every family's curated colour photos. */
 function groupedGallery(shared: string[], groups: DescriptionGalleryGroup[], warnings: string[]): string {
   let budget = MAX_GALLERY_IMAGES
   const take = (urls: string[]): string[] => {
@@ -111,7 +117,7 @@ function groupedGallery(shared: string[], groups: DescriptionGalleryGroup[], war
   if (sharedTaken.length > 0) parts.push(galleryGrid(sharedTaken))
   for (const g of groups) {
     if (budget <= 0) break
-    const urls = take(g.urls.filter((u) => !shared.includes(u)))
+    const urls = take(galleryForCuratedRow(g.urls))
     if (urls.length === 0) continue
     parts.push(
       `<h3 style="margin:18px 0 8px;font-size:16px;color:#111827;">${esc(g.value)}</h3>${galleryGrid(urls)}`,
@@ -186,18 +192,27 @@ function heroGallery(urls: string[], warnings: string[]): string {
   return `<style>${css}</style><div class="gallery">${inputs}<div class="stage">${stage}${thumbs}</div></div>`
 }
 
-/** {{gallery_groups}} — one classed section per colour/variant group, images as
- *  bare <img> tags (theme CSS owns sizing/treatment). Shared images are not
- *  repeated inside groups, mirroring {{gallery}}'s dedup. Emits the cap
- *  warning AT MOST ONCE, and only when a non-empty (post-dedup) group was
- *  actually dropped — a budget exhausted only by all-shared-duplicate or
- *  empty groups is not a real cap. */
+/** {{gallery_groups}} — one classed section per colour/variant group ("Colori
+ *  disponibili"), images as bare <img> tags (theme CSS owns sizing/treatment).
+ *
+ *  Each group renders VERBATIM — the section is the per-colour TRUTH, not a
+ *  diff against the hero, so a photo curated into a colour set shows there even
+ *  when it is also the listing's cover shot. The old `!shared.includes(u)`
+ *  filter was the same "P5 de-dupe" that had already been removed from the
+ *  publish path (see ebay-gallery-verbatim.pure.ts): it dropped 114 of 459
+ *  curated images across 20 of 26 families, took REGAL-JACKET's Nero set from 3
+ *  photos to 1 — its FIRST, the main colour shot, being the cover — and emptied
+ *  WATERPROOF-OVERJACKET-BLACK-MEN's only colour section outright.
+ *
+ *  Emits the cap warning AT MOST ONCE, and only when a non-empty group was
+ *  actually dropped — a budget exhausted only by empty groups is not a real
+ *  cap. */
 function groupsGallery(shared: string[], groups: DescriptionGalleryGroup[], warnings: string[]): string {
   let budget = MAX_GALLERY_IMAGES
   let capped = false
   const parts: string[] = []
   for (const g of groups) {
-    const urls = g.urls.filter((u) => !shared.includes(u))
+    const urls = galleryForCuratedRow(g.urls)
     if (urls.length === 0) continue
     if (budget <= 0) {
       capped = true

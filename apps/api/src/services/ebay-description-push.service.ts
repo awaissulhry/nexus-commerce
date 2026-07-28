@@ -34,7 +34,7 @@
 import { createHash } from 'node:crypto'
 import type { PrismaClient } from '@prisma/client'
 import { callTradingApi, siteIdForMarket, escapeXml } from './ebay-trading-api.service.js'
-import { renderListingDescriptionSafe, stampDescriptionPushSafe } from './ebay-description-theme.service.js'
+import { renderListingDescriptionSafe, stampDescriptionPushSafe, resolveDescriptionMode } from './ebay-description-theme.service.js'
 import { resolvePerMarketContent } from './ebay-variation-push.service.js'
 
 // Same detector the axes-convert service proved live: eBay rejects Trading
@@ -314,7 +314,13 @@ export async function pushDescriptions(
         continue
       }
 
-      const mode: 'group' | 'single' = children.length > 0 ? 'group' : 'single'
+      // The ONE derivation the Studio preview shares (see
+      // resolveDescriptionMode): children OR curated colour buckets → 'group'.
+      // Counting children alone scored every pool shell 'single', which blanks
+      // {{gallery_groups}} — so an adopted listing pushed here lost the "Colori
+      // disponibili" section that ebay-shared-listing-push (mode 'group') gives
+      // the very same listing.
+      const mode: 'group' | 'single' = await resolveDescriptionMode(prisma, root.id, children.length)
 
       // ED v2 P5 — after ANY listing of this family is actually revised, stamp
       // the delivery (awaited below, DS-0) so the staleness badge clears.

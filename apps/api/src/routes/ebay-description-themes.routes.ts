@@ -13,6 +13,7 @@ import {
   renderListingDescriptionSafe,
   galleryHashOfRows,
   evaluateDescriptionStaleness,
+  resolveDescriptionMode,
 } from '../services/ebay-description-theme.service.js'
 
 /**
@@ -324,15 +325,13 @@ export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstan
     // exactly what a push renders). Root products resolve to themselves.
     const rootProductId = await resolveFamilyRootId(productId)
     // DS-6 — when the caller doesn't force a mode, derive it the way the PUSH
-    // service does (children → 'group', else 'single'). The old `= 'group'`
-    // default made the Studio preview a standalone product with per-colour
-    // gallery sections that its push would never send — a preview that lies
-    // about what goes live is worse than no preview.
-    const resolvedMode: 'single' | 'group' =
-      mode ??
-      ((await prisma.product.count({ where: { parentId: rootProductId, deletedAt: null } })) > 0
-        ? 'group'
-        : 'single')
+    // service does. The old `= 'group'` default made the Studio preview a
+    // standalone product with per-colour gallery sections that its push would
+    // never send — a preview that lies about what goes live is worse than no
+    // preview. resolveDescriptionMode is now that ONE shared derivation (it
+    // also scores pool shells as 'group'; counting children alone hid the
+    // Colori section on every adopted/shared-pool listing).
+    const resolvedMode: 'single' | 'group' = mode ?? (await resolveDescriptionMode(prisma, rootProductId))
     const listing = await prisma.channelListing.findFirst({
       where: { productId: rootProductId, channel: 'EBAY', region: marketplace.toUpperCase() === 'UK' ? 'GB' : marketplace.toUpperCase() },
       select: { description: true, title: true },

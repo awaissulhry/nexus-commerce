@@ -28,30 +28,21 @@ import {
 import { renderListingDescriptionSafe, stampDescriptionPushSafe } from '../ebay-description-theme.service.js'
 import { logger } from '../../utils/logger.js'
 import { resolveImagePictureAxis } from './ebay-image-axis.pure.js'
+import { galleryForCuratedRow } from './ebay-gallery-verbatim.pure.js'
 import { publishEbaySharedListingImages } from './ebay-shared-image-publish.service.js'
 
 /**
  * PURE — the per-variation gallery a publish sends for one curated row.
  *
- * OPERATOR RULE (2026-07-27, explicit): images from the shared "cover & common"
- * pool may be reused in ANY row and ANY position. What is curated in Nexus is
- * what goes to eBay, verbatim and in order.
- *
- * This used to subtract the shared pool from every per-colour/per-SKU set (the
- * old "P5 de-dupe"), on the theory that eBay would otherwise show a photo
- * twice. That theory was wrong for variation listings — the group gallery and
- * a variation's gallery are separate strips — and it silently corrupted live
- * listings: GALE-JACKET-ALT2 curated 7 photos per colour and published 6,
- * because each colour's hero was also the cover shot. eBay then promoted a
- * "LEVEL 2 PROTECTORS" marketing tile to Principale.
- *
- * Kept as a named, tested function (rather than deleting the call site) so the
- * guarantee "curation is sent verbatim" has somewhere to be asserted, and so a
- * future filter cannot be reintroduced without failing a test.
+ * The rule itself now lives in ONE place, shared with the listing-description
+ * renderer (which carried its own copy of the same discredited "subtract the
+ * shared pool" filter and dropped a quarter of every family's curated colour
+ * photos until 2026-07-28). Re-exported here so this module's call sites and
+ * ebay-image-dedupe.vitest.test.ts keep importing it from the publish service.
+ * See ebay-gallery-verbatim.pure.ts for the operator rule and the two incidents
+ * that produced it.
  */
-export function galleryForCuratedRow(urls: string[]): string[] {
-  return [...urls]
-}
+export { galleryForCuratedRow }
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
 

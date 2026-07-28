@@ -38,6 +38,13 @@ const mockStamp = vi.fn()
 vi.mock('./ebay-description-theme.service.js', () => ({
   renderListingDescriptionSafe: (...args: unknown[]) => mockRender(...args),
   stampDescriptionPushSafe: (...args: unknown[]) => mockStamp(...args),
+  // group/single now comes from the ONE shared resolver (pool shells score
+  // 'group' even with no children). Its real implementation — including the
+  // colour-bucket and pool-parent lookups — is covered in
+  // ebay-description-theme.service.vitest.test.ts; here it stays a thin stand-in
+  // so these tests keep exercising the push, not the derivation.
+  resolveDescriptionMode: async (_prisma: unknown, _productId: string, childCount?: number) =>
+    (childCount ?? 0) > 0 ? 'group' : 'single',
 }))
 
 // ── Mock the per-market content resolver (heavy module; pure echo here) ────

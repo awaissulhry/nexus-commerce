@@ -21,7 +21,12 @@ vi.mock('./ebay-image-axis-preference.service.js', () => ({
 }))
 
 import { resolvePolicyDisplayNames } from './ebay-account.service.js'
-import { renderListingDescriptionSafe, ensureBuiltInThemes } from './ebay-description-theme.service.js'
+import {
+  renderListingDescriptionSafe,
+  ensureBuiltInThemes,
+  descriptionModeFor,
+  resolveDescriptionMode,
+} from './ebay-description-theme.service.js'
 import { BUILT_IN_THEMES, BUILT_IN_PREVIOUS } from './ebay-description-render.js'
 
 // ── Fixtures ───────────────────────────────────────────────────────────────
@@ -327,6 +332,61 @@ describe('loadGalleries — shell pool-parent borrow (via renderListingDescripti
     expect(res.themed).toBe(true)
     expect(res.warnings).toEqual([])
     expect(res.html).not.toContain('<img')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 3b. Description mode — the ONE derivation preview and push share
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('descriptionModeFor / resolveDescriptionMode — pool shells are group mode', () => {
+  it('pure rule: children OR curated colour buckets mean group', () => {
+    expect(descriptionModeFor({ childCount: 40, colourBucketCount: 0 })).toBe('group')
+    expect(descriptionModeFor({ childCount: 0, colourBucketCount: 4 })).toBe('group')
+    expect(descriptionModeFor({ childCount: 0, colourBucketCount: 0 })).toBe('single')
+  })
+
+  /** REGAL-JACKET-ALT1's exact shape: an adopted/shared-pool listing with ZERO
+   *  children that fronts 40 pool members and curates 4 colour buckets. The old
+   *  `children > 0` rule scored it 'single', and single mode hard-blanks
+   *  {{gallery_groups}} — so its "Colori disponibili" section was absent while
+   *  ebay-shared-listing-push published the very same listing as 'group'. */
+  it('a childless pool shell WITH its own colour buckets resolves to group', async () => {
+    const prisma = mockPrisma(shellFixture({
+      curatedByProduct: {
+        'shell-1': [
+          { variantGroupKey: 'Colore', variantGroupValue: 'Nero', variationId: null, url: 'https://img.example/n.jpg' },
+          { variantGroupKey: 'Colore', variantGroupValue: 'Grigio', variationId: null, url: 'https://img.example/g.jpg' },
+        ],
+      },
+    }))
+    expect(await resolveDescriptionMode(asPrisma(prisma), 'shell-1')).toBe('group')
+  })
+
+  it('a childless shell with NO curation of its own inherits the pool parent\'s colours', async () => {
+    const prisma = mockPrisma(shellFixture({
+      curatedByProduct: {
+        [POOL]: [{ variantGroupKey: 'Colore', variantGroupValue: 'Nero', variationId: null, url: 'https://img.example/n.jpg' }],
+      },
+    }))
+    expect(await resolveDescriptionMode(asPrisma(prisma), 'shell-1')).toBe('group')
+  })
+
+  it('a genuine standalone product (no children, no colour buckets) stays single', async () => {
+    const prisma = mockPrisma(shellFixture({ memberships: [] }))
+    expect(await resolveDescriptionMode(asPrisma(prisma), 'shell-1')).toBe('single')
+  })
+
+  it('a family with children short-circuits to group without touching images', async () => {
+    const prisma = mockPrisma(shellFixture({ childCount: 40 }))
+    expect(await resolveDescriptionMode(asPrisma(prisma), 'parent-1', 40)).toBe('group')
+    expect(prisma.listingImage.findMany).not.toHaveBeenCalled()
+  })
+
+  it('fails OPEN — a broken image query never blocks a push', async () => {
+    const prisma = mockPrisma(shellFixture())
+    prisma.listingImage.findMany.mockRejectedValueOnce(new Error('db down') as never)
+    expect(await resolveDescriptionMode(asPrisma(prisma), 'shell-1', 0)).toBe('single')
   })
 })
 
