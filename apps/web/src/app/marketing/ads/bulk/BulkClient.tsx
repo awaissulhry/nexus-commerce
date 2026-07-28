@@ -221,7 +221,14 @@ function BulkInner() {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'operator rollback from bulk page' }),
       })
       const body = await r.json()
-      toast(`${body.reversed} change${body.reversed === 1 ? '' : 's'} reverted — ${body.skipped} skipped · ${body.failed} failed`, body.failed ? 'warning' : 'success')
+      // Phase 2 — an expired undo window is a fact, not a silent zero. This
+      // previously reported "0 changes reverted" for a change set that was
+      // simply too old, which reads identically to "there was nothing to undo".
+      if (body.expired) {
+        toast(body.reason ?? `Past the ${body.windowHours ?? 24}-hour undo window.`, 'warning')
+      } else {
+        toast(`${body.reversed} change${body.reversed === 1 ? '' : 's'} reverted — ${body.skipped} skipped · ${body.failed} failed`, body.failed ? 'warning' : 'success')
+      }
       void loadJobs()
     } finally { setBusy(false) }
   }, [toast, loadJobs])

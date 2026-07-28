@@ -29,12 +29,24 @@ import {
 } from './ads-mutation.service.js'
 
 const ROLLBACK_WINDOW_MS = 24 * 60 * 60 * 1000
+/** Surfaced to the UI so the button can explain itself rather than no-op. */
+export const ROLLBACK_WINDOW_HOURS = ROLLBACK_WINDOW_MS / 3_600_000
 
 export interface RollbackOutcome {
   ok: boolean
   reversed: number
   skipped: number
   failed: number
+  /**
+   * Phase 2 — why nothing was reversed, when nothing was.
+   *
+   * The History "Undo" button returned `reversed: 0` with no explanation, which
+   * is indistinguishable from "there was nothing to undo". An expired window is
+   * a fact the operator needs, not a silent no-op.
+   */
+  expired?: boolean
+  windowHours?: number
+  reason?: string
   details: Array<{
     actionLogId: string
     actionType: string
@@ -187,6 +199,18 @@ export async function rollbackByChangeSetId(args: {
   })
 
   const out: RollbackOutcome = { ok: true, reversed: 0, skipped: 0, failed: 0, details: [] }
+  if (logs.length === 0) {
+    // Distinguish "nothing to undo" from "too late to undo" — the caller
+    // otherwise shows the same empty result for both.
+    const anyOutsideWindow = await prisma.advertisingActionLog.count({
+      where: { executionId: args.changeSetId, rolledBackAt: null },
+    }).catch(() => 0)
+    if (anyOutsideWindow > 0) {
+      out.expired = true
+      out.windowHours = ROLLBACK_WINDOW_HOURS
+      out.reason = `This change set is older than the ${ROLLBACK_WINDOW_HOURS}-hour undo window. Amazon's own state has usually moved on by then, so restoring a day-old snapshot can do more harm than the change it reverses.`
+    }
+  }
   for (const log of logs) {
     const r = await reverseOne(log, args.actor, args.reason)
     const base = { actionLogId: log.id, actionType: log.actionType, entityType: log.entityType, entityId: log.entityId }

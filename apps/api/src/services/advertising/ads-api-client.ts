@@ -37,6 +37,7 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { logger } from '../../utils/logger.js'
+import { QuotaLedger, MemoryQuotaStore, RedisQuotaStore, type QuotaStore } from '../ads-core/quota-ledger.js'
 
 export type AdsMode = 'sandbox' | 'live'
 
@@ -212,27 +213,118 @@ async function getLwaToken(
   return refreshPromise
 }
 
-// Retry fetch for rate-limit (429) and transient server errors (5xx).
-// Exponential backoff: 1 s → 2 s → 4 s (capped at 8 s). 4xx errors
-// other than 429 are not retried — they indicate a logic problem.
+// ── Phase 2 — quota governance for Amazon ─────────────────────────────────
+// ads-core/quota-ledger.ts existed and governed only eBay; nothing under
+// services/advertising imported it. Amazon relied on bare 429/5xx retry.
+//
+// Amazon's rate limit is a REGIONAL queue shared across all tenants — adding
+// connections does not raise throughput — so the bucket is keyed by region and
+// is deliberately NOT per-profile. A per-connection bucket would let two
+// profiles in the same region each believe they had the full allowance.
+let _amzLedgers: { reads: QuotaLedger; writes: QuotaLedger } | null = null
+async function amazonLedgers(): Promise<{ reads: QuotaLedger; writes: QuotaLedger }> {
+  if (_amzLedgers) return _amzLedgers
+  let store: QuotaStore
+  try {
+    const { redis } = await import('../../lib/queue.js')
+    store = new RedisQuotaStore(() => redis.connection)
+  } catch {
+    store = new MemoryQuotaStore()
+  }
+  // Same asymmetry as eBay, for the same reason: a read that slips through on a
+  // store outage costs one wasted call; an unmetered WRITE can breach the
+  // shared regional quota and mutate the live account.
+  _amzLedgers = {
+    reads: new QuotaLedger(store, { failMode: 'open' }),
+    writes: new QuotaLedger(store, { failMode: 'closed' }),
+  }
+  return _amzLedgers
+}
+
+const amazonBudget = (region: string) => ({
+  key: `amz:ads:${region}`,
+  limit: Number(process.env.NEXUS_AMAZON_ADS_REGION_BUDGET ?? 9000),
+  windowSec: 3600,
+})
+
+const quotaBypassed = () => process.env.NEXUS_AMAZON_ADS_QUOTA_MODE === 'off'
+
+export class AmazonAdsQuotaError extends Error {
+  constructor(public readonly retryAfterSec: number, degraded = false) {
+    super(degraded
+      ? 'Amazon ads quota store unavailable (fail-closed for writes) — check Redis or set NEXUS_AMAZON_ADS_QUOTA_MODE=off for a supervised run'
+      : `Amazon ads regional quota exhausted — retry in ${retryAfterSec}s`)
+    this.name = 'AmazonAdsQuotaError'
+  }
+}
+
+/** One unit per OUTBOUND REQUEST, including each retry — Amazon counts them all. */
+async function reserveAmazon(region: string, isWrite: boolean): Promise<void> {
+  if (quotaBypassed()) return
+  const l = await amazonLedgers()
+  const res = await (isWrite ? l.writes : l.reads).reserve(amazonBudget(region))
+  if (!res.ok) throw new AmazonAdsQuotaError(res.retryAfterSec, res.degraded)
+  if (res.degraded) logger.warn('[ADS-LIVE] quota ledger degraded', { region, isWrite })
+}
+
+/**
+ * Retry for 429 (rate limit), 423 (ConcurrentModificationException) and 5xx.
+ *
+ * Four things were wrong before and are fixed here:
+ *  1. `Retry-After` was never read — we guessed while Amazon was telling us.
+ *  2. Backoff was deterministic, so concurrent callers retried in lockstep and
+ *     re-collided. Now jittered.
+ *  3. **423 was a hard failure** though Amazon documents it as retryable. It
+ *     means another writer holds the entity; the correct response is to wait,
+ *     not to surface an error to the operator. It gets its OWN budget because
+ *     it is a contention signal, not a throughput signal — burning the 429
+ *     allowance on lock contention would throttle unrelated traffic.
+ *  4. A dead unreachable `fetch` sat after the loop, so an exhausted retry
+ *     budget issued one final UNCOUNTED request.
+ */
+const RETRYABLE_STATUS = new Set([429, 423])
+
 async function fetchWithRetry(
   url: string,
   opts: RequestInit,
+  ctx: { region: string; isWrite: boolean },
   maxAttempts = 3,
+  maxLockAttempts = 5,
 ): Promise<Response> {
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+  let rateAttempts = 0
+  let lockAttempts = 0
+
+  for (;;) {
+    await reserveAmazon(ctx.region, ctx.isWrite)
     const res = await fetch(url, opts)
     if (res.ok) return res
-    const retryable = res.status === 429 || res.status >= 500
-    if (!retryable || attempt === maxAttempts - 1) return res
-    const delayMs = Math.min(1000 * Math.pow(2, attempt), 8000)
-    logger.warn('[ADS-LIVE] retrying after transient error', {
-      status: res.status, attempt: attempt + 1, delayMs, url,
+
+    const retryable = RETRYABLE_STATUS.has(res.status) || res.status >= 500
+    if (!retryable) return res
+
+    // 423 gets its own budget — see (3) above.
+    if (res.status === 423) {
+      lockAttempts++
+      if (lockAttempts >= maxLockAttempts) return res
+    } else {
+      rateAttempts++
+      if (rateAttempts >= maxAttempts) return res
+    }
+
+    const attempt = res.status === 423 ? lockAttempts : rateAttempts
+    const header = res.headers.get('retry-after')
+    const advised = header && Number.isFinite(Number(header)) ? Number(header) * 1000 : null
+    const backoff = Math.min(1000 * Math.pow(2, attempt - 1), 8000)
+    // Jitter: full-jitter over the chosen delay. Deterministic backoff makes
+    // concurrent callers collide again at exactly the same moment.
+    const base = advised ?? backoff
+    const delayMs = Math.round(base / 2 + Math.random() * (base / 2))
+
+    logger.warn('[ADS-LIVE] retrying', {
+      status: res.status, attempt, delayMs, retryAfterHeader: header ?? null, url,
     })
     await new Promise((r) => setTimeout(r, delayMs))
   }
-  // Should be unreachable but TypeScript needs a return
-  return fetch(url, opts)
 }
 
 async function resolveCredentials(profileId: string): Promise<AdsCredentials> {
@@ -274,7 +366,7 @@ export async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
     method: opts.method,
     headers,
     body: opts.body != null ? JSON.stringify(opts.body) : undefined,
-  })
+  }, { region: opts.region, isWrite: opts.method !== 'GET' })
   if (!res.ok) {
     const text = await res.text()
     throw new Error(`[ADS-LIVE] ${opts.method} ${opts.path} → ${res.status}: ${text}`)

@@ -6081,6 +6081,10 @@ model ImportJobRow {
 
   @@index([jobId, status])
   @@index([targetId])
+
+  /// Phase 2 — apply idempotency. Without this, two concurrent /bulk/apply
+  /// POSTs both passed the plan-token check and both wrote every row.
+  @@unique([jobId, rowIndex])
 }
 
 // ── W8.4: Scheduled imports ───────────────────────────────────────
