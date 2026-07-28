@@ -11,6 +11,9 @@ import { BarChart3, Wallet, TrendingUp, MousePointerClick, Info } from 'lucide-r
 import { KpiStrip, type KpiTileSpec } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
+import { Banner } from '@/design-system/components/Banner'
 
 interface Row {
   key: string; spendEurCents: number; salesCents: number
@@ -21,6 +24,19 @@ export interface AnalyticsData {
   totals: { spendEurCents: number; salesCents: number; impressions: number; clicks: number; orders7d: number }
   byChannel: Row[]; byMarketplace: Row[]
   daily: Array<{ date: string; spendEurCents: number; salesCents: number }>
+  /**
+   * AX-IE.1 — freshness of the Amazon slice. eBay figures here are canonical, but
+   * Amazon ones are mirrored from the ads tables by a nightly backfill, so when the
+   * mirror is stale the Amazon share of every number on this page is wrong.
+   * Null when there is nothing to flag.
+   */
+  amazonShadow?: {
+    lastRefreshedAt: string | null
+    ageHours: number | null
+    shadowCount: number
+    canonicalCount: number
+    stale: boolean
+  } | null
 }
 
 const eur = (c: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100)
@@ -79,6 +95,30 @@ export function AnalyticsClient({ initial }: { initial: AnalyticsData }) {
         <div className="flex items-center gap-2"><BarChart3 size={20} className="text-blue-500" /><h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Cross-channel analytics</h1></div>
         <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-1"><Info size={13} /> {data.attributionNote}</p>
       </header>
+
+      {/* AX-IE.1 — these totals blend canonical eBay numbers with Amazon ones
+          mirrored from the ads tables. If the mirror has drifted, say so above the
+          figures rather than letting stale Amazon spend sit inside a total that
+          looks current. */}
+      {data.amazonShadow?.stale && (
+        <Banner
+          tone="warning"
+          className="mb-4"
+          title="Amazon figures below are mirrored, and the mirror is out of date"
+          action={<a href="/marketing/advertising/campaigns" className="text-sm font-medium underline whitespace-nowrap">Open Ad Manager</a>}
+        >
+          {data.amazonShadow.shadowCount !== data.amazonShadow.canonicalCount
+            ? `The mirror holds ${data.amazonShadow.shadowCount} Amazon campaigns against ${data.amazonShadow.canonicalCount} live in Ad Manager. `
+            : ''}
+          {data.amazonShadow.lastRefreshedAt
+            ? `Last refreshed ${new Date(data.amazonShadow.lastRefreshedAt).toLocaleDateString()}`
+            : 'Never refreshed'}
+          {data.amazonShadow.ageHours != null && data.amazonShadow.ageHours >= 48
+            ? ` — ${Math.floor(data.amazonShadow.ageHours / 24)} days ago. `
+            : '. '}
+          eBay and other channels here are live; Amazon refreshes nightly, and Ad Manager is its source of truth.
+        </Banner>
+      )}
 
       <KpiStrip tiles={tiles} className="mb-4" />
 

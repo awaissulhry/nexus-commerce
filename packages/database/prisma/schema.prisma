@@ -13212,6 +13212,12 @@ enum MktStatus {
 // EbayCampaign, EbayMarkdown, and RetailEvent price actions. Denormalized
 // budget/spend columns exist for the 10k-row grid; authoritative budget
 // pooling lives in CampaignBudget, authoritative metrics in CampaignMetric.
+// AX-IE.1 — canonical for eBay/Shopify/external/content/outreach campaigns.
+// For channel=AMAZON it is a SHADOW of the legacy `Campaign` model and stays
+// non-authoritative until the UM P8 cutover: those rows are written solely by
+// backfillAmazonShadow (delete-then-insert, scoped to channel=AMAZON) and are only
+// as fresh as its last run. Anything Amazon-ads-facing reads `Campaign`.
+// See docs/CANONICAL-ADS-MODELS.md.
 model MarketingCampaign {
   id        String       @id @default(cuid())
   channel   MktChannel
@@ -13329,6 +13335,13 @@ model MarketingCampaignLink {
 // Amazon SP/SB/SD specifics. Migration target for everything on legacy
 // Campaign that isn't core. Legacy AdGroup/AdTarget/AdProductAd remain the
 // Amazon-only sub-tree (no cross-channel analog) and re-parent here in P2.
+// ⚠️ AX-IE.1 — SHADOW, not authoritative. See docs/CANONICAL-ADS-MODELS.md.
+// Canonical Amazon campaign state is the legacy `Campaign` model (196 live rows,
+// read by all 276 advertising routes and the entire write path). This table has
+// ZERO code references anywhere in apps/api, apps/web or packages — it is populated
+// only by backfillAmazonShadow as part of the UM cross-channel migration and stays
+// non-authoritative until the UM P8 cutover. Do not read it for Amazon facts and
+// never hand-write it: the backfill is delete-then-insert scoped to channel=AMAZON.
 model AmazonAdsCampaignDetail {
   id         String            @id @default(cuid())
   campaignId String            @unique
@@ -13532,6 +13545,13 @@ model CampaignTarget {
 // Cross-channel budget pool. Generalizes legacy BudgetPool (which was
 // intra-Amazon only) so a pool can span Amazon SP + eBay Promoted +
 // Google. Guardrails (cooldown, max-shift %, dry-run) lifted verbatim.
+//
+// AX-IE.1 — deliberately NOT resolved against BudgetPool*. Both pairs are EMPTY
+// (0 rows) with live code paths: BudgetPool* serves the Amazon ads routes and the
+// rebalance cron, CampaignBudget* serves marketing-os. With no data on either side
+// there is nothing to disagree and nothing to migrate, so picking a winner today
+// would be pure risk. Amazon-scoped pooling stays on BudgetPool*; this is the
+// cross-channel successor to adopt at UM P8. See docs/CANONICAL-ADS-MODELS.md.
 model CampaignBudget {
   id              String  @id @default(cuid())
   name            String
@@ -13606,6 +13626,12 @@ model CampaignBudgetRebalance {
 // sales) PLUS costEurCents — an FX-normalized (frozen-rate-at-ingest)
 // column so cross-channel rollups sum a single currency. Cross-channel
 // ROAS is labeled "channel-reported" in the UI — attribution differs.
+//
+// ⚠️ AX-IE.1 — MIXED authority, read docs/CANONICAL-ADS-MODELS.md before using.
+//   • eBay rows: CANONICAL. Real writers (ebay-ads-reports, ebay-backfill).
+//   • AMAZON rows: SHADOW of AmazonAdsDailyPerformance, written only by
+//     backfillAmazonShadow. Never source an Amazon ads number from here — the
+//     ads cockpit, exports and rules all read AmazonAdsDailyPerformance.
 model CampaignMetric {
   id         String             @id @default(cuid())
   // Null when only the external entity is known (pre-link metrics).

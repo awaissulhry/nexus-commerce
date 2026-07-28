@@ -98,6 +98,39 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
     return { items, count: items.length, capped: items.length >= take }
   })
 
+  /**
+   * AX-IE.1 — freshness of the Amazon slice of the marketing tables.
+   *
+   * `MarketingCampaign` / `CampaignMetric` are CANONICAL for eBay and the other
+   * channels, but for Amazon they are a mirror of `Campaign` /
+   * `AmazonAdsDailyPerformance`, written only by backfillAmazonShadow. That
+   * backfill had no schedule until AX-IE.1, so it sat frozen at its migration date:
+   * 338 shadow rows against the canonical 196, because 338 is the PRE-dedup count
+   * from AF.1d (338 -> 169). Every surface reading these tables was quietly showing
+   * two-month-old Amazon money next to a live ads cockpit.
+   *
+   * Returns null when there is nothing to say. See docs/CANONICAL-ADS-MODELS.md.
+   */
+  async function amazonShadowFreshness() {
+    const [agg, canonicalCount] = await Promise.all([
+      prisma.marketingCampaign.aggregate({ where: { channel: 'AMAZON' }, _max: { updatedAt: true }, _count: true }),
+      prisma.campaign.count(),
+    ])
+    const shadowCount = agg._count
+    if (!shadowCount) return null
+    const lastRefreshedAt = agg._max.updatedAt
+    const ageHours = lastRefreshedAt ? Math.floor((Date.now() - lastRefreshedAt.getTime()) / 3_600_000) : null
+    return {
+      lastRefreshedAt,
+      ageHours,
+      shadowCount,
+      canonicalCount,
+      // Nightly cron plus headroom for one missed run. A count mismatch means the
+      // mirror is wrong regardless of age, so either condition marks it stale.
+      stale: (ageHours == null) || ageHours > 36 || shadowCount !== canonicalCount,
+    }
+  }
+
   // ── Single campaign ───────────────────────────────────────────────────
   app.get('/marketing/os/campaigns/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
@@ -134,11 +167,15 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
     const to = q.to ? new Date(q.to) : new Date()
     const baseWhere = { entityType: 'CAMPAIGN', date: { gte: from, lte: to } }
 
-    const [byChannel, byMarketplace, daily, totals] = await Promise.all([
+    const [byChannel, byMarketplace, daily, totals, amazonShadow] = await Promise.all([
       prisma.campaignMetric.groupBy({ by: ['channel'], where: baseWhere, _sum: { costEurCents: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true } }),
       prisma.campaignMetric.groupBy({ by: ['marketplace'], where: baseWhere, _sum: { costEurCents: true, sales7dCents: true }, orderBy: { _sum: { costEurCents: 'desc' } }, take: 20 }),
       prisma.campaignMetric.groupBy({ by: ['date'], where: baseWhere, _sum: { costEurCents: true, sales7dCents: true }, orderBy: { date: 'asc' } }),
       prisma.campaignMetric.aggregate({ where: baseWhere, _sum: { costEurCents: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true } }),
+      // AX-IE.1 — these totals BLEND canonical eBay numbers with mirrored Amazon
+      // ones. When the mirror is stale the Amazon share of every figure on this
+      // page is wrong, so the page has to be able to say so.
+      amazonShadowFreshness(),
     ])
 
     const fmt = (rows: Array<{ _sum: { costEurCents: bigint | null; sales7dCents: number | null; impressions?: number | null; clicks?: number | null; orders7d?: number | null } }>, key: string, rowsRaw: Array<Record<string, unknown>>) =>
@@ -161,6 +198,7 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
       from: from.toISOString().slice(0, 10),
       to: to.toISOString().slice(0, 10),
       attributionNote: 'Cross-channel ROAS/ACOS are channel-reported (attribution models differ per channel); spend is EUR-normalized via frozen FX at ingest.',
+      amazonShadow,
       totals: {
         spendEurCents: Number(totals._sum.costEurCents ?? 0n),
         salesCents: totals._sum.sales7dCents ?? 0,

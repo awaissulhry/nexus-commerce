@@ -93,6 +93,7 @@ import {
 import { runAdvertisingRuleEvaluatorCron } from './advertising-rule-evaluator.job.js'
 import { runMarketingRuleEvaluatorCron } from './marketing-rule-evaluator.job.js'
 import { runMarketingSyncDrainCron } from './marketing-sync-drain.job.js'
+import { runMarketingAmazonShadowBackfillCron } from './marketing-amazon-shadow-backfill.job.js'
 import { runAdsSyncDrainCron } from './ads-sync-drain.job.js'
 import { runTosDefenseCron } from './ads-tos-defense.job.js'
 import { runAmsSqsPoll } from './ams-sqs-poll.job.js'
@@ -226,6 +227,10 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'advertising-rule-evaluator': () => runAdvertisingRuleEvaluatorCron(),
   'marketing-rule-evaluator': () => runMarketingRuleEvaluatorCron(),
   'marketing-sync-drain': () => runMarketingSyncDrainCron(),
+  // AX-IE.1 — refresh the Amazon cross-channel shadow (MarketingCampaign /
+  // CampaignMetric) from the canonical Campaign / AmazonAdsDailyPerformance
+  // tables. Idempotent, scoped to channel=AMAZON, never touches canonical rows.
+  'marketing-amazon-shadow-backfill': () => runMarketingAmazonShadowBackfillCron(),
   // Apex A.2c — Redis-free autonomous drain of queued ad bid/budget/state writes.
   'drain-ads-sync': () => runAdsSyncDrainCron(),
   // Apex D.2 — autonomous Top-of-Search placement-multiplier defense (allowlisted).

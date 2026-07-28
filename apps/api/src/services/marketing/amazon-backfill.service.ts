@@ -18,6 +18,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { publishMarketingEvent } from '../marketing-events.service.js'
+import { EXCLUDE_AMS_DAILY } from '../ads-core/ams-daily.js'
 
 const SURFACE_BY_TYPE: Record<string, 'SP' | 'SB' | 'SD'> = { SP: 'SP', SB: 'SB', SD: 'SD' }
 const STATUS_MAP: Record<string, string> = {
@@ -88,7 +89,21 @@ export interface BackfillReport {
 export async function backfillAmazonShadow(opts: { apply: boolean }): Promise<BackfillReport> {
   const { apply } = opts
   const campaigns = await prisma.campaign.findMany({ orderBy: { createdAt: 'asc' } })
-  const perf = await prisma.amazonAdsDailyPerformance.findMany()
+  // AX-IE.1 — exclude the AMS daily rows, for the same reason AX2.3 excludes them
+  // from every console aggregate: the daily grain is owned by the report pipeline,
+  // and Marketing Stream used to write a SECOND parallel set for the same
+  // campaign-days under profileId 'ams'.
+  //
+  // They mattered here specifically because the destination key is narrower than
+  // the source key — AmazonAdsDailyPerformance is unique on
+  // (profileId, adProduct, entityType, entityId, date) but CampaignMetric is unique
+  // on (channel, entityType, entityId, date). Two rows differing only by profileId
+  // therefore collapsed, and `skipDuplicates` dropped whichever arrived second.
+  // Measured: 616 of 25,192 rows, ALL of them profileId collisions, and the loser
+  // was arbitrary — e.g. campaign 139838320481420 on 2026-06-06 had an 'ams' row at
+  // cost 0 against the real IT row at EUR 4.79, so a day's spend could land as zero.
+  // Excluding them makes the copy both correct and exactly parity-checkable.
+  const perf = await prisma.amazonAdsDailyPerformance.findMany({ where: { ...EXCLUDE_AMS_DAILY } })
   const fx = await buildFx()
   const marketCodes = await buildMarketCodeMap()
   logger.info(

@@ -67,9 +67,26 @@ Its only caller is a **manual endpoint** (`marketing-os.routes.ts:759`). **There
 
 **338 is the pre-dedup campaign count from AF.1d** ("Duplicate campaign merge (338 → 169; marketplace short-code vs Amazon ID split)"), and `MarketingCampaignLink` = **169** = the post-dedup count. The shadow is a frozen snapshot of a **state we already know to be wrong**.
 
-And it is on screen: `/marketing/campaigns` → `/api/marketing/os/campaigns` → `prisma.marketingCampaign.findMany`.
+And it is on screen — **corrected during implementation**. My first reading named
+`/marketing/campaigns`, but that route is retired: it `redirect()`s to
+`/marketing/advertising/campaigns`, and `MarketingCampaignsClient` is referenced only
+from a comment. The exposure is real but sits elsewhere, and is **broader** than one page.
+These live routes all read the shadow via `/api/marketing/os/*`:
 
-> **So: `/marketing/campaigns` shows 338 Amazon campaigns with two-month-old spend; `/marketing/ads/campaigns` shows 196 with live spend.** That is reproducible today and is my best candidate for the inconsistency you've been seeing.
+| Route | Reads | Shows |
+|---|---|---|
+| **`/marketing/analytics`** | `CampaignMetric` grouped by channel | **Amazon spend/sales/ROAS frozen at 2026-05-28, blended into cross-channel totals** |
+| `/marketing/calendar` | `MarketingCampaign` | stale Amazon campaign set |
+| `/marketing/budgets` | `MarketingCampaign` | stale Amazon budgets |
+| `/marketing/automation-os` | `MarketingCampaign` | stale Amazon campaign set |
+| `/marketing/campaigns/[id]` | `MarketingCampaign` | stale detail for deep links |
+
+`/marketing/advertising/campaigns` — the real cockpit — reads `/api/advertising/*`,
+i.e. Generation A, and is correct.
+
+> **So: `/marketing/analytics` reports Amazon money two months stale inside totals that
+> look current, while the ads cockpit shows live figures.** That is the reproducible
+> inconsistency, and the count mismatch (338 vs 196) is the same root cause.
 
 ### 1.4 Budgets are a non-issue
 

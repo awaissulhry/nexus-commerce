@@ -1400,6 +1400,11 @@ async function start() {
       const { startMarketingSyncDrainCron } = await import('./jobs/marketing-sync-drain.job.js');
       markCronStep('ads:import ads-sync-drain.job');
       const { startAdsSyncDrainCron } = await import('./jobs/ads-sync-drain.job.js');
+      // AX-IE.1 — refresh the Amazon cross-channel shadow nightly. Without it the
+      // shadow froze at its migration date and /marketing/campaigns disagreed with
+      // the ads cockpit (338 pre-dedup rows vs the canonical 196).
+      markCronStep('ads:import marketing-amazon-shadow-backfill.job');
+      const { startMarketingAmazonShadowBackfillCron } = await import('./jobs/marketing-amazon-shadow-backfill.job.js');
       // Apex D.2 — Top-of-Search defense (self-gated: only schedules when
       // NEXUS_ENABLE_TOS_DEFENSE_CRON is on, since it writes live placement bids).
       const { startTosDefenseCron } = await import('./jobs/ads-tos-defense.job.js');
@@ -1420,6 +1425,7 @@ async function start() {
       startMarketingRuleEvaluatorCron();
       startMarketingSyncDrainCron();
       startAdsSyncDrainCron();
+      startMarketingAmazonShadowBackfillCron();
       startTosDefenseCron();
       startAmsSqsPollCron();
       startSqpIngestCron();
