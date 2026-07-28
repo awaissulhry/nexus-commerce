@@ -4426,10 +4426,17 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const built = await buildBulksheetWorkbook({
       rows: spRows,
       portfolios: portfolios.map((p) => ({
-        'Portfolio ID': p.externalPortfolioId, 'Portfolio name': p.name, State: st(p.state ?? ''),
-        'Budget amount': p.budgetAmount != null ? Number(p.budgetAmount) : '', 'Budget currency': p.budgetCurrencyCode ?? '',
-        'Budget policy': p.budgetPolicy ?? '', 'Start date': p.startDate ?? '', 'End date': p.endDate ?? '',
-        'In budget': p.inBudget ? 'yes' : 'no',
+        // AX-IE.2 — Amazon's real header names and its Product/Entity/Operation
+        // prefix. Operation is left BLANK on export: the operator fills it in to
+        // request a change, exactly as on the campaigns sheet.
+        Product: 'Portfolios', Entity: 'Portfolio', Operation: '',
+        'Portfolio ID': p.externalPortfolioId, 'Portfolio name': p.name,
+        'Budget amount': p.budgetAmount != null ? Number(p.budgetAmount) : '',
+        'Budget currency code': p.budgetCurrencyCode ?? '',
+        'Budget policy': p.budgetPolicy ?? '',
+        'Budget start date': p.startDate ?? '', 'Budget end date': p.endDate ?? '',
+        'State (Informational only)': st(p.state ?? ''),
+        'In Budget (Informational only)': p.inBudget ? 'yes' : 'no',
       })),
       coverage: {
         entities, excludes,

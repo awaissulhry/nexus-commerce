@@ -143,16 +143,38 @@ export interface BuildInput {
   generatedAt: Date
 }
 
+/**
+ * AX-IE.2 — Amazon's REAL Portfolios columns, copied from a Seller Central
+ * download (docs/ads-amazon/AMAZON-BULKSHEET-GRAMMAR.md), not guessed.
+ *
+ * The previous list was nine ad-hoc columns invented before we had a real file,
+ * and four of the names were wrong: `Budget currency` is `Budget currency code`,
+ * `Start date` / `End date` are `Budget start date` / `Budget end date`, and
+ * both `State` and `In Budget` carry the `(Informational only)` suffix — they
+ * are READ-ONLY on Amazon's own sheet, so offering State as an editable enum
+ * invited an edit that could never apply.
+ *
+ * The important difference is the first three columns. Amazon's sheet carries
+ * Product / Entity / Operation, which is precisely what makes a sheet importable
+ * — and their absence is why our importer skipped this one. AX-ZD.8 concluded
+ * portfolios "cannot round-trip"; that was true of our file, not of the format.
+ * Emitting the real shape is the prerequisite for fixing that; the apply path
+ * (entityRule declares `applySupported: false`) is still to build, so the sheet
+ * stays declared non-input until it exists.
+ */
 const PORTFOLIO_COLUMNS: SheetColumnSpec[] = [
+  { header: 'Product', type: 'text' },
+  { header: 'Entity', type: 'text' },
+  { header: 'Operation', type: 'text' },
   { header: 'Portfolio ID', type: 'id' },
   { header: 'Portfolio name', type: 'text' },
-  { header: 'State', type: 'enum', allowedValues: VOCABULARIES.state.values },
   { header: 'Budget amount', type: 'money' },
-  { header: 'Budget currency', type: 'text' },
+  { header: 'Budget currency code', type: 'text' },
   { header: 'Budget policy', type: 'text' },
-  { header: 'Start date', type: 'date' },
-  { header: 'End date', type: 'date' },
-  { header: 'In budget', type: 'text' },
+  { header: 'Budget start date', type: 'date' },
+  { header: 'Budget end date', type: 'date' },
+  { header: 'State (Informational only)', type: 'text' },
+  { header: 'In Budget (Informational only)', type: 'text' },
 ]
 
 export async function buildBulksheetWorkbook(input: BuildInput): Promise<BuildResult> {
