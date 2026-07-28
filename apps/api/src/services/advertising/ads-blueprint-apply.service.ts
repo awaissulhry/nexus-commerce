@@ -49,11 +49,30 @@ export interface ApplyRequest {
   actor?: string
 }
 
+/**
+ * AX2.7 — can this marketplace actually receive writes? Verified state, not a
+ * guess: 5 of the 9 connections are sandbox with no writesEnabledAt, and FR/ES
+ * are production but have never had a single AD_* write reach Amazon.
+ */
+export async function marketContext(marketplace: string) {
+  const conn = await prisma.amazonAdsConnection.findFirst({
+    where: { marketplace, isActive: true },
+    orderBy: { mode: 'asc' }, // 'production' sorts before 'sandbox'
+    select: { mode: true, writesEnabledAt: true, lastWriteAt: true },
+  })
+  return {
+    marketplace,
+    writable: conn?.mode === 'production' && !!conn.writesEnabledAt,
+    everWritten: !!conn?.lastWriteAt,
+  }
+}
+
 export async function planApply(req: ApplyRequest): Promise<{ plan: ApplyPlan; blueprintName: string }> {
   const bp = await prisma.adBlueprint.findUnique({ where: { id: req.blueprintId } })
   if (!bp) throw new Error('blueprint not found')
   const existing = await loadExistingTargets(req.marketplace)
-  const plan = planApplication(bp.doc as unknown as BlueprintDoc, req.target, existing, req.options ?? {})
+  const market = await marketContext(req.marketplace)
+  const plan = planApplication(bp.doc as unknown as BlueprintDoc, req.target, existing, { ...(req.options ?? {}), market })
   return { plan, blueprintName: bp.name }
 }
 

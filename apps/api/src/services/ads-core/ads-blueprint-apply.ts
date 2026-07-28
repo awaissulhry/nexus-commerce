@@ -68,6 +68,8 @@ export interface ApplyConflict {
 
 export interface ApplyPlan {
   productToken: string
+  /** Non-blocking advisories — things worth knowing before you commit. */
+  warnings: string[]
   campaigns: PlannedCampaign[]
   totals: {
     campaigns: number
@@ -84,6 +86,18 @@ export interface ApplyPlan {
   allowed: boolean
 }
 
+/**
+ * What we know about the destination marketplace's ability to receive writes.
+ * Supplied by the caller because the pure planner has no DB access.
+ */
+export interface MarketContext {
+  marketplace: string
+  /** production connection AND writesEnabledAt set. */
+  writable: boolean
+  /** Has any write ever actually reached Amazon for this market? */
+  everWritten: boolean
+}
+
 export interface ApplyOptions {
   /** Shared targets the operator has chosen NOT to create. */
   skipSharedTargets?: string[]
@@ -91,6 +105,8 @@ export interface ApplyOptions {
   acceptSharedTargets?: string[]
   /** Refuse if the replication would commit more than this per day. */
   dailyBudgetCapEur?: number
+  /** Destination market. Omit only when the caller has already vetted it. */
+  market?: MarketContext
 }
 
 const norm = (s: string): string => s.trim().toLowerCase()
@@ -186,6 +202,23 @@ export function planApplication(
   const unresolved = conflictList.filter((c) => c.resolution === 'UNRESOLVED')
 
   const blockers: string[] = []
+  const warnings: string[] = []
+
+  // AX2.7 — a replication into a market that cannot receive writes would create
+  // the whole structure LOCALLY, with null Amazon ids, and only report PARTIAL
+  // afterwards. Refuse before anything is created.
+  if (opts.market && !opts.market.writable) {
+    blockers.push(
+      `${opts.market.marketplace} has no writable production Amazon Ads connection, so all `
+      + `${doc.campaigns.length} campaigns would be created locally and never reach Amazon`,
+    )
+  } else if (opts.market && !opts.market.everWritten) {
+    warnings.push(
+      `no write has ever reached Amazon for ${opts.market.marketplace} — this replication would be the first, `
+      + 'so verify one campaign in Seller Central before trusting the rest',
+    )
+  }
+
   if (unresolved.length) {
     blockers.push(
       `${unresolved.length} keyword(s) would make ${target.productToken} bid against campaigns you already run `
@@ -201,6 +234,7 @@ export function planApplication(
 
   return {
     productToken: target.productToken,
+    warnings,
     campaigns,
     totals: { campaigns: campaigns.length, adGroups, positives, negatives, productAds, dailyBudgetTotal },
     conflicts: conflictList,

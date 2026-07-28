@@ -95,7 +95,23 @@ Observed freshness: `lastSyncedAt` for **184 of 189 campaigns sits in the 30 min
 30 minutes**, even though `ads-campaign-settings-sync` last ran 7 minutes ago. So the 20-minute job is not
 stamping every campaign each pass — worth confirming whether it early-exits on "no change" or is paging out.
 
-### 🟠 B4 — 5 of 9 marketplaces cannot write; 2 more never have
+### ✅ B4 correction — the multi-market claim was overstated (AX2.7, 2026-07-28)
+
+I wrote that "any bulk action taken across markets silently no-ops on seven of nine". Probing says otherwise:
+
+- **Zero campaigns exist in the five sandbox markets** (UK, PL, SE, NL, IE). Nothing is being edited there, so
+  nothing is silently no-opping.
+- **FR and ES have zero `AD_*` queue rows** — no write was ever *attempted*. Their null `lastWriteAt` means
+  nobody has edited them, not that writes fail. All 196 campaigns sit in IT (126), DE (38), FR (22), ES (10),
+  and **all four of those markets are writable**.
+
+So B4 is informational, and the AX2.1 banner already carries it. What the probe *did* expose is a foot-gun in
+the replication I had just built: applying a blueprint to a sandbox market would have created the entire
+structure locally with null Amazon ids and only reported PARTIAL afterwards. AX2.7 makes the planner
+market-aware — a non-writable market is a **blocker**, and a writable-but-never-written market (FR, ES) is a
+**warning** that the run would be the first write ever to reach that account.
+
+### 🟠 B4 (original) — 5 of 9 marketplaces cannot write; 2 more never have
 
 ```
 IT  production  writesEnabled 2026-05-31   lastWrite 2026-07-27 22:19   ✓ working

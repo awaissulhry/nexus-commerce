@@ -122,6 +122,37 @@ describe('planApplication — the self-competition gate', () => {
   })
 })
 
+describe('planApplication — market awareness (AX2.7)', () => {
+  const writable = { marketplace: 'IT', writable: true, everWritten: true }
+
+  it('REFUSES a market with no writable production connection', () => {
+    // UK/PL/SE/NL/IE are sandbox connections with no writesEnabledAt. Without
+    // this the run creates the whole structure locally with null Amazon ids and
+    // only reports PARTIAL afterwards — 11 orphaned campaigns.
+    const p = planApplication(doc, gale, [], { market: { marketplace: 'UK', writable: false, everWritten: false } })
+    expect(p.allowed).toBe(false)
+    expect(p.blockers.some((b) => b.includes('UK') && b.includes('never reach Amazon'))).toBe(true)
+  })
+
+  it('WARNS, but allows, a writable market that has never been written to', () => {
+    // FR and ES are production + writesEnabled but have zero AD_* queue rows:
+    // a replication there would be the first write ever to reach that account.
+    const p = planApplication(doc, gale, [], { market: { marketplace: 'FR', writable: true, everWritten: false } })
+    expect(p.allowed).toBe(true)
+    expect(p.warnings.some((w) => w.includes('FR') && w.includes('first'))).toBe(true)
+  })
+
+  it('a proven market produces neither blocker nor warning', () => {
+    const p = planApplication(doc, gale, [], { market: writable })
+    expect(p.allowed).toBe(true)
+    expect(p.warnings).toEqual([])
+  })
+
+  it('omitting market context does not invent a blocker', () => {
+    expect(planApplication(doc, gale, []).allowed).toBe(true)
+  })
+})
+
 describe('planApplication — other blockers', () => {
   it('refuses when the replication exceeds the daily budget cap', () => {
     const p = planApplication(doc, gale, [], { dailyBudgetCapEur: 20 })
