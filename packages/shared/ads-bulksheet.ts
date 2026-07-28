@@ -415,4 +415,62 @@ export function buildDictionaryRows(): string[][] {
 }
 
 /** Schema version stamped into `_meta` so an uploaded file can be matched to its generation. */
-export const BULKSHEET_SCHEMA_VERSION = '2026-07-28.1'
+export const BULKSHEET_SCHEMA_VERSION = '2026-07-28.2'
+
+// ── Round-trip identity (AX-IE.3) ─────────────────────────────────────
+// Two hidden columns that make a re-upload safe. Without them a returning file
+// can only be matched by row position, which is wrong the moment anyone sorts,
+// filters or inserts a row — and sorting is the first thing an operator does.
+
+export const ROW_KEY_HEADER = '_row_key'
+export const BASELINE_HEADER = '_baseline'
+export const META_HEADERS = [ROW_KEY_HEADER, BASELINE_HEADER] as const
+
+/**
+ * Opaque, stable key for one exported entity. The ONLY join key on import.
+ *
+ * `localId` is always included so rows for entities Amazon has not issued an id
+ * for yet are still uniquely addressable.
+ */
+export function buildRowKey(parts: { entity: string; externalId?: string | null; localId: string }): string {
+  const e = normEnum(parts.entity).toLowerCase()
+  return `${e}:${parts.externalId ?? 'local'}:${parts.localId}`
+}
+
+/**
+ * Fingerprint of the EDITABLE values at export time.
+ *
+ * On import a mismatch means the entity changed on Amazon's side since the file
+ * was produced — that is a conflict to surface, not a value to clobber. Only
+ * editable columns are hashed, so read-only performance context drifting (which
+ * it does constantly, Amazon restates for 60 days) never manufactures a false
+ * conflict.
+ *
+ * FNV-1a rather than a crypto hash deliberately: this module is shared with the
+ * browser, and the requirement is a stable short fingerprint, not collision
+ * resistance against an adversary.
+ */
+export function computeBaseline(get: (header: string) => unknown): string {
+  let h = 0x811c9dc5
+  for (const col of COLUMNS) {
+    if (!col.editable) continue
+    const v = get(col.header)
+    const s = v == null ? '' : String(v).trim()
+    const field = `${col.header}=${s};`
+    for (let i = 0; i < field.length; i++) {
+      h ^= field.charCodeAt(i)
+      h = Math.imul(h, 0x01000193) >>> 0
+    }
+  }
+  return h.toString(16).padStart(8, '0')
+}
+
+/** True when the uploaded row's baseline no longer matches the entity's current values. */
+export function baselineConflicts(uploaded: string, current: string): boolean {
+  const a = (uploaded ?? '').trim()
+  // A file with no baseline (hand-authored, or Numbers stripped it) is not a
+  // conflict — it is simply unverifiable, and blocking it would make the
+  // template-free path unusable.
+  if (!a) return false
+  return a !== current
+}

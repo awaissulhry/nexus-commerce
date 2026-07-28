@@ -12,6 +12,7 @@ import {
   parseMoney, parseBid, parsePercent, parseDate,
   validateRow, entityRule, buildDictionaryRows, DICTIONARY_HEADERS,
   AMAZON_BID_FLOOR_EUR,
+  buildRowKey, computeBaseline, baselineConflicts,
 } from '@nexus/shared/ads-bulksheet'
 
 /** Build a `get` accessor over a plain row object, as callers do. */
@@ -199,6 +200,43 @@ describe('row validation', () => {
     for (const e of ['Campaign', 'Ad group', 'Keyword', 'Product ad', 'Product targeting', 'Negative keyword', 'Bidding adjustment', 'Portfolio']) {
       expect(entityRule(e), e).not.toBeNull()
     }
+  })
+})
+
+describe('round-trip identity', () => {
+  it('builds a stable, unique row key per entity', () => {
+    const a = buildRowKey({ entity: 'Keyword', externalId: '123', localId: 'abc' })
+    expect(a).toBe(buildRowKey({ entity: 'Keyword', externalId: '123', localId: 'abc' }))
+    expect(a).not.toBe(buildRowKey({ entity: 'Negative keyword', externalId: '123', localId: 'abc' }))
+  })
+
+  it('still produces a key when Amazon has issued no id', () => {
+    const k = buildRowKey({ entity: 'Campaign', externalId: null, localId: 'local-1' })
+    expect(k).toContain('local')
+    expect(k).not.toBe(buildRowKey({ entity: 'Campaign', externalId: null, localId: 'local-2' }))
+  })
+
+  it('changes the baseline when an EDITABLE value changes', () => {
+    const base = { Bid: '0.31', State: 'enabled' }
+    const before = computeBaseline((h) => (base as Record<string, string>)[h])
+    const after = computeBaseline((h) => ({ ...base, Bid: '0.42' } as Record<string, string>)[h])
+    expect(after).not.toBe(before)
+  })
+
+  it('does NOT change when only read-only context changes', () => {
+    // Amazon restates performance for 60 days. If drifting read-only metrics moved
+    // the fingerprint, every re-upload would look like a conflict.
+    const editable = { Bid: '0.31', State: 'enabled' }
+    const a = computeBaseline((h) => ({ ...editable, 'Campaign ID': '111' } as Record<string, string>)[h])
+    const b = computeBaseline((h) => ({ ...editable, 'Campaign ID': '999' } as Record<string, string>)[h])
+    expect(a).toBe(b)
+  })
+
+  it('treats a missing baseline as unverifiable, not as a conflict', () => {
+    // Hand-authored files, and files Numbers has stripped, must stay usable.
+    expect(baselineConflicts('', 'abc123')).toBe(false)
+    expect(baselineConflicts('abc123', 'abc123')).toBe(false)
+    expect(baselineConflicts('abc123', 'def456')).toBe(true)
   })
 })
 

@@ -33,6 +33,8 @@ export interface SheetColumnSpec {
   allowedValues?: readonly string[]
   /** Hover text on the header cell — the Dictionary definition. */
   headerNote?: string
+  /** Hidden column: present for the round trip, out of the operator's way. */
+  hidden?: boolean
 }
 
 export interface SheetSpec {
@@ -131,8 +133,10 @@ class ExcelJsWriter implements SpreadsheetWriter {
       // The Dictionary definition, on the header, so analysts hover instead of
       // switching sheets.
       if (c.headerNote) cell.note = c.headerNote
+      const col = ws.getColumn(i + 1)
       const fmt = NUM_FMT[c.type]
-      if (fmt) ws.getColumn(i + 1).numFmt = fmt
+      if (fmt) col.numFmt = fmt
+      if (c.hidden) col.hidden = true
     })
     if (spec.freeze) {
       ws.views = [{ state: 'frozen', xSplit: spec.freeze.columns, ySplit: spec.freeze.rows, activeCell: 'A2' }]
@@ -193,6 +197,7 @@ class ExcelJsWriter implements SpreadsheetWriter {
       // Width from the header and a sample of the data, capped. p95-ish without
       // sorting every column: one 300-character search term must not blow out the layout.
       spec.columns.forEach((c, i) => {
+        if (c.hidden) return // sizing a hidden column would un-hide it in some readers
         const col = ws.getColumn(i + 1)
         let widest = c.header.length
         let seen = 0

@@ -72,7 +72,12 @@ import { randomBytes, createHash } from 'node:crypto'
 // pre-validation and this server-side gate cannot drift apart.
 import {
   parseMoney, parseBid, parseVocabulary, VOCABULARIES, BULKSHEET_SCHEMA_VERSION,
+  buildRowKey, ROW_KEY_HEADER,
 } from '@nexus/shared/ads-bulksheet'
+
+/** AX-IE.3 — stable per-entity key, the only thing a re-upload is matched on. */
+const rowKey = (entity: string, externalId: string | null | undefined, localId: string): string =>
+  buildRowKey({ entity, externalId, localId })
 
 // AD.4 — in-memory token store for the two-step enable-writes flow.
 // Token issued by /preview-writes is required to complete /enable-writes.
@@ -4236,48 +4241,127 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       return { error: 'export_too_large', totalCampaigns, ceiling: HARD_CEILING, hint: 'Narrow the scope, or pass ?limit= to explicitly acknowledge a partial export.' }
     }
     const limit = explicitLimit ?? HARD_CEILING
+    // AX-IE.3 — every entity type, not four. Negatives and product ads were being
+    // dropped ENTIRELY: 1,649 negative targets and 4,015 product ads that the file
+    // never mentioned, so a round trip could not preserve what it never carried.
     const campaigns = await prisma.campaign.findMany({
       take: limit, orderBy: { name: 'asc' },
-      // take one MORE than the cap purely to detect overflow — the extra row is sliced off below
-      include: { adGroups: { include: { targets: { where: { isNegative: false }, take: TARGET_CAP + 1 } } } },
+      include: {
+        adGroups: {
+          include: {
+            // take one MORE than the cap purely to detect overflow — sliced off below
+            targets: { take: TARGET_CAP + 1, orderBy: { createdAt: 'asc' } },
+            productAds: true,
+          },
+        },
+      },
     })
     let targetsTruncated = 0
     const PROD: Record<string, string> = { SPONSORED_PRODUCTS: 'Sponsored Products', SPONSORED_BRANDS: 'Sponsored Brands', SPONSORED_DISPLAY: 'Sponsored Display' }
     const st = (s: string) => (s || '').toLowerCase()
     const sheetRows: Array<Record<string, unknown>> = []
     const push = (o: Record<string, unknown>) => { sheetRows.push(o) }
+    const marketplaces = new Set<string>()
+
+    // Amazon's auto-targeting expressions are NOT match types — they are the four
+    // auto groups. Emitting them in Match type produced a value no vocabulary
+    // accepts; they belong in the targeting expression.
+    const AUTO_EXPRESSIONS = new Set(['SEARCH_LOOSE_MATCH', 'SEARCH_CLOSE_MATCH', 'PRODUCT_SUBSTITUTES', 'PRODUCT_COMPLEMENTS'])
+    // 334 negative rows carry a malformed expressionType ('_EXACT' / '_PHRASE'),
+    // evidently a stripped 'NEGATIVE' prefix. Map on the suffix so they export as
+    // real negatives instead of silently blank.
+    const negMatch = (raw: string): string => (/(PHRASE)$/.test(raw) ? 'Negative phrase' : /(EXACT)$/.test(raw) ? 'Negative exact' : '')
+
     for (const c of campaigns) {
       const product = PROD[c.adProduct ?? ''] ?? 'Sponsored Products'
+      if (c.marketplace) marketplaces.add(c.marketplace)
+      const campRef = { Product: product, 'Campaign ID': c.externalCampaignId ?? '' }
       // AX-IE.0 (E4) — targeting type is READ, never guessed. It used to be inferred
-      // by regex on the campaign name, which mislabelled 26 of 196 campaigns ("Autumn
-      // Boots" exported as auto). Blank when Amazon hasn't told us yet: a bulksheet
-      // that omits a value is inert, one that states the wrong value corrupts on
-      // re-upload. Populated by ads-campaign-settings-sync from the v3 campaigns API.
-      push({ Product: product, Entity: 'Campaign', 'Campaign ID': c.externalCampaignId ?? '', 'Portfolio ID': c.portfolioId ?? '', 'Campaign name': c.name, 'Start date': c.startDate ?? '', 'End date': c.endDate ?? '', 'Targeting type': c.targetingType ? c.targetingType.toLowerCase() : '', State: st(c.status), 'Daily budget': c.dailyBudget != null ? Number(c.dailyBudget) : '', 'Bidding strategy': c.biddingStrategy ?? '' })
+      // by regex on the campaign name, which mislabelled 12 of the 176 campaigns
+      // Amazon reports on. Blank when Amazon hasn't told us yet: a bulksheet that
+      // omits a value is inert, one that states the wrong value corrupts on re-upload.
+      push({ ...campRef, Entity: 'Campaign', [ROW_KEY_HEADER]: rowKey('Campaign', c.externalCampaignId, c.id), 'Portfolio ID': c.portfolioId ?? '', 'Campaign name': c.name, 'Start date': c.startDate ?? '', 'End date': c.endDate ?? '', 'Targeting type': c.targetingType ? c.targetingType.toLowerCase() : '', State: st(c.status), 'Daily budget': c.dailyBudget != null ? Number(c.dailyBudget) : '', 'Bidding strategy': c.biddingStrategy ?? '' })
+
+      // Placement modifiers — 152 campaigns carry these and they were invisible.
+      const dyn = (c.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement?: string; percentage?: number }> }
+      for (const pb of dyn.placementBidding ?? []) {
+        if (!pb?.placement) continue
+        push({ ...campRef, Entity: 'Bidding adjustment', [ROW_KEY_HEADER]: rowKey('Bidding adjustment', `${c.externalCampaignId}:${pb.placement}`, c.id), Placement: pb.placement, Percentage: pb.percentage ?? 0, State: st(c.status) })
+      }
+
       for (const g of c.adGroups) {
-        push({ Product: product, Entity: 'Ad group', 'Campaign ID': c.externalCampaignId ?? '', 'Ad group ID': g.externalAdGroupId ?? '', 'Ad group name': g.name, State: st(g.status), 'Ad Group Default Bid': g.defaultBidCents / 100 })
+        const agRef = { ...campRef, 'Ad group ID': g.externalAdGroupId ?? '' }
+        push({ ...agRef, Entity: 'Ad group', [ROW_KEY_HEADER]: rowKey('Ad group', g.externalAdGroupId, g.id), 'Ad group name': g.name, State: st(g.status), 'Ad Group Default Bid': g.defaultBidCents / 100 })
+
+        for (const a of g.productAds) {
+          push({ ...agRef, Entity: 'Product ad', [ROW_KEY_HEADER]: rowKey('Product ad', a.externalAdId, a.id), 'Ad ID': a.externalAdId ?? '', SKU: a.sku ?? '', ASIN: a.asin ?? '', State: st(a.status) })
+        }
+
         const shown = g.targets.length > TARGET_CAP ? g.targets.slice(0, TARGET_CAP) : g.targets
         if (g.targets.length > TARGET_CAP) targetsTruncated += 1
         for (const t of shown) {
           const isKw = t.kind === 'KEYWORD'
-          push({ Product: product, Entity: isKw ? 'Keyword' : 'Product targeting', 'Campaign ID': c.externalCampaignId ?? '', 'Ad group ID': g.externalAdGroupId ?? '', 'Keyword ID': isKw ? (t.externalTargetId ?? '') : '', 'Product Targeting ID': isKw ? '' : (t.externalTargetId ?? ''), State: st(t.status), Bid: t.bidCents / 100, 'Keyword text': isKw ? t.expressionValue : '', 'Match type': t.expressionType, 'Product targeting expression': isKw ? '' : t.expressionValue })
+          const isAuto = AUTO_EXPRESSIONS.has(t.expressionType ?? '')
+          const entity = t.isNegative
+            ? (isKw ? (t.negativeLevel === 'CAMPAIGN' ? 'Campaign negative keyword' : 'Negative keyword') : 'Negative product targeting')
+            : (isKw ? 'Keyword' : 'Product targeting')
+          const idField = isKw ? 'Keyword ID' : 'Product Targeting ID'
+          push({
+            ...agRef,
+            // A campaign-level negative has no ad group; leaving the id in would
+            // claim a parent it does not have.
+            ...(t.negativeLevel === 'CAMPAIGN' ? { 'Ad group ID': '' } : {}),
+            Entity: entity,
+            [ROW_KEY_HEADER]: rowKey(entity, t.externalTargetId, t.id),
+            [idField]: t.externalTargetId ?? '',
+            State: st(t.status),
+            // Negatives carry no bid on Amazon's bulksheet — they exclude traffic,
+            // they don't buy it. Writing 0 there reads as "a bid of zero".
+            Bid: t.isNegative ? '' : t.bidCents / 100,
+            'Keyword text': isKw ? t.expressionValue : '',
+            // Match type applies to KEYWORD targets only. A negative PRODUCT target
+            // is expressed by its targeting expression; stamping "Negative exact"
+            // on it would be a plausible value that means nothing.
+            'Match type': t.isNegative ? (isKw ? negMatch(t.expressionType ?? '') : '') : (isKw && !isAuto ? t.expressionType : ''),
+            'Product targeting expression': isKw ? '' : t.expressionValue,
+          })
         }
       }
     }
+
+    const portfolios = await prisma.amazonAdsPortfolio.findMany({ orderBy: { name: 'asc' } })
     const { buildBulksheetWorkbook } = await import('../services/advertising/bulksheet/build-workbook.js')
-    const built = await buildBulksheetWorkbook(sheetRows)
+    const entities = [...new Set(sheetRows.map((r) => String(r.Entity)))].sort()
+    const excludes = ['Sponsored Brands sheet', 'Sponsored Display sheet']
+    const built = await buildBulksheetWorkbook({
+      rows: sheetRows,
+      portfolios: portfolios.map((p) => ({
+        'Portfolio ID': p.externalPortfolioId, 'Portfolio name': p.name, State: st(p.state ?? ''),
+        'Budget amount': p.budgetAmount != null ? Number(p.budgetAmount) : '', 'Budget currency': p.budgetCurrencyCode ?? '',
+        'Budget policy': p.budgetPolicy ?? '', 'Start date': p.startDate ?? '', 'End date': p.endDate ?? '',
+        'In budget': p.inBudget ? 'yes' : 'no',
+      })),
+      coverage: {
+        entities, excludes,
+        campaignsExported: campaigns.length, campaignsTotal: totalCampaigns,
+        truncated: totalCampaigns > limit || targetsTruncated > 0,
+        marketplaces: [...marketplaces].sort(),
+      },
+      exportId: randomBytes(9).toString('base64url'),
+      generatedAt: new Date(),
+    })
     const buf = built.buffer
-    // Truthful coverage headers. The sheet is Campaign / Ad group / Keyword /
-    // Product targeting only — negatives, product ads and placement modifiers are
-    // still absent (AX-IE.3 completes the entity set). Naming what is missing is
-    // what stops a partial file from reading as a full one.
-    reply.header('X-Nexus-Export-Campaigns', String(Math.min(limit, totalCampaigns)))
+    // Truthful coverage headers — naming what is missing is what stops a partial
+    // file from reading as a full one.
+    reply.header('X-Nexus-Export-Campaigns', String(campaigns.length))
     reply.header('X-Nexus-Export-Campaigns-Total', String(totalCampaigns))
     reply.header('X-Nexus-Export-Truncated', totalCampaigns > limit || targetsTruncated > 0 ? 'true' : 'false')
     reply.header('X-Nexus-Export-Adgroups-Target-Truncated', String(targetsTruncated))
-    reply.header('X-Nexus-Export-Entities', 'Campaign,Ad group,Keyword,Product targeting')
-    reply.header('X-Nexus-Export-Excludes', 'Negative keyword,Campaign negative keyword,Product ad,Bidding adjustment,Sponsored Brands sheet,Sponsored Display sheet')
+    reply.header('X-Nexus-Export-Entities', entities.join(','))
+    reply.header('X-Nexus-Export-Excludes', excludes.join(','))
     reply.header('X-Nexus-Export-Rows', String(built.rowCount))
+    reply.header('X-Nexus-Export-Portfolios', String(built.portfolioCount))
+    reply.header('X-Nexus-Export-Id', built.exportId)
     reply.header('X-Nexus-Bulksheet-Schema', BULKSHEET_SCHEMA_VERSION)
     reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     reply.header('Content-Disposition', 'attachment; filename="nexus-bulksheet.xlsx"')
