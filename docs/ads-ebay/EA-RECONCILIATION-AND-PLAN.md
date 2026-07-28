@@ -97,6 +97,10 @@ responses (35118/35090/35119, and `seller_keyword_id` ≠ `keyword_id`), and by 
 rolling it back with eBay confirming. All five scopes incl. `sell.marketing` are in `ebay-auth.service.ts:73-84`,
 so a reconnect re-grants automatically. **Do not carry F1 into EA.1.**
 
+> **CORRECTION (2026-07-28).** Gate 2 below is now **settled: prod is LIVE and live writes have fired.** `CampaignAction` rows dated 2026-07-20 carry `_mode:"live"` / `SUCCESS` for `create_campaign` + `bulk_create_ads` + `bulk_delete_ads`. The claim below that "no live write is proven to have fired" was wrong — it was inferred from the docs rather than the audit table, which I had not queried at the time.
+>
+> A separate, larger finding landed the same day: **eBay has suspended Promoted Listings for this account** — `INELIGIBLE / NOT_IN_GOOD_STANDING` on all three programs, every ads call returning `409/35077`, and all 13 campaigns forced to `SYSTEM_PAUSED`. This blocks EA work upstream of everything in this plan, alongside B1 and B2. Pre-flight it with `GET /api/ebay-ads/account-health`.
+
 **Gate 2 — `NEXUS_MARKETING_WRITES_EBAY`: docs say live, unverifiable from the repo.** `RUNBOOK.md:18` and
 `E5-AUTOMATION.md:3` (both 2026-07-03) say `=1` live; `E4-WRITES.md:3` and `docs/MARKETING-OS.md:103` still say
 unset — stale, never back-edited. Railway vars live outside the repo. Note the gate is strict `=== '1'`; `true`
