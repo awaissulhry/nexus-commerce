@@ -25,6 +25,7 @@ import {
   type AdsActor,
 } from '../ads-mutation.service.js'
 import type { PreviewRow } from './preview.js'
+import { applyFields } from './field-map.js'
 
 export interface ApplyOptions {
   actor: AdsActor
@@ -123,59 +124,37 @@ export async function applyPlan(
       let res: { ok: boolean; error: string | null } | null = null
 
       if (row.entity === 'Campaign') {
-        const patch: Parameters<typeof updateCampaignWithSync>[0]['patch'] = {}
-        const state = nextOf(row, 'State')
-        if (state && STATE_TO_DB[state]) patch.status = STATE_TO_DB[state]
+        // D2 — every writable column comes from the shared FIELD_MAP, which is
+        // also what preview derives its diff list from. Adding a column in one
+        // place can no longer leave the other behind.
+        const patch: Record<string, unknown> = {}
+        const err = applyFields('campaign', patch, (c) => nextOf(row, c))
+        if (err) { rec('FAILED', err); continue }
         if (row.status === 'ARCHIVE') patch.status = 'ARCHIVED'
-        const budget = nextOf(row, 'Daily budget')
-        if (budget != null) {
-          const m = parseMoney(budget)
-          if ('error' in m) { rec('FAILED', `Daily budget: ${m.error}`); continue }
-          patch.dailyBudget = m.value
-        }
-        const strat = nextOf(row, 'Bidding strategy')
-        if (strat) {
-          const canonical = parseVocabulary('biddingStrategy', strat)
-          const mapped = canonical ? STRATEGY_TO_DB[canonical] : undefined
-          if (!mapped) { rec('FAILED', `Bidding strategy "${strat}" is not one we can write`); continue }
-          patch.biddingStrategy = mapped
-        }
         if (!Object.keys(patch).length) { rec('SKIPPED', 'No writable field changed'); continue }
         res = await updateCampaignWithSync({
-          campaignId: row.targetId, patch, actor: opts.actor,
+          campaignId: row.targetId, patch: patch as Parameters<typeof updateCampaignWithSync>[0]['patch'], actor: opts.actor,
           reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId,
         })
       } else if (row.entity === 'Ad group') {
-        const patch: Parameters<typeof updateAdGroupWithSync>[0]['patch'] = {}
-        const state = nextOf(row, 'State')
-        if (state && STATE_TO_DB[state]) patch.status = STATE_TO_DB[state]
+        const patch: Record<string, unknown> = {}
+        const err = applyFields('adGroup', patch, (c) => nextOf(row, c))
+        if (err) { rec('FAILED', err); continue }
         if (row.status === 'ARCHIVE') patch.status = 'ARCHIVED'
-        const bid = nextOf(row, 'Ad Group Default Bid')
-        if (bid != null) {
-          const m = parseMoney(bid)
-          if ('error' in m) { rec('FAILED', `Ad Group Default Bid: ${m.error}`); continue }
-          patch.defaultBidCents = Math.round(m.value * 100)
-        }
         if (!Object.keys(patch).length) { rec('SKIPPED', 'No writable field changed'); continue }
         res = await updateAdGroupWithSync({
-          adGroupId: row.targetId, patch, actor: opts.actor,
+          adGroupId: row.targetId, patch: patch as Parameters<typeof updateAdGroupWithSync>[0]['patch'], actor: opts.actor,
           reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId,
         })
       } else {
         // Keyword / Product targeting / the negative variants all live on AdTarget.
-        const patch: Parameters<typeof updateAdTargetWithSync>[0]['patch'] = {}
-        const state = nextOf(row, 'State')
-        if (state && STATE_TO_DB[state]) patch.status = STATE_TO_DB[state]
+        const patch: Record<string, unknown> = {}
+        const err = applyFields('adTarget', patch, (c) => nextOf(row, c))
+        if (err) { rec('FAILED', err); continue }
         if (row.status === 'ARCHIVE') patch.status = 'ARCHIVED'
-        const bid = nextOf(row, 'Bid')
-        if (bid != null) {
-          const m = parseMoney(bid)
-          if ('error' in m) { rec('FAILED', `Bid: ${m.error}`); continue }
-          patch.bidCents = Math.round(m.value * 100)
-        }
         if (!Object.keys(patch).length) { rec('SKIPPED', 'No writable field changed'); continue }
         res = await updateAdTargetWithSync({
-          adTargetId: row.targetId, patch, actor: opts.actor,
+          adTargetId: row.targetId, patch: patch as Parameters<typeof updateAdTargetWithSync>[0]['patch'], actor: opts.actor,
           reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId,
         })
       }

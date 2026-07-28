@@ -22,6 +22,7 @@
 
 import type { PrismaClient } from '@prisma/client'
 import { computeBaseline, baselineDrift, parseMoney, parseVocabulary } from '@nexus/shared/ads-bulksheet'
+import { FIELDS_BY_KIND } from './field-map.js'
 
 /** One field that would change. */
 export interface FieldDiff {
@@ -77,10 +78,17 @@ export interface PreviewResult {
   planToken: string
 }
 
-/** Editable fields we can currently resolve and apply, per entity. */
-const CAMPAIGN_FIELDS = ['State', 'Daily budget', 'Campaign name', 'Bidding strategy', 'Portfolio ID'] as const
-const ADGROUP_FIELDS = ['State', 'Ad group name', 'Ad Group Default Bid'] as const
-const TARGET_FIELDS = ['State', 'Bid'] as const
+/**
+ * D2 — DERIVED from the apply mapper, never hand-maintained.
+ *
+ * These lists used to be written out here independently of apply.ts and drifted
+ * from it: `Campaign name`, `Portfolio ID` and `Ad group name` were offered as
+ * editable diffs that apply silently discarded. A column that cannot be written
+ * can no longer appear in a diff, because there is only one list now.
+ */
+const CAMPAIGN_FIELDS = FIELDS_BY_KIND.campaign
+const ADGROUP_FIELDS = FIELDS_BY_KIND.adGroup
+const TARGET_FIELDS = FIELDS_BY_KIND.adTarget
 
 const money = (raw: string): number | null => {
   const p = parseMoney(raw)
