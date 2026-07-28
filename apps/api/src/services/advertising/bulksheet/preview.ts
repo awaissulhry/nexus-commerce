@@ -318,7 +318,17 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
     const pct = d.deltaPct == null ? '' : ` (${d.deltaPct > 0 ? '+' : ''}${d.deltaPct}%)`
     warnings.push(`This ${dir} total daily budget by €${Math.abs(d.deltaEur).toFixed(2)}${pct}, across ${d.campaigns} campaign${d.campaigns === 1 ? '' : 's'}.`)
   }
-  if (blast.pauses > 0) warnings.push(`${blast.pauses} entit${blast.pauses === 1 ? 'y' : 'ies'} will be paused.`)
+  if (blast.pauses > 0) {
+    warnings.push(`${blast.pauses} entit${blast.pauses === 1 ? 'y' : 'ies'} will be paused.`)
+  }
+  // House rule: campaigns are never paused — pausing resets Amazon's learning and
+  // introduces delivery lag. Suppression is done with ~EUR 0.02 bids instead. An
+  // operator can still do it deliberately from a file they authored, but it must
+  // not be possible to do it without noticing.
+  const campaignPauses = rows.filter((r) => r.entity === 'Campaign' && r.diffs.some((x) => x.field === 'State' && x.next === 'paused')).length
+  if (campaignPauses > 0) {
+    warnings.push(`${campaignPauses} CAMPAIGN${campaignPauses === 1 ? '' : 'S'} would be paused, which is against the house rule — pausing disrupts Amazon's algorithm and delays delivery. Suppress with ~EUR 0.02 bids instead unless this is deliberate.`)
+  }
   if (blast.largeBidChanges > 0) {
     warnings.push(`${blast.largeBidChanges} bid${blast.largeBidChanges === 1 ? '' : 's'} change by more than 50% — worth checking for a decimal-point slip.`)
   }

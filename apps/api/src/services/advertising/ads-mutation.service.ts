@@ -70,10 +70,17 @@ async function writeAdvertisingActionLog(args: {
   payloadBefore: object
   payloadAfter: object
   outboundQueueId: string | null
+  /**
+   * AX-IE.6 — groups every write from one operation (a bulksheet upload, say)
+   * under a single id so the whole set can be reverted together. `executionId`
+   * has an index and no foreign key, so it takes any change-set id; rule
+   * executions were simply its first user.
+   */
+  changeSetId?: string | null
 }): Promise<string> {
   const row = await prisma.advertisingActionLog.create({
     data: {
-      executionId: null,
+      executionId: args.changeSetId ?? null,
       userId: args.actor,
       actionType: args.actionType,
       entityType: args.entityType,
@@ -209,6 +216,8 @@ export async function updateCampaignWithSync(args: {
   actor: AdsActor
   reason?: string | null
   applyImmediately?: boolean
+  /** AX-IE.6 — tag this write as part of a revertible change set. */
+  changeSetId?: string | null
 }): Promise<MutationOutcome> {
   const existing = await prisma.campaign.findUnique({
     where: { id: args.campaignId },
@@ -344,6 +353,7 @@ export async function updateCampaignWithSync(args: {
     ...(args.patch.endDate !== undefined ? { endDate: args.patch.endDate?.toISOString() ?? null } : {}),
   }
   const actionLogId = await writeAdvertisingActionLog({
+    changeSetId: args.changeSetId ?? null,
     actor: args.actor,
     actionType: syncType,
     entityType: 'CAMPAIGN',
@@ -371,6 +381,8 @@ export async function updateAdGroupWithSync(args: {
   applyImmediately?: boolean
   force?: boolean // NP — bypass the 5¢ floor for deliberate bid suppression/restore
   forceResync?: boolean // WC — push to Amazon even if the local value is unchanged (one-time re-sync of stale Amazon state)
+  /** AX-IE.6 — tag this write as part of a revertible change set. */
+  changeSetId?: string | null
 }): Promise<MutationOutcome> {
   const existing = await prisma.adGroup.findUnique({
     where: { id: args.adGroupId },
@@ -462,6 +474,7 @@ export async function updateAdGroupWithSync(args: {
     ...(args.patch.status ? { status: args.patch.status } : {}),
   }
   const actionLogId = await writeAdvertisingActionLog({
+    changeSetId: args.changeSetId ?? null,
     actor: args.actor,
     actionType: syncType,
     entityType: 'AD_GROUP',
@@ -482,6 +495,8 @@ export async function updateProductAdWithSync(args: {
   actor: AdsActor
   reason?: string | null
   applyImmediately?: boolean
+  /** AX-IE.6 — tag this write as part of a revertible change set. */
+  changeSetId?: string | null
 }): Promise<MutationOutcome> {
   const existing = await prisma.adProductAd.findUnique({
     where: { id: args.productAdId },
@@ -505,6 +520,7 @@ export async function updateProductAdWithSync(args: {
     applyImmediately: args.applyImmediately ?? false,
   })
   const actionLogId = await writeAdvertisingActionLog({
+    changeSetId: args.changeSetId ?? null,
     actor: args.actor,
     actionType: 'AD_ENTITY_STATE_UPDATE',
     entityType: 'PRODUCT_AD',
@@ -530,6 +546,8 @@ export async function updateAdTargetWithSync(args: {
   applyImmediately?: boolean
   force?: boolean // NP — bypass the change-clamp + 5¢ floor for deliberate bid suppression/restore
   forceResync?: boolean // WC — push to Amazon even if the local value is unchanged (one-time re-sync of stale Amazon state)
+  /** AX-IE.6 — tag this write as part of a revertible change set. */
+  changeSetId?: string | null
 }): Promise<MutationOutcome> {
   const existing = await prisma.adTarget.findUnique({
     where: { id: args.adTargetId },
@@ -645,6 +663,7 @@ export async function updateAdTargetWithSync(args: {
     ...(args.patch.status ? { status: args.patch.status } : {}),
   }
   const actionLogId = await writeAdvertisingActionLog({
+    changeSetId: args.changeSetId ?? null,
     actor: args.actor,
     actionType: syncType,
     entityType: 'AD_TARGET',

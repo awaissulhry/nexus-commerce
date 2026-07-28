@@ -4629,6 +4629,99 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── POST /advertising/bulk/import/:id/apply — AX-IE.6 ─────────────
+  // The first thing in this pipeline that writes.
+  //
+  // Requires the planToken from the preview. It is recomputed here and must
+  // still match: if anything moved underneath — the file re-staged, an entity
+  // changed on Amazon — the plan the operator approved is no longer the plan
+  // that would run, so we refuse rather than execute a different one. That
+  // closes the window between "approved" and "applied".
+  //
+  // Every row goes through ads-mutation.service -> ads-write-gate -> outbox.
+  // Nothing here talks to Amazon directly: the gate is where env-live, the
+  // production-connection check and the default-deny per-campaign allowlist all
+  // live, and a bulk upload must not be a way around any of them.
+  fastify.post('/advertising/bulk/import/:id/apply', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = (request.body ?? {}) as {
+      planToken?: string; applyImmediately?: boolean; strict?: boolean; conflicts?: 'skip' | 'mine'
+    }
+    const job = await prisma.importJob.findUnique({ where: { id } })
+    if (!job || job.targetEntity !== 'adsBulksheet') { reply.status(404); return { error: 'not_found' } }
+    if (!b.planToken) {
+      reply.status(400)
+      return { error: 'plan_token_required', message: 'Run the preview first and pass its planToken. Applying without seeing the plan is not supported.' }
+    }
+
+    const { buildPreview } = await import('../services/advertising/bulksheet/preview.js')
+    const plan = await buildPreview(prisma, id)
+    if (plan.planToken !== b.planToken) {
+      reply.status(409)
+      return {
+        error: 'plan_changed',
+        message: 'Something changed since you previewed this file, so the plan you approved is not the plan that would run. Re-run the preview and check the differences.',
+        expected: b.planToken, actual: plan.planToken, counts: plan.counts,
+      }
+    }
+
+    const { applyPlan } = await import('../services/advertising/bulksheet/apply.js')
+    const actor = actorFromHeaders(request.headers as Record<string, unknown>)
+    const started = Date.now()
+    const result = await applyPlan(prisma, id, plan.rows, {
+      actor,
+      // Default is NOT live: the row is queued through the gate. Going live is an
+      // explicit, per-request decision, and the gate can still refuse it.
+      applyImmediately: b.applyImmediately === true,
+      strict: b.strict === true,
+      conflicts: b.conflicts === 'mine' ? 'mine' : 'skip',
+    })
+
+    await prisma.importJob.update({
+      where: { id },
+      data: {
+        status: result.failed > 0 ? 'FAILED_PARTIAL' : 'COMPLETED',
+        successRows: result.applied,
+        failedRows: result.failed,
+        completedAt: new Date(),
+      },
+    })
+
+    return {
+      importJobId: id,
+      changeSetId: result.changeSetId,
+      applied: result.applied,
+      skipped: result.skipped,
+      failed: result.failed,
+      aborted: result.aborted,
+      applyImmediately: b.applyImmediately === true,
+      elapsedMs: Date.now() - started,
+      rollback: `POST /api/advertising/bulk/import/${id}/rollback`,
+      results: result.results.slice(0, 500),
+    }
+  })
+
+  // ── POST /advertising/bulk/import/:id/rollback — undo the whole upload ──
+  // The teardown could not find one competitor that documents reversing an
+  // applied change set. We already had the primitive; this points it at imports.
+  fastify.post('/advertising/bulk/import/:id/rollback', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = (request.body ?? {}) as { reason?: string }
+    const job = await prisma.importJob.findUnique({ where: { id } })
+    if (!job || job.targetEntity !== 'adsBulksheet') { reply.status(404); return { error: 'not_found' } }
+
+    const { rollbackByChangeSetId } = await import('../services/advertising/rollback.service.js')
+    const outcome = await rollbackByChangeSetId({
+      changeSetId: `import:${id}`,
+      actor: actorFromHeaders(request.headers as Record<string, unknown>),
+      reason: b.reason ?? `rollback of bulksheet import ${id}`,
+    })
+    if (outcome.reversed > 0) {
+      await prisma.importJob.update({ where: { id }, data: { status: 'ROLLED_BACK', errorSummary: `Rolled back ${outcome.reversed} change(s)` } })
+    }
+    return { importJobId: id, changeSetId: `import:${id}`, ...outcome }
+  })
+
   // ── GET /advertising/bulk/import/:id — the staged plan + full error list ──
   fastify.get('/advertising/bulk/import/:id', async (request, reply) => {
     const { id } = request.params as { id: string }

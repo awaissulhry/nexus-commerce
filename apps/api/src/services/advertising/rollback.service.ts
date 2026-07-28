@@ -154,6 +154,62 @@ async function reverseOne(
 }
 
 /**
+ * AX-IE.6 — roll back a whole CHANGE SET in one call.
+ *
+ * Same inversion logic as rollbackByExecutionId (both walk `reverseOne`), but
+ * found by change-set id rather than by an AutomationRuleExecution row, because
+ * a bulksheet upload is not a rule execution. `AdvertisingActionLog.executionId`
+ * is an indexed column with no foreign key, so it holds any change-set id — rule
+ * executions were simply its first user.
+ *
+ * This is the thing no competitor has. Agencies ask for one-click reversal of an
+ * applied change set and the teardown found it documented nowhere — Pacvue,
+ * Quartile and Trellis are all called out for its absence. We already had the
+ * primitive; this just points it at imports.
+ */
+export async function rollbackByChangeSetId(args: {
+  changeSetId: string
+  actor: AdsActor
+  reason: string
+}): Promise<RollbackOutcome> {
+  const logs = await prisma.advertisingActionLog.findMany({
+    where: {
+      executionId: args.changeSetId,
+      rolledBackAt: null,
+      // Same 24h horizon as the rule path: past that, Amazon's own state has
+      // usually moved on and restoring a day-old snapshot does more harm than good.
+      createdAt: { gte: new Date(Date.now() - ROLLBACK_WINDOW_MS) },
+    },
+    // Newest first: undo in reverse order of application, so a field written
+    // twice within one set lands back on its original value rather than an
+    // intermediate one.
+    orderBy: { createdAt: 'desc' },
+  })
+
+  const out: RollbackOutcome = { ok: true, reversed: 0, skipped: 0, failed: 0, details: [] }
+  for (const log of logs) {
+    const r = await reverseOne(log, args.actor, args.reason)
+    const base = { actionLogId: log.id, actionType: log.actionType, entityType: log.entityType, entityId: log.entityId }
+    if (r.ok && !r.skipped) {
+      out.reversed += 1
+      out.details.push({ ...base, outcome: 'REVERSED' })
+      await prisma.advertisingActionLog.update({
+        where: { id: log.id },
+        data: { rolledBackAt: new Date(), rollbackReason: args.reason },
+      })
+    } else if (r.skipped) {
+      out.skipped += 1
+      out.details.push({ ...base, outcome: 'SKIPPED', reason: r.reason })
+    } else {
+      out.failed += 1
+      out.ok = false
+      out.details.push({ ...base, outcome: 'FAILED', reason: r.reason })
+    }
+  }
+  return out
+}
+
+/**
  * Roll back every non-rolled-back AdvertisingActionLog row tied to an
  * execution. executionId can be null when the operator invokes rollback
  * by ruleId-window instead — we synthesize a window from the
