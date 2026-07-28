@@ -1290,6 +1290,78 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ══ AX2.4 — Structure Blueprints (READ SIDE) ══════════════════════════
+  // Extract a named, product-agnostic structure from live campaigns so it can
+  // be audited and, later (AX2.5), replicated. Nothing here writes to Amazon.
+  //
+  // The load-bearing output is doc.sharedTargets: the positive CATEGORY and
+  // COMPETITOR keywords that are NOT about the source product. Replicate those
+  // verbatim onto a sibling and your own two products bid against each other in
+  // the same auction. AX2.5 must arbitrate that list before it may create
+  // anything.
+
+  fastify.post('/advertising/blueprints/preview', async (request, reply) => {
+    const b = request.body as { campaignIds?: string[]; namePrefix?: string; marketplace?: string; productToken?: string; competitorTokens?: string[] }
+    if (!b?.productToken) { reply.code(400); return { error: 'productToken is required — it is what gets parameterised out' } }
+    const { previewBlueprint } = await import('../services/advertising/ads-blueprint.service.js')
+    try {
+      return await previewBlueprint({ ...b, productToken: b.productToken })
+    } catch (e) { reply.code(400); return { error: (e as Error).message } }
+  })
+
+  fastify.post('/advertising/blueprints', async (request, reply) => {
+    const b = request.body as { name?: string; description?: string; campaignIds?: string[]; namePrefix?: string; marketplace?: string; productToken?: string; competitorTokens?: string[] }
+    if (!b?.name?.trim()) { reply.code(400); return { error: 'name is required' } }
+    if (!b?.productToken) { reply.code(400); return { error: 'productToken is required' } }
+    const { saveBlueprint } = await import('../services/advertising/ads-blueprint.service.js')
+    try {
+      const row = await saveBlueprint({
+        ...b, name: b.name.trim(), productToken: b.productToken,
+        createdBy: actorFromHeaders(request.headers as Record<string, unknown>),
+      })
+      return { ok: true, id: row.id, name: row.name }
+    } catch (e) {
+      const msg = (e as Error).message
+      reply.code(/unique|already exists/i.test(msg) ? 409 : 400)
+      return { error: msg }
+    }
+  })
+
+  fastify.get('/advertising/blueprints', async () => {
+    const { listBlueprints } = await import('../services/advertising/ads-blueprint.service.js')
+    return { items: await listBlueprints() }
+  })
+
+  fastify.get('/advertising/blueprints/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const row = await prisma.adBlueprint.findUnique({ where: { id } })
+    if (!row) { reply.code(404); return { error: 'blueprint not found' } }
+    return row
+  })
+
+  fastify.delete('/advertising/blueprints/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const row = await prisma.adBlueprint.findUnique({ where: { id }, select: { id: true } })
+    if (!row) { reply.code(404); return { error: 'blueprint not found' } }
+    await prisma.adBlueprint.delete({ where: { id } })
+    return { ok: true }
+  })
+
+  /** Has a product's structure drifted from the template it was built from? */
+  fastify.post('/advertising/blueprints/:id/diff', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as { campaignIds?: string[]; namePrefix?: string; marketplace?: string; productToken?: string }
+    if (!b?.productToken) { reply.code(400); return { error: 'productToken of the compared product is required' } }
+    const { diffAgainst } = await import('../services/advertising/ads-blueprint.service.js')
+    try {
+      return await diffAgainst(id, b, b.productToken)
+    } catch (e) {
+      const msg = (e as Error).message
+      reply.code(/not found/i.test(msg) ? 404 : 400)
+      return { error: msg }
+    }
+  })
+
   /**
    * AX2.1 — grid-wide Amazon delivery truth in ONE call.
    *

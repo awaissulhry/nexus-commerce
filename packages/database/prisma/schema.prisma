@@ -13403,6 +13403,29 @@ model OutreachDetail {
   @@index([mode])
 }
 
+/// AX2.4 — a named, product-agnostic campaign structure extracted from live
+/// campaigns, with ASINs, brand keywords and name tokens parameterised out.
+/// `doc` holds the BlueprintDoc from ads-core/ads-blueprint.ts, including the
+/// `sharedTargets` list — the exact keywords that would make two of our own
+/// products bid against each other if the structure were replicated verbatim.
+/// Read side only: nothing here creates anything on Amazon.
+model AdBlueprint {
+  id               String   @id @default(cuid())
+  name             String   @unique
+  description      String?
+  marketplace      String
+  adProduct        String   @default("SPONSORED_PRODUCTS")
+  productToken     String
+  competitorTokens String[] @default([])
+  sourceCampaignIds String[] @default([])
+  doc              Json
+  createdBy        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([marketplace])
+}
+
 // Channel-agnostic targeting/audience row. Generalizes legacy AdTarget +
 // CustomerSegment audience binding. Amazon ad-groups/product-ads stay as
 // an Amazon-only sub-tree (legacy AdGroup/AdProductAd), NOT here.
