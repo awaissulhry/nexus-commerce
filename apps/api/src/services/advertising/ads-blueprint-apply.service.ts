@@ -80,7 +80,9 @@ export interface ApplyResult {
   applicationId: string
   status: 'PLANNED' | 'APPLIED' | 'PARTIAL' | 'FAILED'
   plan: ApplyPlan
-  created: { campaigns: number; adGroups: number; targets: number; productAds: number }
+  created: { campaigns: number; adGroups: number; targets: number; negatives: number; productAds: number }
+  /** PAT/product targets the blueprint carries but this phase cannot create. */
+  skippedNonKeyword: number
   /** Campaigns that landed locally but never got an Amazon id. */
   notOnAmazon: string[]
   errors: string[]
@@ -105,7 +107,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
   })
 
   if (dryRun) {
-    return { applicationId: application.id, status: 'PLANNED', plan, created: { campaigns: 0, adGroups: 0, targets: 0, productAds: 0 }, notOnAmazon: [], errors: [] }
+    return { applicationId: application.id, status: 'PLANNED', plan, created: { campaigns: 0, adGroups: 0, targets: 0, negatives: 0, productAds: 0 }, skippedNonKeyword: 0, notOnAmazon: [], errors: [] }
   }
   if (!plan.allowed) {
     // Belt and braces: the route also refuses, but the gate must hold even if
@@ -114,8 +116,9 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
     throw new Error(`refused: ${plan.blockers.join(' | ')}`)
   }
 
-  const { createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal } = await import('./ads-create.service.js')
-  const created = { campaigns: 0, adGroups: 0, targets: 0, productAds: 0 }
+  const { createCampaignLocal, createAdGroupLocal, createKeywordLocal, bulkNegativeKeywords, createProductAdLocal } = await import('./ads-create.service.js')
+  const created = { campaigns: 0, adGroups: 0, targets: 0, negatives: 0, productAds: 0 }
+  let skippedNonKeyword = 0
   const createdCampaignIds: string[] = []
   const notOnAmazon: string[] = []
   const errors: string[] = []
@@ -143,9 +146,31 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
         })
         created.adGroups++
 
+        // AX2.9 — NEGATIVES FIRST. A campaign that goes live with its positives
+        // but not its exclusions immediately buys the traffic the template pays
+        // to avoid. Creating them before the positives means that even a run
+        // that fails part-way is narrower than its source, never wider.
+        // Amazon negatives are EXACT or PHRASE only; the blueprint encodes them
+        // with a leading underscore (_EXACT / _PHRASE). bulkNegativeKeywords is
+        // the existing idempotent path — it skips one that already exists.
+        const negItems = g.targets
+          .filter((t) => t.isNegative && t.kind?.toUpperCase() === 'KEYWORD')
+          .map((t) => ({ adGroupId: grp.id, keywordText: t.expression, matchType: (t.expressionType ?? 'EXACT').toUpperCase().replace(/^_/, '') as 'EXACT' | 'PHRASE' }))
+          .filter((n) => n.matchType === 'EXACT' || n.matchType === 'PHRASE')
+        if (negItems.length) {
+          const nr = await bulkNegativeKeywords(negItems, req.actor)
+          created.negatives += nr.created
+          if (nr.failed) errors.push(`${nr.failed} negative(s) failed: ${nr.errors.slice(0, 2).join('; ').slice(0, 160)}`)
+        }
+
         for (const t of g.targets) {
-          if (t.kind?.toUpperCase() !== 'KEYWORD') continue // AX2.5 covers keyword targets
-          if (t.isNegative) continue // negatives are AX2.5-follow-up (different API surface)
+          if (t.isNegative) continue // handled above
+          if (t.kind?.toUpperCase() !== 'KEYWORD') {
+            // PAT / product targets need a different API surface — count them
+            // so the gap is visible rather than silently dropped.
+            skippedNonKeyword++
+            continue
+          }
           const mt = (t.expressionType ?? 'EXACT').toUpperCase().replace(/^_/, '')
           if (mt !== 'EXACT' && mt !== 'PHRASE' && mt !== 'BROAD') continue
           try {
@@ -180,7 +205,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
   })
   logger.info('[AX2.5] blueprint applied', { applicationId: application.id, status, created, errors: errors.length })
 
-  return { applicationId: application.id, status, plan, created, notOnAmazon, errors }
+  return { applicationId: application.id, status, plan, created, skippedNonKeyword, notOnAmazon, errors }
 }
 
 /**
