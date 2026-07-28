@@ -68,6 +68,11 @@ import {
   computeRebalance,
 } from '../services/advertising/budget-pool-rebalancer.service.js'
 import { randomBytes, createHash } from 'node:crypto'
+// AX-IE.2 — the bulksheet grammar. Shared with apps/web so the browser's
+// pre-validation and this server-side gate cannot drift apart.
+import {
+  parseMoney, parseBid, parseVocabulary, VOCABULARIES, BULKSHEET_SCHEMA_VERSION,
+} from '@nexus/shared/ads-bulksheet'
 
 // AD.4 — in-memory token store for the two-step enable-writes flow.
 // Token issued by /preview-writes is required to complete /enable-writes.
@@ -4210,29 +4215,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // ── GET /advertising/bulk/export — current state as an Amazon bulksheet (.xlsx)
   // Read-only. Campaign + Ad group + Keyword/Product-targeting rows in the exact
   // Sponsored Products bulksheet column layout. Powers the Bulk operations screen.
-  const BULK_COLS = ['Product', 'Entity', 'Operation', 'Campaign ID', 'Ad group ID', 'Portfolio ID', 'Ad ID', 'Keyword ID', 'Product Targeting ID', 'Campaign name', 'Ad group name', 'Start date', 'End date', 'Targeting type', 'State', 'Daily budget', 'SKU', 'Ad Group Default Bid', 'Bid', 'Keyword text', 'Native language keyword', 'Native language locale', 'Match type', 'Bidding strategy', 'Placement', 'Percentage', 'Product targeting expression', 'Audience ID', 'Shopper Cohort Percentage', 'Shopper Cohort Type', 'Sites']
-  // AX-IE.0 — per-column cell typing. This is the seed of the AX-IE.2 schema object;
-  // for now it exists to close one specific corruption chain.
-  //
-  // 'money' columns used to be written as STRINGS (Bid came out of `.toFixed(2)`),
-  // which made the whole column text in Excel and Numbers: unsummable, unsortable,
-  // and — the actual damage — an it-IT operator editing it types "1,25", the text
-  // cell keeps it verbatim, and on re-upload `Number("1,25")` is NaN, which the
-  // importer silently turned into a EUR 0.50 bid. Writing real numbers means the
-  // spreadsheet itself hands back an invariant value.
-  //
-  // 'id' columns are pinned to text ('@') so an Amazon id can never be re-read as a
-  // float. Nothing is currently over 2^53 (max observed: 15 digits) so this is
-  // prophylactic — it stops a Numbers re-save or a stray "convert to number" from
-  // silently rewriting an identity column.
-  const BULK_COL_TYPE: Record<string, 'id' | 'money' | 'int' | 'date'> = {
-    'Campaign ID': 'id', 'Ad group ID': 'id', 'Portfolio ID': 'id', 'Ad ID': 'id',
-    'Keyword ID': 'id', 'Product Targeting ID': 'id', 'Audience ID': 'id', SKU: 'id',
-    'Daily budget': 'money', 'Ad Group Default Bid': 'money', Bid: 'money',
-    Percentage: 'int', 'Shopper Cohort Percentage': 'int',
-    'Start date': 'date', 'End date': 'date',
-  }
-  const BULK_NUMFMT: Record<string, string> = { id: '@', money: '#,##0.00', int: '#,##0', date: 'yyyy-mm-dd' }
+  // AX-IE.2 — columns, cell types, number formats, dropdowns and the Dictionary
+  // sheet all come from the shared schema (@nexus/shared/ads-bulksheet), which the
+  // importer and the bulk UI validate against too. Nothing here enumerates
+  // columns: adding one is editing that array.
   fastify.get('/advertising/bulk/export', async (request, reply) => {
     const q = request.query as { limit?: string }
     // AX-IE.0 (E1) — this used to default to 200 campaigns and hard-cap at 500,
@@ -4258,22 +4244,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     let targetsTruncated = 0
     const PROD: Record<string, string> = { SPONSORED_PRODUCTS: 'Sponsored Products', SPONSORED_BRANDS: 'Sponsored Brands', SPONSORED_DISPLAY: 'Sponsored Display' }
     const st = (s: string) => (s || '').toLowerCase()
-    const ExcelJS = (await import('exceljs')).default
-    const wb = new ExcelJS.Workbook()
-    const ws = wb.addWorksheet('Sponsored Products Campaigns')
-    ws.addRow(BULK_COLS)
-    // Coerce per column type so ExcelJS emits the right cell kind: numbers as
-    // numbers, dates as real Dates, ids as text. null → genuinely empty cell.
-    const coerce = (col: string, v: unknown): string | number | Date | null => {
-      if (v == null || v === '') return null
-      switch (BULK_COL_TYPE[col]) {
-        case 'money': { const n = Number(v); return Number.isFinite(n) ? n : null }
-        case 'int': { const n = Number(v); return Number.isFinite(n) ? Math.round(n) : null }
-        case 'date': return v instanceof Date ? v : new Date(String(v))
-        default: return String(v)
-      }
-    }
-    const push = (o: Record<string, unknown>) => ws.addRow(BULK_COLS.map((c) => coerce(c, o[c])))
+    const sheetRows: Array<Record<string, unknown>> = []
+    const push = (o: Record<string, unknown>) => { sheetRows.push(o) }
     for (const c of campaigns) {
       const product = PROD[c.adProduct ?? ''] ?? 'Sponsored Products'
       // AX-IE.0 (E4) — targeting type is READ, never guessed. It used to be inferred
@@ -4292,11 +4264,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
     }
-    BULK_COLS.forEach((col, i) => {
-      const fmt = BULK_NUMFMT[BULK_COL_TYPE[col] ?? '']
-      if (fmt) ws.getColumn(i + 1).numFmt = fmt
-    })
-    const buf = Buffer.from(await wb.xlsx.writeBuffer())
+    const { buildBulksheetWorkbook } = await import('../services/advertising/bulksheet/build-workbook.js')
+    const built = await buildBulksheetWorkbook(sheetRows)
+    const buf = built.buffer
     // Truthful coverage headers. The sheet is Campaign / Ad group / Keyword /
     // Product targeting only — negatives, product ads and placement modifiers are
     // still absent (AX-IE.3 completes the entity set). Naming what is missing is
@@ -4307,6 +4277,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('X-Nexus-Export-Adgroups-Target-Truncated', String(targetsTruncated))
     reply.header('X-Nexus-Export-Entities', 'Campaign,Ad group,Keyword,Product targeting')
     reply.header('X-Nexus-Export-Excludes', 'Negative keyword,Campaign negative keyword,Product ad,Bidding adjustment,Sponsored Brands sheet,Sponsored Display sheet')
+    reply.header('X-Nexus-Export-Rows', String(built.rowCount))
+    reply.header('X-Nexus-Bulksheet-Schema', BULKSHEET_SCHEMA_VERSION)
     reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     reply.header('Content-Disposition', 'attachment; filename="nexus-bulksheet.xlsx"')
     return reply.send(buf)
@@ -4335,47 +4307,27 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const agByExt = new Map(ags.map((a) => [a.externalAdGroupId, a]))
     const ST: Record<string, 'ENABLED' | 'PAUSED' | 'ARCHIVED'> = { enabled: 'ENABLED', paused: 'PAUSED', archived: 'ARCHIVED' }
 
-    // ── AX-IE.0 — strict parsing. Both of the helpers below replace a silent
-    // fallback that was actively corrupting data.
+    // ── AX-IE.2 — parsing now comes from the shared schema, so the browser and
+    // the server reach the identical verdict. These were defined inline here,
+    // which is exactly how two grammars drifted apart in the first place.
     //
-    // Match type used to collapse anything unrecognised to EXACT. Match type is
-    // IMMUTABLE on Amazon: the only way to correct one is archive + recreate, which
-    // resets the target id and destroys its entire performance history. A typo must
-    // never be able to buy that outcome quietly.
-    const MATCH_TYPES: Record<string, 'EXACT' | 'PHRASE' | 'BROAD'> = {
-      EXACT: 'EXACT', PHRASE: 'PHRASE', BROAD: 'BROAD',
-      ESATTA: 'EXACT', FRASE: 'PHRASE', GENERICA: 'BROAD', // it-IT Seller Central
-    }
-    const NEG_MATCH_TYPES: Record<string, 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE'> = {
-      NEGATIVEEXACT: 'NEGATIVE_EXACT', NEGATIVEPHRASE: 'NEGATIVE_PHRASE',
-      CAMPAIGNNEGATIVEEXACT: 'NEGATIVE_EXACT', CAMPAIGNNEGATIVEPHRASE: 'NEGATIVE_PHRASE',
-      EXACT: 'NEGATIVE_EXACT', PHRASE: 'NEGATIVE_PHRASE',
-      ESATTA: 'NEGATIVE_EXACT', FRASE: 'NEGATIVE_PHRASE',
-    }
-    const normEnum = (raw: string) => raw.trim().toUpperCase().replace(/[\s_-]+/g, '')
-
-    // Money used to be `Number(x)`, and anything NaN became a EUR 0.50 bid. Now an
-    // unreadable value is a row error. XLSX stores numbers locale-invariantly, so a
-    // well-formed sheet never reaches the string branches at all — those exist for
-    // CSV and for cells an operator retyped as text.
+    // Each replaces a silent fallback that was actively corrupting data: match
+    // type collapsed anything unrecognised to EXACT (immutable on Amazon —
+    // correcting one means archive + recreate, which destroys the target's
+    // performance history), and an unparseable bid became a EUR 0.50 bid.
     const parseMoneyEur = (raw: string): { eur: number } | { error: string } => {
-      const s = raw.replace(/[\s €]/g, '')
-      if (!s) return { error: 'value is empty' }
-      let t = s
-      if (/^-?\d{1,3}(\.\d{3})+,\d+$/.test(t)) t = t.replace(/\./g, '').replace(',', '.')       // 1.234,56 it-IT
-      else if (/^-?\d{1,3}(,\d{3})+\.\d+$/.test(t)) t = t.replace(/,/g, '')                     // 1,234.56 en-US
-      else if (/^-?\d+,\d{3}$/.test(t)) return { error: `"${raw}" is ambiguous — "," could be a decimal comma or a thousands separator. Write it as ${t.replace(',', '.')} or ${t.replace(',', '')}.` }
-      else if (/^-?\d+,\d{1,2}$/.test(t)) t = t.replace(',', '.')                               // 1,25 it-IT
-      const n = Number(t)
-      if (!Number.isFinite(n)) return { error: `"${raw}" is not a number` }
-      return { eur: n }
+      const r = parseMoney(raw)
+      return 'error' in r ? r : { eur: r.value }
     }
-    const AMAZON_BID_FLOOR_EUR = 0.02
     const parseBidEur = (raw: string): { eur: number } | { error: string } => {
-      const m = parseMoneyEur(raw)
-      if ('error' in m) return { error: `Bid: ${m.error}` }
-      if (m.eur < AMAZON_BID_FLOOR_EUR) return { error: `Bid ${m.eur.toFixed(2)} is below Amazon's floor of ${AMAZON_BID_FLOOR_EUR.toFixed(2)}` }
-      return m
+      const r = parseBid(raw)
+      return 'error' in r ? r : { eur: r.value }
+    }
+    // Canonical vocabulary value -> the enum our existing write paths expect.
+    const MATCH_TYPE_TO_DB: Record<string, 'EXACT' | 'PHRASE' | 'BROAD'> = { Exact: 'EXACT', Phrase: 'PHRASE', Broad: 'BROAD' }
+    const NEG_MATCH_TYPE_TO_DB: Record<string, 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE'> = {
+      Exact: 'NEGATIVE_EXACT', Phrase: 'NEGATIVE_PHRASE',
+      'Negative exact': 'NEGATIVE_EXACT', 'Negative phrase': 'NEGATIVE_PHRASE',
     }
 
     const profileCache = new Map<string, string | null>()
@@ -4417,8 +4369,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         } else if (entity === 'Keyword' && op === 'Create') {
           const a = agByExt.get(g(r, 'Ad group ID')); if (!a) { push('error', 'Ad group ID not found'); continue }
           const rawMt = g(r, 'Match type')
-          const matchType = MATCH_TYPES[normEnum(rawMt)]
-          if (!matchType) { push('error', `Match type "${rawMt}" not recognised — expected one of ${Object.keys(MATCH_TYPES).join(', ')}`); continue }
+          const canonicalMt = parseVocabulary('matchType', rawMt)
+          const matchType = canonicalMt ? MATCH_TYPE_TO_DB[canonicalMt] : undefined
+          if (!matchType) { push('error', `Match type "${rawMt}" not recognised — expected one of ${VOCABULARIES.matchType.values.join(', ')}`); continue }
           const keywordText = g(r, 'Keyword text')
           if (!keywordText) { push('error', 'Keyword text is required'); continue }
           const bid = parseBidEur(g(r, 'Bid'))
@@ -4431,7 +4384,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           const profileId = await profileFor(mkt)
           if (!profileId || !mkt) { push('error', 'No active connection for marketplace'); continue }
           const rawMt = g(r, 'Match type')
-          const matchType = NEG_MATCH_TYPES[normEnum(rawMt)]
+          const canonicalMt = parseVocabulary('matchType', rawMt)
+          const matchType = canonicalMt ? NEG_MATCH_TYPE_TO_DB[canonicalMt] : undefined
           if (!matchType) { push('error', `Match type "${rawMt}" not recognised for a negative keyword — expected Negative exact or Negative phrase`); continue }
           const keywordText = g(r, 'Keyword text')
           if (!keywordText) { push('error', 'Keyword text is required'); continue }

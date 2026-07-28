@@ -81,8 +81,19 @@ These live routes all read the shadow via `/api/marketing/os/*`:
 | `/marketing/automation-os` | `MarketingCampaign` | stale Amazon campaign set |
 | `/marketing/campaigns/[id]` | `MarketingCampaign` | stale detail for deep links |
 
-`/marketing/advertising/campaigns` — the real cockpit — reads `/api/advertising/*`,
-i.e. Generation A, and is correct.
+**`/marketing/ads/campaigns` — the current console — reads `/api/advertising/*`, i.e.
+Generation A, and is correct.**
+
+**Console lineage** (confirmed by the owner 2026-07-28, and worth writing down because
+three ad surfaces are routed simultaneously and only one is current):
+
+| Route | Status |
+|---|---|
+| **`/marketing/ads/*`** | **current console — build here, link here** |
+| `/marketing/ads-console/*` | previous console (holds a bulk screen, see §4 #11) |
+| `/marketing/advertising/*` | earlier surface |
+
+All three are routed (none redirect), so "it loads" is not evidence a surface is current.
 
 > **So: `/marketing/analytics` reports Amazon money two months stale inside totals that
 > look current, while the ads cockpit shows live figures.** That is the reproducible
@@ -241,6 +252,8 @@ Source is authoritative; these are the disagreements.
 | 8 | Spec §2.5: swap to `@protobi/exceljs` | `exceljs ^4.4.0` is a dependency of **both** `apps/api` and `apps/web`. Not an api-only swap; needs a web-side plan too. |
 | 9 | Audit §3.5: refresh-token expiry is "two days from this audit date" | 2026-07-30 is the **policy** start. Conservative earliest death for these connections is ~2027-05-17 (§3.1). Instrument now; not a two-day emergency. |
 | 10 | Spec §0: reuse `ImportJob`/`ImportJobRow`/`ExportJob`/`BulkActionJob` | **Unverified.** These are product/listing-shaped. Fit for ad entities needs checking at AX-IE.4 — not a .0/.1 concern, but flagging it early because it's load-bearing for the whole import phase. |
+| 11 | Audit §2.3: "there is no bulk/import/export UI page under `/marketing/ads` at all" | Literally true, but misleading. **`/marketing/ads-console/bulk` exists and is routed** — it downloads via `GET /advertising/bulk/export`, parses .xlsx/.csv client-side with exceljs, and validates rows against its OWN per-entity grammar. It sits on the *previous* console, so AX-IE.8's `/marketing/ads/bulk` is still the right target — but the second grammar was real and had already drifted from the server's (8 entities and required-fields but no value checks, against the server's 4 entity×operation combinations with strict value checks). AX-IE.2 resolves that by making the schema shared. |
+| 12 | Spec §2.5: adopt `@protobi/exceljs` | Fork verified real (MIT, `4.4.0-protobi.10`); upstream last published **2024-12-20**, not Oct 2023. But `exceljs` is a direct dependency of `apps/web` **and 12+ files in `apps/api`, including the untouchable flat-file substrate** — swapping it is not an ads change. `npm audit` shows only a *moderate* transitive advisory via `uuid`, with no non-downgrade fix. AX-IE.2 therefore puts every call behind `SpreadsheetWriter`/`SpreadsheetReader` so the swap is a one-file change, and defers the swap itself. |
 
 ---
 

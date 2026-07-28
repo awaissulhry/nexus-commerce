@@ -105,7 +105,7 @@ export function AnalyticsClient({ initial }: { initial: AnalyticsData }) {
           tone="warning"
           className="mb-4"
           title="Amazon figures below are mirrored, and the mirror is out of date"
-          action={<a href="/marketing/advertising/campaigns" className="text-sm font-medium underline whitespace-nowrap">Open Ad Manager</a>}
+          action={<a href="/marketing/ads/campaigns" className="text-sm font-medium underline whitespace-nowrap">Open Ad Manager</a>}
         >
           {data.amazonShadow.shadowCount !== data.amazonShadow.canonicalCount
             ? `The mirror holds ${data.amazonShadow.shadowCount} Amazon campaigns against ${data.amazonShadow.canonicalCount} live in Ad Manager. `

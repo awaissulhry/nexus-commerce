@@ -51,7 +51,10 @@ is *not* the exposure):
 | `/marketing/calendar`, `/marketing/budgets`, `/marketing/automation-os` | stale Amazon campaign set |
 | `/marketing/campaigns/[id]` | stale detail for deep links |
 
-`/marketing/advertising/campaigns` reads Generation A directly and is correct.
+**`/marketing/ads/campaigns` — the current console — reads Generation A directly and is
+correct.** Console lineage, confirmed by the owner 2026-07-28: `/marketing/ads/*` is the
+new console; `/marketing/ads-console/*` and `/marketing/advertising/*` are its
+predecessors. Point users, links and new work at `/marketing/ads/*`.
 
 AX-IE.1 fixes that by scheduling the backfill and surfacing its freshness, **not** by
 migrating or dropping anything.
