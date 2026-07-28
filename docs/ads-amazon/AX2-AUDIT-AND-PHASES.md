@@ -159,7 +159,16 @@ while the rest of the system keys on `'IT'`, so intraday data could not be filte
 **Still open:** the 9,728 existing hourly rows keep the raw marketplace id until backfilled, and DR.3 (wiring
 intraday "Today" off the hourly table) remains unbuilt — AMS's actual value is still unrealised.
 
-### 🟡 B5 — Sponsored Products only, but nothing says so
+### ⏸️ B5 — DEFERRED BY DECISION (2026-07-28)
+
+Operator decision: Sponsored Brands and Sponsored Display are **not planned**, so AX2.8 is deliberately not
+built. This is a deferral, not an oversight — the gap below is real, it simply has no traffic behind it.
+
+One residual honesty issue worth knowing: `TYPE_LABEL` in the Ad Manager grid still offers "Sponsored Brands"
+and "Sponsored Display" labels that can never populate, because nothing syncs them. Harmless today; if it ever
+reads as "we have SB/SD data and it's empty", say so and I'll drop the labels.
+
+### 🟡 B5 (original) — Sponsored Products only, but nothing says so
 
 `ads-api-client.ts` implements `/sp/campaigns`, `/sp/adGroups`, `/sp/keywords`, `/sp/targets`,
 `/sp/negativeKeywords`, `/sp/negativeTargets`, `/sp/productAds` — plus a single `/sd/targets`. There is **no
@@ -268,7 +277,7 @@ Ordered so each phase is independently shippable and nothing later depends on a 
 | **AX2.5** | **Replication (write side)** | Apply a blueprint to N target products: dry-run diff → portfolio budget guard → **self-competition + keyword-conflict check (blocking)** → gated create → post-create read-back → single-unit rollback | The feature you asked for, with the guard that makes it safe |
 | **AX2.6** | **Bulksheet round-trip** | Export a blueprint or a live structure as an Amazon bulksheet; re-import with a diff preview | Operator escape hatch + a diffable artifact; also the fastest path to bulk edits |
 | **AX2.7** | **Multi-market truth** | Either graduate FR/ES/PL/UK/SE/NL/IE properly, or make the console state plainly which markets are read-only. Replication becomes market-aware | Prevents "I cloned to UK and nothing happened" |
-| **AX2.8** | **Sponsored Brands / Sponsored Display** | Add `campaignType`, the `/sb` and `/sd` client surfaces, sync and grid support | Largest scope, lowest urgency — SP is where the spend is |
+| ~~**AX2.8**~~ | ~~Sponsored Brands / Sponsored Display~~ | **DEFERRED by operator decision 2026-07-28** — SB/SD are not planned, so the modelling work has no traffic behind it | — |
 
 **Suggested first cut:** AX2.0 + AX2.1 together. They are small, they are both live defects, and they make
 everything after them verifiable.
