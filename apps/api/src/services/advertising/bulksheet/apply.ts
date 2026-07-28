@@ -282,43 +282,104 @@ export async function applyPlan(
   )
 
   for (const row of rows) {
-    const rec = (outcome: ApplyRowResult['outcome'], message: string) => {
-      out.results.push({ rowIndex: row.rowIndex, entity: row.entity, targetId: row.targetId, label: row.label, outcome, message })
+    if (out.aborted) break
+
+    /**
+     * The ONE place a row's fate is recorded — response, staging table and
+     * strict-mode abort together.
+     *
+     * They used to be three separate things, and they disagreed. Several failure
+     * paths (a bad State value, an unmappable column, the fail-closed default)
+     * pushed FAILED into the response and returned without touching
+     * ImportJobRow, so the staging row stayed PENDING — and the annotated
+     * workbook, which reads that column, marked those rows "unchanged". The
+     * operator's own file told them nothing had happened to a row that had just
+     * failed. Those same paths also ignored `strict`, which is documented as
+     * "abort the whole set on the first failure" and did not.
+     *
+     * Routing every outcome through here makes both impossible by construction
+     * rather than by remembering.
+     */
+    const settle = async (outcome: ApplyRowResult['outcome'], message: string, createdId?: string | null): Promise<void> => {
+      const targetId = createdId ?? row.targetId
+      out.results.push({ rowIndex: row.rowIndex, entity: row.entity, targetId, label: row.label, outcome, message })
       if (outcome === 'APPLIED') out.applied++
       else if (outcome === 'SKIPPED') out.skipped++
       else out.failed++
+
+      if (outcome === 'APPLIED') {
+        await prisma.importJobRow.updateMany({
+          where: { jobId, rowIndex: row.rowIndex },
+          data: {
+            status: 'SUCCESS', targetId, completedAt: new Date(),
+            // The before/after snapshot the operator was shown, frozen — so what
+            // was approved stays recoverable after the fact.
+            beforeState: Object.fromEntries(row.diffs.map((d) => [d.field, d.current])) as object,
+            afterState: Object.fromEntries(row.diffs.map((d) => [d.field, d.next])) as object,
+          },
+        })
+        return
+      }
+      if (outcome === 'FAILED') {
+        await prisma.importJobRow.updateMany({
+          where: { jobId, rowIndex: row.rowIndex },
+          data: { status: 'FAILED', errorMessage: message.slice(0, 900) },
+        })
+        if (opts.strict) out.aborted = true
+        return
+      }
+      // SKIPPED. Guarded on `status != SUCCESS` because the first thing this
+      // loop does is skip rows an EARLIER run already applied — overwriting
+      // those back to SKIPPED would destroy the idempotency record and let a
+      // third run re-apply them.
+      await prisma.importJobRow.updateMany({
+        where: { jobId, rowIndex: row.rowIndex, status: { not: 'SUCCESS' } },
+        data: { status: 'SKIPPED', errorMessage: message.slice(0, 900) },
+      })
+    }
+    const rec = settle
+
+    /**
+     * Every update service reports `{ ok: true, error: 'no_changes' }` when the
+     * row already held the value asked for. That is NOT an applied write, and
+     * reporting it as one is the failure this whole series is about: the
+     * response says applied, the staging row goes SUCCESS, and the annotated
+     * file comes back green for a change that never happened.
+     *
+     * Reachable, and by the documented recovery path: re-uploading a file whose
+     * Archive rows already ran gets a NEW job id, so the "already applied" set
+     * above is empty and every one of those rows would have reported APPLIED a
+     * second time. `conflicts: 'mine'` gets there too, when the value someone
+     * else set is the value being forced.
+     */
+    const settleWrite = async (res: { ok: boolean; error: string | null } | null): Promise<void> => {
+      if (res?.ok && res.error === 'no_changes') {
+        await settle('SKIPPED', 'Nothing to change — it already holds that value')
+        return
+      }
+      if (res?.ok) {
+        await settle('APPLIED', opts.applyImmediately ? 'Applied (live)' : 'Queued through the write gate (pending)')
+        return
+      }
+      await settle('FAILED', res?.error ?? 'Write refused')
     }
 
-    if (done.has(row.rowIndex)) { rec('SKIPPED', 'Already applied by an earlier run of this import'); continue }
-    if (row.status === 'UNCHANGED') { rec('SKIPPED', 'Nothing to change'); continue }
-    if (row.status === 'UNRESOLVED') { rec('SKIPPED', row.note ?? 'Could not resolve the target entity'); continue }
-    if (row.status === 'UNSUPPORTED') { rec('SKIPPED', row.note ?? 'This entity type cannot be applied yet'); continue }
+    if (done.has(row.rowIndex)) { await rec('SKIPPED', 'Already applied by an earlier run of this import'); continue }
+    if (row.status === 'UNCHANGED') { await rec('SKIPPED', 'Nothing to change'); continue }
+    if (row.status === 'UNRESOLVED') { await rec('SKIPPED', row.note ?? 'Could not resolve the target entity'); continue }
+    if (row.status === 'UNSUPPORTED') { await rec('SKIPPED', row.note ?? 'This entity type cannot be applied yet'); continue }
     if (row.status === 'CONFLICT' && opts.conflicts === 'skip') {
-      rec('SKIPPED', `Skipped: ${row.note ?? 'changed on Amazon since download'}`)
+      await rec('SKIPPED', `Skipped: ${row.note ?? 'changed on Amazon since download'}`)
       continue
     }
     if (row.status === 'CREATE') {
       const r = await createRow(prisma, row, jobId, opts, changeSetId)
-      rec(r.outcome, r.message)
-      if (r.outcome === 'APPLIED') {
-        await prisma.importJobRow.updateMany({
-          where: { jobId, rowIndex: row.rowIndex },
-          data: {
-            status: 'SUCCESS', targetId: r.createdId, completedAt: new Date(),
-            beforeState: {} as object,
-            afterState: Object.fromEntries(row.diffs.map((d) => [d.field, d.next])) as object,
-          },
-        })
-      } else if (r.outcome === 'FAILED') {
-        await prisma.importJobRow.updateMany({
-          where: { jobId, rowIndex: row.rowIndex },
-          data: { status: 'FAILED', errorMessage: r.message.slice(0, 900) },
-        })
-        if (opts.strict) { out.aborted = true; break }
-      }
+      // The created id is reported, not row.targetId — which is null on a create,
+      // so the operator's result row used to name nothing at all.
+      await settle(r.outcome, r.message, r.createdId)
       continue
     }
-    if (!row.targetId) { rec('SKIPPED', 'No resolved entity to write to'); continue }
+    if (!row.targetId) { await rec('SKIPPED', 'No resolved entity to write to'); continue }
 
     try {
       let res: { ok: boolean; error: string | null } | null = null
@@ -329,9 +390,9 @@ export async function applyPlan(
         // place can no longer leave the other behind.
         const patch: Record<string, unknown> = {}
         const err = applyFields('campaign', patch, (c) => nextOf(row, c))
-        if (err) { rec('FAILED', err); continue }
+        if (err) { await rec('FAILED', err); continue }
         if (row.status === 'ARCHIVE') patch.status = 'ARCHIVED'
-        if (!Object.keys(patch).length) { rec('SKIPPED', 'No writable field changed'); continue }
+        if (!Object.keys(patch).length) { await rec('SKIPPED', 'No writable field changed'); continue }
         res = await updateCampaignWithSync({
           campaignId: row.targetId, patch: patch as Parameters<typeof updateCampaignWithSync>[0]['patch'], actor: opts.actor,
           reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId,
@@ -339,10 +400,19 @@ export async function applyPlan(
       } else if (row.entity === 'Portfolio') {
         // AX-IE.2 — same rails as everything else: through the write gate and
         // the outbox, never a private path. A portfolio moves budget.
+        // Archive is not a portfolio operation. Amazon marks portfolio state
+        // "(Informational only)" on its own sheet, so FIELD_MAP has no State for
+        // it — without this the row would fall through to the generic "no
+        // writable field changed", which reads as an empty edit rather than an
+        // operation that does not exist.
+        if (row.status === 'ARCHIVE') {
+          await rec('SKIPPED', 'A portfolio cannot be archived from a bulksheet — Amazon treats portfolio state as read-only. Change it in the console.')
+          continue
+        }
         const patch: Record<string, unknown> = {}
         const err = applyFields('portfolio', patch, (c) => nextOf(row, c))
-        if (err) { rec('FAILED', err); continue }
-        if (!Object.keys(patch).length) { rec('SKIPPED', 'No writable field changed'); continue }
+        if (err) { await rec('FAILED', err); continue }
+        if (!Object.keys(patch).length) { await rec('SKIPPED', 'No writable field changed'); continue }
         res = await updatePortfolioWithSync({
           portfolioId: row.targetId, patch: patch as Parameters<typeof updatePortfolioWithSync>[0]['patch'], actor: opts.actor,
           reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId,
@@ -350,9 +420,9 @@ export async function applyPlan(
       } else if (row.entity === 'Ad group') {
         const patch: Record<string, unknown> = {}
         const err = applyFields('adGroup', patch, (c) => nextOf(row, c))
-        if (err) { rec('FAILED', err); continue }
+        if (err) { await rec('FAILED', err); continue }
         if (row.status === 'ARCHIVE') patch.status = 'ARCHIVED'
-        if (!Object.keys(patch).length) { rec('SKIPPED', 'No writable field changed'); continue }
+        if (!Object.keys(patch).length) { await rec('SKIPPED', 'No writable field changed'); continue }
         res = await updateAdGroupWithSync({
           adGroupId: row.targetId, patch: patch as Parameters<typeof updateAdGroupWithSync>[0]['patch'], actor: opts.actor,
           reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId,
@@ -363,21 +433,19 @@ export async function applyPlan(
         // operation form of the same field.
         const raw = row.status === 'ARCHIVE' ? 'archived' : nextOf(row, 'State')
         const mapped = raw ? STATE_TO_DB[raw.trim().toLowerCase()] : undefined
-        if (!raw) { rec('SKIPPED', 'No writable field changed'); continue }
-        if (!mapped) { rec('FAILED', `State "${raw}" is not one we can write`); continue }
+        if (!raw) { await rec('SKIPPED', 'No writable field changed'); continue }
+        if (!mapped) { await rec('FAILED', `State "${raw}" is not one we can write`); continue }
         res = await updateProductAdWithSync({
           productAdId: row.targetId, status: mapped, actor: opts.actor,
           reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId,
         })
-        // "no_changes" means the DB already held this state — a skip, not a failure.
-        if (res.error === 'no_changes') { rec('SKIPPED', 'Nothing to change'); continue }
       } else if (isAdTargetEntity(row.entity)) {
         // Keyword / Product targeting / the negative variants all live on AdTarget.
         const patch: Record<string, unknown> = {}
         const err = applyFields('adTarget', patch, (c) => nextOf(row, c))
-        if (err) { rec('FAILED', err); continue }
+        if (err) { await rec('FAILED', err); continue }
         if (row.status === 'ARCHIVE') patch.status = 'ARCHIVED'
-        if (!Object.keys(patch).length) { rec('SKIPPED', 'No writable field changed'); continue }
+        if (!Object.keys(patch).length) { await rec('SKIPPED', 'No writable field changed'); continue }
         res = await updateAdTargetWithSync({
           adTargetId: row.targetId, patch: patch as Parameters<typeof updateAdTargetWithSync>[0]['patch'], actor: opts.actor,
           reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId,
@@ -390,35 +458,13 @@ export async function applyPlan(
         // A Product ad id is not an AdTarget id, so that is either a no-op or a
         // write to whatever row happens to share the value. Refusing is the only
         // safe answer, and it surfaces the missing branch instead of hiding it.
-        rec('FAILED', `${row.entity} has no apply path — preview should have marked this UNSUPPORTED. This is a bug, not a data problem.`)
+        await rec('FAILED', `${row.entity} has no apply path — preview should have marked this UNSUPPORTED. This is a bug, not a data problem.`)
         continue
       }
 
-      if (res?.ok) {
-        rec('APPLIED', opts.applyImmediately ? 'Applied (live)' : 'Queued through the write gate (pending)')
-        await prisma.importJobRow.updateMany({
-          where: { jobId, rowIndex: row.rowIndex },
-          data: {
-            status: 'SUCCESS',
-            targetId: row.targetId,
-            completedAt: new Date(),
-            // The before/after snapshot the operator was shown, frozen — so what
-            // was approved stays recoverable after the fact.
-            beforeState: Object.fromEntries(row.diffs.map((d) => [d.field, d.current])) as object,
-            afterState: Object.fromEntries(row.diffs.map((d) => [d.field, d.next])) as object,
-          },
-        })
-      } else {
-        rec('FAILED', res?.error ?? 'Write refused')
-        await prisma.importJobRow.updateMany({
-          where: { jobId, rowIndex: row.rowIndex },
-          data: { status: 'FAILED', errorMessage: (res?.error ?? 'write refused').slice(0, 900) },
-        })
-        if (opts.strict) { out.aborted = true; break }
-      }
+      await settleWrite(res)
     } catch (e) {
-      rec('FAILED', (e as Error).message.slice(0, 300))
-      if (opts.strict) { out.aborted = true; break }
+      await settle('FAILED', (e as Error).message.slice(0, 300))
     }
   }
 
