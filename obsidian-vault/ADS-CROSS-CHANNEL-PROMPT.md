@@ -112,6 +112,40 @@ Also: `apps/web` **never imports `packages/shared/ads-bulksheet.ts`** — zero h
 
 ## Phase 4 — finish the round trip
 
+### 4a. Close the export-only gap — this is the headline item
+
+The export emits **9 entity types**; the apply path writes **4**. Everything else is a one-way trip: an operator downloads it, edits it, uploads it, and the row is silently skipped. Worse, the declaration and the behaviour disagree **in both directions**.
+
+`ENTITY_RULES` (`packages/shared/ads-bulksheet.ts:379-388`) declares:
+
+| Entity | `applySupported` | What actually happens |
+|---|---|---|
+| Campaign | `true` | applied |
+| Ad group | `true` | applied |
+| Keyword | `true` | applied |
+| Negative keyword | `true` | applied |
+| **Campaign negative keyword** | **`false`** | **applied anyway** — falls into the AdTarget branch (`preview.ts:206`, `apply.ts:164-181`) |
+| **Product targeting** | **`false`** | **applied anyway** — same branch |
+| **Negative product targeting** | **`false`** | **applied anyway** — same branch |
+| **Product ad** (`SKU`/`ASIN` rows) | `false` | genuinely skipped — `UNSUPPORTED` at `preview.ts:237-239`, dropped at `apply.ts:108` |
+| **Bidding adjustment** (placement modifiers) | `false` | genuinely skipped |
+| **Portfolio** | `false` | genuinely skipped, and the sheet can't be parsed at all |
+
+Two distinct bugs here:
+
+1. **Three entity types are applied while declared unsupported.** They work, but nobody decided that — it is an accident of `preview.ts` routing them into the AdTarget branch. Flip the declarations to `true` and add tests, or gate them properly. Right now the schema lies.
+2. **Product ads, bidding adjustments and portfolios are export-only.** These are the SKU/ASIN-level rows and the placement modifiers — the two things operators most want to bulk-edit. `Product ad`'s create key is already declared as `[['SKU','ASIN'], 'Ad group ID']` and its mutate key as `['Ad ID']` (`ads-bulksheet.ts:386`), so the grammar is there; only the apply mapping is missing.
+
+**Wire all three into `apply.ts`:**
+
+- **Product ad** — `Update` (state: enabled/paused/archived) and `Archive` against `AdProductAd` via a new `updateProductAdWithSync` in `ads-mutation.service.ts`, following the existing `updateAdGroupWithSync` shape exactly. `Create` needs SKU-or-ASIN + ad group and belongs with the general Create work below. Note the market context: Perpetua explicitly *cannot* bulk-archive targets or bulk-set placement multipliers, and Adbrew is the only competitor documenting bulk placement-modifier edits — so this is a claim worth being able to make.
+- **Bidding adjustment** — placement modifiers already export from `dynamicBidding.placementBidding` (`advertising.routes.ts:4353`). The row key is `(Campaign ID, Placement)` and the value is `Percentage` (0–900). Apply through the existing campaign patch path.
+- **Portfolio** — first fix the sheet so it can round-trip at all (below), then support `Update` on name and budget.
+
+Add the invariant test from Phase 6 so a declared-but-unmapped entity can never ship again.
+
+### 4b. Everything else
+
 - **SB and SD sheets.** Today SB/SD campaigns are written onto the **SP sheet** (`advertising.routes.ts:4339`), and `ENTITIES_BY_PRODUCT` — whose own comment claims "this is what validation uses" (`ads-bulksheet.ts:164`) — is referenced only from a test. Give each ad product its own sheet and make `ENTITIES_BY_PRODUCT` load-bearing.
 - **Portfolios cannot round-trip** — `PORTFOLIO_COLUMNS` (`build-workbook.ts:146-156`) is 9 ad-hoc columns against Amazon's real 12 with no `Entity` column, so the importer skips the sheet.
 - **Export is not streamed.** `createWriter()` uses a plain `new ExcelJS.Workbook()` (`spreadsheet-adapter.ts:250-253`), so `maybeDrain()` (`:194-204`) is dead code and the whole graph is materialised before ExcelJS starts. Move to `WorkbookWriter` with the drain guard (exceljs#2916), and move export to an async `ExportJob` with progress.
@@ -143,7 +177,14 @@ Build, in this order:
 
 eBay has ~139 good unit tests but **zero route tests** across 68 endpoints and **zero web tests**.
 
-Required: a fixture workbook (including one round-tripped through Apple Numbers, which writes structurally different XLSX — different `dimension` refs, sometimes missing `r` attributes), an end-to-end export→edit→import→apply→rollback test, and route tests for the eBay endpoints. Add an invariant test asserting that **no field can appear in a preview `*_FIELDS` list without a corresponding apply mapping** — that single test makes D2 unrepeatable.
+Required: a fixture workbook (including one round-tripped through Apple Numbers, which writes structurally different XLSX — different `dimension` refs, sometimes missing `r` attributes), an end-to-end export→edit→import→apply→rollback test, and route tests for the eBay endpoints.
+
+Two invariant tests matter more than any individual unit test, because each makes a whole bug class unrepeatable:
+
+1. **No field may appear in a preview `*_FIELDS` list without a corresponding apply mapping.** Kills D2.
+2. **Every entity the exporter emits must either be applied, or be declared `applySupported: false` *and* reach `UNSUPPORTED` in preview — with no third state.** Kills the Phase 4a contradiction where three entity types are applied while declared unsupported, and makes export-only rows impossible to ship silently.
+
+Add a third, cheaper check while you are there: assert that the set of entities in `ENTITY_RULES` equals the set the exporter can emit, so adding a row type to the export without a grammar entry fails CI.
 
 ## The eBay pool question — decide it explicitly, do not silently defer again
 
