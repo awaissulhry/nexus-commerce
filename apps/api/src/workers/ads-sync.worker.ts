@@ -17,7 +17,7 @@
 
 import { Worker, type Job } from 'bullmq'
 import prisma from '../db.js'
-import { entityWriteInFlightElsewhere, settleAdMutations } from '../services/advertising/ads-mutation.service.js'
+import { claimEntityWrite, settleAdMutations } from '../services/advertising/ads-mutation.service.js'
 import { ADS_STALE_INTENT_MS, classifyCrashedWrite } from '../services/ads-core/ad-mutation-state.js'
 import { redis } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
@@ -268,15 +268,17 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     return { status: 'SKIPPED', queueId }
   }
 
-  // AX-ZD.1 — serialise writes per entity. Amazon answers two concurrent writes
+  // AX-ZD.1e — serialise writes per entity. Amazon answers two concurrent writes
   // to one entity with HTTP 423 ConcurrentModificationException, and this worker
   // runs at concurrency 2. Defer rather than fail: the row stays PENDING with a
   // short hold and the drain picks it up, so nothing is lost and the operator's
-  // change still lands. (A mitigation, not a lock — see
-  // entityWriteInFlightElsewhere for why, and what closing it fully requires.)
+  // change still lands. claimEntityWrite is a real atomic claim (transaction-
+  // scoped advisory lock), not the check-then-act mitigation it replaced.
   const payloadForLock = row.payload as unknown as AdMutationPayload
-  if (payloadForLock?.entityType && payloadForLock?.entityId
-      && await entityWriteInFlightElsewhere(payloadForLock.entityType, payloadForLock.entityId, queueId)) {
+  const claimed = !payloadForLock?.entityType || !payloadForLock?.entityId
+    ? true // malformed payload: let the normal dispatch path reject it
+    : await claimEntityWrite(payloadForLock.entityType, payloadForLock.entityId, queueId)
+  if (!claimed) {
     await prisma.outboundSyncQueue.update({
       where: { id: queueId },
       data: { holdUntil: new Date(Date.now() + SERIALISE_DEFER_MS) },
@@ -287,11 +289,12 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     return { status: 'DEFERRED', queueId }
   }
 
+  // The claim above already moved the typed rows to IN_FLIGHT — that IS the
+  // exclusion token, so settling again here would be a redundant write.
   await prisma.outboundSyncQueue.update({
     where: { id: queueId },
     data: { syncStatus: 'IN_PROGRESS' },
   })
-  await settleAdMutations(queueId, 'IN_PROGRESS')
 
   const payload = row.payload as unknown as AdMutationPayload
   const marketplace = payload?.marketplace ?? null

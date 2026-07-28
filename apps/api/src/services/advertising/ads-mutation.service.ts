@@ -227,46 +227,93 @@ export async function settleAdMutations(
 }
 
 /**
- * AX-ZD.1 — is another queue row already writing to this entity?
+ * AX-ZD.1e — claim an entity for writing, atomically.
  *
  * Amazon answers two concurrent writes to one entity with HTTP 423
  * ConcurrentModificationException, and the ads worker runs at concurrency 2, so
- * two jobs for the same campaign can overlap. Until ZD.1 there was no way to
- * even ask this: OutboundSyncQueue has no entity foreign key, only a JSON blob.
+ * two jobs for the same campaign genuinely overlap.
  *
- * HONEST LIMIT — this REDUCES the race, it does not eliminate it. Two workers
- * can both check, both find nothing, and both proceed inside the same few
- * milliseconds. True mutual exclusion needs a lock held across the check and the
- * write; a Postgres advisory lock would be the natural choice and is exactly
- * what we cannot rely on here, because pgbouncer transaction pooling detaches
- * session-scoped locks from the client that took them (the same reason
- * `prisma migrate deploy` stalls against this database). Closing the remaining
- * window means moving dispatch off OutboundSyncQueue so a row can be claimed
- * atomically — deferred, and the reason serialisation is a mitigation today
- * rather than a guarantee.
+ * ZD.1b did this as check-then-act and I labelled it a mitigation, on the
+ * grounds that a Postgres advisory lock — the natural fix — was unusable here
+ * because pgbouncer transaction pooling detaches the lock from the client. That
+ * is true of SESSION-scoped locks (`pg_advisory_lock`), which is why
+ * `prisma migrate deploy` stalls against this database. It is NOT true of
+ * TRANSACTION-scoped locks: `pg_advisory_xact_lock` releases at COMMIT, which is
+ * exactly the unit transaction pooling preserves. Measured against this
+ * database before relying on it — two concurrent holders serialised cleanly and
+ * a try-lock from a second client correctly refused while held.
+ *
+ * So this is a real claim, not a mitigation.
+ *
+ * THE LOCK COVERS THE CHECK-AND-SET, NOT THE WRITE. Holding a transaction open
+ * across an Amazon call — seconds, with retries — would pin a pooled server
+ * connection for the whole round trip and turn a slow Amazon into a database
+ * incident. It does not need to: once this commits, our row is IN_FLIGHT, and
+ * any other claimer must take the same lock and will see it. The IN_FLIGHT
+ * state is the exclusion token; the lock only makes acquiring it indivisible.
+ *
+ * Returns false when the entity is busy — the caller defers rather than failing,
+ * so nothing is lost.
+ *
+ * VERIFIED BY `scripts/_zd1e-claim-verify.mts`, not by the unit suite. The
+ * property that matters is Postgres lock behaviour under real concurrency, and
+ * a mocked test would assert only that this function calls the mock. The
+ * harness races two claims on one entity against the live database and checks
+ * exactly one wins, the loser is refused while the winner is in flight, the
+ * loser succeeds once it settles, and a different entity is never blocked.
  */
-export async function entityWriteInFlightElsewhere(
+export async function claimEntityWrite(
   entityType: AdEntityType,
   entityId: string,
-  excludeQueueId: string,
+  outboundQueueId: string,
   now: Date = new Date(),
 ): Promise<boolean> {
   try {
-    const rows = await prisma.adMutation.findMany({
-      where: {
-        entityType, entityId,
-        state: 'IN_FLIGHT',
-        NOT: { outboundQueueId: excludeQueueId },
-      },
-      select: { state: true, updatedAt: true },
-    })
-    return rows.some((r) => isBlockingWrite(r, now))
-  } catch {
+    return await prisma.$transaction(async (tx) => {
+      // Namespaced two-key form so this can never collide with another
+      // advisory-lock user (Prisma's migrate lock included).
+      const got = await tx.$queryRawUnsafe<Array<{ ok: boolean }>>(
+        `SELECT pg_try_advisory_xact_lock(${ADS_LOCK_CLASS}, hashtext($1)) AS ok`,
+        `${entityType}:${entityId}`,
+      )
+      // Another worker is inside the critical section for this entity right
+      // now. Don't wait for it — deferring is cheaper than holding a connection.
+      if (!got[0]?.ok) return false
+
+      const blockers = await tx.adMutation.findMany({
+        where: { entityType, entityId, state: 'IN_FLIGHT', NOT: { outboundQueueId } },
+        select: { state: true, updatedAt: true },
+      })
+      if (blockers.some((b) => isBlockingWrite(b, now))) return false
+
+      const claimed = await tx.adMutation.updateMany({
+        where: { outboundQueueId, state: 'PENDING' },
+        data: { state: 'IN_FLIGHT', attempts: { increment: 1 } },
+      })
+      // A queue row enqueued before ZD.1 has no typed rows, so there is nothing
+      // to claim and nothing to exclude on. Let it through: that is exactly the
+      // pre-ZD.1 behaviour, and these drain within the retry ladder.
+      return claimed.count > 0 || (await legacyRowWithNoMutations(tx, outboundQueueId))
+    }, { timeout: 10_000 })
+  } catch (err) {
     // Fail OPEN: if we cannot tell, let the write proceed. Amazon's 423 is
     // retryable and visible; a write blocked by a failed bookkeeping query
     // would be neither.
-    return false
+    logger.warn('[AX-ZD.1e] claim failed; proceeding unserialised', {
+      outboundQueueId, error: err instanceof Error ? err.message : String(err),
+    })
+    return true
   }
+}
+
+/** Namespace for ads entity-write advisory locks. */
+const ADS_LOCK_CLASS = 4242
+
+async function legacyRowWithNoMutations(
+  tx: { adMutation: { count: (a: unknown) => Promise<number> } },
+  outboundQueueId: string,
+): Promise<boolean> {
+  return (await tx.adMutation.count({ where: { outboundQueueId } })) === 0
 }
 
 /**
