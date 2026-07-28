@@ -77,6 +77,7 @@ import {
 import {
   validateBulksheetStreaming, looksLikeXlsx, assertNotZipBomb, MAX_ISSUES,
 } from '../services/advertising/bulksheet/import-validate.js'
+import { asciiHeader } from '../services/advertising/bulksheet/spreadsheet-adapter.js'
 import { createWriteStream } from 'node:fs'
 import { mkdtemp, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -4419,7 +4420,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const entities = [...new Set(spRows.map((r) => String(r.Entity)))].sort()
     const excludes = [
       ...[...withheldByProduct.entries()].sort().map(([prod, n]) =>
-        `${prod} (${n} row${n === 1 ? '' : 's'} withheld — no confirmed sheet layout)`),
+        `${prod} (${n} row${n === 1 ? '' : 's'} withheld - no confirmed sheet layout)`),
       ...(withheldByProduct.has('Sponsored Brands') ? [] : ['Sponsored Brands sheet']),
       ...(withheldByProduct.has('Sponsored Display') ? [] : ['Sponsored Display sheet']),
     ]
@@ -4461,17 +4462,26 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const buf = built.buffer
     // Truthful coverage headers — naming what is missing is what stops a partial
     // file from reading as a full one.
+    //
+    // Every free-text header goes through asciiHeader(). Node rejects non-ASCII
+    // in header VALUES with ERR_INVALID_CHAR, which is a 500, not a warning —
+    // and this endpoint took exactly that: the withheld-rows message contained
+    // an em dash, so the whole export died the moment the account had a single
+    // Sponsored Brands or Display row. Header text is assembled from entity
+    // names and operator-facing prose, so this has to be a guard rather than a
+    // one-off fix at the callsite.
+    const h = (k: string, v: string) => reply.header(k, asciiHeader(v))
     reply.header('X-Nexus-Export-Campaigns', String(campaigns.length))
     reply.header('X-Nexus-Export-Campaigns-Total', String(totalCampaigns))
     reply.header('X-Nexus-Export-Truncated', totalCampaigns > limit || targetsTruncated > 0 ? 'true' : 'false')
     reply.header('X-Nexus-Export-Adgroups-Target-Truncated', String(targetsTruncated))
-    reply.header('X-Nexus-Export-Entities', entities.join(','))
-    reply.header('X-Nexus-Export-Excludes', excludes.join(','))
+    h('X-Nexus-Export-Entities', entities.join(','))
+    h('X-Nexus-Export-Excludes', excludes.join(','))
     reply.header('X-Nexus-Export-Rows', String(built.rowCount))
     reply.header('X-Nexus-Export-Portfolios', String(built.portfolioCount))
     reply.header('X-Nexus-Export-Performance-Window-Days', String(perfDays))
-    reply.header('X-Nexus-Export-Performance-Grains', [...new Set(perfGrains)].sort().join(','))
-    reply.header('X-Nexus-Export-Id', built.exportId)
+    h('X-Nexus-Export-Performance-Grains', [...new Set(perfGrains)].sort().join(','))
+    h('X-Nexus-Export-Id', built.exportId)
     reply.header('X-Nexus-Bulksheet-Schema', BULKSHEET_SCHEMA_VERSION)
     reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     reply.header('Content-Disposition', 'attachment; filename="nexus-bulksheet.xlsx"')

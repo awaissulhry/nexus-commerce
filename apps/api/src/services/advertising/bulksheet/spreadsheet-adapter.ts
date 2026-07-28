@@ -148,6 +148,26 @@ export function cellToString(v: unknown): string {
 }
 
 /**
+ * Make a string safe to put in an HTTP header VALUE.
+ *
+ * Node throws ERR_INVALID_CHAR — a 500, not a warning — on any byte outside
+ * printable ASCII. Our coverage headers are assembled from entity names and
+ * operator-facing prose, so a single em dash was enough to take the whole export
+ * endpoint down once the account had one Sponsored Brands row. Typographic
+ * punctuation folds to its ASCII equivalent so the text still reads; anything
+ * else is dropped.
+ */
+export function asciiHeader(v: string): string {
+  return v
+    .replace(/[\u2010-\u2015]/g, '-')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/\u2026/g, '...')
+    .replace(/\u00A0/g, ' ')
+    .replace(/[^\x20-\x7E]/g, '')
+}
+
+/**
  * Prefix-escape values a spreadsheet would otherwise evaluate.
  *
  * D6 — for XLSX this is now used only as a PREDICATE ("would this need
@@ -257,7 +277,20 @@ class ExcelJsWriter implements SpreadsheetWriter {
   }
 
   addSheet(spec: SheetSpec): void {
-    const ws = this.wb.addWorksheet(spec.name, spec.hidden ? { state: 'hidden' } : undefined)
+    // Frozen panes and hidden state must BOTH be passed at creation.
+    //
+    // On the streaming writer `WorksheetWriter.views` is a getter with no
+    // setter, so the previous `ws.views = [...]` after creation threw
+    // "Cannot set property views of #<WorksheetWriter> which has only a getter"
+    // — and since the Sponsored Products sheet is frozen, that took the entire
+    // export down with a 500. The buffered writer tolerated the assignment,
+    // which is why the streaming switch surfaced it.
+    const opts: Record<string, unknown> = {}
+    if (spec.hidden) opts.state = 'hidden'
+    if (spec.freeze) {
+      opts.views = [{ state: 'frozen', xSplit: spec.freeze.columns, ySplit: spec.freeze.rows, activeCell: 'A2' }]
+    }
+    const ws = this.wb.addWorksheet(spec.name, Object.keys(opts).length ? opts : undefined)
     const header = ws.addRow(spec.columns.map((c) => c.header))
     header.font = { bold: true, color: { argb: 'FFFFFFFF' } }
     header.alignment = { wrapText: true, vertical: 'middle' }
@@ -276,9 +309,6 @@ class ExcelJsWriter implements SpreadsheetWriter {
       // Hidden columns are left alone: sizing one un-hides it in some readers.
       if (!c.hidden && c.width) col.width = c.width
     })
-    if (spec.freeze) {
-      ws.views = [{ state: 'frozen', xSplit: spec.freeze.columns, ySplit: spec.freeze.rows, activeCell: 'A2' }]
-    }
     if (typeof header.commit === 'function') header.commit()
     this.sheets.set(spec.name, ws)
     this.specs.set(spec.name, spec)
