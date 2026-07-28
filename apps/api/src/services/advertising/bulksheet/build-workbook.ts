@@ -120,6 +120,12 @@ export interface WorkbookCoverage {
    * is "never collected".
    */
   performanceGrains: string[]
+  /**
+   * AX-ZD.5 — how settled the metric window is. Two exports of "the same week"
+   * disagree because Amazon restates for up to 60 days; stamping this is what
+   * makes that self-explaining rather than a bug report.
+   */
+  vintage?: { worst: string; ruleSafe: boolean; summary: string; breakdown: Record<string, number> }
 }
 
 export interface BuildResult {
@@ -227,6 +233,9 @@ function metaPairs(c: WorkbookCoverage, at: Date, exportId: string, rowCount: nu
     ['marketplaces', c.marketplaces.join(',')],
     ['performanceWindowDays', String(c.performanceWindowDays)],
     ['performanceGrains', c.performanceGrains.join(',')],
+    ['metricsVintage', c.vintage?.worst ?? 'unknown'],
+    ['metricsRuleSafe', String(c.vintage?.ruleSafe ?? false)],
+    ['metricsVintageSummary', c.vintage?.summary ?? ''],
     ['entities', c.entities.join(',')],
     ['excludes', c.excludes.join(',')],
   ]
@@ -244,6 +253,15 @@ function readmeLines(c: WorkbookCoverage, at: Date, exportId: string): string[] 
     `Coverage   ${c.campaignsExported} of ${c.campaignsTotal} campaigns${c.truncated ? '  ** TRUNCATED **' : ''}`,
     `Markets    ${c.marketplaces.join(', ') || '—'}`,
     `Metrics    last ${c.performanceWindowDays} days, available for: ${c.performanceGrains.join(', ') || 'nothing yet'}`,
+    ...(c.vintage ? [`Vintage    ${c.vintage.worst} — ${c.vintage.summary}`] : []),
+    '',
+    'WHY TWO EXPORTS OF THE SAME WEEK CAN DISAGREE',
+    '  Amazon keeps revising these numbers after the day they describe. Clicks and',
+    '  spend settle in about 3 days; conversions attribute back to the CLICK date for',
+    '  up to 14, and revisions arrive for up to 60. So a file pulled today and the',
+    '  same week pulled next month will not match, and neither one is wrong.',
+    ...(c.vintage ? [`  This file: ${c.vintage.summary}`] : []),
+    '  Do not optimise against anything less than about two weeks old.',
     '',
     'ABOUT THE PERFORMANCE COLUMNS',
     `  Impressions … ROAS are read-only context, summed over the last ${c.performanceWindowDays} days.`,

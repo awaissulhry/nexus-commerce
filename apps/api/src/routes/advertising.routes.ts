@@ -4285,6 +4285,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const perfDays = Math.max(1, Math.min(180, Number((request.query as { days?: string }).days ?? 30)))
     const perfSince = new Date(Date.now() - perfDays * 86400_000)
     const { AMS_DAILY_MARKER } = await import('../services/ads-core/ams-daily.js')
+    const vintageMod = await import('../services/ads-core/data-vintage.js')
     const perfGrains: string[] = []
     const perfGrainRows = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['entityType'],
@@ -4414,6 +4415,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         // and PRODUCT_AD rows today — no AD_TARGET or AD_GROUP grain exists — so
         // keyword and ad-group metric cells are blank rather than a fabricated 0.
         performanceGrains: [...new Set(perfGrains)].sort(),
+        // AX-ZD.5 — say how settled the window is, in the file itself.
+        vintage: (() => {
+          const { describeWindow } = vintageMod
+          const w = describeWindow(perfSince, new Date())
+          return { worst: w.worst, ruleSafe: w.ruleSafe, summary: w.summary, breakdown: w.breakdown }
+        })(),
       },
       exportId: randomBytes(9).toString('base64url'),
       generatedAt: new Date(),
@@ -4723,6 +4730,47 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       await prisma.importJob.update({ where: { id }, data: { status: 'ROLLED_BACK', errorSummary: `Rolled back ${outcome.reversed} change(s)` } })
     }
     return { importJobId: id, changeSetId: `import:${id}`, ...outcome }
+  })
+
+  // ── GET /advertising/data-vintage — AX-ZD.5 ───────────────────────
+  // How much of a date range is still moving, and whether it may drive a rule.
+  //
+  // Amazon restates for up to 60 days, so two pulls of "the same week" disagree.
+  // Every competitor in the teardown inherits that and none of them exposes it —
+  // which is why "your numbers changed, your tool is wrong" recurs verbatim
+  // across all of them. Saying it out loud is the entire feature.
+  fastify.get('/advertising/data-vintage', async (request, reply) => {
+    const q = request.query as { days?: string; from?: string; to?: string; date?: string }
+    const { vintageOf, describeWindow, attributionWindowDays, VINTAGE_STATES } =
+      await import('../services/ads-core/data-vintage.js')
+    const now = new Date()
+
+    // A single date, for badging one row.
+    if (q.date) {
+      const d = new Date(q.date)
+      if (Number.isNaN(d.getTime())) { reply.status(400); return { error: 'bad_date' } }
+      return { date: q.date, ...vintageOf(d, now) }
+    }
+
+    const to = q.to ? new Date(q.to) : now
+    const from = q.from ? new Date(q.from) : new Date(now.getTime() - (Math.max(1, Math.min(400, Number(q.days ?? 30))) - 1) * 86_400_000)
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) { reply.status(400); return { error: 'bad_range' } }
+
+    const w = describeWindow(from, to, now)
+    reply.header('Cache-Control', 'private, max-age=300')
+    return {
+      ...w,
+      states: VINTAGE_STATES,
+      attributionWindowDays: {
+        SPONSORED_PRODUCTS: attributionWindowDays('SPONSORED_PRODUCTS'),
+        SPONSORED_BRANDS: attributionWindowDays('SPONSORED_BRANDS'),
+        SPONSORED_DISPLAY: attributionWindowDays('SPONSORED_DISPLAY'),
+      },
+      // The freshest metric row we hold, so the badge can pair settlement state
+      // with "last synced" rather than implying the data is current.
+      lastMetricDate: (await prisma.amazonAdsDailyPerformance.aggregate({ _max: { date: true } }))._max.date ?? null,
+      lastReportedAt: (await prisma.amazonAdsDailyPerformance.aggregate({ _max: { reportedAt: true } }))._max.reportedAt ?? null,
+    }
   })
 
   // ── GET /advertising/bulk/imports — AX-IE.8, history for the bulk page ──
