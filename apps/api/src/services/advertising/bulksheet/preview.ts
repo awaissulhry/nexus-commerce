@@ -23,7 +23,7 @@
 import type { PrismaClient } from '@prisma/client'
 import { parseRowKey, rowKeyMatchesEntity, isAdTargetEntity } from '@nexus/shared/ads-bulksheet'
 import { computeBaseline, baselineDrift, parseMoney, parseVocabulary } from '@nexus/shared/ads-bulksheet'
-import { FIELDS_BY_KIND } from './field-map.js'
+import { FIELDS_BY_KIND, CREATE_COLUMNS } from './field-map.js'
 
 /** One field that would change. */
 export interface FieldDiff {
@@ -39,6 +39,15 @@ export interface PreviewRow {
   rowKey: string
   /** Local entity id once resolved; null when the row points at nothing we hold. */
   targetId: string | null
+  /**
+   * On a CREATE, the local id of the parent the new row hangs off — the ad group
+   * for a keyword or product ad, the campaign for an ad group or a campaign
+   * negative. Null on everything else. Resolved here rather than in apply
+   * because this is where the batch-loaded maps already are, and because an
+   * unresolvable parent should be visible in the preview, not discovered
+   * halfway through a write.
+   */
+  parentId: string | null
   label: string
   status: 'CREATE' | 'UPDATE' | 'ARCHIVE' | 'UNCHANGED' | 'CONFLICT' | 'UNRESOLVED' | 'UNSUPPORTED'
   diffs: FieldDiff[]
@@ -176,6 +185,13 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
       if (id) targetIds.add(id)
       if (local) targetLocal.add(local)
     }
+    // A CREATE points at a PARENT, not at itself, and that parent has to be
+    // loaded too or the row cannot be previewed — only discovered as broken
+    // once apply is already writing.
+    if (p.operation === 'Create') {
+      if (v['Ad group ID']) agIds.add(v['Ad group ID'])
+      if (v['Campaign ID']) campIds.add(v['Campaign ID'])
+    }
   }
 
   /** Match on either key. Purely additive — anything the id column found, it still finds. */
@@ -249,11 +265,75 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
     archives: 0, pauses: 0, enables: 0, bidChanges: 0, largeBidChanges: 0, bidDeltaEur: 0, byEntity: {},
   }
 
+  /**
+   * A CREATE previewed as a diff from nothing.
+   *
+   * Only columns the operator actually filled in are listed — a blank cell on a
+   * create means "leave it to the default", and showing `→ ''` for every unused
+   * column would bury the three that matter under twenty that do not.
+   */
+  const createRow = (base: PreviewRow, entity: string, v: Record<string, string>, parentId: string, label: string): PreviewRow => ({
+    ...base,
+    status: 'CREATE',
+    parentId,
+    label,
+    diffs: (CREATE_COLUMNS[entity] ?? [])
+      .filter((c) => (v[c] ?? '').trim() !== '')
+      .map((c) => ({ field: c, current: '', next: v[c].trim() })),
+  })
+
   for (const { rowIndex, p } of actionable) {
     const v = p.values
     const op = p.operation!
     const entity = p.entity!
-    const base: PreviewRow = { rowIndex, entity, operation: op, rowKey: p.rowKey ?? '', targetId: null, label: '', status: 'UNSUPPORTED', diffs: [] }
+    const base: PreviewRow = { rowIndex, entity, operation: op, rowKey: p.rowKey ?? '', targetId: null, parentId: null, label: '', status: 'UNSUPPORTED', diffs: [] }
+
+    // Two limits of create support, stated where they bite rather than only in
+    // a doc.
+    //
+    // A new CAMPAIGN is not supported. Every other create attaches to a parent
+    // that already exists, which is a lookup; a campaign create needs a
+    // marketplace, an ad product, a targeting type and a portfolio decision that
+    // the SP sheet does not carry unambiguously, and getting that wrong mints a
+    // live campaign that spends. It belongs in the campaign wizard until the
+    // sheet can express it fully.
+    //
+    // And a parent being created IN THE SAME FILE is not resolvable: children
+    // reference parents by id, and a row that does not exist yet has no id. So
+    // "new ad group + its keywords in one upload" needs two uploads today. Doing
+    // it properly means Amazon's placeholder-handle convention plus a
+    // topological apply order, which is its own piece of work.
+    if (op === 'Create' && entity === 'Campaign') {
+      rows.push({
+        ...base, status: 'UNRESOLVED', label: v['Campaign name'] ?? '',
+        note: 'Creating a campaign from a bulksheet is not supported. The sheet cannot express marketplace, ad product and targeting type unambiguously, and guessing them would mint a campaign that spends. Create it in the campaign wizard, then export again to edit it here.',
+      })
+      continue
+    }
+
+    // A create hangs off a parent, so resolve that first — a keyword or product
+    // ad off its ad group, a campaign negative off its campaign. An unresolvable
+    // parent is reported here, where the operator can still fix the file.
+    if (op === 'Create' && CREATE_COLUMNS[entity]) {
+      const wantsCampaign = entity === 'Campaign negative keyword' || entity === 'Ad group'
+      const parent = wantsCampaign
+        ? campBy.get(v['Campaign ID'] ?? '')
+        : agBy.get(v['Ad group ID'] ?? '')
+      if (!parent) {
+        const col = wantsCampaign ? 'Campaign ID' : 'Ad group ID'
+        rows.push({
+          ...base, status: 'UNRESOLVED', label: v['Keyword text'] || v['Product targeting expression'] || v.SKU || v['Ad group name'] || '',
+          note: (v[col] ?? '').trim()
+            ? `No ${wantsCampaign ? 'campaign' : 'ad group'} with ${col} "${v[col]}" — a new row has to attach to one that already exists.`
+            : `${col} is required to create a ${entity}: it is the parent the new row attaches to.`,
+        })
+        continue
+      }
+      const label = v['Keyword text'] || v['Product targeting expression'] || v.SKU || v['ASIN (Informational only)'] || v['Ad group name'] || ''
+      rows.push(createRow(base, entity, v, parent.id, label))
+      blast.byEntity[entity] = (blast.byEntity[entity] ?? 0) + 1
+      continue
+    }
 
     // Only the entities the apply path can actually execute get a real diff. The
     // rest preview as UNSUPPORTED rather than implying they will be written.
@@ -288,7 +368,8 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
     } else if (entity === 'Product ad') {
       const t = byRowKey(adById, base.rowKey, entity) ?? (v['Ad ID'] ? adBy.get(v['Ad ID']) : undefined)
       if (!t) {
-        if (op === 'Create') { rows.push({ ...base, status: 'CREATE', label: v.SKU || v['ASIN (Informational only)'] || '' }); blast.byEntity[entity] = (blast.byEntity[entity] ?? 0) + 1; continue }
+        // A Create never reaches here — it was handled above, where its parent
+        // ad group is resolved. Landing here means the Ad ID matched nothing.
         rows.push({ ...base, status: 'UNRESOLVED', label: v.SKU ?? v['Ad ID'] ?? '', note: 'No product ad with that Ad ID' })
         continue
       }
@@ -301,8 +382,8 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
       const id = v['Keyword ID'] || v['Product Targeting ID']
       const t = byRowKey(tgtById, base.rowKey, entity) ?? (id ? tgtBy.get(id) : undefined)
       if (!t) {
-        // A Create has no id yet — that is expected, not an error.
-        if (op === 'Create') { rows.push({ ...base, status: 'CREATE', label: v['Keyword text'] || v['Product targeting expression'] || '' }); blast.byEntity[entity] = (blast.byEntity[entity] ?? 0) + 1; continue }
+        // A Create never reaches here — it was handled above, where its parent
+        // is resolved. Landing here means the id column matched nothing.
         rows.push({ ...base, status: 'UNRESOLVED', label: v['Keyword text'] ?? id ?? '', note: 'No target with that id' })
         continue
       }

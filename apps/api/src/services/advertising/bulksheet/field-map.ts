@@ -136,6 +136,31 @@ export const FIELDS_BY_KIND: Record<ApplyTargetKind, readonly string[]> = {
 }
 
 /**
+ * The columns a CREATE consumes, per entity.
+ *
+ * Separate from FIELD_MAP on purpose: the two lists genuinely differ, and
+ * collapsing them would break one or the other. `Keyword text` and `Match type`
+ * are immutable on an existing target — they are in NON_WRITABLE_REASONS below —
+ * but they are exactly what a new keyword IS. Conversely `Bid` is writable on an
+ * update and meaningless on a negative's create.
+ *
+ * PreviewRow carries no raw cell values, only diffs, so a create is previewed as
+ * a diff from nothing: `current: ''` → `next: <the cell>`. That is what lets
+ * apply read a create through the same accessor as an update, and it means the
+ * operator sees every field a new row will be born with instead of a bare
+ * "CREATE" verdict.
+ */
+export const CREATE_COLUMNS: Record<string, readonly string[]> = {
+  'Ad group': ['Ad group name', 'Ad Group Default Bid', 'State'],
+  'Keyword': ['Keyword text', 'Match type', 'Bid', 'State'],
+  'Negative keyword': ['Keyword text', 'Match type', 'State'],
+  'Campaign negative keyword': ['Keyword text', 'Match type', 'State'],
+  'Product targeting': ['Product targeting expression', 'Bid', 'State'],
+  'Negative product targeting': ['Product targeting expression', 'State'],
+  'Product ad': ['SKU', 'ASIN (Informational only)', 'State'],
+}
+
+/**
  * Columns that are editable in the schema but deliberately NOT writable here,
  * with the reason. Kept explicit so "why did my edit do nothing?" has an answer
  * in code rather than in someone's memory.

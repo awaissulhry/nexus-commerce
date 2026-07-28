@@ -66,7 +66,11 @@ export interface MutationOutcome {
  * unify human + automation writes under one column (the audit table
  * needs to round-trip the actor verbatim).
  */
-async function writeAdvertisingActionLog(args: {
+// Exported for the bulksheet create path (AX-IE.9): a create goes through the
+// ads-create services, which do not enqueue outbound work and so never reach the
+// call sites below — but it still has to join the upload's change set, or Undo
+// leaves behind the rows the import invented.
+export async function writeAdvertisingActionLog(args: {
   actor: AdsActor
   actionType: string
   entityType: 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET' | 'RETAIL_EVENT' | 'PRODUCT_AD'

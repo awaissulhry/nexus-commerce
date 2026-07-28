@@ -22,7 +22,7 @@ import type { PrismaClient } from '@prisma/client'
 import { parseMoney, parseVocabulary, isAdTargetEntity } from '@nexus/shared/ads-bulksheet'
 import {
   updateCampaignWithSync, updateAdGroupWithSync, updateAdTargetWithSync, updatePortfolioWithSync,
-  updateProductAdWithSync,
+  updateProductAdWithSync, writeAdvertisingActionLog,
   type AdsActor,
 } from '../ads-mutation.service.js'
 import type { PreviewRow } from './preview.js'
@@ -72,6 +72,191 @@ const nextOf = (row: PreviewRow, field: string): string | undefined =>
   row.diffs.find((d) => d.field === field)?.next
 
 /**
+ * AX-IE.9 — create a row the file asked for, through the SAME create services
+ * the rest of the app uses. No second write path: rule zero.
+ *
+ * Two things are worth knowing about how this differs from an update.
+ *
+ * The create services push to Amazon INLINE (gated), rather than through the
+ * outbox with a grace window. So a create lands immediately while the updates in
+ * the same file are still sitting in the queue, and `applyImmediately` does not
+ * change that — it only sets holdUntil on queued work, and a create has none.
+ * That asymmetry is real and is why the operator is told, per row, whether the
+ * new entity reached Amazon or exists only locally.
+ *
+ * They are also idempotent by natural key (H.1/H.5): re-running a create returns
+ * the existing row rather than a duplicate. That is what makes re-uploading a
+ * partially-applied file safe, which is the recovery path apply already
+ * documents.
+ */
+async function createRow(
+  prisma: PrismaClient,
+  row: PreviewRow,
+  jobId: string,
+  opts: ApplyOptions,
+  changeSetId: string,
+): Promise<{ outcome: ApplyRowResult['outcome']; message: string; createdId: string | null }> {
+  if (!row.parentId) return { outcome: 'SKIPPED', message: 'No parent resolved for this new row', createdId: null }
+
+  const text = (c: string): string => (nextOf(row, c) ?? '').trim()
+  const bidEur = (): number | null => {
+    const raw = text('Bid')
+    if (!raw) return null
+    const m = parseMoney(raw)
+    return 'error' in m ? null : m.value
+  }
+  const match = (): 'BROAD' | 'PHRASE' | 'EXACT' | null => {
+    const canonical = parseVocabulary('matchType', text('Match type'))
+    if (!canonical) return null
+    if (canonical === 'Broad') return 'BROAD'
+    if (canonical === 'Phrase' || canonical === 'Negative phrase') return 'PHRASE'
+    if (canonical === 'Exact' || canonical === 'Negative exact') return 'EXACT'
+    return null
+  }
+
+  const svc = await import('../ads-create.service.js')
+  // AdsActor is a tagged string (`user:<id>` / `automation:<id>`); the create
+  // services want the bare id for their audit rows.
+  const actorId = opts.actor.startsWith('user:') ? opts.actor.slice('user:'.length) : undefined
+  let created: { id: string; externalId: string | null }
+
+  try {
+    switch (row.entity) {
+      case 'Ad group': {
+        const name = text('Ad group name')
+        if (!name) return { outcome: 'FAILED', message: 'Ad group name is required to create an ad group', createdId: null }
+        const bid = (() => { const raw = text('Ad Group Default Bid'); if (!raw) return null; const m = parseMoney(raw); return 'error' in m ? null : m.value })()
+        if (bid == null) return { outcome: 'FAILED', message: 'Ad Group Default Bid is required to create an ad group', createdId: null }
+        const r = await svc.createAdGroupLocal({ campaignId: row.parentId, name, defaultBidEur: bid, userId: actorId })
+        created = { id: r.id, externalId: r.externalAdGroupId }
+        break
+      }
+      case 'Keyword': {
+        const kw = text('Keyword text'); const mt = match(); const bid = bidEur()
+        if (!kw) return { outcome: 'FAILED', message: 'Keyword text is required', createdId: null }
+        if (!mt) return { outcome: 'FAILED', message: `Match type "${text('Match type')}" is not one we can create`, createdId: null }
+        if (bid == null) return { outcome: 'FAILED', message: 'Bid is required to create a keyword', createdId: null }
+        const r = await svc.createKeywordLocal({ adGroupId: row.parentId, keywordText: kw, matchType: mt, bidEur: bid, userId: actorId })
+        created = { id: r.id, externalId: r.externalTargetId }
+        break
+      }
+      case 'Negative keyword': {
+        const kw = text('Keyword text'); const mt = match()
+        if (!kw) return { outcome: 'FAILED', message: 'Keyword text is required', createdId: null }
+        if (mt !== 'EXACT' && mt !== 'PHRASE') return { outcome: 'FAILED', message: 'A negative keyword must be Negative exact or Negative phrase', createdId: null }
+        const r = await svc.createNegativeKeywordLocal({ adGroupId: row.parentId, keywordText: kw, matchType: mt, userId: actorId })
+        created = { id: r.id, externalId: r.externalTargetId }
+        break
+      }
+      case 'Campaign negative keyword': {
+        const kw = text('Keyword text'); const mt = match()
+        if (!kw) return { outcome: 'FAILED', message: 'Keyword text is required', createdId: null }
+        if (mt !== 'EXACT' && mt !== 'PHRASE') return { outcome: 'FAILED', message: 'A campaign negative must be Negative exact or Negative phrase', createdId: null }
+        // This one service takes the EXTERNAL campaign id, not the local one.
+        const camp = await prisma.campaign.findUnique({ where: { id: row.parentId }, select: { externalCampaignId: true } })
+        if (!camp?.externalCampaignId) {
+          return { outcome: 'FAILED', message: 'That campaign has never synced to Amazon, so a campaign negative cannot be attached to it yet', createdId: null }
+        }
+        const r = await svc.createNegativeKeywordCampaignLocal({ externalCampaignId: camp.externalCampaignId, keywordText: kw, matchType: mt, userId: actorId })
+        if (!r) return { outcome: 'FAILED', message: 'Campaign negative could not be created', createdId: null }
+        created = { id: r.id, externalId: null }
+        break
+      }
+      case 'Product targeting': {
+        const expr = text('Product targeting expression'); const bid = bidEur()
+        if (!expr) return { outcome: 'FAILED', message: 'Product targeting expression is required', createdId: null }
+        if (bid == null) return { outcome: 'FAILED', message: 'Bid is required to create a product target', createdId: null }
+        const r = await svc.createTargetLocal({ adGroupId: row.parentId, kind: 'PRODUCT', value: expr, bidEur: bid, userId: actorId })
+        created = { id: r.id, externalId: r.externalTargetId }
+        break
+      }
+      case 'Negative product targeting': {
+        const expr = text('Product targeting expression')
+        if (!expr) return { outcome: 'FAILED', message: 'Product targeting expression is required', createdId: null }
+        const r = await svc.createNegativeProductTargetLocal({ adGroupId: row.parentId, asin: expr, userId: actorId })
+        created = { id: r.id, externalId: r.externalTargetId }
+        break
+      }
+      case 'Product ad': {
+        const sku = text('SKU'); const asin = text('ASIN (Informational only)')
+        if (!sku && !asin) return { outcome: 'FAILED', message: 'A product ad needs a SKU or an ASIN', createdId: null }
+        const r = await svc.createProductAdLocal({ adGroupId: row.parentId, sku: sku || undefined, asin: asin || undefined, userId: actorId })
+        created = { id: r.id, externalId: r.externalAdId }
+        break
+      }
+      default:
+        return { outcome: 'SKIPPED', message: `Creating a ${row.entity} from a bulksheet is not wired up`, createdId: null }
+    }
+  } catch (e) {
+    return { outcome: 'FAILED', message: (e as Error).message.slice(0, 300), createdId: null }
+  }
+
+  // Register the create in the change set, so Undo covers it. Without this the
+  // operator reverts an upload and the rows it INVENTED stay behind — the half
+  // of the round trip that is easiest to miss and worst to discover late.
+  // reverseOne inverts a create by archiving, which is Amazon's delete.
+  const entityType = ENTITY_TYPE_FOR_LOG[row.entity]
+  if (entityType) {
+    await writeAdvertisingActionLog({
+      changeSetId, actor: opts.actor,
+      actionType: `bulksheet_create_${entityType.toLowerCase()}`,
+      entityType, entityId: created.id,
+      payloadBefore: { created: false },
+      payloadAfter: Object.fromEntries(row.diffs.map((d) => [d.field, d.next])),
+      outboundQueueId: null,
+    })
+  }
+
+  // State is honoured after the fact: every create service makes the row
+  // ENABLED, so a file asking for a paused new row would otherwise start
+  // spending. Reported separately because the create itself did succeed.
+  const wanted = STATE_TO_DB[text('State').toLowerCase()]
+  let stateNote = ''
+  if (wanted && wanted !== 'ENABLED') {
+    const s = await setCreatedState(row.entity, created.id, wanted, opts, jobId, changeSetId)
+    stateNote = s ? `, set to ${wanted.toLowerCase()}` : `, but could NOT be set to ${wanted.toLowerCase()} — it is live and enabled`
+  }
+
+  return {
+    outcome: 'APPLIED',
+    message: created.externalId
+      ? `Created on Amazon (${created.externalId})${stateNote}`
+      : `Created locally${stateNote} — not yet on Amazon (the write gate declined, or the parent has never synced)`,
+    createdId: created.id,
+  }
+}
+
+/** AdvertisingActionLog.entityType per bulksheet entity. */
+const ENTITY_TYPE_FOR_LOG: Record<string, 'AD_GROUP' | 'AD_TARGET' | 'PRODUCT_AD'> = {
+  'Ad group': 'AD_GROUP',
+  'Keyword': 'AD_TARGET',
+  'Negative keyword': 'AD_TARGET',
+  'Campaign negative keyword': 'AD_TARGET',
+  'Product targeting': 'AD_TARGET',
+  'Negative product targeting': 'AD_TARGET',
+  'Product ad': 'PRODUCT_AD',
+}
+
+/** Apply a non-default State to a row that was just created. */
+async function setCreatedState(
+  entity: string,
+  id: string,
+  status: 'ENABLED' | 'PAUSED' | 'ARCHIVED',
+  opts: ApplyOptions,
+  jobId: string,
+  changeSetId: string,
+): Promise<boolean> {
+  const common = { actor: opts.actor, reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId }
+  try {
+    if (entity === 'Ad group') return (await updateAdGroupWithSync({ adGroupId: id, patch: { status }, ...common })).ok
+    if (entity === 'Product ad') return (await updateProductAdWithSync({ productAdId: id, status, ...common })).ok
+    return (await updateAdTargetWithSync({ adTargetId: id, patch: { status }, ...common })).ok
+  } catch {
+    return false
+  }
+}
+
+/**
  * Apply the rows a preview already resolved.
  *
  * `rows` is the preview's own output, so apply and preview cannot disagree about
@@ -113,10 +298,24 @@ export async function applyPlan(
       continue
     }
     if (row.status === 'CREATE') {
-      // Creates need the ad-group resolution and create-service plumbing that
-      // /bulk/apply already owns; wiring them here as well would be a second
-      // path to the same write. Left for the endpoint consolidation.
-      rec('SKIPPED', 'Row creation is not part of this apply path yet')
+      const r = await createRow(prisma, row, jobId, opts, changeSetId)
+      rec(r.outcome, r.message)
+      if (r.outcome === 'APPLIED') {
+        await prisma.importJobRow.updateMany({
+          where: { jobId, rowIndex: row.rowIndex },
+          data: {
+            status: 'SUCCESS', targetId: r.createdId, completedAt: new Date(),
+            beforeState: {} as object,
+            afterState: Object.fromEntries(row.diffs.map((d) => [d.field, d.next])) as object,
+          },
+        })
+      } else if (r.outcome === 'FAILED') {
+        await prisma.importJobRow.updateMany({
+          where: { jobId, rowIndex: row.rowIndex },
+          data: { status: 'FAILED', errorMessage: r.message.slice(0, 900) },
+        })
+        if (opts.strict) { out.aborted = true; break }
+      }
       continue
     }
     if (!row.targetId) { rec('SKIPPED', 'No resolved entity to write to'); continue }

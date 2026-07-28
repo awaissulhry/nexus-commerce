@@ -137,6 +137,63 @@ describe('the row key is not a skeleton key', () => {
   })
 })
 
+describe('a CREATE resolves its PARENT, not itself', () => {
+  const AG = { id: 'loc_ag_1', externalAdGroupId: '777', name: 'AG', status: 'ENABLED', defaultBidCents: 50 }
+
+  it('previews a new keyword as a diff from nothing, with the parent attached', async () => {
+    const p = await buildPreview(fakePrisma({
+      staged: [staged(0, 'Keyword', { 'Ad group ID': '777', 'Keyword text': 'giacca moto', 'Match type': 'Exact', Bid: '0,85', State: 'enabled' })].map((s) => ({
+        ...s, parsedValues: { ...(s.parsedValues as Rec), operation: 'Create' },
+      })),
+      adGroups: [AG],
+    }), 'job')
+
+    expect(p.rows[0].status).toBe('CREATE')
+    expect(p.rows[0].parentId, 'the new row must know which ad group it hangs off').toBe('loc_ag_1')
+    expect(p.rows[0].targetId, 'nothing exists yet to point at').toBeNull()
+    expect(p.rows[0].label).toBe('giacca moto')
+    // Every field the new row will be born with, so the preview is not a bare verdict.
+    expect(p.rows[0].diffs).toEqual([
+      { field: 'Keyword text', current: '', next: 'giacca moto' },
+      { field: 'Match type', current: '', next: 'Exact' },
+      { field: 'Bid', current: '', next: '0,85' },
+      { field: 'State', current: '', next: 'enabled' },
+    ])
+  })
+
+  it('omits columns the operator left blank rather than listing them as empty', async () => {
+    const p = await buildPreview(fakePrisma({
+      staged: [staged(0, 'Negative keyword', { 'Ad group ID': '777', 'Keyword text': 'bambino', 'Match type': 'Negative exact' })].map((s) => ({
+        ...s, parsedValues: { ...(s.parsedValues as Rec), operation: 'Create' },
+      })),
+      adGroups: [AG],
+    }), 'job')
+    expect(p.rows[0].diffs.map((d) => d.field)).toEqual(['Keyword text', 'Match type'])
+  })
+
+  it('refuses a new row whose parent does not exist, and says which column is wrong', async () => {
+    const p = await buildPreview(fakePrisma({
+      staged: [staged(0, 'Keyword', { 'Ad group ID': '999', 'Keyword text': 'x', 'Match type': 'Exact', Bid: '1,00' })].map((s) => ({
+        ...s, parsedValues: { ...(s.parsedValues as Rec), operation: 'Create' },
+      })),
+      adGroups: [AG],
+    }), 'job')
+    expect(p.rows[0].status).toBe('UNRESOLVED')
+    expect(p.rows[0].note).toMatch(/No ad group with Ad group ID "999"/)
+  })
+
+  it('says the parent column is REQUIRED when it is blank', async () => {
+    const p = await buildPreview(fakePrisma({
+      staged: [staged(0, 'Product ad', { SKU: 'XV-001' })].map((s) => ({
+        ...s, parsedValues: { ...(s.parsedValues as Rec), operation: 'Create' },
+      })),
+      adGroups: [AG],
+    }), 'job')
+    expect(p.rows[0].status).toBe('UNRESOLVED')
+    expect(p.rows[0].note).toMatch(/Ad group ID is required/)
+  })
+})
+
 describe('product ads resolve on both keys too', () => {
   const AD = { id: 'loc_ad_1', externalAdId: '493240712820577', sku: null, asin: 'B0CR5TFBZC', status: 'ENABLED' }
 

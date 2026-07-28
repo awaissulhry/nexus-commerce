@@ -130,8 +130,13 @@ describe('source ratchet — APPLY_BRANCHES above must still describe apply.ts',
     // The shape that caused this: `} else {` immediately before the AdTarget
     // write. The final else must refuse, not write.
     expect(src).toMatch(/has no apply path/)
-    const adTargetCall = src.indexOf('updateAdTargetWithSync({')
+    // Anchor on the DISPATCH call specifically — `adTargetId: row.targetId` is
+    // unique to it. Matching bare `updateAdTargetWithSync({` also caught the
+    // create path's state write, which is a different call with its own entity
+    // switch and was never the thing at risk.
+    const adTargetCall = src.indexOf('adTargetId: row.targetId')
     const guard = src.indexOf('isAdTargetEntity(row.entity)')
+    expect(adTargetCall, 'the dispatch call moved — re-anchor this ratchet').toBeGreaterThan(-1)
     expect(guard, 'the AdTarget write is no longer behind an entity check').toBeGreaterThan(-1)
     expect(guard).toBeLessThan(adTargetCall)
   })

@@ -96,6 +96,35 @@ async function reverseOne(
       const r = await updatePlacementBidding({ campaignId: log.entityId, adjustments: beforeAdj })
       return r.ok ? { ok: true } : { ok: false, reason: 'placement restore failed' }
     }
+    // AX-IE.9 — inverting a CREATE.
+    //
+    // Everything else here restores a before-snapshot. A create has no before
+    // state, so the inverse is to archive what was made. Archive IS the delete
+    // on Amazon for these entities — there is no delete endpoint for a keyword
+    // or a product ad, and archive is terminal, which is exactly the semantics
+    // wanted here.
+    //
+    // Without this, undoing an import reverted every edit and silently left
+    // behind every row the import INVENTED — the half of a round trip that is
+    // easiest to miss and worst to find out about later.
+    if (log.actionType.startsWith('bulksheet_create_')) {
+      const patch = { status: 'ARCHIVED' as const }
+      const common = { actor, reason: `rollback: ${reason}`, applyImmediately: true }
+      if (log.entityType === 'AD_GROUP') {
+        const r = await updateAdGroupWithSync({ adGroupId: log.entityId, patch, ...common })
+        return r.ok ? { ok: true } : { ok: false, reason: r.error ?? 'archive failed' }
+      }
+      if (log.entityType === 'PRODUCT_AD') {
+        const { updateProductAdWithSync } = await import('./ads-mutation.service.js')
+        const r = await updateProductAdWithSync({ productAdId: log.entityId, status: 'ARCHIVED', ...common })
+        return r.ok ? { ok: true } : { ok: false, reason: r.error ?? 'archive failed' }
+      }
+      if (log.entityType === 'AD_TARGET') {
+        const r = await updateAdTargetWithSync({ adTargetId: log.entityId, patch, ...common })
+        return r.ok ? { ok: true } : { ok: false, reason: r.error ?? 'archive failed' }
+      }
+      return { ok: false, reason: `cannot invert a create of ${log.entityType}` }
+    }
     if (log.entityType === 'CAMPAIGN') {
       // Build patch from before-snapshot fields the action affected.
       const after = log.payloadAfter as Record<string, unknown>
