@@ -18,7 +18,8 @@ Evidence harnesses (read-only, untracked): `apps/api/scripts/_axie1-model-census
 | **AX-IE.4** importer | ✅ shipped 2026-07-28 — `POST /advertising/bulk/upload` takes a real file, streams it, validates every row, stages into `ImportJob`/`ImportJobRow`, writes nothing. 202 + poll |
 | **AX-IE.5** dry-run preview | ✅ shipped 2026-07-28 — field-level diff, blast radius, per-field conflict detection, `planToken` handshake. `POST /advertising/bulk/import/:id/preview` |
 | **AX-IE.6** apply + rollback | ✅ shipped 2026-07-28 — planToken handshake, writes only through `ads-write-gate`, whole-upload rollback via `rollbackByChangeSetId`. Verified: 9 applied → 9 reversed → 0 failed |
-| AX-IE.7+ | not started — next is the annotated error workbook |
+| **AX-IE.7** annotated workbook | ✅ shipped 2026-07-28 — `_status`/`_errors`/`_applied_at`, red offending cell keeping the operator's original text, grouped Errors sheet, `_baseline` refreshed so the correction loop closes |
+| **AX-IE.8** bulk UI page | not started — `/marketing/ads/bulk` on the current console |
 
 ### Measured, and what it changed
 
@@ -28,6 +29,10 @@ Evidence harnesses (read-only, untracked): `apps/api/scripts/_axie1-model-census
 | Validation vs staging | validate 100k = **1.3s**; stage 100k = **~110s** | staging is Neon round trips, not CPU → upload returns **202 in 0.2s**, work continues behind the job |
 | Real account file | 9,288 rows, **~8s** end to end | the 100k ceiling is the documented edge, not the normal case |
 | ExcelJS streaming reader | crashes on part-order (`workbook-reader.js:303` reads `this.model.sheets` unguarded, one line after guarding `this.workbookRels`) | detected + bounded fallback to the buffered reader; `entries:'emit'` dropped |
+
+**Spec conflict #13 — Italian error text.** Spec §3 says localise import errors to
+Italian. Not done, deliberately: the house rule is operator-facing UI in English, with
+Italian reserved for listing content, and these messages are operator-facing.
 
 **Conflict #12 update:** the spec's `entries: 'emit'` recommendation is wrong for this
 usage — entries that nothing consumes only add a stall path. Removed.
