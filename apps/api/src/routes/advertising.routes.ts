@@ -4395,10 +4395,36 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
     const portfolios = await prisma.amazonAdsPortfolio.findMany({ orderBy: { name: 'asc' } })
     const { buildBulksheetWorkbook } = await import('../services/advertising/bulksheet/build-workbook.js')
-    const entities = [...new Set(sheetRows.map((r) => String(r.Entity)))].sort()
-    const excludes = ['Sponsored Brands sheet', 'Sponsored Display sheet']
+    // AX-ZD.7 — SB and SD rows must not ride the Sponsored Products sheet.
+    //
+    // Every row was pushed into one array written to "Sponsored Products
+    // Campaigns", while coverage simultaneously told the operator SB and SD were
+    // excluded. The file contradicted itself, and worse: a Sponsored Brands row
+    // sitting under an SP header gets validated against SP grammar on re-upload
+    // and applied as if it were SP. ENTITIES_BY_PRODUCT exists to say which
+    // entities are legal for which product, and nothing consulted it.
+    //
+    // The fix is NOT to invent SB/SD sheets. build-workbook explains why that
+    // stays deferred — their bulksheets-2.0 column sets cannot be confirmed
+    // without one real Seller Central download, and a guessed layout is exactly
+    // the plausible-but-wrong output this work exists to remove. So the rows are
+    // withheld and COUNTED, because silently dropping them would trade one
+    // dishonest file for another.
+    const spRows = sheetRows.filter((r) => (r.Product ?? 'Sponsored Products') === 'Sponsored Products')
+    const withheldByProduct = new Map<string, number>()
+    for (const r of sheetRows) {
+      const prod = String(r.Product ?? 'Sponsored Products')
+      if (prod !== 'Sponsored Products') withheldByProduct.set(prod, (withheldByProduct.get(prod) ?? 0) + 1)
+    }
+    const entities = [...new Set(spRows.map((r) => String(r.Entity)))].sort()
+    const excludes = [
+      ...[...withheldByProduct.entries()].sort().map(([prod, n]) =>
+        `${prod} (${n} row${n === 1 ? '' : 's'} withheld — no confirmed sheet layout)`),
+      ...(withheldByProduct.has('Sponsored Brands') ? [] : ['Sponsored Brands sheet']),
+      ...(withheldByProduct.has('Sponsored Display') ? [] : ['Sponsored Display sheet']),
+    ]
     const built = await buildBulksheetWorkbook({
-      rows: sheetRows,
+      rows: spRows,
       portfolios: portfolios.map((p) => ({
         'Portfolio ID': p.externalPortfolioId, 'Portfolio name': p.name, State: st(p.state ?? ''),
         'Budget amount': p.budgetAmount != null ? Number(p.budgetAmount) : '', 'Budget currency': p.budgetCurrencyCode ?? '',

@@ -83,7 +83,7 @@ export const VOCABULARIES = {
   },
   entity: {
     // The union across every sheet. Which ones are LEGAL depends on the ad
-    // product — see ENTITIES_BY_PRODUCT, which is what validation uses.
+    // product — see ENTITIES_BY_PRODUCT, which validateRow enforces (AX-ZD.7).
     values: [
       'Campaign', 'Ad group', 'Product ad', 'Keyword', 'Negative keyword',
       'Campaign negative keyword', 'Product targeting', 'Negative product targeting',
@@ -436,6 +436,29 @@ export function validateRow(get: (header: string) => string): RowVerdict {
   const operation = parseVocabulary('operation', opRaw)
   if (!operation) {
     return { entity, operation: null, readOnly: false, ok: false, previewOnly: false, issues: [{ column: 'Operation', message: `Operation "${opRaw}" not recognised — expected Create, Update or Archive` }] }
+  }
+
+  // AX-ZD.7 — the entity must be legal for its ad product.
+  //
+  // ENTITIES_BY_PRODUCT's own comment claimed it "is what validation uses", and
+  // validation did not use it: the constant was referenced only from a test. So
+  // a Keyword row on a Sponsored Display campaign, or any SB/SD row pasted onto
+  // the Sponsored Products sheet, validated cleanly and applied as if it were
+  // SP. Checking it here makes the comment true.
+  //
+  // Only checked when the row states a Product. A blank Product is not an error
+  // — the column is optional in a hand-edited file, and rejecting on absence
+  // would break sheets that were valid before this check existed.
+  const productRaw = raw('Product')
+  if (productRaw) {
+    const product = parseVocabulary('product', productRaw)
+    const allowed = product ? ENTITIES_BY_PRODUCT[product] : undefined
+    if (allowed && !allowed.includes(entity)) {
+      issues.push({
+        column: 'Entity',
+        message: `${entity} is not a valid entity for ${product} — expected one of ${allowed.join(', ')}`,
+      })
+    }
   }
 
   // Required fields for this entity × operation.

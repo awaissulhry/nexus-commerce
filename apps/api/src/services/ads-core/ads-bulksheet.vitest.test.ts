@@ -337,3 +337,47 @@ describe('dictionary', () => {
     for (const c of COLUMNS) expect(c.definition.length, c.header).toBeGreaterThan(10)
   })
 })
+
+describe('AX-ZD.7 — an entity must be legal for its ad product', () => {
+  const row = (vals: Record<string, string>) => (h: string) => vals[h] ?? ''
+
+  it('rejects a Keyword on Sponsored Display', () => {
+    // SD has no keyword targeting. Before this, the row validated cleanly and
+    // applied as if it were Sponsored Products.
+    const v = validateRow(row({
+      Entity: 'Keyword', Operation: 'Update', Product: 'Sponsored Display',
+      'Keyword ID': 'k1', Bid: '0.50',
+    }))
+    expect(v.ok).toBe(false)
+    expect(v.issues.some((i) => i.column === 'Entity' && /not a valid entity for Sponsored Display/.test(i.message))).toBe(true)
+  })
+
+  it('accepts a Keyword on Sponsored Products', () => {
+    const v = validateRow(row({
+      Entity: 'Keyword', Operation: 'Update', Product: 'Sponsored Products',
+      'Keyword ID': 'k1', Bid: '0.50',
+    }))
+    expect(v.issues.some((i) => /not a valid entity/.test(i.message))).toBe(false)
+  })
+
+  it('accepts Contextual targeting on Sponsored Display', () => {
+    const v = validateRow(row({
+      Entity: 'Contextual targeting', Operation: 'Update', Product: 'Sponsored Display',
+    }))
+    expect(v.issues.some((i) => /not a valid entity/.test(i.message))).toBe(false)
+  })
+
+  it('a blank Product is not an error — the column is optional in a hand-edited file', () => {
+    // Rejecting on absence would break sheets that were valid before this check.
+    const v = validateRow(row({ Entity: 'Keyword', Operation: 'Update', 'Keyword ID': 'k1', Bid: '0.50' }))
+    expect(v.issues.some((i) => /not a valid entity/.test(i.message))).toBe(false)
+  })
+
+  it('an unrecognised Product does not silently pass the entity check', () => {
+    // It fails on the Product vocabulary instead — the row is still rejected,
+    // just for the accurate reason.
+    const v = validateRow(row({ Entity: 'Keyword', Operation: 'Update', Product: 'Sponsored Nonsense', 'Keyword ID': 'k1', Bid: '0.5' }))
+    expect(v.ok).toBe(false)
+    expect(v.issues.some((i) => i.column === 'Product')).toBe(true)
+  })
+})
