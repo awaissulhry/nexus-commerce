@@ -4660,6 +4660,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const b = (request.body ?? {}) as {
       planToken?: string; applyImmediately?: boolean; strict?: boolean; conflicts?: 'skip' | 'mine'
+      // AX-ZD.6 — explicit override for a run that trips the blast-radius gate.
+      acknowledgeBlastRadius?: boolean
     }
     const job = await prisma.importJob.findUnique({ where: { id } })
     if (!job || job.targetEntity !== 'adsBulksheet') { reply.status(404); return { error: 'not_found' } }
@@ -4676,6 +4678,31 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         error: 'plan_changed',
         message: 'Something changed since you previewed this file, so the plan you approved is not the plan that would run. Re-run the preview and check the differences.',
         expected: b.planToken, actual: plan.planToken, counts: plan.counts,
+      }
+    }
+
+    // AX-ZD.6 — blast-radius gate. BlastRadius was computed for every preview
+    // and shown to the operator, and nothing ever gated on it. That is fine
+    // while a human reads the preview; it is not fine for a file nobody looked
+    // at, and it is not fine when the preview said "12 rows" and the file
+    // actually rewrites the account because an export truncated or a formula
+    // got dragged down a column.
+    //
+    // Interactive thresholds are deliberately loose — someone has already seen
+    // these counts. This catches only "you cannot have meant this", and they
+    // can say they did mean it by re-sending with acknowledgeBlastRadius.
+    // An unattended caller has no such escape hatch by design.
+    const { evaluateBlastRadius, blastInputFromPreview, INTERACTIVE_THRESHOLDS } =
+      await import('../services/ads-core/blast-radius-guard.js')
+    const blast = evaluateBlastRadius(blastInputFromPreview(plan), INTERACTIVE_THRESHOLDS)
+    if (!blast.proceed && b.acknowledgeBlastRadius !== true) {
+      reply.status(412)
+      return {
+        error: 'blast_radius_exceeded',
+        message: `${blast.summary} Re-send with acknowledgeBlastRadius: true if this is intended.`,
+        breaches: blast.breaches,
+        counts: plan.counts,
+        blastRadius: plan.blastRadius,
       }
     }
 

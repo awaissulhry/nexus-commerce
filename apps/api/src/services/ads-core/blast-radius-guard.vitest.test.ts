@@ -1,8 +1,7 @@
 /** Threshold-gated halt — the precondition for applying a file nobody read. */
 import { describe, it, expect } from 'vitest'
 import {
-  evaluateBlastRadius, blastInputFromPreview, UNATTENDED_THRESHOLDS, type BlastInput,
-} from './blast-radius-guard.js'
+  evaluateBlastRadius, blastInputFromPreview, UNATTENDED_THRESHOLDS, type BlastInput, INTERACTIVE_THRESHOLDS } from './blast-radius-guard.js'
 
 const small = (over: Partial<BlastInput> = {}): BlastInput => ({
   changedRows: 10, totalRows: 100, archives: 0, pauses: 0,
@@ -102,5 +101,49 @@ describe('blastInputFromPreview', () => {
     })
     expect(input.changedRows).toBe(0)
     expect(evaluateBlastRadius(input).proceed).toBe(true)
+  })
+})
+
+describe('AX-ZD.6 — interactive vs unattended are different questions', () => {
+  const base: BlastInput = {
+    changedRows: 0, totalRows: 100, archives: 0, pauses: 0, bidChanges: 0,
+    largeBidChanges: 0, budgetDeltaEur: 0, campaignsTouched: 0, conflicts: 0,
+  }
+
+  it('a normal human edit passes interactively but trips unattended', () => {
+    // 60 rows of a 100-row file, one archive: an ordinary afternoon for an
+    // operator, and something nobody should wake up to having happened.
+    const run = { ...base, changedRows: 60, archives: 1, pauses: 5 }
+    expect(evaluateBlastRadius(run, INTERACTIVE_THRESHOLDS).proceed).toBe(true)
+    expect(evaluateBlastRadius(run, UNATTENDED_THRESHOLDS).proceed).toBe(false)
+  })
+
+  it('a conflict stops an unattended run and never blocks a human', () => {
+    // The apply route makes the operator choose conflicts: 'mine' | 'skip', so
+    // interactively a conflict is a decision already taken. Unattended there is
+    // nobody to take it.
+    const run = { ...base, changedRows: 1, conflicts: 1 }
+    expect(evaluateBlastRadius(run, INTERACTIVE_THRESHOLDS).proceed).toBe(true)
+    expect(evaluateBlastRadius(run, UNATTENDED_THRESHOLDS).proceed).toBe(false)
+  })
+
+  it('a catastrophe is refused even with a human present', () => {
+    // The whole point of gating the interactive path too: a truncated export or
+    // a formula dragged down a column, which the preview counts will not make
+    // obvious at a glance.
+    const run = { ...base, changedRows: 400, totalRows: 400, archives: 400 }
+    const v = evaluateBlastRadius(run, INTERACTIVE_THRESHOLDS)
+    expect(v.proceed).toBe(false)
+    expect(v.breaches.map((b) => b.metric)).toContain('archives')
+  })
+
+  it('interactive is looser than unattended on every shared limit', () => {
+    // A guard that was accidentally TIGHTER interactively would block ordinary
+    // work while letting schedules through — the exact inversion of the intent.
+    const keys = ['maxChangedRows', 'maxChangedPct', 'maxArchives', 'maxPauses',
+      'maxLargeBidChanges', 'maxBudgetDeltaEur', 'maxConflicts'] as const
+    for (const k of keys) {
+      expect(INTERACTIVE_THRESHOLDS[k], k).toBeGreaterThanOrEqual(UNATTENDED_THRESHOLDS[k])
+    }
   })
 })

@@ -67,6 +67,34 @@ export const UNATTENDED_THRESHOLDS: BlastThresholds = {
   maxConflicts: 0,
 }
 
+/**
+ * Thresholds for a HUMAN who has just read a preview and clicked Apply.
+ *
+ * Deliberately much looser than the unattended set, because the failure being
+ * guarded against is different. Unattended, the question is "should this run at
+ * all?". Interactively, someone has already seen the counts, so the question is
+ * only "is this so large that they cannot have meant it?" — a truncated export,
+ * a formula dragged down a column, a file for the wrong account.
+ *
+ * A human can override any of these by acknowledging them explicitly. A
+ * schedule cannot, which is the entire distinction between the two sets.
+ *
+ * `maxConflicts` is effectively unbounded here: the apply route already makes
+ * the operator choose `conflicts: 'mine' | 'skip'`, so a conflict interactively
+ * is a decision that has been made, not one being skipped past.
+ */
+export const INTERACTIVE_THRESHOLDS: BlastThresholds = {
+  maxChangedRows: 5_000,
+  // A person may legitimately rewrite an entire file they just built.
+  maxChangedPct: 100,
+  // Still tight. Archive is terminal on Amazon whoever is clicking.
+  maxArchives: 200,
+  maxPauses: 1_000,
+  maxLargeBidChanges: 500,
+  maxBudgetDeltaEur: 2_000,
+  maxConflicts: Number.MAX_SAFE_INTEGER,
+}
+
 export interface BlastVerdict {
   proceed: boolean
   /** Every breached threshold, not just the first — one fix at a time is slow. */
