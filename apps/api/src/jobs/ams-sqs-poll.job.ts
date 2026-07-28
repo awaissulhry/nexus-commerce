@@ -14,6 +14,8 @@ import cron from 'node-cron'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { isAmsSqsConfigured, pollAmsRaw, deleteAmsMessage, parseAmsBody } from '../services/ams-sqs.service.js'
+import { routeRecords } from '../services/ads-core/ams-dataset.js'
+import { ingestEntityChanges, ingestBudgetUsage } from '../services/advertising/ads-stream-change.service.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 const MAX_BATCHES_PER_TICK = 5 // drain up to ~50 messages/tick
@@ -27,6 +29,10 @@ export async function runAmsSqsPoll(): Promise<void> {
       let upserted = 0
       let deleted = 0
       let failed = 0
+      let changed = 0
+      let budgetEvents = 0
+      let unmatched = 0
+      let unknownDs = 0
       for (let batch = 0; batch < MAX_BATCHES_PER_TICK; batch++) {
         const raw = await pollAmsRaw(10)
         if (raw.length === 0) break
@@ -35,8 +41,30 @@ export async function runAmsSqsPoll(): Promise<void> {
             const records = parseAmsBody(msg.body)
             received += records.length
             if (records.length > 0) {
-              const res = await ingestMarketingStream(records as never)
-              upserted += res.upserted
+              // AX-ZD.2 — three families arrive down one queue and answer
+              // different questions. Previously everything went to the metrics
+              // ingest, which SKIPped anything without traffic/conversion in
+              // its id — so change and budget events were silently discarded.
+              const routed = routeRecords(records as Array<Record<string, unknown>>)
+              if (routed.performance.length) {
+                const res = await ingestMarketingStream(routed.performance as never)
+                upserted += res.upserted
+              }
+              if (routed.change.length) {
+                const c = await ingestEntityChanges(routed.change)
+                changed += c.campaigns + c.adGroups + c.targets
+                unmatched += c.unmatched
+              }
+              if (routed.budget.length) {
+                const b = await ingestBudgetUsage(routed.budget)
+                budgetEvents += b.exhausted + b.warning
+              }
+              if (routed.unknown.length) {
+                // Visible, not invisible: an unrecognised dataset means Amazon
+                // added one, and we should find out from a log rather than from
+                // a gap in the data months later.
+                unknownDs += routed.unknown.length
+              }
             }
             // Ack even when 0 records (e.g. a non-perf dataset we skip) — leaving
             // it would just redeliver forever.
@@ -49,7 +77,10 @@ export async function runAmsSqsPoll(): Promise<void> {
           }
         }
       }
-      return `received=${received} upserted=${upserted} deleted=${deleted} failed=${failed}`
+      if (unknownDs > 0) {
+        logger.warn('[ams-sqs-poll] unrecognised AMS dataset(s) received', { count: unknownDs })
+      }
+      return `received=${received} upserted=${upserted} changed=${changed} budget=${budgetEvents} unmatched=${unmatched} unknownDataset=${unknownDs} deleted=${deleted} failed=${failed}`
     })
   } catch (err) {
     logger.error('ams-sqs-poll cron: failure', { error: err instanceof Error ? err.message : String(err) })

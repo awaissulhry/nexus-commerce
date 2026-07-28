@@ -18,6 +18,7 @@ import { randomUUID } from 'node:crypto'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { liveCall, adsMode, type AdsRegion } from './ads-api-client.js'
+import { AMS_ALL_DATASETS, familyOf, adProductOf } from '../ads-core/ams-dataset.js'
 
 // AME.9 — the AWS destination Amazon pushes AMS messages to (an SQS queue ARN
 // or a Firehose delivery-stream ARN the operator provisions + grants Amazon
@@ -25,17 +26,18 @@ import { liveCall, adsMode, type AdsRegion } from './ads-api-client.js'
 // feed stays dormant (the ingest endpoint simply receives nothing).
 const AMS_DESTINATION_ARN = process.env.NEXUS_AMS_DESTINATION_ARN || ''
 
-// AMS performance datasets — *-traffic = impressions/clicks/cost by hour,
-// *-conversion = attributed sales/orders. SP/SD/SB share the same message
-// shape; only the dataset_id (→ ad product) differs. Budget-usage + entity
-// change-streams (campaigns/adgroups/ads/targets) have DIFFERENT shapes and
-// are intentionally NOT subscribed here yet (they need dedicated ingest).
-export const AMS_DATASETS = [
-  'sp-traffic', 'sp-conversion',
-  'sd-traffic', 'sd-conversion',
-  'sb-traffic', 'sb-conversion',
-] as const
-export type AmsDataset = (typeof AMS_DATASETS)[number]
+// AX-ZD.2 — all three dataset families are now subscribable.
+//
+// The comment that used to live here said the entity change-streams and
+// budget-usage were "intentionally NOT subscribed yet (they need dedicated
+// ingest)". They now have it: ads-core/ams-dataset.ts classifies each family
+// and ams-sqs-poll routes them apart.
+//
+// The change streams matter most. They are the ONLY push signal that someone
+// edited in Seller Central — without them the system cannot tell an external
+// edit from a write of ours that has not landed.
+export const AMS_DATASETS = AMS_ALL_DATASETS
+export type AmsDataset = (typeof AMS_ALL_DATASETS)[number]
 
 /** Map an AMS dataset_id to our ad-product enum. Returns 'SKIP' for datasets
  *  this performance-ingest doesn't model (budget-usage, entity streams, …) so
@@ -43,13 +45,10 @@ export type AmsDataset = (typeof AMS_DATASETS)[number]
  *  Null = no dataset_id supplied → treat as legacy SP (back-compat). */
 function adProductFromDataset(ds?: string): 'SPONSORED_PRODUCTS' | 'SPONSORED_DISPLAY' | 'SPONSORED_BRANDS' | 'SKIP' | null {
   if (!ds) return null
-  const d = ds.toLowerCase()
-  const isPerf = d.includes('traffic') || d.includes('conversion')
-  if (!isPerf) return 'SKIP'
-  if (d.startsWith('sp-')) return 'SPONSORED_PRODUCTS'
-  if (d.startsWith('sd-')) return 'SPONSORED_DISPLAY'
-  if (d.startsWith('sb-')) return 'SPONSORED_BRANDS'
-  return 'SKIP'
+  // AX-ZD.2 — change and budget records reach their own consumers now, so
+  // anything arriving HERE that is not performance is genuinely unexpected.
+  if (familyOf(ds) !== 'PERFORMANCE') return 'SKIP'
+  return adProductOf(ds) ?? 'SKIP'
 }
 
 export interface AmsSubscriptionInput { profileId: string; region: AdsRegion; dataSetId: string; destinationArn?: string; notes?: string }
