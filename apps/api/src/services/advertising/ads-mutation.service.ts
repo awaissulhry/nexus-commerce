@@ -379,11 +379,17 @@ export async function updateAdGroupWithSync(args: {
       externalAdGroupId: true,
       defaultBidCents: true,
       status: true,
+      orphanedAt: true,
       campaign: { select: { id: true, marketplace: true } },
     },
   })
   if (!existing) {
     return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'not_found' }
+  }
+  // AX2.0 — same guard as AdTarget: Amazon says this ad group is gone, so stop
+  // regenerating writes for it. `force` is the operator's re-test path.
+  if (existing.orphanedAt && !args.force) {
+    return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'entity_orphaned' }
   }
   const changes: FieldChange[] = []
   let syncType: AdSyncType = 'AD_BID_UPDATE'
@@ -532,6 +538,7 @@ export async function updateAdTargetWithSync(args: {
       externalTargetId: true,
       bidCents: true,
       status: true,
+      orphanedAt: true,
       adGroup: {
         select: { id: true, campaign: { select: { id: true, marketplace: true, dynamicBidding: true } } },
       },
@@ -539,6 +546,21 @@ export async function updateAdTargetWithSync(args: {
   })
   if (!existing) {
     return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'not_found' }
+  }
+
+  // AX2.0 — Amazon has already told us this target does not exist. Enqueueing
+  // again just recreates the dead write: this is the loop that produced 662
+  // dead-lettered rows from 23 targets, ~23/day for 26 days. Refuse at the
+  // chokepoint so EVERY caller (rank-defend, dayparting, bulk, manual) is
+  // covered, and no queue row or Amazon call is generated.
+  //
+  // `force` is the deliberate operator override — a repair path may push to
+  // re-test whether the entity is back, and a success clears orphanedAt.
+  if (existing.orphanedAt && !args.force) {
+    return {
+      ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null,
+      error: 'entity_orphaned',
+    }
   }
 
   // Apex A.2a — clamp the requested bid to the campaign's max-change-% guardrail

@@ -380,11 +380,11 @@ model Product {
   // selling motorcycle gear across EU Amazon + eBay marketplaces.
   // PPE Directive 2016/425: Cat I (min risk), Cat II (intermediate),
   // Cat III (mortal risk — motorcycle helmets, body armour).
-  ppeCategory    String? // 'CAT_I' | 'CAT_II' | 'CAT_III'
+  ppeCategory                String? // 'CAT_I' | 'CAT_II' | 'CAT_III'
   // ADR/IATA hazardous materials flags (uncommon for apparel, but
   // needed for aerosols, chain lube, etc. in Xavia's accessories range).
-  hazmatClass    String? // UN hazard class e.g. "3", "8", "9"
-  hazmatUnNumber String? // UN number e.g. "UN1950"
+  hazmatClass                String? // UN hazard class e.g. "3", "8", "9"
+  hazmatUnNumber             String? // UN number e.g. "UN1950"
   // C4 — structured CE/PPE protective-gear data (motorcycle apparel). All
   // nullable; captured in the ComplianceTab + fed to the compliance resolver →
   // all 3 channels (eBay productSafety, Shopify metafields, Amazon attrs).
@@ -394,7 +394,7 @@ model Product {
   declarationOfConformityUrl String? // Declaration of Conformity (DoC) link
   impactProtectors           Json? // [{ zone, standard, level }] — EN 1621-1/-2/-4
   // Back-relation to per-product certificate rows (CE, EN-13595, REACH…)
-  certificates   ProductCertificate[]
+  certificates               ProductCertificate[]
 
   // R.4 — Replenishment economics. Per-product overrides for the
   // global defaults (95% service / 25% carrying cost / €15 ordering
@@ -461,7 +461,7 @@ model SkuAlias {
   productId String
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   alias     String   @unique // normalized: lowercase + trimmed
-  raw       String           // original as the operator typed it
+  raw       String // original as the operator typed it
   source    String   @default("MANUAL") // MANUAL | IMPORT | AUTO
   createdAt DateTime @default(now())
 
@@ -472,27 +472,27 @@ model SkuAlias {
 // Each committed import writes one row here so operators can review history,
 // download error reports, and understand cumulative stock movements.
 model StockImportJob {
-  id           String    @id @default(cuid())
-  filename     String?
-  fileKind     String?   // csv | xlsx | json
-  locationCode String
-  mode         String    // ADJUST | SET
-  target       String    // WAREHOUSE | CHANNEL | BOTH
-  totalRows    Int       @default(0)
-  succeeded    Int       @default(0)
-  failed       Int       @default(0)
-  skipped      Int       @default(0)
-  status       String    @default("PENDING") // DRAFT | PENDING | APPLYING | APPLIED | PARTIAL | FAILED | CANCELLED
-  appliedAt    DateTime?
-  createdAt    DateTime  @default(now())
-  errorSummary String?
-  results      Json?     // per-row outcome snapshot for history drill-down
+  id              String    @id @default(cuid())
+  filename        String?
+  fileKind        String? // csv | xlsx | json
+  locationCode    String
+  mode            String // ADJUST | SET
+  target          String // WAREHOUSE | CHANNEL | BOTH
+  totalRows       Int       @default(0)
+  succeeded       Int       @default(0)
+  failed          Int       @default(0)
+  skipped         Int       @default(0)
+  status          String    @default("PENDING") // DRAFT | PENDING | APPLYING | APPLIED | PARTIAL | FAILED | CANCELLED
+  appliedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  errorSummary    String?
+  results         Json? // per-row outcome snapshot for history drill-down
   // IM.3.2 — async apply live progress (updated per chunk while APPLYING)
-  startedAt     DateTime?
-  progressAt    DateTime?
-  processedRows Int       @default(0)
+  startedAt       DateTime?
+  progressAt      DateTime?
+  processedRows   Int       @default(0)
   // IM.3.3 — who applied the import (session email; null = pre-IM.3.3 or script)
-  createdBy     String?
+  createdBy       String?
   // IM.3.4 — batch revert: id of the revert job that undid this import
   revertedByJobId String?
 
@@ -1545,10 +1545,10 @@ model ChannelListing {
 
   // ── PHASE 20: SSOT Override Toggles ────────────────────────────
   // When true, use master product value; when false, use channel-specific override
-  followMasterTitle        Boolean @default(true)
-  followMasterDescription  Boolean @default(true)
-  followMasterPrice        Boolean @default(true)
-  followMasterQuantity     Boolean @default(true)
+  followMasterTitle       Boolean @default(true)
+  followMasterDescription Boolean @default(true)
+  followMasterPrice       Boolean @default(true)
+  followMasterQuantity    Boolean @default(true)
 
   // SC.0 — Sync Control (2026-07-21). syncPaused wins over Follow/Pinned:
   // a paused listing sends NO outbound quantity pushes at all until resumed
@@ -1556,10 +1556,10 @@ model ChannelListing {
   // is the per-listing routing override (empty = all locations routed to
   // this listing's channel+market via StockLocation.servesMarketplaces) —
   // schema-dark until a real case wires it (proposal D4).
-  syncPaused          Boolean  @default(false)
-  sourceLocationCodes String[] @default([])
-  followMasterImages       Boolean @default(true)
-  followMasterBulletPoints Boolean @default(true)
+  syncPaused               Boolean  @default(false)
+  sourceLocationCodes      String[] @default([])
+  followMasterImages       Boolean  @default(true)
+  followMasterBulletPoints Boolean  @default(true)
 
   // ── PHASE 20: SSOT Master Data References ──────────────────────
   // Store master values for quick comparison and cascade logic
@@ -1946,7 +1946,7 @@ model ListingIssue {
   listingId      String
 
   code           String // SP-API issue code (e.g. "90220")
-  severity       String @default("ERROR") // ERROR | WARNING | INFO
+  severity       String   @default("ERROR") // ERROR | WARNING | INFO
   message        String
   attributeNames String[] // the failing attributes Amazon named
   categories     String[] // SP-API issue categories
@@ -2698,11 +2698,11 @@ model Campaign {
   // bid/state mutation to this campaign's entities unless this is true.
   // Lets a cautious cutover canary exactly one campaign. Bid-change-% and
   // writes-per-day caps live in dynamicBidding JSON (alongside cpcCeiling).
-  liveBidWritesEnabled Boolean   @default(false)
+  liveBidWritesEnabled Boolean @default(false)
   // Rolling daily counter for the maxWritesPerDay guardrail. liveBidWritesDay
   // is the UTC 'YYYY-MM-DD' the counter belongs to; a date mismatch means the
   // count is stale and treated as 0.
-  liveBidWritesToday   Int       @default(0)
+  liveBidWritesToday   Int     @default(0)
   liveBidWritesDay     String?
 
   adGroups   AdGroup[]
@@ -2717,25 +2717,25 @@ model Campaign {
 // AD.1 — Sponsored Products/Brands/Display ad group. Owns the default
 // bid + targeting mode; child targets carry per-keyword overrides.
 model AdGroup {
-  id                String         @id @default(cuid())
-  campaignId        String
-  campaign          Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  externalAdGroupId String?
-  name              String
-  defaultBidCents   Int            @default(50)
+  id                     String         @id @default(cuid())
+  campaignId             String
+  campaign               Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  externalAdGroupId      String?
+  name                   String
+  defaultBidCents        Int            @default(50)
   suppressedFromBidCents Int? // NP — default bid before no-pause suppression; restored on resume
-  baseBidFromCents  Int? // BL — default bid before a base-bid deltaPct mod; the STABLE baseline (no compounding); reverted when the directive clears
-  status            CampaignStatus @default(ENABLED)
-  targetingType     String         @default("MANUAL") // AUTO | MANUAL
-  impressions       Int            @default(0)
-  clicks            Int            @default(0)
-  spendCents        Int            @default(0)
-  salesCents        Int            @default(0)
-  lastSyncedAt      DateTime?
-  lastSyncStatus    AdSyncStatus?
-  lastSyncError     String?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  baseBidFromCents       Int? // BL — default bid before a base-bid deltaPct mod; the STABLE baseline (no compounding); reverted when the directive clears
+  status                 CampaignStatus @default(ENABLED)
+  targetingType          String         @default("MANUAL") // AUTO | MANUAL
+  impressions            Int            @default(0)
+  clicks                 Int            @default(0)
+  spendCents             Int            @default(0)
+  salesCents             Int            @default(0)
+  lastSyncedAt           DateTime?
+  lastSyncStatus         AdSyncStatus?
+  lastSyncError          String?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
 
   // ── Phase 2: v1 unified API additions ─────────────────────────────────
   bidStrategyJson Json?
@@ -2746,39 +2746,46 @@ model AdGroup {
   deliveryStatus  String?
   deliveryReasons String[] @default([])
 
+  /// AX2.0 — Amazon answered a write with entityNotFoundError: this entity no
+  /// longer exists there. Set once, cleared on the next successful sync, and
+  /// checked before enqueueing so a dead entity is never re-pushed daily.
+  orphanedAt   DateTime?
+  orphanReason String?
+
   targets    AdTarget[]
   productAds AdProductAd[]
 
   @@unique([externalAdGroupId, campaignId])
   @@index([campaignId, status])
+  @@index([orphanedAt])
 }
 
 // AD.1 — Unified target row (keyword | product | category | audience).
 // Amazon reports performance at this grain.
 model AdTarget {
-  id               String         @id @default(cuid())
-  adGroupId        String
-  adGroup          AdGroup        @relation(fields: [adGroupId], references: [id], onDelete: Cascade)
-  externalTargetId String?
-  kind             String // KEYWORD | PRODUCT | CATEGORY | AUDIENCE
-  expressionType   String // EXACT | PHRASE | BROAD | ASIN | CATEGORY_REFINEMENT
-  expressionValue  String
-  bidCents         Int            @default(50)
+  id                     String         @id @default(cuid())
+  adGroupId              String
+  adGroup                AdGroup        @relation(fields: [adGroupId], references: [id], onDelete: Cascade)
+  externalTargetId       String?
+  kind                   String // KEYWORD | PRODUCT | CATEGORY | AUDIENCE
+  expressionType         String // EXACT | PHRASE | BROAD | ASIN | CATEGORY_REFINEMENT
+  expressionValue        String
+  bidCents               Int            @default(50)
   // NP — the bid this target held BEFORE no-pause suppression dropped it to the
   // floor (~2¢). null = not suppressed. Restored verbatim when the campaign resumes.
   suppressedFromBidCents Int?
-  baseBidFromCents Int? // BL — the bid before a base-bid deltaPct mod; STABLE baseline so re-applying the delta never compounds; reverted when the directive clears
-  status           CampaignStatus @default(ENABLED)
-  impressions      Int            @default(0)
-  clicks           Int            @default(0)
-  spendCents       Int            @default(0)
-  salesCents       Int            @default(0)
-  ordersCount      Int            @default(0)
-  lastSyncedAt     DateTime?
-  lastSyncStatus   AdSyncStatus?
-  lastSyncError    String?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  baseBidFromCents       Int? // BL — the bid before a base-bid deltaPct mod; STABLE baseline so re-applying the delta never compounds; reverted when the directive clears
+  status                 CampaignStatus @default(ENABLED)
+  impressions            Int            @default(0)
+  clicks                 Int            @default(0)
+  spendCents             Int            @default(0)
+  salesCents             Int            @default(0)
+  ordersCount            Int            @default(0)
+  lastSyncedAt           DateTime?
+  lastSyncStatus         AdSyncStatus?
+  lastSyncError          String?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
 
   // ── Phase 2: v1 unified API additions ─────────────────────────────────
   // Distinguishes positive (default) from negative targets/keywords. v1
@@ -2792,9 +2799,17 @@ model AdTarget {
   deliveryStatus  String?
   deliveryReasons String[] @default([])
 
+  /// AX2.0 — Amazon answered a write with entityNotFoundError: this keyword /
+  /// target no longer exists there. Set once, cleared on the next successful
+  /// sync, and checked before enqueueing. Without it the rank engine
+  /// regenerated the same dead write every day (662 dead rows from 23 targets).
+  orphanedAt   DateTime?
+  orphanReason String?
+
   @@index([adGroupId, status])
   @@index([externalTargetId])
   @@index([adGroupId, isNegative])
+  @@index([orphanedAt])
 }
 
 // AD.1 — Links ad-groups to local Product rows (via ASIN/SKU). The
@@ -3052,13 +3067,13 @@ model AmazonAdsSearchTerm {
 // (GET_BRAND_ANALYTICS_SEARCH_QUERY_PERFORMANCE_REPORT); upserted by the
 // sqp-ingest cron. Distinct from AmazonAdsSearchTerm (which is OUR ad terms only).
 model SearchQueryPerformance {
-  id            String   @id @default(cuid())
-  marketplace   String // country code (IT, DE, …)
-  reportPeriod  String // WEEK | MONTH | QUARTER
-  startDate     DateTime @db.Date // period start
-  searchQuery   String
-  asin          String? // null = brand-level; set = ASIN-level row
-  searchQueryVolume Int @default(0) // total market searches for this query (rank proxy)
+  id                String   @id @default(cuid())
+  marketplace       String // country code (IT, DE, …)
+  reportPeriod      String // WEEK | MONTH | QUARTER
+  startDate         DateTime @db.Date // period start
+  searchQuery       String
+  asin              String? // null = brand-level; set = ASIN-level row
+  searchQueryVolume Int      @default(0) // total market searches for this query (rank proxy)
   searchQueryRank   Int? // query's popularity rank in the marketplace
 
   // Funnel: total = whole market, brand = OUR share count. shares are 0..1.
@@ -3603,25 +3618,25 @@ model UserProfile {
   // blocks login and (via the session layer) revokes on next request.
   // A newly invited user starts "active" but holds zero roles → no
   // access until a role is assigned (least-privilege default).
-  status              String    @default("active") // "active" | "deactivated"
-  deactivatedAt       DateTime?
+  status             String               @default("active") // "active" | "deactivated"
+  deactivatedAt      DateTime?
   // Progressive lockout counters. Persisted here (not in-memory) so
   // they survive restarts and hold across Railway replicas without
   // depending on Redis uptime.
-  failedLoginCount    Int       @default(0)
-  lockedUntil         DateTime?
-  lastLoginAt         DateTime?
+  failedLoginCount   Int                  @default(0)
+  lockedUntil        DateTime?
+  lastLoginAt        DateTime?
   // Immediate propagation (§3.5): bumped on any role/permission/user
   // mutation affecting this user. Cached permission sets are keyed by
   // (userId, permissionsVersion); a bump invalidates them on next request.
-  permissionsVersion  Int       @default(0)
+  permissionsVersion Int                  @default(0)
   // Per-user MFA override. The assigned role's requireMfa also applies;
   // effective requirement is the OR of the two (enforced in S5).
-  mfaRequired         Boolean   @default(false)
+  mfaRequired        Boolean              @default(false)
   // ── Phase S1 relations ──
-  roleAssignments     UserRole[]
-  resetTokens         PasswordResetToken[]
-  invitationsSent     Invitation[]         @relation("invitedBy")
+  roleAssignments    UserRole[]
+  resetTokens        PasswordResetToken[]
+  invitationsSent    Invitation[]         @relation("invitedBy")
 }
 
 // Phase H — consent log (GDPR Art. 7). Append-only; each row pins a
@@ -3859,22 +3874,22 @@ model UserRole {
 // 72h TTL, bound to an email + role (+ optional channel scope). Delivered
 // as a copyable link and/or a Resend email.
 model Invitation {
-  id           String      @id @default(cuid())
-  email        String
-  roleId       String
-  role         Role        @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  id              String      @id @default(cuid())
+  email           String
+  roleId          String
+  role            Role        @relation(fields: [roleId], references: [id], onDelete: Restrict)
   // sha256 of the raw token. The raw token is shown once at creation and
   // emailed; only the hash is stored, so a DB read cannot forge an invite.
-  tokenHash    String      @unique
+  tokenHash       String      @unique
   // Mirrors UserRole.channelScope for the assignment created on accept.
-  channelScope Json?
+  channelScope    Json?
   invitedByUserId String
-  invitedBy    UserProfile @relation("invitedBy", fields: [invitedByUserId], references: [id], onDelete: Cascade)
-  expiresAt    DateTime
-  acceptedAt   DateTime?
-  acceptedUserId String?
-  revokedAt    DateTime?
-  createdAt    DateTime    @default(now())
+  invitedBy       UserProfile @relation("invitedBy", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  acceptedUserId  String?
+  revokedAt       DateTime?
+  createdAt       DateTime    @default(now())
 
   @@index([email])
   @@index([expiresAt])
@@ -7052,7 +7067,7 @@ model AmazonFlatFileFeedJob {
 /// failed push is inspectable forever (the eBay parallel of AmazonFlatFileFeedJob).
 model EbayPushJob {
   id     String  @id @default(cuid())
-  mode   String  // 'api' | 'feed'
+  mode   String // 'api' | 'feed'
   taskId String? // eBay Sell Feed task id (feed mode); null for api mode
 
   markets  Json? // string[] — target markets (IT/DE/FR/ES/UK)
@@ -7063,8 +7078,8 @@ model EbayPushJob {
   pushed Int    @default(0)
   failed Int    @default(0)
 
-  perSkuResults Json?   // [{ sku, market, status: success|error, listingId?, message }]
-  warnings      Json?   // oversell warnings
+  perSkuResults Json? // [{ sku, market, status: success|error, listingId?, message }]
+  warnings      Json? // oversell warnings
   errorMessage  String? // top-level error
 
   submittedAt DateTime  @default(now())
@@ -10631,20 +10646,20 @@ model ReviewRule {
   // ── RRT.2 — operator-configurable send timing ──
   // Product-type targeting (RRT.3). Empty = applies to all types. Each entry is
   // a case-insensitive substring of Product.productType (e.g. "casco","glove").
-  productTypes  String[] @default([])
+  productTypes   String[] @default([])
   // Per-rule send-delay override, in days after the anchor. null = use the
   // editable ReviewTimingDefault table (then DEFAULT). Backfilled to
   // minDaysSinceDelivery for pre-existing rows so their timing is unchanged.
-  sendDelayDays Int?
+  sendDelayDays  Int?
   // Anchor the delay counts from (RRT.4). Amazon forced to DELIVERY at resolve.
-  anchor        String   @default("DELIVERY") // DELIVERY | SHIP | PURCHASE
+  anchor         String   @default("DELIVERY") // DELIVERY | SHIP | PURCHASE
   // Preferred local send hour 0-23 in the marketplace timezone (RRT.5). null = any.
-  sendHourLocal Int?
+  sendHourLocal  Int?
   // Roll Sat/Sun sends forward to Monday (RRT.5).
-  skipWeekends  Boolean  @default(false)
+  skipWeekends   Boolean  @default(false)
   // STO.6 — shift the send forward (within the Amazon window) to the best-ranked
   // weekday in ReviewSendWindow.dayRank, then pin that day's hour. Off by default.
-  shiftToBestDay Boolean @default(false)
+  shiftToBestDay Boolean  @default(false)
 
   @@unique([name, scope, marketplace])
   @@index([scope, isActive])
@@ -10883,27 +10898,27 @@ model AgentDefinition {
 // One execution (autonomous run or interactive copilot turn) — the
 // observability + audit spine. `steps` is the ordered tool/model trace.
 model AgentRun {
-  id           String          @id @default(cuid())
+  id           String           @id @default(cuid())
   agentId      String?
   agent        AgentDefinition? @relation(fields: [agentId], references: [id])
   agentKey     String // denormalized so history survives def deletion
   trigger      String // manual | event | schedule
-  status       String          @default("running") // running | awaiting_approval | done | failed | cancelled
+  status       String           @default("running") // running | awaiting_approval | done | failed | cancelled
   entityType   String?
   entityId     String?
   input        Json?
   output       Json?
   steps        Json? // [{type:'tool'|'model', name, args, result, ms, costUSD}]
-  inputTokens  Int             @default(0)
-  outputTokens Int             @default(0)
-  costUSD      Decimal         @default(0) @db.Decimal(12, 6)
+  inputTokens  Int              @default(0)
+  outputTokens Int              @default(0)
+  costUSD      Decimal          @default(0) @db.Decimal(12, 6)
   model        String?
   provider     String?
   latencyMs    Int?
-  ok           Boolean         @default(true)
+  ok           Boolean          @default(true)
   errorMessage String?
   userId       String? // who triggered (null for autonomous)
-  createdAt    DateTime        @default(now())
+  createdAt    DateTime         @default(now())
   endedAt      DateTime?
   approvals    AgentApproval[]
 
@@ -10931,15 +10946,15 @@ model AgentTool {
 // A high-stakes action awaiting human approval — the governed-autonomy
 // gate. Carries a dry-run preview of the action's effect.
 model AgentApproval {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   agentRunId  String
-  agentRun    AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+  agentRun    AgentRun  @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
   toolName    String
   riskTier    String
   args        Json // the proposed action
   preview     Json? // dry-run diff / preview of effect
-  status      String   @default("pending") // pending | approved | rejected | expired | executed
-  requestedAt DateTime @default(now())
+  status      String    @default("pending") // pending | approved | rejected | expired | executed
+  requestedAt DateTime  @default(now())
   decidedBy   String?
   decidedAt   DateTime?
   reason      String?
@@ -11524,21 +11539,21 @@ model EbayCampaign {
   // CPC only: 'MANUAL' | 'SMART' (immutable after launch).
   campaignTargetingType String?
   // ['ON_SITE'] | ['OFF_SITE'] — single channel per campaign.
-  channels String[] @default([])
+  channels              String[]  @default([])
   // CPS only: 'FIXED' | 'DYNAMIC'.
-  adRateStrategy String?
+  adRateStrategy        String?
   // CPS DYNAMIC prefs: { adRateAdjustmentPercent, adRateCapPercent }.
-  dynamicAdRatePrefs Json?
+  dynamicAdRatePrefs    Json?
   // Rules-based CPS: { autoSelectFutureInventory, criterionType,
   // selectionRules[] } — IMMUTABLE on eBay after create (clone to change).
-  campaignCriterion Json?
-  isRulesBased      Boolean @default(false)
+  campaignCriterion     Json?
+  isRulesBased          Boolean   @default(false)
   // Created/managed by Nexus vs discovered from Seller Hub.
-  nexusManaged Boolean @default(false)
+  nexusManaged          Boolean   @default(false)
   // updateCampaignBudget hard quota: 15/day/campaign (verified).
-  budgetUpdatesToday Int       @default(0)
-  budgetUpdatesDay   DateTime?
-  lastEntitySyncAt   DateTime?
+  budgetUpdatesToday    Int       @default(0)
+  budgetUpdatesDay      DateTime?
+  lastEntitySyncAt      DateTime?
 
   // ── Lifecycle ────────────────────────────────────────────────────
   // 'DRAFT' | 'RUNNING' | 'PAUSED' | 'ENDED' | 'SUSPENDED'
@@ -11630,8 +11645,8 @@ model EbayAdGroup {
   externalAdGroupId String
   name              String
   // eBay adGroupStatus + local 'STALE' for groups gone from the account.
-  status         String
-  defaultBidCents Int?
+  status            String
+  defaultBidCents   Int?
 
   lastSyncAt DateTime?
   createdAt  DateTime  @default(now())
@@ -11654,7 +11669,7 @@ model EbayAd {
   adGroup    EbayAdGroup? @relation(fields: [adGroupId], references: [id], onDelete: SetNull)
   adGroupId  String?
 
-  marketplace String
+  marketplace            String
   // eBay ItemID — the universal attach key (nullable only for
   // inventory-reference ads whose listing isn't resolved yet).
   listingId              String?
@@ -11665,13 +11680,13 @@ model EbayAd {
   // CPS ad rate — THE authoritative rate for this listing in this campaign.
   bidPercentage Decimal? @db.Decimal(6, 2)
   // eBay adStatus + local 'STALE' when the listingId is no longer live.
-  status String
+  status        String
   // 'RULE' | 'KEY_BULK' | 'CONSOLE' | 'AUTOMATION' | 'DISCOVERED'
-  createdVia String @default("DISCOVERED")
+  createdVia    String   @default("DISCOVERED")
   // Surfaced state, not an error (eBay auto-hides OOS ads): 'OUT_OF_STOCK'.
-  hiddenReason String?
+  hiddenReason  String?
   // Resolved Nexus product (null until matched via the listing index).
-  productId String?
+  productId     String?
 
   lastSyncAt DateTime?
   createdAt  DateTime  @default(now())
@@ -11744,17 +11759,17 @@ model EbayAdsReportTask {
   dimensions   Json
   metrics      Json
 
-  externalTaskId String? @unique
+  externalTaskId String?   @unique
   // ads-core ReportTaskState: PENDING | IN_PROGRESS | SUCCESS | FAILED |
   // EXPIRED | INGESTED
-  status        String    @default("PENDING")
-  reportHref    String?
-  attempts      Int       @default(0)
-  lastPolledAt  DateTime?
-  downloadedAt  DateTime?
-  ingestedAt    DateTime?
-  failureReason String?
-  rowsIngested  Int       @default(0)
+  status         String    @default("PENDING")
+  reportHref     String?
+  attempts       Int       @default(0)
+  lastPolledAt   DateTime?
+  downloadedAt   DateTime?
+  ingestedAt     DateTime?
+  failureReason  String?
+  rowsIngested   Int       @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -11785,7 +11800,7 @@ model EbayAdsDailyPerformance {
   soldQty              Int      @default(0)
   currency             String   @default("EUR")
   // Unmapped TSV columns land here verbatim — no silent drops.
-  extra Json?
+  extra                Json?
 
   reportTaskId String?
   reportedAt   DateTime?
@@ -11809,7 +11824,7 @@ model EbayListingIndex {
 
   /// EV2 — eBay gallery thumbnail (Trading GalleryURL / GetItem PictureURL[0]);
   /// picker + Products-page thumbnails. Catalog MAIN image is the serve-time fallback.
-  imageUrl String?
+  imageUrl      String?
   title         String?
   categoryId    String?
   price         Decimal? @db.Decimal(10, 2)
@@ -11821,7 +11836,7 @@ model EbayListingIndex {
   aspects       Json?
 
   // 'CHANNEL_LISTING' | 'SHARED_MEMBERSHIP' | 'DISCOVERED'
-  source String @default("DISCOVERED")
+  source      String   @default("DISCOVERED")
   // Resolved Nexus products (variant-level ids; may be several).
   productIds  String[] @default([])
   // 'MATCHED' | 'UNMATCHED' | 'CONFIRMED' | 'IGNORED'
@@ -11851,9 +11866,9 @@ model EbayListingEconomics {
   itemId      String
   productId   String?
 
-  priceCents Int?
-  currency   String @default("EUR")
-  cogsCents  Int?
+  priceCents        Int?
+  currency          String  @default("EUR")
+  cogsCents         Int?
   // 'ORDER_HISTORY' | 'CATEGORY_ESTIMATE'
   ebayFeesCents     Int?
   feesSource        String?
@@ -11897,11 +11912,11 @@ model MarketingAutomationState {
 model MarketingSpendCeiling {
   id String @id @default(cuid())
 
-  channel        String
-  marketplace    String
+  channel         String
+  marketplace     String
   monthlyCapCents Int
-  currency       String  @default("EUR")
-  killSwitch     Boolean @default(false)
+  currency        String  @default("EUR")
+  killSwitch      Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -11994,12 +12009,12 @@ model EbayAdsRuleExecution {
 model EbayAdsProposal {
   id String @id @default(cuid())
 
-  ruleId    String?
-  kind      String // adjust_ad_rate | adjust_bid | pause_ad | add_negative | ...
-  entityRef Json // {campaignId, listingId?, keywordId?, marketplace}
+  ruleId         String?
+  kind           String // adjust_ad_rate | adjust_bid | pause_ad | add_negative | ...
+  entityRef      Json // {campaignId, listingId?, keywordId?, marketplace}
   proposedAction Json // {field, from, to, params}
   reasoning      Json? // inputs + rule + math that produced this
-  proposedKey    String @unique
+  proposedKey    String  @unique
 
   status          String    @default("PENDING") // PENDING | APPROVED | REJECTED | APPLIED | ROLLED_BACK | EXPIRED
   estimatedImpact Json?
@@ -12331,12 +12346,12 @@ model AdsRuleSuggestion {
   // The proposed change: { type, op?, value?, wouldChange?, placement?, ... } (the *_apply output).
   proposedAction Json
   // Stable dedup key for the change kind (e.g. 'budget_apply:decPct:20') — one pending row per.
-  proposedKey String
+  proposedKey    String
 
-  status     String    @default("pending") // pending | applied | dismissed
-  createdAt  DateTime  @default(now())
-  decidedAt  DateTime?
-  decidedBy  String?
+  status        String    @default("pending") // pending | applied | dismissed
+  createdAt     DateTime  @default(now())
+  decidedAt     DateTime?
+  decidedBy     String?
   appliedResult Json?
 
   @@unique([ruleId, entityId, proposedKey], map: "AdsRuleSuggestion_dedupe_key")
@@ -13610,37 +13625,37 @@ model CalendarEntry {
 // References Campaign by id (no Prisma relation, to keep this additive).
 // ════════════════════════════════════════════════════════════════════
 model AdSchedule {
-  id              String    @id @default(cuid())
-  campaignId      String // local Campaign.id
-  name            String
+  id               String             @id @default(cuid())
+  campaignId       String // local Campaign.id
+  name             String
   // Active windows the campaign SHOULD deliver in. JSON:
   // [{ days:[0-6], startHour:0-23, endHour:0-23, bidMultiplierPct?:number, targetKey?:string }]
   // bidMultiplierPct: +30 raises bids 30% on window-enter, restores on exit (legacy intensity mode).
   // RS.1 — targetKey: references a RankTarget.key (goal mode); the engine holds that
   // target's impression-share during the window. A window may carry either form.
   // Empty = always on (no-op schedule).
-  windows         Json      @default("[]")
-  timezone        String    @default("Europe/Rome")
-  enabled         Boolean   @default(true)
+  windows          Json               @default("[]")
+  timezone         String             @default("Europe/Rome")
+  enabled          Boolean            @default(true)
   // RS.1 — baseline RankTarget.key for time OUTSIDE every window ("for the rest, hold Y").
   // null = legacy behaviour (no baseline; gaps mean paused).
   defaultTargetKey String?
   // Last status the cron applied, to avoid redundant writes/churn.
-  lastApplied     String? // ENABLED | PAUSED
-  lastEvaluatedAt DateTime?
+  lastApplied      String? // ENABLED | PAUSED
+  lastEvaluatedAt  DateTime?
   // AU.3 — bid snapshot taken when entering a bid-multiplier window.
   // JSON: { [adTargetId]: originalBidCents }. Cleared when exiting/restoring.
-  originalBids    Json?
+  originalBids     Json?
   // RTC — per-campaign target overrides: { targetKey: { biasPct?, targetISPct?, acosCapPct?, maxCpcCents? } }
-  targetOverrides Json      @default("{}")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  createdBy       String?
+  targetOverrides  Json               @default("{}")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  createdBy        String?
   // Phase 2 (rank-schedule groups) — binds this execution row to a named RankScheduleGroup so one
   // named schedule can span many campaigns. The rank-defend cron still reads per-campaign rows;
   // groupId is metadata for the management/authoring layer only (cron untouched).
-  groupId         String?
-  group           RankScheduleGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  groupId          String?
+  group            RankScheduleGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
 
   @@index([campaignId])
   @@index([enabled])
@@ -13709,15 +13724,15 @@ model AutopilotPlan {
   id               String    @id @default(cuid())
   name             String
   marketplace      String
-  productGroupName String?            // ties back to the SP Super Wizard launch
-  campaignIds      Json      @default("[]")  // local Campaign.id[] under control
+  productGroupName String? // ties back to the SP Super Wizard launch
+  campaignIds      Json      @default("[]") // local Campaign.id[] under control
   goal             String    @default("BALANCED") // LAUNCH | PROFIT | BALANCED | LIQUIDATE | DEFEND_RANK
-  autonomy         String    @default("SUGGEST")  // OFF | SUGGEST | AUTO
+  autonomy         String    @default("SUGGEST") // OFF | SUGGEST | AUTO
   // {targetAcosPct,bidMinCents,bidMaxCents,budgetMinCents,budgetMaxCents,maxDailySpendCents,rampPct,neverPause}
   guardrails       Json      @default("{}")
   // per-module {on, params}: bid/budget/dayparting/rank/placement (ours) + harvest/negate (delegated)
   modules          Json      @default("{}")
-  graph            Json      @default("{}")  // React Flow {nodes,edges} canvas persistence
+  graph            Json      @default("{}") // React Flow {nodes,edges} canvas persistence
   // links to the Rule-Setting session's harvest/negate AutomationRule ids we provisioned
   linkedRuleIds    Json      @default("[]")
   stage            String    @default("launch") // life-stage for auto-transitions
@@ -13728,7 +13743,7 @@ model AutopilotPlan {
   updatedAt        DateTime  @updatedAt
   createdBy        String?
 
-  decisions        AutopilotDecision[]
+  decisions AutopilotDecision[]
 
   @@index([enabled])
   @@index([marketplace])
@@ -13736,20 +13751,20 @@ model AutopilotPlan {
 
 // One row per conductor decision — the live (SSE) feed AND the reversible audit trail.
 model AutopilotDecision {
-  id          String   @id @default(cuid())
+  id          String        @id @default(cuid())
   planId      String
   plan        AutopilotPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  at          DateTime @default(now())
-  cycle       String              // fast | slow | event | backtest
-  module      String              // bid|budget|dayparting|rank|placement|harvest|negate|safety
+  at          DateTime      @default(now())
+  cycle       String // fast | slow | event | backtest
+  module      String // bid|budget|dayparting|rank|placement|harvest|negate|safety
   campaignId  String?
-  action      String              // BID_RAISE|BID_LOWER|BUDGET_UP|BUDGET_DOWN|PLACEMENT|RANK|HARVEST|NEGATE|SUPPRESS|RESUME|NOOP
+  action      String // BID_RAISE|BID_LOWER|BUDGET_UP|BUDGET_DOWN|PLACEMENT|RANK|HARVEST|NEGATE|SUPPRESS|RESUME|NOOP
   before      Json?
   after       Json?
   reason      String
-  status      String   @default("PROPOSED") // PROPOSED|APPLIED|SKIPPED|DENIED|ROLLED_BACK
-  executionId String?             // → existing audit/sync row for one-click rollback
-  source      String   @default("autopilot") // autopilot | rule-setting (coordinated/linked)
+  status      String        @default("PROPOSED") // PROPOSED|APPLIED|SKIPPED|DENIED|ROLLED_BACK
+  executionId String? // → existing audit/sync row for one-click rollback
+  source      String        @default("autopilot") // autopilot | rule-setting (coordinated/linked)
 
   @@index([planId, at])
   @@index([status])
@@ -13761,26 +13776,26 @@ model AutopilotDecision {
 // held by bid-to-win, so a target is {placement + targetIS + ACOS/CPC guardrails};
 // the RS closed loop (RS.5) converges bids toward targetISPct within the caps.
 model RankTarget {
-  id          String   @id @default(cuid())
-  key         String   @unique // slug: own-top | defend-top | rest-of-search | pause | custom-…
-  name        String
+  id              String   @id @default(cuid())
+  key             String   @unique // slug: own-top | defend-top | rest-of-search | pause | custom-…
+  name            String
   // PLACEMENT_TOP | PLACEMENT_REST_OF_SEARCH | PLACEMENT_PRODUCT_PAGE
-  placement   String   @default("PLACEMENT_TOP")
-  targetISPct Int? // target Top-of-Search impression share % (0-100); null = no IS target
-  acosCapPct  Int? // ACOS ceiling % the loop must respect; null = use campaign/global default
-  maxCpcCents Int? // hard bid ceiling the loop may set; null = use CPC-ceiling guardrail
-  biasPct     Int? // starting placement-bias % (0-900) applied on entry
+  placement       String   @default("PLACEMENT_TOP")
+  targetISPct     Int? // target Top-of-Search impression share % (0-100); null = no IS target
+  acosCapPct      Int? // ACOS ceiling % the loop must respect; null = use campaign/global default
+  maxCpcCents     Int? // hard bid ceiling the loop may set; null = use CPC-ceiling guardrail
+  biasPct         Int? // starting placement-bias % (0-900) applied on entry
   // MP — motion profile: HOW the loop moves the bias (all null/false = today's behaviour).
-  jumpStartPct Int? // opening bid: on entry, SNAP straight to this % in one cycle; null = gradual ramp to biasPct
-  stepUpPct    Int? // gradual climb step %/cycle; null = 15 (25 all-out)
-  stepDownPct  Int? // ease step %/cycle; null = SNAP down to floor on a plan change (today); a number = gradual, never snap
-  maxBiasPct   Int? // ceiling the climb won't exceed; null = 900
-  keepClimbing Boolean @default(false) // after the jump, keep stepping to the ceiling even with NO signal (bounded by ceiling + ACOS cap)
-  pause       Boolean  @default(false) // this target = pause delivery in the window
+  jumpStartPct    Int? // opening bid: on entry, SNAP straight to this % in one cycle; null = gradual ramp to biasPct
+  stepUpPct       Int? // gradual climb step %/cycle; null = 15 (25 all-out)
+  stepDownPct     Int? // ease step %/cycle; null = SNAP down to floor on a plan change (today); a number = gradual, never snap
+  maxBiasPct      Int? // ceiling the climb won't exceed; null = 900
+  keepClimbing    Boolean  @default(false) // after the jump, keep stepping to the ceiling even with NO signal (bounded by ceiling + ACOS cap)
+  pause           Boolean  @default(false) // this target = pause delivery in the window
   // RS.1.1 — "all-out": the defend loop IGNORES acosCapPct and holds the slot at
   // any cost up to maxCpcCents (null maxCpc = truly unbounded). For windows where
   // winning the rank matters more than margin. maxCpcCents stays a runaway guard.
-  allOut      Boolean  @default(false)
+  allOut          Boolean  @default(false)
   // BL — blended multi-placement strategy. When set (non-empty), the engine drives
   // EACH lane's placement simultaneously in one combined write (Top + Rest of Search +
   // Product pages), instead of the single `placement` above (which zeros the other
@@ -13788,24 +13803,24 @@ model RankTarget {
   // Shape: [{ placement, biasPct, maxBiasPct?, targetISPct?, acosCapPct?, stepUpPct?,
   //   stepDownPct?, keepClimbing?, allOut? }]. Per-lane signal: Top=Amazon Top-IS,
   //   Rest=SQP brand share, Product=open-loop (set-and-hold, no chase).
-  lanes       Json? // BL — per-placement lane specs; null = single-placement (legacy)
+  lanes           Json? // BL — per-placement lane specs; null = single-placement (legacy)
   // BL — base-bid directive (the campaign's base bid the placement multipliers stack on).
   // mode: null/'hold' = don't touch (today); 'absolute' = set ad-group default to
   // bidValueCents; 'suppress' = floor to ~2¢ (placements still set). 'deltaPct' is
   // reserved (needs baseline memory — wired in a follow-up).
-  bidMode      String? // null|'hold'|'absolute'|'suppress'|'deltaPct'
-  bidValueCents Int?   // for 'absolute' — set ad-group default bid to this
-  bidDeltaPct  Int?    // reserved for 'deltaPct' (±% on base bid)
-  color       String? // UI swatch (hex)
-  builtIn     Boolean  @default(false) // seeded preset — not user-deletable
-  sortOrder   Int      @default(0)
+  bidMode         String? // null|'hold'|'absolute'|'suppress'|'deltaPct'
+  bidValueCents   Int? // for 'absolute' — set ad-group default bid to this
+  bidDeltaPct     Int? // reserved for 'deltaPct' (±% on base bid)
+  color           String? // UI swatch (hex)
+  builtIn         Boolean  @default(false) // seeded preset — not user-deletable
+  sortOrder       Int      @default(0)
   // RTC — scope: both null = global library swatch (the default); set = a custom
   // swatch visible only on that product family / campaign. Built-ins stay global.
   scopeProductId  String?
   scopeCampaignId String?
-  createdBy   String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 // RTPL — a named, reusable rank SCHEDULE template (account-global). Saves the painted
@@ -13857,7 +13872,7 @@ model ProductRankPlan {
   // list) so newly-created campaigns for the family are auto-covered, not orphaned.
   excludeCampaignIds Json @default("[]")
   // RTC — per-product target overrides: { targetKey: { biasPct?, targetISPct?, acosCapPct?, maxCpcCents? } }
-  targetOverrides Json @default("{}")
+  targetOverrides    Json @default("{}")
 
   // ── Lifecycle / safety ──
   enabled         Boolean   @default(false) // armed = the cron auto-holds it
@@ -14035,11 +14050,11 @@ model DevelopmentProject {
   ownerUserId      String?
   linkedProductId  String?
   // FP.2 — factory-pack content.
-  sizeChart        Json?    // { columns: string[], rows: [{ size, values: string[] }], tolerance?: string }
-  materials        Json?    // [{ component, material, spec }]
-  colorways        Json?    // [{ name, pantone?, hex? }]
-  specNotes        String?  // construction / special instructions for the factory
-  revision         Int      @default(1)
+  sizeChart        Json? // { columns: string[], rows: [{ size, values: string[] }], tolerance?: string }
+  materials        Json? // [{ component, material, spec }]
+  colorways        Json? // [{ name, pantone?, hex? }]
+  specNotes        String? // construction / special instructions for the factory
+  revision         Int       @default(1)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -14073,17 +14088,17 @@ model DevelopmentProjectSupplier {
 // sheets, Pantone refs. Cloudinary-hosted; the factory-facing source of
 // truth for "make THIS".
 model DevelopmentAttachment {
-  id         String   @id @default(cuid())
-  projectId  String
-  kind       String   @default("TECH_PACK") // TECH_PACK | REFERENCE | MEASUREMENT | SAMPLE_PHOTO | OTHER
-  sortOrder  Int      @default(0)    // FP.5 — pack ordering
-  caption    String?                 // FP.5 — per-image caption
-  includeInPack Boolean @default(true)
-  url        String
-  filename   String?
-  sizeBytes  Int?
-  uploadedBy String?
-  uploadedAt DateTime @default(now())
+  id            String   @id @default(cuid())
+  projectId     String
+  kind          String   @default("TECH_PACK") // TECH_PACK | REFERENCE | MEASUREMENT | SAMPLE_PHOTO | OTHER
+  sortOrder     Int      @default(0) // FP.5 — pack ordering
+  caption       String? // FP.5 — per-image caption
+  includeInPack Boolean  @default(true)
+  url           String
+  filename      String?
+  sizeBytes     Int?
+  uploadedBy    String?
+  uploadedAt    DateTime @default(now())
 
   project DevelopmentProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -14140,7 +14155,7 @@ model AdsAutomationState {
 
   // Last anomaly-guard evaluation, for observability.
   lastCheckedAt DateTime?
-  updatedAt     DateTime @updatedAt
+  updatedAt     DateTime  @updatedAt
 }
 
 // R0.1 — Amazon Data & Reports strategy (docs/AMAZON_DATA_STRATEGY.md).
@@ -14191,8 +14206,8 @@ model SharedListingMembership {
   // excludes exactly this variant of this listing from the pool fan-out
   // ("everything real-time except one variant"). stockBuffer mirrors the
   // ChannelListing concept for the shared lane (field now, UI later — D3).
-  followPool         Boolean @default(true)
-  stockBuffer        Int     @default(0)
+  followPool         Boolean   @default(true)
+  stockBuffer        Int       @default(0)
   lastQtyPushed      Int?
   lastPushedAt       DateTime?
   lastError          String?
@@ -14216,16 +14231,16 @@ model SharedListingMembership {
 // newListingDefaultMode decides how listings are born there
 // ('FOLLOW' | 'PAUSED'). Absent row = FOLLOW + not paused (today's behavior).
 model SyncChannelPolicy {
-  id                    String   @id @default(cuid())
+  id                    String    @id @default(cuid())
   channel               String // 'AMAZON' | 'EBAY' | 'SHOPIFY' | ...
   marketplace           String // 'IT', 'DE', ... or '*' for channel-wide
-  pushesPaused          Boolean  @default(false)
-  newListingDefaultMode String   @default("FOLLOW") // FOLLOW | PAUSED
+  pushesPaused          Boolean   @default(false)
+  newListingDefaultMode String    @default("FOLLOW") // FOLLOW | PAUSED
   // SC.5 — cutoff for the PAUSED default: only listings created AFTER this
   // moment are auto-paused (kill-switch toggles never move the cutoff).
   newListingModeSetAt   DateTime?
-  updatedAt             DateTime @updatedAt
-  createdAt             DateTime @default(now())
+  updatedAt             DateTime  @updatedAt
+  createdAt             DateTime  @default(now())
 
   @@unique([channel, marketplace])
 }
@@ -14259,7 +14274,7 @@ model EbayDescriptionTheme {
   id        String   @id @default(cuid())
   name      String   @unique
   notes     String?
-  html      String   // theme HTML with {{tokens}}; sanitized at render
+  html      String // theme HTML with {{tokens}}; sanitized at render
   isDefault Boolean  @default(false)
   active    Boolean  @default(true)
   builtIn   Boolean  @default(false) // seeded starter — editable, not deletable

@@ -19,6 +19,7 @@ import { Worker, type Job } from 'bullmq'
 import prisma from '../db.js'
 import { redis } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
+import { isEntityGoneError, orphanReasonFrom } from '../services/ads-core/amazon-entity-gone.js'
 import {
   updateCampaign,
   updateAdGroup,
@@ -219,12 +220,28 @@ async function stampEntitySync(
   error: string | null,
 ): Promise<void> {
   const data = { lastSyncedAt: new Date(), lastSyncStatus: status, lastSyncError: error }
+
+  // AX2.0 — record "Amazon says this is gone" so we stop regenerating the same
+  // dead write forever, and clear the mark the moment a write succeeds again
+  // (a re-created keyword self-heals without operator action).
+  const gone = status === 'FAILED' && isEntityGoneError(error)
+  const orphanPatch = gone
+    ? { orphanedAt: new Date(), orphanReason: orphanReasonFrom(error) }
+    : status === 'SUCCESS'
+      ? { orphanedAt: null, orphanReason: null }
+      : {}
+
   try {
     switch (payload.entityType) {
       case 'CAMPAIGN': await prisma.campaign.update({ where: { id: payload.entityId }, data }); break
-      case 'AD_GROUP': await prisma.adGroup.update({ where: { id: payload.entityId }, data }); break
-      case 'AD_TARGET': await prisma.adTarget.update({ where: { id: payload.entityId }, data }); break
+      case 'AD_GROUP': await prisma.adGroup.update({ where: { id: payload.entityId }, data: { ...data, ...orphanPatch } }); break
+      case 'AD_TARGET': await prisma.adTarget.update({ where: { id: payload.entityId }, data: { ...data, ...orphanPatch } }); break
       case 'PRODUCT_AD': await prisma.adProductAd.update({ where: { id: payload.entityId }, data: { lastSyncedAt: data.lastSyncedAt } }); break
+    }
+    if (gone) {
+      logger.warn('[ads-sync.worker] entity ORPHANED — Amazon no longer has it; further writes suppressed', {
+        entityType: payload.entityType, entityId: payload.entityId, externalId: payload.externalId,
+      })
     }
   } catch (e) { logger.warn('[ads-sync.worker] entity sync-stamp failed', { entityType: payload.entityType, entityId: payload.entityId, error: (e as Error).message }) }
 }
