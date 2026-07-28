@@ -1347,6 +1347,72 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true }
   })
 
+  /**
+   * AX2.5 — apply a blueprint to a product.
+   *
+   * dryRun DEFAULTS TO TRUE. Executing requires an explicit `dryRun: false`
+   * AND a plan the gate marked `allowed`. The gate is blocking: a keyword that
+   * would make the new product bid against a campaign you already run has to be
+   * skipped or accepted by name first.
+   */
+  fastify.post('/advertising/blueprints/:id/apply', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as {
+      productToken?: string; asins?: string[]; marketplace?: string
+      dryRun?: boolean; skipSharedTargets?: string[]; acceptSharedTargets?: string[]; dailyBudgetCapEur?: number
+    }
+    if (!b?.productToken) { reply.code(400); return { error: 'productToken is required — it is what {{product}} becomes' } }
+    if (!b?.marketplace) { reply.code(400); return { error: 'marketplace is required' } }
+
+    const svc = await import('../services/advertising/ads-blueprint-apply.service.js')
+    const req = {
+      blueprintId: id,
+      target: { productToken: b.productToken, asins: b.asins ?? [] },
+      marketplace: b.marketplace,
+      options: {
+        skipSharedTargets: b.skipSharedTargets,
+        acceptSharedTargets: b.acceptSharedTargets,
+        dailyBudgetCapEur: b.dailyBudgetCapEur,
+      },
+      dryRun: b.dryRun !== false,
+      actor: actorFromHeaders(request.headers as Record<string, unknown>),
+    }
+    try {
+      // Refuse a live run up front so the caller gets 409 + the reasons rather
+      // than a thrown 500 from the service's own belt-and-braces check.
+      if (req.dryRun === false) {
+        const { plan } = await svc.planApply(req)
+        if (!plan.allowed) { reply.code(409); return { error: 'refused', blockers: plan.blockers, conflicts: plan.conflicts, plan } }
+      }
+      return await svc.applyBlueprint(req)
+    } catch (e) {
+      const msg = (e as Error).message
+      reply.code(/not found/i.test(msg) ? 404 : /refused/i.test(msg) ? 409 : 400)
+      return { error: msg }
+    }
+  })
+
+  fastify.get('/advertising/blueprint-applications', async (request) => {
+    const q = request.query as { blueprintId?: string; status?: string }
+    const rows = await prisma.adBlueprintApplication.findMany({
+      where: { ...(q.blueprintId ? { blueprintId: q.blueprintId } : {}), ...(q.status ? { status: q.status } : {}) },
+      orderBy: { createdAt: 'desc' }, take: 100,
+    })
+    return { items: rows }
+  })
+
+  fastify.post('/advertising/blueprint-applications/:id/rollback', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { rollbackApplication } = await import('../services/advertising/ads-blueprint-apply.service.js')
+    try {
+      return await rollbackApplication(id, actorFromHeaders(request.headers as Record<string, unknown>))
+    } catch (e) {
+      const msg = (e as Error).message
+      reply.code(/not found/i.test(msg) ? 404 : 400)
+      return { error: msg }
+    }
+  })
+
   /** Has a product's structure drifted from the template it was built from? */
   fastify.post('/advertising/blueprints/:id/diff', async (request, reply) => {
     const { id } = request.params as { id: string }

@@ -13435,6 +13435,33 @@ model OutreachDetail {
   @@index([mode])
 }
 
+/// AX2.5 — one replication run: applying a blueprint to one product. Recorded
+/// so the run can be rolled back as a single unit instead of hunting orphaned
+/// entities, and so a PARTIAL outcome stays legible (`notOnAmazon` lists
+/// campaigns that landed locally but never reached Amazon).
+model AdBlueprintApplication {
+  id                 String    @id @default(cuid())
+  blueprintId        String
+  productToken       String
+  marketplace        String
+  asins              String[]  @default([])
+  /// PLANNED | APPLIED | PARTIAL | FAILED | ROLLED_BACK
+  status             String    @default("PLANNED")
+  plan               Json
+  acceptedConflicts  String[]  @default([])
+  skippedTargets     String[]  @default([])
+  createdCampaignIds String[]  @default([])
+  notOnAmazon        String[]  @default([])
+  errors             String[]  @default([])
+  actor              String?
+  createdAt          DateTime  @default(now())
+  appliedAt          DateTime?
+  rolledBackAt       DateTime?
+
+  @@index([blueprintId])
+  @@index([status])
+}
+
 /// AX2.4 — a named, product-agnostic campaign structure extracted from live
 /// campaigns, with ASINs, brand keywords and name tokens parameterised out.
 /// `doc` holds the BlueprintDoc from ads-core/ads-blueprint.ts, including the
