@@ -21,10 +21,18 @@ Evidence harnesses (read-only, untracked): `apps/api/scripts/_axie1-model-census
 | **AX-IE.7** annotated workbook | ✅ shipped 2026-07-28 — `_status`/`_errors`/`_applied_at`, red offending cell keeping the operator's original text, grouped Errors sheet, `_baseline` refreshed so the correction loop closes |
 | **AX-IE.8** bulk UI page | ✅ shipped 2026-07-28 — `/marketing/ads/bulk`: Import staircase, blast-radius review, History with deep-linked Review + Undo |
 
-**AX-IE is complete .0 → .8.** Remaining in the programme: the SB / SB-multi / SD sheets
+| **AX-ZD.5** data vintage | ✅ shipped 2026-07-28 — settlement state as a pure function of date, `isRuleSafe` guard, stamped into every export's `_meta` and README, plus `GET /advertising/data-vintage` |
+
+**AX-IE is complete .0 → .8, and AX-ZD.5 is done.** Remaining in the programme: the SB / SB-multi / SD sheets
 in the exporter (columns known, see `docs/AMAZON-BULKSHEET-SCHEMA.md`), consolidating the
 CREATE path (still only in the older `/bulk/apply`), predicate selection in `AdsDataGrid`,
-and the whole **AX-ZD** zero-drift series (.1–.6).
+and the rest of **AX-ZD**: **.1** typed `AdMutation` queue + 423/`Retry-After`, **.2** the
+five missing Marketing Stream datasets, **.3** intended/observed/reported, **.4** three-tier
+reconciliation, **.6** scheduled imports.
+
+**.1 and .2 are gated on an explicit conversation** — both change how live writes queue
+and how we consume Amazon's push feed, which is a different risk class from everything
+shipped so far.
 
 ### Measured, and what it changed
 
