@@ -24,6 +24,7 @@ import prisma from '../db.js'
 import { Prisma } from '@prisma/client'
 import { logger } from '../utils/logger.js'
 import { testConnection, adsMode, listPortfolios, createPortfolio, type AdsRegion } from '../services/advertising/ads-api-client.js'
+import { AMS_DAILY_MARKER, EXCLUDE_AMS_DAILY } from '../services/ads-core/ams-daily.js'
 import { allocate, microsToCents, toEurCents } from '../services/ads-core/metrics-math.js'
 import { detectKeywordConflicts } from '../services/advertising/keyword-conflicts.service.js'
 import { getFxRate } from '../services/fx-rate.service.js'
@@ -202,6 +203,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       // daily-performance table, batched across the whole list (2 groupBys). The
       // localEntityId match + entityId fallback (rows that never linked locally)
       // mirrors the detail endpoint's OR-match without double-counting.
+      //
+      // AX2.3 — the "without double-counting" claim held only while
+      // localEntityId:null meant "campaign we could not link". Amazon Marketing
+      // Stream broke that: its daily upsert never set localEntityId, so 659
+      // rows for campaigns that ARE linked fell into the fallback bucket and
+      // were ADDED to the report figures — inflating spend, sales, impressions,
+      // clicks and orders (and therefore ACoS/ROAS) for every IT campaign with
+      // AMS coverage. Reports own the daily grain; AMS owns hourly. Excluding
+      // the stream's marker here fixes the arithmetic without deleting data.
       const ids = campaigns.map((c) => c.id)
       const extIds = campaigns.map((c) => c.externalCampaignId).filter(Boolean) as string[]
       const n = (v: bigint | number | null | undefined) => Number(v ?? 0)
@@ -210,7 +220,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const _sum = { impressions: true, clicks: true, costMicros: true, sales7dCents: true, sales14dCents: true, orders7d: true } as const
       const [byLocal, byExt] = await Promise.all([
         prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId'], where: { entityType: 'CAMPAIGN', localEntityId: { in: ids }, date: dateFilter }, _sum }),
-        prisma.amazonAdsDailyPerformance.groupBy({ by: ['entityId'], where: { entityType: 'CAMPAIGN', entityId: { in: extIds }, localEntityId: null, date: dateFilter }, _sum }),
+        prisma.amazonAdsDailyPerformance.groupBy({ by: ['entityId'], where: { entityType: 'CAMPAIGN', entityId: { in: extIds }, localEntityId: null, reportRunId: { not: AMS_DAILY_MARKER }, date: dateFilter }, _sum }),
       ])
       const mapL = new Map(byLocal.map((r) => [r.localEntityId, r._sum]))
       const mapE = new Map(byExt.map((r) => [r.entityId, r._sum]))
@@ -282,6 +292,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           { localEntityId: id },
           ...(campaign.externalCampaignId ? [{ entityId: campaign.externalCampaignId }] : []),
         ],
+        // AX2.3 — the entityId arm also matches AMS's daily rows, which are for
+        // THIS campaign and would be summed on top of the report figures.
+        ...EXCLUDE_AMS_DAILY,
       }
       // Allocated metrics via the shared service (Σ ad groups == campaign).
       const { computeCampaignDetailMetrics } = await import('../services/advertising/ads-detail-metrics.service.js')
@@ -2696,8 +2709,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       ? { OR: [
           { localEntityId: campaignScope.localEntityId },
           ...(campaignScope.entityId ? [{ entityId: campaignScope.entityId }] : []),
-        ] }
-      : {}
+        ], ...EXCLUDE_AMS_DAILY }
+      : { ...EXCLUDE_AMS_DAILY }
 
     const { cached: cachedTrends } = await import('../services/advertising/ads-cache.js')
     const trendsKey = `trends:${query.campaignId ?? ''}:${range.sinceStr}:${range.untilStr}:${query.marketplace ?? ''}:${query.adProduct ?? ''}:${query.currencyCode ?? ''}:${query.compare ?? ''}`

@@ -11,6 +11,7 @@
  */
 import prisma from '../../db.js'
 import { allocate, microsToCents } from '../ads-core/metrics-math.js'
+import { EXCLUDE_AMS_DAILY } from '../ads-core/ams-daily.js'
 
 export interface AllocatedMetrics {
   impressions: number
@@ -60,6 +61,8 @@ export async function computeCampaignDetailMetrics(opts: {
         { localEntityId: opts.campaignId },
         ...(opts.externalCampaignId ? [{ entityId: opts.externalCampaignId }] : []),
       ],
+      ...EXCLUDE_AMS_DAILY, // AX2.3 — the entityId arm also matches AMS daily rows
+
     },
     _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, sales14dCents: true, orders7d: true },
   })
@@ -83,6 +86,8 @@ export async function computeCampaignDetailMetrics(opts: {
           { localEntityId: opts.campaignId },
           ...(opts.externalCampaignId ? [{ entityId: opts.externalCampaignId }] : []),
         ],
+        ...EXCLUDE_AMS_DAILY, // AX2.3
+
       },
       _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, orders7d: true },
     }).catch(() => null)

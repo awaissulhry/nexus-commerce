@@ -108,6 +108,41 @@ PL UK SE NL IE  sandbox      writesEnabled NULL                         ⛔ bloc
 The console presents all of them. Only IT and DE have ever pushed. Any bulk action taken across markets
 silently no-ops on seven of nine.
 
+### 🔴 B3 correction — AMS was already LIVE, and it was corrupting the metrics (AX2.3, 2026-07-28)
+
+My audit said Marketing Stream was "written but unconfigured". Wrong — that was a **local** env reading. In
+production AMS has been live since 2026-05-21: **9,728 hourly rows**, newest ingested 2026-07-27 23:49. The
+phase was not "switch it on"; it was "fix what it has been doing".
+
+**It was double-counting the Ad Manager's numbers.** AMS upserted BOTH grains. The daily grain is owned by the
+report pipeline, so the stream produced a second parallel set of rows for the same campaign-days under
+`profileId: 'ams'` — with `localEntityId` left null. Every console aggregate matches
+`localEntityId = campaign OR entityId = externalCampaignId`, on the assumption that a null `localEntityId`
+means "a campaign we could not link". AMS rows **are** linked, so they matched the second arm and were summed
+on top of the report figures.
+
+Measured over 90 days, across **28 campaigns**:
+
+| Phantom (double-counted) | |
+|---|---|
+| spend | **€1,317.36** on €7,374.98 real → **~17.9% over-reported** |
+| sales | **€3,344.33** |
+| impressions / clicks / orders | 1,654,728 / 3,358 / 38 |
+
+Sales were inflated proportionally harder than spend, so **ACoS looked better than reality** — the dangerous
+direction. Affected the grid, campaign detail, and the trends chart.
+
+Fixes: AMS writes the hourly grain only; the ~659 daily rows already written are excluded at read time via
+`EXCLUDE_AMS_DAILY` at all four aggregate sites (not deleted — audit data preserved, and a purge would be a
+destructive change needing its own gate).
+
+Also fixed: every hourly row carried `marketplace='APJ6JRA9NG5V4'` — Amazon's marketplaceId for amazon.it —
+while the rest of the system keys on `'IT'`, so intraday data could not be filtered by market at all.
+`normalizeAmsMarketplace()` maps the EU ids and passes unknown ids through rather than mislabelling them.
+
+**Still open:** the 9,728 existing hourly rows keep the raw marketplace id until backfilled, and DR.3 (wiring
+intraday "Today" off the hourly table) remains unbuilt — AMS's actual value is still unrealised.
+
 ### 🟡 B5 — Sponsored Products only, but nothing says so
 
 `ads-api-client.ts` implements `/sp/campaigns`, `/sp/adGroups`, `/sp/keywords`, `/sp/targets`,

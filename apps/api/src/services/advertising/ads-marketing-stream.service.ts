@@ -113,6 +113,27 @@ export function noteAmsUnauthorized() { _amsDebug.unauthorizedCount += 1; _amsDe
 
 /** Ingest a batch of AMS messages. Idempotent-ish: accumulates into the
  *  (profile, adProduct=SP, CAMPAIGN, campaign_id, day) daily row. */
+/**
+ * AX2.3 — Amazon marketplaceId → the 2-letter code the rest of Nexus uses.
+ * Already-normalised values pass through, so this is safe to apply blindly.
+ */
+const AMS_MARKETPLACE_IDS: Record<string, string> = {
+  APJ6JRA9NG5V4: 'IT',
+  A1PA6795UKMFR9: 'DE',
+  A13V1IB3VIYZZH: 'FR',
+  A1RKKUPIHCS9HS: 'ES',
+  A1F83G8C2ARO7P: 'UK',
+  A1805IZSGTT6HS: 'NL',
+  A1C3SOZRARQ6R3: 'PL',
+  A2NODRKZP88ZB9: 'SE',
+  A28R8C7NBKEWEA: 'IE',
+  ATVPDKIKX0DER: 'US',
+}
+export function normalizeAmsMarketplace(raw: string | null | undefined): string {
+  if (!raw) return 'IT'
+  return AMS_MARKETPLACE_IDS[raw] ?? raw
+}
+
 export async function ingestMarketingStream(messages: AmsMessage[]): Promise<AmsIngestResult> {
   const result: AmsIngestResult = { received: messages.length, upserted: 0, skipped: 0 }
   // Capture a couple of raw samples for diagnostics (cap 5).
@@ -140,24 +161,25 @@ export async function ingestMarketingStream(messages: AmsMessage[]): Promise<Ams
     if (!campaignId || Number.isNaN(tw.getTime())) { result.skipped++; continue }
     const date = new Date(Date.UTC(tw.getUTCFullYear(), tw.getUTCMonth(), tw.getUTCDate()))
     const hour = tw.getUTCHours()
-    const marketplace = m.marketplace ?? m.marketplace_id ?? 'IT'
+    // AX2.3 — AMS sends Amazon's marketplaceId (e.g. APJ6JRA9NG5V4 = amazon.it).
+    // Storing it raw left all 9,728 hourly rows with marketplace='APJ6JRA9NG5V4'
+    // while the rest of the system keys on 'IT', so intraday data could not be
+    // filtered by market at all. Normalise to the 2-letter code.
+    const marketplace = normalizeAmsMarketplace(m.marketplace ?? m.marketplace_id)
     const isTraffic = m.impressions != null || m.clicks != null || m.cost != null
     const costMicros = m.cost != null ? BigInt(Math.round(m.cost * 1_000_000)) : 0n
     const salesCents = m.attributed_sales_1d != null ? Math.round(m.attributed_sales_1d * 100) : 0
     try {
-      await prisma.amazonAdsDailyPerformance.upsert({
-        where: { profileId_adProduct_entityType_entityId_date: { profileId, adProduct, entityType: 'CAMPAIGN', entityId: campaignId, date } },
-        create: {
-          profileId, marketplace, adProduct, date, entityType: 'CAMPAIGN', entityId: campaignId,
-          impressions: m.impressions ?? 0, clicks: m.clicks ?? 0, costMicros, currencyCode: m.currency ?? 'EUR',
-          sales7dCents: salesCents,
-          orders7d: m.attributed_conversions_1d ?? 0, units7d: m.attributed_units_ordered_1d ?? 0,
-          reportRunId: 'ams-stream', reportedAt: new Date(),
-        },
-        update: isTraffic
-          ? { impressions: { increment: m.impressions ?? 0 }, clicks: { increment: m.clicks ?? 0 }, costMicros: { increment: costMicros }, reportedAt: new Date() }
-          : { sales7dCents: { increment: salesCents }, orders7d: { increment: m.attributed_conversions_1d ?? 0 }, units7d: { increment: m.attributed_units_ordered_1d ?? 0 }, reportedAt: new Date() },
-      })
+      // AX2.3 — the DAILY grain is owned by the report pipeline (authoritative,
+      // reconciled at 72h). AMS used to upsert it too, under profileId:'ams'
+      // with localEntityId left null — a second parallel set of rows for the
+      // same campaign-days. Because every console aggregate matches
+      // "localEntityId = campaign OR entityId = externalCampaignId", those rows
+      // were summed ON TOP of the report figures and inflated spend, sales,
+      // impressions, clicks and orders across the grid, campaign detail and the
+      // trends chart. AMS's real edge is the hour grain, and that is all it
+      // writes now. (The ~659 rows already written are excluded at read time
+      // via EXCLUDE_AMS_DAILY rather than deleted.)
       // CD.11 — also write the hourly row (the genuine AMS edge: hour grain).
       const localEntityId = await resolveLocalId(campaignId, marketplace)
       await prisma.amazonAdsHourlyPerformance.upsert({
