@@ -21,6 +21,14 @@ import {
 import { createReader, type ParsedSheet } from './spreadsheet-adapter.js'
 import { SP_SHEET, DICTIONARY_SHEET, README_SHEET, META_SHEET, PORTFOLIOS_SHEET } from './build-workbook.js'
 
+/**
+ * Columns WE add to an annotated return file. On re-upload they are our own
+ * output coming back, not operator input, so they are ignored rather than
+ * reported as unknown columns — otherwise every corrected file would warn about
+ * three columns we put there ourselves.
+ */
+const ANNOTATION_HEADERS = new Set(['_status', '_errors', '_applied_at'].map(normHeader))
+
 /** Sheets we generate that are never an input. */
 const NON_DATA_SHEETS = new Set([DICTIONARY_SHEET, README_SHEET, META_SHEET, PORTFOLIOS_SHEET].map(normHeader))
 
@@ -189,6 +197,7 @@ export async function validateBulksheet(buf: Buffer): Promise<ValidationResult> 
   for (const h of sheet.headers) {
     if (!h) continue
     if (h === ROW_KEY_HEADER || h === BASELINE_HEADER) { resolved.set(h, h); continue }
+    if (ANNOTATION_HEADERS.has(normHeader(h))) continue
     const col = resolveColumn(h)
     if (col) { if (!resolved.has(col.header)) resolved.set(col.header, h) } else unknown.push(h)
   }
@@ -365,6 +374,9 @@ export async function validateBulksheetStreaming(
           if (!h) return
           headerIndex.set(h, i)
           if (h === ROW_KEY_HEADER || h === BASELINE_HEADER) { resolved!.set(h, h); return }
+          // Our own annotation columns coming back on a corrected file — not
+          // operator input, so not "unknown".
+          if (ANNOTATION_HEADERS.has(normHeader(h))) return
           const col = resolveColumn(h)
           if (col) { if (!resolved!.has(col.header)) resolved!.set(col.header, h) } else unknown.push(h)
         })

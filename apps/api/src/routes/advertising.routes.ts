@@ -4622,8 +4622,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       warnings: preview.warnings,
       conflicts: preview.conflicts.slice(0, take),
       // Only rows that actually do something — an operator scrolling a diff does
-      // not want 9,000 unchanged rows in the way.
-      rows: preview.rows.filter((r) => r.diffs.length || r.status !== 'UNCHANGED').slice(0, take),
+      // not want 9,000 unchanged rows in the way. A row carrying a NOTE is kept
+      // even when it changes nothing: "match type cannot be changed on an
+      // existing target" is precisely what someone needs to see when they
+      // believe they just edited one.
+      rows: preview.rows.filter((r) => r.diffs.length || r.note || r.status !== 'UNCHANGED').slice(0, take),
       rowsReturned: Math.min(take, preview.rows.length),
       apply: `POST /api/advertising/bulk/import/${id}/apply with planToken`,
     }
@@ -4720,6 +4723,32 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       await prisma.importJob.update({ where: { id }, data: { status: 'ROLLED_BACK', errorSummary: `Rolled back ${outcome.reversed} change(s)` } })
     }
     return { importJobId: id, changeSetId: `import:${id}`, ...outcome }
+  })
+
+  // ── GET /advertising/bulk/import/:id/annotated — AX-IE.7 ──────────
+  // The uploaded file handed back marked up: _status / _errors / _applied_at,
+  // the offending CELL filled red with the message on it, and an Errors sheet
+  // that groups failures into families so "398 rows failed" becomes "one
+  // find-and-replace".
+  //
+  // Crucially `_baseline` is refreshed for every row that landed, so re-uploading
+  // this exact file is a no-op for the rows that worked and only retries the ones
+  // that did not. That is what closes the correction loop without the operator
+  // reconciling anything by hand.
+  fastify.get('/advertising/bulk/import/:id/annotated', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const job = await prisma.importJob.findUnique({ where: { id } })
+    if (!job || job.targetEntity !== 'adsBulksheet') { reply.status(404); return { error: 'not_found' } }
+
+    const { buildAnnotatedWorkbook } = await import('../services/advertising/bulksheet/annotate.js')
+    const built = await buildAnnotatedWorkbook(prisma, id)
+    const base = (job.filename ?? 'bulksheet.xlsx').replace(/\.xlsx$/i, '')
+    reply.header('X-Nexus-Annotated-Rows', String(built.rows))
+    reply.header('X-Nexus-Annotated-Errors', String(built.errors))
+    reply.header('X-Nexus-Annotated-Ok', String(built.ok))
+    reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    reply.header('Content-Disposition', `attachment; filename="${base}-reviewed.xlsx"`)
+    return reply.send(built.buffer)
   })
 
   // ── GET /advertising/bulk/import/:id — the staged plan + full error list ──

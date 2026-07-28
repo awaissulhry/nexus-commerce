@@ -26,6 +26,29 @@ import { NUM_FMT, type BulksheetCellType } from '@nexus/shared/ads-bulksheet'
 /** A value the writer knows how to place in a cell. `null` writes a blank. */
 export type CellValue = string | number | Date | null
 
+/**
+ * AX-IE.7 — a cell that also carries why it is wrong.
+ *
+ * Marking the OFFENDING CELL rather than the row is the difference between "row
+ * 412 has a problem" and landing the operator on the exact value to retype.
+ */
+export interface AnnotatedCell {
+  value: CellValue
+  fill?: 'error' | 'conflict' | 'ok'
+  note?: string
+}
+export type RowCell = CellValue | AnnotatedCell
+
+const FILL_ARGB: Record<NonNullable<AnnotatedCell['fill']>, string> = {
+  error: 'FFFDE7E9',    // soft red — readable behind black text, unlike a saturated fill
+  conflict: 'FFFFF4E5', // amber
+  ok: 'FFEAF7ED',       // green
+}
+
+function isAnnotated(c: RowCell): c is AnnotatedCell {
+  return c !== null && typeof c === 'object' && !(c instanceof Date) && 'value' in c
+}
+
 export interface SheetColumnSpec {
   header: string
   type: BulksheetCellType
@@ -48,7 +71,7 @@ export interface SheetSpec {
 
 export interface SpreadsheetWriter {
   addSheet(spec: SheetSpec): void
-  addRow(sheet: string, values: readonly CellValue[]): Promise<void>
+  addRow(sheet: string, values: readonly RowCell[]): Promise<void>
   /** Finish and return the workbook bytes. */
   toBuffer(): Promise<Buffer>
 }
@@ -146,10 +169,20 @@ class ExcelJsWriter implements SpreadsheetWriter {
     this.specs.set(spec.name, spec)
   }
 
-  async addRow(sheet: string, values: readonly CellValue[]): Promise<void> {
+  async addRow(sheet: string, values: readonly RowCell[]): Promise<void> {
     const ws = this.sheets.get(sheet)
     if (!ws) throw new Error(`[bulksheet] unknown sheet "${sheet}"`)
-    const row = ws.addRow(values.map((v) => (typeof v === 'string' ? escapeFormulaInjection(v) : v)))
+    const plain = values.map((c) => {
+      const v = isAnnotated(c) ? c.value : c
+      return typeof v === 'string' ? escapeFormulaInjection(v) : v
+    })
+    const row = ws.addRow(plain)
+    values.forEach((c, i) => {
+      if (!isAnnotated(c) || (!c.fill && !c.note)) return
+      const cell = row.getCell(i + 1)
+      if (c.fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FILL_ARGB[c.fill] } }
+      if (c.note) cell.note = c.note
+    })
     if (typeof row.commit === 'function') row.commit()
     await this.maybeDrain()
   }

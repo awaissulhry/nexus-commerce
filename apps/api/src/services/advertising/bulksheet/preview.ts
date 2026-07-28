@@ -154,7 +154,7 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
     }) : Promise.resolve([]),
     targetIds.size ? prisma.adTarget.findMany({
       where: { externalTargetId: { in: [...targetIds] } },
-      select: { id: true, externalTargetId: true, expressionValue: true, status: true, bidCents: true, isNegative: true },
+      select: { id: true, externalTargetId: true, expressionValue: true, expressionType: true, status: true, bidCents: true, isNegative: true },
     }) : Promise.resolve([]),
   ])
   const campBy = new Map(camps.map((c) => [c.externalCampaignId!, c]))
@@ -177,6 +177,7 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
     // rest preview as UNSUPPORTED rather than implying they will be written.
     let current: Record<string, string> | null = null
     let fields: readonly string[] = []
+    let immutableNote: string | undefined
 
     if (entity === 'Campaign') {
       const c = campBy.get(v['Campaign ID'] ?? '')
@@ -215,6 +216,17 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
       base.label = t.expressionValue
       current = { State: (t.status ?? '').toLowerCase(), Bid: fmtMoney(t.bidCents / 100) }
       fields = TARGET_FIELDS
+      // Match type is IMMUTABLE on Amazon. If the file asks to change it, say so
+      // here — otherwise the row reports "unchanged" and the operator believes
+      // they made an edit that silently did nothing.
+      const askedMt = v['Match type']
+      if (askedMt) {
+        const wanted = parseVocabulary('matchType', askedMt)
+        const held = parseVocabulary('matchType', t.expressionType ?? '')
+        if (wanted && held && wanted !== held) {
+          immutableNote = `Match type cannot be changed on an existing target (${held} → ${wanted}). Amazon treats it as immutable: archive this row and create a new one instead. Nothing else on this row is affected.`
+        }
+      }
     } else {
       rows.push({ ...base, label: v['Campaign ID'] ?? '', note: `${entity} rows are validated and previewed, but applying them is not wired up yet` })
       continue
@@ -242,9 +254,12 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
       continue
     }
 
-    const driftNote = driftedElsewhere.length
-      ? `Heads up: ${driftedElsewhere.join(', ')} changed on Amazon since you downloaded, but you are not editing ${driftedElsewhere.length === 1 ? 'it' : 'them'}, so this applies cleanly.`
-      : undefined
+    const driftNote = [
+      immutableNote,
+      driftedElsewhere.length
+        ? `Heads up: ${driftedElsewhere.join(', ')} changed on Amazon since you downloaded, but you are not editing ${driftedElsewhere.length === 1 ? 'it' : 'them'}, so this applies cleanly.`
+        : undefined,
+    ].filter(Boolean).join(' ') || undefined
 
     if (op === 'Archive') {
       rows.push({ ...base, status: 'ARCHIVE', diffs: [{ field: 'State', current: current.State ?? '', next: 'archived' }], note: driftNote })
