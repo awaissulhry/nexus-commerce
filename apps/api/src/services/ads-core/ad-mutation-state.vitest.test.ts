@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   AD_MUTATION_STATES, IN_FLIGHT_STATES, TERMINAL_STATES,
-  PENDING_TRUST_WINDOW_MS, SERIALISE_BLOCK_WINDOW_MS,
+  ADS_STALE_INTENT_MS, PENDING_TRUST_WINDOW_MS, SERIALISE_BLOCK_WINDOW_MS,
   classifyCrashedWrite, isBelievablyPending, isBlockingWrite, isTerminal, stateForQueueStatus,
 } from './ad-mutation-state.js'
 
@@ -116,7 +116,7 @@ describe('crashed ad writes — reclaim the fresh, dead-letter the stale', () =>
   const now = new Date('2026-07-28T12:00:00Z')
   const ago = (ms: number) => new Date(now.getTime() - ms)
   const MIN = 60_000, HOUR = 60 * MIN, DAY = 24 * HOUR
-  const th = { reclaimAfterMs: 30 * MIN, staleAfterMs: 7 * DAY }
+  const th = { reclaimAfterMs: 30 * MIN, staleAfterMs: ADS_STALE_INTENT_MS }
   const classify = (createdMsAgo: number, updatedMsAgo: number) =>
     classifyCrashedWrite({ createdAt: ago(createdMsAgo), updatedAt: ago(updatedMsAgo) }, th, now)
 
@@ -126,6 +126,23 @@ describe('crashed ad writes — reclaim the fresh, dead-letter the stale', () =>
 
   it('a recent crash is reclaimed — the intent is still current', () => {
     expect(classify(2 * HOUR, 45 * MIN)).toBe('RECLAIM')
+  })
+
+  it('the 6.9-day row prod re-dispatched would now be dead-lettered instead', () => {
+    // Measured on prod 2026-07-28: this row WAS reclaimed and re-sent to Amazon
+    // under the janitor's inherited 7-day threshold. It survived only because
+    // the target no longer existed. A bid write pushes a stored number rather
+    // than recomputing from live state, so a week-old decision must not be
+    // re-applied to a campaign spending money today.
+    expect(classify(6.9 * DAY, 6.9 * DAY)).toBe('DEAD_LETTER')
+  })
+
+  it('ads staleness is far tighter than the janitor’s generic 7 days', () => {
+    // The janitor's number is justified by "dispatch re-reads the live quantity
+    // anyway" — true for stock sync, false for a bid write. Inheriting it was
+    // the wrong call and prod proved it on the first sweep.
+    expect(ADS_STALE_INTENT_MS).toBeLessThan(7 * DAY)
+    expect(classify(2 * DAY, 2 * DAY)).toBe('DEAD_LETTER')
   })
 
   it('the 26-day prod row is dead-lettered, not re-applied', () => {

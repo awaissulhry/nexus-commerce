@@ -96,6 +96,28 @@ export function isBlockingWrite(
  */
 export type CrashedWriteAction = 'RECLAIM' | 'DEAD_LETTER' | 'LEAVE'
 
+/**
+ * How old an ad intent may be and still be worth applying.
+ *
+ * This was initially the janitor's `EXPIRE_PENDING_AFTER_MS` (7 days), on the
+ * reasoning that both sides should age rows out on the same clock. Prod
+ * disproved it on the first sweep: a 6.9-day-old bid write was reclaimed and
+ * re-dispatched to Amazon. It happened to be harmless — the target no longer
+ * existed — but only by luck.
+ *
+ * The janitor's own note explains why its number does not transfer: *"dispatch
+ * re-reads the live quantity anyway, so draining a week-old row adds nothing"*.
+ * That is true of stock sync, which recomputes from current state. A bid write
+ * does not re-read anything; it pushes a number decided at enqueue time. So the
+ * question is not "is this row old" but "is this DECISION still the one we would
+ * make", and for a system whose rank engine re-evaluates hourly, a day-old bid
+ * has already been superseded.
+ *
+ * 24h, therefore — deliberately diverging from the janitor rather than
+ * inheriting a threshold whose justification does not apply here.
+ */
+export const ADS_STALE_INTENT_MS = 24 * 60 * 60 * 1000
+
 export function classifyCrashedWrite(
   row: { createdAt: Date; updatedAt: Date },
   thresholds: { reclaimAfterMs: number; staleAfterMs: number },

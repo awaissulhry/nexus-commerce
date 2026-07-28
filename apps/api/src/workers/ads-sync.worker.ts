@@ -18,7 +18,7 @@
 import { Worker, type Job } from 'bullmq'
 import prisma from '../db.js'
 import { entityWriteInFlightElsewhere, settleAdMutations } from '../services/advertising/ads-mutation.service.js'
-import { classifyCrashedWrite } from '../services/ads-core/ad-mutation-state.js'
+import { ADS_STALE_INTENT_MS, classifyCrashedWrite } from '../services/ads-core/ad-mutation-state.js'
 import { redis } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { isEntityGoneError, orphanReasonFrom } from '../services/ads-core/amazon-entity-gone.js'
@@ -488,8 +488,9 @@ const AD_SYNC_TYPE_LIST = [
 export async function reclaimCrashedAdWrites(
   now: Date = new Date(),
 ): Promise<{ reclaimed: number; deadLettered: number }> {
-  const { RECLAIM_IN_PROGRESS_AFTER_MS, EXPIRE_PENDING_AFTER_MS } =
-    await import('../jobs/outbound-queue-janitor.job.js')
+  // RECLAIM window is shared with the janitor — "has this dispatch crashed" is
+  // the same question everywhere. STALENESS is not: see ADS_STALE_INTENT_MS.
+  const { RECLAIM_IN_PROGRESS_AFTER_MS } = await import('../jobs/outbound-queue-janitor.job.js')
 
   // The stuck set is inherently tiny, so classify per row rather than encoding
   // the decision in query filters where it cannot be tested.
@@ -500,7 +501,7 @@ export async function reclaimCrashedAdWrites(
   })
   const thresholds = {
     reclaimAfterMs: RECLAIM_IN_PROGRESS_AFTER_MS,
-    staleAfterMs: EXPIRE_PENDING_AFTER_MS,
+    staleAfterMs: ADS_STALE_INTENT_MS,
   }
   const stale = stuck.filter((r) => classifyCrashedWrite(r, thresholds, now) === 'DEAD_LETTER')
   const fresh = stuck.filter((r) => classifyCrashedWrite(r, thresholds, now) === 'RECLAIM')
@@ -535,13 +536,19 @@ export async function reclaimCrashedAdWrites(
   return { reclaimed: fresh.length, deadLettered: stale.length }
 }
 
-export async function drainAdsSyncOnce(limit = 50): Promise<{ processed: number; results: Array<{ status: string; queueId: string }> }> {
-  await reclaimCrashedAdWrites().catch((err) => {
+export async function drainAdsSyncOnce(limit = 50): Promise<{
+  processed: number
+  reclaimed: number
+  deadLettered: number
+  results: Array<{ status: string; queueId: string }>
+}> {
+  const swept = await reclaimCrashedAdWrites().catch((err) => {
     // Reclaim is maintenance; a failure here must not stop the drain from
     // dispatching the writes that are ready.
     logger.warn('[ads-sync.worker] reclaim failed; draining anyway', {
       error: err instanceof Error ? err.message : String(err),
     })
+    return { reclaimed: 0, deadLettered: 0 }
   })
   const candidates = await prisma.outboundSyncQueue.findMany({
     where: {
@@ -558,5 +565,5 @@ export async function drainAdsSyncOnce(limit = 50): Promise<{ processed: number;
     const fakeJob = { id: `manual-${c.id}`, data: { queueId: c.id, syncType: c.syncType } } as unknown as Job<AdsJobData>
     results.push(await processAdsSyncJob(fakeJob))
   }
-  return { processed: results.length, results }
+  return { processed: results.length, reclaimed: swept.reclaimed, deadLettered: swept.deadLettered, results }
 }
