@@ -19,7 +19,12 @@ Evidence harnesses (read-only, untracked): `apps/api/scripts/_axie1-model-census
 | **AX-IE.5** dry-run preview | ✅ shipped 2026-07-28 — field-level diff, blast radius, per-field conflict detection, `planToken` handshake. `POST /advertising/bulk/import/:id/preview` |
 | **AX-IE.6** apply + rollback | ✅ shipped 2026-07-28 — planToken handshake, writes only through `ads-write-gate`, whole-upload rollback via `rollbackByChangeSetId`. Verified: 9 applied → 9 reversed → 0 failed |
 | **AX-IE.7** annotated workbook | ✅ shipped 2026-07-28 — `_status`/`_errors`/`_applied_at`, red offending cell keeping the operator's original text, grouped Errors sheet, `_baseline` refreshed so the correction loop closes |
-| **AX-IE.8** bulk UI page | not started — `/marketing/ads/bulk` on the current console |
+| **AX-IE.8** bulk UI page | ✅ shipped 2026-07-28 — `/marketing/ads/bulk`: Import staircase, blast-radius review, History with deep-linked Review + Undo |
+
+**AX-IE is complete .0 → .8.** Remaining in the programme: the SB / SB-multi / SD sheets
+in the exporter (columns known, see `docs/AMAZON-BULKSHEET-SCHEMA.md`), consolidating the
+CREATE path (still only in the older `/bulk/apply`), predicate selection in `AdsDataGrid`,
+and the whole **AX-ZD** zero-drift series (.1–.6).
 
 ### Measured, and what it changed
 
