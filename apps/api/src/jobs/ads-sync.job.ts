@@ -238,7 +238,11 @@ export async function runCampaignSettingsSyncCron(): Promise<void> {
   try {
     await recordCronRun('ads-campaign-settings-sync', async () => {
       const r = await syncCampaignSettingsFromAmazon()
-      return `profiles=${r.profiles} campaigns=${r.campaigns} updated=${r.updated} placements=${r.placementsFilled} errors=${r.errors.length}`
+      // AX-ZD.3b — racedOut counts campaigns skipped because they changed
+      // locally mid-poll. Normally 0; a persistent non-zero means writes and
+      // this sync are contending, which is worth seeing rather than inferring.
+      const raced = r.racedOut ? ` racedOut=${r.racedOut}` : ''
+      return `profiles=${r.profiles} campaigns=${r.campaigns} updated=${r.updated}${raced} placements=${r.placementsFilled} errors=${r.errors.length}`
     })
   } catch (err) {
     logger.error('ads-campaign-settings-sync cron: failure', { error: err instanceof Error ? err.message : String(err) })

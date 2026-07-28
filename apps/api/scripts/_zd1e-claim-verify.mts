@@ -12,6 +12,7 @@
 import prisma from '../src/db.js'
 import {
   claimEntityWrite, dispatchPayloadFromMutations,
+  pendingWriteFields, pendingWriteFieldsByEntity,
 } from '../src/services/advertising/ads-mutation.service.js'
 
 const ENTITY_ID = `zd1e-probe-${process.pid}`
@@ -102,6 +103,23 @@ try {
 
   check('a queue row with no typed rows returns null, so dispatch falls back',
     (await dispatchPayloadFromMutations(`zd1e-nonexistent-${process.pid}`)) === null)
+
+  // ── AX-ZD.3b — the batch lookup must agree with the per-entity one exactly.
+  // The settings sync uses the batch form to avoid a query per campaign; if the
+  // two ever disagree, fields silently stop being protected from a clobber.
+  const FIELDS = ['status', 'dailyBudget', 'biddingStrategy', 'portfolioId', 'targetingType']
+  await prisma.adMutation.updateMany({
+    where: { outboundQueueId: Q4 }, data: { state: 'PENDING' },
+  })
+  const perEntity = await pendingWriteFields('CAMPAIGN', ENTITY_ID, FIELDS)
+  const batch = await pendingWriteFieldsByEntity('CAMPAIGN', FIELDS)
+  const fromBatch = batch.get(ENTITY_ID) ?? new Set<string>()
+  const sorted = (s: Set<string>): string => [...s].sort().join(',')
+  check('batch and per-entity agree on the same entity',
+    sorted(perEntity) === sorted(fromBatch), `perEntity=[${sorted(perEntity)}] batch=[${sorted(fromBatch)}]`)
+  check('batch found the pending fields at all', fromBatch.size > 0, `[${sorted(fromBatch)}]`)
+  check('batch reports nothing for an entity with no pending writes',
+    (batch.get(`${ENTITY_ID}-absent`) ?? new Set()).size === 0)
 } finally {
   const removed = await prisma.adMutation.deleteMany({
     where: { entityId: { startsWith: `zd1e-probe-${process.pid}` } },

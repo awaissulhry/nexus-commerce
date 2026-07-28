@@ -398,6 +398,54 @@ async function legacyRowWithNoMutations(
 }
 
 /**
+ * AX-ZD.3b — every in-flight field, for every entity of a type, in ONE query.
+ *
+ * `pendingWriteFields` asks per entity, which is right for a single campaign and
+ * wrong inside the settings-sync loop: that runs per campaign across every
+ * profile, so it issued one query per campaign per poll and would grow linearly
+ * with the account.
+ *
+ * Unfiltered by entity on purpose. AdMutation holds only UNDELIVERED writes —
+ * everything else has settled to a terminal state — so this set is naturally
+ * tiny (normally empty) regardless of how many campaigns exist. `take` is a
+ * backstop against a pathological backlog rather than an expected path, and it
+ * logs rather than truncating silently, because a silent cap here would quietly
+ * stop protecting the entities past the limit.
+ */
+export async function pendingWriteFieldsByEntity(
+  entityType: AdEntityType,
+  fields: readonly string[],
+  now: Date = new Date(),
+): Promise<Map<string, Set<string>>> {
+  const out = new Map<string, Set<string>>()
+  if (!fields.length) return out
+  const LIMIT = 5_000
+  try {
+    const rows = await prisma.adMutation.findMany({
+      where: { entityType, field: { in: [...fields] }, state: { in: [...IN_FLIGHT_STATES] } },
+      select: { entityId: true, field: true, state: true, createdAt: true },
+      take: LIMIT,
+    })
+    if (rows.length === LIMIT) {
+      logger.warn('[AX-ZD.3b] in-flight mutation set hit the cap; entities beyond it are unprotected this pass', {
+        entityType, limit: LIMIT,
+      })
+    }
+    for (const r of rows) {
+      if (!isBelievablyPending(r, now)) continue
+      const set = out.get(r.entityId) ?? new Set<string>()
+      set.add(r.field)
+      out.set(r.entityId, set)
+    }
+    return out
+  } catch {
+    // Fail OPEN, same as the per-entity form: reporting drift we caused costs a
+    // minute, suppressing a real one loses an operator's edit.
+    return out
+  }
+}
+
+/**
  * AX-ZD.1 — which of these fields have a write in flight on this entity?
  *
  * The replacement for the campaign-wide JSON scan. One query, field-scoped, so a

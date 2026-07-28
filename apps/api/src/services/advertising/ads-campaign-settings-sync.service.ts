@@ -12,7 +12,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { listCampaignsV3, type AdsRegion, type V3CampaignSettings } from './ads-api-client.js'
-import { pendingWriteFields } from './ads-mutation.service.js'
+import { pendingWriteFieldsByEntity } from './ads-mutation.service.js'
 import { holdBackPendingFields } from '../ads-core/drift.js'
 
 const STATE_MAP: Record<string, 'ENABLED' | 'PAUSED' | 'ARCHIVED'> = { enabled: 'ENABLED', paused: 'PAUSED', archived: 'ARCHIVED' }
@@ -148,14 +148,21 @@ async function recordCampaignDrift(
 
 export async function syncCampaignSettingsFromAmazon(
   opts?: { profileId?: string },
-): Promise<{ profiles: number; campaigns: number; updated: number; placementsFilled: number; archived: number; driftFound: number; sampleShape?: unknown; errors: string[] }> {
+): Promise<{ profiles: number; campaigns: number; updated: number; racedOut: number; placementsFilled: number; archived: number; driftFound: number; sampleShape?: unknown; errors: string[] }> {
   const conns = await prisma.amazonAdsConnection.findMany({
     where: opts?.profileId ? { profileId: opts.profileId } : {},
     select: { profileId: true, region: true, marketplace: true },
   })
-  let campaigns = 0, updated = 0, placementsFilled = 0, archived = 0, driftFound = 0
+  let campaigns = 0, updated = 0, racedOut = 0, placementsFilled = 0, archived = 0, driftFound = 0
   let sampleShape: unknown
   const errors: string[] = []
+
+  // AX-ZD.3b — one query for every campaign with an undelivered write, instead
+  // of one per campaign per poll. Safe to snapshot up front only because the
+  // update below is guarded on Campaign.updatedAt: a write enqueued DURING this
+  // run is invisible to the snapshot, and without that guard we would overwrite
+  // it — reintroducing exactly the clobber ZD.3 removed.
+  const pendingByCampaign = await pendingWriteFieldsByEntity('CAMPAIGN', CAMPAIGN_DRIFT_FIELDS)
 
   for (const conn of conns) {
     const region: AdsRegion = conn.region === 'NA' || conn.region === 'FE' ? (conn.region as AdsRegion) : 'EU'
@@ -182,7 +189,7 @@ export async function syncCampaignSettingsFromAmazon(
         select: {
           id: true, dynamicBidding: true, name: true, marketplace: true,
           status: true, dailyBudget: true, biddingStrategy: true, portfolioId: true,
-          lastSyncedAt: true, lastSyncStatus: true,
+          lastSyncedAt: true, lastSyncStatus: true, updatedAt: true,
         },
       })
       if (!existing) continue
@@ -221,7 +228,7 @@ export async function syncCampaignSettingsFromAmazon(
       //
       // The drift row is still recorded for them, classified WRITE_PENDING, so
       // the disagreement stays visible rather than being silently skipped.
-      const pending = await pendingWriteFields('CAMPAIGN', existing.id, CAMPAIGN_DRIFT_FIELDS)
+      const pending = pendingByCampaign.get(existing.id) ?? new Set<string>()
 
       // AX-ZD.4 — record what Amazon disagrees with BEFORE we overwrite it.
       // `data` holds only the fields Amazon actually reported, so a partial
@@ -245,8 +252,24 @@ export async function syncCampaignSettingsFromAmazon(
       const changed = Object.keys(data).length > 0
       data.settingsSyncedAt = new Date()
       try {
-        await prisma.campaign.update({ where: { id: existing.id }, data })
-        if (changed) updated++
+        // AX-ZD.3b — optimistic guard. `existing` was read moments ago; if the
+        // row has moved since, an operator (or a rule) wrote to this campaign
+        // while we were mid-poll and their value is newer than Amazon's. Skip
+        // rather than overwrite — the next poll, 20 minutes out, picks it up
+        // with a fresh snapshot that knows about their write.
+        //
+        // Skipping also skips settingsSyncedAt, so a raced campaign shows one
+        // cycle staler than it truly is (AX2.2 read-freshness). Deliberate: the
+        // alternative is a second write purely to stamp, and understating
+        // freshness for 20 minutes is the harmless direction to be wrong in.
+        const w = await prisma.campaign.updateMany({
+          where: { id: existing.id, updatedAt: existing.updatedAt },
+          data,
+        })
+        if (w.count === 0) {
+          racedOut++
+          logger.info('[settings-sync] skipped: campaign changed locally mid-poll', { campaignId: c.campaignId })
+        } else if (changed) updated++
       } catch (e) { errors.push(`update ${c.campaignId}: ${(e as Error).message.slice(0, 120)}`) }
     }
     // H.12 — archive local active campaigns this profile's list no longer returns (archived/deleted on Amazon).
@@ -254,8 +277,8 @@ export async function syncCampaignSettingsFromAmazon(
     catch (e) { errors.push(`camp-del ${conn.profileId}: ${(e as Error).message.slice(0, 120)}`) }
   }
 
-  logger.info('[settings-sync] done', { profiles: conns.length, campaigns, updated, placementsFilled, archived, driftFound, errors: errors.length })
-  return { profiles: conns.length, campaigns, updated, placementsFilled, archived, driftFound, sampleShape, errors }
+  logger.info('[settings-sync] done', { profiles: conns.length, campaigns, updated, racedOut, placementsFilled, archived, driftFound, errors: errors.length })
+  return { profiles: conns.length, campaigns, updated, racedOut, placementsFilled, archived, driftFound, sampleShape, errors }
 }
 
 // Map one v3 record onto a non-destructive update patch (only present fields).
