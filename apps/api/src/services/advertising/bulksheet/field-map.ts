@@ -22,7 +22,7 @@
 import { parseMoney, parseVocabulary } from '@nexus/shared/ads-bulksheet'
 
 /** Which write service a row's entity is applied through. */
-export type ApplyTargetKind = 'campaign' | 'adGroup' | 'adTarget' | 'portfolio'
+export type ApplyTargetKind = 'campaign' | 'adGroup' | 'adTarget' | 'portfolio' | 'productAd'
 
 /**
  * One writable column. `apply` mutates the patch and returns an error string to
@@ -116,6 +116,14 @@ export const FIELD_MAP: Record<ApplyTargetKind, FieldMapping[]> = {
     stateField,
     money('Bid', (p, v) => { p.bidCents = Math.round(v * 100) }),
   ],
+  /**
+   * Product ads are state-only. They carry no bid — the bid lives on the ad
+   * group and the targets — and SKU/ASIN are what the ad IS, not settings on it:
+   * pointing an existing ad at a different product is a delete plus a create on
+   * Amazon, not an update. The exporter emits both columns for identification,
+   * and offering them as editable would promise a rename that cannot happen.
+   */
+  productAd: [stateField],
 }
 
 /** The columns preview may diff, derived so it can never exceed what apply writes. */
@@ -124,6 +132,7 @@ export const FIELDS_BY_KIND: Record<ApplyTargetKind, readonly string[]> = {
   campaign: FIELD_MAP.campaign.map((f) => f.column),
   adGroup: FIELD_MAP.adGroup.map((f) => f.column),
   adTarget: FIELD_MAP.adTarget.map((f) => f.column),
+  productAd: FIELD_MAP.productAd.map((f) => f.column),
 }
 
 /**

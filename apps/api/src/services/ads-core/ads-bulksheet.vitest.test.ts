@@ -230,10 +230,16 @@ describe('row validation', () => {
   })
 
   it('flags entities we can validate but cannot yet apply', () => {
-    // Product ad still has no apply path — it previews, it does not write.
-    const v = validateRow(rowGet({ Entity: 'Product ad', Operation: 'Update', 'Ad ID': 'a1' }))
+    // Bidding adjustment is the last one: a placement percentage lives inside
+    // campaign.dynamicBidding and its only write path pushes to Amazon inline,
+    // with no changeSetId and no queued mode. It previews, it does not write.
+    const v = validateRow(rowGet({ Entity: 'Bidding adjustment', Operation: 'Update', 'Campaign ID': '123', Placement: 'Placement Top', Percentage: '25' }))
     expect(v.ok).toBe(true)
     expect(v.previewOnly).toBe(true)
+
+    // Product ad was the example here until Part 2b wired its write path.
+    const productAd = validateRow(rowGet({ Entity: 'Product ad', Operation: 'Update', 'Ad ID': 'a1' }))
+    expect(productAd.previewOnly).toBe(false)
 
     const applied = validateRow(rowGet({ Entity: 'Campaign', Operation: 'Update', 'Campaign ID': '123' }))
     expect(applied.previewOnly).toBe(false)

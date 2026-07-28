@@ -22,7 +22,7 @@ import {
  * The entities `applyPlan` has a real branch for, transcribed from its dispatch.
  * The source ratchet at the bottom is what keeps this honest.
  */
-const APPLY_BRANCHES = ['Campaign', 'Portfolio', 'Ad group', ...AD_TARGET_ENTITIES]
+const APPLY_BRANCHES = ['Campaign', 'Portfolio', 'Ad group', 'Product ad', ...AD_TARGET_ENTITIES]
 
 const declaredApplied = ENTITY_RULES.filter((r) => r.applySupported).map((r) => r.entity)
 const declaredUnapplied = ENTITY_RULES.filter((r) => !r.applySupported).map((r) => r.entity)
@@ -78,8 +78,20 @@ describe('the regression itself', () => {
 })
 
 describe('the entities that really are unwired stay honest', () => {
-  it('Product ad and Bidding adjustment are the only ones left', () => {
-    expect([...declaredUnapplied].sort()).toEqual(['Bidding adjustment', 'Product ad'])
+  it('Bidding adjustment is the only one left', () => {
+    // Not a capability gap we forgot: a placement percentage lives inside
+    // campaign.dynamicBidding, and its only write path pushes to Amazon inline —
+    // no changeSetId, no queued mode. Applying one from a bulksheet would go
+    // live on a non-live apply and survive the rollback of its own upload.
+    expect([...declaredUnapplied].sort()).toEqual(['Bidding adjustment'])
+  })
+
+  it('preview explains that specific reason rather than a generic "not wired up"', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { join, dirname } = await import('node:path')
+    const { fileURLToPath } = await import('node:url')
+    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'preview.ts'), 'utf8')
+    expect(src).toMatch(/Placement bid adjustments cannot be applied from a bulksheet yet/)
   })
 
   it('neither is an AdTarget entity, so preview cannot fall into that branch', () => {
@@ -110,7 +122,7 @@ describe('source ratchet — APPLY_BRANCHES above must still describe apply.ts',
     const branched = [...src.matchAll(/row\.entity === '([^']+)'/g)].map((m) => m[1])
     // The AdTarget five are covered by the helper, not by name.
     expect(src).toMatch(/isAdTargetEntity\(row\.entity\)/)
-    expect(branched.sort()).toEqual(['Ad group', 'Campaign', 'Portfolio'])
+    expect(branched.sort()).toEqual(['Ad group', 'Campaign', 'Portfolio', 'Product ad'])
   })
 
   it('has no catch-all else that could write an unknown entity to AdTarget', async () => {

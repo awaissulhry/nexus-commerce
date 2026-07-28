@@ -383,10 +383,13 @@ export const ENTITY_RULES: readonly EntityRule[] = [
   { entity: 'Campaign negative keyword', create: ['Keyword text', 'Match type', 'Campaign ID'], mutate: ['Keyword ID'], applySupported: true },
   { entity: 'Product targeting', create: [['Product targeting expression', 'Targeting expression'], 'Ad group ID'], mutate: [['Product Targeting ID', 'Targeting ID']], applySupported: true },
   { entity: 'Negative product targeting', create: [['Product targeting expression', 'Targeting expression'], 'Ad group ID'], mutate: [['Product Targeting ID', 'Targeting ID']], applySupported: true },
-  // Still genuinely unwired. Both preview as UNSUPPORTED and apply skips them,
-  // so these two declarations agree with the code — unlike the three above,
-  // which claimed `false` while apply had been writing them all along.
-  { entity: 'Product ad', create: [['SKU', 'ASIN'], 'Ad group ID'], mutate: ['Ad ID'], applySupported: false },
+  { entity: 'Product ad', create: [['SKU', 'ASIN'], 'Ad group ID'], mutate: ['Ad ID'], applySupported: true },
+  // The last one that is genuinely unwired, and the reason is not laziness: a
+  // placement percentage is not its own row here — it lives inside
+  // campaign.dynamicBidding.placementBidding[], and the only write path for it
+  // pushes to Amazon inline, with no changeSetId and no queued mode. Applying one
+  // from a bulksheet would go live even on a non-live apply, and could not be
+  // rolled back with the rest of its upload. Preview says so in as many words.
   { entity: 'Bidding adjustment', create: ['Campaign ID', 'Placement', 'Percentage'], mutate: ['Campaign ID', 'Placement'], applySupported: false },
   { entity: 'Portfolio', create: ['Portfolio name'], mutate: ['Portfolio ID'], applySupported: true },
 ]

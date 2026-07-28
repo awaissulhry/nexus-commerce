@@ -91,6 +91,7 @@ const CAMPAIGN_FIELDS = FIELDS_BY_KIND.campaign
 const ADGROUP_FIELDS = FIELDS_BY_KIND.adGroup
 const TARGET_FIELDS = FIELDS_BY_KIND.adTarget
 const PORTFOLIO_FIELDS = FIELDS_BY_KIND.portfolio
+const PRODUCTAD_FIELDS = FIELDS_BY_KIND.productAd
 
 const money = (raw: string): number | null => {
   const p = parseMoney(raw)
@@ -144,18 +145,20 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
   const agIds = new Set<string>()
   const targetIds = new Set<string>()
   const pfIds = new Set<string>()
+  const adIds = new Set<string>()
   for (const { p } of actionable) {
     const v = p.values
     if (p.entity === 'Campaign' || p.entity === 'Bidding adjustment') { if (v['Campaign ID']) campIds.add(v['Campaign ID']) }
     else if (p.entity === 'Portfolio') { if (v['Portfolio ID']) pfIds.add(v['Portfolio ID']) }
     else if (p.entity === 'Ad group') { if (v['Ad group ID']) agIds.add(v['Ad group ID']) }
+    else if (p.entity === 'Product ad') { if (v['Ad ID']) adIds.add(v['Ad ID']) }
     else {
       const id = v['Keyword ID'] || v['Product Targeting ID']
       if (id) targetIds.add(id)
     }
   }
 
-  const [camps, ags, targets, portfolios] = await Promise.all([
+  const [camps, ags, targets, portfolios, productAds] = await Promise.all([
     campIds.size ? prisma.campaign.findMany({
       where: { externalCampaignId: { in: [...campIds] } },
       select: { id: true, externalCampaignId: true, name: true, status: true, dailyBudget: true, biddingStrategy: true, portfolioId: true },
@@ -172,10 +175,15 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
       where: { externalPortfolioId: { in: [...pfIds] } },
       select: { id: true, externalPortfolioId: true, name: true, budgetAmount: true, budgetCurrencyCode: true, budgetPolicy: true, startDate: true, endDate: true },
     }) : Promise.resolve([]),
+    adIds.size ? prisma.adProductAd.findMany({
+      where: { externalAdId: { in: [...adIds] } },
+      select: { id: true, externalAdId: true, sku: true, asin: true, status: true },
+    }) : Promise.resolve([]),
   ])
   const campBy = new Map(camps.map((c) => [c.externalCampaignId!, c]))
   const agBy = new Map(ags.map((a) => [a.externalAdGroupId!, a]))
   const tgtBy = new Map(targets.map((t) => [t.externalTargetId!, t]))
+  const adBy = new Map(productAds.map((a) => [a.externalAdId!, a]))
 
   // AX-ZD.9 — resolve by _row_key first, ID column second.
   //
@@ -188,6 +196,7 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
   const campById = new Map(camps.map((c) => [c.id, c]))
   const agById = new Map(ags.map((a) => [a.id, a]))
   const tgtById = new Map(targets.map((t) => [t.id, t]))
+  const adById = new Map(productAds.map((a) => [a.id, a]))
 
   /**
    * Look up by row key, but only when the key was minted for THIS entity —
@@ -242,6 +251,18 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
         'Ad Group Default Bid': fmtMoney(a.defaultBidCents / 100),
       }
       fields = ADGROUP_FIELDS
+    } else if (entity === 'Product ad') {
+      const t = byRowKey(adById, base.rowKey, entity) ?? (v['Ad ID'] ? adBy.get(v['Ad ID']) : undefined)
+      if (!t) {
+        if (op === 'Create') { rows.push({ ...base, status: 'CREATE', label: v.SKU || v['ASIN (Informational only)'] || '' }); blast.byEntity[entity] = (blast.byEntity[entity] ?? 0) + 1; continue }
+        rows.push({ ...base, status: 'UNRESOLVED', label: v.SKU ?? v['Ad ID'] ?? '', note: 'No product ad with that Ad ID' })
+        continue
+      }
+      base.targetId = t.id
+      // The SKU is what an operator recognises; the ad id is a 15-digit integer.
+      base.label = t.sku ?? t.asin ?? t.externalAdId ?? ''
+      current = { State: (t.status ?? '').toLowerCase() }
+      fields = PRODUCTAD_FIELDS
     } else if (isAdTargetEntity(entity)) {
       const id = v['Keyword ID'] || v['Product Targeting ID']
       const t = byRowKey(tgtById, base.rowKey, entity) ?? (id ? tgtBy.get(id) : undefined)
@@ -274,7 +295,26 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
         }
       }
     } else {
-      rows.push({ ...base, label: v['Campaign ID'] ?? '', note: `${entity} rows are validated and previewed, but applying them is not wired up yet` })
+      // Bidding adjustment is the only entity that still lands here, and the
+      // reason is specific enough to be worth stating.
+      //
+      // A placement percentage is not its own row in our schema — it lives inside
+      // campaign.dynamicBidding.placementBidding[]. The write path that exists,
+      // `updatePlacementBidding`, pushes to Amazon INLINE: it takes no
+      // changeSetId, so a bulksheet-applied placement change would not be
+      // revertible with the rest of its upload, and it has no queued mode, so it
+      // would go live even on an apply the operator ran with applyImmediately
+      // false. Every other row in the same file would sit in the outbox while
+      // that one had already changed the account.
+      //
+      // Wiring it means giving placement bids a queued write like every other
+      // entity. That is a change to the write pipeline, not to the bulksheet, so
+      // it is deliberately not done here. Previewing it as UNSUPPORTED is the
+      // honest answer until then.
+      const note = entity === 'Bidding adjustment'
+        ? 'Placement bid adjustments cannot be applied from a bulksheet yet: they have no queued write path, so applying one would go live immediately and could not be rolled back with the rest of this upload. Change it in the campaign instead.'
+        : `${entity} rows are validated and previewed, but applying them is not wired up yet`
+      rows.push({ ...base, label: v['Campaign ID'] ?? '', note })
       continue
     }
 

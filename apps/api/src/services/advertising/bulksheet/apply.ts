@@ -22,6 +22,7 @@ import type { PrismaClient } from '@prisma/client'
 import { parseMoney, parseVocabulary, isAdTargetEntity } from '@nexus/shared/ads-bulksheet'
 import {
   updateCampaignWithSync, updateAdGroupWithSync, updateAdTargetWithSync, updatePortfolioWithSync,
+  updateProductAdWithSync,
   type AdsActor,
 } from '../ads-mutation.service.js'
 import type { PreviewRow } from './preview.js'
@@ -157,6 +158,20 @@ export async function applyPlan(
           adGroupId: row.targetId, patch: patch as Parameters<typeof updateAdGroupWithSync>[0]['patch'], actor: opts.actor,
           reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId,
         })
+      } else if (row.entity === 'Product ad') {
+        // State-only, so it does not go through applyFields' patch shape —
+        // updateProductAdWithSync takes the status directly. ARCHIVE is the
+        // operation form of the same field.
+        const raw = row.status === 'ARCHIVE' ? 'archived' : nextOf(row, 'State')
+        const mapped = raw ? STATE_TO_DB[raw.trim().toLowerCase()] : undefined
+        if (!raw) { rec('SKIPPED', 'No writable field changed'); continue }
+        if (!mapped) { rec('FAILED', `State "${raw}" is not one we can write`); continue }
+        res = await updateProductAdWithSync({
+          productAdId: row.targetId, status: mapped, actor: opts.actor,
+          reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId,
+        })
+        // "no_changes" means the DB already held this state — a skip, not a failure.
+        if (res.error === 'no_changes') { rec('SKIPPED', 'Nothing to change'); continue }
       } else if (isAdTargetEntity(row.entity)) {
         // Keyword / Product targeting / the negative variants all live on AdTarget.
         const patch: Record<string, unknown> = {}
