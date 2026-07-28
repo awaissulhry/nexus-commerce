@@ -86,9 +86,18 @@ describe('comparison', () => {
     expect(diffFields({ dailyBudget: 20 }, { dailyBudget: '' }, ['dailyBudget'])).toEqual([])
   })
 
-  it('reports a value we do not hold but Amazon does', () => {
-    expect(diffFields({}, { portfolioId: '123' }, ['portfolioId'])).toEqual([
-      { field: 'portfolioId', ours: null, theirs: '123' },
+  it('SKIPS a field we have never held, rather than calling it an external edit', () => {
+    // Caught in production: the first live run flagged 135 campaigns as
+    // EXTERNAL_CHANGE on targetingType, which was just a newly-added column
+    // filling in. We cannot have drifted from a value we never observed, and a
+    // drift report that cries wolf on its first run is one nobody opens again.
+    expect(diffFields({}, { portfolioId: '123' }, ['portfolioId'])).toEqual([])
+    expect(diffFields({ targetingType: null }, { targetingType: 'MANUAL' }, ['targetingType'])).toEqual([])
+  })
+
+  it('still reports a real disagreement between two known values', () => {
+    expect(diffFields({ portfolioId: '111' }, { portfolioId: '222' }, ['portfolioId'])).toEqual([
+      { field: 'portfolioId', ours: '111', theirs: '222' },
     ])
   })
 })

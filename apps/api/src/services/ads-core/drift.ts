@@ -123,9 +123,19 @@ export interface FieldDrift {
 /**
  * Compare two field maps and return only genuine differences.
  *
+ * Two asymmetric skips, both learned the hard way:
+ *
  * A field Amazon did NOT report is skipped rather than treated as cleared — a
  * partial response must never look like somebody blanking a value, which is the
  * same trap the settings sync already guards against on the write side.
+ *
+ * A field WE do not hold is also skipped. "We have nothing, Amazon has
+ * something" is a data-completeness gap, not divergence — we cannot have drifted
+ * from a value we never observed. This one was caught in production: the first
+ * live run reported 135 campaigns as EXTERNAL_CHANGE on `targetingType`, which
+ * was simply the newly-added column filling in for the first time. Every one of
+ * those would have read as "somebody edited this in Seller Central", and a drift
+ * report that cries wolf on its first run is a drift report nobody opens again.
  */
 export function diffFields(
   ours: Record<string, unknown>,
@@ -138,6 +148,7 @@ export function diffFields(
     const t = normaliseForCompare(theirs[f])
     if (t == null) continue
     const o = normaliseForCompare(ours[f])
+    if (o == null) continue
     if (o !== t) out.push({ field: f, ours: o, theirs: t })
   }
   return out
