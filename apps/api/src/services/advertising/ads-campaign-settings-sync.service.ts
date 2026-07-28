@@ -12,6 +12,8 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { listCampaignsV3, type AdsRegion, type V3CampaignSettings } from './ads-api-client.js'
+import { pendingWriteFields } from './ads-mutation.service.js'
+import { holdBackPendingFields } from '../ads-core/drift.js'
 
 const STATE_MAP: Record<string, 'ENABLED' | 'PAUSED' | 'ARCHIVED'> = { enabled: 'ENABLED', paused: 'PAUSED', archived: 'ARCHIVED' }
 
@@ -83,6 +85,7 @@ async function recordCampaignDrift(
   },
   incoming: Record<string, unknown>,
   amazon: V3CampaignSettings,
+  pending: Set<string>,
 ): Promise<number> {
   const { diffFields, classifyDrift } = await import('../ads-core/drift.js')
   const ours: Record<string, unknown> = {
@@ -105,8 +108,9 @@ async function recordCampaignDrift(
   })
   if (!diffs.length) return 0
 
-  // A queued mutation for this field explains the difference before anything
-  // else can, so look before blaming a human.
+  // `pending` is computed by the caller, which also uses it to hold those
+  // fields back from the overwrite (AX-ZD.3) — one query, one answer, so the
+  // classification and the write decision can never disagree.
   //
   // AX-ZD.1 — this used to be a campaign-wide JSON-path scan on
   // OutboundSyncQueue (`payload.entityId == id`), counted once and then applied
@@ -115,14 +119,6 @@ async function recordCampaignDrift(
   // change classified a name edit made in Seller Central as WRITE_PENDING and
   // hid it. AdMutation carries one row per (entity, field), so the question is
   // now asked per field.
-  //
-  // Mutations enqueued before ZD.1 shipped have no typed row and will classify
-  // as an external edit until they drain. That is the conservative direction:
-  // it shows the operator a drift that turns out to be ours, rather than hiding
-  // one that is real.
-  const { pendingWriteFields } = await import('./ads-mutation.service.js')
-  const pending = await pendingWriteFields('CAMPAIGN', existing.id, CAMPAIGN_DRIFT_FIELDS)
-
   const now = new Date()
   for (const d of diffs) {
     const classification = classifyDrift({
@@ -192,11 +188,11 @@ export async function syncCampaignSettingsFromAmazon(
       if (!existing) continue
 
       const data: Record<string, unknown> = {}
+      const prevDynamic = (existing.dynamicBidding ?? {}) as Record<string, unknown>
       // dynamicBidding (strategy + placement bids) — merge so we don't drop keys
       // (e.g. our own maxBidChangePct guard) Amazon doesn't echo back.
       if (c.dynamicBidding && (c.dynamicBidding.strategy || c.dynamicBidding.placementBidding)) {
-        const prev = (existing.dynamicBidding ?? {}) as Record<string, unknown>
-        data.dynamicBidding = { ...prev, ...c.dynamicBidding }
+        data.dynamicBidding = { ...prevDynamic, ...c.dynamicBidding }
         if ((c.dynamicBidding.placementBidding?.length ?? 0) > 0) placementsFilled++
       }
       if (typeof c.budget?.budget === 'number') data.dailyBudget = c.budget.budget
@@ -215,14 +211,35 @@ export async function syncCampaignSettingsFromAmazon(
       //
       // Deliberately does NOT touch lastSyncStatus: that is delivery truth, and
       // a successful read must never mask a failed bid write.
+      // AX-ZD.3 — intended vs observed. This sync is a READ, and it overwrites
+      // the local row with Amazon's values. That is right for a field nobody is
+      // changing, and wrong for one with a write still in flight: the operator
+      // sets a budget, this poll lands inside the 5-minute grace window, and
+      // their change visibly reverts — then the write delivers and the next poll
+      // flips it back. A read must never clobber an intent that has not been
+      // delivered yet, so pending fields are dropped from the overwrite.
+      //
+      // The drift row is still recorded for them, classified WRITE_PENDING, so
+      // the disagreement stays visible rather than being silently skipped.
+      const pending = await pendingWriteFields('CAMPAIGN', existing.id, CAMPAIGN_DRIFT_FIELDS)
+
       // AX-ZD.4 — record what Amazon disagrees with BEFORE we overwrite it.
       // `data` holds only the fields Amazon actually reported, so a partial
       // response can never look like somebody blanking a value.
       try {
-        driftFound += await recordCampaignDrift(existing, data, c)
+        driftFound += await recordCampaignDrift(existing, data, c, pending)
       } catch (e) {
         // Drift bookkeeping must never break the sync it rides on.
         logger.warn('[settings-sync] drift record failed', { campaignId: c.campaignId, error: (e as Error).message.slice(0, 120) })
+      }
+
+      const held = holdBackPendingFields(data, pending, prevDynamic)
+      for (const k of Object.keys(data)) delete data[k]
+      Object.assign(data, held)
+      if (pending.size) {
+        logger.info('[settings-sync] held back fields with an undelivered write', {
+          campaignId: c.campaignId, fields: [...pending],
+        })
       }
 
       const changed = Object.keys(data).length > 0

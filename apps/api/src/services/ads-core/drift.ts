@@ -153,3 +153,42 @@ export function diffFields(
   }
   return out
 }
+
+/**
+ * AX-ZD.3 — intended vs observed: stop a READ from clobbering an undelivered write.
+ *
+ * The settings sync overwrites the local row with whatever Amazon currently
+ * reports. That is correct for a field nobody is changing, and wrong for one
+ * with a write still in flight: an operator sets a budget, the poll lands inside
+ * the five-minute grace window, and their change visibly reverts — then the
+ * write delivers and the next poll flips it back. Two reversals for one edit,
+ * and both look like the system losing their work.
+ *
+ * The local row holds OBSERVED state; the queued mutation holds INTENDED. The
+ * reconciler's job is to drive observed toward intended, so observed must not
+ * overwrite intended while intended is still on its way.
+ *
+ * `dynamicBidding` needs its own handling because `biddingStrategy` rides inside
+ * it as well as being a scalar column. Protecting only the column would let
+ * Amazon's value back in through the blob and undo the hold-back silently.
+ *
+ * Pure: no I/O. Returns a new object; the input is untouched.
+ */
+export function holdBackPendingFields(
+  incoming: Record<string, unknown>,
+  pending: ReadonlySet<string>,
+  previousDynamicBidding: Record<string, unknown> = {},
+): Record<string, unknown> {
+  if (!pending.size) return { ...incoming }
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(incoming)) {
+    if (!pending.has(k)) out[k] = v
+  }
+  if (pending.has('biddingStrategy') && out.dynamicBidding) {
+    out.dynamicBidding = {
+      ...(out.dynamicBidding as Record<string, unknown>),
+      strategy: previousDynamicBidding.strategy,
+    }
+  }
+  return out
+}

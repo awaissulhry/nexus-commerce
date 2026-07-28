@@ -9,8 +9,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   classifyDrift, describeDrift, isOurs, normaliseForCompare, diffFields,
-  WRITE_LAG_GRACE_MS,
-} from './drift.js'
+  WRITE_LAG_GRACE_MS, holdBackPendingFields } from './drift.js'
 
 const NOW = new Date('2026-07-28T12:00:00Z')
 const agoMs = (ms: number) => new Date(NOW.getTime() - ms)
@@ -99,5 +98,55 @@ describe('comparison', () => {
     expect(diffFields({ portfolioId: '111' }, { portfolioId: '222' }, ['portfolioId'])).toEqual([
       { field: 'portfolioId', ours: '111', theirs: '222' },
     ])
+  })
+})
+
+describe('AX-ZD.3 — a read must not clobber an undelivered write', () => {
+  it('passes everything through when nothing is pending', () => {
+    const incoming = { dailyBudget: 10, status: 'ENABLED' }
+    expect(holdBackPendingFields(incoming, new Set())).toEqual(incoming)
+  })
+
+  it('holds back only the pending field, not the whole update', () => {
+    // The scenario: operator sets budget 12, the poll lands inside the grace
+    // window and reports Amazon's old 10. Without this, their change reverts on
+    // screen and then flips back when the write lands.
+    const out = holdBackPendingFields(
+      { dailyBudget: 10, status: 'PAUSED', targetingType: 'MANUAL' },
+      new Set(['dailyBudget']),
+    )
+    expect(out).not.toHaveProperty('dailyBudget')
+    expect(out.status).toBe('PAUSED')       // no pending write — Amazon still wins
+    expect(out.targetingType).toBe('MANUAL')
+  })
+
+  it('does not mutate the caller’s object', () => {
+    const incoming = { dailyBudget: 10, status: 'PAUSED' }
+    holdBackPendingFields(incoming, new Set(['dailyBudget']))
+    expect(incoming.dailyBudget).toBe(10)
+  })
+
+  it('protects biddingStrategy inside dynamicBidding, not just the column', () => {
+    // biddingStrategy is both a scalar column and a key inside the blob.
+    // Holding back only the column would let Amazon's value return through the
+    // blob and undo the hold-back with nothing to show for it.
+    const out = holdBackPendingFields(
+      { biddingStrategy: 'MANUAL', dynamicBidding: { strategy: 'MANUAL', placementBidding: [{ p: 1 }] } },
+      new Set(['biddingStrategy']),
+      { strategy: 'AUTO_FOR_SALES' },
+    )
+    expect(out).not.toHaveProperty('biddingStrategy')
+    expect((out.dynamicBidding as Record<string, unknown>).strategy).toBe('AUTO_FOR_SALES')
+    // Placement bids are a different write path and must still come through.
+    expect((out.dynamicBidding as Record<string, unknown>).placementBidding).toEqual([{ p: 1 }])
+  })
+
+  it('leaves dynamicBidding alone when biddingStrategy is not pending', () => {
+    const out = holdBackPendingFields(
+      { dailyBudget: 9, dynamicBidding: { strategy: 'MANUAL' } },
+      new Set(['dailyBudget']),
+      { strategy: 'AUTO_FOR_SALES' },
+    )
+    expect((out.dynamicBidding as Record<string, unknown>).strategy).toBe('MANUAL')
   })
 })
