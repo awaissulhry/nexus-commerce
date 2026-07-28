@@ -39,6 +39,11 @@ import { mapSourceToBuckets } from './copyFromListing.pure'
 // so the pure cap semantics and the UI can never drift apart.
 const EBAY_MAX = EBAY_BUCKET_CAP
 const MIN_COLS = 6
+// Drawer width. Wider than the old flat 840px — the family header (sku + axis
+// picker + Copy from… + Discard/Save/Save & Publish) and the bucket grid both
+// want the room. Capped at 94vw so the backdrop stays clickable on a small
+// screen; the panel's own `max-width: 100%` is the final stop.
+const DRAWER_WIDTH = 'min(1100px, 94vw)'
 // Default-bucket key AND the '__shared__' wire value for "one shared gallery"
 // (activeAxis / imageAxisPreference) — intentionally the same sentinel.
 const SHARED = SHARED_GALLERY_AXIS
@@ -676,65 +681,90 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
     return (
       <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
 
-        {/* Section header */}
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
-          {collapsible && (
-            <button
-              type="button"
-              aria-label={collapsed ? `Expand ${sku}` : `Collapse ${sku}`}
-              onClick={() => setCollapsed(c => !c)}
-              className="flex-shrink-0 rounded p-0.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 dark:hover:text-slate-200 dark:hover:bg-slate-700 transition-colors"
-            >
-              {collapsed
-                ? <ChevronRight className="w-4 h-4" />
-                : <ChevronDown className="w-4 h-4" />}
-            </button>
-          )}
-          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex-shrink-0 min-w-0 truncate">{sku}</span>
-          {isDraft && (
-            <span
-              className="text-[10px] rounded-full px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium flex-shrink-0"
-              title="This family has no eBay listing yet. You can curate and Save its images, but they can't be published until the listing is created via the flat-file push."
-            >
-              Draft — not listed yet
-            </span>
-          )}
-          {hasDirty && !saving && (
-            <span className="text-[10px] rounded-full px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium flex-shrink-0">
-              unsaved
-            </span>
-          )}
-          {saving && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400 flex-shrink-0" />}
-          {/* EFX P5 — the picker shows whenever the family has ANY axis (the
-              old >1 gate hid it exactly when operators needed to see/override
-              the grouping) and always offers the explicit shared-gallery mode.
-              Single-valued axes stay selectable, annotated with their outcome. */}
-          {!loading && pickerAxes.length > 0 && (
-            <>
-              <Select
-                value={axis}
-                onChange={e => changeAxis(e.target.value)}
-                className="text-xs ml-1 flex-shrink-0"
-                aria-label="Axis eBay images vary by"
+        {/* Section header — two groups, never one flat row: an identity cluster
+            that may shrink/truncate, and an action group that never does. The
+            old single row made every item flex-shrink-0 (sku, chips, the help
+            line), so the only thing that could give was the axis Select; once
+            it bottomed out the surplus overflowed right and the card's
+            overflow-hidden CLIPPED the last button (Save & Publish). With the
+            cluster carrying flex-1 + min-w-0, the buttons are laid out first
+            and stay whole at any drawer/viewport width, SKU length or label
+            ("Publishing…" is wider than "Publish"). */}
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
+          <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
+            {collapsible && (
+              <button
+                type="button"
+                aria-label={collapsed ? `Expand ${sku}` : `Collapse ${sku}`}
+                onClick={() => setCollapsed(c => !c)}
+                className="flex-shrink-0 rounded p-0.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 dark:hover:text-slate-200 dark:hover:bg-slate-700 transition-colors"
               >
-                {/* EAC — ghost axes (Team Name / Athlete / Body Type) filtered
-                    out; single-value count now the resolved (clean) count. */}
-                {pickerAxes.map(a => (
-                  <option key={a} value={a}>
-                    {a}{(axisValueCount(a) ?? 2) <= 1 ? ' (1 value — publishes as shared gallery)' : ''}
-                  </option>
-                ))}
-                <option value={SHARED}>One shared gallery (no per-variant images)</option>
-              </Select>
+                {collapsed
+                  ? <ChevronRight className="w-4 h-4" />
+                  : <ChevronDown className="w-4 h-4" />}
+              </button>
+            )}
+            {/* Bounded so even a pathological SKU truncates with an ellipsis
+                instead of eating the row. */}
+            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex-shrink-0 max-w-[16rem] truncate" title={sku}>{sku}</span>
+            {isDraft && (
               <span
-                className="text-[10px] text-slate-400 flex-shrink-0"
-                title="eBay allows a listing's images to vary by exactly ONE aspect (any aspect — not just colour). Pick which one, or publish one shared gallery for the whole listing."
+                className="text-[10px] rounded-full px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium flex-shrink-0"
+                title="This family has no eBay listing yet. You can curate and Save its images, but they can't be published until the listing is created via the flat-file push."
               >
-                eBay allows product images to vary by ONE aspect only.
+                Draft — not listed yet
               </span>
-            </>
-          )}
-          <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+            )}
+            {hasDirty && !saving && (
+              <span className="text-[10px] rounded-full px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium flex-shrink-0">
+                unsaved
+              </span>
+            )}
+            {saving && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400 flex-shrink-0" />}
+            {/* EFX P5 — the picker shows whenever the family has ANY axis (the
+                old >1 gate hid it exactly when operators needed to see/override
+                the grouping) and always offers the explicit shared-gallery mode.
+                Single-valued axes stay selectable, annotated with their outcome. */}
+            {!loading && pickerAxes.length > 0 && (
+              <>
+                {/* Width-bounded: the class lands on the inner <select> (the DS
+                    primitive's own <span> is the flex item), so the min-w keeps
+                    it from collapsing into the empty box it used to become and
+                    the max-w keeps the longest option from bullying the row. */}
+                <Select
+                  value={axis}
+                  onChange={e => changeAxis(e.target.value)}
+                  className="text-xs ml-1 min-w-[8.5rem] max-w-[15rem]"
+                  aria-label="Axis eBay images vary by"
+                >
+                  {/* EAC — ghost axes (Team Name / Athlete / Body Type) filtered
+                      out; single-value count now the resolved (clean) count. */}
+                  {pickerAxes.map(a => (
+                    <option key={a} value={a}>
+                      {a}{(axisValueCount(a) ?? 2) <= 1 ? ' (1 value — publishes as shared gallery)' : ''}
+                    </option>
+                  ))}
+                  <option value={SHARED}>One shared gallery (no per-variant images)</option>
+                </Select>
+                {/* The row's designated shrinker — decorative copy, full text
+                    stays in the title tooltip. */}
+                <span
+                  className="text-[10px] text-slate-400 min-w-0 truncate"
+                  title="eBay allows a listing's images to vary by exactly ONE aspect (any aspect — not just colour). Pick which one, or publish one shared gallery for the whole listing."
+                >
+                  eBay allows product images to vary by ONE aspect only.
+                </span>
+              </>
+            )}
+          </div>
+          {/* Never shrinks, never clips. flex-wrap on the row + ml-auto drops
+              the whole group onto its own right-aligned line when the header
+              runs out of room; max-w-full then caps it at the row width so the
+              buttons wrap among THEMSELVES rather than overflowing (with
+              flex-shrink-0 alone the group keeps its max-content width and the
+              inner flex-wrap can never trigger). Measured clip-free from
+              1064px down to 320px. */}
+          <div className="ml-auto flex flex-wrap justify-end items-center gap-1.5 flex-shrink-0 max-w-full">
             {/* EB-IMG P2 — copy every saved bucket from another listing in
                 this sheet (near-identical products → start from a sibling's
                 curation, swap the odd image, Save). */}
@@ -1453,7 +1483,7 @@ export function EbayFlatFileImageDrawer({ open, onClose, marketplace, families: 
       subtitle={hasProducts
         ? `${families.length} product famil${families.length !== 1 ? 'ies' : 'y'}${addedFamilies.length > 0 ? ` (${addedFamilies.length} added)` : ''}`
         : undefined}
-      width={840}
+      width={DRAWER_WIDTH}
       footer={isMulti ? (
         <div className="flex justify-end gap-2 w-full">
           <Button size="sm" variant="secondary" onClick={saveAll} disabled={busyAll}>
