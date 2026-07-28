@@ -7,7 +7,7 @@
  * 36% underneath you is how a bid engine chases its own tail.
  */
 import { describe, it, expect } from 'vitest'
-import { vintageOf, isRuleSafe, attributionWindowDays, describeWindow, vintageBadge, VINTAGE_STATES, ruleWindowBounds } from './data-vintage.js'
+import { vintageOf, isRuleSafe, attributionWindowDays, describeWindow, vintageBadge, VINTAGE_STATES, ruleWindowBounds } from '@nexus/shared/data-vintage'
 
 const NOW = new Date('2026-07-28T12:00:00Z')
 const dAgo = (n: number) => new Date(Date.UTC(2026, 6, 28 - n))
@@ -189,5 +189,37 @@ describe('AX-ZD.5 ratchet — the evaluator must not read provisional data', () 
       .filter(({ l }) => /date:\s*\{\s*gte:\s*since\s*\}/.test(l))
     expect(unbounded.map((u) => u.i), 'add `lte: until` — these read provisional data').toEqual([])
     expect(src).toMatch(/ruleWindowBounds\(/)
+  })
+})
+
+describe('AX-ZD.5 — the summary an operator actually reads', () => {
+  const now = new Date('2026-07-28T12:00:00Z')
+  const daysAgo = (n: number): Date => {
+    const d = new Date(now); d.setUTCDate(d.getUTCDate() - n); return d
+  }
+
+  it('a one-day window does not list the states it does not have', () => {
+    // "1 of 1 day are still moving (1 provisional, 0 stabilising, 0 settling)"
+    // is noise, and noise is what makes an operator stop reading the warning
+    // that matters.
+    const s = describeWindow(now, now, now).summary
+    expect(s).toBe('This day is still provisional and will change. Amazon restates for up to 60 days, so this window will not match a copy taken later.')
+    expect(s).not.toMatch(/0 stabilising|0 settling|1 of 1/)
+  })
+
+  it('a fully-unsettled window says "all", not "N of N"', () => {
+    const s = describeWindow(daysAgo(6), now, now).summary
+    expect(s).toMatch(/^All 7 days are still moving \(2 provisional, 2 stabilising, 3 settling\)\./)
+  })
+
+  it('a partly-settled window keeps the ratio, and omits absent states', () => {
+    const s = describeWindow(daysAgo(29), now, now).summary
+    expect(s).toMatch(/^15 of 30 days are still moving \(2 provisional, 2 stabilising, 11 settling\)\./)
+  })
+
+  it('a fully-settled window says so plainly and never mentions restatement', () => {
+    const s = describeWindow(daysAgo(40), daysAgo(20), now).summary
+    expect(s).toMatch(/settled — safe to optimise against/)
+    expect(s).not.toMatch(/still moving|restates/)
   })
 })

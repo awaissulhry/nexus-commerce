@@ -21,6 +21,10 @@
     "./ads-bulksheet": {
       "types": "./dist/ads-bulksheet.d.ts",
       "default": "./dist/ads-bulksheet.js"
+    },
+    "./data-vintage": {
+      "types": "./dist/data-vintage.d.ts",
+      "default": "./dist/data-vintage.js"
     }
   },
   "scripts": {

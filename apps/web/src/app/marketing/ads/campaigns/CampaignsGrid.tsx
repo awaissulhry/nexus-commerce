@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Link from 'next/link'
 import { Settings2, Download, Wand2, Plus, X, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, Lightbulb, ExternalLink, ListChecks, Pencil, Shuffle } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { describeWindow } from '@nexus/shared/data-vintage'
 import { getBackendUrl } from '@/lib/backend-url'
 import { FilterDropdown, H10Select, HoverCard } from './FilterDropdown'
 import { AdManagerGraph } from './AdManagerGraph'
@@ -1234,6 +1235,36 @@ export function CampaignsGrid() {
     return max ? new Date(max).toLocaleString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
   })()
 
+  // AX-ZD.5 — say out loud that these numbers are not finished yet.
+  //
+  // Amazon keeps moving them long after the day they describe: clicks and cost
+  // settle in 48-72h, conversions attribute back to the CLICK date for up to 14
+  // days, and restatements arrive for up to 60. So every ACOS and ROAS on this
+  // page for a recent day WILL change, and an operator who screenshots today and
+  // compares next week is right to think something is wrong — the numbers did
+  // change, silently.
+  //
+  // The whole cost of fixing that is being willing to say so. Computed from the
+  // selected range with the same pure module the API uses, so the page and any
+  // rule can never disagree about what is settled.
+  // Keyed on `dateRange`, NOT `rangePreset`. The header's picker writes
+  // dateRange and that is what drives `load()`; rangePreset is legacy and now
+  // only feeds AdManagerGraph. Reading the preset here would have described a
+  // different window than the one the numbers below actually cover — silently,
+  // and only once an operator touched the date picker.
+  //
+  // The dates are pinned to UTC midnight of their LOCAL calendar day first.
+  // dateRange is built with setHours(0,0,0,0) — local midnight — while
+  // describeWindow compares UTC calendar days, so at UTC+2 the end date
+  // 2026-07-28 is really 2026-07-27T22:00Z and the window quietly stops a day
+  // short of what the header says. That drops today: the single most
+  // provisional day in the range, and the one the warning most needs to count.
+  const vintage = useMemo(() => {
+    const asUtcDay = (d: Date): Date =>
+      new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+    return describeWindow(asUtcDay(dateRange.start), asUtcDay(dateRange.end))
+  }, [dateRange])
+
   // AX2.1 — the account-level truth, stated once at the top. Without this an
   // operator in sandbox sees every edit "save" and none of them reach Amazon.
   const blockedMarkets = (delivery?.connections ?? []).filter((c) => !c.writable).map((c) => c.marketplace)
@@ -1252,6 +1283,15 @@ export function CampaignsGrid() {
           <b>{blockedMarkets.length} marketplace(s) cannot receive writes:</b> {blockedMarkets.join(', ')}.
           Changes to campaigns in those markets stay local.
           {neverWritten.length > 0 && <> {neverWritten.join(', ')} {neverWritten.length === 1 ? 'is' : 'are'} writable but {neverWritten.length === 1 ? 'has' : 'have'} never been written to.</>}
+        </div>
+      )}
+      {!vintage.ruleSafe && (
+        <div
+          className="h10-pill warn"
+          style={{ display: 'block', margin: '0 0 10px', padding: '8px 12px', lineHeight: 1.45 }}
+          role="status"
+        >
+          <b>These figures are still settling.</b> {vintage.summary}
         </div>
       )}
       <AdsPageHeader

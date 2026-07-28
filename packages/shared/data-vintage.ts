@@ -197,11 +197,24 @@ export function describeWindow(from: Date, to: Date, now: Date = new Date()): Wi
   const unsettled = breakdown.provisional + breakdown.stabilising + breakdown.settling
   const iso = (d: Date) => d.toISOString().slice(0, 10)
 
+  // Only name the states actually present. "(1 provisional, 0 stabilising, 0
+  // settling)" on a one-day window is noise, and noise is what makes an
+  // operator stop reading the warning that matters.
+  const parts = (['provisional', 'stabilising', 'settling'] as const)
+    .filter((s) => breakdown[s] > 0)
+    .map((s) => `${breakdown[s]} ${s}`)
+    .join(', ')
+  const restate = 'Amazon restates for up to 60 days, so this window will not match a copy taken later.'
+
   const summary = days === 0
     ? 'Empty date range.'
     : unsettled === 0
       ? `All ${days} day${days === 1 ? '' : 's'} settled — safe to optimise against.`
-      : `${unsettled} of ${days} day${days === 1 ? '' : 's'} are still moving (${breakdown.provisional} provisional, ${breakdown.stabilising} stabilising, ${breakdown.settling} settling). Amazon restates for up to 60 days, so this window will not match a copy taken later.`
+      : days === 1
+        ? `This day is still ${worst} and will change. ${restate}`
+        : unsettled === days
+          ? `All ${days} days are still moving (${parts}). ${restate}`
+          : `${unsettled} of ${days} days are still moving (${parts}). ${restate}`
 
   return { from: iso(from), to: iso(to), days, breakdown, worst, ruleSafe: unsettled === 0, summary }
 }
