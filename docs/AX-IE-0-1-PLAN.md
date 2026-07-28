@@ -16,7 +16,8 @@ Evidence harnesses (read-only, untracked): `apps/api/scripts/_axie1-model-census
 | **AX-IE.2** schema + adapter | ✅ shipped 2026-07-28 — one schema in `@nexus/shared/ads-bulksheet` drives export, Dictionary and validation on both server and browser; ExcelJS behind `SpreadsheetWriter`/`SpreadsheetReader` |
 | **AX-IE.3** exporter rewrite | ◐ **mostly done** — all 9 SP entity types, Portfolios, README, `_meta`, `_row_key`, `_baseline`, and the SP sheet now matches Amazon's **real 53-column layout column-for-column** after the owner supplied two genuine bulksheets (see `docs/AMAZON-BULKSHEET-SCHEMA.md`). Remaining: emit the **SB / SB-multi / SD sheets** — no longer blocked, their column sets are now known |
 | **AX-IE.4** importer | ✅ shipped 2026-07-28 — `POST /advertising/bulk/upload` takes a real file, streams it, validates every row, stages into `ImportJob`/`ImportJobRow`, writes nothing. 202 + poll |
-| AX-IE.5+ | not started — next is the dry-run preview |
+| **AX-IE.5** dry-run preview | ✅ shipped 2026-07-28 — field-level diff, blast radius, per-field conflict detection, `planToken` handshake. `POST /advertising/bulk/import/:id/preview` |
+| AX-IE.6+ | not started — next is apply + rollback |
 
 ### Measured, and what it changed
 
@@ -29,6 +30,18 @@ Evidence harnesses (read-only, untracked): `apps/api/scripts/_axie1-model-census
 
 **Conflict #12 update:** the spec's `entries: 'emit'` recommendation is wrong for this
 usage — entries that nothing consumes only add a stall path. Removed.
+
+**AX-IE.5 — what the first run taught.** The `_baseline` design was wrong twice, and
+both only showed up end to end:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| 57 of 57 rows CONFLICT | the hash covered every editable column, including `Operation` — which the operator fills in to request a change, so each row conflicted with itself | baseline is per-ENTITY (`BASELINE_FIELDS`), only fields that entity owns |
+| 5 campaigns still conflict, budget delta reads 0 | exporter hashed raw DB values (`100`, `LEGACY_FOR_SALES`), preview hashed what it read back (`"100.00"`, `"Dynamic bids – down only"`) | both normalise through the schema inside `computeBaseline` |
+| an unrelated field's drift blocked 5 valid edits | row-level conflict | baseline stored **per field**; a row conflicts only when drift collides with what is being edited, otherwise it is a note |
+
+The third was found because the settings-sync cron genuinely moved `Bidding strategy`
+between an export and its preview — real drift, correctly detected, wrong response.
 
 The rest of this document is the original .0/.1 plan, kept as the evidence record,
 with corrections marked inline where implementation proved something different.
