@@ -71,6 +71,31 @@ This is the highest-value work in the whole plan, because the code exists and do
 
 **Rollback expiry is silent.** `rollback.service.ts:181` filters to a 24h window; the History "Undo" button returns `reversed: 0` with no explanation (`BulkClient.tsx:220`). Surface the window and disable the button past it.
 
+## Phase 2b — build the zero-drift spine that was gated
+
+`docs/ads-amazon/` records AX-ZD.1 and ZD.2 as *gated*. In practice they do not exist, and without them "no inconsistencies" is not achievable — the system cannot tell a Seller Central edit from a write that hasn't landed. This is the core of the real-time requirement and it is currently missing.
+
+**AX-ZD.2 — subscribe the change datasets.** `AMS_DATASETS` is the six performance datasets only (`ads-marketing-stream.service.ts:33-37`), and the header at `:30-32` states budget-usage and the entity-change streams are intentionally excluded. Add:
+
+- **`campaigns`, `adgroups`, `ads`, `targets`** — near-real-time change events on state / budget / bid / name. GA since 2025-12-01 and schema-aligned with Amazon's unified Campaign Management API. **This is the only push signal that someone edited in Seller Central.**
+- **`budget-usage`** — event-driven at every 5% consumption increment. Derive exhaustion as `usage ≥ 100%`, warn at ≥95%. It is a percentage stream, not an out-of-budget boolean, so you cannot detect the exact instant — only the crossing of the last bucket.
+- `sb-traffic`, `sb-conversion`, `sd-traffic`, `sd-conversion` for SB/SD parity.
+
+`ams-sqs-poll.job.ts:35-43` currently hands every record to `ingestMarketingStream` with no routing beyond a `SKIP` for anything lacking `traffic`/`conversion` in the id. Route by dataset family: performance → metrics ingest, change → drift/observed-state update, budget → pacing.
+
+**Be honest in the UI about what is actually real-time.** The `*-traffic` and `*-conversion` datasets are hourly rollups delivered 1–3h late — up to ~4h behind. Only `budget-usage` and the four change datasets are genuinely event-driven. Label them differently; do not market hourly batch as real-time.
+
+**AX-ZD.1 — the typed mutation queue.** Ad writes ride `OutboundSyncQueue`, a product/listing model with `productId`/`channelListingId`/`externalListingId` and no campaign, ad-group or target foreign key. Consequences today: `/campaigns/:id/pending-writes` reconstructs state by scanning a JSON blob; the drift check's pending-write lookup is a **campaign-wide** JSON-path scan (`ads-campaign-settings-sync.service.ts:110-124`) so **one queued mutation classifies every drifting field on that campaign as `WRITE_PENDING`**; and writes cannot be serialised per entity, which is what HTTP 423 exists to punish.
+
+Add `AdMutation` — `entityType`, `entityId`, `externalEntityId`, `profileId`, `marketplace`, `field`, `intendedValue`, `previousValue`, `state`, `attempts`, `lastError`, `changeSetId`, `importJobId?`, `ruleId?`, `actor`, `idempotencyKey`, `holdUntil`. Keep the existing grace-period, dead-lettering and `ads-write-gate` behaviour exactly — that part is already right.
+
+**AX-ZD.3 — the three-state model.** `AdDrift` has two value columns, `ourValue`/`amazonValue` (`schema.prisma:3362-3363`). Add the third: **intended** (what an operator or rule asked for), **observed** (what Amazon last told us), **reported** (what reporting attributes, restated for up to 60 days). Drift is `intended ≠ observed`; the reconciler's only job is to drive observed toward intended, or surface it when the change came from Amazon's side.
+
+**Two drift bugs to fix while you are in there:**
+
+- **Drift only ever covers CAMPAIGN.** `AdDrift.entityType` documents `CAMPAIGN | AD_GROUP | AD_TARGET` (`schema.prisma:3355`) but only `'CAMPAIGN'` is ever written (`ads-campaign-settings-sync.service.ts:100,128,131`). Bids and ad-group state — the things that actually move spend — are not drift-checked at all.
+- **`targetingType` drift can never fire.** It is in `CAMPAIGN_DRIFT_FIELDS` (`:66`) but absent from both the `ours` map (`:88-93`) and the `select` (`:177-181`), so `diffFields` skips it permanently (`drift.ts:150-151`). Dead field, silently.
+
 ## Phase 3 — unify the two channels
 
 The programme has built two of everything: two rules engines, two rollback implementations, two drift detectors, two API clients, two write gates, two report pipelines, two automation-state tables, two bulk paths, and six parallel web route groups. `ads-core/` was the intended seam — of its 14 modules only **two** (`date-range`, `campaign-status`) are genuinely bi-channel. Seven are Amazon-only, four eBay-only, one is a contract only eBay implements.
@@ -156,6 +181,38 @@ Add the invariant test from Phase 6 so a declared-but-unmapped entity can never 
 - **Progress, resumability, cancellation.** `validateBulksheetStreaming` accepts `onProgress` (`import-validate.ts:315`) and the route never passes it; background work is a bare `void (async () => …)` (`:4530`). Move to BullMQ as the code itself says was deferred (`:4527-4528`).
 - **Sheet protection, named ranges, conditional formatting** — none implemented, and the README instructs operators about protection that is never applied (`build-workbook.ts:293`).
 
+### 4c. eBay parity — the entity and economics gaps
+
+The eBay console is strong but has holes that make routine operations impossible.
+
+**Entity lifecycle — currently create-only in three places:**
+
+| Missing | Impact |
+|---|---|
+| Negative keyword **update / delete / re-scope** | You can add a negative from a search term (`SearchTermsTab.tsx:57`) and can never remove it. A mistyped negative is permanent. |
+| Ad group **update / delete** | No rename, no `defaultBid` change, no status change |
+| Keyword **delete** | No `bulk_delete_keyword` path |
+| **Offsite campaign creation** | Honest explainer stub at `campaigns/new/offsite/page.tsx:2-4`; sync, reporting and lifecycle already work, only create is absent |
+
+(Promoted Stores is correctly out of scope — it is not in the Sell Marketing API contract, which is `ON_SITE`/`OFF_SITE` only. Leave it.)
+
+**No `add_negative_keyword` automation action.** `ebay-ads-automation.service.ts:1052` lists the CPC actions as `pause_keyword, bid_down_keyword, alert`. So the search-query → harvest → negate loop — the single highest-value automation on any CPC channel, and the only route to search-term data on eBay since CPS exposes none — is **manual only**. Add the action, and pair it with the negative reconciliation the earlier strategy work called for: every EXACT term becomes an exact negative in the PHRASE and BROAD groups, every PHRASE term a phrase negative in BROAD. Without that cascade the same query enters your own second-price auction three times and **you set your own clearing price**.
+
+**Attribution economics are labelled but not modelled.** The 30-day any-buyer window exists only as a display string (`ebay-ads.routes.ts:148`; `_lib/banners.tsx:40`). There is no `armedUntil` column, computation or job anywhere. And "the fee is charged at the rate in effect at time of **sale**, not at click" — eBay's actual documented mechanic — appears only in `docs/ads-ebay/E0-FINDINGS.md:38`.
+
+The consequence is a live correctness bug: `estimateImpact` (`ebay-ads-automation.service.ts:130-157`) assumes fees scale linearly and instantly with the rate. Under rate-at-sale, **raising a rate retroactively re-prices every click already banked in the trailing 30 days**, and lowering it discounts them. The function states its assumption honestly, which is good, but every impact estimate shown to an operator is wrong in a direction that under-states the cost of a rate increase.
+
+Minimum viable fix: add `armedUntil` per ad, roll it up, and make `estimateImpact` account for banked in-window inventory. This also unlocks the rate-scheduling work from `obsidian-vault/28` §4.1 (A1/A2) if you ever want it — but correctness first.
+
+**Marketplace correctness beyond the GB mapping in D3:**
+
+- Report tasks send only `marketplaceIds[0]` (`ebay-ads-api.service.ts:254`) while ingest attributes every row to `task.marketplaces[0] ?? 'EBAY_IT'` (`ebay-ads-reports.service.ts:419`) — a multi-marketplace campaign set mis-partitions its own facts.
+- Currency is hardcoded `'EUR'` across routes, ingest and ceilings (`ebay-ads.routes.ts:131,161`; `ebay-ads-reports.service.ts:490`) despite the schema carrying `budgetCurrency`. GB/GBP would be silently wrong.
+- Listing discovery hardcodes `siteId = '101'` (eBay Italy) at `ebay-listing-index.service.ts:49`, and new index rows default `marketplace = 'IT'` whenever the `GetItem` detail budget is exhausted (`:194`).
+- Entity sync defaults `marketplace = 'EBAY_IT'` when eBay omits `marketplaceId` (`ebay-ads-entity-sync.service.ts:59,266`).
+
+You asked for EU-wide from the start. Today it is Italy-real, DE/FR/ES structural, GB a trap.
+
 ## Phase 5 — the enterprise envelope
 
 From the benchmark: across six enterprise ad suites, **nobody** has per-user spend ceilings, blast-radius caps, rule dry-run against history, change-set revert, rule-version attribution, retailer-autonomous change detection, vintage-aware metric rendering, a sandbox, canary rollout, fiscal-calendar budgets, a published SLA, correct non-CPC modelling, audit export, or a structure linter. We already hold working fragments of nine of those.
@@ -170,6 +227,7 @@ Build, in this order:
 6. **Provenance on every setting** — `source: manual | inherited | rule:<id> | agent:<id> | import:<run>` plus actor and timestamp. Prerequisite for readiness, approvals, undo and AI trust alike.
 7. **Channel-readiness scoring** with blocking vs warning tiers, made the **publish gate rather than a report**. Blocking = the channel will reject; warning = will run but underperform.
 8. **Centralised channel-feedback inbox with triage state** — sync and async responses, linked to entity + field, 30-day history, snooze 24h/7d/14d/30d, blacklist, purge, 0–1000 severity. Port Productsup's design almost verbatim; the triage state is what keeps it usable past week three.
+9. **Scheduled / recurring imports** — poll an S3 drop, SFTP path or a Google Sheet as a nightly source of truth for bids, budgets and negatives. Scheduled *exports* exist across the market; **nobody polls an inbound source**, despite that being how large brands actually govern spend. `ScheduledImport` and `ScheduledExport` models already exist in the schema and `scheduled-actions.job.ts` already runs — this is wiring, not new infrastructure. It is also the concrete answer to "it must keep working end to end on its own."
 
 ## Phase 6 — tests
 
@@ -193,6 +251,37 @@ The EA spec proposed `EbayAdPool` to solve four real failure modes: self-competi
 But the phenomenon is real — `SharedListingMembership` (`ebay-listing-index.service.ts:290-294`) is the actual shared-SKU mechanism, and the products rollup explicitly ignores it. Meanwhile the builder's conflict check filters `fundingModel: 'COST_PER_SALE'` only (`ebay-ads-builder.service.ts:62`), so **a listing in both a CPS and a CPC campaign is never flagged** — precisely the double-fee case eBay documents.
 
 So: propose a construction path over `SharedListingMembership` instead of `ProductVariation`, scoped to the two invariants with the clearest payoff — **I3** (never both CPS and CPC on one listing) and **I6** (pool-scoped inventory throttling). If you conclude it is still not viable, say so with evidence and propose the narrower alternative. Do not leave it unaddressed a third time.
+
+## Coverage map — every requirement, and where it is handled
+
+Use this to check nothing has been dropped. If you finish a phase and an item here is still open, say so rather than closing the phase.
+
+| Requirement | Where |
+|---|---|
+| Import/export works end to end, both directions | Phase 4a + 4b |
+| **Product-level rows (SKU/ASIN) importable, not just exportable** | Phase 4a |
+| Placement modifiers importable | Phase 4a |
+| Portfolios round-trip | Phase 4a + 4b |
+| SB and SD, not just SP | Phase 4b |
+| Enterprise workbook — dropdowns, headers, formats, organisation | D5 + Phase 4b (most of it already built; `Lists`/named ranges, protection and conditional formatting are what remain) |
+| Excel **and** Numbers open it cleanly | Phase 6 fixture |
+| Italian decimals and `;` CSV delimiter | Phase 4b (parser already correct; the CSV *path* is missing) |
+| Real-time sync, no inconsistencies | **Phase 2b** — this is the load-bearing one |
+| Distinguish Seller Central edits from write lag | Phase 2b (change datasets + three-state) |
+| Drift on bids and ad groups, not just campaigns | Phase 2b |
+| Nothing silently out of sync | Phase 2 (vintage enforcement) + 2b |
+| Runs unattended, end to end | Phase 2 (quota, retries, 423) + Phase 5 item 9 |
+| Scale to thousands of SKUs with real control | Phase 4b (streaming, unbounded queries, async job) + Phase 5 items 3–4 |
+| Bulk actions at scale | Phase 4a/4b + predicate selection (already noted in the review) |
+| eBay EU-wide, all five sites | D3 + Phase 4c marketplace items |
+| eBay shared-inventory pool / self-competition | The pool section above |
+| eBay attribution window and rate-at-sale economics | Phase 4c |
+| Search-term harvest → negative loop | Phase 4c |
+| Amazon + eBay as one platform, not two | Phase 3 |
+| Enterprise bar vs Rithum / Pacvue / Skai | Phase 5 |
+| Extend existing files, never create parallels | Rule zero |
+
+Three things I am **deliberately not** asking for, so you don't add them speculatively: Promoted Stores (no API contract), the `/adsApi/v1` migration (worth planning, not worth doing mid-programme), and Italian-language error text (an existing house rule at `annotate.ts:15-17`).
 
 ## How to proceed
 
