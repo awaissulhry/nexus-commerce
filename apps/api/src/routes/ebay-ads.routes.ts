@@ -21,6 +21,7 @@ import { BUILDER_TEMPLATES, buildListingPlan, mineKeywordSeeds, suggestBudgetLoc
 import { getActiveEbayAdsAuth, suggestMaxCpcApi, suggestKeywordsApi, suggestBidsApi, suggestBudgetApi, fetchAdvertisingEligibility, EbayAdsQuotaError } from '../services/marketing/ebay-ads-api.service.js'
 import { EbayApiError } from '../services/ads-core/ebay-error.js'
 import { logger } from '../utils/logger.js'
+import { EBAY_MANAGED_STATUSES } from '../services/ads-core/campaign-status.js'
 
 const SHORT_BY_MKT: Record<string, string> = { EBAY_IT: 'IT', EBAY_DE: 'DE', EBAY_FR: 'FR', EBAY_ES: 'ES', EBAY_GB: 'UK' }
 
@@ -125,7 +126,7 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       prisma.ebayListingEconomics.groupBy({ by: ['dataStatus'], _count: { _all: true } }),
       freshness(),
       prisma.ebayListingIndex.count({ where: { endedAt: null } }),
-      prisma.ebayAd.findMany({ where: { listingId: { not: null }, status: { notIn: ['STALE'] }, campaign: { fundingModel: 'COST_PER_SALE', status: { in: ['RUNNING', 'PAUSED'] } } }, select: { listingId: true }, distinct: ['listingId'] }),
+      prisma.ebayAd.findMany({ where: { listingId: { not: null }, status: { notIn: ['STALE'] }, campaign: { fundingModel: 'COST_PER_SALE', status: { in: [...EBAY_MANAGED_STATUSES] } } }, select: { listingId: true }, distinct: ['listingId'] }),
     ])
     const current = derive(toSums(cur))
     const prior = derive(toSums(prev))
@@ -438,7 +439,7 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       // ER3.4 — promoted-state: which active campaigns carry each listing (+
       // eBay's OOS auto-hide flag at the ad level)
       prisma.ebayAd.findMany({
-        where: { listingId: { not: null }, status: { notIn: ['STALE'] }, campaign: { status: { in: ['RUNNING', 'PAUSED'] } } },
+        where: { listingId: { not: null }, status: { notIn: ['STALE'] }, campaign: { status: { in: [...EBAY_MANAGED_STATUSES] } } },
         select: { listingId: true, hiddenReason: true, campaign: { select: { id: true, name: true, fundingModel: true } } },
       }),
     ])
@@ -1049,7 +1050,7 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     const moves = b.items.filter((i) => i.resolution === 'move')
     const moveResults: Array<{ listingId: string; ok: boolean; error?: string | null }> = []
     for (const m of moves) {
-      const old = await prisma.ebayAd.findFirst({ where: { listingId: m.listingId, status: { notIn: ['STALE'] }, campaignId: { not: created.campaignId }, campaign: { fundingModel: 'COST_PER_SALE', status: { in: ['RUNNING', 'PAUSED'] } } }, select: { campaignId: true } })
+      const old = await prisma.ebayAd.findFirst({ where: { listingId: m.listingId, status: { notIn: ['STALE'] }, campaignId: { not: created.campaignId }, campaign: { fundingModel: 'COST_PER_SALE', status: { in: [...EBAY_MANAGED_STATUSES] } } }, select: { campaignId: true } })
       if (!old) { moveResults.push({ listingId: m.listingId, ok: true }); continue }
       try {
         const r = await writesSvc.removeAds(ctx, old.campaignId, [m.listingId])

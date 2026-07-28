@@ -21,6 +21,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import * as writes from './ebay-ads-write.service.js'
+import { EBAY_MANAGED_STATUSES } from '../ads-core/campaign-status.js'
 
 const AUTOMATION_ACTOR = 'automation:ebay-ads'
 
@@ -274,7 +275,7 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
       where: {
         listingId: { not: null },
         status: { in: action.type === 'reactivate_ad' ? ['STALE'] : ['ACTIVE'] },
-        campaign: { fundingModel: 'COST_PER_SALE', status: 'RUNNING', ...(rule.marketplace ? { marketplace: rule.marketplace } : {}), ...campaignScope, ...POLICY_ALLOWS },
+        campaign: { fundingModel: 'COST_PER_SALE', status: { in: [...EBAY_MANAGED_STATUSES] }, ...(rule.marketplace ? { marketplace: rule.marketplace } : {}), ...campaignScope, ...POLICY_ALLOWS },
       },
       include: { campaign: { select: { id: true, externalCampaignId: true, name: true, marketplace: true, bidPercentage: true } } },
     })
@@ -361,7 +362,7 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
     }
   } else if (trigger.scope === 'CPC_KEYWORD') {
     const keywords = await prisma.ebayKeyword.findMany({
-      where: { status: 'ACTIVE', campaign: { fundingModel: 'COST_PER_CLICK', status: 'RUNNING', ...(rule.marketplace ? { marketplace: rule.marketplace } : {}), ...campaignScope, ...POLICY_ALLOWS } },
+      where: { status: 'ACTIVE', campaign: { fundingModel: 'COST_PER_CLICK', status: { in: [...EBAY_MANAGED_STATUSES] }, ...(rule.marketplace ? { marketplace: rule.marketplace } : {}), ...campaignScope, ...POLICY_ALLOWS } },
       include: { campaign: { select: { id: true, externalCampaignId: true, name: true, marketplace: true } } },
     })
     const kwPolicies = await policiesFor(keywords.map((k) => k.campaignId))
@@ -691,7 +692,7 @@ export async function detectAnomalies(): Promise<Anomaly[]> {
   // E7 #12 Floor Watch: DYNAMIC campaigns whose applied ad rates exceed the
   // configured cap (eBay's stealth-floor precedent, Nov 2024).
   try {
-    const dynamics = await prisma.ebayCampaign.findMany({ where: { adRateStrategy: 'DYNAMIC', status: 'RUNNING' }, include: { ads: { where: { status: { notIn: ['STALE'] } }, select: { listingId: true, bidPercentage: true } } } })
+    const dynamics = await prisma.ebayCampaign.findMany({ where: { adRateStrategy: 'DYNAMIC', status: { in: [...EBAY_MANAGED_STATUSES] } }, include: { ads: { where: { status: { notIn: ['STALE'] } }, select: { listingId: true, bidPercentage: true } } } })
     for (const d of dynamics) {
       const cap = Number(((d.dynamicAdRatePrefs as Array<{ adRateCapPercent?: string }> | null)?.[0]?.adRateCapPercent) ?? NaN)
       if (!Number.isFinite(cap)) continue
@@ -734,7 +735,7 @@ export async function detectDrift(campaignId?: string): Promise<DriftRow[]> {
   const camps = await prisma.ebayCampaign.findMany({
     where: {
       ...(campaignId ? { id: campaignId } : {}),
-      status: { in: ['RUNNING', 'PAUSED'] },
+      status: { in: [...EBAY_MANAGED_STATUSES] },
       NOT: { externalCampaignId: { startsWith: 'sandbox-' } },
     },
     include: { ads: { where: { status: { notIn: ['STALE'] } }, select: { listingId: true, bidPercentage: true } } },
@@ -824,7 +825,7 @@ export async function repairDrift(actorUserId: string | null, req: { campaignId:
 export async function runCoverageGuard(): Promise<{ unpromoted: number; proposal: boolean }> {
   const live = await prisma.ebayListingIndex.findMany({ where: { endedAt: null }, select: { itemId: true, marketplace: true } })
   const promoted = new Set((await prisma.ebayAd.findMany({
-    where: { listingId: { not: null }, status: { notIn: ['STALE'] }, campaign: { fundingModel: 'COST_PER_SALE', status: { in: ['RUNNING', 'PAUSED'] } } },
+    where: { listingId: { not: null }, status: { notIn: ['STALE'] }, campaign: { fundingModel: 'COST_PER_SALE', status: { in: [...EBAY_MANAGED_STATUSES] } } },
     select: { listingId: true },
   })).map((a) => a.listingId!))
   const unpromoted = live.filter((l) => !promoted.has(l.itemId))
@@ -835,7 +836,7 @@ export async function runCoverageGuard(): Promise<{ unpromoted: number; proposal
   }
   const catchAll = await prisma.ebayCampaign.findFirst({
     // ER1 — never propose enrolling into a Protected / posture-OFF campaign
-    where: { nexusManaged: true, fundingModel: 'COST_PER_SALE', status: 'RUNNING', name: { startsWith: 'catch_all-' }, ...POLICY_ALLOWS },
+    where: { nexusManaged: true, fundingModel: 'COST_PER_SALE', status: { in: [...EBAY_MANAGED_STATUSES] }, name: { startsWith: 'catch_all-' }, ...POLICY_ALLOWS },
     orderBy: { createdAt: 'desc' },
   })
   await prisma.ebayAdsProposal.upsert({
@@ -872,7 +873,7 @@ export async function runCoverageGuard(): Promise<{ unpromoted: number; proposal
 export async function evaluateRateDiscovery(): Promise<{ plans: number; proposed: number; completed: number }> {
   const report = { plans: 0, proposed: 0, completed: 0 }
   const plans = await prisma.ebayRateDiscoveryPlan.findMany({
-    where: { status: 'ACTIVE', campaign: { status: 'RUNNING', ...POLICY_ALLOWS } },
+    where: { status: 'ACTIVE', campaign: { status: { in: [...EBAY_MANAGED_STATUSES] }, ...POLICY_ALLOWS } },
     include: { campaign: { select: { id: true, externalCampaignId: true, name: true, marketplace: true } } },
   })
   const ctx = { actorUserId: AUTOMATION_ACTOR }

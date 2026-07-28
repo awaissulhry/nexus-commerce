@@ -13,6 +13,19 @@ export const EBAY_STATUS_PILL: Record<string, { label: string; cls: string }> = 
   SUSPENDED: { label: 'Suspended', cls: 'warn' },
   STALE: { label: 'Stale', cls: 'warn' },
   SANDBOX: { label: 'Sandbox', cls: 'arch' },
+  // D1 — eBay paused this itself when seller standing dropped (error 35077).
+  // Distinct from our own PAUSED: nothing we do resumes it, so it reads as a
+  // blocking state rather than an operator choice.
+  SYSTEM_PAUSED: { label: 'Paused by eBay', cls: 'bad' },
+}
+
+/** Why a status is what it is, when the reason is not the operator's doing. */
+export const EBAY_STATUS_HINT: Record<string, string> = {
+  SYSTEM_PAUSED:
+    'eBay paused this campaign — not Nexus. It happens when seller standing falls below Above Standard, '
+    + 'and every Promoted Listings write is refused until standing recovers. Check Seller Hub → Performance.',
+  SUSPENDED: 'eBay suspended this campaign.',
+  STALE: 'The listing behind this ad is no longer live on eBay.',
 }
 
 export const ebayStatusPill = (status: string): { label: string; cls: string } =>

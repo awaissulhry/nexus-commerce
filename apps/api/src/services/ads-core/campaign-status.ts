@@ -31,7 +31,35 @@ export const EBAY_CAMPAIGN_STATUS_MAP: Record<string, string> = {
   ENDED: 'ENDED',
   SUSPENDED: 'SUSPENDED',
   DRAFT: 'DRAFT',
+  // D1 — eBay pauses a whole account's campaigns when seller standing drops
+  // (error 35077). It was absent here, and normalizeCampaignStatus falls back
+  // to DRAFT, so a retailer-paused campaign was not merely unmapped — it was
+  // actively mislabelled as a draft everywhere normalisation is used.
+  SYSTEM_PAUSED: 'PAUSED',
 }
+
+/**
+ * D1 — campaigns we MANAGE: they exist on eBay and are not dead.
+ *
+ * `EbayCampaign.status` stores eBay's raw string (ebay-ads-entity-sync:72), and
+ * 14 call sites filtered on the literals 'RUNNING'/'PAUSED'. When eBay set this
+ * account to SYSTEM_PAUSED that matched **zero of eleven** campaigns: coverage
+ * read 0%, the products rollup showed nothing promoted, the builder's conflict
+ * preflight missed all 24 ads, and every automation rule evaluated an empty
+ * candidate set — silently, with no error raised anywhere.
+ *
+ * Use this for "which campaigns do we consider", which is nearly always the
+ * question being asked.
+ */
+export const EBAY_MANAGED_STATUSES = ['RUNNING', 'PAUSED', 'SYSTEM_PAUSED'] as const
+
+/**
+ * D1 — campaigns actually SERVING right now. SYSTEM_PAUSED is not serving, and
+ * neither is PAUSED. Deliberately separate from MANAGED so the distinction is
+ * available rather than re-derived: today every call site wants MANAGED, but a
+ * "what is live this minute" question must not silently inherit that answer.
+ */
+export const EBAY_SERVING_STATUSES = ['RUNNING'] as const
 
 /** Map a channel-native status through a map with an explicit fallback. */
 export function normalizeCampaignStatus(

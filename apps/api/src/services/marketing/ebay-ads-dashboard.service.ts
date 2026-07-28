@@ -6,6 +6,7 @@
  */
 import prisma from '../../db.js'
 import { checkSpendCeilings } from './ebay-ads-automation.service.js'
+import { EBAY_MANAGED_STATUSES } from '../ads-core/campaign-status.js'
 
 export interface RecommendationRow {
   type: 'unmatched_listings' | 'missing_costs' | 'unpromoted_listings' | 'campaigns_without_rules' | 'rates_above_breakeven'
@@ -42,11 +43,11 @@ export async function getEbayAdsDashboard(): Promise<{ recommendations: Recommen
   const [promotedAds, liveCount, runningCampaigns, enabledRules, coverageProposal, ceilings] = await Promise.all([
     // non-stale ads of active CPS/CPC campaigns — the "promoted" universe
     prisma.ebayAd.findMany({
-      where: { listingId: { not: null }, status: { notIn: ['STALE'] }, campaign: { status: { in: ['RUNNING', 'PAUSED'] } } },
+      where: { listingId: { not: null }, status: { notIn: ['STALE'] }, campaign: { status: { in: [...EBAY_MANAGED_STATUSES] } } },
       select: { listingId: true, bidPercentage: true, campaign: { select: { id: true, name: true, status: true, marketplace: true, fundingModel: true, bidPercentage: true } } },
     }),
     prisma.ebayListingIndex.count({ where: { endedAt: null } }),
-    prisma.ebayCampaign.findMany({ where: { status: 'RUNNING' }, select: { id: true, externalCampaignId: true, name: true, marketplace: true, fundingModel: true, dailyBudget: true } }),
+    prisma.ebayCampaign.findMany({ where: { status: { in: [...EBAY_MANAGED_STATUSES] } }, select: { id: true, externalCampaignId: true, name: true, marketplace: true, fundingModel: true, dailyBudget: true } }),
     prisma.ebayAdsRule.findMany({ where: { enabled: true }, select: { marketplace: true, scope: true } }),
     prisma.ebayAdsProposal.findFirst({ where: { proposedKey: 'coverage:enroll-catch-all', status: 'PENDING' }, select: { id: true } }),
     checkSpendCeilings(),

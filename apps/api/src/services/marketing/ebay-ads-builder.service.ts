@@ -8,6 +8,7 @@
  */
 import prisma from '../../db.js'
 import { getLiveEbayItemIds } from './ebay-listing-index.service.js'
+import { EBAY_MANAGED_STATUSES } from '../ads-core/campaign-status.js'
 
 export interface BuilderTemplate {
   key: string; label: string; strategy: 'CPS' | 'CPC'
@@ -59,7 +60,7 @@ export async function buildListingPlan(opts: {
   const [eco, conflicts, facts30] = await Promise.all([
     prisma.ebayListingEconomics.findMany({ where: { marketplace: short, itemId: { in: itemIds.length ? itemIds : ['−'] } }, select: { itemId: true, breakEvenAdRatePct: true, dataStatus: true } }),
     prisma.ebayAd.findMany({
-      where: { listingId: { in: itemIds.length ? itemIds : ['−'] }, status: { notIn: ['STALE'] }, campaign: { fundingModel: 'COST_PER_SALE', status: { in: ['RUNNING', 'PAUSED'] } } },
+      where: { listingId: { in: itemIds.length ? itemIds : ['−'] }, status: { notIn: ['STALE'] }, campaign: { fundingModel: 'COST_PER_SALE', status: { in: [...EBAY_MANAGED_STATUSES] } } },
       select: { listingId: true, bidPercentage: true, campaign: { select: { id: true, name: true } } },
     }),
     prisma.ebayAdsDailyPerformance.groupBy({
@@ -118,7 +119,7 @@ export async function buildListingPlan(opts: {
       forecastMonthlyFeeCents: listings.reduce((a, l) => a + (l.forecastMonthlyFeeCents ?? 0), 0),
       trailingSales30dCents: listings.reduce((a, l) => a + l.trailingSales30dCents, 0),
     },
-    activeCampaigns: await prisma.ebayCampaign.count({ where: { marketplace: opts.marketplace, status: 'RUNNING', NOT: { externalCampaignId: { startsWith: 'sandbox-' } } } }),
+    activeCampaigns: await prisma.ebayCampaign.count({ where: { marketplace: opts.marketplace, status: { in: [...EBAY_MANAGED_STATUSES] }, NOT: { externalCampaignId: { startsWith: 'sandbox-' } } } }),
   }
 }
 
