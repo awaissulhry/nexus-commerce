@@ -19,7 +19,7 @@ import {
   type RowVerdict,
 } from '@nexus/shared/ads-bulksheet'
 import { createReader, type ParsedSheet } from './spreadsheet-adapter.js'
-import { SP_SHEET, DICTIONARY_SHEET, README_SHEET, META_SHEET, PORTFOLIOS_SHEET } from './build-workbook.js'
+import { SP_SHEET, DICTIONARY_SHEET, README_SHEET, META_SHEET } from './build-workbook.js'
 
 /**
  * Columns WE add to an annotated return file. On re-upload they are our own
@@ -30,7 +30,10 @@ import { SP_SHEET, DICTIONARY_SHEET, README_SHEET, META_SHEET, PORTFOLIOS_SHEET 
 const ANNOTATION_HEADERS = new Set(['_status', '_errors', '_applied_at'].map(normHeader))
 
 /** Sheets we generate that are never an input. */
-const NON_DATA_SHEETS = new Set([DICTIONARY_SHEET, README_SHEET, META_SHEET, PORTFOLIOS_SHEET].map(normHeader))
+// AX-IE.2 — Portfolios left this list once we emitted Amazon's real sheet.
+// It carries Product/Entity/Operation like any other input, and the apply path
+// now exists, so treating it as documentation would be the silent no-op again.
+const NON_DATA_SHEETS = new Set([DICTIONARY_SHEET, README_SHEET, META_SHEET].map(normHeader))
 
 export interface CellIssue {
   sheet: string
@@ -91,9 +94,6 @@ export interface ValidationResult {
  */
 export function ignoredSheetReason(sheetName: string): string | null {
   const n = normHeader(sheetName)
-  if (n === normHeader(PORTFOLIOS_SHEET)) {
-    return 'Portfolios is exported for reference only. Portfolio changes cannot be applied from a bulksheet yet, so any edits here were NOT read — change portfolios in the console instead.'
-  }
   if (n === normHeader(DICTIONARY_SHEET)) return 'Dictionary is generated documentation, not input.'
   if (n === normHeader(README_SHEET)) return 'README is generated documentation, not input.'
   if (n === normHeader(META_SHEET)) return 'Hidden export metadata, not input.'

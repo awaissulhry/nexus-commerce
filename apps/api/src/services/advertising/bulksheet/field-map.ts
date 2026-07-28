@@ -22,7 +22,7 @@
 import { parseMoney, parseVocabulary } from '@nexus/shared/ads-bulksheet'
 
 /** Which write service a row's entity is applied through. */
-export type ApplyTargetKind = 'campaign' | 'adGroup' | 'adTarget'
+export type ApplyTargetKind = 'campaign' | 'adGroup' | 'adTarget' | 'portfolio'
 
 /**
  * One writable column. `apply` mutates the patch and returns an error string to
@@ -92,6 +92,21 @@ export const FIELD_MAP: Record<ApplyTargetKind, FieldMapping[]> = {
       },
     },
   ],
+  /**
+   * AX-IE.2 — portfolios, from Amazon's real sheet.
+   *
+   * State is deliberately ABSENT. Amazon labels it "State (Informational only)"
+   * on its own Portfolios sheet, so it is read-only there; offering it would
+   * invite an edit that can never apply. Same for "In Budget".
+   */
+  portfolio: [
+    text('Portfolio name', 'name'),
+    money('Budget amount', (p, v) => { p.budgetAmount = v }),
+    text('Budget currency code', 'budgetCurrencyCode'),
+    text('Budget policy', 'budgetPolicy'),
+    text('Budget start date', 'startDate', { allowEmpty: true }),
+    text('Budget end date', 'endDate', { allowEmpty: true }),
+  ],
   adGroup: [
     stateField,
     text('Ad group name', 'name'),
@@ -105,6 +120,7 @@ export const FIELD_MAP: Record<ApplyTargetKind, FieldMapping[]> = {
 
 /** The columns preview may diff, derived so it can never exceed what apply writes. */
 export const FIELDS_BY_KIND: Record<ApplyTargetKind, readonly string[]> = {
+  portfolio: FIELD_MAP.portfolio.map((f) => f.column),
   campaign: FIELD_MAP.campaign.map((f) => f.column),
   adGroup: FIELD_MAP.adGroup.map((f) => f.column),
   adTarget: FIELD_MAP.adTarget.map((f) => f.column),

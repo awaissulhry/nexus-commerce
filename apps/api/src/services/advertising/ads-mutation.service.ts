@@ -33,7 +33,7 @@ const GRACE_PERIOD_MS = Number(process.env.NEXUS_ADS_GRACE_MS ?? 5 * 60 * 1000)
 
 export type AdsActor = `user:${string}` | `automation:${string}`
 
-export type AdEntityType = 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET' | 'PRODUCT_AD'
+export type AdEntityType = 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET' | 'PRODUCT_AD' | 'PORTFOLIO'
 
 export type AdSyncType =
   | 'AD_BID_UPDATE'
@@ -42,6 +42,7 @@ export type AdSyncType =
   | 'AD_BIDDING_STRATEGY_UPDATE'
   | 'AD_CAMPAIGN_NAME_UPDATE'
   | 'AD_CAMPAIGN_PORTFOLIO_UPDATE'
+  | 'AD_PORTFOLIO_UPDATE'
 
 export interface FieldChange {
   field: string
@@ -1068,6 +1069,107 @@ export async function bulkUpdateAdTargetBids(args: {
     }
   }
   return out
+}
+
+/**
+ * AX-IE.2 — portfolio update, on the same rails as every other ad write.
+ *
+ * Rides updateOutbound → ads-write-gate → the outbox exactly like campaigns do,
+ * so the live-write gate, the grace window, the audit log and the rollback path
+ * all apply unchanged. A portfolio moves budget, so it must not get a private
+ * path around the gate.
+ *
+ * State is NOT writable here: Amazon marks it "(Informational only)" on its own
+ * Portfolios sheet.
+ */
+export interface PortfolioPatch {
+  name?: string
+  budgetAmount?: number
+  budgetCurrencyCode?: string
+  budgetPolicy?: string
+  startDate?: string | null
+  endDate?: string | null
+}
+
+export async function updatePortfolioWithSync(args: {
+  portfolioId: string
+  patch: PortfolioPatch
+  actor: AdsActor
+  reason?: string | null
+  applyImmediately?: boolean
+  changeSetId?: string | null
+}): Promise<MutationOutcome> {
+  const existing = await prisma.amazonAdsPortfolio.findUnique({ where: { id: args.portfolioId } })
+  if (!existing) return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'portfolio_not_found' }
+
+  const changes: FieldChange[] = []
+  const data: Record<string, unknown> = {}
+  // startDate/endDate are DateTime columns but the sheet carries YYYY-MM-DD.
+  // Compare on the date part or every run reports a change it cannot settle.
+  const str = (v: unknown): string | null =>
+    v === null || v === undefined ? null
+      : v instanceof Date ? v.toISOString().slice(0, 10)
+        : String(v)
+  const track = (field: string, oldValue: unknown, newValue: unknown, column: string): void => {
+    if (newValue === undefined) return
+    if (str(oldValue) === str(newValue)) return
+    data[column] = newValue
+    changes.push({ field, oldValue: str(oldValue), newValue: str(newValue) })
+  }
+  track('name', existing.name, args.patch.name, 'name')
+  track('budgetAmount', existing.budgetAmount == null ? null : Number(existing.budgetAmount), args.patch.budgetAmount, 'budgetAmount')
+  track('budgetCurrencyCode', existing.budgetCurrencyCode, args.patch.budgetCurrencyCode, 'budgetCurrencyCode')
+  track('budgetPolicy', existing.budgetPolicy, args.patch.budgetPolicy, 'budgetPolicy')
+  const asDate = (v: string | null | undefined): Date | undefined =>
+    v === undefined ? undefined : v ? new Date(`${v}T00:00:00.000Z`) : undefined
+  track('startDate', existing.startDate, asDate(args.patch.startDate), 'startDate')
+  track('endDate', existing.endDate, asDate(args.patch.endDate), 'endDate')
+
+  if (!changes.length) {
+    return { ok: true, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: null }
+  }
+
+  const payloadBefore = {
+    name: existing.name,
+    budgetAmount: existing.budgetAmount == null ? null : Number(existing.budgetAmount),
+    budgetCurrencyCode: existing.budgetCurrencyCode,
+    budgetPolicy: existing.budgetPolicy,
+    startDate: existing.startDate,
+    endDate: existing.endDate,
+  }
+
+  await prisma.amazonAdsPortfolio.update({ where: { id: existing.id }, data })
+
+  const outboundQueueId = await enqueueOutbound({
+    entityType: 'PORTFOLIO',
+    entityId: existing.id,
+    externalId: existing.externalPortfolioId ?? null,
+    syncType: 'AD_PORTFOLIO_UPDATE',
+    // The portfolio model carries profileId, not marketplace, and the worker
+    // resolves the write gate + profile from marketplace. Look it up rather
+    // than leaving it null, or the write is refused as unattributable.
+    marketplace: (await prisma.amazonAdsConnection.findFirst({
+      where: { profileId: existing.profileId }, select: { marketplace: true },
+    }))?.marketplace ?? null,
+    fieldChanges: changes,
+    actor: args.actor,
+    reason: args.reason ?? null,
+    applyImmediately: args.applyImmediately === true,
+  })
+
+  const actionLogId = await writeAdvertisingActionLog({
+    actor: args.actor,
+    actionType: 'AD_PORTFOLIO_UPDATE',
+    entityType: 'CAMPAIGN', // the audit table's enum has no PORTFOLIO member yet
+    entityId: existing.id,
+    payloadBefore,
+    payloadAfter: { ...payloadBefore, ...data },
+    outboundQueueId,
+    changeSetId: args.changeSetId ?? null,
+  })
+
+  await enqueueBullMQJob(outboundQueueId, 'AD_PORTFOLIO_UPDATE')
+  return { ok: true, outboundQueueId, bidHistoryIds: [], actionLogId, error: null }
 }
 
 // AD.4 hook — operator cancel within grace window. Flips

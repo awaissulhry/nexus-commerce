@@ -21,7 +21,7 @@
 import type { PrismaClient } from '@prisma/client'
 import { parseMoney, parseVocabulary } from '@nexus/shared/ads-bulksheet'
 import {
-  updateCampaignWithSync, updateAdGroupWithSync, updateAdTargetWithSync,
+  updateCampaignWithSync, updateAdGroupWithSync, updateAdTargetWithSync, updatePortfolioWithSync,
   type AdsActor,
 } from '../ads-mutation.service.js'
 import type { PreviewRow } from './preview.js'
@@ -134,6 +134,17 @@ export async function applyPlan(
         if (!Object.keys(patch).length) { rec('SKIPPED', 'No writable field changed'); continue }
         res = await updateCampaignWithSync({
           campaignId: row.targetId, patch: patch as Parameters<typeof updateCampaignWithSync>[0]['patch'], actor: opts.actor,
+          reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId,
+        })
+      } else if (row.entity === 'Portfolio') {
+        // AX-IE.2 — same rails as everything else: through the write gate and
+        // the outbox, never a private path. A portfolio moves budget.
+        const patch: Record<string, unknown> = {}
+        const err = applyFields('portfolio', patch, (c) => nextOf(row, c))
+        if (err) { rec('FAILED', err); continue }
+        if (!Object.keys(patch).length) { rec('SKIPPED', 'No writable field changed'); continue }
+        res = await updatePortfolioWithSync({
+          portfolioId: row.targetId, patch: patch as Parameters<typeof updatePortfolioWithSync>[0]['patch'], actor: opts.actor,
           reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId,
         })
       } else if (row.entity === 'Ad group') {

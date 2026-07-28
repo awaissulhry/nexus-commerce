@@ -128,18 +128,17 @@ describe('D6 — formula escaping must not corrupt the value', () => {
 })
 
 describe('AX-ZD.8 — a sheet that is not an input must say so', () => {
-  it('Portfolios is named as ignored, with the reason, not silently skipped', () => {
-    // The failure this removes: an operator edits portfolio budgets, uploads,
-    // and gets no error and no warning. Silence reads as success.
-    const reason = ignoredSheetReason('Portfolios')
-    expect(reason).toBeTruthy()
-    expect(reason!).toMatch(/cannot be applied from a bulksheet/i)
-    expect(reason!).toMatch(/console/i)
+  it('Portfolios is NO LONGER ignored — it round-trips now', () => {
+    // AX-ZD.8 made this sheet report itself as skipped, because our file had no
+    // Entity column and no apply path. Amazon's real sheet has both, so as of
+    // AX-IE.2 it is a genuine input and must not be reported as ignored.
+    expect(ignoredSheetReason('Portfolios')).toBeNull()
+    expect(ignoredSheetReason('portfolios')).toBeNull()
   })
 
   it('matches regardless of casing or spacing, as a renamed tab would arrive', () => {
-    expect(ignoredSheetReason('portfolios')).toBeTruthy()
-    expect(ignoredSheetReason('  Portfolios  ')).toBeTruthy()
+    expect(ignoredSheetReason('dictionary')).toBeTruthy()
+    expect(ignoredSheetReason('  README  ')).toBeTruthy()
   })
 
   it('generated documentation sheets are ignored too, with their own reasons', () => {

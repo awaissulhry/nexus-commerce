@@ -385,7 +385,7 @@ export const ENTITY_RULES: readonly EntityRule[] = [
   { entity: 'Negative product targeting', create: [['Product targeting expression', 'Targeting expression'], 'Ad group ID'], mutate: [['Product Targeting ID', 'Targeting ID']], applySupported: false },
   { entity: 'Product ad', create: [['SKU', 'ASIN'], 'Ad group ID'], mutate: ['Ad ID'], applySupported: false },
   { entity: 'Bidding adjustment', create: ['Campaign ID', 'Placement', 'Percentage'], mutate: ['Campaign ID', 'Placement'], applySupported: false },
-  { entity: 'Portfolio', create: ['Portfolio name'], mutate: ['Portfolio ID'], applySupported: false },
+  { entity: 'Portfolio', create: ['Portfolio name'], mutate: ['Portfolio ID'], applySupported: true },
 ]
 
 const RULE_BY_ENTITY = new Map(ENTITY_RULES.map((r) => [normEnum(r.entity), r]))

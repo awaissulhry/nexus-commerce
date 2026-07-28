@@ -118,3 +118,44 @@ describe('Phase 6 invariant #1 — preview cannot promise what apply drops', () 
     }
   })
 })
+
+describe('AX-IE.2 — portfolio fields', () => {
+  it('maps every writable portfolio column Amazon actually offers', () => {
+    const patch: Record<string, unknown> = {}
+    const err = applyFields('portfolio', patch, (c) => ({
+      'Portfolio name': 'Moto Core',
+      'Budget amount': '250.00',
+      'Budget currency code': 'EUR',
+      'Budget policy': 'dateRange',
+      'Budget start date': '2026-08-01',
+      'Budget end date': '2026-08-31',
+    }[c]))
+    expect(err).toBeNull()
+    expect(patch).toEqual({
+      name: 'Moto Core',
+      budgetAmount: 250,
+      budgetCurrencyCode: 'EUR',
+      budgetPolicy: 'dateRange',
+      startDate: '2026-08-01',
+      endDate: '2026-08-31',
+    })
+  })
+
+  it('does NOT offer State — Amazon marks it informational only', () => {
+    // Offering it would invite an edit that can never apply. Amazon's own
+    // Portfolios sheet labels the column "State (Informational only)".
+    expect(FIELDS_BY_KIND.portfolio).not.toContain('State')
+    expect(FIELDS_BY_KIND.portfolio).not.toContain('State (Informational only)')
+    expect(FIELDS_BY_KIND.portfolio).not.toContain('In Budget (Informational only)')
+  })
+
+  it('uses Amazon’s header names, not the ones we invented', () => {
+    // The old sheet said "Budget currency" / "Start date"; Amazon says
+    // "Budget currency code" / "Budget start date". A mismatch here means the
+    // column silently never resolves on import.
+    expect(FIELDS_BY_KIND.portfolio).toContain('Budget currency code')
+    expect(FIELDS_BY_KIND.portfolio).toContain('Budget start date')
+    expect(FIELDS_BY_KIND.portfolio).not.toContain('Budget currency')
+    expect(FIELDS_BY_KIND.portfolio).not.toContain('Start date')
+  })
+})

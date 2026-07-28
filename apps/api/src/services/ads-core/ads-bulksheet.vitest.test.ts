@@ -230,12 +230,18 @@ describe('row validation', () => {
   })
 
   it('flags entities we can validate but cannot yet apply', () => {
-    const v = validateRow(rowGet({ Entity: 'Portfolio', Operation: 'Create', 'Portfolio name': 'Moto' }))
+    // Product ad still has no apply path — it previews, it does not write.
+    const v = validateRow(rowGet({ Entity: 'Product ad', Operation: 'Update', 'Ad ID': 'a1' }))
     expect(v.ok).toBe(true)
     expect(v.previewOnly).toBe(true)
 
     const applied = validateRow(rowGet({ Entity: 'Campaign', Operation: 'Update', 'Campaign ID': '123' }))
     expect(applied.previewOnly).toBe(false)
+
+    // AX-IE.2 — Portfolio moved to applicable once we emitted Amazon's real
+    // sheet and built the write path. It was the previewOnly example here.
+    const portfolio = validateRow(rowGet({ Entity: 'Portfolio', Operation: 'Update', 'Portfolio ID': 'p1' }))
+    expect(portfolio.previewOnly).toBe(false)
   })
 
   it('knows the entities the old client knew, so nothing regresses', () => {

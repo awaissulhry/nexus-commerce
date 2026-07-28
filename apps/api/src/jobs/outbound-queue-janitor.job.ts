@@ -35,6 +35,10 @@ const AD_SYNC_TYPES = [
   'AD_BUDGET_UPDATE',
   'AD_ENTITY_STATE_UPDATE',
   'AD_BIDDING_STRATEGY_UPDATE',
+  // AX-IE.2 — portfolios are ads rows too. Left out, this janitor would sweep
+  // them with its generic semantics while reclaimCrashedAdWrites (which uses
+  // the ads-side list) would not see them at all.
+  'AD_PORTFOLIO_UPDATE',
 ]
 
 /** IN_PROGRESS older than this is a crashed dispatch — reclaim to PENDING. */

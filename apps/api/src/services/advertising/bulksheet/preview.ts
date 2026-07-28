@@ -90,6 +90,7 @@ export interface PreviewResult {
 const CAMPAIGN_FIELDS = FIELDS_BY_KIND.campaign
 const ADGROUP_FIELDS = FIELDS_BY_KIND.adGroup
 const TARGET_FIELDS = FIELDS_BY_KIND.adTarget
+const PORTFOLIO_FIELDS = FIELDS_BY_KIND.portfolio
 
 const money = (raw: string): number | null => {
   const p = parseMoney(raw)
@@ -142,9 +143,11 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
   const campIds = new Set<string>()
   const agIds = new Set<string>()
   const targetIds = new Set<string>()
+  const pfIds = new Set<string>()
   for (const { p } of actionable) {
     const v = p.values
     if (p.entity === 'Campaign' || p.entity === 'Bidding adjustment') { if (v['Campaign ID']) campIds.add(v['Campaign ID']) }
+    else if (p.entity === 'Portfolio') { if (v['Portfolio ID']) pfIds.add(v['Portfolio ID']) }
     else if (p.entity === 'Ad group') { if (v['Ad group ID']) agIds.add(v['Ad group ID']) }
     else {
       const id = v['Keyword ID'] || v['Product Targeting ID']
@@ -152,7 +155,7 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
     }
   }
 
-  const [camps, ags, targets] = await Promise.all([
+  const [camps, ags, targets, portfolios] = await Promise.all([
     campIds.size ? prisma.campaign.findMany({
       where: { externalCampaignId: { in: [...campIds] } },
       select: { id: true, externalCampaignId: true, name: true, status: true, dailyBudget: true, biddingStrategy: true, portfolioId: true },
@@ -164,6 +167,10 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
     targetIds.size ? prisma.adTarget.findMany({
       where: { externalTargetId: { in: [...targetIds] } },
       select: { id: true, externalTargetId: true, expressionValue: true, expressionType: true, status: true, bidCents: true, isNegative: true },
+    }) : Promise.resolve([]),
+    pfIds.size ? prisma.amazonAdsPortfolio.findMany({
+      where: { externalPortfolioId: { in: [...pfIds] } },
+      select: { id: true, externalPortfolioId: true, name: true, budgetAmount: true, budgetCurrencyCode: true, budgetPolicy: true, startDate: true, endDate: true },
     }) : Promise.resolve([]),
   ])
   const campBy = new Map(camps.map((c) => [c.externalCampaignId!, c]))

@@ -27,6 +27,7 @@ import {
   updateAdGroup,
   updateTarget,
   updateProductAd,
+  updatePortfolio,
   adsMode,
   type ClientContext,
   type AdsRegion,
@@ -44,7 +45,7 @@ interface AdsJobData {
 }
 
 interface AdMutationPayload {
-  entityType: 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET' | 'PRODUCT_AD'
+  entityType: 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET' | 'PRODUCT_AD' | 'PORTFOLIO'
   entityId: string
   externalId: string | null
   marketplace: string | null
@@ -200,6 +201,29 @@ async function dispatchToAmazon(
     if (payload.entityType === 'PRODUCT_AD') {
       const res = await updateProductAd(ctx, payload.externalId, { state: patch.state })
       return { ok: res.ok, rawResponse: res.rawResponse, error: res.error ?? null }
+    }
+    if (payload.entityType === 'PORTFOLIO') {
+      // AX-IE.2 — budget fields travel as one object on the v3 portfolio API,
+      // so they are rebuilt here from the flat field changes rather than passed
+      // through patchFromChanges (which only knows campaign-shaped keys).
+      const get = (f: string): string | undefined =>
+        payload.fieldChanges.find((c) => c.field === f)?.newValue ?? undefined
+      const amount = get('budgetAmount')
+      const budget = amount !== undefined || get('budgetPolicy') || get('startDate') || get('endDate')
+        ? {
+            amount: amount !== undefined ? Number(amount) : undefined,
+            currencyCode: get('budgetCurrencyCode'),
+            policy: get('budgetPolicy'),
+            startDate: get('startDate'),
+            endDate: get('endDate'),
+          }
+        : undefined
+      const res = await updatePortfolio(ctx, {
+        portfolioId: payload.externalId,
+        name: get('name'),
+        budget: budget as Parameters<typeof updatePortfolio>[1]['budget'],
+      })
+      return { ok: res.ok, rawResponse: null, error: null }
     }
     return { ok: false, rawResponse: null, error: `unknown_entity_type:${payload.entityType}` }
   } catch (err) {
@@ -473,6 +497,10 @@ export function stopAdsSyncWorker(): void {
 // endpoint (mounts under cron triggers).
 const AD_SYNC_TYPE_LIST = [
   'AD_BID_UPDATE', 'AD_BUDGET_UPDATE', 'AD_ENTITY_STATE_UPDATE', 'AD_BIDDING_STRATEGY_UPDATE',
+  // AX-IE.2 — portfolios dispatch on the same rails. Omitting this would queue
+  // portfolio writes that the drain never picks up, and Redis is down on prod
+  // so the drain IS the dispatch path.
+  'AD_PORTFOLIO_UPDATE',
 ]
 
 /**
