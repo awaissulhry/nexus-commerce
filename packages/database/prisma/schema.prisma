@@ -2652,9 +2652,17 @@ model Campaign {
   // NP — set while the campaign is bid-suppressed (no-pause: bids at the floor
   // instead of status=PAUSED). Fast "is suppressed" flag + when it started.
   bidsSuppressedAt    DateTime?
+  /// AX2.2 — WRITE truth: when we last pushed to Amazon and how it went.
+  /// Stamped by ads-sync.worker. Never stamped by a read, so a successful
+  /// settings read can't mask a failed bid write.
   lastSyncedAt        DateTime?
   lastSyncStatus      AdSyncStatus?
   lastSyncError       String?
+  /// AX2.2 — READ freshness: when the 20-minute settings sync last actually
+  /// observed this campaign on Amazon. Distinct from lastSyncedAt, which the
+  /// console previously displayed as "last synced" while it really meant
+  /// "last written" (observed spread: ES 5m, DE/FR ~2h, one IT campaign 34d).
+  settingsSyncedAt    DateTime?
 
   // ── Phase 2: v1 unified API additions ─────────────────────────────────
   // adProduct is the v1 discriminator. The legacy `type` enum stays for
@@ -2711,6 +2719,7 @@ model Campaign {
   @@unique([externalCampaignId, marketplace])
   @@index([marketplace, status])
   @@index([lastSyncStatus])
+  @@index([settingsSyncedAt])
   @@index([adProduct, marketplace, status])
 }
 
@@ -13397,6 +13406,14 @@ model OutreachDetail {
 // Channel-agnostic targeting/audience row. Generalizes legacy AdTarget +
 // CustomerSegment audience binding. Amazon ad-groups/product-ads stay as
 // an Amazon-only sub-tree (legacy AdGroup/AdProductAd), NOT here.
+//
+// ⚠️ AX2.2 — DEAD MODEL. Verified 2026-07-28: 0 rows, and ZERO code references
+// (`prisma.campaignTarget.` appears nowhere in apps/api or apps/web — the
+// `CampaignTargeting` hits are an unrelated self-competition interface).
+// Amazon targeting lives entirely in AdTarget (4,415 rows). Do NOT write here;
+// a second target model read by one path and written by another is exactly the
+// two-of-everything hazard. Dropping the table is a destructive migration and
+// is deliberately left for a separate gate.
 model CampaignTarget {
   id         String            @id @default(cuid())
   campaignId String

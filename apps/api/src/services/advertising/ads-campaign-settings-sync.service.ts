@@ -95,9 +95,20 @@ export async function syncCampaignSettingsFromAmazon(
       const strat = mapStrategy(c.dynamicBidding?.strategy)
       if (strat) data.biddingStrategy = strat
 
-      if (Object.keys(data).length > 0) {
-        try { await prisma.campaign.update({ where: { id: existing.id }, data }); updated++ } catch (e) { errors.push(`update ${c.campaignId}: ${(e as Error).message.slice(0, 120)}`) }
-      }
+      // AX2.2 — stamp read-freshness for EVERY campaign Amazon returned, not
+      // only the ones whose fields changed. Previously an unchanged campaign
+      // was never touched, so "last synced" in the console actually meant
+      // "last written" (observed: ES 5m, DE/FR ~2h, one IT campaign 34 DAYS)
+      // and a perfectly-verified campaign looked stale.
+      //
+      // Deliberately does NOT touch lastSyncStatus: that is delivery truth, and
+      // a successful read must never mask a failed bid write.
+      const changed = Object.keys(data).length > 0
+      data.settingsSyncedAt = new Date()
+      try {
+        await prisma.campaign.update({ where: { id: existing.id }, data })
+        if (changed) updated++
+      } catch (e) { errors.push(`update ${c.campaignId}: ${(e as Error).message.slice(0, 120)}`) }
     }
     // H.12 — archive local active campaigns this profile's list no longer returns (archived/deleted on Amazon).
     try { archived += await reconcileCampaignDeletions({ connMarketplace: conn.marketplace, seenExternalCampaignIds: seen, fetchOk: true }) }

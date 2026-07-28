@@ -1300,7 +1300,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const campaigns = await prisma.campaign.findMany({
       select: {
         id: true, marketplace: true, liveBidWritesEnabled: true, liveBidWritesToday: true,
-        lastSyncedAt: true, lastSyncStatus: true, lastSyncError: true,
+        lastSyncedAt: true, lastSyncStatus: true, lastSyncError: true, settingsSyncedAt: true,
       },
     })
 
@@ -1374,9 +1374,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           pending,
           orphanedAdGroups: orphaned,
           liveWritesToday: c.liveBidWritesToday ?? 0,
+          // WRITE truth (when we last pushed) vs READ freshness (when the
+          // 20-min settings sync last saw this campaign on Amazon). AX2.2 —
+          // these are different questions and the console conflated them.
           lastSyncedAt: c.lastSyncedAt,
           lastSyncStatus: c.lastSyncStatus,
           lastSyncError: c.lastSyncError,
+          verifiedAt: c.settingsSyncedAt,
+          stale: c.settingsSyncedAt ? Date.now() - c.settingsSyncedAt.getTime() > 90 * 60_000 : true,
         }]
       })),
     }

@@ -90,6 +90,9 @@ interface DeliveryCampaign {
   liveWritesToday: number
   lastSyncStatus: string | null
   lastSyncError: string | null
+  /** AX2.2 — when the 20-min settings sync last SAW this campaign on Amazon. */
+  verifiedAt: string | null
+  stale: boolean
 }
 interface DeliveryState {
   adsMode: string
@@ -1165,7 +1168,15 @@ export function CampaignsGrid() {
         if (d?.orphanedAdGroups) bits.push(`${d.orphanedAdGroups} ad group(s) contain targets Amazon has deleted`)
         if (d?.lastSyncError) bits.push(`Last error: ${d.lastSyncError}`)
         if (d?.liveWritesToday != null) bits.push(`Live writes today: ${d.liveWritesToday}`)
-        return <span className={`h10-pill ${p.cls}`} title={bits.join('\n')}>{p.label}{d?.pending ? ` ${d.pending}` : ''}</span>
+        // AX2.2 — read freshness is a separate fact from write delivery.
+        bits.push(d?.verifiedAt
+          ? `Last verified against Amazon: ${new Date(d.verifiedAt).toLocaleString()}`
+          : 'Never verified against Amazon')
+        return (
+          <span className={`h10-pill ${p.cls}`} title={bits.join('\n')}>
+            {p.label}{d?.pending ? ` ${d.pending}` : ''}{d?.stale ? ' \u29D7' : ''}
+          </span>
+        )
       }
       case 'status': { const sp = STATUS_PILL[c.status] ?? { label: c.status, cls: '' }; return <span className="h10-statuscell"><span className={`h10-pill ${sp.cls}`}>{sp.label}</span><button type="button" className="ch" aria-label={`Change status for ${c.name}`} onClick={(ev) => { const r = (ev.currentTarget as HTMLElement).getBoundingClientRect(); setStatusMenu({ id: c.id, x: Math.max(8, r.right - 156), y: r.bottom + 5 }) }}><ChevronDown size={13} aria-hidden /></button></span> }
       case 'minMaxBudget': return ed(c.minMaxBudget && (c.minMaxBudget.min != null || c.minMaxBudget.max != null) ? `${c.minMaxBudget.min != null ? eur(c.minMaxBudget.min) : '—'} – ${c.minMaxBudget.max != null ? eur(c.minMaxBudget.max) : '—'}` : 'None - None', 'minMaxBudget')

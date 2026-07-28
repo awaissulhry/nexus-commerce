@@ -122,6 +122,32 @@ populated from a real sync.
 This is the same "two-of-everything" hazard flagged in the eBay audit — a defined-but-unused twin that will
 eventually get written to by one code path and read by another.
 
+### ✅ B3/B7 follow-up — what AX2.2 actually found (2026-07-28)
+
+Two items in this audit were **wrong**, corrected by probing rather than reading:
+
+- **`ads-keyword-bid-resync` is healthy.** Every run SUCCESS, ~550 s, hourly. The `RUNNING` row I saw was an
+  in-flight run of a 9-minute job, not a stuck one. **No overlap bug — item withdrawn.**
+- **The "4 never-synced" campaigns are now 11**, all `IT-AIREON-SP-*` created 2026-07-28 with valid Amazon ids
+  — a complete SP structure (Auto · Brand/Competitor/Category × Broad/Phrase/Exact · PAT). Not a defect: new
+  campaigns that the settings sync had not yet stamped. They are also the natural **blueprint template** for AX2.4.
+
+The real finding behind B3's freshness anomaly: **`lastSyncedAt` never meant "we checked Amazon."** The
+settings sync reads every ENABLED+PAUSED campaign every 20 minutes but only called `campaign.update()` when a
+field changed, and never stamped a timestamp — so `lastSyncedAt` only ever reflected the **write** path.
+Observed spread: ES 5 m, DE/FR ~2 h, one IT campaign **34 days**, none of it read-freshness.
+
+Fixed by adding `Campaign.settingsSyncedAt`, stamped for every campaign Amazon returns. `lastSyncStatus`
+deliberately still means delivery, so a successful read can never mask a failed bid write — the exact trap the
+A2 work called out. `delivery-state` now exposes both (`verifiedAt` + `stale`).
+
+Also confirmed: **`CampaignTarget` is fully dead** — 0 rows and zero code references (`prisma.campaignTarget.`
+appears nowhere; the `CampaignTargeting` hits are an unrelated self-competition interface). Marked
+DEAD MODEL in the schema; dropping the table is destructive and left for a separate gate.
+
+The one remaining `externalCampaignId`-less campaign is `ZZ_e2e_single_wwq7s`, an **archived e2e test artifact**
+from 2026-06-23 — harmless debris, not a production integrity gap.
+
 ### 🟡 B7 — small integrity gaps
 
 - **1 campaign has no `externalCampaignId`** — it can never be resolved against Amazon (and per the AF.1d rule
