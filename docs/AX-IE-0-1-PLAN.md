@@ -15,7 +15,20 @@ Evidence harnesses (read-only, untracked): `apps/api/scripts/_axie1-model-census
 | **AX-IE.1** canonical model | ✅ shipped 2026-07-28, parity green |
 | **AX-IE.2** schema + adapter | ✅ shipped 2026-07-28 — one schema in `@nexus/shared/ads-bulksheet` drives export, Dictionary and validation on both server and browser; ExcelJS behind `SpreadsheetWriter`/`SpreadsheetReader` |
 | **AX-IE.3** exporter rewrite | ◐ **partial** — all 9 SP entity types, Portfolios, README, `_meta`, `_row_key`, `_baseline` shipped (3,318 → 9,291 rows). **SB/SD sheets blocked** on the bulksheet download; **streaming/async job deferred** (the account is 9.3k rows; the buffered path is well inside budget, and the job substrate belongs with AX-IE.4) |
-| AX-IE.4+ | not started |
+| **AX-IE.4** importer | ✅ shipped 2026-07-28 — `POST /advertising/bulk/upload` takes a real file, streams it, validates every row, stages into `ImportJob`/`ImportJobRow`, writes nothing. 202 + poll |
+| AX-IE.5+ | not started — next is the dry-run preview |
+
+### Measured, and what it changed
+
+| Finding | Number | Consequence |
+|---|---|---|
+| Buffered ExcelJS read | **1.4 GB RSS** for a 5.5 MB / 100k-row file (~260x) | switched to streaming: **354 MB and faster** (1.2s vs 2.2s), identical verdicts |
+| Validation vs staging | validate 100k = **1.3s**; stage 100k = **~110s** | staging is Neon round trips, not CPU → upload returns **202 in 0.2s**, work continues behind the job |
+| Real account file | 9,288 rows, **~8s** end to end | the 100k ceiling is the documented edge, not the normal case |
+| ExcelJS streaming reader | crashes on part-order (`workbook-reader.js:303` reads `this.model.sheets` unguarded, one line after guarding `this.workbookRels`) | detected + bounded fallback to the buffered reader; `entries:'emit'` dropped |
+
+**Conflict #12 update:** the spec's `entries: 'emit'` recommendation is wrong for this
+usage — entries that nothing consumes only add a stall path. Removed.
 
 The rest of this document is the original .0/.1 plan, kept as the evidence record,
 with corrections marked inline where implementation proved something different.
