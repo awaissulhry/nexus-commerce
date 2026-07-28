@@ -22,7 +22,7 @@
 
 import {
   COLUMNS, HEADERS, VOCABULARIES, DICTIONARY_HEADERS, buildDictionaryRows, parseVocabulary,
-  META_HEADERS, ROW_KEY_HEADER, BASELINE_HEADER, computeBaseline, BULKSHEET_SCHEMA_VERSION,
+  META_HEADERS, ROW_KEY_HEADER, BASELINE_HEADER, computeBaseline, BULKSHEET_SCHEMA_VERSION, toAmazonDate,
   type BulksheetColumn,
 } from '@nexus/shared/ads-bulksheet'
 import { createWriter, type CellValue, type SheetColumnSpec } from './spreadsheet-adapter.js'
@@ -62,8 +62,17 @@ export function coerceCell(col: BulksheetColumn, v: unknown): CellValue {
       const n = Number(v)
       return Number.isFinite(n) ? Math.round(n) : null
     }
-    case 'date':
-      return v instanceof Date ? v : new Date(String(v))
+    case 'ratio': {
+      // Stored as a FRACTION and formatted '0.00%' — Amazon's own convention.
+      // Writing "46.88%" as text would destroy sorting and re-import.
+      const n = Number(v)
+      return Number.isFinite(n) ? n : null
+    }
+    case 'date': {
+      // Amazon's bulksheet uses YYYYMMDD, so emit that rather than a Date serial.
+      const d = v instanceof Date ? v : new Date(String(v))
+      return Number.isNaN(d.getTime()) ? null : toAmazonDate(d)
+    }
     default:
       return String(v)
   }
@@ -102,6 +111,15 @@ export interface WorkbookCoverage {
   campaignsTotal: number
   truncated: boolean
   marketplaces: string[]
+  /** Days of performance summed into the read-only metric columns. */
+  performanceWindowDays: number
+  /**
+   * Which grains actually have performance data. Ours currently holds only
+   * CAMPAIGN and PRODUCT_AD rows, so keyword and ad-group metrics are BLANK
+   * rather than zero — a zero there would assert "no impressions" when the truth
+   * is "never collected".
+   */
+  performanceGrains: string[]
 }
 
 export interface BuildResult {
@@ -207,6 +225,8 @@ function metaPairs(c: WorkbookCoverage, at: Date, exportId: string, rowCount: nu
     ['campaignsTotal', String(c.campaignsTotal)],
     ['truncated', String(c.truncated)],
     ['marketplaces', c.marketplaces.join(',')],
+    ['performanceWindowDays', String(c.performanceWindowDays)],
+    ['performanceGrains', c.performanceGrains.join(',')],
     ['entities', c.entities.join(',')],
     ['excludes', c.excludes.join(',')],
   ]
@@ -223,6 +243,13 @@ function readmeLines(c: WorkbookCoverage, at: Date, exportId: string): string[] 
     `Schema     ${BULKSHEET_SCHEMA_VERSION}`,
     `Coverage   ${c.campaignsExported} of ${c.campaignsTotal} campaigns${c.truncated ? '  ** TRUNCATED **' : ''}`,
     `Markets    ${c.marketplaces.join(', ') || '—'}`,
+    `Metrics    last ${c.performanceWindowDays} days, available for: ${c.performanceGrains.join(', ') || 'nothing yet'}`,
+    '',
+    'ABOUT THE PERFORMANCE COLUMNS',
+    `  Impressions … ROAS are read-only context, summed over the last ${c.performanceWindowDays} days.`,
+    `  They are populated for ${c.performanceGrains.join(' and ') || 'no grain yet'}. On every other row they are`,
+    '  BLANK ON PURPOSE — we do not yet collect metrics at that grain, and writing 0',
+    '  there would claim "no impressions" when the truth is "never collected".',
     '',
     'WHAT IS IN HERE',
     `  Included  ${c.entities.join(', ')}`,

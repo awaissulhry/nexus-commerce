@@ -4267,6 +4267,60 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     let targetsTruncated = 0
     const PROD: Record<string, string> = { SPONSORED_PRODUCTS: 'Sponsored Products', SPONSORED_BRANDS: 'Sponsored Brands', SPONSORED_DISPLAY: 'Sponsored Display' }
     const st = (s: string) => (s || '').toLowerCase()
+
+    // Performance context. Amazon's own bulksheet carries these 11 columns, so
+    // they are part of the native layout rather than an addition of ours.
+    //
+    // Sourced from AmazonAdsDailyPerformance, NOT from the denormalized counters
+    // on Campaign/AdGroup/AdTarget — those are unpopulated for the grains that
+    // matter (0 of 265 ad groups and 0 of 4,510 targets carry impressions), so
+    // reading them would have written "0 impressions" onto every keyword row.
+    // A zero that means "we never rolled this up" is exactly the plausible-wrong
+    // value this series exists to remove; an entity with no row in the window
+    // gets BLANK cells instead.
+    //
+    // EXCLUDE_AMS_DAILY for the same reason the shadow backfill needs it: the
+    // stream wrote a second parallel set of daily rows under profileId 'ams', and
+    // summing both double-counts spend (AX2.3).
+    const perfDays = Math.max(1, Math.min(180, Number((request.query as { days?: string }).days ?? 30)))
+    const perfSince = new Date(Date.now() - perfDays * 86400_000)
+    const { AMS_DAILY_MARKER } = await import('../services/ads-core/ams-daily.js')
+    const perfGrains: string[] = []
+    const perfGrainRows = await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['entityType'],
+      where: { date: { gte: perfSince }, localEntityId: { not: null } },
+    })
+    for (const g of perfGrainRows) perfGrains.push(g.entityType)
+    const perfRows = await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['localEntityId'],
+      where: { date: { gte: perfSince }, localEntityId: { not: null }, reportRunId: { not: AMS_DAILY_MARKER } },
+      _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, orders7d: true, units7d: true },
+    })
+    const perfBy = new Map<string, { impressions: number; clicks: number; spend: number; sales: number; orders: number; units: number }>()
+    for (const r of perfRows) {
+      if (!r.localEntityId) continue
+      perfBy.set(r.localEntityId, {
+        impressions: r._sum.impressions ?? 0,
+        clicks: r._sum.clicks ?? 0,
+        spend: Number(r._sum.costMicros ?? 0n) / 1_000_000,
+        sales: (r._sum.sales7dCents ?? 0) / 100,
+        orders: r._sum.orders7d ?? 0,
+        units: r._sum.units7d ?? 0,
+      })
+    }
+    const perf = (localId: string) => {
+      const m = perfBy.get(localId)
+      if (!m) return {} // no row in the window — blank, not zero
+      return {
+        Impressions: m.impressions, Clicks: m.clicks,
+        'Click-through rate': m.impressions > 0 ? m.clicks / m.impressions : '',
+        Spend: m.spend, Sales: m.sales, Orders: m.orders, Units: m.units,
+        'Conversion rate': m.clicks > 0 ? m.orders / m.clicks : '',
+        ACOS: m.sales > 0 ? m.spend / m.sales : '',
+        CPC: m.clicks > 0 ? m.spend / m.clicks : '',
+        ROAS: m.spend > 0 ? m.sales / m.spend : '',
+      }
+    }
     const sheetRows: Array<Record<string, unknown>> = []
     const push = (o: Record<string, unknown>) => { sheetRows.push(o) }
     const marketplaces = new Set<string>()
@@ -4288,7 +4342,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       // by regex on the campaign name, which mislabelled 12 of the 176 campaigns
       // Amazon reports on. Blank when Amazon hasn't told us yet: a bulksheet that
       // omits a value is inert, one that states the wrong value corrupts on re-upload.
-      push({ ...campRef, Entity: 'Campaign', [ROW_KEY_HEADER]: rowKey('Campaign', c.externalCampaignId, c.id), 'Portfolio ID': c.portfolioId ?? '', 'Campaign name': c.name, 'Start date': c.startDate ?? '', 'End date': c.endDate ?? '', 'Targeting type': c.targetingType ? c.targetingType.toLowerCase() : '', State: st(c.status), 'Daily budget': c.dailyBudget != null ? Number(c.dailyBudget) : '', 'Bidding strategy': c.biddingStrategy ?? '' })
+      push({ ...campRef, Entity: 'Campaign', [ROW_KEY_HEADER]: rowKey('Campaign', c.externalCampaignId, c.id), 'Portfolio ID': c.portfolioId ?? '', 'Campaign name': c.name, 'Start date': c.startDate ?? '', 'End date': c.endDate ?? '', 'Targeting type': c.targetingType ? c.targetingType.toLowerCase() : '', State: st(c.status), 'Daily budget': c.dailyBudget != null ? Number(c.dailyBudget) : '', 'Bidding strategy': c.biddingStrategy ?? '', ...perf(c.id) })
 
       // Placement modifiers — 152 campaigns carry these and they were invisible.
       const dyn = (c.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement?: string; percentage?: number }> }
@@ -4299,10 +4353,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
       for (const g of c.adGroups) {
         const agRef = { ...campRef, 'Ad group ID': g.externalAdGroupId ?? '' }
-        push({ ...agRef, Entity: 'Ad group', [ROW_KEY_HEADER]: rowKey('Ad group', g.externalAdGroupId, g.id), 'Ad group name': g.name, State: st(g.status), 'Ad Group Default Bid': g.defaultBidCents / 100 })
+        push({ ...agRef, Entity: 'Ad group', [ROW_KEY_HEADER]: rowKey('Ad group', g.externalAdGroupId, g.id), 'Ad group name': g.name, State: st(g.status), 'Ad Group Default Bid': g.defaultBidCents / 100, ...perf(g.id) })
 
         for (const a of g.productAds) {
-          push({ ...agRef, Entity: 'Product ad', [ROW_KEY_HEADER]: rowKey('Product ad', a.externalAdId, a.id), 'Ad ID': a.externalAdId ?? '', SKU: a.sku ?? '', ASIN: a.asin ?? '', State: st(a.status) })
+          push({ ...agRef, Entity: 'Product ad', [ROW_KEY_HEADER]: rowKey('Product ad', a.externalAdId, a.id), 'Ad ID': a.externalAdId ?? '', SKU: a.sku ?? '', 'ASIN (Informational only)': a.asin ?? '', State: st(a.status), ...perf(a.id) })
         }
 
         const shown = g.targets.length > TARGET_CAP ? g.targets.slice(0, TARGET_CAP) : g.targets
@@ -4332,6 +4386,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
             // on it would be a plausible value that means nothing.
             'Match type': t.isNegative ? (isKw ? negMatch(t.expressionType ?? '') : '') : (isKw && !isAuto ? t.expressionType : ''),
             'Product targeting expression': isKw ? '' : t.expressionValue,
+            ...perf(t.id),
           })
         }
       }
@@ -4354,6 +4409,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         campaignsExported: campaigns.length, campaignsTotal: totalCampaigns,
         truncated: totalCampaigns > limit || targetsTruncated > 0,
         marketplaces: [...marketplaces].sort(),
+        performanceWindowDays: perfDays,
+        // Measured, not assumed: AmazonAdsDailyPerformance holds only CAMPAIGN
+        // and PRODUCT_AD rows today — no AD_TARGET or AD_GROUP grain exists — so
+        // keyword and ad-group metric cells are blank rather than a fabricated 0.
+        performanceGrains: [...new Set(perfGrains)].sort(),
       },
       exportId: randomBytes(9).toString('base64url'),
       generatedAt: new Date(),
@@ -4369,6 +4429,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('X-Nexus-Export-Excludes', excludes.join(','))
     reply.header('X-Nexus-Export-Rows', String(built.rowCount))
     reply.header('X-Nexus-Export-Portfolios', String(built.portfolioCount))
+    reply.header('X-Nexus-Export-Performance-Window-Days', String(perfDays))
+    reply.header('X-Nexus-Export-Performance-Grains', [...new Set(perfGrains)].sort().join(','))
     reply.header('X-Nexus-Export-Id', built.exportId)
     reply.header('X-Nexus-Bulksheet-Schema', BULKSHEET_SCHEMA_VERSION)
     reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

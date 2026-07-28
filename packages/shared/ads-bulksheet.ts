@@ -30,7 +30,7 @@
 // Drives the exporter's cell coercion and number formats, and the importer's
 // parsing. 'id' is deliberately distinct from 'text': ids are pinned to a text
 // format so a spreadsheet can never re-read a 19-digit Amazon id as a float.
-export type BulksheetCellType = 'id' | 'text' | 'money' | 'int' | 'percent' | 'date' | 'enum'
+export type BulksheetCellType = 'id' | 'text' | 'money' | 'int' | 'percent' | 'ratio' | 'date' | 'enum'
 
 export const NUM_FMT: Record<BulksheetCellType, string | undefined> = {
   id: '@',
@@ -38,7 +38,12 @@ export const NUM_FMT: Record<BulksheetCellType, string | undefined> = {
   money: '#,##0.00',
   int: '#,##0',
   percent: '#,##0',
-  date: 'yyyy-mm-dd',
+  // Amazon stores CTR/CVR/ACOS as FRACTIONS (0.4688 = 46.88%). Storing the
+  // fraction and formatting it keeps the column sortable and re-importable;
+  // writing "46.88%" as text destroys both.
+  ratio: '0.00%',
+  // Amazon's own bulksheet writes dates as YYYYMMDD (20260612), not ISO.
+  date: '0',
   enum: undefined,
 }
 
@@ -68,18 +73,23 @@ export interface BulksheetColumn {
 // destroys its performance history.
 export const VOCABULARIES = {
   product: {
-    values: ['Sponsored Products', 'Sponsored Brands', 'Sponsored Display'],
+    values: ['Sponsored Products', 'Sponsored Brands', 'Sponsored Display', 'Portfolios'],
     accept: {
       SPONSOREDPRODUCTS: 'Sponsored Products', SP: 'Sponsored Products',
       SPONSOREDBRANDS: 'Sponsored Brands', SB: 'Sponsored Brands',
       SPONSOREDDISPLAY: 'Sponsored Display', SD: 'Sponsored Display',
+      PORTFOLIOS: 'Portfolios', PORTFOLIO: 'Portfolios',
     } as Record<string, string>,
   },
   entity: {
+    // The union across every sheet. Which ones are LEGAL depends on the ad
+    // product — see ENTITIES_BY_PRODUCT, which is what validation uses.
     values: [
       'Campaign', 'Ad group', 'Product ad', 'Keyword', 'Negative keyword',
       'Campaign negative keyword', 'Product targeting', 'Negative product targeting',
-      'Bidding adjustment', 'Portfolio',
+      'Bidding adjustment', 'Bidding adjustment by placement', 'Product collection ad',
+      'Contextual targeting', 'Audience targeting', 'Draft campaign', 'Draft keyword',
+      'Portfolio',
     ],
     accept: {
       CAMPAIGN: 'Campaign', ADGROUP: 'Ad group', PRODUCTAD: 'Product ad',
@@ -87,7 +97,13 @@ export const VOCABULARIES = {
       CAMPAIGNNEGATIVEKEYWORD: 'Campaign negative keyword',
       PRODUCTTARGETING: 'Product targeting',
       NEGATIVEPRODUCTTARGETING: 'Negative product targeting',
-      BIDDINGADJUSTMENT: 'Bidding adjustment', PORTFOLIO: 'Portfolio',
+      BIDDINGADJUSTMENT: 'Bidding adjustment',
+      BIDDINGADJUSTMENTBYPLACEMENT: 'Bidding adjustment by placement',
+      PRODUCTCOLLECTIONAD: 'Product collection ad',
+      CONTEXTUALTARGETING: 'Contextual targeting',
+      AUDIENCETARGETING: 'Audience targeting',
+      DRAFTCAMPAIGN: 'Draft campaign', DRAFTKEYWORD: 'Draft keyword',
+      PORTFOLIO: 'Portfolio',
     } as Record<string, string>,
   },
   operation: {
@@ -111,31 +127,52 @@ export const VOCABULARIES = {
     } as Record<string, string>,
   },
   targetingType: {
-    values: ['auto', 'manual'],
-    accept: { AUTO: 'auto', MANUAL: 'manual', AUTOMATICO: 'auto', MANUALE: 'manual' } as Record<string, string>,
+    // Title case — verified against a real download. We previously emitted
+    // lowercase, which Amazon's own dropdown would have rejected.
+    values: ['Auto', 'Manual'],
+    accept: { AUTO: 'Auto', MANUAL: 'Manual', AUTOMATICO: 'Auto', MANUALE: 'Manual' } as Record<string, string>,
   },
   biddingStrategy: {
-    values: ['Dynamic bids - down only', 'Dynamic bids - up and down', 'Fixed bid'],
+    // NOTE the EN DASH (U+2013) — Amazon writes "Dynamic bids – down only", not a
+    // hyphen. normEnum folds both so either form imports.
+    values: ['Dynamic bids – down only', 'Dynamic bids – up and down', 'Fixed bid'],
     accept: {
-      DYNAMICBIDSDOWNONLY: 'Dynamic bids - down only', LEGACYFORSALES: 'Dynamic bids - down only',
-      DYNAMICBIDSUPANDDOWN: 'Dynamic bids - up and down', AUTOFORSALES: 'Dynamic bids - up and down',
+      DYNAMICBIDSDOWNONLY: 'Dynamic bids – down only', LEGACYFORSALES: 'Dynamic bids – down only',
+      DYNAMICBIDSUPANDDOWN: 'Dynamic bids – up and down', AUTOFORSALES: 'Dynamic bids – up and down',
       FIXEDBID: 'Fixed bid', MANUAL: 'Fixed bid',
     } as Record<string, string>,
   },
   placement: {
-    values: ['Top of search (page 1)', 'Rest of search', 'Product pages', 'Amazon Business'],
+    // Amazon's real bulksheet spellings. Our previous guesses ("Top of search
+    // (page 1)", "Product pages") appear nowhere in a real file.
+    values: ['Placement top', 'Placement rest of search', 'Placement product page', 'Placement Amazon Business'],
     accept: {
-      TOPOFSEARCHPAGE1: 'Top of search (page 1)', PLACEMENTTOP: 'Top of search (page 1)',
-      RESTOFSEARCH: 'Rest of search', PLACEMENTRESTOFSEARCH: 'Rest of search',
-      PRODUCTPAGES: 'Product pages', PLACEMENTPRODUCTPAGE: 'Product pages',
-      AMAZONBUSINESS: 'Amazon Business',
+      PLACEMENTTOP: 'Placement top', TOPOFSEARCH: 'Placement top', TOPOFSEARCHPAGE1: 'Placement top',
+      PLACEMENTRESTOFSEARCH: 'Placement rest of search', RESTOFSEARCH: 'Placement rest of search',
+      PLACEMENTPRODUCTPAGE: 'Placement product page', PRODUCTPAGES: 'Placement product page', PRODUCTPAGE: 'Placement product page',
+      PLACEMENTAMAZONBUSINESS: 'Placement Amazon Business', AMAZONBUSINESS: 'Placement Amazon Business',
     } as Record<string, string>,
   },
 } as const
 
+/**
+ * Which entities are legal on which sheet. Verified against two real downloads
+ * (60-day and 1-day windows) whose entity sets were identical.
+ *
+ * This is per-AD-PRODUCT, not one global list — a guess we had wrong. Sponsored
+ * Display has no keywords at all; it targets by context or audience. Sponsored
+ * Brands has drafts, which Sponsored Products does not.
+ */
+export const ENTITIES_BY_PRODUCT: Record<string, readonly string[]> = {
+  'Sponsored Products': ['Campaign', 'Bidding adjustment', 'Ad group', 'Product ad', 'Keyword', 'Product targeting', 'Negative keyword', 'Campaign negative keyword', 'Negative product targeting'],
+  'Sponsored Brands': ['Campaign', 'Ad group', 'Keyword', 'Negative keyword', 'Draft campaign', 'Draft keyword', 'Bidding adjustment by placement', 'Product collection ad'],
+  'Sponsored Display': ['Campaign', 'Ad group', 'Product ad', 'Contextual targeting', 'Audience targeting'],
+  Portfolios: ['Portfolio'],
+}
+
 /** Normalise an enum token for lookup: case, spaces, underscores and hyphens all collapse. */
 export function normEnum(raw: string): string {
-  return raw.trim().toUpperCase().replace(/[\s_\-()]+/g, '')
+  return raw.trim().toUpperCase().replace(/[\s_\-\u2013\u2014()]+/g, '')
 }
 
 /** Canonical value, or null when unrecognised. Null is ALWAYS an error, never a default. */
@@ -155,43 +192,71 @@ export function parseVocabulary(vocab: keyof typeof VOCABULARIES, raw: string): 
 // Amazon's own bulksheets rely on and every consumer keys off.
 export const COLUMNS: readonly BulksheetColumn[] = [
   { header: 'Product', type: 'enum', vocabulary: 'product', editable: true, definition: 'Which ad product this row belongs to.', example: 'Sponsored Products' },
-  { header: 'Entity', type: 'enum', vocabulary: 'entity', editable: true, definition: 'What kind of object this row describes.', example: 'Keyword' },
+  { header: 'Entity', type: 'enum', vocabulary: 'entity', editable: true, definition: 'What kind of object this row describes. Legal values depend on the ad product.', example: 'Keyword' },
   { header: 'Operation', type: 'enum', vocabulary: 'operation', editable: true, definition: 'Leave blank to change nothing. Create, Update or Archive to act. Archive is irreversible on Amazon.', example: 'Update' },
 
   { header: 'Campaign ID', type: 'id', editable: false, definition: "Amazon's campaign id. Identity — never edit.", example: '490412835561617' },
   { header: 'Ad group ID', type: 'id', editable: false, definition: "Amazon's ad group id. Identity — never edit.", example: '422025536245292' },
-  { header: 'Portfolio ID', type: 'id', editable: true, definition: 'Portfolio this campaign belongs to.', example: '13579246801' },
+  { header: 'Portfolio ID', type: 'id', editable: true, definition: 'Portfolio this campaign belongs to.', example: '204054550849397' },
   { header: 'Ad ID', type: 'id', editable: false, definition: "Amazon's product ad id. Identity — never edit.", example: '11223344556677' },
-  { header: 'Keyword ID', type: 'id', editable: false, definition: "Amazon's keyword id. Identity — never edit.", example: '29599531751472', aliases: ['Keyword Id'] },
-  { header: 'Product Targeting ID', type: 'id', editable: false, definition: "Amazon's product-targeting id. Identity — never edit.", example: '98765432101234', aliases: ['Targeting ID', 'Product targeting Id'] },
+  { header: 'Keyword ID', type: 'id', editable: false, definition: "Amazon's keyword id. Identity — never edit.", example: '29599531751472' },
+  { header: 'Product Targeting ID', type: 'id', editable: false, definition: "Amazon's product-targeting id. Identity — never edit.", example: '98765432101234', aliases: ['Targeting ID'] },
 
-  { header: 'Campaign name', type: 'text', editable: true, definition: 'Campaign name. Unique per profile per ad product — the best natural key Amazon offers.', example: 'AIR MESH BROAD', aliases: ['Campaign Name'] },
-  { header: 'Ad group name', type: 'text', editable: true, definition: 'Ad group name.', example: 'Giacche Broad', aliases: ['Ad Group Name'] },
-  { header: 'Start date', type: 'date', editable: true, definition: 'Campaign start date. ISO only (yyyy-mm-dd) — ambiguous dd/mm vs mm/dd is rejected, not guessed.', example: '2026-07-28' },
-  { header: 'End date', type: 'date', editable: true, definition: 'Campaign end date. Blank means no end date.', example: '2026-12-31' },
-  { header: 'Targeting type', type: 'enum', vocabulary: 'targetingType', editable: false, definition: "Auto or manual targeting, as Amazon reports it. Blank means Amazon has not told us — a blank cell is inert, a wrong one corrupts on re-upload.", example: 'manual' },
+  { header: 'Campaign name', type: 'text', editable: true, definition: 'Campaign name. Unique per profile per ad product — the best natural key Amazon offers.', example: 'AIR MESH BROAD' },
+  { header: 'Ad group name', type: 'text', editable: true, definition: 'Ad group name.', example: 'Giacche Broad' },
+  { header: 'Campaign name (Informational only)', type: 'text', editable: false, definition: 'The parent campaign’s name, echoed for readability. Editing it changes nothing.' },
+  { header: 'Ad group name (Informational only)', type: 'text', editable: false, definition: 'The parent ad group’s name, echoed for readability. Editing it changes nothing.' },
+  { header: 'Portfolio name (Informational only)', type: 'text', editable: false, definition: 'The portfolio’s name, echoed for readability. Editing it changes nothing.' },
+
+  { header: 'Start date', type: 'date', editable: true, definition: 'Campaign start date, YYYYMMDD as Amazon writes it. ISO yyyy-mm-dd is also accepted on import.', example: '20260612' },
+  { header: 'End date', type: 'date', editable: true, definition: 'Campaign end date. Blank means no end date.', example: '20261231' },
+  { header: 'Targeting type', type: 'enum', vocabulary: 'targetingType', editable: false, definition: 'Auto or Manual targeting, as Amazon reports it. Blank means Amazon has not told us — a blank cell is inert, a wrong one corrupts on re-upload.', example: 'Manual' },
   { header: 'State', type: 'enum', vocabulary: 'state', editable: true, definition: 'enabled, paused or archived. Archived is terminal on Amazon — there is no unarchive.', example: 'enabled' },
+  { header: 'Campaign state (Informational only)', type: 'enum', vocabulary: 'state', editable: false, definition: 'The parent campaign’s state. Read-only context: a paused campaign serves nothing regardless of this row.' },
+  { header: 'Ad Group State (Informational only)', type: 'enum', vocabulary: 'state', editable: false, definition: 'The parent ad group’s state. Read-only context.' },
 
   { header: 'Daily budget', type: 'money', editable: true, definition: 'Campaign daily budget in the campaign currency.', example: '20.00', unit: 'currency', aliases: ['Budget'] },
   { header: 'SKU', type: 'id', editable: false, definition: 'Seller SKU advertised by a product ad. Text — leading zeros are preserved.', example: '0012345' },
-  { header: 'ASIN', type: 'id', editable: false, definition: 'ASIN advertised by a product ad.', example: 'B0CXXXXXXX' },
-  { header: 'Ad Group Default Bid', type: 'money', editable: true, definition: 'Fallback bid for targets in this ad group that have no bid of their own.', example: '0.50', unit: 'currency', aliases: ['Ad group default bid'] },
-  { header: 'Bid', type: 'money', editable: true, definition: `Bid for this keyword or target. Minimum ${'€'}0.02.`, example: '0.31', unit: 'currency' },
+  { header: 'ASIN (Informational only)', type: 'id', editable: false, definition: 'ASIN advertised by this product ad.', example: 'B0BMSH19GY', aliases: ['ASIN'] },
+  { header: 'Eligibility status (Informational only)', type: 'text', editable: false, definition: 'Whether Amazon considers this ad eligible to serve.', example: 'Eligible' },
+  { header: 'Reason for ineligibility (Informational only)', type: 'text', editable: false, definition: 'Why an ineligible ad is not serving.' },
 
-  { header: 'Keyword text', type: 'text', editable: true, definition: 'The keyword. Immutable once created — changing it is archive + create.', example: 'giacca moto', aliases: ['Keyword Text'] },
+  { header: 'Ad Group Default Bid', type: 'money', editable: true, definition: 'Fallback bid for targets in this ad group that have no bid of their own.', example: '0.50', unit: 'currency' },
+  { header: 'Ad Group Default Bid (Informational only)', type: 'money', editable: false, definition: 'The parent ad group’s default bid, echoed on child rows.', unit: 'currency' },
+  { header: 'Bid', type: 'money', editable: true, definition: 'Bid for this keyword or target. Amazon’s floor is 0.02.', example: '0.31', unit: 'currency' },
+
+  { header: 'Keyword text', type: 'text', editable: true, definition: 'The keyword. Immutable once created — changing it is archive + create.', example: 'giacca moto' },
   { header: 'Native language keyword', type: 'text', editable: true, definition: 'Keyword in the marketplace language, where Amazon supplies one.' },
   { header: 'Native language locale', type: 'text', editable: true, definition: 'Locale of the native-language keyword.', example: 'it_IT' },
   { header: 'Match type', type: 'enum', vocabulary: 'matchType', editable: true, definition: 'Broad, Phrase or Exact (or the negative forms). IMMUTABLE on Amazon: changing it is archive + create and loses all performance history.', example: 'Broad' },
-  { header: 'Bidding strategy', type: 'enum', vocabulary: 'biddingStrategy', editable: true, definition: 'How Amazon may flex your bid in the auction.', example: 'Dynamic bids - down only' },
-  { header: 'Placement', type: 'enum', vocabulary: 'placement', editable: true, definition: 'Which placement a bidding adjustment applies to.', example: 'Top of search (page 1)' },
-  { header: 'Percentage', type: 'percent', editable: true, definition: 'Placement bid adjustment, 0–900. A whole number, not a fraction.', example: '50', unit: '%' },
+  { header: 'Bidding strategy', type: 'enum', vocabulary: 'biddingStrategy', editable: true, definition: 'How Amazon may flex your bid in the auction.', example: 'Dynamic bids – down only' },
+  { header: 'Placement', type: 'enum', vocabulary: 'placement', editable: true, definition: 'Which placement a bidding adjustment applies to.', example: 'Placement top' },
+  { header: 'Percentage', type: 'percent', editable: true, definition: 'Placement bid adjustment, 0–900. A whole number, not a fraction.', example: '30', unit: '%' },
   { header: 'Product targeting expression', type: 'text', editable: true, definition: 'Targeting expression, e.g. asin="B0..." or category="...".', aliases: ['Targeting expression'] },
+  { header: 'Resolved product targeting expression (Informational only)', type: 'text', editable: false, definition: 'The expression with ids resolved to human-readable names.', aliases: ['Resolved targeting expression (Informational only)'] },
 
-  { header: 'Portfolio name', type: 'text', editable: true, definition: 'Portfolio name.', example: 'Moto — Core' },
   { header: 'Audience ID', type: 'id', editable: false, definition: 'Sponsored Display audience id.' },
-  { header: 'Shopper Cohort Percentage', type: 'percent', editable: true, definition: 'Sponsored Display shopper-cohort bid adjustment.', unit: '%' },
-  { header: 'Shopper Cohort Type', type: 'text', editable: true, definition: 'Sponsored Display shopper-cohort type.' },
-  { header: 'Sites', type: 'text', editable: true, definition: 'Sponsored Display placement sites.' },
+  { header: 'Shopper Cohort Percentage', type: 'percent', editable: true, definition: 'Shopper-cohort bid adjustment.', unit: '%' },
+  { header: 'Shopper Cohort Type', type: 'text', editable: true, definition: 'Shopper-cohort type.' },
+  { header: 'Segment Name (Informational only)', type: 'text', editable: false, definition: 'Audience segment name, echoed for readability.' },
+  { header: 'Sites', type: 'text', editable: true, definition: 'Placement sites.' },
+
+  // Performance context. These are Amazon's OWN columns, not additions of ours —
+  // the spec listed them as our invention, but a real download carries all 11.
+  // Read-only, and deliberately excluded from the _baseline fingerprint: Amazon
+  // restates them for up to 60 days, so hashing them would turn ordinary
+  // restatement into a false "someone changed this" conflict on every re-upload.
+  { header: 'Impressions', type: 'int', editable: false, definition: 'Impressions in the exported window.' },
+  { header: 'Clicks', type: 'int', editable: false, definition: 'Clicks in the exported window.' },
+  { header: 'Click-through rate', type: 'ratio', editable: false, definition: 'Clicks / impressions. Stored as a fraction (0.0025 = 0.25%).' },
+  { header: 'Spend', type: 'money', editable: false, definition: 'Ad spend in the exported window.', unit: 'currency' },
+  { header: 'Sales', type: 'money', editable: false, definition: 'Attributed sales in the exported window.', unit: 'currency' },
+  { header: 'Orders', type: 'int', editable: false, definition: 'Attributed orders in the exported window.' },
+  { header: 'Units', type: 'int', editable: false, definition: 'Attributed units in the exported window.' },
+  { header: 'Conversion rate', type: 'ratio', editable: false, definition: 'Orders / clicks. Stored as a fraction.' },
+  { header: 'ACOS', type: 'ratio', editable: false, definition: 'Spend / sales. Stored as a fraction (0.4688 = 46.88%).' },
+  { header: 'CPC', type: 'money', editable: false, definition: 'Average cost per click.', unit: 'currency' },
+  { header: 'ROAS', type: 'money', editable: false, definition: 'Sales / spend. A ratio, not a percentage.' },
 ] as const
 
 export const HEADERS: readonly string[] = COLUMNS.map((c) => c.header)
@@ -263,19 +328,37 @@ export function parsePercent(raw: string): Parsed<number> {
   return { value: Math.round(m.value) }
 }
 
-/** ISO dates only. dd/mm vs mm/dd is unresolvable from the value alone, so it errors. */
+/**
+ * Dates. Amazon's own bulksheet writes YYYYMMDD (20260612) — NOT ISO — so that is
+ * what we emit and the first thing we accept. ISO is accepted too because people
+ * type it.
+ *
+ * `03/04/2026` is rejected rather than guessed: it is March 4th in the US and
+ * April 3rd in Italy, and there is nothing in the value itself to decide which.
+ */
 export function parseDate(raw: string): Parsed<string> {
   const s = raw.trim()
   if (!s) return { error: 'value is empty' }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-    const d = new Date(`${s}T00:00:00Z`)
-    if (Number.isNaN(d.getTime())) return { error: `"${raw}" is not a real date` }
-    return { value: s }
+  const check = (y: number, m: number, d: number, canonical: string): Parsed<string> => {
+    const dt = new Date(Date.UTC(y, m - 1, d))
+    if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) {
+      return { error: `"${raw}" is not a real date` }
+    }
+    return { value: canonical }
   }
+  const compact = /^(\d{4})(\d{2})(\d{2})$/.exec(s)
+  if (compact) return check(+compact[1]!, +compact[2]!, +compact[3]!, s)
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s)
+  if (iso) return check(+iso[1]!, +iso[2]!, +iso[3]!, `${iso[1]}${iso[2]}${iso[3]}`)
   if (/^\d{1,2}[/.]\d{1,2}[/.]\d{2,4}$/.test(s)) {
-    return { error: `"${raw}" is ambiguous — 03/04/2026 is March 4th in the US and April 3rd in Italy. Use yyyy-mm-dd.` }
+    return { error: `"${raw}" is ambiguous — 03/04/2026 is March 4th in the US and April 3rd in Italy. Use YYYYMMDD (20260403).` }
   }
-  return { error: `"${raw}" is not a date. Use yyyy-mm-dd.` }
+  return { error: `"${raw}" is not a date. Use YYYYMMDD, e.g. 20260403.` }
+}
+
+/** A JS Date → Amazon's YYYYMMDD integer. */
+export function toAmazonDate(d: Date): number {
+  return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate()
 }
 
 // ── Per-entity grammar ────────────────────────────────────────────────

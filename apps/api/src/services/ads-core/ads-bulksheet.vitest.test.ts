@@ -12,7 +12,7 @@ import {
   parseMoney, parseBid, parsePercent, parseDate,
   validateRow, entityRule, buildDictionaryRows, DICTIONARY_HEADERS,
   AMAZON_BID_FLOOR_EUR,
-  buildRowKey, computeBaseline, baselineConflicts,
+  buildRowKey, computeBaseline, baselineConflicts, ENTITIES_BY_PRODUCT,
 } from '@nexus/shared/ads-bulksheet'
 
 /** Build a `get` accessor over a plain row object, as callers do. */
@@ -46,6 +46,27 @@ describe('columns', () => {
   it('marks Targeting type read-only — it is observed from Amazon, never authored', () => {
     expect(resolveColumn('Targeting type')!.editable).toBe(false)
   })
+
+  it('matches the 53-column Sponsored Products layout of a real download', () => {
+    expect(COLUMNS).toHaveLength(53)
+    // Amazon's informational columns are read-only by definition.
+    for (const c of COLUMNS) {
+      if (/\(Informational only\)$/.test(c.header)) expect(c.editable, c.header).toBe(false)
+    }
+    // Performance columns are Amazon's OWN, not our additions, and read-only.
+    for (const h of ['Impressions', 'Clicks', 'Spend', 'Sales', 'ACOS', 'CPC', 'ROAS']) {
+      expect(resolveColumn(h)!.editable, h).toBe(false)
+    }
+    // ...and excluded from the baseline, or 60 days of restatement would read as conflicts.
+    const a = computeBaseline((h) => (h === 'Bid' ? '0.31' : h === 'ACOS' ? '0.20' : ''))
+    const b = computeBaseline((h) => (h === 'Bid' ? '0.31' : h === 'ACOS' ? '0.99' : ''))
+    expect(a).toBe(b)
+  })
+
+  it('stores ratios as fractions, the way Amazon does', () => {
+    expect(resolveColumn('ACOS')!.type).toBe('ratio')
+    expect(NUM_FMT.ratio).toBe('0.00%')
+  })
 })
 
 describe('header resolution', () => {
@@ -67,6 +88,25 @@ describe('header resolution', () => {
 })
 
 describe('vocabularies', () => {
+  it('accepts the real placement and bidding-strategy spellings, including the en dash', () => {
+    // Amazon writes "Dynamic bids – down only" with U+2013, and placements as
+    // "Placement top" — our earlier guesses appear nowhere in a real file.
+    expect(parseVocabulary('biddingStrategy', 'Dynamic bids \u2013 down only')).toBe('Dynamic bids \u2013 down only')
+    expect(parseVocabulary('biddingStrategy', 'Dynamic bids - down only')).toBe('Dynamic bids \u2013 down only')
+    expect(parseVocabulary('biddingStrategy', 'LEGACY_FOR_SALES')).toBe('Dynamic bids \u2013 down only')
+    expect(parseVocabulary('placement', 'Placement top')).toBe('Placement top')
+    expect(parseVocabulary('placement', 'PLACEMENT_TOP')).toBe('Placement top')
+    expect(parseVocabulary('targetingType', 'AUTO')).toBe('Auto')
+  })
+
+  it('knows which entities are legal on which sheet', () => {
+    // Verified per ad product: Sponsored Display has no keywords at all.
+    expect(ENTITIES_BY_PRODUCT['Sponsored Display']).not.toContain('Keyword')
+    expect(ENTITIES_BY_PRODUCT['Sponsored Display']).toContain('Contextual targeting')
+    expect(ENTITIES_BY_PRODUCT['Sponsored Brands']).toContain('Draft campaign')
+    expect(ENTITIES_BY_PRODUCT['Sponsored Products']).toContain('Campaign negative keyword')
+  })
+
   it('accepts canonical, cased, and it-IT match types', () => {
     expect(parseVocabulary('matchType', 'BROAD')).toBe('Broad')
     expect(parseVocabulary('matchType', 'broad')).toBe('Broad')
@@ -144,8 +184,11 @@ describe('percent and date parsing', () => {
     expect('error' in parsePercent('-1')).toBe(true)
   })
 
-  it('accepts ISO dates only, and explains why dd/mm is refused', () => {
-    expect(parseDate('2026-07-28')).toEqual({ value: '2026-07-28' })
+  it('accepts Amazon YYYYMMDD and ISO, normalising to Amazon form', () => {
+    // Verified against two real downloads: Amazon writes 20260612, not ISO.
+    expect(parseDate('20260728')).toEqual({ value: '20260728' })
+    expect(parseDate('2026-07-28')).toEqual({ value: '20260728' })
+    expect('error' in parseDate('20260231')).toBe(true) // Feb 31st
     const amb = parseDate('03/04/2026')
     expect('error' in amb).toBe(true)
     if ('error' in amb) expect(amb.error).toContain('ambiguous')
