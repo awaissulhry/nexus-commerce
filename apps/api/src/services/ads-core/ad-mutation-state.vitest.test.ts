@@ -8,7 +8,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   AD_MUTATION_STATES, IN_FLIGHT_STATES, TERMINAL_STATES,
-  PENDING_TRUST_WINDOW_MS, isBelievablyPending, isTerminal, stateForQueueStatus,
+  PENDING_TRUST_WINDOW_MS, SERIALISE_BLOCK_WINDOW_MS,
+  isBelievablyPending, isBlockingWrite, isTerminal, stateForQueueStatus,
 } from './ad-mutation-state.js'
 
 describe('the defect: a campaign-wide pending lookup hides real external edits', () => {
@@ -80,6 +81,34 @@ describe('stateForQueueStatus — the projection from the dispatch path', () => 
     // write that may never have landed.
     expect(stateForQueueStatus('SOMETHING_NEW')).toBe('PENDING')
     expect(isTerminal(stateForQueueStatus('SOMETHING_NEW'))).toBe(false)
+  })
+})
+
+describe('per-entity serialisation — the HTTP 423 guard', () => {
+  const now = new Date('2026-07-28T12:00:00Z')
+  const at = (msAgo: number) => new Date(now.getTime() - msAgo)
+
+  it('a live in-flight write blocks another write to the same entity', () => {
+    expect(isBlockingWrite({ state: 'IN_FLIGHT', updatedAt: at(2_000) }, now)).toBe(true)
+  })
+
+  it('only IN_FLIGHT blocks — a queued write has not reached Amazon yet', () => {
+    // PENDING rows are still inside the grace window; blocking on them would
+    // stall every write for five minutes behind an undo-able change.
+    expect(isBlockingWrite({ state: 'PENDING', updatedAt: at(2_000) }, now)).toBe(false)
+    expect(isBlockingWrite({ state: 'APPLIED', updatedAt: at(2_000) }, now)).toBe(false)
+  })
+
+  it('a crashed write stops blocking its entity, rather than stranding it forever', () => {
+    expect(isBlockingWrite({ state: 'IN_FLIGHT', updatedAt: at(SERIALISE_BLOCK_WINDOW_MS - 1) }, now)).toBe(true)
+    expect(isBlockingWrite({ state: 'IN_FLIGHT', updatedAt: at(SERIALISE_BLOCK_WINDOW_MS + 1) }, now)).toBe(false)
+  })
+
+  it('the block window is far shorter than the drift trust window', () => {
+    // They answer different questions and must not be collapsed: stranding a
+    // write is more urgent than suppressing a drift signal, so the write
+    // unblocks in minutes while drift stays suppressed for hours.
+    expect(SERIALISE_BLOCK_WINDOW_MS).toBeLessThan(PENDING_TRUST_WINDOW_MS)
   })
 })
 

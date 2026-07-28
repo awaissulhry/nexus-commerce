@@ -17,7 +17,7 @@
 
 import { Worker, type Job } from 'bullmq'
 import prisma from '../db.js'
-import { settleAdMutations } from '../services/advertising/ads-mutation.service.js'
+import { entityWriteInFlightElsewhere, settleAdMutations } from '../services/advertising/ads-mutation.service.js'
 import { redis } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { isEntityGoneError, orphanReasonFrom } from '../services/ads-core/amazon-entity-gone.js'
@@ -267,6 +267,25 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     return { status: 'SKIPPED', queueId }
   }
 
+  // AX-ZD.1 — serialise writes per entity. Amazon answers two concurrent writes
+  // to one entity with HTTP 423 ConcurrentModificationException, and this worker
+  // runs at concurrency 2. Defer rather than fail: the row stays PENDING with a
+  // short hold and the drain picks it up, so nothing is lost and the operator's
+  // change still lands. (A mitigation, not a lock — see
+  // entityWriteInFlightElsewhere for why, and what closing it fully requires.)
+  const payloadForLock = row.payload as unknown as AdMutationPayload
+  if (payloadForLock?.entityType && payloadForLock?.entityId
+      && await entityWriteInFlightElsewhere(payloadForLock.entityType, payloadForLock.entityId, queueId)) {
+    await prisma.outboundSyncQueue.update({
+      where: { id: queueId },
+      data: { holdUntil: new Date(Date.now() + SERIALISE_DEFER_MS) },
+    })
+    logger.info('[ads-sync.worker] deferred — another write is in flight on this entity', {
+      queueId, entityType: payloadForLock.entityType, entityId: payloadForLock.entityId,
+    })
+    return { status: 'DEFERRED', queueId }
+  }
+
   await prisma.outboundSyncQueue.update({
     where: { id: queueId },
     data: { syncStatus: 'IN_PROGRESS' },
@@ -398,6 +417,10 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
   }
   return { status: 'FAILED', queueId }
 }
+
+/** How long a deferred row waits before the drain retries it. Short: the
+ *  blocking write is a single Amazon call, normally done in seconds. */
+const SERIALISE_DEFER_MS = Number(process.env.NEXUS_ADS_SERIALISE_DEFER_MS ?? 20_000)
 
 let worker: Worker | null = null
 

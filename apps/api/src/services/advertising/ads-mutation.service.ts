@@ -24,7 +24,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import {
-  IN_FLIGHT_STATES, isBelievablyPending, isTerminal, stateForQueueStatus,
+  IN_FLIGHT_STATES, isBelievablyPending, isBlockingWrite, isTerminal, stateForQueueStatus,
 } from '../ads-core/ad-mutation-state.js'
 
 // Conservative grace window. Operators have 5 min to cancel before
@@ -223,6 +223,49 @@ export async function settleAdMutations(
     logger.warn('[AX-ZD.1] mutation settle failed', {
       outboundQueueId, syncStatus, error: err instanceof Error ? err.message : String(err),
     })
+  }
+}
+
+/**
+ * AX-ZD.1 — is another queue row already writing to this entity?
+ *
+ * Amazon answers two concurrent writes to one entity with HTTP 423
+ * ConcurrentModificationException, and the ads worker runs at concurrency 2, so
+ * two jobs for the same campaign can overlap. Until ZD.1 there was no way to
+ * even ask this: OutboundSyncQueue has no entity foreign key, only a JSON blob.
+ *
+ * HONEST LIMIT — this REDUCES the race, it does not eliminate it. Two workers
+ * can both check, both find nothing, and both proceed inside the same few
+ * milliseconds. True mutual exclusion needs a lock held across the check and the
+ * write; a Postgres advisory lock would be the natural choice and is exactly
+ * what we cannot rely on here, because pgbouncer transaction pooling detaches
+ * session-scoped locks from the client that took them (the same reason
+ * `prisma migrate deploy` stalls against this database). Closing the remaining
+ * window means moving dispatch off OutboundSyncQueue so a row can be claimed
+ * atomically — deferred, and the reason serialisation is a mitigation today
+ * rather than a guarantee.
+ */
+export async function entityWriteInFlightElsewhere(
+  entityType: AdEntityType,
+  entityId: string,
+  excludeQueueId: string,
+  now: Date = new Date(),
+): Promise<boolean> {
+  try {
+    const rows = await prisma.adMutation.findMany({
+      where: {
+        entityType, entityId,
+        state: 'IN_FLIGHT',
+        NOT: { outboundQueueId: excludeQueueId },
+      },
+      select: { state: true, updatedAt: true },
+    })
+    return rows.some((r) => isBlockingWrite(r, now))
+  } catch {
+    // Fail OPEN: if we cannot tell, let the write proceed. Amazon's 423 is
+    // retryable and visible; a write blocked by a failed bookkeeping query
+    // would be neither.
+    return false
   }
 }
 

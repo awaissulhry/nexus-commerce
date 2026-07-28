@@ -51,6 +51,32 @@ export function isTerminal(state: string): boolean {
  */
 export const PENDING_TRUST_WINDOW_MS = 24 * 60 * 60 * 1000
 
+/**
+ * How long an IN_FLIGHT row may block another write to the same entity.
+ *
+ * Amazon returns HTTP 423 ConcurrentModificationException when two writes hit
+ * one entity at once, and the ads worker runs at concurrency 2, so two jobs for
+ * the same campaign genuinely can overlap. Deferring the second is the fix.
+ *
+ * The window exists so a crashed write cannot block its entity forever. Any
+ * single Amazon call finishes in seconds; five minutes past going IN_FLIGHT, the
+ * row is not "in progress", it is abandoned, and continuing to defer behind it
+ * would strand every later write to that campaign. Deliberately much shorter
+ * than PENDING_TRUST_WINDOW_MS, which answers a different question — that one
+ * bounds how long we *suppress drift*, this one bounds how long we *block a
+ * write*, and stranding a write is the more urgent failure.
+ */
+export const SERIALISE_BLOCK_WINDOW_MS = 5 * 60 * 1000
+
+/** Is this row a live write that another write to the same entity must wait for? */
+export function isBlockingWrite(
+  row: { state: string; updatedAt: Date },
+  now: Date = new Date(),
+): boolean {
+  if (row.state !== 'IN_FLIGHT') return false
+  return now.getTime() - row.updatedAt.getTime() < SERIALISE_BLOCK_WINDOW_MS
+}
+
 export function isBelievablyPending(
   row: { state: string; createdAt: Date },
   now: Date = new Date(),
