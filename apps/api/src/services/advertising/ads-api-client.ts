@@ -394,6 +394,12 @@ export interface V3CampaignSettings {
   name?: string
   state?: string // enabled | paused | archived
   portfolioId?: string | null // Amazon's authoritative campaign→portfolio membership
+  // AX-IE.0 (E4) — Amazon's authoritative AUTO|MANUAL. The v1 unified export record
+  // carries no targeting type at all, so this v3 list is the only source we have.
+  // Declared optional and never defaulted: if Amazon omits it we store null and the
+  // bulksheet exporter emits a blank cell, because a wrong targeting type in a
+  // bulksheet corrupts on re-upload while a blank one is inert.
+  targetingType?: string
   dynamicBidding?: { strategy?: string; placementBidding?: Array<{ placement: string; percentage: number }> }
   budget?: { budget?: number; budgetType?: string }
 }

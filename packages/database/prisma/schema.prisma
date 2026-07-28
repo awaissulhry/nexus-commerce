@@ -2669,6 +2669,16 @@ model Campaign {
   // back-compat reads; sync code populates BOTH columns until M3 cutover.
   // Values: 'SPONSORED_PRODUCTS' | 'SPONSORED_BRANDS' | 'SPONSORED_DISPLAY' | 'SPONSORED_TELEVISION'
   adProduct          String?
+  /// AX-IE.0 (E4) — Amazon's REAL campaign targeting type ('AUTO' | 'MANUAL'),
+  /// read from v3 POST /sp/campaigns/list by ads-campaign-settings-sync.
+  /// Null = Amazon hasn't reported it yet; the bulksheet exporter emits a blank
+  /// cell rather than guessing. This replaced a regex over the campaign NAME
+  /// (/\bauto|close match|.../) which mislabelled 26 of 196 campaigns — e.g. a
+  /// manual campaign called "Autumn Boots" exported as auto, and a bulksheet that
+  /// states the wrong targeting type corrupts on re-upload.
+  /// NOTE: AdGroup.targetingType is NOT a substitute — it is only ever written by
+  /// our own campaign builders, so every synced ad group sits at its default.
+  targetingType      String?
   // v1 budget shape: { amount, type: 'DAILY'|'LIFETIME', recurrenceTimePeriod? }
   budgetJson         Json?
   // Full v1 bidding strategy (per-adProduct varies). For SP: { strategy, adjustments[] }.
@@ -2881,10 +2891,32 @@ model AmazonAdsConnection {
   lastVerifiedAt       DateTime?
   lastErrorAt          DateTime?
   lastError            String?
+
+  // ── AX-IE.0 — refresh-token lifetime tracking ────────────────────────
+  // From 2026-07-30 Amazon refresh tokens expire 365 days from CONSENT. Nothing
+  // used to track token age, so every connection would simply stop working a year
+  // after authorisation with no warning and no way to see it coming.
+  //
+  // tokenIssuedAt is stamped at consent (amazon-ads-auth callback) and again on
+  // every refresh-token rotation. tokenExpiresAt is derived, stored rather than
+  // computed so the window can be corrected per-connection if Amazon's rule turns
+  // out to differ.
+  //
+  // tokenIssuedAtIsEstimate marks a value we INFERRED rather than observed. The 10
+  // existing connections were all seeded in one batch (createdAt 2026-05-17
+  // 02:45:45, sub-second apart), so their true consent dates are unrecoverable —
+  // the backfill uses createdAt as a conservative floor and flags it, so the UI can
+  // never present a guess as a fact. Cleared the first time a real consent or
+  // rotation stamps it.
+  tokenIssuedAt          DateTime?
+  tokenExpiresAt         DateTime?
+  tokenIssuedAtIsEstimate Boolean  @default(false)
+
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
   @@index([marketplace, isActive])
+  @@index([tokenExpiresAt])
 }
 
 // ── Phase 2: v1 unified Amazon Ads API substrate ─────────────────────────

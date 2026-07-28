@@ -4145,33 +4145,102 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // Read-only. Campaign + Ad group + Keyword/Product-targeting rows in the exact
   // Sponsored Products bulksheet column layout. Powers the Bulk operations screen.
   const BULK_COLS = ['Product', 'Entity', 'Operation', 'Campaign ID', 'Ad group ID', 'Portfolio ID', 'Ad ID', 'Keyword ID', 'Product Targeting ID', 'Campaign name', 'Ad group name', 'Start date', 'End date', 'Targeting type', 'State', 'Daily budget', 'SKU', 'Ad Group Default Bid', 'Bid', 'Keyword text', 'Native language keyword', 'Native language locale', 'Match type', 'Bidding strategy', 'Placement', 'Percentage', 'Product targeting expression', 'Audience ID', 'Shopper Cohort Percentage', 'Shopper Cohort Type', 'Sites']
+  // AX-IE.0 — per-column cell typing. This is the seed of the AX-IE.2 schema object;
+  // for now it exists to close one specific corruption chain.
+  //
+  // 'money' columns used to be written as STRINGS (Bid came out of `.toFixed(2)`),
+  // which made the whole column text in Excel and Numbers: unsummable, unsortable,
+  // and — the actual damage — an it-IT operator editing it types "1,25", the text
+  // cell keeps it verbatim, and on re-upload `Number("1,25")` is NaN, which the
+  // importer silently turned into a EUR 0.50 bid. Writing real numbers means the
+  // spreadsheet itself hands back an invariant value.
+  //
+  // 'id' columns are pinned to text ('@') so an Amazon id can never be re-read as a
+  // float. Nothing is currently over 2^53 (max observed: 15 digits) so this is
+  // prophylactic — it stops a Numbers re-save or a stray "convert to number" from
+  // silently rewriting an identity column.
+  const BULK_COL_TYPE: Record<string, 'id' | 'money' | 'int' | 'date'> = {
+    'Campaign ID': 'id', 'Ad group ID': 'id', 'Portfolio ID': 'id', 'Ad ID': 'id',
+    'Keyword ID': 'id', 'Product Targeting ID': 'id', 'Audience ID': 'id', SKU: 'id',
+    'Daily budget': 'money', 'Ad Group Default Bid': 'money', Bid: 'money',
+    Percentage: 'int', 'Shopper Cohort Percentage': 'int',
+    'Start date': 'date', 'End date': 'date',
+  }
+  const BULK_NUMFMT: Record<string, string> = { id: '@', money: '#,##0.00', int: '#,##0', date: 'yyyy-mm-dd' }
   fastify.get('/advertising/bulk/export', async (request, reply) => {
     const q = request.query as { limit?: string }
-    const limit = Math.max(1, Math.min(500, Number(q.limit ?? 200)))
+    // AX-IE.0 (E1) — this used to default to 200 campaigns and hard-cap at 500,
+    // silently. The account sits at 196: it was four campaigns away from handing
+    // back a file that looks complete and isn't. Export everything by default, and
+    // when anything IS dropped say so loudly rather than emitting a quiet partial.
+    const HARD_CEILING = 5000
+    const TARGET_CAP = 1000 // Amazon's own per-ad-group keyword ceiling
+    const explicitLimit = q.limit != null && q.limit !== '' && Number.isFinite(Number(q.limit))
+      ? Math.max(1, Math.floor(Number(q.limit)))
+      : null
+    const totalCampaigns = await prisma.campaign.count()
+    if (!explicitLimit && totalCampaigns > HARD_CEILING) {
+      reply.status(409)
+      return { error: 'export_too_large', totalCampaigns, ceiling: HARD_CEILING, hint: 'Narrow the scope, or pass ?limit= to explicitly acknowledge a partial export.' }
+    }
+    const limit = explicitLimit ?? HARD_CEILING
     const campaigns = await prisma.campaign.findMany({
       take: limit, orderBy: { name: 'asc' },
-      include: { adGroups: { include: { targets: { where: { isNegative: false }, take: 200 } } } },
+      // take one MORE than the cap purely to detect overflow — the extra row is sliced off below
+      include: { adGroups: { include: { targets: { where: { isNegative: false }, take: TARGET_CAP + 1 } } } },
     })
+    let targetsTruncated = 0
     const PROD: Record<string, string> = { SPONSORED_PRODUCTS: 'Sponsored Products', SPONSORED_BRANDS: 'Sponsored Brands', SPONSORED_DISPLAY: 'Sponsored Display' }
     const st = (s: string) => (s || '').toLowerCase()
-    const isAuto = (n: string) => /\bauto|close match|loose match|substitute|complement/i.test(n || '')
     const ExcelJS = (await import('exceljs')).default
     const wb = new ExcelJS.Workbook()
     const ws = wb.addWorksheet('Sponsored Products Campaigns')
     ws.addRow(BULK_COLS)
-    const push = (o: Record<string, unknown>) => ws.addRow(BULK_COLS.map((c) => o[c] ?? ''))
+    // Coerce per column type so ExcelJS emits the right cell kind: numbers as
+    // numbers, dates as real Dates, ids as text. null → genuinely empty cell.
+    const coerce = (col: string, v: unknown): string | number | Date | null => {
+      if (v == null || v === '') return null
+      switch (BULK_COL_TYPE[col]) {
+        case 'money': { const n = Number(v); return Number.isFinite(n) ? n : null }
+        case 'int': { const n = Number(v); return Number.isFinite(n) ? Math.round(n) : null }
+        case 'date': return v instanceof Date ? v : new Date(String(v))
+        default: return String(v)
+      }
+    }
+    const push = (o: Record<string, unknown>) => ws.addRow(BULK_COLS.map((c) => coerce(c, o[c])))
     for (const c of campaigns) {
       const product = PROD[c.adProduct ?? ''] ?? 'Sponsored Products'
-      push({ Product: product, Entity: 'Campaign', 'Campaign ID': c.externalCampaignId ?? '', 'Campaign name': c.name, 'Start date': c.startDate ? c.startDate.toISOString().slice(0, 10) : '', 'End date': c.endDate ? c.endDate.toISOString().slice(0, 10) : '', 'Targeting type': isAuto(c.name) ? 'auto' : 'manual', State: st(c.status), 'Daily budget': c.dailyBudget != null ? Number(c.dailyBudget) : '', 'Bidding strategy': c.biddingStrategy ?? '' })
+      // AX-IE.0 (E4) — targeting type is READ, never guessed. It used to be inferred
+      // by regex on the campaign name, which mislabelled 26 of 196 campaigns ("Autumn
+      // Boots" exported as auto). Blank when Amazon hasn't told us yet: a bulksheet
+      // that omits a value is inert, one that states the wrong value corrupts on
+      // re-upload. Populated by ads-campaign-settings-sync from the v3 campaigns API.
+      push({ Product: product, Entity: 'Campaign', 'Campaign ID': c.externalCampaignId ?? '', 'Portfolio ID': c.portfolioId ?? '', 'Campaign name': c.name, 'Start date': c.startDate ?? '', 'End date': c.endDate ?? '', 'Targeting type': c.targetingType ? c.targetingType.toLowerCase() : '', State: st(c.status), 'Daily budget': c.dailyBudget != null ? Number(c.dailyBudget) : '', 'Bidding strategy': c.biddingStrategy ?? '' })
       for (const g of c.adGroups) {
-        push({ Product: product, Entity: 'Ad group', 'Campaign ID': c.externalCampaignId ?? '', 'Ad group ID': g.externalAdGroupId ?? '', 'Ad group name': g.name, State: st(g.status) })
-        for (const t of g.targets) {
+        push({ Product: product, Entity: 'Ad group', 'Campaign ID': c.externalCampaignId ?? '', 'Ad group ID': g.externalAdGroupId ?? '', 'Ad group name': g.name, State: st(g.status), 'Ad Group Default Bid': g.defaultBidCents / 100 })
+        const shown = g.targets.length > TARGET_CAP ? g.targets.slice(0, TARGET_CAP) : g.targets
+        if (g.targets.length > TARGET_CAP) targetsTruncated += 1
+        for (const t of shown) {
           const isKw = t.kind === 'KEYWORD'
-          push({ Product: product, Entity: isKw ? 'Keyword' : 'Product targeting', 'Campaign ID': c.externalCampaignId ?? '', 'Ad group ID': g.externalAdGroupId ?? '', 'Keyword ID': isKw ? (t.externalTargetId ?? '') : '', 'Product Targeting ID': isKw ? '' : (t.externalTargetId ?? ''), State: st(t.status), Bid: (t.bidCents / 100).toFixed(2), 'Keyword text': isKw ? t.expressionValue : '', 'Match type': t.expressionType, 'Product targeting expression': isKw ? '' : t.expressionValue })
+          push({ Product: product, Entity: isKw ? 'Keyword' : 'Product targeting', 'Campaign ID': c.externalCampaignId ?? '', 'Ad group ID': g.externalAdGroupId ?? '', 'Keyword ID': isKw ? (t.externalTargetId ?? '') : '', 'Product Targeting ID': isKw ? '' : (t.externalTargetId ?? ''), State: st(t.status), Bid: t.bidCents / 100, 'Keyword text': isKw ? t.expressionValue : '', 'Match type': t.expressionType, 'Product targeting expression': isKw ? '' : t.expressionValue })
         }
       }
     }
+    BULK_COLS.forEach((col, i) => {
+      const fmt = BULK_NUMFMT[BULK_COL_TYPE[col] ?? '']
+      if (fmt) ws.getColumn(i + 1).numFmt = fmt
+    })
     const buf = Buffer.from(await wb.xlsx.writeBuffer())
+    // Truthful coverage headers. The sheet is Campaign / Ad group / Keyword /
+    // Product targeting only — negatives, product ads and placement modifiers are
+    // still absent (AX-IE.3 completes the entity set). Naming what is missing is
+    // what stops a partial file from reading as a full one.
+    reply.header('X-Nexus-Export-Campaigns', String(Math.min(limit, totalCampaigns)))
+    reply.header('X-Nexus-Export-Campaigns-Total', String(totalCampaigns))
+    reply.header('X-Nexus-Export-Truncated', totalCampaigns > limit || targetsTruncated > 0 ? 'true' : 'false')
+    reply.header('X-Nexus-Export-Adgroups-Target-Truncated', String(targetsTruncated))
+    reply.header('X-Nexus-Export-Entities', 'Campaign,Ad group,Keyword,Product targeting')
+    reply.header('X-Nexus-Export-Excludes', 'Negative keyword,Campaign negative keyword,Product ad,Bidding adjustment,Sponsored Brands sheet,Sponsored Display sheet')
     reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     reply.header('Content-Disposition', 'attachment; filename="nexus-bulksheet.xlsx"')
     return reply.send(buf)
@@ -4199,6 +4268,50 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const campByExt = new Map(camps.map((c) => [c.externalCampaignId, c]))
     const agByExt = new Map(ags.map((a) => [a.externalAdGroupId, a]))
     const ST: Record<string, 'ENABLED' | 'PAUSED' | 'ARCHIVED'> = { enabled: 'ENABLED', paused: 'PAUSED', archived: 'ARCHIVED' }
+
+    // ── AX-IE.0 — strict parsing. Both of the helpers below replace a silent
+    // fallback that was actively corrupting data.
+    //
+    // Match type used to collapse anything unrecognised to EXACT. Match type is
+    // IMMUTABLE on Amazon: the only way to correct one is archive + recreate, which
+    // resets the target id and destroys its entire performance history. A typo must
+    // never be able to buy that outcome quietly.
+    const MATCH_TYPES: Record<string, 'EXACT' | 'PHRASE' | 'BROAD'> = {
+      EXACT: 'EXACT', PHRASE: 'PHRASE', BROAD: 'BROAD',
+      ESATTA: 'EXACT', FRASE: 'PHRASE', GENERICA: 'BROAD', // it-IT Seller Central
+    }
+    const NEG_MATCH_TYPES: Record<string, 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE'> = {
+      NEGATIVEEXACT: 'NEGATIVE_EXACT', NEGATIVEPHRASE: 'NEGATIVE_PHRASE',
+      CAMPAIGNNEGATIVEEXACT: 'NEGATIVE_EXACT', CAMPAIGNNEGATIVEPHRASE: 'NEGATIVE_PHRASE',
+      EXACT: 'NEGATIVE_EXACT', PHRASE: 'NEGATIVE_PHRASE',
+      ESATTA: 'NEGATIVE_EXACT', FRASE: 'NEGATIVE_PHRASE',
+    }
+    const normEnum = (raw: string) => raw.trim().toUpperCase().replace(/[\s_-]+/g, '')
+
+    // Money used to be `Number(x)`, and anything NaN became a EUR 0.50 bid. Now an
+    // unreadable value is a row error. XLSX stores numbers locale-invariantly, so a
+    // well-formed sheet never reaches the string branches at all — those exist for
+    // CSV and for cells an operator retyped as text.
+    const parseMoneyEur = (raw: string): { eur: number } | { error: string } => {
+      const s = raw.replace(/[\s €]/g, '')
+      if (!s) return { error: 'value is empty' }
+      let t = s
+      if (/^-?\d{1,3}(\.\d{3})+,\d+$/.test(t)) t = t.replace(/\./g, '').replace(',', '.')       // 1.234,56 it-IT
+      else if (/^-?\d{1,3}(,\d{3})+\.\d+$/.test(t)) t = t.replace(/,/g, '')                     // 1,234.56 en-US
+      else if (/^-?\d+,\d{3}$/.test(t)) return { error: `"${raw}" is ambiguous — "," could be a decimal comma or a thousands separator. Write it as ${t.replace(',', '.')} or ${t.replace(',', '')}.` }
+      else if (/^-?\d+,\d{1,2}$/.test(t)) t = t.replace(',', '.')                               // 1,25 it-IT
+      const n = Number(t)
+      if (!Number.isFinite(n)) return { error: `"${raw}" is not a number` }
+      return { eur: n }
+    }
+    const AMAZON_BID_FLOOR_EUR = 0.02
+    const parseBidEur = (raw: string): { eur: number } | { error: string } => {
+      const m = parseMoneyEur(raw)
+      if ('error' in m) return { error: `Bid: ${m.error}` }
+      if (m.eur < AMAZON_BID_FLOOR_EUR) return { error: `Bid ${m.eur.toFixed(2)} is below Amazon's floor of ${AMAZON_BID_FLOOR_EUR.toFixed(2)}` }
+      return m
+    }
+
     const profileCache = new Map<string, string | null>()
     const profileFor = async (mkt: string | null): Promise<string | null> => {
       if (!mkt) return null
@@ -4220,7 +4333,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           const c = campByExt.get(g(r, 'Campaign ID')); if (!c) { push('error', 'Campaign ID not found'); continue }
           const patch: { status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; dailyBudget?: number } = {}
           if (op === 'Archive') patch.status = 'ARCHIVED'; else if (ST[g(r, 'State').toLowerCase()]) patch.status = ST[g(r, 'State').toLowerCase()]
-          const db = g(r, 'Daily budget') || g(r, 'Budget'); if (db && Number.isFinite(Number(db))) patch.dailyBudget = Number(db)
+          const db = g(r, 'Daily budget') || g(r, 'Budget')
+          if (db) {
+            const parsed = parseMoneyEur(db)
+            if ('error' in parsed) { push('error', `Daily budget: ${parsed.error}`); continue }
+            if (parsed.eur <= 0) { push('error', `Daily budget must be greater than 0 (received "${db}")`); continue }
+            patch.dailyBudget = parsed.eur
+          }
           const res = await updateCampaignWithSync({ campaignId: c.id, patch, actor, reason: 'bulk upload', applyImmediately })
           if (res.ok) push('applied', applyImmediately ? 'Campaign updated (live)' : 'Campaign queued (pending)'); else push('error', res.error ?? 'update failed')
         } else if (entity === 'Ad group' && (op === 'Update' || op === 'Archive')) {
@@ -4231,17 +4350,26 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           if (res.ok) push('applied', applyImmediately ? 'Ad group updated (live)' : 'Ad group queued (pending)'); else push('error', res.error ?? 'update failed')
         } else if (entity === 'Keyword' && op === 'Create') {
           const a = agByExt.get(g(r, 'Ad group ID')); if (!a) { push('error', 'Ad group ID not found'); continue }
-          const mt = g(r, 'Match type').toUpperCase(); const matchType = mt.includes('PHRASE') ? 'PHRASE' : mt.includes('BROAD') ? 'BROAD' : 'EXACT'
-          const bid = Number(g(r, 'Bid')); const bidEur = Number.isFinite(bid) && bid > 0 ? bid : 0.5
-          await createKeywordLocal({ adGroupId: a.id, keywordText: g(r, 'Keyword text'), matchType, bidEur } as never)
+          const rawMt = g(r, 'Match type')
+          const matchType = MATCH_TYPES[normEnum(rawMt)]
+          if (!matchType) { push('error', `Match type "${rawMt}" not recognised — expected one of ${Object.keys(MATCH_TYPES).join(', ')}`); continue }
+          const keywordText = g(r, 'Keyword text')
+          if (!keywordText) { push('error', 'Keyword text is required'); continue }
+          const bid = parseBidEur(g(r, 'Bid'))
+          if ('error' in bid) { push('error', bid.error); continue }
+          await createKeywordLocal({ adGroupId: a.id, keywordText, matchType, bidEur: bid.eur } as never)
           push('applied', 'Keyword created (pending)')
         } else if (entity === 'Negative keyword' && op === 'Create') {
           const cid = g(r, 'Campaign ID'); const aid = g(r, 'Ad group ID')
           const mkt = campByExt.get(cid)?.marketplace ?? agByExt.get(aid)?.campaign?.marketplace ?? null
           const profileId = await profileFor(mkt)
           if (!profileId || !mkt) { push('error', 'No active connection for marketplace'); continue }
-          const matchType = g(r, 'Match type').toLowerCase().includes('phrase') ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT'
-          await createNegative({ profileId, externalCampaignId: cid, externalAdGroupId: aid || undefined, keywordText: g(r, 'Keyword text'), matchType, scope: aid ? 'AD_GROUP' : 'CAMPAIGN', marketplace: mkt } as never)
+          const rawMt = g(r, 'Match type')
+          const matchType = NEG_MATCH_TYPES[normEnum(rawMt)]
+          if (!matchType) { push('error', `Match type "${rawMt}" not recognised for a negative keyword — expected Negative exact or Negative phrase`); continue }
+          const keywordText = g(r, 'Keyword text')
+          if (!keywordText) { push('error', 'Keyword text is required'); continue }
+          await createNegative({ profileId, externalCampaignId: cid, externalAdGroupId: aid || undefined, keywordText, matchType, scope: aid ? 'AD_GROUP' : 'CAMPAIGN', marketplace: mkt } as never)
           push('applied', 'Negative keyword created (pending)')
         } else {
           push('skipped', `${entity || 'Row'} · ${op} not supported yet`)
@@ -6988,10 +7116,36 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         lastVerifiedAt: true,
         lastErrorAt: true,
         lastError: true,
+        tokenIssuedAt: true,
+        tokenExpiresAt: true,
+        tokenIssuedAtIsEstimate: true,
       },
     })
+    // AX-IE.0 — refresh tokens expire 365 days from consent (Amazon policy from
+    // 2026-07-30). Surface the countdown next to every connection so a dead
+    // connection is something you saw coming, not something you discover when the
+    // ads stop syncing. `isEstimate` is carried through so the UI can mark an
+    // inferred date as approximate rather than presenting a guess as a fact.
+    const DAY = 24 * 60 * 60 * 1000
+    const now = Date.now()
+    const withExpiry = items.map((c) => {
+      const daysToTokenExpiry = c.tokenExpiresAt ? Math.floor((c.tokenExpiresAt.getTime() - now) / DAY) : null
+      return {
+        ...c,
+        daysToTokenExpiry,
+        tokenExpiryStatus: daysToTokenExpiry == null ? 'unknown'
+          : daysToTokenExpiry <= 0 ? 'expired'
+          : daysToTokenExpiry <= 30 ? 'critical'
+          : daysToTokenExpiry <= 60 ? 'warning' : 'ok',
+      }
+    })
     reply.header('Cache-Control', 'private, max-age=30')
-    return { items, count: items.length, adsMode: adsMode() }
+    return {
+      items: withExpiry,
+      count: withExpiry.length,
+      adsMode: adsMode(),
+      tokenExpiryAlerts: withExpiry.filter((c) => c.isActive && (c.tokenExpiryStatus === 'critical' || c.tokenExpiryStatus === 'expired')).length,
+    }
   })
 
   // ── POST /advertising/connections — create or update credentials ─────

@@ -381,6 +381,15 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     )
 
+    // AX-IE.0 — this is the moment of consent, and from 2026-07-30 it starts a
+    // 365-day clock on the refresh token. Stamping it here is the only way to know
+    // a connection's real age; everything downstream (the countdown in account
+    // settings, the /health alert) derives from these two columns. Observed, so
+    // never an estimate — that flag exists solely for the pre-AX-IE.0 rows whose
+    // true consent date is unrecoverable.
+    const tokenIssuedAt = new Date()
+    const tokenExpiresAt = new Date(tokenIssuedAt.getTime() + 365 * 24 * 60 * 60 * 1000)
+
     for (const profile of profiles) {
       const profileId = String(profile.profileId)
       const marketplaceStringId = profile.accountInfo?.marketplaceStringId ?? ''
@@ -397,12 +406,20 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
           credentialsEncrypted,
           mode: 'sandbox',
           isActive: true,
+          tokenIssuedAt,
+          tokenExpiresAt,
+          tokenIssuedAtIsEstimate: false,
         },
         update: {
           marketplace: marketplaceStringId,
           accountLabel,
           credentialsEncrypted,
           isActive: true,
+          // A fresh consent issues a fresh refresh token, so the clock restarts and
+          // any inherited estimate is now superseded by an observed timestamp.
+          tokenIssuedAt,
+          tokenExpiresAt,
+          tokenIssuedAtIsEstimate: false,
           updatedAt: new Date(),
         },
       })

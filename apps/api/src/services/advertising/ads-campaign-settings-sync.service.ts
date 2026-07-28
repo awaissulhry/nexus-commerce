@@ -15,6 +15,18 @@ import { listCampaignsV3, type AdsRegion, type V3CampaignSettings } from './ads-
 
 const STATE_MAP: Record<string, 'ENABLED' | 'PAUSED' | 'ARCHIVED'> = { enabled: 'ENABLED', paused: 'PAUSED', archived: 'ARCHIVED' }
 
+// AX-IE.0 (E4) — Amazon's real targeting type. Strict: only the two values Amazon
+// documents are accepted, anything else (including absent) yields null so the
+// bulksheet exporter emits a blank cell. This is the ONLY source we have — the v1
+// unified export record carries no targeting type, and AdGroup.targetingType is
+// written solely by our own campaign builders so every synced ad group sits at its
+// default. Guessing here is what produced the "Autumn Boots exports as auto" bug.
+function mapTargetingType(raw?: string): 'AUTO' | 'MANUAL' | null {
+  if (!raw) return null
+  const s = raw.trim().toUpperCase()
+  return s === 'AUTO' || s === 'MANUAL' ? s : null
+}
+
 function mapStrategy(raw?: string): 'AUTO_FOR_SALES' | 'LEGACY_FOR_SALES' | 'MANUAL' | null {
   if (!raw) return null
   const s = raw.toUpperCase()
@@ -94,6 +106,8 @@ export async function syncCampaignSettingsFromAmazon(
       if (st) data.status = st
       const strat = mapStrategy(c.dynamicBidding?.strategy)
       if (strat) data.biddingStrategy = strat
+      const tt = mapTargetingType(c.targetingType)
+      if (tt) data.targetingType = tt
 
       // AX2.2 — stamp read-freshness for EVERY campaign Amazon returned, not
       // only the ones whose fields changed. Previously an unchanged campaign
@@ -130,6 +144,8 @@ function patchFromV3(c: V3CampaignSettings, prevDynamic: unknown): Record<string
   if (st) data.status = st
   const strat = mapStrategy(c.dynamicBidding?.strategy)
   if (strat) data.biddingStrategy = strat
+  const tt = mapTargetingType(c.targetingType)
+  if (tt) data.targetingType = tt
   return data
 }
 
