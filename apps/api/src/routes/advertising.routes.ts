@@ -1277,6 +1277,111 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  /**
+   * AX2.1 — grid-wide Amazon delivery truth in ONE call.
+   *
+   * The Ad Manager grid had no delivery surfacing at all: a PATCH returning
+   * `{ok:true}` means the write was ENQUEUED, not that Amazon accepted it, and
+   * in sandbox no HTTP is sent yet the queue row still reads SUCCESS. Operators
+   * were told "saved" for writes that never landed.
+   *
+   * /pending-writes answers this per campaign, which would be 500 requests for
+   * a 500-row grid — hence this bulk sibling.
+   */
+  fastify.get('/advertising/delivery-state', async () => {
+    const mode = adsMode()
+
+    const connections = await prisma.amazonAdsConnection.findMany({
+      where: { isActive: true },
+      select: { marketplace: true, mode: true, writesEnabledAt: true, lastWriteAt: true, lastError: true },
+      orderBy: { marketplace: 'asc' },
+    })
+
+    const campaigns = await prisma.campaign.findMany({
+      select: {
+        id: true, marketplace: true, liveBidWritesEnabled: true, liveBidWritesToday: true,
+        lastSyncedAt: true, lastSyncStatus: true, lastSyncError: true,
+      },
+    })
+
+    // Pending Amazon-bound writes, mapped back to their owning campaign.
+    const pendingRows = await prisma.outboundSyncQueue.findMany({
+      where: { targetChannel: 'AMAZON', syncStatus: 'PENDING' },
+      select: { payload: true },
+      take: 2000,
+    })
+    const pendingEntityIds = pendingRows
+      .map((r) => (r.payload as { entityId?: string } | null)?.entityId)
+      .filter((x): x is string => !!x)
+
+    // Resolve entity → campaign for the three grains that can be queued.
+    const campaignOf = new Map<string, string>()
+    for (const c of campaigns) campaignOf.set(c.id, c.id)
+    if (pendingEntityIds.length) {
+      const groups = await prisma.adGroup.findMany({ where: { id: { in: pendingEntityIds } }, select: { id: true, campaignId: true } })
+      for (const g of groups) campaignOf.set(g.id, g.campaignId)
+      const targets = await prisma.adTarget.findMany({
+        where: { id: { in: pendingEntityIds } },
+        select: { id: true, adGroup: { select: { campaignId: true } } },
+      })
+      for (const t of targets) if (t.adGroup) campaignOf.set(t.id, t.adGroup.campaignId)
+    }
+    const pendingByCampaign = new Map<string, number>()
+    for (const eid of pendingEntityIds) {
+      const cid = campaignOf.get(eid)
+      if (cid) pendingByCampaign.set(cid, (pendingByCampaign.get(cid) ?? 0) + 1)
+    }
+
+    // AX2.0 orphans, rolled up per campaign — entities Amazon no longer has,
+    // whose bids can therefore never move until they are repaired.
+    const orphanGroups = await prisma.adGroup.findMany({
+      where: { targets: { some: { orphanedAt: { not: null } } } },
+      select: { campaignId: true, _count: { select: { targets: true } } },
+    })
+    const orphanByCampaign = new Map<string, number>()
+    for (const g of orphanGroups) orphanByCampaign.set(g.campaignId, (orphanByCampaign.get(g.campaignId) ?? 0) + 1)
+
+    const writableMarkets = new Set(
+      connections.filter((c) => c.mode === 'production' && c.writesEnabledAt).map((c) => c.marketplace),
+    )
+
+    return {
+      adsMode: mode,
+      // The single most important fact: in sandbox NOTHING reaches Amazon.
+      sandbox: mode !== 'live',
+      connections: connections.map((c) => ({
+        marketplace: c.marketplace,
+        mode: c.mode,
+        writable: c.mode === 'production' && !!c.writesEnabledAt,
+        everWritten: !!c.lastWriteAt,
+        lastWriteAt: c.lastWriteAt,
+        lastError: c.lastError,
+      })),
+      campaigns: Object.fromEntries(campaigns.map((c) => {
+        const pending = pendingByCampaign.get(c.id) ?? 0
+        const orphaned = orphanByCampaign.get(c.id) ?? 0
+        const marketWritable = c.marketplace ? writableMarkets.has(c.marketplace) : false
+        const state =
+          mode !== 'live' ? 'sandbox'
+          : !marketWritable ? 'market_blocked'
+          : !c.liveBidWritesEnabled ? 'gated'
+          : pending > 0 ? 'pending'
+          : c.lastSyncStatus === 'FAILED' ? 'failed'
+          : c.lastSyncStatus === 'SUCCESS' ? 'live'
+          : 'unknown'
+        return [c.id, {
+          state,
+          pending,
+          orphanedAdGroups: orphaned,
+          liveWritesToday: c.liveBidWritesToday ?? 0,
+          lastSyncedAt: c.lastSyncedAt,
+          lastSyncStatus: c.lastSyncStatus,
+          lastSyncError: c.lastSyncError,
+        }]
+      })),
+    }
+  })
+
   // ── RC4.5: cancel a staged (PENDING) Amazon write within its grace window ──
   // Powers the staged-changes tray's per-change "Discard" + "Discard all".
   fastify.post('/advertising/queued-mutations/:queueId/cancel', async (request, reply) => {

@@ -40,13 +40,30 @@ const num = (v: unknown) => (typeof v === 'number' ? v : Number(v) || 0)
 const eur = (v: number) => `€${v.toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const pct = (v: unknown) => { if (v == null || v === '') return '—'; const n = Number(v); return Number.isFinite(n) ? `${(n <= 1 ? n * 100 : n).toFixed(2)}%` : '—' }
 const fmtDate = (iso?: string | null) => { if (!iso) return '—'; const d = new Date(iso); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) }
-// PATCH a JSON body; true iff the response is ok and not an `{ ok: false }` envelope.
-async function patchJson(url: string, body: Record<string, unknown>): Promise<boolean> {
+/**
+ * AX2.1 — PATCH and report what ACTUALLY happened.
+ *
+ * `{ok:true}` from the mutation service means the change was written locally
+ * and an OutboundSyncQueue row was created — i.e. ENQUEUED, not "Amazon
+ * accepted". In sandbox no HTTP is sent at all. Reporting that as "saved" is
+ * how a write could silently never land. `outboundQueueId` distinguishes the
+ * two, and `entity_orphaned` (AX2.0) is a refusal we must not paint as success.
+ */
+type WriteOutcome = 'applied' | 'queued' | 'refused' | 'error'
+async function patchWrite(url: string, body: Record<string, unknown>): Promise<{ outcome: WriteOutcome; error?: string }> {
   try {
     const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    const j = await r.json().catch(() => ({}))
-    return r.ok && j?.ok !== false
-  } catch { return false }
+    const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string | null; outboundQueueId?: string | null }
+    if (!r.ok || j?.ok === false) {
+      return { outcome: j?.error === 'entity_orphaned' ? 'refused' : 'error', error: j?.error ?? `HTTP ${r.status}` }
+    }
+    return { outcome: j?.outboundQueueId ? 'queued' : 'applied' }
+  } catch (e) { return { outcome: 'error', error: (e as Error).message } }
+}
+/** Back-compat boolean wrapper: a refusal is NOT a success. */
+async function patchJson(url: string, body: Record<string, unknown>): Promise<boolean> {
+  const r = await patchWrite(url, body)
+  return r.outcome === 'applied' || r.outcome === 'queued'
 }
 const AMZ_PLACEMENT: Record<string, string> = { TOS: 'PLACEMENT_TOP', PP: 'PLACEMENT_PRODUCT_PAGE', ROS: 'PLACEMENT_REST_OF_SEARCH' }
 
@@ -64,7 +81,33 @@ const TYPE_LABEL: Record<string, string> = { SPONSORED_PRODUCTS: 'Sponsored Prod
 // the 4-column Adtomic cluster (Bid Rule · Target ACoS · Min/Max Bid · Bid
 // Automation); every other item is a single column.
 interface ColDef { key: string; label: string }
+
+// AX2.1 — GET /advertising/delivery-state
+interface DeliveryCampaign {
+  state: 'live' | 'pending' | 'failed' | 'sandbox' | 'gated' | 'market_blocked' | 'unknown'
+  pending: number
+  orphanedAdGroups: number
+  liveWritesToday: number
+  lastSyncStatus: string | null
+  lastSyncError: string | null
+}
+interface DeliveryState {
+  adsMode: string
+  sandbox: boolean
+  connections: Array<{ marketplace: string; mode: string; writable: boolean; everWritten: boolean }>
+  campaigns: Record<string, DeliveryCampaign>
+}
+const DELIVERY_PILL: Record<DeliveryCampaign['state'], { label: string; cls: string; hint: string }> = {
+  live:           { label: 'Live',     cls: 'ok',   hint: 'Last write reached Amazon.' },
+  pending:        { label: 'Pending',  cls: 'warn', hint: 'Write is queued but has not reached Amazon yet.' },
+  failed:         { label: 'Failed',   cls: 'bad',  hint: 'The last write to Amazon failed.' },
+  sandbox:        { label: 'Sandbox',  cls: 'warn', hint: 'SANDBOX mode — changes are local only and are never sent to Amazon.' },
+  gated:          { label: 'Gated',    cls: 'bad',  hint: 'Live bid writes are disabled for this campaign, so changes stay local.' },
+  market_blocked: { label: 'No write', cls: 'bad',  hint: 'This marketplace has no writable production connection — changes stay local.' },
+  unknown:        { label: '—',        cls: '',     hint: 'No write has been attempted yet.' },
+}
 const ALL_COLS: ColDef[] = [
+  { key: 'delivery', label: 'Amazon Delivery' },
   { key: 'bidAlgorithm', label: 'Bid Algorithm' },
   { key: 'status', label: 'Status' },
   { key: 'minMaxBudget', label: 'Min/Max Budget' },
@@ -113,7 +156,7 @@ const COL_BY_KEY: Record<string, ColDef> = Object.fromEntries(ALL_COLS.map((c) =
 const ALL_KEYS = ALL_COLS.map((c) => c.key)
 // H10 ships with every column visible (Select All on).
 const DEFAULT_VISIBLE = ALL_KEYS
-const COLS_KEY = 'h10-am-columns-v2' // bumped: catalog rebuilt to H10's 44-col model
+const COLS_KEY = 'h10-am-columns-v3' // bumped: AX2.1 added the Amazon Delivery column
 
 // Physical grid columns. Most checklist items are one column; "Bid Algorithm"
 // expands to the Adtomic cluster. `metric` → numeric/sortable cell (renderCol);
@@ -125,7 +168,7 @@ const CLUSTER: PhysCol[] = [
   { key: 'minMaxBid', label: 'Min/Max Bid', metric: false },
   { key: 'bidAutomation', label: 'Bid Automation', metric: false },
 ]
-const SETTINGS_KEYS = new Set(['status', 'minMaxBudget', 'rules', 'biddingStrategy', 'bidMultiplier', 'startDate', 'endDate', 'dailyBudget', 'curBudgetUtil', 'avgBudgetUtil'])
+const SETTINGS_KEYS = new Set(['delivery', 'status', 'minMaxBudget', 'rules', 'biddingStrategy', 'bidMultiplier', 'startDate', 'endDate', 'dailyBudget', 'curBudgetUtil', 'avgBudgetUtil'])
 function physCols(itemKey: string): PhysCol[] {
   if (itemKey === 'bidAlgorithm') return CLUSTER
   const it = COL_BY_KEY[itemKey]
@@ -700,6 +743,16 @@ export function CampaignsGrid() {
   const [rowsPerPage, setRowsPerPage] = useState(100)
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null)
 
+  // AX2.1 — one call for grid-wide Amazon delivery truth.
+  const [delivery, setDelivery] = useState<DeliveryState | null>(null)
+  const loadDelivery = useCallback(async () => {
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/delivery-state`, { cache: 'no-store' })
+      if (r.ok) setDelivery((await r.json()) as DeliveryState)
+    } catch { /* delivery is advisory — never block the grid on it */ }
+  }, [])
+  useEffect(() => { void loadDelivery() }, [loadDelivery])
+
   const load = useCallback(async (opts?: { sync?: boolean; range?: { start: Date; end: Date } }) => {
     if (opts?.sync) setSyncing(true)
     try {
@@ -1103,6 +1156,17 @@ export function CampaignsGrid() {
       case 'targetAcos': return ed(`${((c.targetAcos ?? 0.3) * 100).toFixed(2)}%`, 'targetAcos') // 0.3 = optimizer default when unset
       case 'minMaxBid': return ed(c.minMaxBid && (c.minMaxBid.min != null || c.minMaxBid.max != null) ? `${c.minMaxBid.min != null ? eur(c.minMaxBid.min) : '—'} – ${c.minMaxBid.max != null ? eur(c.minMaxBid.max) : '—'}` : 'None', 'minMaxBid')
       case 'bidAutomation': return <span className={`h10-toggle ${c.bidAutomation ? 'on' : 'off'}`} aria-hidden />
+      case 'delivery': {
+        const d = delivery?.campaigns?.[c.id]
+        const st = d?.state ?? 'unknown'
+        const p = DELIVERY_PILL[st]
+        const bits = [p.hint]
+        if (d?.pending) bits.push(`${d.pending} write(s) pending`)
+        if (d?.orphanedAdGroups) bits.push(`${d.orphanedAdGroups} ad group(s) contain targets Amazon has deleted`)
+        if (d?.lastSyncError) bits.push(`Last error: ${d.lastSyncError}`)
+        if (d?.liveWritesToday != null) bits.push(`Live writes today: ${d.liveWritesToday}`)
+        return <span className={`h10-pill ${p.cls}`} title={bits.join('\n')}>{p.label}{d?.pending ? ` ${d.pending}` : ''}</span>
+      }
       case 'status': { const sp = STATUS_PILL[c.status] ?? { label: c.status, cls: '' }; return <span className="h10-statuscell"><span className={`h10-pill ${sp.cls}`}>{sp.label}</span><button type="button" className="ch" aria-label={`Change status for ${c.name}`} onClick={(ev) => { const r = (ev.currentTarget as HTMLElement).getBoundingClientRect(); setStatusMenu({ id: c.id, x: Math.max(8, r.right - 156), y: r.bottom + 5 }) }}><ChevronDown size={13} aria-hidden /></button></span> }
       case 'minMaxBudget': return ed(c.minMaxBudget && (c.minMaxBudget.min != null || c.minMaxBudget.max != null) ? `${c.minMaxBudget.min != null ? eur(c.minMaxBudget.min) : '—'} – ${c.minMaxBudget.max != null ? eur(c.minMaxBudget.max) : '—'}` : 'None - None', 'minMaxBudget')
       case 'rules': return <button type="button" className="h10-rules" onClick={() => setRulesModal(c)}><b>0</b> <Settings2 size={12} /></button>
@@ -1159,8 +1223,26 @@ export function CampaignsGrid() {
     return max ? new Date(max).toLocaleString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
   })()
 
+  // AX2.1 — the account-level truth, stated once at the top. Without this an
+  // operator in sandbox sees every edit "save" and none of them reach Amazon.
+  const blockedMarkets = (delivery?.connections ?? []).filter((c) => !c.writable).map((c) => c.marketplace)
+  const neverWritten = (delivery?.connections ?? []).filter((c) => c.writable && !c.everWritten).map((c) => c.marketplace)
+
   return (
     <div className="h10-am">
+      {delivery?.sandbox && (
+        <div className="h10-pill bad" style={{ display: 'block', margin: '0 0 10px', padding: '8px 12px', lineHeight: 1.45 }} role="status">
+          <b>Sandbox mode — nothing on this page reaches Amazon.</b> Edits are written locally and audited, but no
+          Amazon call is made. Set <code>NEXUS_AMAZON_ADS_MODE=live</code> to push for real.
+        </div>
+      )}
+      {!delivery?.sandbox && blockedMarkets.length > 0 && (
+        <div className="h10-pill warn" style={{ display: 'block', margin: '0 0 10px', padding: '8px 12px', lineHeight: 1.45 }} role="status">
+          <b>{blockedMarkets.length} marketplace(s) cannot receive writes:</b> {blockedMarkets.join(', ')}.
+          Changes to campaigns in those markets stay local.
+          {neverWritten.length > 0 && <> {neverWritten.join(', ')} {neverWritten.length === 1 ? 'is' : 'are'} writable but {neverWritten.length === 1 ? 'has' : 'have'} never been written to.</>}
+        </div>
+      )}
       <AdsPageHeader
         title="Ad Manager" subtitle="Create and manage your campaigns"
         markets={markets} market={market} onMarketChange={setMarket}
