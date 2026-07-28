@@ -3334,6 +3334,49 @@ model ProductProfitDaily {
 // executionId nullable so operator writes (no rule) still land here.
 // Rollback walks AdvertisingActionLog.payloadBefore to invert each
 // operation within a 24h window.
+/// AX-ZD.4 — one OPEN drift record per (entity, field), not an event log.
+///
+/// Detection is a byproduct of the settings sync that already reads every
+/// campaign's live state from Amazon every ~20 minutes, so it costs no extra API
+/// calls — which matters because Amazon's limits are regional and adding
+/// accounts does not buy throughput.
+///
+/// Keyed per field so the table stays bounded (a campaign that has drifted for
+/// three days is ONE row with occurrences=216, not 216 rows), and so "how long
+/// has this been wrong" is answerable from firstDetectedAt.
+///
+/// classification is the part that matters: without it, "our write has not
+/// landed", "somebody edited in Seller Central" and "the write failed silently"
+/// are indistinguishable — they all just look like local != remote.
+model AdDrift {
+  id String @id @default(cuid())
+
+  entityType  String // CAMPAIGN | AD_GROUP | AD_TARGET
+  entityId    String // local id
+  externalId  String?
+  marketplace String?
+  entityName  String?
+
+  field       String
+  ourValue    String?
+  amazonValue String?
+
+  /// EXTERNAL_CHANGE | WRITE_LAG | WRITE_PENDING | WRITE_FAILED
+  classification String
+
+  firstDetectedAt DateTime  @default(now())
+  lastDetectedAt  DateTime  @default(now())
+  occurrences     Int       @default(1)
+  /// Set when a later read finds the values agree again. Rows are re-opened
+  /// (resolvedAt back to null) rather than duplicated if it drifts a second time.
+  resolvedAt      DateTime?
+
+  @@unique([entityType, entityId, field])
+  @@index([classification, lastDetectedAt(sort: Desc)])
+  @@index([resolvedAt, lastDetectedAt(sort: Desc)])
+  @@index([entityType, entityId])
+}
+
 model AdvertisingActionLog {
   id                   String    @id @default(cuid())
   // Set when the write came from a rule. SetNull on delete so the

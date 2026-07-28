@@ -4732,6 +4732,50 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { importJobId: id, changeSetId: `import:${id}`, ...outcome }
   })
 
+  // ── GET /advertising/drift — AX-ZD.4 ──────────────────────────────
+  // Where our copy and Amazon disagree, and — the part that matters — WHY.
+  //
+  // Detection rides on the settings sync that already reads every campaign's
+  // live state, so it costs no extra API calls. Amazon's rate limits are
+  // regional and adding accounts does not buy throughput, so a drift sweep that
+  // needed its own reads would be competing with the writes it is meant to
+  // protect.
+  fastify.get('/advertising/drift', async (request, reply) => {
+    const q = request.query as { classification?: string; includeResolved?: string; limit?: string }
+    const take = Math.max(1, Math.min(500, Number(q.limit ?? 100)))
+    const where: Record<string, unknown> = {}
+    if (q.classification) where.classification = q.classification
+    if (q.includeResolved !== '1' && q.includeResolved !== 'true') where.resolvedAt = null
+
+    const [rows, byClass, openCount] = await Promise.all([
+      prisma.adDrift.findMany({ where, orderBy: { lastDetectedAt: 'desc' }, take }),
+      prisma.adDrift.groupBy({ by: ['classification'], where: { resolvedAt: null }, _count: true }),
+      prisma.adDrift.count({ where: { resolvedAt: null } }),
+    ])
+
+    const { describeDrift } = await import('../services/ads-core/drift.js')
+    const counts = Object.fromEntries(byClass.map((b) => [b.classification, b._count]))
+    // EXTERNAL_CHANGE and WRITE_FAILED are the two that will not fix themselves.
+    const needsAttention = (counts.EXTERNAL_CHANGE ?? 0) + (counts.WRITE_FAILED ?? 0)
+
+    reply.header('Cache-Control', 'private, max-age=30')
+    return {
+      open: openCount,
+      needsAttention,
+      byClassification: counts,
+      summary: openCount === 0
+        ? 'Everything we hold matches what Amazon last told us.'
+        : needsAttention === 0
+          ? `${openCount} field(s) differ, all explained by our own in-flight writes. Expect them to resolve on their own.`
+          : `${needsAttention} field(s) differ for a reason that will NOT resolve on its own — someone changed them on Amazon, or one of our writes failed.`,
+      items: rows.map((r) => ({
+        ...r,
+        explanation: describeDrift(r.classification as never, r.field),
+        driftingForHours: Math.round((Date.now() - r.firstDetectedAt.getTime()) / 3_600_000),
+      })),
+    }
+  })
+
   // ── GET /advertising/data-vintage — AX-ZD.5 ───────────────────────
   // How much of a date range is still moving, and whether it may drive a rule.
   //

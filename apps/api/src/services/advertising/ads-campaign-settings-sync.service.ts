@@ -61,14 +61,95 @@ export async function reconcileCampaignDeletions(opts: { connMarketplace: string
   return r.count
 }
 
+/** Campaign fields worth comparing. Deliberately small — these are the ones an
+ *  operator changes in Seller Central, and the ones our own writes touch. */
+const CAMPAIGN_DRIFT_FIELDS = ['status', 'dailyBudget', 'biddingStrategy', 'portfolioId', 'targetingType'] as const
+
+/**
+ * AX-ZD.4 — record where Amazon disagrees with us, from the read we already did.
+ *
+ * `incoming` contains ONLY the fields Amazon actually reported, so a partial
+ * response cannot masquerade as somebody clearing a value.
+ *
+ * A drift row is keyed per (entity, field) and re-opened rather than duplicated,
+ * so a campaign that has been wrong for three days is one row with a high
+ * occurrence count and an honest firstDetectedAt — not 216 rows.
+ */
+async function recordCampaignDrift(
+  existing: {
+    id: string; name: string; marketplace: string | null
+    status: string | null; dailyBudget: unknown; biddingStrategy: string | null
+    portfolioId: string | null; lastSyncedAt: Date | null; lastSyncStatus: string | null
+  },
+  incoming: Record<string, unknown>,
+  amazon: V3CampaignSettings,
+): Promise<number> {
+  const { diffFields, classifyDrift } = await import('../ads-core/drift.js')
+  const ours: Record<string, unknown> = {
+    status: existing.status,
+    dailyBudget: existing.dailyBudget == null ? null : Number(existing.dailyBudget),
+    biddingStrategy: existing.biddingStrategy,
+    portfolioId: existing.portfolioId,
+  }
+  const diffs = diffFields(ours, incoming, CAMPAIGN_DRIFT_FIELDS)
+
+  // Anything we hold that Amazon now agrees with is no longer drifting. Closing
+  // resolved rows is what stops the drift list becoming a graveyard nobody reads.
+  const stillDrifting = new Set(diffs.map((d) => d.field))
+  await prisma.adDrift.updateMany({
+    where: {
+      entityType: 'CAMPAIGN', entityId: existing.id, resolvedAt: null,
+      field: { notIn: [...stillDrifting] },
+    },
+    data: { resolvedAt: new Date() },
+  })
+  if (!diffs.length) return 0
+
+  // A queued mutation for this campaign explains the difference before anything
+  // else can, so look before blaming a human.
+  const pending = await prisma.outboundSyncQueue.count({
+    where: {
+      syncType: { startsWith: 'AD_' },
+      syncStatus: { in: ['PENDING', 'IN_PROGRESS'] },
+      payload: { path: ['entityId'], equals: existing.id },
+    },
+  }).catch(() => 0)
+
+  const now = new Date()
+  for (const d of diffs) {
+    const classification = classifyDrift({
+      ours: d.ours, theirs: d.theirs,
+      lastWriteAt: existing.lastSyncedAt,
+      lastWriteStatus: existing.lastSyncStatus,
+      hasPendingWrite: pending > 0,
+      now,
+    })
+    await prisma.adDrift.upsert({
+      where: { entityType_entityId_field: { entityType: 'CAMPAIGN', entityId: existing.id, field: d.field } },
+      create: {
+        entityType: 'CAMPAIGN', entityId: existing.id, externalId: amazon.campaignId,
+        marketplace: existing.marketplace, entityName: existing.name,
+        field: d.field, ourValue: d.ours, amazonValue: d.theirs, classification,
+      },
+      update: {
+        ourValue: d.ours, amazonValue: d.theirs, classification,
+        lastDetectedAt: now, occurrences: { increment: 1 },
+        // Re-open rather than leaving a stale resolution behind.
+        resolvedAt: null,
+      },
+    })
+  }
+  return diffs.length
+}
+
 export async function syncCampaignSettingsFromAmazon(
   opts?: { profileId?: string },
-): Promise<{ profiles: number; campaigns: number; updated: number; placementsFilled: number; archived: number; sampleShape?: unknown; errors: string[] }> {
+): Promise<{ profiles: number; campaigns: number; updated: number; placementsFilled: number; archived: number; driftFound: number; sampleShape?: unknown; errors: string[] }> {
   const conns = await prisma.amazonAdsConnection.findMany({
     where: opts?.profileId ? { profileId: opts.profileId } : {},
     select: { profileId: true, region: true, marketplace: true },
   })
-  let campaigns = 0, updated = 0, placementsFilled = 0, archived = 0
+  let campaigns = 0, updated = 0, placementsFilled = 0, archived = 0, driftFound = 0
   let sampleShape: unknown
   const errors: string[] = []
 
@@ -90,7 +171,16 @@ export async function syncCampaignSettingsFromAmazon(
       if (!c.campaignId) continue
       seen.add(c.campaignId)
       campaigns++
-      const existing = await prisma.campaign.findFirst({ where: { externalCampaignId: c.campaignId }, select: { id: true, dynamicBidding: true } })
+      const existing = await prisma.campaign.findFirst({
+        where: { externalCampaignId: c.campaignId },
+        // AX-ZD.4 — the comparison fields come along so drift can be detected
+        // from the read we are already doing, at no extra API cost.
+        select: {
+          id: true, dynamicBidding: true, name: true, marketplace: true,
+          status: true, dailyBudget: true, biddingStrategy: true, portfolioId: true,
+          lastSyncedAt: true, lastSyncStatus: true,
+        },
+      })
       if (!existing) continue
 
       const data: Record<string, unknown> = {}
@@ -117,6 +207,16 @@ export async function syncCampaignSettingsFromAmazon(
       //
       // Deliberately does NOT touch lastSyncStatus: that is delivery truth, and
       // a successful read must never mask a failed bid write.
+      // AX-ZD.4 — record what Amazon disagrees with BEFORE we overwrite it.
+      // `data` holds only the fields Amazon actually reported, so a partial
+      // response can never look like somebody blanking a value.
+      try {
+        driftFound += await recordCampaignDrift(existing, data, c)
+      } catch (e) {
+        // Drift bookkeeping must never break the sync it rides on.
+        logger.warn('[settings-sync] drift record failed', { campaignId: c.campaignId, error: (e as Error).message.slice(0, 120) })
+      }
+
       const changed = Object.keys(data).length > 0
       data.settingsSyncedAt = new Date()
       try {
@@ -129,8 +229,8 @@ export async function syncCampaignSettingsFromAmazon(
     catch (e) { errors.push(`camp-del ${conn.profileId}: ${(e as Error).message.slice(0, 120)}`) }
   }
 
-  logger.info('[settings-sync] done', { profiles: conns.length, campaigns, updated, placementsFilled, archived, errors: errors.length })
-  return { profiles: conns.length, campaigns, updated, placementsFilled, archived, sampleShape, errors }
+  logger.info('[settings-sync] done', { profiles: conns.length, campaigns, updated, placementsFilled, archived, driftFound, errors: errors.length })
+  return { profiles: conns.length, campaigns, updated, placementsFilled, archived, driftFound, sampleShape, errors }
 }
 
 // Map one v3 record onto a non-destructive update patch (only present fields).
