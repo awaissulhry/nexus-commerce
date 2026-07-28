@@ -22,8 +22,9 @@ import { getActiveEbayAdsAuth, suggestMaxCpcApi, suggestKeywordsApi, suggestBids
 import { EbayApiError } from '../services/ads-core/ebay-error.js'
 import { logger } from '../utils/logger.js'
 import { EBAY_MANAGED_STATUSES } from '../services/ads-core/campaign-status.js'
+import { EBAY_MARKETPLACE_SHORT, marketplaceShort } from '../services/ads-core/ebay-marketplace.js'
 
-const SHORT_BY_MKT: Record<string, string> = { EBAY_IT: 'IT', EBAY_DE: 'DE', EBAY_FR: 'FR', EBAY_ES: 'ES', EBAY_GB: 'UK' }
+const SHORT_BY_MKT = EBAY_MARKETPLACE_SHORT // D3 — one shared map
 
 interface WindowQuery { preset?: string; startDate?: string; endDate?: string; marketplace?: string }
 
@@ -630,7 +631,7 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
   app.post<{ Body: { productIds?: string[]; listingIds?: string[]; marketplace?: string; campaignId: string; defaultRatePct?: number; perListing?: Array<{ listingId: string; ratePct?: number }>; override?: { reason: string } } }>(
     '/ebay-ads/promote', async (req, reply) => {
       const b = req.body
-      const short = ({ EBAY_IT: 'IT', EBAY_DE: 'DE', EBAY_FR: 'FR', EBAY_ES: 'ES' } as Record<string, string>)[b.marketplace ?? 'EBAY_IT']
+      const short = marketplaceShort(b.marketplace ?? 'EBAY_IT')
       const resolved = new Map<string, string[]>() // listingId → productIds (provenance)
       for (const lid of b.listingIds ?? []) resolved.set(lid, [])
       for (const pid of b.productIds ?? []) {
@@ -648,7 +649,7 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
   // Rules preview (local approximation over the listing index, labeled as such)
   app.post<{ Body: { marketplace: string; selectionRules: Array<{ brands?: string[]; categoryIds?: string[]; minPrice?: number; maxPrice?: number }> } }>(
     '/ebay-ads/campaigns/preview-rules', async (req) => {
-      const short = ({ EBAY_IT: 'IT', EBAY_DE: 'DE', EBAY_FR: 'FR', EBAY_ES: 'ES' } as Record<string, string>)[req.body.marketplace] ?? 'IT'
+      const short = marketplaceShort(req.body.marketplace)
       const live = await prisma.ebayListingIndex.findMany({ where: { marketplace: short, endedAt: null } })
       const matches = live.filter((l) => req.body.selectionRules.some((r) => {
         if (r.categoryIds?.length && (!l.categoryId || !r.categoryIds.includes(l.categoryId))) return false

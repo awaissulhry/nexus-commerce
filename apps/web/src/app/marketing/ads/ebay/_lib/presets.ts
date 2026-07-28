@@ -9,6 +9,11 @@ export const EBAY_MARKETS = [
   { id: 'EBAY_DE', label: 'Germany (EBAY_DE)' },
   { id: 'EBAY_FR', label: 'France (EBAY_FR)' },
   { id: 'EBAY_ES', label: 'Spain (EBAY_ES)' },
+  // D3 — the API already half-supported GB: three marketplace maps carried it
+  // and four did not, so a GB request either lost its marketplace predicate or
+  // silently wrote to Italy. The maps are consolidated; this makes the console
+  // able to reach the marketplace the API accepts.
+  { id: 'EBAY_GB', label: 'United Kingdom (EBAY_GB)' },
 ]
 export const PRESETS = [
   { id: 'last7', label: 'Last 7 days' },

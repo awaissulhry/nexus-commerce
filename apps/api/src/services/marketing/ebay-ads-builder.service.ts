@@ -9,6 +9,7 @@
 import prisma from '../../db.js'
 import { getLiveEbayItemIds } from './ebay-listing-index.service.js'
 import { EBAY_MANAGED_STATUSES } from '../ads-core/campaign-status.js'
+import { EBAY_MARKETPLACE_SHORT } from '../ads-core/ebay-marketplace.js'
 
 export interface BuilderTemplate {
   key: string; label: string; strategy: 'CPS' | 'CPC'
@@ -22,7 +23,7 @@ export const BUILDER_TEMPLATES: Record<string, BuilderTemplate> = {
   defend: { key: 'defend', label: 'Defend visibility', strategy: 'CPC', goalFactor: 1.0, fallbackRatePct: 0, endDays: null, rulePacks: ['Keyword bleeder — pause (CPC)'] },
 }
 
-const SHORT_BY_MKT: Record<string, string> = { EBAY_IT: 'IT', EBAY_DE: 'DE', EBAY_FR: 'FR', EBAY_ES: 'ES', EBAY_GB: 'UK' }
+const SHORT_BY_MKT = EBAY_MARKETPLACE_SHORT // D3 — one shared map
 export const shortMkt = (m: string): string => SHORT_BY_MKT[m] ?? 'IT'
 
 export interface PlanListing {

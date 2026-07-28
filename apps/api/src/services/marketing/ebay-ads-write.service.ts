@@ -25,6 +25,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { checkMarketingWriteGate } from './marketing-write-gate.js'
 import { normalizeCampaignStatus, canTransitionCampaignStatus, EBAY_CAMPAIGN_STATUS_MAP, type NormalizedCampaignStatus } from '../ads-core/campaign-status.js'
+import { EBAY_MARKETPLACE_SHORT } from '../ads-core/ebay-marketplace.js'
 import {
   getActiveEbayAdsAuth,
   createCampaignApi, campaignLifecycleApi, cloneCampaignApi,
@@ -128,7 +129,7 @@ async function audit(params: {
   }).catch((e) => logger.error(`[E4][ebay-ads] audit write failed: ${(e as Error).message}`))
 }
 
-const SHORT: Record<string, string> = { EBAY_IT: 'IT', EBAY_DE: 'DE', EBAY_FR: 'FR', EBAY_ES: 'ES', EBAY_GB: 'UK' }
+const SHORT = EBAY_MARKETPLACE_SHORT // D3 — one shared map
 const gate = (marketplace: string, valueCents = 0) =>
   checkMarketingWriteGate({ channel: 'EBAY', marketplace, payloadValueCents: valueCents })
 

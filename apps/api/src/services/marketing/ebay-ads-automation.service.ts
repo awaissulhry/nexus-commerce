@@ -22,6 +22,8 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import * as writes from './ebay-ads-write.service.js'
 import { EBAY_MANAGED_STATUSES } from '../ads-core/campaign-status.js'
+import { marketplaceShort } from '../ads-core/ebay-marketplace.js'
+import { parseGuardrails, capActions } from '../ads-core/ebay-rule-guardrails.js'
 
 const AUTOMATION_ACTOR = 'automation:ebay-ads'
 
@@ -237,7 +239,22 @@ async function factsFor(entityType: 'LISTING' | 'KEYWORD', ids: string[], window
 
 const zeroFacts: EntityFacts = { impressions: 0, clicks: 0, adFeesCents: 0, salesCents: 0, soldQty: 0 }
 
-async function candidatesForRule(rule: { id: string; marketplace: string | null; trigger: unknown; action: unknown; scope?: unknown }): Promise<{ evaluated: number; candidates: CandidateChange[] }> {
+
+/**
+ * D7 — apply the rule's own guardrails to its candidate set.
+ * Separate function so the cap is applied at EVERY return path rather than
+ * whichever one someone remembered.
+ */
+function capCandidates(rawGuardrails: unknown, evaluated: number, candidates: CandidateChange[]): { evaluated: number; candidates: CandidateChange[]; withheldByGuardrail?: number } {
+  const { value: g } = parseGuardrails(rawGuardrails)
+  const { kept, withheld } = capActions(g, candidates)
+  if (withheld > 0) {
+    logger.warn('[ebay-ads][D7] guardrail withheld candidates', { maxActionsPerRun: g.maxActionsPerRun, withheld, evaluated })
+  }
+  return { evaluated, candidates: kept, ...(withheld ? { withheldByGuardrail: withheld } : {}) }
+}
+
+async function candidatesForRule(rule: { id: string; marketplace: string | null; trigger: unknown; action: unknown; scope?: unknown; guardrails?: unknown }): Promise<{ evaluated: number; candidates: CandidateChange[]; withheldByGuardrail?: number }> {
   const trigger = rule.trigger as RuleTrigger
   const action = rule.action as RuleAction
   // E7 — campaign-scoped rule packs: rules bound at launch carry
@@ -280,7 +297,7 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
       include: { campaign: { select: { id: true, externalCampaignId: true, name: true, marketplace: true, bidPercentage: true } } },
     })
     const policies = await policiesFor(ads.map((a) => a.campaignId))
-    const short = (m: string) => ({ EBAY_IT: 'IT', EBAY_DE: 'DE', EBAY_FR: 'FR', EBAY_ES: 'ES' } as Record<string, string>)[m] ?? 'IT'
+    const short = (m: string) => marketplaceShort(m)
     const listingIds = ads.map((a) => a.listingId!)
     const factsByWindow = new Map<string, Map<string, EntityFacts>>()
     for (const [k, w] of windowSpecs) factsByWindow.set(k, await factsFor('LISTING', listingIds, w.windowDays, w.exclude))
@@ -413,7 +430,9 @@ async function candidatesForRule(rule: { id: string; marketplace: string | null;
       }
     }
   }
-  return { evaluated, candidates }
+  // D7 — guardrails are READ now, not merely stored. maxActionsPerRun is the
+  // blast-radius lever Phase 5 needs and the reason the field keeps its name.
+  return capCandidates(rule.guardrails, evaluated, candidates)
 }
 
 export interface EvaluationReport { rules: number; evaluated: number; matched: number; proposed: number; applied: number; skippedGlobal: boolean; errors: string[] }
@@ -560,7 +579,7 @@ async function applyProposalAction(actorUserId: string | null, p: { kind: string
     const ads = await prisma.ebayAd.findMany({ where: { campaignId: refd.campaignId, listingId: { not: null }, status: { notIn: ['STALE'] } }, select: { listingId: true } })
     if (!ads.length) throw new Error('no active ads to step')
     const camp = await prisma.ebayCampaign.findUniqueOrThrow({ where: { id: refd.campaignId }, select: { marketplace: true } })
-    const short = ({ EBAY_IT: 'IT', EBAY_DE: 'DE', EBAY_FR: 'FR', EBAY_ES: 'ES' } as Record<string, string>)[camp.marketplace] ?? 'IT'
+    const short = marketplaceShort(camp.marketplace)
     const eco = new Map((await prisma.ebayListingEconomics.findMany({ where: { marketplace: short, itemId: { in: ads.map((a) => a.listingId!) } }, select: { itemId: true, breakEvenAdRatePct: true } }))
       .map((e) => [e.itemId, e.breakEvenAdRatePct != null ? Number(e.breakEvenAdRatePct.toString()) : null]))
     const items = ads.map((a) => {
@@ -1061,7 +1080,11 @@ export interface RuleBody {
 /** ER3.2 pure — validate a rule body (create/edit/preview share it). Returns
  *  human-readable problems; empty array = valid. */
 export function validateRuleBody(b: Partial<RuleBody>): string[] {
+  // D7 — a typo'd guardrail key used to fail OPEN: stored, shown in the editor,
+  // silently enforcing nothing. Refuse it at the boundary instead.
+  const guardrailErrors = parseGuardrails(b.guardrails).errors
   const errs: string[] = []
+  errs.push(...guardrailErrors)
   if (!b.name || typeof b.name !== 'string' || !b.name.trim() || b.name.length > 80) errs.push('name: required, ≤ 80 chars')
   const t = b.trigger as RuleTrigger | undefined
   if (!t || (t.scope !== 'CPS_AD' && t.scope !== 'CPC_KEYWORD')) errs.push('trigger.scope: CPS_AD or CPC_KEYWORD')
