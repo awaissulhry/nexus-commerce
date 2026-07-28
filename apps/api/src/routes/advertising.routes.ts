@@ -4234,38 +4234,128 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // importer and the bulk UI validate against too. Nothing here enumerates
   // columns: adding one is editing that array.
   fastify.get('/advertising/bulk/export', async (request, reply) => {
-    const q = request.query as { limit?: string }
+    const q = request.query as {
+      limit?: string; days?: string
+      campaignIds?: string; portfolioId?: string; adProduct?: string; marketplace?: string
+      state?: string; entities?: string
+    }
     // AX-IE.0 (E1) — this used to default to 200 campaigns and hard-cap at 500,
     // silently. The account sits at 196: it was four campaigns away from handing
     // back a file that looks complete and isn't. Export everything by default, and
     // when anything IS dropped say so loudly rather than emitting a quiet partial.
     const HARD_CEILING = 5000
     const TARGET_CAP = 1000 // Amazon's own per-ad-group keyword ceiling
+    const AD_CAP = 1000     // product ads per ad group — same reason, see below
     const explicitLimit = q.limit != null && q.limit !== '' && Number.isFinite(Number(q.limit))
       ? Math.max(1, Math.floor(Number(q.limit)))
       : null
-    const totalCampaigns = await prisma.campaign.count()
+
+    // ── AX-IE.10 — export scope ────────────────────────────────────────
+    //
+    // "Export exactly what I'm looking at". Without it the only way to get a
+    // workable file out of a large account is ?limit=, which truncates by
+    // alphabetical accident — it answers "fewer rows" when the question was
+    // "these rows".
+    //
+    // Every filter is validated against the values we actually store. An
+    // unrecognised one is a 400, never a silent empty export: "0 campaigns"
+    // because you typed `adProduct=SP` is precisely the plausible-wrong answer
+    // this series exists to remove.
+    const csv = (s?: string): string[] => (s ?? '').split(',').map((x) => x.trim()).filter(Boolean)
+    const scopeLabels: string[] = []
+    const where: Record<string, unknown> = {}
+
+    const campaignIds = csv(q.campaignIds)
+    if (campaignIds.length) {
+      where.externalCampaignId = { in: campaignIds }
+      scopeLabels.push(`${campaignIds.length} specific campaign${campaignIds.length === 1 ? '' : 's'}`)
+    }
+    if (q.portfolioId) { where.portfolioId = q.portfolioId; scopeLabels.push(`portfolio ${q.portfolioId}`) }
+
+    const AD_PRODUCTS = ['SPONSORED_PRODUCTS', 'SPONSORED_BRANDS', 'SPONSORED_DISPLAY']
+    if (q.adProduct) {
+      const v = q.adProduct.trim().toUpperCase().replace(/[\s-]+/g, '_')
+      if (!AD_PRODUCTS.includes(v)) {
+        reply.status(400)
+        return { error: 'bad_scope', field: 'adProduct', received: q.adProduct, allowed: AD_PRODUCTS }
+      }
+      where.adProduct = v
+      scopeLabels.push(`ad product ${v.toLowerCase().replace(/_/g, ' ')}`)
+    }
+    const STATES = ['ENABLED', 'PAUSED', 'ARCHIVED']
+    if (q.state) {
+      const v = q.state.trim().toUpperCase()
+      if (!STATES.includes(v)) {
+        reply.status(400)
+        return { error: 'bad_scope', field: 'state', received: q.state, allowed: STATES }
+      }
+      where.status = v
+      scopeLabels.push(`state ${v.toLowerCase()}`)
+    }
+    if (q.marketplace) {
+      const v = q.marketplace.trim().toUpperCase()
+      const known = await prisma.campaign.findFirst({ where: { marketplace: v }, select: { id: true } })
+      if (!known) {
+        const have = (await prisma.campaign.groupBy({ by: ['marketplace'] })).map((m) => m.marketplace).filter(Boolean)
+        reply.status(400)
+        return { error: 'bad_scope', field: 'marketplace', received: q.marketplace, allowed: have }
+      }
+      where.marketplace = v
+      scopeLabels.push(`marketplace ${v}`)
+    }
+
+    // Entity filter. Validated the same way, against the grammar rather than a
+    // hand-written list, so it cannot drift from what the exporter can emit.
+    const wantedEntities = csv(q.entities)
+    if (wantedEntities.length) {
+      const canonical = wantedEntities.map((e) => parseVocabulary('entity', e))
+      const bad = wantedEntities.filter((_, i) => !canonical[i])
+      if (bad.length) {
+        reply.status(400)
+        return { error: 'bad_scope', field: 'entities', received: bad, allowed: VOCABULARIES.entity.values }
+      }
+      scopeLabels.push(`entities: ${canonical.join(', ')}`)
+    }
+    const entityWanted = wantedEntities.length
+      ? new Set(wantedEntities.map((e) => parseVocabulary('entity', e)!))
+      : null
+
+    const scoped = Object.keys(where).length > 0
+    const totalCampaigns = await prisma.campaign.count({ where })
+    if (totalCampaigns === 0 && scoped) {
+      reply.status(404)
+      return {
+        error: 'scope_matched_nothing',
+        scope: scopeLabels,
+        hint: 'No campaign matches that scope, so there is nothing to export. Widen it rather than uploading an empty file.',
+      }
+    }
     if (!explicitLimit && totalCampaigns > HARD_CEILING) {
       reply.status(409)
-      return { error: 'export_too_large', totalCampaigns, ceiling: HARD_CEILING, hint: 'Narrow the scope, or pass ?limit= to explicitly acknowledge a partial export.' }
+      return { error: 'export_too_large', totalCampaigns, ceiling: HARD_CEILING, hint: 'Narrow the scope with ?campaignIds=/?portfolioId=/?adProduct=, or pass ?limit= to explicitly acknowledge a partial export.' }
     }
     const limit = explicitLimit ?? HARD_CEILING
     // AX-IE.3 — every entity type, not four. Negatives and product ads were being
     // dropped ENTIRELY: 1,649 negative targets and 4,015 product ads that the file
     // never mentioned, so a round trip could not preserve what it never carried.
     const campaigns = await prisma.campaign.findMany({
-      take: limit, orderBy: { name: 'asc' },
+      where, take: limit, orderBy: { name: 'asc' },
       include: {
         adGroups: {
           include: {
             // take one MORE than the cap purely to detect overflow — sliced off below
             targets: { take: TARGET_CAP + 1, orderBy: { createdAt: 'asc' } },
-            productAds: true,
+            // Product ads were unbounded while targets were capped, which is the
+            // wrong way round for an account that holds 4,015 of them against
+            // 4,510 targets. Same one-over trick so an overflow is reported
+            // rather than quietly dropped.
+            productAds: { take: AD_CAP + 1, orderBy: { createdAt: 'asc' } },
           },
         },
       },
     })
     let targetsTruncated = 0
+    let adsTruncated = 0
     const PROD: Record<string, string> = { SPONSORED_PRODUCTS: 'Sponsored Products', SPONSORED_BRANDS: 'Sponsored Brands', SPONSORED_DISPLAY: 'Sponsored Display' }
     const st = (s: string) => (s || '').toLowerCase()
 
@@ -4324,7 +4414,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
     const sheetRows: Array<Record<string, unknown>> = []
-    const push = (o: Record<string, unknown>) => { sheetRows.push(o) }
+    // AX-IE.10 — the entity filter lives in the single funnel every row already
+    // goes through, so a new entity type cannot be added and silently escape it.
+    const push = (o: Record<string, unknown>) => {
+      if (entityWanted && !entityWanted.has(String(o.Entity))) return
+      sheetRows.push(o)
+    }
     const marketplaces = new Set<string>()
 
     // Amazon's auto-targeting expressions are NOT match types — they are the four
@@ -4357,7 +4452,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         const agRef = { ...campRef, 'Ad group ID': g.externalAdGroupId ?? '' }
         push({ ...agRef, Entity: 'Ad group', [ROW_KEY_HEADER]: rowKey('Ad group', g.externalAdGroupId, g.id), 'Ad group name': g.name, State: st(g.status), 'Ad Group Default Bid': g.defaultBidCents / 100, ...perf(g.id) })
 
-        for (const a of g.productAds) {
+        const shownAds = g.productAds.length > AD_CAP ? g.productAds.slice(0, AD_CAP) : g.productAds
+        if (g.productAds.length > AD_CAP) adsTruncated += 1
+        for (const a of shownAds) {
           push({ ...agRef, Entity: 'Product ad', [ROW_KEY_HEADER]: rowKey('Product ad', a.externalAdId, a.id), 'Ad ID': a.externalAdId ?? '', SKU: a.sku ?? '', 'ASIN (Informational only)': a.asin ?? '', State: st(a.status), ...perf(a.id) })
         }
 
@@ -4442,7 +4539,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       coverage: {
         entities, excludes,
         campaignsExported: campaigns.length, campaignsTotal: totalCampaigns,
-        truncated: totalCampaigns > limit || targetsTruncated > 0,
+        truncated: totalCampaigns > limit || targetsTruncated > 0 || adsTruncated > 0,
+        // A scope is NOT truncation — it is what was asked for — so it is
+        // reported separately. Conflating them would make a deliberate filter
+        // read as an accident, and an accident read as a choice.
+        scope: scopeLabels,
         marketplaces: [...marketplaces].sort(),
         performanceWindowDays: perfDays,
         // Measured, not assumed: AmazonAdsDailyPerformance holds only CAMPAIGN
@@ -4473,8 +4574,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const h = (k: string, v: string) => reply.header(k, asciiHeader(v))
     reply.header('X-Nexus-Export-Campaigns', String(campaigns.length))
     reply.header('X-Nexus-Export-Campaigns-Total', String(totalCampaigns))
-    reply.header('X-Nexus-Export-Truncated', totalCampaigns > limit || targetsTruncated > 0 ? 'true' : 'false')
+    reply.header('X-Nexus-Export-Truncated', totalCampaigns > limit || targetsTruncated > 0 || adsTruncated > 0 ? 'true' : 'false')
     reply.header('X-Nexus-Export-Adgroups-Target-Truncated', String(targetsTruncated))
+    reply.header('X-Nexus-Export-Adgroups-Ad-Truncated', String(adsTruncated))
+    // Scoped or not, and to what — so a download is self-describing without
+    // opening it. Free text, so it goes through the ASCII guard.
+    reply.header('X-Nexus-Export-Scoped', scopeLabels.length ? 'true' : 'false')
+    h('X-Nexus-Export-Scope', scopeLabels.join(' | '))
     h('X-Nexus-Export-Entities', entities.join(','))
     h('X-Nexus-Export-Excludes', excludes.join(','))
     reply.header('X-Nexus-Export-Rows', String(built.rowCount))

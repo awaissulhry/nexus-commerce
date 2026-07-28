@@ -110,6 +110,15 @@ export interface WorkbookCoverage {
   campaignsExported: number
   campaignsTotal: number
   truncated: boolean
+  /**
+   * AX-IE.10 — the filters this export was taken through, as `label: value`.
+   *
+   * Empty for a whole-account export. It has to be recorded IN the file, because
+   * a scoped export is indistinguishable from a complete one once it is sitting
+   * in someone's Downloads folder — and a file that looks complete and isn't is
+   * the same failure as the silent 200-campaign cap this series started with.
+   */
+  scope: string[]
   marketplaces: string[]
   /** Days of performance summed into the read-only metric columns. */
   performanceWindowDays: number
@@ -282,6 +291,7 @@ function metaPairs(c: WorkbookCoverage, at: Date, exportId: string, rowCount: nu
     ['metricsVintageSummary', c.vintage?.summary ?? ''],
     ['entities', c.entities.join(',')],
     ['excludes', c.excludes.join(',')],
+    ['scope', c.scope.join(' · ')],
   ]
 }
 
@@ -291,10 +301,24 @@ function readmeLines(c: WorkbookCoverage, at: Date, exportId: string): string[] 
   return [
     'This file is your current Amazon Ads state. Edit it and upload it back.',
     '',
-    'ONE SHEET IS NOT AN INPUT',
-    '  Portfolios is exported for reference only. Portfolio changes cannot be applied',
-    '  from a bulksheet yet, so edits there are not read on upload — change portfolios',
-    '  in the console instead. Every other sheet round-trips.',
+    // AX-IE.10 — a scoped file must announce it on the first screen the operator
+    // reads. Buried in _meta is not good enough: the whole risk of scoping is
+    // that a partial export looks exactly like a complete one.
+    ...(c.scope.length
+      ? [
+        'THIS IS A PARTIAL EXPORT',
+        '  It was filtered to:',
+        ...c.scope.map((s) => `    ${s}`),
+        '  Anything outside that is NOT in this file and will not be touched by',
+        '  uploading it back. Rows are only ever matched by their own id, so a',
+        '  narrow file cannot affect what it does not contain.',
+        '',
+      ]
+      : []),
+    'SHEETS THAT ARE NOT INPUTS',
+    '  README, Dictionary and the hidden _meta are generated documentation — edits',
+    '  there are ignored on upload. Every other sheet, Portfolios included,',
+    '  round-trips.',
     '',
     `Generated  ${at.toISOString()}`,
     `Export id  ${exportId}`,
