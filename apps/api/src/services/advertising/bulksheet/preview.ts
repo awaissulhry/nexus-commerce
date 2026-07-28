@@ -21,7 +21,7 @@
  */
 
 import type { PrismaClient } from '@prisma/client'
-import { parseRowKey, rowKeyMatchesEntity } from '@nexus/shared/ads-bulksheet'
+import { parseRowKey, rowKeyMatchesEntity, isAdTargetEntity } from '@nexus/shared/ads-bulksheet'
 import { computeBaseline, baselineDrift, parseMoney, parseVocabulary } from '@nexus/shared/ads-bulksheet'
 import { FIELDS_BY_KIND } from './field-map.js'
 
@@ -242,7 +242,7 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
         'Ad Group Default Bid': fmtMoney(a.defaultBidCents / 100),
       }
       fields = ADGROUP_FIELDS
-    } else if (entity === 'Keyword' || entity === 'Product targeting' || entity === 'Negative keyword' || entity === 'Campaign negative keyword' || entity === 'Negative product targeting') {
+    } else if (isAdTargetEntity(entity)) {
       const id = v['Keyword ID'] || v['Product Targeting ID']
       const t = byRowKey(tgtById, base.rowKey, entity) ?? (id ? tgtBy.get(id) : undefined)
       if (!t) {

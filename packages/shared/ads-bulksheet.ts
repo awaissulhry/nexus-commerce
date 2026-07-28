@@ -380,13 +380,40 @@ export const ENTITY_RULES: readonly EntityRule[] = [
   { entity: 'Ad group', create: ['Ad group name', 'Campaign ID'], mutate: ['Ad group ID'], applySupported: true },
   { entity: 'Keyword', create: ['Keyword text', 'Match type', ['Campaign ID', 'Ad group ID']], mutate: ['Keyword ID'], applySupported: true },
   { entity: 'Negative keyword', create: ['Keyword text', 'Match type', ['Campaign ID', 'Ad group ID']], mutate: ['Keyword ID'], applySupported: true },
-  { entity: 'Campaign negative keyword', create: ['Keyword text', 'Match type', 'Campaign ID'], mutate: ['Keyword ID'], applySupported: false },
-  { entity: 'Product targeting', create: [['Product targeting expression', 'Targeting expression'], 'Ad group ID'], mutate: [['Product Targeting ID', 'Targeting ID']], applySupported: false },
-  { entity: 'Negative product targeting', create: [['Product targeting expression', 'Targeting expression'], 'Ad group ID'], mutate: [['Product Targeting ID', 'Targeting ID']], applySupported: false },
+  { entity: 'Campaign negative keyword', create: ['Keyword text', 'Match type', 'Campaign ID'], mutate: ['Keyword ID'], applySupported: true },
+  { entity: 'Product targeting', create: [['Product targeting expression', 'Targeting expression'], 'Ad group ID'], mutate: [['Product Targeting ID', 'Targeting ID']], applySupported: true },
+  { entity: 'Negative product targeting', create: [['Product targeting expression', 'Targeting expression'], 'Ad group ID'], mutate: [['Product Targeting ID', 'Targeting ID']], applySupported: true },
+  // Still genuinely unwired. Both preview as UNSUPPORTED and apply skips them,
+  // so these two declarations agree with the code — unlike the three above,
+  // which claimed `false` while apply had been writing them all along.
   { entity: 'Product ad', create: [['SKU', 'ASIN'], 'Ad group ID'], mutate: ['Ad ID'], applySupported: false },
   { entity: 'Bidding adjustment', create: ['Campaign ID', 'Placement', 'Percentage'], mutate: ['Campaign ID', 'Placement'], applySupported: false },
   { entity: 'Portfolio', create: ['Portfolio name'], mutate: ['Portfolio ID'], applySupported: true },
 ]
+
+/**
+ * The five entities that are each stored as one AdTarget row and therefore share
+ * a single write path (`updateAdTargetWithSync`).
+ *
+ * This exists because the list was previously written out by hand in preview's
+ * branch condition while `applySupported` was maintained separately here — and
+ * they drifted. Three of these declared `applySupported: false`, so import
+ * validation labelled the rows PREVIEW_ONLY and told the operator they would not
+ * be written; the apply path wrote them anyway, because nothing downstream of
+ * validation ever consulted the flag. Wrong in the dangerous direction: a
+ * promise of "nothing will happen" that wasn't kept.
+ *
+ * One list, read by both, so the two cannot disagree again.
+ */
+export const AD_TARGET_ENTITIES = [
+  'Keyword', 'Negative keyword', 'Campaign negative keyword',
+  'Product targeting', 'Negative product targeting',
+] as const
+
+export function isAdTargetEntity(entity: string): boolean {
+  const canonical = parseVocabulary('entity', entity)
+  return canonical != null && (AD_TARGET_ENTITIES as readonly string[]).includes(canonical)
+}
 
 const RULE_BY_ENTITY = new Map(ENTITY_RULES.map((r) => [normEnum(r.entity), r]))
 export function entityRule(entity: string): EntityRule | null {

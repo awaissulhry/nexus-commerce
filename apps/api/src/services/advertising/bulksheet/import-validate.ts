@@ -86,11 +86,15 @@ export interface ValidationResult {
 /**
  * AX-ZD.8 — why a generated sheet is not an input.
  *
- * Portfolios is the one that matters. It is emitted with real, editable-looking
- * budget and state values, sits in NON_DATA_SHEETS, and `entityRule('Portfolio')`
- * declares `applySupported: false` — so a portfolio edit could not be applied
- * even if the sheet were read. Saying so is the whole fix; pretending the sheet
- * is importable would move the silent no-op rather than remove it.
+ * Portfolios used to be the case that mattered: emitted with real,
+ * editable-looking values, ignored on import, and declaring
+ * `applySupported: false` — so an edit there was a silent no-op. AX-IE.2 wired
+ * the write path and took it out of NON_DATA_SHEETS, so it is now a real input
+ * and no longer an example here.
+ *
+ * What remains are the three genuinely generated sheets below. The rule stands:
+ * a sheet we will not read has to SAY so, because silence is indistinguishable
+ * from acceptance to the person who just edited it.
  */
 export function ignoredSheetReason(sheetName: string): string | null {
   const n = normHeader(sheetName)

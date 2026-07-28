@@ -19,7 +19,7 @@
  */
 
 import type { PrismaClient } from '@prisma/client'
-import { parseMoney, parseVocabulary } from '@nexus/shared/ads-bulksheet'
+import { parseMoney, parseVocabulary, isAdTargetEntity } from '@nexus/shared/ads-bulksheet'
 import {
   updateCampaignWithSync, updateAdGroupWithSync, updateAdTargetWithSync, updatePortfolioWithSync,
   type AdsActor,
@@ -157,7 +157,7 @@ export async function applyPlan(
           adGroupId: row.targetId, patch: patch as Parameters<typeof updateAdGroupWithSync>[0]['patch'], actor: opts.actor,
           reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId,
         })
-      } else {
+      } else if (isAdTargetEntity(row.entity)) {
         // Keyword / Product targeting / the negative variants all live on AdTarget.
         const patch: Record<string, unknown> = {}
         const err = applyFields('adTarget', patch, (c) => nextOf(row, c))
@@ -168,6 +168,16 @@ export async function applyPlan(
           adTargetId: row.targetId, patch: patch as Parameters<typeof updateAdTargetWithSync>[0]['patch'], actor: opts.actor,
           reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId,
         })
+      } else {
+        // Fail closed. This used to be a bare `else` falling into the AdTarget
+        // write above, which meant any entity without its own branch — Product
+        // ad, Bidding adjustment — would have had its id handed to
+        // updateAdTargetWithSync the moment somebody flipped `applySupported`.
+        // A Product ad id is not an AdTarget id, so that is either a no-op or a
+        // write to whatever row happens to share the value. Refusing is the only
+        // safe answer, and it surfaces the missing branch instead of hiding it.
+        rec('FAILED', `${row.entity} has no apply path — preview should have marked this UNSUPPORTED. This is a bug, not a data problem.`)
+        continue
       }
 
       if (res?.ok) {
