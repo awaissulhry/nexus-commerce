@@ -8,8 +8,8 @@
  */
 import {
   LayoutGrid, Gauge, BadgeDollarSign, FileSpreadsheet, Atom, Sparkles, ListChecks, Lightbulb, HeartPulse, BarChart3, Table, Briefcase, Wand2, Users, PieChart, History, HelpCircle, Settings, ShoppingBag,
-  type LucideIcon,
-} from 'lucide-react'
+  Copy,
+  type LucideIcon } from 'lucide-react'
 
 export const ADS_BASE = '/marketing/ads'
 
@@ -51,6 +51,8 @@ export const ADS_NAV: NavItem[] = [
   { label: 'Analytics', route: 'analytics', Icon: BarChart3 },
   { label: 'Ad Manager', route: 'campaigns', Icon: Table },
   { label: 'Portfolios', route: 'portfolios', Icon: Briefcase },
+  // AX2.10 — capture a working structure and replicate it onto another product.
+  { label: 'Blueprints', route: 'blueprints', Icon: Copy },
   // AX-IE.8 — the bulksheet round trip: download current state, edit in Excel or
   // Numbers, upload, preview what it would do, apply, undo.
   { label: 'Bulk Operations', route: 'bulk', Icon: FileSpreadsheet },
