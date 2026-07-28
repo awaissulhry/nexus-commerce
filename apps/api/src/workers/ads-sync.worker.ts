@@ -17,7 +17,7 @@
 
 import { Worker, type Job } from 'bullmq'
 import prisma from '../db.js'
-import { claimEntityWrite, settleAdMutations } from '../services/advertising/ads-mutation.service.js'
+import { claimEntityWrite, dispatchPayloadFromMutations, settleAdMutations } from '../services/advertising/ads-mutation.service.js'
 import { ADS_STALE_INTENT_MS, classifyCrashedWrite } from '../services/ads-core/ad-mutation-state.js'
 import { redis } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
@@ -296,7 +296,14 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     data: { syncStatus: 'IN_PROGRESS' },
   })
 
-  const payload = row.payload as unknown as AdMutationPayload
+  // AX-ZD.1f — dispatch from the typed rows, which are now authoritative. The
+  // JSON blob remains the fallback for rows enqueued before ZD.1, which have no
+  // typed rows; dispatching nothing for those would silently drop a change.
+  const typed = await dispatchPayloadFromMutations(queueId).catch(() => null)
+  const payload = (typed ?? row.payload) as unknown as AdMutationPayload
+  if (!typed) {
+    logger.info('[ads-sync.worker] dispatching from the legacy JSON payload (pre-ZD.1 row)', { queueId })
+  }
   const marketplace = payload?.marketplace ?? null
 
   // AD.4 — Two-key live-write gate. In sandbox mode the gate passes

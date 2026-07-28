@@ -114,7 +114,23 @@ async function enqueueOutbound(args: EnqueueArgs): Promise<string> {
   const holdUntil = args.applyImmediately
     ? new Date()
     : new Date(Date.now() + GRACE_PERIOD_MS)
-  const row = await prisma.outboundSyncQueue.create({
+  // AX-ZD.1f — the queue row and its typed rows are now written in ONE
+  // transaction. While AdMutation was bookkeeping only, a failed write there
+  // was better swallowed than allowed to fail an operator's change. Now that
+  // dispatch reads the typed rows, a half-write would be a SILENTLY DROPPED
+  // write, which is the worst outcome available. Either both land or neither
+  // does and the caller sees the error.
+  return prisma.$transaction(async (tx) => {
+    const id = await createQueueRow(tx, args, holdUntil)
+    await recordAdMutations(tx, id, args, holdUntil)
+    return id
+  })
+}
+
+type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
+
+async function createQueueRow(tx: Tx, args: EnqueueArgs, holdUntil: Date): Promise<string> {
+  const row = await tx.outboundSyncQueue.create({
     data: {
       // Campaign-level entities don't tie to a product/channel listing.
       // Leave both FKs null; the worker reads entityType from payload.
@@ -138,7 +154,6 @@ async function enqueueOutbound(args: EnqueueArgs): Promise<string> {
     },
     select: { id: true },
   })
-  await recordAdMutations(row.id, args, holdUntil)
   return row.id
 }
 
@@ -150,13 +165,13 @@ async function enqueueOutbound(args: EnqueueArgs): Promise<string> {
  * "is anything in flight on this campaign?" — hiding real external edits. One
  * row per field is the whole point.
  *
- * ADDITIVE and deliberately non-fatal. `OutboundSyncQueue` is still the dispatch
- * path, and it is already committed by the time we get here; if this bookkeeping
- * write fails, the write must still go to Amazon. A missing typed row degrades
- * to the pre-ZD.1 behaviour for that field (drift may classify it as an external
- * edit) rather than dropping an operator's change on the floor.
+ * AX-ZD.1f — no longer optional, and no longer swallowing. These rows are what
+ * dispatch reads, so a missing one is a dropped write rather than a degraded
+ * drift signal. It runs inside the enqueue transaction: either the queue row and
+ * its typed rows both land, or the operator's PATCH fails loudly.
  */
 async function recordAdMutations(
+  tx: Tx,
   outboundQueueId: string,
   args: EnqueueArgs,
   holdUntil: Date,
@@ -164,9 +179,9 @@ async function recordAdMutations(
   if (!args.fieldChanges.length) return
   const str = (v: unknown): string | null =>
     v === null || v === undefined ? null : typeof v === 'string' ? v : JSON.stringify(v)
-  try {
-    await prisma.adMutation.createMany({
-      data: args.fieldChanges.map((c) => ({
+  {
+    await tx.adMutation.createMany({
+      data: dedupeFieldChanges(args.fieldChanges).map((c) => ({
         entityType: args.entityType,
         entityId: args.entityId,
         externalEntityId: args.externalId,
@@ -184,10 +199,76 @@ async function recordAdMutations(
       })),
       skipDuplicates: true,
     })
-  } catch (err) {
-    logger.warn('[AX-ZD.1] typed mutation record failed; dispatch is unaffected', {
-      outboundQueueId, error: err instanceof Error ? err.message : String(err),
-    })
+  }
+}
+
+/**
+ * AX-ZD.1f — collapse repeated fields, last-wins.
+ *
+ * The typed rows are keyed `${queueId}:${field}` and inserted with
+ * `skipDuplicates`, so a repeated field would keep the FIRST occurrence and drop
+ * the rest. The JSON path builds a plain object from the same array, so it keeps
+ * the LAST. That is a silent divergence between two paths that must dispatch
+ * identically — the operator would see the wrong value applied.
+ *
+ * No caller sends duplicates today, so this changes nothing now. It exists so
+ * the two paths are equivalent by construction rather than by luck, because the
+ * failure mode is a wrong bid reaching Amazon with nothing in the logs.
+ */
+export function dedupeFieldChanges(changes: FieldChange[]): FieldChange[] {
+  const byField = new Map<string, FieldChange>()
+  for (const c of changes) byField.set(c.field, c) // last wins, matching object-build
+  return [...byField.values()]
+}
+
+/**
+ * AX-ZD.1f — the dispatch payload, read from the typed rows.
+ *
+ * Dispatch used to parse a JSON blob on the queue row. That blob and the typed
+ * rows are two records of one intent and could disagree; this makes the typed
+ * rows authoritative and leaves OutboundSyncQueue owning delivery mechanics —
+ * retries, dead-lettering, the grace window — which it does well.
+ *
+ * Returns null when there are no typed rows, and the caller falls back to the
+ * blob. That is not defensive padding: rows enqueued before ZD.1 genuinely have
+ * none, and dispatching nothing for them would silently drop an operator's
+ * change. New rows always have them — the enqueue transaction guarantees it.
+ */
+export interface DispatchPayload {
+  entityType: AdEntityType
+  entityId: string
+  externalId: string | null
+  marketplace: string | null
+  fieldChanges: FieldChange[]
+  actor: string
+  reason: string | null
+}
+
+export async function dispatchPayloadFromMutations(
+  outboundQueueId: string,
+): Promise<DispatchPayload | null> {
+  const rows = await prisma.adMutation.findMany({
+    where: { outboundQueueId },
+    select: {
+      entityType: true, entityId: true, externalEntityId: true, marketplace: true,
+      field: true, intendedValue: true, previousValue: true, actor: true,
+    },
+    orderBy: { field: 'asc' },
+  })
+  if (!rows.length) return null
+  const head = rows[0]!
+  return {
+    entityType: head.entityType as AdEntityType,
+    entityId: head.entityId,
+    externalId: head.externalEntityId,
+    marketplace: head.marketplace,
+    fieldChanges: rows.map((r) => ({
+      field: r.field, oldValue: r.previousValue, newValue: r.intendedValue,
+    })),
+    actor: head.actor,
+    // `reason` is audit prose, never dispatched, and lives on the queue row.
+    // Recording it per field would duplicate it N times to no purpose.
+    reason: null,
   }
 }
 
