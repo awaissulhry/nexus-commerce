@@ -39,6 +39,8 @@ interface StagedParsed {
   baseline: string
   values: Record<string, string>
   cells?: string[]
+  /** D4 — header names from the uploaded file. Preferred over decoding `cells`. */
+  columns?: string[]
 }
 
 export interface AnnotateResult {
@@ -157,14 +159,25 @@ export async function buildAnnotatedWorkbook(prisma: PrismaClient, jobId: string
     // Which cells to mark. The staged row keeps the ADDRESSES of offending cells
     // from validation; anything else falls back to marking the whole row's status.
     const badColumns = new Set<string>()
-    for (const addr of p.cells ?? []) {
-      // "Sheet!F412" → the column letter is between '!' and the digits.
-      const m = /!([A-Z]+)\d+$/.exec(addr ?? '')
-      if (!m) continue
-      let n = 0
-      for (const ch of m[1]!) n = n * 26 + (ch.charCodeAt(0) - 64)
-      const col = COLUMNS[n - 1]
-      if (col) badColumns.add(col.header)
+    // D4 — prefer the header names validation recorded against the UPLOADED
+    // file. Decoding the column letter back through the CANONICAL COLUMNS was
+    // wrong for any reordered file, which is precisely what the importer
+    // advertises support for: the red cell landed on an unrelated column.
+    for (const header of p.columns ?? []) {
+      if (header) badColumns.add(header)
+    }
+    if (!badColumns.size) {
+      // Fallback for rows staged before columns[] existed. Still wrong on a
+      // reordered file — but it is the best available for legacy payloads, and
+      // it no longer applies to anything newly validated.
+      for (const addr of p.cells ?? []) {
+        const m = /!([A-Z]+)\d+$/.exec(addr ?? '')
+        if (!m) continue
+        let n = 0
+        for (const ch of m[1]!) n = n * 26 + (ch.charCodeAt(0) - 64)
+        const col = COLUMNS[n - 1]
+        if (col) badColumns.add(col.header)
+      }
     }
 
     const msg = r.errorMessage ?? ''

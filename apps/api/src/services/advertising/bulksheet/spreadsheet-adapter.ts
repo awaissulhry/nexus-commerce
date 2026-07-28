@@ -120,7 +120,14 @@ export function cellToString(v: unknown): string {
   return String(v).replace(/ /g, ' ').normalize('NFC').trim()
 }
 
-/** Prefix-escape values Excel would otherwise evaluate. Also blocks CSV formula injection. */
+/**
+ * Prefix-escape values a spreadsheet would otherwise evaluate.
+ *
+ * D6 — for XLSX this is now used only as a PREDICATE ("would this need
+ * quoting?"); the workbook writer applies ExcelJS `quotePrefix` styling instead
+ * of mutating the value. It remains the correct escape for the CSV path, where
+ * there is no styling and prefixing the value is the only defence.
+ */
 export function escapeFormulaInjection(s: string): string {
   return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s
 }
@@ -134,15 +141,73 @@ async function loadExcelJS(): Promise<ExcelJSModule> {
   return (await import('exceljs')).default as unknown as ExcelJSModule
 }
 
+/** D5 — hidden sheet holding enum ranges for data validation. */
+const LISTS_SHEET = 'Lists'
+
+/**
+ * 0-based column index → Excel letter. Deliberately local: the identical helper
+ * lives in import-validate.ts, which imports THIS module, so sharing it either
+ * way round would close a require cycle.
+ */
+function colLetter(index: number): string {
+  let n = index + 1, out = ''
+  while (n > 0) { const r = (n - 1) % 26; out = String.fromCharCode(65 + r) + out; n = Math.floor((n - 1) / 26) }
+  return out
+}
+
 class ExcelJsWriter implements SpreadsheetWriter {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private wb: any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private sheets = new Map<string, any>()
   private specs = new Map<string, SheetSpec>()
+  /** D5 — enum values already given a defined name, keyed by their joined value. */
+  private listNames = new Map<string, string>()
+  private listCol = 0
+  // Deliberately NOT in `sheets`: that map is the DATA-sheet registry and
+  // toBuffer() resolves a SheetSpec for every entry. Lists has no spec.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private listsWs: any = null
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(wb: any) { this.wb = wb }
+
+  /**
+   * D5 — park an enum on a hidden `Lists` sheet and return a defined-name
+   * reference for data validation, or null when an inline list is safely short.
+   *
+   * Two defects, one fix. Excel caps an inline list formula at 255 characters
+   * and the Entity enum is 278, so the workbook was being REPAIRED on open.
+   * And the validation object was previously constructed per row — O(rows ×
+   * enum-columns), ~93k objects at current volume — where a named range is
+   * built once and referenced.
+   */
+  private listRangeFor(header: string, values: readonly string[]): string | null {
+    const inlineLength = values.join(',').length + 2
+    if (inlineLength <= 255) return null // short enough; no sheet clutter
+
+    const key = values.join('\u0000')
+    const existing = this.listNames.get(key)
+    if (existing) return `=${existing}`
+
+    if (!this.listsWs) {
+      // Hidden so operators never see it, and kept out of the data-sheet
+      // registry so it is never treated as an exportable sheet.
+      this.listsWs = this.wb.addWorksheet(LISTS_SHEET, { state: 'veryHidden' })
+    }
+    const ws = this.listsWs
+    this.listCol += 1
+    const col = this.listCol
+    ws.getCell(1, col).value = header
+    values.forEach((v, i) => { ws.getCell(i + 2, col).value = v })
+
+    const name = `_bulk_${header.replace(/[^A-Za-z0-9]/g, '_')}`
+    const letter = colLetter(col - 1)
+    // Absolute, sheet-qualified — a defined name must not drift with insertions.
+    this.wb.definedNames.add(`'${LISTS_SHEET}'!$${letter}$2:$${letter}$${values.length + 1}`, name)
+    this.listNames.set(key, name)
+    return `=${name}`
+  }
 
   addSheet(spec: SheetSpec): void {
     const ws = this.wb.addWorksheet(spec.name, spec.hidden ? { state: 'hidden' } : undefined)
@@ -172,11 +237,31 @@ class ExcelJsWriter implements SpreadsheetWriter {
   async addRow(sheet: string, values: readonly RowCell[]): Promise<void> {
     const ws = this.sheets.get(sheet)
     if (!ws) throw new Error(`[bulksheet] unknown sheet "${sheet}"`)
-    const plain = values.map((c) => {
+    // D6 — write the RAW value, not an escaped copy of it.
+    //
+    // MEASURED, not assumed: ExcelJS writes a JS string as an XLSX *string*
+    // cell (ValueType.String), and a string cell is never evaluated by Excel —
+    // only an explicit <f> formula element is. So the injection defence for
+    // XLSX is the cell TYPE, which we already get for free. quotePrefix is
+    // applied as belt-and-braces (it stops Excel re-interpreting the value if
+    // an operator edits the cell) but it does NOT survive an ExcelJS
+    // write→load round trip, so nothing may depend on reading it back.
+    //
+    // The escape is still essential for the CSV path, where cells carry no type.
+    // The defect: escapeFormulaInjection prepended a literal apostrophe to the
+    // VALUE, so a campaign named "-50% Sale" was written as "'-50% Sale" — real
+    // data, not a display convention. The baseline is hashed pre-escape
+    // (build-workbook:184), so the exported cell no longer matched its own
+    // fingerprint and a re-upload read as an external change.
+    const needsQuote = values.map((c) => {
       const v = isAnnotated(c) ? c.value : c
-      return typeof v === 'string' ? escapeFormulaInjection(v) : v
+      return typeof v === 'string' && v !== escapeFormulaInjection(v)
     })
+    const plain = values.map((c) => (isAnnotated(c) ? c.value : c))
     const row = ws.addRow(plain)
+    needsQuote.forEach((q, i) => {
+      if (q) row.getCell(i + 1).style = { ...row.getCell(i + 1).style, quotePrefix: true }
+    })
     values.forEach((c, i) => {
       if (!isAnnotated(c) || (!c.fill && !c.note)) return
       const cell = row.getCell(i + 1)
@@ -219,7 +304,14 @@ class ExcelJsWriter implements SpreadsheetWriter {
       }
       spec.columns.forEach((c, i) => {
         if (!c.allowedValues?.length) return
-        const formula = `"${c.allowedValues.join(',')}"`
+        // D5 — an inline `"a,b,c…"` list is capped at 255 characters by Excel.
+        // The 16 Entity values produce 278, so Excel REPAIRED the workbook on
+        // open — and a repair prompt taints the whole file. A defined name has
+        // no length limit. Falls back to inline only for short lists, so a new
+        // enum cannot silently reintroduce the ceiling.
+        const named = this.listRangeFor(c.header, c.allowedValues)
+        const inline = `"${c.allowedValues.join(',')}"`
+        const formula = named ?? inline
         for (let r = 2; r <= lastRow; r++) {
           ws.getCell(r, i + 1).dataValidation = {
             type: 'list', allowBlank: true, formulae: [formula], showErrorMessage: true,

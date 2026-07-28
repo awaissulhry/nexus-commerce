@@ -39,6 +39,8 @@ export interface CellIssue {
   column?: string
   /** A1-style address the operator can navigate to, e.g. "Sponsored Products!F412". */
   cellAddress?: string
+  /** D4 — the uploaded file's header name for this cell. Authoritative. */
+  cellColumn?: string
   message: string
   receivedValue?: string
 }
@@ -246,6 +248,10 @@ export async function validateBulksheet(buf: Buffer): Promise<ValidationResult> 
         rowNumber: r.rowNumber,
         column: i.column,
         cellAddress: addr(own, r.rowNumber),
+        // D4 — the header NAME, so annotate never has to decode a column letter
+        // back through the CANONICAL column list. The importer supports reordered
+        // files, and on exactly those the decode landed on an unrelated column.
+        cellColumn: own,
         message: i.message,
         receivedValue: i.column ? get(i.column) || undefined : undefined,
       }
@@ -409,6 +415,7 @@ export async function validateBulksheetStreaming(
           rowNumber: row.rowNumber,
           column: i.column,
           cellAddress: idx == null ? undefined : `${dataSheet}!${columnLetter(idx)}${row.rowNumber}`,
+          cellColumn: own, // D4 — see above
           message: i.message,
           receivedValue: i.column ? get(i.column) || undefined : undefined,
         }

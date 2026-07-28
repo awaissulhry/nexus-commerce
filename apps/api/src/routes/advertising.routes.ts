@@ -4541,7 +4541,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
                   entity: r.entity, operation: r.operation,
                   rowKey: r.rowKey, baseline: r.baseline, values: r.values,
                   // Only the addressing survives; the text is in errorMessage.
-                  ...(r.issues.length ? { cells: r.issues.map((i2) => i2.cellAddress).filter(Boolean) } : {}),
+                  ...(r.issues.length ? {
+                    cells: r.issues.map((i2) => i2.cellAddress).filter(Boolean),
+                    // D4 — header names, resolved against the UPLOADED file.
+                    columns: r.issues.map((i2) => i2.cellColumn).filter(Boolean),
+                  } : {}),
                 } as object,
               })),
             })
