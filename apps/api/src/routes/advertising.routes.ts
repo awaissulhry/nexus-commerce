@@ -74,6 +74,14 @@ import {
   parseMoney, parseBid, parseVocabulary, VOCABULARIES, BULKSHEET_SCHEMA_VERSION,
   buildRowKey, ROW_KEY_HEADER,
 } from '@nexus/shared/ads-bulksheet'
+import {
+  validateBulksheetStreaming, looksLikeXlsx, assertNotZipBomb, MAX_ISSUES,
+} from '../services/advertising/bulksheet/import-validate.js'
+import { createWriteStream } from 'node:fs'
+import { mkdtemp, rm, readFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pipeline } from 'node:stream/promises'
 
 /** AX-IE.3 — stable per-entity key, the only thing a re-upload is matched on. */
 const rowKey = (entity: string, externalId: string | null | undefined, localId: string): string =>
@@ -4366,6 +4374,174 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     reply.header('Content-Disposition', 'attachment; filename="nexus-bulksheet.xlsx"')
     return reply.send(buf)
+  })
+
+
+  // ── POST /advertising/bulk/upload — AX-IE.4 ────────────────────────
+  // Accept a real FILE, validate every row, write NOTHING.
+  //
+  // The old round trip was broken at the interface: /bulk/apply took JSON, so an
+  // operator had to convert their own spreadsheet by hand. And it validated
+  // inside the apply loop, meaning a bad row 900 left rows 1-899 already applied
+  // with no plan and no record of intent.
+  //
+  // This stages a plan into the EXISTING ImportJob / ImportJobRow substrate
+  // (parsedValues carries the frozen row, beforeState/afterState drive rollback
+  // later) rather than inventing a parallel job model. Preview is AX-IE.5, apply
+  // is AX-IE.6 — nothing here touches Amazon or our ad tables.
+  fastify.post('/advertising/bulk/upload', async (request, reply) => {
+    const file = await request.file()
+    if (!file) { reply.status(400); return { error: 'no_file', message: 'Attach a .xlsx bulksheet.' } }
+
+    const filename = file.filename ?? 'upload.xlsx'
+    if (/\.xlsm$/i.test(filename)) {
+      reply.status(415)
+      return { error: 'macro_workbook', message: '.xlsm is accepted for reading elsewhere but not for round-trip upload — macros cannot be preserved. Save as .xlsx and retry.' }
+    }
+
+    // Stream to disk rather than holding the upload in memory, and parse from the
+    // file. The buffered reader materialises every cell: measured at 1.4 GB RSS on
+    // a 5.5 MB / 100k-row file. Streaming the same file is 354 MB and faster, so
+    // the documented 100k row cap is one we can actually honour.
+    const tmpDir = await mkdtemp(join(tmpdir(), 'nexus-bulksheet-'))
+    const tmpPath = join(tmpDir, 'upload.xlsx')
+    const cleanup = async () => { try { await rm(tmpDir, { recursive: true, force: true }) } catch { /* best effort */ } }
+
+    try {
+      await pipeline(file.file, createWriteStream(tmpPath))
+      if (file.file.truncated) {
+        reply.status(413)
+        return { error: 'file_too_large', message: 'File exceeds the 50 MB upload limit. Split it by campaign type or date range.' }
+      }
+
+      // Cheap checks first, in cost order, and BOTH before any decompression is
+      // pointed at the file: magic bytes, then the ZIP central directory.
+      const head = await readFile(tmpPath)
+      if (!looksLikeXlsx(head)) {
+        reply.status(415)
+        return { error: 'not_xlsx', message: 'That is not an .xlsx file (its first bytes are not a ZIP header). CSV support is a separate path.' }
+      }
+      let zip: { entries: number; uncompressed: number }
+      try {
+        zip = assertNotZipBomb(head)
+      } catch (e) {
+        reply.status(415)
+        return { error: 'rejected_archive', message: (e as Error).message }
+      }
+
+      const job = await prisma.importJob.create({
+        data: {
+          jobName: `Amazon Ads bulksheet — ${filename}`,
+          source: 'upload',
+          filename,
+          fileKind: 'xlsx',
+          // Free-form on the model; keeps ad imports distinguishable from the
+          // product/listing/inventory importers that share this table.
+          targetEntity: 'adsBulksheet',
+          onError: 'skip',
+          status: 'PROCESSING',
+          startedAt: new Date(),
+          createdBy: actorFromHeaders(request.headers as Record<string, unknown>),
+        },
+        select: { id: true },
+      })
+
+      // 202 + a job id, rather than holding the request open.
+      //
+      // Measured: validation is ~1.3s for 100k rows, but STAGING them is ~110s —
+      // it is round trips to Neon, not CPU. A two-minute HTTP request is at the
+      // mercy of every proxy in between, and a client timeout would strand a job
+      // that actually succeeded. So the work continues after the response and the
+      // job row is the progress record. (The real account file is ~9.3k rows /
+      // ~8s; this matters for the documented 100k ceiling.)
+      //
+      // AX-IE.6 moves this onto BullMQ proper alongside apply; until then a process
+      // restart mid-parse leaves the job PROCESSING, which the status endpoint
+      // reports honestly rather than hiding.
+      const started = Date.now()
+      void (async () => {
+        try {
+          const result = await validateBulksheetStreaming(tmpPath, async (batch) => {
+            await prisma.importJobRow.createMany({
+              data: batch.map((r) => ({
+                jobId: job.id,
+                rowIndex: r.rowNumber,
+                status: r.status === 'ERROR' ? 'FAILED' : r.status === 'NO_OP' ? 'SKIPPED' : 'PENDING',
+                errorMessage: r.issues.length ? r.issues.map((i2) => i2.message).join('; ').slice(0, 900) : null,
+                parsedValues: {
+                  entity: r.entity, operation: r.operation,
+                  rowKey: r.rowKey, baseline: r.baseline, values: r.values,
+                  // Only the addressing survives; the text is in errorMessage.
+                  ...(r.issues.length ? { cells: r.issues.map((i2) => i2.cellAddress).filter(Boolean) } : {}),
+                } as object,
+              })),
+            })
+          }, { batchSize: 5000 })
+
+          await prisma.importJob.update({
+            where: { id: job.id },
+            data: {
+              status: result.structuralError ? 'FAILED' : 'PENDING_PREVIEW',
+              totalRows: result.counts.total,
+              failedRows: result.counts.errors,
+              skippedRows: result.counts.noOp,
+              completedAt: new Date(),
+              errorSummary: result.structuralError
+                ?? ([
+                  result.counts.errors ? `${result.counts.errors} row(s) with errors` : null,
+                  result.schemaMismatch,
+                  result.unknownColumns.length ? `ignored unknown columns: ${result.unknownColumns.join(', ')}` : null,
+                  result.issuesTruncated ? `issue list capped at ${MAX_ISSUES}` : null,
+                ].filter(Boolean).join(' · ') || null),
+            },
+          })
+          logger.info('[ads-bulksheet] validated upload', { jobId: job.id, ...result.counts, ms: Date.now() - started })
+        } catch (e) {
+          // A background failure must land ON the job, never only in the log —
+          // otherwise the operator polls a row that never changes.
+          await prisma.importJob.update({
+            where: { id: job.id },
+            data: { status: 'FAILED', completedAt: new Date(), errorSummary: `Validation failed: ${(e as Error).message}`.slice(0, 900) },
+          }).catch(() => { /* the job may have been deleted */ })
+          logger.error('[ads-bulksheet] upload validation failed', { jobId: job.id, error: (e as Error).message })
+        } finally {
+          await cleanup()
+        }
+      })()
+
+      reply.status(202)
+      return {
+        importJobId: job.id,
+        status: 'PROCESSING',
+        filename,
+        archive: zip,
+        poll: `GET /api/advertising/bulk/import/${job.id}`,
+      }
+    } catch (e) {
+      await cleanup()
+      throw e
+    }
+  })
+
+  // ── GET /advertising/bulk/import/:id — the staged plan + full error list ──
+  fastify.get('/advertising/bulk/import/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const q = request.query as { status?: string; limit?: string; offset?: string }
+    const job = await prisma.importJob.findUnique({ where: { id } })
+    if (!job || job.targetEntity !== 'adsBulksheet') { reply.status(404); return { error: 'not_found' } }
+    const take = Math.max(1, Math.min(5000, Number(q.limit ?? 500)))
+    const skip = Math.max(0, Number(q.offset ?? 0))
+    const rows = await prisma.importJobRow.findMany({
+      where: { jobId: id, ...(q.status ? { status: q.status } : {}) },
+      orderBy: { rowIndex: 'asc' }, take, skip,
+    })
+    const byStatus = await prisma.importJobRow.groupBy({ by: ['status'], where: { jobId: id }, _count: true })
+    return {
+      job: { id: job.id, filename: job.filename, status: job.status, totalRows: job.totalRows, failedRows: job.failedRows, skippedRows: job.skippedRows, errorSummary: job.errorSummary, createdAt: job.createdAt },
+      counts: Object.fromEntries(byStatus.map((b) => [b.status, b._count])),
+      rows: rows.map((r) => ({ rowIndex: r.rowIndex, status: r.status, errorMessage: r.errorMessage, ...(r.parsedValues as object) })),
+      page: { take, skip, returned: rows.length },
+    }
   })
 
   // ── POST /advertising/bulk/apply — apply a validated bulksheet ───────

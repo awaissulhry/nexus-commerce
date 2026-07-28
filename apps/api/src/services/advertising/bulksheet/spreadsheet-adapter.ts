@@ -261,3 +261,97 @@ class ExcelJsReader implements SpreadsheetReader {
 export async function createReader(): Promise<SpreadsheetReader> {
   return new ExcelJsReader()
 }
+
+/**
+ * ExcelJS's streaming reader is sensitive to the ORDER of parts inside the zip.
+ * `workbook-reader.js:303` reads `this.model.sheets` while defensively guarding
+ * `this.workbookRels` on the line directly above it — so a workbook whose
+ * `_rels/workbook.xml.rels` is parsed before `xl/workbook.xml` throws
+ * "Cannot read properties of undefined (reading 'sheets')" from inside the
+ * library. Reproduced with a plain 2-row workbook.
+ *
+ * Callers detect it with this and fall back to the buffered reader, which does
+ * not care about part order.
+ */
+export function isExcelJsStreamOrderingBug(e: unknown): boolean {
+  const m = e instanceof Error ? e.message : String(e)
+  return /Cannot read properties of undefined \(reading 'sheets'\)/.test(m)
+    || /Cannot read property 'sheets' of undefined/.test(m)
+}
+
+/** One row handed back by the streaming reader. */
+export interface StreamedRow {
+  sheet: string
+  rowNumber: number
+  cells: Record<string, string>
+}
+
+/**
+ * Stream a workbook off DISK, row by row.
+ *
+ * The buffered reader materialises every cell as an object: measured at **1.4 GB
+ * RSS for a 5.5 MB / 100k-row file**, a ~260x expansion that would take the
+ * container down long before the documented row cap. This path holds one row at
+ * a time instead, so memory is bounded by the widest row rather than the file.
+ *
+ * `styles:'ignore'` is a large part of the win and costs nothing here — import
+ * wants values, not presentation.
+ *
+ * Numbers-tolerance matters more in this mode: Numbers writes different
+ * `dimension` refs and sometimes omits `r` attributes, so headers are taken from
+ * the first row's own array positions and every later row is read by the same
+ * index, never by a claimed cell address.
+ */
+export async function streamWorkbook(
+  filePath: string,
+  onRow: (row: StreamedRow, headers: string[]) => Promise<void> | void,
+  opts: { skipSheets?: (name: string) => boolean } = {},
+): Promise<{ sheets: Array<{ name: string; headers: string[]; rows: number }> }> {
+  const ExcelJS = await loadExcelJS()
+  const reader = new ExcelJS.stream.xlsx.WorkbookReader(filePath, {
+    // NOT `entries: 'emit'` — the spec suggests it, but emitting entries we never
+    // consume is pointless here and only adds a way for the reader to stall.
+    sharedStrings: 'cache',
+    styles: 'ignore',
+    hyperlinks: 'ignore',
+    worksheets: 'emit',
+  })
+
+  const sheets: Array<{ name: string; headers: string[]; rows: number }> = []
+  for await (const worksheet of reader) {
+    const name = (worksheet as { name?: string }).name ?? ''
+    if (opts.skipSheets?.(name)) {
+      // Still have to drain it — an un-consumed worksheet stalls the reader.
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      for await (const _ of worksheet) { /* discard */ }
+      continue
+    }
+    let headers: string[] = []
+    let count = 0
+    for await (const row of worksheet) {
+      const values = (row.values as unknown[]) ?? []
+      // ExcelJS row.values is 1-based with a hole at index 0.
+      const cellsArr = values.slice(1).map((v) => cellToString(v))
+      if (row.number === 1) {
+        headers = cellsArr
+        while (headers.length && headers[headers.length - 1] === '') headers.pop()
+        continue
+      }
+      if (!headers.length) continue
+      const cells: Record<string, string> = {}
+      let any = false
+      for (let i = 0; i < headers.length; i++) {
+        const h = headers[i]
+        if (!h) continue
+        const v = cellsArr[i] ?? ''
+        cells[h] = v
+        if (v) any = true
+      }
+      if (!any) continue
+      count++
+      await onRow({ sheet: name, rowNumber: row.number, cells }, headers)
+    }
+    sheets.push({ name, headers, rows: count })
+  }
+  return { sheets }
+}
