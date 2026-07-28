@@ -247,6 +247,11 @@ function readmeLines(c: WorkbookCoverage, at: Date, exportId: string): string[] 
   return [
     'This file is your current Amazon Ads state. Edit it and upload it back.',
     '',
+    'ONE SHEET IS NOT AN INPUT',
+    '  Portfolios is exported for reference only. Portfolio changes cannot be applied',
+    '  from a bulksheet yet, so edits there are not read on upload — change portfolios',
+    '  in the console instead. Every other sheet round-trips.',
+    '',
     `Generated  ${at.toISOString()}`,
     `Export id  ${exportId}`,
     `Schema     ${BULKSHEET_SCHEMA_VERSION}`,

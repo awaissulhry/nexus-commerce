@@ -4590,6 +4590,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
                   result.counts.errors ? `${result.counts.errors} row(s) with errors` : null,
                   result.schemaMismatch,
                   result.unknownColumns.length ? `ignored unknown columns: ${result.unknownColumns.join(', ')}` : null,
+                  // AX-ZD.8 — an ignored sheet must reach the operator. Editing
+                  // Portfolios and getting silence reads as success.
+                  ...result.ignoredSheets.map((x) => `${x.sheet} sheet not read — ${x.reason}`),
                   result.issuesTruncated ? `issue list capped at ${MAX_ISSUES}` : null,
                 ].filter(Boolean).join(' · ') || null),
             },

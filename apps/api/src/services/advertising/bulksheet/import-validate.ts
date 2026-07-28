@@ -72,6 +72,32 @@ export interface ValidationResult {
   issues: CellIssue[]
   issuesTruncated: boolean
   rows: StagedRow[]
+  /**
+   * AX-ZD.8 — sheets present in the upload that were deliberately not read, and
+   * why. Without this, an operator who edits the Portfolios sheet gets silence:
+   * no error, no warning, and nothing applied. Silence reads as success.
+   */
+  ignoredSheets: Array<{ sheet: string; reason: string }>
+}
+
+/**
+ * AX-ZD.8 — why a generated sheet is not an input.
+ *
+ * Portfolios is the one that matters. It is emitted with real, editable-looking
+ * budget and state values, sits in NON_DATA_SHEETS, and `entityRule('Portfolio')`
+ * declares `applySupported: false` — so a portfolio edit could not be applied
+ * even if the sheet were read. Saying so is the whole fix; pretending the sheet
+ * is importable would move the silent no-op rather than remove it.
+ */
+export function ignoredSheetReason(sheetName: string): string | null {
+  const n = normHeader(sheetName)
+  if (n === normHeader(PORTFOLIOS_SHEET)) {
+    return 'Portfolios is exported for reference only. Portfolio changes cannot be applied from a bulksheet yet, so any edits here were NOT read — change portfolios in the console instead.'
+  }
+  if (n === normHeader(DICTIONARY_SHEET)) return 'Dictionary is generated documentation, not input.'
+  if (n === normHeader(README_SHEET)) return 'README is generated documentation, not input.'
+  if (n === normHeader(META_SHEET)) return 'Hidden export metadata, not input.'
+  return null
 }
 
 /** A cap so a garbage file cannot OOM the worker while still being useful. */
@@ -146,6 +172,17 @@ export function assertNotZipBomb(
   return { entries, uncompressed }
 }
 
+/** AX-ZD.8 — generated sheets present in the upload, with the reason each was skipped. */
+function collectIgnoredSheets(sheets: ParsedSheet[], chosen: ParsedSheet | null): Array<{ sheet: string; reason: string }> {
+  const out: Array<{ sheet: string; reason: string }> = []
+  for (const s of sheets) {
+    if (chosen && normHeader(s.name) === normHeader(chosen.name)) continue
+    const reason = ignoredSheetReason(s.name)
+    if (reason) out.push({ sheet: s.name, reason })
+  }
+  return out
+}
+
 /** Pick the data sheet: our own name if present, else whichever looks most like it. */
 function pickDataSheet(sheets: ParsedSheet[]): ParsedSheet | null {
   const candidates = sheets.filter((s) => !NON_DATA_SHEETS.has(normHeader(s.name)))
@@ -173,7 +210,7 @@ export async function validateBulksheet(buf: Buffer): Promise<ValidationResult> 
   const empty: ValidationResult = {
     ok: false, meta: {}, headers: [], unknownColumns: [], missingColumns: [],
     counts: { total: 0, ready: 0, noOp: 0, previewOnly: 0, errors: 0 },
-    issues: [], issuesTruncated: false, rows: [],
+    issues: [], issuesTruncated: false, rows: [], ignoredSheets: [],
   }
 
   const reader = await createReader()
@@ -188,7 +225,10 @@ export async function validateBulksheet(buf: Buffer): Promise<ValidationResult> 
   if (!sheet) return { ...empty, structuralError: 'No data sheet found. Expected a sheet of bulksheet rows alongside README/Dictionary.' }
 
   const meta = readMeta(sheets)
-  const result: ValidationResult = { ...empty, sheet: sheet.name, meta, headers: sheet.headers }
+  const result: ValidationResult = {
+    ...empty, sheet: sheet.name, meta, headers: sheet.headers,
+    ignoredSheets: collectIgnoredSheets(sheets, sheet),
+  }
 
   // ── Structural, all-or-nothing ──────────────────────────────────────
   // Columns are matched by NAME (slug + alias table), never by position:
@@ -338,7 +378,7 @@ export async function validateBulksheetStreaming(
       return {
         ok: false, meta: {}, headers: [], unknownColumns: [], missingColumns: [],
         counts: { total: 0, ready: 0, noOp: 0, previewOnly: 0, errors: 0 },
-        issues: [], issuesTruncated: false,
+        issues: [], issuesTruncated: false, ignoredSheets: [],
         structuralError: 'This workbook is laid out in a way our streaming reader cannot follow, and it is too large to read the slower way. Open it in Excel or Numbers, "Save As" a fresh .xlsx, and upload that.',
       }
     }
@@ -351,7 +391,7 @@ export async function validateBulksheetStreaming(
   const out: StreamValidationResult = {
     ok: false, meta: {}, headers: [], unknownColumns: [], missingColumns: [],
     counts: { total: 0, ready: 0, noOp: 0, previewOnly: 0, errors: 0 },
-    issues: [], issuesTruncated: false,
+    issues: [], issuesTruncated: false, ignoredSheets: [],
   }
 
   let resolved: Map<string, string> | null = null
@@ -451,7 +491,19 @@ export async function validateBulksheetStreaming(
         // Yield so a long file cannot monopolise the event loop.
         await new Promise((r) => setImmediate(r))
       }
-    }, { skipSheets: (name) => NON_DATA_SHEETS.has(normHeader(name)) })
+    }, { skipSheets: (name) => {
+      const skip = NON_DATA_SHEETS.has(normHeader(name))
+      // AX-ZD.8 — record it on the way past. The streaming reader never
+      // materialises these sheets, so this callback is the only point at which
+      // we know the operator's file contained one.
+      if (skip) {
+        const reason = ignoredSheetReason(name)
+        if (reason && !out.ignoredSheets.some((x) => normHeader(x.sheet) === normHeader(name))) {
+          out.ignoredSheets.push({ sheet: name, reason })
+        }
+      }
+      return skip
+    } })
   } catch (e) {
     if (!isExcelJsStreamOrderingBug(e)) throw e
     // Anything already staged is discarded by the caller re-staging from scratch;
