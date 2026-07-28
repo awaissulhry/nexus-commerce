@@ -14,7 +14,7 @@ Evidence harnesses (read-only, untracked): `apps/api/scripts/_axie1-model-census
 | **AX-IE.0** P0 correctness | ✅ shipped 2026-07-28, verified on prod |
 | **AX-IE.1** canonical model | ✅ shipped 2026-07-28, parity green |
 | **AX-IE.2** schema + adapter | ✅ shipped 2026-07-28 — one schema in `@nexus/shared/ads-bulksheet` drives export, Dictionary and validation on both server and browser; ExcelJS behind `SpreadsheetWriter`/`SpreadsheetReader` |
-| **AX-IE.3** exporter rewrite | ◐ **partial** — all 9 SP entity types, Portfolios, README, `_meta`, `_row_key`, `_baseline` shipped (3,318 → 9,291 rows). **SB/SD sheets blocked** on the bulksheet download; **streaming/async job deferred** (the account is 9.3k rows; the buffered path is well inside budget, and the job substrate belongs with AX-IE.4) |
+| **AX-IE.3** exporter rewrite | ◐ **mostly done** — all 9 SP entity types, Portfolios, README, `_meta`, `_row_key`, `_baseline`, and the SP sheet now matches Amazon's **real 53-column layout column-for-column** after the owner supplied two genuine bulksheets (see `docs/AMAZON-BULKSHEET-SCHEMA.md`). Remaining: emit the **SB / SB-multi / SD sheets** — no longer blocked, their column sets are now known |
 | **AX-IE.4** importer | ✅ shipped 2026-07-28 — `POST /advertising/bulk/upload` takes a real file, streams it, validates every row, stages into `ImportJob`/`ImportJobRow`, writes nothing. 202 + poll |
 | AX-IE.5+ | not started — next is the dry-run preview |
 
@@ -311,8 +311,8 @@ obviously-correct failed on the account's dominant naming convention.
 
 | Item | Needed by | How to close |
 |---|---|---|
-| Exact SP full-download column list | AX-IE.2/.3 (schema object) | **One real bulksheet download from Seller Central** — your action, not code. `advertising.amazon.com/API/docs` is a client-rendered SPA and returns an empty shell to fetchers, so this cannot be scraped. |
-| SB + SD bulksheet schemas under bulksheets 2.0 | AX-IE.3 | Same download, SB/SD selected. |
+| ~~Exact SP full-download column list~~ | ~~AX-IE.2/.3~~ | ✅ **CLOSED 2026-07-28.** Two real downloads supplied; identical structure. Recorded in `docs/AMAZON-BULKSHEET-SCHEMA.md`, encoded in `packages/shared/ads-bulksheet.ts`. Eight of our guessed values were wrong — see that doc. |
+| ~~SB + SD bulksheet schemas~~ | ~~AX-IE.3~~ | ✅ **CLOSED** — SB 51 cols, SB Multi Ad Group 75, SD 47, Portfolios 12, all captured. Emitting those sheets is the remaining .3 work. |
 | Per-resource batch maxima | AX-IE.6 (apply batching), AX-ZD.1 (rate limiting) | One live API probe, escalating batch sizes until 429/413. |
 | `@protobi/exceljs` swap incl. `apps/web` | AX-IE.2 | Dependency review. |
 | `ImportJob*` fit for ad entities | AX-IE.4 | Schema read (conflict #10). |
