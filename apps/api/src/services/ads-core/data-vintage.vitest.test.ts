@@ -7,10 +7,7 @@
  * 36% underneath you is how a bid engine chases its own tail.
  */
 import { describe, it, expect } from 'vitest'
-import {
-  vintageOf, isRuleSafe, attributionWindowDays, describeWindow, vintageBadge,
-  VINTAGE_STATES,
-} from './data-vintage.js'
+import { vintageOf, isRuleSafe, attributionWindowDays, describeWindow, vintageBadge, VINTAGE_STATES, ruleWindowBounds } from './data-vintage.js'
 
 const NOW = new Date('2026-07-28T12:00:00Z')
 const dAgo = (n: number) => new Date(Date.UTC(2026, 6, 28 - n))
@@ -123,5 +120,74 @@ describe('badge', () => {
 
   it('orders states least to most trustworthy', () => {
     expect(VINTAGE_STATES).toEqual(['provisional', 'stabilising', 'settling', 'settled', 'final'])
+  })
+})
+
+// ── AX-ZD.5 enforcement (Phase 2) ──────────────────────────────────────────
+// Before this, `isRuleSafe` had ZERO call sites outside its own test, and the
+// Amazon rule evaluator used a bare `date >= now - N` with no upper bound — so
+// every rule read D-0 and D-1 (provisional) on every run.
+describe('ruleWindowBounds — the teeth', () => {
+  const now = new Date('2026-07-28T12:00:00Z')
+
+  it('excludes the provisional tail (today and yesterday)', () => {
+    const w = ruleWindowBounds(14, now)
+    // Newest day considered is D-2, not D-0.
+    expect(w.until.toISOString().slice(0, 10)).toBe('2026-07-26')
+    expect(vintageOf(w.until, now).state).not.toBe('provisional')
+  })
+
+  it('keeps the requested number of days, shifted back', () => {
+    const w = ruleWindowBounds(7, now)
+    expect(w.since.toISOString().slice(0, 10)).toBe('2026-07-20')
+    expect(w.until.toISOString().slice(0, 10)).toBe('2026-07-26')
+    expect(w.vintage.days).toBe(7)
+  })
+
+  it('no day inside the window is provisional', () => {
+    for (const days of [1, 7, 14, 30, 90]) {
+      const w = ruleWindowBounds(days, now)
+      expect(w.vintage.breakdown.provisional, `${days}d window leaked a provisional day`).toBe(0)
+    }
+  })
+
+  it('reports the window’s settledness instead of hiding it', () => {
+    const w = ruleWindowBounds(14, now)
+    // A 14-day window is legitimately still settling — the point is to SAY so,
+    // not to refuse to act on it.
+    expect(w.vintage.worst).toBe('stabilising')
+    expect(w.vintage.summary).toMatch(/still moving/)
+  })
+
+  it('a degenerate window still excludes provisional days', () => {
+    const w = ruleWindowBounds(0, now)
+    expect(w.vintage.breakdown.provisional).toBe(0)
+    expect(w.vintage.days).toBeGreaterThan(0)
+  })
+
+  it('does NOT gate on isRuleSafe — that would disable every rule', () => {
+    // ruleSafe is only true from ageDays >= 15. The evaluator's windows are 7,
+    // 14 and 30 days, so gating on it would mean no rule could ever fire. This
+    // asserts the deliberate choice rather than leaving it to a comment.
+    const w = ruleWindowBounds(14, now)
+    expect(w.vintage.ruleSafe).toBe(false)   // the window is not fully settled…
+    expect(w.vintage.breakdown.provisional).toBe(0) // …but it is not provisional either
+    expect(isRuleSafe(w.until, now)).toBe(false)
+  })
+})
+
+describe('AX-ZD.5 ratchet — the evaluator must not read provisional data', () => {
+  it('no rule window in the evaluator uses an unbounded date filter', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { join, dirname } = await import('node:path')
+    const { fileURLToPath } = await import('node:url')
+    const p = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'jobs', 'advertising-rule-evaluator.job.ts')
+    const src = readFileSync(p, 'utf8')
+    // `date: { gte: since }` with no `lte` is the shape that read D-0/D-1.
+    const unbounded = src.split('\n')
+      .map((l, i) => ({ l, i: i + 1 }))
+      .filter(({ l }) => /date:\s*\{\s*gte:\s*since\s*\}/.test(l))
+    expect(unbounded.map((u) => u.i), 'add `lte: until` — these read provisional data').toEqual([])
+    expect(src).toMatch(/ruleWindowBounds\(/)
   })
 })

@@ -97,6 +97,57 @@ export function isRuleSafe(date: Date, now: Date = new Date()): boolean {
 }
 
 /**
+ * AX-ZD.5 enforcement — how many trailing days a rule must NOT look at.
+ *
+ * D-0 and D-1 are `provisional`: still being reported, and the module's stated
+ * rule is that provisional data must never reach a bid, a rule or an automated
+ * decision.
+ *
+ * WHY NOT `isRuleSafe` HERE. `ruleSafe` is only true from `ageDays >= 15`,
+ * because conversions attribute back for up to 14 days. Gating rules on that
+ * would disable every rule in the system — the Amazon evaluator's windows are
+ * 7, 14 and 30 days, so no day inside any of them would ever qualify. That is
+ * the fully-settled bar, and it is the right bar for a decision that must not
+ * move afterwards (an attribution study, a restated report). It is the wrong
+ * bar for "should I pause this keyword".
+ *
+ * So enforcement is graduated, and deliberately so: exclude the provisional
+ * tail — the thing that is actively wrong — and report the rest of the window's
+ * settledness rather than refusing to act on it. `isRuleSafe` remains available
+ * for callers that genuinely need finality.
+ */
+export const PROVISIONAL_DAYS = 2
+
+export interface RuleWindow {
+  /** Inclusive lower bound (UTC midnight). */
+  since: Date
+  /** Inclusive upper bound — the newest day a rule may consider. */
+  until: Date
+  /** How trustworthy the resulting window is, for surfacing to an operator. */
+  vintage: WindowVintage
+}
+
+/**
+ * Bounds for a rule's metric window, with the provisional tail removed.
+ *
+ * Mirrors eBay's `windowBounds(windowDays, excludeRecentDays)` — the same
+ * honesty, on the channel that lacked it. Amazon's evaluator previously used a
+ * bare `date >= now - N` with **no upper bound**, so every rule read D-0 and
+ * D-1 on every run.
+ */
+export function ruleWindowBounds(windowDays: number, now: Date = new Date()): RuleWindow {
+  const until = new Date(now)
+  until.setUTCDate(until.getUTCDate() - PROVISIONAL_DAYS)
+  until.setUTCHours(23, 59, 59, 999)
+
+  const since = new Date(until)
+  since.setUTCDate(since.getUTCDate() - Math.max(1, windowDays) + 1)
+  since.setUTCHours(0, 0, 0, 0)
+
+  return { since, until, vintage: describeWindow(since, until, now) }
+}
+
+/**
  * Amazon's attribution window per ad product — the reason conversions keep
  * arriving. A purchase on day 14 is attributed back to the CLICK date, so it
  * rewrites day 0's ACOS long after day 0 looked finished.

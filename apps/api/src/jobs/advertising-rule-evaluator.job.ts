@@ -37,6 +37,7 @@ import { recordCronRun } from '../utils/cron-observability.js'
 import { evaluateAllRulesForTrigger } from '../services/automation-rule.service.js'
 import { microsToCents } from '../services/ads-core/metrics-math.js'
 import cron from 'node-cron'
+import { ruleWindowBounds } from '../services/ads-core/data-vintage.js'
 
 // Trigger thresholds — env-tunable for testing.
 const FBA_AGE_DAYS_LTE = Number(process.env.NEXUS_AD_FBA_AGE_DAYS_LTE ?? 30)
@@ -406,7 +407,7 @@ interface CampaignBudgetContext {
 }
 
 async function buildCampaignBudgetContexts(): Promise<CampaignBudgetContext[]> {
-  const since = new Date(); since.setUTCDate(since.getUTCDate() - BUDGET_RULE_WINDOW_DAYS); since.setUTCHours(0, 0, 0, 0)
+  const { since, until } = ruleWindowBounds(BUDGET_RULE_WINDOW_DAYS) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
   const campaigns = await prisma.campaign.findMany({
     where: { status: 'ENABLED' },
     select: { id: true, name: true, externalCampaignId: true, marketplace: true, dailyBudget: true },
@@ -414,7 +415,7 @@ async function buildCampaignBudgetContexts(): Promise<CampaignBudgetContext[]> {
   if (campaigns.length === 0) return []
   const perf = await prisma.amazonAdsDailyPerformance.groupBy({
     by: ['localEntityId'],
-    where: { entityType: 'CAMPAIGN', localEntityId: { in: campaigns.map((c) => c.id) }, date: { gte: since } },
+    where: { entityType: 'CAMPAIGN', localEntityId: { in: campaigns.map((c) => c.id) }, date: { gte: since, lte: until } },
     _sum: { costMicros: true, sales7dCents: true, sales14dCents: true },
   })
   const byId = new Map(perf.map((p) => [p.localEntityId!, p]))
@@ -446,10 +447,10 @@ async function buildCampaignBudgetContexts(): Promise<CampaignBudgetContext[]> {
 // ENABLED keywords that spent money but got ZERO impressions in the last 7
 // days — signals delivery failure (suppressed listing, bad targeting, etc.)
 async function buildZeroImpressionContexts() {
-  const since = new Date(); since.setUTCDate(since.getUTCDate() - 7); since.setUTCHours(0, 0, 0, 0)
+  const { since, until } = ruleWindowBounds(7) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
   const perf = await prisma.amazonAdsDailyPerformance.groupBy({
     by: ['localEntityId', 'marketplace'],
-    where: { entityType: 'KEYWORD', date: { gte: since }, costMicros: { gt: 0n } },
+    where: { entityType: 'KEYWORD', date: { gte: since, lte: until }, costMicros: { gt: 0n } },
     _sum: { impressions: true, costMicros: true },
     having: { impressions: { _sum: { equals: 0 } } },
   })
@@ -466,10 +467,10 @@ async function buildZeroImpressionContexts() {
 const LOW_CTR_THRESHOLD = Number(process.env.NEXUS_LOW_CTR_THRESHOLD ?? 0.002)
 const LOW_CTR_MIN_IMPRESSIONS = Number(process.env.NEXUS_LOW_CTR_MIN_IMPR ?? 500)
 async function buildLowCtrContexts() {
-  const since = new Date(); since.setUTCDate(since.getUTCDate() - 14); since.setUTCHours(0, 0, 0, 0)
+  const { since, until } = ruleWindowBounds(14) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
   const perf = await prisma.amazonAdsDailyPerformance.groupBy({
     by: ['localEntityId', 'marketplace'],
-    where: { entityType: 'KEYWORD', date: { gte: since } },
+    where: { entityType: 'KEYWORD', date: { gte: since, lte: until } },
     _sum: { impressions: true, clicks: true, costMicros: true },
   })
   return perf
@@ -523,10 +524,10 @@ async function buildCvrDropContexts() {
 // orders in the window — more granular and faster than the daily harvest cron.
 const WASTE_MIN_SPEND = Number(process.env.NEXUS_WASTE_MIN_SPEND_CENTS ?? 500) // €5 default
 async function buildWastedKeywordContexts() {
-  const since = new Date(); since.setUTCDate(since.getUTCDate() - 14); since.setUTCHours(0, 0, 0, 0)
+  const { since, until } = ruleWindowBounds(14) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
   const perf = await prisma.amazonAdsDailyPerformance.groupBy({
     by: ['localEntityId', 'marketplace'],
-    where: { entityType: 'KEYWORD', date: { gte: since } },
+    where: { entityType: 'KEYWORD', date: { gte: since, lte: until } },
     _sum: { costMicros: true, orders7d: true, clicks: true },
   })
   return perf
@@ -544,7 +545,7 @@ async function buildWastedKeywordContexts() {
 // for exact-match promotion. Powers the match-type migration automation.
 const CONVERTING_MIN_ORDERS = Number(process.env.NEXUS_CONVERTING_MIN_ORDERS ?? 2)
 async function buildSearchTermConvertingContexts() {
-  const since = new Date(); since.setUTCDate(since.getUTCDate() - 30); since.setUTCHours(0, 0, 0, 0)
+  const { since, until } = ruleWindowBounds(30) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
   const terms = await prisma.amazonAdsSearchTerm.groupBy({
     by: ['query', 'campaignId', 'adGroupId', 'marketplace'],
     // Prisma's `in` cannot contain null — match the null (auto-targeting, no
@@ -552,7 +553,7 @@ async function buildSearchTermConvertingContexts() {
     // "Expected ListStringFieldRefInput or Null" every tick, silently breaking
     // the whole evaluator (surfaced by the RRL.7 overdueCrons alert).
     where: {
-      date: { gte: since },
+      date: { gte: since, lte: until },
       OR: [{ matchType: { in: ['BROAD', 'PHRASE'] } }, { matchType: null }],
     },
     _sum: { orders7d: true, clicks: true, costMicros: true, sales7dCents: true },
@@ -587,10 +588,10 @@ async function buildSearchTermConvertingContexts() {
 // profitable-but-leaky converters a rule can bid down toward target.
 async function buildHighAcosKeywordContexts() {
   try {
-    const since = new Date(); since.setUTCDate(since.getUTCDate() - 14); since.setUTCHours(0, 0, 0, 0)
+    const { since, until } = ruleWindowBounds(14) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
     const perf = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId', 'marketplace'],
-      where: { entityType: 'KEYWORD', date: { gte: since } },
+      where: { entityType: 'KEYWORD', date: { gte: since, lte: until } },
       _sum: { costMicros: true, sales7dCents: true, orders7d: true },
     })
     return perf
@@ -611,10 +612,10 @@ async function buildHighAcosKeywordContexts() {
 // with bid_up to win more of a profitable term.
 async function buildScaleOpportunityContexts() {
   try {
-    const since = new Date(); since.setUTCDate(since.getUTCDate() - 14); since.setUTCHours(0, 0, 0, 0)
+    const { since, until } = ruleWindowBounds(14) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
     const perf = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId', 'marketplace'],
-      where: { entityType: 'KEYWORD', date: { gte: since } },
+      where: { entityType: 'KEYWORD', date: { gte: since, lte: until } },
       _sum: { costMicros: true, sales7dCents: true, orders7d: true, clicks: true },
     })
     return perf
@@ -636,10 +637,10 @@ async function buildScaleOpportunityContexts() {
 // or bid_down (target: ad_group).
 async function buildAdGroupUnderperformContexts() {
   try {
-    const since = new Date(); since.setUTCDate(since.getUTCDate() - 14); since.setUTCHours(0, 0, 0, 0)
+    const { since, until } = ruleWindowBounds(14) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
     const perf = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId', 'marketplace'],
-      where: { entityType: 'AD_GROUP', date: { gte: since } },
+      where: { entityType: 'AD_GROUP', date: { gte: since, lte: until } },
       _sum: { costMicros: true, sales7dCents: true, orders7d: true },
     })
     return perf
@@ -660,12 +661,12 @@ async function buildAdGroupUnderperformContexts() {
 // for brand growth, a signal nothing else triggers on. Pairs with adjust_ad_budget.
 async function buildNewToBrandWinnerContexts() {
   try {
-    const since = new Date(); since.setUTCDate(since.getUTCDate() - 14); since.setUTCHours(0, 0, 0, 0)
+    const { since, until } = ruleWindowBounds(14) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
     const campaigns = await prisma.campaign.findMany({ where: { status: 'ENABLED' }, select: { id: true, name: true, externalCampaignId: true, marketplace: true } })
     if (campaigns.length === 0) return []
     const perf = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId'],
-      where: { entityType: 'CAMPAIGN', localEntityId: { in: campaigns.map((c) => c.id) }, date: { gte: since } },
+      where: { entityType: 'CAMPAIGN', localEntityId: { in: campaigns.map((c) => c.id) }, date: { gte: since, lte: until } },
       _sum: { ntbOrders14d: true, ntbSalesCents14d: true, costMicros: true },
     })
     const byId = new Map(perf.map((p) => [p.localEntityId!, p]))
@@ -686,12 +687,12 @@ async function buildNewToBrandWinnerContexts() {
 // at the campaign level (coarser than per-target underperformance).
 async function buildCampaignNoSalesContexts() {
   try {
-    const since = new Date(); since.setUTCDate(since.getUTCDate() - 30); since.setUTCHours(0, 0, 0, 0)
+    const { since, until } = ruleWindowBounds(30) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
     const campaigns = await prisma.campaign.findMany({ where: { status: 'ENABLED' }, select: { id: true, name: true, externalCampaignId: true, marketplace: true } })
     if (campaigns.length === 0) return []
     const perf = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId'],
-      where: { entityType: 'CAMPAIGN', localEntityId: { in: campaigns.map((c) => c.id) }, date: { gte: since } },
+      where: { entityType: 'CAMPAIGN', localEntityId: { in: campaigns.map((c) => c.id) }, date: { gte: since, lte: until } },
       _sum: { costMicros: true, sales7dCents: true, sales14dCents: true },
     })
     const byId = new Map(perf.map((p) => [p.localEntityId!, p]))
@@ -713,10 +714,10 @@ async function buildCampaignNoSalesContexts() {
 // KEYWORD_WASTED_SPEND (keyword entity) and the batch harvest cron.
 async function buildSearchTermWastingContexts() {
   try {
-    const since = new Date(); since.setUTCDate(since.getUTCDate() - 30); since.setUTCHours(0, 0, 0, 0)
+    const { since, until } = ruleWindowBounds(30) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
     const terms = await prisma.amazonAdsSearchTerm.groupBy({
       by: ['query', 'campaignId', 'adGroupId', 'marketplace'],
-      where: { date: { gte: since } },
+      where: { date: { gte: since, lte: until } },
       _sum: { orders7d: true, clicks: true, costMicros: true },
       having: { orders7d: { _sum: { equals: 0 } } },
     })
