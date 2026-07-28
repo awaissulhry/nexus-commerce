@@ -13511,6 +13511,52 @@ model OutreachDetail {
   @@index([mode])
 }
 
+/// AX-ZD.1 — a typed record of one intended field change on one ad entity.
+///
+/// Ad writes ride OutboundSyncQueue, a product/listing model with no campaign,
+/// ad-group or target FK — the entity and the changed fields sit inside a JSON
+/// payload. That is why the drift check's pending-write lookup is a
+/// campaign-wide JSON scan: one queued mutation marks EVERY drifting field on
+/// that campaign as WRITE_PENDING, hiding a real Seller Central edit.
+///
+/// ADDITIVE for now. OutboundSyncQueue remains the dispatch path with its
+/// grace period, dead-lettering and write gate untouched; this is written
+/// alongside it so the typed record exists to be READ from. Moving dispatch is
+/// a separate, verifiable step.
+model AdMutation {
+  id               String    @id @default(cuid())
+  /// CAMPAIGN | AD_GROUP | AD_TARGET | PRODUCT_AD
+  entityType       String
+  entityId         String
+  externalEntityId String?
+  profileId        String?
+  marketplace      String?
+  /// The single field this row intends to change. The point of the model.
+  field            String
+  intendedValue    String?
+  previousValue    String?
+  /// PENDING | IN_FLIGHT | APPLIED | FAILED | CANCELLED | SUPERSEDED
+  state            String    @default("PENDING")
+  attempts         Int       @default(0)
+  lastError        String?
+  changeSetId      String?
+  importJobId      String?
+  ruleId           String?
+  actor            String
+  idempotencyKey   String?
+  holdUntil        DateTime?
+  /// The OutboundSyncQueue row that actually dispatches this, while it still does.
+  outboundQueueId  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  settledAt        DateTime?
+
+  @@index([entityType, entityId, field, state])
+  @@index([entityType, entityId, state])
+  @@index([changeSetId])
+  @@index([state, holdUntil])
+}
+
 /// AX2.5 — one replication run: applying a blueprint to one product. Recorded
 /// so the run can be rolled back as a single unit instead of hunting orphaned
 /// entities, and so a PARTIAL outcome stays legible (`notOnAmazon` lists

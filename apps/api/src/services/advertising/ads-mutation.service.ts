@@ -23,6 +23,9 @@
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import {
+  IN_FLIGHT_STATES, isBelievablyPending, isTerminal, stateForQueueStatus,
+} from '../ads-core/ad-mutation-state.js'
 
 // Conservative grace window. Operators have 5 min to cancel before
 // the worker actually calls Amazon. Override via env for testing.
@@ -135,7 +138,124 @@ async function enqueueOutbound(args: EnqueueArgs): Promise<string> {
     },
     select: { id: true },
   })
+  await recordAdMutations(row.id, args, holdUntil)
   return row.id
+}
+
+/**
+ * AX-ZD.1 — write one typed `AdMutation` per changed field, alongside the queue row.
+ *
+ * The queue row carries every field change in a single JSON payload, which is
+ * why the drift check cannot ask "is THIS field in flight?" and instead asks
+ * "is anything in flight on this campaign?" — hiding real external edits. One
+ * row per field is the whole point.
+ *
+ * ADDITIVE and deliberately non-fatal. `OutboundSyncQueue` is still the dispatch
+ * path, and it is already committed by the time we get here; if this bookkeeping
+ * write fails, the write must still go to Amazon. A missing typed row degrades
+ * to the pre-ZD.1 behaviour for that field (drift may classify it as an external
+ * edit) rather than dropping an operator's change on the floor.
+ */
+async function recordAdMutations(
+  outboundQueueId: string,
+  args: EnqueueArgs,
+  holdUntil: Date,
+): Promise<void> {
+  if (!args.fieldChanges.length) return
+  const str = (v: unknown): string | null =>
+    v === null || v === undefined ? null : typeof v === 'string' ? v : JSON.stringify(v)
+  try {
+    await prisma.adMutation.createMany({
+      data: args.fieldChanges.map((c) => ({
+        entityType: args.entityType,
+        entityId: args.entityId,
+        externalEntityId: args.externalId,
+        marketplace: args.marketplace,
+        field: c.field,
+        intendedValue: str(c.newValue),
+        previousValue: str(c.oldValue),
+        state: 'PENDING',
+        actor: args.actor,
+        // The queue row id is the natural idempotency key: the dispatch path is
+        // keyed on it, and one (queue row, field) pair is exactly one intent.
+        idempotencyKey: `${outboundQueueId}:${c.field}`,
+        holdUntil,
+        outboundQueueId,
+      })),
+      skipDuplicates: true,
+    })
+  } catch (err) {
+    logger.warn('[AX-ZD.1] typed mutation record failed; dispatch is unaffected', {
+      outboundQueueId, error: err instanceof Error ? err.message : String(err),
+    })
+  }
+}
+
+/**
+ * AX-ZD.1 — project an `OutboundSyncQueue` outcome onto its typed mutations.
+ *
+ * Called from the worker at every point the queue row's status moves. This is
+ * the half that makes the typed record safe to READ from: an unsettled row means
+ * "in flight", so a record that is written but never settled would suppress
+ * drift on its field indefinitely. `PENDING_TRUST_WINDOW_MS` bounds that failure
+ * mode, but settling correctly is what stops it happening at all.
+ *
+ * Never throws: settlement bookkeeping must not fail a write that already
+ * reached Amazon.
+ */
+export async function settleAdMutations(
+  outboundQueueId: string,
+  syncStatus: string,
+  opts: { isDead?: boolean; error?: string | null } = {},
+): Promise<void> {
+  const state = stateForQueueStatus(syncStatus, opts.isDead ?? false)
+  try {
+    await prisma.adMutation.updateMany({
+      where: { outboundQueueId, state: { in: [...IN_FLIGHT_STATES] } },
+      data: {
+        state,
+        lastError: opts.error ?? null,
+        ...(state === 'IN_FLIGHT' ? { attempts: { increment: 1 } } : {}),
+        ...(isTerminal(state) ? { settledAt: new Date() } : {}),
+      },
+    })
+  } catch (err) {
+    logger.warn('[AX-ZD.1] mutation settle failed', {
+      outboundQueueId, syncStatus, error: err instanceof Error ? err.message : String(err),
+    })
+  }
+}
+
+/**
+ * AX-ZD.1 — which of these fields have a write in flight on this entity?
+ *
+ * The replacement for the campaign-wide JSON scan. One query, field-scoped, so a
+ * queued budget change no longer explains away a name edit.
+ *
+ * Fails OPEN (empty set) on error: if we cannot tell, we report drift rather
+ * than suppress it. An operator investigating a drift that turns out to be our
+ * own pending write loses a minute; a suppressed drift loses their edit.
+ */
+export async function pendingWriteFields(
+  entityType: AdEntityType,
+  entityId: string,
+  fields: readonly string[],
+  now: Date = new Date(),
+): Promise<Set<string>> {
+  if (!fields.length) return new Set()
+  try {
+    const rows = await prisma.adMutation.findMany({
+      where: {
+        entityType, entityId,
+        field: { in: [...fields] },
+        state: { in: [...IN_FLIGHT_STATES] },
+      },
+      select: { field: true, state: true, createdAt: true },
+    })
+    return new Set(rows.filter((r) => isBelievablyPending(r, now)).map((r) => r.field))
+  } catch {
+    return new Set()
+  }
 }
 
 async function writeBidHistory(args: {
@@ -747,5 +867,9 @@ export async function cancelPendingMutation(outboundQueueId: string): Promise<{ 
     where: { id: outboundQueueId },
     data: { syncStatus: 'CANCELLED' },
   })
+  // AX-ZD.1 — release the typed rows too. A cancelled intent that stayed
+  // PENDING would keep suppressing drift on its fields for the full trust
+  // window, which is exactly the bug this model exists to remove.
+  await settleAdMutations(outboundQueueId, 'CANCELLED')
   return { ok: true, error: null }
 }

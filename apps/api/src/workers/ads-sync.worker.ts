@@ -17,6 +17,7 @@
 
 import { Worker, type Job } from 'bullmq'
 import prisma from '../db.js'
+import { settleAdMutations } from '../services/advertising/ads-mutation.service.js'
 import { redis } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { isEntityGoneError, orphanReasonFrom } from '../services/ads-core/amazon-entity-gone.js'
@@ -270,6 +271,7 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     where: { id: queueId },
     data: { syncStatus: 'IN_PROGRESS' },
   })
+  await settleAdMutations(queueId, 'IN_PROGRESS')
 
   const payload = row.payload as unknown as AdMutationPayload
   const marketplace = payload?.marketplace ?? null
@@ -291,6 +293,7 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
         syncedAt: new Date(),
       },
     })
+    await settleAdMutations(queueId, 'SKIPPED', { error: `${gate.deniedAt}: ${gate.reason}` })
     await stampEntitySync(payload, 'SKIPPED', `${gate.deniedAt}: ${gate.reason}`)
     return { status: 'SKIPPED', queueId }
   }
@@ -309,6 +312,7 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
         retryCount: { increment: 1 },
       },
     })
+    await settleAdMutations(queueId, 'FAILED', { isDead: true, error: 'no_active_ads_connection_for_marketplace' })
     return { status: 'FAILED', queueId }
   }
 
@@ -323,6 +327,12 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
         syncedAt: new Date(),
         errorMessage: null,
       },
+    })
+    // AX-ZD.1 — settle the typed rows. A local-only result pushed NOTHING to
+    // Amazon, so the intent was abandoned, not applied; SKIPPED maps to
+    // CANCELLED and keeps "APPLIED" meaning "Amazon accepted this".
+    await settleAdMutations(queueId, localOnly ? 'SKIPPED' : 'SUCCESS', {
+      error: localOnly ? `local-only: ${localOnly}` : null,
     })
     // AD.4 — mark the linked AdvertisingActionLog row as SUCCESS.
     await prisma.advertisingActionLog
@@ -366,6 +376,12 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
           ? new Date(Date.now() + Math.pow(2, nextRetry) * 60 * 1000)
           : null,
     },
+  })
+  // AX-ZD.1 — a retryable transient is still in flight, so the typed rows stay
+  // PENDING and keep suppressing drift on their fields; only a dead row is
+  // terminal. Same split as the audit log below, for the same reason.
+  await settleAdMutations(queueId, nextRetry >= row.maxRetries ? 'FAILED' : 'PENDING', {
+    isDead: nextRetry >= row.maxRetries, error: result.error,
   })
   // AD.4 — mark the linked AdvertisingActionLog as FAILED only on
   // terminal failure (so retryable transients don't pollute the audit).

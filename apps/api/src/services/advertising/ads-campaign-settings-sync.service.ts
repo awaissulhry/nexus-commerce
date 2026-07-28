@@ -105,15 +105,23 @@ async function recordCampaignDrift(
   })
   if (!diffs.length) return 0
 
-  // A queued mutation for this campaign explains the difference before anything
+  // A queued mutation for this field explains the difference before anything
   // else can, so look before blaming a human.
-  const pending = await prisma.outboundSyncQueue.count({
-    where: {
-      syncType: { startsWith: 'AD_' },
-      syncStatus: { in: ['PENDING', 'IN_PROGRESS'] },
-      payload: { path: ['entityId'], equals: existing.id },
-    },
-  }).catch(() => 0)
+  //
+  // AX-ZD.1 — this used to be a campaign-wide JSON-path scan on
+  // OutboundSyncQueue (`payload.entityId == id`), counted once and then applied
+  // to EVERY field diff. OutboundSyncQueue has no field column, so it could not
+  // have been written any other way — and the result was that one queued budget
+  // change classified a name edit made in Seller Central as WRITE_PENDING and
+  // hid it. AdMutation carries one row per (entity, field), so the question is
+  // now asked per field.
+  //
+  // Mutations enqueued before ZD.1 shipped have no typed row and will classify
+  // as an external edit until they drain. That is the conservative direction:
+  // it shows the operator a drift that turns out to be ours, rather than hiding
+  // one that is real.
+  const { pendingWriteFields } = await import('./ads-mutation.service.js')
+  const pending = await pendingWriteFields('CAMPAIGN', existing.id, CAMPAIGN_DRIFT_FIELDS)
 
   const now = new Date()
   for (const d of diffs) {
@@ -121,7 +129,7 @@ async function recordCampaignDrift(
       ours: d.ours, theirs: d.theirs,
       lastWriteAt: existing.lastSyncedAt,
       lastWriteStatus: existing.lastSyncStatus,
-      hasPendingWrite: pending > 0,
+      hasPendingWrite: pending.has(d.field),
       now,
     })
     await prisma.adDrift.upsert({
