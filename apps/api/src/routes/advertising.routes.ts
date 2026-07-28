@@ -4514,6 +4514,26 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const prod = String(r.Product ?? 'Sponsored Products')
       if (prod !== 'Sponsored Products') withheldByProduct.set(prod, (withheldByProduct.get(prod) ?? 0) + 1)
     }
+    // A scope can select campaigns whose rows we cannot put in a sheet yet.
+    // Sponsored Brands and Sponsored Display have no confirmed layout, so their
+    // rows are withheld — and `?adProduct=SPONSORED_DISPLAY` therefore matched 15
+    // real campaigns and produced a valid .xlsx with ZERO data rows. HTTP 200, a
+    // file that opens, nothing in it. The coverage header explained why, but
+    // nobody reads response headers out of a Downloads folder.
+    //
+    // Refuse instead. An empty file that looks fine is the failure this series
+    // exists to remove, and it is worse under a scope than without one, because
+    // the operator asked for something specific and got silence.
+    if (spRows.length === 0 && withheldByProduct.size > 0) {
+      reply.status(409)
+      return {
+        error: 'no_sheet_for_scope',
+        scope: scopeLabels,
+        withheld: [...withheldByProduct.entries()].map(([product, rows]) => ({ product, rows })),
+        campaignsMatched: campaigns.length,
+        hint: 'Those campaigns exist, but Sponsored Brands and Sponsored Display have no confirmed sheet layout yet, so their rows cannot be written to a bulksheet. Exporting them would hand back an empty file.',
+      }
+    }
     const entities = [...new Set(spRows.map((r) => String(r.Entity)))].sort()
     const excludes = [
       ...[...withheldByProduct.entries()].sort().map(([prod, n]) =>
