@@ -727,10 +727,11 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
                 Single-valued axes stay selectable, annotated with their outcome. */}
             {!loading && pickerAxes.length > 0 && (
               <>
-                {/* Width-bounded: the class lands on the inner <select> (the DS
-                    primitive's own <span> is the flex item), so the min-w keeps
-                    it from collapsing into the empty box it used to become and
-                    the max-w keeps the longest option from bullying the row. */}
+                {/* Width-bounded: className lands on the inner control (the DS
+                    primitive's own wrapper span is the flex item), so the min-w
+                    keeps it from collapsing into the empty box it used to
+                    become and the max-w keeps the longest option from bullying
+                    the row. */}
                 <Select
                   value={axis}
                   onChange={e => changeAxis(e.target.value)}
