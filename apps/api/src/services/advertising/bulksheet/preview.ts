@@ -21,6 +21,7 @@
  */
 
 import type { PrismaClient } from '@prisma/client'
+import { parseRowKey, rowKeyMatchesEntity } from '@nexus/shared/ads-bulksheet'
 import { computeBaseline, baselineDrift, parseMoney, parseVocabulary } from '@nexus/shared/ads-bulksheet'
 import { FIELDS_BY_KIND } from './field-map.js'
 
@@ -169,6 +170,29 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
   const agBy = new Map(ags.map((a) => [a.externalAdGroupId!, a]))
   const tgtBy = new Map(targets.map((t) => [t.externalTargetId!, t]))
 
+  // AX-ZD.9 — resolve by _row_key first, ID column second.
+  //
+  // The schema called _row_key "the ONLY join key on import" and nothing joined
+  // on it: every row was matched by its ID column alone. That column is the
+  // fragile one — Amazon ids are 15-digit integers and a spreadsheet that treats
+  // one as a number writes back `2.04055E+14`, after which the row cannot be
+  // matched and silently previews as UNRESOLVED. The local id inside the row key
+  // survives all of that, because nothing in Excel has a reason to touch it.
+  const campById = new Map(camps.map((c) => [c.id, c]))
+  const agById = new Map(ags.map((a) => [a.id, a]))
+  const tgtById = new Map(targets.map((t) => [t.id, t]))
+
+  /**
+   * Look up by row key, but only when the key was minted for THIS entity —
+   * otherwise a Campaign row carrying an ad group's key would resolve to the
+   * wrong record and diff against fields it does not own.
+   */
+  const byRowKey = <T>(map: Map<string, T>, rowKey: string, entity: string): T | undefined => {
+    if (!rowKeyMatchesEntity(rowKey, entity)) return undefined
+    const parsed = parseRowKey(rowKey)
+    return parsed ? map.get(parsed.localId) : undefined
+  }
+
   const rows: PreviewRow[] = []
   const blast: BlastRadius = {
     dailyBudget: { currentEur: 0, nextEur: 0, deltaEur: 0, deltaPct: null, campaigns: 0 },
@@ -188,8 +212,8 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
     let immutableNote: string | undefined
 
     if (entity === 'Campaign') {
-      const c = campBy.get(v['Campaign ID'] ?? '')
-      if (!c) { rows.push({ ...base, status: 'UNRESOLVED', label: v['Campaign name'] ?? v['Campaign ID'] ?? '', note: 'No campaign with that Campaign ID' }); continue }
+      const c = byRowKey(campById, base.rowKey, entity) ?? campBy.get(v['Campaign ID'] ?? '')
+      if (!c) { rows.push({ ...base, status: 'UNRESOLVED', label: v['Campaign name'] ?? v['Campaign ID'] ?? '', note: 'No campaign with that Campaign ID, and no usable _row_key' }); continue }
       base.targetId = c.id
       base.label = c.name
       current = {
@@ -201,8 +225,8 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
       }
       fields = CAMPAIGN_FIELDS
     } else if (entity === 'Ad group') {
-      const a = agBy.get(v['Ad group ID'] ?? '')
-      if (!a) { rows.push({ ...base, status: 'UNRESOLVED', label: v['Ad group name'] ?? v['Ad group ID'] ?? '', note: 'No ad group with that Ad group ID' }); continue }
+      const a = byRowKey(agById, base.rowKey, entity) ?? agBy.get(v['Ad group ID'] ?? '')
+      if (!a) { rows.push({ ...base, status: 'UNRESOLVED', label: v['Ad group name'] ?? v['Ad group ID'] ?? '', note: 'No ad group with that Ad group ID, and no usable _row_key' }); continue }
       base.targetId = a.id
       base.label = a.name
       current = {
@@ -213,7 +237,7 @@ export async function buildPreview(prisma: PrismaClient, jobId: string): Promise
       fields = ADGROUP_FIELDS
     } else if (entity === 'Keyword' || entity === 'Product targeting' || entity === 'Negative keyword' || entity === 'Campaign negative keyword' || entity === 'Negative product targeting') {
       const id = v['Keyword ID'] || v['Product Targeting ID']
-      const t = id ? tgtBy.get(id) : undefined
+      const t = byRowKey(tgtById, base.rowKey, entity) ?? (id ? tgtBy.get(id) : undefined)
       if (!t) {
         // A Create has no id yet — that is expected, not an error.
         if (op === 'Create') { rows.push({ ...base, status: 'CREATE', label: v['Keyword text'] || v['Product targeting expression'] || '' }); blast.byEntity[entity] = (blast.byEntity[entity] ?? 0) + 1; continue }

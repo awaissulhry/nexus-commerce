@@ -533,7 +533,8 @@ export const BASELINE_HEADER = '_baseline'
 export const META_HEADERS = [ROW_KEY_HEADER, BASELINE_HEADER] as const
 
 /**
- * Opaque, stable key for one exported entity. The ONLY join key on import.
+ * Opaque, stable key for one exported entity. The primary join key on import,
+ * with the entity's own ID column as the fallback (see parseRowKey).
  *
  * `localId` is always included so rows for entities Amazon has not issued an id
  * for yet are still uniquely addressable.
@@ -541,6 +542,48 @@ export const META_HEADERS = [ROW_KEY_HEADER, BASELINE_HEADER] as const
 export function buildRowKey(parts: { entity: string; externalId?: string | null; localId: string }): string {
   const e = normEnum(parts.entity).toLowerCase()
   return `${e}:${parts.externalId ?? 'local'}:${parts.localId}`
+}
+
+/**
+ * The inverse of `buildRowKey` — AX-ZD.9.
+ *
+ * The key is not a hash, so the LOCAL id is recoverable, and that is what makes
+ * it usable as a join key rather than merely an echo. Until now `_row_key` was
+ * emitted, parsed, stored and handed to the preview, which then resolved every
+ * row by its ID column alone. The "ONLY join key on import" above was false.
+ *
+ * It matters because the ID column is the fragile one. Amazon campaign ids are
+ * 15-digit integers, and a spreadsheet that decides one is a number renders it
+ * `2.04055E+14`; clear it, retype it, or let a locale reformat it and the row
+ * can no longer be matched. The local id in the key never changes.
+ *
+ * SPLIT ON FIRST AND LAST COLON, not on every colon: `Bidding adjustment` builds
+ * its externalId as `${campaignId}:${placement}`, so the middle segment can
+ * legitimately contain one. Entity is normalised (no colons) and localId is a
+ * cuid (no colons), so the two ends are unambiguous.
+ */
+export function parseRowKey(key: string | null | undefined): {
+  entity: string
+  externalId: string | null
+  localId: string
+} | null {
+  const k = (key ?? '').trim()
+  if (!k) return null
+  const first = k.indexOf(':')
+  const last = k.lastIndexOf(':')
+  if (first < 1 || last <= first || last === k.length - 1) return null
+  const externalId = k.slice(first + 1, last)
+  return {
+    entity: k.slice(0, first),
+    externalId: externalId === 'local' ? null : externalId,
+    localId: k.slice(last + 1),
+  }
+}
+
+/** True when a row key was minted for this entity. Guards cross-entity resolution. */
+export function rowKeyMatchesEntity(key: string | null | undefined, entity: string): boolean {
+  const parsed = parseRowKey(key)
+  return !!parsed && parsed.entity === normEnum(entity).toLowerCase()
 }
 
 /**

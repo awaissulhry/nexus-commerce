@@ -12,8 +12,7 @@ import {
   parseMoney, parseBid, parsePercent, parseDate,
   validateRow, entityRule, buildDictionaryRows, DICTIONARY_HEADERS,
   AMAZON_BID_FLOOR_EUR,
-  buildRowKey, computeBaseline, baselineConflicts, baselineDrift, ENTITIES_BY_PRODUCT,
-} from '@nexus/shared/ads-bulksheet'
+  buildRowKey, computeBaseline, baselineConflicts, baselineDrift, ENTITIES_BY_PRODUCT, parseRowKey, rowKeyMatchesEntity } from '@nexus/shared/ads-bulksheet'
 
 /** Build a `get` accessor over a plain row object, as callers do. */
 const rowGet = (r: Record<string, string>) => (h: string) => r[h] ?? ''
@@ -379,5 +378,55 @@ describe('AX-ZD.7 — an entity must be legal for its ad product', () => {
     const v = validateRow(row({ Entity: 'Keyword', Operation: 'Update', Product: 'Sponsored Nonsense', 'Keyword ID': 'k1', Bid: '0.5' }))
     expect(v.ok).toBe(false)
     expect(v.issues.some((i) => i.column === 'Product')).toBe(true)
+  })
+})
+
+describe('AX-ZD.9 — _row_key is a real join key, not an echo', () => {
+  it('round-trips a normal key', () => {
+    const key = buildRowKey({ entity: 'Campaign', externalId: '204054550849397', localId: 'clx123' })
+    expect(parseRowKey(key)).toEqual({ entity: 'campaign', externalId: '204054550849397', localId: 'clx123' })
+  })
+
+  it('recovers the local id even when the external id contains a colon', () => {
+    // Bidding adjustment builds externalId as `${campaignId}:${placement}`.
+    // Splitting on every colon would take "PLACEMENT_TOP" as the local id and
+    // resolve nothing — or worse, something else.
+    const key = buildRowKey({
+      entity: 'Bidding adjustment', externalId: '204054550849397:PLACEMENT_TOP', localId: 'clxABC',
+    })
+    const p = parseRowKey(key)!
+    expect(p.localId).toBe('clxABC')
+    expect(p.externalId).toBe('204054550849397:PLACEMENT_TOP')
+  })
+
+  it('survives the Excel failure the ID column does not', () => {
+    // A 15-digit Amazon id round-trips through a spreadsheet as 2.04055E+14.
+    // The ID column is then useless; the row key still carries the local id.
+    const key = buildRowKey({ entity: 'Campaign', externalId: '204054550849397', localId: 'clx123' })
+    const mangled = '2.04055E+14'
+    expect(mangled).not.toBe('204054550849397')
+    expect(parseRowKey(key)!.localId).toBe('clx123')
+  })
+
+  it('a local-only entity reports no external id rather than the literal "local"', () => {
+    const key = buildRowKey({ entity: 'Keyword', externalId: null, localId: 'clxNEW' })
+    const p = parseRowKey(key)!
+    expect(p.externalId).toBeNull()
+    expect(p.localId).toBe('clxNEW')
+  })
+
+  it('refuses malformed keys instead of guessing', () => {
+    for (const bad of ['', '   ', 'campaign', 'campaign:', ':x:y', 'campaign:ext:']) {
+      expect(parseRowKey(bad), bad).toBeNull()
+    }
+  })
+
+  it('a key minted for one entity never matches another', () => {
+    // Guards cross-entity resolution: an ad group's key on a Campaign row must
+    // not resolve, or the diff would compare fields the record does not own.
+    const key = buildRowKey({ entity: 'Ad group', externalId: 'x', localId: 'clx1' })
+    expect(rowKeyMatchesEntity(key, 'Ad group')).toBe(true)
+    expect(rowKeyMatchesEntity(key, 'Campaign')).toBe(false)
+    expect(rowKeyMatchesEntity('', 'Campaign')).toBe(false)
   })
 })
