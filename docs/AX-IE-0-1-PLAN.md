@@ -23,12 +23,20 @@ Evidence harnesses (read-only, untracked): `apps/api/scripts/_axie1-model-census
 
 | **AX-ZD.5** data vintage | ✅ shipped 2026-07-28 — settlement state as a pure function of date, `isRuleSafe` guard, stamped into every export's `_meta` and README, plus `GET /advertising/data-vintage` |
 
-**AX-IE is complete .0 → .8, and AX-ZD.5 is done.** Remaining in the programme: the SB / SB-multi / SD sheets
+| **AX-ZD.4** drift detection | ✅ shipped 2026-07-28 — rides the existing settings sync (zero extra API calls), classifies every difference, `GET /advertising/drift` |
+
+**AX-IE is complete .0 → .8; AX-ZD.4 and .5 are done.** Remaining in the programme: the SB / SB-multi / SD sheets
 in the exporter (columns known, see `docs/AMAZON-BULKSHEET-SCHEMA.md`), consolidating the
 CREATE path (still only in the older `/bulk/apply`), predicate selection in `AdsDataGrid`,
 and the rest of **AX-ZD**: **.1** typed `AdMutation` queue + 423/`Retry-After`, **.2** the
 five missing Marketing Stream datasets, **.3** intended/observed/reported, **.4** three-tier
 reconciliation, **.6** scheduled imports.
+
+**ZD.4's first live run is the argument for doing .1 next.** It classified drift into
+WRITE_PENDING / WRITE_LAG / WRITE_FAILED / EXTERNAL_CHANGE, but the pending-write lookup
+has to find in-flight mutations by parsing a JSON blob on `OutboundSyncQueue`, because
+that model has no campaign/ad-group/target foreign key (audit §3.2). The typed
+`AdMutation` queue is what makes that lookup exact instead of best-effort.
 
 **.1 and .2 are gated on an explicit conversation** — both change how live writes queue
 and how we consume Amazon's push feed, which is a different risk class from everything
