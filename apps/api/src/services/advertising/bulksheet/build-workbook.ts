@@ -175,7 +175,7 @@ export async function buildBulksheetWorkbook(input: BuildInput): Promise<BuildRe
     cells.push(String(r[ROW_KEY_HEADER] ?? ''))
     // Computed here, from the same values being written, so the fingerprint can
     // never disagree with the cells it describes.
-    cells.push(computeBaseline((h) => r[h]))
+    cells.push(computeBaseline(String(r.Entity ?? ''), (h) => r[h]))
     await writer.addRow(SP_SHEET, cells)
     rowCount++
   }

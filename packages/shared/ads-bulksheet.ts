@@ -521,39 +521,125 @@ export function buildRowKey(parts: { entity: string; externalId?: string | null;
 }
 
 /**
- * Fingerprint of the EDITABLE values at export time.
+ * The fields whose values the baseline fingerprints, per entity.
  *
- * On import a mismatch means the entity changed on Amazon's side since the file
- * was produced — that is a conflict to surface, not a value to clobber. Only
- * editable columns are hashed, so read-only performance context drifting (which
- * it does constantly, Amazon restates for 60 days) never manufactures a false
- * conflict.
+ * Deliberately NOT "all editable columns". Two things must be excluded or the
+ * check defeats itself:
+ *
+ *   Product / Entity / Operation — Operation is blank on export and the operator
+ *     FILLS IT IN to request a change. Hashing it meant every edited row reported
+ *     a conflict with itself. (Caught in the first end-to-end preview: 57 of 57
+ *     rows came back CONFLICT.)
+ *   Columns the entity does not own — a keyword row carries a Campaign name for
+ *     readability; hashing it would make a campaign rename look like a keyword
+ *     conflict.
+ *
+ * Both sides compute over the SAME list for the same entity: the exporter from
+ * the row it is writing, the preview from the entity as it stands now. A
+ * mismatch then means exactly one thing — somebody changed it on Amazon.
+ */
+export const BASELINE_FIELDS: Record<string, readonly string[]> = {
+  Campaign: ['State', 'Daily budget', 'Campaign name', 'Bidding strategy', 'Portfolio ID'],
+  'Ad group': ['State', 'Ad group name', 'Ad Group Default Bid'],
+  'Product ad': ['State'],
+  Keyword: ['State', 'Bid'],
+  'Product targeting': ['State', 'Bid'],
+  'Negative keyword': ['State'],
+  'Campaign negative keyword': ['State'],
+  'Negative product targeting': ['State'],
+  'Bidding adjustment': ['State', 'Percentage'],
+  Portfolio: ['State', 'Portfolio name'],
+}
+
+/**
+ * Normalise a value before it enters the fingerprint.
+ *
+ * The two sides reach the same field from different directions: the exporter has
+ * the raw DB value (`LEGACY_FOR_SALES`, `100`), the preview has whatever it read
+ * back (`Dynamic bids – down only`, `100.00`). Hashing those verbatim made every
+ * campaign row conflict with itself. Normalising through the SCHEMA — vocabulary
+ * for enums, fixed precision for money — means both sides agree without either
+ * needing to know how the other formats.
+ */
+function normaliseForBaseline(header: string, v: unknown): string {
+  if (v == null || v === '') return ''
+  const col = resolveColumn(header)
+  if (!col) return String(v).trim()
+  if (col.vocabulary) return parseVocabulary(col.vocabulary, String(v)) ?? ''
+  if (col.type === 'money') { const n = Number(v); return Number.isFinite(n) ? n.toFixed(2) : '' }
+  if (col.type === 'int' || col.type === 'percent') { const n = Number(v); return Number.isFinite(n) ? String(Math.round(n)) : '' }
+  return String(v).trim()
+}
+
+/** Fields hashed for an entity; empty when we have no comparable state for it. */
+export function baselineFields(entity: string): readonly string[] {
+  const canonical = parseVocabulary('entity', entity)
+  return (canonical && BASELINE_FIELDS[canonical]) || []
+}
+
+/**
+ * Fingerprint of an entity's comparable state at export time.
+ *
+ * PER FIELD, not one hash for the row: `State:1a2b|Bid:3c4d`. That is what makes
+ * conflict detection precise rather than noisy. Observed in testing — the
+ * settings-sync cron changed `Bidding strategy` between an export and its
+ * preview, and with a single row-level hash that flagged five campaigns whose
+ * operator had only touched Daily budget. With per-field hashes we can say
+ * exactly what drifted and only object when it collides with the edit.
+ *
+ * Performance columns are excluded by construction (not in BASELINE_FIELDS), so
+ * Amazon restating metrics for 60 days cannot manufacture a false conflict.
  *
  * FNV-1a rather than a crypto hash deliberately: this module is shared with the
  * browser, and the requirement is a stable short fingerprint, not collision
  * resistance against an adversary.
  */
-export function computeBaseline(get: (header: string) => unknown): string {
-  let h = 0x811c9dc5
-  for (const col of COLUMNS) {
-    if (!col.editable) continue
-    const v = get(col.header)
-    const s = v == null ? '' : String(v).trim()
-    const field = `${col.header}=${s};`
-    for (let i = 0; i < field.length; i++) {
-      h ^= field.charCodeAt(i)
+export function computeBaseline(entity: string, get: (header: string) => unknown): string {
+  const parts: string[] = []
+  for (const field of baselineFields(entity)) {
+    let h = 0x811c9dc5
+    const chunk = normaliseForBaseline(field, get(field))
+    for (let i = 0; i < chunk.length; i++) {
+      h ^= chunk.charCodeAt(i)
       h = Math.imul(h, 0x01000193) >>> 0
     }
+    parts.push(`${field}:${(h >>> 16).toString(16).padStart(4, '0')}`)
   }
-  return h.toString(16).padStart(8, '0')
+  return parts.join('|')
 }
 
-/** True when the uploaded row's baseline no longer matches the entity's current values. */
-export function baselineConflicts(uploaded: string, current: string): boolean {
+/** Parse a per-field baseline back into a map. Tolerates the empty string. */
+export function parseBaseline(s: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const part of (s ?? '').split('|')) {
+    const i = part.lastIndexOf(':')
+    if (i > 0) out[part.slice(0, i)] = part.slice(i + 1)
+  }
+  return out
+}
+
+/**
+ * Which fields drifted on Amazon since the file was produced.
+ *
+ * `onlyFields` scopes the answer to the fields the operator is actually
+ * changing: if Amazon moved something they are not touching, that is drift worth
+ * reporting but NOT a conflict with their edit, and blocking on it would train
+ * people to click through the warning.
+ *
+ * A row with no baseline (hand-authored, or Numbers stripped it) is
+ * unverifiable, not conflicted — blocking it would make the template-free path
+ * unusable.
+ */
+export function baselineDrift(uploaded: string, current: string, onlyFields?: readonly string[]): string[] {
   const a = (uploaded ?? '').trim()
-  // A file with no baseline (hand-authored, or Numbers stripped it) is not a
-  // conflict — it is simply unverifiable, and blocking it would make the
-  // template-free path unusable.
-  if (!a) return false
-  return a !== current
+  if (!a) return []
+  const was = parseBaseline(a)
+  const now = parseBaseline(current)
+  const scope = onlyFields?.length ? onlyFields : Object.keys(was)
+  return scope.filter((f) => was[f] != null && now[f] != null && was[f] !== now[f])
+}
+
+/** True when anything the operator is changing also changed on Amazon. */
+export function baselineConflicts(uploaded: string, current: string, onlyFields?: readonly string[]): boolean {
+  return baselineDrift(uploaded, current, onlyFields).length > 0
 }

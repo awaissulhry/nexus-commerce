@@ -5961,6 +5961,22 @@ model ImportJob {
   errorSummary String?
 
   /**
+   * AX-IE.5 — dry-run plan handshake.
+   *
+   * planToken is a fingerprint of the computed plan. Apply must present it and it
+   * must still match, which closes the window between "operator approved this
+   * preview" and "apply ran": if anything moved underneath — the file re-staged,
+   * an entity changed on Amazon — the token no longer matches and apply refuses
+   * rather than executing a plan nobody agreed to.
+   *
+   * planSummary holds the counts and blast-radius figures the operator was shown,
+   * so what they approved is recoverable after the fact rather than recomputed.
+   */
+  planToken      String?
+  planComputedAt DateTime?
+  planSummary    Json?
+
+  /**
    * Optional schedule that triggered this import (W8.4).
    */
   scheduleId  String?

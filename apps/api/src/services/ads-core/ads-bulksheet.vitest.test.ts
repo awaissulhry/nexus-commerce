@@ -12,7 +12,7 @@ import {
   parseMoney, parseBid, parsePercent, parseDate,
   validateRow, entityRule, buildDictionaryRows, DICTIONARY_HEADERS,
   AMAZON_BID_FLOOR_EUR,
-  buildRowKey, computeBaseline, baselineConflicts, ENTITIES_BY_PRODUCT,
+  buildRowKey, computeBaseline, baselineConflicts, baselineDrift, ENTITIES_BY_PRODUCT,
 } from '@nexus/shared/ads-bulksheet'
 
 /** Build a `get` accessor over a plain row object, as callers do. */
@@ -58,8 +58,8 @@ describe('columns', () => {
       expect(resolveColumn(h)!.editable, h).toBe(false)
     }
     // ...and excluded from the baseline, or 60 days of restatement would read as conflicts.
-    const a = computeBaseline((h) => (h === 'Bid' ? '0.31' : h === 'ACOS' ? '0.20' : ''))
-    const b = computeBaseline((h) => (h === 'Bid' ? '0.31' : h === 'ACOS' ? '0.99' : ''))
+    const a = computeBaseline('Keyword', (h) => (h === 'Bid' ? '0.31' : h === 'ACOS' ? '0.20' : ''))
+    const b = computeBaseline('Keyword', (h) => (h === 'Bid' ? '0.31' : h === 'ACOS' ? '0.99' : ''))
     expect(a).toBe(b)
   })
 
@@ -259,27 +259,63 @@ describe('round-trip identity', () => {
     expect(k).not.toBe(buildRowKey({ entity: 'Campaign', externalId: null, localId: 'local-2' }))
   })
 
-  it('changes the baseline when an EDITABLE value changes', () => {
-    const base = { Bid: '0.31', State: 'enabled' }
-    const before = computeBaseline((h) => (base as Record<string, string>)[h])
-    const after = computeBaseline((h) => ({ ...base, Bid: '0.42' } as Record<string, string>)[h])
+  it('changes the baseline when the entity\'s own state changes', () => {
+    const before = computeBaseline('Keyword', (h) => ({ State: 'enabled', Bid: '0.31' } as Record<string, string>)[h])
+    const after = computeBaseline('Keyword', (h) => ({ State: 'enabled', Bid: '0.42' } as Record<string, string>)[h])
     expect(after).not.toBe(before)
   })
 
-  it('does NOT change when only read-only context changes', () => {
-    // Amazon restates performance for 60 days. If drifting read-only metrics moved
-    // the fingerprint, every re-upload would look like a conflict.
-    const editable = { Bid: '0.31', State: 'enabled' }
-    const a = computeBaseline((h) => ({ ...editable, 'Campaign ID': '111' } as Record<string, string>)[h])
-    const b = computeBaseline((h) => ({ ...editable, 'Campaign ID': '999' } as Record<string, string>)[h])
-    expect(a).toBe(b)
+  it('IGNORES Operation — the operator filling it in is the whole point', () => {
+    // Regression: hashing Operation made every edited row conflict with itself.
+    // The first end-to-end preview returned 57 CONFLICTs out of 57 rows.
+    const a = computeBaseline('Campaign', (h) => ({ State: 'enabled', Operation: '' } as Record<string, string>)[h])
+    const b = computeBaseline('Campaign', (h) => ({ State: 'enabled', Operation: 'Update' } as Record<string, string>)[h])
+    expect(b).toBe(a)
+  })
+
+  it('ignores columns the entity does not own', () => {
+    // A keyword row carries a Campaign name for readability; a campaign rename
+    // must not read as a keyword conflict.
+    const a = computeBaseline('Keyword', (h) => ({ State: 'enabled', Bid: '0.31', 'Campaign name': 'OLD' } as Record<string, string>)[h])
+    const b = computeBaseline('Keyword', (h) => ({ State: 'enabled', Bid: '0.31', 'Campaign name': 'NEW' } as Record<string, string>)[h])
+    expect(b).toBe(a)
+  })
+
+  it('does NOT change when only read-only performance context changes', () => {
+    // Amazon restates performance for 60 days. If that moved the fingerprint,
+    // every re-upload would look like a conflict.
+    const a = computeBaseline('Keyword', (h) => ({ State: 'enabled', Bid: '0.31', ACOS: '0.20' } as Record<string, string>)[h])
+    const b = computeBaseline('Keyword', (h) => ({ State: 'enabled', Bid: '0.31', ACOS: '0.99' } as Record<string, string>)[h])
+    expect(b).toBe(a)
   })
 
   it('treats a missing baseline as unverifiable, not as a conflict', () => {
     // Hand-authored files, and files Numbers has stripped, must stay usable.
-    expect(baselineConflicts('', 'abc123')).toBe(false)
-    expect(baselineConflicts('abc123', 'abc123')).toBe(false)
-    expect(baselineConflicts('abc123', 'def456')).toBe(true)
+    expect(baselineConflicts('', 'State:abcd')).toBe(false)
+  })
+
+  it('reports drift PER FIELD, not for the whole row', () => {
+    const was = computeBaseline('Campaign', (h) => ({ State: 'enabled', 'Daily budget': '100', 'Campaign name': 'A', 'Bidding strategy': 'MANUAL' } as Record<string, string>)[h])
+    const now = computeBaseline('Campaign', (h) => ({ State: 'enabled', 'Daily budget': '100', 'Campaign name': 'A', 'Bidding strategy': 'LEGACY_FOR_SALES' } as Record<string, string>)[h])
+    expect(baselineDrift(was, now)).toEqual(['Bidding strategy'])
+  })
+
+  it('only CONFLICTS when the drift collides with what the operator edited', () => {
+    // Real case: the settings-sync cron moved Bidding strategy between an export
+    // and its preview. The operator had only touched Daily budget, so blocking
+    // them would have been noise — and noise trains people to click through.
+    const was = computeBaseline('Campaign', (h) => ({ State: 'enabled', 'Daily budget': '100', 'Bidding strategy': 'MANUAL' } as Record<string, string>)[h])
+    const now = computeBaseline('Campaign', (h) => ({ State: 'enabled', 'Daily budget': '100', 'Bidding strategy': 'LEGACY_FOR_SALES' } as Record<string, string>)[h])
+    expect(baselineConflicts(was, now, ['Daily budget'])).toBe(false)
+    expect(baselineConflicts(was, now, ['Bidding strategy'])).toBe(true)
+  })
+
+  it('normalises through the schema so both sides agree on format', () => {
+    // The exporter has the raw DB value, the preview has what it read back.
+    // 100 vs "100.00", LEGACY_FOR_SALES vs "Dynamic bids – down only".
+    const raw = computeBaseline('Campaign', (h) => ({ 'Daily budget': 100, 'Bidding strategy': 'LEGACY_FOR_SALES' } as Record<string, unknown>)[h])
+    const read = computeBaseline('Campaign', (h) => ({ 'Daily budget': '100.00', 'Bidding strategy': 'Dynamic bids – down only' } as Record<string, unknown>)[h])
+    expect(read).toBe(raw)
   })
 })
 

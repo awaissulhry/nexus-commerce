@@ -4585,6 +4585,50 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── POST /advertising/bulk/import/:id/preview — AX-IE.5, the dry run ──
+  // Resolve every staged row against LIVE state and report what would change.
+  // Writes nothing. Returns a planToken that apply must present, so the plan an
+  // operator approves is the plan that runs.
+  //
+  // No competitor ships this: Perpetua and Amazon's own console both validate
+  // after upload, so the first time you learn a file was wrong is once it has
+  // already been applied.
+  fastify.post('/advertising/bulk/import/:id/preview', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const job = await prisma.importJob.findUnique({ where: { id } })
+    if (!job || job.targetEntity !== 'adsBulksheet') { reply.status(404); return { error: 'not_found' } }
+    if (job.status === 'PROCESSING') { reply.status(409); return { error: 'still_validating', message: 'The file is still being read. Poll the job until it leaves PROCESSING.' } }
+    if (job.status === 'FAILED' && !job.totalRows) { reply.status(422); return { error: 'file_rejected', message: job.errorSummary } }
+
+    const { buildPreview } = await import('../services/advertising/bulksheet/preview.js')
+    const preview = await buildPreview(prisma, id)
+
+    await prisma.importJob.update({
+      where: { id },
+      data: {
+        planToken: preview.planToken,
+        planComputedAt: new Date(),
+        planSummary: { counts: preview.counts, blastRadius: preview.blastRadius, warnings: preview.warnings } as object,
+      },
+    })
+
+    const q = request.query as { limit?: string }
+    const take = Math.max(1, Math.min(2000, Number(q.limit ?? 200)))
+    return {
+      importJobId: id,
+      planToken: preview.planToken,
+      counts: preview.counts,
+      blastRadius: preview.blastRadius,
+      warnings: preview.warnings,
+      conflicts: preview.conflicts.slice(0, take),
+      // Only rows that actually do something — an operator scrolling a diff does
+      // not want 9,000 unchanged rows in the way.
+      rows: preview.rows.filter((r) => r.diffs.length || r.status !== 'UNCHANGED').slice(0, take),
+      rowsReturned: Math.min(take, preview.rows.length),
+      apply: `POST /api/advertising/bulk/import/${id}/apply with planToken`,
+    }
+  })
+
   // ── GET /advertising/bulk/import/:id — the staged plan + full error list ──
   fastify.get('/advertising/bulk/import/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
