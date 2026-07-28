@@ -4752,17 +4752,64 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
+    // AX-IE.9 — claim the job before applying, so two applies cannot interleave.
+    //
+    // Everything above this line is a READ. Two concurrent POSTs with the same
+    // valid plan token both passed the token check, both passed the blast-radius
+    // gate, and both entered applyPlan — where the "already applied" set is read
+    // at the top, before either had written anything, so it was empty for both.
+    // Every row was then written twice and enqueued to the outbox twice. The
+    // @@unique([jobId, rowIndex]) constraint does not catch it: apply marks rows
+    // done with updateMany, not create.
+    //
+    // A compare-and-swap on the job row is the whole fix, and it is atomic in
+    // Postgres without an advisory lock — which matters here, because session-
+    // scoped advisory locks do not survive the pgbouncer pooler.
+    //
+    // Re-applying a finished job stays allowed: it is the documented recovery
+    // after a partial failure, and applyPlan skips rows already marked SUCCESS.
+    // Only a run that is genuinely IN FLIGHT is refused.
+    const CLAIMABLE = ['PENDING_PREVIEW', 'FAILED_PARTIAL', 'COMPLETED']
+    const claimed = await prisma.importJob.updateMany({
+      where: { id, status: { in: CLAIMABLE } },
+      data: { status: 'APPLYING', startedAt: new Date() },
+    })
+    if (claimed.count === 0) {
+      const now = await prisma.importJob.findUnique({ where: { id }, select: { status: true } })
+      reply.status(409)
+      return {
+        error: 'apply_in_progress',
+        status: now?.status ?? 'UNKNOWN',
+        message: now?.status === 'APPLYING'
+          ? 'This file is being applied right now. Wait for that run to finish — starting a second one would write every row twice.'
+          : now?.status === 'PROCESSING'
+            ? 'This file is still being validated. Run the preview first.'
+            : `This file cannot be applied from status ${now?.status ?? 'UNKNOWN'}.`,
+      }
+    }
+
     const { applyPlan } = await import('../services/advertising/bulksheet/apply.js')
     const actor = actorFromHeaders(request.headers as Record<string, unknown>)
     const started = Date.now()
-    const result = await applyPlan(prisma, id, plan.rows, {
-      actor,
-      // Default is NOT live: the row is queued through the gate. Going live is an
-      // explicit, per-request decision, and the gate can still refuse it.
-      applyImmediately: b.applyImmediately === true,
-      strict: b.strict === true,
-      conflicts: b.conflicts === 'mine' ? 'mine' : 'skip',
-    })
+    let result: Awaited<ReturnType<typeof applyPlan>>
+    try {
+      result = await applyPlan(prisma, id, plan.rows, {
+        actor,
+        // Default is NOT live: the row is queued through the gate. Going live is an
+        // explicit, per-request decision, and the gate can still refuse it.
+        applyImmediately: b.applyImmediately === true,
+        strict: b.strict === true,
+        conflicts: b.conflicts === 'mine' ? 'mine' : 'skip',
+      })
+    } catch (e) {
+      // Release the claim, or the job is wedged in APPLYING forever and no
+      // retry can ever get past the guard above.
+      await prisma.importJob.update({
+        where: { id },
+        data: { status: 'FAILED_PARTIAL', errorSummary: `Apply threw: ${(e as Error).message}`.slice(0, 900) },
+      })
+      throw e
+    }
 
     await prisma.importJob.update({
       where: { id },
