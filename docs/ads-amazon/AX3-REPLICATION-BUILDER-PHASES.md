@@ -340,10 +340,22 @@ snapshot, and says so.
   state would add a schema, a lifecycle and a staleness problem to save a minute.
 - *Export-as-bulksheet.* `/marketing/ads/bulk` already round-trips; this is a link, not a build.
 
-### AX3.7 — Verification and hand-off
-Live dry-run walkthrough on a real portfolio; one gated real replication verified in Seller Central;
-DS-conformance pass against the pre-push ratchet; English-only UI check; rewrite
-`AX2-REPLICATION-RUNBOOK.md`, which currently opens with "There is **no UI for blueprints yet**".
+### AX3.7 — Verification and hand-off — IN PROGRESS 2026-07-29
+- ✅ **The sub-nav bug, actually diagnosed** (`563b42de6`). My first fix assumed container resolution
+  and I should have measured first. Measured on prod: `scrollTo({behavior:'smooth'})` on `.h10-main`
+  moves it **zero pixels**; the identical call with `behavior:'auto'` lands correctly. `html` carries
+  a global `scroll-behavior: smooth` and the combination silently no-ops. That is why the sub-nav has
+  never worked, and why the original `scrollIntoView({behavior:'smooth'})` could never have worked
+  either. The container walk was still needed and stays; the animation is now an eased rAF tween over
+  instant scrolls. **`SpSuperWizard.tsx:154` has the same one-liner and the same bug** — untouched,
+  different surface, deserves its own verification rather than a drive-by.
+- ✅ **DS-conformance + P3 token guards** — both clean.
+- ✅ **Runbook rewritten** (`c1b9c04a5`). It opened by telling operators to paste `fetch()` into a
+  browser console; it now documents the builder.
+- ⏳ Prod E2E of the AX3.6 surfaces (history, drift check, saved structures) once deployed.
+- ⏳ **One gated real replication, verified in Seller Central** — not done, and not to be done without
+  the operator. Nothing in AX3.0–AX3.7 has created a campaign: zero `AdBlueprintApplication` rows,
+  zero campaigns created.
 
 ---
 
