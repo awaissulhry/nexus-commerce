@@ -236,13 +236,35 @@ written is a poor opening move. Always overridable.
 deliberately keeps them, so `IT-AIREON-SP-Auto` read "0 keywords" while the plan created 4 auto
 clauses. Fixed in `49a160a04`; the count is now "targets", which is what it actually is.
 
-### AX3.4 — Step 2: the editable tree, client **and** server contract
-The tree, per-node delete, inline edits, the bulk toolbar, `TargetingModal`, inline conflict
-Skip/Accept. **And the server contract that honours it**: apply currently re-plans from the
-blueprint and would ignore every edit. The endpoint takes the edited plan, **re-runs the
-self-competition gate server-side against the edited plan** (the client is never trusted for the
-gate), and creates exactly what was approved. Shipping the editor without this half would be the
-"reports success for something it didn't do" failure this codebase has been burned by before.
+### ✅ AX3.4 — Step 2: the editable tree, client **and** server — SHIPPED 2026-07-29 `d82ca7d00`, `9ecc4a927`
+
+**The contract.** The client never sends a plan. It sends the source selector plus an **edit set
+addressed by plan id**, and the server rebuilds the plan from what is in the account right now,
+replays the edits, and re-runs the entire gate over the result. The obvious design — let the client
+edit the plan and post it back — would put the self-competition gate on the client's side of the
+trust boundary, which is exactly backwards.
+
+`planApplication` split into `buildPlanCampaigns` → `applyEdits` → `evaluatePlan`, so the blockers,
+the budget cap and the name-collision check all see the *final* campaign set. Every node carries a
+deterministic id (`c0.g1.t7`).
+
+Three things that had to be right:
+- **An added keyword is gated like a copied one.** A copied target inherits its class from the
+  blueprint; an operator-typed one has none, so it is classified at evaluation time against the
+  *target* product — its own brand term is free, anything else is gated. Otherwise "add a keyword"
+  is a hole straight through the gate.
+- **Stale edits block, never partially apply.** If the source changed after the edits were made,
+  applying the ones that still resolve would create something nobody approved.
+- **`plan-preview` returns both plans** — un-edited (what the tree renders, with stable ids so a
+  removal stays addressable and restorable) and edited (the footer's totals, blockers, conflicts).
+  One round trip, so the tree and the verdict cannot disagree.
+
+Conflicts are inline on the offending keyword rather than in a separate table: you see the term, its
+bid and the campaign it would fight at the moment you decide, and "Drop it" removes it in one click.
+
+Schema (additive, applied by Railway prestart, **verified on prod**): `blueprintId` nullable, plus
+`sourceSelector` / `options` / `edits` / `launchMode`, so a run replicated from a live source is
+still a recorded, rollback-able unit and "why is this campaign called that" stays answerable.
 
 ### AX3.5 — Step 3: preflight, launch, result, rollback
 Totals, blockers, warnings, conflict ledger, €/day vs cap, market writability, not-copied recap,
