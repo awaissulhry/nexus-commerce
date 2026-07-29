@@ -1,244 +1,184 @@
-# Replicating a campaign structure onto a new product — operator runbook
+# Replicating a campaign structure onto another product — operator runbook
 
-> For `/marketing/ads/campaigns`. Written 2026-07-28 against the live account.
-> There is **no UI for blueprints yet**, so every step is a `fetch` you paste into the browser console.
-
----
-
-## Before you start — three things that are true of your account
-
-**1. Production writes are LIVE.** `NEXUS_MARKETING_WRITES_EBAY` is eBay; for Amazon the gate is open and IT/DE
-have written as recently as this morning. **A non-dry-run apply creates real campaigns that start spending.**
-
-**2. Only AIREON uses the naming convention blueprints understand.** Of 115 active IT campaigns:
-
-| Convention | Count | Example |
-|---|---|---|
-| `IT-TOKEN-SP-Role` | **11** | `IT-AIREON-SP-Auto` |
-| `TOKEN \| IT \| Match \| Type` | 11 | `GALE \| IT \| Auto` |
-| everything else | 93 | `AIR MESH BROAD` |
-
-Blueprints derive a campaign's *role* from its name. **Extract from AIREON** — it is the only clean template.
-Replicated campaigns are created in the AIREON convention, which is what you want going forward, but they will
-look different from the 93 legacy ones. The **diff** feature only produces meaningful output when comparing
-against campaigns that share the convention — diffing against `GALE | IT | Auto` will return noise.
-
-**3. The gate will refuse your first attempt, and that is correct.** AIREON and GALE already overlap on 43
-keywords. See step 4.
+> **Rewritten 2026-07-29.** The previous version of this file told you to paste `fetch()` calls into a
+> browser console, because there was no UI. There is now: **Ads → Campaign Builder → Replicate
+> Structure**. Everything below is done on that screen.
+>
+> `/marketing/ads/blueprints` still works — it redirects here.
 
 ---
 
-## Step 0 — Open a console with a session
+## What this does, and the one thing it refuses to do
 
-1. Log in to the app: **https://nexus-commerce-three.vercel.app/marketing/ads/campaigns**
-2. Open DevTools → Console.
-3. Paste this helper once. Every later step uses it.
+It copies a campaign structure — the campaigns, ad groups, keywords, negatives, product and auto
+targeting, bids, budgets and placement modifiers — onto a different product, renaming everything on
+the way.
 
-```js
-const API = 'https://nexusapi-production-b7bb.up.railway.app'
-async function ads(path, body, method) {
-  const r = await fetch(API + '/api/advertising' + path, {
-    method: method ?? (body ? 'POST' : 'GET'),
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',                    // ← your session; without this you get 401
-    body: body ? JSON.stringify(body) : undefined,
-  })
-  const j = await r.json().catch(() => ({}))
-  console.log(r.status, j)
-  return j
-}
+It will **not** let you copy a keyword that would put your new product into the same Amazon auction
+as something you already run. Amazon's auction is second-price: two of your own jackets bidding on
+`giacca moto` raise your own clearing price and split one pool of demand between them. Those keywords
+are a **blocking** decision — you resolve each one before anything is created. That gate is the
+reason this is safe to use, and there is no way around it.
+
+---
+
+## Before you start
+
+**Writes are live.** A launch creates real campaigns in your Amazon account. IT and DE have written
+as recently as this morning; FR and ES are writable but have never had a write reach Amazon, and the
+preflight will warn you if you are about to be the first. The five sandbox markets (UK, PL, SE, NL,
+IE) are **blocked** — the plan refuses rather than creating a structure that would sit there inert.
+
+**Your naming conventions all work now.** Roles used to be derived from one convention that only 11
+of 190 campaigns used. Portfolio, pipe (`GALE | IT | Phrase | Category`), underscore
+(`IT_Auto_Close`), token-last (`Auto_Loose_Moss`) and unportfolio'd campaigns all parse.
+
+---
+
+## Step 1 — Source & Products
+
+### Pick what to copy
+
+The tree is **portfolio → campaign → ad group**. Tick at any level. An ad group brings its campaign
+with it, because Amazon has no ad group without one.
+
+Do not skip the **No portfolio** group. 128 of 190 campaigns live there, including every
+product-targeting structure in the account.
+
+If you saved a structure before, it appears above the tree as **Saved structures** — clicking it
+selects the campaigns it was captured from and fills in its product token. Note that this copies what
+those campaigns look like *now*, not a snapshot from when you saved it.
+
+### What to copy
+
+Everything is on by default. Two of the toggles change behaviour rather than preference, and say so
+on screen:
+
+- **turning off negatives makes the copies WIDER than the source** — they will buy traffic the
+  original pays to avoid;
+- **turning off auto groups** leaves an Auto campaign with nothing to target at all.
+
+### Naming — usually required, not optional
+
+The product token is guessed from the names you selected. Check it.
+
+Amazon will not accept two campaigns with the same name, and **most of your campaign names do not
+contain the product**, so substituting the product alone leaves the name unchanged and the launch is
+blocked. Use the prefix/suffix or find-and-replace. The preview shows every old → new name, flags any
+that would collide, and flags any that are unchanged.
+
+### Products
+
+The same picker as the other builders. One product ad per product, in every ad group.
+
+### Destination
+
+Market, portfolio, daily-budget cap, and the bid/budget policy: **copy · scale by % · flat value**.
+
+Copying bids verbatim is not neutral. A bid that matured on a product with months of history is not
+the right opening bid for one with none — and if the source is bid-suppressed (the AIREON auto
+clauses sit at the 2¢ floor deliberately), copying verbatim copies the suppression too.
+
+### Past runs
+
+The same section lists what has already been replicated into this market, with rollback and
+raise-bids per run, plus the **drift check** — compare a saved structure against a product's live
+campaigns to see what has moved since.
+
+---
+
+## Step 2 — Review & Edit
+
+Everything that would be created, before any of it is. Rename, re-price, or delete at any level:
+campaign, ad group, or individual keyword. Deletions strike through and can be restored.
+
+**Conflicts appear inline on the offending keyword**, naming the campaign it would fight:
+
+```
+giacca moto donna  BROAD    ⚠ competes with IT-AIREON-SP-Category-Broad +17   [Drop it] [Keep it]
 ```
 
-If you get `401 {"error":"Access denied"}`, your session expired — reload the app and retry.
+- **Drop it** removes that keyword from *every* ad group in the plan.
+- **Keep it** records the decision — sometimes right, when the new product is genuinely the better
+  match and you intend to move the traffic.
+
+Expect the keyword count to fall sharply. On AIREON → GALE, resolving all 43 conflicts took positives
+from 137 to 24. That is not the tool being unhelpful; it is the honest size of what is actually
+*about* the new product once you stop duplicating category bids you already own.
+
+You can also **add** keywords here. They go through the same self-competition check as copied ones.
+
+> If you go back and change the source after editing, your edits are refused as a set rather than
+> partly applied. Applying the half that still resolves would create something you never approved.
 
 ---
 
-## Step 1 — Preview the blueprint (reads only, saves nothing)
+## Step 3 — Preflight & Launch
 
-```js
-await ads('/blueprints/preview', {
-  namePrefix: 'IT-AIREON-SP-',
-  productToken: 'AIREON',
-  marketplace: 'IT',
-})
-```
+Read, in order: the totals, **what will not be created**, the warnings, and the €/day.
 
-**Expect:** `doc.stats` ≈ `{campaigns: 11, adGroups: 11, positives: 137, negatives: 204, productAds: 63}`
-and 11 roles: `Auto, Brand-Broad, Brand-Exact, Brand-Phrase, Category-Broad, Category-Exact, Category-Phrase,
-Competitor-Broad, Competitor-Exact, Competitor-Phrase, PAT`.
+### How it goes out
 
-**Check before continuing:**
-- `campaigns[].namePattern` shows `IT-{{product}}-SP-…` — the product is parameterised out.
-- `sharedTargets` has ~43 entries. **This is the list that will cause conflicts.** Read it now.
-- No ASIN appears anywhere in the doc (they are per-product by design).
+- **Land at the bid floor** (default) — created and enabled at Amazon's €0.02 minimum, with every
+  planned bid remembered. The structure exists and syncs normally but cannot meaningfully spend. One
+  click raises it later. **Never paused**: pausing disrupts Amazon's optimisation and forces
+  re-learning, which is why this account suppresses with bids instead.
+- **Go live now** — created at the planned bids and budgets, spending from the moment it lands.
 
----
+Use the floor for the first replication of a product line. Look at it in Seller Central, then raise it.
 
-## Step 2 — Save it
+### After it runs
 
-```js
-const bp = await ads('/blueprints', {
-  name: 'SP Jacket Standard (from AIREON)',
-  description: '11-campaign SP structure: Auto, Brand/Competitor/Category × Broad/Phrase/Exact, PAT',
-  namePrefix: 'IT-AIREON-SP-',
-  productToken: 'AIREON',
-  marketplace: 'IT',
-})
-// keep this id
-const BP = bp.id
-```
-
-`409` means the name is taken — pick another. List them any time with `await ads('/blueprints')`.
-
----
-
-## Step 3 — Dry run against your target product
-
-`dryRun` defaults to **true**, so this creates nothing. Supply the ASINs you want advertised.
-
-```js
-await ads(`/blueprints/${BP}/apply`, {
-  productToken: 'VENTRA',              // becomes the {{product}} in every name and brand keyword
-  asins: ['B0XXXXXXX1', 'B0XXXXXXX2'], // the ASINs for THAT product
-  marketplace: 'IT',
-  dailyBudgetCapEur: 120,              // refuse if the structure commits more than this per day
-})
-```
-
-**Read the response in this order:**
-
-| Field | What it tells you |
+| Status | Meaning |
 |---|---|
-| `plan.allowed` | `false` on the first run — expected, see step 4 |
-| `plan.totals.dailyBudgetTotal` | **€110/day** for the full AIREON structure. This is a real commitment |
-| `plan.totals` | campaigns / positives / negatives / productAds that would be created |
-| `plan.conflicts` | keywords that would compete with campaigns you already run |
-| `plan.warnings` | e.g. "first write ever to reach FR" |
-| `plan.blockers` | why it refused |
-| `skippedNonKeyword` | PAT/product targets this phase cannot create — see Limits |
+| `APPLIED` | everything created, and every campaign got an Amazon id |
+| `PARTIAL` | something did not land — **read `notOnAmazon` and the errors** |
+| `FAILED` | nothing was created |
+
+`notOnAmazon` means those campaigns exist locally but never reached Amazon — the write gate was closed
+for that market. They are inert, not live.
+
+From the result panel you can **roll the whole run back** (archives every campaign it created, as one
+unit), **raise to the planned bids**, or **save the structure as a blueprint**.
 
 ---
 
-## Step 4 — Resolve the conflicts (the important step)
+## Verify
 
-The gate refuses because some of AIREON's keywords are **not about AIREON** — category terms like
-`giacca moto` and competitor terms like `dainese`. Creating them for a second jacket puts two of your own
-products in the same Amazon auction: you bid against yourself, raise your own clearing price, and split one
-pool of demand.
+**In Nexus:** open Ad Manager, filter to the new names, and check the **Amazon Delivery** column.
+`Live` means the last write reached Amazon; `Pending`, `Failed`, `Sandbox`, `Gated` and `No write`
+each mean it did not.
 
-Each conflict names the campaigns you would fight:
+**In Amazon:** Seller Central → Campaign Manager, confirm one campaign exists with the expected budget
+and keywords. Do this on the first replication for a product line; the delivery column is trustworthy
+afterwards.
 
-```
-"giacca moto"  already run by  GALE | IT | Broad | Category,  IT-AIREON-SP-Category-Broad
-```
-
-You have two choices per keyword.
-
-**A. Skip it (recommended default).** The new product does not bid on it; your existing campaign keeps it.
-
-```js
-const skip = ['giacca moto', 'abbigliamento moto', 'dainese' /* … */]
-await ads(`/blueprints/${BP}/apply`, {
-  productToken: 'VENTRA', asins: ['B0XXXXXXX1'], marketplace: 'IT',
-  dailyBudgetCapEur: 120, skipSharedTargets: skip,
-})
-```
-
-**B. Accept it on the record.** Sometimes correct — e.g. the new product is genuinely a better match for that
-term and you intend to move the traffic. The decision is stored on the application row.
-
-```js
-acceptSharedTargets: ['giacca moto']
-```
-
-To skip *all* of them in one go:
-
-```js
-const dry = await ads(`/blueprints/${BP}/apply`, { productToken:'VENTRA', asins:['B0XXXXXXX1'], marketplace:'IT' })
-const skipAll = dry.plan.conflicts.map(c => c.expression)
-```
-
-> **Expect the count to drop sharply.** On AIREON→GALE, skipping all 43 conflicts took positives from
-> **137 → 24**. That is not the tool being unhelpful — it is the honest size of what is genuinely *about*
-> the new product once you stop duplicating category bids you already own.
-
-Re-run until `plan.allowed === true`.
+Then leave it 24h. The 20-minute settings sync reconciles Amazon's own state back, and `/api/health`
+→ `adsIntegrity` reports problems on its own.
 
 ---
-
-## Step 5 — Go live
-
-Only when `plan.allowed` is `true` and you have read `plan.totals`:
-
-```js
-const run = await ads(`/blueprints/${BP}/apply`, {
-  productToken: 'VENTRA', asins: ['B0XXXXXXX1'], marketplace: 'IT',
-  dailyBudgetCapEur: 120,
-  skipSharedTargets: skipAll,
-  dryRun: false,                       // ← the only thing that makes it real
-})
-const APP = run.applicationId
-```
-
-**Read the result honestly:**
-
-| `status` | Meaning |
-|---|---|
-| `APPLIED` | everything created and every campaign got an Amazon id |
-| `PARTIAL` | something did not land — **check `notOnAmazon` and `errors`** |
-| `FAILED` | no campaign was created |
-
-`notOnAmazon` lists campaigns that exist locally but never reached Amazon. A non-empty list means the write
-gate was closed for that market — the campaigns are inert, not live.
-
----
-
-## Step 6 — Verify in two places
-
-**In Nexus:** open `/marketing/ads/campaigns`, filter to the new names (`IT-VENTRA-SP-…`), and check the
-**Amazon Delivery** column. `Live` means the last write reached Amazon; `Pending`, `Failed`, `Sandbox`,
-`Gated` or `No write` each mean it did not.
-
-**In Amazon:** open Seller Central → Campaign Manager and confirm one campaign exists with the expected
-budget and keywords. Do this on the **first** replication for a product line; the delivery column is
-trustworthy afterwards.
-
-Then leave it alone for 24h. The 20-minute settings sync will reconcile Amazon's own state back into the
-console, and `/api/health` → `adsIntegrity` will report any problem on its own.
-
----
-
-## Step 7 — If it went wrong, roll the whole run back
-
-```js
-await ads(`/blueprint-applications/${APP}/rollback`, {})
-```
-
-This archives **every campaign that run created**, as one unit. Archiving is soft and reversible on Amazon's
-side. It does not touch anything that existed before the run.
-
-Review past runs any time:
-
-```js
-await ads('/blueprint-applications')
-```
-
----
-
-## Limits — what this does NOT do yet
-
-1. **PAT / product-targeting campaigns are not created.** The AIREON blueprint contains a `PAT` campaign; its
-   product targets need a different Amazon API surface. They are counted in `skippedNonKeyword` so you can see
-   what was left out — the campaign shell is created, but empty of product targets. **Add those by hand.**
-2. **Diff only works within one naming convention.** Comparing this blueprint against `GALE | IT | …`
-   campaigns returns noise, because roles are derived from names.
-3. **No UI.** Everything is console-driven until a surface is built.
-4. **One product per run.** Replicating to three products is three applies.
 
 ## If something looks wrong
 
-- `401` — session expired, reload the app.
-- `409 refused` — the gate blocked it; the body carries `blockers` and `conflicts`.
-- `404 blueprint not found` — wrong id; `await ads('/blueprints')`.
-- `PARTIAL` with `notOnAmazon` — the market could not accept writes; nothing is live.
-- Anything else — `GET /api/health` and read `adsIntegrity`; it names the problem and the next step.
+- **"N campaign name(s) already exist"** — the rename did not change them. Add a prefix, or a
+  find-and-replace.
+- **"N keyword(s) would make X bid against campaigns you already run"** — go to step 2 and resolve
+  them on the keywords.
+- **"X was already replicated in this marketplace on …"** — you have done this before. Check the
+  earlier run under **Past runs** before launching a second set.
+- **"N of your edits point at … no longer in this plan"** — the source changed after you edited.
+  Review step 2 again.
+- **`PARTIAL` with `notOnAmazon`** — the market could not accept writes; nothing is live.
+- Anything else — `GET /api/health` and read `adsIntegrity`.
+
+---
+
+## Known limits
+
+1. **Sponsored Brands and Sponsored Display are not modelled** (deferred by decision). SB/SD auto
+   clauses in a source are reported and not created.
+2. **One product per run.** Replicating to three products is three runs.
+3. **The drift check needs one naming convention.** Comparing a structure against campaigns named
+   differently returns noise.
+4. **No resumable drafts.** Closing the builder loses the in-progress setup; saved structures and
+   "Replicate again" cover the expensive part.
