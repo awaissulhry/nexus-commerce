@@ -71,6 +71,20 @@ export interface ApplyRequest {
   actor?: string
   /** AX3.0 — the portfolio the replicated campaigns should join. */
   portfolioId?: string
+  /**
+   * AX3.5 — how the run goes out.
+   *
+   * `floor` (the DEFAULT) creates everything at Amazon's 2c minimum and records
+   * each planned bid as the restore point, so the structure exists, syncs and
+   * reads back normally but cannot meaningfully spend until someone raises it.
+   * `live` creates at the planned bids.
+   *
+   * Never a pause: pausing disrupts Amazon's optimisation and forces re-learning,
+   * which is why this account suppresses with bids instead. A floored launch is
+   * the same mechanism as no-pause suppression, so the console shows it as a
+   * suppressed campaign and `restoreCampaignBids` un-does it.
+   */
+  launchMode?: 'live' | 'floor'
 }
 
 /**
@@ -244,6 +258,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
       plan: plan as unknown as object,
       acceptedConflicts: (req.options?.acceptSharedTargets ?? []),
       skippedTargets: (req.options?.skipSharedTargets ?? []),
+      launchMode: req.launchMode ?? 'floor',
       actor: req.actor ?? null,
     },
   })
@@ -267,6 +282,24 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
   const createdCampaignIds: string[] = []
   const notOnAmazon: string[] = []
   const errors: string[] = []
+
+  // AX3.5 — a floored launch creates AT the floor and remembers the planned bid,
+  // rather than creating at the planned bid and lowering it afterwards. The
+  // second order looks equivalent and is not: it puts real bids on Amazon for
+  // however long the suppression writes take to land, which is exactly the spend
+  // this option exists to avoid.
+  const { SUPPRESSION_FLOOR_CENTS } = await import('./ads-bid-suppression.service.js')
+  const floored = (req.launchMode ?? 'floor') === 'floor'
+  const bidEurFor = (cents: number | null | undefined, fallback: number) =>
+    floored ? SUPPRESSION_FLOOR_CENTS / 100 : (cents ?? fallback) / 100
+  /** Remember what this entity's bid WOULD have been, so restore is exact. */
+  const rememberTarget = async (id: string, plannedCents: number | null | undefined) => {
+    if (!floored) return
+    const c = plannedCents ?? null
+    if (c == null || c <= SUPPRESSION_FLOOR_CENTS) return
+    try { await prisma.adTarget.update({ where: { id }, data: { suppressedFromBidCents: c } }) }
+    catch (e) { errors.push(`remember bid: ${(e as Error).message.slice(0, 90)}`) }
+  }
 
   for (const c of plan.campaigns) {
     try {
@@ -302,9 +335,13 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
       for (const g of c.adGroups) {
         const grp = await createAdGroupLocal({
           campaignId: camp.id, name: g.name,
-          defaultBidEur: (g.defaultBidCents ?? 50) / 100, userId: req.actor,
+          defaultBidEur: bidEurFor(g.defaultBidCents, 50), userId: req.actor,
         })
         created.adGroups++
+        if (floored && (g.defaultBidCents ?? 0) > SUPPRESSION_FLOOR_CENTS) {
+          try { await prisma.adGroup.update({ where: { id: grp.id }, data: { suppressedFromBidCents: g.defaultBidCents } }) }
+          catch (e) { errors.push(`remember ad-group bid: ${(e as Error).message.slice(0, 90)}`) }
+        }
 
         // AX2.9 — NEGATIVES FIRST. A campaign that goes live with its positives
         // but not its exclusions immediately buys the traffic the template pays
@@ -334,7 +371,8 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
 
         for (const t of g.targets) {
           if (t.isNegative) continue // handled above
-          const bidEur = (t.bidCents ?? g.defaultBidCents ?? 50) / 100
+          const plannedCents = t.bidCents ?? g.defaultBidCents ?? 50
+          const bidEur = bidEurFor(plannedCents, 50)
           const kind = t.kind?.toUpperCase()
 
           // AX3.0 — the two kinds that used to be counted and dropped.
@@ -342,7 +380,8 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
           // AUTO: the four SP clauses; the Auto campaign was created with nothing.
           if (kind === 'PRODUCT' || kind === 'CATEGORY') {
             try {
-              await createTargetLocal({ adGroupId: grp.id, kind: kind === 'PRODUCT' ? 'PRODUCT' : 'CATEGORY', value: t.expression, bidEur, userId: req.actor })
+              const r = await createTargetLocal({ adGroupId: grp.id, kind: kind === 'PRODUCT' ? 'PRODUCT' : 'CATEGORY', value: t.expression, bidEur, userId: req.actor })
+              await rememberTarget(r.id, plannedCents)
               created.targets++
             } catch (e) { errors.push(`${kind.toLowerCase()} target "${t.expression}": ${(e as Error).message.slice(0, 120)}`) }
             continue
@@ -352,7 +391,8 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
             // silently swallowed — the plan warned about it already.
             if (!t.autoClause) { skippedNonKeyword++; continue }
             try {
-              await createTargetLocal({ adGroupId: grp.id, kind: 'AUTO', value: t.autoClause, bidEur, userId: req.actor })
+              const r = await createTargetLocal({ adGroupId: grp.id, kind: 'AUTO', value: t.autoClause, bidEur, userId: req.actor })
+              await rememberTarget(r.id, plannedCents)
               created.targets++
             } catch (e) { errors.push(`auto clause ${t.autoClause}: ${(e as Error).message.slice(0, 120)}`) }
             continue
@@ -362,10 +402,11 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
           const mt = (t.expressionType ?? 'EXACT').toUpperCase().replace(/^_/, '')
           if (mt !== 'EXACT' && mt !== 'PHRASE' && mt !== 'BROAD') continue
           try {
-            await createKeywordLocal({
+            const r = await createKeywordLocal({
               adGroupId: grp.id, keywordText: t.expression,
               matchType: mt, bidEur, userId: req.actor,
             })
+            await rememberTarget(r.id, plannedCents)
             created.targets++
           } catch (e) { errors.push(`keyword "${t.expression}": ${(e as Error).message.slice(0, 120)}`) }
         }
@@ -394,6 +435,14 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
           })
         } catch (e) { errors.push(`placement bidding "${c.name}": ${(e as Error).message.slice(0, 120)}`) }
       }
+
+      // AX3.5 — mark a floored campaign as suppressed, using the same flag the
+      // no-pause engine sets. That makes it read as suppressed everywhere in the
+      // console and lets restoreCampaignBids un-do it with no special case.
+      if (floored) {
+        try { await prisma.campaign.update({ where: { id: camp.id }, data: { bidsSuppressedAt: new Date() } }) }
+        catch (e) { errors.push(`suppression flag "${c.name}": ${(e as Error).message.slice(0, 90)}`) }
+      }
     } catch (e) {
       errors.push(`campaign "${c.name}": ${(e as Error).message.slice(0, 160)}`)
     }
@@ -411,6 +460,34 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
   logger.info('[AX2.5] blueprint applied', { applicationId: application.id, status, created, errors: errors.length })
 
   return { applicationId: application.id, status, plan, created, skippedNonKeyword, notOnAmazon, errors }
+}
+
+/**
+ * AX3.5 — take a floored run up to the bids it was planned at.
+ *
+ * The counterpart to launching at the floor. Each entity remembered its planned
+ * bid in `suppressedFromBidCents`, so this is the ordinary no-pause restore —
+ * retry-safe, gated, and audited — applied across every campaign the run
+ * created, rather than a bespoke path that would need its own correctness proof.
+ */
+export async function raiseApplicationBids(applicationId: string, actor?: string): Promise<{ raised: number; campaigns: number; errors: string[] }> {
+  const app = await prisma.adBlueprintApplication.findUnique({ where: { id: applicationId } })
+  if (!app) throw new Error('application not found')
+  if (app.status === 'ROLLED_BACK') return { raised: 0, campaigns: 0, errors: ['this run was rolled back'] }
+
+  const { restoreCampaignBids } = await import('./ads-bid-suppression.service.js')
+  const who = (actor?.startsWith('user:') || actor?.startsWith('automation:')
+    ? actor
+    : 'automation:ax35-replication-raise') as `user:${string}` | `automation:${string}`
+  const errors: string[] = []
+  let raised = 0
+  for (const id of app.createdCampaignIds) {
+    try {
+      raised += await restoreCampaignBids(id, { actor: who, reason: `raise replication ${applicationId} to its planned bids`, applyImmediately: true })
+    } catch (e) { errors.push(`${id}: ${(e as Error).message.slice(0, 120)}`) }
+  }
+  await prisma.adBlueprintApplication.update({ where: { id: applicationId }, data: { launchMode: 'live' } })
+  return { raised, campaigns: app.createdCampaignIds.length, errors }
 }
 
 /**

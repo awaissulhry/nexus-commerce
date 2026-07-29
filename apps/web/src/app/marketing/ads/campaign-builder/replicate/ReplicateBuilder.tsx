@@ -30,6 +30,7 @@ import { NamingPanel } from './NamingPanel'
 import { CopyScopePanel } from './CopyScopePanel'
 import { DestinationPanel } from './DestinationPanel'
 import { ReviewTree } from './ReviewTree'
+import { LaunchStep, type LaunchResult } from './LaunchStep'
 import {
   fullCopyScope, emptyNaming, copyPolicy, guessProductToken, verdictOf,
   type CopyScope, type NamingRules, type ValuePolicy, type PlanPreviewResponse, type PlanEdits,
@@ -80,6 +81,13 @@ export function ReplicateBuilder() {
   // ── review-step edits ─────────────────────────────────────────────────
   const [edits, setEdits] = useState<PlanEdits>({})
   const [conflictDecisions, setConflictDecisions] = useState<Record<string, 'skip' | 'accept'>>({})
+
+  // ── launch ────────────────────────────────────────────────────────────
+  const [launchMode, setLaunchMode] = useState<'live' | 'floor'>('floor')
+  const [launching, setLaunching] = useState(false)
+  const [launchErr, setLaunchErr] = useState<string | null>(null)
+  const [result, setResult] = useState<LaunchResult | null>(null)
+  const [busy, setBusy] = useState(false)
 
   // ── the server's plan ─────────────────────────────────────────────────
   const [preview, setPreview] = useState<PlanPreviewResponse | null>(null)
@@ -169,6 +177,75 @@ export function ReplicateBuilder() {
     return () => { alive = false; clearTimeout(t) }
     // planKey captures every input; listing them individually would be noise.
   }, [planKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * Everything the plan is derived from, in one place. The launch sends exactly
+   * this — a selector plus edits, never a plan — so the server rebuilds and
+   * re-gates from the live account rather than trusting anything from here.
+   */
+  const requestBody = useCallback((extra: Record<string, unknown>) => {
+    const num = (v: string) => (v.trim() === '' || !Number.isFinite(Number(v)) ? undefined : Number(v))
+    return JSON.stringify({
+      source: { campaignIds: source.campaignIds, adGroupIds: source.adGroupIds, marketplace: sourceMarket },
+      sourceProductToken: sourceToken.trim(),
+      productToken: targetToken.trim(),
+      asins,
+      marketplace: market,
+      portfolioId: portfolioId || undefined,
+      dailyBudgetCapEur: num(cap),
+      edits,
+      acceptSharedTargets: Object.entries(conflictDecisions).filter(([, v]) => v === 'accept').map(([k]) => k),
+      naming: { prefix: naming.prefix, suffix: naming.suffix, replacements: naming.replacements.filter((r) => r.from) },
+      include: scope,
+      bidPolicy: bidPolicy.mode === 'copy' ? undefined : { mode: bidPolicy.mode, value: bidPolicy.mode === 'fixed' ? Math.round((num(bidPolicy.value) ?? 0) * 100) : num(bidPolicy.value) },
+      budgetPolicy: budgetPolicy.mode === 'copy' ? undefined : { mode: budgetPolicy.mode, value: num(budgetPolicy.value) },
+      ...extra,
+    })
+  }, [source, sourceMarket, sourceToken, targetToken, asins, market, portfolioId, cap, edits, conflictDecisions, naming, scope, bidPolicy, budgetPolicy])
+
+  const launch = useCallback(async () => {
+    if (launching) return
+    setLaunching(true); setLaunchErr(null)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/blueprints/replicate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: requestBody({ launchMode, dryRun: false }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j?.error) throw new Error(j?.blockers?.join(' · ') || j?.error || `HTTP ${r.status}`)
+      setResult(j as LaunchResult)
+    } catch (e) { setLaunchErr((e as Error).message) } finally { setLaunching(false) }
+  }, [launching, requestBody, launchMode])
+
+  const afterRun = useCallback(async (path: string, label: string) => {
+    if (!result || busy) return
+    setBusy(true); setLaunchErr(null)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/blueprint-applications/${result.applicationId}/${path}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: '{}',
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j?.error) throw new Error(j?.error || `${label} failed`)
+      if (path === 'rollback') setResult({ ...result, created: { campaigns: 0, adGroups: 0, targets: 0, negatives: 0, productAds: 0 }, status: 'PLANNED', errors: [`Rolled back — ${j.archived ?? 0} campaign(s) archived.`] })
+      else setLaunchMode('live')
+    } catch (e) { setLaunchErr((e as Error).message) } finally { setBusy(false) }
+  }, [result, busy])
+
+  const saveBlueprint = useCallback(async (name: string) => {
+    setBusy(true); setLaunchErr(null)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/blueprints`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({
+          name,
+          campaignIds: source.campaignIds, adGroupIds: source.adGroupIds,
+          marketplace: sourceMarket, productToken: sourceToken.trim(),
+        }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j?.error) throw new Error(j?.error || 'could not save')
+    } catch (e) { setLaunchErr((e as Error).message) } finally { setBusy(false) }
+  }, [source, sourceMarket, sourceToken])
 
   // Scroll-spy for the step-1 sub-nav, matching the SP Super Wizard's.
   useEffect(() => {
@@ -336,8 +413,19 @@ export function ReplicateBuilder() {
         {step === 3 && (
           <div className="h10-spw-stub-step">
             <h2>Preflight &amp; Launch</h2>
-            <p className="h10-spw-desc">Totals, blockers, the self-competition ledger, and the launch itself. Lands in AX3.5.</p>
-            <div className="h10-spw-card h10-rep-todo">Next phase.</div>
+            <p className="h10-spw-desc">
+              The last screen before any of this exists. Check what will be created, what will not be,
+              and what it commits per day.
+            </p>
+            <LaunchStep
+              plan={verdictOf(preview)} scope={scope} market={market}
+              launchMode={launchMode} setLaunchMode={setLaunchMode}
+              launching={launching} result={result} err={launchErr} busy={busy}
+              onLaunch={() => void launch()}
+              onRollback={() => void afterRun('rollback', 'Rollback')}
+              onRaise={() => void afterRun('raise-bids', 'Raise')}
+              onSaveBlueprint={(n) => void saveBlueprint(n)}
+            />
           </div>
         )}
       </div>
@@ -346,14 +434,23 @@ export function ReplicateBuilder() {
         {step > 1 && <button type="button" className="h10-spw-back" onClick={() => setStep((s) => (s > 1 ? ((s - 1) as StepN) : s))}>Back</button>}
         <span className="grow" />
         {step < 3 && <PlanBar planning={planning} err={planErr} preview={preview} missing={missing} />}
-        <button
-          type="button"
-          className="h10-spw-next"
-          disabled={step === 1 && !canAdvance}
-          onClick={() => setStep((s) => (s < 3 ? ((s + 1) as StepN) : s))}
-        >
-          Next
-        </button>
+        {/* Step 3 carries its own launch button — a second "Next" there would be
+            a button with nothing left to do. */}
+        {step < 3 && (
+          <button
+            type="button"
+            className="h10-spw-next"
+            disabled={step === 1 && !canAdvance}
+            onClick={() => setStep((s) => (s < 3 ? ((s + 1) as StepN) : s))}
+          >
+            Next
+          </button>
+        )}
+        {step === 3 && result && (
+          <button type="button" className="h10-spw-next" onClick={() => router.push('/marketing/ads/campaigns')}>
+            Go to Ad Manager
+          </button>
+        )}
       </footer>
     </div>
   )

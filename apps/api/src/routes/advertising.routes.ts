@@ -1398,6 +1398,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       bidPolicy?: { mode: 'copy' | 'scale' | 'fixed'; value?: number }
       budgetPolicy?: { mode: 'copy' | 'scale' | 'fixed'; value?: number }
       edits?: Record<string, unknown>
+      launchMode?: 'live' | 'floor'
       dryRun?: boolean
     }
     if (!b?.source) { reply.code(400); return { error: 'source is required' } }
@@ -1423,6 +1424,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         budgetPolicy: b.budgetPolicy,
       },
       edits: b.edits as never,
+      // Defaults to the floor. Spending real money has to be the thing you
+      // opt IN to, not the thing you forget to opt out of.
+      launchMode: b.launchMode === 'live' ? 'live' as const : 'floor' as const,
       dryRun: b.dryRun !== false,
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
     }
@@ -1541,6 +1545,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       orderBy: { createdAt: 'desc' }, take: 100,
     })
     return { items: rows }
+  })
+
+  /** AX3.5 — take a run that landed at the bid floor up to its planned bids. */
+  fastify.post('/advertising/blueprint-applications/:id/raise-bids', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { raiseApplicationBids } = await import('../services/advertising/ads-blueprint-apply.service.js')
+    try {
+      return await raiseApplicationBids(id, actorFromHeaders(request.headers as Record<string, unknown>))
+    } catch (e) {
+      const msg = (e as Error).message
+      reply.code(/not found/i.test(msg) ? 404 : 400)
+      return { error: msg }
+    }
   })
 
   fastify.post('/advertising/blueprint-applications/:id/rollback', async (request, reply) => {

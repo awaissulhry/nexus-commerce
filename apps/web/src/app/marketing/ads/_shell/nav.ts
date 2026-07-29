@@ -8,7 +8,6 @@
  */
 import {
   LayoutGrid, Gauge, BadgeDollarSign, FileSpreadsheet, Atom, Sparkles, ListChecks, Lightbulb, HeartPulse, BarChart3, Table, Briefcase, Wand2, Users, PieChart, History, HelpCircle, Settings, ShoppingBag,
-  Copy,
   type LucideIcon } from 'lucide-react'
 
 export const ADS_BASE = '/marketing/ads'
@@ -51,8 +50,11 @@ export const ADS_NAV: NavItem[] = [
   { label: 'Analytics', route: 'analytics', Icon: BarChart3 },
   { label: 'Ad Manager', route: 'campaigns', Icon: Table },
   { label: 'Portfolios', route: 'portfolios', Icon: Briefcase },
-  // AX2.10 — capture a working structure and replicate it onto another product.
-  { label: 'Blueprints', route: 'blueprints', Icon: Copy },
+  // AX3.5 — "Blueprints" used to live here. Replication is a way of CREATING
+  // campaigns, so it moved to the Campaign Builder alongside the other five
+  // builder types, as "Replicate Structure". /marketing/ads/blueprints redirects
+  // there. Nothing was removed — the blueprint library is reachable from inside
+  // the builder, and saving one is an action at the end of a run.
   // AX-IE.8 — the bulksheet round trip: download current state, edit in Excel or
   // Numbers, upload, preview what it would do, apply, undo.
   { label: 'Bulk Operations', route: 'bulk', Icon: FileSpreadsheet },

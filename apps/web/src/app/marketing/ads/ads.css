@@ -2697,3 +2697,45 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-rep-row .cf button { font: inherit; font-size: 11.5px; font-weight: 600; color: #3a4452; background: #fff; border: 1px solid #e0d4a8; border-radius: 5px; padding: 2px 8px; cursor: pointer; }
 .h10-rep-row .cf button:hover { background: #fffdf5; }
 .h10-rep-row .cf button.on { background: #1f6fde; border-color: #1f6fde; color: #fff; }
+
+/* ── AX3.5 — step 3: preflight and launch ───────────────────────────────── */
+.h10-rep-launch { display: flex; flex-direction: column; gap: 14px; }
+.h10-rep-tot { display: flex; align-items: center; gap: 30px; flex-wrap: wrap; }
+.h10-rep-tot .tot { display: flex; flex-direction: column; gap: 2px; }
+.h10-rep-tot .tot .n { font-size: 24px; font-weight: 800; color: #1c2530; letter-spacing: -0.02em; line-height: 1.1; }
+.h10-rep-tot .tot .l { font-size: 12px; color: #7c8794; }
+.h10-rep-tot .spend { margin-left: auto; display: flex; flex-direction: column; gap: 2px; text-align: right; padding-left: 26px; border-left: 1px solid #eef0f4; }
+.h10-rep-tot .spend .n { font-size: 24px; font-weight: 800; color: #1f6fde; letter-spacing: -0.02em; line-height: 1.1; }
+.h10-rep-tot .spend .l { font-size: 12px; color: #7c8794; }
+
+.h10-rep-note { padding: 12px 15px; font-size: 13px; line-height: 1.55; color: #3a4452; background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; }
+.h10-rep-note b { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: #1c2530; }
+.h10-rep-note p { margin: 5px 0 0; }
+.h10-rep-note ul { margin: 6px 0 0; padding-left: 20px; }
+.h10-rep-note li { margin: 2px 0; }
+.h10-rep-note .hint { font-size: 12px; color: #7c8794; }
+.h10-rep-note.bad { background: #fdf0ef; border-color: #f0c4c0; color: #7a2018; }
+.h10-rep-note.bad b { color: #c11208; }
+.h10-rep-note.warn { background: #fdf6e3; border-color: #f0e0b0; color: #6b5514; }
+.h10-rep-note.warn b { color: #8a6d1f; }
+.h10-rep-note.ok { background: #e6f6ed; border-color: #b9e2cb; color: #14603a; }
+.h10-rep-note.ok b { color: #1a7f4b; }
+
+.h10-rep-mode .hd { display: block; font-size: 14px; font-weight: 700; color: #1c2530; margin-bottom: 12px; }
+.h10-rep-mode .opts { display: flex; flex-direction: column; gap: 10px; }
+.h10-rep-mode .opt { display: flex; align-items: flex-start; gap: 11px; padding: 13px 15px; border: 1px solid #e6e9ee; border-radius: 10px; cursor: pointer; }
+.h10-rep-mode .opt:hover { border-color: #c8d1db; background: #fbfcfd; }
+.h10-rep-mode .opt.on { border-color: #1f6fde; background: #f4f9ff; box-shadow: 0 0 0 2px rgba(31,111,222,.09); }
+.h10-rep-mode .opt input { width: 16px; height: 16px; margin-top: 2px; accent-color: #1f6fde; cursor: pointer; flex: none; }
+.h10-rep-mode .opt .t { display: flex; flex-direction: column; gap: 3px; }
+.h10-rep-mode .opt .t b { font-size: 13.5px; font-weight: 700; color: #1c2530; }
+.h10-rep-mode .opt .t .h { font-size: 12.5px; line-height: 1.55; color: #5b6573; }
+
+.h10-rep-launchbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.h10-rep-launchbar .grow { flex: 1; }
+.h10-rep-launchbar .ok { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #1a7f4b; }
+.h10-rep-launchbar .bad { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #c11208; }
+.h10-rep-launchbar .h10-spw-next { display: inline-flex; align-items: center; gap: 7px; }
+.h10-rep-bulkbtn.danger { color: #c11208; border-color: #f0c4c0; }
+.h10-rep-bulkbtn.danger:hover { background: #fdf0ef; border-color: #e0a49e; }
+.h10-rep-bulkbtn { display: inline-flex; align-items: center; gap: 6px; }
