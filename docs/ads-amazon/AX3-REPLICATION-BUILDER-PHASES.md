@@ -266,6 +266,23 @@ Schema (additive, applied by Railway prestart, **verified on prod**): `blueprint
 `sourceSelector` / `options` / `edits` / `launchMode`, so a run replicated from a live source is
 still a recorded, rollback-able unit and "why is this campaign called that" stays answerable.
 
+**Verified end to end on prod.** AIREON `Auto` + `Category-Broad` → VENTRA: the tree renders both
+campaigns renamed, expands to the ad group and its 84 targets, and every conflicting keyword shows
+the campaign it would fight (`competes with IT-AIREON-SP-Category-Broad +17`) with Drop it / Keep it
+inline. Dropping `giacca moto donna` struck it through, moved the ad group to 83 targets, raised
+"Undo all 1 change", and the footer verdict came back from the server at **31 targets · 27 conflicts**
+(from 32 · 28). That round trip *is* the contract: the client sent an edit, the server rebuilt the
+plan from the live account, re-ran the gate, and returned the new verdict.
+
+Two defects prod caught and fixed during that pass:
+- `e91fdfca7` — the step-1 sub-nav highlighted a section without scrolling to it. `scrollIntoView`
+  resolves against the nearest scrollable box, which in this shell is `.h10-main`, not the document.
+  **`SpSuperWizard.tsx:154` has the identical one-liner and is very likely affected the same way** —
+  left alone as out of scope, but worth a look.
+- `72ba037d6` — "Drop it" removed only the clicked row. A structure repeats its category terms across
+  match-type tiers, and the gate reports one conflict per expression, so the conflict stayed
+  unresolved: a button that visibly did nothing. It now drops the keyword everywhere it appears.
+
 ### AX3.5 — Step 3: preflight, launch, result, rollback
 Totals, blockers, warnings, conflict ledger, €/day vs cap, market writability, not-copied recap,
 launch, result panel, rollback, Save as blueprint, Export as bulksheet.
