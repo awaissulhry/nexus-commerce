@@ -223,6 +223,10 @@ export async function listBlueprints() {
     return {
       id: r.id, name: r.name, description: r.description, marketplace: r.marketplace,
       productToken: r.productToken, createdAt: r.createdAt,
+      // AX3.5 — the campaigns this was captured from, so the replication builder
+      // can pre-select them in the source tree. Without this a saved blueprint is
+      // a name with no way back to what it describes.
+      sourceCampaignIds: r.sourceCampaignIds,
       stats: doc?.stats ?? null,
       sharedTargetCount: doc?.sharedTargets?.length ?? 0,
       roles: (doc?.campaigns ?? []).map((c) => c.role),

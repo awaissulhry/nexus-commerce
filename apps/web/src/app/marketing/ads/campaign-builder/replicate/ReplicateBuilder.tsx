@@ -340,7 +340,10 @@ export function ReplicateBuilder() {
                     <button key={m} type="button" className={sourceMarket === m ? 'on' : ''} onClick={() => setSourceMarket(m)} aria-pressed={sourceMarket === m}>{m}</button>
                   ))}
                 </div>
-                <SourcePicker market={sourceMarket} selected={selectedAdGroups} setSelected={setSelectedAdGroups} onChange={onSource} />
+                <SourcePicker
+                  market={sourceMarket} selected={selectedAdGroups} setSelected={setSelectedAdGroups} onChange={onSource}
+                  onPickBlueprint={(tok) => { guessAppliedFor.current = 'saved'; setSourceToken(tok) }}
+                />
                 <SourceSummary s={source} orphaned={preview?.source.orphanedInSource ?? 0} />
               </section>
 

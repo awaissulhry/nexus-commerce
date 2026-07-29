@@ -60,13 +60,23 @@ function TriBox({ checked, indeterminate, onChange, label }: {
   return <input ref={ref} type="checkbox" checked={checked} onChange={onChange} aria-label={label} />
 }
 
-export function SourcePicker({ market, selected, setSelected, onChange }: {
+/** A structure someone saved earlier, so it can be replicated again. */
+interface SavedBlueprint {
+  id: string; name: string; marketplace: string; productToken: string
+  sourceCampaignIds: string[]
+  stats: { campaigns: number; adGroups: number; positives: number; negatives: number } | null
+}
+
+export function SourcePicker({ market, selected, setSelected, onChange, onPickBlueprint }: {
   market: string
   selected: Set<string>
   setSelected: (next: Set<string>) => void
   onChange: (s: SourceSelection) => void
+  /** Told which product token the saved structure was captured from. */
+  onPickBlueprint?: (productToken: string) => void
 }) {
   const [tree, setTree] = useState<SrcPortfolio[]>([])
+  const [saved, setSaved] = useState<SavedBlueprint[]>([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
   const [q, setQ] = useState('')
@@ -91,6 +101,18 @@ export function SourcePicker({ market, selected, setSelected, onChange }: {
         setLoading(false)
       })
       .catch((e) => { if (alive) { setErr((e as Error).message); setLoading(false) } })
+    return () => { alive = false }
+  }, [market])
+
+  // Saved structures. These used to have their own page in the nav rail; the
+  // library lives here now, so a blueprint saved a month ago is still one click
+  // from being replicated rather than stranded.
+  useEffect(() => {
+    let alive = true
+    fetch(`${getBackendUrl()}/api/advertising/blueprints`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((j) => { if (alive) setSaved(((j?.items ?? []) as SavedBlueprint[]).filter((b) => b.marketplace === market)) })
+      .catch(() => {})
     return () => { alive = false }
   }, [market])
 
@@ -169,6 +191,32 @@ export function SourcePicker({ market, selected, setSelected, onChange }: {
           <button type="button" className="h10-rep-clear" onClick={() => setSelected(new Set())}>Clear selection</button>
         )}
       </div>
+
+      {saved.length > 0 && (
+        <div className="h10-rep-saved">
+          <span className="lbl">Saved structures</span>
+          {saved.map((b) => {
+            const ids = new Set(b.sourceCampaignIds)
+            const ags = allCampaigns.filter((c) => ids.has(c.id)).flatMap((c) => c.adGroups.map((g) => g.id))
+            const gone = b.sourceCampaignIds.length > 0 && ags.length === 0
+            return (
+              <button
+                key={b.id}
+                type="button"
+                className="chip"
+                disabled={gone}
+                title={gone ? 'The campaigns this was captured from are no longer active' : `Select the ${b.sourceCampaignIds.length} campaigns this was captured from`}
+                onClick={() => { setSelected(new Set(ags)); onPickBlueprint?.(b.productToken) }}
+              >
+                <b>{b.name}</b>
+                <span className="m">
+                  {gone ? 'source campaigns no longer active' : `${b.stats?.campaigns ?? b.sourceCampaignIds.length} campaigns · from ${b.productToken}`}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       <div className="h10-rep-tree" role="tree">
         {view.length === 0 && <div className="h10-rep-empty">Nothing matches “{q}”.</div>}

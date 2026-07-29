@@ -2739,3 +2739,12 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-rep-bulkbtn.danger { color: #c11208; border-color: #f0c4c0; }
 .h10-rep-bulkbtn.danger:hover { background: #fdf0ef; border-color: #e0a49e; }
 .h10-rep-bulkbtn { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Saved structures — the blueprint library, now inside the builder. */
+.h10-rep-saved { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 11px 14px; border-bottom: 1px solid #eef0f4; background: #fbfcfd; }
+.h10-rep-saved .lbl { font-size: 12px; font-weight: 600; color: #7c8794; margin-right: 2px; }
+.h10-rep-saved .chip { display: inline-flex; flex-direction: column; gap: 1px; text-align: left; font: inherit; background: #fff; border: 1px solid #d8dde4; border-radius: 8px; padding: 6px 11px; cursor: pointer; }
+.h10-rep-saved .chip:hover:not(:disabled) { border-color: #1f6fde; background: #f4f9ff; }
+.h10-rep-saved .chip:disabled { opacity: .55; cursor: not-allowed; }
+.h10-rep-saved .chip b { font-size: 12.5px; font-weight: 600; color: #1c2530; }
+.h10-rep-saved .chip .m { font-size: 11px; color: #8a94a1; }
