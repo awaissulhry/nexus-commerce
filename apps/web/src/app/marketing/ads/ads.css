@@ -2517,3 +2517,58 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
    styled it. Additive; visible only where a danger action exists. */
 .h10-menu button.danger { color: var(--h10-danger, #e5484d); }
 .h10-menu button.danger:hover { background: #fdecec; color: #c11208; }
+
+/* ══ AX3.2 — Replicate Structure builder ═════════════════════════════════
+   Rides the .h10-spw wizard chrome (stepper, sub-nav, footer) so replication
+   looks and behaves like every other campaign builder. Only the source tree
+   and its summary are new. */
+.h10-rep-market { display: flex; align-items: center; gap: 6px; margin: 0 0 12px; }
+.h10-rep-market .lbl { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: #5b6573; margin-right: 4px; }
+.h10-rep-market button { font: inherit; font-size: 12.5px; font-weight: 600; color: #3a4452; background: #fff; border: 1px solid #d8dde4; border-radius: 7px; padding: 5px 12px; cursor: pointer; }
+.h10-rep-market button:hover { border-color: #b9c2cd; }
+.h10-rep-market button.on { background: #eef5ff; border-color: #1f6fde; color: #1f6fde; }
+
+.h10-rep-src { background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; overflow: hidden; }
+.h10-rep-src.loading, .h10-rep-src.err { display: flex; align-items: center; gap: 8px; padding: 22px 24px; font-size: 13.5px; color: #5b6573; }
+.h10-rep-src.err { color: #c11208; }
+.h10-rep-src-top { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid #eef0f4; background: #fbfcfd; }
+.h10-rep-search { position: relative; flex: 1; display: flex; align-items: center; }
+.h10-rep-search svg { position: absolute; left: 10px; color: #9aa4b1; pointer-events: none; }
+.h10-rep-search input { width: 100%; font: inherit; font-size: 13px; color: #1c2530; background: #fff; border: 1px solid #d8dde4; border-radius: 8px; padding: 7px 11px 7px 31px; }
+.h10-rep-search input:focus { outline: none; border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
+.h10-rep-clear { font: inherit; font-size: 12.5px; font-weight: 600; color: #1f6fde; background: none; border: none; cursor: pointer; white-space: nowrap; }
+.h10-rep-clear:hover { text-decoration: underline; }
+
+.h10-rep-tree { max-height: 520px; overflow: auto; }
+.h10-rep-empty { padding: 26px 24px; font-size: 13.5px; color: #6b7a8d; text-align: center; }
+.h10-rep-pf + .h10-rep-pf { border-top: 1px solid #f0f2f5; }
+
+.h10-rep-row { display: flex; align-items: center; gap: 9px; padding: 8px 14px; font-size: 13px; color: #1c2530; min-width: 0; }
+.h10-rep-row:hover { background: #f7f9fb; }
+.h10-rep-row.on { background: #f4f9ff; }
+.h10-rep-row .exp { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; background: none; border: none; color: #7c8794; border-radius: 5px; cursor: pointer; flex: none; }
+.h10-rep-row .exp:hover { background: #e6eaf0; color: #3a4452; }
+.h10-rep-row .exp-sp { width: 20px; flex: none; }
+.h10-rep-row input[type="checkbox"] { width: 15px; height: 15px; accent-color: #1f6fde; cursor: pointer; flex: none; }
+.h10-rep-row .nm { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.h10-rep-row .meta { margin-left: auto; padding-left: 14px; font-size: 12px; color: #7c8794; white-space: nowrap; flex: none; }
+.h10-rep-row .meta .part { color: #1f6fde; }
+.h10-rep-row .tag { font-size: 10.5px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: #6b7a8d; background: #eef0f4; border-radius: 4px; padding: 1px 5px; }
+.h10-rep-row .tag.auto { color: #1f6fde; background: #eaf2fe; }
+
+.h10-rep-row.pf { background: #f7f9fb; font-weight: 600; border-bottom: 1px solid #f0f2f5; }
+.h10-rep-row.pf:hover { background: #f2f5f9; }
+.h10-rep-row.pf.on { background: #eef5ff; }
+.h10-rep-row.cmp { padding-left: 30px; }
+.h10-rep-row.ag { padding-left: 62px; color: #4a5563; }
+.h10-rep-row.ag .nm svg { color: #9aa4b1; }
+.h10-rep-row.ag.empty { color: #9aa4b1; font-style: italic; }
+
+.h10-rep-sum { margin-top: 12px; padding: 11px 14px; font-size: 13px; color: #1c2530; background: #f4f9ff; border: 1px solid #d6e6fb; border-radius: 9px; }
+.h10-rep-sum.none { background: #fbfcfd; border-color: #e6e9ee; color: #7c8794; }
+.h10-rep-sum b { font-weight: 700; }
+.h10-rep-sum .bud { margin-left: 12px; padding-left: 12px; border-left: 1px solid #c8dcf6; color: #3a4452; }
+.h10-rep-sum .part { display: block; margin-top: 4px; font-size: 12px; color: #8a6d1f; }
+
+.h10-rep-todo { color: #7c8794; font-size: 13px; }
+.h10-rep-hint { font-size: 12.5px; color: #7c8794; }

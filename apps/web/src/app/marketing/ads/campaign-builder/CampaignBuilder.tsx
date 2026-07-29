@@ -10,7 +10,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ChevronDown } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { IconAtom, IconQuick, IconCubes, IconRocket, IconCube } from '../_shell/builder-icons'
+import { IconAtom, IconQuick, IconCubes, IconRocket, IconCube, IconReplicate } from '../_shell/builder-icons'
 
 const FLAG: Record<string, string> = { IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', GB: '🇬🇧', UK: '🇬🇧', NL: '🇳🇱', SE: '🇸🇪', PL: '🇵🇱', BE: '🇧🇪', IE: '🇮🇪', TR: '🇹🇷', US: '🇺🇸' }
 const MARKET_NAME: Record<string, string> = { IT: 'Italy', DE: 'Germany', FR: 'France', ES: 'Spain', GB: 'United Kingdom', UK: 'United Kingdom', NL: 'Netherlands', SE: 'Sweden', PL: 'Poland', BE: 'Belgium', IE: 'Ireland', TR: 'Türkiye', US: 'United States' }
@@ -23,6 +23,9 @@ const TYPES: TypeCard[] = [
   { key: 'sp-super-wizard', title: 'SP Super Wizard', Icon: IconRocket, bestFor: 'Sellers with customized needs', desc: 'Quickly create multiple campaigns, customize naming rules, ie match types, keyword types ( Brand, Category, Competitor),structure templates.' },
 ]
 const SINGLE: TypeCard = { key: 'single', title: 'Single Campaign', Icon: IconCube, bestFor: 'Experienced Sellers', desc: 'Set up a single Sponsored Product, Sponsored Brand or Sponsored Display campaign that can be added to an existing Rule.' }
+// AX3.2 — replication is a way of creating campaigns, so it belongs with the
+// other ways of creating campaigns rather than off in the nav rail.
+const REPLICATE: TypeCard = { key: 'replicate', title: 'Replicate Structure', Icon: IconReplicate, bestFor: 'Sellers launching a product like one they already run', desc: 'Copy a portfolio, a set of campaigns or single ad groups onto another product — keywords, negatives, bids, budgets and placement modifiers included. Rename in bulk, edit anything before it is created, and resolve any keyword that would make your two products bid against each other.' }
 
 /** The small Amazon "smile" mark shown in the profile chip. */
 function AmazonMark() {
@@ -95,6 +98,7 @@ export function CampaignBuilder() {
     else if (key === 'single') router.push('/marketing/ads/campaign-builder/single')
     else if (key === 'quick') router.push('/marketing/ads/campaign-builder/quick')
     else if (key === 'guided') router.push('/marketing/ads/campaign-builder/guided')
+    else if (key === 'replicate') router.push('/marketing/ads/campaign-builder/replicate')
   }
   return (
     <div className="h10-cb">
@@ -114,6 +118,7 @@ export function CampaignBuilder() {
           <div className="h10-cb-cards">
             {TYPES.map((t) => <TypeCardView key={t.key} t={t} onPick={pick} />)}
             <TypeCardView t={SINGLE} onPick={pick} />
+            <TypeCardView t={REPLICATE} onPick={pick} />
           </div>
         </section>
       </div>

@@ -103,6 +103,21 @@ export function IconCube({ size = 36, style }: P) {
   )
 }
 
+/* Replicate Structure — one cube copied into a second, ghosted outline behind it. */
+export function IconReplicate({ size = 36, style }: P) {
+  return (
+    <svg viewBox="0 0 48 48" fill="none" style={box(size, style)} aria-hidden>
+      {/* the copy — dashed outline, offset up-right */}
+      <g opacity="0.55">
+        <path d="M31 6.5 41.5 12.5 31 18.5 20.5 12.5 31 6.5Z" fill="none" stroke="#a9cef4" strokeWidth="1.6" strokeDasharray="3 2.4" strokeLinejoin="round" />
+        <path d="M20.5 12.5v9L31 27.5v-9M41.5 12.5v9L31 27.5" fill="none" stroke="#a9cef4" strokeWidth="1.6" strokeDasharray="3 2.4" strokeLinejoin="round" />
+      </g>
+      {/* the source */}
+      <Cube cx={18} cy={22} r={11.5} h={11.5} top="#3f8ae8" left="#1b50a4" right="#2c6fd8" />
+    </svg>
+  )
+}
+
 /* ── AI-Goal "Select AI Target" icons (simple blue line glyphs in the same circle) ── */
 
 /* Impression & Click — eye. */
