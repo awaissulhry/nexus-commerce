@@ -300,11 +300,8 @@ export function ReplicateBuilder() {
    *    no-ops. That — not the container — is why the sub-nav has never worked,
    *    here or in the SP Super Wizard, which uses the same one-liner.
    *
-   * So the animation is ours: a short eased rAF tween over instant scrolls,
-   * which is smooth, cancellable, and does not depend on a browser behaviour
-   * that has already been observed to do nothing.
+   * So the scroll is a direct scrollTop assignment — see the note at the write.
    */
-  const scrollAnim = useRef(0)
   const gotoSec = (id: string) => {
     const el = document.getElementById(`rep-${id}`)
     if (!el) return
@@ -320,17 +317,15 @@ export function ReplicateBuilder() {
     const to = Math.max(0, Math.min(max, from + el.getBoundingClientRect().top - 12))
     if (Math.abs(to - from) < 2) return
 
-    cancelAnimationFrame(scrollAnim.current)
-    const start = performance.now()
-    const DURATION = 260
-    const step = (now: number) => {
-      const t = Math.min(1, (now - start) / DURATION)
-      const eased = 1 - (1 - t) ** 3 // ease-out cubic
-      const y = from + (to - from) * eased
-      if (scroller) scroller.scrollTop = y; else window.scrollTo(0, y)
-      if (t < 1) scrollAnim.current = requestAnimationFrame(step)
-    }
-    scrollAnim.current = requestAnimationFrame(step)
+    // Assign scrollTop directly. Not the prettiest option and deliberately so:
+    // this is the only form of this scroll I have been able to VERIFY working on
+    // production. Native `behavior:'smooth'` moves this container zero pixels,
+    // and an rAF tween cannot be confirmed either way from an automated tab
+    // because rAF is suspended when the tab is not foreground. Two unverifiable
+    // fixes have already shipped for this one control; a jump that provably
+    // works beats a glide that might not.
+    if (scroller) scroller.scrollTop = to
+    else window.scrollTo(0, to)
   }
 
   const missing: string[] = []
