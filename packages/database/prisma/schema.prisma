@@ -3166,6 +3166,108 @@ model AmazonAdsPlacementReport {
   @@index([profileId, adProduct, date])
 }
 
+// SP-API Data Kiosk async query job. Data Kiosk is GraphQL: create a query,
+// poll it, then fetch a document. Verified live 2026-07-29.
+//
+// Why a persistent job row rather than the inline poll-then-ingest that Brand
+// Metrics uses: an `economics` query over 6 days / ~280 SKUs took **more than
+// 11 minutes** to reach DONE (salesAndTraffic took 24s). Inline polling would
+// hold a request open for minutes and lose everything on restart.
+//
+// This is safe precisely because Data Kiosk mints its 300s signed URL at the
+// DOCUMENT step, not the status step — so status can be polled cheaply across
+// cron ticks, and only the final download must happen promptly. (Contrast
+// AmazonAdsExportJob, whose URL is minted on completion and whose split cron
+// stages produced 670 `s3_download_400` failures.)
+model DataKioskQueryJob {
+  id          String @id @default(cuid())
+  // 'economics' | 'salesAndTraffic'
+  queryType   String
+  marketplaceId String
+  startDate   DateTime @db.Date
+  endDate     DateTime @db.Date
+
+  externalQueryId String
+  // PENDING | IN_PROGRESS | DONE | FATAL
+  status          String  @default("PENDING")
+  dataDocumentId  String?
+  errorDocumentId String?
+
+  // Exact GraphQL sent, for replay/debug.
+  query        String
+  rowsIngested Int     @default(0)
+  errorMessage String?
+  attempts     Int     @default(0)
+
+  lastPolledAt DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([status, lastPolledAt])
+  @@index([queryType, marketplaceId, startDate])
+  @@index([externalQueryId])
+}
+
+// Per-SKU-day economics from Data Kiosk `analytics_economics_2024_03_15`.
+// This is Amazon's own profitability arithmetic — net proceeds after fees and
+// ad spend — which the Reports API does not expose in this form.
+//
+// Grain verified against 1,127 real rows: (date, marketplaceId, childAsin,
+// msku) is unique; (date, childAsin) COLLIDES 896/1127 because one ASIN can
+// carry several MSKUs. msku is therefore part of the key, not decoration.
+model AmazonEconomicsDaily {
+  id String @id @default(cuid())
+
+  // Amazon's raw marketplaceId plus the 2-letter code the rest of Nexus keys on.
+  marketplaceId String
+  marketplace   String
+  date          DateTime @db.Date
+
+  parentAsin String
+  childAsin  String
+  msku       String
+
+  currencyCode String @default("EUR")
+
+  unitsOrdered            Int      @default(0)
+  netProductSales         Decimal? @db.Decimal(14, 2)
+  averageSellingPrice     Decimal? @db.Decimal(14, 2)
+  // netProceeds.perUnit is NULL in ~9% of rows (105/1127 measured) — nullable
+  // on purpose. netProceeds.total was never null.
+  netProceedsTotal        Decimal? @db.Decimal(14, 2)
+  netProceedsPerUnit      Decimal? @db.Decimal(14, 2)
+
+  // Amazon returns `fees` and `ads` as arrays with NO identifying field — a
+  // 3-fee row is three bare amounts with no way to tell referral from FBA.
+  // Confirmed against live data, not just the schema. So only the TOTAL is
+  // trustworthy; the labelled breakdown lives on `economicsPreview(feeTypes:)`
+  // and is a separate integration. Counts are kept so a future mapping can be
+  // reconciled against what was stored.
+  feesTotal  Decimal? @db.Decimal(14, 2)
+  feesCount  Int      @default(0)
+  adsTotal   Decimal? @db.Decimal(14, 2)
+  adsCount   Int      @default(0)
+
+  // Operator-entered in Seller Central. Null in 1120/1127 and 1127/1127
+  // respectively at time of writing — absent, NOT zero.
+  costOfGoodsSold   Decimal? @db.Decimal(14, 2)
+  miscellaneousCost Decimal? @db.Decimal(14, 2)
+
+  // Full row verbatim. The unlabelled fee/ad arrays are retained so nothing is
+  // discarded before we can attribute them.
+  raw Json
+
+  reportedAt DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([marketplaceId, date, childAsin, msku])
+  @@index([marketplace, date])
+  @@index([childAsin, date])
+  @@index([msku, date])
+}
+
 // DEAD — never written, and its columns do not exist in Amazon's Brand
 // Metrics response. It was modelled on searchImpressionShare /
 // brandSearches / brandConversionShare / categoryRank; the live API

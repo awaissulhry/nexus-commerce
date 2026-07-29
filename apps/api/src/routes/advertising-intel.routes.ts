@@ -245,6 +245,59 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return sqpDebugState.last ?? { note: 'no SQP report ingested yet this process' }
   })
 
+  // ── Data Kiosk economics (Phase 2) ─────────────────────────────────
+  // Per-SKU-day net proceeds after fees and ad spend, from SP-API Data Kiosk.
+
+  fastify.get('/advertising/economics', async (request) => {
+    const q = (request.query ?? {}) as { marketplace?: string; asin?: string; msku?: string; limit?: string }
+    const take = Math.min(1000, Math.max(1, Number(q.limit) || 200))
+    const rows = await prisma.amazonEconomicsDaily.findMany({
+      where: {
+        ...(q.marketplace ? { marketplace: q.marketplace } : {}),
+        ...(q.asin ? { childAsin: q.asin } : {}),
+        ...(q.msku ? { msku: q.msku } : {}),
+      },
+      orderBy: [{ date: 'desc' }, { childAsin: 'asc' }],
+      take,
+    })
+    return { items: rows, count: rows.length }
+  })
+
+  // Job queue state — economics queries can run 10+ minutes, so surfacing the
+  // in-flight jobs is how an operator tells "slow" from "stuck".
+  fastify.get('/advertising/economics/jobs', async () => {
+    const jobs = await prisma.dataKioskQueryJob.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: {
+        id: true, queryType: true, marketplaceId: true, startDate: true, endDate: true,
+        externalQueryId: true, status: true, rowsIngested: true, attempts: true,
+        errorMessage: true, lastPolledAt: true, completedAt: true, createdAt: true,
+      },
+    })
+    return { items: jobs, count: jobs.length }
+  })
+
+  // Manual trigger: create the query only. Deliberately NOT awaiting
+  // completion — the poll cron picks it up, because these queries routinely
+  // outlive an HTTP request.
+  fastify.post('/advertising/economics/create', async (request, reply) => {
+    const b = (request.body ?? {}) as { startDate?: string; endDate?: string; marketplaceIds?: string[] }
+    const endDate = b.endDate ?? new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10)
+    const startDate = b.startDate ?? new Date(Date.now() - 9 * 86400000).toISOString().slice(0, 10)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      reply.status(400); return { error: 'startDate/endDate must be YYYY-MM-DD' }
+    }
+    const { runEconomicsCreateCycle } = await import('../services/amazon/data-kiosk.service.js')
+    const out = await runEconomicsCreateCycle({ startDate, endDate, marketplaceIds: b.marketplaceIds })
+    return { startDate, endDate, ...out, note: 'poll cron ingests on completion; economics queries can take 10+ minutes' }
+  })
+
+  fastify.post('/advertising/economics/poll', async () => {
+    const { runDataKioskPollCycle } = await import('../services/amazon/data-kiosk.service.js')
+    return runDataKioskPollCycle()
+  })
+
   // ── Brand Metrics (Phase 1) ────────────────────────────────────────
   // Brand funnel vs CATEGORY benchmarks. Weekly grain — Amazon ignores
   // aggregationLevel and always returns lookbackPeriod="1w".

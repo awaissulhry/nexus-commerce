@@ -189,6 +189,7 @@ import { startBulkAutomationTickCron } from "./jobs/bulk-automation-tick.job.js"
 import { startScheduledImportCron } from "./jobs/scheduled-import.job.js";
 import { startScheduledExportCron } from "./jobs/scheduled-export.job.js";
 import { startSalesReportIngestCron } from "./jobs/sales-report-ingest.job.js";
+import { startDataKioskCrons } from "./jobs/data-kiosk.job.js";
 import { startForecastCron } from "./jobs/forecast.job.js";
 import { startDashboardDigestCron } from "./jobs/dashboard-digest.job.js";
 import { startPricingCron } from "./jobs/pricing-refresh.job.js";
@@ -922,6 +923,13 @@ async function start() {
     // manual trigger when the cron is off.
     if (process.env.NEXUS_ENABLE_SALES_REPORT_CRON === '1') {
       startSalesReportIngestCron();
+    }
+
+    // Phase 2 — Data Kiosk economics (per-SKU-day net proceeds after fees and
+    // ad spend). Two crons: a daily create, and a 10-minute resumable poll,
+    // because an economics query can take well over 11 minutes to complete.
+    if (process.env.NEXUS_ENABLE_DATA_KIOSK_CRON === '1') {
+      startDataKioskCrons();
     }
 
     // F.4 — Nightly forecast regeneration. Gated separately from sales-
