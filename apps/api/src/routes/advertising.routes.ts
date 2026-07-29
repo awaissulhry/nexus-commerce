@@ -4275,6 +4275,123 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── GET /advertising/bulk/export/estimate ───────────────────────────
+  //
+  // What a scope WOULD produce, before anyone commits to a download.
+  //
+  // Until this existed the only way to learn what a scope selected was to
+  // download it and open it. That is fine when the answer is "everything"; it is
+  // not fine when someone is narrowing to one product and cannot tell whether
+  // they have 3,000 rows or nothing at all.
+  //
+  // It shares parseExportScope with the download, so the count shown beside the
+  // button and the file behind it are computed from the same filters. It also
+  // returns the two refusals up front — a scope that matches nothing, and one
+  // that only selects ad products with no sheet layout — so they land in the
+  // picker while it can still be changed, instead of as a failed download.
+  //
+  // Counts rows WITHOUT building a workbook: five grouped counts, no ExcelJS, no
+  // performance join. It has to be cheap enough to re-run on every keystroke.
+  fastify.get('/advertising/bulk/export/estimate', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { parseExportScope } = await import('../services/advertising/bulksheet/export-scope.js')
+    const parsed = await parseExportScope(prisma, q)
+    if ('status' in parsed) { reply.status(parsed.status); return parsed.body }
+    const { where, labels, entityWanted, scoped } = parsed.scope
+
+    const campaigns = await prisma.campaign.findMany({
+      where,
+      select: { id: true, adProduct: true, _count: { select: { adGroups: true } } },
+    })
+    if (campaigns.length === 0) {
+      return {
+        scoped, scope: labels, campaigns: 0, rows: 0, byEntity: {}, withheld: [],
+        blocked: scoped ? 'scope_matched_nothing' : null,
+        message: scoped
+          ? 'No campaign matches this scope, so there is nothing to export.'
+          : 'There are no campaigns to export.',
+      }
+    }
+
+    const campaignIds = campaigns.map((c) => c.id)
+    // Sponsored Brands and Sponsored Display have no confirmed sheet layout, so
+    // their rows are withheld from the file. Counting them separately is what
+    // lets the picker say "these 15 campaigns exist but cannot be written" rather
+    // than silently reporting a smaller number than the operator expects.
+    const exportable = new Set(campaigns.filter((c) => (c.adProduct ?? 'SPONSORED_PRODUCTS') === 'SPONSORED_PRODUCTS').map((c) => c.id))
+    const withheldCampaigns = campaigns.filter((c) => !exportable.has(c.id))
+
+    const [adGroups, productAds, targets] = await Promise.all([
+      prisma.adGroup.findMany({ where: { campaignId: { in: campaignIds } }, select: { id: true, campaignId: true } }),
+      prisma.adProductAd.groupBy({ by: ['adGroupId'], where: { adGroup: { campaignId: { in: campaignIds } } }, _count: { _all: true } }),
+      prisma.adTarget.groupBy({
+        by: ['adGroupId', 'kind', 'isNegative', 'negativeLevel'],
+        where: { adGroup: { campaignId: { in: campaignIds } } },
+        _count: { _all: true },
+      }),
+    ])
+    const agCampaign = new Map(adGroups.map((g) => [g.id, g.campaignId]))
+    const inScope = (adGroupId: string): boolean => {
+      const cid = agCampaign.get(adGroupId)
+      return cid != null && exportable.has(cid)
+    }
+
+    const byEntity: Record<string, number> = {}
+    const add = (entity: string, n: number) => {
+      if (n <= 0) return
+      if (entityWanted && !entityWanted.has(entity)) return
+      byEntity[entity] = (byEntity[entity] ?? 0) + n
+    }
+
+    add('Campaign', exportable.size)
+    add('Ad group', adGroups.filter((g) => exportable.has(g.campaignId)).length)
+    for (const p of productAds) if (inScope(p.adGroupId)) add('Product ad', p._count._all)
+    for (const t of targets) {
+      if (!inScope(t.adGroupId)) continue
+      const isKw = t.kind === 'KEYWORD'
+      const entity = t.isNegative
+        ? (isKw ? (t.negativeLevel === 'CAMPAIGN' ? 'Campaign negative keyword' : 'Negative keyword') : 'Negative product targeting')
+        : (isKw ? 'Keyword' : 'Product targeting')
+      add(entity, t._count._all)
+    }
+    // Placement modifiers live inside campaign.dynamicBidding, so they are
+    // counted from the blob rather than a table.
+    if (!entityWanted || entityWanted.has('Bidding adjustment')) {
+      const dyn = await prisma.campaign.findMany({
+        where: { id: { in: [...exportable] } }, select: { dynamicBidding: true },
+      })
+      let n = 0
+      for (const c of dyn) {
+        const pb = (c.dynamicBidding as { placementBidding?: unknown[] } | null)?.placementBidding
+        if (Array.isArray(pb)) n += pb.filter((x) => (x as { placement?: string })?.placement).length
+      }
+      add('Bidding adjustment', n)
+    }
+
+    const rows = Object.values(byEntity).reduce((a, b) => a + b, 0)
+    const withheld = [...withheldCampaigns.reduce((m, c) => {
+      const label = c.adProduct === 'SPONSORED_BRANDS' ? 'Sponsored Brands' : c.adProduct === 'SPONSORED_DISPLAY' ? 'Sponsored Display' : String(c.adProduct)
+      m.set(label, (m.get(label) ?? 0) + 1)
+      return m
+    }, new Map<string, number>()).entries()].map(([product, campaigns]) => ({ product, campaigns }))
+
+    return {
+      scoped, scope: labels,
+      campaigns: exportable.size,
+      rows,
+      byEntity,
+      withheld,
+      // The picker disables Download on a non-null `blocked` and shows `message`.
+      // Same two refusals the download itself would return, surfaced early.
+      blocked: rows === 0 ? (withheld.length ? 'no_sheet_for_scope' : 'scope_matched_nothing') : null,
+      message: rows === 0
+        ? (withheld.length
+          ? 'Those campaigns exist, but Sponsored Brands and Sponsored Display have no confirmed sheet layout yet, so none of their rows can go in a bulksheet.'
+          : 'Nothing in this scope can be written to a bulksheet.')
+        : null,
+    }
+  })
+
   fastify.get('/advertising/bulk/export', async (request, reply) => {
     const q = request.query as {
       limit?: string; days?: string
@@ -4292,125 +4409,17 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       ? Math.max(1, Math.floor(Number(q.limit)))
       : null
 
-    // ── AX-IE.10 — export scope ────────────────────────────────────────
-    //
-    // "Export exactly what I'm looking at". Without it the only way to get a
-    // workable file out of a large account is ?limit=, which truncates by
-    // alphabetical accident — it answers "fewer rows" when the question was
-    // "these rows".
-    //
-    // Every filter is validated against the values we actually store. An
-    // unrecognised one is a 400, never a silent empty export: "0 campaigns"
-    // because you typed `adProduct=SP` is precisely the plausible-wrong answer
-    // this series exists to remove.
-    const csv = (s?: string): string[] => (s ?? '').split(',').map((x) => x.trim()).filter(Boolean)
-    const scopeLabels: string[] = []
-    const where: Record<string, unknown> = {}
+    // AX-IE.10 — parsed by the SAME function the estimate endpoint uses, so the
+    // number shown next to the Download button and the file behind it cannot
+    // disagree. See export-scope.ts for why that is not a nicety.
+    const { parseExportScope } = await import('../services/advertising/bulksheet/export-scope.js')
+    const parsed = await parseExportScope(prisma, q)
+    // `in` rather than `!parsed.ok`: this file is large enough that control-flow
+    // narrowing on the boolean discriminant does not take, and a presence check
+    // never depends on it.
+    if ('status' in parsed) { reply.status(parsed.status); return parsed.body }
+    const { where, labels: scopeLabels, entityWanted, scoped } = parsed.scope
 
-    const campaignIds = csv(q.campaignIds)
-    if (campaignIds.length) {
-      where.externalCampaignId = { in: campaignIds }
-      scopeLabels.push(`${campaignIds.length} specific campaign${campaignIds.length === 1 ? '' : 's'}`)
-    }
-    if (q.portfolioId) { where.portfolioId = q.portfolioId; scopeLabels.push(`portfolio ${q.portfolioId}`) }
-
-    const AD_PRODUCTS = ['SPONSORED_PRODUCTS', 'SPONSORED_BRANDS', 'SPONSORED_DISPLAY']
-    if (q.adProduct) {
-      const v = q.adProduct.trim().toUpperCase().replace(/[\s-]+/g, '_')
-      if (!AD_PRODUCTS.includes(v)) {
-        reply.status(400)
-        return { error: 'bad_scope', field: 'adProduct', received: q.adProduct, allowed: AD_PRODUCTS }
-      }
-      where.adProduct = v
-      scopeLabels.push(`ad product ${v.toLowerCase().replace(/_/g, ' ')}`)
-    }
-    const STATES = ['ENABLED', 'PAUSED', 'ARCHIVED']
-    if (q.state) {
-      const v = q.state.trim().toUpperCase()
-      if (!STATES.includes(v)) {
-        reply.status(400)
-        return { error: 'bad_scope', field: 'state', received: q.state, allowed: STATES }
-      }
-      where.status = v
-      scopeLabels.push(`state ${v.toLowerCase()}`)
-    }
-    if (q.marketplace) {
-      const v = q.marketplace.trim().toUpperCase()
-      const known = await prisma.campaign.findFirst({ where: { marketplace: v }, select: { id: true } })
-      if (!known) {
-        const have = (await prisma.campaign.groupBy({ by: ['marketplace'] })).map((m) => m.marketplace).filter(Boolean)
-        reply.status(400)
-        return { error: 'bad_scope', field: 'marketplace', received: q.marketplace, allowed: have }
-      }
-      where.marketplace = v
-      scopeLabels.push(`marketplace ${v}`)
-    }
-
-    // ── Scope by the PRODUCT being advertised ──────────────────────────
-    //
-    // "Give me the bulksheet for everything advertising this jacket" — the one
-    // an operator actually asks for, and the only scope here that reaches
-    // through the ad structure into the catalogue.
-    //
-    // Selects CAMPAIGNS, like every other filter, not just the matching product
-    // ad rows. A campaign that advertises the ASIN comes out whole — its
-    // keywords, its other product ads, its negatives — because that is the thing
-    // you tune when you want to change how a product is advertised. Exporting
-    // one lone Product ad row would be a file you cannot do anything with.
-    //
-    // Measured before building: all 4,015 product ads carry an ASIN and NONE
-    // carries a SKU, so a SKU filter alone would have matched nothing. `sku` is
-    // therefore resolved through Product.productId, and `asin` matched directly.
-    const asins = csv(q.asin).map((a) => a.toUpperCase())
-    const skus = csv(q.sku)
-    if (asins.length || skus.length) {
-      const asinSet = new Set(asins)
-      if (skus.length) {
-        const products = await prisma.product.findMany({ where: { sku: { in: skus } }, select: { id: true, sku: true } })
-        const foundSkus = new Set(products.map((p) => p.sku))
-        const missing = skus.filter((s) => !foundSkus.has(s))
-        if (missing.length) {
-          reply.status(400)
-          return { error: 'bad_scope', field: 'sku', received: missing, hint: 'No product in the catalogue has that SKU. Check it, or scope by ASIN instead.' }
-        }
-        // Product ads link to the catalogue by productId; read their ASINs back
-        // so both inputs converge on one filter.
-        const ads = await prisma.adProductAd.findMany({
-          where: { productId: { in: products.map((p) => p.id) }, asin: { not: null } },
-          select: { asin: true },
-        })
-        for (const a of ads) if (a.asin) asinSet.add(a.asin)
-        scopeLabels.push(`sku ${skus.join(', ')}`)
-      }
-      if (asins.length) scopeLabels.push(`asin ${asins.join(', ')}`)
-
-      if (asinSet.size === 0) {
-        reply.status(404)
-        return {
-          error: 'scope_matched_nothing', scope: scopeLabels,
-          hint: 'Those SKUs exist in the catalogue but nothing advertising them is linked to a product ad, so there are no campaigns to export.',
-        }
-      }
-      where.adGroups = { some: { productAds: { some: { asin: { in: [...asinSet] } } } } }
-    }
-
-    // Entity filter. Validated the same way, against the grammar rather than a
-    // hand-written list, so it cannot drift from what the exporter can emit.
-    const wantedEntities = csv(q.entities)
-    if (wantedEntities.length) {
-      const canonical = wantedEntities.map((e) => parseVocabulary('entity', e))
-      const bad = wantedEntities.filter((_, i) => !canonical[i])
-      if (bad.length) {
-        reply.status(400)
-        return { error: 'bad_scope', field: 'entities', received: bad, allowed: VOCABULARIES.entity.values }
-      }
-      scopeLabels.push(`entities: ${canonical.join(', ')}`)
-    }
-    const entityWanted = wantedEntities.length
-      ? new Set(wantedEntities.map((e) => parseVocabulary('entity', e)!))
-      : null
-
-    const scoped = Object.keys(where).length > 0
     const totalCampaigns = await prisma.campaign.count({ where })
     if (totalCampaigns === 0 && scoped) {
       reply.status(404)
