@@ -4233,11 +4233,53 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // sheet all come from the shared schema (@nexus/shared/ads-bulksheet), which the
   // importer and the bulk UI validate against too. Nothing here enumerates
   // columns: adding one is editing that array.
+  // ── GET /advertising/bulk/export/scope-options ──────────────────────
+  //
+  // Everything the Export tab's scope picker needs, in one round trip, read from
+  // OUR tables. Deliberately not /advertising/portfolios: that one calls Amazon
+  // live, which is right for a settings screen and wrong for populating a
+  // dropdown someone opens on the way to clicking Download.
+  //
+  // Counts come back with each option because "Moss_Jacket (7 campaigns)" is the
+  // difference between choosing confidently and choosing and then checking.
+  fastify.get('/advertising/bulk/export/scope-options', async () => {
+    const [portfolios, byProduct, byMarketplace, totalCampaigns] = await Promise.all([
+      prisma.amazonAdsPortfolio.findMany({ select: { externalPortfolioId: true, name: true }, orderBy: { name: 'asc' } }),
+      prisma.campaign.groupBy({ by: ['adProduct'], _count: { _all: true } }),
+      prisma.campaign.groupBy({ by: ['marketplace'], _count: { _all: true } }),
+      prisma.campaign.count(),
+    ])
+    const pfCounts = await prisma.campaign.groupBy({ by: ['portfolioId'], _count: { _all: true } })
+    const byPf = new Map(pfCounts.map((p) => [p.portfolioId ?? '', p._count._all]))
+
+    return {
+      totalCampaigns,
+      // Portfolios with nothing in them are dropped: offering a scope that can
+      // only return "matched nothing" is a dead end, not a choice.
+      portfolios: portfolios
+        .map((p) => ({ id: p.externalPortfolioId, name: p.name, campaigns: byPf.get(p.externalPortfolioId) ?? 0 }))
+        .filter((p) => p.campaigns > 0),
+      marketplaces: byMarketplace
+        .filter((m) => m.marketplace)
+        .map((m) => ({ value: m.marketplace!, campaigns: m._count._all })),
+      // `exportable` is the honest bit. SB and SD campaigns exist and have rows,
+      // but no confirmed sheet layout, so scoping to them can only 409. Say that
+      // in the picker rather than letting someone find out by downloading.
+      adProducts: byProduct.filter((p) => p.adProduct).map((p) => ({
+        value: p.adProduct!,
+        campaigns: p._count._all,
+        exportable: p.adProduct === 'SPONSORED_PRODUCTS',
+        note: p.adProduct === 'SPONSORED_PRODUCTS' ? null : 'No confirmed sheet layout yet — these rows cannot be written to a bulksheet.',
+      })),
+      entities: VOCABULARIES.entity.values,
+    }
+  })
+
   fastify.get('/advertising/bulk/export', async (request, reply) => {
     const q = request.query as {
       limit?: string; days?: string
       campaignIds?: string; portfolioId?: string; adProduct?: string; marketplace?: string
-      state?: string; entities?: string
+      state?: string; entities?: string; asin?: string; sku?: string
     }
     // AX-IE.0 (E1) — this used to default to 200 campaigns and hard-cap at 500,
     // silently. The account sits at 196: it was four campaigns away from handing
@@ -4302,6 +4344,54 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       }
       where.marketplace = v
       scopeLabels.push(`marketplace ${v}`)
+    }
+
+    // ── Scope by the PRODUCT being advertised ──────────────────────────
+    //
+    // "Give me the bulksheet for everything advertising this jacket" — the one
+    // an operator actually asks for, and the only scope here that reaches
+    // through the ad structure into the catalogue.
+    //
+    // Selects CAMPAIGNS, like every other filter, not just the matching product
+    // ad rows. A campaign that advertises the ASIN comes out whole — its
+    // keywords, its other product ads, its negatives — because that is the thing
+    // you tune when you want to change how a product is advertised. Exporting
+    // one lone Product ad row would be a file you cannot do anything with.
+    //
+    // Measured before building: all 4,015 product ads carry an ASIN and NONE
+    // carries a SKU, so a SKU filter alone would have matched nothing. `sku` is
+    // therefore resolved through Product.productId, and `asin` matched directly.
+    const asins = csv(q.asin).map((a) => a.toUpperCase())
+    const skus = csv(q.sku)
+    if (asins.length || skus.length) {
+      const asinSet = new Set(asins)
+      if (skus.length) {
+        const products = await prisma.product.findMany({ where: { sku: { in: skus } }, select: { id: true, sku: true } })
+        const foundSkus = new Set(products.map((p) => p.sku))
+        const missing = skus.filter((s) => !foundSkus.has(s))
+        if (missing.length) {
+          reply.status(400)
+          return { error: 'bad_scope', field: 'sku', received: missing, hint: 'No product in the catalogue has that SKU. Check it, or scope by ASIN instead.' }
+        }
+        // Product ads link to the catalogue by productId; read their ASINs back
+        // so both inputs converge on one filter.
+        const ads = await prisma.adProductAd.findMany({
+          where: { productId: { in: products.map((p) => p.id) }, asin: { not: null } },
+          select: { asin: true },
+        })
+        for (const a of ads) if (a.asin) asinSet.add(a.asin)
+        scopeLabels.push(`sku ${skus.join(', ')}`)
+      }
+      if (asins.length) scopeLabels.push(`asin ${asins.join(', ')}`)
+
+      if (asinSet.size === 0) {
+        reply.status(404)
+        return {
+          error: 'scope_matched_nothing', scope: scopeLabels,
+          hint: 'Those SKUs exist in the catalogue but nothing advertising them is linked to a product ad, so there are no campaigns to export.',
+        }
+      }
+      where.adGroups = { some: { productAds: { some: { asin: { in: [...asinSet] } } } } }
     }
 
     // Entity filter. Validated the same way, against the grammar rather than a
