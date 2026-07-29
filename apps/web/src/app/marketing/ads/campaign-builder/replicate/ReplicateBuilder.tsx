@@ -18,7 +18,7 @@
  * enforce, never a client-side approximation of them.
  */
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Info, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -58,6 +58,7 @@ const EXIT_TO = '/marketing/ads/campaign-builder'
 
 export function ReplicateBuilder() {
   const router = useRouter()
+  const params = useSearchParams()
   const [step, setStep] = useState<StepN>(1)
   const [activeSec, setActiveSec] = useState('source')
 
@@ -100,6 +101,25 @@ export function ReplicateBuilder() {
 
   // Changing the source market invalidates a selection made against another tree.
   useEffect(() => { setSelectedAdGroups(new Set()) }, [sourceMarket])
+
+  /**
+   * AX3.6 — arrive with a source already chosen:
+   *   /campaign-builder/replicate?campaigns=<id>,<id>&market=IT
+   *
+   * Makes a replication linkable — from a future Ad Manager action, from a
+   * bookmark, or from a message to a colleague — without the builder needing to
+   * know who sent them. Runs once, on mount, so it never fights the operator's
+   * own clicks afterwards.
+   */
+  const deepLinked = useRef(false)
+  useEffect(() => {
+    if (deepLinked.current) return
+    const ids = (params?.get('campaigns') ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+    const mk = params?.get('market')
+    if (mk && MARKETS.includes(mk)) { setSourceMarket(mk); setMarket(mk) }
+    if (ids.length) setReselect({ campaignIds: ids, nonce: 1 })
+    if (ids.length || mk) deepLinked.current = true
+  }, [params])
 
   const onSource = useCallback((s: SourceSelection) => setSource(s), [])
 
