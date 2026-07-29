@@ -140,7 +140,18 @@ export interface PlanFromSourceRequest {
 }
 
 export async function planFromSource(req: PlanFromSourceRequest): Promise<{
+  /**
+   * The plan BEFORE the review-step edits. This is what the review tree renders,
+   * so a removed campaign still shows (struck through, restorable) and every
+   * node keeps the stable id an edit addresses it by.
+   */
   plan: ApplyPlan
+  /**
+   * The plan AFTER them — the verdict that actually matters. Present only when
+   * edits were supplied. Returning both in one round trip is what stops the tree
+   * and the totals from ever disagreeing about the same replication.
+   */
+  edited?: ApplyPlan
   source: { campaigns: number; adGroups: number; positives: number; negatives: number; productAds: number; orphanedInSource: number }
   sharedTargets: BlueprintDoc['sharedTargets']
   /** Every campaign's source name next to what it will be called — the rename preview. */
@@ -157,9 +168,13 @@ export async function planFromSource(req: PlanFromSourceRequest): Promise<{
     marketContext(req.marketplace),
     loadExistingCampaignNames(req.marketplace),
   ])
-  const plan = planApplication(doc, req.target, existing, {
-    ...(req.options ?? {}), market, existingCampaignNames,
-  }, req.edits)
+  const opts = { ...(req.options ?? {}), market, existingCampaignNames }
+  const plan = planApplication(doc, req.target, existing, opts)
+  // Edits are evaluated as a SECOND plan rather than folded into the first, so
+  // the tree keeps every node (a removed campaign stays visible and restorable)
+  // while the totals and blockers describe what would actually be created.
+  const hasEdits = !!req.edits && Object.values(req.edits).some((v) => Array.isArray(v) && v.length > 0)
+  const edited = hasEdits ? planApplication(doc, req.target, existing, opts, req.edits) : undefined
   // The doc holds patterns; the plan holds finished names. Pair them by index —
   // planApplication maps campaigns 1:1 and preserves order.
   const renames = doc.campaigns.map((c, i) => ({
@@ -168,6 +183,7 @@ export async function planFromSource(req: PlanFromSourceRequest): Promise<{
   }))
   return {
     plan,
+    edited,
     source: {
       campaigns: doc.stats.campaigns, adGroups: doc.stats.adGroups,
       positives: doc.stats.positives, negatives: doc.stats.negatives,

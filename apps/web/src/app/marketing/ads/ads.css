@@ -2653,3 +2653,47 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-rep-planbar .cf { color: #8a6d1f; font-weight: 600; }
 .h10-rep-hint { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: #7c8794; }
 .h10-rep-hint.bad { color: #c11208; }
+
+/* ── AX3.4 — step 2: the editable review tree ───────────────────────────── */
+.h10-rep-review { background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; overflow: hidden; }
+.h10-rep-review-top { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid #eef0f4; background: #fbfcfd; }
+.h10-rep-review-top .h10-rep-search { flex: 1; }
+.h10-rep-bulkbtn { font: inherit; font-size: 12.5px; font-weight: 600; color: #3a4452; background: #fff; border: 1px solid #d8dde4; border-radius: 7px; padding: 6px 11px; cursor: pointer; white-space: nowrap; }
+.h10-rep-bulkbtn:hover { border-color: #b9c2cd; background: #f7f9fb; }
+.h10-rep-undo { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12.5px; font-weight: 600; color: #1f6fde; background: none; border: none; cursor: pointer; white-space: nowrap; }
+.h10-rep-undo:hover { text-decoration: underline; }
+
+.h10-rep-tree.rev { max-height: 620px; }
+.h10-rep-cwrap + .h10-rep-cwrap { border-top: 1px solid #f0f2f5; }
+.h10-rep-cwrap.cut { background: #fbfbfc; }
+.h10-rep-cwrap.cut > .h10-rep-row.cmp .nmbtn b { text-decoration: line-through; color: #a4adba; }
+
+.h10-rep-row .nmbtn { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; color: #1c2530; background: none; border: none; padding: 2px 4px; margin: -2px -4px; border-radius: 6px; cursor: pointer; text-align: left; min-width: 0; }
+.h10-rep-row .nmbtn:hover { background: #eef2f7; }
+.h10-rep-row .nmbtn b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-rep-row .tag.edited { color: #1f6fde; background: #eaf2fe; }
+.h10-rep-row .tag.new { color: #1a7f4b; background: #e6f6ed; }
+.h10-rep-row .tag.neg { color: #8a6d1f; background: #fdf6e3; }
+.h10-rep-row .cutbtn { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; color: #a4adba; background: none; border: none; border-radius: 6px; cursor: pointer; flex: none; }
+.h10-rep-row .cutbtn:hover { color: #c11208; background: #fdf0ef; }
+.h10-rep-row .cutbtn.on { color: #1f6fde; }
+.h10-rep-row .cutbtn.on:hover { color: #1f6fde; background: #eaf2fe; }
+.h10-rep-row .addbtn { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; color: #1f6fde; background: none; border: 1px solid #d6e6fb; border-radius: 6px; cursor: pointer; flex: none; }
+.h10-rep-row .addbtn:hover { background: #eaf2fe; }
+
+.h10-rep-row .inl { display: inline-flex; align-items: center; gap: 3px; margin-left: 10px; padding: 2px 6px; border: 1px solid #e6e9ee; border-radius: 6px; background: #fff; font-size: 12px; color: #7c8794; }
+.h10-rep-row .inl:focus-within { border-color: #1f6fde; box-shadow: 0 0 0 2px rgba(31,111,222,.12); }
+.h10-rep-row .inl input { width: 54px; font: inherit; font-size: 12px; color: #1c2530; border: none; padding: 1px 0; background: none; text-align: right; }
+.h10-rep-row .inl input:focus { outline: none; }
+.h10-rep-row .inl.bid { margin-left: auto; }
+
+.h10-rep-row.tgt { padding-left: 62px; font-size: 12.5px; color: #3a4452; }
+.h10-rep-row.tgt code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #1c2530; }
+.h10-rep-row.tgt.cut code { text-decoration: line-through; color: #a4adba; }
+.h10-rep-row.tgt.empty { color: #a4adba; font-style: italic; }
+.h10-rep-row.tgt.added { background: #f6fbf8; }
+.h10-rep-row.tgt.conflict { background: #fdf6e3; }
+.h10-rep-row .cf { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; font-size: 11.5px; color: #8a6d1f; white-space: nowrap; }
+.h10-rep-row .cf button { font: inherit; font-size: 11.5px; font-weight: 600; color: #3a4452; background: #fff; border: 1px solid #e0d4a8; border-radius: 5px; padding: 2px 8px; cursor: pointer; }
+.h10-rep-row .cf button:hover { background: #fffdf5; }
+.h10-rep-row .cf button.on { background: #1f6fde; border-color: #1f6fde; color: #fff; }

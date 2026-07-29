@@ -29,9 +29,10 @@ import { SourcePicker, emptySelection, type SourceSelection } from './SourcePick
 import { NamingPanel } from './NamingPanel'
 import { CopyScopePanel } from './CopyScopePanel'
 import { DestinationPanel } from './DestinationPanel'
+import { ReviewTree } from './ReviewTree'
 import {
-  fullCopyScope, emptyNaming, copyPolicy, guessProductToken,
-  type CopyScope, type NamingRules, type ValuePolicy, type PlanPreviewResponse,
+  fullCopyScope, emptyNaming, copyPolicy, guessProductToken, verdictOf,
+  type CopyScope, type NamingRules, type ValuePolicy, type PlanPreviewResponse, type PlanEdits,
 } from './replicate-types'
 
 type StepN = 1 | 2 | 3
@@ -76,6 +77,10 @@ export function ReplicateBuilder() {
   const [bidPolicy, setBidPolicy] = useState<ValuePolicy>(copyPolicy())
   const [budgetPolicy, setBudgetPolicy] = useState<ValuePolicy>(copyPolicy())
 
+  // ── review-step edits ─────────────────────────────────────────────────
+  const [edits, setEdits] = useState<PlanEdits>({})
+  const [conflictDecisions, setConflictDecisions] = useState<Record<string, 'skip' | 'accept'>>({})
+
   // ── the server's plan ─────────────────────────────────────────────────
   const [preview, setPreview] = useState<PlanPreviewResponse | null>(null)
   const [planning, setPlanning] = useState(false)
@@ -112,10 +117,23 @@ export function ReplicateBuilder() {
 
   const asins = useMemo(() => products.map((p) => p.asin || p.sku).filter(Boolean), [products])
 
+  // Node ids are positional in the source doc, so a different SOURCE invalidates
+  // every edit. Clearing them here is kinder than letting the server reject the
+  // whole set as stale — which it would, correctly.
+  const sourceKey = JSON.stringify([source.campaignIds, source.adGroupIds, sourceMarket])
+  const lastSourceKey = useRef(sourceKey)
+  useEffect(() => {
+    if (lastSourceKey.current !== sourceKey) {
+      lastSourceKey.current = sourceKey
+      setEdits({}); setConflictDecisions({})
+    }
+  }, [sourceKey])
+
   // ── re-plan, debounced, whenever anything that shapes the plan changes ──
   const planKey = JSON.stringify({
     ids: source.campaignIds, ags: source.adGroupIds, sourceMarket,
     sourceToken, targetToken, naming, scope, market, cap, bidPolicy, budgetPolicy, asins,
+    edits, accepted: Object.entries(conflictDecisions).filter(([, v]) => v === 'accept').map(([k]) => k).sort(),
   })
   useEffect(() => {
     if (!source.campaigns || !sourceToken.trim() || !targetToken.trim()) { setPreview(null); setPlanErr(null); return }
@@ -132,6 +150,8 @@ export function ReplicateBuilder() {
           asins,
           marketplace: market,
           dailyBudgetCapEur: num(cap),
+          edits,
+          acceptSharedTargets: Object.entries(conflictDecisions).filter(([, v]) => v === 'accept').map(([k]) => k),
           naming: { prefix: naming.prefix, suffix: naming.suffix, replacements: naming.replacements.filter((r) => r.from) },
           include: scope,
           bidPolicy: bidPolicy.mode === 'copy' ? undefined : { mode: bidPolicy.mode, value: bidPolicy.mode === 'fixed' ? Math.round((num(bidPolicy.value) ?? 0) * 100) : num(bidPolicy.value) },
@@ -270,8 +290,24 @@ export function ReplicateBuilder() {
         {step === 2 && (
           <div className="h10-spw-stub-step">
             <h2>Review &amp; Edit</h2>
-            <p className="h10-spw-desc">Every campaign, ad group and keyword, editable and deletable before anything is created. Lands in AX3.4.</p>
-            <div className="h10-spw-card h10-rep-todo">Next phase.</div>
+            <p className="h10-spw-desc">
+              Everything that would be created, before any of it is. Rename it, re-price it, drop a
+              keyword, an ad group or a whole campaign — and resolve any keyword that would put this
+              product in the same auction as one you already run.
+            </p>
+            {!preview ? (
+              <div className="h10-spw-card h10-rep-todo">
+                {planning ? 'Building the plan…' : 'Finish step 1 first — a source, both product tokens, and at least one product.'}
+              </div>
+            ) : (
+              <ReviewTree
+                plan={preview.plan}
+                edits={edits}
+                setEdits={setEdits}
+                conflictDecisions={conflictDecisions}
+                setConflictDecisions={setConflictDecisions}
+              />
+            )}
           </div>
         )}
 
@@ -287,7 +323,7 @@ export function ReplicateBuilder() {
       <footer className="h10-spw-foot">
         {step > 1 && <button type="button" className="h10-spw-back" onClick={() => setStep((s) => (s > 1 ? ((s - 1) as StepN) : s))}>Back</button>}
         <span className="grow" />
-        {step === 1 && <PlanBar planning={planning} err={planErr} preview={preview} missing={missing} />}
+        {step < 3 && <PlanBar planning={planning} err={planErr} preview={preview} missing={missing} />}
         <button
           type="button"
           className="h10-spw-next"
@@ -328,8 +364,11 @@ function PlanBar({ planning, err, preview, missing }: {
   if (missing.length) return <span className="h10-rep-hint">Still needed: {missing.join(', ')}</span>
   if (planning) return <span className="h10-rep-hint"><Loader2 size={13} className="spin" aria-hidden /> Checking this against your account…</span>
   if (err) return <span className="h10-rep-hint bad">{err}</span>
-  if (!preview) return null
-  const p = preview.plan
+  // Always the EDITED plan when there is one — the footer must describe what
+  // would actually be created, not what the source happened to contain.
+  const p = verdictOf(preview)
+  if (!p) return null
+  const unresolved = p.conflicts.filter((c) => c.resolution === 'UNRESOLVED').length
   return (
     <span className="h10-rep-planbar">
       {p.allowed
@@ -338,7 +377,7 @@ function PlanBar({ planning, err, preview, missing }: {
       <span className="t">
         {p.totals.campaigns} campaigns · {p.totals.positives} targets · {p.totals.negatives} negatives · {p.totals.productAds} ads ·{' '}
         <b>€{p.totals.dailyBudgetTotal.toFixed(2)}/day</b>
-        {p.conflicts.length > 0 && <span className="cf"> · {p.conflicts.length} keyword conflict{p.conflicts.length === 1 ? '' : 's'} to resolve</span>}
+        {unresolved > 0 && <span className="cf"> · {unresolved} keyword conflict{unresolved === 1 ? '' : 's'} to resolve</span>}
       </span>
     </span>
   )

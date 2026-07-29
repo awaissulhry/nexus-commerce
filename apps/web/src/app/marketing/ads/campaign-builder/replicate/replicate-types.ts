@@ -42,6 +42,30 @@ export type PolicyMode = 'copy' | 'scale' | 'fixed'
 export interface ValuePolicy { mode: PolicyMode; value: string }
 export const copyPolicy = (): ValuePolicy => ({ mode: 'copy', value: '' })
 
+/**
+ * AX3.4 — what the operator changed in the review step, addressed by plan id.
+ *
+ * This is the ONLY thing the client sends about the review step. The server
+ * rebuilds the plan from the live source, replays these, and re-runs the gate —
+ * so the edit set can narrow, rename or re-price a replication, and an added
+ * keyword is classified and gated like a copied one, but nothing gets past the
+ * self-competition check by editing a payload.
+ */
+export interface PlanEdits {
+  removedCampaigns?: string[]
+  removedAdGroups?: string[]
+  removedTargets?: string[]
+  renamedCampaigns?: Array<{ id: string; name: string }>
+  renamedAdGroups?: Array<{ id: string; name: string }>
+  campaignBudgets?: Array<{ id: string; dailyBudget: number }>
+  adGroupBids?: Array<{ id: string; defaultBidCents: number }>
+  targetBids?: Array<{ id: string; bidCents: number }>
+  addedTargets?: Array<{
+    adGroupId: string; expression: string; expressionType: string
+    kind?: string; isNegative?: boolean; bidCents?: number | null
+  }>
+}
+
 /** Server response from POST /advertising/blueprints/plan-preview. */
 export interface PlanConflict {
   expression: string
@@ -61,24 +85,34 @@ export interface Plan {
   totals: PlanTotals
   excluded: { keywords: number; negatives: number; productTargets: number; autoClauses: number }
   campaigns: Array<{
+    id: string
     role: string; name: string; dailyBudget: number | null; targetingType: 'AUTO' | 'MANUAL'
     placementBidding: Array<{ placement: string; percentage: number }>
     adGroups: Array<{
+      id: string
       name: string; defaultBidCents: number | null; asins: string[]
       targets: Array<{
+        id: string
         expression: string; expressionType: string; kind: string; bidCents: number | null
         isNegative: boolean; negativeLevel: string | null; autoClause?: string | null
         conflictsWith?: Array<{ campaignName: string; campaignId: string }>
+        gated?: boolean; added?: boolean
       }>
     }>
   }>
 }
 export interface PlanPreviewResponse {
+  /** Before the review-step edits — what the tree renders, with stable ids. */
   plan: Plan
+  /** After them. Present only when edits were sent; this is the real verdict. */
+  edited?: Plan
   source: { campaigns: number; adGroups: number; positives: number; negatives: number; productAds: number; orphanedInSource: number }
   sharedTargets: Array<{ expression: string; targetClass: string }>
   renames: Array<{ from: string; to: string }>
 }
+
+/** The plan whose totals and blockers describe what would actually be created. */
+export const verdictOf = (p: PlanPreviewResponse | null): Plan | null => (p ? (p.edited ?? p.plan) : null)
 
 // ── product-token guessing ────────────────────────────────────────────────
 
