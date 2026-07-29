@@ -184,7 +184,29 @@ export function ReplicateBuilder() {
     return () => obs.disconnect()
   }, [step])
 
-  const gotoSec = (id: string) => document.getElementById(`rep-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  /**
+   * Jump to a step-1 section.
+   *
+   * `scrollIntoView` alone does not work here: the ads shell scrolls an inner
+   * `.h10-main` element rather than the document, and step 1 also contains its
+   * own scrollable source tree, so the call resolved against the wrong box and
+   * moved the page a few pixels. Verified on prod — the sub-nav highlighted the
+   * section and then sat still. Walk up to the ancestor that actually scrolls
+   * and move that.
+   */
+  const gotoSec = (id: string) => {
+    const el = document.getElementById(`rep-${id}`)
+    if (!el) return
+    let box: HTMLElement | null = el.parentElement
+    while (box && box !== document.body) {
+      const oy = getComputedStyle(box).overflowY
+      if ((oy === 'auto' || oy === 'scroll') && box.scrollHeight > box.clientHeight + 1) break
+      box = box.parentElement
+    }
+    const offset = el.getBoundingClientRect().top - 12
+    if (box && box !== document.body) box.scrollTo({ top: box.scrollTop + offset, behavior: 'smooth' })
+    else window.scrollTo({ top: window.scrollY + offset, behavior: 'smooth' })
+  }
 
   const missing: string[] = []
   if (!source.campaigns) missing.push('a source')
