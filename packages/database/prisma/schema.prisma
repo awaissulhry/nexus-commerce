@@ -3166,8 +3166,13 @@ model AmazonAdsPlacementReport {
   @@index([profileId, adProduct, date])
 }
 
-// Brand Metrics API output — search impression share, branded queries,
-// branded conversion share. One row per (profile, brand, day).
+// DEAD — never written, and its columns do not exist in Amazon's Brand
+// Metrics response. It was modelled on searchImpressionShare /
+// brandSearches / brandConversionShare / categoryRank; the live API
+// (captured 2026-07-29) returns brandBuildingMetrics with an entirely
+// different metric set. Superseded by AmazonAdsBrandBuildingMetric below.
+// Kept only because dropping a table is a destructive migration — safe to
+// remove once that is explicitly approved.
 model AmazonAdsBrandMetric {
   id                    String   @id @default(cuid())
   profileId             String
@@ -3182,6 +3187,71 @@ model AmazonAdsBrandMetric {
   createdAt             DateTime @default(now())
 
   @@unique([profileId, brandName, date])
+}
+
+// Brand Metrics API — the REAL shape, captured live 2026-07-29 from
+// GET /insights/brandMetrics/report/{id}:
+//
+//   { "brandBuildingMetrics": [ { metadata: {...}, metrics: {...} } ] }
+//
+// Amazon reports the brand's funnel (awareness → consideration → sales)
+// against the category, plus a category MEDIAN and TOP-PERFORMER benchmark
+// for nearly every metric — that benchmark pair is the competitive value
+// here, and it is why the raw map is retained rather than flattened away.
+//
+// Two contract facts worth keeping in mind:
+//  · Every metric value arrives as a STRING ("12", "0.6668"), never a number.
+//  · aggregationLevel on the request is IGNORED. DAILY / WEEKLY / MONTHLY all
+//    return byte-identical payloads with lookbackPeriod="1w", so the grain is
+//    always weekly and computationDate is the week's computation date.
+model AmazonAdsBrandBuildingMetric {
+  id          String @id @default(cuid())
+  profileId   String
+  marketplace String
+  brandName   String
+  brandId     String?
+
+  // metadata.metricsComputationDate — the weekly grain.
+  computationDate DateTime @db.Date
+  lookbackPeriod  String   @default("1w")
+
+  // Part of the uniqueness key. Amazon reports the SAME brand-week at several
+  // category-node depths (the IT profile returns 6: the root
+  // "/Categorie/Moto, accessori e componenti" plus five sub-nodes), each with
+  // its own median and top-performer benchmark. Keying without this collapsed
+  // 28 records into 5. NOT NULL with an '' sentinel because Postgres treats
+  // NULLs as distinct in a unique index, which would silently re-admit the
+  // duplicates this key exists to prevent.
+  categoryNodeName     String  @default("")
+  categoryNodeTreeName String?
+
+  // Full metrics map exactly as Amazon sent it. Amazon adds metrics over
+  // time; keeping the raw object means a new field needs no migration and
+  // no data is silently discarded at ingest.
+  metrics Json
+
+  // Promoted columns for the funnel indices the console charts. Nullable on
+  // purpose — Amazon omits metrics it cannot compute, and 0 is a REAL value
+  // for every one of these, so absent must never collapse to zero.
+  awarenessIndex                    Decimal? @db.Decimal(12, 4)
+  considerationIndex                Decimal? @db.Decimal(12, 4)
+  salesIndex                        Decimal? @db.Decimal(12, 4)
+  brandCustomers                    Int?
+  highValueCustomers                Int?
+  addToCarts                        Int?
+  viewedDetailPageOnly              Int?
+  brandedSearchesOnly               Int?
+  brandedSearchesAndDetailPageViews Int?
+  newToBrandCustomerRate            Decimal? @db.Decimal(12, 4)
+  customerConversionRate            Decimal? @db.Decimal(12, 4)
+
+  reportedAt DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([profileId, brandName, computationDate, lookbackPeriod, categoryNodeName])
+  @@index([profileId, computationDate])
+  @@index([marketplace, computationDate])
 }
 
 // Persistent state for async Reports API polling. Amazon's flow: POST to

@@ -62,6 +62,10 @@ import {
   summarizeCycle as summarizeV1Cycle,
 } from '../services/advertising/ads-v1-sync.service.js'
 import { syncCampaignSettingsFromAmazon } from '../services/advertising/ads-campaign-settings-sync.service.js'
+import {
+  runBrandMetricsCycle,
+  runBrandMetricsIngestCycle,
+} from '../services/advertising/ads-brand-metrics.service.js'
 import prisma from '../db.js'
 
 let fbaStorageAgeTask: ReturnType<typeof cron.schedule> | null = null
@@ -74,6 +78,7 @@ let reportCreateStTask: ReturnType<typeof cron.schedule> | null = null
 let reportCreatePlTask: ReturnType<typeof cron.schedule> | null = null
 let reportCreateApTask: ReturnType<typeof cron.schedule> | null = null
 let reportPollTask: ReturnType<typeof cron.schedule> | null = null
+let brandMetricsTask: ReturnType<typeof cron.schedule> | null = null
 let reportIngestTask: ReturnType<typeof cron.schedule> | null = null
 let searchTermCleanupTask: ReturnType<typeof cron.schedule> | null = null
 let v1ExportCreateTask: ReturnType<typeof cron.schedule> | null = null
@@ -331,6 +336,37 @@ export async function runReportCreatePlCron(): Promise<void> {
     const result = await runPlacementReportCycle({ startDate, endDate })
     return `created=${result.jobsCreated} skipped=${result.jobsSkipped} errors=${result.errors.length}`
   }).catch((err) => logger.error('ads-report-create-pl cron: failure', { error: String(err) }))
+}
+
+// 02:10 UTC weekly (Monday) — Brand Metrics.
+//
+// ONE cron, not the usual create/poll/ingest trio. Brand Metrics' signed
+// download URL lives 300 seconds, so a separate ingest tick would always
+// arrive to a dead link — create, poll and ingest all happen inside this run.
+//
+// Weekly because the grain IS weekly: Amazon ignores aggregationLevel and
+// always returns lookbackPeriod="1w". A daily cron would re-fetch identical
+// data and burn quota. The 5-week window backfills any week we missed and
+// lets Amazon restate recent ones.
+export async function runBrandMetricsCron(): Promise<void> {
+  await recordCronRun('ads-brand-metrics', async () => {
+    const end = new Date(Date.now() - 9 * 86400000).toISOString().slice(0, 10)
+    const start = new Date(Date.now() - 44 * 86400000).toISOString().slice(0, 10)
+    const created = await runBrandMetricsCycle({ startDate: start, endDate: end })
+    // Amazon needs a moment between accepting the request and the report
+    // becoming SUCCESSFUL; polling immediately would just burn a pass.
+    await new Promise((r) => setTimeout(r, 20_000))
+    const out = await runBrandMetricsIngestCycle()
+    return `created=${created.jobsCreated} skipped=${created.jobsSkipped} ingested=${out.ingested} errors=${created.errors.length + out.errors.length}`
+  }).catch((err) => logger.error('ads-brand-metrics cron: failure', { error: String(err) }))
+}
+
+export function startBrandMetricsCron(): void {
+  if (brandMetricsTask) { logger.warn('ads-brand-metrics already started'); return }
+  const schedule = process.env.NEXUS_ADS_BRAND_METRICS_SCHEDULE ?? '10 2 * * 1'
+  if (!cron.validate(schedule)) { logger.error('ads-brand-metrics: invalid schedule', { schedule }); return }
+  brandMetricsTask = cron.schedule(schedule, () => { void runBrandMetricsCron() })
+  logger.info('ads-brand-metrics cron: scheduled', { schedule })
 }
 
 export function startReportCreatePlCron(): void {
@@ -628,6 +664,8 @@ export function startAllAdvertisingCrons(): void {
   startReportPollCron()
   startReportIngestCron()
   startSearchTermCleanupCron()
+  // Phase 1: Brand Metrics — brand funnel vs category benchmarks (weekly).
+  startBrandMetricsCron()
   // H.2: v1 unified export pipeline (structure data — campaigns/adGroups/targets/ads)
   startV1ExportCreateCron()
   startV1ExportPollCron()

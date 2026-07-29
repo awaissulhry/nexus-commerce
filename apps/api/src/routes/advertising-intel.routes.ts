@@ -245,6 +245,55 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return sqpDebugState.last ?? { note: 'no SQP report ingested yet this process' }
   })
 
+  // ── Brand Metrics (Phase 1) ────────────────────────────────────────
+  // Brand funnel vs CATEGORY benchmarks. Weekly grain — Amazon ignores
+  // aggregationLevel and always returns lookbackPeriod="1w".
+
+  fastify.get('/advertising/brand-metrics', async (request) => {
+    const q = (request.query ?? {}) as { marketplace?: string; limit?: string }
+    const take = Math.min(500, Math.max(1, Number(q.limit) || 200))
+    const rows = await prisma.amazonAdsBrandBuildingMetric.findMany({
+      where: q.marketplace ? { marketplace: q.marketplace } : undefined,
+      orderBy: [{ computationDate: 'desc' }, { brandName: 'asc' }],
+      take,
+    })
+    return { items: rows, count: rows.length }
+  })
+
+  // Diagnostic: the last Brand Metrics report's real shape. Amazon extends the
+  // metric set over time and every value arrives as a string, so this is how a
+  // contract drift gets caught without Railway log access.
+  fastify.get('/advertising/brand-metrics/debug', async (_request, reply) => {
+    const { brandMetricsDebugState } = await import('../services/advertising/ads-brand-metrics.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return brandMetricsDebugState.last ?? { note: 'no Brand Metrics report ingested yet this process' }
+  })
+
+  fastify.post('/advertising/brand-metrics/probe', async (request) => {
+    const b = (request.body ?? {}) as { profileId?: string }
+    const { probeBrandMetricsAccess } = await import('../services/advertising/ads-brand-metrics.service.js')
+    return probeBrandMetricsAccess(b.profileId)
+  })
+
+  // Manual trigger. Runs create → poll → ingest inline because the signed
+  // download URL is only valid for 300s; splitting the stages would guarantee
+  // an expired link. Awaited (not fire-and-forget) since the whole cycle is
+  // seconds, unlike the per-ASIN SQP reports below.
+  fastify.post('/advertising/brand-metrics/ingest', async (request, reply) => {
+    const b = (request.body ?? {}) as { startDate?: string; endDate?: string }
+    const endDate = b.endDate ?? new Date(Date.now() - 9 * 86400000).toISOString().slice(0, 10)
+    const startDate = b.startDate ?? new Date(Date.now() - 44 * 86400000).toISOString().slice(0, 10)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      reply.status(400); return { error: 'startDate/endDate must be YYYY-MM-DD' }
+    }
+    const { runBrandMetricsCycle, runBrandMetricsIngestCycle } =
+      await import('../services/advertising/ads-brand-metrics.service.js')
+    const created = await runBrandMetricsCycle({ startDate, endDate })
+    await new Promise((r) => setTimeout(r, 20_000))
+    const out = await runBrandMetricsIngestCycle()
+    return { startDate, endDate, created, ingested: out.ingested, errors: [...created.errors, ...out.errors] }
+  })
+
   // Probe whether the account has Brand Analytics SQP access (resolves the
   // gating dependency without committing to ingestion).
   fastify.post('/advertising/sqp/probe', async (request, reply) => {

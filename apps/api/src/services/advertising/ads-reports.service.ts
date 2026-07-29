@@ -259,7 +259,15 @@ export async function pollPendingJobs(limit = 20): Promise<PollSummary> {
   }
 
   const jobs = await prisma.amazonAdsReportJob.findMany({
-    where: { status: { in: ['PENDING', 'IN_PROGRESS'] } },
+    where: {
+      status: { in: ['PENDING', 'IN_PROGRESS'] },
+      // AmazonAdsReportJob is shared with other async Amazon report flows
+      // (Brand Metrics polls /insights/brandMetrics/report, not
+      // /reporting/reports). Without this filter THIS poller would claim
+      // those rows and poll them against the wrong endpoint. Stay scoped
+      // to the ad products the v3 Reporting API actually serves.
+      adProduct: { in: ['SPONSORED_PRODUCTS', 'SPONSORED_DISPLAY', 'SPONSORED_BRANDS'] },
+    },
     orderBy: [{ lastPolledAt: 'asc' }, { createdAt: 'asc' }],
     take: limit,
   })
