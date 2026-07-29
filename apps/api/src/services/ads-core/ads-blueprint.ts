@@ -22,9 +22,45 @@
  * Pure: no I/O, no Prisma. Everything here is unit-tested.
  */
 
-export type TargetClass = 'BRAND' | 'CATEGORY' | 'COMPETITOR' | 'ASIN' | 'UNKNOWN'
+export type TargetClass = 'BRAND' | 'CATEGORY' | 'COMPETITOR' | 'ASIN' | 'AUTO' | 'UNKNOWN'
 
 export const PRODUCT_TOKEN = '{{product}}'
+
+/**
+ * AX3.0 — Amazon's four SP auto-targeting clauses, in the vocabulary
+ * `ads-create.service.createTargetLocal` expects as its `value`.
+ *
+ * WHY THIS MAP EXISTS. A synced auto target carries an EMPTY expressionValue —
+ * `ads-v1-sync` builds the value from `targetDetails.keyword ?? asin ??
+ * categoryId`, none of which an auto clause has. The clause survives in
+ * `expressionType` instead (SEARCH_CLOSE_MATCH, PRODUCT_SUBSTITUTES, …), and
+ * builder-created rows use a third spelling again ('close', 'substitutes').
+ * Without this normalisation an extracted Auto campaign carries four targets we
+ * cannot identify, and replication creates a campaign with NO targeting at all —
+ * inert, never spends, never discovers. Verified on production: 132 of the 141
+ * live AUTO rows are the expressionType spelling.
+ */
+export type AutoClause = 'CLOSE_MATCH' | 'LOOSE_MATCH' | 'SUBSTITUTES' | 'COMPLEMENTS'
+const AUTO_CLAUSE_ALIASES: Record<string, AutoClause> = {
+  SEARCH_CLOSE_MATCH: 'CLOSE_MATCH', CLOSE_MATCH: 'CLOSE_MATCH', CLOSE: 'CLOSE_MATCH', QUERYHIGHRELMATCHES: 'CLOSE_MATCH',
+  SEARCH_LOOSE_MATCH: 'LOOSE_MATCH', LOOSE_MATCH: 'LOOSE_MATCH', LOOSE: 'LOOSE_MATCH', QUERYBROADRELMATCHES: 'LOOSE_MATCH',
+  PRODUCT_SUBSTITUTES: 'SUBSTITUTES', SUBSTITUTES: 'SUBSTITUTES', ASINSUBSTITUTERELATED: 'SUBSTITUTES',
+  PRODUCT_COMPLEMENTS: 'COMPLEMENTS', COMPLEMENTS: 'COMPLEMENTS', ASINACCESSORYRELATED: 'COMPLEMENTS',
+}
+
+/**
+ * The SP auto clause a target represents, or null when it is not one we can
+ * re-create. Reads expressionType first (the synced spelling) and falls back to
+ * expressionValue (the builder-created spelling). SB/SD clauses
+ * (SEARCH_RELATED_TO_YOUR_BRAND, PRODUCT_SIMILAR, …) deliberately return null:
+ * SB/SD are not modelled, so claiming we can replicate them would be a lie.
+ */
+export function autoClauseOf(t: Pick<SourceTarget, 'kind' | 'expressionType' | 'expressionValue'>): AutoClause | null {
+  if ((t.kind ?? '').toUpperCase() !== 'AUTO') return null
+  const byType = AUTO_CLAUSE_ALIASES[(t.expressionType ?? '').toUpperCase()]
+  if (byType) return byType
+  return AUTO_CLAUSE_ALIASES[(t.expressionValue ?? '').trim().toUpperCase()] ?? null
+}
 
 export interface SourceTarget {
   kind: string
@@ -46,6 +82,12 @@ export interface SourceCampaign {
   biddingStrategy: string | null
   placementBidding: Array<{ placement: string; percentage: number }>
   adGroups: SourceAdGroup[]
+  /**
+   * AX3.0 — Amazon's real targeting type ('AUTO' | 'MANUAL'). Optional so the
+   * existing fixtures stay valid; when absent it is inferred from whether the
+   * campaign carries any auto clause, which is what an Auto campaign always has.
+   */
+  targetingType?: string | null
 }
 
 export interface BlueprintTarget {
@@ -57,6 +99,13 @@ export interface BlueprintTarget {
   isNegative: boolean
   negativeLevel: string | null
   targetClass: TargetClass
+  /**
+   * AX3.0 — set for SP auto-targeting clauses, so replication can re-create them
+   * (`createTargetLocal({ kind: 'AUTO', value: autoClause })`). Null on an AUTO
+   * row we could not identify — the plan reports those rather than dropping them
+   * silently.
+   */
+  autoClause?: AutoClause | null
 }
 export interface BlueprintAdGroup {
   namePattern: string
@@ -73,6 +122,11 @@ export interface BlueprintCampaign {
   biddingStrategy: string | null
   placementBidding: Array<{ placement: string; percentage: number }>
   adGroups: BlueprintAdGroup[]
+  /**
+   * AX3.0 — 'AUTO' | 'MANUAL'. Created campaigns previously always defaulted to
+   * MANUAL, so an Auto campaign replicated as a manual one with no targeting.
+   */
+  targetingType: 'AUTO' | 'MANUAL'
 }
 export interface BlueprintDoc {
   version: 1
@@ -135,6 +189,13 @@ export function classifyTarget(
    */
   role?: string,
 ): TargetClass {
+  // AX3.0 — an auto clause is machine targeting, not a term anyone bids on by
+  // name, so it can never create self-competition and must never reach
+  // sharedTargets. Checked FIRST and by kind, not by value: a synced auto row
+  // has an empty value (→ used to fall through to UNKNOWN by luck), while a
+  // builder-created one has 'close' / 'substitutes' (→ used to classify
+  // CATEGORY and surface as a bogus "keyword you already bid on" conflict).
+  if ((t.kind ?? '').toUpperCase() === 'AUTO') return 'AUTO'
   const v = (t.expressionValue ?? '').trim()
   if (!v) return 'UNKNOWN'
   if (t.kind && t.kind.toUpperCase() !== 'KEYWORD') {
@@ -183,17 +244,20 @@ export interface ExtractOptions {
 
 export function extractBlueprint(campaigns: SourceCampaign[], opts: ExtractOptions): BlueprintDoc {
   const { productToken, competitorTokens = [] } = opts
-  const byClass: Record<TargetClass, number> = { BRAND: 0, CATEGORY: 0, COMPETITOR: 0, ASIN: 0, UNKNOWN: 0 }
+  const byClass: Record<TargetClass, number> = { BRAND: 0, CATEGORY: 0, COMPETITOR: 0, ASIN: 0, AUTO: 0, UNKNOWN: 0 }
   const shared = new Map<string, TargetClass>()
   let positives = 0, negatives = 0, adGroups = 0, productAds = 0
 
   const outCampaigns: BlueprintCampaign[] = campaigns.map((c) => {
     const role = deriveRole(c.name, productToken)
+    let sawAutoClause = false
     const groups: BlueprintAdGroup[] = c.adGroups.map((g) => {
       adGroups++
       productAds += g.asins.length
       const targets: BlueprintTarget[] = g.targets.map((t) => {
         const targetClass = classifyTarget(t, productToken, competitorTokens, role)
+        const autoClause = autoClauseOf(t)
+        if (autoClause) sawAutoClause = true
         byClass[targetClass]++
         if (t.isNegative) negatives++; else positives++
         // Only POSITIVE non-product targets create self-competition. A shared
@@ -209,6 +273,7 @@ export function extractBlueprint(campaigns: SourceCampaign[], opts: ExtractOptio
           isNegative: t.isNegative,
           negativeLevel: t.negativeLevel,
           targetClass,
+          ...(t.kind?.toUpperCase() === 'AUTO' ? { autoClause } : {}),
         }
       })
       return {
@@ -218,6 +283,9 @@ export function extractBlueprint(campaigns: SourceCampaign[], opts: ExtractOptio
         productAdCount: g.asins.length,
       }
     })
+    // Amazon's own answer wins; a campaign carrying auto clauses is AUTO even if
+    // the column was never synced (5 of 190 live campaigns have it null).
+    const declared = (c.targetingType ?? '').toUpperCase()
     return {
       role,
       namePattern: parameterise(c.name, productToken),
@@ -225,6 +293,7 @@ export function extractBlueprint(campaigns: SourceCampaign[], opts: ExtractOptio
       biddingStrategy: c.biddingStrategy,
       placementBidding: c.placementBidding,
       adGroups: groups,
+      targetingType: (declared === 'AUTO' || declared === 'MANUAL' ? declared : sawAutoClause ? 'AUTO' : 'MANUAL') as 'AUTO' | 'MANUAL',
     }
   })
 

@@ -1379,6 +1379,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as {
       productToken?: string; asins?: string[]; marketplace?: string
       dryRun?: boolean; skipSharedTargets?: string[]; acceptSharedTargets?: string[]; dailyBudgetCapEur?: number
+      portfolioId?: string
     }
     if (!b?.productToken) { reply.code(400); return { error: 'productToken is required — it is what {{product}} becomes' } }
     if (!b?.marketplace) { reply.code(400); return { error: 'marketplace is required' } }
@@ -1393,6 +1394,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         acceptSharedTargets: b.acceptSharedTargets,
         dailyBudgetCapEur: b.dailyBudgetCapEur,
       },
+      // AX3.0 — the portfolio the replicated campaigns join.
+      portfolioId: b.portfolioId,
       dryRun: b.dryRun !== false,
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
     }

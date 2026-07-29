@@ -18,7 +18,7 @@
  * Pure: no I/O, no Prisma. Unit-tested.
  */
 
-import { PRODUCT_TOKEN, type BlueprintDoc } from './ads-blueprint.js'
+import { PRODUCT_TOKEN, type AutoClause, type BlueprintDoc } from './ads-blueprint.js'
 
 /** A product to replicate the structure onto. */
 export interface ApplyTarget {
@@ -44,6 +44,8 @@ export interface PlannedTarget {
   negativeLevel: string | null
   /** Set when this target collides with something we already run. */
   conflictsWith?: Array<{ campaignName: string; campaignId: string }>
+  /** AX3.0 — the SP auto clause to re-create, for kind === 'AUTO'. */
+  autoClause?: AutoClause | null
 }
 export interface PlannedAdGroup {
   name: string
@@ -57,6 +59,10 @@ export interface PlannedCampaign {
   dailyBudget: number | null
   biddingStrategy: string | null
   adGroups: PlannedAdGroup[]
+  /** AX3.0 — carried through so an Auto campaign is created as Auto. */
+  targetingType: 'AUTO' | 'MANUAL'
+  /** AX3.0 — captured by the blueprint and, until now, silently discarded. */
+  placementBidding: Array<{ placement: string; percentage: number }>
 }
 
 export interface ApplyConflict {
@@ -107,6 +113,17 @@ export interface ApplyOptions {
   dailyBudgetCapEur?: number
   /** Destination market. Omit only when the caller has already vetted it. */
   market?: MarketContext
+  /**
+   * AX3.0 — every non-archived campaign name already in the destination market.
+   *
+   * `materialise` only rewrites a name that CONTAINS the product token. Most of
+   * this account's campaigns don't: `IT_Auto_Close`, `BMM_Misano`,
+   * `Auto_Loose_Moss` all survive substitution unchanged, so replicating them
+   * produced a second campaign with a byte-identical name and nothing objected.
+   * Two campaigns with one name is unresolvable afterwards — every report, every
+   * rule and every operator lookup becomes ambiguous — so it blocks.
+   */
+  existingCampaignNames?: string[]
 }
 
 const norm = (s: string): string => s.trim().toLowerCase()
@@ -178,6 +195,7 @@ export function planApplication(
         targets.push({
           expression, expressionType: t.expressionType, kind: t.kind,
           bidCents: t.bidCents, isNegative: t.isNegative, negativeLevel: t.negativeLevel,
+          ...(t.kind?.toUpperCase() === 'AUTO' ? { autoClause: t.autoClause ?? null } : {}),
         })
         if (t.isNegative) negatives++; else positives++
       }
@@ -195,6 +213,8 @@ export function planApplication(
       dailyBudget: c.dailyBudget,
       biddingStrategy: c.biddingStrategy,
       adGroups: groups,
+      targetingType: c.targetingType ?? 'MANUAL',
+      placementBidding: c.placementBidding ?? [],
     }
   })
 
@@ -231,6 +251,35 @@ export function planApplication(
   }
   if (!target.productToken.trim()) blockers.push('productToken is required — it is what {{product}} becomes')
   if (!target.asins.length) blockers.push('no ASINs supplied — the campaigns would have nothing to advertise')
+
+  // AX3.0 — name collisions, against the destination market AND within the plan
+  // itself (two source campaigns whose names differ only by the product token
+  // collapse onto one name once it is substituted).
+  const live = new Set((opts.existingCampaignNames ?? []).map(norm))
+  const collideLive = campaigns.filter((c) => live.has(norm(c.name))).map((c) => c.name)
+  if (collideLive.length) {
+    blockers.push(
+      `${collideLive.length} campaign name(s) already exist in this marketplace and would be duplicated `
+      + `(${collideLive.slice(0, 3).map((n) => `"${n}"`).join(', ')}${collideLive.length > 3 ? ', …' : ''}). `
+      + 'Rename them, or replicate from a source whose names carry the product token.',
+    )
+  }
+  const planCounts = new Map<string, number>()
+  for (const c of campaigns) planCounts.set(norm(c.name), (planCounts.get(norm(c.name)) ?? 0) + 1)
+  const collideSelf = [...planCounts.entries()].filter(([, n]) => n > 1).map(([n]) => n)
+  if (collideSelf.length) {
+    blockers.push(`this plan would create ${collideSelf.length} duplicate campaign name(s) of its own: ${collideSelf.slice(0, 3).map((n) => `"${n}"`).join(', ')}`)
+  }
+
+  // Auto clauses we could not identify would be dropped at create time. Say so
+  // here rather than letting the campaign land with less targeting than planned.
+  const unknownAuto = campaigns.flatMap((c) => c.adGroups.flatMap((g) => g.targets.filter((t) => t.kind?.toUpperCase() === 'AUTO' && !t.autoClause)))
+  if (unknownAuto.length) {
+    warnings.push(
+      `${unknownAuto.length} auto-targeting clause(s) are not Amazon SP clauses we can re-create `
+      + '(Sponsored Brands / Display targeting is not modelled) — they will not be created',
+    )
+  }
 
   return {
     productToken: target.productToken,

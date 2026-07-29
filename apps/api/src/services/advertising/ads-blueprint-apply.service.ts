@@ -40,6 +40,18 @@ export async function loadExistingTargets(marketplace: string): Promise<Existing
     .map((r) => ({ expression: r.expressionValue, campaignName: r.adGroup!.campaign!.name, campaignId: r.adGroup!.campaign!.id }))
 }
 
+/**
+ * AX3.0 — every campaign name live in this marketplace, for the collision gate.
+ * Archived names are excluded: Amazon frees an archived name for re-use.
+ */
+export async function loadExistingCampaignNames(marketplace: string): Promise<string[]> {
+  const rows = await prisma.campaign.findMany({
+    where: { marketplace, status: { not: 'ARCHIVED' } },
+    select: { name: true },
+  })
+  return rows.map((r) => r.name)
+}
+
 export interface ApplyRequest {
   blueprintId: string
   target: ApplyTarget
@@ -47,6 +59,8 @@ export interface ApplyRequest {
   options?: ApplyOptions
   dryRun?: boolean
   actor?: string
+  /** AX3.0 — the portfolio the replicated campaigns should join. */
+  portfolioId?: string
 }
 
 /**
@@ -70,9 +84,14 @@ export async function marketContext(marketplace: string) {
 export async function planApply(req: ApplyRequest): Promise<{ plan: ApplyPlan; blueprintName: string }> {
   const bp = await prisma.adBlueprint.findUnique({ where: { id: req.blueprintId } })
   if (!bp) throw new Error('blueprint not found')
-  const existing = await loadExistingTargets(req.marketplace)
-  const market = await marketContext(req.marketplace)
-  const plan = planApplication(bp.doc as unknown as BlueprintDoc, req.target, existing, { ...(req.options ?? {}), market })
+  const [existing, market, existingCampaignNames] = await Promise.all([
+    loadExistingTargets(req.marketplace),
+    marketContext(req.marketplace),
+    loadExistingCampaignNames(req.marketplace),
+  ])
+  const plan = planApplication(bp.doc as unknown as BlueprintDoc, req.target, existing, {
+    ...(req.options ?? {}), market, existingCampaignNames,
+  })
   return { plan, blueprintName: bp.name }
 }
 
@@ -116,7 +135,10 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
     throw new Error(`refused: ${plan.blockers.join(' | ')}`)
   }
 
-  const { createCampaignLocal, createAdGroupLocal, createKeywordLocal, bulkNegativeKeywords, createProductAdLocal } = await import('./ads-create.service.js')
+  const {
+    createCampaignLocal, createAdGroupLocal, createKeywordLocal, bulkNegativeKeywords, createProductAdLocal,
+    createTargetLocal, createNegativeProductTargetLocal, updatePlacementBidding,
+  } = await import('./ads-create.service.js')
   const created = { campaigns: 0, adGroups: 0, targets: 0, negatives: 0, productAds: 0 }
   let skippedNonKeyword = 0
   const createdCampaignIds: string[] = []
@@ -129,12 +151,27 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
         name: c.name,
         type: 'SP',
         marketplace: req.marketplace,
+        // AX3.0 — an Auto campaign has to BE auto. Previously omitted, so
+        // createCampaignLocal defaulted every replica to MANUAL and the Auto
+        // role was created as a manual campaign that could never self-target.
+        targetingType: c.targetingType,
         dailyBudgetEur: Number(c.dailyBudget ?? 0),
         biddingStrategy: c.biddingStrategy === 'AUTO_FOR_SALES' ? 'autoForSales' : c.biddingStrategy === 'MANUAL' ? 'manual' : 'legacyForSales',
+        // AX3.0 — join the destination portfolio. Without it replicas landed
+        // outside every portfolio, invisible to portfolio budgets and rollups.
+        portfolioId: req.portfolioId,
         userId: req.actor,
       })
       created.campaigns++
       createdCampaignIds.push(camp.id)
+      // AX3.0 — allowlist the campaign the instant it exists, matching what the
+      // SP Super Wizard's launch does. Placement writes and pushCampaignStructure
+      // both check Campaign.liveBidWritesEnabled, and so does every later bid
+      // write from rank-defend / autopilot / ToS-defense. A replica without it is
+      // structurally identical to a wizard-built campaign but permanently frozen.
+      try {
+        await prisma.campaign.update({ where: { id: camp.id }, data: { liveBidWritesEnabled: true } })
+      } catch (e) { errors.push(`allowlist "${c.name}": ${(e as Error).message.slice(0, 120)}`) }
       // Read-back: no external id ⇒ it never reached Amazon (gate closed,
       // sandbox, or a rejected create). Say so instead of implying success.
       if (!camp.externalCampaignId) notOnAmazon.push(c.name)
@@ -163,20 +200,48 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
           if (nr.failed) errors.push(`${nr.failed} negative(s) failed: ${nr.errors.slice(0, 2).join('; ').slice(0, 160)}`)
         }
 
+        // AX3.0 — negative PRODUCT targets, alongside the negative keywords above.
+        for (const t of g.targets) {
+          if (!t.isNegative || t.kind?.toUpperCase() !== 'PRODUCT') continue
+          try {
+            await createNegativeProductTargetLocal({ adGroupId: grp.id, asin: t.expression, userId: req.actor })
+            created.negatives++
+          } catch (e) { errors.push(`negative product "${t.expression}": ${(e as Error).message.slice(0, 120)}`) }
+        }
+
         for (const t of g.targets) {
           if (t.isNegative) continue // handled above
-          if (t.kind?.toUpperCase() !== 'KEYWORD') {
-            // PAT / product targets need a different API surface — count them
-            // so the gap is visible rather than silently dropped.
-            skippedNonKeyword++
+          const bidEur = (t.bidCents ?? g.defaultBidCents ?? 50) / 100
+          const kind = t.kind?.toUpperCase()
+
+          // AX3.0 — the two kinds that used to be counted and dropped.
+          // PRODUCT: 613 live in this account; the PAT campaign was created empty.
+          // AUTO: the four SP clauses; the Auto campaign was created with nothing.
+          if (kind === 'PRODUCT' || kind === 'CATEGORY') {
+            try {
+              await createTargetLocal({ adGroupId: grp.id, kind: kind === 'PRODUCT' ? 'PRODUCT' : 'CATEGORY', value: t.expression, bidEur, userId: req.actor })
+              created.targets++
+            } catch (e) { errors.push(`${kind.toLowerCase()} target "${t.expression}": ${(e as Error).message.slice(0, 120)}`) }
             continue
           }
+          if (kind === 'AUTO') {
+            // An unidentifiable clause (SB/SD targeting) is still counted, not
+            // silently swallowed — the plan warned about it already.
+            if (!t.autoClause) { skippedNonKeyword++; continue }
+            try {
+              await createTargetLocal({ adGroupId: grp.id, kind: 'AUTO', value: t.autoClause, bidEur, userId: req.actor })
+              created.targets++
+            } catch (e) { errors.push(`auto clause ${t.autoClause}: ${(e as Error).message.slice(0, 120)}`) }
+            continue
+          }
+          if (kind !== 'KEYWORD') { skippedNonKeyword++; continue }
+
           const mt = (t.expressionType ?? 'EXACT').toUpperCase().replace(/^_/, '')
           if (mt !== 'EXACT' && mt !== 'PHRASE' && mt !== 'BROAD') continue
           try {
             await createKeywordLocal({
               adGroupId: grp.id, keywordText: t.expression,
-              matchType: mt, bidEur: (t.bidCents ?? g.defaultBidCents ?? 50) / 100, userId: req.actor,
+              matchType: mt, bidEur, userId: req.actor,
             })
             created.targets++
           } catch (e) { errors.push(`keyword "${t.expression}": ${(e as Error).message.slice(0, 120)}`) }
@@ -188,6 +253,23 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
             created.productAds++
           } catch (e) { errors.push(`productAd ${asin}: ${(e as Error).message.slice(0, 120)}`) }
         }
+      }
+
+      // AX3.0 — placement bid modifiers. The blueprint has always captured these
+      // and apply has always thrown them away. Every campaign in the template
+      // structure this feature was built from carries PLACEMENT_TOP +75%, which
+      // is a large part of why that structure performs; a replica without it is
+      // not the same campaign. Applied last, because it needs the campaign to
+      // exist on Amazon and the allowlist stamp above to be in place.
+      if (c.placementBidding?.length) {
+        try {
+          await updatePlacementBidding({
+            campaignId: camp.id,
+            adjustments: c.placementBidding,
+            biddingStrategy: c.biddingStrategy === 'AUTO_FOR_SALES' ? 'autoForSales' : c.biddingStrategy === 'MANUAL' ? 'manual' : 'legacyForSales',
+            userId: req.actor,
+          })
+        } catch (e) { errors.push(`placement bidding "${c.name}": ${(e as Error).message.slice(0, 120)}`) }
       }
     } catch (e) {
       errors.push(`campaign "${c.name}": ${(e as Error).message.slice(0, 160)}`)

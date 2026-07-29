@@ -179,3 +179,106 @@ describe('planApplication — other blockers', () => {
     expect(p.blockers.length).toBe(3)
   })
 })
+
+// ── AX3.0 — name collisions ───────────────────────────────────────────────
+describe('planApplication — the name-collision gate', () => {
+  // Most of this account does NOT put the product token in the campaign name:
+  // IT_Auto_Close, BMM_Misano, Auto_Loose_Moss. materialise() only rewrites a
+  // name containing the token, so those replicate to a byte-identical name.
+  const untokenised = (): SourceCampaign[] => [{
+    name: 'IT_Auto_Close', dailyBudget: 5, biddingStrategy: null, placementBidding: [],
+    adGroups: [{ name: 'IT_Auto_Close Ad Group', defaultBidCents: 30, asins: ['B0MOSS0001'], targets: [kw('giacca moto')] }],
+  }]
+
+  it('BLOCKS a plan whose name already exists live in the destination market', () => {
+    const d = extractBlueprint(untokenised(), { productToken: 'MOSS' })
+    const p = planApplication(d, gale, [], { existingCampaignNames: ['IT_Auto_Close', 'IT-AIREON-SP-Auto'] })
+    expect(p.campaigns[0]!.name).toBe('IT_Auto_Close') // the token was never in the name
+    expect(p.allowed).toBe(false)
+    expect(p.blockers.some((b) => b.includes('already exist') && b.includes('IT_Auto_Close'))).toBe(true)
+  })
+
+  it('matches names case- and whitespace-insensitively', () => {
+    const d = extractBlueprint(untokenised(), { productToken: 'MOSS' })
+    expect(planApplication(d, gale, [], { existingCampaignNames: ['  it_AUTO_close '] }).allowed).toBe(false)
+  })
+
+  it('allows when the name carries the token and therefore actually changes', () => {
+    const p = planApplication(doc, gale, [], { existingCampaignNames: ['IT-AIREON-SP-Brand-Exact', 'IT-AIREON-SP-Category-Exact'] })
+    expect(p.campaigns.map((c) => c.name)).toEqual(['IT-GALE-SP-Brand-Exact', 'IT-GALE-SP-Category-Exact'])
+    expect(p.allowed).toBe(true)
+  })
+
+  it('BLOCKS a plan that would collide with ITSELF', () => {
+    // Two source campaigns differing only by the product token collapse onto one
+    // name once it is substituted out.
+    const twins: SourceCampaign[] = [
+      { name: 'GALE-SP-Auto', dailyBudget: 5, biddingStrategy: null, placementBidding: [], adGroups: [{ name: 'a', defaultBidCents: 30, asins: [], targets: [] }] },
+      { name: 'gale-SP-Auto', dailyBudget: 5, biddingStrategy: null, placementBidding: [], adGroups: [{ name: 'b', defaultBidCents: 30, asins: [], targets: [] }] },
+    ]
+    const p = planApplication(extractBlueprint(twins, { productToken: 'GALE' }), gale, [], {})
+    expect(p.allowed).toBe(false)
+    expect(p.blockers.some((b) => b.includes('duplicate campaign name'))).toBe(true)
+  })
+
+  it('does not invent a blocker when no names are supplied', () => {
+    expect(planApplication(doc, gale, []).allowed).toBe(true)
+  })
+
+  it('an ARCHIVED name is not a collision — the caller excludes them, so this stays a pure check', () => {
+    const d = extractBlueprint(untokenised(), { productToken: 'MOSS' })
+    expect(planApplication(d, gale, [], { existingCampaignNames: [] }).allowed).toBe(true)
+  })
+})
+
+// ── AX3.0 — fidelity carried into the plan ────────────────────────────────
+describe('planApplication — what the plan now carries into creation', () => {
+  const autoSrc = (): SourceCampaign[] => [{
+    name: 'IT-AIREON-SP-Auto', dailyBudget: 10, biddingStrategy: 'LEGACY_FOR_SALES',
+    placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 75 }], targetingType: 'AUTO',
+    adGroups: [{
+      name: 'IT-AIREON-SP-Auto Ad Group', defaultBidCents: 2, asins: ['B0AIREON1'],
+      targets: [
+        { kind: 'AUTO', expressionType: 'SEARCH_CLOSE_MATCH', expressionValue: '', bidCents: 2, isNegative: false, negativeLevel: null },
+        { kind: 'AUTO', expressionType: 'SEARCH_RELATED_TO_YOUR_BRAND', expressionValue: '', bidCents: 2, isNegative: false, negativeLevel: null },
+        { kind: 'PRODUCT', expressionType: 'ASIN', expressionValue: 'B0RIVAL001', bidCents: 40, isNegative: false, negativeLevel: null },
+      ],
+    }],
+  }]
+  const p = () => planApplication(extractBlueprint(autoSrc(), { productToken: 'AIREON' }), gale, [])
+
+  it('carries targetingType so the replica is created AUTO', () => {
+    expect(p().campaigns[0]!.targetingType).toBe('AUTO')
+  })
+
+  it('carries the placement modifier that used to be captured and thrown away', () => {
+    expect(p().campaigns[0]!.placementBidding).toEqual([{ placement: 'PLACEMENT_TOP', percentage: 75 }])
+  })
+
+  it('carries the identified auto clause so it can actually be created', () => {
+    const targets = p().campaigns[0]!.adGroups[0]!.targets
+    expect(targets.find((t) => t.expressionType === 'SEARCH_CLOSE_MATCH')!.autoClause).toBe('CLOSE_MATCH')
+  })
+
+  it('WARNS about an auto clause it cannot re-create instead of dropping it silently', () => {
+    const plan = p()
+    expect(plan.allowed).toBe(true)
+    expect(plan.warnings.some((w) => w.includes('auto-targeting clause') && w.includes('not be created'))).toBe(true)
+  })
+
+  it('keeps PRODUCT targets in the plan — the PAT campaign used to land empty', () => {
+    const targets = p().campaigns[0]!.adGroups[0]!.targets
+    expect(targets.some((t) => t.kind === 'PRODUCT' && t.expression === 'B0RIVAL001')).toBe(true)
+  })
+
+  it('an auto clause is never counted as a conflict, whoever else runs one', () => {
+    // Every Auto campaign in the account has all four clauses; treating them as
+    // shared keywords would block every replication that includes an Auto role.
+    const plan = planApplication(extractBlueprint(autoSrc(), { productToken: 'AIREON' }), gale, [
+      { expression: '', campaignName: 'IT_Auto_Close', campaignId: 'c1' },
+      { expression: 'close', campaignName: 'IT_Auto_Close', campaignId: 'c1' },
+    ])
+    expect(plan.conflicts).toEqual([])
+    expect(plan.allowed).toBe(true)
+  })
+})

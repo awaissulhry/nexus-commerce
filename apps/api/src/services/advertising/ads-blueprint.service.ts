@@ -33,6 +33,9 @@ export async function loadSourceCampaigns(sel: CampaignSelector): Promise<{ camp
     orderBy: { name: 'asc' },
     select: {
       id: true, name: true, marketplace: true, dailyBudget: true, biddingStrategy: true, dynamicBidding: true,
+      // AX3.0 — Amazon's real targeting type. Without it every replica was created
+      // MANUAL, so an Auto campaign came back as a manual campaign with no targets.
+      targetingType: true,
       adGroups: {
         select: {
           name: true, defaultBidCents: true,
@@ -47,6 +50,7 @@ export async function loadSourceCampaigns(sel: CampaignSelector): Promise<{ camp
     name: c.name,
     dailyBudget: c.dailyBudget != null ? Number(c.dailyBudget) : null,
     biddingStrategy: c.biddingStrategy ?? null,
+    targetingType: c.targetingType ?? null,
     placementBidding: (((c.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }).placementBidding) ?? [],
     adGroups: c.adGroups.map((g) => ({
       name: g.name,

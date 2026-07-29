@@ -4,12 +4,16 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
-  parameterise, classifyTarget, deriveRole, extractBlueprint, diffBlueprint,
+  parameterise, classifyTarget, deriveRole, extractBlueprint, diffBlueprint, autoClauseOf,
   PRODUCT_TOKEN, type SourceCampaign,
 } from './ads-blueprint.js'
 
 const kw = (expressionValue: string, expressionType = 'EXACT', isNegative = false, bidCents: number | null = 2) => ({
   kind: 'KEYWORD', expressionType, expressionValue, bidCents, isNegative, negativeLevel: isNegative ? 'AD_GROUP' : null,
+})
+/** An auto-targeting clause as the SYNC writes it: value empty, clause in expressionType. */
+const auto = (expressionType: string, bidCents: number | null = 2) => ({
+  kind: 'AUTO', expressionType, expressionValue: '', bidCents, isNegative: false, negativeLevel: null,
 })
 
 const aireon = (): SourceCampaign[] => [
@@ -65,6 +69,42 @@ describe('classifyTarget', () => {
   })
   it('UNKNOWN for an empty expression rather than guessing', () => {
     expect(classifyTarget(kw(''), 'AIREON')).toBe('UNKNOWN')
+  })
+})
+
+// ── AX3.0 — auto-targeting clauses ────────────────────────────────────────
+describe('autoClauseOf', () => {
+  it('reads the clause the SYNC writes — expressionType, with an empty value', () => {
+    // Verified on production: 132 of 141 live AUTO rows look exactly like this.
+    expect(autoClauseOf(auto('SEARCH_CLOSE_MATCH'))).toBe('CLOSE_MATCH')
+    expect(autoClauseOf(auto('SEARCH_LOOSE_MATCH'))).toBe('LOOSE_MATCH')
+    expect(autoClauseOf(auto('PRODUCT_SUBSTITUTES'))).toBe('SUBSTITUTES')
+    expect(autoClauseOf(auto('PRODUCT_COMPLEMENTS'))).toBe('COMPLEMENTS')
+  })
+  it('reads the clause a BUILDER writes — expressionType AUTO, clause in the value', () => {
+    const built = (v: string) => ({ kind: 'AUTO', expressionType: 'AUTO', expressionValue: v, bidCents: 2, isNegative: false, negativeLevel: null })
+    expect(autoClauseOf(built('close'))).toBe('CLOSE_MATCH')
+    expect(autoClauseOf(built('substitutes'))).toBe('SUBSTITUTES')
+    expect(autoClauseOf(built('CLOSE_MATCH'))).toBe('CLOSE_MATCH')
+  })
+  it('returns null for SB/SD clauses we cannot re-create, rather than guessing', () => {
+    expect(autoClauseOf(auto('SEARCH_RELATED_TO_YOUR_BRAND'))).toBeNull()
+    expect(autoClauseOf(auto('PRODUCT_SIMILAR'))).toBeNull()
+  })
+  it('is null for anything that is not an auto target', () => {
+    expect(autoClauseOf(kw('giacca moto'))).toBeNull()
+    expect(autoClauseOf({ kind: 'PRODUCT', expressionType: 'ASIN', expressionValue: 'B0FB41W1TD' })).toBeNull()
+  })
+})
+
+describe('classifyTarget — auto clauses are machine targeting, never a shared keyword', () => {
+  it('classifies an AUTO target as AUTO however it is spelled', () => {
+    expect(classifyTarget(auto('SEARCH_CLOSE_MATCH'), 'AIREON')).toBe('AUTO')
+    // The regression this fixes: a builder-created clause has a NON-empty value,
+    // so it used to fall through to CATEGORY and be reported as a keyword the
+    // new product would "bid against you" on.
+    expect(classifyTarget({ kind: 'AUTO', expressionValue: 'close' }, 'AIREON')).toBe('AUTO')
+    expect(classifyTarget({ kind: 'AUTO', expressionValue: 'substitutes' }, 'AIREON')).toBe('AUTO')
   })
 })
 
@@ -140,6 +180,44 @@ describe('extractBlueprint', () => {
     const exprs = doc.sharedTargets.map((t) => t.expression)
     expect(exprs).not.toContain('aireon')
     expect(exprs.join(' ')).not.toContain('aireon')
+  })
+})
+
+// ── AX3.0 — the Auto campaign survives extraction ─────────────────────────
+describe('extractBlueprint — Auto campaigns', () => {
+  const autoCampaign = (targetingType?: string | null): SourceCampaign[] => [{
+    name: 'IT-AIREON-SP-Auto', dailyBudget: 10, biddingStrategy: 'LEGACY_FOR_SALES', placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 75 }],
+    targetingType,
+    adGroups: [{
+      name: 'IT-AIREON-SP-Auto Ad Group', defaultBidCents: 2, asins: ['B0FB41W1TD'],
+      targets: [auto('SEARCH_CLOSE_MATCH'), auto('SEARCH_LOOSE_MATCH'), auto('PRODUCT_SUBSTITUTES'), auto('PRODUCT_COMPLEMENTS'), kw('giacca moto', 'EXACT', true)],
+    }],
+  }]
+
+  it('keeps the four clauses, identified, so replication can re-create them', () => {
+    const d = extractBlueprint(autoCampaign('AUTO'), { productToken: 'AIREON' })
+    expect(d.campaigns[0]!.adGroups[0]!.targets.map((t) => t.autoClause).filter(Boolean))
+      .toEqual(['CLOSE_MATCH', 'LOOSE_MATCH', 'SUBSTITUTES', 'COMPLEMENTS'])
+    expect(d.stats.byClass.AUTO).toBe(4)
+  })
+
+  it('an auto clause NEVER reaches the shared surface — it is not a keyword anyone bids on', () => {
+    const d = extractBlueprint(autoCampaign('AUTO'), { productToken: 'AIREON' })
+    expect(d.sharedTargets).toEqual([])
+  })
+
+  it('carries the targeting type, so the replica is created AUTO and not MANUAL', () => {
+    expect(extractBlueprint(autoCampaign('AUTO'), { productToken: 'AIREON' }).campaigns[0]!.targetingType).toBe('AUTO')
+    expect(extractBlueprint(aireon(), { productToken: 'AIREON' }).campaigns[0]!.targetingType).toBe('MANUAL')
+  })
+
+  it('infers AUTO from the clauses when the column was never synced (5 live campaigns have it null)', () => {
+    expect(extractBlueprint(autoCampaign(null), { productToken: 'AIREON' }).campaigns[0]!.targetingType).toBe('AUTO')
+  })
+
+  it('preserves the placement modifier the whole template depends on', () => {
+    const d = extractBlueprint(autoCampaign('AUTO'), { productToken: 'AIREON' })
+    expect(d.campaigns[0]!.placementBidding).toEqual([{ placement: 'PLACEMENT_TOP', percentage: 75 }])
   })
 })
 
