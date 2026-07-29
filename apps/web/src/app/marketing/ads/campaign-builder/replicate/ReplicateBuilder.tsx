@@ -287,13 +287,24 @@ export function ReplicateBuilder() {
   /**
    * Jump to a step-1 section.
    *
-   * `scrollIntoView` alone does not work here: the ads shell scrolls an inner
-   * `.h10-main` element rather than the document, and step 1 also contains its
-   * own scrollable source tree, so the call resolved against the wrong box and
-   * moved the page a few pixels. Verified on prod — the sub-nav highlighted the
-   * section and then sat still. Walk up to the ancestor that actually scrolls
-   * and move that.
+   * Two things had to be true, and only the second was obvious.
+   *
+   * 1. The ads shell scrolls an inner `.h10-main`, not the document, and step 1
+   *    also contains its own scrollable source tree — so we walk up to the
+   *    ancestor that genuinely scrolls rather than trusting `scrollIntoView` to
+   *    pick it.
+   * 2. **Native smooth scrolling does not work on that container.** Measured on
+   *    prod: `scrollTo({behavior:'smooth'})` on `.h10-main` moves it zero pixels,
+   *    while the identical call with `behavior:'auto'` lands correctly. `html`
+   *    carries a global `scroll-behavior: smooth`, and the combination silently
+   *    no-ops. That — not the container — is why the sub-nav has never worked,
+   *    here or in the SP Super Wizard, which uses the same one-liner.
+   *
+   * So the animation is ours: a short eased rAF tween over instant scrolls,
+   * which is smooth, cancellable, and does not depend on a browser behaviour
+   * that has already been observed to do nothing.
    */
+  const scrollAnim = useRef(0)
   const gotoSec = (id: string) => {
     const el = document.getElementById(`rep-${id}`)
     if (!el) return
@@ -303,9 +314,23 @@ export function ReplicateBuilder() {
       if ((oy === 'auto' || oy === 'scroll') && box.scrollHeight > box.clientHeight + 1) break
       box = box.parentElement
     }
-    const offset = el.getBoundingClientRect().top - 12
-    if (box && box !== document.body) box.scrollTo({ top: box.scrollTop + offset, behavior: 'smooth' })
-    else window.scrollTo({ top: window.scrollY + offset, behavior: 'smooth' })
+    const scroller = box && box !== document.body ? box : null
+    const from = scroller ? scroller.scrollTop : window.scrollY
+    const max = scroller ? scroller.scrollHeight - scroller.clientHeight : document.body.scrollHeight - window.innerHeight
+    const to = Math.max(0, Math.min(max, from + el.getBoundingClientRect().top - 12))
+    if (Math.abs(to - from) < 2) return
+
+    cancelAnimationFrame(scrollAnim.current)
+    const start = performance.now()
+    const DURATION = 260
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / DURATION)
+      const eased = 1 - (1 - t) ** 3 // ease-out cubic
+      const y = from + (to - from) * eased
+      if (scroller) scroller.scrollTop = y; else window.scrollTo(0, y)
+      if (t < 1) scrollAnim.current = requestAnimationFrame(step)
+    }
+    scrollAnim.current = requestAnimationFrame(step)
   }
 
   const missing: string[] = []
