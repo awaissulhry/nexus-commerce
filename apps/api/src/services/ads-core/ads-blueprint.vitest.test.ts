@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
-  parameterise, classifyTarget, deriveRole, extractBlueprint, diffBlueprint, autoClauseOf,
+  parameterise, classifyTarget, deriveRole, extractBlueprint, diffBlueprint, autoClauseOf, structuralRole,
   PRODUCT_TOKEN, type SourceCampaign,
 } from './ads-blueprint.js'
 
@@ -117,6 +117,94 @@ describe('deriveRole', () => {
   })
   it('gives the same role for a different product — that is the whole point', () => {
     expect(deriveRole('IT-GALE-SP-Brand-Broad', 'GALE')).toBe(deriveRole('IT-AIREON-SP-Brand-Broad', 'AIREON'))
+  })
+
+  // ── AX3.1 — this account uses five naming conventions, not one ──────────
+  it('handles the PIPE convention', () => {
+    // Was "|-IT-|-Phrase-|-Competitor" — pipes were not separators.
+    expect(deriveRole('GALE | IT | Phrase | Competitor', 'GALE')).toBe('Phrase-Competitor')
+    expect(deriveRole('GALE | IT | Auto', 'GALE')).toBe('Auto')
+  })
+  it('handles the UNDERSCORE convention, token in the middle or absent', () => {
+    expect(deriveRole('IT_BMM_Gale', 'GALE')).toBe('BMM')
+    expect(deriveRole('IT_Auto_Substitute', 'GALE')).toBe('Auto-Substitute')
+  })
+  it('handles the token at the END of the name', () => {
+    expect(deriveRole('Auto_Loose_Moss', 'MOSS')).toBe('Auto-Loose')
+  })
+  it('gives a market-independent role, so DE and IT siblings match', () => {
+    expect(deriveRole('DE_Auto_Substitute', 'GALE')).toBe(deriveRole('IT_Auto_Substitute', 'GALE'))
+  })
+  it('only strips a REAL marketplace code, never a 2-letter role word', () => {
+    expect(deriveRole('AI-SP-Brand', 'GALE')).toBe('AI-Brand')
+    expect(deriveRole('IT-SP-Brand', 'GALE')).toBe('Brand')
+  })
+  it('falls back rather than returning the bare product placeholder', () => {
+    // A campaign named only for its product reduces to nothing once the token
+    // is parameterised out; "{{product}}" is not a usable role.
+    expect(deriveRole('GALE', 'GALE')).toBe(PRODUCT_TOKEN)
+    expect(deriveRole('GALE', 'GALE', 'Keyword-Exact')).toBe('Keyword-Exact')
+  })
+})
+
+describe('structuralRole — a role for names that say nothing', () => {
+  const mk = (targets: ReturnType<typeof kw>[], targetingType?: string | null): SourceCampaign => ({
+    name: 'x', dailyBudget: 1, biddingStrategy: null, placementBidding: [], targetingType,
+    adGroups: [{ name: 'g', defaultBidCents: 2, asins: [], targets }],
+  })
+  it('is Auto for an auto campaign, by column or by clause', () => {
+    expect(structuralRole(mk([], 'AUTO'))).toBe('Auto')
+    expect(structuralRole(mk([auto('SEARCH_CLOSE_MATCH')]))).toBe('Auto')
+  })
+  it('names the dominant kind and match type', () => {
+    expect(structuralRole(mk([kw('a', 'EXACT'), kw('b', 'EXACT'), kw('c', 'BROAD')]))).toBe('Keyword-Exact')
+  })
+  it('names a product-targeting campaign', () => {
+    expect(structuralRole(mk([{ kind: 'PRODUCT', expressionType: 'ASIN', expressionValue: 'B0X', bidCents: 2, isNegative: false, negativeLevel: null }]))).toBe('Product')
+  })
+  it('ignores negatives — they do not describe what a campaign targets', () => {
+    expect(structuralRole(mk([kw('a', 'EXACT'), kw('b', 'PHRASE', true), kw('c', 'PHRASE', true)]))).toBe('Keyword-Exact')
+  })
+  it('never returns empty', () => {
+    expect(structuralRole(mk([]))).toBe('Campaign')
+  })
+})
+
+describe('extractBlueprint — orphaned source targets', () => {
+  // All four auto clauses on IT-AIREON-SP-Auto carry orphanedAt: Amazon deleted
+  // them. They must still replicate — creating the same clause for a different
+  // product is a fresh create, and dropping them would rebuild the exact defect
+  // AX3.0 fixed (an Auto campaign with no targeting).
+  const src = (): SourceCampaign[] => [{
+    name: 'IT-AIREON-SP-Auto', dailyBudget: 10, biddingStrategy: null, placementBidding: [], targetingType: 'AUTO',
+    adGroups: [{
+      name: 'g', defaultBidCents: 2, asins: [],
+      targets: [{ ...auto('SEARCH_CLOSE_MATCH'), orphaned: true }, { ...auto('SEARCH_LOOSE_MATCH'), orphaned: true }, kw('giacca moto')],
+    }],
+  }]
+
+  it('replicates an orphaned target rather than silently dropping it', () => {
+    const d = extractBlueprint(src(), { productToken: 'AIREON' })
+    expect(d.campaigns[0]!.adGroups[0]!.targets.map((t) => t.autoClause).filter(Boolean)).toEqual(['CLOSE_MATCH', 'LOOSE_MATCH'])
+  })
+  it('counts them, so the operator knows the SOURCE has drifted from Amazon', () => {
+    expect(extractBlueprint(src(), { productToken: 'AIREON' }).stats.orphanedInSource).toBe(2)
+  })
+  it('is zero when nothing has drifted', () => {
+    expect(extractBlueprint(aireon(), { productToken: 'AIREON' }).stats.orphanedInSource).toBe(0)
+  })
+})
+
+describe('extractBlueprint — roles stay unique', () => {
+  it('two campaigns that reduce to the same role do not collapse', () => {
+    // Real pair from this account: names differing only in case.
+    const src: SourceCampaign[] = [
+      { name: 'MISANO PRODUCT TARGETING', dailyBudget: 1, biddingStrategy: null, placementBidding: [], adGroups: [{ name: 'a', defaultBidCents: 2, asins: [], targets: [] }] },
+      { name: 'MIsano Product Targeting', dailyBudget: 1, biddingStrategy: null, placementBidding: [], adGroups: [{ name: 'b', defaultBidCents: 2, asins: [], targets: [] }] },
+    ]
+    const roles = extractBlueprint(src, { productToken: 'GALE' }).campaigns.map((c) => c.role)
+    expect(new Set(roles).size).toBe(2)
+    expect(roles[1]).toMatch(/-2$/)
   })
 })
 

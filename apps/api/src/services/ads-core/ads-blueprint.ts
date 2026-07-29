@@ -69,6 +69,13 @@ export interface SourceTarget {
   bidCents: number | null
   isNegative: boolean
   negativeLevel: string | null
+  /**
+   * AX3.1 — Amazon no longer has this entity (AdTarget.orphanedAt is set). It is
+   * still replicated: creating the same target for a different product is a new
+   * create, not a re-push of the dead id. Counted so the preview can say the
+   * SOURCE has drifted from Amazon.
+   */
+  orphaned?: boolean
 }
 export interface SourceAdGroup {
   name: string
@@ -139,6 +146,12 @@ export interface BlueprintDoc {
     negatives: number
     productAds: number
     byClass: Record<TargetClass, number>
+    /**
+     * AX3.1 — source targets Amazon has already deleted. They ARE replicated
+     * (see SourceTarget.orphaned); this number exists so the operator knows the
+     * structure they are copying no longer matches what is live.
+     */
+    orphanedInSource: number
   }
   /**
    * Positive targets that are NOT specific to the source product — i.e. every
@@ -213,27 +226,65 @@ export function classifyTarget(
 /**
  * Derive a campaign's role from its name given the product token.
  * "IT-AIREON-SP-Brand-Broad" → "Brand-Broad".
+ *
+ * AX3.1 — this account uses FIVE naming conventions and only 11 of 190
+ * campaigns use the dash one this was written for. `|` is now a separator, so
+ * "GALE | IT | Phrase | Competitor" yields "Phrase-Competitor" instead of the
+ * previous "|-IT-|-Phrase-|-Competitor". `fallback` is used when the name
+ * carries no information of its own — a campaign named only for its product
+ * reduces to nothing once the token is parameterised out — and callers pass a
+ * structural label there rather than letting the role become "{{product}}".
  */
-export function deriveRole(name: string, productToken: string): string {
+export function deriveRole(name: string, productToken: string, fallback?: string): string {
   const pattern = parameterise(name, productToken)
   // Tokenise rather than chain regexes: once the product token is removed the
   // separators collapse unpredictably, and an ad-product marker can end up at
   // the start of the string where an "inner" pattern will not match it.
   const parts = pattern
     .replace(new RegExp(escapeRe(PRODUCT_TOKEN), 'g'), ' ')
-    .split(/[-_\s]+/)
+    .split(/[-_|\s]+/)
     .filter(Boolean)
 
   const out: string[] = []
   for (let i = 0; i < parts.length; i++) {
     const p = parts[i]!
-    // A leading 2-letter token is the marketplace prefix (IT-, DE-, …).
-    if (out.length === 0 && i < 2 && /^[a-z]{2}$/i.test(p)) continue
+    // A leading 2-letter token is the marketplace prefix (IT-, DE-, …). Only a
+    // real marketplace code, so a role that legitimately starts with a 2-letter
+    // word is not eaten.
+    if (out.length === 0 && i < 2 && MARKETPLACE_CODES.has(p.toUpperCase())) continue
     // Standalone sp/sb/sd is the ad-product marker by naming convention.
     if (/^(sp|sb|sd)$/i.test(p)) continue
     out.push(p)
   }
-  return out.join('-') || pattern
+  return out.join('-') || fallback || pattern
+}
+
+/** The marketplace prefixes this account's naming conventions actually use. */
+const MARKETPLACE_CODES = new Set(['IT', 'DE', 'FR', 'ES', 'UK', 'GB', 'NL', 'SE', 'PL', 'BE', 'IE', 'TR', 'US'])
+
+/**
+ * AX3.1 — a role derived from what a campaign DOES, for names that say nothing.
+ * "Auto", or "Exact-Category" — targeting type, then the dominant match type and
+ * target class of its positives.
+ */
+export function structuralRole(c: SourceCampaign): string {
+  const targets = c.adGroups.flatMap((g) => g.targets).filter((t) => !t.isNegative)
+  if ((c.targetingType ?? '').toUpperCase() === 'AUTO' || targets.some((t) => autoClauseOf(t))) return 'Auto'
+  const top = (counts: Map<string, number>): string | null =>
+    [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? null
+  const match = new Map<string, number>()
+  const kinds = new Map<string, number>()
+  for (const t of targets) {
+    const k = (t.kind ?? '').toUpperCase()
+    kinds.set(k === 'KEYWORD' ? 'Keyword' : k === 'PRODUCT' ? 'Product' : k === 'CATEGORY' ? 'Category' : 'Other', (kinds.get(k) ?? 0) + 1)
+    if (k !== 'KEYWORD') continue
+    const mt = (t.expressionType ?? '').toUpperCase().replace(/^_/, '')
+    if (mt === 'EXACT' || mt === 'PHRASE' || mt === 'BROAD') {
+      const label = mt.charAt(0) + mt.slice(1).toLowerCase()
+      match.set(label, (match.get(label) ?? 0) + 1)
+    }
+  }
+  return [top(kinds), top(match)].filter(Boolean).join('-') || 'Campaign'
 }
 
 export interface ExtractOptions {
@@ -246,10 +297,22 @@ export function extractBlueprint(campaigns: SourceCampaign[], opts: ExtractOptio
   const { productToken, competitorTokens = [] } = opts
   const byClass: Record<TargetClass, number> = { BRAND: 0, CATEGORY: 0, COMPETITOR: 0, ASIN: 0, AUTO: 0, UNKNOWN: 0 }
   const shared = new Map<string, TargetClass>()
-  let positives = 0, negatives = 0, adGroups = 0, productAds = 0
+  let positives = 0, negatives = 0, adGroups = 0, productAds = 0, orphanedInSource = 0
+
+  // AX3.1 — roles must stay unique. diffBlueprint indexes live campaigns BY ROLE,
+  // so two campaigns that reduce to the same role silently collapse into one and
+  // the diff reports the other as missing. Real example: "MISANO PRODUCT
+  // TARGETING" and "MIsano Product Targeting" both reduce to the same role.
+  const roleSeen = new Map<string, number>()
+  const uniqueRole = (base: string): string => {
+    const k = base.toLowerCase()
+    const n = (roleSeen.get(k) ?? 0) + 1
+    roleSeen.set(k, n)
+    return n === 1 ? base : `${base}-${n}`
+  }
 
   const outCampaigns: BlueprintCampaign[] = campaigns.map((c) => {
-    const role = deriveRole(c.name, productToken)
+    const role = uniqueRole(deriveRole(c.name, productToken, structuralRole(c)))
     let sawAutoClause = false
     const groups: BlueprintAdGroup[] = c.adGroups.map((g) => {
       adGroups++
@@ -259,6 +322,7 @@ export function extractBlueprint(campaigns: SourceCampaign[], opts: ExtractOptio
         const autoClause = autoClauseOf(t)
         if (autoClause) sawAutoClause = true
         byClass[targetClass]++
+        if (t.orphaned) orphanedInSource++
         if (t.isNegative) negatives++; else positives++
         // Only POSITIVE non-product targets create self-competition. A shared
         // negative is harmless — it excludes the same traffic for both products.
@@ -301,7 +365,7 @@ export function extractBlueprint(campaigns: SourceCampaign[], opts: ExtractOptio
     version: 1,
     productToken,
     campaigns: outCampaigns,
-    stats: { campaigns: campaigns.length, adGroups, positives, negatives, productAds, byClass },
+    stats: { campaigns: campaigns.length, adGroups, positives, negatives, productAds, byClass, orphanedInSource },
     sharedTargets: [...shared.entries()]
       .map(([expression, targetClass]) => ({ expression, targetClass }))
       .sort((a, b) => a.expression.localeCompare(b.expression)),

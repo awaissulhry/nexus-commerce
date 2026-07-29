@@ -1319,8 +1319,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // the same auction. AX2.5 must arbitrate that list before it may create
   // anything.
 
+  /**
+   * AX3.1 — the source tree the replication builder picks from: portfolio →
+   * campaign → ad group, with counts. Includes the unportfolio'd campaigns,
+   * which are 128 of 190 and hold the richest product-targeting structures.
+   */
+  fastify.get('/advertising/blueprints/sources', async (request, reply) => {
+    const q = request.query as { marketplace?: string }
+    const { loadSourceTree } = await import('../services/advertising/ads-blueprint.service.js')
+    try { return await loadSourceTree({ marketplace: q.marketplace ?? null }) }
+    catch (e) { reply.code(500); return { error: (e as Error).message, portfolios: [] } }
+  })
+
   fastify.post('/advertising/blueprints/preview', async (request, reply) => {
-    const b = request.body as { campaignIds?: string[]; namePrefix?: string; marketplace?: string; productToken?: string; competitorTokens?: string[] }
+    const b = request.body as { campaignIds?: string[]; adGroupIds?: string[]; portfolioId?: string; namePrefix?: string; marketplace?: string; productToken?: string; competitorTokens?: string[] }
     if (!b?.productToken) { reply.code(400); return { error: 'productToken is required — it is what gets parameterised out' } }
     const { previewBlueprint } = await import('../services/advertising/ads-blueprint.service.js')
     try {
@@ -1329,7 +1341,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   fastify.post('/advertising/blueprints', async (request, reply) => {
-    const b = request.body as { name?: string; description?: string; campaignIds?: string[]; namePrefix?: string; marketplace?: string; productToken?: string; competitorTokens?: string[] }
+    const b = request.body as { name?: string; description?: string; campaignIds?: string[]; adGroupIds?: string[]; portfolioId?: string; namePrefix?: string; marketplace?: string; productToken?: string; competitorTokens?: string[] }
     if (!b?.name?.trim()) { reply.code(400); return { error: 'name is required' } }
     if (!b?.productToken) { reply.code(400); return { error: 'productToken is required' } }
     const { saveBlueprint } = await import('../services/advertising/ads-blueprint.service.js')
@@ -1438,7 +1450,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   /** Has a product's structure drifted from the template it was built from? */
   fastify.post('/advertising/blueprints/:id/diff', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const b = request.body as { campaignIds?: string[]; namePrefix?: string; marketplace?: string; productToken?: string }
+    const b = request.body as { campaignIds?: string[]; adGroupIds?: string[]; portfolioId?: string; namePrefix?: string; marketplace?: string; productToken?: string }
     if (!b?.productToken) { reply.code(400); return { error: 'productToken of the compared product is required' } }
     const { diffAgainst } = await import('../services/advertising/ads-blueprint.service.js')
     try {

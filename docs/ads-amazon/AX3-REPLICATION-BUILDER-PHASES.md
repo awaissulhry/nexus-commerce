@@ -122,9 +122,19 @@ design language, no new stylesheet.
 
 **Step 1 — Source & Products** (sub-nav sections, in order)
 
-1. **Source structure** — pick a **portfolio** (primary, with campaign/ad-group/keyword/negative
-   counts and €/day shown per row), or a **saved blueprint**, or campaigns by name prefix.
-   Selecting one renders a live "what's inside" summary.
+1. **Source structure** — a **checkbox tree: portfolio → campaign → ad group**, with
+   campaign/ad-group/keyword/negative counts and €/day on every row. Tick a whole portfolio, or
+   cherry-pick individual campaigns, or individual ad groups within a campaign. A saved blueprint
+   is a fourth entry point into the same tree.
+
+   This granularity is not a nicety. **128 of 190 live campaigns belong to no portfolio at all**,
+   and the richest product-targeting structures — `GALE JACKET PRODUCT TARGETING` and its siblings,
+   154 product targets between them — are among them. A portfolio-only picker cannot reach the best
+   material in the account.
+
+   Selecting an ad group replicates its parent campaign shell plus that ad group only; Amazon has
+   no ad group without a campaign. Keyword-level cherry-picking is deliberately *not* here — it
+   belongs in step 2, where every keyword is visible and deletable in context.
 2. **What to copy** — checklist, Amazon's pattern: keywords · negatives · product targets · auto
    groups · bids · budgets · placement modifiers. Unchecked means not created, and it says so.
 3. **Naming** — the bulk rename the operator asked for: product-token swap (`AIREON` → `VENTRA`),
@@ -167,19 +177,33 @@ to the source-picker rows and the tree indent, appended to the existing `ads.css
 Each is independently shippable and verifiable on production. Order is deliberate: the engine tells
 the truth before a one-click surface multiplies what it gets wrong.
 
-### AX3.0 — Fidelity: make apply create what it captured *(no UI)*
-Fix G3, G4, G5, G6, G7, G8, G2. Capture `targetingType` and the auto groups; create Auto campaigns
-as `AUTO` with their four auto targets; create PRODUCT targets and negative product targets; apply
-`placementBidding`; pass `portfolioId`; stamp `liveBidWritesEnabled` to match SPW; block a planned
-name that collides with a live campaign in the destination market. Unit tests on the pure modules,
-which already have suites. **Ships with a dry-run diff proving the AIREON portfolio now round-trips
-at full fidelity — 11/11 campaigns, not 10 shells and an inert Auto.**
+### ✅ AX3.0 — Fidelity: make apply create what it captured *(no UI)* — SHIPPED 2026-07-29 `620ae445c`
+G2, G3, G4, G5, G6, G7, G8. Captures `targetingType` and normalises the auto clause across all three
+spellings it appears in; creates Auto campaigns as `AUTO` with their clauses, PRODUCT/CATEGORY
+targets, and negative product targets; applies `placementBidding`; passes `portfolioId`; stamps
+`liveBidWritesEnabled`; blocks a name that collides with the destination market **or with the plan
+itself**. 22 new unit tests (68 total across the two suites).
 
-### AX3.1 — Source by portfolio, and roles that survive five conventions
-G1, G10. Add `portfolioId` to `CampaignSelector`; tokenise on `[-_|\s]+`; derive role from
-*structure* (targetingType + dominant match type + target class) with the name as a fallback label;
-new `GET /advertising/blueprints/sources` returning portfolios with counts and stats for the picker.
-Verified against all nine live portfolios.
+**Verified on live data** via `scripts/_bp-fidelity-verify.mts` across all five source shapes —
+**241 targets recovered** that were previously created and silently dropped:
+
+| Source | Recovered | Notes |
+|---|---|---|
+| IT AIREON | 4 | the 4 auto clauses; 11/11 placement modifiers now applied |
+| IT_Gale | 28 | 12 auto + 16 product. Collision gate correctly **blocks** `IT_Auto_Close`, `IT_Auto_Loose`, `IT_Auto_Substitute` |
+| Xavia GALE IT | 23 | pipe convention; roles still ugly (`\|-IT-\|-Auto`) → AX3.1 |
+| Moss_Jacket | 22 | 4 of 7 campaigns are AUTO |
+| GALE product-targeting (no portfolio) | **164** | previously 100% dropped. Also caught a **self**-collision: two campaigns whose names differ only in case |
+
+### AX3.1 — Source at any grain, and roles that survive five conventions
+G1, G10, plus the approved extension. `CampaignSelector` gains `portfolioId` **and `adGroupIds`**, so
+a source can be a portfolio, a hand-picked set of campaigns, or individual ad groups within them.
+`deriveRole` tokenises on `[-_|\s]+` so the pipe convention stops producing `|-IT-|-Auto`, falls back
+to a *structural* label (targeting type + dominant match type + target class) when the name yields
+nothing, and de-duplicates roles so two campaigns never collapse onto one in the diff.
+New `GET /advertising/blueprints/sources` returns the portfolio → campaign → ad-group tree with
+counts, including the unportfolio'd campaigns that a portfolio-only picker cannot reach.
+Verified against all nine live portfolios and the unportfolio'd set.
 
 ### AX3.2 — The builder entry point
 Sixth card in `CampaignBuilder.tsx`; route `/marketing/ads/campaign-builder/replicate`; SPW chrome +
