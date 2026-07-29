@@ -5231,119 +5231,37 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // ── POST /advertising/bulk/apply — apply a validated bulksheet ───────
-  // Dispatches each row's Operation to the existing audited write paths. Defaults
-  // to applyImmediately:false → pending/sandbox (no live Amazon writes unless the
-  // campaign is on the live-write allowlist). v1 supports Campaign + Ad group
-  // Update/Archive, Keyword Create, Negative keyword Create; others are skipped.
-  fastify.post('/advertising/bulk/apply', async (request, reply) => {
-    const body = request.body as { rows?: Array<Record<string, string>>; applyImmediately?: boolean }
-    const rows = Array.isArray(body?.rows) ? body.rows : []
-    if (!rows.length) { reply.status(400); return { error: 'rows[] required' } }
-    if (rows.length > 2000) { reply.status(400); return { error: 'max 2000 rows per apply' } }
-    const applyImmediately = body.applyImmediately === true
-    const actor = actorFromHeaders(request.headers as Record<string, unknown>)
-    const g = (r: Record<string, string>, k: string) => (r[k] ?? '').toString().trim()
-    const extC = [...new Set(rows.map((r) => g(r, 'Campaign ID')).filter(Boolean))]
-    const extA = [...new Set(rows.map((r) => g(r, 'Ad group ID')).filter(Boolean))]
-    const [camps, ags] = await Promise.all([
-      prisma.campaign.findMany({ where: { externalCampaignId: { in: extC } }, select: { id: true, externalCampaignId: true, marketplace: true } }),
-      prisma.adGroup.findMany({ where: { externalAdGroupId: { in: extA } }, select: { id: true, externalAdGroupId: true, campaign: { select: { marketplace: true } } } }),
-    ])
-    const campByExt = new Map(camps.map((c) => [c.externalCampaignId, c]))
-    const agByExt = new Map(ags.map((a) => [a.externalAdGroupId, a]))
-    const ST: Record<string, 'ENABLED' | 'PAUSED' | 'ARCHIVED'> = { enabled: 'ENABLED', paused: 'PAUSED', archived: 'ARCHIVED' }
-
-    // ── AX-IE.2 — parsing now comes from the shared schema, so the browser and
-    // the server reach the identical verdict. These were defined inline here,
-    // which is exactly how two grammars drifted apart in the first place.
-    //
-    // Each replaces a silent fallback that was actively corrupting data: match
-    // type collapsed anything unrecognised to EXACT (immutable on Amazon —
-    // correcting one means archive + recreate, which destroys the target's
-    // performance history), and an unparseable bid became a EUR 0.50 bid.
-    const parseMoneyEur = (raw: string): { eur: number } | { error: string } => {
-      const r = parseMoney(raw)
-      return 'error' in r ? r : { eur: r.value }
+  // ── POST /advertising/bulk/apply — RETIRED ──────────────────────────
+  //
+  // This was the original bulksheet write: raw JSON rows in, mutations out. It
+  // is a second, unguarded path into the live ad account, and it predates every
+  // guard the current one has —
+  //
+  //   no preview, so nothing is seen before it is written;
+  //   no plan token, so nothing closes the gap between deciding and applying;
+  //   no blast-radius gate, so a dragged formula column is indistinguishable
+  //     from an intentional rewrite of the account;
+  //   no change set, so there is NO UNDO for anything it does;
+  //   no job claim, so two submissions apply every row twice.
+  //
+  // It is also the last consumer of the second grammar: the caller validated
+  // rows with its own hand-written entity list, which had already drifted from
+  // the shared one (missing Campaign negative keyword and Negative product
+  // targeting, no ad-product legality check, no it-IT aliases).
+  //
+  // Measured on prod before retiring it: ZERO writes have ever come through
+  // here — no OutboundSyncQueue row has ever carried its `bulk upload` reason —
+  // against 14 through the current path across 23 import jobs. So this refuses
+  // rather than being deleted: a 410 that names the replacement is a better
+  // answer than a 404 for anything still pointed at it.
+  fastify.post('/advertising/bulk/apply', async (_request, reply) => {
+    reply.status(410)
+    return {
+      error: 'endpoint_retired',
+      message: 'This apply path has been retired because it wrote to the ad account with no preview, no blast-radius check and no undo. Upload the file at /marketing/ads/bulk instead — same sheet, but you see exactly what it would do first, and the whole upload can be reverted in one click.',
+      replacement: 'POST /api/advertising/bulk/upload → /bulk/import/:id/preview → /bulk/import/:id/apply',
+      ui: '/marketing/ads/bulk',
     }
-    const parseBidEur = (raw: string): { eur: number } | { error: string } => {
-      const r = parseBid(raw)
-      return 'error' in r ? r : { eur: r.value }
-    }
-    // Canonical vocabulary value -> the enum our existing write paths expect.
-    const MATCH_TYPE_TO_DB: Record<string, 'EXACT' | 'PHRASE' | 'BROAD'> = { Exact: 'EXACT', Phrase: 'PHRASE', Broad: 'BROAD' }
-    const NEG_MATCH_TYPE_TO_DB: Record<string, 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE'> = {
-      Exact: 'NEGATIVE_EXACT', Phrase: 'NEGATIVE_PHRASE',
-      'Negative exact': 'NEGATIVE_EXACT', 'Negative phrase': 'NEGATIVE_PHRASE',
-    }
-
-    const profileCache = new Map<string, string | null>()
-    const profileFor = async (mkt: string | null): Promise<string | null> => {
-      if (!mkt) return null
-      if (profileCache.has(mkt)) return profileCache.get(mkt) ?? null
-      const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace: mkt, isActive: true }, select: { profileId: true } })
-      const pid = conn?.profileId ?? null; profileCache.set(mkt, pid); return pid
-    }
-    const { createKeywordLocal } = await import('../services/advertising/ads-create.service.js')
-    const { createNegative } = await import('../services/advertising/ads-negative-kw.service.js')
-
-    const results: Array<{ row: number; entity: string; operation: string; status: 'applied' | 'skipped' | 'error'; message: string }> = []
-    let applied = 0, skipped = 0, errors = 0
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i]; const entity = g(r, 'Entity'); const op = g(r, 'Operation')
-      const push = (status: 'applied' | 'skipped' | 'error', message: string) => { results.push({ row: i + 1, entity, operation: op || 'Read', status, message }); if (status === 'applied') applied++; else if (status === 'error') errors++; else skipped++ }
-      if (!op) { push('skipped', 'No operation (read row)'); continue }
-      try {
-        if (entity === 'Campaign' && (op === 'Update' || op === 'Archive')) {
-          const c = campByExt.get(g(r, 'Campaign ID')); if (!c) { push('error', 'Campaign ID not found'); continue }
-          const patch: { status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; dailyBudget?: number } = {}
-          if (op === 'Archive') patch.status = 'ARCHIVED'; else if (ST[g(r, 'State').toLowerCase()]) patch.status = ST[g(r, 'State').toLowerCase()]
-          const db = g(r, 'Daily budget') || g(r, 'Budget')
-          if (db) {
-            const parsed = parseMoneyEur(db)
-            if ('error' in parsed) { push('error', `Daily budget: ${parsed.error}`); continue }
-            if (parsed.eur <= 0) { push('error', `Daily budget must be greater than 0 (received "${db}")`); continue }
-            patch.dailyBudget = parsed.eur
-          }
-          const res = await updateCampaignWithSync({ campaignId: c.id, patch, actor, reason: 'bulk upload', applyImmediately })
-          if (res.ok) push('applied', applyImmediately ? 'Campaign updated (live)' : 'Campaign queued (pending)'); else push('error', res.error ?? 'update failed')
-        } else if (entity === 'Ad group' && (op === 'Update' || op === 'Archive')) {
-          const a = agByExt.get(g(r, 'Ad group ID')); if (!a) { push('error', 'Ad group ID not found'); continue }
-          const status = op === 'Archive' ? 'ARCHIVED' : ST[g(r, 'State').toLowerCase()]
-          if (!status) { push('skipped', 'No State to update'); continue }
-          const res = await updateAdGroupWithSync({ adGroupId: a.id, patch: { status }, actor, reason: 'bulk upload', applyImmediately })
-          if (res.ok) push('applied', applyImmediately ? 'Ad group updated (live)' : 'Ad group queued (pending)'); else push('error', res.error ?? 'update failed')
-        } else if (entity === 'Keyword' && op === 'Create') {
-          const a = agByExt.get(g(r, 'Ad group ID')); if (!a) { push('error', 'Ad group ID not found'); continue }
-          const rawMt = g(r, 'Match type')
-          const canonicalMt = parseVocabulary('matchType', rawMt)
-          const matchType = canonicalMt ? MATCH_TYPE_TO_DB[canonicalMt] : undefined
-          if (!matchType) { push('error', `Match type "${rawMt}" not recognised — expected one of ${VOCABULARIES.matchType.values.join(', ')}`); continue }
-          const keywordText = g(r, 'Keyword text')
-          if (!keywordText) { push('error', 'Keyword text is required'); continue }
-          const bid = parseBidEur(g(r, 'Bid'))
-          if ('error' in bid) { push('error', bid.error); continue }
-          await createKeywordLocal({ adGroupId: a.id, keywordText, matchType, bidEur: bid.eur } as never)
-          push('applied', 'Keyword created (pending)')
-        } else if (entity === 'Negative keyword' && op === 'Create') {
-          const cid = g(r, 'Campaign ID'); const aid = g(r, 'Ad group ID')
-          const mkt = campByExt.get(cid)?.marketplace ?? agByExt.get(aid)?.campaign?.marketplace ?? null
-          const profileId = await profileFor(mkt)
-          if (!profileId || !mkt) { push('error', 'No active connection for marketplace'); continue }
-          const rawMt = g(r, 'Match type')
-          const canonicalMt = parseVocabulary('matchType', rawMt)
-          const matchType = canonicalMt ? NEG_MATCH_TYPE_TO_DB[canonicalMt] : undefined
-          if (!matchType) { push('error', `Match type "${rawMt}" not recognised for a negative keyword — expected Negative exact or Negative phrase`); continue }
-          const keywordText = g(r, 'Keyword text')
-          if (!keywordText) { push('error', 'Keyword text is required'); continue }
-          await createNegative({ profileId, externalCampaignId: cid, externalAdGroupId: aid || undefined, keywordText, matchType, scope: aid ? 'AD_GROUP' : 'CAMPAIGN', marketplace: mkt } as never)
-          push('applied', 'Negative keyword created (pending)')
-        } else {
-          push('skipped', `${entity || 'Row'} · ${op} not supported yet`)
-        }
-      } catch (e) { push('error', (e as Error)?.message ?? 'failed') }
-    }
-    return { total: rows.length, applied, skipped, errors, applyImmediately, results }
   })
 
   // GET /api/advertising/reports/negative-keyword-candidates

@@ -14,6 +14,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import ExcelJS from 'exceljs'
 import { Download, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Info, ExternalLink } from 'lucide-react'
+import Link from 'next/link'
+import { validateRow as validateBulksheetRow } from '@nexus/shared/ads-bulksheet'
 import { getBackendUrl } from '@/lib/backend-url'
 import { campaignHref } from '../automation/useCampaignMap'
 import { useAmazonLinks, buildAmazonCampaignHref } from '../automation/useAmazonLinks'
@@ -21,8 +23,11 @@ import { useAmazonLinks, buildAmazonCampaignHref } from '../automation/useAmazon
 type Row = Record<string, string>
 interface VRow { r: Row; ok: boolean; op: string; msg: string }
 
-const ENTITIES = ['Campaign', 'Ad group', 'Keyword', 'Product ad', 'Product targeting', 'Negative keyword', 'Bidding adjustment', 'Portfolio']
-const OPS = ['Create', 'Update', 'Archive']
+// AX-IE.11 — the entity and operation lists that used to live here are gone.
+// They were the second grammar the shared schema was built to end, and they had
+// already drifted: no Campaign negative keyword, no Negative product targeting,
+// no ad-product legality check, no it-IT aliases. Validation now comes from
+// `@nexus/shared/ads-bulksheet`, the same module the server validates with.
 
 const cellStr = (v: unknown): string => {
   if (v == null) return ''
@@ -86,41 +91,20 @@ export function BulkOpsClient() {
   const [err, setErr] = useState<string | null>(null)
   const [truncated, setTruncated] = useState(false)
   const [over, setOver] = useState(false)
-  const [applying, setApplying] = useState(false)
-  const [applyRes, setApplyRes] = useState<{ total?: number; applied?: number; skipped?: number; errors?: number; results?: Array<{ row: number; entity: string; operation: string; status: string; message: string }>; error?: string } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  /**
+   * One grammar. `validateRow` is the shared, server-identical checker, so this
+   * page can no longer accept a row the server would reject — or reject one it
+   * would take.
+   */
   const validateRow = (r: Row): { ok: boolean; op: string; msg: string } => {
-    const g = (k: string) => (r[k] ?? '').toString().trim()
-    const entity = g('Entity'); const op = g('Operation')
-    const ok = (m: string) => ({ ok: true, op: op || 'Read', msg: m })
-    const bad = (m: string) => ({ ok: false, op: op || 'Read', msg: m })
-    if (!entity) return bad('Missing Entity')
-    if (!ENTITIES.includes(entity)) return bad(`Unknown Entity “${entity}”`)
-    if (op && !OPS.includes(op)) return bad(`Operation must be Create/Update/Archive (got “${op}”)`)
-    if (!op) return ok('Read — no change')
-    switch (entity) {
-      case 'Campaign':
-        if (op === 'Create') { if (!g('Campaign name')) return bad('Campaign name required'); if (!g('Daily budget') && !g('Budget')) return bad('Daily budget required') } else if (!g('Campaign ID')) return bad('Campaign ID required')
-        break
-      case 'Ad group':
-        if (op === 'Create') { if (!g('Ad group name')) return bad('Ad group name required'); if (!g('Campaign ID')) return bad('Campaign ID required') } else if (!g('Ad group ID')) return bad('Ad group ID required')
-        break
-      case 'Keyword':
-      case 'Negative keyword':
-        if (op === 'Create') { if (!g('Keyword text')) return bad('Keyword text required'); if (!g('Match type')) return bad('Match type required'); if (!g('Campaign ID') && !g('Ad group ID')) return bad('Campaign ID or Ad group ID required') } else if (!g('Keyword ID')) return bad('Keyword ID required')
-        break
-      case 'Product targeting':
-        if (op === 'Create') { if (!g('Product targeting expression') && !g('Targeting expression')) return bad('Product targeting expression required'); if (!g('Ad group ID')) return bad('Ad group ID required') } else if (!g('Product Targeting ID') && !g('Targeting ID')) return bad('Product Targeting ID required')
-        break
-      case 'Product ad':
-        if (op === 'Create' && !g('SKU') && !g('ASIN')) return bad('SKU or ASIN required')
-        break
-      case 'Portfolio':
-        if (op === 'Create') { if (!g('Portfolio name')) return bad('Portfolio name required') } else if (!g('Portfolio ID')) return bad('Portfolio ID required')
-        break
-    }
-    return ok(`${op} ok`)
+    const v = validateBulksheetRow((h) => (r[h] ?? '').toString())
+    const op = v.operation ?? 'Read'
+    if (!v.ok) return { ok: false, op, msg: v.issues.map((i) => i.message).join('; ') || 'Invalid row' }
+    if (v.readOnly) return { ok: true, op: 'Read', msg: 'Read — no change' }
+    if (v.previewOnly) return { ok: true, op, msg: `${op} — previews only, not applied` }
+    return { ok: true, op, msg: `${op} ok` }
   }
 
   const parseXlsx = async (file: File): Promise<Row[]> => {
@@ -157,16 +141,6 @@ export function BulkOpsClient() {
       setRows(raw.slice(0, MAX).map((r) => { const v = validateRow(r); return { r, ...v } }))
     } catch (e) { setErr((e as Error)?.message ?? 'Could not parse file') } finally { setParsing(false) }
   }, [])
-
-  const apply = async () => {
-    const actionable = rows.filter((v) => v.ok && v.op !== 'Read')
-    if (!actionable.length) return
-    setApplying(true); setApplyRes(null)
-    try {
-      const res = await fetch(`${getBackendUrl()}/api/advertising/bulk/apply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows: actionable.map((v) => v.r), applyImmediately: false }) }).then((r) => r.json())
-      setApplyRes(res)
-    } catch (e) { setApplyRes({ error: (e as Error)?.message ?? 'Apply failed' }) } finally { setApplying(false) }
-  }
 
   const keyField = (r: Row) => r['Campaign name'] || r['Ad group name'] || r['Keyword text'] || r['Product targeting expression'] || r['Portfolio name'] || r['Campaign ID'] || '—'
   const exportHref = `${getBackendUrl()}/api/advertising/bulk/export?limit=500`
@@ -268,17 +242,16 @@ export function BulkOpsClient() {
             return (
               <div style={{ marginBottom: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <button className="az-btn dark" disabled={applying || actionable === 0} onClick={() => void apply()} style={applying || actionable === 0 ? { opacity: .55 } : undefined}>{applying ? 'Applying...' : `Apply ${actionable} change${actionable === 1 ? '' : 's'}`}</button>
-                  <span className="az-rowstat" style={{ color: 'var(--ink2)' }}><Info size={13} />Queued as pending (sandbox-safe) — live writes still require your per-campaign allowlist. Read &amp; error rows are skipped.</span>
+                  {/* AX-IE.11 — this used to apply the file from here, through a
+                      path with no preview, no blast-radius check and no undo.
+                      Validation still runs, so this page remains useful for
+                      checking a file; the write now happens where it can be
+                      seen first and reverted afterwards. */}
+                  <Link href="/marketing/ads/bulk" className="az-btn dark">
+                    Apply {actionable} change{actionable === 1 ? '' : 's'} in Bulk operations
+                  </Link>
+                  <span className="az-rowstat" style={{ color: 'var(--ink2)' }}><Info size={13} />Applying moved to Bulk operations, where you see the exact before/after and can undo the whole upload. This page still validates a file.</span>
                 </div>
-                {applyRes && (applyRes.error
-                  ? <div className="az-rowstat err" style={{ marginTop: 10 }}><AlertCircle size={14} />{applyRes.error}</div>
-                  : <div className="az-sum" style={{ marginTop: 12 }}>
-                      <span className="chip create"><b>{applyRes.applied ?? 0}</b> applied</span>
-                      <span className="chip"><b>{applyRes.skipped ?? 0}</b> skipped</span>
-                      <span className={`chip ${applyRes.errors ? 'err' : ''}`}><b>{applyRes.errors ?? 0}</b> errors</span>
-                      {(applyRes.results ?? []).filter((x) => x.status === 'error').slice(0, 6).map((x, i) => <span key={i} className="az-rowstat err" style={{ width: '100%' }}><AlertCircle size={12} />Row {x.row} ({x.entity} {x.operation}): {x.message}</span>)}
-                    </div>)}
               </div>
             )
           })()}
