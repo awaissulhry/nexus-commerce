@@ -13562,8 +13562,12 @@ model AdMutation {
 /// entities, and so a PARTIAL outcome stays legible (`notOnAmazon` lists
 /// campaigns that landed locally but never reached Amazon).
 model AdBlueprintApplication {
-  id                 String    @id @default(cuid())
-  blueprintId        String
+  id String @id @default(cuid())
+  /// AX3.4 — null when the run replicated a LIVE source (a portfolio, some
+  /// campaigns, or single ad groups) rather than a saved blueprint. Saving a
+  /// blueprint is an optional action at the end of the builder, not a
+  /// precondition for replicating.
+  blueprintId        String?
   productToken       String
   marketplace        String
   asins              String[]  @default([])
@@ -13579,6 +13583,18 @@ model AdBlueprintApplication {
   createdAt          DateTime  @default(now())
   appliedAt          DateTime?
   rolledBackAt       DateTime?
+
+  /// AX3.4 — what was replicated: { portfolioId | campaignIds | adGroupIds |
+  /// namePrefix, marketplace }. Lets a run be explained and repeated later.
+  sourceSelector Json?
+  /// AX3.4 — the naming rules, copy scope and bid/budget policies chosen.
+  /// Without these, "why is this campaign called that" is unanswerable later.
+  options        Json?
+  /// AX3.4 — the step-2 edit set that was applied on top of the plan.
+  edits          Json?
+  /// AX3.5 — 'live' | 'floor'. Whether the run went out at its planned bids or
+  /// landed at Amazon's 2c floor. A money fact; it belongs on the record.
+  launchMode     String?
 
   @@index([blueprintId])
   @@index([status])

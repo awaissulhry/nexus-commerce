@@ -398,3 +398,138 @@ describe('planApplication — bid and budget policy', () => {
     expect(planApplication(doc, gale, [], { dailyBudgetCapEur: 20, budgetPolicy: { mode: 'scale', value: 50 } }).allowed).toBe(true)
   })
 })
+
+// ── AX3.4 — the review step's edits ───────────────────────────────────────
+describe('planApplication — edits', () => {
+  const ids = () => {
+    const p = planApplication(doc, gale, [])
+    return {
+      c0: p.campaigns[0]!.id, c1: p.campaigns[1]!.id,
+      g0: p.campaigns[0]!.adGroups[0]!.id, g1: p.campaigns[1]!.adGroups[0]!.id,
+      t0: p.campaigns[0]!.adGroups[0]!.targets[0]!.id,
+    }
+  }
+
+  it('gives every node a stable, deterministic id', () => {
+    const a = planApplication(doc, gale, [])
+    const b = planApplication(doc, gale, [])
+    expect(a.campaigns.map((c) => c.id)).toEqual(['c0', 'c1'])
+    expect(a.campaigns[0]!.adGroups[0]!.targets.map((t) => t.id)).toEqual(b.campaigns[0]!.adGroups[0]!.targets.map((t) => t.id))
+  })
+
+  it('removes a campaign, and the budget total follows', () => {
+    const p = planApplication(doc, gale, [], {}, { removedCampaigns: [ids().c1] })
+    expect(p.campaigns.map((c) => c.role)).toEqual(['Brand-Exact'])
+    expect(p.totals.campaigns).toBe(1)
+    expect(p.totals.dailyBudgetTotal).toBe(10) // was 25
+  })
+
+  it('removes a single keyword', () => {
+    const p = planApplication(doc, gale, [], {}, { removedTargets: [ids().t0] })
+    expect(p.campaigns[0]!.adGroups[0]!.targets.map((t) => t.expression)).toEqual(['giacca GALE'])
+    expect(p.totals.positives).toBe(3) // the fixture has 4 positives
+  })
+
+  it('drops a campaign whose every ad group was emptied — an empty shell is worse than nothing', () => {
+    const p0 = planApplication(doc, gale, [])
+    const all = p0.campaigns[0]!.adGroups[0]!.targets.map((t) => t.id)
+    const p = planApplication(doc, gale, [], {}, { removedTargets: all })
+    expect(p.campaigns.map((c) => c.role)).toEqual(['Category-Exact'])
+  })
+
+  it('renames a campaign and an ad group', () => {
+    const i = ids()
+    const p = planApplication(doc, gale, [], {}, {
+      renamedCampaigns: [{ id: i.c0, name: 'GALE Hero' }],
+      renamedAdGroups: [{ id: i.g0, name: 'GALE Hero AG' }],
+    })
+    expect(p.campaigns[0]!.name).toBe('GALE Hero')
+    expect(p.campaigns[0]!.adGroups[0]!.name).toBe('GALE Hero AG')
+  })
+
+  it('a rename is checked by the collision gate like any other name', () => {
+    const i = ids()
+    const p = planApplication(doc, gale, [], { existingCampaignNames: ['Taken'] }, {
+      renamedCampaigns: [{ id: i.c0, name: 'Taken' }],
+    })
+    expect(p.allowed).toBe(false)
+    expect(p.blockers.some((b) => b.includes('already exist'))).toBe(true)
+  })
+
+  it('edits budgets and bids, never below the floor', () => {
+    const i = ids()
+    const p = planApplication(doc, gale, [], {}, {
+      campaignBudgets: [{ id: i.c0, dailyBudget: 3 }],
+      adGroupBids: [{ id: i.g0, defaultBidCents: 1 }],
+      targetBids: [{ id: i.t0, bidCents: 0 }],
+    })
+    expect(p.campaigns[0]!.dailyBudget).toBe(3)
+    expect(p.totals.dailyBudgetTotal).toBe(18)
+    expect(p.campaigns[0]!.adGroups[0]!.defaultBidCents).toBe(2)
+    expect(p.campaigns[0]!.adGroups[0]!.targets[0]!.bidCents).toBe(2)
+  })
+
+  it('an edited budget can bring a plan back under the cap', () => {
+    const i = ids()
+    expect(planApplication(doc, gale, [], { dailyBudgetCapEur: 20 }).allowed).toBe(false)
+    expect(planApplication(doc, gale, [], { dailyBudgetCapEur: 20 }, { campaignBudgets: [{ id: i.c0, dailyBudget: 4 }] }).allowed).toBe(true)
+  })
+
+  it('adds a keyword to an ad group', () => {
+    const p = planApplication(doc, gale, [], {}, {
+      addedTargets: [{ adGroupId: ids().g0, expression: 'giacca {{product}} estiva', expressionType: 'EXACT' }],
+    })
+    const added = p.campaigns[0]!.adGroups[0]!.targets.find((t) => t.added)!
+    expect(added.expression).toBe('giacca GALE estiva') // materialised like any other
+    expect(p.totals.positives).toBe(5)
+  })
+
+  // ── the part that must not have a hole in it ────────────────────────────
+  it('an ADDED keyword is gated exactly like a copied one', () => {
+    // Otherwise "add a keyword" in step 2 is a way to walk straight past the
+    // self-competition check that the whole feature exists to enforce.
+    const p = planApplication(doc, gale, [
+      { expression: 'stivali moto', campaignName: 'IT-AIREON-SP-Category-Broad', campaignId: 'c_x' },
+    ], {}, { addedTargets: [{ adGroupId: ids().g0, expression: 'stivali moto', expressionType: 'BROAD' }] })
+    expect(p.allowed).toBe(false)
+    expect(p.conflicts.map((c) => c.expression)).toContain('stivali moto')
+  })
+
+  it('an added BRAND keyword is not gated — it is about the new product', () => {
+    const p = planApplication(doc, gale, [
+      { expression: 'gale jacket', campaignName: 'Something', campaignId: 'c_y' },
+    ], {}, { addedTargets: [{ adGroupId: ids().g0, expression: 'gale jacket', expressionType: 'EXACT' }] })
+    expect(p.allowed).toBe(true)
+  })
+
+  it('an added NEGATIVE is never gated — a negative cannot compete', () => {
+    const p = planApplication(doc, gale, [
+      { expression: 'casco', campaignName: 'Z', campaignId: 'c_z' },
+    ], {}, { addedTargets: [{ adGroupId: ids().g0, expression: 'casco', expressionType: 'EXACT', isNegative: true }] })
+    expect(p.allowed).toBe(true)
+    expect(p.conflicts).toEqual([])
+  })
+
+  it('BLOCKS a stale edit set rather than applying part of it', () => {
+    // The operator went back and changed the source; their edits now address
+    // nodes that do not exist. Applying the rest would create something nobody
+    // approved.
+    const p = planApplication(doc, gale, [], {}, { removedCampaigns: ['c99'] })
+    expect(p.allowed).toBe(false)
+    expect(p.blockers.some((b) => b.includes('no longer in this plan'))).toBe(true)
+    // and nothing was removed
+    expect(p.campaigns).toHaveLength(2)
+  })
+
+  it('a stale reference in ANY edit kind blocks', () => {
+    expect(planApplication(doc, gale, [], {}, { targetBids: [{ id: 'c0.g0.t99', bidCents: 5 }] }).allowed).toBe(false)
+    expect(planApplication(doc, gale, [], {}, { addedTargets: [{ adGroupId: 'c9.g9', expression: 'x', expressionType: 'EXACT' }] }).allowed).toBe(false)
+  })
+
+  it('no edits at all behaves exactly as before', () => {
+    const a = planApplication(doc, gale, [])
+    const b = planApplication(doc, gale, [], {}, {})
+    expect(b.totals).toEqual(a.totals)
+    expect(b.allowed).toBe(a.allowed)
+  })
+})

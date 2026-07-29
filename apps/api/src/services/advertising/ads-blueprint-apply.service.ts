@@ -18,7 +18,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import type { BlueprintDoc } from '../ads-core/ads-blueprint.js'
-import { planApplication, materialise, type ApplyPlan, type ApplyOptions, type ApplyTarget, type ExistingTarget } from '../ads-core/ads-blueprint-apply.js'
+import { planApplication, materialise, type ApplyPlan, type ApplyOptions, type ApplyTarget, type ExistingTarget, type PlanEdits } from '../ads-core/ads-blueprint-apply.js'
 
 /**
  * Every positive keyword we currently target in this marketplace — the surface
@@ -53,14 +53,48 @@ export async function loadExistingCampaignNames(marketplace: string): Promise<st
 }
 
 export interface ApplyRequest {
-  blueprintId: string
+  /**
+   * AX3.4 — a saved blueprint, OR a live `source` below. Exactly one is
+   * required; a replication no longer has to be preceded by saving something.
+   */
+  blueprintId?: string
+  source?: import('./ads-blueprint.service.js').CampaignSelector
+  /** The token to parameterise OUT of a live source. Ignored with blueprintId. */
+  sourceProductToken?: string
+  competitorTokens?: string[]
   target: ApplyTarget
   marketplace: string
   options?: ApplyOptions
+  /** AX3.4 — the review step's changes. Re-validated server-side, always. */
+  edits?: PlanEdits
   dryRun?: boolean
   actor?: string
   /** AX3.0 — the portfolio the replicated campaigns should join. */
   portfolioId?: string
+}
+
+/**
+ * AX3.4 — the doc a run is based on, from either kind of source.
+ *
+ * Rebuilt from the LIVE source on every call, including the launch. The client
+ * sends a selector and its edits, never a plan, so what gets created is always
+ * derived server-side from what is actually in the account right now.
+ */
+async function resolveDoc(req: ApplyRequest): Promise<{ doc: BlueprintDoc; name: string }> {
+  if (req.blueprintId) {
+    const bp = await prisma.adBlueprint.findUnique({ where: { id: req.blueprintId } })
+    if (!bp) throw new Error('blueprint not found')
+    return { doc: bp.doc as unknown as BlueprintDoc, name: bp.name }
+  }
+  if (!req.source) throw new Error('either blueprintId or source is required')
+  if (!req.sourceProductToken) throw new Error('sourceProductToken is required when replicating from a live source')
+  const { previewBlueprint } = await import('./ads-blueprint.service.js')
+  const { doc } = await previewBlueprint({
+    ...req.source,
+    productToken: req.sourceProductToken,
+    competitorTokens: req.competitorTokens,
+  })
+  return { doc, name: 'live source' }
 }
 
 /**
@@ -101,6 +135,8 @@ export interface PlanFromSourceRequest {
   /** Destination marketplace — not necessarily the source's. */
   marketplace: string
   options?: ApplyOptions
+  /** AX3.4 — the review step's changes, applied on top of the freshly-built plan. */
+  edits?: PlanEdits
 }
 
 export async function planFromSource(req: PlanFromSourceRequest): Promise<{
@@ -123,7 +159,7 @@ export async function planFromSource(req: PlanFromSourceRequest): Promise<{
   ])
   const plan = planApplication(doc, req.target, existing, {
     ...(req.options ?? {}), market, existingCampaignNames,
-  })
+  }, req.edits)
   // The doc holds patterns; the plan holds finished names. Pair them by index —
   // planApplication maps campaigns 1:1 and preserves order.
   const renames = doc.campaigns.map((c, i) => ({
@@ -143,17 +179,16 @@ export async function planFromSource(req: PlanFromSourceRequest): Promise<{
 }
 
 export async function planApply(req: ApplyRequest): Promise<{ plan: ApplyPlan; blueprintName: string }> {
-  const bp = await prisma.adBlueprint.findUnique({ where: { id: req.blueprintId } })
-  if (!bp) throw new Error('blueprint not found')
+  const { doc, name } = await resolveDoc(req)
   const [existing, market, existingCampaignNames] = await Promise.all([
     loadExistingTargets(req.marketplace),
     marketContext(req.marketplace),
     loadExistingCampaignNames(req.marketplace),
   ])
-  const plan = planApplication(bp.doc as unknown as BlueprintDoc, req.target, existing, {
+  const plan = planApplication(doc, req.target, existing, {
     ...(req.options ?? {}), market, existingCampaignNames,
-  })
-  return { plan, blueprintName: bp.name }
+  }, req.edits)
+  return { plan, blueprintName: name }
 }
 
 export interface ApplyResult {
@@ -174,7 +209,18 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
 
   const application = await prisma.adBlueprintApplication.create({
     data: {
-      blueprintId: req.blueprintId,
+      // AX3.4 — null when replicated straight from a live source.
+      blueprintId: req.blueprintId ?? null,
+      sourceSelector: req.source ? ({ ...req.source, sourceProductToken: req.sourceProductToken } as object) : undefined,
+      // The naming rules, copy scope and value policies that produced these
+      // names and bids. Without them, "why is this campaign called that" is
+      // unanswerable a month later.
+      options: req.options ? ({
+        naming: req.options.naming, include: req.options.include,
+        bidPolicy: req.options.bidPolicy, budgetPolicy: req.options.budgetPolicy,
+        dailyBudgetCapEur: req.options.dailyBudgetCapEur,
+      } as object) : undefined,
+      edits: req.edits ? (req.edits as object) : undefined,
       productToken: req.target.productToken,
       marketplace: req.marketplace,
       asins: req.target.asins,

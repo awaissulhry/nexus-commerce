@@ -1347,6 +1347,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       include?: Record<string, boolean>
       bidPolicy?: { mode: 'copy' | 'scale' | 'fixed'; value?: number }
       budgetPolicy?: { mode: 'copy' | 'scale' | 'fixed'; value?: number }
+      edits?: Record<string, unknown>
     }
     if (!b?.source) { reply.code(400); return { error: 'source is required' } }
     if (!b?.sourceProductToken) { reply.code(400); return { error: 'sourceProductToken is required — it is what gets parameterised out' } }
@@ -1369,8 +1370,73 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           bidPolicy: b.bidPolicy,
           budgetPolicy: b.budgetPolicy,
         },
+        edits: b.edits as never,
       })
     } catch (e) { reply.code(400); return { error: (e as Error).message } }
+  })
+
+  /**
+   * AX3.4 — replicate a live source, with the review step's edits.
+   *
+   * THE CONTRACT. The client never sends a plan. It sends the SELECTOR plus the
+   * edits it made, and the server rebuilds the plan from what is in the account
+   * right now, applies those edits, and re-runs the entire gate over the result.
+   * So an operator can delete a campaign, drop a keyword, rename anything or add
+   * a term — and an added term is classified and gated exactly like a copied one.
+   * Nothing walks past the self-competition check by editing a JSON payload.
+   *
+   * dryRun DEFAULTS TO TRUE, as everywhere else in this feature.
+   */
+  fastify.post('/advertising/blueprints/replicate', async (request, reply) => {
+    const b = request.body as {
+      source?: { campaignIds?: string[]; adGroupIds?: string[]; portfolioId?: string; namePrefix?: string; marketplace?: string }
+      sourceProductToken?: string; competitorTokens?: string[]
+      productToken?: string; asins?: string[]; marketplace?: string; portfolioId?: string
+      skipSharedTargets?: string[]; acceptSharedTargets?: string[]; dailyBudgetCapEur?: number
+      naming?: { prefix?: string; suffix?: string; replacements?: Array<{ from: string; to: string }> }
+      include?: Record<string, boolean>
+      bidPolicy?: { mode: 'copy' | 'scale' | 'fixed'; value?: number }
+      budgetPolicy?: { mode: 'copy' | 'scale' | 'fixed'; value?: number }
+      edits?: Record<string, unknown>
+      dryRun?: boolean
+    }
+    if (!b?.source) { reply.code(400); return { error: 'source is required' } }
+    if (!b?.sourceProductToken) { reply.code(400); return { error: 'sourceProductToken is required' } }
+    if (!b?.productToken) { reply.code(400); return { error: 'productToken is required — it is what {{product}} becomes' } }
+    if (!b?.marketplace) { reply.code(400); return { error: 'marketplace is required' } }
+
+    const svc = await import('../services/advertising/ads-blueprint-apply.service.js')
+    const req = {
+      source: b.source,
+      sourceProductToken: b.sourceProductToken,
+      competitorTokens: b.competitorTokens,
+      target: { productToken: b.productToken, asins: b.asins ?? [] },
+      marketplace: b.marketplace,
+      portfolioId: b.portfolioId,
+      options: {
+        skipSharedTargets: b.skipSharedTargets,
+        acceptSharedTargets: b.acceptSharedTargets,
+        dailyBudgetCapEur: b.dailyBudgetCapEur,
+        naming: b.naming,
+        include: b.include,
+        bidPolicy: b.bidPolicy,
+        budgetPolicy: b.budgetPolicy,
+      },
+      edits: b.edits as never,
+      dryRun: b.dryRun !== false,
+      actor: actorFromHeaders(request.headers as Record<string, unknown>),
+    }
+    try {
+      if (req.dryRun === false) {
+        const { plan } = await svc.planApply(req)
+        if (!plan.allowed) { reply.code(409); return { error: 'refused', blockers: plan.blockers, conflicts: plan.conflicts, plan } }
+      }
+      return await svc.applyBlueprint(req)
+    } catch (e) {
+      const msg = (e as Error).message
+      reply.code(/not found/i.test(msg) ? 404 : /refused/i.test(msg) ? 409 : 400)
+      return { error: msg }
+    }
   })
 
   fastify.post('/advertising/blueprints/preview', async (request, reply) => {

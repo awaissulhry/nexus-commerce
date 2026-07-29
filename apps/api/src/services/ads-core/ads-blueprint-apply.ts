@@ -36,6 +36,8 @@ export interface ExistingTarget {
 }
 
 export interface PlannedTarget {
+  /** AX3.4 — stable address for an edit: `c0.g1.t7`. Deterministic from the source. */
+  id: string
   expression: string
   expressionType: string
   kind: string
@@ -46,14 +48,27 @@ export interface PlannedTarget {
   conflictsWith?: Array<{ campaignName: string; campaignId: string }>
   /** AX3.0 — the SP auto clause to re-create, for kind === 'AUTO'. */
   autoClause?: AutoClause | null
+  /**
+   * AX3.4 — this target is subject to the self-competition gate: a positive,
+   * non-product term that is not specific to the target product. Computed once
+   * during the build so the gate can be re-run over an EDITED plan without
+   * re-deriving classification from the doc.
+   */
+  gated?: boolean
+  /** AX3.4 — added by the operator in step 2 rather than copied from the source. */
+  added?: boolean
 }
 export interface PlannedAdGroup {
+  /** AX3.4 — stable address for an edit: `c0.g1`. */
+  id: string
   name: string
   defaultBidCents: number | null
   targets: PlannedTarget[]
   asins: string[]
 }
 export interface PlannedCampaign {
+  /** AX3.4 — stable address for an edit: `c0`. */
+  id: string
   role: string
   name: string
   dailyBudget: number | null
@@ -64,6 +79,44 @@ export interface PlannedCampaign {
   /** AX3.0 — captured by the blueprint and, until now, silently discarded. */
   placementBidding: Array<{ placement: string; percentage: number }>
 }
+
+/**
+ * AX3.4 — what the operator changed in the review step.
+ *
+ * THE CONTRACT. The client never sends a plan; it sends the EDITS it made to
+ * one. The server re-plans from the source, applies these, and re-runs the whole
+ * gate over the result. So an edit can narrow a replication, rename it, or
+ * re-price it — and an added keyword is classified and gated exactly like a
+ * copied one — but nothing can be smuggled past the self-competition check by
+ * editing a JSON payload.
+ *
+ * Every edit addresses a node by its plan id. An id that no longer exists means
+ * the plan moved under the operator (they went back and changed the source or
+ * the copy scope), which is reported rather than silently ignored — applying a
+ * stale edit set is how you create something nobody approved.
+ */
+export interface PlanEdits {
+  removedCampaigns?: string[]
+  removedAdGroups?: string[]
+  removedTargets?: string[]
+  renamedCampaigns?: Array<{ id: string; name: string }>
+  renamedAdGroups?: Array<{ id: string; name: string }>
+  campaignBudgets?: Array<{ id: string; dailyBudget: number }>
+  adGroupBids?: Array<{ id: string; defaultBidCents: number }>
+  targetBids?: Array<{ id: string; bidCents: number }>
+  /** Keyed by ad-group id, because a target has to live in one. */
+  addedTargets?: Array<{
+    adGroupId: string
+    expression: string
+    expressionType: string
+    kind?: string
+    isNegative?: boolean
+    bidCents?: number | null
+  }>
+}
+
+/** Ids referenced by an edit set that no longer exist in the freshly-built plan. */
+export interface StaleEditRef { kind: 'campaign' | 'adGroup' | 'target'; id: string }
 
 export interface ApplyConflict {
   expression: string
@@ -204,9 +257,185 @@ export function applyNaming(name: string, rules: NamingRules | undefined): strin
 
 const norm = (s: string): string => s.trim().toLowerCase()
 
+/** Word-boundary token match, so "aireonaut" is not the AIREON brand. */
+function hasProductToken(haystack: string, token: string): boolean {
+  if (!token) return false
+  const esc = token.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(^|[^a-z0-9])${esc}([^a-z0-9]|$)`, 'i').test(haystack)
+}
+
 /** Substitute the target product into a parameterised string. */
 export function materialise(pattern: string, productToken: string): string {
   return pattern.split(PRODUCT_TOKEN).join(productToken)
+}
+
+/**
+ * AX3.4 — stage one: turn the doc into the campaigns it describes.
+ *
+ * Pure shaping only — the product token, the copy scope, the naming rules and
+ * the value policies. It decides nothing about whether the plan may RUN; that is
+ * `evaluatePlan`, and keeping the two apart is what lets an edit sit between
+ * them without the gate being computed against a plan nobody is going to create.
+ */
+export function buildPlanCampaigns(
+  doc: BlueprintDoc,
+  target: ApplyTarget,
+  opts: ApplyOptions = {},
+): { campaigns: PlannedCampaign[]; excluded: ApplyPlan['excluded'] } {
+  const skip = new Set((opts.skipSharedTargets ?? []).map(norm))
+  const shared = new Set(doc.sharedTargets.map((t) => norm(t.expression)))
+  const scope: CopyScope = { ...FULL_COPY, ...(opts.include ?? {}) }
+  const excluded = { keywords: 0, negatives: 0, productTargets: 0, autoClauses: 0 }
+
+  const campaigns: PlannedCampaign[] = doc.campaigns.map((c, ci) => {
+    const dailyBudget = scope.budgets
+      ? applyValuePolicy(c.dailyBudget, opts.budgetPolicy, 1)
+      : (opts.budgetPolicy?.mode === 'fixed' ? Math.max(1, opts.budgetPolicy.value ?? 0) : c.dailyBudget)
+    const groups: PlannedAdGroup[] = c.adGroups.map((g, gi) => {
+      const defaultBidCents = scope.bids ? applyValuePolicy(g.defaultBidCents, opts.bidPolicy, FLOOR_CENTS) : g.defaultBidCents
+      const targets: PlannedTarget[] = []
+      g.targets.forEach((t, ti) => {
+        // Copy scope. Counted, so step 3 can say what was left behind.
+        const kind = (t.kind ?? '').toUpperCase()
+        if (t.isNegative) {
+          if (!scope.negatives) { excluded.negatives++; return }
+        } else if (kind === 'AUTO') {
+          if (!scope.autoClauses) { excluded.autoClauses++; return }
+        } else if (kind === 'PRODUCT' || kind === 'CATEGORY') {
+          if (!scope.productTargets) { excluded.productTargets++; return }
+        } else if (!scope.keywords) { excluded.keywords++; return }
+
+        const expression = materialise(t.expression, target.productToken)
+        // A target's own bid follows the bid policy; with bids off it falls back
+        // to the ad group default rather than to zero.
+        const bidCents = scope.bids ? applyValuePolicy(t.bidCents, opts.bidPolicy, FLOOR_CENTS) : null
+
+        // Only POSITIVE shared targets are gated. A negative is not a bid and
+        // cannot compete; skipping one would silently widen the new campaign.
+        const gated = !t.isNegative && shared.has(norm(t.expression))
+        if (gated && (skip.has(norm(t.expression)) || skip.has(norm(expression)))) return // operator removed it
+
+        targets.push({
+          id: `c${ci}.g${gi}.t${ti}`,
+          expression, expressionType: t.expressionType, kind: t.kind,
+          bidCents, isNegative: t.isNegative, negativeLevel: t.negativeLevel,
+          ...(gated ? { gated: true } : {}),
+          ...(kind === 'AUTO' ? { autoClause: t.autoClause ?? null } : {}),
+        })
+      })
+      return {
+        id: `c${ci}.g${gi}`,
+        name: applyNaming(materialise(g.namePattern, target.productToken), opts.naming),
+        defaultBidCents,
+        targets,
+        asins: target.asins,
+      }
+    })
+    return {
+      id: `c${ci}`,
+      role: c.role,
+      name: applyNaming(materialise(c.namePattern, target.productToken), opts.naming),
+      dailyBudget,
+      biddingStrategy: c.biddingStrategy,
+      adGroups: groups,
+      targetingType: c.targetingType ?? 'MANUAL',
+      placementBidding: scope.placementBidding ? (c.placementBidding ?? []) : [],
+    }
+  })
+  return { campaigns, excluded }
+}
+
+/**
+ * AX3.4 — stage two: apply the operator's review-step edits.
+ *
+ * Returns the edited campaigns plus any ids the edit set referenced that no
+ * longer exist. A stale reference is REPORTED, never skipped: it means the plan
+ * moved after the edits were made, and quietly applying the rest would create
+ * something the operator never approved.
+ *
+ * A campaign left with no ad groups, or an ad group left with no targets and no
+ * auto targeting, is dropped — an empty shell on Amazon is worse than nothing.
+ */
+export function applyEdits(
+  campaigns: PlannedCampaign[],
+  edits: PlanEdits | undefined,
+  target: ApplyTarget,
+): { campaigns: PlannedCampaign[]; stale: StaleEditRef[] } {
+  if (!edits) return { campaigns, stale: [] }
+  const stale: StaleEditRef[] = []
+
+  const campById = new Map(campaigns.map((c) => [c.id, c]))
+  const agById = new Map(campaigns.flatMap((c) => c.adGroups.map((g) => [g.id, g] as const)))
+  const tgtById = new Map(campaigns.flatMap((c) => c.adGroups.flatMap((g) => g.targets.map((t) => [t.id, t] as const))))
+  const check = (kind: StaleEditRef['kind'], id: string, has: boolean) => { if (!has) stale.push({ kind, id }) }
+
+  for (const id of edits.removedCampaigns ?? []) check('campaign', id, campById.has(id))
+  for (const id of edits.removedAdGroups ?? []) check('adGroup', id, agById.has(id))
+  for (const id of edits.removedTargets ?? []) check('target', id, tgtById.has(id))
+  for (const e of edits.renamedCampaigns ?? []) check('campaign', e.id, campById.has(e.id))
+  for (const e of edits.renamedAdGroups ?? []) check('adGroup', e.id, agById.has(e.id))
+  for (const e of edits.campaignBudgets ?? []) check('campaign', e.id, campById.has(e.id))
+  for (const e of edits.adGroupBids ?? []) check('adGroup', e.id, agById.has(e.id))
+  for (const e of edits.targetBids ?? []) check('target', e.id, tgtById.has(e.id))
+  for (const a of edits.addedTargets ?? []) check('adGroup', a.adGroupId, agById.has(a.adGroupId))
+  if (stale.length) return { campaigns, stale }
+
+  const rmC = new Set(edits.removedCampaigns ?? [])
+  const rmG = new Set(edits.removedAdGroups ?? [])
+  const rmT = new Set(edits.removedTargets ?? [])
+  const renC = new Map((edits.renamedCampaigns ?? []).map((e) => [e.id, e.name]))
+  const renG = new Map((edits.renamedAdGroups ?? []).map((e) => [e.id, e.name]))
+  const budC = new Map((edits.campaignBudgets ?? []).map((e) => [e.id, e.dailyBudget]))
+  const bidG = new Map((edits.adGroupBids ?? []).map((e) => [e.id, e.defaultBidCents]))
+  const bidT = new Map((edits.targetBids ?? []).map((e) => [e.id, e.bidCents]))
+  const addByAg = new Map<string, PlanEdits['addedTargets']>()
+  for (const a of edits.addedTargets ?? []) {
+    const list = addByAg.get(a.adGroupId) ?? []
+    list.push(a)
+    addByAg.set(a.adGroupId, list as never)
+  }
+
+  const out = campaigns
+    .filter((c) => !rmC.has(c.id))
+    .map((c) => {
+      const adGroups = c.adGroups
+        .filter((g) => !rmG.has(g.id))
+        .map((g) => {
+          const kept = g.targets.filter((t) => !rmT.has(t.id)).map((t) => (
+            bidT.has(t.id) ? { ...t, bidCents: Math.max(FLOOR_CENTS, bidT.get(t.id)!) } : t
+          ))
+          const added: PlannedTarget[] = (addByAg.get(g.id) ?? []).map((a, i) => ({
+            id: `${g.id}.a${i}`,
+            expression: materialise(a.expression, target.productToken),
+            expressionType: a.expressionType,
+            kind: a.kind ?? 'KEYWORD',
+            bidCents: a.bidCents == null ? null : Math.max(FLOOR_CENTS, a.bidCents),
+            isNegative: !!a.isNegative,
+            negativeLevel: a.isNegative ? 'AD_GROUP' : null,
+            added: true,
+            // Gating for an ADDED positive is decided in evaluatePlan, which
+            // knows the target product — an operator-typed keyword has no
+            // classification from the doc to inherit.
+          }))
+          return {
+            ...g,
+            name: renG.get(g.id) ?? g.name,
+            defaultBidCents: bidG.has(g.id) ? Math.max(FLOOR_CENTS, bidG.get(g.id)!) : g.defaultBidCents,
+            targets: [...kept, ...added],
+          }
+        })
+        // An ad group with nothing in it would be created empty on Amazon.
+        .filter((g) => g.targets.length > 0)
+      return {
+        ...c,
+        name: renC.get(c.id) ?? c.name,
+        dailyBudget: budC.has(c.id) ? budC.get(c.id)! : c.dailyBudget,
+        adGroups,
+      }
+    })
+    .filter((c) => c.adGroups.length > 0)
+
+  return { campaigns: out, stale }
 }
 
 /**
@@ -219,10 +448,31 @@ export function planApplication(
   target: ApplyTarget,
   existing: ExistingTarget[],
   opts: ApplyOptions = {},
+  edits?: PlanEdits,
 ): ApplyPlan {
-  const skip = new Set((opts.skipSharedTargets ?? []).map(norm))
+  const built = buildPlanCampaigns(doc, target, opts)
+  const edited = applyEdits(built.campaigns, edits, target)
+  return evaluatePlan(edited.campaigns, built.excluded, doc, target, existing, opts, edited.stale)
+}
+
+/**
+ * AX3.4 — stage three: decide whether these campaigns may be created.
+ *
+ * Runs over the FINAL campaign set, whatever produced it. That is the whole
+ * point: the self-competition gate, the budget cap and the name-collision check
+ * see exactly what will be created, including anything the operator added or
+ * removed in the review step.
+ */
+export function evaluatePlan(
+  campaigns: PlannedCampaign[],
+  excluded: ApplyPlan['excluded'],
+  doc: BlueprintDoc,
+  target: ApplyTarget,
+  existing: ExistingTarget[],
+  opts: ApplyOptions = {},
+  stale: StaleEditRef[] = [],
+): ApplyPlan {
   const accept = new Set((opts.acceptSharedTargets ?? []).map(norm))
-  const shared = new Set(doc.sharedTargets.map((t) => norm(t.expression)))
 
   // Index what we already run, by keyword.
   const existingBy = new Map<string, Array<{ campaignName: string; campaignId: string }>>()
@@ -236,90 +486,48 @@ export function planApplication(
   const conflicts = new Map<string, ApplyConflict>()
   let adGroups = 0, positives = 0, negatives = 0, productAds = 0, dailyBudgetTotal = 0
 
-  // AX3.3 — what comes across, and how the numbers come across.
-  const scope: CopyScope = { ...FULL_COPY, ...(opts.include ?? {}) }
-  const excluded = { keywords: 0, negatives: 0, productTargets: 0, autoClauses: 0 }
-
-  const campaigns: PlannedCampaign[] = doc.campaigns.map((c) => {
-    const dailyBudget = scope.budgets
-      ? applyValuePolicy(c.dailyBudget, opts.budgetPolicy, 1)
-      : (opts.budgetPolicy?.mode === 'fixed' ? Math.max(1, opts.budgetPolicy.value ?? 0) : c.dailyBudget)
-    dailyBudgetTotal += Number(dailyBudget ?? 0)
-    const groups: PlannedAdGroup[] = c.adGroups.map((g) => {
+  for (const c of campaigns) {
+    dailyBudgetTotal += Number(c.dailyBudget ?? 0)
+    for (const g of c.adGroups) {
       adGroups++
-      const defaultBidCents = scope.bids ? applyValuePolicy(g.defaultBidCents, opts.bidPolicy, FLOOR_CENTS) : g.defaultBidCents
-      const targets: PlannedTarget[] = []
+      productAds += g.asins.length
       for (const t of g.targets) {
-        // Copy scope. Counted, so step 3 can say what was left behind.
-        const kind = (t.kind ?? '').toUpperCase()
-        if (t.isNegative) {
-          if (!scope.negatives) { excluded.negatives++; continue }
-        } else if (kind === 'AUTO') {
-          if (!scope.autoClauses) { excluded.autoClauses++; continue }
-        } else if (kind === 'PRODUCT' || kind === 'CATEGORY') {
-          if (!scope.productTargets) { excluded.productTargets++; continue }
-        } else if (!scope.keywords) { excluded.keywords++; continue }
-
-        const expression = materialise(t.expression, target.productToken)
-        const key = norm(expression)
-        // A target's own bid follows the bid policy; with bids off it falls back
-        // to the ad group default rather than to zero.
-        const bidCents = scope.bids ? applyValuePolicy(t.bidCents, opts.bidPolicy, FLOOR_CENTS) : null
-
-        // Only POSITIVE shared targets are gated. A negative is not a bid and
-        // cannot compete; skipping one would silently widen the new campaign.
-        if (!t.isNegative && shared.has(norm(t.expression))) {
-          if (skip.has(norm(t.expression)) || skip.has(key)) continue // operator removed it
-          const clash = existingBy.get(key)
-          if (clash?.length) {
-            const accepted = accept.has(norm(t.expression)) || accept.has(key)
-            const prev = conflicts.get(key)
-            conflicts.set(key, {
-              expression,
-              existing: clash,
-              resolution: accepted ? 'ACCEPTED' : (prev?.resolution === 'ACCEPTED' ? 'ACCEPTED' : 'UNRESOLVED'),
-            })
-            targets.push({
-              expression, expressionType: t.expressionType, kind: t.kind,
-              bidCents, isNegative: t.isNegative, negativeLevel: t.negativeLevel,
-              conflictsWith: clash,
-            })
-            if (t.isNegative) negatives++; else positives++
-            continue
-          }
-        }
-
-        targets.push({
-          expression, expressionType: t.expressionType, kind: t.kind,
-          bidCents, isNegative: t.isNegative, negativeLevel: t.negativeLevel,
-          ...(kind === 'AUTO' ? { autoClause: t.autoClause ?? null } : {}),
-        })
         if (t.isNegative) negatives++; else positives++
+        if (t.isNegative) continue
+        // An operator-ADDED keyword has no classification from the doc, so it is
+        // classified here against the TARGET product: its own brand term is
+        // safe, anything else is treated as shared and gated like a copied one.
+        // Without this, "add a keyword" would be a hole straight through the gate.
+        const gated = t.gated ?? (t.added ? !hasProductToken(t.expression, target.productToken) && (t.kind ?? 'KEYWORD').toUpperCase() === 'KEYWORD' : false)
+        if (!gated) continue
+        const key = norm(t.expression)
+        const clash = existingBy.get(key)
+        if (!clash?.length) continue
+        const accepted = accept.has(key)
+        const prev = conflicts.get(key)
+        conflicts.set(key, {
+          expression: t.expression,
+          existing: clash,
+          resolution: accepted ? 'ACCEPTED' : (prev?.resolution === 'ACCEPTED' ? 'ACCEPTED' : 'UNRESOLVED'),
+        })
+        t.conflictsWith = clash
       }
-      productAds += target.asins.length
-      return {
-        name: applyNaming(materialise(g.namePattern, target.productToken), opts.naming),
-        defaultBidCents,
-        targets,
-        asins: target.asins,
-      }
-    })
-    return {
-      role: c.role,
-      name: applyNaming(materialise(c.namePattern, target.productToken), opts.naming),
-      dailyBudget,
-      biddingStrategy: c.biddingStrategy,
-      adGroups: groups,
-      targetingType: c.targetingType ?? 'MANUAL',
-      placementBidding: scope.placementBidding ? (c.placementBidding ?? []) : [],
     }
-  })
+  }
 
   const conflictList = [...conflicts.values()].sort((a, b) => a.expression.localeCompare(b.expression))
   const unresolved = conflictList.filter((c) => c.resolution === 'UNRESOLVED')
 
   const blockers: string[] = []
   const warnings: string[] = []
+
+  // AX3.4 — edits made against a plan that has since changed shape.
+  if (stale.length) {
+    blockers.push(
+      `${stale.length} of your edits point at campaigns, ad groups or keywords that are no longer in this plan `
+      + '— the source or the copy settings changed after you made them. Review step 2 again.',
+    )
+  }
 
   // AX2.7 — a replication into a market that cannot receive writes would create
   // the whole structure LOCALLY, with null Amazon ids, and only report PARTIAL
