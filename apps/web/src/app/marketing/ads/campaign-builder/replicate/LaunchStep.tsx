@@ -150,8 +150,8 @@ export function LaunchStep({
           {launching
             ? <><Loader2 size={14} className="spin" aria-hidden /> Creating…</>
             : launchMode === 'floor'
-              ? `Create ${t.campaigns} campaigns at the bid floor`
-              : `Create ${t.campaigns} campaigns — €${t.dailyBudgetTotal.toFixed(2)}/day`}
+              ? `Create ${t.campaigns} campaign${t.campaigns === 1 ? '' : 's'} at the bid floor`
+              : `Create ${t.campaigns} campaign${t.campaigns === 1 ? '' : 's'} — €${t.dailyBudgetTotal.toFixed(2)}/day`}
         </button>
       </div>
     </div>
