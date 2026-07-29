@@ -205,15 +205,36 @@ New `GET /advertising/blueprints/sources` returns the portfolio → campaign →
 counts, including the unportfolio'd campaigns that a portfolio-only picker cannot reach.
 Verified against all nine live portfolios and the unportfolio'd set.
 
-### AX3.2 — The builder entry point
-Sixth card in `CampaignBuilder.tsx`; route `/marketing/ads/campaign-builder/replicate`; SPW chrome +
-3-step stepper + Exit Builder; nav item removed; old route redirected. Steps scaffolded.
+### ✅ AX3.2 — The builder entry point — SHIPPED 2026-07-29 `0fc79c2d2`
+Sixth card on `CampaignBuilder.tsx`; route `/marketing/ads/campaign-builder/replicate`; SPW chrome +
+3-step stepper + Exit Builder + scroll-spy sub-nav. The source tree ships with it: portfolio →
+campaign → ad group, tri-state selection held at ad-group grain, unportfolio'd campaigns in their
+own group. **Verified on prod** — IT AIREON renders 11 campaigns with matching counts and the AUTO
+tag on the Auto campaign.
 
-### AX3.3 — Step 1
-Source picker (portfolio / blueprint / prefix) with live summary · what-to-copy checklist · bulk
-rename with old→new preview and collision stop · shared `ProductSelection` · destination market,
-`PortfolioPicker`, budget cap, bid/budget policy. New `POST /advertising/blueprints/plan-preview`
-plans from an ephemeral source so no blueprint has to be saved first.
+The nav item and the old `/blueprints` page are deliberately still there. They come out in AX3.5,
+when the new flow can do everything the old one can — moving the entrance before the room is built
+is how you end up with two half-features.
+
+### ✅ AX3.3 — Step 1 — SHIPPED 2026-07-29 `010695bf1`, `49a160a04`
+What-to-copy checklist (Amazon's copy-dialog pattern, with the two toggles that change behaviour
+rather than preference calling themselves out) · bulk rename — product-token swap, find-and-replace,
+prefix/suffix — with **every old → new name on screen** and collisions flagged as you type · the
+shared `ProductSelection` · destination market, `PortfolioPicker`, budget cap, and a bid/budget
+policy (copy · scale % · flat, floored at Amazon's 2¢).
+
+Naming, copy scope and the value policies are all `ApplyOptions` on the **pure planner**, not client
+state, so the footer's totals/blockers/conflicts are the ones the launch will enforce. New read-only
+`POST /advertising/blueprints/plan-preview` plans from a live source with no saved blueprint, so the
+library does not fill with throwaway rows while someone types.
+
+The product token is **guessed** from the selected names — the word appearing in most of them,
+ignoring anything structural — because making the operator work it out from names they may not have
+written is a poor opening move. Always overridable.
+
+*Prod caught one defect during verification:* the picker filtered orphaned targets while the planner
+deliberately keeps them, so `IT-AIREON-SP-Auto` read "0 keywords" while the plan created 4 auto
+clauses. Fixed in `49a160a04`; the count is now "targets", which is what it actually is.
 
 ### AX3.4 — Step 2: the editable tree, client **and** server contract
 The tree, per-node delete, inline edits, the bulk toolbar, `TargetingModal`, inline conflict
