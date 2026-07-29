@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { ChevronDown, ExternalLink } from 'lucide-react'
 import { ADS_NAV, EBAY_ADS_NAV, ADS_BASE } from './nav'
+import { AmazonBadge, EbayBadge } from './BrandMarks'
 import { getBackendUrl } from '@/lib/backend-url'
 
 // E4.1 — channel counterparts: switching keeps you on the equivalent page.
@@ -63,26 +64,25 @@ export function AdsSidebar() {
 
   return (
     <aside className="h10-rail">
+      {/* CH1 — the brand row carries the channel state. Collapsed, a corner chip on
+          the "N" says which account you're spending in; hovered, the full switch
+          fades in at the right edge alongside the wordmark. Replaces the E4.1 pill
+          row, which could not fit inside the 66px collapsed rail. */}
       <div className="h10-brand">
-        <span className="logo" aria-hidden>N</span>
+        <span className="h10-brandmark">
+          <span className="logo" aria-hidden>N</span>
+          <span className="chip">{isEbay ? <EbayBadge size={15} /> : <AmazonBadge size={15} />}</span>
+        </span>
         <span className="word"><span className="mk">Nexus</span> <b>Ads</b></span>
-      </div>
-      {/* E4.1/E6.1 — channel switch (brand logos): same console, shift the channel, then pick the market on-page */}
-      <div className="h10-channel" role="tablist" aria-label="Ad channel">
-        <button type="button" role="tab" aria-selected={!isEbay} aria-label="Amazon ads" title="Amazon ads" className={`h10-channel-btn ${!isEbay ? 'on' : ''}`} onClick={() => switchChannel('amazon')}>
-          <svg viewBox="0 0 74 24" className="h10-channel-logo" aria-hidden focusable="false">
-            <text x="37" y="13" textAnchor="middle" fontSize="13.5" fontWeight="700" letterSpacing="-0.4" fill="currentColor">amazon</text>
-            <path d="M18 17.2c9.5 4.6 27.5 4.7 37.5-.3" fill="none" stroke="#FF9900" strokeWidth="2" strokeLinecap="round" />
-            <path d="M55.5 16.9l2.8-.9-1.5 2.6z" fill="#FF9900" />
-          </svg>
-        </button>
-        <button type="button" role="tab" aria-selected={isEbay} aria-label="eBay ads" title="eBay ads" className={`h10-channel-btn ${isEbay ? 'on' : ''}`} onClick={() => switchChannel('ebay')}>
-          <svg viewBox="0 0 52 24" className="h10-channel-logo" aria-hidden focusable="false">
-            <text x="26" y="16.5" textAnchor="middle" fontSize="15" fontWeight="700" letterSpacing="-0.6">
-              <tspan fill="#E53238">e</tspan><tspan fill="#0064D2">b</tspan><tspan fill="#F5AF02">a</tspan><tspan fill="#86B817">y</tspan>
-            </text>
-          </svg>
-        </button>
+        {/* E4.1/E6.1 — same console, shift the channel, then pick the market on-page */}
+        <div className="h10-brand-switch" role="tablist" aria-label="Ad channel">
+          <button type="button" role="tab" aria-selected={!isEbay} aria-label="Amazon ads" title="Amazon ads" className={`h10-chan ${!isEbay ? 'on' : ''}`} onClick={() => switchChannel('amazon')}>
+            <AmazonBadge size={18} />
+          </button>
+          <button type="button" role="tab" aria-selected={isEbay} aria-label="eBay ads" title="eBay ads" className={`h10-chan ${isEbay ? 'on' : ''}`} onClick={() => switchChannel('ebay')}>
+            <EbayBadge size={18} />
+          </button>
+        </div>
       </div>
       <nav className="h10-nav">
         {nav.map((it) => {

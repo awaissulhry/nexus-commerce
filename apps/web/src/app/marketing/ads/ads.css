@@ -89,14 +89,65 @@
 .h10-rail.pinned .h10-item .ext,
 .h10-rail.pinned .h10-parent-chev .chev,
 .h10-rail.pinned .h10-connect { opacity: 1; }
+/* CH1 — the channel switch has to mirror the hover reveal here too, or a pinned
+   rail would render expanded with no way to change channel. */
+.h10-rail.pinned .h10-brand-switch { opacity: 1; pointer-events: auto; }
 
 /* brand: compact "N" mark when collapsed, full "Nexus Ads" wordmark on hover */
 .h10-brand { display: flex; align-items: center; gap: 12px; height: 66px; padding-left: 19px; flex-shrink: 0; }
+.h10-brandmark { position: relative; display: flex; flex-shrink: 0; }
 .h10-brand .logo { width: 28px; height: 28px; border-radius: 7px; background: var(--h10-primary); color: #fff; font-weight: 800; font-size: 15px; letter-spacing: -0.02em; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .h10-brand .word { white-space: nowrap; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; opacity: 0; transition: opacity .14s ease; }
 .h10-brand .word .mk { color: var(--h10-rail-text-strong); }
 .h10-brand .word b { color: var(--h10-primary); font-weight: 800; }
 .h10-rail:hover .h10-brand .word { opacity: 1; }
+
+/* CH1 — active-channel chip on the brand mark's corner. Same badge idiom as
+   .h10-nav-badge and the SPW product thumb: a small tile offset outward with a
+   2px ring in the rail surface so it reads as a separate token from the "N"
+   underneath rather than a smudge on it. At 15px with a 4px offset it spans
+   x 37->51 (53 with the ring) — comfortably inside the 66px collapsed rail, so
+   it can never crop the way the old pill row did. */
+.h10-brandmark .chip { position: absolute; right: -4px; bottom: -4px; display: flex; line-height: 0; border-radius: 3px; box-shadow: 0 0 0 2px var(--h10-rail-bg); }
+.h10-bmk { display: inline-flex; line-height: 0; }
+
+/* CH1 — channel switch: hidden at rest, fades in with the wordmark. The 19px
+   right inset MIRRORS the row's 19px padding-left (balance rule).
+   `pointer-events` (NOT `visibility`) gates the hidden state, for two reasons:
+   a visibility:hidden control cannot take focus at all, so the keyboard rule
+   below could never fire on it; and it would drop the switch out of the
+   accessibility tree, hiding the channel state from screen readers even though
+   it is real, current state. pointer-events:none still kills the invisible
+   mouse hit target, which is what actually needed fixing. */
+.h10-brand-switch { display: flex; gap: 2px; margin-left: auto; margin-right: 19px; opacity: 0; pointer-events: none; transition: opacity .14s ease; }
+.h10-rail:hover .h10-brand-switch { opacity: 1; pointer-events: auto; }
+/* 28px square tiles at the "N"'s own 7px radius, so the row reads as one family */
+.h10-chan { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px; background: transparent; cursor: pointer; transition: background .12s ease; }
+.h10-chan .h10-bmk { opacity: .5; filter: grayscale(1); transition: opacity .12s ease, filter .12s ease; }
+.h10-chan:hover { background: var(--h10-rail-item-hover); }
+.h10-chan:hover .h10-bmk { opacity: .85; filter: grayscale(.35); }
+.h10-chan.on { background: var(--h10-rail-chip-active-bg); }
+.h10-chan.on .h10-bmk { opacity: 1; filter: none; }
+.h10-chan:focus-visible { outline: 2px solid var(--h10-primary); outline-offset: 2px; }
+
+/* CH1 — keyboard parity. The rail only ever opened on :hover, so once the channel
+   switch became hover-only it would have been unreachable without a mouse — and it
+   is the only channel control in the app. These mirror the :hover reveals for
+   keyboard users.
+   Deliberately :has(:focus-visible) and NOT :focus-within: plain focus-within also
+   fires on a MOUSE click, and a clicked <Link> keeps focus after navigation, which
+   would pin the rail open over the page after the pointer left. :focus-visible only
+   matches keyboard focus, so mouse behaviour is untouched.
+   Kept as separate rules rather than comma-joined onto the :hover selectors above:
+   a browser without :has() support drops the whole rule it appears in, and joining
+   them would take the working mouse behaviour down with it. */
+.h10-rail:has(:focus-visible) { width: 344px; overflow-y: auto; box-shadow: var(--h10-shadow-rail); }
+.h10-rail:has(:focus-visible) .h10-brand .word { opacity: 1; }
+.h10-rail:has(:focus-visible) .h10-brand-switch { opacity: 1; pointer-events: auto; }
+.h10-rail:has(:focus-visible) .h10-item .lbl { opacity: 1; }
+.h10-rail:has(:focus-visible) .h10-item .chev, .h10-rail:has(:focus-visible) .h10-item .ext { opacity: 1; }
+.h10-rail:has(:focus-visible) .h10-connect { opacity: 1; }
+.h10-rail:has(:focus-visible) .h10-railft { opacity: 1; }
 
 .h10-nav { flex: 1; padding: 4px 0; display: flex; flex-direction: column; gap: 2px; }
 .h10-group { display: flex; flex-direction: column; }
@@ -2371,7 +2422,7 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-spw-ps-th img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .h10-spw-ps-th .ph { display: block; width: 100%; height: 100%; background: #f0f2f5; }
 .h10-spw-ps-th .tag { position: absolute; left: 2px; bottom: 2px; line-height: 0; }
-.h10-spw-amz { display: inline-flex; line-height: 0; }
+/* CH1 — the SPW Amazon badge moved to the shared `.h10-bmk` mark (BrandMarks.tsx) */
 .h10-spw-ps .m { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .h10-spw-ps .m .nm { font-size: 12.5px; font-weight: 500; color: #1c2530; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .h10-spw-ps .m .id { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: #5b6573; }
@@ -2454,16 +2505,12 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-spw-st-toggle button.ai:hover:not(:disabled) { filter: brightness(1.05); border-color: transparent; }
 .h10-spw-st-toggle button:disabled { opacity: .5; cursor: not-allowed; }
 
-/* E4.1 — channel switch (square buttons in the rail, under the brand) */
-.h10-channel { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 12px 10px; }
-.h10-channel-btn { aspect-ratio: 2.4 / 1; border-radius: 8px; border: 1px solid rgba(148, 163, 184, 0.22); background: rgba(148, 163, 184, 0.07); color: #94a3b8; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 120ms, color 120ms, border-color 120ms; }
-.h10-channel-btn:hover { background: rgba(148, 163, 184, 0.14); color: #cbd5e1; }
-.h10-channel-btn.on { background: rgba(59, 130, 246, 0.16); border-color: rgba(59, 130, 246, 0.45); color: #93c5fd; }
-/* E6.1 — logo variant of the channel buttons */
-.h10-channel-btn { display: flex; align-items: center; justify-content: center; padding: 4px 6px; }
-.h10-channel-logo { height: 20px; width: auto; max-width: 100%; opacity: 0.55; filter: grayscale(0.35); transition: opacity 120ms, filter 120ms; }
-.h10-channel-btn:hover .h10-channel-logo { opacity: 0.85; filter: grayscale(0.1); }
-.h10-channel-btn.on .h10-channel-logo { opacity: 1; filter: none; }
+/* E4.1/E6.1 — the channel switch used to live here as a two-up pill row under
+   the brand. It could not survive the collapsed rail: `1fr 1fr` columns cannot
+   shrink below the wordmark SVG's intrinsic width, so the row demanded 162px
+   inside 66px — Amazon lost its right edge and eBay was clipped away entirely.
+   Rebuilt as a corner chip plus a hover-revealed switch in the brand row; see
+   `.h10-brandmark` / `.h10-brand-switch` above. */
 
 /* ER1 — danger menu items: CampaignDetailHeader has always emitted
    `.h10-menu button.danger` (CampaignDetailHeader.tsx:88) but no rule ever

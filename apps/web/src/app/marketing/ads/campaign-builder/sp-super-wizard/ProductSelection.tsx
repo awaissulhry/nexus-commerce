@@ -11,24 +11,13 @@
 import { type Dispatch, type SetStateAction, Fragment, useCallback, useEffect, useState } from 'react'
 import { Search, Plus, Check, Trash2, Copy, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronDown, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { AmazonBadge } from '../../_shell/BrandMarks'
 
 export type SpwProduct = { id: string; name: string; sku: string; asin: string; imageUrl: string | null; parentId: string | null; childCount: number }
 type Raw = { id: string; name: string; sku: string; asin?: string | null; imageUrl?: string | null; photoUrl?: string | null; parentId?: string | null; childCount?: number }
 const toProd = (p: Raw): SpwProduct => ({ id: p.id, name: p.name, sku: p.sku, asin: p.asin ?? '', imageUrl: p.imageUrl ?? p.photoUrl ?? null, parentId: p.parentId ?? null, childCount: p.childCount ?? 0 })
 
 const PAGE = 10
-
-function AmazonBadge({ size = 15 }: { size?: number }) {
-  return (
-    <span className="h10-spw-amz" style={{ width: size, height: size }} aria-hidden>
-      <svg viewBox="0 0 20 20" width={size} height={size}>
-        <rect width="20" height="20" rx="3" fill="#232f3e" />
-        <text x="4.5" y="13.5" fontSize="11" fontWeight="700" fill="#fff" fontFamily="Arial, sans-serif">a</text>
-        <path d="M3.5 14.5c3 1.7 6.5 1.7 9.4-.2" stroke="#ff9900" strokeWidth="1.3" fill="none" strokeLinecap="round" />
-      </svg>
-    </span>
-  )
-}
 
 function Thumb({ p }: { p: SpwProduct }) {
   return (
