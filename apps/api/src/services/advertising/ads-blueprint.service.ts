@@ -138,7 +138,11 @@ export async function loadSourceTree(opts: { marketplace?: string | null } = {})
         adGroups: {
           select: {
             id: true, name: true,
-            targets: { where: { orphanedAt: null }, select: { isNegative: true } },
+            // Counts must match what a replication would CREATE, and replication
+            // includes orphaned targets on purpose (see loadSourceCampaigns).
+            // Filtering here made IT-AIREON-SP-Auto read "0 targets" in the
+            // picker while the plan created its four auto clauses.
+            targets: { select: { isNegative: true } },
             _count: { select: { productAds: true } },
           },
         },

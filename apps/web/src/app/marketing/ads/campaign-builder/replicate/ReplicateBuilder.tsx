@@ -307,7 +307,7 @@ function SourceSummary({ s, orphaned }: { s: SourceSelection; orphaned: number }
   return (
     <div className="h10-rep-sum">
       <b>{s.campaigns}</b> campaign{s.campaigns === 1 ? '' : 's'} · <b>{s.adGroups}</b> ad group{s.adGroups === 1 ? '' : 's'} ·{' '}
-      <b>{s.positives}</b> keyword{s.positives === 1 ? '' : 's'} · <b>{s.negatives}</b> negative{s.negatives === 1 ? '' : 's'} ·{' '}
+      <b>{s.positives}</b> target{s.positives === 1 ? '' : 's'} · <b>{s.negatives}</b> negative{s.negatives === 1 ? '' : 's'} ·{' '}
       <b>{s.productAds}</b> product ad{s.productAds === 1 ? '' : 's'}
       <span className="bud">source runs <b>€{s.dailyBudgetTotal.toFixed(2)}/day</b></span>
       {!s.whole && <span className="part">partial — some campaigns contribute only the ad groups you ticked</span>}
@@ -336,7 +336,7 @@ function PlanBar({ planning, err, preview, missing }: {
         ? <span className="ok"><CheckCircle2 size={13} aria-hidden /> Ready</span>
         : <span className="bad"><AlertTriangle size={13} aria-hidden /> {p.blockers.length} blocker{p.blockers.length === 1 ? '' : 's'}</span>}
       <span className="t">
-        {p.totals.campaigns} campaigns · {p.totals.positives} keywords · {p.totals.negatives} negatives · {p.totals.productAds} ads ·{' '}
+        {p.totals.campaigns} campaigns · {p.totals.positives} targets · {p.totals.negatives} negatives · {p.totals.productAds} ads ·{' '}
         <b>€{p.totals.dailyBudgetTotal.toFixed(2)}/day</b>
         {p.conflicts.length > 0 && <span className="cf"> · {p.conflicts.length} keyword conflict{p.conflicts.length === 1 ? '' : 's'} to resolve</span>}
       </span>

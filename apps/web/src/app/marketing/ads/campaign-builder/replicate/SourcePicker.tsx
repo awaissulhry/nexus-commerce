@@ -190,7 +190,7 @@ export function SourcePicker({ market, selected, setSelected, onChange }: {
                   {p.name}
                   {!p.portfolioId && <span className="tag" title="These campaigns are not in any Amazon portfolio. They are still replicable.">unassigned</span>}
                 </span>
-                <span className="meta">{p.campaigns.length} campaigns · {ags} ad groups · {pos} keywords · {money(p.dailyBudgetTotal)}/day</span>
+                <span className="meta">{p.campaigns.length} campaigns · {ags} ad groups · {pos} targets · {money(p.dailyBudgetTotal)}/day</span>
               </div>
 
               {open && p.campaigns.map((c) => {
@@ -210,7 +210,7 @@ export function SourcePicker({ market, selected, setSelected, onChange }: {
                       </span>
                       <span className="meta">
                         {cSel > 0 && cSel < c.adGroups.length ? <b className="part">{cSel}/{c.adGroups.length} ad groups · </b> : null}
-                        {c.positives} keywords · {c.negatives} negatives · {c.productAds} ads · {money(c.dailyBudget ?? 0)}/day
+                        {c.positives} targets · {c.negatives} negatives · {c.productAds} ads · {money(c.dailyBudget ?? 0)}/day
                       </span>
                     </div>
                     {cOpen && c.adGroups.map((g) => (
@@ -218,7 +218,7 @@ export function SourcePicker({ market, selected, setSelected, onChange }: {
                         <span className="exp-sp" />
                         <TriBox checked={selected.has(g.id)} indeterminate={false} onChange={() => toggleAdGroup(g.id)} label={`Select ad group ${g.name}`} />
                         <span className="nm"><Layers size={12} aria-hidden /> {g.name}</span>
-                        <span className="meta">{g.positives} keywords · {g.negatives} negatives · {g.productAds} ads</span>
+                        <span className="meta">{g.positives} targets · {g.negatives} negatives · {g.productAds} ads</span>
                       </div>
                     ))}
                     {cOpen && c.adGroups.length === 0 && (
