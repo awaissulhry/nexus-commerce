@@ -308,12 +308,37 @@ redirect so the runbook and any bookmark still work.
 Export-as-bulksheet deferred to AX3.6 — `/marketing/ads/bulk` already does the round trip, so this
 is a link, not a build.
 
-### AX3.6 — Library, history, drafts, diff
-Resumable **Draft** replications (Amazon's pattern); replication history + rollback inside the
-wizard; blueprint detail view — see every campaign, ad group and keyword before you apply (G14);
-rename/delete a blueprint; the drift **diff** UI, which today has an endpoint and no surface (G14);
-re-run guard warning when this blueprint already produced campaigns for this product (G13);
-"Replicate this" from the Ad Manager row menu (Sellozo's pattern).
+### ✅ AX3.6 — Library, history, diff — SHIPPED 2026-07-29 `16a88018d`, `a7ee04953`
+Three things that existed in the data and nowhere in the product:
+
+- **Re-run guard** (G13). Nothing stopped replicating the same structure onto the same product twice,
+  and the second run looked exactly as healthy as the first — the names only differ if you rename
+  them, and the gate has no opinion about your *own* new campaigns. The plan now names the earlier
+  run's date and size. A warning, not a block: re-running is legitimate after a rollback or for a
+  second market, and a rolled-back run says nothing because it is not a duplicate of anything.
+- **Replication history.** A run has been a rollback-able unit since AX2.5, but once AX3.5 retired
+  the Blueprints page there was no way to find one you did not launch in the current session — so
+  rollback and raise-bids were effectively single-session features. Past runs now sit in the builder
+  with how many of their campaigns are *still live*, so a run whose campaigns were archived elsewhere
+  does not offer a rollback that would do nothing. Dry runs excluded.
+- **The drift check** (G15). `POST /blueprints/:id/diff` had existed since AX2.4 with no surface, so
+  the audit half of "blueprints" was unreachable.
+
+Plus saved-structure detail + delete (G14), and "Replicate again" — which re-selects the campaigns a
+structure was captured from, deliberately copying what they look like **now** rather than a frozen
+snapshot, and says so.
+
+`?campaigns=<id>,<id>&market=IT` preselects the source, so a replication is linkable.
+
+**Deferred, with reasons — not oversights:**
+- *"Replicate this" from the Ad Manager row menu.* That grid has a bulk-action modal, not a row menu;
+  every row in it is a PATCH and "replicate" is a navigation, so it does not belong there.
+  `CampaignsGrid.tsx` is also large and unverified by this work, and a convenience entry point is not
+  worth risking it. The deep link is the mechanism; only the placement is open.
+- *Resumable drafts.* Worth less than it looked. The flow is three steps, and saved structures +
+  "Replicate again" already remove the expensive part of starting over. Persisting half-built builder
+  state would add a schema, a lifecycle and a staleness problem to save a minute.
+- *Export-as-bulksheet.* `/marketing/ads/bulk` already round-trips; this is a link, not a build.
 
 ### AX3.7 — Verification and hand-off
 Live dry-run walkthrough on a real portfolio; one gated real replication verified in Seller Central;
