@@ -77,6 +77,23 @@ export function ReviewTree({
   const setTBid = (id: string, bidCents: number) =>
     push('targetBids', [...(edits.targetBids ?? []).filter((e) => e.id !== id), { id, bidCents }])
 
+  /**
+   * Resolve a conflict by dropping the keyword — from EVERY ad group that would
+   * have carried it, not just the row that was clicked.
+   *
+   * A structure repeats the same category term across its match-type tiers, so
+   * "giacca moto" is typically in three or four ad groups at once. The gate
+   * reports one conflict per expression, so dropping a single instance leaves it
+   * unresolved and the operator clicking a button that visibly does nothing.
+   */
+  const dropConflict = (expression: string) => {
+    const key = expression.toLowerCase()
+    const ids = plan.campaigns.flatMap((c) => c.adGroups.flatMap((g) =>
+      g.targets.filter((t) => !t.isNegative && t.expression.toLowerCase() === key).map((t) => t.id)))
+    setConflictDecisions({ ...conflictDecisions, [key]: 'skip' })
+    setEdits({ ...edits, removedTargets: [...new Set([...(edits.removedTargets ?? []), ...ids])] })
+  }
+
   const needle = q.trim().toLowerCase()
   const matches = (s: string) => !needle || s.toLowerCase().includes(needle)
 
@@ -180,7 +197,7 @@ export function ReviewTree({
                                   <AlertTriangle size={12} aria-hidden />
                                   competes with {conflict.slice(0, 1).map((e) => e.campaignName).join('')}{conflict.length > 1 ? ` +${conflict.length - 1}` : ''}
                                   <button type="button" className={decision === 'skip' ? 'on' : ''}
-                                    onClick={() => { setConflictDecisions({ ...conflictDecisions, [t.expression.toLowerCase()]: 'skip' }); if (!rmT.has(t.id)) toggleIn('removedTargets', t.id) }}>Drop it</button>
+                                    onClick={() => dropConflict(t.expression)}>Drop it</button>
                                   <button type="button" className={decision === 'accept' ? 'on' : ''}
                                     onClick={() => setConflictDecisions({ ...conflictDecisions, [t.expression.toLowerCase()]: 'accept' })}>Keep it</button>
                                 </span>
