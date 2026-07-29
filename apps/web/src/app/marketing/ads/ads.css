@@ -2748,3 +2748,26 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-rep-saved .chip:disabled { opacity: .55; cursor: not-allowed; }
 .h10-rep-saved .chip b { font-size: 12.5px; font-weight: 600; color: #1c2530; }
 .h10-rep-saved .chip .m { font-size: 11px; color: #8a94a1; }
+
+/* ── AX3.6 — past runs, saved structures, drift check ───────────────────── */
+.h10-rep-hist { display: flex; flex-direction: column; gap: 14px; }
+.h10-rep-hist-hd { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 700; color: #1c2530; margin-bottom: 10px; }
+.h10-rep-hist-none { margin: 0; font-size: 12.5px; line-height: 1.55; color: #7c8794; }
+.h10-rep-hist-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 0; font-size: 13px; color: #3a4452; }
+.h10-rep-hist-row + .h10-rep-hist-row { border-top: 1px solid #f0f2f5; }
+.h10-rep-hist-row .exp { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; background: none; border: none; color: #7c8794; border-radius: 5px; cursor: pointer; flex: none; }
+.h10-rep-hist-row .exp:hover { background: #eef2f7; color: #3a4452; }
+.h10-rep-hist-row .exp-sp { width: 20px; flex: none; }
+.h10-rep-hist-row .nm { display: flex; flex-direction: column; gap: 1px; min-width: 170px; }
+.h10-rep-hist-row .nm b { font-weight: 600; color: #1c2530; }
+.h10-rep-hist-row .nm .m { font-size: 11.5px; color: #8a94a1; }
+.h10-rep-hist-row .stat { margin-left: auto; font-size: 12px; color: #7c8794; white-space: nowrap; }
+.h10-rep-hist-row .stat .bad { color: #c11208; }
+.h10-rep-hist-row .detail { flex-basis: 100%; margin: 6px 0 2px 30px; padding: 10px 13px; background: #fbfcfd; border: 1px solid #eef0f4; border-radius: 8px; }
+.h10-rep-hist-row .detail b { display: block; font-size: 12px; font-weight: 700; color: #3a4452; margin-bottom: 3px; }
+.h10-rep-hist-row .detail p { margin: 0 0 5px; font-size: 12px; line-height: 1.55; color: #5b6573; }
+.h10-rep-hist-row .detail p.m { color: #8a94a1; }
+.h10-rep-drift { margin-top: 14px; }
+.h10-rep-drift .row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
+.h10-rep-drift .h10-rep-note { margin-top: 10px; }
+.h10-rep-drift code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }

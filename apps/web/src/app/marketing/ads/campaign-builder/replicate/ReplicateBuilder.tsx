@@ -31,6 +31,7 @@ import { CopyScopePanel } from './CopyScopePanel'
 import { DestinationPanel } from './DestinationPanel'
 import { ReviewTree } from './ReviewTree'
 import { LaunchStep, type LaunchResult } from './LaunchStep'
+import { HistoryPanel, DriftCheck } from './HistoryPanel'
 import {
   fullCopyScope, emptyNaming, copyPolicy, guessProductToken, verdictOf,
   type CopyScope, type NamingRules, type ValuePolicy, type PlanPreviewResponse, type PlanEdits,
@@ -49,6 +50,7 @@ const S1_SECTIONS = [
   { id: 'naming', label: 'Naming' },
   { id: 'products', label: 'Product Selection' },
   { id: 'destination', label: 'Destination' },
+  { id: 'history', label: 'Past runs' },
 ]
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES']
@@ -63,6 +65,7 @@ export function ReplicateBuilder() {
   const [sourceMarket, setSourceMarket] = useState('IT')
   const [selectedAdGroups, setSelectedAdGroups] = useState<Set<string>>(new Set())
   const [source, setSource] = useState<SourceSelection>(emptySelection())
+  const [reselect, setReselect] = useState<{ campaignIds: string[]; nonce: number } | null>(null)
 
   // ── transform ─────────────────────────────────────────────────────────
   const [scope, setScope] = useState<CopyScope>(fullCopyScope())
@@ -343,6 +346,7 @@ export function ReplicateBuilder() {
                 <SourcePicker
                   market={sourceMarket} selected={selectedAdGroups} setSelected={setSelectedAdGroups} onChange={onSource}
                   onPickBlueprint={(tok) => { guessAppliedFor.current = 'saved'; setSourceToken(tok) }}
+                  reselect={reselect}
                 />
                 <SourceSummary s={source} orphaned={preview?.source.orphanedInSource ?? 0} />
               </section>
@@ -373,6 +377,25 @@ export function ReplicateBuilder() {
                 <ProductSelection products={products} setProducts={setProducts} />
               </section>
 
+              <section id="rep-history" className="h10-spw-sec" style={{ order: 99 }}>
+                <h2>Past runs &amp; saved structures</h2>
+                <p className="h10-spw-desc">
+                  What has already been replicated into {market}, and the structures you saved. Rolling a run
+                  back archives every campaign it created, as one unit.
+                </p>
+                <HistoryPanel
+                  market={market}
+                  onReplicateAgain={(ids, tok) => {
+                    // SourcePicker owns the ad-group ids, so hand it the campaigns
+                    // and let it resolve them against the loaded tree.
+                    setReselect({ campaignIds: ids, nonce: Date.now() })
+                    guessAppliedFor.current = 'saved'
+                    setSourceToken(tok)
+                    gotoSec('source')
+                  }}
+                />
+                <DriftCheck market={market} />
+              </section>
               <section id="rep-destination" className="h10-spw-sec">
                 <h2>Destination</h2>
                 <p className="h10-spw-desc">Where the copies land, and what their bids and budgets should be.</p>

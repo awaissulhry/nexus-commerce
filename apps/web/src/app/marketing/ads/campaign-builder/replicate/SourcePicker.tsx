@@ -67,13 +67,19 @@ interface SavedBlueprint {
   stats: { campaigns: number; adGroups: number; positives: number; negatives: number } | null
 }
 
-export function SourcePicker({ market, selected, setSelected, onChange, onPickBlueprint }: {
+export function SourcePicker({ market, selected, setSelected, onChange, onPickBlueprint, reselect }: {
   market: string
   selected: Set<string>
   setSelected: (next: Set<string>) => void
   onChange: (s: SourceSelection) => void
   /** Told which product token the saved structure was captured from. */
   onPickBlueprint?: (productToken: string) => void
+  /**
+   * AX3.6 — "replicate this again", by campaign id. Only this component knows
+   * which ad groups those campaigns own, so the caller names the campaigns and
+   * the resolution happens here once the tree is loaded.
+   */
+  reselect?: { campaignIds: string[]; nonce: number } | null
 }) {
   const [tree, setTree] = useState<SrcPortfolio[]>([])
   const [saved, setSaved] = useState<SavedBlueprint[]>([])
@@ -134,6 +140,19 @@ export function SourcePicker({ market, selected, setSelected, onChange, onPickBl
   }, [allCampaigns])
 
   const selOfCampaign = useCallback((c: SrcCampaign) => c.adGroups.filter((g) => selected.has(g.id)).length, [selected])
+
+  // Resolve a "replicate again" request against the loaded tree. Keyed by nonce
+  // so asking for the same set twice still re-selects it.
+  const lastReselect = useRef(0)
+  useEffect(() => {
+    if (!reselect || !tree.length || lastReselect.current === reselect.nonce) return
+    lastReselect.current = reselect.nonce
+    const want = new Set(reselect.campaignIds)
+    const ags = allCampaigns.filter((c) => want.has(c.id)).flatMap((c) => c.adGroups.map((g) => g.id))
+    setSelected(new Set(ags))
+    // Open the groups holding them, so the selection is visible rather than implied.
+    setOpenPf(new Set(tree.filter((p) => p.campaigns.some((c) => want.has(c.id))).map((p) => p.portfolioId ?? '__none__')))
+  }, [reselect, tree, allCampaigns, setSelected])
 
   const toggleAdGroup = (id: string) => {
     const n = new Set(selected)

@@ -189,6 +189,16 @@ export interface ApplyOptions {
   /** AX3.3 — what to do with the source's bids and budgets. */
   bidPolicy?: ValuePolicy
   budgetPolicy?: ValuePolicy
+  /**
+   * AX3.6 — a replication that already happened for this product in this market.
+   *
+   * Nothing stops you replicating the same structure twice, and the second run
+   * looks exactly as healthy as the first: the names differ only if you rename
+   * them, the gate has no opinion about your own new campaigns, and you end up
+   * with two of everything bidding against each other. Warned, not blocked —
+   * re-running is legitimate after a rollback, or to add a second market.
+   */
+  priorRun?: { when: string; status: string; campaigns: number }
 }
 
 /**
@@ -520,6 +530,17 @@ export function evaluatePlan(
 
   const blockers: string[] = []
   const warnings: string[] = []
+
+  // AX3.6 — you have already done this. Loud, because a duplicate replication is
+  // invisible afterwards: two healthy-looking structures quietly splitting one
+  // product's demand between them.
+  if (opts.priorRun && opts.priorRun.status !== 'ROLLED_BACK') {
+    warnings.push(
+      `${target.productToken} was already replicated in this marketplace on ${opts.priorRun.when} `
+      + `(${opts.priorRun.status.toLowerCase()}, ${opts.priorRun.campaigns} campaign(s)). Running again creates a `
+      + 'SECOND set that will bid against the first — check the earlier run before launching.',
+    )
+  }
 
   // AX3.4 — edits made against a plan that has since changed shape.
   if (stale.length) {

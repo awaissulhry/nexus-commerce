@@ -112,6 +112,30 @@ async function resolveDoc(req: ApplyRequest): Promise<{ doc: BlueprintDoc; name:
 }
 
 /**
+ * AX3.6 — the most recent replication of this product into this market that was
+ * not rolled back. Feeds the "you have already done this" warning.
+ */
+export async function priorRunFor(productToken: string, marketplace: string) {
+  const row = await prisma.adBlueprintApplication.findFirst({
+    where: {
+      productToken: { equals: productToken, mode: 'insensitive' },
+      marketplace,
+      // PLANNED rows are dry runs — they created nothing, so they are not a
+      // duplicate of anything.
+      status: { in: ['APPLIED', 'PARTIAL'] },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { createdAt: true, appliedAt: true, status: true, createdCampaignIds: true },
+  })
+  if (!row) return undefined
+  return {
+    when: (row.appliedAt ?? row.createdAt).toISOString().slice(0, 10),
+    status: row.status,
+    campaigns: row.createdCampaignIds.length,
+  }
+}
+
+/**
  * AX2.7 — can this marketplace actually receive writes? Verified state, not a
  * guess: 5 of the 9 connections are sandbox with no writesEnabledAt, and FR/ES
  * are production but have never had a single AD_* write reach Amazon.
@@ -177,12 +201,13 @@ export async function planFromSource(req: PlanFromSourceRequest): Promise<{
     productToken: req.sourceProductToken,
     competitorTokens: req.competitorTokens,
   })
-  const [existing, market, existingCampaignNames] = await Promise.all([
+  const [existing, market, existingCampaignNames, priorRun] = await Promise.all([
     loadExistingTargets(req.marketplace),
     marketContext(req.marketplace),
     loadExistingCampaignNames(req.marketplace),
+    priorRunFor(req.target.productToken, req.marketplace),
   ])
-  const opts = { ...(req.options ?? {}), market, existingCampaignNames }
+  const opts = { ...(req.options ?? {}), market, existingCampaignNames, priorRun }
   const plan = planApplication(doc, req.target, existing, opts)
   // Edits are evaluated as a SECOND plan rather than folded into the first, so
   // the tree keeps every node (a removed campaign stays visible and restorable)
@@ -210,13 +235,14 @@ export async function planFromSource(req: PlanFromSourceRequest): Promise<{
 
 export async function planApply(req: ApplyRequest): Promise<{ plan: ApplyPlan; blueprintName: string }> {
   const { doc, name } = await resolveDoc(req)
-  const [existing, market, existingCampaignNames] = await Promise.all([
+  const [existing, market, existingCampaignNames, priorRun] = await Promise.all([
     loadExistingTargets(req.marketplace),
     marketContext(req.marketplace),
     loadExistingCampaignNames(req.marketplace),
+    priorRunFor(req.target.productToken, req.marketplace),
   ])
   const plan = planApplication(doc, req.target, existing, {
-    ...(req.options ?? {}), market, existingCampaignNames,
+    ...(req.options ?? {}), market, existingCampaignNames, priorRun,
   }, req.edits)
   return { plan, blueprintName: name }
 }

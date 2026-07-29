@@ -1538,13 +1538,42 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  /**
+   * AX3.6 — replication history. PLANNED rows are dry runs that created nothing,
+   * so they are excluded by default: a history that is mostly previews of things
+   * that never happened is not a history anyone can read.
+   */
   fastify.get('/advertising/blueprint-applications', async (request) => {
-    const q = request.query as { blueprintId?: string; status?: string }
+    const q = request.query as { blueprintId?: string; status?: string; marketplace?: string; includeDryRuns?: string }
     const rows = await prisma.adBlueprintApplication.findMany({
-      where: { ...(q.blueprintId ? { blueprintId: q.blueprintId } : {}), ...(q.status ? { status: q.status } : {}) },
-      orderBy: { createdAt: 'desc' }, take: 100,
+      where: {
+        ...(q.blueprintId ? { blueprintId: q.blueprintId } : {}),
+        ...(q.marketplace ? { marketplace: q.marketplace } : {}),
+        ...(q.status ? { status: q.status } : q.includeDryRuns === 'true' ? {} : { status: { not: 'PLANNED' } }),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: {
+        id: true, blueprintId: true, productToken: true, marketplace: true, status: true,
+        createdCampaignIds: true, notOnAmazon: true, errors: true,
+        createdAt: true, appliedAt: true, rolledBackAt: true, launchMode: true,
+        sourceSelector: true, actor: true,
+      },
     })
-    return { items: rows }
+    // How many of each run's campaigns are still live — a run whose campaigns
+    // were archived elsewhere should not offer a rollback that does nothing.
+    const ids = rows.flatMap((r) => r.createdCampaignIds)
+    const live = ids.length
+      ? await prisma.campaign.findMany({ where: { id: { in: ids }, status: { not: 'ARCHIVED' } }, select: { id: true } })
+      : []
+    const liveSet = new Set(live.map((c) => c.id))
+    return {
+      items: rows.map((r) => ({
+        ...r,
+        campaigns: r.createdCampaignIds.length,
+        liveCampaigns: r.createdCampaignIds.filter((id) => liveSet.has(id)).length,
+      })),
+    }
   })
 
   /** AX3.5 — take a run that landed at the bid floor up to its planned bids. */

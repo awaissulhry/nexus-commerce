@@ -533,3 +533,19 @@ describe('planApplication — edits', () => {
     expect(b.allowed).toBe(a.allowed)
   })
 })
+
+// ── AX3.6 — the re-run guard ──────────────────────────────────────────────
+describe('planApplication — you have already replicated this', () => {
+  it('WARNS when this product was already replicated into this market', () => {
+    const p = planApplication(doc, gale, [], { priorRun: { when: '2026-07-20', status: 'APPLIED', campaigns: 11 } })
+    expect(p.allowed).toBe(true) // a warning, not a block — re-running is legitimate
+    expect(p.warnings.some((w) => w.includes('already replicated') && w.includes('2026-07-20') && w.includes('SECOND set'))).toBe(true)
+  })
+  it('says nothing when the earlier run was rolled back', () => {
+    const p = planApplication(doc, gale, [], { priorRun: { when: '2026-07-20', status: 'ROLLED_BACK', campaigns: 11 } })
+    expect(p.warnings.some((w) => w.includes('already replicated'))).toBe(false)
+  })
+  it('says nothing when there is no earlier run', () => {
+    expect(planApplication(doc, gale, []).warnings.some((w) => w.includes('already replicated'))).toBe(false)
+  })
+})
