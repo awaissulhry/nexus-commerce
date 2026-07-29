@@ -283,9 +283,30 @@ Two defects prod caught and fixed during that pass:
   match-type tiers, and the gate reports one conflict per expression, so the conflict stayed
   unresolved: a button that visibly did nothing. It now drops the keyword everywhere it appears.
 
-### AX3.5 — Step 3: preflight, launch, result, rollback
-Totals, blockers, warnings, conflict ledger, €/day vs cap, market writability, not-copied recap,
-launch, result panel, rollback, Save as blueprint, Export as bulksheet.
+### ✅ AX3.5 — Step 3: preflight, launch, result, rollback — SHIPPED 2026-07-29 `406c28add`
+Totals, the €/day it commits, every blocker and warning, and — the part easy to leave out — **what
+will not be created**: the copy scope's exclusions, counted, beside the things it will.
+
+**Launch mode defaults to the safe side.** *Land at the bid floor* creates everything ENABLED at
+Amazon's 2¢ minimum with each planned bid remembered, so the structure exists, syncs and reads back
+normally but cannot meaningfully spend; one click raises it. **Never a pause** — pausing disrupts
+Amazon's optimisation and forces re-learning, which is why this account suppresses with bids.
+
+Two implementation choices worth keeping:
+- **It reuses the no-pause machinery** rather than inventing a second one. A floored launch writes
+  `suppressedFromBidCents` + `bidsSuppressedAt` exactly as `suppressCampaignBids` does, so the
+  console shows it as a suppressed campaign and `restoreCampaignBids` raises it through its existing
+  retry-safe, gated, audited path.
+- **Creation happens AT the floor**, not at the planned bid followed by a lowering. The second order
+  looks equivalent and puts real bids on Amazon for however long the suppression writes take to
+  land — the exact spend this option exists to prevent.
+
+Result panel reports created / never-reached-Amazon / errored, with rollback, raise-to-planned-bids,
+and save-as-blueprint. **Blueprints left the nav rail**; `/marketing/ads/blueprints` is a permanent
+redirect so the runbook and any bookmark still work.
+
+Export-as-bulksheet deferred to AX3.6 — `/marketing/ads/bulk` already does the round trip, so this
+is a link, not a build.
 
 ### AX3.6 — Library, history, drafts, diff
 Resumable **Draft** replications (Amazon's pattern); replication history + rollback inside the
