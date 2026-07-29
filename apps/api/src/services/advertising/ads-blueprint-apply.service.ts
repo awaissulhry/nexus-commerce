@@ -18,7 +18,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import type { BlueprintDoc } from '../ads-core/ads-blueprint.js'
-import { planApplication, type ApplyPlan, type ApplyOptions, type ApplyTarget, type ExistingTarget } from '../ads-core/ads-blueprint-apply.js'
+import { planApplication, materialise, type ApplyPlan, type ApplyOptions, type ApplyTarget, type ExistingTarget } from '../ads-core/ads-blueprint-apply.js'
 
 /**
  * Every positive keyword we currently target in this marketplace — the surface
@@ -78,6 +78,67 @@ export async function marketContext(marketplace: string) {
     marketplace,
     writable: conn?.mode === 'production' && !!conn.writesEnabledAt,
     everWritten: !!conn?.lastWriteAt,
+  }
+}
+
+/**
+ * AX3.3 — plan a replication straight from a live source, with no saved
+ * blueprint in between.
+ *
+ * The builder's step 1 changes the source, the naming and the copy scope
+ * continuously; persisting an AdBlueprint on every keystroke would fill the
+ * library with throwaway rows. Extraction is pure and cheap, so the doc is built
+ * per request and discarded. Saving one stays an explicit action.
+ *
+ * Read-only: nothing here creates an AdBlueprintApplication or touches Amazon.
+ */
+export interface PlanFromSourceRequest {
+  source: import('./ads-blueprint.service.js').CampaignSelector
+  /** The token to parameterise OUT of the source (e.g. 'AIREON'). */
+  sourceProductToken: string
+  competitorTokens?: string[]
+  target: ApplyTarget
+  /** Destination marketplace — not necessarily the source's. */
+  marketplace: string
+  options?: ApplyOptions
+}
+
+export async function planFromSource(req: PlanFromSourceRequest): Promise<{
+  plan: ApplyPlan
+  source: { campaigns: number; adGroups: number; positives: number; negatives: number; productAds: number; orphanedInSource: number }
+  sharedTargets: BlueprintDoc['sharedTargets']
+  /** Every campaign's source name next to what it will be called — the rename preview. */
+  renames: Array<{ from: string; to: string }>
+}> {
+  const { previewBlueprint } = await import('./ads-blueprint.service.js')
+  const { doc } = await previewBlueprint({
+    ...req.source,
+    productToken: req.sourceProductToken,
+    competitorTokens: req.competitorTokens,
+  })
+  const [existing, market, existingCampaignNames] = await Promise.all([
+    loadExistingTargets(req.marketplace),
+    marketContext(req.marketplace),
+    loadExistingCampaignNames(req.marketplace),
+  ])
+  const plan = planApplication(doc, req.target, existing, {
+    ...(req.options ?? {}), market, existingCampaignNames,
+  })
+  // The doc holds patterns; the plan holds finished names. Pair them by index —
+  // planApplication maps campaigns 1:1 and preserves order.
+  const renames = doc.campaigns.map((c, i) => ({
+    from: materialise(c.namePattern, req.sourceProductToken),
+    to: plan.campaigns[i]?.name ?? '',
+  }))
+  return {
+    plan,
+    source: {
+      campaigns: doc.stats.campaigns, adGroups: doc.stats.adGroups,
+      positives: doc.stats.positives, negatives: doc.stats.negatives,
+      productAds: doc.stats.productAds, orphanedInSource: doc.stats.orphanedInSource,
+    },
+    sharedTargets: doc.sharedTargets,
+    renames,
   }
 }
 

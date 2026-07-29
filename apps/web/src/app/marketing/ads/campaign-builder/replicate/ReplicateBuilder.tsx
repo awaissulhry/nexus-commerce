@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * AX3.2 — Replicate Structure, the sixth campaign-builder type.
+ * AX3.2/AX3.3 — Replicate Structure, the sixth campaign-builder type.
  *
  * Replication used to live at /marketing/ads/blueprints, in the nav rail, away
  * from every other way of creating a campaign. It belongs here: it IS a way of
@@ -12,14 +12,27 @@
  * what you are copying it onto, review and edit it, then check and launch. The
  * self-competition gate is unchanged and still blocking: this surface only
  * changes where the decisions are made, never whether they are made.
+ *
+ * The plan is always the SERVER's. Step 1 re-plans (debounced) on every change
+ * so the totals, blockers and conflicts on screen are the ones the launch will
+ * enforce, never a client-side approximation of them.
  */
-import { Fragment, useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Info } from 'lucide-react'
+import { Info, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
+import { getBackendUrl } from '@/lib/backend-url'
+import { ProductSelection, type SpwProduct } from '../sp-super-wizard/ProductSelection'
 import { SourcePicker, emptySelection, type SourceSelection } from './SourcePicker'
+import { NamingPanel } from './NamingPanel'
+import { CopyScopePanel } from './CopyScopePanel'
+import { DestinationPanel } from './DestinationPanel'
+import {
+  fullCopyScope, emptyNaming, copyPolicy, guessProductToken,
+  type CopyScope, type NamingRules, type ValuePolicy, type PlanPreviewResponse,
+} from './replicate-types'
 
 type StepN = 1 | 2 | 3
 const STEPS: Array<{ n: StepN; label: string }> = [
@@ -43,14 +56,99 @@ export function ReplicateBuilder() {
   const router = useRouter()
   const [step, setStep] = useState<StepN>(1)
   const [activeSec, setActiveSec] = useState('source')
-  const [market, setMarket] = useState('IT')
+
+  // ── source ────────────────────────────────────────────────────────────
+  const [sourceMarket, setSourceMarket] = useState('IT')
   const [selectedAdGroups, setSelectedAdGroups] = useState<Set<string>>(new Set())
   const [source, setSource] = useState<SourceSelection>(emptySelection())
 
-  // Changing market invalidates a selection made against another market's tree.
-  useEffect(() => { setSelectedAdGroups(new Set()) }, [market])
+  // ── transform ─────────────────────────────────────────────────────────
+  const [scope, setScope] = useState<CopyScope>(fullCopyScope())
+  const [sourceToken, setSourceToken] = useState('')
+  const [targetToken, setTargetToken] = useState('')
+  const [naming, setNaming] = useState<NamingRules>(emptyNaming())
+  const [products, setProducts] = useState<SpwProduct[]>([])
+
+  // ── destination ───────────────────────────────────────────────────────
+  const [market, setMarket] = useState('IT')
+  const [portfolioId, setPortfolioId] = useState('')
+  const [cap, setCap] = useState('')
+  const [bidPolicy, setBidPolicy] = useState<ValuePolicy>(copyPolicy())
+  const [budgetPolicy, setBudgetPolicy] = useState<ValuePolicy>(copyPolicy())
+
+  // ── the server's plan ─────────────────────────────────────────────────
+  const [preview, setPreview] = useState<PlanPreviewResponse | null>(null)
+  const [planning, setPlanning] = useState(false)
+  const [planErr, setPlanErr] = useState<string | null>(null)
+  const [liveNames, setLiveNames] = useState<Set<string>>(new Set())
+
+  // Changing the source market invalidates a selection made against another tree.
+  useEffect(() => { setSelectedAdGroups(new Set()) }, [sourceMarket])
 
   const onSource = useCallback((s: SourceSelection) => setSource(s), [])
+
+  // Guess the product token from the names the operator just picked.
+  const guessed = useMemo(() => guessProductToken(source.campaignNames), [source.campaignNames])
+  const guessAppliedFor = useRef('')
+  useEffect(() => {
+    const key = source.campaignNames.join('|')
+    if (guessed && guessAppliedFor.current !== key) { guessAppliedFor.current = key; setSourceToken(guessed) }
+  }, [guessed, source.campaignNames])
+
+  // Live campaign names in the destination, for the rename preview's collision flag.
+  useEffect(() => {
+    let alive = true
+    fetch(`${getBackendUrl()}/api/advertising/blueprints/sources?marketplace=${market}`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!alive) return
+        const names = ((j?.portfolios ?? []) as Array<{ campaigns: Array<{ name: string }> }>)
+          .flatMap((p) => p.campaigns.map((c) => c.name.toLowerCase()))
+        setLiveNames(new Set(names))
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [market])
+
+  const asins = useMemo(() => products.map((p) => p.asin || p.sku).filter(Boolean), [products])
+
+  // ── re-plan, debounced, whenever anything that shapes the plan changes ──
+  const planKey = JSON.stringify({
+    ids: source.campaignIds, ags: source.adGroupIds, sourceMarket,
+    sourceToken, targetToken, naming, scope, market, cap, bidPolicy, budgetPolicy, asins,
+  })
+  useEffect(() => {
+    if (!source.campaigns || !sourceToken.trim() || !targetToken.trim()) { setPreview(null); setPlanErr(null); return }
+    let alive = true
+    setPlanning(true)
+    const t = setTimeout(() => {
+      const num = (v: string) => (v.trim() === '' || !Number.isFinite(Number(v)) ? undefined : Number(v))
+      fetch(`${getBackendUrl()}/api/advertising/blueprints/plan-preview`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({
+          source: { campaignIds: source.campaignIds, adGroupIds: source.adGroupIds, marketplace: sourceMarket },
+          sourceProductToken: sourceToken.trim(),
+          productToken: targetToken.trim(),
+          asins,
+          marketplace: market,
+          dailyBudgetCapEur: num(cap),
+          naming: { prefix: naming.prefix, suffix: naming.suffix, replacements: naming.replacements.filter((r) => r.from) },
+          include: scope,
+          bidPolicy: bidPolicy.mode === 'copy' ? undefined : { mode: bidPolicy.mode, value: bidPolicy.mode === 'fixed' ? Math.round((num(bidPolicy.value) ?? 0) * 100) : num(bidPolicy.value) },
+          budgetPolicy: budgetPolicy.mode === 'copy' ? undefined : { mode: budgetPolicy.mode, value: num(budgetPolicy.value) },
+        }),
+      })
+        .then((r) => r.json())
+        .then((j) => {
+          if (!alive) return
+          if (j?.error) { setPlanErr(j.error); setPreview(null) } else { setPreview(j as PlanPreviewResponse); setPlanErr(null) }
+          setPlanning(false)
+        })
+        .catch((e) => { if (alive) { setPlanErr((e as Error).message); setPlanning(false) } })
+    }, 400)
+    return () => { alive = false; clearTimeout(t) }
+    // planKey captures every input; listing them individually would be noise.
+  }, [planKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll-spy for the step-1 sub-nav, matching the SP Super Wizard's.
   useEffect(() => {
@@ -68,7 +166,12 @@ export function ReplicateBuilder() {
 
   const gotoSec = (id: string) => document.getElementById(`rep-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
-  const canAdvance = source.campaigns > 0
+  const missing: string[] = []
+  if (!source.campaigns) missing.push('a source')
+  if (!sourceToken.trim()) missing.push('the product in the source names')
+  if (!targetToken.trim()) missing.push('the product it becomes')
+  if (!products.length) missing.push('at least one product to advertise')
+  const canAdvance = missing.length === 0
 
   return (
     <div className="h10-spw h10-rep">
@@ -115,32 +218,50 @@ export function ReplicateBuilder() {
                 <div className="h10-rep-market" role="group" aria-label="Source marketplace">
                   <span className="lbl"><Info size={13} aria-hidden /> Reading from</span>
                   {MARKETS.map((m) => (
-                    <button key={m} type="button" className={market === m ? 'on' : ''} onClick={() => setMarket(m)} aria-pressed={market === m}>{m}</button>
+                    <button key={m} type="button" className={sourceMarket === m ? 'on' : ''} onClick={() => setSourceMarket(m)} aria-pressed={sourceMarket === m}>{m}</button>
                   ))}
                 </div>
-                <SourcePicker market={market} selected={selectedAdGroups} setSelected={setSelectedAdGroups} onChange={onSource} />
-                <SourceSummary s={source} />
+                <SourcePicker market={sourceMarket} selected={selectedAdGroups} setSelected={setSelectedAdGroups} onChange={onSource} />
+                <SourceSummary s={source} orphaned={preview?.source.orphanedInSource ?? 0} />
               </section>
 
               <section id="rep-copy" className="h10-spw-sec">
                 <h2>What to copy</h2>
-                <p className="h10-spw-desc">Choose which parts of the structure come across. Lands in AX3.3.</p>
-                <div className="h10-spw-card h10-rep-todo">Next phase.</div>
+                <p className="h10-spw-desc">Everything comes across by default. Turn off only what you do not want re-created.</p>
+                <CopyScopePanel scope={scope} setScope={setScope} />
               </section>
+
               <section id="rep-naming" className="h10-spw-sec">
                 <h2>Naming</h2>
-                <p className="h10-spw-desc">Rename everything in bulk, with a preview of every old and new name. Lands in AX3.3.</p>
-                <div className="h10-spw-card h10-rep-todo">Next phase.</div>
+                <p className="h10-spw-desc">
+                  Rename everything in one go. Amazon will not accept two campaigns with the same name, and
+                  most source names do not carry the product, so this is usually required rather than optional.
+                </p>
+                <NamingPanel
+                  sourceToken={sourceToken} setSourceToken={setSourceToken}
+                  targetToken={targetToken} setTargetToken={setTargetToken}
+                  naming={naming} setNaming={setNaming}
+                  sourceNames={source.campaignNames} guessed={guessed} liveNames={liveNames}
+                />
               </section>
+
               <section id="rep-products" className="h10-spw-sec">
                 <h2>Product Selection</h2>
-                <p className="h10-spw-desc">The products the copied campaigns will advertise. Lands in AX3.3.</p>
-                <div className="h10-spw-card h10-rep-todo">Next phase.</div>
+                <p className="h10-spw-desc">The products the copied campaigns will advertise — one product ad per product, in every ad group.</p>
+                <ProductSelection products={products} setProducts={setProducts} />
               </section>
+
               <section id="rep-destination" className="h10-spw-sec">
                 <h2>Destination</h2>
-                <p className="h10-spw-desc">Target market, portfolio, budget cap and bid policy. Lands in AX3.3.</p>
-                <div className="h10-spw-card h10-rep-todo">Next phase.</div>
+                <p className="h10-spw-desc">Where the copies land, and what their bids and budgets should be.</p>
+                <DestinationPanel
+                  market={market} setMarket={setMarket}
+                  portfolioId={portfolioId} setPortfolioId={setPortfolioId}
+                  cap={cap} setCap={setCap}
+                  bidPolicy={bidPolicy} setBidPolicy={setBidPolicy}
+                  budgetPolicy={budgetPolicy} setBudgetPolicy={setBudgetPolicy}
+                  plannedTotal={preview?.plan.totals.dailyBudgetTotal ?? null}
+                />
               </section>
             </div>
           </div>
@@ -166,7 +287,7 @@ export function ReplicateBuilder() {
       <footer className="h10-spw-foot">
         {step > 1 && <button type="button" className="h10-spw-back" onClick={() => setStep((s) => (s > 1 ? ((s - 1) as StepN) : s))}>Back</button>}
         <span className="grow" />
-        {step === 1 && !canAdvance && <span className="h10-rep-hint">Select at least one campaign or ad group to continue</span>}
+        {step === 1 && <PlanBar planning={planning} err={planErr} preview={preview} missing={missing} />}
         <button
           type="button"
           className="h10-spw-next"
@@ -181,10 +302,8 @@ export function ReplicateBuilder() {
 }
 
 /** What the current selection adds up to — the answer to "am I copying the right thing?". */
-function SourceSummary({ s }: { s: SourceSelection }) {
-  if (s.campaigns === 0) {
-    return <p className="h10-rep-sum none">Nothing selected yet.</p>
-  }
+function SourceSummary({ s, orphaned }: { s: SourceSelection; orphaned: number }) {
+  if (s.campaigns === 0) return <p className="h10-rep-sum none">Nothing selected yet.</p>
   return (
     <div className="h10-rep-sum">
       <b>{s.campaigns}</b> campaign{s.campaigns === 1 ? '' : 's'} · <b>{s.adGroups}</b> ad group{s.adGroups === 1 ? '' : 's'} ·{' '}
@@ -192,6 +311,35 @@ function SourceSummary({ s }: { s: SourceSelection }) {
       <b>{s.productAds}</b> product ad{s.productAds === 1 ? '' : 's'}
       <span className="bud">source runs <b>€{s.dailyBudgetTotal.toFixed(2)}/day</b></span>
       {!s.whole && <span className="part">partial — some campaigns contribute only the ad groups you ticked</span>}
+      {orphaned > 0 && (
+        <span className="part">
+          {orphaned} of these targets no longer exist on Amazon. They are still copied — a copy is a fresh
+          create, not a re-push — but the source has drifted from what is live.
+        </span>
+      )}
     </div>
+  )
+}
+
+/** The server's verdict, live in the footer, so it is never a surprise at step 3. */
+function PlanBar({ planning, err, preview, missing }: {
+  planning: boolean; err: string | null; preview: PlanPreviewResponse | null; missing: string[]
+}) {
+  if (missing.length) return <span className="h10-rep-hint">Still needed: {missing.join(', ')}</span>
+  if (planning) return <span className="h10-rep-hint"><Loader2 size={13} className="spin" aria-hidden /> Checking this against your account…</span>
+  if (err) return <span className="h10-rep-hint bad">{err}</span>
+  if (!preview) return null
+  const p = preview.plan
+  return (
+    <span className="h10-rep-planbar">
+      {p.allowed
+        ? <span className="ok"><CheckCircle2 size={13} aria-hidden /> Ready</span>
+        : <span className="bad"><AlertTriangle size={13} aria-hidden /> {p.blockers.length} blocker{p.blockers.length === 1 ? '' : 's'}</span>}
+      <span className="t">
+        {p.totals.campaigns} campaigns · {p.totals.positives} keywords · {p.totals.negatives} negatives · {p.totals.productAds} ads ·{' '}
+        <b>€{p.totals.dailyBudgetTotal.toFixed(2)}/day</b>
+        {p.conflicts.length > 0 && <span className="cf"> · {p.conflicts.length} keyword conflict{p.conflicts.length === 1 ? '' : 's'} to resolve</span>}
+      </span>
+    </span>
   )
 }

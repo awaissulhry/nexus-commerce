@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { extractBlueprint, type SourceCampaign } from './ads-blueprint.js'
-import { planApplication, materialise, type ExistingTarget } from './ads-blueprint-apply.js'
+import { planApplication, materialise, applyNaming, type ExistingTarget } from './ads-blueprint-apply.js'
 
 const kw = (expressionValue: string, expressionType = 'EXACT', isNegative = false, bidCents: number | null = 30) => ({
   kind: 'KEYWORD', expressionType, expressionValue, bidCents, isNegative, negativeLevel: isNegative ? 'AD_GROUP' : null,
@@ -280,5 +280,121 @@ describe('planApplication — what the plan now carries into creation', () => {
     ])
     expect(plan.conflicts).toEqual([])
     expect(plan.allowed).toBe(true)
+  })
+})
+
+// ── AX3.3 — bulk rename ───────────────────────────────────────────────────
+describe('applyNaming', () => {
+  it('adds a prefix and a suffix', () => {
+    expect(applyNaming('IT-GALE-SP-Auto', { prefix: 'Q1-', suffix: '-v2' })).toBe('Q1-IT-GALE-SP-Auto-v2')
+  })
+  it('find-and-replaces literally and case-insensitively, every occurrence', () => {
+    expect(applyNaming('IT-GALE-SP-GALE', { replacements: [{ from: 'gale', to: 'VENTRA' }] })).toBe('IT-VENTRA-SP-VENTRA')
+  })
+  it('treats the needle as text, not a pattern — operators type names, not regexes', () => {
+    expect(applyNaming('GALE | IT | Auto', { replacements: [{ from: ' | ', to: '-' }] })).toBe('GALE-IT-Auto')
+    expect(applyNaming('A.B', { replacements: [{ from: '.', to: '_' }] })).toBe('A_B')
+  })
+  it('applies replacements before the prefix and suffix', () => {
+    expect(applyNaming('OLD-Auto', { prefix: 'OLD-', replacements: [{ from: 'OLD-', to: '' }] })).toBe('OLD-Auto')
+  })
+  it('is a no-op with no rules', () => {
+    expect(applyNaming('IT-GALE-SP-Auto', undefined)).toBe('IT-GALE-SP-Auto')
+    expect(applyNaming('IT-GALE-SP-Auto', {})).toBe('IT-GALE-SP-Auto')
+  })
+})
+
+describe('planApplication — naming is part of the plan, not a preview', () => {
+  it('renames campaigns AND their ad groups', () => {
+    const p = planApplication(doc, gale, [], { naming: { prefix: 'Q1-' } })
+    expect(p.campaigns[0]!.name).toBe('Q1-IT-GALE-SP-Brand-Exact')
+    expect(p.campaigns[0]!.adGroups[0]!.name).toBe('Q1-IT-GALE-SP-Brand-Exact Ad Group')
+  })
+  it('the collision gate checks the RENAMED name, so a rename can clear a block', () => {
+    const untokenised = extractBlueprint([{
+      name: 'IT_Auto_Close', dailyBudget: 5, biddingStrategy: null, placementBidding: [],
+      adGroups: [{ name: 'ag', defaultBidCents: 30, asins: [], targets: [kw('giacca moto')] }],
+    }], { productToken: 'MOSS' })
+    const live = { existingCampaignNames: ['IT_Auto_Close'] }
+    expect(planApplication(untokenised, gale, [], live).allowed).toBe(false)
+    expect(planApplication(untokenised, gale, [], { ...live, naming: { prefix: 'GALE-' } }).allowed).toBe(true)
+  })
+})
+
+// ── AX3.3 — what to copy ──────────────────────────────────────────────────
+describe('planApplication — copy scope', () => {
+  const src = (): SourceCampaign[] => [{
+    name: 'IT-AIREON-SP-Mixed', dailyBudget: 10, biddingStrategy: null,
+    placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 75 }], targetingType: 'MANUAL',
+    adGroups: [{
+      name: 'ag', defaultBidCents: 30, asins: ['B0A'],
+      targets: [
+        kw('giacca aireon'), kw('casco moto', 'EXACT', true),
+        { kind: 'PRODUCT', expressionType: 'ASIN', expressionValue: 'B0RIVAL', bidCents: 40, isNegative: false, negativeLevel: null },
+        { kind: 'AUTO', expressionType: 'SEARCH_CLOSE_MATCH', expressionValue: '', bidCents: 20, isNegative: false, negativeLevel: null },
+      ],
+    }],
+  }]
+  const d = extractBlueprint(src(), { productToken: 'AIREON' })
+  const kinds = (include: Record<string, boolean>) => {
+    const p = planApplication(d, gale, [], { include })
+    return { plan: p, kinds: p.campaigns[0]!.adGroups[0]!.targets.map((t) => `${t.kind}${t.isNegative ? ':neg' : ''}`) }
+  }
+
+  it('copies everything by default', () => {
+    expect(kinds({}).kinds.sort()).toEqual(['AUTO', 'KEYWORD', 'KEYWORD:neg', 'PRODUCT'])
+  })
+  it('excluding keywords keeps the negatives, product targets and auto clauses', () => {
+    const { kinds: k, plan } = kinds({ keywords: false })
+    expect(k.sort()).toEqual(['AUTO', 'KEYWORD:neg', 'PRODUCT'])
+    expect(plan.excluded.keywords).toBe(1)
+  })
+  it('excluding negatives keeps only the positives', () => {
+    expect(kinds({ negatives: false }).kinds.sort()).toEqual(['AUTO', 'KEYWORD', 'PRODUCT'])
+  })
+  it('excluding product targets and auto clauses leaves the keywords', () => {
+    expect(kinds({ productTargets: false, autoClauses: false }).kinds.sort()).toEqual(['KEYWORD', 'KEYWORD:neg'])
+  })
+  it('excluding placement modifiers empties them rather than copying them', () => {
+    expect(planApplication(d, gale, [], { include: { placementBidding: false } }).campaigns[0]!.placementBidding).toEqual([])
+    expect(planApplication(d, gale, []).campaigns[0]!.placementBidding).toHaveLength(1)
+  })
+  it('WARNS about everything the scope left behind — never silently', () => {
+    const p = planApplication(d, gale, [], { include: { keywords: false, autoClauses: false } })
+    expect(p.warnings.some((w) => w.includes('will NOT be copied') && w.includes('keyword') && w.includes('auto clause'))).toBe(true)
+  })
+  it('warns when a campaign would be created with no positive targeting at all', () => {
+    const p = planApplication(d, gale, [], { include: { keywords: false, productTargets: false, autoClauses: false } })
+    expect(p.warnings.some((w) => w.includes('no positive targeting'))).toBe(true)
+  })
+})
+
+// ── AX3.3 — bid and budget policy ─────────────────────────────────────────
+describe('planApplication — bid and budget policy', () => {
+  it('copies verbatim by default', () => {
+    const p = planApplication(doc, gale, [])
+    expect(p.campaigns[0]!.dailyBudget).toBe(10)
+    expect(p.campaigns[0]!.adGroups[0]!.targets[0]!.bidCents).toBe(30)
+  })
+  it('scales bids by a percentage', () => {
+    const p = planApplication(doc, gale, [], { bidPolicy: { mode: 'scale', value: 50 } })
+    expect(p.campaigns[0]!.adGroups[0]!.targets[0]!.bidCents).toBe(15)
+    expect(p.campaigns[0]!.adGroups[0]!.defaultBidCents).toBe(15)
+  })
+  it('never scales a bid below Amazon’s 2c floor', () => {
+    const p = planApplication(doc, gale, [], { bidPolicy: { mode: 'scale', value: 1 } })
+    expect(p.campaigns[0]!.adGroups[0]!.targets[0]!.bidCents).toBe(2)
+  })
+  it('sets a flat bid', () => {
+    const p = planApplication(doc, gale, [], { bidPolicy: { mode: 'fixed', value: 12 } })
+    expect(p.campaigns[0]!.adGroups[0]!.targets[0]!.bidCents).toBe(12)
+  })
+  it('scales budgets, and the committed total follows', () => {
+    const p = planApplication(doc, gale, [], { budgetPolicy: { mode: 'scale', value: 50 } })
+    expect(p.totals.dailyBudgetTotal).toBe(13) // 10→5, 15→8 (rounded)
+  })
+  it('a scaled budget can bring a plan under the cap that blocked it', () => {
+    expect(planApplication(doc, gale, [], { dailyBudgetCapEur: 20 }).allowed).toBe(false)
+    expect(planApplication(doc, gale, [], { dailyBudgetCapEur: 20, budgetPolicy: { mode: 'scale', value: 50 } }).allowed).toBe(true)
   })
 })

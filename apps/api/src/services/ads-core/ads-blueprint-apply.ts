@@ -90,6 +90,11 @@ export interface ApplyPlan {
   /** Reasons the plan may not be executed. Empty ⇒ allowed. */
   blockers: string[]
   allowed: boolean
+  /**
+   * AX3.3 — what the copy scope deliberately left behind. Reported so "we copied
+   * the structure" never quietly means "we copied most of the structure".
+   */
+  excluded: { keywords: number; negatives: number; productTargets: number; autoClauses: number }
 }
 
 /**
@@ -124,6 +129,77 @@ export interface ApplyOptions {
    * rule and every operator lookup becomes ambiguous — so it blocks.
    */
   existingCampaignNames?: string[]
+  /** AX3.3 — bulk rename, applied after the product token is substituted in. */
+  naming?: NamingRules
+  /** AX3.3 — which parts of the structure come across. Omitted ⇒ everything. */
+  include?: Partial<CopyScope>
+  /** AX3.3 — what to do with the source's bids and budgets. */
+  bidPolicy?: ValuePolicy
+  budgetPolicy?: ValuePolicy
+}
+
+/**
+ * AX3.3 — the bulk rename. Runs on the MATERIALISED name (after {{product}} has
+ * become the target token), because that is the name Amazon will hold and the
+ * name the collision gate has to check.
+ *
+ * `replacements` is Google Ads Editor's find-and-replace: the operator's own
+ * source names are the input, so a literal, ordered, case-insensitive replace is
+ * what they expect — not a regex they have to escape.
+ */
+export interface NamingRules {
+  prefix?: string
+  suffix?: string
+  replacements?: Array<{ from: string; to: string }>
+}
+
+/** AX3.3 — Amazon's copy dialog lets you choose what comes across. So does this. */
+export interface CopyScope {
+  keywords: boolean
+  negatives: boolean
+  productTargets: boolean
+  autoClauses: boolean
+  /** Off ⇒ every bid falls back to the ad group's default. */
+  bids: boolean
+  /** Off ⇒ every campaign gets `budgetPolicy.value` (or 0) instead of the source's. */
+  budgets: boolean
+  placementBidding: boolean
+}
+export const FULL_COPY: CopyScope = {
+  keywords: true, negatives: true, productTargets: true, autoClauses: true,
+  bids: true, budgets: true, placementBidding: true,
+}
+
+/**
+ * How a copied number is carried over. A bid that matured on a product with
+ * months of history is not automatically the right opening bid for a product
+ * with none, so "copy it verbatim" must be a choice rather than the only option.
+ */
+export interface ValuePolicy {
+  mode: 'copy' | 'scale' | 'fixed'
+  /** scale ⇒ percentage of the source (100 = unchanged). fixed ⇒ the value itself. */
+  value?: number
+}
+
+const FLOOR_CENTS = 2 // Amazon's minimum bid, and our no-pause suppression floor.
+
+function applyValuePolicy(source: number | null, policy: ValuePolicy | undefined, floor: number): number | null {
+  if (!policy || policy.mode === 'copy') return source
+  if (policy.mode === 'fixed') return Math.max(floor, policy.value ?? 0)
+  const pct = policy.value ?? 100
+  return source == null ? null : Math.max(floor, Math.round(source * (pct / 100)))
+}
+
+/** Apply the bulk rename to one already-materialised name. */
+export function applyNaming(name: string, rules: NamingRules | undefined): string {
+  if (!rules) return name
+  let out = name
+  for (const r of rules.replacements ?? []) {
+    if (!r.from) continue
+    // Literal, case-insensitive, all occurrences — the operator typed a name, not a pattern.
+    out = out.replace(new RegExp(r.from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), r.to ?? '')
+  }
+  return `${rules.prefix ?? ''}${out}${rules.suffix ?? ''}`
 }
 
 const norm = (s: string): string => s.trim().toLowerCase()
@@ -160,14 +236,35 @@ export function planApplication(
   const conflicts = new Map<string, ApplyConflict>()
   let adGroups = 0, positives = 0, negatives = 0, productAds = 0, dailyBudgetTotal = 0
 
+  // AX3.3 — what comes across, and how the numbers come across.
+  const scope: CopyScope = { ...FULL_COPY, ...(opts.include ?? {}) }
+  const excluded = { keywords: 0, negatives: 0, productTargets: 0, autoClauses: 0 }
+
   const campaigns: PlannedCampaign[] = doc.campaigns.map((c) => {
-    dailyBudgetTotal += Number(c.dailyBudget ?? 0)
+    const dailyBudget = scope.budgets
+      ? applyValuePolicy(c.dailyBudget, opts.budgetPolicy, 1)
+      : (opts.budgetPolicy?.mode === 'fixed' ? Math.max(1, opts.budgetPolicy.value ?? 0) : c.dailyBudget)
+    dailyBudgetTotal += Number(dailyBudget ?? 0)
     const groups: PlannedAdGroup[] = c.adGroups.map((g) => {
       adGroups++
+      const defaultBidCents = scope.bids ? applyValuePolicy(g.defaultBidCents, opts.bidPolicy, FLOOR_CENTS) : g.defaultBidCents
       const targets: PlannedTarget[] = []
       for (const t of g.targets) {
+        // Copy scope. Counted, so step 3 can say what was left behind.
+        const kind = (t.kind ?? '').toUpperCase()
+        if (t.isNegative) {
+          if (!scope.negatives) { excluded.negatives++; continue }
+        } else if (kind === 'AUTO') {
+          if (!scope.autoClauses) { excluded.autoClauses++; continue }
+        } else if (kind === 'PRODUCT' || kind === 'CATEGORY') {
+          if (!scope.productTargets) { excluded.productTargets++; continue }
+        } else if (!scope.keywords) { excluded.keywords++; continue }
+
         const expression = materialise(t.expression, target.productToken)
         const key = norm(expression)
+        // A target's own bid follows the bid policy; with bids off it falls back
+        // to the ad group default rather than to zero.
+        const bidCents = scope.bids ? applyValuePolicy(t.bidCents, opts.bidPolicy, FLOOR_CENTS) : null
 
         // Only POSITIVE shared targets are gated. A negative is not a bid and
         // cannot compete; skipping one would silently widen the new campaign.
@@ -184,7 +281,7 @@ export function planApplication(
             })
             targets.push({
               expression, expressionType: t.expressionType, kind: t.kind,
-              bidCents: t.bidCents, isNegative: t.isNegative, negativeLevel: t.negativeLevel,
+              bidCents, isNegative: t.isNegative, negativeLevel: t.negativeLevel,
               conflictsWith: clash,
             })
             if (t.isNegative) negatives++; else positives++
@@ -194,27 +291,27 @@ export function planApplication(
 
         targets.push({
           expression, expressionType: t.expressionType, kind: t.kind,
-          bidCents: t.bidCents, isNegative: t.isNegative, negativeLevel: t.negativeLevel,
-          ...(t.kind?.toUpperCase() === 'AUTO' ? { autoClause: t.autoClause ?? null } : {}),
+          bidCents, isNegative: t.isNegative, negativeLevel: t.negativeLevel,
+          ...(kind === 'AUTO' ? { autoClause: t.autoClause ?? null } : {}),
         })
         if (t.isNegative) negatives++; else positives++
       }
       productAds += target.asins.length
       return {
-        name: materialise(g.namePattern, target.productToken),
-        defaultBidCents: g.defaultBidCents,
+        name: applyNaming(materialise(g.namePattern, target.productToken), opts.naming),
+        defaultBidCents,
         targets,
         asins: target.asins,
       }
     })
     return {
       role: c.role,
-      name: materialise(c.namePattern, target.productToken),
-      dailyBudget: c.dailyBudget,
+      name: applyNaming(materialise(c.namePattern, target.productToken), opts.naming),
+      dailyBudget,
       biddingStrategy: c.biddingStrategy,
       adGroups: groups,
       targetingType: c.targetingType ?? 'MANUAL',
-      placementBidding: c.placementBidding ?? [],
+      placementBidding: scope.placementBidding ? (c.placementBidding ?? []) : [],
     }
   })
 
@@ -281,6 +378,28 @@ export function planApplication(
     )
   }
 
+  // AX3.3 — the copy scope is the operator's own choice, so it warns rather than
+  // blocks; it must still be said out loud.
+  const droppedTotal = excluded.keywords + excluded.negatives + excluded.productTargets + excluded.autoClauses
+  if (droppedTotal) {
+    const parts = [
+      excluded.keywords && `${excluded.keywords} keyword(s)`,
+      excluded.negatives && `${excluded.negatives} negative(s)`,
+      excluded.productTargets && `${excluded.productTargets} product target(s)`,
+      excluded.autoClauses && `${excluded.autoClauses} auto clause(s)`,
+    ].filter(Boolean)
+    warnings.push(`${parts.join(', ')} in the source will NOT be copied — you excluded them under "what to copy"`)
+  }
+  // A campaign with no positive targeting cannot spend. Auto campaigns self-target.
+  const inert = campaigns.filter((c) => c.targetingType !== 'AUTO'
+    && c.adGroups.every((g) => g.targets.every((t) => t.isNegative)))
+  if (inert.length) {
+    warnings.push(
+      `${inert.length} campaign(s) would be created with no positive targeting and could never run `
+      + `(${inert.slice(0, 3).map((c) => `"${c.name}"`).join(', ')}${inert.length > 3 ? ', …' : ''})`,
+    )
+  }
+
   return {
     productToken: target.productToken,
     warnings,
@@ -289,5 +408,6 @@ export function planApplication(
     conflicts: conflictList,
     blockers,
     allowed: blockers.length === 0,
+    excluded,
   }
 }

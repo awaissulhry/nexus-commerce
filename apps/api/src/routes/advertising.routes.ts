@@ -1331,6 +1331,48 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     catch (e) { reply.code(500); return { error: (e as Error).message, portfolios: [] } }
   })
 
+  /**
+   * AX3.3 — plan a replication from a live source without saving a blueprint.
+   * Read-only: no AdBlueprint, no AdBlueprintApplication, nothing on Amazon.
+   * This is what the builder's step 1 calls as the operator changes the source,
+   * the naming or the copy scope.
+   */
+  fastify.post('/advertising/blueprints/plan-preview', async (request, reply) => {
+    const b = request.body as {
+      source?: { campaignIds?: string[]; adGroupIds?: string[]; portfolioId?: string; namePrefix?: string; marketplace?: string }
+      sourceProductToken?: string; competitorTokens?: string[]
+      productToken?: string; asins?: string[]; marketplace?: string
+      skipSharedTargets?: string[]; acceptSharedTargets?: string[]; dailyBudgetCapEur?: number
+      naming?: { prefix?: string; suffix?: string; replacements?: Array<{ from: string; to: string }> }
+      include?: Record<string, boolean>
+      bidPolicy?: { mode: 'copy' | 'scale' | 'fixed'; value?: number }
+      budgetPolicy?: { mode: 'copy' | 'scale' | 'fixed'; value?: number }
+    }
+    if (!b?.source) { reply.code(400); return { error: 'source is required' } }
+    if (!b?.sourceProductToken) { reply.code(400); return { error: 'sourceProductToken is required — it is what gets parameterised out' } }
+    if (!b?.productToken) { reply.code(400); return { error: 'productToken is required — it is what {{product}} becomes' } }
+    if (!b?.marketplace) { reply.code(400); return { error: 'marketplace is required' } }
+    const { planFromSource } = await import('../services/advertising/ads-blueprint-apply.service.js')
+    try {
+      return await planFromSource({
+        source: b.source,
+        sourceProductToken: b.sourceProductToken,
+        competitorTokens: b.competitorTokens,
+        target: { productToken: b.productToken, asins: b.asins ?? [] },
+        marketplace: b.marketplace,
+        options: {
+          skipSharedTargets: b.skipSharedTargets,
+          acceptSharedTargets: b.acceptSharedTargets,
+          dailyBudgetCapEur: b.dailyBudgetCapEur,
+          naming: b.naming,
+          include: b.include,
+          bidPolicy: b.bidPolicy,
+          budgetPolicy: b.budgetPolicy,
+        },
+      })
+    } catch (e) { reply.code(400); return { error: (e as Error).message } }
+  })
+
   fastify.post('/advertising/blueprints/preview', async (request, reply) => {
     const b = request.body as { campaignIds?: string[]; adGroupIds?: string[]; portfolioId?: string; namePrefix?: string; marketplace?: string; productToken?: string; competitorTokens?: string[] }
     if (!b?.productToken) { reply.code(400); return { error: 'productToken is required — it is what gets parameterised out' } }
