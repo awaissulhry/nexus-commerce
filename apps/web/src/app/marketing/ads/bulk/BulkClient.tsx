@@ -30,6 +30,7 @@ import { ProgressBar } from '@/design-system/components/ProgressBar'
 import { EmptyState } from '@/design-system/components/EmptyState'
 import { ToastProvider, useToast } from '@/design-system/components/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
+import { ExportScopeModal } from './ExportScopeModal'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
@@ -78,8 +79,11 @@ function BulkInner() {
   const [tab, setTab] = useState('import')
 
   // ── export ──
-  const [perfDays, setPerfDays] = useState('30')
+  // "Download everything" is the one-click path and takes the default window;
+  // anyone who cares about the window is in the scope modal, which owns its own.
+  const perfDays = '30'
   const [downloading, setDownloading] = useState(false)
+  const [scopeOpen, setScopeOpen] = useState(false)
 
   // ── import ──
   const [stage, setStage] = useState<Stage>('idle')
@@ -281,16 +285,16 @@ function BulkInner() {
                 Products layout, so it opens in Excel and Numbers with no surprises.
               </p>
               <div className="bulk-row">
-                <label className="bulk-label" htmlFor="perfdays">Performance window</label>
-                <Select id="perfdays" value={perfDays} onChange={(e) => setPerfDays(e.target.value)} className="bulk-select">
-                  <option value="7">Last 7 days</option>
-                  <option value="30">Last 30 days</option>
-                  <option value="60">Last 60 days</option>
-                  <option value="90">Last 90 days</option>
-                </Select>
-                <Button variant="primary" onClick={() => void downloadExport()} disabled={downloading}>
-                  <Download size={14} />{downloading ? 'Preparing…' : 'Download bulksheet'}
+                <Button variant="primary" onClick={() => setScopeOpen(true)}>
+                  <Download size={14} />Choose what to export
                 </Button>
+                <Button variant="secondary" onClick={() => void downloadExport()} disabled={downloading}>
+                  {downloading ? 'Preparing…' : 'Download everything'}
+                </Button>
+                <span className="bulk-hint">
+                  Scope it by portfolio, product, state or row type — and see the row count before
+                  you download.
+                </span>
               </div>
               <Banner tone="info" className="bulk-banner">
                 Metrics are populated for campaigns and product ads. Keyword and ad-group rows are
@@ -519,6 +523,15 @@ function BulkInner() {
           </div>
         )}
       </div>
+
+      <ExportScopeModal
+        open={scopeOpen}
+        onClose={() => setScopeOpen(false)}
+        api={api}
+        onDownloaded={({ rows, campaigns, filename }) =>
+          toast(`${rows.toLocaleString()} rows across ${campaigns} campaign${campaigns === 1 ? '' : 's'} → ${filename}`, 'success')}
+        onError={(m) => toast(m, 'danger')}
+      />
     </>
   )
 }

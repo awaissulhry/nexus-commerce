@@ -17,6 +17,8 @@ import { FilterDropdown, H10Select, HoverCard } from './FilterDropdown'
 import { AdManagerGraph } from './AdManagerGraph'
 import { InfoTip } from './InfoTip'
 
+import { ExportScopeModal } from '../bulk/ExportScopeModal'
+
 interface Camp {
   id: string; name: string; marketplace: string | null; status: string
   adProduct?: string | null; type?: string | null
@@ -695,6 +697,7 @@ export function CampaignsGrid() {
   const [mode, setMode] = useState<Mode>('metrics')
   const [campaignSel, setCampaignSel] = useState<string[]>([])
   const [sel, setSel] = useState<Set<string>>(new Set())
+  const [exportOpen, setExportOpen] = useState(false)
   // CBN.2b — filter bar (Helium 10 Ad Manager match). `statuses`/`types` hold the
   // concrete selected values; full-length == "All" (no filter applied).
   const [statuses, setStatuses] = useState<string[]>(DEFAULT_STATUSES)
@@ -1419,7 +1422,11 @@ export function CampaignsGrid() {
           <button type="button" className={`h10-am-btn ${showCustomize ? 'on' : ''}`} onClick={() => setShowCustomize((v) => !v)} aria-haspopup="dialog" aria-expanded={showCustomize}><Settings2 size={13} /> Customize</button>
           {showCustomize && <CustomizePanel visible={colVisible} onChange={onColsChange} onReset={resetCols} onClose={() => setShowCustomize(false)} />}
         </div>
-        <button type="button" className="h10-am-btn"><Download size={13} /> Export Data</button>
+        {/* Was a dead control — an H10 pixel-match placeholder with no onClick,
+            which is its own small lie: a button that looks like it works. Now it
+            opens the export scope modal, so "Export Data" from the grid means
+            exactly what it says and carries the current view with it. */}
+        <button type="button" className="h10-am-btn" onClick={() => setExportOpen(true)} aria-haspopup="dialog"><Download size={13} /> Export Data</button>
         <Link href="/marketing/ads/rules-automation" className="h10-am-btn"><Wand2 size={13} /> Create Rule</Link>
         <Link href="/marketing/ads/campaign-builder" className="h10-am-btn primary"><Plus size={13} /> Campaign</Link>
       </div>
@@ -1614,6 +1621,26 @@ export function CampaignsGrid() {
         if (editPop.kind === 'minMaxBid') return <RangePopover title="Min/Max Bid" rangeLabel="Set a Min/Max Bid Range" initial={c.minMaxBid ?? null} x={editPop.x} y={editPop.y} onApply={(mm) => setCampaignMinMaxBid(c, mm)} onClose={close} />
         return <RangePopover title="Min/Max Budget" rangeLabel="Set a Min/Max Budget Range" initial={c.minMaxBudget ?? null} x={editPop.x} y={editPop.y} onApply={(mm) => setCampaignMinMaxBudget(c, mm)} onClose={close} />
       })()}
+
+      {/* AX-IE.10 — "export exactly what I'm looking at".
+          The grid hands over the ids its OWN filters resolved to, rather than the
+          server re-implementing market/status/type/range semantics that live only
+          in this component's state. `filtered` stays the single definition of the
+          current view, and the export cannot drift from what is on screen. */}
+      <ExportScopeModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        api={(path) => `${getBackendUrl()}/api/advertising${path}`}
+        grid={{
+          viewIds: filtered.map((c) => c.id),
+          selectedIds: [...sel],
+          viewLabel: [
+            market !== 'all' ? market : null,
+            portfolio ? 'portfolio' : null,
+            campaignSel.length ? `${campaignSel.length} named` : null,
+          ].filter(Boolean).join(' · ') || undefined,
+        }}
+      />
     </div>
   )
 }

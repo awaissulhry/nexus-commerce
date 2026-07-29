@@ -60,7 +60,13 @@ export async function parseExportScope(prisma: PrismaClient, q: ExportScopeQuery
 
   const campaignIds = csv(q.campaignIds)
   if (campaignIds.length) {
-    where.externalCampaignId = { in: campaignIds }
+    // Either id form. Callers hold different ones — the bulksheet's own rows
+    // carry Amazon's external id, while the campaigns grid works in local ids
+    // because that is what its PATCH endpoints take. Matching only one of them
+    // would make "export what I'm looking at" silently select nothing, which is
+    // the same trap `_row_key` resolution fell into: a lookup keyed on the one
+    // id the caller happened not to have.
+    where.OR = [{ externalCampaignId: { in: campaignIds } }, { id: { in: campaignIds } }]
     labels.push(`${campaignIds.length} specific campaign${campaignIds.length === 1 ? '' : 's'}`)
   }
   if (q.portfolioId) { where.portfolioId = q.portfolioId; labels.push(`portfolio ${q.portfolioId}`) }
