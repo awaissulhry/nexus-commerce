@@ -422,7 +422,19 @@ export function ReplicateBuilder() {
                 <ProductSelection products={products} setProducts={setProducts} />
               </section>
 
-              <section id="rep-history" className="h10-spw-sec" style={{ order: 99 }}>
+              <section id="rep-destination" className="h10-spw-sec">
+                <h2>Destination</h2>
+                <p className="h10-spw-desc">Where the copies land, and what their bids and budgets should be.</p>
+                <DestinationPanel
+                  market={market} setMarket={setMarket}
+                  portfolioId={portfolioId} setPortfolioId={setPortfolioId}
+                  cap={cap} setCap={setCap}
+                  bidPolicy={bidPolicy} setBidPolicy={setBidPolicy}
+                  budgetPolicy={budgetPolicy} setBudgetPolicy={setBudgetPolicy}
+                  plannedTotal={preview?.plan.totals.dailyBudgetTotal ?? null}
+                />
+              </section>
+              <section id="rep-history" className="h10-spw-sec">
                 <h2>Past runs &amp; saved structures</h2>
                 <p className="h10-spw-desc">
                   What has already been replicated into {market}, and the structures you saved. Rolling a run
@@ -440,18 +452,6 @@ export function ReplicateBuilder() {
                   }}
                 />
                 <DriftCheck market={market} />
-              </section>
-              <section id="rep-destination" className="h10-spw-sec">
-                <h2>Destination</h2>
-                <p className="h10-spw-desc">Where the copies land, and what their bids and budgets should be.</p>
-                <DestinationPanel
-                  market={market} setMarket={setMarket}
-                  portfolioId={portfolioId} setPortfolioId={setPortfolioId}
-                  cap={cap} setCap={setCap}
-                  bidPolicy={bidPolicy} setBidPolicy={setBidPolicy}
-                  budgetPolicy={budgetPolicy} setBudgetPolicy={setBudgetPolicy}
-                  plannedTotal={preview?.plan.totals.dailyBudgetTotal ?? null}
-                />
               </section>
             </div>
           </div>
