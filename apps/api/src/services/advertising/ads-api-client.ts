@@ -1463,7 +1463,7 @@ export async function listProductEligibility(
   const out: AdsProductEligibility[] = []
   for (let i = 0; i < products.length; i += ELIGIBILITY_CHUNK) {
     const chunk = products.slice(i, i + ELIGIBILITY_CHUNK)
-    const res = await liveCall<{ productResponseList?: AdsProductEligibility[] }>({
+    const res = await liveCall<Record<string, unknown>>({
       profileId: ctx.profileId,
       region: ctx.region,
       method: 'POST',
@@ -1474,7 +1474,27 @@ export async function listProductEligibility(
         productDetailsList: chunk.map((p) => ({ ...(p.asin ? { asin: p.asin } : {}), ...(p.sku ? { sku: p.sku } : {}) })),
       },
     })
-    out.push(...(res.productResponseList ?? []))
+
+    // The root field name came from a third-party doc mirror, so accept the
+    // documented name and the obvious alternatives rather than silently
+    // returning nothing if Amazon spells it differently.
+    const list =
+      (res.productResponseList as AdsProductEligibility[] | undefined) ??
+      (res.productResponses as AdsProductEligibility[] | undefined) ??
+      (Array.isArray(res) ? (res as unknown as AdsProductEligibility[]) : undefined)
+
+    if (!list || list.length === 0) {
+      // A 2xx that yields no rows is the dangerous case: it looks like success
+      // and renders as "unknown" forever. Log the actual shape ONCE per call so
+      // the mismatch is diagnosable instead of invisible.
+      logger.warn('[ads-eligibility] 2xx with no parsable rows', {
+        rootKeys: Object.keys(res ?? {}).slice(0, 12),
+        sample: JSON.stringify(res ?? {}).slice(0, 900),
+        requested: chunk.length,
+        adType: input.adType ?? 'sp',
+      })
+    }
+    out.push(...(list ?? []))
   }
   return out
 }
