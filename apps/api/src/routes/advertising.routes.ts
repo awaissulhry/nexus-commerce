@@ -5266,6 +5266,75 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { importJobId: id, changeSetId: `import:${id}`, ...outcome }
   })
 
+  /**
+   * AX-VT.6 — GET /advertising/trust
+   *
+   * One answer to one question: "is Nexus telling me the truth about Amazon right now?"
+   *
+   * Everything here already existed, scattered — AdDrift rows, AD_* dead letters, unsettled
+   * AdMutation rows, launch-verification receipts, the integrity snapshot. That scattering is
+   * exactly how the portfolio defect survived: 169 drift rows for biddingStrategy sat unread while
+   * the portfolio field was silently undetectable, and nobody had one place that would have shown
+   * both. This is a read model — it computes nothing new and writes nothing.
+   *
+   * Deliberately NOT cached beyond 15s: the whole value is that it reflects now.
+   */
+  fastify.get('/advertising/trust', async (request, reply) => {
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const [
+      driftByClass, driftOpen, deadLetters, pendingMutations, staleMutations,
+      lastReconcile, lastReceipt, failedWriteCampaigns,
+    ] = await Promise.all([
+      prisma.adDrift.groupBy({ by: ['classification'], where: { resolvedAt: null }, _count: true }),
+      prisma.adDrift.count({ where: { resolvedAt: null } }),
+      prisma.outboundSyncQueue.count({ where: { syncType: { startsWith: 'AD_' }, isDead: true } }),
+      prisma.adMutation.count({ where: { state: { in: ['PENDING', 'IN_FLIGHT'] } } }),
+      // An intent unsettled for over a day is not "in flight" any more, it is stuck.
+      prisma.adMutation.count({ where: { state: { in: ['PENDING', 'IN_FLIGHT'] }, createdAt: { lt: dayAgo } } }),
+      prisma.cronRun.findFirst({ where: { jobName: 'ads-structural-reconcile' }, orderBy: { startedAt: 'desc' }, select: { startedAt: true, finishedAt: true, status: true, outputSummary: true } }),
+      prisma.advertisingActionLog.findFirst({ where: { actionType: 'launch_verification' }, orderBy: { createdAt: 'desc' }, select: { createdAt: true, amazonResponseStatus: true, payloadAfter: true } }),
+      prisma.campaign.count({ where: { lastSyncStatus: 'FAILED' } }),
+    ])
+
+    const counts = Object.fromEntries(driftByClass.map((b) => [b.classification, b._count]))
+    // The distinction that matters operationally: WRITE_PENDING and WRITE_LAG resolve themselves.
+    // EXTERNAL_CHANGE and WRITE_FAILED do not, and are the only ones worth waking someone for.
+    const selfHealing = (counts.WRITE_PENDING ?? 0) + (counts.WRITE_LAG ?? 0)
+    const needsAttention = (counts.EXTERNAL_CHANGE ?? 0) + (counts.WRITE_FAILED ?? 0)
+
+    const { runSyncIntegrityCheck } = await import('../services/advertising/ads-sync-integrity.service.js')
+    const integrity = await runSyncIntegrityCheck().catch(() => null)
+
+    const receipt = lastReceipt?.payloadAfter as { ok?: boolean; total?: number; verified?: number; mismatch?: number; missingOnAmazon?: number; notPushed?: number; uncovered?: number } | null
+
+    // One honest headline. "Trustworthy" is claimed only when nothing is unexplained AND something
+    // has actually checked recently — silence because nothing is looking is not good news.
+    const reconcileStale = !lastReconcile?.finishedAt || (Date.now() - lastReconcile.finishedAt.getTime()) > 13 * 60 * 60 * 1000
+    const verdict = needsAttention > 0 || deadLetters > 0 || staleMutations > 0 || failedWriteCampaigns > 0
+      ? 'NEEDS_ATTENTION'
+      : reconcileStale ? 'UNVERIFIED' : selfHealing > 0 ? 'SETTLING' : 'TRUSTWORTHY'
+
+    reply.header('Cache-Control', 'private, max-age=15')
+    return {
+      verdict,
+      headline: {
+        NEEDS_ATTENTION: 'Amazon and Nexus disagree in ways that will not resolve on their own.',
+        UNVERIFIED: 'Nothing has compared this account against Amazon recently, so its state is unconfirmed.',
+        SETTLING: 'Our own writes are still landing. Expect this to clear without action.',
+        TRUSTWORTHY: 'Everything we hold matches what Amazon last told us, and it was checked recently.',
+      }[verdict],
+      drift: { open: driftOpen, needsAttention, selfHealing, byClassification: counts },
+      writes: { deadLetters, pending: pendingMutations, stuckOverADay: staleMutations, campaignsWithFailedWrite: failedWriteCampaigns },
+      lastReconcile: lastReconcile
+        ? { startedAt: lastReconcile.startedAt, finishedAt: lastReconcile.finishedAt, status: lastReconcile.status, summary: lastReconcile.outputSummary, stale: reconcileStale }
+        : null,
+      lastLaunchVerification: lastReceipt
+        ? { at: lastReceipt.createdAt, status: lastReceipt.amazonResponseStatus, ok: receipt?.ok ?? null, total: receipt?.total ?? null, verified: receipt?.verified ?? null, mismatch: receipt?.mismatch ?? null, missingOnAmazon: receipt?.missingOnAmazon ?? null, notPushed: receipt?.notPushed ?? null, uncovered: receipt?.uncovered ?? null }
+        : null,
+      integrity: integrity ? { severity: integrity.severity, findings: integrity.findings } : null,
+    }
+  })
+
   // ── GET /advertising/drift — AX-ZD.4 ──────────────────────────────
   // Where our copy and Amazon disagree, and — the part that matters — WHY.
   //

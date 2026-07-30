@@ -39,6 +39,29 @@ const DRIFT_ENTITY_TYPE: Record<LaunchEntityResult['entityType'], string> = {
 }
 
 /**
+ * Fields this reconcile opens drift rows for. STRUCTURE — not bids.
+ *
+ * Measured on the first prod run over 5 legacy campaigns: 198 entities produced 107 mismatches, and
+ * 102 of them were `bid` (local €0.50 against Amazon's real €2.00 on 2024-era campaigns whose bids
+ * were set in Seller Central). Every one is genuine drift, correctly classified EXTERNAL_CHANGE —
+ * and recording them would have buried the two findings that actually mattered: keywords saved
+ * locally that never reached Amazon.
+ *
+ * Bids already have an owner. `ads-write-reconcile.service.ts` sweeps them, the rank engine
+ * re-evaluates hourly, and this service explicitly refuses to auto-repair them because the correct
+ * resolution is ambiguous. Opening hundreds of rows nobody will act on is how a drift list becomes
+ * a graveyard — the same lesson as the 135 false targetingType rows on ZD.4's first run.
+ *
+ * Bid deltas are still COMPARED and still counted in the returned summary, so the number is visible;
+ * they just don't become tracked rows. Suppression is reported, never silent.
+ */
+const DRIFT_RECORD_FIELDS = new Set([
+  'existence', 'state', 'name', 'dailyBudget', 'portfolioId',
+  'targetingType', 'biddingStrategy', 'matchType', 'keywordText', 'value', 'sku',
+])
+const BID_FIELDS = new Set(['bid', 'defaultBid'])
+
+/**
  * Campaigns per verification batch.
  *
  * Not a rate-limit concern — each batch is a fixed handful of list calls whatever its size — but a
@@ -59,6 +82,11 @@ export interface StructuralReconcileResult {
   uncovered: number
   driftRowsOpened: number
   driftRowsResolved: number
+  /**
+   * Bid/defaultBid disagreements seen but deliberately not turned into drift rows — the bid path
+   * owns those. Surfaced so the suppression is a reported number rather than a silent policy.
+   */
+  bidDeltasNotRecorded: number
   portfoliosRepaired: number
   errors: string[]
 }
@@ -73,7 +101,7 @@ export async function runStructuralReconcileOnce(opts: {
   const out: StructuralReconcileResult = {
     ok: true, campaignsChecked: 0, campaignsTruncated: 0, entitiesChecked: 0,
     verified: 0, mismatch: 0, missingOnAmazon: 0, notPushed: 0, uncovered: 0,
-    driftRowsOpened: 0, driftRowsResolved: 0, portfoliosRepaired: 0, errors: [],
+    driftRowsOpened: 0, driftRowsResolved: 0, bidDeltasNotRecorded: 0, portfoliosRepaired: 0, errors: [],
   }
   const limit = opts.limit ?? 400
 
@@ -126,6 +154,12 @@ export async function runStructuralReconcileOnce(opts: {
       // synthetic `existence` field so it gets a row of its own rather than being invisible.
       const deltas = e.deltas.length ? e.deltas : [{ field: 'existence', intended: 'on Amazon', observed: e.verdict === 'NOT_PUSHED' ? 'never sent' : 'not returned' }]
       for (const d of deltas) {
+        if (BID_FIELDS.has(d.field)) { out.bidDeltasNotRecorded++; continue }
+        // An unrecognised field is recorded rather than dropped: a new comparison added later
+        // should default to visible, not silently ignored.
+        if (!DRIFT_RECORD_FIELDS.has(d.field) && !BID_FIELDS.has(d.field)) {
+          logger.info('[AX-VT.5] recording drift for an unlisted field', { field: d.field })
+        }
         try {
           out.driftRowsOpened += await openDrift(entityType, e, d.field, d.intended, d.observed)
           seenKeys.add(`${entityType}|${e.localId}|${d.field}`)
