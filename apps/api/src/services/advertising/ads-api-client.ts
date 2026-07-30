@@ -655,7 +655,72 @@ export async function listSdTargets(ctx: ClientContext, opts: { externalCampaign
   return out
 }
 
+/**
+ * Sponsored Display campaigns / ad groups / product ads — the rest of the `/sd/*` family.
+ *
+ * Learned the hard and embarrassing way: `/sp/campaigns/list` does not return Sponsored Display
+ * campaigns AT ALL, no matter what state filter you pass, because it is the Sponsored PRODUCTS
+ * endpoint. Verifying an SD campaign against it reports the campaign, its ad groups and every one
+ * of its ads as MISSING_ON_AMAZON — measured: 50 entities across three SD campaigns. I first
+ * blamed archived-state filtering, "fixed" that, and got the identical result, which is what
+ * finally pointed at the endpoint family rather than the filter.
+ *
+ * `listCampaignsServing` is also an SP call, so it is NOT an independent check for SD — it
+ * returns null for an SD campaign that is perfectly healthy. Do not use it to conclude an SD
+ * campaign is gone.
+ *
+ * All of `/sd/*` uses GET with comma-separated query filters (the older style), unlike the v3
+ * POST `/list` endpoints. Same shape as listSdTargets, which is proven live.
+ */
+async function sdGet<T>(ctx: ClientContext, resource: string, externalCampaignIds: string[]): Promise<T[]> {
+  if (adsMode() === 'sandbox') return []
+  if (!externalCampaignIds.length) return []
+  const out: T[] = []
+  for (let i = 0; i < externalCampaignIds.length; i += 50) {
+    const chunk = externalCampaignIds.slice(i, i + 50)
+    const res = await liveCall<T[]>({
+      profileId: ctx.profileId, region: ctx.region, method: 'GET',
+      path: `/sd/${resource}?campaignIdFilter=${encodeURIComponent(chunk.join(','))}`,
+      contentType: 'application/json', acceptHeader: 'application/json',
+    })
+    for (const r of res ?? []) out.push(r)
+  }
+  return out
+}
+
+export async function listSdCampaigns(ctx: ClientContext, opts: { externalCampaignIds?: string[] }): Promise<V3CampaignSettings[]> {
+  const raw = await sdGet<{ campaignId?: number | string; name?: string; state?: string; portfolioId?: number | string | null; tactic?: string; budget?: number; costType?: string }>(ctx, 'campaigns', opts.externalCampaignIds ?? [])
+  // Normalised onto the same DTO the SP path produces so the comparison layer stays one shape.
+  // SD reports `budget` as a bare number and has no targetingType or dynamicBidding.
+  return raw.map((c) => ({
+    campaignId: String(c.campaignId ?? ''),
+    name: c.name,
+    state: c.state,
+    portfolioId: c.portfolioId == null ? null : String(c.portfolioId),
+    budget: c.budget == null ? undefined : { budget: c.budget, budgetType: 'DAILY' },
+  }))
+}
+
+export async function listSdAdGroups(ctx: ClientContext, opts: { externalCampaignIds?: string[] }): Promise<AdGroupServingDTO[]> {
+  const raw = await sdGet<{ adGroupId?: number | string; campaignId?: number | string; name?: string; state?: string; defaultBid?: number }>(ctx, 'adGroups', opts.externalCampaignIds ?? [])
+  return raw.map((a) => ({
+    adGroupId: String(a.adGroupId ?? ''),
+    campaignId: a.campaignId == null ? undefined : String(a.campaignId),
+    name: a.name, state: a.state, defaultBid: a.defaultBid,
+  }))
+}
+
 export interface ProductAdDTO { adId?: string; campaignId?: string; adGroupId?: string; sku?: string; asin?: string; state?: string }
+
+export async function listSdProductAds(ctx: ClientContext, opts: { externalCampaignIds?: string[] }): Promise<ProductAdDTO[]> {
+  const raw = await sdGet<{ adId?: number | string; campaignId?: number | string; adGroupId?: number | string; sku?: string; asin?: string; state?: string }>(ctx, 'productAds', opts.externalCampaignIds ?? [])
+  return raw.map((a) => ({
+    adId: String(a.adId ?? ''),
+    campaignId: a.campaignId == null ? undefined : String(a.campaignId),
+    adGroupId: a.adGroupId == null ? undefined : String(a.adGroupId),
+    sku: a.sku, asin: a.asin, state: a.state,
+  }))
+}
 export async function listProductAds(ctx: ClientContext, opts: { campaignIds?: string[]; states?: readonly string[] }): Promise<ProductAdDTO[]> {
   if (adsMode() === 'sandbox') return []
   const out: ProductAdDTO[] = []; let nextToken: string | undefined; let pages = 0

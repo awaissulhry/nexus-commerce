@@ -19,7 +19,8 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import {
-  listCampaignsV3, listAdGroupsV3, listKeywords, listTargets, listSdTargets, listProductAds,
+  listCampaignsV3, listAdGroupsV3, listKeywords, listTargets, listProductAds,
+  listSdCampaigns, listSdAdGroups, listSdProductAds, listSdTargets,
   ALL_STATES, type AdsRegion,
 } from './ads-api-client.js'
 import {
@@ -95,23 +96,37 @@ export async function verifyLaunch(campaignIds: string[]): Promise<LaunchVerific
     // One read per entity kind for the whole launch. If a read fails we say so and skip that
     // kind rather than reporting its entities as broken — a failed READ is not a failed write,
     // and claiming otherwise would send someone chasing a problem that does not exist.
+    // SP endpoints do not return SD entities and vice-versa, so each family is read from its own
+    // and the results merged into one lookup per entity kind. Only the SP reads are issued when
+    // the launch has no SD campaign, and vice-versa.
+    const spExtIds = camps.filter((c) => !sdCampaignIds.has(c.id)).map((c) => c.externalCampaignId).filter((x): x is string => !!x)
+
     let amzCampaigns, amzAdGroups, amzKeywords, amzTargets, amzProductAds
-    try { amzCampaigns = new Map((await listCampaignsV3(ctx, { campaignIds: extIds, states: [...ALL_STATES] })).map((c) => [c.campaignId, c])) }
-    catch (e) { errors.push(`read campaigns ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
-    try { amzAdGroups = new Map((await listAdGroupsV3(ctx, { campaignIds: extIds, states: ALL_STATES })).map((a) => [a.adGroupId, a])) }
-    catch (e) { errors.push(`read adGroups ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
-    try { amzKeywords = new Map((await listKeywords(ctx, { campaignIds: extIds, states: ALL_STATES })).map((k) => [k.keywordId, k])) }
-    catch (e) { errors.push(`read keywords ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
-    try { amzTargets = new Map((await listTargets(ctx, { campaignIds: extIds, states: ALL_STATES })).map((t) => [t.targetId, t])) }
-    catch (e) { errors.push(`read targets ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
-    // Only ask for SD targets when the launch actually contains an SD campaign.
     let amzSdTargets: Map<string | undefined, { state?: string; bid?: number; expression?: Array<{ value?: string }> }> | undefined
+
+    if (spExtIds.length) {
+      try { amzCampaigns = new Map((await listCampaignsV3(ctx, { campaignIds: spExtIds, states: [...ALL_STATES] })).map((c) => [c.campaignId, c])) }
+      catch (e) { errors.push(`read campaigns ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
+      try { amzAdGroups = new Map((await listAdGroupsV3(ctx, { campaignIds: spExtIds, states: ALL_STATES })).map((a) => [a.adGroupId, a])) }
+      catch (e) { errors.push(`read adGroups ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
+      try { amzKeywords = new Map((await listKeywords(ctx, { campaignIds: spExtIds, states: ALL_STATES })).map((k) => [k.keywordId, k])) }
+      catch (e) { errors.push(`read keywords ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
+      try { amzTargets = new Map((await listTargets(ctx, { campaignIds: spExtIds, states: ALL_STATES })).map((t) => [t.targetId, t])) }
+      catch (e) { errors.push(`read targets ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
+      try { amzProductAds = new Map((await listProductAds(ctx, { campaignIds: spExtIds, states: ALL_STATES })).map((a) => [a.adId, a])) }
+      catch (e) { errors.push(`read productAds ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
+    }
+
     if (sdExtIds.length) {
+      try { for (const c of await listSdCampaigns(ctx, { externalCampaignIds: sdExtIds })) (amzCampaigns ??= new Map()).set(c.campaignId, c) }
+      catch (e) { errors.push(`read SD campaigns ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
+      try { for (const a of await listSdAdGroups(ctx, { externalCampaignIds: sdExtIds })) (amzAdGroups ??= new Map()).set(a.adGroupId, a) }
+      catch (e) { errors.push(`read SD adGroups ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
+      try { for (const a of await listSdProductAds(ctx, { externalCampaignIds: sdExtIds })) (amzProductAds ??= new Map()).set(a.adId, a) }
+      catch (e) { errors.push(`read SD productAds ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
       try { amzSdTargets = new Map((await listSdTargets(ctx, { externalCampaignIds: sdExtIds })).map((t) => [t.targetId, t])) }
       catch (e) { errors.push(`read SD targets ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
     }
-    try { amzProductAds = new Map((await listProductAds(ctx, { campaignIds: extIds, states: ALL_STATES })).map((a) => [a.adId, a])) }
-    catch (e) { errors.push(`read productAds ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
 
     if (amzCampaigns) {
       for (const c of camps) {
