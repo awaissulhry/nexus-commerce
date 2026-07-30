@@ -891,6 +891,21 @@ export interface CreateCampaignInput {
   state?: 'enabled' | 'paused'
   startDate?: string // YYYY-MM-DD
   biddingStrategy?: 'legacyForSales' | 'autoForSales' | 'manual'
+  /**
+   * AX-VT.1 — the portfolio the campaign is born into.
+   *
+   * This field's absence was the whole bug: every builder collected a portfolio
+   * from the operator, `createCampaignLocal` stored it on the local row, and it
+   * was silently dropped here because the interface had nowhere to put it. The
+   * campaign was created on Amazon in no portfolio at all, while our UI showed
+   * it inside one — 62 campaigns across 9 portfolios, none of it visible to
+   * portfolio budgets or rollups on Amazon's side.
+   *
+   * Omitted from the request body when absent rather than sent as null: an
+   * explicit null is a request to un-portfolio, which is not what "the operator
+   * didn't pick one" means.
+   */
+  portfolioId?: string
 }
 export async function createCampaign(ctx: ClientContext, input: CreateCampaignInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
   if (adsMode() === 'sandbox') {
@@ -903,6 +918,7 @@ export async function createCampaign(ctx: ClientContext, input: CreateCampaignIn
     budget: { budget: input.dailyBudget, budgetType: 'DAILY' },
     dynamicBidding: { strategy: { legacyForSales: 'LEGACY_FOR_SALES', autoForSales: 'AUTO_FOR_SALES', manual: 'MANUAL' }[input.biddingStrategy ?? 'legacyForSales'] },
     ...(input.startDate ? { startDate: input.startDate } : {}),
+    ...(input.portfolioId ? { portfolioId: input.portfolioId } : {}),
   }
   const response = await liveCall<{ campaigns?: { success?: Array<{ campaignId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/campaigns', body: { campaigns: [v3] }, contentType: 'application/vnd.spCampaign.v3+json', acceptHeader: 'application/vnd.spCampaign.v3+json' })
   return { ok: true, mode: 'live', externalId: response?.campaigns?.success?.[0]?.campaignId ?? null, rawResponse: response }

@@ -101,6 +101,44 @@ describe('comparison', () => {
   })
 })
 
+describe('AX-VT.2 — "Amazon has nothing where we have something" is real drift, per field', () => {
+  // This is the class that was undetectable. The create path never sent portfolioId to
+  // Amazon, so 62 campaigns sat with a local portfolio and none on Amazon — and the
+  // `t == null` skip discarded every one, every cycle. 169 drift rows existed for
+  // biddingStrategy and zero for portfolioId, across campaigns that were all wrong.
+  it('reports an explicit null from Amazon when the field is opted in', () => {
+    expect(diffFields({ portfolioId: '111' }, { portfolioId: null }, ['portfolioId'], { nullIsMeaningful: ['portfolioId'] }))
+      .toEqual([{ field: 'portfolioId', ours: '111', theirs: null }])
+  })
+
+  it('treats an empty string the same as an explicit null', () => {
+    expect(diffFields({ portfolioId: '111' }, { portfolioId: '' }, ['portfolioId'], { nullIsMeaningful: ['portfolioId'] }))
+      .toEqual([{ field: 'portfolioId', ours: '111', theirs: null }])
+  })
+
+  it('does NOT flip the rule for fields that did not opt in', () => {
+    // A flaky partial response must never read as "somebody zeroed the budget".
+    expect(diffFields({ dailyBudget: 20, portfolioId: '111' }, { dailyBudget: null, portfolioId: null }, ['dailyBudget', 'portfolioId'], { nullIsMeaningful: ['portfolioId'] }))
+      .toEqual([{ field: 'portfolioId', ours: '111', theirs: null }])
+  })
+
+  it('still skips a present-but-undefined value even when opted in', () => {
+    // `{ portfolioId: undefined }` is our own mapper declining to set the key, which is
+    // absence. Only a value Amazon actually sent counts as "Amazon says none".
+    expect(diffFields({ portfolioId: '111' }, { portfolioId: undefined }, ['portfolioId'], { nullIsMeaningful: ['portfolioId'] }))
+      .toEqual([])
+  })
+
+  it('reports nothing when both sides are empty', () => {
+    expect(diffFields({ portfolioId: null }, { portfolioId: null }, ['portfolioId'], { nullIsMeaningful: ['portfolioId'] }))
+      .toEqual([])
+  })
+
+  it('leaves the default behaviour untouched when no opt-in is passed', () => {
+    expect(diffFields({ portfolioId: '111' }, { portfolioId: null }, ['portfolioId'])).toEqual([])
+  })
+})
+
 describe('AX-ZD.3 — a read must not clobber an undelivered write', () => {
   it('passes everything through when nothing is pending', () => {
     const incoming = { dailyBudget: 10, status: 'ENABLED' }

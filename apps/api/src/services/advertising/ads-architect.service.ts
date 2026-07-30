@@ -31,6 +31,10 @@ export interface ArchitectInput {
   defaultBidEur: number
   productSku?: string
   productAsin?: string
+  /** AX-VT.1 — the destination portfolio. The other three builders always collected
+   *  one; this builder had no field for it at all, so an architect-built campaign
+   *  could never join a portfolio even once the create path was fixed. */
+  portfolioId?: string
   userId?: string
 }
 
@@ -90,7 +94,7 @@ export async function applyPlan(input: ArchitectInput): Promise<ArchitectResult>
   const campaignIds: string[] = []
   try {
     for (const pc of plan.campaigns) {
-      const c = await createCampaignLocal({ name: pc.name, type: pc.type, marketplace: input.marketplace, targetingType: pc.targetingType, dailyBudgetEur: pc.dailyBudgetEur, userId: input.userId })
+      const c = await createCampaignLocal({ name: pc.name, type: pc.type, marketplace: input.marketplace, targetingType: pc.targetingType, dailyBudgetEur: pc.dailyBudgetEur, portfolioId: input.portfolioId, userId: input.userId })
       created.campaigns++; campaignIds.push(c.id)
       for (const pg of pc.adGroups) {
         const g = await createAdGroupLocal({ campaignId: c.id, name: pg.name, defaultBidEur: pg.defaultBidEur, userId: input.userId })

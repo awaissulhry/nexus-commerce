@@ -6128,6 +6128,25 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await assignPortfolioDirect(id, b.portfolioId) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // AX-VT.1 — verify campaign→portfolio membership against Amazon, and repair what our own
+  // create path failed to deliver. Read-only by default: pass ?apply=1 to write.
+  //
+  // Only MISSING_ON_AMAZON rows are ever pushed. A campaign Amazon reports in a DIFFERENT
+  // portfolio is a human's Seller Central decision and is reported as CONFLICT, never
+  // overwritten — see verifyCampaignPortfolios for why that distinction is load-bearing.
+  fastify.post('/advertising/campaigns/verify-portfolios', async (request, reply) => {
+    const q = request.query as { apply?: string; marketplace?: string }
+    const b = (request.body ?? {}) as { campaignIds?: string[]; marketplace?: string }
+    const { verifyCampaignPortfolios } = await import('../services/advertising/ads-create.service.js')
+    try {
+      return await verifyCampaignPortfolios({
+        campaignIds: b.campaignIds,
+        marketplace: b.marketplace ?? q.marketplace,
+        dryRun: q.apply !== '1',
+      })
+    } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // LAUNCH-REPAIR — bulk ad-group negative keywords (funnel isolation back-fill). Idempotent.
   fastify.post('/advertising/negative-keywords/bulk', async (request, reply) => {
     const b = request.body as { items?: Array<{ adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE' }>; userId?: string }

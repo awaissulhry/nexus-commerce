@@ -17,7 +17,7 @@ import { logger } from '../../utils/logger.js'
 import {
   createCampaign, createAdGroup, createKeyword, createProductAd,
   createTarget, createNegativeProductTarget, createNegativeKeyword, createSdTarget, createSbAd, updateCampaign,
-  listNegativeKeywords, listAdGroupsV3, listCampaignsServing,
+  listNegativeKeywords, listAdGroupsV3, listCampaignsServing, listCampaignsV3,
   type AdsRegion,
 } from './ads-api-client.js'
 import { checkAdsWriteGate } from './ads-write-gate.js'
@@ -44,7 +44,9 @@ export async function createCampaignLocal(input: NewCampaign): Promise<{ id: str
   if (ctx) {
     const gate = await checkAdsWriteGate({ marketplace: input.marketplace, payloadValueCents: Math.round(input.dailyBudgetEur * 100) })
     if (gate.allowed) {
-      const r = await createCampaign(ctx, { name: input.name, targetingType: input.targetingType ?? 'MANUAL', dailyBudget: input.dailyBudgetEur, biddingStrategy: input.biddingStrategy, state: 'enabled' })
+      // AX-VT.1 — portfolioId travels with the create. It used to be collected by
+      // every builder, stored on the local row below, and dropped right here.
+      const r = await createCampaign(ctx, { name: input.name, targetingType: input.targetingType ?? 'MANUAL', dailyBudget: input.dailyBudgetEur, biddingStrategy: input.biddingStrategy, state: 'enabled', portfolioId: input.portfolioId })
       externalId = r.externalId; mode = r.mode
     }
   }
@@ -288,6 +290,162 @@ export async function assignPortfolioDirect(campaignId: string, portfolioId: str
   if (r.ok) await prisma.campaign.update({ where: { id: campaignId }, data: { portfolioId } })
   logger.info('[LAUNCH-REPAIR] assignPortfolioDirect', { campaignId, portfolioId, ok: r.ok, error: r.error })
   return { ok: r.ok, error: r.error ?? undefined, rawResponse: r.rawResponse }
+}
+
+/**
+ * AX-VT.1 — verify (and optionally repair) campaign→portfolio membership against Amazon.
+ *
+ * This is the read-back that should always have existed. `createCampaignLocal` now sends
+ * portfolioId with the create, but Amazon's SP v3 create schema does not publicly document
+ * whether it honours the field, and the create response echoes only campaignId — so a create
+ * alone can never prove membership landed. One list call per marketplace settles it for a
+ * whole launch, and the same function repairs the 62 campaigns the original defect stranded.
+ *
+ * The important subtlety is WHICH disagreements are ours to overwrite:
+ *
+ *   Amazon null, we hold a value   → MISSING_ON_AMAZON. Our write never landed. Repairable:
+ *                                    the operator asked for this in Nexus and we failed to
+ *                                    deliver it, so pushing is restoring their intent.
+ *   Amazon holds a DIFFERENT id    → CONFLICT. Somebody moved the campaign in Seller Central.
+ *                                    Reported, NEVER auto-pushed — "repairing" that would
+ *                                    silently undo a human's deliberate decision, which is a
+ *                                    worse bug than the one we are fixing.
+ *
+ * That distinction is why this cannot be a blind `assignPortfolioDirect` loop over everything
+ * with a local portfolioId. Read first, then push only what we broke.
+ */
+export type PortfolioVerdict = 'AGREED' | 'MISSING_ON_AMAZON' | 'CONFLICT' | 'NOT_ON_AMAZON'
+
+export interface PortfolioVerifyRow {
+  campaignId: string
+  name: string
+  marketplace: string | null
+  externalCampaignId: string | null
+  intended: string | null
+  amazon: string | null
+  verdict: PortfolioVerdict
+  repaired?: boolean
+  error?: string
+}
+
+export interface PortfolioVerifyResult {
+  ok: boolean
+  dryRun: boolean
+  checked: number
+  agreed: number
+  missingOnAmazon: number
+  conflicts: number
+  notOnAmazon: number
+  repaired: number
+  repairFailed: number
+  rows: PortfolioVerifyRow[]
+  errors: string[]
+}
+
+export async function verifyCampaignPortfolios(opts: {
+  campaignIds?: string[]
+  marketplace?: string
+  dryRun?: boolean
+} = {}): Promise<PortfolioVerifyResult> {
+  const dryRun = opts.dryRun !== false // default SAFE: report unless explicitly told to write
+  const out: PortfolioVerifyResult = {
+    ok: true, dryRun, checked: 0, agreed: 0, missingOnAmazon: 0, conflicts: 0,
+    notOnAmazon: 0, repaired: 0, repairFailed: 0, rows: [], errors: [],
+  }
+
+  const campaigns = await prisma.campaign.findMany({
+    where: {
+      portfolioId: { not: null },
+      status: { not: 'ARCHIVED' },
+      ...(opts.campaignIds?.length ? { id: { in: opts.campaignIds } } : {}),
+      ...(opts.marketplace ? { marketplace: opts.marketplace } : {}),
+    },
+    select: { id: true, name: true, marketplace: true, externalCampaignId: true, portfolioId: true },
+  })
+  out.checked = campaigns.length
+  if (!campaigns.length) return out
+
+  // Group by marketplace — each one is a different Amazon profile, so a different read.
+  const byMarket = new Map<string, typeof campaigns>()
+  for (const c of campaigns) {
+    if (!c.marketplace || !c.externalCampaignId) {
+      out.notOnAmazon++
+      out.rows.push({
+        campaignId: c.id, name: c.name, marketplace: c.marketplace,
+        externalCampaignId: c.externalCampaignId, intended: c.portfolioId, amazon: null,
+        verdict: 'NOT_ON_AMAZON',
+      })
+      continue
+    }
+    const arr = byMarket.get(c.marketplace) ?? []
+    arr.push(c)
+    byMarket.set(c.marketplace, arr)
+  }
+
+  for (const [marketplace, rows] of byMarket) {
+    const ctx = await resolveCtx(marketplace)
+    if (!ctx) { out.ok = false; out.errors.push(`no connection for ${marketplace}`); continue }
+
+    // Chunked so a large account cannot blow the filter size limit.
+    const amzById = new Map<string, string | null>()
+    try {
+      for (let i = 0; i < rows.length; i += 100) {
+        const ids = rows.slice(i, i + 100).map((r) => r.externalCampaignId as string)
+        for (const a of await listCampaignsV3(ctx, { campaignIds: ids })) {
+          amzById.set(a.campaignId, a.portfolioId ?? null)
+        }
+      }
+    } catch (e) {
+      out.ok = false
+      out.errors.push(`read ${marketplace}: ${(e as Error).message.slice(0, 160)}`)
+      continue
+    }
+
+    for (const c of rows) {
+      const ext = c.externalCampaignId as string
+      const intended = c.portfolioId as string
+      if (!amzById.has(ext)) {
+        out.notOnAmazon++
+        out.rows.push({ campaignId: c.id, name: c.name, marketplace, externalCampaignId: ext, intended, amazon: null, verdict: 'NOT_ON_AMAZON' })
+        continue
+      }
+      const amazon = amzById.get(ext) ?? null
+      if (amazon === intended) { out.agreed++; continue }
+
+      if (amazon !== null) {
+        // Somebody moved it on Amazon. Surface it; do not touch it.
+        out.conflicts++
+        out.rows.push({ campaignId: c.id, name: c.name, marketplace, externalCampaignId: ext, intended, amazon, verdict: 'CONFLICT' })
+        continue
+      }
+
+      out.missingOnAmazon++
+      const row: PortfolioVerifyRow = {
+        campaignId: c.id, name: c.name, marketplace, externalCampaignId: ext,
+        intended, amazon: null, verdict: 'MISSING_ON_AMAZON',
+      }
+      if (!dryRun) {
+        const gate = await checkAdsWriteGate({ marketplace, payloadValueCents: 0, campaignId: c.id })
+        if (!gate.allowed) {
+          row.repaired = false
+          row.error = 'write-gate closed: ' + ('reason' in gate ? String(gate.reason) : 'denied')
+          out.repairFailed++
+        } else {
+          const r = await updateCampaign(ctx, ext, { portfolioId: intended })
+          row.repaired = r.ok
+          if (r.ok) out.repaired++
+          else { out.repairFailed++; row.error = r.error ?? 'patch failed' }
+        }
+      }
+      out.rows.push(row)
+    }
+  }
+
+  logger.info('[AX-VT.1] verifyCampaignPortfolios', {
+    dryRun, checked: out.checked, agreed: out.agreed, missingOnAmazon: out.missingOnAmazon,
+    conflicts: out.conflicts, notOnAmazon: out.notOnAmazon, repaired: out.repaired, repairFailed: out.repairFailed,
+  })
+  return out
 }
 
 // ── AX2.1 — Product / category / auto targeting ─────────────────────────

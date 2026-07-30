@@ -136,19 +136,51 @@ export interface FieldDrift {
  * was simply the newly-added column filling in for the first time. Every one of
  * those would have read as "somebody edited this in Seller Central", and a drift
  * report that cries wolf on its first run is a drift report nobody opens again.
+ *
+ * ── AX-VT.2 — `nullIsMeaningful`, and why it has to be per-field ──
+ *
+ * There was a third skip hiding inside the first: a field Amazon reported with
+ * an EMPTY value was also treated as unreported. For most fields that is right —
+ * `dailyBudget: null` from Amazon means the response was partial, because a live
+ * campaign always has a budget. But for a few fields empty is a real, meaningful
+ * answer, and conflating the two made an entire drift class undetectable:
+ *
+ *   portfolioId: null  =  "this campaign is in NO portfolio"
+ *
+ * That is exactly the state the AX-VT.1 defect produced — we held a portfolio,
+ * Amazon held none — and it was silently skipped on the `t == null` line for
+ * every campaign, every cycle. `portfolioId` sat in CAMPAIGN_DRIFT_FIELDS as
+ * dead configuration: 169 drift rows recorded for `biddingStrategy` and not one
+ * for `portfolioId`, across 62 campaigns that were all genuinely wrong.
+ *
+ * Flipping the rule globally would have been the wrong fix — it would let one
+ * flaky partial response read as "somebody zeroed the budget". So the caller
+ * declares which fields carry that semantic, and nothing else changes.
+ *
+ * `undefined` is still excluded even when opted in: a key present with an
+ * undefined value is our own mapper declining to set it, which is absence, not a
+ * cleared value. Only an explicit null (or empty string) counts.
  */
 export function diffFields(
   ours: Record<string, unknown>,
   theirs: Record<string, unknown>,
   fields: readonly string[],
+  opts: { nullIsMeaningful?: readonly string[] } = {},
 ): FieldDrift[] {
+  const nullIsMeaningful = new Set(opts.nullIsMeaningful ?? [])
   const out: FieldDrift[] = []
   for (const f of fields) {
     if (!(f in theirs)) continue
-    const t = normaliseForCompare(theirs[f])
-    if (t == null) continue
+    const raw = theirs[f]
+    const t = normaliseForCompare(raw)
     const o = normaliseForCompare(ours[f])
     if (o == null) continue
+    if (t == null) {
+      // Amazon reported this field and it holds nothing.
+      if (!nullIsMeaningful.has(f) || raw === undefined) continue
+      out.push({ field: f, ours: o, theirs: null })
+      continue
+    }
     if (o !== t) out.push({ field: f, ours: o, theirs: t })
   }
   return out

@@ -94,7 +94,10 @@ async function recordCampaignDrift(
     biddingStrategy: existing.biddingStrategy,
     portfolioId: existing.portfolioId,
   }
-  const diffs = diffFields(ours, incoming, CAMPAIGN_DRIFT_FIELDS)
+  // AX-VT.2 — `portfolioId: null` from Amazon means "in no portfolio", which is a real
+  // answer, not a partial response. It is opted in explicitly so the other fields keep
+  // treating an empty value as "Amazon didn't tell us". See diffFields.
+  const diffs = diffFields(ours, incoming, CAMPAIGN_DRIFT_FIELDS, { nullIsMeaningful: ['portfolioId'] })
 
   // Anything we hold that Amazon now agrees with is no longer drifting. Closing
   // resolved rows is what stops the drift list becoming a graveyard nobody reads.
@@ -233,8 +236,14 @@ export async function syncCampaignSettingsFromAmazon(
       // AX-ZD.4 — record what Amazon disagrees with BEFORE we overwrite it.
       // `data` holds only the fields Amazon actually reported, so a partial
       // response can never look like somebody blanking a value.
+      //
+      // AX-VT.2 — portfolioId is handed to the drift check but deliberately NOT added to
+      // `data`. `data` is the Prisma write payload a few lines down, so putting membership
+      // in it would make this read converge local state to Amazon's null — the exact
+      // evidence-destroying behaviour AX-VT.3 removes from the portfolio sync. Comparison
+      // and convergence are different jobs; only one of them belongs to this function.
       try {
-        driftFound += await recordCampaignDrift(existing, data, c, pending)
+        driftFound += await recordCampaignDrift(existing, { ...data, portfolioId: c.portfolioId ?? null }, c, pending)
       } catch (e) {
         // Drift bookkeeping must never break the sync it rides on.
         logger.warn('[settings-sync] drift record failed', { campaignId: c.campaignId, error: (e as Error).message.slice(0, 120) })

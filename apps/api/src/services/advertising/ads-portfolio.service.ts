@@ -65,10 +65,63 @@ async function linkCampaignMembership(profileId: string, region: AdsRegion): Pro
   let linked = 0
   for (const [pid, ids] of byPid) {
     if (!ids.length) continue
+    // AX-VT.3 — record before converging, when convergence would DESTROY a local value.
+    //
+    // The docstring above is right that Amazon owns membership, and this still converges to
+    // it. What it got wrong is the word "not destructive": that holds only while our writes
+    // actually reach Amazon. They did not — the create path never sent portfolioId at all —
+    // so this sweep quietly emptied the portfolio in Nexus too, and the operator who
+    // reported "my campaigns aren't in the portfolio on Amazon" could no longer show that
+    // Nexus had ever disagreed. The bug erased its own evidence.
+    //
+    // So: when Amazon reports no portfolio for a campaign we hold one for, open a drift row
+    // first. Convergence is unchanged; it is simply no longer silent. Best-effort — drift
+    // bookkeeping must never break the sync it rides on.
+    if (pid === null) {
+      try { await recordMembershipLoss(ids) }
+      catch (e) { logger.warn('[ADS-PORTFOLIO-SYNC] membership-loss drift record failed', { error: (e as Error).message.slice(0, 140) }) }
+    }
     const res = await prisma.campaign.updateMany({ where: { externalCampaignId: { in: ids } }, data: { portfolioId: pid } })
     if (pid) linked += res.count
   }
   return linked
+}
+
+/**
+ * AX-VT.3 — open a drift row for every campaign about to lose a local portfolio.
+ *
+ * Classified through the same `classifyDrift` the settings sync uses, so a membership loss
+ * reads consistently with every other drift: WRITE_FAILED if our last write failed,
+ * WRITE_LAG if we wrote moments ago, EXTERNAL_CHANGE if somebody unassigned it in Seller
+ * Central. Keyed (entityType, entityId, field) like all drift, so a campaign wrong for three
+ * days is one row with a high occurrence count, not one row per sync.
+ */
+async function recordMembershipLoss(externalCampaignIds: string[]): Promise<void> {
+  const losing = await prisma.campaign.findMany({
+    where: { externalCampaignId: { in: externalCampaignIds }, portfolioId: { not: null } },
+    select: { id: true, name: true, marketplace: true, portfolioId: true, externalCampaignId: true, lastSyncedAt: true, lastSyncStatus: true },
+  })
+  if (!losing.length) return
+  const { classifyDrift } = await import('../ads-core/drift.js')
+  const now = new Date()
+  for (const c of losing) {
+    const classification = classifyDrift({
+      ours: c.portfolioId, theirs: null,
+      lastWriteAt: c.lastSyncedAt, lastWriteStatus: c.lastSyncStatus, now,
+    })
+    await prisma.adDrift.upsert({
+      where: { entityType_entityId_field: { entityType: 'CAMPAIGN', entityId: c.id, field: 'portfolioId' } },
+      create: {
+        entityType: 'CAMPAIGN', entityId: c.id, externalId: c.externalCampaignId,
+        marketplace: c.marketplace, entityName: c.name,
+        field: 'portfolioId', ourValue: c.portfolioId, amazonValue: null, classification,
+      },
+      update: { ourValue: c.portfolioId, amazonValue: null, classification, lastDetectedAt: now, occurrences: { increment: 1 }, resolvedAt: null },
+    })
+  }
+  logger.warn('[AX-VT.3] campaigns losing local portfolio membership to Amazon', {
+    count: losing.length, campaigns: losing.slice(0, 10).map((c) => c.name),
+  })
 }
 
 /** Pull portfolios from Amazon for every active connection (or sandbox) and upsert them locally. */
