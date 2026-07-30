@@ -615,23 +615,20 @@ export async function listSdTargets(ctx: ClientContext, opts: { externalCampaign
   for (let i = 0; i < Math.max(ids.length, 1); i += 50) {
     const chunk = ids.slice(i, i + 50)
     const qs = chunk.length ? `?campaignIdFilter=${encodeURIComponent(chunk.join(','))}` : ''
-    try {
-      const res = await liveCall<Array<{ targetId?: number | string; campaignId?: number | string; adGroupId?: number | string; expression?: Array<{ type?: string; value?: string }>; state?: string; bid?: number }>>({
-        profileId: ctx.profileId, region: ctx.region, method: 'GET', path: `/sd/targets${qs}`,
-        contentType: 'application/json', acceptHeader: 'application/json',
+    // Errors propagate with Amazon's own message. The caller records them in `errors[]`, which
+    // already forces ok:false — replacing the real reason with a generic string is how a
+    // diagnosable failure becomes an afternoon of guessing.
+    const res = await liveCall<Array<{ targetId?: number | string; campaignId?: number | string; adGroupId?: number | string; expression?: Array<{ type?: string; value?: string }>; state?: string; bid?: number }>>({
+      profileId: ctx.profileId, region: ctx.region, method: 'GET', path: `/sd/targets${qs}`,
+      contentType: 'application/json', acceptHeader: 'application/json',
+    })
+    for (const t of res ?? []) {
+      out.push({
+        targetId: t.targetId == null ? undefined : String(t.targetId),
+        campaignId: t.campaignId == null ? undefined : String(t.campaignId),
+        adGroupId: t.adGroupId == null ? undefined : String(t.adGroupId),
+        expression: t.expression, state: t.state, bid: t.bid,
       })
-      for (const t of res ?? []) {
-        out.push({
-          targetId: t.targetId == null ? undefined : String(t.targetId),
-          campaignId: t.campaignId == null ? undefined : String(t.campaignId),
-          adGroupId: t.adGroupId == null ? undefined : String(t.adGroupId),
-          expression: t.expression, state: t.state, bid: t.bid,
-        })
-      }
-    } catch {
-      // An SD read failure must not fail the whole verification — the caller records it as an
-      // error, which already forces ok:false. Silence here, loudness there.
-      throw new Error('sd targets read failed')
     }
     if (!ids.length) break
   }
