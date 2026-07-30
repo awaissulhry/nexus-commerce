@@ -1420,6 +1420,9 @@ async function start() {
       const { startAmsSqsPollCron } = await import('./jobs/ams-sqs-poll.job.js');
       // Apex E.1 — SQP competitive-intel ingest (self-gated on NEXUS_ENABLE_SQP_INGEST_CRON).
       const { startSqpIngestCron } = await import('./jobs/sqp-ingest.job.js');
+      // AX-VT.5 — 6-hourly structural reconcile: compare the whole account against Amazon and
+      // record where it disagrees. Reads + portfolio repair only; never touches bids.
+      const { startStructuralReconcileCron } = await import('./jobs/ads-structural-reconcile.job.js');
       // Register all schedules (these are synchronous node-cron registrations).
       markCronStep('ads:register schedules');
       startDaypartingCron();
@@ -1437,6 +1440,7 @@ async function start() {
       startTosDefenseCron();
       startAmsSqsPollCron();
       startSqpIngestCron();
+      startStructuralReconcileCron();
       const { startTosIsIngestCron } = await import('./jobs/ads-tos-is-ingest.job.js');
       startTosIsIngestCron();
       markCronStep('ads:schedules registered');

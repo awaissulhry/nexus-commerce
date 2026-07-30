@@ -6172,6 +6172,21 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await verifyLaunch(b.campaignIds) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // AX-VT.5 — run the structural reconcile on demand. Reads the account back from Amazon, records
+  // drift, and repairs ONLY portfolio membership (the one unambiguous case). ?repairPortfolios=0
+  // makes it strictly read-only; ?limit= bounds a spot-check.
+  fastify.post('/advertising/structural-reconcile', async (request, reply) => {
+    const q = request.query as { marketplace?: string; repairPortfolios?: string; limit?: string }
+    const { runStructuralReconcileOnce } = await import('../services/advertising/ads-structural-reconcile.service.js')
+    try {
+      return await runStructuralReconcileOnce({
+        marketplace: q.marketplace,
+        repairPortfolios: q.repairPortfolios !== '0',
+        limit: q.limit ? Math.max(1, Number(q.limit) || 0) || undefined : undefined,
+      })
+    } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // LAUNCH-REPAIR — bulk ad-group negative keywords (funnel isolation back-fill). Idempotent.
   fastify.post('/advertising/negative-keywords/bulk', async (request, reply) => {
     const b = request.body as { items?: Array<{ adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE' }>; userId?: string }

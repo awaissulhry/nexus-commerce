@@ -34,6 +34,14 @@ export interface IntegritySnapshot {
   campaignsFailedWrite: number
   /** Campaigns in a market with no writable production connection. */
   campaignsInUnwritableMarket: number
+  /**
+   * AX-VT.5 — open, unresolved drift rows: entities where Amazon disagrees with our records and
+   * nothing is in flight to explain it. This is the signal that was missing entirely; the portfolio
+   * defect that started AX-VT ran for weeks with every other number on this snapshot healthy.
+   */
+  openDriftRows: number
+  /** Minutes since the structural reconcile last completed a pass. */
+  minutesSinceStructuralReconcile: number | null
 }
 
 export interface IntegrityFinding {
@@ -64,6 +72,15 @@ export const INTEGRITY_THRESHOLDS = {
   amsStaleMinutes: 480,
   /** Post-AX2.0 the steady state is zero. Any new one is signal. */
   deadLettersLastHour: 0,
+  /**
+   * AX-VT.5 — above this, drift stops being a list somebody works through and becomes a systemic
+   * fault. Set at 25 from measurement, not taste: the portfolio defect alone produced 62 wrong
+   * campaigns, and the SD archiving 19, so a real systemic break clears this comfortably while a
+   * handful of ordinary Seller Central edits does not.
+   */
+  driftRowsCritical: 25,
+  /** The reconcile runs 6-hourly; two missed passes is a stall worth naming. */
+  structuralReconcileStaleMinutes: 13 * 60,
 }
 
 export function evaluateIntegrity(s: IntegritySnapshot): IntegrityReport {
@@ -113,6 +130,32 @@ export function evaluateIntegrity(s: IntegritySnapshot): IntegrityReport {
       severity: 'WARN',
       message: `No Marketing Stream data ingested for ${Math.round(s.minutesSinceAmsIngest / 60)}h.`,
       action: 'Longer than a quiet overnight. Intraday figures are stale — check the AMS subscription and the SQS→Lambda forwarder.',
+    })
+  }
+
+  // AX-VT.5 — the signal whose absence let the portfolio defect run for weeks.
+  if (s.openDriftRows > 0) {
+    findings.push({
+      code: 'ADS_DRIFT_OPEN',
+      severity: s.openDriftRows > INTEGRITY_THRESHOLDS.driftRowsCritical ? 'CRITICAL' : 'WARN',
+      message: `${s.openDriftRows} entity field(s) where Amazon disagrees with our records.`,
+      action: 'Open GET /advertising/drift. WRITE_PENDING and WRITE_LAG resolve themselves; WRITE_FAILED and EXTERNAL_CHANGE do not.',
+    })
+  }
+
+  if (s.minutesSinceStructuralReconcile == null) {
+    findings.push({
+      code: 'ADS_STRUCTURAL_RECONCILE_NEVER',
+      severity: 'WARN',
+      message: 'The structural reconcile has never completed a pass.',
+      action: 'Nothing is comparing the account against Amazon on a schedule. Check NEXUS_ENABLE_AMAZON_ADS_CRON and the ads-structural-reconcile cron.',
+    })
+  } else if (s.minutesSinceStructuralReconcile > INTEGRITY_THRESHOLDS.structuralReconcileStaleMinutes) {
+    findings.push({
+      code: 'ADS_STRUCTURAL_RECONCILE_STALE',
+      severity: 'WARN',
+      message: `No structural reconcile pass for ${Math.round(s.minutesSinceStructuralReconcile / 60)}h.`,
+      action: 'Drift is accumulating unmeasured. Check the ads-structural-reconcile cron is running.',
     })
   }
 

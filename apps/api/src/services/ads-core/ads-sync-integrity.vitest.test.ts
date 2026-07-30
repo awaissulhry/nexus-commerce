@@ -11,6 +11,9 @@ const healthy = (over: Partial<IntegritySnapshot> = {}): IntegritySnapshot => ({
   minutesSinceAmsIngest: 45,
   campaignsFailedWrite: 0,
   campaignsInUnwritableMarket: 0,
+  // AX-VT.5 — a healthy account now also means "nothing is drifting" and "something is checking".
+  openDriftRows: 0,
+  minutesSinceStructuralReconcile: 30,
   ...over,
 })
 
@@ -38,6 +41,26 @@ describe('evaluateIntegrity — the AX2.0 regression alarm', () => {
   })
   it('threshold is genuinely zero, not a tolerance', () => {
     expect(INTEGRITY_THRESHOLDS.deadLettersLastHour).toBe(0)
+  })
+})
+
+describe('AX-VT.5 — drift and reconcile freshness', () => {
+  it('open drift is a finding, and a systemic count is CRITICAL', () => {
+    expect(evaluateIntegrity(healthy({ openDriftRows: 3 })).severity).toBe('WARN')
+    // 62 wrong campaigns (the portfolio defect) must not read the same as three Seller Central edits.
+    expect(evaluateIntegrity(healthy({ openDriftRows: 62 })).severity).toBe('CRITICAL')
+  })
+
+  it('a reconcile that has never run is itself a finding', () => {
+    // Silence because nothing is checking is the failure mode this whole series exists to remove.
+    const r = evaluateIntegrity(healthy({ minutesSinceStructuralReconcile: null }))
+    expect(r.findings.map((f) => f.code)).toContain('ADS_STRUCTURAL_RECONCILE_NEVER')
+  })
+
+  it('tolerates one missed 6-hourly pass, complains at two', () => {
+    expect(evaluateIntegrity(healthy({ minutesSinceStructuralReconcile: 7 * 60 })).severity).toBe('OK')
+    expect(evaluateIntegrity(healthy({ minutesSinceStructuralReconcile: 14 * 60 })).findings.map((f) => f.code))
+      .toContain('ADS_STRUCTURAL_RECONCILE_STALE')
   })
 })
 

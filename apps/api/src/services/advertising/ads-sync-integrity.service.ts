@@ -19,7 +19,7 @@ export async function collectIntegritySnapshot(): Promise<IntegritySnapshot> {
 
   const [
     deadLettersLastHour, deadLetters24h, orphanedTargets, orphanedLast24h,
-    freshest, amsNewest, campaignsFailedWrite, conns,
+    freshest, amsNewest, campaignsFailedWrite, conns, openDriftRows, lastReconcile,
   ] = await Promise.all([
     prisma.outboundSyncQueue.count({ where: { syncType: { startsWith: 'AD_' }, isDead: true, diedAt: { gte: hourAgo } } }),
     prisma.outboundSyncQueue.count({ where: { syncType: { startsWith: 'AD_' }, isDead: true, diedAt: { gte: dayAgo } } }),
@@ -29,6 +29,13 @@ export async function collectIntegritySnapshot(): Promise<IntegritySnapshot> {
     prisma.amazonAdsHourlyPerformance.aggregate({ _max: { reportedAt: true } }).catch(() => null),
     prisma.campaign.count({ where: { lastSyncStatus: 'FAILED' } }),
     prisma.amazonAdsConnection.findMany({ where: { isActive: true }, select: { marketplace: true, mode: true, writesEnabledAt: true } }),
+    // AX-VT.5 — open drift + reconcile freshness. Both fail OPEN (0 / null) rather than throwing:
+    // the integrity check is report-only and must never break the cron it rides on.
+    prisma.adDrift.count({ where: { resolvedAt: null } }).catch(() => 0),
+    prisma.cronRun.findFirst({
+      where: { jobName: 'ads-structural-reconcile', status: 'SUCCESS' },
+      orderBy: { finishedAt: 'desc' }, select: { finishedAt: true },
+    }).catch(() => null),
   ])
 
   // Campaigns stranded where no production connection can accept a write.
@@ -49,6 +56,8 @@ export async function collectIntegritySnapshot(): Promise<IntegritySnapshot> {
     minutesSinceAmsIngest: minsSince(amsNewest?._max.reportedAt ?? null),
     campaignsFailedWrite,
     campaignsInUnwritableMarket,
+    openDriftRows,
+    minutesSinceStructuralReconcile: minsSince(lastReconcile?.finishedAt ?? null),
   }
 }
 
