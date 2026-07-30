@@ -540,7 +540,9 @@ export async function listNegativeKeywords(ctx: ClientContext, opts: { campaignI
   return out
 }
 
-export interface AdGroupServingDTO { adGroupId?: string; campaignId?: string; name?: string; state?: string; extendedData?: { servingStatus?: string; statusReasons?: string[] } }
+// AX-VT.4 — defaultBid was always in Amazon's response; the DTO simply never declared it, so
+// nothing could verify that an ad group's bid landed as intended.
+export interface AdGroupServingDTO { adGroupId?: string; campaignId?: string; name?: string; state?: string; defaultBid?: number; extendedData?: { servingStatus?: string; statusReasons?: string[] } }
 export async function listAdGroupsV3(ctx: ClientContext, opts: { campaignIds?: string[] }): Promise<AdGroupServingDTO[]> {
   if (adsMode() === 'sandbox') return []
   const out: AdGroupServingDTO[] = []; let nextToken: string | undefined; let pages = 0
@@ -552,6 +554,64 @@ export async function listAdGroupsV3(ctx: ClientContext, opts: { campaignIds?: s
       contentType: 'application/vnd.spAdGroup.v3+json', acceptHeader: 'application/vnd.spAdGroup.v3+json',
     })
     for (const a of res.adGroups ?? []) out.push(a)
+    nextToken = res.nextToken; pages++
+  } while (nextToken && pages < 50)
+  return out
+}
+
+/**
+ * AX-VT.4 — the three reads a launch needs to prove fidelity, not just existence.
+ *
+ * Creates for these entities returned an id and nothing else, and there was no list call to
+ * check them against, so "11 campaigns created" could never be upgraded to "11 campaigns
+ * created AS SPECIFIED". Same pagination shape as the other v3 list calls.
+ */
+export interface KeywordDTO { keywordId?: string; campaignId?: string; adGroupId?: string; keywordText?: string; matchType?: string; state?: string; bid?: number }
+export async function listKeywords(ctx: ClientContext, opts: { campaignIds?: string[] }): Promise<KeywordDTO[]> {
+  if (adsMode() === 'sandbox') return []
+  const out: KeywordDTO[] = []; let nextToken: string | undefined; let pages = 0
+  do {
+    const body: Record<string, unknown> = { maxResults: 500, ...(nextToken ? { nextToken } : {}) }
+    if (opts.campaignIds?.length) body.campaignIdFilter = { include: opts.campaignIds }
+    const res = await liveCall<{ keywords?: KeywordDTO[]; nextToken?: string }>({
+      profileId: ctx.profileId, region: ctx.region, method: 'POST', path: '/sp/keywords/list', body,
+      contentType: 'application/vnd.spKeyword.v3+json', acceptHeader: 'application/vnd.spKeyword.v3+json',
+    })
+    for (const k of res.keywords ?? []) out.push(k)
+    nextToken = res.nextToken; pages++
+  } while (nextToken && pages < 50)
+  return out
+}
+
+export interface TargetDTO { targetId?: string; campaignId?: string; adGroupId?: string; expressionType?: string; state?: string; bid?: number; expression?: Array<{ type?: string; value?: string }> }
+export async function listTargets(ctx: ClientContext, opts: { campaignIds?: string[] }): Promise<TargetDTO[]> {
+  if (adsMode() === 'sandbox') return []
+  const out: TargetDTO[] = []; let nextToken: string | undefined; let pages = 0
+  do {
+    const body: Record<string, unknown> = { maxResults: 500, ...(nextToken ? { nextToken } : {}) }
+    if (opts.campaignIds?.length) body.campaignIdFilter = { include: opts.campaignIds }
+    const res = await liveCall<{ targetingClauses?: TargetDTO[]; nextToken?: string }>({
+      profileId: ctx.profileId, region: ctx.region, method: 'POST', path: '/sp/targets/list', body,
+      contentType: 'application/vnd.spTargetingClause.v3+json', acceptHeader: 'application/vnd.spTargetingClause.v3+json',
+    })
+    for (const t of res.targetingClauses ?? []) out.push(t)
+    nextToken = res.nextToken; pages++
+  } while (nextToken && pages < 50)
+  return out
+}
+
+export interface ProductAdDTO { adId?: string; campaignId?: string; adGroupId?: string; sku?: string; asin?: string; state?: string }
+export async function listProductAds(ctx: ClientContext, opts: { campaignIds?: string[] }): Promise<ProductAdDTO[]> {
+  if (adsMode() === 'sandbox') return []
+  const out: ProductAdDTO[] = []; let nextToken: string | undefined; let pages = 0
+  do {
+    const body: Record<string, unknown> = { maxResults: 500, ...(nextToken ? { nextToken } : {}) }
+    if (opts.campaignIds?.length) body.campaignIdFilter = { include: opts.campaignIds }
+    const res = await liveCall<{ productAds?: ProductAdDTO[]; nextToken?: string }>({
+      profileId: ctx.profileId, region: ctx.region, method: 'POST', path: '/sp/productAds/list', body,
+      contentType: 'application/vnd.spProductAd.v3+json', acceptHeader: 'application/vnd.spProductAd.v3+json',
+    })
+    for (const a of res.productAds ?? []) out.push(a)
     nextToken = res.nextToken; pages++
   } while (nextToken && pages < 50)
   return out

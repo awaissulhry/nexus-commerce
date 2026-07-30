@@ -1070,8 +1070,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // and repair them if the create didn't carry it. Reported so the launch's claim is
     // checked rather than assumed.
     const { settleLaunchPortfolios } = await import('../services/advertising/ads-create.service.js')
-    const portfolioCheck = await settleLaunchPortfolios(created.map((c) => c.campaignId))
-    return { ok: true, created, totalCampaigns: created.length, rules: rulesCreated, portfolioCheck }
+    const createdIds = created.map((c) => c.campaignId)
+    const portfolioCheck = await settleLaunchPortfolios(createdIds)
+    // AX-VT.4 — then read the whole launch back and report intended vs observed. Runs AFTER the
+    // portfolio repair so the receipt reflects the state the operator is actually left with.
+    const { verifyLaunch } = await import('../services/advertising/ads-launch-verify.service.js')
+    const verification = await verifyLaunch(createdIds).catch(() => null)
+    return { ok: true, created, totalCampaigns: created.length, rules: rulesCreated, portfolioCheck, verification }
   })
 
   // SB.7 — Single Campaign builder launch. Creates ONE SP campaign with PER-KEYWORD match
@@ -1180,7 +1185,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       // AX-VT.1 — read back and repair portfolio membership before claiming success.
       const { settleLaunchPortfolios } = await import('../services/advertising/ads-create.service.js')
       const portfolioCheck = await settleLaunchPortfolios([camp.id])
-      return { ok: true, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, rules: rulesCreated, attached: attachedCount, portfolioCheck }
+      // AX-VT.4 — full intended-vs-observed receipt for the campaign and everything under it.
+      const { verifyLaunch } = await import('../services/advertising/ads-launch-verify.service.js')
+      const verification = await verifyLaunch([camp.id]).catch(() => null)
+      return { ok: true, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, rules: rulesCreated, attached: attachedCount, portfolioCheck, verification }
     } catch (e) {
       logger.error('[single-launch] failed', { name, market, error: (e as Error).message })
       reply.status(500); return { ok: false, error: (e as Error).message }
@@ -6153,6 +6161,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         dryRun: q.apply !== '1',
       })
     } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
+  // AX-VT.4 — re-verify a launch on demand: intended vs observed for a set of campaigns and
+  // everything under them. Read-only; five Amazon list calls per marketplace regardless of size.
+  fastify.post('/advertising/launches/verify', async (request, reply) => {
+    const b = request.body as { campaignIds?: string[] }
+    if (!Array.isArray(b?.campaignIds) || !b.campaignIds.length) { reply.status(400); return { error: 'campaignIds[] required' } }
+    const { verifyLaunch } = await import('../services/advertising/ads-launch-verify.service.js')
+    try { return await verifyLaunch(b.campaignIds) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // LAUNCH-REPAIR — bulk ad-group negative keywords (funnel isolation back-fill). Idempotent.

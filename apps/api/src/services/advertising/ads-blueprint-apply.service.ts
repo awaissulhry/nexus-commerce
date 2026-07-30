@@ -20,6 +20,7 @@ import { logger } from '../../utils/logger.js'
 import type { BlueprintDoc } from '../ads-core/ads-blueprint.js'
 import { planApplication, materialise, type ApplyPlan, type ApplyOptions, type ApplyTarget, type ExistingTarget, type PlanEdits } from '../ads-core/ads-blueprint-apply.js'
 import type { PortfolioVerifyResult } from './ads-create.service.js'
+import type { LaunchVerification } from './ads-launch-verify.service.js'
 
 /**
  * Every positive keyword we currently target in this marketplace — the surface
@@ -264,6 +265,11 @@ export interface ApplyResult {
    * the create did not carry portfolioId and this step is what put them where they belong.
    */
   portfolioCheck?: PortfolioVerifyResult | null
+  /**
+   * AX-VT.4 — Amazon's own account of what the run produced, field by field. `ok: false` means
+   * the replica does not match the blueprint, which also downgrades `status` to PARTIAL.
+   */
+  verification?: LaunchVerification | null
 }
 
 export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
@@ -492,6 +498,20 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
     errors.push(`portfolio membership could not be set for ${portfolioCheck.repairFailed} campaign(s)`)
   }
 
+  // AX-VT.4 — read the whole replica back. `notOnAmazon` only ever caught campaigns that got no
+  // id at all; a replica whose bids or match types landed differently looked like a clean run.
+  // Runs after the portfolio repair so the receipt describes the end state.
+  const { verifyLaunch } = await import('./ads-launch-verify.service.js')
+  const verification = await verifyLaunch(createdCampaignIds).catch((e) => {
+    errors.push(`launch verification failed: ${(e as Error).message.slice(0, 120)}`)
+    return null
+  })
+  if (verification && !verification.ok) {
+    // Surfaced as errors so `status` downgrades to PARTIAL — a run whose result does not match
+    // the blueprint is not an APPLIED run, and saying so is the entire point of this phase.
+    for (const p of verification.problems.slice(0, 20)) errors.push(p)
+  }
+
   const status: ApplyResult['status'] =
     created.campaigns === 0 ? 'FAILED'
     : (errors.length || notOnAmazon.length) ? 'PARTIAL'
@@ -503,7 +523,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
   })
   logger.info('[AX2.5] blueprint applied', { applicationId: application.id, status, created, errors: errors.length })
 
-  return { applicationId: application.id, status, plan, created, skippedNonKeyword, notOnAmazon, errors, portfolioCheck }
+  return { applicationId: application.id, status, plan, created, skippedNonKeyword, notOnAmazon, errors, portfolioCheck, verification }
 }
 
 /**
