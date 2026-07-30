@@ -161,7 +161,9 @@ export async function verifyLaunch(campaignIds: string[]): Promise<LaunchVerific
       // report MISSING_ON_AMAZON. A verifier that invents failures gets switched off.
       if (!src) continue
       const a = t.externalTargetId ? src.get(t.externalTargetId) : undefined
-      const label = t.expressionValue ?? t.id
+      // SD audience clauses carry an EMPTY expressionValue, not null, so `?? t.id` left the
+      // receipt showing a blank row. Fall back to the kind, which at least names what it is.
+      const label = (t.expressionValue || '').trim() || t.kind || t.id
       if (isKeyword) {
         const k = a as { keywordText?: string; matchType?: string; state?: string; bid?: number } | undefined
         entities.push(verifyEntity({

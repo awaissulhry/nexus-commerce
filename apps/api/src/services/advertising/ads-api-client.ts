@@ -628,10 +628,14 @@ export async function listSdTargets(ctx: ClientContext, opts: { externalCampaign
   if (adsMode() === 'sandbox') return []
   const out: TargetDTO[] = []
   const ids = opts.externalCampaignIds ?? []
+  // No campaigns asked for means nothing to verify. Returning early rather than falling through
+  // to an unfiltered GET: /sd/targets with no filter pulls EVERY SD target in the account, which
+  // is never what a caller wants and is an expensive way to find that out.
+  if (!ids.length) return out
   // /sd/targets takes campaignIdFilter as a comma-separated query param; chunk to keep the URL sane.
-  for (let i = 0; i < Math.max(ids.length, 1); i += 50) {
+  for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50)
-    const qs = chunk.length ? `?campaignIdFilter=${encodeURIComponent(chunk.join(','))}` : ''
+    const qs = `?campaignIdFilter=${encodeURIComponent(chunk.join(','))}`
     // Errors propagate with Amazon's own message. The caller records them in `errors[]`, which
     // already forces ok:false — replacing the real reason with a generic string is how a
     // diagnosable failure becomes an afternoon of guessing.
@@ -647,7 +651,6 @@ export async function listSdTargets(ctx: ClientContext, opts: { externalCampaign
         expression: t.expression, state: t.state, bid: t.bid,
       })
     }
-    if (!ids.length) break
   }
   return out
 }
