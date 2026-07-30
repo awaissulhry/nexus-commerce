@@ -20,6 +20,8 @@ import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
+import { MarketSelect } from '../../_shell/MarketSelect'
 import { ProductSelection, type SpwProduct } from './ProductSelection'
 import { StructureSelection, type StructureMode, type AutomationMode } from './StructureSelection'
 import { PlacementBidMultiplier, type PlacementBids, emptyPlacementBids } from '../../_shared/PlacementBidMultiplier'
@@ -50,6 +52,8 @@ const EXIT_TO = '/marketing/ads/campaign-builder'
 
 export function SpSuperWizard() {
   const router = useRouter()
+  // APS.2a — the launch target, from the console context. Was hardcoded 'IT'.
+  const { market, setMarket, markets, ready: marketReady } = useAdsMarketplace()
   const [step, setStep] = useState<StepN>(1)
   const [activeSec, setActiveSec] = useState('product-group')
   const [productGroupName, setProductGroupName] = useState('')
@@ -92,10 +96,14 @@ export function SpSuperWizard() {
   // (no Amazon push unless a per-campaign live gate is open), then we land on /campaigns.
   const launch = useCallback(async () => {
     if (launching) return
+    // Never guess the launch target. If the console has not resolved a
+    // launchable market, refuse rather than fall back to a default that
+    // silently sends the campaign to the wrong country.
+    if (!market) { setLaunchErr('No launchable Amazon marketplace is selected.'); return }
     setLaunching(true); setLaunchErr('')
     try {
       const payload = {
-        market: 'IT',
+        market,
         productGroupName,
         products: products.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined, productId: p.id })),
         campaigns: campaigns.map((c) => ({
@@ -126,7 +134,7 @@ export function SpSuperWizard() {
           await fetch(`${getBackendUrl()}/api/advertising/autopilot-plans`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              name: productGroupName || 'Autopilot plan', marketplace: 'IT', productGroupName,
+              name: productGroupName || 'Autopilot plan', marketplace: market, productGroupName,
               campaignIds: createdIds, goal: aiControl.goal, autonomy: aiControl.autonomy,
               guardrails: aiGuardrailsToCents(aiControl.guardrails),
               modules: Object.fromEntries(Object.entries(aiControl.modules).map(([k, on]) => [k, { on }])),
@@ -146,7 +154,7 @@ export function SpSuperWizard() {
       }
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, productGroupName, products, campaigns, bidMult, rules, automationMode, bidConfig, aiControl, portfolioId, router])
+  }, [launching, market, productGroupName, products, campaigns, bidMult, rules, automationMode, bidConfig, aiControl, portfolioId, router])
 
   /** Re-run verification for the campaigns this launch created (transient read failures are common). */
   const recheck = useCallback(async () => {
@@ -193,7 +201,18 @@ export function SpSuperWizard() {
           <span className="eyebrow">Helium 10 Ads</span>
           <h1>Campaign Builder : SP Super Wizard</h1>
         </div>
-        <button type="button" className="h10-spw-exit" onClick={() => router.push(EXIT_TO)}>Exit Builder</button>
+        {/* APS.2a — the launch target, always on screen. A builder that does not
+            say which country it is about to spend money in is a trap. */}
+        <div className="h10-spw-topr">
+          <MarketSelect
+            markets={markets}
+            value={market}
+            onChange={setMarket}
+            disabled={!marketReady}
+            brand={<span className="amz">amazon</span>}
+          />
+          <button type="button" className="h10-spw-exit" onClick={() => router.push(EXIT_TO)}>Exit Builder</button>
+        </div>
       </header>
 
       <nav className="h10-spw-steps" aria-label="Wizard steps">

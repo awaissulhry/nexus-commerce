@@ -19,6 +19,8 @@ import { useRouter } from 'next/navigation'
 import { ChevronDown, Pencil, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { Input } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
+import { MarketSelect } from '../../_shell/MarketSelect'
 import { InfoTip } from '../../campaigns/InfoTip'
 import { PortfolioPicker } from '../sp-super-wizard/PortfolioPicker'
 import { ProductSelection, type SpwProduct } from '../sp-super-wizard/ProductSelection'
@@ -80,6 +82,8 @@ const EXIT_TO = '/marketing/ads/campaign-builder'
 
 export function SingleCampaignBuilder() {
   const router = useRouter()
+  // APS.2a — the launch target, from the console context. Was hardcoded 'IT'.
+  const { market, setMarket, markets, ready: marketReady } = useAdsMarketplace()
   const [step, setStep] = useState<StepN>(1)
   const [activeSec, setActiveSec] = useState('details')
   // SB.2 — Campaign Details + Bidding Strategy + Sites
@@ -149,10 +153,13 @@ export function SingleCampaignBuilder() {
   const launch = useCallback(async () => {
     if (launching) return
     if (!name.trim()) { setLaunchErr('Enter a campaign name (Campaign Details) before launching.'); return }
+    // Never guess the launch target — a silent fallback would send the campaign
+    // to the wrong country.
+    if (!market) { setLaunchErr('No launchable Amazon marketplace is selected.'); return }
     setLaunching(true); setLaunchErr('')
     try {
       const payload = {
-        market: 'IT', name: name.trim(), adGroupName: adGroup.trim() || undefined, portfolioId: portfolioId || undefined,
+        market, name: name.trim(), adGroupName: adGroup.trim() || undefined, portfolioId: portfolioId || undefined,
         biddingStrategy, sites,
         placementBids: { tos: bidMult.tos, pdp: bidMult.pdp, ros: bidMult.ros },
         bidBoosts: { video: bidMult.videoBoost, amazonBusiness: bidMult.abBoost, amazonBusinessPct: bidMult.abBoostPct, audience: bidMult.audienceMod },
@@ -173,7 +180,7 @@ export function SingleCampaignBuilder() {
       if (!r.ok || j?.ok === false) throw new Error(j?.error || 'Launch failed')
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, name, adGroup, portfolioId, biddingStrategy, sites, bidMult, products, svEnabled, budget, defaultBid, bidConfig, targetMode, keywords, negKeywords, productTargets, campaignRules, autoBidAdjust, router])
+  }, [launching, market, name, adGroup, portfolioId, biddingStrategy, sites, bidMult, products, svEnabled, budget, defaultBid, bidConfig, targetMode, keywords, negKeywords, productTargets, campaignRules, autoBidAdjust, router])
   const bidLabel = bidConfig.strategy === 'none' ? 'None' : (({ maxImpressions: 'Max Impressions', targetAcos: 'Target ACoS', maxOrders: 'Max Orders', custom: 'Custom' } as Record<string, string>)[bidConfig.strategy] ?? '—')
   const placementParts = [bidMult.tos && `ToS ${bidMult.tos}%`, bidMult.pdp && `PDP ${bidMult.pdp}%`, bidMult.ros && `RoS ${bidMult.ros}%`].filter(Boolean)
   const boostChips = [bidMult.videoBoost && 'Video', bidMult.abBoost && 'Amazon Business', bidMult.audienceMod && 'Audience'].filter(Boolean) as string[]
@@ -217,7 +224,11 @@ export function SingleCampaignBuilder() {
           <span className="eyebrow">Helium 10 Ads</span>
           <h1>Campaign Builder : Single Campaign</h1>
         </div>
-        <button type="button" className="h10-spw-exit" onClick={() => router.push(EXIT_TO)}>Exit Builder</button>
+        {/* APS.2a — the launch target, always on screen. */}
+        <div className="h10-spw-topr">
+          <MarketSelect markets={markets} value={market} onChange={setMarket} disabled={!marketReady} brand={<span className="amz">amazon</span>} />
+          <button type="button" className="h10-spw-exit" onClick={() => router.push(EXIT_TO)}>Exit Builder</button>
+        </div>
       </header>
 
       <nav className="h10-spw-steps" aria-label="Builder steps">

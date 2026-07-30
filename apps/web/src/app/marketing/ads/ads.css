@@ -2052,6 +2052,14 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-spw-top h1 { font-size: 32px; font-weight: 800; color: #1c2530; letter-spacing: -0.02em; margin: 0; line-height: 1.16; }
 .h10-spw-exit { font-size: 13px; font-weight: 600; color: #3a4452; background: #fff; border: 1px solid #d8dde4; border-radius: 8px; padding: 9px 16px; cursor: pointer; margin-top: 6px; white-space: nowrap; }
 .h10-spw-exit:hover { background: #f1f4f8; }
+/* APS.2a — builder header right cluster: market selector + Exit Builder.
+   The 6px top offset that kept Exit level with the flex-start title block now
+   belongs to the cluster, so both controls share one baseline. Vertical
+   padding is matched to .h10-spw-exit (9px) rather than centred, so the two
+   buttons are the SAME height instead of merely concentric. */
+.h10-spw-topr { display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-shrink: 0; }
+.h10-spw-topr .h10-spw-exit { margin-top: 0; }
+.h10-spw-topr .h10-hbtn.acct { padding: 9px 14px; border-radius: 8px; }
 
 /* stepper */
 .h10-spw-steps { display: flex; align-items: center; gap: 8px; margin: 20px 0 0; padding: 0 0 18px; border-bottom: 1px solid #e6e9ee; }

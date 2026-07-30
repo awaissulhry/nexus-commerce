@@ -12,15 +12,8 @@ import Link from 'next/link'
 import { Video, ExternalLink, RefreshCw, ChevronDown } from 'lucide-react'
 import { DateRangePicker } from './DateRangePicker'
 import { EbayMark } from './EbayMark'
-
-const FLAG: Record<string, string> = {
-  IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', GB: '🇬🇧', UK: '🇬🇧', NL: '🇳🇱',
-  SE: '🇸🇪', PL: '🇵🇱', BE: '🇧🇪', IE: '🇮🇪', TR: '🇹🇷', US: '🇺🇸',
-}
-const MARKET_NAME: Record<string, string> = {
-  IT: 'Italy', DE: 'Germany', FR: 'France', ES: 'Spain', GB: 'United Kingdom', UK: 'United Kingdom',
-  NL: 'Netherlands', SE: 'Sweden', PL: 'Poland', BE: 'Belgium', IE: 'Ireland', TR: 'Türkiye', US: 'United States',
-}
+import { MarketSelect } from './MarketSelect'
+import type { AdsMarket } from './MarketplaceContext'
 
 // Kept for AdManagerGraph (preset → {start,end}); the header itself now uses the
 // full DateRangePicker. Safe to retire once the graph moves to an explicit range.
@@ -68,10 +61,17 @@ export function AdsPageHeader({
   // pages pass 'ebay' so the header stops showing the amazon wordmark.
   channel?: 'amazon' | 'ebay'
 }) {
-  const [open, setOpen] = useState<'' | 'market' | 'action'>('')
+  const [open, setOpen] = useState<'' | 'action'>('')
   const close = () => setOpen('')
-  const marketChip = market === 'all' ? 'All markets' : `${FLAG[market] ?? '🏳️'} ${MARKET_NAME[market] ?? market}`
   const [dateRange, setDateRange] = useState(() => { const e = new Date(); e.setHours(0, 0, 0, 0); const s = new Date(e); s.setDate(s.getDate() - 6); return { start: s, end: e } })
+
+  // APS.2a — these pages pass a plain string[] of markets they saw in their own
+  // data, and every one of those is selectable-as-a-filter. Widen to the shared
+  // AdsMarket shape with launchable:true so the extracted control behaves
+  // exactly as this header did before.
+  const marketOptions: AdsMarket[] = markets.map((m) => ({
+    code: m, label: '', mode: 'production', writesEnabled: true, launchable: true,
+  }))
 
   return (
     <div className="h10-hdr">
@@ -87,23 +87,14 @@ export function AdsPageHeader({
 
         {showDateRange && <DateRangePicker value={dateRange} onChange={(s, e) => { setDateRange({ start: s, end: e }); onDateRange?.(s, e) }} />}
 
-        {/* market / account selector */}
-        <div className="h10-hsel">
-          <button type="button" className="h10-hbtn acct" onClick={() => setOpen(open === 'market' ? '' : 'market')}>
-            {channel === 'ebay' ? <EbayMark /> : <span className="amz">amazon</span>}<span className="chip">{marketChip}</span><ChevronDown size={13} />
-          </button>
-          {open === 'market' && <>
-            <button type="button" className="h10-menu-back" aria-label="Close" onClick={close} />
-            <div className="h10-menu">
-              <button type="button" className={market === 'all' ? 'on' : ''} onClick={() => { onMarketChange('all'); close() }}>All markets</button>
-              {markets.map((m) => (
-                <button type="button" key={m} className={m === market ? 'on' : ''} onClick={() => { onMarketChange(m); close() }}>
-                  <span>{FLAG[m] ?? '🏳️'} {MARKET_NAME[m] ?? m}</span><span className="sub">{m}</span>
-                </button>
-              ))}
-            </div>
-          </>}
-        </div>
+        {/* market / account selector — shared with the campaign builders (APS.2a) */}
+        <MarketSelect
+          markets={marketOptions}
+          value={market}
+          onChange={onMarketChange}
+          allowAll
+          brand={channel === 'ebay' ? <EbayMark /> : <span className="amz">amazon</span>}
+        />
 
         {/* Primary: a single button (e.g. "+ Rule") when primaryAction is set,
             otherwise the Action ▾ dropdown. */}

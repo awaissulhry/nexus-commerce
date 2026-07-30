@@ -24,6 +24,8 @@ import { useRouter } from 'next/navigation'
 import { Layers, BarChart3 } from 'lucide-react'
 import { Input } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
+import { MarketSelect } from '../../_shell/MarketSelect'
 import { InfoTip } from '../../campaigns/InfoTip'
 import { ProductSelection, type SpwProduct } from '../sp-super-wizard/ProductSelection'
 import { defaultAutoGroups, type SpwCampaign } from '../sp-super-wizard/CampaignSetup'
@@ -74,6 +76,8 @@ function KindBadge({ kind }: { kind: SpwCampaign['kind'] }) {
 
 export function QuickBuilder() {
   const router = useRouter()
+  // APS.2a — the launch target, from the console context. Was hardcoded 'IT'.
+  const { market, setMarket, markets, ready: marketReady } = useAdsMarketplace()
   const [step, setStep] = useState<StepN>(1)
   const [productGroupName, setProductGroupName] = useState('')
   const [bidConfig, setBidConfig] = useState<BidConfig>(defaultBidConfig())
@@ -130,6 +134,9 @@ export function QuickBuilder() {
   // per-campaign write gate opens; the rules propose on the Suggestions page (control:'manual').
   const launch = useCallback(async () => {
     if (launching || !canNext) return
+    // Never guess the launch target — a silent fallback would send the campaign
+    // to the wrong country.
+    if (!market) { setLaunchErr('No launchable Amazon marketplace is selected.'); return }
     setLaunching(true); setLaunchErr('')
     const grp = productGroupName.trim()
     // Harvest sources are the discovery campaigns (Auto + Research): look for search terms (st),
@@ -140,7 +147,7 @@ export function QuickBuilder() {
     const negRow = () => ({ st: true, tB: false, tP: false, tE: false, tBox: false, nP: false, nE: true, nBox: false })
     try {
       const payload = {
-        market: 'IT',
+        market,
         productGroupName: grp,
         products: products.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined, productId: p.id })),
         campaigns: campaigns.map((c) => ({
@@ -168,7 +175,7 @@ export function QuickBuilder() {
       if (!r.ok || j?.ok === false) throw new Error(j?.error || 'Launch failed')
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, canNext, productGroupName, products, campaigns, toggles, bidConfig, sugBid, sugBudget, router])
+  }, [launching, market, canNext, productGroupName, products, campaigns, toggles, bidConfig, sugBid, sugBudget, router])
 
   return (
     <div className="h10-spw h10-qcb">
@@ -177,7 +184,11 @@ export function QuickBuilder() {
           <span className="eyebrow">Helium 10 Ads</span>
           <h1>Campaign Builder : Quick</h1>
         </div>
-        <button type="button" className="h10-spw-exit" onClick={() => router.push(EXIT_TO)}>Exit Builder</button>
+        {/* APS.2a — the launch target, always on screen. */}
+        <div className="h10-spw-topr">
+          <MarketSelect markets={markets} value={market} onChange={setMarket} disabled={!marketReady} brand={<span className="amz">amazon</span>} />
+          <button type="button" className="h10-spw-exit" onClick={() => router.push(EXIT_TO)}>Exit Builder</button>
+        </div>
       </header>
 
       <nav className="h10-spw-steps" aria-label="Builder steps">
