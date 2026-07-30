@@ -40,6 +40,15 @@ export interface IntegritySnapshot {
    * defect that started AX-VT ran for weeks with every other number on this snapshot healthy.
    */
   openDriftRows: number
+  /**
+   * Of those, the ones that will NOT resolve on their own — EXTERNAL_CHANGE and WRITE_FAILED.
+   *
+   * Severity keys off THIS, not the total. Measured on prod: 29 open rows of which 27 were
+   * WRITE_LAG (our own writes still landing, self-healing by definition) tripped CRITICAL against
+   * a total-based threshold. A busy hour of legitimate writes must never look like a systemic
+   * break, or the CRITICAL that matters gets ignored along with the ones that don't.
+   */
+  driftNeedsAttention: number
   /** Minutes since the structural reconcile last completed a pass. */
   minutesSinceStructuralReconcile: number | null
 }
@@ -134,12 +143,16 @@ export function evaluateIntegrity(s: IntegritySnapshot): IntegrityReport {
   }
 
   // AX-VT.5 — the signal whose absence let the portfolio defect run for weeks.
-  if (s.openDriftRows > 0) {
+  //
+  // Reported on the total, escalated on the part that will not fix itself. Those are different
+  // questions and conflating them is what made the first version fire CRITICAL on 27 healthy
+  // in-flight writes.
+  if (s.driftNeedsAttention > 0) {
     findings.push({
       code: 'ADS_DRIFT_OPEN',
-      severity: s.openDriftRows > INTEGRITY_THRESHOLDS.driftRowsCritical ? 'CRITICAL' : 'WARN',
-      message: `${s.openDriftRows} entity field(s) where Amazon disagrees with our records.`,
-      action: 'Open GET /advertising/drift. WRITE_PENDING and WRITE_LAG resolve themselves; WRITE_FAILED and EXTERNAL_CHANGE do not.',
+      severity: s.driftNeedsAttention > INTEGRITY_THRESHOLDS.driftRowsCritical ? 'CRITICAL' : 'WARN',
+      message: `${s.driftNeedsAttention} entity field(s) differ from Amazon for a reason that will NOT resolve on its own${s.openDriftRows > s.driftNeedsAttention ? ` (of ${s.openDriftRows} open in total)` : ''}.`,
+      action: 'Open GET /advertising/drift or /marketing/ads/trust. EXTERNAL_CHANGE means someone edited it on Amazon; WRITE_FAILED means one of our writes never landed.',
     })
   }
 

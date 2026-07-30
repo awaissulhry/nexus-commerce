@@ -13,6 +13,7 @@ const healthy = (over: Partial<IntegritySnapshot> = {}): IntegritySnapshot => ({
   campaignsInUnwritableMarket: 0,
   // AX-VT.5 — a healthy account now also means "nothing is drifting" and "something is checking".
   openDriftRows: 0,
+  driftNeedsAttention: 0,
   minutesSinceStructuralReconcile: 30,
   ...over,
 })
@@ -45,10 +46,27 @@ describe('evaluateIntegrity — the AX2.0 regression alarm', () => {
 })
 
 describe('AX-VT.5 — drift and reconcile freshness', () => {
-  it('open drift is a finding, and a systemic count is CRITICAL', () => {
-    expect(evaluateIntegrity(healthy({ openDriftRows: 3 })).severity).toBe('WARN')
+  it('escalates on drift that will NOT self-heal, not on the total', () => {
+    expect(evaluateIntegrity(healthy({ openDriftRows: 3, driftNeedsAttention: 3 })).severity).toBe('WARN')
     // 62 wrong campaigns (the portfolio defect) must not read the same as three Seller Central edits.
-    expect(evaluateIntegrity(healthy({ openDriftRows: 62 })).severity).toBe('CRITICAL')
+    expect(evaluateIntegrity(healthy({ openDriftRows: 62, driftNeedsAttention: 62 })).severity).toBe('CRITICAL')
+  })
+
+  it('self-healing drift alone is SILENT — measured on prod', () => {
+    // 29 open of which 27 were WRITE_LAG (our own writes still landing) fired CRITICAL against the
+    // first, total-based threshold. A busy hour of legitimate writes must never look systemic, or
+    // the CRITICAL that matters gets ignored along with the ones that don't.
+    const r = evaluateIntegrity(healthy({ openDriftRows: 27, driftNeedsAttention: 0 }))
+    expect(r.severity).toBe('OK')
+    expect(r.findings.map((f) => f.code)).not.toContain('ADS_DRIFT_OPEN')
+  })
+
+  it('names the total alongside the actionable count when they differ', () => {
+    const f = evaluateIntegrity(healthy({ openDriftRows: 29, driftNeedsAttention: 2 }))
+      .findings.find((x) => x.code === 'ADS_DRIFT_OPEN')
+    expect(f?.severity).toBe('WARN')
+    expect(f?.message).toContain('2 entity field(s)')
+    expect(f?.message).toContain('of 29 open in total')
   })
 
   it('a reconcile that has never run is itself a finding', () => {
