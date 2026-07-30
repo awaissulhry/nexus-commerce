@@ -543,12 +543,13 @@ export async function listNegativeKeywords(ctx: ClientContext, opts: { campaignI
 // AX-VT.4 — defaultBid was always in Amazon's response; the DTO simply never declared it, so
 // nothing could verify that an ad group's bid landed as intended.
 export interface AdGroupServingDTO { adGroupId?: string; campaignId?: string; name?: string; state?: string; defaultBid?: number; extendedData?: { servingStatus?: string; statusReasons?: string[] } }
-export async function listAdGroupsV3(ctx: ClientContext, opts: { campaignIds?: string[] }): Promise<AdGroupServingDTO[]> {
+export async function listAdGroupsV3(ctx: ClientContext, opts: { campaignIds?: string[]; states?: readonly string[] }): Promise<AdGroupServingDTO[]> {
   if (adsMode() === 'sandbox') return []
   const out: AdGroupServingDTO[] = []; let nextToken: string | undefined; let pages = 0
   do {
     const body: Record<string, unknown> = { maxResults: 500, includeExtendedDataFields: true, ...(nextToken ? { nextToken } : {}) }
     if (opts.campaignIds?.length) body.campaignIdFilter = { include: opts.campaignIds }
+    if (opts.states?.length) body.stateFilter = { include: [...opts.states] }
     const res = await liveCall<{ adGroups?: AdGroupServingDTO[]; nextToken?: string }>({
       profileId: ctx.profileId, region: ctx.region, method: 'POST', path: '/sp/adGroups/list', body,
       contentType: 'application/vnd.spAdGroup.v3+json', acceptHeader: 'application/vnd.spAdGroup.v3+json',
@@ -566,13 +567,28 @@ export async function listAdGroupsV3(ctx: ClientContext, opts: { campaignIds?: s
  * check them against, so "11 campaigns created" could never be upgraded to "11 campaigns
  * created AS SPECIFIED". Same pagination shape as the other v3 list calls.
  */
+/**
+ * AX-VT.4 — every v3 list here accepts `states`, and verification MUST pass all three.
+ *
+ * Amazon's v3 lists exclude ARCHIVED by default. Measured on prod: verifying three archived
+ * Sponsored Display campaigns reported 50 entities as MISSING_ON_AMAZON when every one of them
+ * exists and is archived exactly as our records say. That is a verifier alarming an operator
+ * about campaigns they deliberately archived — indistinguishable, to them, from a real fault.
+ *
+ * State is one of the fields being COMPARED, so the read has to find the entity whatever state
+ * it is in. `ALL_STATES` is the right default for verification specifically; callers that want
+ * only live entities (the deletion-reconcile snapshot, for one) still pass their own filter.
+ */
+export const ALL_STATES = ['ENABLED', 'PAUSED', 'ARCHIVED'] as const
+
 export interface KeywordDTO { keywordId?: string; campaignId?: string; adGroupId?: string; keywordText?: string; matchType?: string; state?: string; bid?: number }
-export async function listKeywords(ctx: ClientContext, opts: { campaignIds?: string[] }): Promise<KeywordDTO[]> {
+export async function listKeywords(ctx: ClientContext, opts: { campaignIds?: string[]; states?: readonly string[] }): Promise<KeywordDTO[]> {
   if (adsMode() === 'sandbox') return []
   const out: KeywordDTO[] = []; let nextToken: string | undefined; let pages = 0
   do {
     const body: Record<string, unknown> = { maxResults: 500, ...(nextToken ? { nextToken } : {}) }
     if (opts.campaignIds?.length) body.campaignIdFilter = { include: opts.campaignIds }
+    if (opts.states?.length) body.stateFilter = { include: [...opts.states] }
     const res = await liveCall<{ keywords?: KeywordDTO[]; nextToken?: string }>({
       profileId: ctx.profileId, region: ctx.region, method: 'POST', path: '/sp/keywords/list', body,
       contentType: 'application/vnd.spKeyword.v3+json', acceptHeader: 'application/vnd.spKeyword.v3+json',
@@ -584,12 +600,13 @@ export async function listKeywords(ctx: ClientContext, opts: { campaignIds?: str
 }
 
 export interface TargetDTO { targetId?: string; campaignId?: string; adGroupId?: string; expressionType?: string; state?: string; bid?: number; expression?: Array<{ type?: string; value?: string }> }
-export async function listTargets(ctx: ClientContext, opts: { campaignIds?: string[] }): Promise<TargetDTO[]> {
+export async function listTargets(ctx: ClientContext, opts: { campaignIds?: string[]; states?: readonly string[] }): Promise<TargetDTO[]> {
   if (adsMode() === 'sandbox') return []
   const out: TargetDTO[] = []; let nextToken: string | undefined; let pages = 0
   do {
     const body: Record<string, unknown> = { maxResults: 500, ...(nextToken ? { nextToken } : {}) }
     if (opts.campaignIds?.length) body.campaignIdFilter = { include: opts.campaignIds }
+    if (opts.states?.length) body.stateFilter = { include: [...opts.states] }
     const res = await liveCall<{ targetingClauses?: TargetDTO[]; nextToken?: string }>({
       profileId: ctx.profileId, region: ctx.region, method: 'POST', path: '/sp/targets/list', body,
       contentType: 'application/vnd.spTargetingClause.v3+json', acceptHeader: 'application/vnd.spTargetingClause.v3+json',
@@ -636,12 +653,13 @@ export async function listSdTargets(ctx: ClientContext, opts: { externalCampaign
 }
 
 export interface ProductAdDTO { adId?: string; campaignId?: string; adGroupId?: string; sku?: string; asin?: string; state?: string }
-export async function listProductAds(ctx: ClientContext, opts: { campaignIds?: string[] }): Promise<ProductAdDTO[]> {
+export async function listProductAds(ctx: ClientContext, opts: { campaignIds?: string[]; states?: readonly string[] }): Promise<ProductAdDTO[]> {
   if (adsMode() === 'sandbox') return []
   const out: ProductAdDTO[] = []; let nextToken: string | undefined; let pages = 0
   do {
     const body: Record<string, unknown> = { maxResults: 500, ...(nextToken ? { nextToken } : {}) }
     if (opts.campaignIds?.length) body.campaignIdFilter = { include: opts.campaignIds }
+    if (opts.states?.length) body.stateFilter = { include: [...opts.states] }
     const res = await liveCall<{ productAds?: ProductAdDTO[]; nextToken?: string }>({
       profileId: ctx.profileId, region: ctx.region, method: 'POST', path: '/sp/productAds/list', body,
       contentType: 'application/vnd.spProductAd.v3+json', acceptHeader: 'application/vnd.spProductAd.v3+json',
