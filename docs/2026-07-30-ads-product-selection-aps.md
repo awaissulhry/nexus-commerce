@@ -248,8 +248,42 @@ Nothing starts without your explicit go on that specific phase.
 
 ---
 
-## 6. Open questions for you
+## 6. Decisions — RESOLVED 2026-07-30
 
-1. **Ineligible products — hide, or show greyed with a reason?** Industry norm is show-with-reason (operator learns why). Hiding is cleaner but opaque.
-2. **Marketplace source for the builders that lack one** (Quick, Guided, Single, AI Goal all assume IT — `SpSuperWizard.tsx:129` hardcodes `marketplace: 'IT'`). Add an explicit selector, or inherit from a console-level context?
-3. **APS.3 scope** — SP only first, or SP+SB+SD at once (`adType` is a single parameter, so all three is nearly free)?
+**Q1. Ineligible products → SHOW GREYED, WITH THE REASON.**
+Row stays visible, not addable, Amazon's reason on hover (`NOT_IN_BUYBOX`, `OUT_OF_STOCK`,
+`VARIATION_PARENT`, …). No silent omission — the operator must be able to tell "not in the
+catalog" apart from "Amazon is blocking this". Consistent with visibility-over-minimalism.
+No override path in scope; if Amazon says ineligible, the picker respects it.
+
+**Q2. Marketplace → CONSOLE-LEVEL CONTEXT.**
+One marketplace switcher in the ads shell (`_shell/`); every builder and the picker inherit
+it. This retires the hardcoded `marketplace: 'IT'` at `SpSuperWizard.tsx:129` and the
+per-builder drift in one move. `ReplicateBuilder` keeps its own source/destination markets —
+replication is inherently cross-market — but its **destination** feeds the picker.
+
+*Plan impact:* this becomes **APS.2a**, landing before APS.2b (the picker props), because the
+picker's `marketplace` prop needs a source to read from.
+
+**Q3. Eligibility → ALL FOUR AD TYPES (`sp`, `sb`, `sd`, `dsp`).**
+`adType` is a single request parameter, so breadth is nearly free once the service exists.
+SB matters most: it is where the missing-ASIN defect (D3) actually breaks launches —
+`ads-create.service.ts:562` throws `at least one ASIN required`.
+
+*Note:* [`reference_amazon_stack_entitlements`] records DSP as blocked at Amazon. The `dsp`
+adType will be wired but will return whatever Amazon returns for our profile; it is not a
+reason to build DSP surfaces.
+
+### Revised phase list
+
+| Phase | Scope |
+|---|---|
+| **APS.1** | Server contract — `q` alias, additive `asin` + `rollupChannelKeys`, `advertisableOn=` filter |
+| **APS.2a** | Console-level marketplace context in the ads shell; retire hardcoded `'IT'` |
+| **APS.2b** | Picker takes `channel` + `marketplace`; server-side search and paging |
+| **APS.3** | Eligibility service, all four ad types; greyed rows + reason pills |
+| **APS.4** | Design-system rebuild (eBay `ListingsStep` migrates first) |
+| **APS.5** | Server-side bulk paste, saved segments, FBA/stock/buy-box filters |
+| **APS.6** | One component for Amazon + eBay; fold in `AddProductsModal` |
+
+**Next gate: APS.1.** Not started.
