@@ -121,7 +121,7 @@ function Thumb({ p }: { p: SpwProduct }) {
  * identifier; a SKU gets the word "SKU". Conflating the two is what made the
  * old picker claim every product had an ASIN.
  */
-function ProductIdent({ p, copyable }: { p: SpwProduct; copyable?: boolean }) {
+function ProductIdent({ p, copyable, trailing }: { p: SpwProduct; copyable?: boolean; trailing?: React.ReactNode }) {
   const copy = (t: string) => { try { void navigator.clipboard?.writeText(t) } catch { /* ignore */ } }
   return (
     <span className="id">
@@ -130,8 +130,12 @@ function ProductIdent({ p, copyable }: { p: SpwProduct; copyable?: boolean }) {
           <AmazonBadge size={14} />
           <span className="code">{p.asin}</span>
           {copyable ? <button type="button" className="cp" title="Copy ASIN" onClick={() => copy(p.asin)}><Copy size={12} /></button> : null}
+          {/* The SKU rides along even when an ASIN exists: operators recognise
+              their own SKUs (GALE-JACKET) and do not memorise ASINs. It
+              truncates before the ASIN or the variation count do, and carries
+              the full value in its title. */}
           {p.sku ? <span className="dot">·</span> : null}
-          {p.sku ? <span className="sku">{p.sku}</span> : null}
+          {p.sku ? <span className="sku" title={p.sku}>{p.sku}</span> : null}
         </>
       ) : (
         <>
@@ -140,6 +144,7 @@ function ProductIdent({ p, copyable }: { p: SpwProduct; copyable?: boolean }) {
           {copyable && p.sku ? <button type="button" className="cp" title="Copy SKU" onClick={() => copy(p.sku)}><Copy size={12} /></button> : null}
         </>
       )}
+      {trailing}
     </span>
   )
 }
@@ -457,18 +462,23 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
                         <Thumb p={p} />
                         <span className="m">
                           <span className="nm" title={p.name}>{p.name}</span>
-                          <span className="id">
-                            {p.asin ? <><AmazonBadge size={14} /><span className="code">{p.asin}</span></> : <><span className="h10-spw-ps-skutag">SKU</span><span className="code">{p.sku}</span></>}
-                            {/* Before expansion we only know the family's TOTAL variations.
-                                Once the scoped children load we can say how many of them
-                                are actually advertisable here — often fewer. */}
-                            {isFamily ? (
-                              <span className="varc">
-                                · {adv != null ? `${adv} of ${p.childCount}` : p.childCount} variation{(adv ?? p.childCount) === 1 ? '' : 's'}
-                                {adv != null && adv < p.childCount ? ` on ${market}` : ''}
-                              </span>
-                            ) : null}
-                          </span>
+                          {/* Same identity treatment as children and the tray —
+                              ASIN · SKU — so a family is recognisable by the SKU
+                              its operator actually thinks in. */}
+                          <ProductIdent
+                            p={p}
+                            trailing={
+                              /* Before expansion we only know the family's TOTAL
+                                 variations. Once the scoped children load we can say
+                                 how many are actually advertisable here — often fewer. */
+                              isFamily ? (
+                                <span className="varc">
+                                  · {adv != null ? `${adv} of ${p.childCount}` : p.childCount} variation{(adv ?? p.childCount) === 1 ? '' : 's'}
+                                  {adv != null && adv < p.childCount ? ` on ${market}` : ''}
+                                </span>
+                              ) : null
+                            }
+                          />
                         </span>
                         {/* Eligibility is a property of the advertisable unit, so it
                             appears on standalones and children — never on a family row. */}
