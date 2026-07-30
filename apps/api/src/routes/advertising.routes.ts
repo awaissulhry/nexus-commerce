@@ -8285,6 +8285,43 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, connection: conn }
   })
 
+  // ── APS.3 — GET /advertising/eligibility ──────────────────────────────
+  //
+  //   ?marketplace=IT&adType=sp&asins=B0F7J163XJ,B0CR629FDY
+  //
+  // Deliberately a GET: the RBAC manifest maps reads under /api/advertising to
+  // ads.view and writes to ads.campaigns.manage, and checking whether a product
+  // can serve is a read. A POST would have demanded campaign-manage rights to
+  // answer a question an analyst should be able to ask.
+  //
+  // Never 500s on an Amazon failure — statuses degrade to UNKNOWN so the picker
+  // keeps working, and the payload says it is degraded rather than implying
+  // everything is fine.
+  fastify.get('/advertising/eligibility', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const marketplace = String(q.marketplace ?? '').trim().toUpperCase()
+    if (!marketplace) return reply.code(400).send({ error: 'marketplace is required' })
+
+    const adTypeRaw = String(q.adType ?? 'sp').trim().toLowerCase()
+    const adType = (['sp', 'sb', 'sd', 'dsp'].includes(adTypeRaw) ? adTypeRaw : 'sp') as 'sp' | 'sb' | 'sd' | 'dsp'
+
+    // Bounded so one caller cannot fan a single request into hundreds of
+    // upstream chunks. The picker pages at 10 and expands one family at a time.
+    const MAX_ASINS = 200
+    const requested = String(q.asins ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+    const asins = requested.slice(0, MAX_ASINS)
+
+    const { getProductEligibility } = await import('../services/advertising/ads-eligibility.service.js')
+    const report = await getProductEligibility({ marketplace, asins, adType })
+
+    reply.header('Cache-Control', 'private, max-age=60')
+    return {
+      ...report,
+      // Silent truncation would read as "all clear" for the ASINs we dropped.
+      truncated: requested.length > asins.length ? requested.length - asins.length : 0,
+    }
+  })
+
   fastify.get('/advertising/connections', async (_request, reply) => {
     const items = await prisma.amazonAdsConnection.findMany({
       orderBy: [{ marketplace: 'asc' }],

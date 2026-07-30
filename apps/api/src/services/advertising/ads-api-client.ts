@@ -1405,6 +1405,80 @@ export function regionEndpoint(region: AdsRegion): string {
   return REGION_ENDPOINT[region]
 }
 
+// ── APS.3: product advertising eligibility ────────────────────────────
+//
+// POST /eligibility/product/list — Amazon's own answer to "will this actually
+// serve?", which is a different question from "is it listed here". Scoping the
+// picker by marketplace (APS.2b) removes products with no listing; it cannot
+// see an out-of-stock ASIN, a lost buy box, or a suppressed listing. Those are
+// the reasons a launched campaign quietly delivers nothing.
+//
+// Amazon considers this important enough to have added ASIN eligibility to
+// bulksheets for parity with this API.
+//
+// Note VARIATION_PARENT among the reasons: a variation parent is never
+// advertisable, which is why the picker asks about CHILDREN and standalones and
+// never about family rows.
+export type AdsEligibilityAdType = 'sp' | 'sb' | 'sd' | 'dsp'
+export type AdsEligibilityOverall = 'ELIGIBLE' | 'ELIGIBLE_WITH_WARNING' | 'INELIGIBLE'
+export interface AdsEligibilityStatus {
+  /** e.g. NOT_IN_BUYBOX, OUT_OF_STOCK, VARIATION_PARENT, LISTING_SUPRESSED. */
+  name: string
+  severity: 'ELIGIBLE_WITH_WARNING' | 'INELIGIBLE' | string
+  message?: string | null
+  helpUrl?: string | null
+}
+export interface AdsProductEligibility {
+  asin?: string | null
+  sku?: string | null
+  overallStatus: AdsEligibilityOverall
+  eligibilityStatusList?: AdsEligibilityStatus[] | null
+}
+
+/**
+ * Amazon does not document a maximum list length for this endpoint. 20 is a
+ * deliberately conservative chunk: small enough to be safe, large enough that a
+ * 40-variation family is three calls rather than forty. Revisit with evidence,
+ * not optimism.
+ */
+export const ELIGIBILITY_CHUNK = 20
+
+export async function listProductEligibility(
+  ctx: ClientContext,
+  input: { products: Array<{ asin?: string; sku?: string }>; adType?: AdsEligibilityAdType; locale?: string },
+): Promise<AdsProductEligibility[]> {
+  const products = input.products.filter((p) => p.asin || p.sku)
+  if (products.length === 0) return []
+
+  if (adsMode() === 'sandbox') {
+    // No fixture: report ELIGIBLE rather than inventing ineligibility, so a
+    // sandbox environment never greys out a product for a reason Amazon did
+    // not actually give.
+    const fallback: AdsProductEligibility[] = products.map((p) => ({
+      asin: p.asin ?? null, sku: p.sku ?? null, overallStatus: 'ELIGIBLE' as const, eligibilityStatusList: [],
+    }))
+    return loadFixture<AdsProductEligibility[]>('eligibility', fallback)
+  }
+
+  const out: AdsProductEligibility[] = []
+  for (let i = 0; i < products.length; i += ELIGIBILITY_CHUNK) {
+    const chunk = products.slice(i, i + ELIGIBILITY_CHUNK)
+    const res = await liveCall<{ productResponseList?: AdsProductEligibility[] }>({
+      profileId: ctx.profileId,
+      region: ctx.region,
+      method: 'POST',
+      path: '/eligibility/product/list',
+      body: {
+        adType: input.adType ?? 'sp',
+        ...(input.locale ? { locale: input.locale } : {}),
+        productDetailsList: chunk.map((p) => ({ ...(p.asin ? { asin: p.asin } : {}), ...(p.sku ? { sku: p.sku } : {}) })),
+      },
+    })
+    out.push(...(res.productResponseList ?? []))
+  }
+  return out
+}
+
 // AD.1 — Test endpoint shim. Connection-test routes (admin-only) call
 // this to confirm credentials work. Sandbox always returns OK; live
 // mode would issue listProfiles + check the response.

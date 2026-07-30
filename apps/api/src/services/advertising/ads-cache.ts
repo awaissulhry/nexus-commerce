@@ -85,6 +85,45 @@ export async function cached<T>(key: string, ttlSec: number, fn: () => Promise<T
   return val
 }
 
+/**
+ * APS.3 — read-without-populating, and write-without-reading.
+ *
+ * `cached()` assumes one key = one producer, so a caller that wants to BATCH
+ * its misses cannot use it: passing a probe like `async () => null` stores that
+ * null and poisons the key for the whole TTL. Eligibility looks up many ASINs in
+ * one Amazon call, so it needs to peek at each key, fetch only what missed, and
+ * write the answers back individually.
+ *
+ * `undefined` means miss. A cached `null` is a real value and is returned.
+ */
+export async function peekCached<T>(key: string): Promise<T | undefined> {
+  const k = PREFIX + key
+  const m = memGet(k)
+  if (m !== undefined) return m as T
+  if (redisDisabled()) return undefined
+  try {
+    const hit = await withTimeout(redis.connection.get(k), REDIS_OP_TIMEOUT_MS)
+    noteRedisResult(true)
+    if (hit == null) return undefined
+    const v = JSON.parse(hit) as T
+    memSet(k, v, 60) // brief L1 mirror; the authoritative TTL stays on L2
+    return v
+  } catch (e) {
+    noteRedisResult(false)
+    logger.debug('[ads-cache] peek miss/err', { error: String(e).slice(0, 100) })
+    return undefined
+  }
+}
+
+export function putCached(key: string, val: unknown, ttlSec: number): void {
+  const k = PREFIX + key
+  memSet(k, val, ttlSec)
+  if (redisDisabled()) return
+  withTimeout(redis.connection.set(k, JSON.stringify(val), 'EX', ttlSec), REDIS_OP_TIMEOUT_MS)
+    .then(() => noteRedisResult(true))
+    .catch((e) => { noteRedisResult(false); logger.debug('[ads-cache] put err', { error: String(e).slice(0, 100) }) })
+}
+
 let flushing = false
 export async function flushAdsCache(): Promise<void> {
   mem.clear() // L1 always cleared, synchronously.
