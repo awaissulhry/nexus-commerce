@@ -274,16 +274,81 @@ SB matters most: it is where the missing-ASIN defect (D3) actually breaks launch
 adType will be wired but will return whatever Amazon returns for our profile; it is not a
 reason to build DSP surfaces.
 
-### Revised phase list
+### Phase list — status as of 2026-07-30 end of session
 
-| Phase | Scope |
-|---|---|
-| **APS.1** | Server contract — `q` alias, additive `asin` + `rollupChannelKeys`, `advertisableOn=` filter |
-| **APS.2a** | Console-level marketplace context in the ads shell; retire hardcoded `'IT'` |
-| **APS.2b** | Picker takes `channel` + `marketplace`; server-side search and paging |
-| **APS.3** | Eligibility service, all four ad types; greyed rows + reason pills |
-| **APS.4** | Design-system rebuild (eBay `ListingsStep` migrates first) |
-| **APS.5** | Server-side bulk paste, saved segments, FBA/stock/buy-box filters |
-| **APS.6** | One component for Amazon + eBay; fold in `AddProductsModal` |
+| Phase | Scope | Status |
+|---|---|---|
+| **APS.1** | Server contract — `q` alias, additive `asin` + `rollupChannelKeys`, `advertisableOn=` | ✅ `bb4ca215a` prod-verified |
+| **APS.2a** | Console marketplace context; retire hardcoded `'IT'` | ✅ `402c2d427` prod-verified |
+| **APS.2b** | Picker scoped by `channel`+`marketplace`; server-side search/paging | ✅ `70edeb777` prod-verified |
+| **APS.3** | Eligibility service + per-row verdicts | ✅ `e30c45fea`…`91371b878` prod-verified |
+| — | SKU on top-level rows (operator request) | ✅ `5aa31f8a8` prod-verified |
+| **APS.4** | Design-system rebuild | **re-scoped, see below** |
+| **APS.5** | Saved segments, ad-relevant filters + sort | not started |
+| **APS.6** | One component for Amazon + eBay; fold in `AddProductsModal` | not started |
 
-**Next gate: APS.1.** Not started.
+**Measured effect:** the Amazon picker went from 37 rows (24 unadvertisable) to
+14 on IT / 12 on DE, with per-row Amazon verdicts. Search went from dead to
+37→1 on "GALE".
+
+---
+
+## 7. What remains
+
+### APS.4 — design-system rebuild (RE-SCOPED 2026-07-30)
+
+Originally justified by "the DS rule says so", then nearly dropped when
+`scripts/ds-conformance-guard.mjs` turned out to allowlist `marketing/ads/` as
+*"the deliberate H10 pixel-match world"*.
+
+**Operator decision: the Helium 10 pixel-match is no longer the goal — that
+target has been passed. Consistency is the goal.** So the exemption is now a
+fossil, and it is the thing producing the inconsistency.
+
+Two distinct jobs hide behind this, and they should not be conflated:
+
+- **APS.4 (picker):** rebuild `ProductSelection` on design-system primitives.
+  `ListingsStep` and `KeywordTargetingPanel` must migrate first — all three
+  share the `.h10-spw-ps` anatomy (75 lines in `ads.css`), and
+  `marketing/ads/ebay/` IS ratchet-enforced.
+- **Console-wide (separate proposal):** retiring the `marketing/ads/`
+  allowlist entry altogether. `ads.css` is 2,804 lines; this is its own
+  programme, not an APS phase. Doing the picker first yields a concrete
+  reference for what a DS-consistent ads console looks like.
+
+### APS.5 — power features
+Reduced: server-side bulk paste was pulled forward into APS.2b (it had to be —
+server-side paging made the old client-side matcher worse). What remains is
+saved product sets / rule-based segments (the Perpetua model), ad-relevant
+filters (FBA/FBM, stock, buy-box, portfolio membership) and sort.
+
+### APS.6 — consolidation
+One `<ProductSelection channel=…>` for Amazon and eBay; fold in
+`AddProductsModal.tsx`, which duplicates the same fetch.
+
+---
+
+## 8. Debt found along the way (not in the original plan)
+
+1. **`DestinationPanel.tsx:15` hardcodes `MARKETS = ['IT','DE','FR','ES']`.**
+   Matches today's launchable set by coincidence; will drift. Replicate is
+   genuinely cross-market, so its DESTINATION list should come from the context
+   while source stays independent.
+2. **Product-TARGET pickers are scoped to our own catalogue.** `TargetingModal`
+   and `SingleCampaignBuilder`'s second picker. Amazon allows targeting
+   *competitor* ASINs; a real competitor-entry flow does not exist.
+3. **Analytics pages share `MarketSelect` but not its state** (Health,
+   Portfolios, Rules, AI Advertising), so the console switcher and a page filter
+   can disagree. Defensible — "all markets" suits analysis and not launching —
+   but it is a visible inconsistency.
+4. **`.h10-spw-ps` is shared by three components**, so a change to one can break
+   the other two. This is the real hazard in that CSS, independent of APS.4.
+5. **93 of 339 products have no `amazonAsin`**, so their rows read "Not
+   checked". Correct behaviour, but it is a data gap worth closing.
+
+## 9. Operational findings — for the merchandising side, not the code
+
+- **REGAL jacket listings are SUPPRESSED on FR (3 children) and ES (2)** —
+  `LISTING_SUPRESSED`. They are listed, so scoping accepts them; Amazon will
+  not serve ads for them. Found by APS.3.
+- **AMAZON_FR has 0 live+active listings** while 8 families are in scope.
