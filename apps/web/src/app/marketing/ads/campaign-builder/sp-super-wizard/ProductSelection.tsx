@@ -277,7 +277,21 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
     return () => { alive = false }
   }, [needAsins, elig, market, channel, api])
 
-  const verdict = (p: SpwProduct): EligRow | undefined => (p.asin ? elig[p.asin.toUpperCase()] : undefined)
+  /**
+   * A product with no ASIN on file cannot be asked about — and rendering
+   * nothing would make it indistinguishable from a row that simply has not
+   * loaded yet. Measured on prod: 16 of AIREON's 40 children have no
+   * amazonAsin, so a blank cell is common rather than rare.
+   *
+   * It stays ADDABLE: Sponsored Products ads are created from the seller SKU
+   * (ads-create.service.ts), so a missing ASIN blocks the CHECK, not the ad.
+   */
+  const verdict = (p: SpwProduct): EligRow | undefined => {
+    if (!p.asin) {
+      return { asin: '', sku: p.sku, status: 'UNKNOWN', reasons: [], unknownReason: 'no ASIN on file for this product' }
+    }
+    return elig[p.asin.toUpperCase()]
+  }
   /** Only a verdict Amazon actually gave blocks staging. UNKNOWN never blocks. */
   const blocked = (p: SpwProduct): boolean => verdict(p)?.status === 'INELIGIBLE'
 
