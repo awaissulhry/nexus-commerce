@@ -63,7 +63,18 @@ export interface LaunchVerification extends LaunchVerificationSummary {
   errors: string[]
 }
 
-export async function verifyLaunch(campaignIds: string[]): Promise<LaunchVerification> {
+/**
+ * Why the caller has to say who it is.
+ *
+ * The structural reconcile (AX-VT.5) uses this same function over batches of existing campaigns, so
+ * both paths were writing `launch_verification` audit rows — and the trust page's "last launch
+ * verified" card duly showed a reconcile batch's 107 mismatches as though an operator had just
+ * launched something. Both rows are worth keeping; they answer different questions, so they get
+ * different actionTypes.
+ */
+export type VerifySource = 'LAUNCH' | 'RECONCILE'
+
+export async function verifyLaunch(campaignIds: string[], source: VerifySource = 'LAUNCH'): Promise<LaunchVerification> {
   const errors: string[] = []
   const entities: LaunchEntityResult[] = []
   let uncovered = 0
@@ -266,7 +277,7 @@ export async function verifyLaunch(campaignIds: string[]): Promise<LaunchVerific
 
   await prisma.advertisingActionLog.create({
     data: {
-      actionType: 'launch_verification', entityType: 'CAMPAIGN',
+      actionType: source === 'RECONCILE' ? 'reconcile_verification' : 'launch_verification', entityType: 'CAMPAIGN',
       entityId: campaignIds[0] ?? 'unknown',
       payloadBefore: {}, payloadAfter: out as unknown as object,
       amazonResponseStatus: out.ok ? 'SUCCESS' : 'PARTIAL',

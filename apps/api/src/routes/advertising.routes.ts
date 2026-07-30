@@ -5292,6 +5292,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       // An intent unsettled for over a day is not "in flight" any more, it is stuck.
       prisma.adMutation.count({ where: { state: { in: ['PENDING', 'IN_FLIGHT'] }, createdAt: { lt: dayAgo } } }),
       prisma.cronRun.findFirst({ where: { jobName: 'ads-structural-reconcile' }, orderBy: { startedAt: 'desc' }, select: { startedAt: true, finishedAt: true, status: true, outputSummary: true } }),
+      // Launch receipts only. The reconcile writes `reconcile_verification` for the same shape over
+      // existing campaigns, and showing one as the other made this card claim a launch had been
+      // verified when none had — see VerifySource in ads-launch-verify.service.
       prisma.advertisingActionLog.findFirst({ where: { actionType: 'launch_verification' }, orderBy: { createdAt: 'desc' }, select: { createdAt: true, amazonResponseStatus: true, payloadAfter: true } }),
       prisma.campaign.count({ where: { lastSyncStatus: 'FAILED' } }),
     ])

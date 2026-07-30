@@ -133,7 +133,8 @@ export async function runStructuralReconcileOnce(opts: {
     const batch = campaigns.slice(i, i + BATCH).map((c) => c.id)
     let v
     try {
-      v = await verifyLaunch(batch)
+      // 'RECONCILE' so the audit row is not mistaken for an operator's launch — see VerifySource.
+      v = await verifyLaunch(batch, 'RECONCILE')
     } catch (e) {
       out.ok = false
       out.errors.push(`batch ${i / BATCH}: ${(e as Error).message.slice(0, 140)}`)
