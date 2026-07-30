@@ -72,6 +72,7 @@ export class ProductReadCacheService {
         id: true,
         sku: true,
         name: true,
+        amazonAsin: true, // APS.1 — mirrored to ProductReadCache.asin
         brand: true,
         basePrice: true,
         totalStock: true,
@@ -243,6 +244,27 @@ export class ProductReadCacheService {
       }
     }
 
+    // ── APS.1: channel-key rollup ────────────────────────────────────
+    // channelKeys above describes THIS row only. A variation parent
+    // usually holds no Amazon listing of its own while every child does,
+    // so a marketplace-scoped picker filtering on channelKeys would hide
+    // the whole family. Measured on prod: normal-knee-slider carries
+    // ["EBAY_IT"] and has 8 children live on Amazon.
+    //
+    // The rollup is own-keys ∪ children's-keys. One extra query, and only
+    // for parents — leaf rows just reuse channelKeys.
+    const rollupSet = new Set(channelKeys)
+    if (product.isParent) {
+      const childListings = await prisma.channelListing.findMany({
+        where: { product: { parentId: productId, deletedAt: null } },
+        select: { channel: true, marketplace: true, region: true },
+      })
+      for (const l of childListings) {
+        rollupSet.add(`${l.channel}_${l.marketplace ?? l.region ?? 'MAIN'}`)
+      }
+    }
+    const rollupChannelKeys = [...rollupSet]
+
     // ── PIM category facets ──────────────────────────────────────────
     // Direct memberships + closure ancestor rollup, so the fallback grid
     // path can filter by a parent category and match the whole subtree
@@ -284,6 +306,7 @@ export class ProductReadCacheService {
     const data = {
       sku: product.sku,
       name: product.name,
+      asin: product.amazonAsin ?? null,
       brand: product.brand ?? null,
       basePrice: product.basePrice ?? null,
       totalStock: product.totalStock ?? 0,
@@ -313,6 +336,7 @@ export class ProductReadCacheService {
       hasGtin: !!product.gtin && product.gtin.trim().length > 0,
       hasPhotos: product._count.images > 0,
       channelKeys,
+      rollupChannelKeys,
       driftCount,
       coverageJson: Object.keys(coverageMap).length > 0
         ? (coverageMap as Prisma.InputJsonValue)
@@ -332,9 +356,13 @@ export class ProductReadCacheService {
       update: data,
     })
 
-    // PG.2 — propagate to the parent's cache row. When a child's images
-    // change, the parent's PG.2 fallback ("borrow the first child's MAIN
-    // when I have none of my own") needs to re-pick. Lazy import the
+    // PG.2 — propagate to the parent's cache row. Two derived values on a
+    // parent depend on its children:
+    //   · PG.2  the borrowed thumbnail ("use the first child's MAIN when I
+    //           have none of my own") must re-pick when a child's images change;
+    //   · APS.1 rollupChannelKeys must re-roll when a child gains or loses a
+    //           ChannelListing, or a marketplace-scoped picker goes stale.
+    // Both are served by this one re-enqueue. Lazy import the
     // queue to keep this module free of the BullMQ import chain at
     // bootstrap time (cache-service ← worker ← cache-service would be
     // a cycle if it loaded eagerly). Fire-and-forget; idempotent jobId

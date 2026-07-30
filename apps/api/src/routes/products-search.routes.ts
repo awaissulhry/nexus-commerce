@@ -40,6 +40,9 @@ const itemSchema = {
     id: { type: 'string' },
     sku: { type: 'string' },
     name: { type: 'string' },
+    // APS.1 — the ads product picker needs the real ASIN. Without this
+    // declaration fast-json-stringify drops it even though mapRow emits it.
+    asin: { type: ['string', 'null'] },
     brand: { type: ['string', 'null'] },
     basePrice: { type: ['number', 'null'] },
     totalStock: { type: 'integer' },
@@ -63,6 +66,7 @@ const itemSchema = {
     hasGtin: { type: 'boolean' },
     hasPhotos: { type: 'boolean' },
     channelKeys: { type: 'array', items: { type: 'string' } },
+    rollupChannelKeys: { type: 'array', items: { type: 'string' } },
     driftCount: { type: 'integer' },
     coverage: anyJson,
     primaryCategoryId: { type: ['string', 'null'] },

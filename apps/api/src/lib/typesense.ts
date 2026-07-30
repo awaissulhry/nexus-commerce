@@ -92,6 +92,10 @@ const PRODUCTS_SCHEMA = {
     { name: 'familyId', type: 'string', facet: true, optional: true },
     { name: 'workflowStageId', type: 'string', facet: true, optional: true },
     { name: 'channelKeys', type: 'string[]', facet: true },
+    // APS.1 — own keys ∪ children's keys; what marketplace-scoped ad
+    // pickers filter on. Optional so an existing collection created before
+    // APS.1 keeps accepting documents until it is recreated.
+    { name: 'rollupChannelKeys', type: 'string[]', facet: true, optional: true },
     { name: 'categoryIds', type: 'string[]', facet: true },
     { name: 'primaryCategoryId', type: 'string', facet: true, optional: true },
     { name: 'hasPhotos', type: 'bool', facet: true },
@@ -151,6 +155,7 @@ export type ProductSearchDoc = {
   familyId?: string
   workflowStageId?: string
   channelKeys: string[]
+  rollupChannelKeys?: string[]
   categoryIds: string[]
   primaryCategoryId?: string
   hasPhotos: boolean

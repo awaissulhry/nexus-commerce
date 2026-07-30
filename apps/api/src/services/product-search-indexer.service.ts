@@ -55,6 +55,9 @@ function toDoc(row: CacheRow, nameIt?: string): ProductSearchDoc {
     familyId: row.familyId ?? undefined,
     workflowStageId: row.workflowStageId ?? undefined,
     channelKeys: row.channelKeys ?? [],
+    // APS.1 — keeps the dormant Typesense path filter-identical to the
+    // ProductReadCache path for advertisableOn=.
+    rollupChannelKeys: row.rollupChannelKeys ?? [],
     categoryIds: row.categoryIds ?? [],
     primaryCategoryId: row.primaryCategoryId ?? undefined,
     hasPhotos: row.hasPhotos,

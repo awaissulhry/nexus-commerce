@@ -30,7 +30,15 @@ export interface ProductSearchFilters {
   limit: number
   search?: string
   status: string[]
-  channels: string[] // channelKeys, e.g. AMAZON_IT
+  channels: string[] // channelKeys, e.g. AMAZON_IT — matches a row's OWN listings
+  /**
+   * APS.1 — like `channels`, but matched against rollupChannelKeys, so a
+   * variation parent matches when ANY of its children is listed there.
+   * This is what a marketplace-scoped ad product picker must filter on:
+   * filtering roots on `channels` hides families whose parent carries no
+   * listing of its own (measured: normal-knee-slider, 8 Amazon children).
+   */
+  advertisableOn: string[]
   productTypes: string[]
   brands: string[]
   families: string[]
@@ -62,6 +70,21 @@ function bool(v: unknown): boolean | undefined {
   return undefined
 }
 
+/**
+ * Read the free-text term. `search` is the documented name; `q` is accepted
+ * as an alias because several callers were written against it and were
+ * silently returning UNFILTERED results — the ads campaign-builder product
+ * picker among them. Accepting both fixes those callers without a client
+ * change, and costs nothing here.
+ */
+function term(q: Record<string, unknown>): string | undefined {
+  for (const key of ['search', 'q'] as const) {
+    const v = q[key]
+    if (typeof v === 'string' && v.trim()) return v.trim()
+  }
+  return undefined
+}
+
 /** Parse the raw Fastify querystring into normalized filters. */
 export function parseFilters(q: Record<string, unknown>): ProductSearchFilters {
   const page = Math.max(parseInt(String(q.page ?? '1'), 10) || 1, 1)
@@ -73,9 +96,10 @@ export function parseFilters(q: Record<string, unknown>): ProductSearchFilters {
   return {
     page,
     limit,
-    search: typeof q.search === 'string' && q.search.trim() ? q.search.trim() : undefined,
+    search: term(q),
     status: arr(q.status),
     channels: arr(q.channels),
+    advertisableOn: arr(q.advertisableOn),
     productTypes: arr(q.productTypes),
     brands: arr(q.brands),
     families: arr(q.families),
@@ -110,6 +134,7 @@ function buildCacheWhere(
   if (f.families.length) where.familyId = { in: f.families }
   if (f.workflowStages.length) where.workflowStageId = { in: f.workflowStages }
   if (f.channels.length) where.channelKeys = { hasSome: f.channels }
+  if (f.advertisableOn.length) where.rollupChannelKeys = { hasSome: f.advertisableOn }
   if (f.categories.length) where.categoryIds = { hasSome: f.categories }
   if (f.hasPhotos !== undefined) where.hasPhotos = f.hasPhotos
   if (f.hasDescription !== undefined) where.hasDescription = f.hasDescription
@@ -166,6 +191,7 @@ function buildTypesenseParams(
   if (f.families.length) filters.push(tsFilterValues('familyId', f.families))
   if (f.workflowStages.length) filters.push(tsFilterValues('workflowStageId', f.workflowStages))
   if (f.channels.length) filters.push(tsFilterValues('channelKeys', f.channels))
+  if (f.advertisableOn.length) filters.push(tsFilterValues('rollupChannelKeys', f.advertisableOn))
   if (f.categories.length) filters.push(tsFilterValues('categoryIds', f.categories))
   if (f.hasPhotos !== undefined) filters.push(`hasPhotos:=${f.hasPhotos}`)
   if (f.hasDescription !== undefined) filters.push(`hasDescription:=${f.hasDescription}`)
@@ -213,6 +239,9 @@ function mapRow(r: CacheRow) {
     id: r.id,
     sku: r.sku,
     name: r.name,
+    // APS.1 — must also be declared in the route's fast-json-stringify
+    // itemSchema; an undeclared property is silently dropped from the wire.
+    asin: r.asin,
     brand: r.brand,
     basePrice: r.basePrice != null ? Number(r.basePrice) : null,
     totalStock: r.totalStock,
@@ -236,6 +265,7 @@ function mapRow(r: CacheRow) {
     hasGtin: r.hasGtin,
     hasPhotos: r.hasPhotos,
     channelKeys: r.channelKeys,
+    rollupChannelKeys: r.rollupChannelKeys,
     driftCount: r.driftCount,
     coverage: r.coverageJson ?? null,
     primaryCategoryId: r.primaryCategoryId,

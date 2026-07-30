@@ -12956,6 +12956,11 @@ model ProductReadCache {
   // ── Core Product fields ──────────────────────────────────────────
   sku               String
   name              String
+  // APS.1 — mirrors Product.amazonAsin. The ads product picker rendered an
+  // Amazon badge beside a SKU and called it an ASIN because the search
+  // payload never carried one; product ads, SB creatives and product
+  // targets all need the real ASIN.
+  asin              String?
   brand             String?
   basePrice         Decimal? @db.Decimal(10, 2)
   totalStock        Int      @default(0)
@@ -12993,7 +12998,19 @@ model ProductReadCache {
 
   // ── Channel keys (for marketplace filter) ─────────────────────────
   // e.g. ["AMAZON_IT", "EBAY_DE", "SHOPIFY_MAIN"]
-  channelKeys String[]
+  //
+  // channelKeys        = keys from THIS row's own ChannelListings only.
+  // rollupChannelKeys  = channelKeys PLUS every child's channelKeys.
+  //
+  // APS.1 — the rollup exists because a variation PARENT often carries no
+  // Amazon listing of its own while its children do. `normal-knee-slider`
+  // has channelKeys=["EBAY_IT"] and 8 children live on Amazon; filtering
+  // roots on channelKeys would have hidden a family with 8 advertisable
+  // ASINs. Filter marketplace-scoped PICKERS on rollupChannelKeys; keep
+  // using channelKeys wherever you mean "this exact row is listed there"
+  // (the /products grid's marketplace facet does, and is untouched).
+  channelKeys       String[]
+  rollupChannelKeys String[]
 
   // ── Coverage summary (for includeCoverage) ────────────────────────
   // Shape: { "AMAZON": { live, draft, error, total }, "EBAY": { ... } }
@@ -13039,9 +13056,12 @@ model ProductReadCache {
   @@index([variantCount])
   @@index([driftCount])
   @@index([primaryCategoryId])
+  @@index([asin])
   // GIN index on categoryIds[] for fast subtree (`hasSome`) filtering;
   // Prisma emits the gin operator-class index for String[] @@index.
   @@index([categoryIds], type: Gin)
+  // Same shape of query (`hasSome`) drives the marketplace-scoped picker.
+  @@index([rollupChannelKeys], type: Gin)
 }
 
 // ── PIM Category taxonomy (net-new) ──────────────────────────────────
