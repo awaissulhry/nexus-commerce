@@ -414,7 +414,10 @@ export function ReplicateBuilder() {
               <section id="rep-products" className="h10-spw-sec">
                 <h2>Product Selection</h2>
                 <p className="h10-spw-desc">The products the copied campaigns will advertise — one product ad per product, in every ad group.</p>
-                <ProductSelection products={products} setProducts={setProducts} />
+                {/* APS.2b — scoped to the DESTINATION market, not the console's.
+                    Replication is the one flow where those legitimately differ:
+                    copying IT→DE must offer what is advertisable in Germany. */}
+                <ProductSelection products={products} setProducts={setProducts} marketplace={market} />
               </section>
 
               <section id="rep-destination" className="h10-spw-sec">

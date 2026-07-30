@@ -2414,6 +2414,13 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-spw-ps-tabs button { background: none; border: none; font: inherit; font-size: 13.5px; font-weight: 600; color: #8a93a1; padding: 0 0 11px; cursor: pointer; position: relative; }
 .h10-spw-ps-tabs button.on { color: #1f6fde; }
 .h10-spw-ps-tabs button.on::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: #1f6fde; border-radius: 2px; }
+/* APS.2b — the picker states its scope, names a SKU as a SKU, and reports what
+   a paste could not resolve. Vertical rhythm matches the search field's 12px. */
+.h10-spw-ps-scope { font-size: 12.5px; color: #5b6573; margin-bottom: 12px; }
+.h10-spw-ps-scope b { color: #1c2530; font-weight: 600; }
+.h10-spw-ps-scopenote { display: block; margin-top: 4px; color: #9a6a12; background: #fdf6e6; border: 1px solid #f3e2b8; border-radius: 6px; padding: 5px 9px; }
+.h10-spw-ps-skutag { font-size: 9.5px; font-weight: 700; letter-spacing: .04em; color: #6b7a8d; background: #eef1f5; border-radius: 3px; padding: 1px 4px; }
+.h10-spw-ps-entermsg { font-size: 12px; color: #5b6573; line-height: 1.45; padding-right: 12px; }
 .h10-spw-ps-search { position: relative; margin-bottom: 12px; }
 .h10-spw-ps-search input { width: 100%; font: inherit; font-size: 13px; color: #1c2530; background: #fff; border: 1px solid #d8dde4; border-radius: 8px; padding: 9px 36px 9px 11px; }
 .h10-spw-ps-search input:focus { outline: none; border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
@@ -2465,7 +2472,9 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-spw-ps-enter { display: flex; flex-direction: column; gap: 10px; }
 .h10-spw-ps-enter textarea { width: 100%; min-height: 220px; resize: vertical; font: inherit; font-size: 13px; color: #1c2530; border: 1px solid #d8dde4; border-radius: 8px; padding: 10px 12px; }
 .h10-spw-ps-enter textarea:focus { outline: none; border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
-.h10-spw-ps-enterfoot { display: flex; justify-content: flex-end; }
+/* APS.2b — the Add button stays right; the unresolved-token report sits left of
+   it, so a paste that half-failed says so instead of looking like it worked. */
+.h10-spw-ps-enterfoot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .h10-spw-ps-rh { display: flex; align-items: center; justify-content: space-between; }
 .h10-spw-ps-rh b { font-size: 13px; font-weight: 700; color: #1c2530; }
 .h10-spw-ps-rh .rm { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; font-weight: 600; color: #5b6573; background: none; border: none; cursor: pointer; }
