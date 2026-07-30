@@ -37,6 +37,13 @@
  */
 import { type Dispatch, type SetStateAction, Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Search, Plus, Check, Trash2, Copy, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronDown, X } from 'lucide-react'
+import { Select } from '@/design-system/primitives'
+// A shared component must not depend on its HOST importing these. Eight of the
+// nine call sites happen to, but ai-advertising/new-goal does NOT — so the DS
+// controls below would have rendered unstyled there. Next dedupes CSS imports,
+// so owning them here costs nothing and makes the component self-sufficient.
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AmazonBadge } from '../../_shell/BrandMarks'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
@@ -177,6 +184,17 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
 
   const [tab, setTab] = useState<'search' | 'enter'>('search')
   const [q, setQ] = useState('')
+  // APS.5a — server-side filters. Deliberately NOT stock or fulfillment: both
+  // are per-row on ProductReadCache, so on a variation PARENT they describe the
+  // parent's own (usually empty) offer rather than the family. Measured on IT:
+  // 13 of 14 families report totalStock=0 while their children hold 159 units,
+  // and 4 of 14 report no fulfillmentMethod at all. Those controls would hide
+  // most of the catalogue — the same parent-rollup trap APS.1 fixed for
+  // channels, and they need the same treatment before they can be offered.
+  const [productType, setProductType] = useState('')
+  const [status, setStatus] = useState('')
+  const [sort, setSort] = useState('updated-desc')
+  const [facetOpts, setFacetOpts] = useState<{ productType: string[]; status: string[] }>({ productType: [], status: [] })
   const [all, setAll] = useState<SpwProduct[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -195,10 +213,12 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
   /** Every read is scoped; nothing in this component queries the whole catalog. */
   const scoped = useCallback((qs: string) => `${api}/api/products/search?advertisableOn=${encodeURIComponent(scope)}&${qs}`, [api, scope])
 
-  // Changing the term or the market invalidates the page cursor and any
-  // children we cached against the previous scope.
-  useEffect(() => { setPage(1) }, [q, scope])
+  // Changing the term, a filter or the market invalidates the page cursor and
+  // any children we cached against the previous scope.
+  useEffect(() => { setPage(1) }, [q, scope, productType, status, sort])
   useEffect(() => { setChildCache({}); setExpanded(new Set()) }, [scope])
+  // A filter chosen for Italy may not even exist in Germany's catalogue.
+  useEffect(() => { setProductType(''); setStatus(''); setFacetOpts({ productType: [], status: [] }) }, [scope])
 
   /**
    * Products staged for one market are not valid in another — a Milan SKU is
@@ -305,18 +325,37 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
     let alive = true
     setLoading(true)
     const t = setTimeout(() => {
-      fetch(scoped(`search=${encodeURIComponent(q)}&page=${page}&limit=${PAGE}`))
+      const qs = [
+        `search=${encodeURIComponent(q)}`,
+        `page=${page}`,
+        `limit=${PAGE}`,
+        `sort=${encodeURIComponent(sort)}`,
+        productType ? `productTypes=${encodeURIComponent(productType)}` : '',
+        status ? `status=${encodeURIComponent(status)}` : '',
+      ].filter(Boolean).join('&')
+      fetch(scoped(qs))
         .then((r) => r.json())
         .then((j) => {
           if (!alive) return
           setAll(((j?.items ?? []) as Raw[]).map(toProd))
           setTotal(Number(j?.total ?? 0))
           setLoading(false)
+          // Facets are computed against the ACTIVE where clause, so once a
+          // filter is on it reports only the value already chosen — you could
+          // never switch from OUTERWEAR to GLOVES. Capture the option list only
+          // while nothing is filtering, when it is genuinely the full set.
+          const f = j?.facets as Record<string, Array<{ value: string; count: number }>> | undefined
+          if (f && !productType && !status) {
+            setFacetOpts({
+              productType: (f.productType ?? []).map((x) => x.value).sort(),
+              status: (f.status ?? []).map((x) => x.value).sort(),
+            })
+          }
         })
         .catch(() => { if (alive) { setAll([]); setTotal(0); setLoading(false) } })
     }, q ? 280 : 0)
     return () => { alive = false; clearTimeout(t) }
-  }, [q, page, scope, scoped])
+  }, [q, page, scope, scoped, sort, productType, status])
 
   const fetchChildren = useCallback(async (parentId: string): Promise<SpwProduct[]> => {
     if (childCache[parentId]) return childCache[parentId]
@@ -436,6 +475,41 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
             <div className="h10-spw-ps-search">
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by product name, ASIN, or SKU" aria-label="Search products" />
               <Search size={15} />
+            </div>
+            {/* APS.5a — filters the SERVER applies, so they hold across pages
+                rather than only the rows on screen. Options come from the
+                response's own facets, so nothing is hardcoded per market. */}
+            <div className="h10-spw-ps-filters">
+              <label>
+                <span>Type</span>
+                <Select value={productType} onChange={(e) => setProductType(e.target.value)} aria-label="Filter by product type">
+                  <option value="">All types</option>
+                  {facetOpts.productType.map((v) => <option key={v} value={v}>{v.replace(/_/g, ' ')}</option>)}
+                </Select>
+              </label>
+              <label>
+                <span>Status</span>
+                <Select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filter by status">
+                  <option value="">Any status</option>
+                  {facetOpts.status.map((v) => <option key={v} value={v}>{v}</option>)}
+                </Select>
+              </label>
+              <label>
+                <span>Sort</span>
+                <Select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort products">
+                  <option value="updated-desc">Recently updated</option>
+                  <option value="name-asc">Name A–Z</option>
+                  <option value="name-desc">Name Z–A</option>
+                  <option value="sku-asc">SKU A–Z</option>
+                  <option value="sku-desc">SKU Z–A</option>
+                  <option value="created-desc">Newest</option>
+                </Select>
+              </label>
+              {(productType || status) && (
+                <button type="button" className="h10-spw-ps-clear" onClick={() => { setProductType(''); setStatus('') }}>
+                  <X size={12} /> Clear
+                </button>
+              )}
             </div>
             <div className="h10-spw-ps-cnt">
               <span>Viewing {total === 0 ? 0 : start + 1}-{Math.min(start + PAGE, total)} of {total} Products</span>

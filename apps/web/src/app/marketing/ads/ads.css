@@ -2439,6 +2439,14 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-spw-ps-search input { width: 100%; font: inherit; font-size: 13px; color: #1c2530; background: #fff; border: 1px solid #d8dde4; border-radius: 8px; padding: 9px 36px 9px 11px; }
 .h10-spw-ps-search input:focus { outline: none; border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
 .h10-spw-ps-search svg { position: absolute; right: 11px; top: 50%; transform: translateY(-50%); color: #8a93a1; pointer-events: none; }
+/* APS.5a — filter row. Matches the search field's 12px rhythm above it; the
+   selects size themselves to content so short lists do not leave dead space. */
+.h10-spw-ps-filters { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.h10-spw-ps-filters label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.h10-spw-ps-filters label > span { font-size: 11px; font-weight: 600; color: #6b7a8d; letter-spacing: .01em; }
+.h10-spw-ps-filters .h10-ds-select select { font-size: 12.5px; padding: 6px 26px 6px 9px; }
+.h10-spw-ps-clear { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 12px; font-weight: 600; color: #5b6573; background: none; border: none; cursor: pointer; padding: 7px 4px; }
+.h10-spw-ps-clear:hover { color: #1f6fde; }
 .h10-spw-ps-cnt { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
 .h10-spw-ps-cnt > span { font-size: 12.5px; color: #5b6573; }
 .h10-spw-ps-cnt .addall, .h10-spw-ps-enterfoot .addall { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; font-weight: 600; color: #5b6573; background: #f4f6f9; border: 1px solid #e6e9ee; cursor: pointer; padding: 5px 11px; border-radius: 6px; }
