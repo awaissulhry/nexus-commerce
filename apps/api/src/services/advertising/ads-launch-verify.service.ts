@@ -20,7 +20,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import {
   listCampaignsV3, listAdGroupsV3, listKeywords, listTargets, listProductAds,
-  listSdCampaigns, listSdAdGroups, listSdProductAds, listSdTargets,
+  listSdCampaigns, listSdAdGroups, listSdProductAds, listSdTargets, listSbCampaigns,
   ALL_STATES, type AdsRegion,
 } from './ads-api-client.js'
 import {
@@ -38,17 +38,35 @@ const centsToUnits = (c: number | null | undefined): number | null => (c == null
 /** Amazon's SP match types come back as EXACT/PHRASE/BROAD; negatives are NEGATIVE_-prefixed. */
 const stripNegative = (m: string | undefined): string | null => (m ? m.replace('NEGATIVE_', '') : null)
 
+/**
+ * The three ad products are three separate Amazon APIs (`/sp/*`, `/sd/*`, `/sb/v4/*`), and asking
+ * one about another's entities returns an empty result rather than an error. Anything unrecognised
+ * is treated as SP only because that is what the builders create; it never grants coverage on its
+ * own, since coverage is tracked per (kind, family) below.
+ */
+export type Family = 'SP' | 'SD' | 'SB'
+const familyOf = (adProduct: string | null): Family =>
+  adProduct === 'SPONSORED_DISPLAY' ? 'SD' : adProduct === 'SPONSORED_BRANDS' ? 'SB' : 'SP'
+
 export interface LaunchVerification extends LaunchVerificationSummary {
   campaignIds: string[]
   entities: LaunchEntityResult[]
   /** Human lines for everything that is not VERIFIED — what the builder UI shows. */
   problems: string[]
+  /**
+   * Local entities we could NOT check, because no Amazon read is wired up for their (kind,
+   * ad-product) pair — SB ad groups and ads, today. Reported rather than hidden: a silent skip
+   * makes an unverifiable launch look like a verified one, which is the failure this whole phase
+   * exists to remove. Does NOT set ok:false — the launch may be perfectly fine; we just can't say.
+   */
+  uncovered: number
   errors: string[]
 }
 
 export async function verifyLaunch(campaignIds: string[]): Promise<LaunchVerification> {
   const errors: string[] = []
   const entities: LaunchEntityResult[] = []
+  let uncovered = 0
 
   const campaigns = await prisma.campaign.findMany({
     where: { id: { in: campaignIds } },
@@ -74,9 +92,12 @@ export async function verifyLaunch(campaignIds: string[]): Promise<LaunchVerific
 
     // Local children of this marketplace's campaigns.
     const localIds = camps.map((c) => c.id)
-    // Which campaigns are Sponsored Display — their targets live behind a different endpoint.
-    const sdCampaignIds = new Set(camps.filter((c) => c.adProduct === 'SPONSORED_DISPLAY').map((c) => c.id))
-    const sdExtIds = camps.filter((c) => sdCampaignIds.has(c.id)).map((c) => c.externalCampaignId).filter((x): x is string => !!x)
+    // Split by ad-product family up front — each is a separate Amazon API.
+    const familyOfCampaign = new Map<string, Family>(camps.map((c) => [c.id, familyOf(c.adProduct)]))
+    const extIdsFor = (f: Family) => camps.filter((c) => familyOfCampaign.get(c.id) === f).map((c) => c.externalCampaignId).filter((x): x is string => !!x)
+    const spExtIds = extIdsFor('SP')
+    const sdExtIds = extIdsFor('SD')
+    const sbExtIds = extIdsFor('SB')
 
     const adGroups = await prisma.adGroup.findMany({
       where: { campaignId: { in: localIds } },
@@ -96,41 +117,62 @@ export async function verifyLaunch(campaignIds: string[]): Promise<LaunchVerific
     // One read per entity kind for the whole launch. If a read fails we say so and skip that
     // kind rather than reporting its entities as broken — a failed READ is not a failed write,
     // and claiming otherwise would send someone chasing a problem that does not exist.
-    // SP endpoints do not return SD entities and vice-versa, so each family is read from its own
-    // and the results merged into one lookup per entity kind. Only the SP reads are issued when
-    // the launch has no SD campaign, and vice-versa.
-    const spExtIds = camps.filter((c) => !sdCampaignIds.has(c.id)).map((c) => c.externalCampaignId).filter((x): x is string => !!x)
+    // ── Per-family reads, with EXPLICIT coverage tracking ──────────────────────────────────
+    //
+    // The three ad products are three separate APIs. `/sp/*` returns Sponsored Products only,
+    // `/sd/*` Sponsored Display, `/sb/v4/*` Sponsored Brands — and asking the wrong one returns
+    // nothing rather than erroring, which reads as "the entity is gone". That produced 50 false
+    // MISSING_ON_AMAZON for SD before it was caught, and SB was heading the same way because it
+    // was lumped in with SP.
+    //
+    // So coverage is tracked rather than assumed: `covered` records which (kind, family) pairs we
+    // actually have a read for. An entity whose pair is NOT covered is SKIPPED — left out of the
+    // receipt entirely rather than reported as a failure. Under-reporting is recoverable;
+    // inventing failures gets the verifier switched off. `uncovered` counts what was skipped so a
+    // gap in coverage is visible instead of looking like a clean pass.
+    const covered = new Set<string>()
+    const mark = (kind: string, family: Family) => covered.add(`${kind}:${family}`)
+    const isCovered = (kind: string, family: Family) => covered.has(`${kind}:${family}`)
 
     let amzCampaigns, amzAdGroups, amzKeywords, amzTargets, amzProductAds
     let amzSdTargets: Map<string | undefined, { state?: string; bid?: number; expression?: Array<{ value?: string }> }> | undefined
 
     if (spExtIds.length) {
-      try { amzCampaigns = new Map((await listCampaignsV3(ctx, { campaignIds: spExtIds, states: [...ALL_STATES] })).map((c) => [c.campaignId, c])) }
+      try { amzCampaigns = new Map((await listCampaignsV3(ctx, { campaignIds: spExtIds, states: [...ALL_STATES] })).map((c) => [c.campaignId, c])); mark('CAMPAIGN', 'SP') }
       catch (e) { errors.push(`read campaigns ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
-      try { amzAdGroups = new Map((await listAdGroupsV3(ctx, { campaignIds: spExtIds, states: ALL_STATES })).map((a) => [a.adGroupId, a])) }
+      try { amzAdGroups = new Map((await listAdGroupsV3(ctx, { campaignIds: spExtIds, states: ALL_STATES })).map((a) => [a.adGroupId, a])); mark('AD_GROUP', 'SP') }
       catch (e) { errors.push(`read adGroups ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
-      try { amzKeywords = new Map((await listKeywords(ctx, { campaignIds: spExtIds, states: ALL_STATES })).map((k) => [k.keywordId, k])) }
+      try { amzKeywords = new Map((await listKeywords(ctx, { campaignIds: spExtIds, states: ALL_STATES })).map((k) => [k.keywordId, k])); mark('KEYWORD', 'SP') }
       catch (e) { errors.push(`read keywords ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
-      try { amzTargets = new Map((await listTargets(ctx, { campaignIds: spExtIds, states: ALL_STATES })).map((t) => [t.targetId, t])) }
+      try { amzTargets = new Map((await listTargets(ctx, { campaignIds: spExtIds, states: ALL_STATES })).map((t) => [t.targetId, t])); mark('TARGET', 'SP') }
       catch (e) { errors.push(`read targets ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
-      try { amzProductAds = new Map((await listProductAds(ctx, { campaignIds: spExtIds, states: ALL_STATES })).map((a) => [a.adId, a])) }
+      try { amzProductAds = new Map((await listProductAds(ctx, { campaignIds: spExtIds, states: ALL_STATES })).map((a) => [a.adId, a])); mark('PRODUCT_AD', 'SP') }
       catch (e) { errors.push(`read productAds ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
     }
 
     if (sdExtIds.length) {
-      try { for (const c of await listSdCampaigns(ctx, { externalCampaignIds: sdExtIds })) (amzCampaigns ??= new Map()).set(c.campaignId, c) }
+      try { for (const c of await listSdCampaigns(ctx, { externalCampaignIds: sdExtIds })) (amzCampaigns ??= new Map()).set(c.campaignId, c); mark('CAMPAIGN', 'SD') }
       catch (e) { errors.push(`read SD campaigns ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
-      try { for (const a of await listSdAdGroups(ctx, { externalCampaignIds: sdExtIds })) (amzAdGroups ??= new Map()).set(a.adGroupId, a) }
+      try { for (const a of await listSdAdGroups(ctx, { externalCampaignIds: sdExtIds })) (amzAdGroups ??= new Map()).set(a.adGroupId, a); mark('AD_GROUP', 'SD') }
       catch (e) { errors.push(`read SD adGroups ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
-      try { for (const a of await listSdProductAds(ctx, { externalCampaignIds: sdExtIds })) (amzProductAds ??= new Map()).set(a.adId, a) }
+      try { for (const a of await listSdProductAds(ctx, { externalCampaignIds: sdExtIds })) (amzProductAds ??= new Map()).set(a.adId, a); mark('PRODUCT_AD', 'SD') }
       catch (e) { errors.push(`read SD productAds ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
-      try { amzSdTargets = new Map((await listSdTargets(ctx, { externalCampaignIds: sdExtIds })).map((t) => [t.targetId, t])) }
+      try { amzSdTargets = new Map((await listSdTargets(ctx, { externalCampaignIds: sdExtIds })).map((t) => [t.targetId, t])); mark('TARGET', 'SD') }
       catch (e) { errors.push(`read SD targets ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
     }
 
-    if (amzCampaigns) {
+    // SB: campaigns only. Its ad groups / ads / keywords live behind further v4 endpoints that are
+    // not wired up, so those kinds stay uncovered for SB and their entities are skipped.
+    if (sbExtIds.length) {
+      try { for (const c of await listSbCampaigns(ctx, { externalCampaignIds: sbExtIds })) (amzCampaigns ??= new Map()).set(c.campaignId, c); mark('CAMPAIGN', 'SB') }
+      catch (e) { errors.push(`read SB campaigns ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
+    }
+
+    {
       for (const c of camps) {
-        const a = c.externalCampaignId ? amzCampaigns.get(c.externalCampaignId) : undefined
+        const fam = familyOfCampaign.get(c.id) as Family
+        if (!isCovered('CAMPAIGN', fam)) { uncovered++; continue }
+        const a = c.externalCampaignId ? amzCampaigns?.get(c.externalCampaignId) : undefined
         const pair: EntityPair = {
           entityType: 'CAMPAIGN', localId: c.id, externalId: c.externalCampaignId, label: c.name,
           intended: {
@@ -153,9 +195,11 @@ export async function verifyLaunch(campaignIds: string[]): Promise<LaunchVerific
       }
     }
 
-    if (amzAdGroups) {
+    {
       for (const g of adGroups) {
-        const a = g.externalAdGroupId ? amzAdGroups.get(g.externalAdGroupId) : undefined
+        const fam = familyOfCampaign.get(g.campaignId) as Family
+        if (!isCovered('AD_GROUP', fam)) { uncovered++; continue }
+        const a = g.externalAdGroupId ? amzAdGroups?.get(g.externalAdGroupId) : undefined
         entities.push(verifyEntity({
           entityType: 'AD_GROUP', localId: g.id, externalId: g.externalAdGroupId, label: g.name,
           intended: { name: g.name, state: g.status, defaultBid: centsToUnits(g.defaultBidCents) },
@@ -170,11 +214,13 @@ export async function verifyLaunch(campaignIds: string[]): Promise<LaunchVerific
       // something that is working correctly. Same reasoning as pushCampaignStructure skipping them.
       if (t.kind === 'AUTO') continue
       const isKeyword = t.kind === 'KEYWORD'
-      const isSd = sdCampaignIds.has(agToCampaign.get(t.adGroupId) ?? '')
-      const src = isKeyword ? amzKeywords : isSd ? amzSdTargets : amzTargets
-      // No read for this kind (SD read failed, or it was never requested) — skip rather than
-      // report MISSING_ON_AMAZON. A verifier that invents failures gets switched off.
-      if (!src) continue
+      const fam = familyOfCampaign.get(agToCampaign.get(t.adGroupId) ?? '') as Family
+      const kind = isKeyword ? 'KEYWORD' : 'TARGET'
+      // Not covered for this family (SB keywords, or a read that failed) — skip rather than report
+      // MISSING_ON_AMAZON. A verifier that invents failures gets switched off.
+      if (!isCovered(kind, fam)) { uncovered++; continue }
+      const src = isKeyword ? amzKeywords : fam === 'SD' ? amzSdTargets : amzTargets
+      if (!src) { uncovered++; continue }
       const a = t.externalTargetId ? src.get(t.externalTargetId) : undefined
       // SD audience clauses carry an EMPTY expressionValue, not null, so `?? t.id` left the
       // receipt showing a blank row. Fall back to the kind, which at least names what it is.
@@ -196,9 +242,11 @@ export async function verifyLaunch(campaignIds: string[]): Promise<LaunchVerific
       }
     }
 
-    if (amzProductAds) {
+    {
       for (const pa of productAds) {
-        const a = pa.externalAdId ? amzProductAds.get(pa.externalAdId) : undefined
+        const fam = familyOfCampaign.get(agToCampaign.get(pa.adGroupId) ?? '') as Family
+        if (!isCovered('PRODUCT_AD', fam)) { uncovered++; continue }
+        const a = pa.externalAdId ? amzProductAds?.get(pa.externalAdId) : undefined
         entities.push(verifyEntity({
           entityType: 'PRODUCT_AD', localId: pa.id, externalId: pa.externalAdId, label: pa.sku ?? pa.asin ?? pa.id,
           // SKU only: an ad created from a SKU may report no asin, and asserting on a field
@@ -212,7 +260,7 @@ export async function verifyLaunch(campaignIds: string[]): Promise<LaunchVerific
 
   const summary = summarise(entities)
   const problems = entities.filter((e) => e.verdict !== 'VERIFIED').map(describeVerdict)
-  const out: LaunchVerification = { ...summary, campaignIds, entities, problems, errors }
+  const out: LaunchVerification = { ...summary, campaignIds, entities, problems, uncovered, errors }
   // A read failure means we do not actually know, so it must not read as a pass.
   if (errors.length) out.ok = false
 
@@ -228,7 +276,7 @@ export async function verifyLaunch(campaignIds: string[]): Promise<LaunchVerific
   logger.info('[AX-VT.4] verifyLaunch', {
     campaigns: campaignIds.length, total: summary.total, verified: summary.verified,
     mismatch: summary.mismatch, missingOnAmazon: summary.missingOnAmazon, notPushed: summary.notPushed,
-    errors: errors.length,
+    uncovered, errors: errors.length,
   })
   if (!out.ok) logger.warn('[AX-VT.4] launch did NOT fully verify', { problems: problems.slice(0, 12), errors })
   return out

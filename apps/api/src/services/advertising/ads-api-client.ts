@@ -701,6 +701,46 @@ export async function listSdCampaigns(ctx: ClientContext, opts: { externalCampai
   }))
 }
 
+/**
+ * Sponsored Brands campaigns — a THIRD family, v4, with its own mime type.
+ *
+ * SB was silently being read through the SP endpoints, which would have produced exactly the
+ * false MISSING_ON_AMAZON storm that SD did (4 campaigns, all of them). Caught before it shipped
+ * only because the SD investigation made the pattern obvious.
+ */
+export async function listSbCampaigns(ctx: ClientContext, opts: { externalCampaignIds?: string[] }): Promise<V3CampaignSettings[]> {
+  if (adsMode() === 'sandbox') return []
+  const ids = opts.externalCampaignIds ?? []
+  if (!ids.length) return []
+  const out: V3CampaignSettings[] = []
+  let nextToken: string | undefined
+  let pages = 0
+  do {
+    const body: Record<string, unknown> = {
+      maxResults: 100,
+      campaignIdFilter: { include: ids },
+      ...(nextToken ? { nextToken } : {}),
+    }
+    const res = await liveCall<{ campaigns?: Array<{ campaignId?: number | string; name?: string; state?: string; portfolioId?: number | string | null; budget?: number; budgetType?: string }>; nextToken?: string }>({
+      profileId: ctx.profileId, region: ctx.region, method: 'POST', path: '/sb/v4/campaigns/list', body,
+      contentType: 'application/vnd.sbcampaignresource.v4+json',
+      acceptHeader: 'application/vnd.sbcampaignresource.v4+json',
+    })
+    for (const c of res.campaigns ?? []) {
+      out.push({
+        campaignId: String(c.campaignId ?? ''),
+        name: c.name,
+        state: c.state,
+        portfolioId: c.portfolioId == null ? null : String(c.portfolioId),
+        budget: c.budget == null ? undefined : { budget: c.budget, budgetType: c.budgetType ?? 'DAILY' },
+      })
+    }
+    nextToken = res.nextToken
+    pages++
+  } while (nextToken && pages < 50)
+  return out
+}
+
 export async function listSdAdGroups(ctx: ClientContext, opts: { externalCampaignIds?: string[] }): Promise<AdGroupServingDTO[]> {
   const raw = await sdGet<{ adGroupId?: number | string; campaignId?: number | string; name?: string; state?: string; defaultBid?: number }>(ctx, 'adGroups', opts.externalCampaignIds ?? [])
   return raw.map((a) => ({
