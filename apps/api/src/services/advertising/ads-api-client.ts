@@ -1428,11 +1428,37 @@ export interface AdsEligibilityStatus {
   message?: string | null
   helpUrl?: string | null
 }
+/**
+ * VERIFIED against the live IT profile 2026-07-30. The identifiers are NESTED
+ * under `productDetails`, not flat on the record — the doc mirror this was
+ * first written from implied otherwise, and reading the wrong level made every
+ * ASIN look unanswered while Amazon was in fact replying correctly:
+ *
+ *   { "eligibilityStatusList": [],
+ *     "overallStatus": "ELIGIBLE",
+ *     "productDetails": { "asin": "B0CFB7GTV7", "globalStoreSetting": null,
+ *                         "sku": "AIR-MESH-JACKET-MEN-L-BLACK" } }
+ *
+ * `asin`/`sku` are kept as optional top-level fields so a future flat shape
+ * still parses, but `productDetails` is the observed truth.
+ */
 export interface AdsProductEligibility {
   asin?: string | null
   sku?: string | null
+  productDetails?: { asin?: string | null; sku?: string | null; globalStoreSetting?: unknown } | null
   overallStatus: AdsEligibilityOverall
   eligibilityStatusList?: AdsEligibilityStatus[] | null
+}
+
+/** The ASIN for a record, from wherever Amazon actually put it. */
+export function eligibilityAsin(r: AdsProductEligibility): string | null {
+  const a = r.productDetails?.asin ?? r.asin
+  return a ? String(a).toUpperCase() : null
+}
+/** The SKU for a record, from wherever Amazon actually put it. */
+export function eligibilitySku(r: AdsProductEligibility): string | null {
+  const s = r.productDetails?.sku ?? r.sku
+  return s ? String(s) : null
 }
 
 /**

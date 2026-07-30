@@ -26,6 +26,8 @@ import { logger } from '../../utils/logger.js'
 import { peekCached, putCached } from './ads-cache.js'
 import {
   listProductEligibility,
+  eligibilityAsin,
+  eligibilitySku,
   type AdsEligibilityAdType,
   type AdsEligibilityStatus,
   type AdsRegion,
@@ -38,6 +40,12 @@ export type EligibilityVerdict = 'ELIGIBLE' | 'ELIGIBLE_WITH_WARNING' | 'INELIGI
 
 export interface EligibilityResult {
   asin: string
+  /**
+   * The seller SKU whose offer Amazon judged. Eligibility is per-OFFER, so when
+   * several SKUs sell one ASIN this names the one the verdict came from —
+   * without it, "not in buy box" is unactionable.
+   */
+  sku?: string | null
   status: EligibilityVerdict
   reasons: Array<{ name: string; severity: string; message: string | null; helpUrl: string | null }>
   /** Set when status is UNKNOWN, so the UI can say WHY it does not know. */
@@ -112,45 +120,31 @@ export async function getProductEligibility(input: {
       products: misses.map((asin) => ({ asin })),
       adType,
     })
-    const byAsin = new Map<string, typeof res[number]>()
-    for (const r of res) if (r.asin) byAsin.set(String(r.asin).toUpperCase(), r)
-
     /**
-     * Amazon's docs state that a request made of ASINs may come back describing
-     * SKUs — "multiple SKUs may be returned for a single ASIN" — so a record can
-     * legitimately arrive with no asin on it. Prod confirms rows come back that
-     * key on nothing we asked for.
+     * The ASIN lives at `productDetails.asin` (verified on the live IT profile
+     * 2026-07-30), so records are keyed through eligibilityAsin() rather than a
+     * flat field.
      *
-     * Rather than trust one shape, correlate the leftovers through OUR catalogue:
-     * ProductReadCache already maps sku → asin (APS.1). A SKU-shaped answer is
-     * therefore still attributable to the ASIN the caller asked about.
-     *
-     * If several SKUs map to one ASIN, take the WORST status. An ASIN with one
-     * blocked offer is not safely advertisable just because another offer is fine.
+     * Amazon can return SEVERAL rows for one ASIN — one per seller SKU offering
+     * it. When that happens take the WORST status: an ASIN with one blocked
+     * offer is not safely advertisable because a second offer happens to be
+     * fine, and eligibility exists to stop exactly that optimistic launch.
      */
-    const unkeyed = res.filter((r) => !r.asin && r.sku)
-    if (unkeyed.length > 0) {
-      const skus = unkeyed.map((r) => String(r.sku))
-      const rows = await prisma.productReadCache.findMany({
-        where: { sku: { in: skus }, asin: { not: null } },
-        select: { sku: true, asin: true },
-      })
-      const skuToAsin = new Map(rows.map((x) => [x.sku, String(x.asin).toUpperCase()]))
-      const RANK: Record<string, number> = { ELIGIBLE: 0, ELIGIBLE_WITH_WARNING: 1, INELIGIBLE: 2 }
-      for (const r of unkeyed) {
-        const asin = skuToAsin.get(String(r.sku))
-        if (!asin) continue
-        const prev = byAsin.get(asin)
-        if (!prev || (RANK[String(r.overallStatus)] ?? 0) > (RANK[String(prev.overallStatus)] ?? 0)) {
-          byAsin.set(asin, r)
-        }
+    const RANK: Record<string, number> = { ELIGIBLE: 0, ELIGIBLE_WITH_WARNING: 1, INELIGIBLE: 2 }
+    const byAsin = new Map<string, typeof res[number]>()
+    for (const r of res) {
+      const a = eligibilityAsin(r)
+      if (!a) continue
+      const prev = byAsin.get(a)
+      if (!prev || (RANK[String(r.overallStatus)] ?? 0) > (RANK[String(prev.overallStatus)] ?? 0)) {
+        byAsin.set(a, r)
       }
     }
 
-    // Still nothing keyable — log the real field names once, otherwise this
-    // degrades to a silent wall of UNKNOWN that reads like an empty catalogue.
+    // Rows we still cannot attribute would otherwise become a silent wall of
+    // UNKNOWN that reads like an empty catalogue. Name the shape instead.
     if (res.length > 0 && byAsin.size === 0) {
-      logger.warn('[aps3-eligibility] rows returned but none keyed by asin or sku', {
+      logger.warn('[aps3-eligibility] rows returned but none keyed by asin', {
         rows: res.length,
         firstRowKeys: Object.keys((res[0] ?? {}) as Record<string, unknown>).slice(0, 15),
         firstRow: JSON.stringify(res[0] ?? {}).slice(0, 700),
@@ -171,7 +165,7 @@ export async function getProductEligibility(input: {
         message: s.message ?? null,
         helpUrl: s.helpUrl ?? null,
       }))
-      const out: EligibilityResult = { asin, status: r.overallStatus ?? 'UNKNOWN', reasons }
+      const out: EligibilityResult = { asin, sku: eligibilitySku(r), status: r.overallStatus ?? 'UNKNOWN', reasons }
       items[asin] = out
       putCached(key(asin), out, TTL_SEC)
     }
