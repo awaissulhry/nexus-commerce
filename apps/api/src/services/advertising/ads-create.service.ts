@@ -448,6 +448,41 @@ export async function verifyCampaignPortfolios(opts: {
   return out
 }
 
+/**
+ * AX-VT.1 — settle portfolio membership at the end of a launch.
+ *
+ * Amazon's SP v3 create response echoes only `campaignId`, and the public docs do not say
+ * whether the create honours `portfolioId` at all. So a launch that merely SENDS the field
+ * cannot claim the campaigns joined the portfolio — which is the precise gap that produced
+ * the original bug, where every layer reported success and 11 campaigns sat outside it.
+ *
+ * Rather than depend on an undocumented behaviour, every launch now reads back and repairs.
+ * One list call per marketplace for the whole batch. If Amazon does honour portfolioId on
+ * create this is a cheap confirmation that reports `repaired: 0`; if it does not, the launch
+ * fixes itself before returning. Either way the operator gets a claim that was checked.
+ *
+ * Best-effort by construction: a launch that created campaigns must never be reported as
+ * failed because the confirmation step could not run.
+ */
+export async function settleLaunchPortfolios(campaignIds: string[]): Promise<PortfolioVerifyResult | null> {
+  if (!campaignIds.length) return null
+  try {
+    const r = await verifyCampaignPortfolios({ campaignIds, dryRun: false })
+    if (r.checked === 0) return null // no portfolio was requested for this launch
+    if (r.missingOnAmazon > 0) {
+      // Worth a loud line: it means the create did NOT carry portfolioId through, and the
+      // read-back is the only reason these campaigns ended up where the operator asked.
+      logger.warn('[AX-VT.1] launch needed portfolio repair — create did not apply portfolioId', {
+        campaigns: r.missingOnAmazon, repaired: r.repaired, failed: r.repairFailed,
+      })
+    }
+    return r
+  } catch (e) {
+    logger.warn('[AX-VT.1] settleLaunchPortfolios failed', { error: (e as Error).message.slice(0, 160) })
+    return null
+  }
+}
+
 // ── AX2.1 — Product / category / auto targeting ─────────────────────────
 // Amazon SP product-targeting expressions. AUTO targets are the four
 // auto-campaign clauses (close-match / loose-match / substitutes /

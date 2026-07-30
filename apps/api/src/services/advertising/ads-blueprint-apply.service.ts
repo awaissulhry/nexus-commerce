@@ -19,6 +19,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import type { BlueprintDoc } from '../ads-core/ads-blueprint.js'
 import { planApplication, materialise, type ApplyPlan, type ApplyOptions, type ApplyTarget, type ExistingTarget, type PlanEdits } from '../ads-core/ads-blueprint-apply.js'
+import type { PortfolioVerifyResult } from './ads-create.service.js'
 
 /**
  * Every positive keyword we currently target in this marketplace — the surface
@@ -257,6 +258,12 @@ export interface ApplyResult {
   /** Campaigns that landed locally but never got an Amazon id. */
   notOnAmazon: string[]
   errors: string[]
+  /**
+   * AX-VT.1 — Amazon's own answer on whether the replicas joined the destination portfolio,
+   * read back after the run. `null` when the run requested no portfolio. `repaired > 0` means
+   * the create did not carry portfolioId and this step is what put them where they belong.
+   */
+  portfolioCheck?: PortfolioVerifyResult | null
 }
 
 export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
@@ -474,6 +481,17 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
     }
   }
 
+  // AX-VT.1 — the AX3.0 comment above ("join the destination portfolio") was right about
+  // the intent and wrong about the layer: createCampaignLocal silently dropped portfolioId,
+  // so every replica landed outside every portfolio anyway. The field now travels with the
+  // create AND is read back here, because a create response cannot prove membership landed.
+  // Any repair it had to perform is surfaced as an error so a PARTIAL run says why.
+  const { settleLaunchPortfolios } = await import('./ads-create.service.js')
+  const portfolioCheck = await settleLaunchPortfolios(createdCampaignIds)
+  if (portfolioCheck?.repairFailed) {
+    errors.push(`portfolio membership could not be set for ${portfolioCheck.repairFailed} campaign(s)`)
+  }
+
   const status: ApplyResult['status'] =
     created.campaigns === 0 ? 'FAILED'
     : (errors.length || notOnAmazon.length) ? 'PARTIAL'
@@ -485,7 +503,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
   })
   logger.info('[AX2.5] blueprint applied', { applicationId: application.id, status, created, errors: errors.length })
 
-  return { applicationId: application.id, status, plan, created, skippedNonKeyword, notOnAmazon, errors }
+  return { applicationId: application.id, status, plan, created, skippedNonKeyword, notOnAmazon, errors, portfolioCheck }
 }
 
 /**

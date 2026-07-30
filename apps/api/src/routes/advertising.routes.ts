@@ -1066,7 +1066,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     logger.warn('[SPW-launch] SP Super Wizard created campaigns', { market, grp: (b.productGroupName || '').trim(), count: created.length, rules: rulesCreated.length, actor: userId })
-    return { ok: true, created, totalCampaigns: created.length, rules: rulesCreated }
+    // AX-VT.1 — confirm the campaigns actually joined the requested portfolio on Amazon,
+    // and repair them if the create didn't carry it. Reported so the launch's claim is
+    // checked rather than assumed.
+    const { settleLaunchPortfolios } = await import('../services/advertising/ads-create.service.js')
+    const portfolioCheck = await settleLaunchPortfolios(created.map((c) => c.campaignId))
+    return { ok: true, created, totalCampaigns: created.length, rules: rulesCreated, portfolioCheck }
   })
 
   // SB.7 — Single Campaign builder launch. Creates ONE SP campaign with PER-KEYWORD match
@@ -1172,7 +1177,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         } catch (e) { logger.error('[single-launch] negative rule failed', { error: (e as Error).message }) }
       }
       logger.warn('[single-launch] created campaign', { market, name, campaignId: camp.id, rules: rulesCreated.length, attached: attachedCount, actor: userId })
-      return { ok: true, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, rules: rulesCreated, attached: attachedCount }
+      // AX-VT.1 — read back and repair portfolio membership before claiming success.
+      const { settleLaunchPortfolios } = await import('../services/advertising/ads-create.service.js')
+      const portfolioCheck = await settleLaunchPortfolios([camp.id])
+      return { ok: true, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, rules: rulesCreated, attached: attachedCount, portfolioCheck }
     } catch (e) {
       logger.error('[single-launch] failed', { name, market, error: (e as Error).message })
       reply.status(500); return { ok: false, error: (e as Error).message }
