@@ -50,6 +50,63 @@ const PAGE = 10
 /** Paste is bounded so one huge paste cannot fan out into unbounded requests. */
 const MAX_PASTE_TOKENS = 50
 
+/**
+ * APS.3b — Amazon's own eligibility verdict, from GET /advertising/eligibility.
+ *
+ * Scoping (APS.2b) answers "is this listed here". This answers "will Amazon
+ * actually serve it" — out of stock, buy box lost, listing suppressed. A
+ * campaign built on an ineligible ASIN launches successfully and then delivers
+ * nothing, which is discovered days later in Amazon's console.
+ *
+ * UNKNOWN is a first-class state, not a synonym for eligible. It means we did
+ * not get an answer, and the row says so instead of quietly implying "fine".
+ */
+type EligVerdict = 'ELIGIBLE' | 'ELIGIBLE_WITH_WARNING' | 'INELIGIBLE' | 'UNKNOWN'
+type EligRow = {
+  asin: string
+  sku?: string | null
+  status: EligVerdict
+  reasons: Array<{ name: string; severity: string; message: string | null; helpUrl: string | null }>
+  unknownReason?: string
+}
+
+/** Amazon's reason codes are SCREAMING_SNAKE; operators are not compilers. */
+const REASON_LABEL: Record<string, string> = {
+  NOT_IN_BUYBOX: 'Not winning the buy box',
+  OUT_OF_STOCK: 'Out of stock',
+  VARIATION_PARENT: 'Variation parent — advertise the child instead',
+  LISTING_SUPRESSED: 'Listing suppressed',
+  MISSING_IMAGE: 'No main image',
+  MISSING_TITLE: 'No title',
+  ADULT_PRODUCT: 'Adult product',
+  CLOSED_CATEGORY: 'Closed category',
+  RESTRICTED_CATEGORY: 'Restricted category',
+  INELIGIBLE_CONDITION: 'Ineligible condition',
+  INELIGIBLE_OFFER: 'Ineligible offer',
+  INELIGIBLE_PRODUCT_COST: 'Price outside the eligible range',
+}
+const reasonText = (r: { name: string; message: string | null }) =>
+  REASON_LABEL[r.name] ?? r.message ?? r.name.replace(/_/g, ' ').toLowerCase()
+
+function EligPill({ e }: { e: EligRow | undefined }) {
+  if (!e) return null
+  const reasons = e.reasons.map(reasonText)
+  if (e.status === 'ELIGIBLE') {
+    // Deliberately quiet: a pass is worth showing (it proves the check RAN and
+    // distinguishes it from UNKNOWN) but must not compete with the problems.
+    return <span className="h10-elig ok" title="Amazon reports this product can be advertised">Eligible</span>
+  }
+  if (e.status === 'UNKNOWN') {
+    return <span className="h10-elig unk" title={e.unknownReason ? `Not checked — ${e.unknownReason}` : 'Not checked'}>Not checked</span>
+  }
+  const label = e.status === 'INELIGIBLE' ? 'Ineligible' : 'Warning'
+  return (
+    <span className={`h10-elig ${e.status === 'INELIGIBLE' ? 'bad' : 'warn'}`} title={reasons.join(' · ') || label}>
+      {label}{reasons.length ? <span className="why"> · {reasons[0]}</span> : null}
+    </span>
+  )
+}
+
 function Thumb({ p }: { p: SpwProduct }) {
   return (
     <span className="h10-spw-ps-th">
@@ -125,6 +182,9 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [childCache, setChildCache] = useState<Record<string, SpwProduct[]>>({})
   const [loadingKids, setLoadingKids] = useState<Set<string>>(new Set())
+  // APS.3b — Amazon's verdict per ASIN. Keyed uppercase, same as the API.
+  const [elig, setElig] = useState<Record<string, EligRow>>({})
+  const [eligDegraded, setEligDegraded] = useState<string | null>(null)
 
   const api = getBackendUrl()
   /** Every read is scoped; nothing in this component queries the whole catalog. */
@@ -159,6 +219,67 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
   }, [scope, setProducts])
   // The notice is about the last change only; a new search should not keep it.
   useEffect(() => { setScopeNote('') }, [q])
+
+  // A verdict belongs to a marketplace; carrying IT's answers into DE would be
+  // worse than having none.
+  useEffect(() => { setElig({}); setEligDegraded(null) }, [scope])
+
+  /**
+   * Which ASINs need a verdict: standalone products on the page, plus the
+   * children of any expanded family.
+   *
+   * Family PARENTS are deliberately excluded. Amazon's own reason list contains
+   * VARIATION_PARENT — a parent is never advertisable — so asking about one
+   * would mark every family "Ineligible" and drown the real signal in noise.
+   * The advertisable unit is the child, which is the same conclusion APS.2b
+   * reached from the listing data.
+   */
+  const needAsins = useMemo(() => {
+    if (channel !== 'AMAZON') return [] as string[]
+    const out = new Set<string>()
+    for (const p of all) if (p.childCount === 0 && p.asin) out.add(p.asin.toUpperCase())
+    for (const id of expanded) for (const k of childCache[id] ?? []) if (k.asin) out.add(k.asin.toUpperCase())
+    return [...out]
+  }, [all, expanded, childCache, channel])
+
+  /**
+   * ASINs already sent upstream, so one is never requested twice.
+   *
+   * Without this the effect loops forever: it depends on `elig`, and setElig
+   * spreads into a NEW object every time, so any ASIN the response does not
+   * cover (the route caps at 200, and UNKNOWN rows are not cached) keeps
+   * `missing` non-empty and re-triggers the effect on its own output.
+   */
+  const askedRef = useRef<Set<string>>(new Set())
+  useEffect(() => { askedRef.current = new Set() }, [scope])
+
+  useEffect(() => {
+    if (!market || channel !== 'AMAZON') return
+    const missing = needAsins.filter((a) => !elig[a] && !askedRef.current.has(a))
+    if (missing.length === 0) return
+    // Mark before the request: a second render must not re-send these.
+    for (const a of missing) askedRef.current.add(a)
+
+    let alive = true
+    const url = `${api}/api/advertising/eligibility?marketplace=${encodeURIComponent(market)}&adType=sp&asins=${encodeURIComponent(missing.join(','))}`
+    fetch(url, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((j: { items?: Record<string, EligRow>; degraded?: boolean; degradedReason?: string }) => {
+        if (!alive) return
+        setElig((cur) => ({ ...cur, ...(j.items ?? {}) }))
+        setEligDegraded(j.degraded ? (j.degradedReason ?? 'Eligibility could not be checked.') : null)
+      })
+      .catch(() => {
+        if (!alive) return
+        // Failing the check must not silently look like "all eligible".
+        setEligDegraded('Eligibility could not be checked.')
+      })
+    return () => { alive = false }
+  }, [needAsins, elig, market, channel, api])
+
+  const verdict = (p: SpwProduct): EligRow | undefined => (p.asin ? elig[p.asin.toUpperCase()] : undefined)
+  /** Only a verdict Amazon actually gave blocks staging. UNKNOWN never blocks. */
+  const blocked = (p: SpwProduct): boolean => verdict(p)?.status === 'INELIGIBLE'
 
   useEffect(() => {
     if (!scope) { setAll([]); setTotal(0); setLoading(false); return }
@@ -209,10 +330,12 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
   const advCount = (parent: SpwProduct): number | null => childCache[parent.id]?.length ?? null
   const addAllChildren = async (parent: SpwProduct) => {
     const kids = childCache[parent.id] ?? (await fetchChildren(parent.id))
-    setProducts((cur) => { const ids = new Set(cur.map((p) => p.id)); return [...cur, ...kids.filter((k) => !ids.has(k.id))] })
+    // Never bulk-stage something Amazon has already said it will not serve.
+    const ok = kids.filter((k) => !blocked(k))
+    setProducts((cur) => { const ids = new Set(cur.map((p) => p.id)); return [...cur, ...ok.filter((k) => !ids.has(k.id))] })
   }
   const removeAllChildren = (parent: SpwProduct) => setProducts((cur) => cur.filter((p) => p.parentId !== parent.id))
-  const addAll = async () => { for (const p of view) { if (p.childCount > 0) await addAllChildren(p); else add(p) } }
+  const addAll = async () => { for (const p of view) { if (p.childCount > 0) await addAllChildren(p); else if (!blocked(p)) add(p) } }
 
   /**
    * Resolve pasted identifiers against the SERVER, within scope, including
@@ -285,6 +408,8 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
         <div className="h10-spw-ps-scope">
           Showing products advertisable on <b>{channel === 'EBAY' ? 'eBay' : 'Amazon'} {scopeLabel}</b>
           {scopeNote ? <span className="h10-spw-ps-scopenote">{scopeNote}</span> : null}
+          {/* Never let a failed check pass for a clean bill of health. */}
+          {eligDegraded ? <span className="h10-spw-ps-scopenote">{eligDegraded} Rows show “Not checked” rather than a verdict.</span> : null}
         </div>
 
         {tab === 'search' ? (
@@ -331,19 +456,23 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
                             ) : null}
                           </span>
                         </span>
+                        {/* Eligibility is a property of the advertisable unit, so it
+                            appears on standalones and children — never on a family row. */}
+                        {!isFamily ? <EligPill e={verdict(p)} /> : null}
                         {isFamily
                           ? <button type="button" className={`addbtn ${allSel ? 'on' : ''}`} onClick={() => (allSel ? removeAllChildren(p) : void addAllChildren(p))}>{allSel ? <><Check size={13} /> Added</> : sel > 0 ? <>{sel}/{adv ?? p.childCount}</> : <><Plus size={13} /> Add all</>}</button>
-                          : <button type="button" className={`addbtn ${has(p.id) ? 'on' : ''}`} onClick={() => (has(p.id) ? remove(p.id) : add(p))}>{has(p.id) ? <><Check size={13} /> Added</> : <><Plus size={13} /> Add</>}</button>}
+                          : <button type="button" className={`addbtn ${has(p.id) ? 'on' : ''}`} disabled={blocked(p) && !has(p.id)} title={blocked(p) ? 'Amazon reports this product cannot be advertised' : undefined} onClick={() => (has(p.id) ? remove(p.id) : add(p))}>{has(p.id) ? <><Check size={13} /> Added</> : <><Plus size={13} /> Add</>}</button>}
                       </div>
                       {open && (loadingKids.has(p.id) ? (
                         <div className="h10-spw-ps-kidload">Loading variations…</div>
                       ) : (childCache[p.id] ?? []).length === 0 ? (
                         <div className="h10-spw-ps-kidload">No variations of this family are advertisable on {market}.</div>
                       ) : (childCache[p.id] ?? []).map((kid) => (
-                        <div className="row kid" key={kid.id}>
+                        <div className={`row kid${blocked(kid) ? ' inelig' : ''}`} key={kid.id}>
                           <Thumb p={kid} />
                           <ProductMeta p={kid} />
-                          <button type="button" className={`addbtn ${has(kid.id) ? 'on' : ''}`} onClick={() => (has(kid.id) ? remove(kid.id) : add(kid))}>{has(kid.id) ? <><Check size={13} /> Added</> : <><Plus size={13} /> Add</>}</button>
+                          <EligPill e={verdict(kid)} />
+                          <button type="button" className={`addbtn ${has(kid.id) ? 'on' : ''}`} disabled={blocked(kid) && !has(kid.id)} title={blocked(kid) ? 'Amazon reports this product cannot be advertised' : undefined} onClick={() => (has(kid.id) ? remove(kid.id) : add(kid))}>{has(kid.id) ? <><Check size={13} /> Added</> : <><Plus size={13} /> Add</>}</button>
                         </div>
                       )))}
                     </Fragment>
@@ -387,9 +516,12 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
             <div className="h10-spw-ps-nodata">No data</div>
           ) : (
             products.map((p) => (
-              <div key={p.id} className="row">
+              <div key={p.id} className={`row${blocked(p) ? ' inelig' : ''}`}>
                 <Thumb p={p} />
                 <ProductMeta p={p} />
+                {/* A product can become ineligible AFTER it was staged (stock runs
+                    out mid-build). The tray must show that, not just the catalogue. */}
+                <EligPill e={verdict(p)} />
                 {sponsoredVideo && (
                   <label className="h10-spw-ps-sv" title="Run a Sponsored Brands video for this product">
                     <input type="checkbox" checked={sponsoredVideo.enabled.has(p.id)} onChange={() => sponsoredVideo.onToggle(p.id)} aria-label={`Sponsored Videos for ${p.name}`} />
