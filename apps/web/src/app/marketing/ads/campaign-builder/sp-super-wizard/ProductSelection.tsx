@@ -36,7 +36,7 @@
  *     Unmatched tokens are now reported instead of disappearing.
  */
 import { type Dispatch, type SetStateAction, Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Search, Plus, Check, Trash2, Copy, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronDown, X } from 'lucide-react'
+import { Search, Plus, Check, Trash2, Copy, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronDown, X, Save } from 'lucide-react'
 import { Select } from '@/design-system/primitives'
 // A shared component must not depend on its HOST importing these. Eight of the
 // nine call sites happen to, but ai-advertising/new-goal does NOT — so the DS
@@ -208,6 +208,10 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
   // APS.3b — Amazon's verdict per ASIN. Keyed uppercase, same as the API.
   const [elig, setElig] = useState<Record<string, EligRow>>({})
   const [eligDegraded, setEligDegraded] = useState<string | null>(null)
+  // APS.5b — named, reusable selections.
+  const [sets, setSets] = useState<Array<{ id: string; name: string; count: number }>>([])
+  const [setBusy, setSetBusy] = useState(false)
+  const [setMsg, setSetMsg] = useState('')
 
   const api = getBackendUrl()
   /** Every read is scoped; nothing in this component queries the whole catalog. */
@@ -432,6 +436,59 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
     } finally { setEntering(false) }
   }
 
+  /* ── APS.5b: saved product sets ──────────────────────────────────────── */
+  const setsUrl = `${api}/api/advertising/product-sets`
+  const loadSets = useCallback(() => {
+    if (!market) return
+    fetch(`${setsUrl}?channel=${channel}&marketplace=${encodeURIComponent(market)}`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((j) => setSets(j.items ?? []))
+      .catch(() => setSets([]))
+  }, [setsUrl, channel, market])
+  useEffect(() => { loadSets(); setSetMsg('') }, [loadSets])
+
+  const saveSet = async () => {
+    if (!products.length || !market) return
+    const name = window.prompt(`Name this set of ${products.length} product${products.length === 1 ? '' : 's'} for ${market}:`)?.trim()
+    if (!name) return
+    setSetBusy(true); setSetMsg('')
+    try {
+      const r = await fetch(setsUrl, {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, channel, marketplace: market, productIds: products.map((p) => p.id) }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(j?.error || 'Could not save')
+      setSetMsg(`Saved “${name}” (${j.count}).`)
+      loadSets()
+    } catch (e) { setSetMsg((e as Error).message) } finally { setSetBusy(false) }
+  }
+
+  /**
+   * Loading REPLACES the tray, and re-resolves against the scope as it is
+   * today. A set curated last month can contain products that have since been
+   * delisted; the server names those rather than dropping them quietly, and we
+   * repeat the names here — "3 are no longer advertisable" is not actionable
+   * without knowing which three.
+   */
+  const loadSet = async (id: string) => {
+    if (!id) return
+    setSetBusy(true); setSetMsg('')
+    try {
+      const r = await fetch(`${setsUrl}/${id}`, { credentials: 'include' })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j?.error || 'Could not load')
+      const items = ((j.items ?? []) as Raw[]).map(toProd)
+      setProducts(items)
+      const dropped = (j.dropped ?? []) as Array<{ sku: string | null; reason: string }>
+      setSetMsg(
+        dropped.length
+          ? `Loaded ${items.length} of ${items.length + dropped.length}. Left out: ${dropped.map((d) => d.sku ?? 'deleted product').slice(0, 6).join(', ')}${dropped.length > 6 ? ` +${dropped.length - 6}` : ''}.`
+          : `Loaded ${items.length} product${items.length === 1 ? '' : 's'}.`,
+      )
+    } catch (e) { setSetMsg((e as Error).message) } finally { setSetBusy(false) }
+  }
+
   const scopeLabel = useMemo(
     () => (market ? `${FLAG[market] ?? '🏳️'} ${MARKET_NAME[market] ?? market}` : ''),
     [market],
@@ -604,6 +661,22 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
           <b>{products.length} Products Added</b>
           <button type="button" className="rm" disabled={!products.length} onClick={() => setProducts([])}><Trash2 size={12} /> Remove All</button>
         </div>
+        {/* APS.5b — reusable selections, scoped to this marketplace. */}
+        <div className="h10-spw-ps-sets">
+          <Select
+            value=""
+            disabled={setBusy || sets.length === 0}
+            aria-label="Load a saved product set"
+            onChange={(e) => { const v = e.target.value; e.currentTarget.value = ''; void loadSet(v) }}
+          >
+            <option value="">{sets.length ? 'Load a set…' : 'No saved sets'}</option>
+            {sets.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.count})</option>)}
+          </Select>
+          <button type="button" className="h10-spw-ps-saveset" disabled={!products.length || setBusy} onClick={() => void saveSet()}>
+            <Save size={12} /> Save as set
+          </button>
+        </div>
+        {setMsg ? <div className="h10-spw-ps-setmsg">{setMsg}</div> : null}
         {sponsoredVideo ? (
           <div className="h10-spw-ps-rcol sv"><span className="pcol">Product <ChevronsUpDown size={11} /></span><span className="svcol">Sponsored Videos <span className="newtag">New</span></span></div>
         ) : (

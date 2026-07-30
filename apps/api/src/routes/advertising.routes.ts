@@ -8285,6 +8285,91 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, connection: conn }
   })
 
+  // ── APS.5b — saved product sets ───────────────────────────────────────
+  //
+  // A named, reusable product selection, scoped to channel + marketplace.
+  //
+  // Loading RE-RESOLVES the stored ids against the scope as it is today rather
+  // than replaying a snapshot: a set curated last month may contain products
+  // that have since been delisted, and staging those silently is exactly the
+  // failure APS exists to remove. The response separates what is still
+  // advertisable from what has fallen out, so the UI can say so.
+
+  fastify.get('/advertising/product-sets', async (request) => {
+    const q = request.query as Record<string, string | undefined>
+    const channel = String(q.channel ?? 'AMAZON').toUpperCase()
+    const marketplace = String(q.marketplace ?? '').toUpperCase()
+    const rows = await prisma.adProductSet.findMany({
+      where: { channel, ...(marketplace ? { marketplace } : {}) },
+      orderBy: [{ updatedAt: 'desc' }],
+      select: { id: true, name: true, channel: true, marketplace: true, productIds: true, createdBy: true, updatedAt: true },
+    })
+    return {
+      items: rows.map((r) => ({
+        id: r.id, name: r.name, channel: r.channel, marketplace: r.marketplace,
+        count: r.productIds.length, createdBy: r.createdBy, updatedAt: r.updatedAt.toISOString(),
+      })),
+    }
+  })
+
+  fastify.get('/advertising/product-sets/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const set = await prisma.adProductSet.findUnique({ where: { id } })
+    if (!set) return reply.code(404).send({ error: 'Product set not found' })
+
+    // In-scope = still advertisable on this set's market TODAY.
+    const key = `${set.channel}_${set.marketplace}`
+    const live = await prisma.productReadCache.findMany({
+      where: { id: { in: set.productIds }, deletedAt: null, rollupChannelKeys: { hasSome: [key] } },
+      select: { id: true, sku: true, name: true, asin: true, imageUrl: true, parentId: true, childCount: true },
+    })
+    const liveIds = new Set(live.map((p) => p.id))
+    // Named, not just counted — "3 products are no longer advertisable" is not
+    // actionable without knowing which.
+    const dropped = await prisma.productReadCache.findMany({
+      where: { id: { in: set.productIds.filter((pid) => !liveIds.has(pid)) } },
+      select: { id: true, sku: true, name: true },
+    })
+    const unknownIds = set.productIds.filter((pid) => !liveIds.has(pid) && !dropped.some((d) => d.id === pid))
+
+    return {
+      id: set.id, name: set.name, channel: set.channel, marketplace: set.marketplace,
+      items: live,
+      dropped: [
+        ...dropped.map((d) => ({ id: d.id, sku: d.sku, name: d.name, reason: 'no longer advertisable on this marketplace' })),
+        ...unknownIds.map((pid) => ({ id: pid, sku: null, name: null, reason: 'product no longer exists' })),
+      ],
+    }
+  })
+
+  fastify.post('/advertising/product-sets', async (request, reply) => {
+    const body = request.body as { name?: string; channel?: string; marketplace?: string; productIds?: string[] }
+    const name = String(body.name ?? '').trim()
+    const marketplace = String(body.marketplace ?? '').trim().toUpperCase()
+    const channel = String(body.channel ?? 'AMAZON').trim().toUpperCase()
+    const productIds = Array.from(new Set((body.productIds ?? []).filter(Boolean)))
+    if (!name) return reply.code(400).send({ error: 'name is required' })
+    if (!marketplace) return reply.code(400).send({ error: 'marketplace is required' })
+    if (productIds.length === 0) return reply.code(400).send({ error: 'a set needs at least one product' })
+
+    // Upsert on the natural key so re-saving a name updates it rather than
+    // failing with a constraint error the operator cannot act on.
+    const saved = await prisma.adProductSet.upsert({
+      where: { channel_marketplace_name: { channel, marketplace, name } },
+      create: { name, channel, marketplace, productIds, createdBy: actorFromHeaders(request.headers as Record<string, unknown>) },
+      update: { productIds },
+    })
+    return { ok: true, id: saved.id, name: saved.name, count: saved.productIds.length }
+  })
+
+  fastify.delete('/advertising/product-sets/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const existing = await prisma.adProductSet.findUnique({ where: { id }, select: { id: true } })
+    if (!existing) return reply.code(404).send({ error: 'Product set not found' })
+    await prisma.adProductSet.delete({ where: { id } })
+    return { ok: true }
+  })
+
   // ── APS.3 — GET /advertising/eligibility ──────────────────────────────
   //
   //   ?marketplace=IT&adType=sp&asins=B0F7J163XJ,B0CR629FDY

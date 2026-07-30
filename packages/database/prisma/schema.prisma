@@ -2868,6 +2868,37 @@ model AdProductAd {
   @@index([asin])
 }
 
+// APS.5b — a named, reusable product selection for the campaign builders.
+//
+// Distinct from SavedView, which stores FILTERS (a query re-evaluated on read).
+// This stores a SELECTION (an explicit list the operator curated), so the two
+// cannot share a table without one of them lying about what it holds.
+//
+// Scoped to channel + marketplace because a set curated for Italy is not valid
+// for Germany — the advertisable catalogue differs, which is the whole premise
+// of APS. Loading a set re-resolves the ids against the CURRENT scope and
+// reports anything that has since fallen out, rather than silently staging
+// products that can no longer be advertised.
+//
+// Account-wide rather than per-user (unlike SavedView): a small ops team wants
+// "GALE launch set" to mean the same thing for everyone. createdBy is recorded
+// for attribution, not for isolation.
+model AdProductSet {
+  id          String   @id @default(cuid())
+  name        String
+  channel     String   @default("AMAZON")
+  marketplace String
+  // Product ids only. Resolving on read keeps names/ASINs current and makes
+  // drift visible; a denormalized snapshot would quietly go stale.
+  productIds  String[] @default([])
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([channel, marketplace, name])
+  @@index([channel, marketplace])
+}
+
 // AD.1 — Amazon Advertising API connection envelope. Distinct from
 // ChannelConnection because Ads API uses a separate LWA-for-
 // Advertising scope. One row per Amazon Ads profileId.
