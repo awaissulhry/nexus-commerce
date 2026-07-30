@@ -115,12 +115,42 @@ export async function getProductEligibility(input: {
     const byAsin = new Map<string, typeof res[number]>()
     for (const r of res) if (r.asin) byAsin.set(String(r.asin).toUpperCase(), r)
 
-    // Amazon answered with rows we could not key. The docs warn that a request
-    // of ASINs can come back describing SKUs, so the record may not carry the
-    // asin we asked about. Log the real field names once — otherwise this
-    // degrades to a silent wall of UNKNOWN that looks like an empty catalogue.
+    /**
+     * Amazon's docs state that a request made of ASINs may come back describing
+     * SKUs — "multiple SKUs may be returned for a single ASIN" — so a record can
+     * legitimately arrive with no asin on it. Prod confirms rows come back that
+     * key on nothing we asked for.
+     *
+     * Rather than trust one shape, correlate the leftovers through OUR catalogue:
+     * ProductReadCache already maps sku → asin (APS.1). A SKU-shaped answer is
+     * therefore still attributable to the ASIN the caller asked about.
+     *
+     * If several SKUs map to one ASIN, take the WORST status. An ASIN with one
+     * blocked offer is not safely advertisable just because another offer is fine.
+     */
+    const unkeyed = res.filter((r) => !r.asin && r.sku)
+    if (unkeyed.length > 0) {
+      const skus = unkeyed.map((r) => String(r.sku))
+      const rows = await prisma.productReadCache.findMany({
+        where: { sku: { in: skus }, asin: { not: null } },
+        select: { sku: true, asin: true },
+      })
+      const skuToAsin = new Map(rows.map((x) => [x.sku, String(x.asin).toUpperCase()]))
+      const RANK: Record<string, number> = { ELIGIBLE: 0, ELIGIBLE_WITH_WARNING: 1, INELIGIBLE: 2 }
+      for (const r of unkeyed) {
+        const asin = skuToAsin.get(String(r.sku))
+        if (!asin) continue
+        const prev = byAsin.get(asin)
+        if (!prev || (RANK[String(r.overallStatus)] ?? 0) > (RANK[String(prev.overallStatus)] ?? 0)) {
+          byAsin.set(asin, r)
+        }
+      }
+    }
+
+    // Still nothing keyable — log the real field names once, otherwise this
+    // degrades to a silent wall of UNKNOWN that reads like an empty catalogue.
     if (res.length > 0 && byAsin.size === 0) {
-      logger.warn('[aps3-eligibility] rows returned but none keyed by asin', {
+      logger.warn('[aps3-eligibility] rows returned but none keyed by asin or sku', {
         rows: res.length,
         firstRowKeys: Object.keys((res[0] ?? {}) as Record<string, unknown>).slice(0, 15),
         firstRow: JSON.stringify(res[0] ?? {}).slice(0, 700),
