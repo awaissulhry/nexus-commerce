@@ -7,7 +7,7 @@
  * and Rules (H10's wand-with-stars = WandSparkles, not in 0.263 → Wand2, near-identical).
  */
 import {
-  LayoutGrid, Gauge, BadgeDollarSign, FileSpreadsheet, Atom, Sparkles, ListChecks, Lightbulb, HeartPulse, BarChart3, Table, Briefcase, Wand2, Users, PieChart, History, HelpCircle, Settings, ShoppingBag,
+  LayoutGrid, Gauge, BadgeDollarSign, FileSpreadsheet, Atom, Sparkles, ListChecks, Lightbulb, HeartPulse, BarChart3, Table, Briefcase, Wand2, Users, PieChart, History, HelpCircle, Settings, ShoppingBag, ShieldCheck,
   type LucideIcon } from 'lucide-react'
 
 export const ADS_BASE = '/marketing/ads'
@@ -47,6 +47,10 @@ export const ADS_NAV: NavItem[] = [
   { label: 'Suggestions', route: 'suggestions', Icon: ListChecks },
   { label: 'Recommendations', route: 'recommendations', Icon: Lightbulb },
   { label: 'Alerts & Health', route: 'health', Icon: HeartPulse },
+  // AX-VT.6 — "does Nexus match Amazon right now". Sits beside Alerts & Health because it answers
+  // the neighbouring question: Health is about our own machinery, Trust is about whether the
+  // account actually looks the way this console claims it does.
+  { label: 'Trust', route: 'trust', Icon: ShieldCheck },
   { label: 'Analytics', route: 'analytics', Icon: BarChart3 },
   { label: 'Ad Manager', route: 'campaigns', Icon: Table },
   { label: 'Portfolios', route: 'portfolios', Icon: Briefcase },

@@ -1,0 +1,207 @@
+/**
+ * AX-VT.6 — trust surface. Tokens only; no raw hex, so light/dark and any palette change follow.
+ */
+
+.h10-vt-trust {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 28px;
+}
+
+.h10-vt-loading {
+  padding: 24px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* ── verdict banner ─────────────────────────────────────────────── */
+
+.h10-vt-verdict {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-subtle);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: var(--surface-card);
+}
+
+.h10-vt-verdict.t-success { border-left-color: var(--status-success-strong); }
+.h10-vt-verdict.t-info    { border-left-color: var(--status-info-strong); }
+.h10-vt-verdict.t-warning { border-left-color: var(--status-warning-strong); }
+.h10-vt-verdict.t-danger  { border-left-color: var(--status-danger-strong); }
+
+.h10-vt-verdict.t-success > svg { color: var(--status-success-strong); }
+.h10-vt-verdict.t-info    > svg { color: var(--status-info-strong); }
+.h10-vt-verdict.t-warning > svg { color: var(--status-warning-strong); }
+.h10-vt-verdict.t-danger  > svg { color: var(--status-danger-strong); }
+
+.h10-vt-verdict-body { flex: 1; min-width: 0; }
+
+.h10-vt-verdict-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.h10-vt-verdict-when {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.h10-vt-verdict-head {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+/* ── cards ──────────────────────────────────────────────────────── */
+
+.h10-vt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.h10-vt-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-card);
+  min-width: 0;
+}
+
+.h10-vt-card h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+
+/* ── stats ──────────────────────────────────────────────────────── */
+
+.h10-vt-stats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.h10-vt-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.h10-vt-stat-v {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A non-zero count carries its tone; zero stays neutral so a healthy page is calm. */
+.h10-vt-stat.t-danger  .h10-vt-stat-v { color: var(--status-danger-strong); }
+.h10-vt-stat.t-warning .h10-vt-stat-v { color: var(--status-warning-strong); }
+.h10-vt-stat.t-info    .h10-vt-stat-v { color: var(--status-info-strong); }
+
+.h10-vt-stat-l {
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.h10-vt-chips {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+/* ── key/value + misc ───────────────────────────────────────────── */
+
+.h10-vt-kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.h10-vt-kv b { color: var(--text-primary); font-weight: 600; }
+
+.h10-vt-pre {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.h10-vt-empty {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.h10-vt-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--color-primary);
+  text-decoration: none;
+  margin-top: auto;
+}
+
+.h10-vt-link:hover { text-decoration: underline; }
+
+/* ── findings ───────────────────────────────────────────────────── */
+
+.h10-vt-findings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.h10-vt-findings li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.h10-vt-findings li > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.h10-vt-findings b { font-size: 12px; color: var(--text-primary); font-weight: 600; }
+.h10-vt-findings span { font-size: 11px; line-height: 1.5; color: var(--text-secondary); }
+
+.h10-spin { animation: h10-vt-trust-spin 0.9s linear infinite; }
+
+@keyframes h10-vt-trust-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .h10-spin { animation: none; }
+}
