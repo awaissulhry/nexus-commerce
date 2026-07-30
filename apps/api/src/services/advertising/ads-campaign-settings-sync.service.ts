@@ -47,8 +47,19 @@ function mapStrategy(raw?: string): 'AUTO_FOR_SALES' | 'LEGACY_FOR_SALES' | 'MAN
 export async function reconcileCampaignDeletions(opts: { connMarketplace: string; seenExternalCampaignIds: Set<string>; fetchOk: boolean }): Promise<number> {
   if (!opts.fetchOk) return 0
   const { normalizeMarketplaceCode } = await import('../../utils/marketplace-code.js')
+  // AX-VT.4 — scope to SPONSORED_PRODUCTS, because that is all the evidence covers.
+  //
+  // `seenExternalCampaignIds` comes from listCampaignsV3, which is the Sponsored PRODUCTS
+  // endpoint: it never returns Sponsored Display or Sponsored Brands campaigns, whatever filter
+  // is passed. So every SD/SB campaign was automatically "not returned by Amazon" and got archived
+  // locally as no longer active. Found by AX-VT.4 verification on 2026-07-30: all 15 SD campaigns
+  // are ARCHIVED locally while Amazon reports at least three of them PAUSED — alive, and managed
+  // by nobody, because our records said they were gone.
+  //
+  // The 20% cap limited the blast radius per run, which is why this took months rather than one
+  // sweep to do its damage. A function may only archive what its fetch could actually have seen.
   const locals = await prisma.campaign.findMany({
-    where: { externalCampaignId: { not: null }, status: { in: ['ENABLED', 'PAUSED'] } },
+    where: { externalCampaignId: { not: null }, status: { in: ['ENABLED', 'PAUSED'] }, adProduct: 'SPONSORED_PRODUCTS' },
     select: { id: true, externalCampaignId: true, marketplace: true },
   })
   const owned = locals.filter((c) => (normalizeMarketplaceCode(c.marketplace) ?? c.marketplace) === opts.connMarketplace || c.marketplace === opts.connMarketplace)
