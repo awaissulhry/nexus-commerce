@@ -1,0 +1,143 @@
+/**
+ * AX-VT.4 — launch receipt styling. Tokens only, no raw hex: every colour resolves to the
+ * platform-semantic alias layer so it tracks light/dark and any future palette change.
+ */
+
+.h10-vt-receipt {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.h10-vt-receipt-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.h10-vt-receipt-errors {
+  margin: 0;
+  padding: 8px 12px 8px 28px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.h10-vt-receipt-body {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-card);
+  overflow: hidden;
+}
+
+.h10-vt-receipt-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.h10-vt-receipt-toggle:hover { background: var(--h10-surface-hover); }
+
+.h10-vt-receipt-counts {
+  display: flex;
+  gap: 5px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+/* Wide content scrolls inside its own container — the page body must never scroll sideways. */
+.h10-vt-receipt-table-wrap {
+  overflow-x: auto;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.h10-vt-receipt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  /* Long keyword text must not stretch the grid — see the DataGrid table-layout trap. */
+  table-layout: fixed;
+}
+
+.h10-vt-receipt-table th {
+  padding: 6px 10px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.h10-vt-receipt-table th:nth-child(1) { width: 90px; }
+.h10-vt-receipt-table th:nth-child(2) { width: 30%; }
+.h10-vt-receipt-table th:nth-child(3) { width: 90px; }
+
+.h10-vt-receipt-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  vertical-align: top;
+}
+
+.h10-vt-receipt-table tr:last-child td { border-bottom: 0; }
+
+.h10-vt-t { color: var(--text-secondary); white-space: nowrap; }
+
+.h10-vt-l {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.h10-vt-d { display: flex; flex-direction: column; gap: 3px; }
+
+.h10-vt-muted { color: var(--text-secondary); }
+
+.h10-vt-delta { display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap; }
+
+.h10-vt-delta b { color: var(--text-secondary); font-weight: 600; }
+
+.h10-vt-want {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--status-success-soft);
+  color: var(--status-success-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.h10-vt-arrow { color: var(--text-tertiary); }
+
+.h10-vt-got {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--status-danger-soft);
+  color: var(--status-danger-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.h10-spin { animation: h10-vt-spin 0.9s linear infinite; }
+
+@keyframes h10-vt-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .h10-spin { animation: none; }
+}

@@ -28,6 +28,8 @@ import { TargetingModal } from './TargetingModal'
 import { LaunchStep, defaultRulesConfig, rulesConfigured, defaultBidConfig, type RulesConfig, type BidConfig } from './LaunchStep'
 import { defaultAiControl, aiGuardrailsToCents, type AiControlConfig } from './AiControlPanel'
 import { defaultCustomKeywordTypes, defaultCustomTargeting, type CustomKeywordType, type TargetingKind } from './CustomScheme'
+import { LaunchReceipt, type LaunchVerification } from '../LaunchReceipt'
+import '../launch-receipt.css'
 
 type StepN = 1 | 2 | 3
 const STEPS: Array<{ n: StepN; label: string }> = [
@@ -74,6 +76,11 @@ export function SpSuperWizard() {
   const [editTgt, setEditTgt] = useState<{ id: string; mode: 'targeting' | 'negative' } | null>(null)
   const [launching, setLaunching] = useState(false)
   const [launchErr, setLaunchErr] = useState('')
+  // AX-VT.4 — set only when the launch did NOT fully verify. A verified launch navigates away
+  // exactly as before; adding a "yes it worked" step to the happy path is how receipts get ignored.
+  const [receipt, setReceipt] = useState<LaunchVerification | null>(null)
+  const [rechecking, setRechecking] = useState(false)
+  const [launchedIds, setLaunchedIds] = useState<string[]>([])
 
   const goNext = useCallback(() => {
     if (step === 2 && campaignsMissingTargeting(campaigns) > 0) { setGuardOpen(true); return }
@@ -127,9 +134,35 @@ export function SpSuperWizard() {
           })
         } catch { /* plan creation best-effort — campaigns already launched */ }
       }
+      // AX-VT.4 — the launch now comes back with Amazon's own account of what it produced.
+      // If anything does not match, stop here and show it; the operator would otherwise find out
+      // days later in Amazon's console, which is exactly what happened on 2026-07-30.
+      const v: LaunchVerification | null = j?.verification ?? null
+      if (v && !v.ok) {
+        setLaunchedIds(Array.isArray(j?.created) ? j.created.map((c: { campaignId: string }) => c.campaignId) : [])
+        setReceipt(v)
+        setLaunching(false)
+        return
+      }
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
   }, [launching, productGroupName, products, campaigns, bidMult, rules, automationMode, bidConfig, aiControl, portfolioId, router])
+
+  /** Re-run verification for the campaigns this launch created (transient read failures are common). */
+  const recheck = useCallback(async () => {
+    if (!launchedIds.length || rechecking) return
+    setRechecking(true)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/launches/verify`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignIds: launchedIds }),
+      })
+      const j = (await r.json()) as LaunchVerification
+      if (j?.ok) router.push('/marketing/ads/campaigns')
+      else setReceipt(j)
+    } catch (e) { setLaunchErr((e as Error).message) }
+    finally { setRechecking(false) }
+  }, [launchedIds, rechecking, router])
 
 
   // Scroll-spy for the step-1 sub-nav. The scroll container is the .h10-main
@@ -229,7 +262,21 @@ export function SpSuperWizard() {
           </div>
         )}
 
-        {step === 3 && <LaunchStep campaigns={campaigns} productGroupName={productGroupName} productCount={products.length} currency="€" automationMode={automationMode} setAutomationMode={setAutomationMode} bidConfig={bidConfig} setBidConfig={setBidConfig} rules={rules} setRules={setRules} portfolioId={portfolioId} setPortfolioId={setPortfolioId} aiControl={aiControl} setAiControl={setAiControl} />}
+        {step === 3 && (
+          <>
+            {/* AX-VT.4 — above the step, so it is the first thing read after a launch that
+                did not land as specified. Absent entirely when everything verified. */}
+            {receipt && (
+              <LaunchReceipt
+                v={receipt}
+                rechecking={rechecking}
+                onRecheck={launchedIds.length ? recheck : undefined}
+                onContinue={() => router.push('/marketing/ads/campaigns')}
+              />
+            )}
+            <LaunchStep campaigns={campaigns} productGroupName={productGroupName} productCount={products.length} currency="€" automationMode={automationMode} setAutomationMode={setAutomationMode} bidConfig={bidConfig} setBidConfig={setBidConfig} rules={rules} setRules={setRules} portfolioId={portfolioId} setPortfolioId={setPortfolioId} aiControl={aiControl} setAiControl={setAiControl} />
+          </>
+        )}
       </div>
 
       <footer className="h10-spw-foot">

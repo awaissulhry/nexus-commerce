@@ -19,7 +19,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import {
-  listCampaignsV3, listAdGroupsV3, listKeywords, listTargets, listProductAds,
+  listCampaignsV3, listAdGroupsV3, listKeywords, listTargets, listSdTargets, listProductAds,
   type AdsRegion,
 } from './ads-api-client.js'
 import {
@@ -54,6 +54,7 @@ export async function verifyLaunch(campaignIds: string[]): Promise<LaunchVerific
     select: {
       id: true, name: true, marketplace: true, externalCampaignId: true, status: true,
       dailyBudget: true, biddingStrategy: true, targetingType: true, portfolioId: true,
+      adProduct: true,
     },
   })
 
@@ -72,10 +73,15 @@ export async function verifyLaunch(campaignIds: string[]): Promise<LaunchVerific
 
     // Local children of this marketplace's campaigns.
     const localIds = camps.map((c) => c.id)
+    // Which campaigns are Sponsored Display — their targets live behind a different endpoint.
+    const sdCampaignIds = new Set(camps.filter((c) => c.adProduct === 'SPONSORED_DISPLAY').map((c) => c.id))
+    const sdExtIds = camps.filter((c) => sdCampaignIds.has(c.id)).map((c) => c.externalCampaignId).filter((x): x is string => !!x)
+
     const adGroups = await prisma.adGroup.findMany({
       where: { campaignId: { in: localIds } },
       select: { id: true, campaignId: true, name: true, externalAdGroupId: true, status: true, defaultBidCents: true },
     })
+    const agToCampaign = new Map(adGroups.map((a) => [a.id, a.campaignId]))
     const agIds = adGroups.map((a) => a.id)
     const targets = await prisma.adTarget.findMany({
       where: { adGroupId: { in: agIds }, isNegative: false },
@@ -98,6 +104,12 @@ export async function verifyLaunch(campaignIds: string[]): Promise<LaunchVerific
     catch (e) { errors.push(`read keywords ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
     try { amzTargets = new Map((await listTargets(ctx, { campaignIds: extIds })).map((t) => [t.targetId, t])) }
     catch (e) { errors.push(`read targets ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
+    // Only ask for SD targets when the launch actually contains an SD campaign.
+    let amzSdTargets: Map<string | undefined, { state?: string; bid?: number; expression?: Array<{ value?: string }> }> | undefined
+    if (sdExtIds.length) {
+      try { amzSdTargets = new Map((await listSdTargets(ctx, { externalCampaignIds: sdExtIds })).map((t) => [t.targetId, t])) }
+      catch (e) { errors.push(`read SD targets ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
+    }
     try { amzProductAds = new Map((await listProductAds(ctx, { campaignIds: extIds })).map((a) => [a.adId, a])) }
     catch (e) { errors.push(`read productAds ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
 
@@ -143,7 +155,10 @@ export async function verifyLaunch(campaignIds: string[]): Promise<LaunchVerific
       // something that is working correctly. Same reasoning as pushCampaignStructure skipping them.
       if (t.kind === 'AUTO') continue
       const isKeyword = t.kind === 'KEYWORD'
-      const src = isKeyword ? amzKeywords : amzTargets
+      const isSd = sdCampaignIds.has(agToCampaign.get(t.adGroupId) ?? '')
+      const src = isKeyword ? amzKeywords : isSd ? amzSdTargets : amzTargets
+      // No read for this kind (SD read failed, or it was never requested) — skip rather than
+      // report MISSING_ON_AMAZON. A verifier that invents failures gets switched off.
       if (!src) continue
       const a = t.externalTargetId ? src.get(t.externalTargetId) : undefined
       const label = t.expressionValue ?? t.id
