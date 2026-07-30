@@ -115,6 +115,19 @@ export async function getProductEligibility(input: {
     const byAsin = new Map<string, typeof res[number]>()
     for (const r of res) if (r.asin) byAsin.set(String(r.asin).toUpperCase(), r)
 
+    // Amazon answered with rows we could not key. The docs warn that a request
+    // of ASINs can come back describing SKUs, so the record may not carry the
+    // asin we asked about. Log the real field names once — otherwise this
+    // degrades to a silent wall of UNKNOWN that looks like an empty catalogue.
+    if (res.length > 0 && byAsin.size === 0) {
+      logger.warn('[aps3-eligibility] rows returned but none keyed by asin', {
+        rows: res.length,
+        firstRowKeys: Object.keys((res[0] ?? {}) as Record<string, unknown>).slice(0, 15),
+        firstRow: JSON.stringify(res[0] ?? {}).slice(0, 700),
+        requestedSample: misses.slice(0, 3),
+      })
+    }
+
     for (const asin of misses) {
       const r = byAsin.get(asin)
       if (!r) {
