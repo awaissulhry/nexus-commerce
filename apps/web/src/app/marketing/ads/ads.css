@@ -2841,7 +2841,12 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-rep-tbl .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
 .h10-rep-tbl .pill.ok { color: #5b6573; background: #f1f4f8; }
 .h10-rep-tbl .pill.cut { color: #a4adba; background: #f1f2f4; }
-.h10-rep-tbl .cf { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 11.5px; color: #8a6d1f; }
+/* `:not(.tag)` because two different things wear this class: the status cell's
+   "competes with…" row (a flex line that must fill its cell so the Accept button
+   cannot be pushed out of it) and the campaigns table's conflict-count BADGE,
+   which is a `.tag` and must stay inline. Without the exclusion the badge
+   stretches to the full column width. */
+.h10-rep-tbl .cf:not(.tag) { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 11.5px; color: #8a6d1f; }
 .h10-rep-tbl .cf > svg { flex: none; }
 .h10-rep-tbl .cf .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-rep-tbl .mini { flex: none; font: inherit; font-size: 11.5px; font-weight: 600; color: #3a4452; background: #fff; border: 1px solid #e0d4a8; border-radius: 5px; padding: 2px 8px; cursor: pointer; }
