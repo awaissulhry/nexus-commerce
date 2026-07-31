@@ -71,6 +71,14 @@ export interface ApplyRequest {
   edits?: PlanEdits
   dryRun?: boolean
   actor?: string
+  /**
+   * AX3.8 — execute against an application row the caller already created.
+   *
+   * The detached-run path has to hand the browser an id BEFORE the work starts,
+   * so it claims the row first. Without this, applyBlueprint would open a second
+   * record and the run the operator is watching would never move.
+   */
+  existingApplicationId?: string
   /** AX3.0 — the portfolio the replicated campaigns should join. */
   portfolioId?: string
   /**
@@ -272,11 +280,86 @@ export interface ApplyResult {
   verification?: LaunchVerification | null
 }
 
+/**
+ * AX3.8 — start a replication and hand back its id, without waiting for it.
+ *
+ * WHY THIS EXISTS. A replication is hundreds of sequential Amazon calls and
+ * takes minutes. Run inside the HTTP request, the platform's edge proxy closes
+ * the connection long before it finishes: the browser reports `Failed to fetch`
+ * and the server carries on. On 2026-07-31 that produced ten live campaigns in
+ * Amazon IT that the operator was told had not been created — and a second click
+ * would have made ten more.
+ *
+ * So the request now does three things only: re-gate the plan, refuse if a run
+ * for this product is already in flight, and claim the row. The work runs
+ * detached against that row and reports into `progress`. The connection can die
+ * whenever it likes; the run is a record, not a response.
+ */
+export async function startBlueprintRun(req: ApplyRequest): Promise<{
+  applicationId: string
+  status: 'RUNNING'
+  alreadyRunning?: boolean
+  plan: ApplyPlan
+}> {
+  const { plan } = await planApply(req)
+  if (!plan.allowed) throw new Error(`refused: ${plan.blockers.join(' | ')}`)
+
+  // One run per product per market at a time. This is the guard that makes a
+  // dropped connection safe: a browser that retries finds the run it lost.
+  const inFlight = await prisma.adBlueprintApplication.findFirst({
+    where: { marketplace: req.marketplace, productToken: req.target.productToken, status: 'RUNNING' },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (inFlight) return { applicationId: inFlight.id, status: 'RUNNING', alreadyRunning: true, plan }
+
+  const application = await prisma.adBlueprintApplication.create({
+    data: {
+      blueprintId: req.blueprintId ?? null,
+      sourceSelector: req.source ? ({ ...req.source, sourceProductToken: req.sourceProductToken } as object) : undefined,
+      options: req.options ? ({
+        naming: req.options.naming, include: req.options.include,
+        bidPolicy: req.options.bidPolicy, budgetPolicy: req.options.budgetPolicy,
+        dailyBudgetCapEur: req.options.dailyBudgetCapEur,
+      } as object) : undefined,
+      edits: req.edits ? (req.edits as object) : undefined,
+      productToken: req.target.productToken,
+      marketplace: req.marketplace,
+      asins: req.target.asins,
+      status: 'RUNNING',
+      startedAt: new Date(),
+      plan: plan as unknown as object,
+      acceptedConflicts: (req.options?.acceptSharedTargets ?? []),
+      skippedTargets: (req.options?.skipSharedTargets ?? []),
+      launchMode: req.launchMode ?? 'floor',
+      actor: req.actor ?? null,
+      progress: { done: 0, total: plan.campaigns.length, campaign: null, created: { campaigns: 0, adGroups: 0, targets: 0, negatives: 0, productAds: 0 } } as object,
+    },
+  })
+
+  void applyBlueprint({ ...req, dryRun: false, existingApplicationId: application.id })
+    .catch(async (e) => {
+      logger.error('[AX3.8] detached replication threw', { applicationId: application.id, error: (e as Error).message })
+      // A thrown run must not sit at RUNNING for ever — that would block the
+      // next launch on the in-flight guard above.
+      await prisma.adBlueprintApplication.update({
+        where: { id: application.id },
+        data: { status: 'FAILED', errors: [`the run stopped: ${(e as Error).message.slice(0, 300)}`], appliedAt: new Date() },
+      }).catch(() => {})
+    })
+
+  return { applicationId: application.id, status: 'RUNNING', plan }
+}
+
 export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
   const dryRun = req.dryRun !== false // default TRUE — executing is opt-in
   const { plan } = await planApply(req)
 
-  const application = await prisma.adBlueprintApplication.create({
+  // AX3.8 — when the caller has already claimed a row (the detached-run path,
+  // which needs an id to hand back before the work starts), execute against it
+  // instead of opening a second one. A run must have exactly one record.
+  const application = req.existingApplicationId
+    ? await prisma.adBlueprintApplication.update({ where: { id: req.existingApplicationId }, data: { plan: plan as unknown as object } })
+    : await prisma.adBlueprintApplication.create({
     data: {
       // AX3.4 — null when replicated straight from a live source.
       blueprintId: req.blueprintId ?? null,
@@ -300,7 +383,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
       launchMode: req.launchMode ?? 'floor',
       actor: req.actor ?? null,
     },
-  })
+    })
 
   if (dryRun) {
     return { applicationId: application.id, status: 'PLANNED', plan, created: { campaigns: 0, adGroups: 0, targets: 0, negatives: 0, productAds: 0 }, skippedNonKeyword: 0, notOnAmazon: [], errors: [] }
@@ -342,7 +425,25 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
     catch (e) { errors.push(`remember bid: ${(e as Error).message.slice(0, 90)}`) }
   }
 
+  // AX3.8 — report from inside the run. Best-effort by design: a progress write
+  // that fails must never abort a launch that is halfway through creating real
+  // campaigns.
+  let campaignsDone = 0
+  const report = async (campaign: string) => {
+    try {
+      await prisma.adBlueprintApplication.update({
+        where: { id: application.id },
+        data: { progress: { done: campaignsDone, total: plan.campaigns.length, campaign, created } as object },
+      })
+    } catch { /* progress is not the work */ }
+  }
+  await prisma.adBlueprintApplication.update({
+    where: { id: application.id },
+    data: { status: 'RUNNING', startedAt: new Date(), progress: { done: 0, total: plan.campaigns.length, campaign: null, created } as object },
+  }).catch(() => {})
+
   for (const c of plan.campaigns) {
+    await report(c.name)
     try {
       const camp = await createCampaignLocal({
         name: c.name,
@@ -498,7 +599,9 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
     } catch (e) {
       errors.push(`campaign "${c.name}": ${(e as Error).message.slice(0, 160)}`)
     }
+    campaignsDone++
   }
+  await report('finishing up')
 
   // AX-VT.1 — the AX3.0 comment above ("join the destination portfolio") was right about
   // the intent and wrong about the layer: createCampaignLocal silently dropped portfolioId,
@@ -547,7 +650,10 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
 
   await prisma.adBlueprintApplication.update({
     where: { id: application.id },
-    data: { status, createdCampaignIds, errors, appliedAt: new Date(), notOnAmazon },
+    data: {
+      status, createdCampaignIds, errors, appliedAt: new Date(), notOnAmazon,
+      progress: { done: plan.campaigns.length, total: plan.campaigns.length, campaign: null, created } as object,
+    },
   })
   logger.info('[AX2.5] blueprint applied', { applicationId: application.id, status, created, errors: errors.length })
 

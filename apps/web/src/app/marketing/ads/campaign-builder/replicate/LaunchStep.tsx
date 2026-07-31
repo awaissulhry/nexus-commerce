@@ -32,6 +32,14 @@ import { COPY_ITEMS, BIDDING_STRATEGIES } from './replicate-types'
 import { describeChanges } from './edit-model'
 import { InfoTip } from '../../campaigns/InfoTip'
 
+/** AX3.8 — where a detached run has got to. */
+export interface RunProgress {
+  done: number
+  total: number
+  campaign: string | null
+  created: { campaigns: number; adGroups: number; targets: number; negatives: number; productAds: number }
+}
+
 export interface LaunchResult {
   applicationId: string
   status: 'PLANNED' | 'APPLIED' | 'PARTIAL' | 'FAILED'
@@ -68,7 +76,7 @@ export function resolutionFor(blocker: string): Resolution {
 
 export function LaunchStep({
   plan, sourcePlan, edits, scope, market, portfolioName, cap, setCap,
-  launchMode, setLaunchMode, launching, result, err, busy,
+  launchMode, setLaunchMode, launching, progress, result, err, busy,
   onLaunch, onRollback, onRaise, onSaveBlueprint, onResolve,
 }: {
   plan: Plan | null
@@ -83,6 +91,7 @@ export function LaunchStep({
   launchMode: 'live' | 'floor'
   setLaunchMode: (m: 'live' | 'floor') => void
   launching: boolean
+  progress: RunProgress | null
   result: LaunchResult | null
   err: string | null
   onLaunch: () => void
@@ -100,6 +109,40 @@ export function LaunchStep({
 
   if (!plan) {
     return <div className="h10-spw-card h10-rep-todo">Finish step 1 first — a source, both product tokens, and at least one product.</div>
+  }
+
+  // AX3.8 — the run is detached, so this is a WATCHER, not a spinner. It keeps
+  // showing what exists so far, which is the fact the old screen hid: campaigns
+  // were being created while it said the launch had failed.
+  if (launching) {
+    const pct = progress && progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0
+    const c = progress?.created
+    return (
+      <div className="h10-rep-launch">
+        <div className="h10-spw-card h10-rep-running">
+          <b className="hd"><Loader2 size={15} className="spin" aria-hidden /> Creating in {market}…</b>
+          <p className="sub">
+            {progress
+              ? <>Campaign {Math.min(progress.done + 1, progress.total)} of {progress.total}{progress.campaign ? <> — <b>{progress.campaign}</b></> : null}</>
+              : 'Starting the run…'}
+          </p>
+          <div className="bar"><span style={{ width: `${pct}%` }} /></div>
+          {c && (
+            <div className="tally">
+              <span><b>{c.campaigns}</b> campaigns</span>
+              <span><b>{c.adGroups}</b> ad groups</span>
+              <span><b>{c.targets}</b> targets</span>
+              <span><b>{c.negatives}</b> negatives</span>
+              <span><b>{c.productAds}</b> product ads</span>
+            </div>
+          )}
+          <p className="safe">
+            This runs on the server. You can close this tab — the run keeps going, and
+            <b> Past runs</b> in step 1 will show what it created.
+          </p>
+        </div>
+      </div>
+    )
   }
 
   if (result) {

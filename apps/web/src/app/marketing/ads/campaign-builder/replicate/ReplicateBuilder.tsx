@@ -30,7 +30,7 @@ import { NamingPanel } from './NamingPanel'
 import { CopyScopePanel } from './CopyScopePanel'
 import { DestinationPanel } from './DestinationPanel'
 import { ReviewStep } from './ReviewStep'
-import { LaunchStep, type LaunchResult, type Resolution } from './LaunchStep'
+import { LaunchStep, type LaunchResult, type Resolution, type RunProgress } from './LaunchStep'
 import { HistoryPanel, DriftCheck } from './HistoryPanel'
 import {
   fullCopyScope, emptyNaming, copyPolicy, guessProductToken, verdictOf,
@@ -91,6 +91,7 @@ export function ReplicateBuilder() {
   const [launching, setLaunching] = useState(false)
   const [launchErr, setLaunchErr] = useState<string | null>(null)
   const [result, setResult] = useState<LaunchResult | null>(null)
+  const [progress, setProgress] = useState<RunProgress | null>(null)
   const [busy, setBusy] = useState(false)
 
   // ── the server's plan ─────────────────────────────────────────────────
@@ -240,9 +241,43 @@ export function ReplicateBuilder() {
     })
   }, [source, sourceMarket, sourceToken, targetToken, asins, market, portfolioId, cap, edits, conflictDecisions, naming, scope, bidPolicy, budgetPolicy])
 
+  /**
+   * AX3.8 — start the run, then WATCH it.
+   *
+   * The launch used to be one long request. Creating ten campaigns is hundreds
+   * of sequential Amazon calls, so the edge proxy closed the connection minutes
+   * in, this `fetch` rejected with "Failed to fetch", and the operator was told
+   * the launch had failed while the server went on to create ten live campaigns.
+   *
+   * The request now returns an id immediately and the work runs detached, so a
+   * dead connection costs nothing. And if even that short request fails, we go
+   * looking for the run before reporting failure — because "I could not reach
+   * the server" and "nothing was created" are different sentences, and printing
+   * the second when the first is true is what caused the incident.
+   */
+  const watch = useCallback(async (applicationId: string) => {
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 1500))
+      try {
+        const r = await fetch(`${getBackendUrl()}/api/advertising/blueprint-applications/${applicationId}`, { credentials: 'include' })
+        if (!r.ok) continue
+        const j = await r.json()
+        setProgress({ done: j.step?.done ?? 0, total: j.step?.total ?? 0, campaign: j.step?.campaign ?? null, created: j.created })
+        if (j.done) {
+          setResult({
+            applicationId: j.id, status: j.status, created: j.created,
+            skippedNonKeyword: j.skippedNonKeyword ?? 0, notOnAmazon: j.notOnAmazon ?? [], errors: j.errors ?? [],
+          })
+          return
+        }
+      } catch { /* a lost poll is not a lost run — keep watching */ }
+    }
+  }, [])
+
   const launch = useCallback(async () => {
     if (launching) return
-    setLaunching(true); setLaunchErr(null)
+    setLaunching(true); setLaunchErr(null); setProgress(null)
+    let applicationId: string | null = null
     try {
       const r = await fetch(`${getBackendUrl()}/api/advertising/blueprints/replicate`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
@@ -250,9 +285,24 @@ export function ReplicateBuilder() {
       })
       const j = await r.json().catch(() => ({}))
       if (!r.ok || j?.error) throw new Error(j?.blockers?.join(' · ') || j?.error || `HTTP ${r.status}`)
-      setResult(j as LaunchResult)
-    } catch (e) { setLaunchErr((e as Error).message) } finally { setLaunching(false) }
-  }, [launching, requestBody, launchMode])
+      applicationId = j.applicationId as string
+    } catch (e) {
+      // Did it start anyway? Ask before claiming it did not.
+      try {
+        const h = await fetch(`${getBackendUrl()}/api/advertising/blueprint-applications?marketplace=${market}&status=RUNNING`, { credentials: 'include' })
+        const hj = await h.json()
+        const mine = (hj?.items ?? []).find((x: { productToken: string }) => x.productToken === targetToken.trim())
+        if (mine) applicationId = mine.id
+      } catch { /* fall through to the error below */ }
+      if (!applicationId) {
+        setLaunchErr(`${(e as Error).message} — nothing was created; check "Past runs" before trying again.`)
+        setLaunching(false)
+        return
+      }
+    }
+    await watch(applicationId)
+    setLaunching(false)
+  }, [launching, requestBody, launchMode, market, targetToken, watch])
 
   const afterRun = useCallback(async (path: string, label: string) => {
     if (!result || busy) return
@@ -509,7 +559,7 @@ export function ReplicateBuilder() {
               portfolioName={portfolioId ? portfolioNames.get(portfolioId) ?? portfolioId : null}
               cap={cap} setCap={setCap}
               launchMode={launchMode} setLaunchMode={setLaunchMode}
-              launching={launching} result={result} err={launchErr} busy={busy}
+              launching={launching} progress={progress} result={result} err={launchErr} busy={busy}
               onLaunch={() => void launch()}
               onRollback={() => void afterRun('rollback', 'Rollback')}
               onRaise={() => void afterRun('raise-bids', 'Raise')}

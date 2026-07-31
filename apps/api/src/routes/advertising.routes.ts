@@ -1450,6 +1450,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       if (req.dryRun === false) {
         const { plan } = await svc.planApply(req)
         if (!plan.allowed) { reply.code(409); return { error: 'refused', blockers: plan.blockers, conflicts: plan.conflicts, plan } }
+        // AX3.8 — the work is DETACHED. Hundreds of Amazon calls do not fit in an
+        // HTTP request: the edge proxy closes the connection and the browser is
+        // told the launch failed while ten live campaigns are being created. The
+        // response is the run's id; progress is polled from the status route.
+        return await svc.startBlueprintRun(req)
       }
       return await svc.applyBlueprint(req)
     } catch (e) {
@@ -1559,6 +1564,34 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
    * so they are excluded by default: a history that is mostly previews of things
    * that never happened is not a history anyone can read.
    */
+  /**
+   * AX3.8 — watch one run.
+   *
+   * The launch is detached, so this is how the builder follows it. It is also
+   * how a browser that lost its connection RE-ATTACHES: the id survives in the
+   * page, and if it did not, the history list finds the run by product + market.
+   */
+  fastify.get('/advertising/blueprint-applications/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const row = await prisma.adBlueprintApplication.findUnique({
+      where: { id },
+      select: {
+        id: true, status: true, progress: true, productToken: true, marketplace: true,
+        createdCampaignIds: true, notOnAmazon: true, errors: true, launchMode: true,
+        createdAt: true, startedAt: true, appliedAt: true, rolledBackAt: true,
+      },
+    })
+    if (!row) { reply.code(404); return { error: 'not found' } }
+    const p = (row.progress ?? {}) as { done?: number; total?: number; campaign?: string | null; created?: Record<string, number> }
+    return {
+      ...row,
+      done: row.status !== 'RUNNING',
+      created: p.created ?? { campaigns: 0, adGroups: 0, targets: 0, negatives: 0, productAds: 0 },
+      step: { done: p.done ?? 0, total: p.total ?? 0, campaign: p.campaign ?? null },
+      skippedNonKeyword: 0,
+    }
+  })
+
   fastify.get('/advertising/blueprint-applications', async (request) => {
     const q = request.query as { blueprintId?: string; status?: string; marketplace?: string; includeDryRuns?: string }
     const rows = await prisma.adBlueprintApplication.findMany({

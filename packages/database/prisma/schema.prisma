@@ -13819,8 +13819,24 @@ model AdBlueprintApplication {
   /// landed at Amazon's 2c floor. A money fact; it belongs on the record.
   launchMode     String?
 
+  /// AX3.8 — live progress while the run is executing: { step, done, total,
+  /// campaign, created:{...} }.
+  ///
+  /// A replication is hundreds of sequential Amazon calls and takes minutes. It
+  /// used to run inside the HTTP request, so the edge proxy cut the connection
+  /// and the browser said "Failed to fetch" while the server carried on and
+  /// created ten live campaigns nobody could see. The run is now detached and
+  /// this column is how it is watched — and how a reconnecting browser finds a
+  /// run already in flight instead of starting a second one.
+  progress       Json?
+  /// AX3.8 — set when execution begins, so a RUNNING row that stops advancing
+  /// can be told apart from one that never started.
+  startedAt      DateTime?
+
   @@index([blueprintId])
   @@index([status])
+  /// AX3.8 — "is a run already in flight for this product?" on every launch.
+  @@index([marketplace, productToken, status])
 }
 
 /// AX2.4 — a named, product-agnostic campaign structure extracted from live
