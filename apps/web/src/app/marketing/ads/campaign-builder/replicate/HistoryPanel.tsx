@@ -90,7 +90,7 @@ export function HistoryPanel({ market, onReplicateAgain }: {
           <p className="h10-rep-hist-none">None saved. You can save one at the end of a run — it stores what you replicated so you do not have to rebuild the selection.</p>
         ) : saved.map((b) => (
           <div className="h10-rep-hist-row" key={b.id}>
-            <button type="button" className="exp" onClick={() => setOpenBp(openBp === b.id ? null : b.id)} aria-expanded={openBp === b.id} aria-label="Show what is inside">
+            <button type="button" className="exp" onClick={() => setOpenBp(openBp === b.id ? null : b.id)} aria-expanded={openBp === b.id} aria-label="Show what is inside" title="Show which campaign roles this saved structure contains">
               {openBp === b.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </button>
             <span className="nm"><b>{b.name}</b><span className="m">{b.marketplace} · captured from {b.productToken}</span></span>

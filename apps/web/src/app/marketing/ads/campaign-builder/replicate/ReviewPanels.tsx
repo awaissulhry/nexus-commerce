@@ -142,8 +142,8 @@ export function AdGroupSettings({ g, allAsins, onBid, onAsins, onRename, onRemov
       {prodOpen && (
         <div className="prodlist">
           <div className="top">
-            <button type="button" onClick={() => onAsins([...allAsins])}>All</button>
-            <button type="button" onClick={() => onAsins([])}>None</button>
+            <button type="button" title="Advertise every product you picked in step 1 in this ad group" onClick={() => onAsins([...allAsins])}>All</button>
+            <button type="button" title="Advertise none of them here — the ad group is created with nothing to advertise" onClick={() => onAsins([])}>None</button>
           </div>
           <div className="items">
             {allAsins.map((a) => (

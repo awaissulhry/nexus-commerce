@@ -193,7 +193,7 @@ export function LaunchStep({
                     <span>Daily cap</span>
                     <Input inputMode="decimal" prefix="€" value={cap} placeholder="none" aria-label="Daily budget cap"
                       onChange={(e) => setCap(e.target.value)} fieldClassName="h10-rep-numfield" />
-                    <button type="button" className="lnk" onClick={() => setCap('')}>Remove the cap</button>
+                    <button type="button" className="lnk" title="Drop the daily-spend ceiling so this replication is no longer refused for exceeding it" onClick={() => setCap('')}>Remove the cap</button>
                   </label>
                 ) : r ? (
                   <Button variant="primary" onClick={() => onResolve(r)}>{r.label} <ArrowRight size={13} /></Button>
@@ -283,7 +283,7 @@ export function LaunchStep({
           <h3>Your changes</h3>
           <span className="n">{changes.length === 0 ? 'None — this is the source structure, re-pointed at the new product' : `${changes.length} change${changes.length === 1 ? '' : 's'}`}</span>
           {changes.length > 0 && (
-            <button type="button" className="lnk" onClick={() => setChangesOpen((o) => !o)}>{changesOpen ? 'Hide' : 'Show all'}</button>
+            <button type="button" className="lnk" title="List every edit you made in step 2" onClick={() => setChangesOpen((o) => !o)}>{changesOpen ? 'Hide' : 'Show all'}</button>
           )}
         </div>
         {changesOpen && (

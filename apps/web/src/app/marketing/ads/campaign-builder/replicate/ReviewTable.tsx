@@ -72,6 +72,7 @@ export function TargetTable({
   const Th = ({ k, children, className }: { k: SortKey; children: ReactNode; className?: string }) => (
     <th className={className}>
       <button type="button" className={`srt ${sort.key === k ? 'on' : ''}`}
+        title={sort.key === k ? 'Sorted by this column — click to reverse' : 'Sort by this column'}
         onClick={() => setSort((s) => ({ key: k, dir: s.key === k && s.dir === 1 ? -1 : 1 }))}>
         {children}{sort.key === k && <span className="ar">{sort.dir === 1 ? '↑' : '↓'}</span>}
       </button>
@@ -173,7 +174,7 @@ export function TargetTable({
                 </td>
                 {showWhere && (
                   <td className="whr">
-                    <button type="button" className="whrbtn" onClick={() => onGoTo?.(r)}>
+                    <button type="button" className="whrbtn" title={`Show ${r.adGroupName} in the structure view`} onClick={() => onGoTo?.(r)}>
                       {r.campaignName.replace(/^[A-Z]{2}-/, '')}
                     </button>
                   </td>

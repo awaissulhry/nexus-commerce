@@ -225,18 +225,22 @@ export function ReviewStep({
         {/* ── structure rail ───────────────────────────────────────────── */}
         {!flat && (
           <aside className="h10-rep-rail" aria-label="Structure">
-            <button type="button" className={`root ${scope.kind === 'all' ? 'on' : ''}`} onClick={() => setScope({ kind: 'all' })}>
-              <span className="n">All campaigns</span>
-              <span className="c">{view.campaigns.filter((c) => !c.removed).length}</span>
-            </button>
+            <InfoTip tip="Every campaign in the plan, side by side, with its budget and what it holds.">
+              <button type="button" className={`root ${scope.kind === 'all' ? 'on' : ''}`} onClick={() => setScope({ kind: 'all' })}>
+                <span className="n">All campaigns</span>
+                <span className="c">{view.campaigns.filter((c) => !c.removed).length}</span>
+              </button>
+            </InfoTip>
             {view.campaigns.map((c) => {
               const conf = c.adGroups.flatMap((g) => g.targets).filter((t) => t.conflict && t.decision !== 'accept' && !t.removed).length
               const on = scope.kind === 'campaign' && scope.id === c.id
               return (
                 <div key={c.id} className="grp">
-                  <button type="button" className={`cmp ${on ? 'on' : ''} ${c.removed ? 'cut' : ''}`} onClick={() => setScope({ kind: 'campaign', id: c.id })}>
+                  <button type="button" className={`cmp ${on ? 'on' : ''} ${c.removed ? 'cut' : ''}`}
+                    title={`${c.name} — open its budget, bidding, placements and targets`}
+                    onClick={() => setScope({ kind: 'campaign', id: c.id })}>
                     <ChevronRight size={13} aria-hidden />
-                    <span className="n" title={c.name}>{c.name}</span>
+                    <span className="n">{c.name}</span>
                     {conf > 0 && (
                       <InfoTip tip={`${conf} keyword${conf === 1 ? '' : 's'} in this campaign would bid against campaigns you already run. Click the campaign to see them.`}>
                         <span className="cf">{conf}</span>
@@ -247,9 +251,11 @@ export function ReviewStep({
                     const gconf = g.targets.filter((t) => t.conflict && t.decision !== 'accept' && !t.removed).length
                     const gon = scope.kind === 'adGroup' && scope.id === g.id
                     return (
-                      <button key={g.id} type="button" className={`ag ${gon ? 'on' : ''} ${g.removed ? 'cut' : ''}`} onClick={() => setScope({ kind: 'adGroup', id: g.id })}>
+                      <button key={g.id} type="button" className={`ag ${gon ? 'on' : ''} ${g.removed ? 'cut' : ''}`}
+                        title={`${g.name} — open its default bid, products and targets`}
+                        onClick={() => setScope({ kind: 'adGroup', id: g.id })}>
                         <Layers size={11} aria-hidden />
-                        <span className="n" title={g.name}>{g.name}</span>
+                        <span className="n">{g.name}</span>
                         <span className="c">{g.targets.filter((t) => !t.removed).length}</span>
                         {gconf > 0 && <span className="cf">{gconf}</span>}
                       </button>
@@ -277,7 +283,7 @@ export function ReviewStep({
             <div className="h10-rep-search">
               <Search size={15} aria-hidden />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a keyword, ad group or campaign" aria-label="Filter the plan" />
-              {q && <button type="button" className="clr" onClick={() => setQ('')} aria-label="Clear search"><X size={13} /></button>}
+              {q && <button type="button" className="clr" onClick={() => setQ('')} aria-label="Clear search" title="Clear the search"><X size={13} /></button>}
             </div>
             <InfoTip tip="Everything you have changed from the source structure, each item individually reversible. Nothing here has reached Amazon.">
               <button type="button" className={`h10-rep-chg ${changes.length ? 'on' : ''}`} onClick={() => setChangesOpen(true)}>
@@ -373,7 +379,9 @@ export function ReviewStep({
               {scope.kind === 'campaign' && !flat && activeCampaign && (
                 <div className="h10-rep-aglist">
                   {activeCampaign.adGroups.map((g) => (
-                    <button key={g.id} type="button" className={`item ${g.removed ? 'cut' : ''}`} onClick={() => setScope({ kind: 'adGroup', id: g.id })}>
+                    <button key={g.id} type="button" className={`item ${g.removed ? 'cut' : ''}`}
+                      title={`Open ${g.name} — its default bid, the products it advertises, and its targets`}
+                      onClick={() => setScope({ kind: 'adGroup', id: g.id })}>
                       <Layers size={13} aria-hidden />
                       <span className="n">{g.name}</span>
                       <span className="m">
@@ -511,7 +519,7 @@ function CampaignsTable({ campaigns, onOpen, onRemove, onBudget, onBulkBudget, o
             return (
               <tr key={c.id} className={c.removed ? 'cut' : ''}>
                 <td className="exp">
-                  <button type="button" className="expbtn" onClick={() => onOpen(c.id)}>
+                  <button type="button" className="expbtn" title={`Open ${c.name} — its bidding, placements and targets`} onClick={() => onOpen(c.id)}>
                     <b>{c.name}</b>
                   </button>
                   {conf > 0 && <span className="tag cf">{conf} conflict{conf === 1 ? '' : 's'}</span>}
