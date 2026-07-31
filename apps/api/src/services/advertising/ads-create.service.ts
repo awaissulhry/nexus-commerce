@@ -108,19 +108,62 @@ export async function createKeywordLocal(input: NewKeyword): Promise<{ id: strin
 }
 
 export interface NewProductAd { adGroupId: string; sku?: string; asin?: string; productId?: string; userId?: string }
+
+/**
+ * Find the seller SKU an SP product ad actually needs.
+ *
+ * **A Sponsored Products ad is created from a merchant SKU, not an ASIN.** Send
+ * only an ASIN and Amazon answers 200 with an empty `success` array — no id, no
+ * error, nothing thrown. Every caller that trusted that call therefore stored a
+ * local row with a null external id and reported it as created. That is how a
+ * replication reported 200 product ads while ZERO of them existed on Amazon, and
+ * the ten campaigns it created could not serve a single impression.
+ *
+ * The identifier can arrive as either kind, because the campaign builders put
+ * `asin || sku` into one flat list — so a product with no ASIN carries its SKU
+ * in the ASIN field. Both are resolved here rather than at each call site.
+ */
+export async function resolveSellerSku(
+  input: { sku?: string | null; asin?: string | null },
+): Promise<{ sku: string; asin: string | null } | null> {
+  if (input.sku) return { sku: input.sku, asin: input.asin ?? null }
+  const value = input.asin
+  if (!value) return null
+  // Prefer FBA when one ASIN has several offers — that is the offer these
+  // campaigns advertise.
+  const byAsin = await prisma.product.findFirst({
+    where: { amazonAsin: value, fulfillmentMethod: 'FBA' }, select: { sku: true, amazonAsin: true }, orderBy: { sku: 'asc' },
+  }) ?? await prisma.product.findFirst({
+    where: { amazonAsin: value }, select: { sku: true, amazonAsin: true }, orderBy: { sku: 'asc' },
+  })
+  if (byAsin) return { sku: byAsin.sku, asin: byAsin.amazonAsin ?? value }
+  // The value is already a seller SKU (a product with no ASIN of its own).
+  const bySku = await prisma.product.findFirst({ where: { sku: value }, select: { sku: true, amazonAsin: true } })
+  if (bySku) return { sku: bySku.sku, asin: bySku.amazonAsin ?? null }
+  return null
+}
+
 export async function createProductAdLocal(input: NewProductAd): Promise<{ id: string; externalAdId: string | null }> {
   const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true } } } })
   if (!ag) throw new Error('ad group not found')
+  const resolved = await resolveSellerSku(input)
   let externalId: string | null = null
   if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
       const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0 })
-      if (gate.allowed) { const r = await createProductAd(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, sku: input.sku, asin: input.asin, state: 'enabled' }); externalId = r.externalId }
+      if (gate.allowed) {
+        if (!resolved) throw new Error(`no seller SKU for "${input.asin ?? input.sku ?? '?'}" — a Sponsored Products ad needs one`)
+        const r = await createProductAd(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, sku: resolved.sku, state: 'enabled' })
+        externalId = r.externalId
+        // Amazon answers 200 with an empty success list when it rejects an ad.
+        // Silence here is what made 200 phantom product ads look like a clean run.
+        if (!externalId) throw new Error(`Amazon did not create the ad for "${resolved.sku}": ${JSON.stringify(r.rawResponse).slice(0, 200)}`)
+      }
     }
   }
-  const ad = await prisma.adProductAd.create({ data: { adGroupId: input.adGroupId, asin: input.asin ?? null, sku: input.sku ?? null, productId: input.productId ?? null, status: 'ENABLED', externalAdId: externalId } })
-  await audit('create_product_ad', 'PRODUCT_AD', ad.id, { sku: input.sku, asin: input.asin, externalId }, input.userId)
+  const ad = await prisma.adProductAd.create({ data: { adGroupId: input.adGroupId, asin: resolved?.asin ?? input.asin ?? null, sku: resolved?.sku ?? input.sku ?? null, productId: input.productId ?? null, status: 'ENABLED', externalAdId: externalId } })
+  await audit('create_product_ad', 'PRODUCT_AD', ad.id, { sku: resolved?.sku ?? input.sku, asin: input.asin, externalId }, input.userId)
   return { id: ad.id, externalAdId: externalId }
 }
 
@@ -181,18 +224,17 @@ export async function pushCampaignStructure(campaignId: string): Promise<{ ok: b
     const productAds = await prisma.adProductAd.findMany({ where: { adGroupId: ag.id, externalAdId: null } })
     for (const pa of productAds) {
       try {
-        // Sponsored Products ads require a seller SKU (merchantSku), not just an ASIN. When the row
-        // has none (wizard launches store ASIN-only), resolve the FBA seller SKU from the catalog
-        // (GALE campaigns are FBA); fall back to any SKU for that ASIN. Persist it back.
-        let sku = pa.sku ?? undefined
-        if (!sku && pa.asin) {
-          const fba = await prisma.product.findFirst({ where: { amazonAsin: pa.asin, fulfillmentMethod: 'FBA' }, select: { sku: true }, orderBy: { sku: 'asc' } })
-          const any = fba ?? await prisma.product.findFirst({ where: { amazonAsin: pa.asin }, select: { sku: true }, orderBy: { sku: 'asc' } })
-          sku = any?.sku ?? undefined
-        }
-        if (!sku) { out.errors.push('productAd "' + (pa.asin || '') + '": no seller SKU for ASIN'); continue }
+        // Sponsored Products ads require a seller SKU (merchantSku), not just an ASIN. Shared with
+        // the launch path so a repair can fix exactly what a launch should have created — including
+        // rows whose "asin" is really a SKU, which the builders' flat `asin || sku` list produces.
+        const resolved = await resolveSellerSku(pa)
+        if (!resolved) { out.errors.push('productAd "' + (pa.asin || pa.sku || '') + '": no seller SKU in the catalog for this product'); continue }
+        const sku = resolved.sku
         const r = await createProductAd(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, sku, state: 'enabled' })
-        if (r.externalId) { await prisma.adProductAd.update({ where: { id: pa.id }, data: { externalAdId: r.externalId, sku } }); out.productAds++ }
+        // Write the real ASIN back too: rows created from the builders' flat list
+        // carry a SKU in `asin`, and leaving that lie in place breaks every later
+        // join that trusts the column's name.
+        if (r.externalId) { await prisma.adProductAd.update({ where: { id: pa.id }, data: { externalAdId: r.externalId, sku, asin: resolved.asin } }); out.productAds++ }
         else out.errors.push('productAd "' + (pa.asin || sku) + '": ' + JSON.stringify(r.rawResponse).slice(0, 200))
       } catch (e) { out.errors.push('productAd "' + (pa.asin || pa.sku || '') + '": ' + ((e as Error)?.message || '')) }
     }
@@ -508,6 +550,14 @@ export interface NewTarget {
   value: string
   audienceType?: 'VIEWS_REMARKETING' | 'PURCHASES_REMARKETING' | 'AUDIENCE'
   bidEur: number; state?: 'enabled' | 'paused'; userId?: string
+  /**
+   * Write the local row but do NOT create it on Amazon.
+   *
+   * For the four SP auto-targeting clauses, which Amazon generates itself when
+   * an ad group joins an AUTO campaign — POST /sp/targets rejects them. The row
+   * still has to exist locally for bids and reporting to hang off.
+   */
+  skipAmazon?: boolean
 }
 export async function createTargetLocal(input: NewTarget): Promise<{ id: string; externalTargetId: string | null; mode: string }> {
   const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true } } } })
@@ -527,7 +577,7 @@ export async function createTargetLocal(input: NewTarget): Promise<{ id: string;
         : [{ type: AUTO_EXPRESSION[input.value] ?? input.value }]
   const expressionType = input.kind === 'PRODUCT' ? 'ASIN' : input.kind === 'CATEGORY' ? 'CATEGORY' : isAudience ? audType : 'AUTO'
   let externalId: string | null = null, mode = 'local'
-  if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
+  if (!input.skipAmazon && ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
       const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: Math.round(input.bidEur * 100) })

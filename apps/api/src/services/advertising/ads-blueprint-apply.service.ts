@@ -320,6 +320,8 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
   let skippedNonKeyword = 0
   const createdCampaignIds: string[] = []
   const notOnAmazon: string[] = []
+  /** Product ads whose row exists but which Amazon never accepted. */
+  const notPushedAds: string[] = []
   const errors: string[] = []
 
   // AX3.5 — a floored launch creates AT the floor and remembers the planned bid,
@@ -429,8 +431,15 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
             // An unidentifiable clause (SB/SD targeting) is still counted, not
             // silently swallowed — the plan warned about it already.
             if (!t.autoClause) { skippedNonKeyword++; continue }
+            // Amazon CREATES the four SP auto clauses itself when an ad group is
+            // added to an AUTO campaign, and POST /sp/targets rejects them
+            // (INVALID_ARGUMENT on the clause value). Posting them anyway is what
+            // put four failures on every replication of an Auto campaign and
+            // downgraded an otherwise clean run to PARTIAL. The local row is still
+            // written — bids and reporting hang off it — it just is not pushed;
+            // the structural reconcile links it to Amazon's own clause.
             try {
-              const r = await createTargetLocal({ adGroupId: grp.id, kind: 'AUTO', value: t.autoClause, bidEur, userId: req.actor })
+              const r = await createTargetLocal({ adGroupId: grp.id, kind: 'AUTO', value: t.autoClause, bidEur, userId: req.actor, skipAmazon: true })
               await rememberTarget(r.id, plannedCents)
               created.targets++
             } catch (e) { errors.push(`auto clause ${t.autoClause}: ${(e as Error).message.slice(0, 120)}`) }
@@ -452,9 +461,13 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
 
         for (const asin of g.asins) {
           try {
-            await createProductAdLocal({ adGroupId: grp.id, asin, userId: req.actor })
-            created.productAds++
-          } catch (e) { errors.push(`productAd ${asin}: ${(e as Error).message.slice(0, 120)}`) }
+            const ad = await createProductAdLocal({ adGroupId: grp.id, asin, userId: req.actor })
+            // Count what reached AMAZON, not what reached our database. Counting
+            // local rows is how a run with zero live product ads reported 200 of
+            // them and looked like a success.
+            if (ad.externalAdId) created.productAds++
+            else notPushedAds.push(asin)
+          } catch (e) { errors.push(`productAd ${asin}: ${(e as Error).message.slice(0, 160)}`) }
         }
       }
 
@@ -506,10 +519,25 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
     errors.push(`launch verification failed: ${(e as Error).message.slice(0, 120)}`)
     return null
   })
+  if (notPushedAds.length) {
+    errors.push(
+      `${notPushedAds.length} product ad(s) were not accepted by Amazon, so those products are not `
+      + `being advertised (${notPushedAds.slice(0, 3).join(', ')}${notPushedAds.length > 3 ? ', …' : ''}). `
+      + 'Use "Push the missing pieces" to retry them.',
+    )
+  }
   if (verification && !verification.ok) {
     // Surfaced as errors so `status` downgrades to PARTIAL — a run whose result does not match
     // the blueprint is not an APPLIED run, and saying so is the entire point of this phase.
-    for (const p of verification.problems.slice(0, 20)) errors.push(p)
+    //
+    // The list is capped, and the CAP IS STATED. It silently kept the first 20 before, so a run
+    // with 200 broken product ads and a run with 20 produced an identical receipt — and the first
+    // one read as the smaller problem.
+    const CAP = 20
+    for (const p of verification.problems.slice(0, CAP)) errors.push(p)
+    if (verification.problems.length > CAP) {
+      errors.push(`…and ${verification.problems.length - CAP} more problem(s) not listed here — ${verification.problems.length} in total.`)
+    }
   }
 
   const status: ApplyResult['status'] =
