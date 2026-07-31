@@ -2461,7 +2461,14 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-spw-ps-cnt .addall, .h10-spw-ps-enterfoot .addall { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; font-weight: 600; color: #5b6573; background: #f4f6f9; border: 1px solid #e6e9ee; cursor: pointer; padding: 5px 11px; border-radius: 6px; }
 .h10-spw-ps-cnt .addall:hover:not(:disabled), .h10-spw-ps-enterfoot .addall:hover:not(:disabled) { background: #eef1f5; color: #3a4452; }
 .h10-spw-ps-cnt .addall:disabled, .h10-spw-ps-enterfoot .addall:disabled { color: #b5bcc6; background: #f6f8fa; cursor: default; }
-.h10-spw-ps-list { display: flex; flex-direction: column; }
+/* Both product lists scroll INSIDE the card.
+   Neither was bounded: the staged list grows one ~74px row per product, and
+   expanding a family in the catalogue adds a row per variation (AIREON has 40).
+   Measured on prod with only 20 products staged, this card was 1611px tall in a
+   906px viewport — the Destination and Past-runs sections below it were pushed
+   two screens down, and the operator had to scroll past the picker to reach the
+   Next button. */
+.h10-spw-ps-list { display: flex; flex-direction: column; max-height: 480px; overflow-y: auto; }
 .h10-spw-ps-list .row, .h10-spw-ps-rlist .row { display: flex; align-items: center; gap: 11px; padding: 10px 2px; border-top: 1px solid #f0f2f5; }
 .h10-spw-ps-list .row:first-child { border-top: 1px solid #e6e9ee; }
 .h10-spw-ps-th { position: relative; flex-shrink: 0; width: 44px; height: 44px; border-radius: 6px; border: 1px solid #e6e9ee; background: #fff; overflow: hidden; }
@@ -2518,7 +2525,7 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-spw-ps-rh .rm:hover:not(:disabled) { color: #cc1100; }
 .h10-spw-ps-rh .rm:disabled { color: #b5bcc6; cursor: default; }
 .h10-spw-ps-rcol { font-size: 11.5px; font-weight: 600; color: #8a93a1; padding: 12px 0 6px; border-bottom: 1px solid #e6e9ee; display: inline-flex; align-items: center; gap: 3px; }
-.h10-spw-ps-rlist { flex: 1; min-height: 220px; }
+.h10-spw-ps-rlist { flex: 1; min-height: 220px; max-height: 480px; overflow-y: auto; }
 .h10-spw-ps-rlist .row .x { flex-shrink: 0; background: none; border: none; color: #a4adba; cursor: pointer; padding: 4px; display: inline-flex; }
 .h10-spw-ps-rlist .row .x:hover { color: #cc1100; }
 .h10-spw-ps-nodata { display: flex; align-items: center; justify-content: center; min-height: 220px; font-size: 13px; color: #a4adba; }
