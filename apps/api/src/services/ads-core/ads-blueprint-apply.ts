@@ -57,6 +57,17 @@ export interface PlannedTarget {
   gated?: boolean
   /** AX3.4 — added by the operator in step 2 rather than copied from the source. */
   added?: boolean
+  /**
+   * AX3.7 — the operator rewrote this target's expression in the review step.
+   *
+   * Load-bearing for the gate: `gated` was derived from the SOURCE expression, so
+   * once the text changes that classification describes a keyword that no longer
+   * exists. Anything carrying this flag is re-classified against the target
+   * product in `evaluatePlan`, exactly like an added one — otherwise renaming a
+   * product-specific keyword into a category term would walk straight past the
+   * self-competition check.
+   */
+  edited?: boolean
 }
 export interface PlannedAdGroup {
   /** AX3.4 — stable address for an edit: `c0.g1`. */
@@ -113,7 +124,29 @@ export interface PlanEdits {
     isNegative?: boolean
     bidCents?: number | null
   }>
+
+  // ── AX3.7 — the rest of what `applyBlueprint` actually sends to Amazon ────
+  //
+  // Everything below was already read by the create path and had no way of being
+  // changed before it got there. A replication that can only adjust bids, budgets
+  // and names is not a review step; it is a preview with three sliders.
+
+  /** Rewrite a keyword or product target. Re-gated — see PlannedTarget.edited. */
+  targetExpressions?: Array<{ id: string; expression: string }>
+  /** EXACT / PHRASE / BROAD. Negatives are EXACT or PHRASE only, on Amazon's side. */
+  targetMatchTypes?: Array<{ id: string; expressionType: string }>
+  /** Top-of-search / product-page / rest-of-search bid multipliers, per campaign. */
+  campaignPlacements?: Array<{ id: string; placementBidding: Array<{ placement: string; percentage: number }> }>
+  /** LEGACY_FOR_SALES | AUTO_FOR_SALES | MANUAL. */
+  campaignBidding?: Array<{ id: string; biddingStrategy: string }>
+  /** Which of the selected products this ad group advertises. Empty ⇒ none. */
+  adGroupAsins?: Array<{ id: string; asins: string[] }>
 }
+
+/** Amazon's three SP placements, and the range it accepts for a multiplier. */
+export const PLACEMENTS = ['PLACEMENT_TOP', 'PLACEMENT_PRODUCT_PAGE', 'PLACEMENT_REST_OF_SEARCH'] as const
+export const MAX_PLACEMENT_PCT = 900
+export const BIDDING_STRATEGIES = ['LEGACY_FOR_SALES', 'AUTO_FOR_SALES', 'MANUAL'] as const
 
 /** Ids referenced by an edit set that no longer exist in the freshly-built plan. */
 export interface StaleEditRef { kind: 'campaign' | 'adGroup' | 'target'; id: string }
@@ -388,6 +421,11 @@ export function applyEdits(
   for (const e of edits.adGroupBids ?? []) check('adGroup', e.id, agById.has(e.id))
   for (const e of edits.targetBids ?? []) check('target', e.id, tgtById.has(e.id))
   for (const a of edits.addedTargets ?? []) check('adGroup', a.adGroupId, agById.has(a.adGroupId))
+  for (const e of edits.targetExpressions ?? []) check('target', e.id, tgtById.has(e.id))
+  for (const e of edits.targetMatchTypes ?? []) check('target', e.id, tgtById.has(e.id))
+  for (const e of edits.campaignPlacements ?? []) check('campaign', e.id, campById.has(e.id))
+  for (const e of edits.campaignBidding ?? []) check('campaign', e.id, campById.has(e.id))
+  for (const e of edits.adGroupAsins ?? []) check('adGroup', e.id, agById.has(e.id))
   if (stale.length) return { campaigns, stale }
 
   const rmC = new Set(edits.removedCampaigns ?? [])
@@ -398,6 +436,11 @@ export function applyEdits(
   const budC = new Map((edits.campaignBudgets ?? []).map((e) => [e.id, e.dailyBudget]))
   const bidG = new Map((edits.adGroupBids ?? []).map((e) => [e.id, e.defaultBidCents]))
   const bidT = new Map((edits.targetBids ?? []).map((e) => [e.id, e.bidCents]))
+  const exprT = new Map((edits.targetExpressions ?? []).map((e) => [e.id, e.expression]))
+  const mtT = new Map((edits.targetMatchTypes ?? []).map((e) => [e.id, e.expressionType]))
+  const placeC = new Map((edits.campaignPlacements ?? []).map((e) => [e.id, e.placementBidding]))
+  const bidStratC = new Map((edits.campaignBidding ?? []).map((e) => [e.id, e.biddingStrategy]))
+  const asinsG = new Map((edits.adGroupAsins ?? []).map((e) => [e.id, e.asins]))
   const addByAg = new Map<string, PlanEdits['addedTargets']>()
   for (const a of edits.addedTargets ?? []) {
     const list = addByAg.get(a.adGroupId) ?? []
@@ -411,9 +454,21 @@ export function applyEdits(
       const adGroups = c.adGroups
         .filter((g) => !rmG.has(g.id))
         .map((g) => {
-          const kept = g.targets.filter((t) => !rmT.has(t.id)).map((t) => (
-            bidT.has(t.id) ? { ...t, bidCents: Math.max(FLOOR_CENTS, bidT.get(t.id)!) } : t
-          ))
+          const kept = g.targets.filter((t) => !rmT.has(t.id)).map((t) => {
+            const expression = exprT.has(t.id) ? materialise(exprT.get(t.id)!.trim(), target.productToken) : t.expression
+            const expressionType = mtT.get(t.id) ?? t.expressionType
+            if (expression === t.expression && expressionType === t.expressionType && !bidT.has(t.id)) return t
+            return {
+              ...t,
+              expression,
+              expressionType,
+              ...(bidT.has(t.id) ? { bidCents: Math.max(FLOOR_CENTS, bidT.get(t.id)!) } : {}),
+              // Only a text change invalidates the doc's classification. A match
+              // type does not change WHICH auction the keyword enters, so it is
+              // not grounds for re-gating.
+              ...(expression === t.expression ? {} : { edited: true }),
+            }
+          })
           const added: PlannedTarget[] = (addByAg.get(g.id) ?? []).map((a, i) => ({
             id: `${g.id}.a${i}`,
             expression: materialise(a.expression, target.productToken),
@@ -427,19 +482,35 @@ export function applyEdits(
             // knows the target product — an operator-typed keyword has no
             // classification from the doc to inherit.
           }))
+          // An ad group may advertise a SUBSET of the selected products. Anything
+          // outside that selection is dropped rather than trusted: the picker is
+          // where products are chosen, and an id arriving only in an edit would
+          // advertise something nobody picked.
+          const allowed = new Set(target.asins)
+          const asins = asinsG.has(g.id) ? asinsG.get(g.id)!.filter((a) => allowed.has(a)) : g.asins
           return {
             ...g,
             name: renG.get(g.id) ?? g.name,
             defaultBidCents: bidG.has(g.id) ? Math.max(FLOOR_CENTS, bidG.get(g.id)!) : g.defaultBidCents,
             targets: [...kept, ...added],
+            asins,
           }
         })
         // An ad group with nothing in it would be created empty on Amazon.
         .filter((g) => g.targets.length > 0)
+      const placements = placeC.has(c.id)
+        ? placeC.get(c.id)!
+          .filter((p) => (PLACEMENTS as readonly string[]).includes(p.placement))
+          .map((p) => ({ placement: p.placement, percentage: Math.max(0, Math.min(MAX_PLACEMENT_PCT, Math.round(p.percentage))) }))
+          .filter((p) => p.percentage > 0)
+        : c.placementBidding
+      const strategy = bidStratC.get(c.id)
       return {
         ...c,
         name: renC.get(c.id) ?? c.name,
         dailyBudget: budC.has(c.id) ? budC.get(c.id)! : c.dailyBudget,
+        biddingStrategy: strategy && (BIDDING_STRATEGIES as readonly string[]).includes(strategy) ? strategy : c.biddingStrategy,
+        placementBidding: placements,
         adGroups,
       }
     })
@@ -504,11 +575,14 @@ export function evaluatePlan(
       for (const t of g.targets) {
         if (t.isNegative) negatives++; else positives++
         if (t.isNegative) continue
-        // An operator-ADDED keyword has no classification from the doc, so it is
-        // classified here against the TARGET product: its own brand term is
-        // safe, anything else is treated as shared and gated like a copied one.
-        // Without this, "add a keyword" would be a hole straight through the gate.
-        const gated = t.gated ?? (t.added ? !hasProductToken(t.expression, target.productToken) && (t.kind ?? 'KEYWORD').toUpperCase() === 'KEYWORD' : false)
+        // An operator-ADDED or operator-REWRITTEN keyword has no usable
+        // classification from the doc, so it is classified here against the
+        // TARGET product: its own brand term is safe, anything else is treated as
+        // shared and gated like a copied one. Without this, "add a keyword" — or
+        // "rename this one" — would be a hole straight through the gate.
+        const gated = (t.added || t.edited)
+          ? !hasProductToken(t.expression, target.productToken) && (t.kind ?? 'KEYWORD').toUpperCase() === 'KEYWORD'
+          : (t.gated ?? false)
         if (!gated) continue
         const key = norm(t.expression)
         const clash = existingBy.get(key)
@@ -618,6 +692,29 @@ export function evaluatePlan(
       excluded.autoClauses && `${excluded.autoClauses} auto clause(s)`,
     ].filter(Boolean)
     warnings.push(`${parts.join(', ')} in the source will NOT be copied — you excluded them under "what to copy"`)
+  }
+  // AX3.7 — Amazon takes negatives as EXACT or PHRASE only. The create path
+  // filters anything else out, so without this the operator is told N negatives
+  // will be created and a smaller number arrives, with nothing said about it.
+  const badNeg = campaigns.flatMap((c) => c.adGroups.flatMap((g) => g.targets.filter((t) => {
+    if (!t.isNegative || (t.kind ?? '').toUpperCase() !== 'KEYWORD') return false
+    const mt = (t.expressionType ?? 'EXACT').toUpperCase().replace(/^_/, '')
+    return mt !== 'EXACT' && mt !== 'PHRASE'
+  })))
+  if (badNeg.length) {
+    warnings.push(
+      `${badNeg.length} negative keyword(s) are set to a match type Amazon does not accept for negatives `
+      + '(only exact and phrase) — they will not be created. Change them to exact or phrase in step 2.',
+    )
+  }
+  // AX3.7 — an ad group whose product list the operator emptied. It would be
+  // created, carry its targeting, and have nothing to advertise.
+  const noAds = campaigns.flatMap((c) => c.adGroups.filter((g) => g.asins.length === 0).map((g) => g.name))
+  if (noAds.length) {
+    warnings.push(
+      `${noAds.length} ad group(s) have no products and would be created with nothing to advertise `
+      + `(${noAds.slice(0, 3).map((n) => `"${n}"`).join(', ')}${noAds.length > 3 ? ', …' : ''})`,
+    )
   }
   // A campaign with no positive targeting cannot spend. Auto campaigns self-target.
   const inert = campaigns.filter((c) => c.targetingType !== 'AUTO'

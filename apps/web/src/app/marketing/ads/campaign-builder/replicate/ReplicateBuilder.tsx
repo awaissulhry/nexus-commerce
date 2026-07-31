@@ -29,8 +29,8 @@ import { SourcePicker, emptySelection, type SourceSelection } from './SourcePick
 import { NamingPanel } from './NamingPanel'
 import { CopyScopePanel } from './CopyScopePanel'
 import { DestinationPanel } from './DestinationPanel'
-import { ReviewTree } from './ReviewTree'
-import { LaunchStep, type LaunchResult } from './LaunchStep'
+import { ReviewStep } from './ReviewStep'
+import { LaunchStep, type LaunchResult, type Resolution } from './LaunchStep'
 import { HistoryPanel, DriftCheck } from './HistoryPanel'
 import {
   fullCopyScope, emptyNaming, copyPolicy, guessProductToken, verdictOf,
@@ -98,6 +98,20 @@ export function ReplicateBuilder() {
   const [planning, setPlanning] = useState(false)
   const [planErr, setPlanErr] = useState<string | null>(null)
   const [liveNames, setLiveNames] = useState<Set<string>>(new Set())
+  const [portfolioNames, setPortfolioNames] = useState<Map<string, string>>(new Map())
+
+  /**
+   * AX3.7 — where step 3 sends you when it says something is blocking.
+   * `nonce` so clicking the same resolver twice still moves the screen.
+   */
+  const [focus, setFocus] = useState<{ filter?: 'conflicts'; campaignId?: string; nonce: number } | null>(null)
+  const onResolve = useCallback((r: NonNullable<Resolution>) => {
+    if (r.kind === 'products') { setStep(1); setActiveSec('products'); setTimeout(() => gotoSec('products'), 0); return }
+    if (r.kind === 'cap') return // resolved in place, on step 3
+    setStep(2)
+    setFocus({ nonce: Date.now(), ...(r.kind === 'conflicts' ? { filter: 'conflicts' as const } : {}), ...(r.kind === 'campaign' && r.campaignId ? { campaignId: r.campaignId } : {}) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Changing the source market invalidates a selection made against another tree.
   useEffect(() => { setSelectedAdGroups(new Set()) }, [sourceMarket])
@@ -138,9 +152,9 @@ export function ReplicateBuilder() {
       .then((r) => r.json())
       .then((j) => {
         if (!alive) return
-        const names = ((j?.portfolios ?? []) as Array<{ campaigns: Array<{ name: string }> }>)
-          .flatMap((p) => p.campaigns.map((c) => c.name.toLowerCase()))
-        setLiveNames(new Set(names))
+        const pfs = (j?.portfolios ?? []) as Array<{ portfolioId: string | null; name: string; campaigns: Array<{ name: string }> }>
+        setLiveNames(new Set(pfs.flatMap((p) => p.campaigns.map((c) => c.name.toLowerCase()))))
+        setPortfolioNames(new Map(pfs.filter((p) => p.portfolioId).map((p) => [p.portfolioId!, p.name])))
       })
       .catch(() => {})
     return () => { alive = false }
@@ -456,11 +470,11 @@ export function ReplicateBuilder() {
         )}
 
         {step === 2 && (
-          <div className="h10-spw-stub-step">
+          <div className="h10-spw-stub-step wide">
             <h2>Review &amp; Edit</h2>
             <p className="h10-spw-desc">
-              Everything that would be created, before any of it is. Rename it, re-price it, drop a
-              keyword, an ad group or a whole campaign — and resolve any keyword that would put this
+              Everything that would be created, before any of it is. Rename it, re-price it, re-target it,
+              drop a keyword, an ad group or a whole campaign — and settle any keyword that would put this
               product in the same auction as one you already run.
             </p>
             {!preview ? (
@@ -468,12 +482,14 @@ export function ReplicateBuilder() {
                 {planning ? 'Building the plan…' : 'Finish step 1 first — a source, both product tokens, and at least one product.'}
               </div>
             ) : (
-              <ReviewTree
+              <ReviewStep
                 plan={preview.plan}
                 edits={edits}
                 setEdits={setEdits}
                 conflictDecisions={conflictDecisions}
                 setConflictDecisions={setConflictDecisions}
+                allAsins={asins}
+                focus={focus}
               />
             )}
           </div>
@@ -487,13 +503,17 @@ export function ReplicateBuilder() {
               and what it commits per day.
             </p>
             <LaunchStep
-              plan={verdictOf(preview)} scope={scope} market={market}
+              plan={verdictOf(preview)} sourcePlan={preview?.plan ?? null} edits={edits}
+              scope={scope} market={market}
+              portfolioName={portfolioId ? portfolioNames.get(portfolioId) ?? portfolioId : null}
+              cap={cap} setCap={setCap}
               launchMode={launchMode} setLaunchMode={setLaunchMode}
               launching={launching} result={result} err={launchErr} busy={busy}
               onLaunch={() => void launch()}
               onRollback={() => void afterRun('rollback', 'Rollback')}
               onRaise={() => void afterRun('raise-bids', 'Raise')}
               onSaveBlueprint={(n) => void saveBlueprint(n)}
+              onResolve={onResolve}
             />
           </div>
         )}

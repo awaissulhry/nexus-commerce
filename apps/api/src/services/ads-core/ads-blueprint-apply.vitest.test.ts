@@ -549,3 +549,96 @@ describe('planApplication — you have already replicated this', () => {
     expect(planApplication(doc, gale, []).warnings.some((w) => w.includes('already replicated'))).toBe(false)
   })
 })
+
+// ── AX3.7 — the rest of what apply actually sends, now editable ───────────
+describe('planApplication — full-control edits', () => {
+  const cat = (p: ReturnType<typeof planApplication>) => p.campaigns.find((c) => c.role === 'Category-Exact')!
+
+  it('rewrites a target expression', () => {
+    const p = planApplication(doc, gale, [], {}, { targetExpressions: [{ id: 'c1.g0.t0', expression: 'giacca da moto' }] })
+    expect(cat(p).adGroups[0]!.targets.map((t) => t.expression)).toContain('giacca da moto')
+    expect(cat(p).adGroups[0]!.targets.map((t) => t.expression)).not.toContain('giacca moto')
+  })
+
+  it('materialises {{product}} in a rewritten expression, like a copied one', () => {
+    const p = planApplication(doc, gale, [], {}, { targetExpressions: [{ id: 'c1.g0.t0', expression: 'giacca {{product}} moto' }] })
+    expect(cat(p).adGroups[0]!.targets.map((t) => t.expression)).toContain('giacca GALE moto')
+  })
+
+  it('changes a match type', () => {
+    const p = planApplication(doc, gale, [], {}, { targetMatchTypes: [{ id: 'c1.g0.t0', expressionType: 'BROAD' }] })
+    expect(cat(p).adGroups[0]!.targets[0]!.expressionType).toBe('BROAD')
+  })
+
+  it('RE-GATES a rewritten keyword against what we already run', () => {
+    // 'abbigliamento moto' is not run by anyone, so the plan is clean...
+    const existing: ExistingTarget[] = [{ expression: 'giacca moto', campaignName: 'IT-AIREON-SP-Category-Exact', campaignId: 'c_aireon' }]
+    const clean = planApplication(doc, gale, existing, { skipSharedTargets: ['giacca moto'] })
+    expect(clean.allowed).toBe(true)
+    // ...until the operator renames a survivor INTO the keyword we already run.
+    const p = planApplication(doc, gale, existing, { skipSharedTargets: ['giacca moto'] }, {
+      targetExpressions: [{ id: 'c1.g0.t1', expression: 'giacca moto' }],
+    })
+    expect(p.allowed).toBe(false)
+    expect(p.conflicts.map((c) => c.expression)).toContain('giacca moto')
+  })
+
+  it('a rewrite that carries the product token is NOT gated', () => {
+    const existing: ExistingTarget[] = [{ expression: 'giacca moto', campaignName: 'x', campaignId: 'c_x' }]
+    const p = planApplication(doc, gale, existing, { skipSharedTargets: ['giacca moto'] }, {
+      targetExpressions: [{ id: 'c1.g0.t1', expression: 'giacca GALE' }],
+    })
+    expect(p.allowed).toBe(true)
+  })
+
+  it('sets placement modifiers, clamped to what Amazon accepts', () => {
+    const p = planApplication(doc, gale, [], {}, {
+      campaignPlacements: [{ id: 'c0', placementBidding: [
+        { placement: 'PLACEMENT_TOP', percentage: 75 },
+        { placement: 'PLACEMENT_PRODUCT_PAGE', percentage: 5000 },
+        { placement: 'NOT_A_PLACEMENT', percentage: 50 },
+        { placement: 'PLACEMENT_REST_OF_SEARCH', percentage: 0 },
+      ] }],
+    })
+    expect(p.campaigns[0]!.placementBidding).toEqual([
+      { placement: 'PLACEMENT_TOP', percentage: 75 },
+      { placement: 'PLACEMENT_PRODUCT_PAGE', percentage: 900 },
+    ])
+  })
+
+  it('sets the bidding strategy, ignoring one Amazon does not have', () => {
+    const ok = planApplication(doc, gale, [], {}, { campaignBidding: [{ id: 'c0', biddingStrategy: 'MANUAL' }] })
+    expect(ok.campaigns[0]!.biddingStrategy).toBe('MANUAL')
+    const bad = planApplication(doc, gale, [], {}, { campaignBidding: [{ id: 'c0', biddingStrategy: 'WISHFUL' }] })
+    expect(bad.campaigns[0]!.biddingStrategy).toBe('LEGACY_FOR_SALES')
+  })
+
+  it('narrows an ad group to a subset of the selected products', () => {
+    const p = planApplication(doc, gale, [], {}, { adGroupAsins: [{ id: 'c0.g0', asins: ['B0GALE0002'] }] })
+    expect(p.campaigns[0]!.adGroups[0]!.asins).toEqual(['B0GALE0002'])
+    expect(p.campaigns[1]!.adGroups[0]!.asins).toEqual(['B0GALE0001', 'B0GALE0002'])
+    expect(p.totals.productAds).toBe(3)
+  })
+
+  it('refuses to advertise an ASIN that was never selected', () => {
+    const p = planApplication(doc, gale, [], {}, { adGroupAsins: [{ id: 'c0.g0', asins: ['B0SOMETHINGELSE'] }] })
+    expect(p.campaigns[0]!.adGroups[0]!.asins).toEqual([])
+    expect(p.warnings.some((w) => w.includes('no products'))).toBe(true)
+  })
+
+  it('warns when a negative carries a match type Amazon will not take', () => {
+    const p = planApplication(doc, gale, [], {}, { targetMatchTypes: [{ id: 'c1.g0.t2', expressionType: 'BROAD' }] })
+    expect(p.warnings.some((w) => w.includes('negative keyword(s)') && w.includes('exact and phrase'))).toBe(true)
+  })
+
+  it('a stale reference in ANY of the new edit kinds blocks', () => {
+    const stale = [
+      { targetExpressions: [{ id: 'c9.g9.t9', expression: 'x' }] },
+      { targetMatchTypes: [{ id: 'c9.g9.t9', expressionType: 'BROAD' }] },
+      { campaignPlacements: [{ id: 'c9', placementBidding: [] }] },
+      { campaignBidding: [{ id: 'c9', biddingStrategy: 'MANUAL' }] },
+      { adGroupAsins: [{ id: 'c9.g9', asins: [] }] },
+    ]
+    for (const e of stale) expect(planApplication(doc, gale, [], {}, e).allowed).toBe(false)
+  })
+})

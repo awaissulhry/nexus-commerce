@@ -64,7 +64,33 @@ export interface PlanEdits {
     adGroupId: string; expression: string; expressionType: string
     kind?: string; isNegative?: boolean; bidCents?: number | null
   }>
+  // AX3.7 — the rest of what the create path sends to Amazon.
+  targetExpressions?: Array<{ id: string; expression: string }>
+  targetMatchTypes?: Array<{ id: string; expressionType: string }>
+  campaignPlacements?: Array<{ id: string; placementBidding: PlacementBid[] }>
+  campaignBidding?: Array<{ id: string; biddingStrategy: string }>
+  adGroupAsins?: Array<{ id: string; asins: string[] }>
 }
+
+export interface PlacementBid { placement: string; percentage: number }
+
+/** Amazon's three SP placements, in the order the console shows them. */
+export const PLACEMENTS: Array<{ key: string; label: string; hint: string }> = [
+  { key: 'PLACEMENT_TOP', label: 'Top of search', hint: 'The first row of results. The most expensive and usually the most valuable placement.' },
+  { key: 'PLACEMENT_PRODUCT_PAGE', label: 'Product pages', hint: 'The carousels on a detail page — where competitor conquesting happens.' },
+  { key: 'PLACEMENT_REST_OF_SEARCH', label: 'Rest of search', hint: 'Everything below the top row.' },
+]
+export const MAX_PLACEMENT_PCT = 900
+
+export const BIDDING_STRATEGIES: Array<{ key: string; label: string; hint: string }> = [
+  { key: 'LEGACY_FOR_SALES', label: 'Down only', hint: 'Amazon lowers your bid when a click looks less likely to convert. Never raises it.' },
+  { key: 'AUTO_FOR_SALES', label: 'Up and down', hint: 'Amazon raises the bid up to 100% for a likely conversion, and lowers it otherwise.' },
+  { key: 'MANUAL', label: 'Fixed', hint: 'Your bid, exactly as set, every auction.' },
+]
+
+export const MATCH_TYPES = ['EXACT', 'PHRASE', 'BROAD'] as const
+/** Amazon accepts negatives as exact or phrase only. */
+export const NEGATIVE_MATCH_TYPES = ['EXACT', 'PHRASE'] as const
 
 /** Server response from POST /advertising/blueprints/plan-preview. */
 export interface PlanConflict {
@@ -84,22 +110,26 @@ export interface Plan {
   conflicts: PlanConflict[]
   totals: PlanTotals
   excluded: { keywords: number; negatives: number; productTargets: number; autoClauses: number }
-  campaigns: Array<{
-    id: string
-    role: string; name: string; dailyBudget: number | null; targetingType: 'AUTO' | 'MANUAL'
-    placementBidding: Array<{ placement: string; percentage: number }>
-    adGroups: Array<{
-      id: string
-      name: string; defaultBidCents: number | null; asins: string[]
-      targets: Array<{
-        id: string
-        expression: string; expressionType: string; kind: string; bidCents: number | null
-        isNegative: boolean; negativeLevel: string | null; autoClause?: string | null
-        conflictsWith?: Array<{ campaignName: string; campaignId: string }>
-        gated?: boolean; added?: boolean
-      }>
-    }>
-  }>
+  campaigns: PlanCampaign[]
+}
+export interface PlanCampaign {
+  id: string
+  role: string; name: string; dailyBudget: number | null; targetingType: 'AUTO' | 'MANUAL'
+  biddingStrategy: string | null
+  placementBidding: PlacementBid[]
+  adGroups: PlanAdGroup[]
+}
+export interface PlanAdGroup {
+  id: string
+  name: string; defaultBidCents: number | null; asins: string[]
+  targets: PlanTarget[]
+}
+export interface PlanTarget {
+  id: string
+  expression: string; expressionType: string; kind: string; bidCents: number | null
+  isNegative: boolean; negativeLevel: string | null; autoClause?: string | null
+  conflictsWith?: Array<{ campaignName: string; campaignId: string }>
+  gated?: boolean; added?: boolean; edited?: boolean
 }
 export interface PlanPreviewResponse {
   /** Before the review-step edits — what the tree renders, with stable ids. */

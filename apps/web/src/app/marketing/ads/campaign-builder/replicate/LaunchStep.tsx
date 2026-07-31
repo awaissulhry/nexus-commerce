@@ -1,23 +1,36 @@
 'use client'
 
 /**
- * AX3.5 — preflight and launch.
+ * AX3.5 / AX3.7 — step 3: preflight and launch.
  *
- * The last screen before real campaigns exist. It states what will be created,
- * what will NOT be (the copy scope's exclusions, and anything the gate is still
- * refusing), what it commits per day, and how it goes out.
+ * The last screen before real campaigns exist. It has to answer four questions
+ * without the operator going looking: what will be created, what will NOT be,
+ * what it commits per day, and — when something is blocking — where to go to
+ * clear it.
+ *
+ * That last one is why this was rebuilt. A blocker used to be a sentence in a
+ * red box with a footnote saying the fix lived on the previous step; the
+ * previous step then opened on a collapsed tree showing none of it. Every
+ * blocker here carries the control that resolves it, and the destination
+ * settings that can cause one — the daily cap, the portfolio — are editable in
+ * place rather than two steps back.
  *
  * The launch-mode control is the money decision. Landing at Amazon's 2c floor is
  * the default because spending should be the thing you opt into, not the thing
  * you forget to opt out of — and it is a floor, never a pause, because pausing
  * disrupts Amazon's optimisation and forces re-learning.
  */
-import { useState } from 'react'
-import { AlertTriangle, CheckCircle2, Loader2, RotateCcw, TrendingUp, Save } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import {
+  AlertTriangle, CheckCircle2, Loader2, RotateCcw, TrendingUp, Save,
+  ArrowRight, Pencil, Info,
+} from 'lucide-react'
 import { Modal } from '@/design-system/components'
 import { Button, Input } from '@/design-system/primitives'
-import type { Plan, CopyScope } from './replicate-types'
+import type { Plan, CopyScope, PlanEdits } from './replicate-types'
 import { COPY_ITEMS } from './replicate-types'
+import { describeChanges } from './edit-model'
+import { InfoTip } from '../../campaigns/InfoTip'
 
 export interface LaunchResult {
   applicationId: string
@@ -28,13 +41,45 @@ export interface LaunchResult {
   errors: string[]
 }
 
+/** Where a blocker gets resolved, and what to call the button that goes there. */
+export type Resolution =
+  | { kind: 'conflicts'; label: string }
+  | { kind: 'campaign'; label: string; campaignId?: string }
+  | { kind: 'cap'; label: string }
+  | { kind: 'products'; label: string }
+  | null
+
+/**
+ * Match a blocker to its cure.
+ *
+ * The gate returns prose, deliberately — it is written for a human. Rather than
+ * restructure it into codes on both sides, this reads the sentence it produced.
+ * A blocker with no match still renders; it just carries no shortcut, which is
+ * the same place the whole screen used to be.
+ */
+export function resolutionFor(blocker: string): Resolution {
+  if (/bid against campaigns you already run/i.test(blocker)) return { kind: 'conflicts', label: 'Resolve them in step 2' }
+  if (/already exist in this marketplace|duplicate campaign name/i.test(blocker)) return { kind: 'campaign', label: 'Rename them in step 2' }
+  if (/over the €.*cap|commits €.*over the/i.test(blocker)) return { kind: 'cap', label: 'Change the cap' }
+  if (/no ASINs supplied/i.test(blocker)) return { kind: 'products', label: 'Pick products in step 1' }
+  if (/no longer in this plan/i.test(blocker)) return { kind: 'campaign', label: 'Review step 2' }
+  return null
+}
+
 export function LaunchStep({
-  plan, scope, market, launchMode, setLaunchMode, launching, result, err,
-  onLaunch, onRollback, onRaise, onSaveBlueprint, busy,
+  plan, sourcePlan, edits, scope, market, portfolioName, cap, setCap,
+  launchMode, setLaunchMode, launching, result, err, busy,
+  onLaunch, onRollback, onRaise, onSaveBlueprint, onResolve,
 }: {
   plan: Plan | null
+  /** The un-edited plan — the ledger needs the original names to describe a change. */
+  sourcePlan: Plan | null
+  edits: PlanEdits
   scope: CopyScope
   market: string
+  portfolioName: string | null
+  cap: string
+  setCap: (v: string) => void
   launchMode: 'live' | 'floor'
   setLaunchMode: (m: 'live' | 'floor') => void
   launching: boolean
@@ -44,19 +89,18 @@ export function LaunchStep({
   onRollback: () => void
   onRaise: () => void
   onSaveBlueprint: (name: string) => void
+  onResolve: (r: NonNullable<Resolution>) => void
   busy: boolean
 }) {
   const [saveOpen, setSaveOpen] = useState(false)
   const [bpName, setBpName] = useState('')
+  const [changesOpen, setChangesOpen] = useState(false)
+
+  const changes = useMemo(() => (sourcePlan ? describeChanges(sourcePlan, edits) : []), [sourcePlan, edits])
 
   if (!plan) {
     return <div className="h10-spw-card h10-rep-todo">Finish step 1 first — a source, both product tokens, and at least one product.</div>
   }
-
-  const t = plan.totals
-  const unresolved = plan.conflicts.filter((c) => c.resolution === 'UNRESOLVED')
-  const excludedItems = COPY_ITEMS.filter((i) => !scope[i.key])
-  const ex = plan.excluded
 
   if (result) {
     return (
@@ -70,8 +114,14 @@ export function LaunchStep({
     )
   }
 
+  const t = plan.totals
+  const excludedItems = COPY_ITEMS.filter((i) => !scope[i.key])
+  const ex = plan.excluded
+  const droppedInScope = ex.keywords + ex.negatives + ex.productTargets + ex.autoClauses
+
   return (
     <div className="h10-rep-launch">
+      {/* ── what will be created ─────────────────────────────────────────── */}
       <div className="h10-spw-card">
         <div className="h10-rep-tot">
           <Tot n={t.campaigns} l="campaigns" />
@@ -86,11 +136,28 @@ export function LaunchStep({
         </div>
       </div>
 
+      {/* ── blockers, each with the control that clears it ───────────────── */}
       {plan.blockers.length > 0 && (
-        <div className="h10-rep-note bad">
-          <b><AlertTriangle size={14} aria-hidden /> Blocked — {plan.blockers.length} thing{plan.blockers.length === 1 ? '' : 's'} to resolve first</b>
-          <ul>{plan.blockers.map((b) => <li key={b}>{b}</li>)}</ul>
-          {unresolved.length > 0 && <p className="hint">The keyword conflicts are resolved in step 2, on the keywords themselves.</p>}
+        <div className="h10-rep-blockers">
+          <b className="hd"><AlertTriangle size={15} aria-hidden /> Blocked — {plan.blockers.length} thing{plan.blockers.length === 1 ? '' : 's'} to resolve first</b>
+          {plan.blockers.map((b) => {
+            const r = resolutionFor(b)
+            return (
+              <div className="bl" key={b}>
+                <p>{b}</p>
+                {r?.kind === 'cap' ? (
+                  <label className="capfix">
+                    <span>Daily cap</span>
+                    <Input inputMode="decimal" prefix="€" value={cap} placeholder="none" aria-label="Daily budget cap"
+                      onChange={(e) => setCap(e.target.value)} fieldClassName="h10-rep-numfield" />
+                    <button type="button" className="lnk" onClick={() => setCap('')}>Remove the cap</button>
+                  </label>
+                ) : r ? (
+                  <Button variant="primary" onClick={() => onResolve(r)}>{r.label} <ArrowRight size={13} /></Button>
+                ) : null}
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -98,11 +165,61 @@ export function LaunchStep({
         <div className="h10-rep-note warn" key={w}><AlertTriangle size={14} aria-hidden /> {w}</div>
       ))}
 
-      {(excludedItems.length > 0 || ex.keywords + ex.negatives + ex.productTargets + ex.autoClauses > 0) && (
+      {/* ── every campaign this will create ──────────────────────────────── */}
+      <div className="h10-spw-card h10-rep-manifest">
+        <h3>Every campaign this will create <InfoTip tip="Exactly what lands in Amazon, after your step-2 edits. Click one to go back and change it." /></h3>
+        <div className="h10-rep-tblwrap">
+          <table className="h10-rep-tbl camps">
+            <thead>
+              <tr>
+                <th>Campaign</th><th className="ct">Type</th><th className="ct">Bidding</th><th className="ct">Targets</th>
+                <th className="ct">Negatives</th><th className="ct">Ads</th><th className="ct">Placements</th><th className="bud">Daily budget</th><th className="act" />
+              </tr>
+            </thead>
+            <tbody>
+              {plan.campaigns.map((c) => {
+                const targets = c.adGroups.flatMap((g) => g.targets)
+                const plc = (c.placementBidding ?? []).filter((p) => p.percentage > 0)
+                return (
+                  <tr key={c.id}>
+                    <td className="exp">
+                      <b>{c.name}</b>
+                      <span className="whrline">{c.adGroups.length} ad group{c.adGroups.length === 1 ? '' : 's'}</span>
+                    </td>
+                    <td className="ct"><span className={`tag ${c.targetingType === 'AUTO' ? 'auto' : ''}`}>{c.targetingType === 'AUTO' ? 'auto' : 'manual'}</span></td>
+                    <td className="ct"><span className="tag">{(c.biddingStrategy ?? 'LEGACY_FOR_SALES').replace(/_/g, ' ').toLowerCase()}</span></td>
+                    <td className="ct">{targets.filter((x) => !x.isNegative).length}</td>
+                    <td className="ct">{targets.filter((x) => x.isNegative).length}</td>
+                    <td className="ct">{c.adGroups.reduce((s, g) => s + g.asins.length, 0)}</td>
+                    <td className="ct">
+                      {plc.length
+                        ? <span className="tag" title={plc.map((p) => `${p.placement.replace('PLACEMENT_', '').replace(/_/g, ' ').toLowerCase()} +${p.percentage}%`).join(', ')}>{plc.map((p) => `+${p.percentage}%`).join(' / ')}</span>
+                        : <span className="dash">—</span>}
+                    </td>
+                    <td className="bud">€{Number(c.dailyBudget ?? 0).toFixed(2)}</td>
+                    <td className="act">
+                      <button type="button" className="lnk" onClick={() => onResolve({ kind: 'campaign', label: '', campaignId: c.id })}
+                        aria-label={`Edit ${c.name}`}>
+                        <Pencil size={13} aria-hidden />
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+            <tfoot>
+              <tr><td colSpan={7} /><td className="bud"><b>€{t.dailyBudgetTotal.toFixed(2)}</b></td><td /></tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* ── what will NOT be created ─────────────────────────────────────── */}
+      {(excludedItems.length > 0 || droppedInScope > 0) && (
         <div className="h10-rep-note">
           <b>What will not be copied</b>
           <ul>
-            {excludedItems.map((i) => <li key={i.key}>{i.label}</li>)}
+            {excludedItems.map((i) => <li key={i.key}>{i.label} — you turned this off under “what to copy”</li>)}
             {ex.keywords > 0 && <li>{ex.keywords} keyword(s) from the source</li>}
             {ex.negatives > 0 && <li>{ex.negatives} negative(s) from the source</li>}
             {ex.productTargets > 0 && <li>{ex.productTargets} product/category target(s)</li>}
@@ -111,6 +228,42 @@ export function LaunchStep({
         </div>
       )}
 
+      {/* ── your changes ─────────────────────────────────────────────────── */}
+      <div className="h10-spw-card h10-rep-changesum">
+        <div className="hd">
+          <h3>Your changes</h3>
+          <span className="n">{changes.length === 0 ? 'None — this is the source structure, re-pointed at the new product' : `${changes.length} change${changes.length === 1 ? '' : 's'}`}</span>
+          {changes.length > 0 && (
+            <button type="button" className="lnk" onClick={() => setChangesOpen((o) => !o)}>{changesOpen ? 'Hide' : 'Show all'}</button>
+          )}
+        </div>
+        {changesOpen && (
+          <ul className="h10-rep-changesum-list">
+            {changes.map((c) => (
+              <li key={c.key}><span className="sc">{c.scope}</span> <b>{c.subject}</b> — {c.detail}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* ── where it lands ───────────────────────────────────────────────── */}
+      <div className="h10-spw-card h10-rep-dest">
+        <h3>Where it lands</h3>
+        <div className="grid">
+          <div className="f"><span className="l">Marketplace</span><span className="v">{market}</span></div>
+          <div className="f"><span className="l">Portfolio</span><span className="v">{portfolioName ?? 'None — outside every portfolio'}</span></div>
+          <label className="f">
+            <span className="l">Daily cap <InfoTip tip="Refuse the whole replication if it would commit more than this per day. Optional." /></span>
+            <Input inputMode="decimal" prefix="€" value={cap} placeholder="no cap" aria-label="Daily budget cap"
+              onChange={(e) => setCap(e.target.value)} fieldClassName="h10-rep-numfield" />
+          </label>
+        </div>
+        {!portfolioName && (
+          <p className="hint"><Info size={12} aria-hidden /> Campaigns outside a portfolio are invisible to portfolio budgets and rollups. Set one in step 1 if that matters.</p>
+        )}
+      </div>
+
+      {/* ── how it goes out ──────────────────────────────────────────────── */}
       <div className="h10-spw-card h10-rep-mode">
         <b className="hd">How this goes out</b>
         <div className="opts">
@@ -141,10 +294,10 @@ export function LaunchStep({
 
       {err && <div className="h10-rep-note bad"><b>Couldn’t launch:</b> {err}</div>}
 
-      <div className="h10-rep-launchbar">
+      <div className="h10-rep-launchbar sticky">
         {plan.allowed
           ? <span className="ok"><CheckCircle2 size={14} aria-hidden /> Ready to create in {market}</span>
-          : <span className="bad"><AlertTriangle size={14} aria-hidden /> Resolve the items above first</span>}
+          : <span className="bad"><AlertTriangle size={14} aria-hidden /> Resolve the {plan.blockers.length} item{plan.blockers.length === 1 ? '' : 's'} above first</span>}
         <span className="grow" />
         <button type="button" className="h10-spw-next" disabled={!plan.allowed || launching} onClick={onLaunch}>
           {launching
