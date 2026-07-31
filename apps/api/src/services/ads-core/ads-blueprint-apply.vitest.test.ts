@@ -212,9 +212,11 @@ describe('planApplication — the name-collision gate', () => {
   it('BLOCKS a plan that would collide with ITSELF', () => {
     // Two source campaigns differing only by the product token collapse onto one
     // name once it is substituted out.
+    // Each carries a keyword: an empty campaign is pruned before the collision
+    // check, so a fixture without targets would test nothing.
     const twins: SourceCampaign[] = [
-      { name: 'GALE-SP-Auto', dailyBudget: 5, biddingStrategy: null, placementBidding: [], adGroups: [{ name: 'a', defaultBidCents: 30, asins: [], targets: [] }] },
-      { name: 'gale-SP-Auto', dailyBudget: 5, biddingStrategy: null, placementBidding: [], adGroups: [{ name: 'b', defaultBidCents: 30, asins: [], targets: [] }] },
+      { name: 'GALE-SP-Auto', dailyBudget: 5, biddingStrategy: null, placementBidding: [], adGroups: [{ name: 'a', defaultBidCents: 30, asins: [], targets: [kw('giacca gale')] }] },
+      { name: 'gale-SP-Auto', dailyBudget: 5, biddingStrategy: null, placementBidding: [], adGroups: [{ name: 'b', defaultBidCents: 30, asins: [], targets: [kw('giubbotto gale')] }] },
     ]
     const p = planApplication(extractBlueprint(twins, { productToken: 'GALE' }), gale, [], {})
     expect(p.allowed).toBe(false)
@@ -640,5 +642,36 @@ describe('planApplication — full-control edits', () => {
       { adGroupAsins: [{ id: 'c9.g9', asins: [] }] },
     ]
     for (const e of stale) expect(planApplication(doc, gale, [], {}, e).allowed).toBe(false)
+  })
+})
+
+// ── AX3.7 — the plan must not change shape just because you edited something ──
+describe('planApplication — empty shells are pruned either way', () => {
+  const withEmpty = (): SourceCampaign[] => [
+    ...source(),
+    // A PAT-style campaign whose targets the blueprint cannot model: it arrives
+    // with an ad group and nothing in it.
+    { name: 'IT-AIREON-SP-PAT', dailyBudget: 12, biddingStrategy: 'LEGACY_FOR_SALES', placementBidding: [],
+      adGroups: [{ name: 'IT-AIREON-SP-PAT Ad Group', defaultBidCents: 30, asins: ['B0AIREON1'], targets: [] }] },
+  ]
+  const docE = extractBlueprint(withEmpty(), { productToken: 'AIREON' })
+
+  it('drops the empty campaign with no edits', () => {
+    const p = planApplication(docE, gale, [])
+    expect(p.campaigns.map((c) => c.name)).not.toContain('IT-GALE-SP-PAT')
+    expect(p.totals.campaigns).toBe(2)
+  })
+
+  it('reports the SAME totals before and after an unrelated edit', () => {
+    const clean = planApplication(docE, gale, [])
+    const edited = planApplication(docE, gale, [], {}, { campaignBudgets: [{ id: 'c0', dailyBudget: 11 }] })
+    expect(edited.totals.campaigns).toBe(clean.totals.campaigns)
+    expect(edited.totals.productAds).toBe(clean.totals.productAds)
+    // ...and the edit itself still lands
+    expect(edited.campaigns[0]!.dailyBudget).toBe(11)
+  })
+
+  it('does not count an empty campaign toward the daily budget it promises', () => {
+    expect(planApplication(docE, gale, []).totals.dailyBudgetTotal).toBe(25) // not 37
   })
 })

@@ -399,12 +399,26 @@ export function buildPlanCampaigns(
  * A campaign left with no ad groups, or an ad group left with no targets and no
  * auto targeting, is dropped — an empty shell on Amazon is worse than nothing.
  */
+/**
+ * Drop anything that would land on Amazon as an empty shell.
+ *
+ * AX3.7 — this used to run only when there were edits, so the SAME replication
+ * reported eleven campaigns before you touched anything and ten after, and the
+ * eleventh was a campaign the plan's own warning said could never run. What gets
+ * created must not depend on whether you happened to edit something unrelated.
+ */
+function pruneEmpty(campaigns: PlannedCampaign[]): PlannedCampaign[] {
+  return campaigns
+    .map((c) => ({ ...c, adGroups: c.adGroups.filter((g) => g.targets.length > 0) }))
+    .filter((c) => c.adGroups.length > 0)
+}
+
 export function applyEdits(
   campaigns: PlannedCampaign[],
   edits: PlanEdits | undefined,
   target: ApplyTarget,
 ): { campaigns: PlannedCampaign[]; stale: StaleEditRef[] } {
-  if (!edits) return { campaigns, stale: [] }
+  if (!edits) return { campaigns: pruneEmpty(campaigns), stale: [] }
   const stale: StaleEditRef[] = []
 
   const campById = new Map(campaigns.map((c) => [c.id, c]))
