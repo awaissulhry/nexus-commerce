@@ -15,6 +15,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { RotateCcw, TrendingUp, Trash2, Loader2, ChevronDown, ChevronRight, GitCompare } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { H10Select } from '../../campaigns/FilterDropdown'
+import { InfoTip } from '../../campaigns/InfoTip'
 
 interface Run {
   id: string; productToken: string; marketplace: string; status: string
@@ -97,11 +98,15 @@ export function HistoryPanel({ market, onReplicateAgain }: {
               {b.stats ? `${b.stats.campaigns} campaigns · ${b.stats.positives} targets · ${b.stats.negatives} negatives` : '—'}
             </span>
             {onReplicateAgain && (
-              <button type="button" className="h10-rep-bulkbtn" onClick={() => onReplicateAgain(b.sourceCampaignIds, b.productToken)}>Replicate again</button>
+              <InfoTip tip="Load this saved structure back into step 1 as the source, so you can replicate it onto another product without rebuilding the selection.">
+                <button type="button" className="h10-rep-bulkbtn" onClick={() => onReplicateAgain(b.sourceCampaignIds, b.productToken)}>Replicate again</button>
+              </InfoTip>
             )}
-            <button type="button" className="cutbtn" disabled={busy === b.id} onClick={() => void deleteBlueprint(b.id)} aria-label={`Delete ${b.name}`}>
-              <Trash2 size={13} />
-            </button>
+            <InfoTip tip={`Delete the saved structure "${b.name}". This only removes the saved recipe — campaigns it has already created are untouched.`}>
+              <button type="button" className="cutbtn" disabled={busy === b.id} onClick={() => void deleteBlueprint(b.id)} aria-label={`Delete ${b.name}`}>
+                <Trash2 size={13} />
+              </button>
+            </InfoTip>
             {openBp === b.id && (
               <div className="detail">
                 <b>Roles in this structure</b>
@@ -133,14 +138,18 @@ export function HistoryPanel({ market, onReplicateAgain }: {
               {r.notOnAmazon.length > 0 && <span className="bad"> · {r.notOnAmazon.length} never reached Amazon</span>}
             </span>
             {r.launchMode === 'floor' && r.liveCampaigns > 0 && (
-              <button type="button" className="h10-rep-bulkbtn" disabled={busy === r.id} onClick={() => void act(r.id, 'raise-bids')}>
-                <TrendingUp size={13} aria-hidden /> Raise bids
-              </button>
+              <InfoTip tip={`Takes this run's ${r.liveCampaigns} campaigns off the €0.02 floor and up to the bids it was planned at. This is when they start spending.`}>
+                <button type="button" className="h10-rep-bulkbtn" disabled={busy === r.id} onClick={() => void act(r.id, 'raise-bids')}>
+                  <TrendingUp size={13} aria-hidden /> Raise bids
+                </button>
+              </InfoTip>
             )}
             {r.liveCampaigns > 0 && (
-              <button type="button" className="h10-rep-bulkbtn danger" disabled={busy === r.id} onClick={() => void act(r.id, 'rollback')}>
-                <RotateCcw size={13} aria-hidden /> Roll back
-              </button>
+              <InfoTip tip={`Archives all ${r.liveCampaigns} campaigns this run created, as one unit. Spending stops. Archived is permanent on Amazon — they cannot be brought back, so this means re-running the replication, not undoing it.`}>
+                <button type="button" className="h10-rep-bulkbtn danger" disabled={busy === r.id} onClick={() => void act(r.id, 'rollback')}>
+                  <RotateCcw size={13} aria-hidden /> Roll back
+                </button>
+              </InfoTip>
             )}
             {busy === r.id && <Loader2 size={14} className="spin" aria-hidden />}
           </div>

@@ -16,6 +16,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { AlertTriangle, Trash2, RotateCcw, Check, Pencil } from 'lucide-react'
 import { Select, Checkbox } from '@/design-system/primitives'
+import { InfoTip } from '../../campaigns/InfoTip'
 import type { TargetView } from './edit-model'
 import { MATCH_TYPES, NEGATIVE_MATCH_TYPES } from './replicate-types'
 
@@ -119,10 +120,12 @@ export function TargetTable({
                       }}
                     />
                   ) : (
-                    <button type="button" className="expbtn" onClick={() => setEditing(r.id)} title="Rewrite this target">
-                      <code>{r.expression}</code>
-                      <Pencil size={11} className="pen" aria-hidden />
-                    </button>
+                    <InfoTip tip="Click to rewrite this target. A rewritten keyword is re-checked against the campaigns you already run, so it cannot be edited past the self-competition gate.">
+                      <button type="button" className="expbtn" onClick={() => setEditing(r.id)}>
+                        <code>{r.expression}</code>
+                        <Pencil size={11} className="pen" aria-hidden />
+                      </button>
+                    </InfoTip>
                   )}
                   {r.isNegative && <span className="tag neg">negative</span>}
                   {r.added && <span className="tag new">added</span>}
@@ -135,19 +138,29 @@ export function TargetTable({
                 </td>
                 <td className="mt">
                   {isKeyword(r) ? (
-                    <Select value={r.matchType.toUpperCase().replace(/^_/, '')} aria-label={`Match type for ${r.expression}`}
-                      onChange={(e) => onMatch(r, e.target.value)}>
-                      {(r.isNegative ? NEGATIVE_MATCH_TYPES : MATCH_TYPES).map((m) => (
-                        <option key={m} value={m}>{m.toLowerCase()}</option>
-                      ))}
-                    </Select>
+                    <InfoTip tip={r.isNegative
+                      ? 'How widely this exclusion applies. Exact blocks only this phrase; phrase blocks any search containing it. Amazon accepts no other match type for a negative, and caps phrase negatives at 4 words.'
+                      : 'Exact matches this phrase only. Phrase matches searches containing it in order. Broad matches related searches — widest reach, loosest intent.'}>
+                      <Select value={r.matchType.toUpperCase().replace(/^_/, '')} aria-label={`Match type for ${r.expression}`}
+                        onChange={(e) => onMatch(r, e.target.value)}>
+                        {(r.isNegative ? NEGATIVE_MATCH_TYPES : MATCH_TYPES).map((m) => (
+                          <option key={m} value={m}>{m.toLowerCase()}</option>
+                        ))}
+                      </Select>
+                    </InfoTip>
                   ) : (
-                    <span className="tag">{matchLabel(r)}</span>
+                    <InfoTip tip={r.kind?.toUpperCase() === 'AUTO'
+                      ? 'An Amazon auto-targeting clause. Amazon creates these itself when the ad group is made, and decides what they match.'
+                      : 'A product or category target — it matches a specific ASIN or browse node rather than a search phrase, so it has no match type.'}>
+                      <span className="tag">{matchLabel(r)}</span>
+                    </InfoTip>
                   )}
                 </td>
                 <td className="bid">
-                  {r.isNegative ? <span className="dash">—</span> : (
-                    <label className="inl">
+                  {r.isNegative ? (
+                    <InfoTip tip="A negative keyword has no bid — it excludes traffic rather than buying it."><span className="dash">—</span></InfoTip>
+                  ) : (
+                    <label className="inl" title={r.bidCents == null ? `Inherited from the ad group's default bid. Type a number to give "${r.expression}" its own.` : `This target's own bid, overriding the ad group default.`}>
                       <span>€</span>
                       <input inputMode="decimal" defaultValue={eur(r.effectiveBidCents)} key={`${r.id}:${r.effectiveBidCents}`}
                         aria-label={`Bid for ${r.expression}`}
@@ -175,18 +188,32 @@ export function TargetTable({
                         competes with {r.conflict[0]!.campaignName}{r.conflict.length > 1 ? ` +${r.conflict.length - 1}` : ''}
                       </span>
                       {r.decision === 'accept'
-                        ? <span className="pill ok"><Check size={11} aria-hidden /> accepted</span>
-                        : <button type="button" className="mini" onClick={() => onConflict(r, 'accept')}>Accept</button>}
+                        ? (
+                          <InfoTip tip={`You accepted this conflict: "${r.expression}" will be created, and this product will bid in the same auction as ${r.conflict.map((c) => c.campaignName).join(', ')}. Drop it with the bin on the right to undo.`}>
+                            <span className="pill ok"><Check size={11} aria-hidden /> accepted</span>
+                          </InfoTip>
+                        )
+                        : (
+                          <InfoTip tip={`Create "${r.expression}" anyway, knowing it bids against ${r.conflict.map((c) => c.campaignName).join(', ')}. You raise your own clearing price and split one pool of demand between two of your products — sometimes worth it, never accidental. Applies to every ad group carrying this keyword.`}>
+                            <button type="button" className="mini" onClick={() => onConflict(r, 'accept')}>Accept</button>
+                          </InfoTip>
+                        )}
                     </span>
                   ) : (
                     <span className="pill ok">will be created</span>
                   )}
                 </td>
                 <td className="act">
-                  <button type="button" className={`cutbtn ${r.removed ? 'on' : ''}`} onClick={() => onRemove(r)}
-                    aria-label={r.removed ? `Restore ${r.expression}` : `Drop ${r.expression}`}>
-                    {r.removed ? <RotateCcw size={14} /> : <Trash2 size={14} />}
-                  </button>
+                  <InfoTip tip={r.removed
+                    ? `Put "${r.expression}" back into the plan.`
+                    : r.conflict
+                      ? `Drop "${r.expression}" — it will not be created, which resolves its conflict. Applies to every ad group carrying this keyword, not just this row.`
+                      : `Drop "${r.expression}" — it will not be created. Nothing on Amazon changes until you launch.`}>
+                    <button type="button" className={`cutbtn ${r.removed ? 'on' : ''}`} onClick={() => onRemove(r)}
+                      aria-label={r.removed ? `Restore ${r.expression}` : `Drop ${r.expression}`}>
+                      {r.removed ? <RotateCcw size={14} /> : <Trash2 size={14} />}
+                    </button>
+                  </InfoTip>
                 </td>
               </tr>
             )

@@ -245,10 +245,12 @@ export function LaunchStep({
                     </td>
                     <td className="bud">€{Number(c.dailyBudget ?? 0).toFixed(2)}</td>
                     <td className="act">
-                      <button type="button" className="lnk" onClick={() => onResolve({ kind: 'campaign', label: '', campaignId: c.id })}
-                        aria-label={`Edit ${c.name}`}>
-                        <Pencil size={13} aria-hidden />
-                      </button>
+                      <InfoTip tip={`Go back to step 2 with ${c.name} open, to change its budget, bidding, placements or targets.`}>
+                        <button type="button" className="lnk" onClick={() => onResolve({ kind: 'campaign', label: '', campaignId: c.id })}
+                          aria-label={`Edit ${c.name}`}>
+                          <Pencil size={13} aria-hidden />
+                        </button>
+                      </InfoTip>
                     </td>
                   </tr>
                 )
@@ -346,13 +348,19 @@ export function LaunchStep({
           ? <span className="ok"><CheckCircle2 size={14} aria-hidden /> Ready to create in {market}</span>
           : <span className="bad"><AlertTriangle size={14} aria-hidden /> Resolve the {plan.blockers.length} item{plan.blockers.length === 1 ? '' : 's'} above first</span>}
         <span className="grow" />
-        <button type="button" className="h10-spw-next" disabled={!plan.allowed || launching} onClick={onLaunch}>
-          {launching
-            ? <><Loader2 size={14} className="spin" aria-hidden /> Creating…</>
-            : launchMode === 'floor'
-              ? `Create ${t.campaigns} campaign${t.campaigns === 1 ? '' : 's'} at the bid floor`
-              : `Create ${t.campaigns} campaign${t.campaigns === 1 ? '' : 's'} — €${t.dailyBudgetTotal.toFixed(2)}/day`}
-        </button>
+        <InfoTip tip={!plan.allowed
+          ? 'Blocked until the items above are resolved.'
+          : launchMode === 'floor'
+            ? `Creates all of this in Amazon ${market} at the €0.02 bid floor, so it exists and syncs but cannot meaningfully spend. Takes a few minutes; you can close the tab while it runs.`
+            : `Creates all of this in Amazon ${market} at the planned bids and commits €${t.dailyBudgetTotal.toFixed(2)}/day from the moment it lands. Takes a few minutes; you can close the tab while it runs.`}>
+          <button type="button" className="h10-spw-next" disabled={!plan.allowed || launching} onClick={onLaunch}>
+            {launching
+              ? <><Loader2 size={14} className="spin" aria-hidden /> Creating…</>
+              : launchMode === 'floor'
+                ? `Create ${t.campaigns} campaign${t.campaigns === 1 ? '' : 's'} at the bid floor`
+                : `Create ${t.campaigns} campaign${t.campaigns === 1 ? '' : 's'} — €${t.dailyBudgetTotal.toFixed(2)}/day`}
+          </button>
+        </InfoTip>
       </div>
     </div>
   )
@@ -401,18 +409,24 @@ function ResultPanel({
 
       <div className="h10-rep-launchbar">
         {launchMode === 'floor' && c.campaigns > 0 && (
-          <button type="button" className="h10-rep-bulkbtn" disabled={busy} onClick={onRaise}>
-            <TrendingUp size={13} aria-hidden /> Raise to the planned bids
-          </button>
+          <InfoTip tip={`Takes all ${c.campaigns} campaigns off the €0.02 floor and up to the bids this run was planned at. This is the moment they start spending — there is no undo except rolling the run back.`}>
+            <button type="button" className="h10-rep-bulkbtn" disabled={busy} onClick={onRaise}>
+              <TrendingUp size={13} aria-hidden /> Raise to the planned bids
+            </button>
+          </InfoTip>
         )}
-        <button type="button" className="h10-rep-bulkbtn" disabled={busy} onClick={onSave}>
-          <Save size={13} aria-hidden /> Save this structure as a blueprint
-        </button>
+        <InfoTip tip="Stores this structure under a name so you can replicate it onto another product later without rebuilding the source selection. Saving changes nothing on Amazon.">
+          <button type="button" className="h10-rep-bulkbtn" disabled={busy} onClick={onSave}>
+            <Save size={13} aria-hidden /> Save this structure as a blueprint
+          </button>
+        </InfoTip>
         <span className="grow" />
         {c.campaigns > 0 && (
-          <button type="button" className="h10-rep-bulkbtn danger" disabled={busy} onClick={onRollback}>
-            <RotateCcw size={13} aria-hidden /> Roll the whole run back
-          </button>
+          <InfoTip tip={`Archives all ${c.campaigns} campaigns this run created, as one unit. Spending stops. Archived is Amazon's permanent state — they cannot be un-archived, so a rollback means re-running the replication from scratch, not undoing it.`}>
+            <button type="button" className="h10-rep-bulkbtn danger" disabled={busy} onClick={onRollback}>
+              <RotateCcw size={13} aria-hidden /> Roll the whole run back
+            </button>
+          </InfoTip>
         )}
       </div>
 

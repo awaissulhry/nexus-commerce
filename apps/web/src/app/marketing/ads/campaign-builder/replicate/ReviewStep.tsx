@@ -28,6 +28,7 @@ import {
   Search, SlidersHorizontal, Check, X,
 } from 'lucide-react'
 import { Button } from '@/design-system/primitives'
+import { InfoTip } from '../../campaigns/InfoTip'
 import {
   viewPlan, conflictGroups, dropConflicts, restoreConflicts, describeChanges,
   setKeyed, toggleId, setIds, countEdits,
@@ -43,15 +44,15 @@ import {
 type Scope = { kind: 'all' } | { kind: 'campaign'; id: string } | { kind: 'adGroup'; id: string }
 type Filter = 'all' | 'conflicts' | 'keywords' | 'negatives' | 'products' | 'auto' | 'edited' | 'dropped'
 
-const FILTERS: Array<{ key: Filter; label: string }> = [
-  { key: 'all', label: 'Everything' },
-  { key: 'conflicts', label: 'Conflicts' },
-  { key: 'keywords', label: 'Keywords' },
-  { key: 'negatives', label: 'Negatives' },
-  { key: 'products', label: 'Product targets' },
-  { key: 'auto', label: 'Auto clauses' },
-  { key: 'edited', label: 'Changed' },
-  { key: 'dropped', label: 'Dropped' },
+const FILTERS: Array<{ key: Filter; label: string; tip: string }> = [
+  { key: 'all', label: 'Everything', tip: 'Every target in scope — keywords, negatives, product targets and auto clauses.' },
+  { key: 'conflicts', label: 'Conflicts', tip: 'Only the keywords that would put this product in the same auction as a campaign you already run.' },
+  { key: 'keywords', label: 'Keywords', tip: 'Only the positive keywords — the searches this product will bid on.' },
+  { key: 'negatives', label: 'Negatives', tip: 'Only the exclusions. Dropping these makes the new campaigns WIDER than the source.' },
+  { key: 'products', label: 'Product targets', tip: 'ASIN and category targeting — what a PAT campaign is made of.' },
+  { key: 'auto', label: 'Auto clauses', tip: 'Amazon’s four auto-targeting clauses: close match, loose match, substitutes, complements.' },
+  { key: 'edited', label: 'Changed', tip: 'Only the rows you have edited — rewritten, re-priced or re-matched.' },
+  { key: 'dropped', label: 'Dropped', tip: 'Only the rows you have removed. They are still listed so you can put them back.' },
 ]
 
 const FLOOR_CENTS = 2
@@ -189,11 +190,17 @@ export function ReviewStep({
             </p>
           </div>
           <div className="ax">
-            <Button variant="primary" onClick={() => { setFlat(true); setFilter('conflicts'); setSel(new Set()) }}>
-              Review them
-            </Button>
-            <Button onClick={() => dropAll(unresolved)}>Drop all {unresolved.length}</Button>
-            <Button onClick={() => acceptConflicts(unresolved.map((c) => c.key))}>Accept all {unresolved.length}</Button>
+            <InfoTip tip="Show every conflicting keyword in one list, with the campaign it would fight, so you can decide them one at a time.">
+              <Button variant="primary" onClick={() => { setFlat(true); setFilter('conflicts'); setSel(new Set()) }}>
+                Review them
+              </Button>
+            </InfoTip>
+            <InfoTip tip={`Do not create any of these ${unresolved.length} keywords. Nothing bids against your existing campaigns — but a campaign whose keywords are ALL conflicting is left with nothing to target and will not be created at all. Reversible until you launch.`}>
+              <Button onClick={() => dropAll(unresolved)}>Drop all {unresolved.length}</Button>
+            </InfoTip>
+            <InfoTip tip={`Create all ${unresolved.length} anyway. This product will bid in the same auctions as the campaigns you already run: you raise your own clearing price and split one pool of demand between two of your own products. A deliberate choice, recorded on the run.`}>
+              <Button onClick={() => acceptConflicts(unresolved.map((c) => c.key))}>Accept all {unresolved.length}</Button>
+            </InfoTip>
           </div>
         </div>
       ) : conflicts.length > 0 && (
@@ -206,7 +213,11 @@ export function ReviewStep({
               {conflicts.filter((c) => c.decision !== 'accept').length} dropped.
             </p>
           </div>
-          <div className="ax"><Button onClick={() => undropAll(conflicts)}>Start over</Button></div>
+          <div className="ax">
+            <InfoTip tip="Undo every conflict decision and put the dropped keywords back, so you can decide them again from scratch.">
+              <Button onClick={() => undropAll(conflicts)}>Start over</Button>
+            </InfoTip>
+          </div>
         </div>
       )}
 
@@ -226,7 +237,11 @@ export function ReviewStep({
                   <button type="button" className={`cmp ${on ? 'on' : ''} ${c.removed ? 'cut' : ''}`} onClick={() => setScope({ kind: 'campaign', id: c.id })}>
                     <ChevronRight size={13} aria-hidden />
                     <span className="n" title={c.name}>{c.name}</span>
-                    {conf > 0 && <span className="cf" title={`${conf} unresolved conflicts`}>{conf}</span>}
+                    {conf > 0 && (
+                      <InfoTip tip={`${conf} keyword${conf === 1 ? '' : 's'} in this campaign would bid against campaigns you already run. Click the campaign to see them.`}>
+                        <span className="cf">{conf}</span>
+                      </InfoTip>
+                    )}
                   </button>
                   {c.adGroups.map((g) => {
                     const gconf = g.targets.filter((t) => t.conflict && t.decision !== 'accept' && !t.removed).length
@@ -250,19 +265,25 @@ export function ReviewStep({
         <div className="h10-rep-pane">
           <div className="h10-rep-toolbar">
             <div className="views">
-              <button type="button" className={!flat ? 'on' : ''} onClick={() => setFlat(false)}>Structure</button>
-              <button type="button" className={flat ? 'on' : ''} onClick={() => setFlat(true)}>
-                All targets <span className="n">{view.targets.length}</span>
-              </button>
+              <InfoTip tip="Walk the plan campaign by campaign, and edit each one's budget, bidding and placements.">
+                <button type="button" className={!flat ? 'on' : ''} onClick={() => setFlat(false)}>Structure</button>
+              </InfoTip>
+              <InfoTip tip="Every target in the whole plan in one table, ignoring the structure — the only way to see all of something (all the conflicts, all the negatives) at once.">
+                <button type="button" className={flat ? 'on' : ''} onClick={() => setFlat(true)}>
+                  All targets <span className="n">{view.targets.length}</span>
+                </button>
+              </InfoTip>
             </div>
             <div className="h10-rep-search">
               <Search size={15} aria-hidden />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a keyword, ad group or campaign" aria-label="Filter the plan" />
               {q && <button type="button" className="clr" onClick={() => setQ('')} aria-label="Clear search"><X size={13} /></button>}
             </div>
-            <button type="button" className={`h10-rep-chg ${changes.length ? 'on' : ''}`} onClick={() => setChangesOpen(true)}>
-              <SlidersHorizontal size={13} aria-hidden /> {countEdits(edits) || 'No'} change{countEdits(edits) === 1 ? '' : 's'}
-            </button>
+            <InfoTip tip="Everything you have changed from the source structure, each item individually reversible. Nothing here has reached Amazon.">
+              <button type="button" className={`h10-rep-chg ${changes.length ? 'on' : ''}`} onClick={() => setChangesOpen(true)}>
+                <SlidersHorizontal size={13} aria-hidden /> {countEdits(edits) || 'No'} change{countEdits(edits) === 1 ? '' : 's'}
+              </button>
+            </InfoTip>
           </div>
 
           {(flat || scope.kind !== 'all') && (
@@ -273,9 +294,11 @@ export function ReviewStep({
                     : f.key === 'edited' ? scopedRows.filter((r) => r.touched).length : null
                 if ((f.key === 'conflicts' || f.key === 'dropped' || f.key === 'edited') && !n) return null
                 return (
-                  <button key={f.key} type="button" className={filter === f.key ? 'on' : ''} onClick={() => setFilter(f.key)}>
-                    {f.label}{n != null && <span className="n">{n}</span>}
-                  </button>
+                  <InfoTip key={f.key} tip={f.tip}>
+                    <button type="button" className={filter === f.key ? 'on' : ''} onClick={() => setFilter(f.key)}>
+                      {f.label}{n != null && <span className="n">{n}</span>}
+                    </button>
+                  </InfoTip>
                 )
               })}
             </div>
@@ -284,14 +307,24 @@ export function ReviewStep({
           {sel.size > 0 && (
             <div className="h10-rep-bulkbar">
               <span className="n">{sel.size} selected</span>
-              <Button onClick={() => setRowsRemoved(selRows, true)}><Trash2 size={13} /> Drop</Button>
-              <Button onClick={() => setRowsRemoved(selRows, false)}><RotateCcw size={13} /> Restore</Button>
-              <Button onClick={() => setBulk('selbid')}>Set bid</Button>
-              <Button onClick={() => setMatchOpen(true)}>Match type</Button>
+              <InfoTip tip={`Do not create these ${sel.size} targets. Reversible until you launch.`}>
+                <Button onClick={() => setRowsRemoved(selRows, true)}><Trash2 size={13} /> Drop</Button>
+              </InfoTip>
+              <InfoTip tip="Put the dropped ones among the selection back into the plan.">
+                <Button onClick={() => setRowsRemoved(selRows, false)}><RotateCcw size={13} /> Restore</Button>
+              </InfoTip>
+              <InfoTip tip="Give every selected target the same bid, overriding its ad group default. Negatives are skipped — they have no bid.">
+                <Button onClick={() => setBulk('selbid')}>Set bid</Button>
+              </InfoTip>
+              <InfoTip tip="Change the match type on every selected keyword at once. Negatives stay exact or phrase — Amazon does not accept a broad negative.">
+                <Button onClick={() => setMatchOpen(true)}>Match type</Button>
+              </InfoTip>
               {selRows.some((r) => r.conflict) && (
-                <Button onClick={() => acceptConflicts(selRows.filter((r) => r.conflict).map((r) => r.expression.toLowerCase()))}>
-                  <Check size={13} /> Accept conflicts
-                </Button>
+                <InfoTip tip="Create the conflicting keywords in this selection anyway, accepting that they bid against campaigns you already run.">
+                  <Button onClick={() => acceptConflicts(selRows.filter((r) => r.conflict).map((r) => r.expression.toLowerCase()))}>
+                    <Check size={13} /> Accept conflicts
+                  </Button>
+                </InfoTip>
               )}
               <span className="grow" />
               <button type="button" className="clr" onClick={() => setSel(new Set())}>Clear selection</button>
@@ -456,8 +489,12 @@ function CampaignsTable({ campaigns, onOpen, onRemove, onBudget, onBulkBudget, o
       <div className="h10-rep-tblbar">
         <span>Click a campaign to edit its bidding, placements and targets.</span>
         <span className="grow" />
-        <button type="button" onClick={onBulkBid}>Set all bids</button>
-        <button type="button" onClick={onBulkBudget}>Set all budgets</button>
+        <InfoTip tip="Give every ad group default and every keyword in the plan the same bid. Floored at Amazon's €0.02 minimum.">
+          <button type="button" onClick={onBulkBid}>Set all bids</button>
+        </InfoTip>
+        <InfoTip tip="Give every campaign in the plan the same daily budget. The total at the bottom is what the replication commits per day.">
+          <button type="button" onClick={onBulkBudget}>Set all budgets</button>
+        </InfoTip>
       </div>
       <table className="h10-rep-tbl camps">
         <thead>
@@ -497,10 +534,14 @@ function CampaignsTable({ campaigns, onOpen, onRemove, onBudget, onBulkBudget, o
                   </label>
                 </td>
                 <td className="act">
-                  <button type="button" className={`cutbtn ${c.removed ? 'on' : ''}`} onClick={() => onRemove(c.id)}
-                    aria-label={c.removed ? `Restore ${c.name}` : `Don’t create ${c.name}`}>
-                    {c.removed ? <RotateCcw size={14} /> : <Trash2 size={14} />}
-                  </button>
+                  <InfoTip tip={c.removed
+                    ? `Put ${c.name} back into the plan.`
+                    : `Leave ${c.name} out of this replication entirely — its ad groups, targets and product ads with it. Reversible until you launch.`}>
+                    <button type="button" className={`cutbtn ${c.removed ? 'on' : ''}`} onClick={() => onRemove(c.id)}
+                      aria-label={c.removed ? `Restore ${c.name}` : `Don’t create ${c.name}`}>
+                      {c.removed ? <RotateCcw size={14} /> : <Trash2 size={14} />}
+                    </button>
+                  </InfoTip>
                 </td>
               </tr>
             )

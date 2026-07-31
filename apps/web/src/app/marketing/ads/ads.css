@@ -2939,6 +2939,9 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 
 .h10-rep-launchbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .h10-rep-launchbar .grow { flex: 1; }
+/* A tooltip wrapper around an existing control — must not disturb its layout. */
+.h10-tipwrap { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; }
+
 /* AX3.8 — the run watcher. */
 .h10-rep-running .hd { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: #1c2530; }
 .h10-rep-running .sub { margin: 7px 0 13px; font-size: 12.5px; color: #5b6573; }

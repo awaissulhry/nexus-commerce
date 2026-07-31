@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useLayoutEffect } from 'react'
+import { useState, useRef, useLayoutEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Info } from 'lucide-react'
 
@@ -9,7 +9,17 @@ import { Info } from 'lucide-react'
 // clip — it always layers ABOVE the sidebar and never hides behind it. Position
 // is measured at runtime and clamped into the viewport (flips above/below by
 // available room; the arrow tracks the icon even when the bubble is shifted).
-export function InfoTip({ tip, size = 12 }: { tip: string; size?: number }) {
+/**
+ * `children` turns this into a tooltip for an EXISTING control (an icon button,
+ * a chip) instead of an ⓘ icon of its own.
+ *
+ * That matters here specifically: the review tables scroll inside
+ * `overflow: auto` panes, and a CSS-positioned tooltip — the DS `Tooltip` and
+ * `HoverCard` are both CSS-positioned — gets clipped at the pane edge. This one
+ * renders into `document.body`, so it is the only tooltip in the app that can be
+ * trusted inside a scrolling container.
+ */
+export function InfoTip({ tip, size = 12, children }: { tip: string; size?: number; children?: ReactNode }) {
   const [open, setOpen] = useState(false)
   const iconRef = useRef<HTMLSpanElement>(null)
   const tipRef = useRef<HTMLSpanElement>(null)
@@ -37,15 +47,17 @@ export function InfoTip({ tip, size = 12 }: { tip: string; size?: number }) {
   return (
     <span
       ref={iconRef}
-      className="info"
-      tabIndex={0}
-      aria-label={tip}
+      className={children ? 'h10-tipwrap' : 'info'}
+      // A wrapped control is already focusable and already labelled; adding a
+      // second tab stop and a second accessible name would double both.
+      tabIndex={children ? undefined : 0}
+      aria-label={children ? undefined : tip}
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
       onFocus={() => setOpen(true)}
       onBlur={() => setOpen(false)}
     >
-      <Info size={size} />
+      {children ?? <Info size={size} />}
       {open && typeof document !== 'undefined' && createPortal(
         <span
           ref={tipRef}
