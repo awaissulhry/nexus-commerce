@@ -2784,6 +2784,10 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 /* The table. `table-layout: fixed` plus per-cell truncation — an auto layout
    with nowrap content lets one long keyword push every other column off. */
 .h10-rep-tblwrap { overflow-x: auto; }
+/* 345 rows is a normal plan. Scroll them inside the pane and let the sticky
+   header do its job, rather than growing the page to five screens. */
+.h10-rep-pane .h10-rep-tblwrap { max-height: 620px; overflow: auto; }
+.h10-rep-tbl th.chk input.part { accent-color: #9aa4b1; }
 .h10-rep-tbl { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12.5px; }
 .h10-rep-tbl th { position: sticky; top: 0; z-index: 1; padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #7c8794; background: #fbfcfd; border-bottom: 1px solid #eef0f4; }
 .h10-rep-tbl th .srt { font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; background: none; border: none; padding: 0; cursor: pointer; }

@@ -33,7 +33,7 @@ import {
   setKeyed, toggleId, setIds, countEdits,
   type TargetView, type CampaignView,
 } from './edit-model'
-import type { Plan, PlanEdits } from './replicate-types'
+import type { Plan, PlanEdits, PlanConflict } from './replicate-types'
 import { TargetTable } from './ReviewTable'
 import {
   CampaignSettings, AdGroupSettings, ChangesDrawer,
@@ -64,12 +64,14 @@ export interface ReviewStepProps {
   setConflictDecisions: (d: Record<string, 'skip' | 'accept'>) => void
   /** Every product the operator picked in step 1 — the ceiling for per-ad-group ads. */
   allAsins: string[]
+  /** The gate's verdict over the edited plan — see viewPlan's `serverConflicts`. */
+  serverConflicts: PlanConflict[]
   /** Set by step 3's "resolve this" buttons: open on the conflicts, filtered. */
   focus: { filter?: Filter; campaignId?: string; nonce: number } | null
 }
 
 export function ReviewStep({
-  plan, edits, setEdits, conflictDecisions, setConflictDecisions, allAsins, focus,
+  plan, edits, setEdits, conflictDecisions, setConflictDecisions, allAsins, serverConflicts, focus,
 }: ReviewStepProps) {
   const [scope, setScope] = useState<Scope>({ kind: 'all' })
   const [flat, setFlat] = useState(false)
@@ -90,7 +92,10 @@ export function ReviewStep({
     setSel(new Set())
   }, [focus])
 
-  const view = useMemo(() => viewPlan(plan, edits, conflictDecisions), [plan, edits, conflictDecisions])
+  const view = useMemo(
+    () => viewPlan(plan, edits, conflictDecisions, serverConflicts),
+    [plan, edits, conflictDecisions, serverConflicts],
+  )
   const conflicts = useMemo(() => conflictGroups(view, conflictDecisions), [view, conflictDecisions])
   const unresolved = conflicts.filter((c) => c.unresolved)
   const changes = useMemo(() => describeChanges(plan, edits), [plan, edits])

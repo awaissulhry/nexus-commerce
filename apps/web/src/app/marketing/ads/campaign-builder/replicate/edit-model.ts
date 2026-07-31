@@ -11,7 +11,7 @@
  * produces the edit set the server replays and re-gates.
  */
 import type {
-  PlanEdits, Plan, PlanCampaign, PlanAdGroup, PlanTarget, PlacementBid,
+  PlanEdits, Plan, PlanCampaign, PlanAdGroup, PlanTarget, PlacementBid, PlanConflict,
 } from './replicate-types'
 
 // ── generic edit-set surgery ──────────────────────────────────────────────
@@ -136,6 +136,16 @@ export function viewPlan(
   plan: Plan,
   edits: PlanEdits,
   conflictDecisions: Record<string, 'skip' | 'accept'>,
+  /**
+   * The gate's verdict over the EDITED plan.
+   *
+   * `plan` is the un-edited one — that is what keeps node ids stable and lets a
+   * removed row stay visible and restorable. But a keyword the operator typed,
+   * or one they rewrote, only exists in the edited plan, so its conflict is only
+   * ever reported there. Without this the gate would block on a keyword the
+   * review table showed as perfectly fine.
+   */
+  serverConflicts: PlanConflict[] = [],
 ): PlanView {
   const rmC = new Set(edits.removedCampaigns ?? [])
   const rmG = new Set(edits.removedAdGroups ?? [])
@@ -150,6 +160,12 @@ export function viewPlan(
   const placeC = idx(edits.campaignPlacements)
   const stratC = idx(edits.campaignBidding)
   const asinsG = idx(edits.adGroupAsins)
+
+  // Only consulted for rows the client cannot classify itself — added and
+  // rewritten ones. A copied row's own `conflictsWith` is already authoritative,
+  // and matching by text alone would flag a brand keyword that merely shares its
+  // wording with a gated category term.
+  const fromServer = new Map(serverConflicts.map((c) => [c.expression.toLowerCase(), c.existing]))
 
   const addedByAg = new Map<string, NonNullable<PlanEdits['addedTargets']>>()
   for (const a of edits.addedTargets ?? []) {
@@ -170,7 +186,10 @@ export function viewPlan(
         const expression = exprT.get(t.id)?.expression ?? t.expression
         const matchType = mtT.get(t.id)?.expressionType ?? t.expressionType
         const bidCents = bidT.get(t.id)?.bidCents ?? t.bidCents
-        const conflict = t.conflictsWith?.length ? t.conflictsWith : null
+        const rewritten = exprT.has(t.id)
+        const conflict = rewritten
+          ? (fromServer.get(expression.toLowerCase()) ?? null)
+          : (t.conflictsWith?.length ? t.conflictsWith : null)
         return {
           id: t.id,
           source: t,
@@ -210,8 +229,8 @@ export function viewPlan(
           removed: gRemoved,
           touched: true,
           added: true,
-          conflict: null,
-          decision: undefined,
+          conflict: fromServer.get(a.expression.toLowerCase()) ?? null,
+          decision: conflictDecisions[a.expression.toLowerCase()],
         })
       })
       all.push(...targets)
@@ -297,7 +316,14 @@ export function dropConflicts(
   const ids = groups.flatMap((g) => g.rows.filter((r) => !r.added).map((r) => r.id))
   const decisions: Record<string, 'skip'> = {}
   for (const g of groups) decisions[g.key] = 'skip'
-  return { edits: setIds(edits, 'removedTargets', ids, true), decisions }
+  let next = setIds(edits, 'removedTargets', ids, true)
+  // A conflicting keyword the operator TYPED is un-added rather than removed —
+  // it has no plan id for `removedTargets` to address.
+  const keys = new Set(groups.map((g) => g.key))
+  if (next.addedTargets?.some((a) => keys.has(a.expression.toLowerCase()))) {
+    next = { ...next, addedTargets: next.addedTargets.filter((a) => !keys.has(a.expression.toLowerCase())) }
+  }
+  return { edits: next, decisions }
 }
 
 /** Put every row carrying these expressions back, and clear the decision. */

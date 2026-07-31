@@ -489,6 +489,7 @@ export function ReplicateBuilder() {
                 conflictDecisions={conflictDecisions}
                 setConflictDecisions={setConflictDecisions}
                 allAsins={asins}
+                serverConflicts={verdictOf(preview)?.conflicts ?? []}
                 focus={focus}
               />
             )}
