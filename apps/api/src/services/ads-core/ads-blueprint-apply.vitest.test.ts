@@ -675,3 +675,33 @@ describe('planApplication — empty shells are pruned either way', () => {
     expect(planApplication(docE, gale, []).totals.dailyBudgetTotal).toBe(25) // not 37
   })
 })
+
+// ── AX3.8 — Amazon's word limits on negative keywords ─────────────────────
+describe('planApplication — negatives Amazon will not accept', () => {
+  const longNegs = (): SourceCampaign[] => [{
+    name: 'IT-AIREON-SP-Category-Broad', dailyBudget: 10, biddingStrategy: 'LEGACY_FOR_SALES', placementBidding: [],
+    adGroups: [{ name: 'ag', defaultBidCents: 30, asins: ['B0AIREON1'], targets: [
+      kw('giacca moto'),
+      kw('giacca da moto estiva uomo', 'PHRASE', true),        // 5 words — over the phrase limit
+      kw('giacca moto uomo', 'PHRASE', true),                  // 3 words — fine
+      kw('una giacca da moto estiva per uomo con protezioni CE omologate', 'EXACT', true), // 11 — over the exact limit
+    ] }],
+  }]
+  const d = extractBlueprint(longNegs(), { productToken: 'AIREON' })
+
+  it('warns about a negative phrase keyword over 4 words', () => {
+    const p = planApplication(d, gale, [])
+    const w = p.warnings.find((x) => x.includes("over Amazon's word limit"))
+    expect(w).toBeTruthy()
+    expect(w).toContain('giacca da moto estiva uomo')
+  })
+
+  it('counts the over-limit exact negative too, and leaves the short one alone', () => {
+    const p = planApplication(d, gale, [])
+    expect(p.warnings.find((x) => x.includes("over Amazon's word limit"))).toMatch(/^2 negative/)
+  })
+
+  it('does not block — the run is still legitimate without them', () => {
+    expect(planApplication(d, gale, []).allowed).toBe(true)
+  })
+})

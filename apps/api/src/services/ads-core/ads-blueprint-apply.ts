@@ -721,6 +721,26 @@ export function evaluatePlan(
       + '(only exact and phrase) — they will not be created. Change them to exact or phrase in step 2.',
     )
   }
+  // AX3.8 — Amazon's word limits on NEGATIVE keywords: 4 words for phrase, 10
+  // for exact. Over the limit it rejects the item and the run reports a smaller
+  // number than it promised with nothing said about which ones. Measured on the
+  // AIREON→AIRMESH run: 6 negatives were 5-6 words and vanished. Warned rather
+  // than auto-shortened — shortening a negative WIDENS what the campaign buys,
+  // which is not a decision to make on someone's behalf.
+  const longNeg = campaigns.flatMap((c) => c.adGroups.flatMap((g) => g.targets.filter((t) => {
+    if (!t.isNegative || (t.kind ?? '').toUpperCase() !== 'KEYWORD') return false
+    const words = t.expression.trim().split(/\s+/).length
+    const mt = (t.expressionType ?? 'EXACT').toUpperCase().replace(/^_/, '')
+    return mt === 'PHRASE' ? words > 4 : words > 10
+  })))
+  if (longNeg.length) {
+    warnings.push(
+      `${longNeg.length} negative keyword(s) are over Amazon's word limit (4 for phrase, 10 for exact) `
+      + `and will NOT be created (${longNeg.slice(0, 3).map((t) => `"${t.expression}"`).join(', ')}${longNeg.length > 3 ? ', …' : ''}). `
+      + 'Shorten them or switch them to exact in step 2.',
+    )
+  }
+
   // AX3.7 — an ad group whose product list the operator emptied. It would be
   // created, carry its targeting, and have nothing to advertise.
   const noAds = campaigns.flatMap((c) => c.adGroups.filter((g) => g.asins.length === 0).map((g) => g.name))
