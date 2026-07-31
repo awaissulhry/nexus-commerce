@@ -2787,7 +2787,8 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 /* 345 rows is a normal plan. Scroll them inside the pane and let the sticky
    header do its job, rather than growing the page to five screens. */
 .h10-rep-pane .h10-rep-tblwrap { max-height: 620px; overflow: auto; }
-.h10-rep-tbl th.chk input.part { accent-color: #9aa4b1; }
+/* DS Checkbox puts className on the wrapping label, not the input. */
+.h10-rep-tbl th.chk .part input { accent-color: #9aa4b1; }
 .h10-rep-tbl { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12.5px; }
 .h10-rep-tbl th { position: sticky; top: 0; z-index: 1; padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #7c8794; background: #fbfcfd; border-bottom: 1px solid #eef0f4; }
 .h10-rep-tbl th .srt { font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; background: none; border: none; padding: 0; cursor: pointer; }
@@ -2803,10 +2804,18 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-rep-tbl th.chk, .h10-rep-tbl td.chk { width: 34px; padding-right: 0; }
 .h10-rep-tbl th.mt, .h10-rep-tbl td.mt { width: 118px; }
 .h10-rep-tbl th.bid, .h10-rep-tbl td.bid { width: 94px; }
-.h10-rep-tbl th.whr, .h10-rep-tbl td.whr { width: 148px; }
-.h10-rep-tbl th.st, .h10-rep-tbl td.st { width: 268px; }
+.h10-rep-tbl th.whr, .h10-rep-tbl td.whr { width: 132px; }
+/* The status cell holds a sentence AND the button that resolves it. Without
+   `overflow: hidden` the inline-flex sizes to its content and pushes the button
+   past the cell — which is how the resolve control ends up off-screen again. */
+.h10-rep-tbl th.st, .h10-rep-tbl td.st { width: 300px; overflow: hidden; }
 .h10-rep-tbl th.act, .h10-rep-tbl td.act { width: 46px; text-align: right; }
 .h10-rep-tbl th.ct, .h10-rep-tbl td.ct { width: 86px; text-align: center; }
+/* "PLACEMENTS" is the one header that does not fit the count width, and the
+   bidding strategy is a phrase rather than a number. */
+.h10-rep-tbl th.plc, .h10-rep-tbl td.plc { width: 104px; text-align: center; }
+.h10-rep-tbl th.strat, .h10-rep-tbl td.strat { width: 116px; text-align: center; }
+.h10-rep-tbl td.strat .tag, .h10-rep-tbl td.plc .tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
 .h10-rep-tbl th.bud, .h10-rep-tbl td.bud { width: 120px; text-align: right; }
 .h10-rep-tbl td.exp { min-width: 0; }
 .h10-rep-tbl .expbtn { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; font: inherit; background: none; border: none; padding: 1px 3px; margin-left: -3px; border-radius: 5px; cursor: pointer; text-align: left; }
@@ -2825,8 +2834,9 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-rep-tbl .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
 .h10-rep-tbl .pill.ok { color: #5b6573; background: #f1f4f8; }
 .h10-rep-tbl .pill.cut { color: #a4adba; background: #f1f2f4; }
-.h10-rep-tbl .cf { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 11.5px; color: #8a6d1f; }
-.h10-rep-tbl .cf .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-rep-tbl .cf { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 11.5px; color: #8a6d1f; }
+.h10-rep-tbl .cf > svg { flex: none; }
+.h10-rep-tbl .cf .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-rep-tbl .mini { flex: none; font: inherit; font-size: 11.5px; font-weight: 600; color: #3a4452; background: #fff; border: 1px solid #e0d4a8; border-radius: 5px; padding: 2px 8px; cursor: pointer; }
 .h10-rep-tbl .mini:hover { background: #fffdf5; }
 .h10-rep-tbl .h10-ds-select select { font-size: 12px; padding: 3px 22px 3px 8px; }

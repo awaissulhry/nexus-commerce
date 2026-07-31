@@ -28,7 +28,7 @@ import {
 import { Modal } from '@/design-system/components'
 import { Button, Input } from '@/design-system/primitives'
 import type { Plan, CopyScope, PlanEdits } from './replicate-types'
-import { COPY_ITEMS } from './replicate-types'
+import { COPY_ITEMS, BIDDING_STRATEGIES } from './replicate-types'
 import { describeChanges } from './edit-model'
 import { InfoTip } from '../../campaigns/InfoTip'
 
@@ -172,8 +172,8 @@ export function LaunchStep({
           <table className="h10-rep-tbl camps">
             <thead>
               <tr>
-                <th>Campaign</th><th className="ct">Type</th><th className="ct">Bidding</th><th className="ct">Targets</th>
-                <th className="ct">Negatives</th><th className="ct">Ads</th><th className="ct">Placements</th><th className="bud">Daily budget</th><th className="act" />
+                <th>Campaign</th><th className="ct">Type</th><th className="strat">Bidding</th><th className="ct">Targets</th>
+                <th className="ct">Negatives</th><th className="ct">Ads</th><th className="plc">Placements</th><th className="bud">Daily budget</th><th className="act" />
               </tr>
             </thead>
             <tbody>
@@ -187,11 +187,15 @@ export function LaunchStep({
                       <span className="whrline">{c.adGroups.length} ad group{c.adGroups.length === 1 ? '' : 's'}</span>
                     </td>
                     <td className="ct"><span className={`tag ${c.targetingType === 'AUTO' ? 'auto' : ''}`}>{c.targetingType === 'AUTO' ? 'auto' : 'manual'}</span></td>
-                    <td className="ct"><span className="tag">{(c.biddingStrategy ?? 'LEGACY_FOR_SALES').replace(/_/g, ' ').toLowerCase()}</span></td>
+                    <td className="strat">
+                      {/* Amazon's own words for these are LEGACY_FOR_SALES / AUTO_FOR_SALES,
+                          which say nothing about what they do to your bid. */}
+                      <span className="tag">{BIDDING_STRATEGIES.find((s) => s.key === (c.biddingStrategy ?? 'LEGACY_FOR_SALES'))?.label ?? 'Down only'}</span>
+                    </td>
                     <td className="ct">{targets.filter((x) => !x.isNegative).length}</td>
                     <td className="ct">{targets.filter((x) => x.isNegative).length}</td>
                     <td className="ct">{c.adGroups.reduce((s, g) => s + g.asins.length, 0)}</td>
-                    <td className="ct">
+                    <td className="plc">
                       {plc.length
                         ? <span className="tag" title={plc.map((p) => `${p.placement.replace('PLACEMENT_', '').replace(/_/g, ' ').toLowerCase()} +${p.percentage}%`).join(', ')}>{plc.map((p) => `+${p.percentage}%`).join(' / ')}</span>
                         : <span className="dash">—</span>}

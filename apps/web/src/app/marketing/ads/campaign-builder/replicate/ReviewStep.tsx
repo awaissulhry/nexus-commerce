@@ -463,7 +463,7 @@ function CampaignsTable({ campaigns, onOpen, onRemove, onBudget, onBulkBudget, o
         <thead>
           <tr>
             <th>Campaign</th><th className="ct">Type</th><th className="ct">Targets</th><th className="ct">Negatives</th>
-            <th className="ct">Products</th><th className="ct">Placements</th><th className="bud">Daily budget</th><th className="act" />
+            <th className="ct">Products</th><th className="plc">Placements</th><th className="bud">Daily budget</th><th className="act" />
           </tr>
         </thead>
         <tbody>
@@ -484,7 +484,7 @@ function CampaignsTable({ campaigns, onOpen, onRemove, onBudget, onBulkBudget, o
                 <td className="ct">{t.filter((x) => !x.isNegative).length}</td>
                 <td className="ct">{t.filter((x) => x.isNegative).length}</td>
                 <td className="ct">{c.adGroups.reduce((s, g) => s + g.asins.length, 0)}</td>
-                <td className="ct">
+                <td className="plc">
                   {plc.length
                     ? <span className="tag" title={plc.map((p) => `${p.placement.replace('PLACEMENT_', '').replace(/_/g, ' ').toLowerCase()} +${p.percentage}%`).join(', ')}>{plc.length} set</span>
                     : <span className="dash">—</span>}
