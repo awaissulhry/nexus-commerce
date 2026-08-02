@@ -3325,7 +3325,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // DPS.4 — three ways to name the campaigns, so the Rank & Dayparting Schedules page can ask for
     // "the whole account" or "this schedule" without pushing 200+ cuids through a query string.
     // `campaignIds` is the original contract and is untouched.
-    const q = request.query as { campaignIds?: string; windowDays?: string; tz?: string; scope?: string; groupId?: string }
+    const q = request.query as { campaignIds?: string; windowDays?: string; weeks?: string; tz?: string; scope?: string; groupId?: string }
     let ids = (q.campaignIds ?? '').split(',').map((s) => s.trim()).filter(Boolean)
     if (!ids.length && q.groupId) {
       const members = await prisma.adSchedule.findMany({ where: { groupId: String(q.groupId) }, select: { campaignId: true } })
@@ -3335,44 +3335,117 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const all = await prisma.campaign.findMany({ where: { status: { not: 'ARCHIVED' } }, select: { id: true } })
       ids = all.map((c) => c.id)
     }
-    if (!ids.length) return { windowDays: 0, timezone: 'Europe/Rome', hasData: false, cells: [] }
-    const windowDays = Math.max(7, Math.min(90, Number(q.windowDays ?? 60)))
-    // whitelist the timezone (it's interpolated into AT TIME ZONE) — never trust the raw param
+    // whitelist the timezone — it reaches AT TIME ZONE, so never trust the raw param
     const TZ_OK = new Set(['Europe/Rome', 'Europe/London', 'Europe/Madrid', 'Europe/Paris', 'Europe/Berlin', 'America/Los_Angeles', 'America/New_York', 'UTC'])
     const tz = TZ_OK.has(q.tz ?? '') ? (q.tz as string) : 'Europe/Rome'
 
+    /**
+     * DPS.4b — the window is a whole number of WEEKS ending at the last complete local day.
+     *
+     * The old window was "the last N days from right now", which made the grid quietly wrong in two
+     * ways, both measured against live data:
+     *
+     *  1. UNEQUAL WEEKDAY SAMPLES. 60 days is 8 weeks + 4 days, so four weekdays were summed over 9
+     *     occurrences and three over 8 — an 11% head start for no reason but calendar arithmetic.
+     *     At 30 days the gap was 20%, at 14 days 33%. Since the heatmap SUMS, "the busiest hour"
+     *     could be an artefact of which weekday happened to appear one extra time. Whole weeks give
+     *     every weekday exactly the same number of observations, so the cells are comparable.
+     *  2. THE IN-PROGRESS DAY. Today is partial by definition (1 row so far today vs a median of 8
+     *     per full day), so including it drags down whichever weekday it lands on. The window now
+     *     ends at local midnight *this* morning — exclusive — so only complete days are counted.
+     *
+     * Boundaries are computed from the DATABASE clock in the display timezone, not the container's
+     * UTC clock: Railway containers have drifted hours before now, and the old code mixed a UTC
+     * midnight boundary with Rome-local bucketing, shifting the window edge by the offset.
+     */
+    const weeksRaw = q.weeks != null ? Number(q.weeks) : Math.floor(Number(q.windowDays ?? 56) / 7)
+    const weeks = Math.max(1, Math.min(26, Number.isFinite(weeksRaw) ? Math.floor(weeksRaw) : 8))
+    const windowDays = weeks * 7
+    const empty = { weeks, windowDays, timezone: tz, from: null as string | null, to: null as string | null, coverage: { daysWithData: 0, firstDay: null as string | null, lastDay: null as string | null }, hasData: false, cells: [] as unknown[] }
+    if (!ids.length) return empty
+
     const camps = await prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, externalCampaignId: true } })
-    if (!camps.length) return { windowDays, timezone: tz, hasData: false, cells: [] }
+    if (!camps.length) return empty
     const localIds = camps.map((c) => c.id)
     const extIds = camps.map((c) => c.externalCampaignId).filter(Boolean) as string[]
-    const since = new Date(); since.setUTCDate(since.getUTCDate() - windowDays); since.setUTCHours(0, 0, 0, 0)
+    const scope = Prisma.sql`("localEntityId" IN (${Prisma.join(localIds)})${extIds.length ? Prisma.sql` OR "entityId" IN (${Prisma.join(extIds)})` : Prisma.empty})`
+    // Rows converted to local wall-clock and clipped to the window. The coarse `date` bounds keep
+    // the index usable; the exact bound is on ts_local, because the window is a LOCAL one.
+    const windowed = Prisma.sql`
+      SELECT t.ts_local, t."costMicros", t."orders7d", t."sales7dCents", t."impressions", t."clicks"
+      FROM (
+        SELECT (("date" + (("hour")::text || ' hours')::interval) AT TIME ZONE 'UTC' AT TIME ZONE ${tz}) AS ts_local,
+               "costMicros", "orders7d", "sales7dCents", "impressions", "clicks"
+        FROM "AmazonAdsHourlyPerformance"
+        WHERE "entityType" = 'CAMPAIGN'
+          AND "date" >= (((now() AT TIME ZONE ${tz})::date - ${windowDays + 2}::int))
+          AND "date" <= (((now() AT TIME ZONE ${tz})::date + 1))
+          AND ${scope}
+      ) t
+      WHERE t.ts_local >= (((now() AT TIME ZONE ${tz})::date - ${windowDays}::int)::timestamp)
+        AND t.ts_local <  (((now() AT TIME ZONE ${tz})::date)::timestamp)`
 
     const rows = await prisma.$queryRaw<Array<{ dow: number; hour: number; cost: bigint | null; orders: bigint | null; sales: bigint | null; impressions: bigint | null; clicks: bigint | null }>>`
       SELECT EXTRACT(DOW FROM ts_local)::int AS dow,
              EXTRACT(HOUR FROM ts_local)::int AS hour,
              SUM("costMicros") AS cost, SUM(COALESCE("orders7d", 0)) AS orders,
              SUM(COALESCE("sales7dCents", 0)) AS sales, SUM("impressions") AS impressions, SUM("clicks") AS clicks
-      FROM (
-        SELECT (("date" + (("hour")::text || ' hours')::interval) AT TIME ZONE 'UTC' AT TIME ZONE ${tz}) AS ts_local,
-               "costMicros", "orders7d", "sales7dCents", "impressions", "clicks"
-        FROM "AmazonAdsHourlyPerformance"
-        WHERE "entityType" = 'CAMPAIGN' AND "date" >= ${since}
-          AND ("localEntityId" IN (${Prisma.join(localIds)})${extIds.length ? Prisma.sql` OR "entityId" IN (${Prisma.join(extIds)})` : Prisma.empty})
-      ) t
+      FROM (${windowed}) w
       GROUP BY dow, hour ORDER BY dow, hour`
 
+    // What the window actually resolved to, and how much of it holds data. Marketing Stream is
+    // never backfilled, so a 13-week window over a 4-week-old campaign is mostly empty — the UI
+    // states this rather than letting the operator read a sparse grid as a real pattern.
+    const meta = await prisma.$queryRaw<Array<{ from_day: Date; to_day: Date; days: bigint; first_day: Date | null; last_day: Date | null }>>`
+      SELECT ((now() AT TIME ZONE ${tz})::date - ${windowDays}::int) AS from_day,
+             ((now() AT TIME ZONE ${tz})::date - 1) AS to_day,
+             (SELECT COUNT(DISTINCT ts_local::date) FROM (${windowed}) w2) AS days,
+             (SELECT MIN(ts_local)::date FROM (${windowed}) w3) AS first_day,
+             (SELECT MAX(ts_local)::date FROM (${windowed}) w4) AS last_day`
+    const m = meta[0]
+    const day = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null)
+
+    /**
+     * DPS.4b — floor every bucket at zero, and say how often that was needed.
+     *
+     * ~3% of Marketing Stream rows are RESTATEMENTS carrying negative counts (Amazon retracting
+     * invalid traffic). When the correction lands inside the window but the original it corrects
+     * falls outside it, the bucket nets below zero — measured live: two buckets at −1 impression.
+     * A negative impression count is not a fact about any hour, and the grid renders anything ≤ 0
+     * as "0", so those buckets silently made the visible cells disagree with the totals.
+     *
+     * Flooring makes every cell a number you can defend, and `restatedCells` keeps it visible
+     * rather than swallowed — silently clamping would be the same class of mistake.
+     */
+    const floor0 = (n: number) => (n > 0 ? n : 0)
+    let restatedCells = 0
     const cells = rows.map((r) => {
-      const costCents = Math.round(Number(r.cost ?? 0n) / 10_000)
-      const salesCents = Number(r.sales ?? 0n)
+      const rawCost = Math.round(Number(r.cost ?? 0n) / 10_000)
+      const rawSales = Number(r.sales ?? 0n)
+      const rawOrders = Number(r.orders ?? 0n)
+      const rawImpr = Number(r.impressions ?? 0n)
+      const rawClicks = Number(r.clicks ?? 0n)
+      if (rawCost < 0 || rawSales < 0 || rawOrders < 0 || rawImpr < 0 || rawClicks < 0) restatedCells++
+      const costCents = floor0(rawCost)
+      const salesCents = floor0(rawSales)
       return {
         dow: r.dow, hour: r.hour, costCents, salesCents,
-        orders: Number(r.orders ?? 0n), impressions: Number(r.impressions ?? 0n), clicks: Number(r.clicks ?? 0n),
+        orders: floor0(rawOrders), impressions: floor0(rawImpr), clicks: floor0(rawClicks),
+        // derived AFTER flooring, so a ratio can never be built from a negative component
         acos: salesCents > 0 ? Math.round((costCents / salesCents) * 1000) / 10 : null,
         roas: costCents > 0 ? Math.round((salesCents / costCents) * 100) / 100 : null,
       }
     })
     reply.header('Cache-Control', 'private, max-age=300')
-    return { windowDays, timezone: tz, hasData: cells.some((c) => c.costCents > 0 || c.clicks > 0), cells }
+    return {
+      weeks, windowDays, timezone: tz,
+      from: day(m?.from_day), to: day(m?.to_day),
+      coverage: { daysWithData: Number(m?.days ?? 0), firstDay: day(m?.first_day), lastDay: day(m?.last_day), restatedCells },
+      // A scope can have impressions with no spend and no clicks (7,404 such rows live) — judging
+      // "has data" on cost/clicks alone showed an empty state over real data.
+      hasData: cells.some((c) => c.costCents > 0 || c.clicks > 0 || c.impressions > 0 || c.orders > 0 || c.salesCents > 0),
+      cells,
+    }
   })
 
   //   - per-adProduct live status from the adapter registry
