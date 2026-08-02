@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Check, Search, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { H10Select } from '../../campaigns/FilterDropdown'
+import { searchOptions } from '@/lib/option-search'
 import { getBackendUrl } from '@/lib/backend-url'
 
 export interface SchedCampaign { id: string; name: string; marketplace: string | null; status: string; targetingType: string; adProduct: string; dailyBudget: number | null; portfolioId: string | null }
@@ -79,14 +80,19 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear 
   }, [])
 
   const selIds = useMemo(() => new Set(selected.map((c) => c.id)), [selected])
-  const ql = q.trim().toLowerCase()
-  const filtered = useMemo(() => all.filter((c) => {
-    if (status === 'enabled' && c.status !== 'ENABLED') return false
-    if (status === 'paused' && c.status !== 'PAUSED') return false
-    if (status === 'all' && c.status === 'ARCHIVED') return false
-    if (ql && !c.name.toLowerCase().includes(ql)) return false
-    return true
-  }), [all, status, ql])
+  // OS.5 — status filtering first, then the shared ranked matcher. The old test was
+  // `c.name.toLowerCase().includes(q)`, which could not find "gale broad" inside
+  // "GALE | IT | Broad | Brand"; searchOptions also orders the best matches to the top,
+  // which matters here because the list is paginated (a good hit was landing on page 3).
+  const filtered = useMemo(() => {
+    const byStatus = all.filter((c) => {
+      if (status === 'enabled' && c.status !== 'ENABLED') return false
+      if (status === 'paused' && c.status !== 'PAUSED') return false
+      if (status === 'all' && c.status === 'ARCHIVED') return false
+      return true
+    })
+    return searchOptions(q, byStatus, (c) => c.name)
+  }, [all, status, q])
 
   const pages = Math.max(1, Math.ceil(filtered.length / perPage))
   const pg = Math.min(page, pages)

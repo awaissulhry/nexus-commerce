@@ -7,11 +7,15 @@
  * searchable: when the in-popover search shows, type to filter, Enter picks the
  * first match, Esc closes. Styling lives in ads.css (.h10-dd-*).
  */
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown, Search } from 'lucide-react'
+import { searchOptions } from '@/lib/option-search'
 
 type Opt = { value: string; label: string }
+
+/** Past this many options a picker becomes a scroll-hunt, so the search box appears on its own. */
+const SEARCH_THRESHOLD = 7
 
 function useClickAway<T extends HTMLElement>(onAway: () => void) {
   const ref = useRef<T>(null)
@@ -47,13 +51,15 @@ export function FilterDropdown({
 
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
-  const ref = useClickAway<HTMLDivElement>(() => { setOpen(false); setQ('') })
+  const [active, setActive] = useState(0)
+  const ref = useClickAway<HTMLDivElement>(() => { setOpen(false); setQ(''); setActive(0) })
 
-  const showSearch = searchable || options.length > 7
+  const showSearch = searchable || options.length > SEARCH_THRESHOLD
   const selected = options.find((o) => o.value === value)
-  const ql = q.trim().toLowerCase()
-  const matches = showSearch && ql ? options.filter((o) => o.label.toLowerCase().includes(ql)) : options
-  const pick = (v: string) => { setValue(v); setOpen(false); setQ('') }
+  // OS.1 — was `label.toLowerCase().includes(q)`, which could not match across the separators in ad
+  // entity names: "gale broad" found nothing in "GALE | IT | Broad | Brand". Now ranked + tokenised.
+  const matches = showSearch ? searchOptions(q, options, (o) => o.label) : options
+  const pick = (v: string) => { setValue(v); setOpen(false); setQ(''); setActive(0) }
 
   return (
     <div className={`h10-dd ${open ? 'open' : ''}`} ref={ref}>
@@ -69,10 +75,12 @@ export function FilterDropdown({
               <input
                 autoFocus
                 value={q}
-                onChange={(e) => setQ(e.target.value)}
+                onChange={(e) => { setQ(e.target.value); setActive(0) }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && matches.length) { e.preventDefault(); pick(matches[0].value) }
-                  else if (e.key === 'Escape') { setOpen(false); setQ('') }
+                  if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => Math.min(i + 1, matches.length - 1)) }
+                  else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)) }
+                  else if (e.key === 'Enter') { e.preventDefault(); const m = matches[active]; if (m) pick(m.value) }
+                  else if (e.key === 'Escape') { e.preventDefault(); setOpen(false); setQ(''); setActive(0) }
                 }}
                 placeholder={searchPlaceholder}
                 aria-label="Search options"
@@ -83,8 +91,15 @@ export function FilterDropdown({
             <button type="button" className={`h10-dd-opt ${!value ? 'on' : ''}`} onClick={() => pick('')}>{emptyLabel}</button>
             {matches.length === 0 ? (
               <div className="h10-dd-empty">No matches</div>
-            ) : matches.map((o) => (
-              <button type="button" key={o.value} className={`h10-dd-opt ${o.value === value ? 'on' : ''}`} onClick={() => pick(o.value)} title={o.label}>{o.label}</button>
+            ) : matches.map((o, i) => (
+              <button
+                type="button"
+                key={`${o.value}__${i}`}
+                className={`h10-dd-opt ${o.value === value ? 'on' : ''} ${showSearch && i === active ? 'active' : ''}`}
+                onClick={() => pick(o.value)}
+                onMouseEnter={() => showSearch && setActive(i)}
+                title={o.label}
+              >{o.label}</button>
             ))}
           </div>
         </div>
@@ -97,36 +112,94 @@ export function FilterDropdown({
 // The popover is portaled to <body> with fixed positioning so it's never clipped by
 // a scrolling modal body or the grid's overflow, and flips up near the viewport
 // bottom. Shares the .h10-dd-* styling so it stays consistent with FilterDropdown.
-export function H10Select({ options, value, onChange, ariaLabel, width }: {
+export function H10Select({ options, value, onChange, ariaLabel, width, searchable, searchPlaceholder = 'Search…' }: {
   options: Opt[]
   value: string
   onChange: (v: string) => void
   ariaLabel?: string
   width?: number | string
+  /** Force the in-popover search box. Otherwise it auto-shows past SEARCH_THRESHOLD options. */
+  searchable?: boolean
+  searchPlaceholder?: string
 }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number; width: number; up: boolean } | null>(null)
+  const [q, setQ] = useState('')
+  const [active, setActive] = useState(0)
   const btnRef = useRef<HTMLButtonElement>(null)
   const selected = options.find((o) => o.value === value)
+  // OS.2 — this control had no search at all, so picking a portfolio or campaign from a long list
+  // meant scroll-hunting. Ranked, token-based matching now (see lib/option-search).
+  const showSearch = searchable || options.length > SEARCH_THRESHOLD
+  const matches = showSearch ? searchOptions(q, options, (o) => o.label) : options
   const place = () => {
     const el = btnRef.current; if (!el) return
     const r = el.getBoundingClientRect()
-    const estH = Math.min(options.length, 7) * 36 + 12
+    const estH = Math.min(options.length, 7) * 36 + 12 + (showSearch ? 42 : 0)
     const up = r.bottom + estH > window.innerHeight - 8
     setPos({ top: up ? r.top - 4 : r.bottom + 4, left: r.left, width: r.width, up })
   }
-  const toggle = () => { if (!open) place(); setOpen((o) => !o) }
+  const close = () => { setOpen(false); setQ(''); setActive(0) }
+  const toggle = () => { if (!open) { place(); setQ(''); setActive(0) } ; setOpen((o) => !o) }
+  const pick = (v: string) => { onChange(v); close() }
+  // Type to narrow, ↑/↓ to move, Enter to take the highlighted row, Esc to back out.
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => Math.min(i + 1, matches.length - 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)) }
+    else if (e.key === 'Enter') { e.preventDefault(); const m = matches[active]; if (m) pick(m.value) }
+    else if (e.key === 'Escape') { e.preventDefault(); close() }
+  }
+  // Runs once the pop is in the DOM and its real (content-driven) width is known — the only moment
+  // an overflow can be detected, since the width depends on the longest option label.
+  const edgeClamp = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const overflow = r.right - (window.innerWidth - 8)
+    if (overflow > 0) el.style.left = `${Math.max(8, r.left - overflow)}px`
+  }, [])
   return (
     <div className="h10-dd" style={width != null ? { width } : undefined}>
       <button ref={btnRef} type="button" className={`h10-dd-btn ${open ? 'open' : ''}`} onClick={toggle} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel}>
         <span>{selected?.label ?? ''}</span><ChevronDown size={14} />
       </button>
       {open && pos && createPortal(<>
-        <button type="button" className="h10-dd-back" aria-label="Close" onClick={() => setOpen(false)} />
-        <div className="h10-dd-pop fixed" role="listbox" style={{ top: pos.top, left: pos.left, minWidth: Math.max(pos.width, 180), transform: pos.up ? 'translateY(-100%)' : undefined }}>
+        <button type="button" className="h10-dd-back" aria-label="Close" onClick={close} />
+        {/* DPS.4 — the pop is positioned at the trigger's left and sized to its widest option, with
+            no right-edge clamp: a select near the right of the viewport holding long labels rendered
+            off-screen (measured 953px wide overflowing by 390px on Rank & Dayparting Schedules).
+            `maxWidth` keeps it on screen and `edgeClamp` slides it left only when it would spill —
+            a trigger with short options is positioned exactly as before. */}
+        <div
+          ref={edgeClamp}
+          className="h10-dd-pop fixed"
+          role="listbox"
+          style={{ top: pos.top, left: pos.left, minWidth: Math.max(pos.width, 180), maxWidth: 'calc(100vw - 16px)', transform: pos.up ? 'translateY(-100%)' : undefined }}
+        >
+          {showSearch && (
+            <div className="h10-dd-search">
+              <Search size={13} />
+              <input
+                autoFocus
+                value={q}
+                onChange={(e) => { setQ(e.target.value); setActive(0) }}
+                onKeyDown={onKey}
+                placeholder={searchPlaceholder}
+                aria-label="Search options"
+              />
+            </div>
+          )}
           <div className="h10-dd-list">
-            {options.map((o) => (
-              <button type="button" key={o.value} className={`h10-dd-opt ${o.value === value ? 'on' : ''}`} onClick={() => { onChange(o.value); setOpen(false) }} title={o.label}>{o.label}</button>
+            {matches.length === 0 ? (
+              <div className="h10-dd-empty">No matches</div>
+            ) : matches.map((o, i) => (
+              <button
+                type="button"
+                key={`${o.value}__${i}`}
+                className={`h10-dd-opt ${o.value === value ? 'on' : ''} ${showSearch && i === active ? 'active' : ''}`}
+                onClick={() => pick(o.value)}
+                onMouseEnter={() => showSearch && setActive(i)}
+                title={o.label}
+              >{o.label}</button>
             ))}
           </div>
         </div>
@@ -139,18 +212,27 @@ export function H10Select({ options, value, onChange, ariaLabel, width }: {
 // shared with the Ad Manager. "Select All" is the first plain row (checked when all on,
 // indeterminate when some); the button summarises as the placeholder / single label /
 // "All" / "N selected". Values are an array; empty ⇒ no filter (matches H10).
-export function MultiSelect({ options, value, onChange, placeholder = 'All', ariaLabel }: {
+export function MultiSelect({ options, value, onChange, placeholder = 'All', ariaLabel, searchable, searchPlaceholder = 'Search…' }: {
   options: Opt[]
   value: string[]
   onChange: (v: string[]) => void
   placeholder?: string
   ariaLabel?: string
+  /** Force the in-popover search box. Otherwise it auto-shows past SEARCH_THRESHOLD options. */
+  searchable?: boolean
+  searchPlaceholder?: string
 }) {
   const [open, setOpen] = useState(false)
-  const ref = useClickAway<HTMLDivElement>(() => setOpen(false))
+  const [q, setQ] = useState('')
+  const ref = useClickAway<HTMLDivElement>(() => { setOpen(false); setQ('') })
   const allOn = options.length > 0 && value.length === options.length
   const some = value.length > 0 && !allOn
   const toggle = (v: string) => onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v])
+  // OS.3 — a Portfolio/Campaign multi-filter could run to dozens of checkboxes with no way to find
+  // one. "Select All" deliberately still applies to ALL options, not just the visible matches —
+  // silently selecting a filtered subset from a control labelled "Select All" would be a lie.
+  const showSearch = searchable || options.length > SEARCH_THRESHOLD
+  const matches = showSearch ? searchOptions(q, options, (o) => o.label) : options
   const toggleAll = () => onChange(allOn ? [] : options.map((o) => o.value))
   const summary = value.length === 0 ? placeholder
     : allOn ? 'All'
@@ -163,11 +245,26 @@ export function MultiSelect({ options, value, onChange, placeholder = 'All', ari
       </button>
       {open && (
         <div className="h10-ms-pop" role="listbox">
+          {showSearch && (
+            <div className="h10-dd-search">
+              <Search size={13} />
+              <input
+                autoFocus
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); setOpen(false); setQ('') } }}
+                placeholder={searchPlaceholder}
+                aria-label="Search options"
+              />
+            </div>
+          )}
           <label className="h10-ms-opt">
             <input type="checkbox" checked={allOn} ref={(el) => { if (el) el.indeterminate = some }} onChange={toggleAll} /> Select All
           </label>
-          {options.map((o) => (
-            <label key={o.value} className={`h10-ms-opt ${value.includes(o.value) ? 'sel' : ''}`}>
+          {matches.length === 0 ? (
+            <div className="h10-dd-empty">No matches</div>
+          ) : matches.map((o, i) => (
+            <label key={`${o.value}__${i}`} className={`h10-ms-opt ${value.includes(o.value) ? 'sel' : ''}`}>
               <input type="checkbox" checked={value.includes(o.value)} onChange={() => toggle(o.value)} /> {o.label}
             </label>
           ))}

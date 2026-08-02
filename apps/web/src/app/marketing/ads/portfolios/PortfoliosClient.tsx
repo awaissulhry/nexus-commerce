@@ -8,7 +8,7 @@
  * container, no direct spend). Assign / rename / archive / budgets land in P2–P3.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { RefreshCw, Plus, Pencil, Archive, Wallet } from 'lucide-react'
+import { RefreshCw, Plus, Pencil, Archive, Wallet, Search } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { Button } from '@/design-system/primitives/Button'
 import { Select } from '@/design-system/primitives/Select'
@@ -16,6 +16,7 @@ import { Input } from '@/design-system/primitives/Input'
 import { Modal } from '@/design-system/components/Modal'
 import { ToastProvider, useToast } from '@/design-system/components/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
+import { searchOptions } from '@/lib/option-search'
 import { eur, pct, intl } from '../_canvas/format'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -54,6 +55,7 @@ function PortfoliosInner() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [mode, setMode] = useState('sandbox')
+  const [q, setQ] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [newName, setNewName] = useState('')
   const [newMarket, setNewMarket] = useState('IT')
@@ -164,6 +166,9 @@ function PortfoliosInner() {
     if (await patchPortfolio(budgetRow.portfolioId, { budget }, 'Budget set')) setBudgetRow(null)
   }
 
+  // OS.6 — this page listed every portfolio with no way to find one. Tiles and totals stay on the
+  // FULL set (they describe the account, not the query); only the table narrows.
+  const visible = searchOptions(q, rows, (r) => r.name)
   const totals = rows.reduce((a, r) => ({ campaigns: a.campaigns + r.campaignCount, spend: a.spend + r.spendCents }), { campaigns: 0, spend: 0 })
 
   return (
@@ -180,6 +185,13 @@ function PortfoliosInner() {
         : <div className="pf-banner pf-banner--live">Live mode — creating a portfolio is a real (gated) write to your Amazon account. Portfolios are organizational containers with no direct spend.</div>}
 
       <div className="pf-toolbar">
+        {rows.length > 0 && (
+          <span className="pf-search">
+            <Search size={14} />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search portfolios…" aria-label="Search portfolios" />
+            {q && <button type="button" onClick={() => setQ('')} aria-label="Clear search">×</button>}
+          </span>
+        )}
         {lastSynced && <span className="pf-synced">Last synced {ago(lastSynced)}</span>}
         <div className="pf-toolbar-r">
           <Button variant="secondary" size="sm" disabled={syncing} onClick={() => void sync(market)}><RefreshCw size={13} /> {syncing ? 'Syncing…' : 'Sync from Amazon'}</Button>
@@ -213,7 +225,10 @@ function PortfoliosInner() {
               <th>Portfolio</th><th>Markets</th><th className="num">Campaigns</th><th className="num">Budget</th><th className="num">Spend</th><th className="num">Sales</th><th className="num">ACoS</th><th>Synced</th><th className="pf-actions-h">Actions</th>
             </tr></thead>
             <tbody>
-              {rows.map((r) => (
+              {visible.length === 0 && (
+                <tr><td colSpan={9} className="pf-norows">No portfolio matches “{q}”.</td></tr>
+              )}
+              {visible.map((r) => (
                 <tr key={r.portfolioId}>
                   <td>
                     <span className="pf-name">

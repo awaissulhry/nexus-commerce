@@ -17,6 +17,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Search, Layers, Loader2 } from 'lucide-react'
+import { searchOptions } from '@/lib/option-search'
 import { getBackendUrl } from '@/lib/backend-url'
 
 export interface SrcAdGroup { id: string; name: string; positives: number; negatives: number; productAds: number }
@@ -123,11 +124,17 @@ export function SourcePicker({ market, selected, setSelected, onChange, onPickBl
   }, [market])
 
   // ── filter ──────────────────────────────────────────────────────────────
+  // OS.5 — shared ranked matcher instead of a raw substring test, so "gale broad" finds
+  // "GALE | IT | Broad | Brand". Each campaign is matched against "<portfolio> <campaign>" so a
+  // query can name either or both ("xavia broad") and a portfolio-only query still keeps its whole
+  // subtree — the previous OR-test lost that as soon as the query mixed the two.
   const view = useMemo(() => {
-    const needle = q.trim().toLowerCase()
-    if (!needle) return tree
+    if (!q.trim()) return tree
     return tree
-      .map((p) => ({ ...p, campaigns: p.campaigns.filter((c) => c.name.toLowerCase().includes(needle) || p.name.toLowerCase().includes(needle)) }))
+      .map((p) => {
+        const kept = searchOptions(q, p.campaigns, (c) => `${p.name} ${c.name}`)
+        return { ...p, campaigns: kept }
+      })
       .filter((p) => p.campaigns.length > 0)
   }, [tree, q])
 

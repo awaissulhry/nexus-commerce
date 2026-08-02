@@ -40,7 +40,7 @@ export interface GridColumn<T> {
 
 export interface GridRangeFilter { key: string; label: string; kind: 'range'; unit?: '€' | '%' | ''; tip?: string; value?: (row: unknown) => number }
 export interface GridSelectFilter { key: string; label: string; kind: 'select'; options: Array<{ value: string; label: string }>; placeholder?: string; wide?: boolean; searchable?: boolean; value?: (row: unknown) => string }
-export interface GridMultiSelectFilter { key: string; label: string; kind: 'multiselect'; options: Array<{ value: string; label: string }>; placeholder?: string; wide?: boolean; value?: (row: unknown) => string }
+export interface GridMultiSelectFilter { key: string; label: string; kind: 'multiselect'; options: Array<{ value: string; label: string }>; placeholder?: string; wide?: boolean; searchable?: boolean; value?: (row: unknown) => string }
 export type GridFilter = GridRangeFilter | GridSelectFilter | GridMultiSelectFilter
 
 /** One inline-editable field (H10 "Edit Groups"). `key` is a column key, or '__first'
@@ -406,7 +406,7 @@ export function AdsDataGrid<T>({
                   </div>
                 ) : f.kind === 'multiselect' ? (
                   <div className={`ffield ${f.wide ? 'wide' : ''}`} key={f.key}><span>{f.label}</span>
-                    <MultiSelect options={f.options} value={(fstate[f.key] as string[]) ?? []} onChange={(v) => { setFstate((s) => ({ ...s, [f.key]: v })); setPage(1) }} placeholder={f.placeholder ?? 'All'} ariaLabel={f.label} />
+                    <MultiSelect options={f.options} value={(fstate[f.key] as string[]) ?? []} onChange={(v) => { setFstate((s) => ({ ...s, [f.key]: v })); setPage(1) }} placeholder={f.placeholder ?? 'All'} ariaLabel={f.label} searchable={f.searchable} />
                   </div>
                 ) : (
                   <div className="ffield" key={f.key}>

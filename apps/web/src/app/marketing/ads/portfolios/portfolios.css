@@ -69,3 +69,11 @@
 .pf-seg button { border: 0; background: #fff; padding: 6px 12px; font-size: 12px; font-weight: 700; color: #5b6573; cursor: pointer; }
 .pf-seg button.on { background: #1f6fde; color: #fff; }
 .pf-daterow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* OS.6 — portfolio search. Sits at the left of the toolbar so it reads before the sync/create
+   actions on the right; the toolbar already uses flex, so it needs no layout change. */
+.pf-search { display: inline-flex; align-items: center; gap: 7px; border: 1px solid #d8dde4; border-radius: 8px; padding: 6px 10px; min-width: 240px; color: #8a93a1; background: #fff; }
+.pf-search input { border: none; outline: none; font: inherit; font-size: 13px; width: 100%; background: transparent; color: #1c2530; }
+.pf-search input::placeholder { color: #aeb6c2; }
+.pf-search button { border: none; background: none; cursor: pointer; font-size: 16px; line-height: 1; color: #8a93a1; padding: 0 2px; }
+.pf-norows { padding: 26px 12px; text-align: center; color: #8a93a1; font-size: 13px; }
