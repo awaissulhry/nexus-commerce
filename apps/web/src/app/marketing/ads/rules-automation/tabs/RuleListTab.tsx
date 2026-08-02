@@ -131,6 +131,7 @@ export function RuleListTab({ noun, seed, onAddRule, liveType, editHref, emptyNo
       <AdsDataGrid<RuleRow>
         rows={rows}
         rowId={(r) => r.id}
+        enabledFirst={(r) => r.automation}
         noun={noun}
         firstColLabel={noun}
         renderFirst={renderFirst}

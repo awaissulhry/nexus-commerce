@@ -130,6 +130,7 @@ export function TargetsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData 
     <AdsDataGrid<TargetRow>
       rows={rows}
       rowId={(r) => r.id}
+      enabledFirst={(r) => r.status}
       noun="Target"
       firstColLabel="Target"
       renderFirst={(r) => <div className="nmw"><span className="t" title={r.expressionValue}>{r.expressionValue}</span>{r.expressionType ? <span className="mk">{TYPE_LABEL[r.expressionType] ?? r.expressionType}</span> : null}</div>}

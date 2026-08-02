@@ -268,6 +268,7 @@ export function RulesAutomationClient() {
           rows={visible}
           loading={loading}
           rowId={(c) => c.id}
+          enabledFirst={(c) => c.status}
           noun="Campaign"
           firstColLabel="Campaign"
           renderFirst={renderFirst}

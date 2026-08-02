@@ -381,6 +381,7 @@ export function BudgetManagerClient() {
         rows={shownRows}
         loading={loading}
         rowId={(r) => r.id ?? `${r.marketplace}:${r.tag ?? ''}`}
+        enabledFirst={(r) => r.status}
         noun="Market"
         firstColLabel="Marketplace"
         renderFirst={renderFirst}

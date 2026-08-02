@@ -138,6 +138,7 @@ export function AdGroupsTab({ campaign, campaignId, onRefresh }: { campaign: Cam
       <AdsDataGrid<AdGroupRow>
         rows={rows}
         rowId={(r) => r.id}
+        enabledFirst={(r) => r.status}
         noun="Ad Group"
         firstColLabel="Ad Group"
         renderFirst={(r) => <div className="nmw"><Layers size={15} className="agi" /><Link href={`/marketing/ads/campaigns/${campaignId}/ad-groups/${r.id}`} className="t agln" title={r.name}>{r.name}</Link></div>}

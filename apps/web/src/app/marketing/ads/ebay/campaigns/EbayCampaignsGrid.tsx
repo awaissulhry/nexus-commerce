@@ -200,6 +200,7 @@ export function EbayCampaignsGrid() {
         rows={rows}
         loading={loading}
         rowId={(c) => c.id}
+        enabledFirst={(c) => c.status}
         noun="Campaign"
         firstColLabel="Campaign"
         renderFirst={(c) => (

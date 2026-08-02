@@ -94,6 +94,7 @@ export function AdsTab({ campaign, dateRange }: { campaign: CampaignDetailData |
       rows={rows}
       loading={loading}
       rowId={(r) => r.id}
+      enabledFirst={(r) => r.status}
       noun="Ad"
       firstColLabel="Product"
       renderFirst={(r) => (

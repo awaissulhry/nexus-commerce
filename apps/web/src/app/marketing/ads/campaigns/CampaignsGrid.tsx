@@ -14,6 +14,7 @@ import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { describeWindow } from '@nexus/shared/data-vintage'
 import { getBackendUrl } from '@/lib/backend-url'
 import { FilterDropdown, H10Select, HoverCard } from './FilterDropdown'
+import { enabledRank } from './_grid/enabledRank'
 import { AdManagerGraph } from './AdManagerGraph'
 import { InfoTip } from './InfoTip'
 
@@ -1214,8 +1215,12 @@ export function CampaignsGrid() {
   const physical = useMemo(() => metricCols.flatMap(physCols), [metricCols])
 
   // sortable columns (click a header; metrics keys sort numerically, name/status text)
+  // SF.1 — with no explicit sort the Ad Manager now leads with the campaigns that are actually
+  // running (enabled → paused → archived), because that is what you opened the page to look at.
+  // Clicking any header hands the order to that column, exactly as before. This grid predates the
+  // shared AdsDataGrid, so it carries its own copy of the banding.
   const sorted = useMemo(() => {
-    if (!sort) return filtered
+    if (!sort) return [...filtered].sort((a, b) => enabledRank(a.status) - enabledRank(b.status))
     const dir = sort.dir === 'asc' ? 1 : -1
     return [...filtered].sort((a, b) => {
       if (sort.key === 'name') return a.name.toLowerCase() < b.name.toLowerCase() ? -dir : a.name.toLowerCase() > b.name.toLowerCase() ? dir : 0

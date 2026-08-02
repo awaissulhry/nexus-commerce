@@ -64,6 +64,7 @@ export function AgNegativesTab({ adGroup, onRefresh, mode }: { adGroup: AdGroupD
     <AdsDataGrid<NegRow>
       rows={rows}
       rowId={(r) => r.id}
+      enabledFirst={(r) => r.status}
       noun={noun}
       firstColLabel={noun}
       renderFirst={(r) => <div className="nmw"><span className="t" title={r.text}>{r.text}</span></div>}

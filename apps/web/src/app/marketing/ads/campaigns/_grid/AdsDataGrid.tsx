@@ -17,6 +17,10 @@ import { createPortal } from 'react-dom'
 import { ChevronDown, ChevronUp, ChevronsUpDown, Settings2, Download, Pencil, Search, X } from 'lucide-react'
 import { FilterDropdown, H10Select, HoverCard, MultiSelect } from '../FilterDropdown'
 import { InfoTip } from '../InfoTip'
+import { enabledRank } from './enabledRank'
+
+// Re-exported so consumers can import the ranking helper from the grid they already use.
+export { enabledRank }
 
 /** A grid column. `render` draws the cell; `sortValue`/`filterValue` drive sort + range
  *  filters; `total` is the value shown in the pinned Total row (omit ⇒ blank). */
@@ -41,6 +45,7 @@ export interface GridColumn<T> {
 export interface GridRangeFilter { key: string; label: string; kind: 'range'; unit?: '€' | '%' | ''; tip?: string; value?: (row: unknown) => number }
 export interface GridSelectFilter { key: string; label: string; kind: 'select'; options: Array<{ value: string; label: string }>; placeholder?: string; wide?: boolean; searchable?: boolean; value?: (row: unknown) => string }
 export interface GridMultiSelectFilter { key: string; label: string; kind: 'multiselect'; options: Array<{ value: string; label: string }>; placeholder?: string; wide?: boolean; searchable?: boolean; value?: (row: unknown) => string }
+
 export type GridFilter = GridRangeFilter | GridSelectFilter | GridMultiSelectFilter
 
 /** One inline-editable field (H10 "Edit Groups"). `key` is a column key, or '__first'
@@ -102,6 +107,14 @@ export interface AdsDataGridProps<T> {
   emptyNode?: ReactNode
   /** initial sort (H10 grids default to Spend ↓); the matching header renders blue/active */
   defaultSort?: { key: string; dir: 'asc' | 'desc' }
+  /**
+   * SF.1 — return the row's live state (a boolean, or a status string like ENABLED/PAUSED/ARCHIVED)
+   * and the grid puts the live rows at the top of the DEFAULT view: what is running is what you
+   * came to look at, and archived rows sink. The chosen sort still orders rows *within* each band.
+   * Clicking a column header hands ordering entirely to that column; clearing the sort (third
+   * click) brings this back. See `enabledRank` for the vocabulary.
+   */
+  enabledFirst?: (row: T) => unknown
   /** inline edit mode (H10 "Edit Groups"): editable cells + Discard/Apply toolbar */
   editMode?: GridEditMode<T>
   /** bulk-action buttons shown in the toolbar when rows are selected (e.g. Adjust Bid / Enable
@@ -159,7 +172,7 @@ export function AdsDataGrid<T>({
   toolbarLeft, toolbarRight, exportable, onExport, customizable = true, storageKey,
   selectable = true, selected, onSelectedChange,
   showTotal, totalFirst = 'Total',
-  reportLabel, emptyLabel = 'No data.', emptyNode, defaultSort, editMode, selectionActions,
+  reportLabel, emptyLabel = 'No data.', emptyNode, defaultSort, enabledFirst, editMode, selectionActions,
   searchable, searchPlaceholder = 'Search…', searchValue, pagerCentered, filtersDefaultOpen = true,
   groupBy, onRowClick, keyboardNav, onRowKey, initialFilters, rowClassName,
 }: AdsDataGridProps<T>) {
@@ -181,6 +194,7 @@ export function AdsDataGrid<T>({
     if (filterPresetsKey) { try { localStorage.setItem(filterPresetsKey, JSON.stringify(next)) } catch { /* ignore */ } }
   }
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(defaultSort ?? null)
+  const [userSorted, setUserSorted] = useState(false)
   // ── inline edit mode (H10 "Edit Groups") ──
   const [editing, setEditing] = useState(false)
   const [drafts, setDrafts] = useState<Record<string, Record<string, string>>>({})
@@ -259,7 +273,11 @@ export function AdsDataGrid<T>({
 
   // ── sorting ──
   const sorted = useMemo(() => {
-    if (!sort && !groupBy) return searched
+    // SF.1 — enabled-first governs the DEFAULT view only. Once a header is clicked that column
+    // owns the order outright (sorting by Spend must really mean Spend, even if the top spender is
+    // paused); clearing the sort restores this banding.
+    const bandBy = enabledFirst && !userSorted ? enabledFirst : null
+    if (!sort && !groupBy && !bandBy) return searched
     const col = sort ? columns.find((c) => c.key === sort.key) : null
     const getVal = !sort ? null : (sort.key === '__first'
       ? (firstSortValue ?? (() => ''))
@@ -272,13 +290,17 @@ export function AdsDataGrid<T>({
         const ga = groupBy(a), gb = groupBy(b)
         if (ga.key !== gb.key) return ga.label.localeCompare(gb.label)
       }
+      if (bandBy) {
+        const ra = enabledRank(bandBy(a)), rb = enabledRank(bandBy(b))
+        if (ra !== rb) return ra - rb
+      }
       if (!getVal || !sort) return 0
       const va = getVal(a) as number | string, vb = getVal(b) as number | string
       const cmp = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb))
       return sort.dir === 'asc' ? cmp : -cmp
     })
     return arr
-  }, [searched, sort, columns, firstSortValue, groupBy])
+  }, [searched, sort, columns, firstSortValue, groupBy, enabledFirst, userSorted])
 
   // group row counts (for the group-header labels), computed over the full sorted set
   const groupCounts = useMemo(() => {
@@ -324,7 +346,14 @@ export function AdsDataGrid<T>({
     document.querySelector('.h10-am-grid tr.kbd-focus')?.scrollIntoView({ block: 'nearest' })
   }, [focusIdx])
 
-  const onSort = (key: string) => setSort((s) => (s?.key === key ? (s.dir === 'asc' ? { key, dir: 'desc' } : null) : { key, dir: 'asc' }))
+  // SF.1 — `userSorted` distinguishes "the grid's default order" from "the operator asked for this
+  // order". Third click clears the sort, which also drops back to the default (enabled-first) view.
+  const onSort = (key: string) => {
+    const next: { key: string; dir: 'asc' | 'desc' } | null =
+      sort?.key === key ? (sort.dir === 'asc' ? { key, dir: 'desc' } : null) : { key, dir: 'asc' }
+    setSort(next)
+    setUserSorted(next !== null)
+  }
   const sortIcon = (key: string) => (sort?.key === key
     ? (sort.dir === 'asc' ? <ChevronUp size={13} className="sa on" /> : <ChevronDown size={13} className="sa on" />)
     : <ChevronsUpDown size={13} className="sa" />)

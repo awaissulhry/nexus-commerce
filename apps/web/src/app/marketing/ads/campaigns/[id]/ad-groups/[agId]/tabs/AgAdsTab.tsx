@@ -75,6 +75,7 @@ export function AgAdsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData | 
     <AdsDataGrid<AdRow>
       rows={rows}
       rowId={(r) => r.id}
+      enabledFirst={(r) => r.status}
       noun="Ad"
       firstColLabel="Product"
       renderFirst={(r) => (

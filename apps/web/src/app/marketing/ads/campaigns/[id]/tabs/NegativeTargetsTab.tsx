@@ -76,6 +76,7 @@ export function NegativeTargetsTab({ campaign }: { campaign: CampaignDetailData 
         rows={rows}
         loading={loading}
         rowId={(r) => r.id}
+        enabledFirst={(r) => r.status}
         noun="Target"
         firstColLabel="Target"
         renderFirst={(r) => <div className="nmw"><span className="t" title={r.text}>{r.text}</span></div>}

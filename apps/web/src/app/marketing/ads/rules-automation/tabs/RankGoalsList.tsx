@@ -132,6 +132,7 @@ export function RankGoalsList() {
       rows={rows}
       loading={loading}
       rowId={(r) => r.id}
+      enabledFirst={(r) => r.enabled}
       noun="Rank Schedule"
       firstColLabel="Rank Schedule"
       renderFirst={renderFirst}
