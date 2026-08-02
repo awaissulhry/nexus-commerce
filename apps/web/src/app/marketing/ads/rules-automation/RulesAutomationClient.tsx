@@ -16,6 +16,7 @@
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { Plus, ExternalLink, Atom, Wand2 } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter, type GridEditMode } from '../campaigns/_grid/AdsDataGrid'
@@ -23,8 +24,8 @@ import { HoverCard } from '../campaigns/FilterDropdown'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RuleTypeModal } from './_shared/RuleTypeModal'
 import { NoDataIllus } from './_shared/NoDataIllus'
+import { RulesTabs, rulesTabByKey, RULES_TABS } from './_shared/tabs'
 import { RuleListTab } from './tabs/RuleListTab'
-import { RankGoalsList } from './tabs/RankGoalsList'
 import { SovTrackerTab } from './tabs/SovTrackerTab'
 import { BudgetScheduleTab } from './_schedule/BudgetScheduleTab'
 import { TAB_RULES } from './tabs/placeholderSeeds'
@@ -68,20 +69,8 @@ const COL_TIPS: Record<string, string> = {
   budgetRule: 'Budget rules automatically adjust this campaign’s budget on a schedule or based on performance.',
 }
 
-// ── the 10 tabs (exact H10 order/labels). Only "rules" is built in R1. ──
-interface Tab { key: string; label: string }
-const TABS: Tab[] = [
-  { key: 'rules', label: 'Apply Rules' },
-  { key: 'bid', label: 'Bid' },
-  { key: 'keyword-harvest', label: 'Keyword Harvest' },
-  { key: 'negative-targeting', label: 'Negative Targeting' },
-  { key: 'budget', label: 'Budget' },
-  { key: 'dayparting', label: 'Dayparting Schedules' },
-  { key: 'budget-schedules', label: 'Budget Schedules' },
-  { key: 'placement', label: 'Placement' },
-  { key: 'share-of-voice', label: 'Share of Voice' },
-  { key: 'keyword-tracker', label: 'Keyword Tracker' },
-]
+// DPS.3 — the tab list now lives in _shared/tabs.tsx so this page and every routed tab page render
+// the SAME bar. Tabs that have their own route (Rank & Dayparting Schedules) are links out of here.
 
 async function patchJson(url: string, body: Record<string, unknown>): Promise<boolean> {
   try {
@@ -94,7 +83,11 @@ async function patchJson(url: string, body: Record<string, unknown>): Promise<bo
 export function RulesAutomationClient() {
   const [rows, setRows] = useState<Camp[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('rules')
+  // DPS.3 — the active tab comes from ?tab= instead of local state, so every non-routed tab is
+  // now bookmarkable and survives a refresh. Unknown/absent → "Apply Rules".
+  const sp = useSearchParams()
+  const requested = sp.get('tab') ?? 'rules'
+  const tab = rulesTabByKey(requested) && !rulesTabByKey(requested)?.routed ? requested : 'rules'
   const [market, setMarket] = useState('all')
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [showRuleType, setShowRuleType] = useState(false)
@@ -227,7 +220,12 @@ export function RulesAutomationClient() {
     { key: 'status', label: 'Status', kind: 'multiselect', options: [{ value: 'ENABLED', label: 'Enabled' }, { value: 'PAUSED', label: 'Paused' }, { value: 'ARCHIVED', label: 'Archived' }], placeholder: 'Enabled', value: (c) => (c as Camp).status },
     { key: 'type', label: 'Campaign Type', kind: 'select', options: [{ value: 'SP', label: 'Sponsored Products' }, { value: 'SB', label: 'Sponsored Brands' }, { value: 'SD', label: 'Sponsored Display' }], placeholder: 'All', value: (c) => productBadge(c as Camp) },
     { key: 'portfolio', label: 'Portfolio', kind: 'select', options: portfolioOpts, placeholder: 'Select a Portfolio', searchable: true, wide: true, value: (c) => String((c as Camp).portfolioId ?? '') },
-    { key: 'campaign', label: 'Campaign', kind: 'select', options: visible.map((c) => ({ value: c.name, label: c.name })), placeholder: 'Select a Campaign', searchable: true, wide: true, value: (c) => (c as Camp).name },
+    // OS.7 — these options are keyed by campaign NAME, and the same name exists in several
+    // marketplaces ("GALE JACKET MAIN" runs in IT/DE/FR/ES). Un-deduped that listed the same choice
+    // four times AND produced duplicate React keys, which corrupted the rendered list once search
+    // started changing its length. Filtering by name matches every market's copy either way, so one
+    // row per distinct name is both correct and what the filter actually does.
+    { key: 'campaign', label: 'Campaign', kind: 'select', options: Array.from(new Set(visible.map((c) => c.name))).sort((a, b) => a.localeCompare(b)).map((n) => ({ value: n, label: n })), placeholder: 'Select a Campaign', searchable: true, wide: true, value: (c) => (c as Camp).name },
     { key: 'bidAutomation', label: 'Bid Automation', kind: 'select', options: [{ value: 'on', label: 'Active' }, { value: 'off', label: 'Inactive' }], placeholder: 'All', value: (c) => ((c as Camp).bidAutomation ? 'on' : 'off') },
   ], [portfolioOpts, visible])
 
@@ -247,13 +245,13 @@ export function RulesAutomationClient() {
     </div>
   )
 
-  const activeTab = TABS.find((t) => t.key === tab) ?? TABS[0]
+  const activeTab = rulesTabByKey(tab) ?? RULES_TABS[0]
 
   return (
     <div className="h10-rules-page">
       <AdsPageHeader
         title="Rules & Automation"
-        subtitle="Create and manage rules for all of your campaigns"
+        subtitle={activeTab.subtitle ?? 'Create and manage rules for all of your campaigns'}
         markets={markets}
         market={market}
         onMarketChange={setMarket}
@@ -263,21 +261,7 @@ export function RulesAutomationClient() {
         primaryAction={{ label: 'Rule', icon: <Plus size={15} />, onClick: () => setShowRuleType(true) }}
       />
 
-      {/* sticky 10-tab bar (reuses the proven .h10-cd-tabs underline styling) */}
-      <div className="h10-cd-tabs h10-rules-tabs" role="tablist" aria-label="Rule types">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={t.key === tab}
-            className={`h10-cd-tab ${t.key === tab ? 'on' : ''}`}
-            onClick={() => setTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <RulesTabs active={tab} />
 
       {tab === 'rules' ? (
         <AdsDataGrid<Camp>
@@ -329,11 +313,6 @@ export function RulesAutomationClient() {
             </span>
           )}
         />
-      ) : tab === 'dayparting' ? (
-        // Rank goals are AdSchedule rows (GET /advertising/schedules) created by the Rank Goal
-        // builder — the legacy RuleListTab only listed AutomationRule dayparting rules, so goal-mode
-        // schedules never showed. RankGoalsList surfaces the real active rank goals here.
-        <RankGoalsList />
       ) : tab === 'placement' ? (
         <RuleListTab
           noun="Placement Rule"

@@ -14,7 +14,8 @@ import { X, Video, Plus, Copy, Trash2, Calendar, BarChart3, LayoutGrid, Search, 
 import { H10Select, HoverCard } from '../../campaigns/FilterDropdown'
 import { CampaignSection, type SchedCampaign } from './CampaignSection'
 import { MetricSelect } from './MetricSelect'
-import { DaypartingHeatmap, type HeatCell, type MetricUnit } from './DaypartingHeatmap'
+import { DaypartingHeatmap, type HeatCell } from './DaypartingHeatmap'
+import { metricVal, type RawCell } from './heatMetrics'
 import { DaypartingChart, type ChartCell } from './DaypartingChart'
 import { scheduleConfigFor, GROUP_BY, DAYS_OF_WEEK_FILTER, WEEKDAYS, TIME_OPTIONS, TIMEZONES, adjustmentsFor } from './scheduleConfig'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -31,23 +32,8 @@ function AtomMark({ size = 20 }: { size?: number }) {
   )
 }
 
-// raw aggregated cell from GET /advertising/dayparting/heatmap
-interface RawCell { dow: number; hour: number; costCents: number; salesCents: number; orders: number; clicks: number; impressions: number; acos: number | null; roas: number | null }
-// metric name → (value from a cell, display unit). Mirrors the H10 "Hourly Campaign Performance" metrics.
-const METRIC_VAL: Record<string, { f: (c: RawCell) => number; unit: MetricUnit }> = {
-  Spend: { f: (c) => c.costCents / 100, unit: 'eur' },
-  Sales: { f: (c) => c.salesCents / 100, unit: 'eur' },
-  ACoS: { f: (c) => c.acos ?? 0, unit: 'pct' },
-  ROAS: { f: (c) => c.roas ?? 0, unit: 'int' },
-  Orders: { f: (c) => c.orders, unit: 'int' },
-  Clicks: { f: (c) => c.clicks, unit: 'int' },
-  Impressions: { f: (c) => c.impressions, unit: 'int' },
-  CPC: { f: (c) => (c.clicks > 0 ? c.costCents / 100 / c.clicks : 0), unit: 'eur' },
-  CTR: { f: (c) => (c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0), unit: 'pct' },
-  CVR: { f: (c) => (c.clicks > 0 ? (c.orders / c.clicks) * 100 : 0), unit: 'pct' },
-  CPA: { f: (c) => (c.orders > 0 ? c.costCents / 100 / c.orders : 0), unit: 'eur' },
-}
-const metricVal = (m: string) => METRIC_VAL[m] ?? METRIC_VAL.Spend
+// DPS.4 — RawCell + the metric→(reader, unit) table moved to ./heatMetrics so this builder and the
+// Rank & Dayparting Schedules page share one definition of what "ACoS" means. Behaviour unchanged.
 
 interface SchedWindow { id: number; day: number; start: string; end: string; adj: string; value: string }
 let _wid = 1

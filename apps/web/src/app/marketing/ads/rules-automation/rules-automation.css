@@ -745,3 +745,15 @@
 .h10-rg-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; font-size: 12px; font-weight: 600; color: #2b3440; background: #fff; border: 1px solid #d8dde4; border-radius: 999px; padding: 3px 9px; }
 .h10-rg-chip .sw { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
 .h10-rg-chip .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* DPS.4 — "Hourly performance" panel on Rank & Dayparting Schedules. The 7×24 grid is the page's
+   primary object (look first, author second), so it gets the same white card treatment as the
+   Filters/grid cards below it and sits directly under the tab bar. */
+.h10-dp-panel { background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; padding: 14px 16px 16px; margin-bottom: 12px; }
+.h10-dp-panelhd { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.h10-dp-panelttl h3 { margin: 0; font-size: 14.5px; font-weight: 700; color: #1c2530; }
+.h10-dp-panelttl p { margin: 3px 0 0; font-size: 12px; color: #8a93a1; }
+.h10-dp-panelttl p b { color: #2b3440; }
+/* Controls wrap onto their own line on narrow viewports rather than crushing the title. */
+.h10-dp-panelctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.h10-dp-panelempty { margin-top: 14px; padding: 28px 18px; text-align: center; font-size: 12.5px; color: #8a93a1; background: #f8fafc; border: 1px dashed #dbe1e8; border-radius: 8px; }

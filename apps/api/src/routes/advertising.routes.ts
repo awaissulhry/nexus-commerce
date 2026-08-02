@@ -3322,8 +3322,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   //    Schedule Criteria heatmap + chart. Same SQL as the single-campaign endpoint, with
   //    IN-lists (Prisma.join) and a whitelisted timezone. ──
   fastify.get('/advertising/dayparting/heatmap', async (request, reply) => {
-    const q = request.query as { campaignIds?: string; windowDays?: string; tz?: string }
-    const ids = (q.campaignIds ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+    // DPS.4 — three ways to name the campaigns, so the Rank & Dayparting Schedules page can ask for
+    // "the whole account" or "this schedule" without pushing 200+ cuids through a query string.
+    // `campaignIds` is the original contract and is untouched.
+    const q = request.query as { campaignIds?: string; windowDays?: string; tz?: string; scope?: string; groupId?: string }
+    let ids = (q.campaignIds ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+    if (!ids.length && q.groupId) {
+      const members = await prisma.adSchedule.findMany({ where: { groupId: String(q.groupId) }, select: { campaignId: true } })
+      ids = members.map((m) => m.campaignId)
+    }
+    if (!ids.length && q.scope === 'all') {
+      const all = await prisma.campaign.findMany({ where: { status: { not: 'ARCHIVED' } }, select: { id: true } })
+      ids = all.map((c) => c.id)
+    }
     if (!ids.length) return { windowDays: 0, timezone: 'Europe/Rome', hasData: false, cells: [] }
     const windowDays = Math.max(7, Math.min(90, Number(q.windowDays ?? 60)))
     // whitelist the timezone (it's interpolated into AT TIME ZONE) — never trust the raw param
