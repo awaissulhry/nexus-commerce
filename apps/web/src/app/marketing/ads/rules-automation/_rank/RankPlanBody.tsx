@@ -16,6 +16,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { Crosshair, Plus, Trash2, Sparkles, Wand2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { H10Select } from '../../campaigns/FilterDropdown'
 import type { SchedCampaign } from '../_schedule/CampaignSection'
 import { DeliveryChip } from './DeliveryChip'
 import { RankTimeGrid } from './RankTimeGrid'
@@ -38,7 +39,13 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
 const api = (p: string) => `${getBackendUrl()}/api/advertising${p}`
 
-export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaign[]; name: string; groupId?: string; portfolioId?: string; onStatus?: (s: RankPlanStatus) => void }>(function RankPlanBody({ campaigns, name, groupId, portfolioId, onStatus }, ref) {
+export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaign[]; name: string; groupId?: string; portfolioId?: string; onStatus?: (s: RankPlanStatus) => void; onGroupCreated?: (id: string) => void }>(function RankPlanBody({ campaigns, name, groupId, portfolioId, onStatus, onGroupCreated }, ref) {
+  // DPS.1 — the id of a group THIS session created. Before this existed, `groupId` came only from
+  // the URL, so the 2nd save in a session was still a POST → a brand-new group every time, and the
+  // server rebound the member schedules to it, stranding the previous group at zero members. (Live
+  // evidence: "IT AIRMESH" ×4 created within 82s, three of them empty.) Holding the created id here
+  // makes save #2 onward a PATCH even before the URL round-trips.
+  const [ownGroupId, setOwnGroupId] = useState<string | null>(null)
   const campKey = useMemo(() => campaigns.map(c => c.id).sort().join(','), [campaigns])
   const [targets, setTargets] = useState<RankTarget[]>([])
   const [scheds, setScheds] = useState<Record<string, Sched | null>>({}) // per-campaign existing schedule
@@ -114,7 +121,7 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
   const activeDemand = smooth && smoothed ? smoothed : demand
 
   const dirty = baseline !== serverBaseline || JSON.stringify(windows) !== JSON.stringify(serverWindows)
-  const saved = !!groupId || savedOnce || Object.values(scheds).some(Boolean)
+  const saved = !!groupId || !!ownGroupId || savedOnce || Object.values(scheds).some(Boolean)
   const hasGoal = !!baseline || windows.length > 0
   // Report state up so the parent builder can drive its single action. Name is compulsory now —
   // a schedule can't be saved without one (the builder disables the button until it's set).
@@ -128,13 +135,15 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
   // Persist as ONE named group. The API materializes one AdSchedule row per member campaign (which
   // the rank-defend cron runs — engine untouched). Per-campaign overrides are preserved by gathering
   // them from the loaded member schedules and passing them in the group's per-campaign map.
-  const saveGroup = async (enabled: boolean): Promise<{ ok: boolean; id?: string }> => {
+  const saveGroup = async (enabled: boolean): Promise<{ ok: boolean; id?: string; created?: boolean }> => {
     const perCamp: Record<string, unknown> = {}
     for (const c of campaigns) { const o = scheds[c.id]?.targetOverrides; if (o && Object.keys(o).length) perCamp[c.id] = o }
-    const body = { id: groupId || undefined, name: name.trim(), campaignIds: campaigns.map(c => c.id), windows, defaultTargetKey: baseline || null, targetOverrides: perCamp, enabled, timezone: 'Europe/Rome', portfolioId: portfolioId || null }
-    const url = groupId ? api(`/rank-schedule-groups/${groupId}`) : api('/rank-schedule-groups')
-    const r = await fetch(url, { method: groupId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(x => x.json()).catch(() => null)
-    return { ok: !!r?.id, id: r?.id }
+    // DPS.1 — an id from EITHER the URL (edit mode) or this session's earlier save (create mode).
+    const gid = groupId || ownGroupId
+    const body = { id: gid || undefined, name: name.trim(), campaignIds: campaigns.map(c => c.id), windows, defaultTargetKey: baseline || null, targetOverrides: perCamp, enabled, timezone: 'Europe/Rome', portfolioId: portfolioId || null }
+    const url = gid ? api(`/rank-schedule-groups/${gid}`) : api('/rank-schedule-groups')
+    const r = await fetch(url, { method: gid ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(x => x.json()).catch(() => null)
+    return { ok: !!r?.id, id: r?.id, created: !gid }
   }
   const markSaved = () => { setServerBaseline(baseline); setServerWindows(windows.map(w => ({ ...w }))) }
 
@@ -146,6 +155,9 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
     try {
       const r = await saveGroup(enabled)
       if (r.ok) {
+        // DPS.1 — remember the id we just minted so the NEXT save patches this group instead of
+        // creating another one, and hand it up so the URL becomes ?groupId=… (shareable + refresh-safe).
+        if (r.created && r.id) { setOwnGroupId(r.id); onGroupCreated?.(r.id) }
         markSaved(); setSavedOnce(true); setDeliverySignal(n => n + 1)
         const n = campaigns.length
         setMsg(enabled
@@ -193,9 +205,17 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
               <span>When this product&apos;s family sells{famName ? ` · ${famName.slice(0, 26)}` : ''}: <b className="h10-rp-sample">{demand.familyOrders} actual orders · {demandDays}d</b></span>
               <span className="grow" />
               {campaigns.length > 1 && (
-                <select className="h10-rp-tf" value={demandCampaignId} onChange={e => setDemandCampaignId(e.target.value)} aria-label="Demand campaign" title="Which selected campaign's product demand to show">
-                  {campaigns.map(c => <option key={c.id} value={c.id}>{c.name.length > 30 ? c.name.slice(0, 30) + '…' : c.name}</option>)}
-                </select>
+                // OS.4 — a native dropdown listing every selected campaign. A portfolio-scoped plan
+                // can hold 11+ of them with near-identical names, so this needs the shared search.
+                <H10Select
+                  width={230}
+                  options={campaigns.map(c => ({ value: c.id, label: c.name }))}
+                  value={demandCampaignId}
+                  onChange={setDemandCampaignId}
+                  ariaLabel="Demand campaign"
+                  searchable
+                  searchPlaceholder="Search campaigns…"
+                />
               )}
               {smoothed && <label className="h10-rp-smooth" title="Sparse product? Smooth toward the market's overall pattern. Off = your real sales."><input type="checkbox" checked={smooth} onChange={e => setSmooth(e.target.checked)} /> smooth</label>}
               <select className="h10-rp-tf" value={demandDays} onChange={e => setDemandDays(Number(e.target.value))} aria-label="Demand timeframe" title="Timeframe for the demand data">

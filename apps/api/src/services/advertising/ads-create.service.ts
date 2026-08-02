@@ -790,8 +790,26 @@ export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Prom
   const enabled = input.enabled !== false
   const tz = input.timezone || 'Europe/Rome'
   const gdata = { name, marketplace: input.marketplace ?? null, timezone: tz, windows: windows as never, defaultTargetKey: input.defaultTargetKey ?? null, targetOverrides: overrides as never, enabled, portfolioId: input.portfolioId ?? null }
-  const group = input.id
-    ? await prisma.rankScheduleGroup.update({ where: { id: input.id }, data: gdata })
+  // DPS.1 — belt-and-braces against duplicate groups. The client now sends the id it minted on the
+  // first save, but a stale bundle (or a double-submit) can still arrive with no id. Since the block
+  // below REBINDS each campaign's schedule to whichever group saved last, a blind create would strand
+  // the previous group at zero members — which is exactly how the live account accumulated 8 empty
+  // groups ("IT AIRMESH" ×4 in 82 seconds). Same name + same portfolio scope = the same schedule, so
+  // adopt the existing row instead of minting a rival.
+  let targetId = input.id ?? null
+  if (!targetId) {
+    const twin = await prisma.rankScheduleGroup.findFirst({
+      where: { name, portfolioId: input.portfolioId ?? null },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    })
+    if (twin) {
+      targetId = twin.id
+      logger.info('[DPS.1] adopted existing rank schedule group instead of creating a duplicate', { id: twin.id, name })
+    }
+  }
+  const group = targetId
+    ? await prisma.rankScheduleGroup.update({ where: { id: targetId }, data: gdata })
     : await prisma.rankScheduleGroup.create({ data: { ...gdata, createdBy: input.userId ?? null } })
 
   const camps = campaignIds.length ? await prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, name: true } }) : []

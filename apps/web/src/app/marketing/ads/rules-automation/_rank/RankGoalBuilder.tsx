@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { X, Video, AlertTriangle } from 'lucide-react'
+import { H10Select } from '../../campaigns/FilterDropdown'
 import { ScheduleBuilder } from '../_schedule/ScheduleBuilder'
 import { CampaignSection, toCampaign, type SchedCampaign } from '../_schedule/CampaignSection'
 import { RankPlanBody, type RankPlanHandle, type RankPlanStatus } from './RankPlanBody'
@@ -120,8 +121,20 @@ export function RankGoalBuilder() {
   // so the builder repopulates as one unit (was blank before, forcing you to re-add campaigns).
   // RankPlanBody then loads windows/baseline/overrides from the members. ?scheduleId is a legacy
   // single-schedule fallback for any old links.
+  // DPS.1 — ids this session minted itself. When the plan body creates a group we push ?groupId= into
+  // the URL so the page is shareable and refresh-safe; that would otherwise re-fire the loader below
+  // and re-fetch name + members we already hold. Skipping our own id keeps the save silent.
+  const selfCreated = useRef<string | null>(null)
+  const onGroupCreated = useCallback((id: string) => {
+    selfCreated.current = id
+    const next = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : sp.toString())
+    next.set('groupId', id)
+    router.replace(`/marketing/ads/rules-automation/builder/dayparting-schedule?${next.toString()}`, { scroll: false })
+  }, [router, sp])
+
   useEffect(() => {
     if (!groupId && !scheduleId) return
+    if (groupId && selfCreated.current === groupId) return // just created here — state is already current
     let alive = true
     ;(async () => {
       try {
@@ -214,10 +227,18 @@ export function RankGoalBuilder() {
               <p className="h10-rb-desc">Select the campaigns this rank plan should hold — one plan, applied across all of them.</p>
               <div className="h10-rb-pfscope">
                 <label htmlFor="rgd-pfscope">Portfolio scope <span className="opt">(optional)</span></label>
-                <select id="rgd-pfscope" value={portfolioScope} onChange={(e) => applyPortfolioScope(e.target.value)} aria-label="Portfolio scope">
-                  <option value="">None — pick campaigns manually</option>
-                  {portfolios.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                {/* OS.4 — was a native dropdown: no search, and an account with many portfolios made
+                    this a scroll-hunt at exactly the moment you are creating a schedule. H10Select
+                    brings the shared ranked search and matches the rest of the console. */}
+                <H10Select
+                  width={320}
+                  options={[{ value: '', label: 'None — pick campaigns manually' }, ...portfolios.map((p) => ({ value: p.id, label: p.name }))]}
+                  value={portfolioScope}
+                  onChange={applyPortfolioScope}
+                  ariaLabel="Portfolio scope"
+                  searchable
+                  searchPlaceholder="Search portfolios…"
+                />
                 {portfolioScope && <span className="hint">Covers every campaign in this portfolio — campaigns added to it later are included on save.</span>}
               </div>
               <CampaignSection selected={selCampaigns} onAdd={addCampaign} onAddMany={addCampaigns} onRemove={removeCampaign} onClear={clearCampaigns} />
@@ -239,7 +260,7 @@ export function RankGoalBuilder() {
             <section id="rgd-plan" className="h10-rb-sec">
               <h2>Your rank goal &amp; schedule</h2>
               <p className="h10-rb-desc">Hold this rank, on this schedule.</p>
-              <RankPlanBody ref={planRef} campaigns={selCampaigns} name={name} groupId={groupId ?? undefined} portfolioId={portfolioScope || undefined} onStatus={setPlanStatus} />
+              <RankPlanBody ref={planRef} campaigns={selCampaigns} name={name} groupId={groupId ?? undefined} portfolioId={portfolioScope || undefined} onStatus={setPlanStatus} onGroupCreated={onGroupCreated} />
             </section>
 
             <section id="rgd-control" className="h10-rb-sec">
