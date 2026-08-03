@@ -1,6 +1,6 @@
 # ADX — Ads Autonomy & SERP Domination
 
-**Status:** ADX.0–2 COMPLETE · ADX.3 next
+**Status:** ⚠️ PHASE PLAN SUPERSEDED by `2026-08-04-adx-plan-v2.md` (2026-08-04). Parts 1–4 (audit, market scan, diagnosis, approach review) remain the record; the phase list in Part 5 is obsolete.
 **Date:** 2026-08-03
 **Goal:** the ads account runs itself, holds page-one real estate across products that share a keyword set, and never requires the operator's attention — while the operator retains explicit, per-lever control over everything.
 
