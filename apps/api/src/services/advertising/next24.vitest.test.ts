@@ -171,10 +171,15 @@ describe('MB.6 buildNext24 — the CPC ceiling in the preview', () => {
     expect(auto.hours[0].ceilingPct!).toBeLessThan(legacy.hours[0].ceilingPct!)
   })
 
-  it('the cap never drops the ceiling below the floor the target holds', () => {
-    // Base bid so high the cap lands under the 150% floor — the loop still holds its floor.
+  it('a cap BELOW the floor drives the hold down to it — the engine does not protect the floor', () => {
+    // €1.90 base, €2.00 ceiling → 5%, under the target's own 150% Placement. The job applies the
+    // cap last with no floor protection ("lower 300→60%" on GALE EXACT DE), so the preview must
+    // report the hold the engine will actually take, not the one the target asks for.
     const { hours } = buildNext24(slots1(), [], 'ao', libOf(CAPPED), { maxBaseBidCents: 190, strategyMultiple: 1 })
-    expect(hours[0].ceilingPct).toBeGreaterThanOrEqual(hours[0].floorPct!)
+    expect(hours[0].floorPct).toBe(5)
+    expect(hours[0].ceilingPct).toBe(5)
+    expect(hours[0].cpcCapPct).toBe(5)
+    expect(hours[0].canChase).toBe(false) // nothing to chase — the ceiling has closed the band
   })
 
   it('a target with NO ceiling is still reported unbounded — the warning must survive MB.4', () => {

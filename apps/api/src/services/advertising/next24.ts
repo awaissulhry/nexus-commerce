@@ -159,13 +159,20 @@ export function buildNext24(
     const allOut = !!t.allOut
     const suppressed = !!t.pause
     const band = biasBand({ biasPct: t.biasPct ?? null, maxBiasPct: t.maxBiasPct ?? null, allOut })
-    const floor = band.floor
     // MB.6 — the CPC ceiling can bind below the band. When it does it IS the ceiling, because
     // the engine will not let the bid past it; reporting the band's number would overstate the
     // reach of every hour this target governs.
+    //
+    // It can also bind below the FLOOR, and that case must be reported honestly rather than
+    // clamped away. In the job the cap is applied last, to nextPct, with no floor protection —
+    // so a target whose Placement % is 300 and whose ceiling permits 60 is driven DOWN to 60
+    // ("lower 300→60%", observed on GALE EXACT DE). Reporting a 300% hold here because the
+    // target asks for one would put this preview back in exactly the disagreement with the
+    // engine it exists to prevent.
     const cap = cpc ? cpcCapPct(t.maxCpcCents ?? null, cpc.maxBaseBidCents, cpc.strategyMultiple) : null
     const capPct = cap && cap.capPct < band.ceiling ? cap.capPct : null
-    const ceiling = capPct != null ? Math.max(floor, capPct) : band.ceiling
+    const floor = capPct != null ? Math.min(band.floor, capPct) : band.floor
+    const ceiling = capPct != null ? Math.min(band.ceiling, capPct) : band.ceiling
     return {
       ...at,
       targetKey: key,
@@ -178,7 +185,10 @@ export function buildNext24(
       // placement multiplier that is simply not what happens, so the band is withheld.
       floorPct: suppressed ? null : floor,
       ceilingPct: suppressed ? null : ceiling,
-      canChase: suppressed ? false : (allOut || ceiling > floor),
+      // MB.6 — `allOut ||` used to force this true, which was harmless while all-out always had
+      // room to climb. A CPC ceiling can now close the band completely (floor == ceiling), and an
+      // all-out hour that cannot move a single point is not chasing anything.
+      canChase: suppressed ? false : ceiling > floor,
       cpcCapPct: suppressed ? null : capPct,
       maxCpcCents: t.maxCpcCents ?? null,
       // all-out ignores the ACOS ceiling by design, so reporting one here would be a lie the

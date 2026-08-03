@@ -212,9 +212,14 @@ export function Next24Preview({ groupId }: { groupId: string }) {
                     /* Green reads as "fine", which a climb WITHOUT a ceiling is not — an
                        unbounded row would otherwise show a reassuring colour beside its own red
                        "no ceiling" guardrail. A bounded climb stays green: that one IS fine. */
-                    <span className={h.unbounded ? 'chase risk' : 'chase'} title={h.cpcCapPct != null ? `The €${((h.maxCpcCents ?? 0) / 100).toFixed(2)} CPC ceiling stops the climb here — the target itself would allow more` : undefined}><TrendingUp size={12} /> {h.floorPct}% → <b>{h.ceilingPct}%</b>{h.cpcCapPct != null && <i className="capd"> CPC-capped</i>}</span>
+                    <span className={h.unbounded ? 'chase risk' : 'chase'}><TrendingUp size={12} /> {h.floorPct}% → <b>{h.ceilingPct}%</b></span>
                   ) : (
                     <span className="hold">hold {h.floorPct}%</span>
+                  )}
+                  {/* MB.6 — on its OWN line. Inside .chase (white-space: nowrap) it widened the
+                      cell past its column and overprinted the guardrail beside it. */}
+                  {h.cpcCapPct != null && !h.suppressed && (
+                    <span className="capd" title={`The €${((h.maxCpcCents ?? 0) / 100).toFixed(2)} CPC ceiling stops this hour at ${h.cpcCapPct}% — the target itself would allow more`}>CPC-capped</span>
                   )}
                 </td>
                 <td className="gd">
