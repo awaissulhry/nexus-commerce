@@ -3076,3 +3076,6 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-cl-sum .chip .f { font-size: 11px; font-weight: 700; color: #a3211a; background: #fbdedb; border-radius: 4px; padding: 1px 6px; }
 .h10-cl-sum .chip.bad { border-color: #f0c6c1; }
 .h10-cl-sum .clr { border: 0; background: none; font-size: 12px; color: #1f6fde; cursor: pointer; text-decoration: underline; }
+.h10-cl-routine { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #6b7480; cursor: pointer; white-space: nowrap; }
+.h10-cl-routine:hover { color: #1c2530; }
+.h10-cl-routine input { margin: 0; cursor: pointer; }

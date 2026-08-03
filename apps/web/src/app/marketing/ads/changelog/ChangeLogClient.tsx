@@ -21,6 +21,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../campaigns/_grid/AdsDataGrid'
+// One definition of "routine", shared with the chart annotations — the same split, for the same
+// reason, so the two surfaces cannot disagree about what counts as noise.
+import { isRoutine } from '../campaigns/ChangeAnnotations'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface Origin { kind: string; id: string | null; name: string }
@@ -85,7 +88,24 @@ export function ChangeLogClient() {
    * would bury it.
    */
   const [originFilter, setOriginFilter] = useState<string | null>(null)
-  const allRows = useMemo(() => rows ?? [], [rows])
+  /**
+   * Routine bid movement is hidden by DEFAULT.
+   *
+   * Measured over a week: 6,095 of 6,133 field changes were rank-schedule bid and placement moves,
+   * against ~1,942 creates, negatives and operator actions in the same period. Unfiltered, the log
+   * reads as a rank-schedule log and everything else is buried 3:1 — which is exactly what it
+   * looked like in use.
+   *
+   * The continuous half is one click away, because "what did our bidding do this week" is a real
+   * question; it is just not the one you open a change log to ask.
+   */
+  const [showRoutine, setShowRoutine] = useState(false)
+  const fetched = useMemo(() => rows ?? [], [rows])
+  const routineCount = useMemo(() => fetched.filter((r) => isRoutine(r.field)).length, [fetched])
+  const allRows = useMemo(
+    () => (showRoutine ? fetched : fetched.filter((r) => !isRoutine(r.field))),
+    [fetched, showRoutine],
+  )
   const summary = useMemo(() => {
     const m = new Map<string, { name: string; kind: string; count: number; failed: number }>()
     for (const r of allRows) {
@@ -243,13 +263,19 @@ export function ChangeLogClient() {
         toolbarRight={(
           <span className="h10-cl-win">
             {failed > 0 && <span className="h10-cl-alert" title="Filter the Delivery column to Failed to see them">{failed} failed to reach Amazon</span>}
+            <label className="h10-cl-routine" title="Bids and placement percentages move every 15 minutes. Hidden by default so creates, negatives and operator edits are not buried under them.">
+              <input type="checkbox" checked={showRoutine} onChange={(e) => setShowRoutine(e.target.checked)} />
+              bid moves{routineCount > 0 ? ` (${routineCount})` : ''}
+            </label>
             <select value={days} onChange={(e) => setDays(e.target.value)} aria-label="Time window" className="h10-cl-select">
               {WINDOWS.map((w) => <option key={w.value} value={w.value}>{w.label}</option>)}
             </select>
           </span>
         )}
         reportLabel={all[0] ? `Newest change: ${new Date(all[0].at).toLocaleString('en-GB')}` : undefined}
-        emptyLabel="No changes recorded in this window — bid moves, placement changes, rule applies and operator edits all land here."
+        emptyLabel={showRoutine
+          ? 'No changes recorded in this window.'
+          : 'No changes in this window other than routine bid movement — tick "bid moves" to include it.'}
       />
     </div>
   )
