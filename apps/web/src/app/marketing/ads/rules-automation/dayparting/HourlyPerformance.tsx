@@ -22,6 +22,7 @@ import { DaypartingHeatmap, type HeatCell } from '../_schedule/DaypartingHeatmap
 import { CHART_METRICS } from '../_schedule/scheduleConfig'
 import { metricVal, type RawCell } from '../_schedule/heatMetrics'
 import { selectionToWindows, selectionHourCount } from './selectionToWindows'
+import { AddToScheduleModal, type ScheduleChoice } from './AddToScheduleModal'
 import { getBackendUrl } from '@/lib/backend-url'
 
 /**
@@ -41,7 +42,14 @@ const WINDOWS = [
 
 export interface ScopeOption { value: string; label: string }
 
-export function HourlyPerformance({ scopes, market = 'all' }: { scopes: ScopeOption[]; market?: string }) {
+export function HourlyPerformance({ scopes, schedules = [], market = 'all', onScheduleChanged }: {
+  scopes: ScopeOption[]
+  /** RDX/D2 — every schedule, including empty ones: hours can be added to a plan that holds no
+   *  campaigns yet. Distinct from `scopes`, which only lists groups that can produce a heatmap. */
+  schedules?: ScheduleChoice[]
+  market?: string
+  onScheduleChanged?: () => void
+}) {
   const [scope, setScope] = useState('all')
   const [metric, setMetric] = useState('Spend')
   const [weeks, setWeeks] = useState('8')
@@ -59,6 +67,7 @@ export function HourlyPerformance({ scopes, market = 'all' }: { scopes: ScopeOpt
   const [tplName, setTplName] = useState('')
   const [savingTpl, setSavingTpl] = useState(false)
   const [tplMsg, setTplMsg] = useState('')
+  const [addOpen, setAddOpen] = useState(false) // RDX/D2
   const [targets, setTargets] = useState<Array<{ key: string; name: string }>>([])
   // Selection only makes sense over a grid that is actually showing data.
   const selectable = hasData
@@ -194,10 +203,28 @@ export function HourlyPerformance({ scopes, market = 'all' }: { scopes: ScopeOpt
           </button>
           {/* Clear resets the draft entirely — leaving a half-typed name behind produced a
               concatenated nonsense name on the next save. */}
+          {/* RDX/D2 — the additive sibling of "Save as template". Kept as its own button because
+              replacing a plan and adding to one are different decisions, not two ways to do one. */}
+          <button type="button" className="h10-am-btn sm" onClick={() => setAddOpen(true)}>Add to schedule…</button>
           <button type="button" className="h10-am-btn sm" onClick={() => { setSel(new Set()); setTplMsg(''); setTplName('') }}>Clear</button>
         </div>
       )}
       {tplMsg && <p className="h10-dp-selmsg">{tplMsg}</p>}
+      {addOpen && (
+        <AddToScheduleModal
+          schedules={schedules}
+          windows={selWindows}
+          hours={selHours}
+          targetName={targetOpts.find((o) => o.value === selTarget)?.label ?? selTarget}
+          targetsByKey={new Map(targets.map((t) => [t.key, t.name]))}
+          onClose={() => setAddOpen(false)}
+          onApplied={(name) => {
+            setAddOpen(false); setSel(new Set()); setTplName('')
+            setTplMsg(`Added ${selHours} hour${selHours === 1 ? '' : 's'} to “${name}”.`)
+            onScheduleChanged?.()
+          }}
+        />
+      )}
       {!loading && !hasData ? (
         <div className="h10-dp-panelempty">
           No hourly data for this selection yet. Amazon Marketing Stream fills forward from the day it

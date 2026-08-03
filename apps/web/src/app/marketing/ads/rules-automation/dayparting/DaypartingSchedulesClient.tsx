@@ -84,7 +84,8 @@ export function DaypartingSchedulesClient() {
       {/* Look first, author second — the grid sits above the list of schedules it justifies.
           RDX/B1 — both now receive `market`. Until B1 the header's market switch was a dead
           control: it held state, rendered, accepted clicks, and nothing consumed it. */}
-      <HourlyPerformance scopes={scopes} market={market} />
+      {/* RDX/D2 — `allSchedules` (not `scopes`): hours can be added to a plan holding no campaigns. */}
+      <HourlyPerformance scopes={scopes} schedules={allSchedules} market={market} onScheduleChanged={() => setReload((n) => n + 1)} />
       {/* RDX/C1 — the gap, stated between the evidence and the schedules that act on it. */}
       <CoveragePanel market={market} schedules={allSchedules} onChanged={() => setReload((n) => n + 1)} />
       <RankGoalsList market={market} reloadSignal={reload} />
