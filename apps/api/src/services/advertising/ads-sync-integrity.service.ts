@@ -60,6 +60,37 @@ export async function collectIntegritySnapshot(): Promise<IntegritySnapshot> {
     openDriftRows,
     driftNeedsAttention,
     minutesSinceStructuralReconcile: minsSince(lastReconcile?.finishedAt ?? null),
+    writeOutcomesByKind: await writeOutcomesByKind(dayAgo),
+  }
+}
+
+/**
+ * WF.2 — 24h write outcomes split by AdTarget.kind.
+ *
+ * AdMutation carries the outcome but not the kind, so the two are joined here. Two grouped
+ * queries plus one id→kind lookup; the id sets are small (a day of mutations), and this runs on a
+ * 10-minute cron, not a request path.
+ */
+async function writeOutcomesByKind(since: Date): Promise<Array<{ kind: string; applied: number; failed: number }>> {
+  try {
+    const rows = await prisma.adMutation.findMany({
+      where: { entityType: 'AD_TARGET', updatedAt: { gte: since }, state: { in: ['APPLIED', 'FAILED'] } },
+      select: { entityId: true, state: true },
+    })
+    if (!rows.length) return []
+    const targets = await prisma.adTarget.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.entityId))] } }, select: { id: true, kind: true } })
+    const kindById = new Map(targets.map((t) => [t.id, t.kind]))
+    const acc = new Map<string, { applied: number; failed: number }>()
+    for (const r of rows) {
+      const kind = kindById.get(r.entityId)
+      if (!kind) continue // deleted locally since the write — no class to attribute it to
+      const a = acc.get(kind) ?? { applied: 0, failed: 0 }
+      if (r.state === 'APPLIED') a.applied++; else a.failed++
+      acc.set(kind, a)
+    }
+    return [...acc.entries()].map(([kind, v]) => ({ kind, ...v }))
+  } catch {
+    return [] // report-only: never break the cron this rides on
   }
 }
 

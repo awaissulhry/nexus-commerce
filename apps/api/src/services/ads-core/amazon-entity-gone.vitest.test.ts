@@ -1,6 +1,6 @@
 /** AX2.0 — entity-gone detection. A false positive silently kills a live keyword. */
 import { describe, it, expect } from 'vitest'
-import { isEntityGoneError, orphanReasonFrom } from './amazon-entity-gone.js'
+import { isEntityGoneError, orphanReasonFrom, isContradictoryOrphan } from './amazon-entity-gone.js'
 
 // Verbatim from a production dead-letter row, 2026-07-27.
 const REAL = 'amazon_rejected: [{"errorType":"entityNotFoundError","errorValue":{"entityNotFoundError":{"cause":{"location":"$.keywords[0].keywordId","trigger":"207019562887495"},"entityId":"207019562887495","entityType":"KEYWORD","message":"Could not find keyword with id 207019562887495"}}}]'
@@ -111,5 +111,49 @@ describe('DL.3 isEntityGoneError — endpoint/kind mismatch is a routing fault, 
   it('never turns a non-gone error into a gone one', () => {
     expect(isEntityGoneError('amazon_rejected: BID_TOO_LOW', { kind: 'PRODUCT' })).toBe(false)
     expect(isEntityGoneError(null, { kind: 'PRODUCT' })).toBe(false)
+  })
+})
+
+/**
+ * WF.1 — withdrawing an orphan mark that contradicts the entity carrying it.
+ *
+ * The deadlock this breaks: `orphanedAt` blocks every non-forced write, and only a successful
+ * write clears `orphanedAt`. Anything mis-marked before DL.3 existed is therefore stuck for good —
+ * four AUTO targets have been since 2026-06-15. The detector must be as conservative as DL.3's,
+ * because a false POSITIVE here un-suppresses writes to an entity that really is gone.
+ */
+describe('WF.1 isContradictoryOrphan', () => {
+  const KEYWORD_MISS = 'Amazon reports this entity no longer exists (keyword 142867388929955)'
+  const TARGET_MISS = 'Amazon reports this entity no longer exists (targetingclause 99007000337844)'
+
+  it('an AUTO/PRODUCT target orphaned for a missing KEYWORD is a routing artefact', () => {
+    // The exact four rows observed on Auto_Close_Moss.
+    expect(isContradictoryOrphan(KEYWORD_MISS, 'AUTO')).toBe(true)
+    expect(isContradictoryOrphan(KEYWORD_MISS, 'PRODUCT')).toBe(true)
+  })
+  it('a KEYWORD target orphaned for a missing TARGET is the mirror artefact', () => {
+    expect(isContradictoryOrphan(TARGET_MISS, 'KEYWORD')).toBe(true)
+  })
+  it('a consistent orphan is left alone — this must not un-suppress a genuinely dead entity', () => {
+    expect(isContradictoryOrphan(KEYWORD_MISS, 'KEYWORD')).toBe(false)
+    expect(isContradictoryOrphan(TARGET_MISS, 'AUTO')).toBe(false)
+    expect(isContradictoryOrphan(TARGET_MISS, 'PRODUCT')).toBe(false)
+  })
+  it('says nothing when the reason names neither, or both', () => {
+    expect(isContradictoryOrphan('Amazon reports this entity no longer exists', 'AUTO')).toBe(false)
+    expect(isContradictoryOrphan('keyword and target both missing', 'AUTO')).toBe(false)
+    expect(isContradictoryOrphan(null, 'AUTO')).toBe(false)
+    expect(isContradictoryOrphan('', 'AUTO')).toBe(false)
+  })
+  it('says nothing for a kind whose endpoint ownership is not established', () => {
+    for (const k of ['AUDIENCE', 'PRODUCT_CATEGORY', 'PRODUCT_AUDIENCE', '', null, undefined]) {
+      expect(isContradictoryOrphan(KEYWORD_MISS, k as string | null)).toBe(false)
+    }
+  })
+  it('agrees with isEntityGoneError: what DL.3 refuses to mark, this refuses to keep', () => {
+    // The same live error DL.3 declines to treat as gone, stamped as a reason, must be withdrawable.
+    const liveErr = 'amazon_rejected: [{"errorType":"entityNotFoundError","errorValue":{"entityNotFoundError":{"cause":{"location":"$.keywords[0].keywordId","trigger":"1"},"entityType":"KEYWORD"}}}]'
+    expect(isEntityGoneError(liveErr, { kind: 'AUTO' })).toBe(false)
+    expect(isContradictoryOrphan(orphanReasonFrom(liveErr), 'AUTO')).toBe(true)
   })
 })

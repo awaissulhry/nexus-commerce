@@ -144,3 +144,51 @@ describe('evaluateIntegrity — severity rollup', () => {
     }
   })
 })
+
+/**
+ * WF.2 — a whole entity class failing while the aggregate looks healthy.
+ *
+ * This is the signal that was missing during DL.1: 413 KEYWORD writes landed while every PRODUCT
+ * and AUTO write failed, and no threshold on this snapshot moved. The failure was not "some writes
+ * fail" — it was "one class fails totally", which only a per-class rate can see.
+ */
+describe('WF.2 ADS_WRITE_KIND_FAILING', () => {
+  const base = (over: Partial<IntegritySnapshot> = {}): IntegritySnapshot => ({
+    deadLettersLastHour: 0, deadLetters24h: 0, orphanedTargets: 0, orphanedLast24h: 0,
+    minutesSinceSettingsSync: 5, minutesSinceAmsIngest: 5, campaignsFailedWrite: 0,
+    campaignsInUnwritableMarket: 0, openDriftRows: 0, driftNeedsAttention: 0,
+    minutesSinceStructuralReconcile: 5, writeOutcomesByKind: [], ...over,
+  })
+  const codes = (s: IntegritySnapshot) => evaluateIntegrity(s).findings.map((f) => f.code)
+
+  it('fires on the observed shape: keywords landing, product/auto failing totally', () => {
+    const r = evaluateIntegrity(base({ writeOutcomesByKind: [
+      { kind: 'KEYWORD', applied: 413, failed: 0 },
+      { kind: 'PRODUCT', applied: 0, failed: 15 },
+      { kind: 'AUTO', applied: 0, failed: 12 },
+    ] }))
+    expect(r.findings.filter((f) => f.code === 'ADS_WRITE_KIND_FAILING')).toHaveLength(2)
+    expect(r.severity).toBe('CRITICAL')
+    expect(r.findings.find((f) => f.code === 'ADS_WRITE_KIND_FAILING')?.action).toMatch(/routing/i)
+  })
+  it('silent when everything lands — the healthy steady state after DL.1', () => {
+    expect(codes(base({ writeOutcomesByKind: [
+      { kind: 'KEYWORD', applied: 413, failed: 0 },
+      { kind: 'PRODUCT', applied: 15, failed: 0 },
+      { kind: 'AUTO', applied: 12, failed: 0 },
+    ] }))).not.toContain('ADS_WRITE_KIND_FAILING')
+  })
+  it('ignores a kind with too little traffic to mean anything', () => {
+    expect(codes(base({ writeOutcomesByKind: [{ kind: 'AUTO', applied: 0, failed: 3 }] }))).not.toContain('ADS_WRITE_KIND_FAILING')
+  })
+  it('ignores an ordinary bad patch — this must not become background noise', () => {
+    expect(codes(base({ writeOutcomesByKind: [{ kind: 'KEYWORD', applied: 40, failed: 10 }] }))).not.toContain('ADS_WRITE_KIND_FAILING')
+  })
+  it('fires at total failure with enough attempts, not before', () => {
+    expect(codes(base({ writeOutcomesByKind: [{ kind: 'PRODUCT', applied: 0, failed: 10 }] }))).toContain('ADS_WRITE_KIND_FAILING')
+    expect(codes(base({ writeOutcomesByKind: [{ kind: 'PRODUCT', applied: 0, failed: 9 }] }))).not.toContain('ADS_WRITE_KIND_FAILING')
+  })
+  it('an absent array (older caller) changes nothing', () => {
+    expect(codes(base({ writeOutcomesByKind: undefined as never }))).not.toContain('ADS_WRITE_KIND_FAILING')
+  })
+})

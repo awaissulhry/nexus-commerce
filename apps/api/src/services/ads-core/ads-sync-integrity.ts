@@ -51,6 +51,16 @@ export interface IntegritySnapshot {
   driftNeedsAttention: number
   /** Minutes since the structural reconcile last completed a pass. */
   minutesSinceStructuralReconcile: number | null
+  /**
+   * WF.2 — per-kind write outcomes over the last 24h: [kind, applied, failed].
+   *
+   * Every other signal on this snapshot was healthy while the DL.1 routing bug ran: dead letters
+   * were being marked, orphans were not rising, the sync was fresh, writes were "landing". They
+   * were landing for KEYWORD targets — 413 of them — while PRODUCT and AUTO failed 100% of the
+   * time, forever, and the aggregate hid it completely. A rate that is fine overall and total for
+   * one class of entity is the shape this array exists to expose.
+   */
+  writeOutcomesByKind: Array<{ kind: string; applied: number; failed: number }>
 }
 
 export interface IntegrityFinding {
@@ -69,6 +79,19 @@ export interface IntegrityReport {
 
 /** Thresholds are generous — this must not cry wolf, or it becomes noise to ignore. */
 export const INTEGRITY_THRESHOLDS = {
+  /**
+   * WF.2 — how many writes a target kind must attempt in 24h before its failure RATE means
+   * anything. Set from the observed instance: the product/auto classes attempted ~27/day each
+   * while failing every one, so 10 catches it within a day and still ignores a kind with two
+   * writes and one hiccup.
+   */
+  kindMinAttempts: 10,
+  /**
+   * Deliberately near-total. A routing fault fails 100% — it is not a flaky endpoint, it is the
+   * wrong endpoint — and a lower bar would fire on ordinary bad hours (budget caps, throttling,
+   * a keyword archived on Amazon mid-batch) and train the alert into background noise.
+   */
+  kindFailRate: 0.95,
   /** The settings sync runs every 20 min; 3 missed passes is a real stall. */
   settingsSyncStaleMinutes: 70,
   /**
@@ -94,6 +117,29 @@ export const INTEGRITY_THRESHOLDS = {
 
 export function evaluateIntegrity(s: IntegritySnapshot): IntegrityReport {
   const findings: IntegrityFinding[] = []
+
+  /**
+   * WF.2 — a whole class of entity failing while the account looks healthy.
+   *
+   * Requires a MINIMUM number of attempts before concluding anything: one failed write out of one
+   * is noise, and a kind with no traffic must never raise an alarm. It is CRITICAL rather than
+   * WARN because the observed instance silently disabled rank control on four live campaigns for
+   * weeks while every dashboard read green.
+   */
+  for (const k of s.writeOutcomesByKind ?? []) {
+    const total = k.applied + k.failed
+    if (total < INTEGRITY_THRESHOLDS.kindMinAttempts) continue
+    if (k.failed === 0) continue
+    const failRate = k.failed / total
+    if (failRate >= INTEGRITY_THRESHOLDS.kindFailRate) {
+      findings.push({
+        code: 'ADS_WRITE_KIND_FAILING',
+        severity: 'CRITICAL',
+        message: `Every recent write to ${k.kind} targets is failing (${k.failed}/${total} in 24h), while other target kinds are landing.`,
+        action: 'A whole entity class failing while the account looks healthy is almost always a ROUTING fault, not deletion — check that this kind is being sent to the endpoint that owns its ids (keywords vs targets), as in DL.1.',
+      })
+    }
+  }
 
   // The AX2.0 regression test. Before that fix this ran at ~23/day forever.
   if (s.deadLettersLastHour > INTEGRITY_THRESHOLDS.deadLettersLastHour) {

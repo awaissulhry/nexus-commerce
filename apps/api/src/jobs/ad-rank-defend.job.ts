@@ -706,8 +706,8 @@ export async function runRankDefendCron(): Promise<void> {
       try {
         const { reconcileFailedAmazonWrites } = await import('../services/advertising/ads-write-reconcile.service.js')
         const rr = await reconcileFailedAmazonWrites({ limit: 50 })
-        if (rr.attempted || rr.skippedPermanent) {
-          rec = ` reconciled=${rr.attempted}(ag=${rr.adGroups},tg=${rr.adTargets},cm=${rr.campaigns})${rr.skippedPermanent ? ` skip-perm=${rr.skippedPermanent}` : ''}`
+        if (rr.attempted || rr.skippedPermanent || rr.orphansCleared) {
+          rec = ` reconciled=${rr.attempted}(ag=${rr.adGroups},tg=${rr.adTargets},cm=${rr.campaigns})${rr.skippedPermanent ? ` skip-perm=${rr.skippedPermanent}` : ''}${rr.orphansCleared ? ` orphans-cleared=${rr.orphansCleared}` : ''}`
         }
       } catch (e) { logger.warn('[ad-rank-defend] reconcile sweep failed', { error: (e as Error).message }) }
       return `evaluated=${r.evaluated} applied=${r.applied}${rec}`

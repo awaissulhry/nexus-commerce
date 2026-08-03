@@ -76,6 +76,37 @@ function mentionsWrongEndpointFor(lowerErr: string, kind?: string | null): boole
   return keywordShaped // PRODUCT | AUTO
 }
 
+/**
+ * WF.1 — an orphan mark that contradicts the entity it sits on.
+ *
+ * `isEntityGoneError` refuses to CREATE this mark (DL.3), but nothing could ever remove one made
+ * before that guard existed, and the reason is a deadlock rather than an oversight: `orphanedAt`
+ * blocks every non-forced write, and the only thing that clears `orphanedAt` is a write
+ * succeeding. The flag prevents the write that would remove the flag. Four AUTO targets on
+ * Auto_Close_Moss have sat like this since 2026-06-15, each stamped "Amazon reports this entity no
+ * longer exists (keyword …)" — a KEYWORD miss recorded against an AUTO target, which is the
+ * routing bug's signature and not a statement about Amazon's inventory.
+ *
+ * Detecting it is the same question DL.3 asks, on the stored reason instead of the live error:
+ * does the entity type Amazon complained about contradict this entity's own kind?
+ *
+ * Clearing on this signal is safe in the strong sense — it does not assert the entity exists. It
+ * only withdraws a conclusion that was never supported, and hands the question back to Amazon: the
+ * next write goes to the CORRECT endpoint now, and if the entity really is gone the worker
+ * re-orphans it with an accurate reason. The system re-derives the truth either way.
+ */
+export function isContradictoryOrphan(orphanReason: string | null | undefined, kind: string | null | undefined): boolean {
+  const k = (kind ?? '').toUpperCase()
+  if (k !== 'KEYWORD' && k !== 'PRODUCT' && k !== 'AUTO') return false
+  const r = (orphanReason ?? '').toLowerCase()
+  if (!r) return false
+  // orphanReasonFrom stamps the entityType Amazon named, e.g. "(keyword 1428…)".
+  const saysKeyword = /\bkeyword\b/.test(r)
+  const saysTarget = /\btarget(ing)?(clause)?\b/.test(r)
+  if (saysKeyword === saysTarget) return false // names both or neither → no contradiction to read
+  return k === 'KEYWORD' ? saysTarget : saysKeyword
+}
+
 /** Short, stable reason string stored on the entity for the operator. */
 export function orphanReasonFrom(err: string | null | undefined): string {
   if (!err) return 'entity not found at Amazon'

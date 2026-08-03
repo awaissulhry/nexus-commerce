@@ -21,6 +21,7 @@
  * and respects the same guardrails as every other write. Ridden by the rank cron.
  */
 import { logger } from '../../utils/logger.js'
+import { isContradictoryOrphan } from '../ads-core/amazon-entity-gone.js'
 import type { AdsActor } from './ads-mutation.service.js'
 
 const ACTOR: AdsActor = 'automation:reconcile'
@@ -31,6 +32,8 @@ export interface WriteReconcileResult {
   adTargets: number
   campaigns: number
   skippedPermanent: number
+  /** WF.1 — self-contradictory orphan marks withdrawn this pass (routing artefacts, not deletions) */
+  orphansCleared: number
   dryRun: boolean
   sample: Array<{ entity: 'AD_GROUP' | 'AD_TARGET' | 'CAMPAIGN'; id: string; value: string }>
 }
@@ -68,7 +71,8 @@ export async function reconcileFailedAmazonWrites(
     adGroups = 0,
     adTargets = 0,
     campaigns = 0,
-    skippedPermanent = 0
+    skippedPermanent = 0,
+    orphansCleared = 0
 
   const pushSample = (entity: WriteReconcileResult['sample'][number]['entity'], id: string, value: string) => {
     if (sample.length < 15) sample.push({ entity, id, value })
@@ -198,5 +202,32 @@ export async function reconcileFailedAmazonWrites(
       dryRun,
     })
   }
-  return { attempted, adGroups, adTargets, campaigns, skippedPermanent, dryRun, sample }
+  /**
+   * WF.1 — withdraw orphan marks that contradict the entity they sit on.
+   *
+   * The chokepoint in ads-mutation clears these too, but only when something tries to write, and a
+   * target whose schedule is PAUSED is never written to — Auto_Close_Moss has carried four such
+   * marks since June for exactly that reason. Sweeping here means a mis-mark cannot outlive its
+   * cause just because nothing happened to touch it.
+   *
+   * This asserts nothing about Amazon's inventory: it removes a conclusion the evidence never
+   * supported. The next write goes to the correct endpoint and Amazon settles the question.
+   */
+  try {
+    const suspects = await prisma.adTarget.findMany({
+      where: { orphanedAt: { not: null } },
+      select: { id: true, kind: true, orphanReason: true },
+      take: 500,
+    })
+    const bogus = suspects.filter((t) => isContradictoryOrphan(t.orphanReason, t.kind))
+    if (bogus.length && !dryRun) {
+      const r = await prisma.adTarget.updateMany({ where: { id: { in: bogus.map((t) => t.id) } }, data: { orphanedAt: null, orphanReason: null } })
+      orphansCleared = r.count
+      logger.info('[write-reconcile] withdrew self-contradictory orphan marks', { count: r.count, ids: bogus.slice(0, 10).map((t) => t.id) })
+    } else if (bogus.length) {
+      orphansCleared = bogus.length
+    }
+  } catch (e) { logger.warn('[write-reconcile] orphan sweep failed', { error: (e as Error).message }) }
+
+  return { attempted, adGroups, adTargets, campaigns, skippedPermanent, orphansCleared, dryRun, sample }
 }

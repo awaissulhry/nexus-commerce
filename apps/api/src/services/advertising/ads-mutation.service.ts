@@ -23,6 +23,7 @@
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { isContradictoryOrphan } from '../ads-core/amazon-entity-gone.js'
 import {
   IN_FLIGHT_STATES, isBelievablyPending, isBlockingWrite, isTerminal, stateForQueueStatus,
 } from '../ads-core/ad-mutation-state.js'
@@ -901,6 +902,8 @@ export async function updateAdTargetWithSync(args: {
       bidCents: true,
       status: true,
       orphanedAt: true,
+      orphanReason: true, // WF.1 — needed to tell a real orphan from a routing artefact
+      kind: true,
       adGroup: {
         select: { id: true, campaign: { select: { id: true, marketplace: true, dynamicBidding: true } } },
       },
@@ -919,9 +922,21 @@ export async function updateAdTargetWithSync(args: {
   // `force` is the deliberate operator override — a repair path may push to
   // re-test whether the entity is back, and a success clears orphanedAt.
   if (existing.orphanedAt && !args.force) {
-    return {
-      ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null,
-      error: 'entity_orphaned',
+    // WF.1 — but first: is the mark self-contradictory? An AUTO/PRODUCT target orphaned for a
+    // missing KEYWORD (or the reverse) records our old routing fault, not Amazon's inventory, and
+    // such a mark can never clear itself — it blocks the very write whose success would remove it.
+    // Withdraw the unsupported conclusion and let this write go to the now-correct endpoint; if
+    // the entity really is gone, the worker re-orphans it with an accurate reason.
+    if (isContradictoryOrphan(existing.orphanReason, existing.kind)) {
+      await prisma.adTarget.update({ where: { id: args.adTargetId }, data: { orphanedAt: null, orphanReason: null } })
+      logger.info('[ads-mutation] cleared a self-contradictory orphan mark — re-testing against Amazon', {
+        adTargetId: args.adTargetId, kind: existing.kind, was: existing.orphanReason,
+      })
+    } else {
+      return {
+        ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null,
+        error: 'entity_orphaned',
+      }
     }
   }
 
