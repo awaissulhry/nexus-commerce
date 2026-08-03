@@ -255,7 +255,13 @@ async function stampEntitySync(
   // AX2.0 — record "Amazon says this is gone" so we stop regenerating the same
   // dead write forever, and clear the mark the moment a write succeeds again
   // (a re-created keyword self-heals without operator action).
-  const gone = status === 'FAILED' && isEntityGoneError(error)
+  // DL.3 — a target's kind decides which endpoint legitimately owns it, so a "not found" from the
+  // other endpoint must not be read as deletion. Only AD_TARGET has a kind; everything else keeps
+  // the previous behaviour.
+  const targetKind = payload.entityType === 'AD_TARGET'
+    ? (await prisma.adTarget.findUnique({ where: { id: payload.entityId }, select: { kind: true } }))?.kind ?? null
+    : null
+  const gone = status === 'FAILED' && isEntityGoneError(error, { kind: targetKind })
   const orphanPatch = gone
     ? { orphanedAt: new Date(), orphanReason: orphanReasonFrom(error) }
     : status === 'SUCCESS'

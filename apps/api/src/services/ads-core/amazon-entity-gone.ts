@@ -22,9 +22,25 @@
  * treated as gone: a malformed request or a transient routing 404 must not
  * orphan a healthy keyword. We require Amazon's own vocabulary.
  */
-export function isEntityGoneError(err: string | null | undefined): boolean {
+export function isEntityGoneError(
+  err: string | null | undefined,
+  opts?: { kind?: string | null },
+): boolean {
   if (!err) return false
   const e = err.toLowerCase()
+
+  // DL.3 — "not found" is only evidence of deletion if we asked the endpoint that OWNS the entity.
+  //
+  // This module's own header records 662 dead-lettered writes diagnosed as "keywords deleted on
+  // Amazon". They were not deleted: every product/auto target's bid was being PUT to /sp/keywords
+  // (see DL.1), so Amazon truthfully reported no keyword with that id — and this detector read our
+  // routing bug as proof the entity was gone, orphaning 27 healthy targets and silently disabling
+  // rank control on four live campaigns.
+  //
+  // Amazon names the location it looked in ($.keywords[0].keywordId /
+  // $.targetingClauses[0].targetId). When that contradicts the entity's own kind, the miss says
+  // something about OUR request, not about Amazon's inventory — so refuse to conclude "gone".
+  if (mentionsWrongEndpointFor(e, opts?.kind)) return false
 
   // Amazon v3 batch responses: {"errorType":"entityNotFoundError", …}
   if (e.includes('entitynotfounderror')) return true
@@ -36,6 +52,28 @@ export function isEntityGoneError(err: string | null | undefined): boolean {
   if (/entity[\s_-]+not[\s_-]+found/.test(e)) return true
 
   return false
+}
+
+/**
+ * DL.3 — did the error come from an endpoint that cannot own this entity?
+ *
+ * `kind` is AdTarget.kind. KEYWORD ids live under /sp/keywords; PRODUCT and AUTO ids live under
+ * /sp/targets. A keyword-shaped miss for a product target (or the reverse) is a routing fault.
+ *
+ * Silent on an absent/unknown kind — this must only ever SUPPRESS a false positive, never invent
+ * one, and callers that cannot supply a kind keep the previous behaviour exactly.
+ */
+function mentionsWrongEndpointFor(lowerErr: string, kind?: string | null): boolean {
+  const k = (kind ?? '').toUpperCase()
+  if (k !== 'KEYWORD' && k !== 'PRODUCT' && k !== 'AUTO') return false
+
+  const keywordShaped = lowerErr.includes('keywordid') || lowerErr.includes('$.keywords')
+  const targetShaped = lowerErr.includes('targetid') || lowerErr.includes('targetingclauses') || lowerErr.includes('$.targets')
+
+  // Only decide when the error points at exactly one of the two.
+  if (keywordShaped === targetShaped) return false
+  if (k === 'KEYWORD') return targetShaped
+  return keywordShaped // PRODUCT | AUTO
 }
 
 /** Short, stable reason string stored on the entity for the operator. */
