@@ -19,6 +19,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { History } from 'lucide-react'
 import { gridFromWindows, type RankWin } from '../_rank/rank-grid-model'
+import { ScheduleActivity } from './ScheduleActivity'
 import { WeekShape } from './WeekShape'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -145,13 +146,29 @@ export function ScheduleVersions({ groupId, palette, compact = false }: {
   )
 }
 
-/** Section wrapper for the builder, where this sits alongside the plan rather than in a drawer. */
+/**
+ * Section wrapper for the builder, where history sits alongside the plan rather than in a drawer.
+ *
+ * TWO TABS, and "Amazon changes" leads. When you are editing a schedule the question you actually
+ * have is "what has this been doing on Amazon" — the bid and placement-percentage moves the engine
+ * made — not "when did I last edit it". Plan edits are the supporting answer to that, so they sit
+ * second. Same two components the list's drawer renders, so the surfaces cannot disagree.
+ */
 export function ScheduleVersionsSection({ groupId, palette }: { groupId: string; palette: TargetPalette }) {
+  const [tab, setTab] = useState<'amazon' | 'plan'>('amazon')
   return (
     <section id="rgd-history" className="h10-rb-sec">
-      <h2><History size={16} style={{ verticalAlign: '-3px', marginRight: 6 }} />Change history</h2>
-      <p className="h10-rb-desc">Every edit to this schedule&rsquo;s plan — what moved, when, and who moved it.</p>
-      <ScheduleVersions groupId={groupId} palette={palette} compact />
+      <h2><History size={16} style={{ verticalAlign: '-3px', marginRight: 6 }} />History</h2>
+      <p className="h10-rb-desc">What this schedule changed on Amazon, and how the plan itself has been edited.</p>
+      <div className="h10-act-tabs inset" role="tablist" aria-label="History type">
+        <button type="button" role="tab" aria-selected={tab === 'amazon'} className={tab === 'amazon' ? 'on' : ''} onClick={() => setTab('amazon')}>Amazon changes</button>
+        <button type="button" role="tab" aria-selected={tab === 'plan'} className={tab === 'plan' ? 'on' : ''} onClick={() => setTab('plan')}>Plan edits</button>
+      </div>
+      <div className="h10-rb-hist">
+        {tab === 'amazon'
+          ? <ScheduleActivity groupId={groupId} />
+          : <ScheduleVersions groupId={groupId} palette={palette} compact />}
+      </div>
     </section>
   )
 }

@@ -903,3 +903,13 @@
    secondary path out of a drawer, not a call to action. */
 .h10-act-all { margin-left: auto; font-size: 12px; font-weight: 600; color: #1f6fde; text-decoration: none; white-space: nowrap; }
 .h10-act-all:hover { text-decoration: underline; }
+/* The history tabs inside the builder sit in a section rather than a drawer, so they lose the
+   drawer's page-edge padding and gain a rule to sit on. */
+.h10-act-tabs.inset { padding: 0; margin: 4px 0 0; }
+.h10-rb-hist { margin-top: 10px; border: 1px solid #eef1f5; border-radius: 9px; overflow: hidden; }
+.h10-rb-hist .h10-act-bar { padding: 10px 12px; }
+.h10-rb-hist .h10-ver { padding: 12px 14px; }
+/* Long-running schedules produce a lot of rows; cap the list so the builder's own controls stay
+   reachable rather than being pushed a screen away. */
+.h10-act-list { max-height: 420px; overflow-y: auto; }
+.h10-hist-b .h10-act-list { max-height: none; }
