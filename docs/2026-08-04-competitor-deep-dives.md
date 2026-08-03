@@ -9,7 +9,7 @@
 > Teikametrics, Intentwise, Scale Insights, BidX, M19), and §0 reconciles its conclusions with ADX.
 Each entry: what they are → architecture → full feature inventory → what to take (mapped to our code) → where we already lead → what to refuse.
 
-Queue: **Pacvue** ✅ · **Rithum** ✅ · **Perpetua** ✅ · Teikametrics · Intentwise · Scale Insights · BidX · M19 · + leaders as found.
+Queue: **Pacvue** ✅ · **Rithum** ✅ · **Perpetua** ✅ · **Teikametrics** ✅ · Intentwise · Scale Insights · BidX · M19 · + leaders as found.
 
 ---
 
@@ -300,5 +300,63 @@ That is strictly stronger. ADX.4 should ship `minBid` / `maxBid` / `targetAcos` 
 1. **Automation must leave behind a structure a human could still run by hand.** (Nexus already honours this by suppressing at €0.02 rather than pausing.)
 2. **Anything that creates entities needs a retirement path designed at the same time.** Directly relevant to ADX.10's bid ladder and any harvest automation.
 3. **If automation makes the account too big to see, the tool owes you a way to see it.** This is the Control Console's actual mandate, stated better than ADX stated it.
+
+---
+
+# 4. Teikametrics
+
+## 4.1 What it is
+
+Mid-market algorithmic bidding, **$149+/mo** — the cheapest serious entry in this study. Platform lineage: Flywheel → **Flywheel 2.0** → now branded **ARI ("Artificial Retail Intelligence")**. Covers **Amazon, Walmart and TikTok Shop**. Absorbed Prestozon. Two tiers: **Essentials** (single brand, free trial) and **Managed Services** with human strategists.
+
+Third company in this study with a managed-services tier. Pacvue needs dedicated staff, Rithum sells people, Teikametrics sells strategists. **Four of the six companies examined so far conclude that software alone does not run ads.** That recurrence is itself a finding.
+
+## 4.2 The bidder — the most transparent mechanism documented so far
+
+From their own help centre, which is unusually specific:
+
+**Operator inputs:** `ACOS Limit`, `Bid Modifier`, "and other constraints."
+**Cadence:** hourly ACOS adjustments on Amazon; bids adjusted multiple times per day.
+**Model inputs:** seasonality, holidays, sales events, product category, product price, match type, **inventory status**, plus cross-seller marketplace data.
+**Scope — the important part:** the bidder adjusts **bids on keywords and targets only.** It does *not* control campaign structure, product selection, or budget allocation.
+
+That last point is the design decision worth noting. Where Quartile restructures accounts (and creates structural lock-in) and Perpetua builds campaigns autonomously, **Teikametrics deliberately confines its algorithm to one actuator.** Structure stays the operator's.
+
+This is the same boundary ADX drew for different reasons: the rank engine owns placement and bid-for-rank; structural change stays gated. Independent arrival at the same line is worth something.
+
+## 4.3 Features of note
+
+- **Cross-marketplace keyword harvesting** — harvest winners on one marketplace, apply them "everywhere the seller's products appear." We have Amazon and eBay ads with entirely separate rule sets (`EbayAdsRule` vs `AutomationRule`); the prior desktop study already flagged that split as worth converging.
+- **Predictive inputs include organic ranking trends and inventory levels** — commerce state as a bidding input, not merely a gate. Fourth independent occurrence of that finding.
+- **Generative AI edits listing content using campaign performance data.** An ads → listings feedback loop. Nexus owns both halves natively and does not connect them in this direction at all.
+- Full-funnel AMC audiences "without SQL skills."
+
+## 4.4 What to take
+
+### ① `ACOS Limit` and `Bid Modifier` as operator constraints on an algorithm
+
+This is the same conclusion as the desktop study's Tier-1 #4, reached from the opposite direction: Teikametrics runs a genuinely proprietary model, and still exposes **two operator-set bounds it may not cross**. The model is opaque; the *constraints* are not.
+
+Confirms the ADX.4 revision — bounds as entity columns — and adds that the bound belongs to *the entity*, while the algorithm remains free inside it.
+
+### ② The single-actuator boundary
+
+Confine the automatic loop to bids and placement. Structure, product selection and budget stay with the operator or behind approval. Teikametrics ships this as a product decision; Quartile's failure modes show the cost of not doing it.
+
+### ③ Ads performance → listing content *(speculative, later)*
+
+Their generative-AI listing editor consumes campaign data. We own the PIM and the ads data in one database — search terms that convert are direct evidence for title and bullet content. Not ADX scope, but it belongs in the backlog: this is a loop only a platform owning both halves can close, and there are exactly two such platforms (Rithum and Nexus).
+
+## 4.5 What to refuse
+
+- **Cross-seller benchmarking data.** Their model uses aggregate data from other sellers — an advantage a single-tenant system structurally cannot have. Don't try to synthesise it.
+- **TikTok Shop / Walmart breadth.** Not our channels.
+- **The managed-services tier**, for the same reason as Rithum's.
+
+## 4.6 Verdict
+
+The most *architecturally* useful entry so far, precisely because it is the least ambitious. Teikametrics does one thing — bids — inside operator-set bounds, at hourly cadence, and refuses to touch structure. That is a coherent product, and it is very close to what the ADX rank engine already is.
+
+Its existence is also mild evidence that our €150/day account does not need ML: their measured result is 10–20% ACOS improvement for sellers at $5–15k/month, i.e. an order of magnitude above us, and the prior desktop study already concluded rules-first at this volume.
 
 ---
