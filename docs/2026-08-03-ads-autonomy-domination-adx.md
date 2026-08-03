@@ -425,7 +425,16 @@ Three fixes in `automation-rule.service.ts`:
 3. **Re-derive the caps** — 2/day on a bid optimizer is decorative. Set caps from the rule's actual cadence and blast radius.
 
 Then a one-off purge of the ~693k junk execution rows, and an alert if any rule's failure rate exceeds a threshold — this ran broken for months in silence, and that silence is the deeper defect.
-**Exit:** rules execute successfully in dry-run; `SUCCESS`/`DRY_RUN` becomes the dominant status; the 96.4% waste goes to ~0.
+**Exit met — verified on prod 2026-08-04:**
+
+| Phase (same UTC day) | DRY_RUN | FAILED | new CAP_EXCEEDED |
+|---|---|---|---|
+| Before deploy | 642 | **17,308** | — |
+| After deploy | 26 | **0** | **0** |
+
+The 96.4% waste is gone and rules execute cleanly for the first time.
+
+**Follow-up now measurable — the caps are still wrong.** With the ratchet fixed, the evaluator's own summary reads `evals=298 matches=201` every tick, ~96 ticks/day. 201 rules match every 15 minutes against caps of 2–5, so the overwhelming majority are still refused — correctly and silently now, rather than by writing a rejection row. Item 3 of this phase (re-derive the caps from cadence × blast radius) was deliberately deferred until this number existed. It now does. Each tick takes ~204s, comfortably inside the 15-minute cadence.
 
 ### ADX.2 — Repair the propose pipeline ✅ **SHIPPED 2026-08-04**
 **Diagnosed:** suggestion generation was gated on `rule.actions[0].control === 'manual'`, a flag only the rule-builder UI sets. Measured on prod: **all 51 advertising rules carry `control = <none>`**, and the only 2 `AdsRuleSuggestion` rows in existence came from two throwaway rules named `__ea manual 178196…` during EA3 development in June. The Propose pipeline had never produced a suggestion from a real rule.
