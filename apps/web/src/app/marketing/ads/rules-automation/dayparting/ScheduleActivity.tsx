@@ -1,12 +1,14 @@
 'use client'
 
 /**
- * The Amazon-change history for one rank schedule: every bid and placement-percentage move the
- * engine made, and whether Amazon actually took it.
+ * The Amazon-change history for ONE SCOPE — a rank schedule, or a campaign.
  *
- * Extracted from ScheduleActivityDrawer so the SAME implementation serves both places a schedule is
- * looked at — the list's drawer and the builder. A second copy would drift, and the two views would
- * quietly disagree about what a schedule did.
+ * Every bid and placement-percentage move the engine made within that scope, and separately
+ * whether Amazon actually took it.
+ *
+ * One implementation serves every place a change history is shown: the schedule drawer, the
+ * builder, and the campaign detail page. A second copy would drift, and two views would quietly
+ * disagree about what actually happened — which is the failure this whole series exists to remove.
  *
  * NOT to be confused with ScheduleVersions, which records what the OPERATOR changed about the plan
  * ("you moved the Friday window"). This one is what the ENGINE changed on Amazon.
@@ -57,17 +59,26 @@ const ago = (iso: string) => {
 // Hour buckets — the grain the schedule itself thinks in ("what did it do at 22:00 last night").
 const hourKey = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', hour12: false })
 
-export function ScheduleActivity({ groupId, showAllLink = true }: { groupId: string; showAllLink?: boolean }) {
+export function ChangeList({ groupId, campaignId, showAllLink = true }: {
+  /** Scope to a rank schedule — resolved server-side to its member schedules' actors. */
+  groupId?: string
+  /** Scope to a single campaign. */
+  campaignId?: string
+  showAllLink?: boolean
+}) {
   const [items, setItems] = useState<ActRow[]>([])
   const [members, setMembers] = useState<Member[]>([])
-  const [campaignId, setCampaignId] = useState('')
+  const [memberFilter, setMemberFilter] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let alive = true
     setLoading(true)
-    const qs = new URLSearchParams({ groupId, limit: '80' })
-    if (campaignId) qs.set('campaignId', campaignId)
+    const qs = new URLSearchParams({ limit: '80' })
+    if (groupId) qs.set('groupId', groupId)
+    // A campaign scope needs no member picker — there is only one campaign — so the filter below
+    // is driven by `members`, which the feed returns only for a group scope.
+    if (campaignId ?? memberFilter) qs.set('campaignId', (campaignId ?? memberFilter) as string)
     void fetch(`${getBackendUrl()}/api/advertising/changes?${qs.toString()}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((j) => {
@@ -81,7 +92,7 @@ export function ScheduleActivity({ groupId, showAllLink = true }: { groupId: str
       .catch(() => { if (alive) setItems([]) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [groupId, campaignId])
+  }, [groupId, campaignId, memberFilter])
 
   const campOptions = useMemo(
     () => [{ value: '', label: `All ${members.length} campaign${members.length === 1 ? '' : 's'}` }, ...members.map((m) => ({ value: m.campaignId, label: m.name }))],
@@ -97,15 +108,15 @@ export function ScheduleActivity({ groupId, showAllLink = true }: { groupId: str
   return (
     <>
       <div className="h10-act-bar">
-        <H10Select
+        {members.length > 1 && <H10Select
           width={260}
           options={campOptions}
-          value={campaignId}
-          onChange={setCampaignId}
+          value={memberFilter}
+          onChange={setMemberFilter}
           ariaLabel="Filter activity by campaign"
           searchable
           searchPlaceholder="Search campaigns…"
-        />
+        />}
         {failed > 0 && <span className="h10-act-alert">{failed} write{failed === 1 ? '' : 's'} failed to reach Amazon</span>}
         {showAllLink && (
           <a className="h10-act-all" href="/marketing/ads/changelog" target="_blank" rel="noopener noreferrer">View all changes →</a>

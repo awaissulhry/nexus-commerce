@@ -3083,3 +3083,6 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
    change is a rare action and should not compete with reading the log. */
 .h10-cl-undo { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #d8dde4; background: #fff; color: #8a93a1; border-radius: 6px; padding: 3px 5px; cursor: pointer; }
 .h10-cl-undo:hover { border-color: #a3211a; color: #a3211a; background: #fbdedb; }
+/* HX.6b — the campaign History tab. The shared change list ships its own row styling; this only
+   gives it the card the other tabs sit in. */
+.h10-cd-hist { background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; overflow: hidden; }

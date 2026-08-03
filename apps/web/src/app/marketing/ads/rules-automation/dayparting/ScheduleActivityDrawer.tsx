@@ -20,7 +20,7 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { X } from 'lucide-react'
-import { ScheduleActivity } from './ScheduleActivity'
+import { ChangeList } from './ScheduleActivity'
 import { ScheduleVersions, type TargetPalette } from './ScheduleVersions'
 import { Next24Preview } from './Next24Preview'
 
@@ -58,7 +58,7 @@ export function ScheduleActivityDrawer({ group, palette, initialTab = 'next24', 
         <div className="h10-hist-b">
           {tab === 'next24' ? <Next24Preview groupId={group.id} />
             : tab === 'changes' ? <ScheduleVersions groupId={group.id} palette={palette} />
-            : <ScheduleActivity groupId={group.id} />}
+            : <ChangeList groupId={group.id} />}
         </div>
       </div>
     </div>

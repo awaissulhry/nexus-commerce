@@ -19,7 +19,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { History, RotateCcw } from 'lucide-react'
 import { gridFromWindows, type RankWin } from '../_rank/rank-grid-model'
-import { ScheduleActivity } from './ScheduleActivity'
+import { ChangeList } from './ScheduleActivity'
 import { WeekShape } from './WeekShape'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -218,7 +218,7 @@ export function ScheduleVersionsSection({ groupId, palette }: { groupId: string;
       </div>
       <div className="h10-rb-hist">
         {tab === 'amazon'
-          ? <ScheduleActivity groupId={groupId} />
+          ? <ChangeList groupId={groupId} />
           : <ScheduleVersions groupId={groupId} palette={palette} compact />}
       </div>
     </section>

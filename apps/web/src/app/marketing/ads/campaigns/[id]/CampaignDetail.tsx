@@ -16,6 +16,8 @@ import { AdGroupsTab } from './tabs/AdGroupsTab'
 import { SearchTermsTab } from './tabs/SearchTermsTab'
 import { NegativeTargetsTab } from './tabs/NegativeTargetsTab'
 import { AdsTab } from './tabs/AdsTab'
+// HX.6b — the same change list the schedule drawer and builder render, scoped to this campaign.
+import { ChangeList } from '../../rules-automation/dayparting/ScheduleActivity'
 
 export interface CampaignDetailData {
   id: string
@@ -42,7 +44,7 @@ export interface CampaignDetailData {
   dataThrough?: string | null
 }
 
-type TabKey = 'details' | 'ad-groups' | 'search-terms' | 'negative-targets' | 'ads' | 'audience'
+type TabKey = 'details' | 'ad-groups' | 'search-terms' | 'negative-targets' | 'ads' | 'audience' | 'history'
 const TABS: ReadonlyArray<{ key: TabKey; label: string; badge?: string }> = [
   { key: 'details', label: 'Details' },
   { key: 'ad-groups', label: 'Ad Groups' },
@@ -50,6 +52,9 @@ const TABS: ReadonlyArray<{ key: TabKey; label: string; badge?: string }> = [
   { key: 'negative-targets', label: 'Campaign Negative Targets' },
   { key: 'ads', label: 'Ads' },
   { key: 'audience', label: 'Audience', badge: 'NEW' },
+  // Last, because it answers "what happened to this campaign" rather than "what is it" — the
+  // question you arrive with only once something looks wrong.
+  { key: 'history', label: 'History' },
 ]
 
 /** Targeting-type tile shown in the title (A = Auto, M = Manual), per H10. */
@@ -141,6 +146,10 @@ export function CampaignDetail({ id }: { id: string }) {
       <div className="h10-cd-body">
         {error
           ? <div className="h10-cd-error">Couldn’t load this campaign — {error}. <button type="button" onClick={() => void load()}>Retry</button></div>
+          : activeTab === 'history'
+            // Scoped to this campaign, reading the same unified feed as the account-wide log, so a
+            // row here and a row there can never disagree about what happened.
+            ? <div className="h10-cd-hist"><ChangeList campaignId={id} showAllLink={false} /></div>
           : activeTab === 'details'
             ? <DetailsTab campaign={camp} campaignId={id} onSaved={() => void load()} />
             : activeTab === 'ad-groups'
