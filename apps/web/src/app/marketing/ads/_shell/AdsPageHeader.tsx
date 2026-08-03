@@ -5,9 +5,10 @@
  * subtitle on the left; Learn · Change Log · Data Sync · Date range · Market
  * selector · Action ▾ on the right. Reused by every /marketing/ads page.
  *
- * The Change Log sits here rather than in the sidebar, deliberately: it belongs to whatever you
- * are looking at, and the sidebar is kept small on purpose. It replaced a mailto "Share Feedback"
- * link, which was the least-used control in the header and the only one that left the product.
+ * The Change Log sits here rather than in the sidebar, and is OPT-IN per page rather than shown
+ * everywhere: a control repeated on 49 pages stops being navigation and becomes furniture. Pages
+ * that own or receive recorded changes ask for it. It took the slot of a mailto "Share Feedback"
+ * link — the least-used control in the header and the only one that left the product.
  * CBN.2f — the date control is the full DateRangePicker (its range is local to the
  * header for now; lift it when the campaigns list endpoint becomes date-aware).
  */
@@ -49,7 +50,7 @@ export interface HeaderPrimary { label: string; icon?: ReactNode; href?: string;
 
 export function AdsPageHeader({
   title, subtitle, markets, market, onMarketChange, onDataSync, syncing, actions, onDateRange,
-  showLearn = true, showDataSync = true, showDateRange = true, primaryAction, channel = 'amazon',
+  showLearn = true, showDataSync = true, showDateRange = true, showChangeLog = false, primaryAction, channel = 'amazon',
 }: {
   title: string; subtitle: string
   markets: string[]; market: string; onMarketChange: (m: string) => void
@@ -61,6 +62,8 @@ export function AdsPageHeader({
   // CBN — per-page header tailoring (Rules & Automation hides Learn/Data-Sync/Date
   // and swaps the Action ▾ dropdown for a single "+ Rule" primary button).
   showLearn?: boolean; showDataSync?: boolean; showDateRange?: boolean
+  /** Opt in on pages that own or receive recorded changes. Off everywhere else by default. */
+  showChangeLog?: boolean
   primaryAction?: HeaderPrimary
   // ER1 (additive; Amazon default) — the account-cluster brand mark. eBay
   // pages pass 'ebay' so the header stops showing the amazon wordmark.
@@ -93,7 +96,7 @@ export function AdsPageHeader({
             operator to the Amazon one would be worse than showing nothing. Hidden when you are
             already there. Navigates in place rather than a new tab — this is top-level console
             navigation, unlike the drawer's link, where a new tab exists to preserve the drawer. */}
-        {pathname !== changeLogHref && (
+        {showChangeLog && pathname !== changeLogHref && (
           <Link className="h10-hbtn ghost" href={changeLogHref} title="Every change Nexus made to this account — what changed, what caused it, and whether it reached the channel">
             <History size={14} /> Change Log
           </Link>

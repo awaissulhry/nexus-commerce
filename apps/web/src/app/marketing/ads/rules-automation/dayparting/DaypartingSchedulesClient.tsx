@@ -69,6 +69,9 @@ export function DaypartingSchedulesClient() {
         markets={markets}
         market={market}
         onMarketChange={setMarket}
+        // The rank schedules are the origin of almost every recorded change, so this is the page
+        // where the account log is worth one click away.
+        showChangeLog
         showLearn={false}
         showDataSync={false}
         showDateRange={false}

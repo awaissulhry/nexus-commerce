@@ -3,13 +3,13 @@
 /**
  * CBN.3.1 — Campaign Details page header (Helium 10 match). Distinct from the list
  * header (AdsPageHeader): a "Back to Ad Manager" link, the targeting-type badge + the
- * campaign name as the title, and a right-side action cluster — Learn · Change Log ·
+ * campaign name as the title, and a right-side action cluster — Learn ·
  * date-range (grid tabs only) · account selector · Action ▾. Reuses DateRangePicker and
  * the shared .h10-hbtn / .h10-hsel / .h10-menu styling so the two headers stay in sync.
  */
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Video, ChevronDown, History } from 'lucide-react'
+import { ArrowLeft, Video, ChevronDown } from 'lucide-react'
 import { DateRangePicker } from './DateRangePicker'
 import { EbayMark } from './EbayMark'
 
@@ -60,11 +60,9 @@ export function CampaignDetailHeader({
         </div>
         <div className="h10-cd-actions">
           <button type="button" className="h10-hbtn"><Video size={15} /> Learn</button>
-          {/* Same swap as AdsPageHeader, so the two headers stay in sync — a control that exists on
-              every list page and vanishes on the detail page reads as a bug. */}
-          <Link className="h10-hbtn ghost" href={channel === 'ebay' ? '/marketing/ads/ebay/change-log' : '/marketing/ads/changelog'} title="Every change Nexus made to this account">
-            <History size={14} /> Change Log
-          </Link>
+          {/* No Change Log here on purpose. What belongs on a campaign page is that CAMPAIGN's
+              history, not the account-wide log — and that surface (HX.6) is not built yet. A link
+              promising campaign history and delivering everything else would be worse than none. */}
 
           {showDateRange && <DateRangePicker value={dateRange} onChange={onDateRange} />}
 
