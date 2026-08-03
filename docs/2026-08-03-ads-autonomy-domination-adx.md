@@ -1,6 +1,6 @@
 # ADX — Ads Autonomy & SERP Domination
 
-**Status:** ADX.0 COMPLETE · ADX.1 (P0 repair) AWAITING GATE
+**Status:** ADX.0–2 COMPLETE · ADX.3 next
 **Date:** 2026-08-03
 **Goal:** the ads account runs itself, holds page-one real estate across products that share a keyword set, and never requires the operator's attention — while the operator retains explicit, per-lever control over everything.
 
@@ -418,7 +418,7 @@ Carry-over is no longer a phase. It is a criterion: an orphaned endpoint gets ad
 ### ADX.0 — Ground truth ✅ **COMPLETE 2026-08-04**
 Measured against prod. Results in §1.10. Headline: the rule engine has never executed successfully — 693,503 failures, 0 successes, caused by a self-ratcheting daily cap. The contention hypothesis was largely refuted.
 
-### ADX.1 — Repair the rule engine 🔴 **P0 — everything downstream is blocked on this**
+### ADX.1 — Repair the rule engine ✅ **SHIPPED 2026-08-04** (`2fb3cc1cb`)
 Three fixes in `automation-rule.service.ts`:
 1. **Stop the ratchet** — the cap must count only executions that *did work*, excluding its own `CAP_EXCEEDED` rows. Count `status IN ('SUCCESS','PARTIAL','DRY_RUN')`, or stop writing a row at all on cap rejection and record the rejection as a counter on the rule.
 2. **Exclude dry-run from the cap** — a dry-run writes nothing and spends nothing; it must not consume a live-spend guard.
@@ -427,9 +427,15 @@ Three fixes in `automation-rule.service.ts`:
 Then a one-off purge of the ~693k junk execution rows, and an alert if any rule's failure rate exceeds a threshold — this ran broken for months in silence, and that silence is the deeper defect.
 **Exit:** rules execute successfully in dry-run; `SUCCESS`/`DRY_RUN` becomes the dominant status; the 96.4% waste goes to ~0.
 
-### ADX.2 — Repair the propose pipeline
-24,846 dry-run executions produced **2 suggestions ever**. Even once ADX.1 lands, a dry-run that emits nothing is invisible. Find why matched rules don't write `AdsRuleSuggestion` rows, and make Propose the reliable default output of a dry-run.
-**Exit:** every dry-run match produces a reviewable suggestion.
+### ADX.2 — Repair the propose pipeline ✅ **SHIPPED 2026-08-04**
+**Diagnosed:** suggestion generation was gated on `rule.actions[0].control === 'manual'`, a flag only the rule-builder UI sets. Measured on prod: **all 51 advertising rules carry `control = <none>`**, and the only 2 `AdsRuleSuggestion` rows in existence came from two throwaway rules named `__ea manual 178196…` during EA3 development in June. The Propose pipeline had never produced a suggestion from a real rule.
+
+Dry-run and Propose were conflated: `rule.dryRun` yields an execution row you'd have to go looking for, while the reviewable artifact sat behind a flag nothing in production sets. A dry-run rule was invisible by construction.
+
+**Fixed:** any advertising rule that matches and executes in dry-run now proposes. Volume is bounded by the existing upsert on `(ruleId, entityId, proposedKey)` — a recurring 15-min tick refreshes one row rather than piling up duplicates — and `generateSuggestionsFromExecution` already drops non-actionable results (failed / noChange / skipped / noActiveWindow).
+
+Excluded: the "test rule" endpoint, via a new explicit `isTestRun` flag. **Not** excluded: `forceDryRun`, which the cron sets account-wide when autonomy is `SUGGEST` — precisely when suggestions are the point.
+**Exit met:** every dry-run match produces a reviewable suggestion. 6 regression tests.
 
 ### ADX.3 — Attribution *(read-only; narrower than originally scoped)*
 `userId` already carries `automation:rank-defend-<id>`, so this is smaller than §1.10b assumed. Close the real gaps: **10,348 log rows with null attribution**, 2,386 tagged `user:anonymous`. Add the reasoning payload — metric, threshold, data window, sample size — so a write explains itself. Ship a unified change history filterable by source, entity and field.

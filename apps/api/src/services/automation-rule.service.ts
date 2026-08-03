@@ -404,8 +404,15 @@ export interface EvaluateRuleArgs {
   ruleId: string
   context: unknown
   /** When true, force dry-run regardless of rule.dryRun. Used by the
-   *  "test rule" flow on the rule-builder UI. */
+   *  "test rule" flow on the rule-builder UI, and by the evaluator cron
+   *  when account autonomy is set to SUGGEST. */
   forceDryRun?: boolean
+  /** ADX.2 — set ONLY by the "test rule" endpoint. A test run is an operator
+   *  poking a rule with a hand-supplied context; it must not put proposals in
+   *  the Suggestions queue. Every other dry-run SHOULD, because a dry-run that
+   *  produces no reviewable artifact is invisible. Distinct from forceDryRun,
+   *  which the cron sets for the whole account under autonomy=SUGGEST. */
+  isTestRun?: boolean
 }
 
 export interface EvaluateRuleResult {
@@ -654,9 +661,29 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
     },
   })
 
-  // ES1 — Manual-control ads rules are propose-only: record each proposed action as a Suggestion
-  // for operator Approve/Dismiss (deduped per rule×entity×change). Fire-and-forget; never throws.
-  if (adsManualSuggest) {
+  // ES1 — record each proposed action as a Suggestion for operator Approve/Dismiss
+  // (deduped per rule×entity×change). Fire-and-forget; never throws.
+  //
+  // ADX.2 — this used to be gated on `adsManualSuggest`, i.e. actions[0].control === 'manual',
+  // a flag only the rule-builder UI sets. Measured on prod 2026-08-04: all 51 advertising rules
+  // carry control=<none>, and the only 2 AdsRuleSuggestion rows in existence came from two
+  // throwaway rules named "__ea manual 178196…" during EA3 development in June. The Propose
+  // pipeline had never produced a suggestion from a real rule.
+  //
+  // Dry-run and Propose were conflated. `rule.dryRun` yields an execution row you'd have to go
+  // looking for; the reviewable artifact was locked behind a flag nothing in production sets. So
+  // a dry-run rule was invisible by construction — which is most of why the automation layer
+  // felt uncontrollable even where it did run.
+  //
+  // Now: ANY advertising rule that matched and executed in dry-run proposes. That is what
+  // Propose mode means. Volume is bounded by the upsert on (ruleId, entityId, proposedKey) —
+  // a recurring 15-min tick refreshes one row rather than piling up duplicates — and
+  // generateSuggestionsFromExecution already drops non-actionable results (failed, noChange,
+  // skipped, noActiveWindow).
+  //
+  // Excluded: isTestRun. Not forceDryRun — the cron sets that for the whole account when
+  // autonomy is SUGGEST, which is precisely when suggestions are the point.
+  if (rule.domain === 'advertising' && dryRun && !args.isTestRun) {
     void import('./advertising/ads-suggestions.service.js').then((m) =>
       m.generateSuggestionsFromExecution({
         ruleId: rule.id, ruleName: rule.name, trigger: rule.trigger, executionId: exec.id,

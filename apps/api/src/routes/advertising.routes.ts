@@ -5940,13 +5940,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       // Allow testing disabled rules — temporarily flip + flip back.
       await prisma.automationRule.update({ where: { id }, data: { enabled: true } })
       try {
-        const result = await evaluateRule({ ruleId: id, context: body.context, forceDryRun: true })
+        const result = await evaluateRule({ ruleId: id, context: body.context, forceDryRun: true, isTestRun: true })
         return { result }
       } finally {
         await prisma.automationRule.update({ where: { id }, data: { enabled: false } })
       }
     }
-    const result = await evaluateRule({ ruleId: id, context: body.context, forceDryRun: true })
+    const result = await evaluateRule({ ruleId: id, context: body.context, forceDryRun: true, isTestRun: true })
     return { result }
   })
 

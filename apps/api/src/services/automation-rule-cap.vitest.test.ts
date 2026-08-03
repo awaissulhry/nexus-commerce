@@ -32,6 +32,19 @@ vi.mock('../db.js', () => ({
   },
 }))
 
+// ADX.2 — the Propose pipeline. genSuggestions is the artifact an operator actually reviews.
+const genSuggestions = vi.fn(async () => 1)
+vi.mock('./advertising/ads-suggestions.service.js', () => ({
+  generateSuggestionsFromExecution: genSuggestions,
+}))
+vi.mock('./advertising/ads-rule-adapter.service.js', () => ({
+  maybeTranslateAdsRule: () => null,
+}))
+vi.mock('./ads-execution-events.service.js', () => ({ publishAdsExecution: vi.fn() }))
+
+/** The suggestion call is fire-and-forget behind a dynamic import; let the microtasks drain. */
+const flush = () => new Promise((r) => setTimeout(r, 0))
+
 const RULE = {
   id: 'rule-1',
   name: 'Bid optimization (profit-native)',
@@ -54,6 +67,7 @@ beforeEach(() => {
   execCount.mockClear()
   ruleUpdate.mockClear()
   ruleFindUnique.mockClear()
+  genSuggestions.mockClear()
 })
 
 describe('daily cap — the ADX.1 ratchet', () => {
@@ -105,12 +119,95 @@ describe('daily cap — the ADX.1 ratchet', () => {
 
     for (let i = 0; i < 25; i++) {
       const r = await evaluateRule({
-        rule: RULE as never,
+        ruleId: 'rule-1',
         context: { trigger: 'SCHEDULE', marketplace: 'IT' },
-      } as never)
+      })
       expect(r.status).toBe('CAP_EXCEEDED')
     }
     // Pre-fix this produced 25 new rows, each raising the count that caused them.
     expect(execCreate).not.toHaveBeenCalled()
+  })
+})
+
+describe('ADX.2 — a dry-run must produce a reviewable proposal', () => {
+  it('an ordinary advertising rule in dry-run emits suggestions', async () => {
+    // No control='manual' anywhere — which is true of all 51 rules on prod.
+    execCount.mockResolvedValueOnce(0)
+
+    const r = await evaluateRule({
+      ruleId: 'rule-1',
+      context: { trigger: 'SCHEDULE', marketplace: 'IT', campaign: { id: 'camp-1', name: 'GALE|IT' } },
+    })
+
+    expect(r.status).toBe('DRY_RUN')
+    await flush()
+    // THE REGRESSION: gated on actions[0].control === 'manual', this never fired in production.
+    expect(genSuggestions).toHaveBeenCalledTimes(1)
+    expect(genSuggestions.mock.calls[0]?.[0]).toMatchObject({ ruleId: 'rule-1' })
+  })
+
+  it('autonomy=SUGGEST (cron forceDryRun) still proposes — that is the whole point of the mode', async () => {
+    execCount.mockResolvedValueOnce(0)
+    ruleFindUnique.mockResolvedValueOnce({ ...RULE, dryRun: false })
+
+    await evaluateRule({
+      ruleId: 'rule-1',
+      context: { trigger: 'SCHEDULE', marketplace: 'IT', campaign: { id: 'camp-1', name: 'GALE|IT' } },
+      forceDryRun: true,
+    })
+
+    await flush()
+    expect(genSuggestions).toHaveBeenCalledTimes(1)
+  })
+
+  it('the "test rule" endpoint does NOT pollute the queue', async () => {
+    execCount.mockResolvedValueOnce(0)
+
+    await evaluateRule({
+      ruleId: 'rule-1',
+      context: { trigger: 'SCHEDULE', marketplace: 'IT', campaign: { id: 'camp-1', name: 'GALE|IT' } },
+      forceDryRun: true,
+      isTestRun: true,
+    })
+
+    await flush()
+    expect(genSuggestions).not.toHaveBeenCalled()
+  })
+
+  it('a live (non-dry-run) advertising rule acts instead of proposing', async () => {
+    execCount.mockResolvedValueOnce(0)
+    ruleFindUnique.mockResolvedValueOnce({ ...RULE, dryRun: false })
+
+    const r = await evaluateRule({
+      ruleId: 'rule-1',
+      context: { trigger: 'SCHEDULE', marketplace: 'IT', campaign: { id: 'camp-1', name: 'GALE|IT' } },
+    })
+
+    expect(r.status).not.toBe('DRY_RUN')
+    await flush()
+    expect(genSuggestions).not.toHaveBeenCalled()
+  })
+
+  it('a non-advertising rule is untouched by this path', async () => {
+    execCount.mockResolvedValueOnce(0)
+    ruleFindUnique.mockResolvedValueOnce({ ...RULE, domain: 'replenishment' })
+
+    await evaluateRule({ ruleId: 'rule-1', context: { trigger: 'SCHEDULE' } })
+
+    await flush()
+    expect(genSuggestions).not.toHaveBeenCalled()
+  })
+
+  it('a capped rule proposes nothing — no execution, no proposal', async () => {
+    execCount.mockResolvedValueOnce(99)
+
+    const r = await evaluateRule({
+      ruleId: 'rule-1',
+      context: { trigger: 'SCHEDULE', marketplace: 'IT', campaign: { id: 'camp-1', name: 'GALE|IT' } },
+    })
+
+    expect(r.status).toBe('CAP_EXCEEDED')
+    await flush()
+    expect(genSuggestions).not.toHaveBeenCalled()
   })
 })
