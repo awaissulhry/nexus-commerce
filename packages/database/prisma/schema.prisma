@@ -14152,7 +14152,14 @@ model AdSchedule {
   groupId          String?
   group            RankScheduleGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
 
-  @@index([campaignId])
+  // C2b — ONE CAMPAIGN, ONE SCHEDULE, enforced by the database rather than by convention.
+  // saveRankScheduleGroup already assumes it: it does findFirst({ where: { campaignId } }) and
+  // rebinds whatever it finds, so a second row for the same campaign would be silently hijacked
+  // and two crons could hold the same campaign to different ranks. The integrity check detects
+  // that; this makes it impossible.
+  // Also means one campaign cannot hold BOTH a classic dayparting row and a rank row — which the
+  // save path could not have handled correctly anyway.
+  @@unique([campaignId])
   @@index([enabled])
   @@index([groupId])
 }

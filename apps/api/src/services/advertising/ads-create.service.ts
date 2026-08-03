@@ -890,13 +890,17 @@ export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Prom
     const perCamp = overrides[cid]
     const memberName = nameById.get(cid) ? `${nameById.get(cid)} — ${name}` : name
     const data = { name: memberName, windows: windows as never, timezone: tz, defaultTargetKey: input.defaultTargetKey ?? null, targetOverrides: (perCamp ?? {}) as never, enabled }
-    const existing = await prisma.adSchedule.findFirst({ where: { campaignId: cid }, select: { id: true, groupId: true } })
-    if (existing) {
-      if (existing.groupId && existing.groupId !== group.id) moved++
-      await prisma.adSchedule.update({ where: { id: existing.id }, data: { ...data, groupId: group.id } })
-    } else {
-      await prisma.adSchedule.create({ data: { ...data, campaignId: cid, groupId: group.id } })
-    }
+    // C2b — now that campaignId is UNIQUE this is a real upsert rather than a read-then-branch.
+    // The old shape had a race: two concurrent saves both saw no existing row and both created one,
+    // which is how a campaign ended up with two schedules in the first place. The constraint makes
+    // that impossible and the upsert makes it correct instead of an error.
+    const existing = await prisma.adSchedule.findFirst({ where: { campaignId: cid }, select: { groupId: true } })
+    if (existing?.groupId && existing.groupId !== group.id) moved++
+    await prisma.adSchedule.upsert({
+      where: { campaignId: cid },
+      update: { ...data, groupId: group.id },
+      create: { ...data, campaignId: cid, groupId: group.id },
+    })
   }
   // Campaigns removed from the group → drop their (now-orphaned) execution rows.
   await prisma.adSchedule.deleteMany({ where: { groupId: group.id, campaignId: { notIn: campaignIds.length ? campaignIds : ['__none__'] } } })
