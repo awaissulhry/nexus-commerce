@@ -30,8 +30,9 @@
  *
  * Daily-cap enforcement: before executing, the engine counts today's
  * executions for the rule and aborts if maxExecutionsPerDay would be
- * exceeded. Status of the aborted execution = 'FAILED' with
- * errorMessage='DAILY_CAP_EXCEEDED'.
+ * exceeded. A cap abort returns status 'CAP_EXCEEDED' and writes NO
+ * execution row — see the long note at the check itself (ADX.1); writing
+ * one made the counter feed itself and killed the engine for months.
  *
  * Per-execution value cap: actions that spend (e.g. create_po) report
  * an estimated EUR-cents value back. The engine compares against
@@ -513,29 +514,48 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
   }
 
   // Daily-cap enforcement before dispatching anything.
+  //
+  // ADX.1 — this block used to be a self-ratcheting counter, and it took the whole
+  // automation engine down for months without a single visible symptom.
+  //
+  // The bug: the cap counted EVERY execution row for today, and then, on rejection,
+  // WROTE ANOTHER execution row. So the moment a rule reached its cap, each following
+  // tick appended a CAP_EXCEEDED row, which raised the number the next tick compared
+  // against. The count could never fall back within a day, and every rejection fed the
+  // thing doing the rejecting. Measured on prod 2026-08-04: 693,503 FAILED executions,
+  // 0 SUCCESS ever; one cap-2 rule had 2 legitimate runs and 790 self-inflicted
+  // rejections in a single day; 96.4% of all engine work was the engine refusing itself.
+  //
+  // Two changes close it:
+  //   1. A cap rejection no longer writes an execution row. Executions record work that
+  //      happened; a refusal is not work. This alone breaks the feedback loop.
+  //   2. The count ignores historical CAP_EXCEEDED rows, so the ~693k already on prod
+  //      don't keep the cap tripped until they're purged.
+  //
+  // Deliberately NOT changed: dry-run executions still count toward the cap. Excluding
+  // them looks right (a dry-run spends nothing) but this cap is also the only bound on
+  // evaluation churn — a rule can match once per entity per tick, and with 216 campaigns
+  // an uncapped dry-run rule would write tens of thousands of rows a day. The cap governs
+  // both live actions and dry-run churn; SPEND is bounded separately by maxValueCentsEur
+  // and maxDailyAdSpendCentsEur. The right fix for "the cap is too tight" is a correctly
+  // sized cap, not an exempt category.
   if (rule.maxExecutionsPerDay != null) {
     const dayStart = new Date()
     dayStart.setUTCHours(0, 0, 0, 0)
     const todayCount = await prisma.automationRuleExecution.count({
-      where: { ruleId: rule.id, startedAt: { gte: dayStart } },
+      where: {
+        ruleId: rule.id,
+        startedAt: { gte: dayStart },
+        // Never count refusals — including the pre-ADX.1 rows still on prod.
+        NOT: { errorMessage: 'DAILY_CAP_EXCEEDED' },
+      },
     })
     if (todayCount >= rule.maxExecutionsPerDay) {
-      const exec = await prisma.automationRuleExecution.create({
-        data: {
-          ruleId: rule.id,
-          triggerData: args.context as object,
-          actionResults: [],
-          dryRun: rule.dryRun || !!args.forceDryRun,
-          status: 'FAILED',
-          errorMessage: 'DAILY_CAP_EXCEEDED',
-          finishedAt: new Date(),
-          durationMs: Date.now() - startedAt,
-        },
-        select: { id: true },
-      })
+      // No execution row: that is the bug. Still publish to the activity feed so a
+      // capped rule is visible rather than silent.
       void import('./ads-execution-events.service.js').then(m => {
         const ctx = extractExecutionContext(args.context)
-        m.publishAdsExecution({ type: 'automation.rule.fired', executionId: exec.id, ruleId: rule.id, ruleName: rule.name, trigger: rule.trigger, status: 'CAP_EXCEEDED', dryRun: rule.dryRun, durationMs: Date.now() - startedAt, ...ctx, actionCount: 0, ts: Date.now() })
+        m.publishAdsExecution({ type: 'automation.rule.fired', executionId: null, ruleId: rule.id, ruleName: rule.name, trigger: rule.trigger, status: 'CAP_EXCEEDED', dryRun: rule.dryRun, durationMs: Date.now() - startedAt, ...ctx, actionCount: 0, ts: Date.now() })
       }).catch(() => {})
       return {
         ruleId: rule.id,
@@ -543,7 +563,6 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
         status: 'CAP_EXCEEDED',
         actionResults: [],
         durationMs: Date.now() - startedAt,
-        executionId: exec.id,
         errorMessage: 'DAILY_CAP_EXCEEDED',
       }
     }

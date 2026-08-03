@@ -9,7 +9,10 @@
 
 export interface AdsExecutionEvent {
   type: 'automation.rule.fired'
-  executionId: string
+  // ADX.1 — null for CAP_EXCEEDED: a cap refusal is not work, so it no longer
+  // persists an AutomationRuleExecution row (writing one made the daily-cap
+  // counter feed itself). The event still fires so a capped rule stays visible.
+  executionId: string | null
   ruleId: string
   ruleName: string
   trigger: string

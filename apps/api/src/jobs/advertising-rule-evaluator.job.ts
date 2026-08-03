@@ -64,6 +64,9 @@ interface TickSummary {
   campaignBudgetContexts: number
   totalEvaluations: number
   totalMatches: number
+  // ADX.1 — outcome counts so a failing engine is visible in the cron summary.
+  totalCapped: number
+  totalFailed: number
   durationMs: number
 }
 
@@ -358,9 +361,14 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
   trigger: string,
   contexts: C[],
   forceDryRun = false,
-): Promise<{ evaluations: number; matches: number }> {
+): Promise<{ evaluations: number; matches: number; capped: number; failed: number }> {
   let evaluations = 0
   let matches = 0
+  // ADX.1 — outcome counts, not just volume. The engine ran with a 96% failure
+  // rate for months and the cron summary said only "evals=N matches=M", which
+  // looks healthy either way. Counting capped/failed is what makes that visible.
+  let capped = 0
+  let failed = 0
   for (const ctx of contexts) {
     // scopeMarketplace filter is enforced when querying the rule list:
     // we pre-fetch rules and skip contexts whose marketplace doesn't
@@ -383,8 +391,10 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
     })
     evaluations += results.length
     matches += results.filter((r) => r.matched).length
+    capped += results.filter((r) => r.status === 'CAP_EXCEEDED').length
+    failed += results.filter((r) => r.status === 'FAILED').length
   }
-  return { evaluations, matches }
+  return { evaluations, matches, capped, failed }
 }
 
 // ── CAMPAIGN_PERFORMANCE_BUDGET (AME.12) ──────────────────────────────
@@ -875,7 +885,7 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
   // controls). Operable from Railway env or flipped via /autonomy/pause-all.
   if (process.env.NEXUS_ADS_AUTOMATION_KILL === '1') {
     logger.warn('[ads-rule-evaluator] global kill-switch active — skipping all rule evaluation')
-    return { fbaAgeContexts: 0, profitabilityContexts: 0, cacSpikeContexts: 0, underperformContexts: 0, campaignBudgetContexts: 0, totalEvaluations: 0, totalMatches: 0, durationMs: Date.now() - startedAt }
+    return { fbaAgeContexts: 0, profitabilityContexts: 0, cacSpikeContexts: 0, underperformContexts: 0, campaignBudgetContexts: 0, totalEvaluations: 0, totalMatches: 0, totalCapped: 0, totalFailed: 0, durationMs: Date.now() - startedAt }
   }
   // TD.0 — runtime halt (circuit-breaker / operator) + OFF autonomy dial, set
   // via AdsAutomationState without a redeploy. Same effect as the env kill.
@@ -886,7 +896,7 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     const { isAutomationHalted, shouldForceDryRun } = await import('../services/advertising/ads-automation-state.service.js')
     if (await isAutomationHalted()) {
       logger.warn('[ads-rule-evaluator] automation halted (AdsAutomationState) — skipping all rule evaluation')
-      return { fbaAgeContexts: 0, profitabilityContexts: 0, cacSpikeContexts: 0, underperformContexts: 0, campaignBudgetContexts: 0, totalEvaluations: 0, totalMatches: 0, durationMs: Date.now() - startedAt }
+      return { fbaAgeContexts: 0, profitabilityContexts: 0, cacSpikeContexts: 0, underperformContexts: 0, campaignBudgetContexts: 0, totalEvaluations: 0, totalMatches: 0, totalCapped: 0, totalFailed: 0, durationMs: Date.now() - startedAt }
     }
     forceDryRun = await shouldForceDryRun()
   } catch { /* state unavailable → fall through (env kill remains the backstop) */ }
@@ -940,6 +950,8 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
 
   let totalEvaluations = 0
   let totalMatches = 0
+  let totalCapped = 0
+  let totalFailed = 0
   const passes: Array<[string, Array<{ marketplace: string | null }>]> = [
     ['FBA_AGE_THRESHOLD_REACHED', fbaAge],
     ['AD_SPEND_PROFITABILITY_BREACH', profitability],
@@ -967,6 +979,8 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     const r = await applyMarketplaceScope(trigger, contexts, forceDryRun)
     totalEvaluations += r.evaluations
     totalMatches += r.matches
+    totalCapped += r.capped
+    totalFailed += r.failed
   }
 
   const summary: TickSummary = {
@@ -977,10 +991,12 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     campaignBudgetContexts: campaignBudget.length,
     totalEvaluations,
     totalMatches,
+    totalCapped,
+    totalFailed,
     durationMs: Date.now() - startedAt,
   }
   lastRunAt = new Date()
-  lastSummary = `fba=${fbaAge.length} prof=${profitability.length} cac=${cacSpike.length} under=${underperform.length} schedule=${scheduleContexts.length} evals=${totalEvaluations} matches=${totalMatches} durationMs=${summary.durationMs}`
+  lastSummary = `fba=${fbaAge.length} prof=${profitability.length} cac=${cacSpike.length} under=${underperform.length} schedule=${scheduleContexts.length} evals=${totalEvaluations} matches=${totalMatches} capped=${totalCapped} failed=${totalFailed} durationMs=${summary.durationMs}`
   return summary
 }
 
