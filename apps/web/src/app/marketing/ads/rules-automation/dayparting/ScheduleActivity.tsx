@@ -11,9 +11,11 @@
  * NOT to be confused with ScheduleVersions, which records what the OPERATOR changed about the plan
  * ("you moved the Friday window"). This one is what the ENGINE changed on Amazon.
  *
- * Data: GET /advertising/rank-schedule-groups/:id/activity — CampaignBidHistory joined to
- * AdMutation for queued writes and to the inline audit row for placement writes, which push to
- * Amazon directly and so have no queue row of their own (HX.2/HX.3).
+ * Data: GET /advertising/changes?groupId= — the UNIFIED feed (HX.4), the same one the account-wide
+ * Change Log reads. It used to have its own endpoint doing the same joins; two implementations of
+ * "join intent to delivery" would drift, and a fix to one would silently miss the other. The feed
+ * resolves a group to its member schedules' actor strings server-side, because a group has N member
+ * AdSchedule rows and therefore N actors.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { H10Select } from '../../campaigns/FilterDropdown'
@@ -21,8 +23,10 @@ import { getBackendUrl } from '@/lib/backend-url'
 
 export interface Delivery { state: string; attempts: number; lastError: string | null }
 export interface ActRow {
-  id: string; at: string; campaignId: string | null; campaignName: string | null
-  entityType: string; entityId: string; field: string
+  id: string; at: string
+  campaign: { id: string; name: string | null } | null
+  entity: { type: string; id: string; name: string | null }
+  field: string
   oldValue: string | null; newValue: string | null; reason: string | null
   delivery: Delivery | null
 }
@@ -62,15 +66,16 @@ export function ScheduleActivity({ groupId, showAllLink = true }: { groupId: str
   useEffect(() => {
     let alive = true
     setLoading(true)
-    const qs = new URLSearchParams({ limit: '80' })
+    const qs = new URLSearchParams({ groupId, limit: '80' })
     if (campaignId) qs.set('campaignId', campaignId)
-    void fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/${groupId}/activity?${qs.toString()}`, { cache: 'no-store' })
+    void fetch(`${getBackendUrl()}/api/advertising/changes?${qs.toString()}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((j) => {
         if (!alive) return
         setItems(Array.isArray(j?.items) ? j.items : [])
-        // From the UNFILTERED member list, so narrowing to one campaign never empties the picker
-        // you would need to widen it again.
+        // The feed returns the group's FULL membership on a group scope, not just the campaigns
+        // present in this page of rows — so narrowing to one campaign never empties the picker you
+        // would need to widen it again.
         if (Array.isArray(j?.members) && j.members.length) setMembers(j.members)
       })
       .catch(() => { if (alive) setItems([]) })
@@ -123,7 +128,7 @@ export function ScheduleActivity({ groupId, showAllLink = true }: { groupId: str
                 <span className="fld">{fieldLabel(row.field)}</span>
                 <span className="chg">
                   <b>{fmtValue(row.oldValue, row.field)}</b> → <b>{fmtValue(row.newValue, row.field)}</b>
-                  {row.campaignName && <i title={row.campaignName}>{row.campaignName}</i>}
+                  {row.campaign?.name && <i title={row.campaign.name}>{row.campaign.name}</i>}
                   {row.reason && <em title={row.reason}>{row.reason}</em>}
                 </span>
                 {/* Intent and delivery stay separate: a change we asked for is not a change Amazon took. */}

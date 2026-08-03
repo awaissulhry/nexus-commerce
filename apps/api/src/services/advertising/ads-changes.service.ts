@@ -31,6 +31,9 @@ export interface ChangeRow {
   source: ChangeSource
   origin: ChangeOrigin
   entity: { type: string; id: string; name: string | null }
+  /** The campaign this change belongs to, when one is resolvable. A bid change is on an
+   *  AD_TARGET, but an operator reads it as "which campaign moved". */
+  campaign: { id: string; name: string | null } | null
   field: string
   oldValue: string | null
   newValue: string | null
@@ -140,6 +143,10 @@ function dedupe(operations: ChangeRow[], fields: ChangeRow[]): ChangeRow[] {
 }
 
 export interface ListChangesOpts {
+  /** Scope to one rank-schedule group: resolved to its member schedules' actor strings. A group
+   *  has N member AdSchedule rows and therefore N actors, which is why a single originId cannot
+   *  express it. */
+  groupId?: string
   from?: Date
   to?: Date
   source?: ChangeSource
@@ -155,7 +162,21 @@ export interface ListChangesOpts {
 
 const UNDO_WINDOW_MS = 24 * 3600 * 1000
 
-export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: ChangeRow[]; count: number; from: Date; to: Date }> {
+export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: ChangeRow[]; count: number; from: Date; to: Date; members: Array<{ campaignId: string; name: string }> }> {
+  // A group scope resolves to its members' actor strings up front, so the DB filters on
+  // changedBy rather than post-filtering a wide read.
+  let groupActors: string[] | null = null
+  let groupMembers: Array<{ campaignId: string; name: string }> = []
+  if (opts.groupId) {
+    const members = await prisma.adSchedule.findMany({ where: { groupId: opts.groupId }, select: { id: true, campaignId: true } })
+    groupActors = members.map((m) => `automation:rank-defend-${m.id}`)
+    if (members.length) {
+      const camps = await prisma.campaign.findMany({ where: { id: { in: members.map((m) => m.campaignId) } }, select: { id: true, name: true } })
+      const nm = new Map(camps.map((c) => [c.id, c.name]))
+      groupMembers = members.map((m) => ({ campaignId: m.campaignId, name: nm.get(m.campaignId) ?? m.campaignId }))
+    }
+  }
+
   const to = opts.to ?? new Date()
   const from = opts.from ?? new Date(to.getTime() - 30 * 24 * 3600 * 1000)
   const limit = Math.max(1, Math.min(500, opts.limit ?? 100))
@@ -171,6 +192,7 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
         ...(opts.entityId ? { entityId: opts.entityId } : {}),
         ...(opts.campaignId ? { campaignId: opts.campaignId } : {}),
         ...(opts.field ? { field: opts.field } : {}),
+        ...(groupActors ? { changedBy: { in: groupActors } } : {}),
       },
       orderBy: { changedAt: 'desc' },
       take: fetchN,
@@ -181,6 +203,7 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
         createdAt: { gte: from, lte: to },
         ...(opts.entityType ? { entityType: opts.entityType } : {}),
         ...(opts.entityId ? { entityId: opts.entityId } : {}),
+        ...(groupActors ? { userId: { in: groupActors } } : {}),
       },
       orderBy: { createdAt: 'desc' },
       take: fetchN,
@@ -194,6 +217,7 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
     return {
       id: `h:${h.id}`, at: h.changedAt, actor: h.changedBy, source, origin,
       entity: { type: h.entityType, id: h.entityId, name: null },
+      campaign: h.campaignId ? { id: h.campaignId, name: null } : null,
       field: h.field, oldValue: h.oldValue, newValue: h.newValue, reason: h.reason,
       delivery: null,
       // Mirrors the rule /campaigns/:id/history already applies: only a target bid, only while the
@@ -208,6 +232,7 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
     return {
       id: `a:${o.id}`, at: o.createdAt, actor: o.userId, source, origin,
       entity: { type: o.entityType, id: o.entityId, name: null },
+      campaign: o.entityType === 'CAMPAIGN' ? { id: o.entityId, name: null } : null,
       field: o.actionType, oldValue: null, newValue: after.note ?? null,
       reason: after.error ?? (o.rolledBackAt ? 'rolled back' : null),
       delivery: o.amazonResponseStatus
@@ -216,6 +241,30 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       undoable: false,
     }
   })
+
+  /**
+   * HX.3, carried over — delivery for the INLINE path.
+   *
+   * Placement writes push to Amazon directly rather than through the queue, so they create no
+   * AdMutation row and the join below finds nothing for them. Their outcome lives on the
+   * AdvertisingActionLog row instead (truthful since HX.1). Indexed here BEFORE dedupe, because
+   * dedupe is about to discard exactly those op rows as duplicates of the field rows.
+   * Without this every placement change reads "no delivery record" — technically true, and
+   * misleading, since we do know what happened.
+   */
+  const PLACEMENT_FIELDS = new Set(['PLACEMENT_TOP', 'PLACEMENT_REST_OF_SEARCH', 'PLACEMENT_PRODUCT_PAGE'])
+  const placementOps = ops.filter((o) => o.actionType === 'update_placement_bidding')
+  const placementByEntity = new Map<string, typeof placementOps>()
+  for (const o of placementOps) { const a = placementByEntity.get(o.entityId) ?? []; a.push(o); placementByEntity.set(o.entityId, a) }
+  for (const r of fieldRows) {
+    if (!PLACEMENT_FIELDS.has(r.field)) continue
+    const cands = placementByEntity.get(r.entity.id)
+    if (!cands?.length) continue
+    let best = cands[0], gap = Math.abs(cands[0].createdAt.getTime() - r.at.getTime())
+    for (const c of cands.slice(1)) { const g = Math.abs(c.createdAt.getTime() - r.at.getTime()); if (g < gap) { gap = g; best = c } }
+    const err = (best.payloadAfter as { error?: string } | null)?.error ?? null
+    r.delivery = { state: best.amazonResponseStatus === 'FAILED' ? 'FAILED' : 'APPLIED', attempts: 1, lastError: err }
+  }
 
   let items = [...fieldRows, ...dedupe(opRows, fieldRows)].sort((a, b) => b.at.getTime() - a.at.getTime())
 
@@ -233,7 +282,7 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       const byKey = new Map<string, typeof muts>()
       for (const m of muts) { const k = key(m.entityId, m.field, m.previousValue, m.intendedValue); const a = byKey.get(k) ?? []; a.push(m); byKey.set(k, a) }
       for (const r of items) {
-        if (r.delivery || !r.id.startsWith('h:')) continue
+        if (r.delivery || !r.id.startsWith('h:')) continue // inline delivery already resolved above
         const cands = byKey.get(key(r.entity.id, r.field, r.oldValue, r.newValue))
         if (!cands?.length) continue
         let best = cands[0], gap = Math.abs(cands[0].createdAt.getTime() - r.at.getTime())
@@ -253,15 +302,25 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
   await resolveOrigins(items.slice(0, limit))
   items = items.slice(0, limit)
 
-  // Campaign names, so a row reads as a campaign rather than a cuid.
-  const campIds = [...new Set(items.filter((r) => r.entity.type === 'CAMPAIGN').map((r) => r.entity.id))]
+  // Campaign names, so a row reads as a campaign rather than a cuid — for the entity itself and
+  // for the campaign a target-level change belongs to.
+  const campIds = [...new Set([
+    ...items.filter((r) => r.entity.type === 'CAMPAIGN').map((r) => r.entity.id),
+    ...items.map((r) => r.campaign?.id).filter(Boolean) as string[],
+  ])]
   if (campIds.length) {
     try {
       const camps = await prisma.campaign.findMany({ where: { id: { in: campIds } }, select: { id: true, name: true } })
       const byId = new Map(camps.map((c) => [c.id, c.name]))
-      for (const r of items) if (r.entity.type === 'CAMPAIGN') r.entity.name = byId.get(r.entity.id) ?? null
+      for (const r of items) {
+        if (r.entity.type === 'CAMPAIGN') r.entity.name = byId.get(r.entity.id) ?? null
+        if (r.campaign) r.campaign.name = byId.get(r.campaign.id) ?? null
+      }
     } catch { /* best-effort */ }
   }
 
-  return { items, count: items.length, from, to }
+  // `members` rides along only on a group scope. A client offering a per-campaign filter needs the
+  // group's FULL membership, not just the campaigns that happen to appear in this page of rows —
+  // otherwise narrowing to one campaign empties the picker you would need to widen it again.
+  return { items, count: items.length, from, to, members: groupMembers }
 }
