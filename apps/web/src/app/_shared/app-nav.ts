@@ -202,7 +202,22 @@ export function buildAppNav(counts: SidebarCounts, conn: Connections): RailNavIt
     },
 
     // ── Marketing ────────────────────────────────────────────────
-    { label: 'Advertising', href: '/marketing/advertising/campaigns', Icon: Megaphone },
+    // H1.1 — the ads console at /marketing/ads had NO entry in this menu, so every operator who
+    // clicked Advertising landed on the legacy tree and the current console was reachable only by
+    // typing its URL. Advertising now opens the console; the older surface keeps an entry because
+    // the H1 audit measured 25 areas there (~7,900 lines — automation, budget-pools, reports,
+    // search-terms, storage-age) with no equivalent yet. Repointing without keeping that link would
+    // strand working pages. Additive: nothing is removed, and nav-permissions already binds BOTH
+    // paths to `pages.advertising`, so access is unchanged either way.
+    {
+      label: 'Advertising',
+      href: '/marketing/ads',
+      Icon: Megaphone,
+      children: [
+        { label: 'Ads Console', href: '/marketing/ads' },
+        { label: 'Advertising (classic)', href: '/marketing/advertising/campaigns' },
+      ],
+    },
     { label: 'Calendar', href: '/marketing/calendar', Icon: CalendarDays },
     { label: 'Content', href: '/marketing/content', Icon: ImageIcon },
     { label: 'Reviews', href: '/marketing/reviews', Icon: Star },
