@@ -175,13 +175,22 @@ export function ArmPreview({ groupId, campaignIds, windows, baselineKey, targets
                    · A Min-bid target was described as "up to 900% bias · no ACoS cap" when it in
                      fact floors bids to ~2¢ and never reaches the placement stage at all.
                 */}
+                {/*
+                  MB.4 — the CPC ceiling now genuinely BINDS the climb (it was read by nothing
+                  before), so "up to 900% bias · max CPC €2.00" would overstate the reach: on a
+                  €0.35 base bid that ceiling stops the multiplier at 471%. Where the cap lands
+                  depends on the campaigns' live base bids, which this panel cannot know — it
+                  also describes UNSAVED plans, with no campaign set to read. So it states the
+                  bound instead of inventing a number; the exact figure is in Next 24 hours,
+                  which is computed server-side from those bids.
+                */}
                 {t.pause ? (
                   <em>holds bids at the ~2¢ floor — delivery continues, prior bids restored after</em>
                 ) : t.allOut ? (
                   <em>
                     {band(t).floor}% → up to {band(t).ceiling}% bias · ignores the ACoS cap
                     {t.maxCpcCents != null
-                      ? ` · max CPC €${(t.maxCpcCents / 100).toFixed(2)}`
+                      ? ` · or wherever the €${(t.maxCpcCents / 100).toFixed(2)} CPC ceiling binds first`
                       : ' · NO CPC ceiling — nothing bounds the bid but Amazon’s 900% cap'}
                   </em>
                 ) : (
@@ -190,7 +199,9 @@ export function ArmPreview({ groupId, campaignIds, windows, baselineKey, targets
                       ? `${band(t).floor}% → up to ${band(t).ceiling}% bias`
                       : `holds ${band(t).floor}% bias`}
                     {t.acosCapPct != null ? ` · ACoS cap ${t.acosCapPct}%` : ' · no ACoS cap'}
-                    {t.maxCpcCents != null ? ` · max CPC €${(t.maxCpcCents / 100).toFixed(2)}` : ''}
+                    {t.maxCpcCents != null
+                      ? ` · ${band(t).ceiling > band(t).floor ? `or wherever the €${(t.maxCpcCents / 100).toFixed(2)} CPC ceiling binds first` : `max CPC €${(t.maxCpcCents / 100).toFixed(2)}`}`
+                      : ''}
                   </em>
                 )}
               </span>

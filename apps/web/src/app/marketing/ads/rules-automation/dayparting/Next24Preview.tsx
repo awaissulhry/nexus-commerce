@@ -32,6 +32,8 @@ interface Row {
   floorPct: number | null
   ceilingPct: number | null
   canChase: boolean
+  /** MB.6 — set when the CPC ceiling, not the target's own Ceiling, is what stops the climb */
+  cpcCapPct?: number | null
   maxCpcCents: number | null
   acosCapPct: number | null
   allOut: boolean
@@ -210,7 +212,7 @@ export function Next24Preview({ groupId }: { groupId: string }) {
                     /* Green reads as "fine", which a climb WITHOUT a ceiling is not — an
                        unbounded row would otherwise show a reassuring colour beside its own red
                        "no ceiling" guardrail. A bounded climb stays green: that one IS fine. */
-                    <span className={h.unbounded ? 'chase risk' : 'chase'}><TrendingUp size={12} /> {h.floorPct}% → <b>{h.ceilingPct}%</b></span>
+                    <span className={h.unbounded ? 'chase risk' : 'chase'} title={h.cpcCapPct != null ? `The €${((h.maxCpcCents ?? 0) / 100).toFixed(2)} CPC ceiling stops the climb here — the target itself would allow more` : undefined}><TrendingUp size={12} /> {h.floorPct}% → <b>{h.ceilingPct}%</b>{h.cpcCapPct != null && <i className="capd"> CPC-capped</i>}</span>
                   ) : (
                     <span className="hold">hold {h.floorPct}%</span>
                   )}

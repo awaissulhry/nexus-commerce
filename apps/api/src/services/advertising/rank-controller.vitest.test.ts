@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveActiveTargetKey, computeStep, stepFor, isRankLoss, type RankTargetSpec } from './rank-controller.js'
+import { resolveActiveTargetKey, computeStep, stepFor, isRankLoss, type RankTargetSpec, cpcCapPct, strategyHeadroom } from './rank-controller.js'
 
 const T = (over: Partial<RankTargetSpec> = {}): RankTargetSpec => ({
   key: 'own-top', placement: 'PLACEMENT_TOP', targetISPct: 70, acosCapPct: 45,
@@ -142,4 +142,69 @@ describe('isRankLoss (RS.6 hourly proxy)', () => {
   it('within band → no loss', () => { expect(isRankLoss(15, 20)).toBe(false) })
   it('tiny baseline → no loss (not enough confidence to act)', () => { expect(isRankLoss(0, 3)).toBe(false) })
   it('exactly at the threshold → no loss (strict <)', () => { expect(isRankLoss(8, 20)).toBe(false) }) // 8 == 20*0.4
+})
+
+/**
+ * MB.4 — the CPC ceiling. This is the function that turns `maxCpcCents` from a stored
+ * decoration into an enforced limit, so the property that matters is arithmetic: at the
+ * returned cap, base bid × (1 + cap/100) × strategy headroom must not exceed the ceiling.
+ * A rounding error here overspends on every click of every all-out hour.
+ */
+describe('MB.4 cpcCapPct — the placement % a CPC ceiling permits', () => {
+  const effCpc = (base: number, pct: number, mult = 1) => base * (1 + pct / 100) * mult
+
+  it('returns null when there is nothing to cap', () => {
+    expect(cpcCapPct(null, 45)).toBeNull() // no ceiling set — today's behaviour for most targets
+    expect(cpcCapPct(200, null)).toBeNull() // no bids known → cannot breach anything
+    expect(cpcCapPct(200, 0)).toBeNull()
+    expect(cpcCapPct(0, 45)).toBeNull()
+  })
+
+  it('computes the cap from base bid and ceiling', () => {
+    // €0.45 base, €2.00 ceiling → 2.00/0.45 = 4.444× → +344%
+    expect(cpcCapPct(200, 45)).toEqual({ capPct: 344, baseAlone: false })
+  })
+
+  it('the capped bid never exceeds the ceiling, and one point more would', () => {
+    const cap = cpcCapPct(200, 45)!
+    expect(effCpc(45, cap.capPct)).toBeLessThanOrEqual(200)
+    expect(effCpc(45, cap.capPct + 1)).toBeGreaterThan(200)
+  })
+
+  it('FLOORS rather than rounds — rounding up would land over the ceiling', () => {
+    // Any base/ceiling pair whose exact cap is fractional must round DOWN.
+    for (const [ceil, base] of [[200, 45], [150, 37], [99, 13], [500, 111]] as const) {
+      const cap = cpcCapPct(ceil, base)!
+      expect(Number.isInteger(cap.capPct)).toBe(true)
+      expect(effCpc(base, cap.capPct)).toBeLessThanOrEqual(ceil)
+    }
+  })
+
+  it('halves the headroom for an up-and-down campaign, which Amazon may bid +100% again', () => {
+    const legacy = cpcCapPct(200, 45, strategyHeadroom('LEGACY_FOR_SALES'))!
+    const auto = cpcCapPct(200, 45, strategyHeadroom('AUTO_FOR_SALES'))!
+    expect(auto.capPct).toBeLessThan(legacy.capPct)
+    // the ceiling still holds once Amazon's own uplift is applied
+    expect(effCpc(45, auto.capPct, 2)).toBeLessThanOrEqual(200)
+  })
+
+  it('an unknown / absent bidding strategy takes no extra headroom', () => {
+    expect(strategyHeadroom(null)).toBe(1)
+    expect(strategyHeadroom('SOMETHING_NEW')).toBe(1)
+    expect(strategyHeadroom('MANUAL')).toBe(1)
+  })
+
+  it('base bid alone over the ceiling → cap 0 and SAY so; no multiplier can rescue it', () => {
+    const cap = cpcCapPct(50, 120)!
+    expect(cap).toEqual({ capPct: 0, baseAlone: true })
+  })
+
+  it('base bid exactly at the ceiling → 0%, and it is not a breach', () => {
+    expect(cpcCapPct(45, 45)).toEqual({ capPct: 0, baseAlone: false })
+  })
+
+  it('a generous ceiling caps above the 900% Amazon maximum — the band clamp still applies', () => {
+    // Not this function's job to know Amazon's 900 cap; it must not invent a limit either.
+    expect(cpcCapPct(10_000, 45)!.capPct).toBeGreaterThan(900)
+  })
 })

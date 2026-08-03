@@ -18,7 +18,7 @@ import cron from 'node-cron'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { computeStep, resolveActiveTargetKey, isRankLoss, type RankTargetSpec, type LaneSpec, type ScheduleWindow } from '../services/advertising/rank-controller.js'
+import { computeStep, resolveActiveTargetKey, isRankLoss, cpcCapPct, strategyHeadroom, type RankTargetSpec, type LaneSpec, type ScheduleWindow } from '../services/advertising/rank-controller.js'
 import { analyzeTopOfSearch, setSearchPlacement, buildBlendedAdjustments } from '../services/advertising/ads-top-of-search.service.js'
 import { sqpImpressionShareForAsins } from '../services/advertising/sqp.service.js'
 import { updateCampaignWithSync, updateAdGroupWithSync, type AdsActor } from '../services/advertising/ads-mutation.service.js'
@@ -151,7 +151,7 @@ export interface RankDefendSummary { evaluated: number; applied: number; decisio
 
 const pctOf = (f: number | null): number | null => (f != null ? Math.round(f * 100) : null)
 type SigMap = Map<string, { currentPct: number; topIS: number | null; topAcos: number | null }>
-interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; bidsSuppressedAt?: Date | null; bidsSuppressedFloorCents?: number | null; deliveryReasons?: string[] }
+interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; biddingStrategy?: string | null; bidsSuppressedAt?: Date | null; bidsSuppressedFloorCents?: number | null; deliveryReasons?: string[] }
 
 // RD.4 — one per-campaign decision body, shared by the schedule loop and the
 // product-plan fan-out. `write` gates ALL actuation (pause / resume / placement
@@ -224,7 +224,7 @@ async function applyBaseBidDirective(camp: CampRow, spec: RankTargetSpec, ctx: {
 
 async function decideAndMaybeApply(
   camp: CampRow, key: string, spec: RankTargetSpec, planId: string | null,
-  ctx: { write: boolean; actor: string; sigByCampaign: SigMap; lossByCampaign: Map<string, boolean>; suppressRaise?: boolean; sqpByCampaign?: Map<string, number | null> },
+  ctx: { write: boolean; actor: string; sigByCampaign: SigMap; lossByCampaign: Map<string, boolean>; suppressRaise?: boolean; sqpByCampaign?: Map<string, number | null>; maxBaseBidByCampaign?: Map<string, number> },
 ): Promise<{ decision: RankDefendDecision; applied: number }> {
   const sigRaw = ctx.sigByCampaign.get(camp.id) ?? { currentPct: 0, topIS: null, topAcos: null }
   const cdb = (camp.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
@@ -287,6 +287,18 @@ async function decideAndMaybeApply(
     try { await updateCampaignWithSync({ campaignId: camp.id, patch: { status: 'ENABLED' }, actor: ctx.actor as AdsActor, reason: 'rank defend — resume to hold the slot', applyImmediately: true } as never); applied++ } catch (e) { logger.warn('[rank-defend] resume failed', { campaignId: camp.id, error: (e as Error).message }) }
   }
   const loss = ctx.lossByCampaign.get(camp.id) ?? false
+  // MB.4 — the campaign's CPC ceiling, expressed as the highest placement % that still
+  // respects it. Computed once here and applied to every path below, so a blend cannot
+  // breach a ceiling the single-placement path honours.
+  const cpcCap = cpcCapPct(spec.maxCpcCents, ctx.maxBaseBidByCampaign?.get(camp.id), strategyHeadroom(camp.biddingStrategy))
+  const capNote = (from: number, to: number): string =>
+    ` · capped ${from}→${to}% by €${((spec.maxCpcCents ?? 0) / 100).toFixed(2)} CPC ceiling${cpcCap?.baseAlone ? ' (base bid ALONE exceeds it — lower the bids)' : ''}`
+  if (cpcCap?.baseAlone) {
+    // No multiplier can rescue this: even 0% placement pays more than the ceiling. Logged
+    // rather than notified because this evaluates every 15 minutes and a notification per
+    // tick would bury the alert it is trying to raise.
+    logger.warn('[rank-defend] base bid alone exceeds the CPC ceiling', { campaignId: camp.id, campaign: camp.name, maxCpcCents: spec.maxCpcCents, maxBaseBidCents: ctx.maxBaseBidByCampaign?.get(camp.id), strategy: camp.biddingStrategy })
+  }
   // C2 — never bid UP into a capped campaign (burns the fixed daily budget early + surrenders
   // the slot). Shared by both paths.
   const campOutOfBudget = (camp.deliveryReasons ?? []).includes('OUT_OF_BUDGET')
@@ -297,6 +309,7 @@ async function decideAndMaybeApply(
   if (spec.lanes && spec.lanes.length) {
     const laneDecisions: NonNullable<RankDefendDecision['lanes']> = []
     const driven: Array<{ placement: string; percentage: number }> = []
+    const capped: string[] = [] // MB.4 — lanes the CPC ceiling pulled back, named in the reason
     for (const lane of spec.lanes) {
       const laneCur = cdb.placementBidding?.find((x) => x.placement === lane.placement)?.percentage ?? 0
       const lTop = lane.placement === 'PLACEMENT_TOP'
@@ -305,6 +318,13 @@ async function decideAndMaybeApply(
       const dd = computeStep(laneToSpec(spec, lane), { currentPct: laneCur, achievedISFraction: laneIS, achievedAcosFraction: lTop ? sigRaw.topAcos : null, lossDetected: lTop ? loss : false })
       let toPct = dd.nextPct, act = dd.action
       if ((ctx.suppressRaise || campOutOfBudget) && act === 'raise') { toPct = laneCur; act = 'hold' }
+      // MB.4 — the ceiling binds every lane. The cap is a property of the campaign's bids,
+      // not of one placement, so a lane may not exceed it even while another sits below.
+      if (cpcCap && toPct > cpcCap.capPct) {
+        capped.push(`${shortPlace(lane.placement)} ${toPct}→${cpcCap.capPct}`)
+        toPct = cpcCap.capPct
+        act = toPct > laneCur ? 'raise' : toPct < laneCur ? 'lower' : 'hold'
+      }
       driven.push({ placement: lane.placement, percentage: toPct })
       laneDecisions.push({ placement: lane.placement, fromPct: laneCur, toPct, action: act })
     }
@@ -312,7 +332,7 @@ async function decideAndMaybeApply(
     const changed = !samePlacements(cdb.placementBidding ?? [], adjustments)
     // HX.1 — computed BEFORE the write so the audit row carries the same explanation the console
     // shows in the decision preview. A history entry without a reason is just a number moving.
-    const blendReason = `blend: ${laneDecisions.map((l) => `${shortPlace(l.placement)} ${l.fromPct}→${l.toPct}`).join(', ')}`
+    const blendReason = `blend: ${laneDecisions.map((l) => `${shortPlace(l.placement)} ${l.fromPct}→${l.toPct}`).join(', ')}${capped.length ? ` · CPC ceiling €${((spec.maxCpcCents ?? 0) / 100).toFixed(2)} capped ${capped.join(', ')}${cpcCap?.baseAlone ? ' (base bid ALONE exceeds it)' : ''}` : ''}`
     if (ctx.write && changed) {
       try { const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js'); await updatePlacementBidding({ campaignId: camp.id, adjustments, actor: ctx.actor, reason: blendReason }); applied++ } catch (e) { logger.warn('[rank-defend] blended apply failed', { campaignId: camp.id, error: (e as Error).message }) }
     }
@@ -333,6 +353,15 @@ async function decideAndMaybeApply(
   if ((ctx.suppressRaise || campOutOfBudget) && action === 'raise') {
     action = 'hold'; nextPct = currentPct
     reason = campOutOfBudget ? 'campaign OUT_OF_BUDGET — holding (raise the daily budget to hold this slot)' : 'family daily budget reached — holding (no raise)'
+  }
+  // MB.4 — the CPC ceiling binds LAST, after every other adjustment, so nothing downstream
+  // can put the bid back over it. The action is re-derived rather than preserved: a target
+  // sitting ABOVE the cap arrives here as a 'hold', and holding is precisely what it must
+  // not do — the cap has to be able to turn that into a 'lower'.
+  if (cpcCap && nextPct > cpcCap.capPct) {
+    reason = `${reason}${capNote(nextPct, cpcCap.capPct)}`
+    nextPct = cpcCap.capPct
+    action = nextPct > currentPct ? 'raise' : nextPct < currentPct ? 'lower' : 'hold'
   }
   // PP — also zero the OTHER search placement (Top↔Rest mutually exclusive) even on a hold.
   const otherSearch = spec.placement === 'PLACEMENT_TOP' ? 'PLACEMENT_REST_OF_SEARCH' : spec.placement === 'PLACEMENT_REST_OF_SEARCH' ? 'PLACEMENT_TOP' : null
@@ -455,7 +484,7 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
 
   // Union of schedule + plan campaigns → one campaign load + one signal pass.
   const unionIds = [...new Set([...schedules.map((s) => s.campaignId), ...governed])]
-  const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true, acos: true, spend: true, bidsSuppressedAt: true, bidsSuppressedFloorCents: true, deliveryReasons: true } })
+  const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true, biddingStrategy: true, acos: true, spend: true, bidsSuppressedAt: true, bidsSuppressedFloorCents: true, deliveryReasons: true } })
   const campById = new Map(campaigns.map((c) => [c.id, c]))
   // RTC — per-campaign (campaign-scope) target overrides for every campaign in play.
   const schedOverrides = new Map<string, TargetOverrideMap>()
@@ -496,6 +525,30 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
       }
     } catch (e) { logger.warn('[rank-defend] loss-proxy read failed', { error: (e as Error).message }) }
   }
+
+  // MB.4 — each campaign's HIGHEST live base bid, the number the CPC ceiling is measured
+  // against. `suppressedFromBidCents` is taken into account because it is what the bid
+  // RETURNS to the moment a serving target takes over: reading only the floored 2¢ of a
+  // suppressed campaign would compute a ceiling-free cap for the very tick that restores it.
+  // Grouped rather than row-by-row — one campaign here holds 141 targets.
+  const maxBaseBidByCampaign = new Map<string, number>()
+  try {
+    const [agRows, agIndex] = await Promise.all([
+      prisma.adGroup.groupBy({ by: ['campaignId'], where: { campaignId: { in: unionIds } }, _max: { defaultBidCents: true, suppressedFromBidCents: true } }),
+      prisma.adGroup.findMany({ where: { campaignId: { in: unionIds } }, select: { id: true, campaignId: true } }),
+    ])
+    for (const r of agRows) {
+      const v = Math.max(r._max.defaultBidCents ?? 0, r._max.suppressedFromBidCents ?? 0)
+      if (v > 0) maxBaseBidByCampaign.set(r.campaignId, v)
+    }
+    const campByAdGroup = new Map(agIndex.map((g) => [g.id, g.campaignId]))
+    const tgRows = await prisma.adTarget.groupBy({ by: ['adGroupId'], where: { adGroup: { campaignId: { in: unionIds } }, isNegative: false }, _max: { bidCents: true, suppressedFromBidCents: true } })
+    for (const r of tgRows) {
+      const cid = campByAdGroup.get(r.adGroupId); if (!cid) continue
+      const v = Math.max(r._max.bidCents ?? 0, r._max.suppressedFromBidCents ?? 0)
+      if (v > (maxBaseBidByCampaign.get(cid) ?? 0)) maxBaseBidByCampaign.set(cid, v)
+    }
+  } catch (e) { logger.warn('[rank-defend] max-base-bid read failed — CPC ceilings not enforced this tick', { error: (e as Error).message }) }
 
   // RM2 — per-campaign SQP brand impression share, the feedback signal for Rest-of-Search targets
   // (Amazon exposes no Rest placement-IS). Resolve each campaign's advertised ASINs → latest weekly
@@ -555,7 +608,7 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
           const demote = sc.demoted.has(fc.id) && !!baselineTarget && plan.defaultTargetKey !== key
           const useKey = demote ? plan.defaultTargetKey! : key
           const eff = effectiveSpec(applyTargetOverrides(toSpec(demote ? baselineTarget! : target), plan.targetOverrides as TargetOverrideMap, schedOverrides.get(fc.id)), { oos, overAcos, familyAcosCapPct: plan.familyAcosCapPct })
-          const { decision, applied: a } = await decideAndMaybeApply(camp, useKey, eff, plan.id, { write, actor: `automation:rank-plan-${plan.id}`, sigByCampaign, lossByCampaign, sqpByCampaign, suppressRaise: overBudget })
+          const { decision, applied: a } = await decideAndMaybeApply(camp, useKey, eff, plan.id, { write, actor: `automation:rank-plan-${plan.id}`, sigByCampaign, lossByCampaign, sqpByCampaign, maxBaseBidByCampaign, suppressRaise: overBudget })
           planDecisions.push(decision); decisions.push(decision); applied += a
         }
       }
@@ -624,7 +677,7 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
     // A resolved key with no RankTarget behind it is a dangling reference (the target was
     // deleted after the schedule was authored). Nothing is held, so record nothing held.
     const target = targetByKey.get(key); if (!target) { receipts.set(s.id, null); continue }
-    const { decision, applied: a } = await decideAndMaybeApply(camp, key, applyTargetOverrides(toSpec(target), s.targetOverrides as TargetOverrideMap), null, { write: !dryRun, actor: `automation:rank-defend-${s.id}`, sigByCampaign, lossByCampaign, sqpByCampaign })
+    const { decision, applied: a } = await decideAndMaybeApply(camp, key, applyTargetOverrides(toSpec(target), s.targetOverrides as TargetOverrideMap), null, { write: !dryRun, actor: `automation:rank-defend-${s.id}`, sigByCampaign, lossByCampaign, sqpByCampaign, maxBaseBidByCampaign })
     decisions.push(decision); applied += a
   }
   // Grouped by resolved key so the 33 live schedules cost ~2 statements rather than 33.

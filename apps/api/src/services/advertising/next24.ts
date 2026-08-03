@@ -14,8 +14,22 @@
  * (dow, hour) slots, because deriving those is a timezone question for the database, not arithmetic
  * to be re-invented per call site.
  */
-import { resolveActiveWindow, biasBand } from './rank-controller.js'
+import { resolveActiveWindow, biasBand, cpcCapPct } from './rank-controller.js'
 import type { ScheduleWindow } from './rank-controller.js'
+
+/**
+ * MB.6 — what the campaigns' bids let the CPC ceiling permit.
+ *
+ * MB.4 made `maxCpcCents` bind the placement multiplier, so the band biasBand returns is no
+ * longer the whole story: a target free to reach 900% may in practice be held to 471% by its
+ * own ceiling. Passing this in lets the preview quote the SAME cap the engine will apply
+ * instead of the pre-MB.4 answer — the divergence this module exists to prevent.
+ *
+ * A group spans many campaigns with different bids, so the binding constraint is the one
+ * that caps LOWEST: reporting the most permissive campaign's ceiling would tell the operator
+ * the plan reaches a bias that most of its campaigns cannot.
+ */
+export interface Next24Cpc { maxBaseBidCents: number | null; strategyMultiple: number }
 
 /** One hour of wall-clock, already converted to the schedule's timezone by the caller. */
 export interface Next24Slot {
@@ -65,6 +79,8 @@ export interface Next24Row {
   ceilingPct: number | null
   /** ceiling > floor (or all-out): the bid can move UP during the hour, not just sit at the floor */
   canChase: boolean
+  /** MB.6 — the ceiling the CPC limit imposes, when it binds BELOW the band's own ceiling */
+  cpcCapPct: number | null
   maxCpcCents: number | null
   acosCapPct: number | null
   allOut: boolean
@@ -106,6 +122,7 @@ export function buildNext24(
   windows: ScheduleWindow[] | null | undefined,
   defaultTargetKey: string | null | undefined,
   targets: Map<string, Next24Target>,
+  cpc?: Next24Cpc,
 ): { hours: Next24Row[]; summary: Next24Summary } {
   const hours: Next24Row[] = slots.map((s) => {
     // Only the three wall-clock fields carry into the row. Spreading the slot would copy `plan`
@@ -126,7 +143,7 @@ export function buildNext24(
     if (!key) {
       return {
         ...at, targetKey: null, targetName: null, color: null, source, eventName,
-        floorPct: null, ceilingPct: null, canChase: false, maxCpcCents: null, acosCapPct: null,
+        floorPct: null, ceilingPct: null, canChase: false, cpcCapPct: null, maxCpcCents: null, acosCapPct: null,
         allOut: false, suppressed: false, unbounded: false, missingTarget: false,
       }
     }
@@ -135,13 +152,20 @@ export function buildNext24(
       // skips the hour, so the preview must show a hole rather than a comfortable-looking row.
       return {
         ...at, targetKey: key, targetName: null, color: null, source, eventName,
-        floorPct: null, ceilingPct: null, canChase: false, maxCpcCents: null, acosCapPct: null,
+        floorPct: null, ceilingPct: null, canChase: false, cpcCapPct: null, maxCpcCents: null, acosCapPct: null,
         allOut: false, suppressed: false, unbounded: false, missingTarget: true,
       }
     }
     const allOut = !!t.allOut
     const suppressed = !!t.pause
-    const { floor, ceiling } = biasBand({ biasPct: t.biasPct ?? null, maxBiasPct: t.maxBiasPct ?? null, allOut })
+    const band = biasBand({ biasPct: t.biasPct ?? null, maxBiasPct: t.maxBiasPct ?? null, allOut })
+    const floor = band.floor
+    // MB.6 — the CPC ceiling can bind below the band. When it does it IS the ceiling, because
+    // the engine will not let the bid past it; reporting the band's number would overstate the
+    // reach of every hour this target governs.
+    const cap = cpc ? cpcCapPct(t.maxCpcCents ?? null, cpc.maxBaseBidCents, cpc.strategyMultiple) : null
+    const capPct = cap && cap.capPct < band.ceiling ? cap.capPct : null
+    const ceiling = capPct != null ? Math.max(floor, capPct) : band.ceiling
     return {
       ...at,
       targetKey: key,
@@ -155,12 +179,15 @@ export function buildNext24(
       floorPct: suppressed ? null : floor,
       ceilingPct: suppressed ? null : ceiling,
       canChase: suppressed ? false : (allOut || ceiling > floor),
+      cpcCapPct: suppressed ? null : capPct,
       maxCpcCents: t.maxCpcCents ?? null,
       // all-out ignores the ACOS ceiling by design, so reporting one here would be a lie the
       // operator could act on. computeStep nulls it the same way.
       acosCapPct: allOut || suppressed ? null : (t.acosCapPct ?? null),
       allOut,
       suppressed,
+      // MB.4 — with the ceiling enforced, "unbounded" means exactly what it says: no ceiling
+      // set at all. A target WITH one is now genuinely bounded, which it was not before.
       unbounded: !suppressed && allOut && (t.maxCpcCents ?? null) == null,
       missingTarget: false,
     }

@@ -90,6 +90,52 @@ export function biasBand(target: Pick<RankTargetSpec, 'biasPct' | 'maxBiasPct' |
   return { floor, ceiling: Math.max(floor, ceiling) }
 }
 
+/**
+ * MB.4 — the CPC ceiling, finally enforced.
+ *
+ * `maxCpcCents` has been stored, per-scope overridable, labelled "never bid above this" and
+ * printed in the arm preview since RS.1 — and read by nothing. computeStep never referenced
+ * it; the bid path enforces a 5¢ floor and a max-change-% clamp and no ceiling at all. An
+ * operator who set €2.00 on an all-out target got no ceiling whatsoever.
+ *
+ * It is enforced by capping the PLACEMENT multiplier rather than rewriting keyword bids,
+ * because the multiplier is the lever this loop already owns: capping it is instant,
+ * reversible, and cannot collide with the suppress/restore or base-bid-delta memories.
+ *
+ * Amazon charges base bid × (1 + placement %), and an `AUTO_FOR_SALES` campaign ("up and
+ * down") lets Amazon add up to another +100% at Top of Search on top of that — so a ceiling
+ * that ignored the bidding strategy would be breached by design on exactly the campaigns
+ * most likely to have one set. `strategyMultiple` carries that headroom.
+ *
+ * `maxBaseBidCents` must be the campaign's HIGHEST live base bid: a ceiling derived from the
+ * average would still let the most expensive keyword sail past it, which is the one thing
+ * "never bid above this" cannot mean.
+ *
+ * Returns null when nothing can be capped — no ceiling set, or no base bid known (a campaign
+ * with no bids cannot breach a ceiling). `baseAlone` reports the case the operator most needs
+ * to see: the base bid ALONE already exceeds the ceiling, so even a 0% placement breaches it
+ * and no multiplier cap can rescue it.
+ */
+export const STRATEGY_HEADROOM: Record<string, number> = {
+  AUTO_FOR_SALES: 2, // up-and-down — Amazon may add up to +100% again at Top of Search
+  LEGACY_FOR_SALES: 1, // down only
+  MANUAL: 1, // fixed
+}
+export function strategyHeadroom(biddingStrategy: string | null | undefined): number {
+  return (biddingStrategy && STRATEGY_HEADROOM[biddingStrategy]) || 1
+}
+
+export interface CpcCap { capPct: number; baseAlone: boolean }
+export function cpcCapPct(maxCpcCents: number | null | undefined, maxBaseBidCents: number | null | undefined, strategyMultiple = 1): CpcCap | null {
+  if (maxCpcCents == null || !(maxCpcCents > 0)) return null
+  if (maxBaseBidCents == null || !(maxBaseBidCents > 0)) return null
+  const mult = strategyMultiple > 0 ? strategyMultiple : 1
+  const raw = 100 * (maxCpcCents / (maxBaseBidCents * mult) - 1)
+  // FLOOR, never round: rounding 344.9 up to 345 would land a bid over the ceiling, which is
+  // the single thing this function exists to prevent.
+  return raw < 0 ? { capPct: 0, baseAlone: true } : { capPct: Math.floor(raw), baseAlone: false }
+}
+
 export interface Observed {
   currentPct: number // current PLACEMENT_TOP bias % (0-900)
   achievedISFraction: number | null // 0-1 achieved TOS IS (daily truth), null if unknown

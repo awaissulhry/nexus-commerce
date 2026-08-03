@@ -131,3 +131,63 @@ describe('buildNext24', () => {
     expect(hours[10]).toMatchObject({ dow: 2, hour: 6, targetKey: 'own-top', source: 'baseline' })
   })
 })
+
+/**
+ * MB.6 — the preview must quote the CPC cap the engine (MB.4) will actually apply.
+ *
+ * This is the exact failure this module was written to prevent, arriving from a new direction:
+ * before MB.4 "up to 900%" was true, and the moment the ceiling started binding it stopped
+ * being true for every all-out target with a maxCpc set — which, on this account, is all of them.
+ */
+describe('MB.6 buildNext24 — the CPC ceiling in the preview', () => {
+  const CAPPED: Next24Target = { key: 'ao', name: 'All-Out', biasPct: 150, allOut: true, maxCpcCents: 200 }
+  const slots1 = (): Next24Slot[] => [{ at: '2026-08-03T10:00:00.000Z', dow: 1, hour: 10 }]
+  const libOf = (t: Next24Target) => new Map([[t.key, t]])
+
+  it('without bid data the ceiling is the band — unchanged from before MB.6', () => {
+    const { hours } = buildNext24(slots1(), [], 'ao', libOf(CAPPED))
+    expect(hours[0].ceilingPct).toBe(900)
+    expect(hours[0].cpcCapPct).toBeNull()
+  })
+
+  it('with bid data the ceiling becomes the CPC cap, and says that is why', () => {
+    // €0.35 base, €2.00 ceiling → 471%
+    const { hours } = buildNext24(slots1(), [], 'ao', libOf(CAPPED), { maxBaseBidCents: 35, strategyMultiple: 1 })
+    expect(hours[0].ceilingPct).toBe(471)
+    expect(hours[0].cpcCapPct).toBe(471)
+    expect(hours[0].canChase).toBe(true)
+  })
+
+  it('a cap ABOVE the band does not lower it, and is not reported as capping', () => {
+    const modest: Next24Target = { key: 'ao', name: 'All-Out', biasPct: 150, maxBiasPct: 300, allOut: true, maxCpcCents: 200 }
+    const { hours } = buildNext24(slots1(), [], 'ao', libOf(modest), { maxBaseBidCents: 20, strategyMultiple: 1 })
+    expect(hours[0].ceilingPct).toBe(300)
+    expect(hours[0].cpcCapPct).toBeNull()
+  })
+
+  it('an up-and-down campaign caps lower than a legacy one on identical bids', () => {
+    const legacy = buildNext24(slots1(), [], 'ao', libOf(CAPPED), { maxBaseBidCents: 35, strategyMultiple: 1 })
+    const auto = buildNext24(slots1(), [], 'ao', libOf(CAPPED), { maxBaseBidCents: 35, strategyMultiple: 2 })
+    expect(auto.hours[0].ceilingPct!).toBeLessThan(legacy.hours[0].ceilingPct!)
+  })
+
+  it('the cap never drops the ceiling below the floor the target holds', () => {
+    // Base bid so high the cap lands under the 150% floor — the loop still holds its floor.
+    const { hours } = buildNext24(slots1(), [], 'ao', libOf(CAPPED), { maxBaseBidCents: 190, strategyMultiple: 1 })
+    expect(hours[0].ceilingPct).toBeGreaterThanOrEqual(hours[0].floorPct!)
+  })
+
+  it('a target with NO ceiling is still reported unbounded — the warning must survive MB.4', () => {
+    const none: Next24Target = { key: 'ao', name: 'All-Out', biasPct: 150, allOut: true }
+    const { hours, summary } = buildNext24(slots1(), [], 'ao', libOf(none), { maxBaseBidCents: 35, strategyMultiple: 1 })
+    expect(hours[0].unbounded).toBe(true)
+    expect(summary.hoursUnbounded).toBe(1)
+  })
+
+  it('a suppressed (Min bid) hour reports no cap — it never reaches the placement stage', () => {
+    const minBid: Next24Target = { key: 'p', name: 'Min bid', pause: true, maxCpcCents: 200 }
+    const { hours } = buildNext24(slots1(), [], 'p', libOf(minBid), { maxBaseBidCents: 35, strategyMultiple: 1 })
+    expect(hours[0].suppressed).toBe(true)
+    expect(hours[0].cpcCapPct).toBeNull()
+  })
+})

@@ -1044,6 +1044,8 @@
 .h10-n24-t td.bd .hold, .h10-n24-t td.bd .sup { white-space: nowrap; }
 .h10-n24-t td.bd .chase b { font-weight: 700; }
 .h10-n24-t td.bd .chase.risk { color: #9a3a24; }
+/* MB.6 — this hour's climb stops at the CPC ceiling, not at the target's own Ceiling. */
+.h10-n24-t td.bd .chase .capd { font-size: 9.5px; font-style: normal; font-weight: 700; color: #c2410c; }
 .h10-n24-t td.bd .sup { color: #8a93a1; }
 .h10-n24-t td.gd { color: #6b7480; }
 .h10-n24-t td.gd span { display: block; font-size: 11px; white-space: nowrap; }

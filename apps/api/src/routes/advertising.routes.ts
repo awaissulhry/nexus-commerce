@@ -8093,6 +8093,46 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       acosCapPct: t.acosCapPct, allOut: t.allOut, pause: t.pause,
     }]))
 
+    /**
+     * MB.6 — the CPC ceiling now binds the placement multiplier (MB.4), so the preview needs
+     * the same two inputs the engine uses: the highest live base bid and the bidding
+     * strategy's headroom. Across a group of campaigns the LOWEST cap is the binding one —
+     * quoting the most permissive member would promise a reach most of the group cannot make.
+     */
+    const cpcInput = await (async () => {
+      const ids = members.map((m) => m.campaignId)
+      if (!ids.length) return undefined
+      const { strategyHeadroom, cpcCapPct: capOf } = await import('../services/advertising/rank-controller.js')
+      const [camps, ags] = await Promise.all([
+        prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, biddingStrategy: true } }),
+        prisma.adGroup.findMany({ where: { campaignId: { in: ids } }, select: { id: true, campaignId: true, defaultBidCents: true, suppressedFromBidCents: true } }),
+      ])
+      const maxBase = new Map<string, number>()
+      for (const g of ags) {
+        const v = Math.max(g.defaultBidCents ?? 0, g.suppressedFromBidCents ?? 0)
+        if (v > (maxBase.get(g.campaignId) ?? 0)) maxBase.set(g.campaignId, v)
+      }
+      const campByAg = new Map(ags.map((g) => [g.id, g.campaignId]))
+      const tgs = await prisma.adTarget.groupBy({ by: ['adGroupId'], where: { adGroup: { campaignId: { in: ids } }, isNegative: false }, _max: { bidCents: true, suppressedFromBidCents: true } })
+      for (const r of tgs) {
+        const cid = campByAg.get(r.adGroupId); if (!cid) continue
+        const v = Math.max(r._max.bidCents ?? 0, r._max.suppressedFromBidCents ?? 0)
+        if (v > (maxBase.get(cid) ?? 0)) maxBase.set(cid, v)
+      }
+      // Pick the member whose ceiling bites hardest, measured against a reference ceiling so
+      // strategy headroom and base bid are compared on one scale rather than separately.
+      let worst: { maxBaseBidCents: number | null; strategyMultiple: number } | undefined
+      let worstCap = Number.POSITIVE_INFINITY
+      for (const c of camps) {
+        const base = maxBase.get(c.id) ?? null
+        const mult = strategyHeadroom(c.biddingStrategy)
+        const probe = capOf(100_00, base, mult)
+        const v = probe ? probe.capPct : Number.POSITIVE_INFINITY
+        if (v < worstCap) { worstCap = v; worst = { maxBaseBidCents: base, strategyMultiple: mult } }
+      }
+      return worst
+    })()
+
     const { hours, summary } = buildNext24(
       slots.map((s) => {
         const at = (s.at instanceof Date ? s.at : new Date(s.at)).toISOString()
@@ -8101,6 +8141,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       (group.windows as Parameters<typeof buildNext24>[1]) ?? [],
       group.defaultTargetKey,
       lib,
+      cpcInput,
     )
 
     reply.header('Cache-Control', 'private, max-age=30')
