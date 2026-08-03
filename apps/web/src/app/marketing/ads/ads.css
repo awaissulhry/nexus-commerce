@@ -3061,3 +3061,18 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-gtt-ann .it .src { flex-shrink: 0; font-weight: 700; color: #1f6fde; }
 .h10-gtt-ann .it .txt { color: #3a4452; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-gtt-ann .more { margin-top: 3px; font-size: 11px; font-style: italic; color: #8a93a1; }
+
+/* ── HX.11 — by-origin rollup above the change feed ────────────────────────────────────────
+   Sorted failures-first by the component: a schedule with 14 failed writes matters more than one
+   with 400 clean ones, so the tone carries that rather than the order alone. */
+.h10-cl-sum { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin: 0 0 10px; }
+.h10-cl-sum .lbl { font-size: 11px; font-weight: 700; color: #8a93a1; text-transform: uppercase; letter-spacing: .3px; margin-right: 2px; }
+.h10-cl-sum .chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid #d8dde4; background: #fff; border-radius: 999px; padding: 4px 11px; font-size: 12px; cursor: pointer; color: #3a4452; }
+.h10-cl-sum .chip:hover { border-color: #1f6fde; color: #1c2530; }
+.h10-cl-sum .chip.on { border-color: #1f6fde; background: #eef4fd; color: #0a4ba8; font-weight: 600; }
+.h10-cl-sum .chip .n { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-cl-sum .chip .c { font-variant-numeric: tabular-nums; color: #8a93a1; }
+.h10-cl-sum .chip.on .c { color: #0a4ba8; }
+.h10-cl-sum .chip .f { font-size: 11px; font-weight: 700; color: #a3211a; background: #fbdedb; border-radius: 4px; padding: 1px 6px; }
+.h10-cl-sum .chip.bad { border-color: #f0c6c1; }
+.h10-cl-sum .clr { border: 0; background: none; font-size: 12px; color: #1f6fde; cursor: pointer; text-decoration: underline; }

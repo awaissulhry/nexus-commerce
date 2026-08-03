@@ -75,7 +75,33 @@ export function ChangeLogClient() {
   }, [days])
   useEffect(() => { load() }, [load])
 
-  const all = useMemo(() => rows ?? [], [rows])
+  /**
+   * HX.11 — rollup by origin, above the flat feed.
+   *
+   * Google's change history offers "by user" and "by campaign" overviews rather than only a
+   * chronological list, and the reason is that a flat feed answers "what happened" but never
+   * "which of my automations is misbehaving". Sorted by FAILURES first, then volume: a schedule
+   * with 14 failed writes matters more than one with 400 clean ones, and sorting by count alone
+   * would bury it.
+   */
+  const [originFilter, setOriginFilter] = useState<string | null>(null)
+  const allRows = useMemo(() => rows ?? [], [rows])
+  const summary = useMemo(() => {
+    const m = new Map<string, { name: string; kind: string; count: number; failed: number }>()
+    for (const r of allRows) {
+      const e = m.get(r.origin.name) ?? { name: r.origin.name, kind: r.origin.kind, count: 0, failed: 0 }
+      e.count++
+      if (r.delivery?.state === 'FAILED') e.failed++
+      m.set(r.origin.name, e)
+    }
+    return [...m.values()].sort((a, b) => b.failed - a.failed || b.count - a.count)
+  }, [allRows])
+
+  // Applied before the grid, so the grid's own column filters compose on top rather than fight it.
+  const all = useMemo(
+    () => (originFilter ? allRows.filter((r) => r.origin.name === originFilter) : allRows),
+    [allRows, originFilter],
+  )
   const failed = useMemo(() => all.filter((r) => r.delivery?.state === 'FAILED').length, [all])
 
   const columns: GridColumn<ChangeRow>[] = useMemo(() => [
@@ -157,6 +183,26 @@ export function ChangeLogClient() {
       {error && (
         <div className="h10-am-latest" role="alert">
           <b>Load failed:</b> {error} · <button className="h10-am-link" onClick={() => load()}>Retry</button>
+        </div>
+      )}
+
+      {summary.length > 1 && (
+        <div className="h10-cl-sum">
+          <span className="lbl">By origin</span>
+          {summary.slice(0, 10).map((o) => (
+            <button
+              type="button"
+              key={o.name}
+              className={`chip ${originFilter === o.name ? 'on' : ''} ${o.failed > 0 ? 'bad' : ''}`}
+              onClick={() => setOriginFilter(originFilter === o.name ? null : o.name)}
+              title={`${o.kind} · ${o.count} change${o.count === 1 ? '' : 's'}${o.failed > 0 ? `, ${o.failed} failed to reach Amazon` : ''}`}
+            >
+              <span className="n">{o.name}</span>
+              <span className="c">{o.count}</span>
+              {o.failed > 0 && <span className="f">{o.failed} failed</span>}
+            </button>
+          ))}
+          {originFilter && <button type="button" className="clr" onClick={() => setOriginFilter(null)}>Clear</button>}
         </div>
       )}
 
