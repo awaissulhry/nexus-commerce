@@ -63,6 +63,21 @@ const ENTRIES: Entry[] = [
   P(PUBLIC, has('/_webhooks/')),
   P(PUBLIC, pfx('/api/assets/_webhooks/')),
 
+  // AMS.1 — Amazon Marketing Stream ingest. A webhook receiver like the ones above: the AMS
+  // subscription delivers Ads API → the operator's AWS Firehose/Lambda → this endpoint, which
+  // authenticates the SENDER with the `x-ams-secret` shared secret (NEXUS_AMS_INGEST_SECRET, set
+  // in production). A forwarder has no session, so the session check can never be the right gate.
+  //
+  // Without this entry the route fell through to the /api/advertising catch-all below, which
+  // demands `ads.campaigns.manage` on writes, and RBAC rejected every delivery BEFORE the secret
+  // check ran: 35,614 rejections in 24h, unbroken since 2026-07-03, while `ams-sqs-poll` received
+  // nothing — 70 new hourly rows in a week. The dayparting heatmap has been reading a feed that
+  // stopped a month ago.
+  //
+  // Scoped as tightly as the deny-by-default model allows: this exact path, POST only. Everything
+  // else under /api/advertising keeps its permissions.
+  P(PUBLIC, (m, p) => m.toUpperCase() === 'POST' && p === '/api/advertising/marketing-stream/ingest'),
+
   // ── PUBLIC: OAuth callbacks (browser redirect / partner-initiated)
   P(PUBLIC, (m, p) => p.startsWith('/api/amazon-ads/auth/')),
   P(PUBLIC, (m, p) => p === '/api/ebay/auth/callback'),

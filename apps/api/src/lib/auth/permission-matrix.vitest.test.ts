@@ -93,3 +93,35 @@ describe('OWNER is implicit-all (no stored permissions needed)', () => {
     expect(SYSTEM_ROLES.OWNER.permissions).toHaveLength(0)
   })
 })
+
+// ── AMS.1 — Marketing Stream ingest is a webhook receiver, not a session surface ──────────────
+//
+// It authenticates its SENDER with the x-ams-secret shared secret, so a session check can never be
+// the right gate: the AMS forwarder is a Lambda and has no session. Before this entry existed, RBAC
+// rejected every delivery before the secret check ran — 35,614 in 24h, unbroken for a month, while
+// the hourly table took 70 new rows in a week.
+//
+// These tests exist to keep the exemption NARROW. Widening it silently would open write routes
+// across the whole advertising surface.
+describe('AMS.1 marketing-stream ingest is PUBLIC, and only that', () => {
+  const INGEST = '/api/advertising/marketing-stream/ingest'
+
+  it('POST to the ingest path is PUBLIC (the shared secret authenticates it)', () => {
+    expect(permissionForRoute('POST', INGEST)).toBe('PUBLIC')
+  })
+
+  it('a non-POST on the SAME path is not public', () => {
+    expect(permissionForRoute('GET', INGEST)).not.toBe('PUBLIC')
+    expect(permissionForRoute('DELETE', INGEST)).not.toBe('PUBLIC')
+  })
+
+  it('neighbouring advertising writes keep their permission', () => {
+    expect(permissionForRoute('POST', '/api/advertising/campaigns')).not.toBe('PUBLIC')
+    expect(permissionForRoute('POST', '/api/advertising/rank-schedule-groups')).not.toBe('PUBLIC')
+    expect(permissionForRoute('POST', '/api/advertising/marketing-stream/other')).not.toBe('PUBLIC')
+  })
+
+  it('advertising reads still require ads.view', () => {
+    expect(permissionForRoute('GET', '/api/advertising/campaigns')).not.toBe('PUBLIC')
+  })
+})
