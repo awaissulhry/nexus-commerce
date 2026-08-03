@@ -8021,6 +8021,59 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return await runAdsRetentionOnce({ dryRun })
   })
 
+  /**
+   * HX.8b — restore a schedule's plan to an earlier version.
+   *
+   * Deferred when HX.8 shipped, and made necessary by F2: bulk template apply rewrites the windows
+   * and baseline of N schedules in one click with nothing to reverse it. The prior plan of every
+   * one of them is already captured — saveRankScheduleGroup snapshots on every save, and bulk apply
+   * goes through exactly that path — so what was missing was only the way back.
+   *
+   * Restores the PLAN ONLY: windows and baseline. Name, campaigns, portfolio binding, timezone and
+   * `enabled` are the group's current state and are carried through untouched, so a restore can
+   * never re-arm a schedule the operator paused or drag back a campaign they removed.
+   *
+   * The restore is itself a save, so it writes its own version row. You can undo the undo, and the
+   * history shows the reversal happened rather than silently rewinding.
+   *
+   * NOT an Amazon undo. This changes the plan the engine reads; on an armed schedule the loop acts
+   * on it within 15 minutes. Bids already pushed to Amazon are not reverted — the UI says so.
+   */
+  fastify.post('/advertising/rank-schedule-groups/:id/restore-version', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as { versionId?: string }
+    if (!b?.versionId) { reply.status(400); return { error: 'versionId required' } }
+
+    const [group, version] = await Promise.all([
+      prisma.rankScheduleGroup.findUnique({ where: { id } }),
+      prisma.rankScheduleVersion.findUnique({ where: { id: String(b.versionId) } }),
+    ])
+    if (!group) { reply.status(404); return { error: 'schedule not found' } }
+    if (!version) { reply.status(404); return { error: 'version not found' } }
+    // A version belongs to one schedule. Restoring another schedule's plan would be a silent
+    // cross-contamination, so it is refused rather than interpreted.
+    if (version.groupId !== group.id) { reply.status(400); return { error: 'that version belongs to a different schedule' } }
+
+    const members = await prisma.adSchedule.findMany({ where: { groupId: id }, select: { campaignId: true } })
+    const { saveRankScheduleGroup } = await import('../services/advertising/ads-create.service.js')
+    try {
+      const r = await saveRankScheduleGroup({
+        id: group.id,
+        name: group.name,
+        campaignIds: members.map((m) => m.campaignId),
+        windows: version.windows,
+        defaultTargetKey: version.defaultTargetKey,
+        targetOverrides: group.targetOverrides,
+        enabled: group.enabled,
+        timezone: group.timezone,
+        portfolioId: group.portfolioId,
+        marketplace: group.marketplace,
+        userId: (request.body as { userId?: string })?.userId ?? null,
+      } as never)
+      return { ...r, restoredFrom: { id: version.id, createdAt: version.createdAt }, armed: group.enabled }
+    } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   fastify.post('/advertising/rank-schedule-groups', async (request, reply) => {
     const b = request.body as Record<string, unknown>
     if (!b?.name || !String(b.name).trim()) { reply.status(400); return { error: 'name is required' } }

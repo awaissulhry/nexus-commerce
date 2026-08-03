@@ -17,7 +17,7 @@
  * Rendered in both places a schedule is looked at: the list's Activity drawer and the builder.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { History } from 'lucide-react'
+import { History, RotateCcw } from 'lucide-react'
 import { gridFromWindows, type RankWin } from '../_rank/rank-grid-model'
 import { ScheduleActivity } from './ScheduleActivity'
 import { WeekShape } from './WeekShape'
@@ -92,6 +92,12 @@ export function ScheduleVersions({ groupId, palette, compact = false }: {
 }) {
   const [items, setItems] = useState<Version[]>([])
   const [loading, setLoading] = useState(true)
+  // HX.8b — restore. Confirmed rather than immediate: on an armed schedule the rank loop acts on
+  // the restored plan within 15 minutes.
+  const [confirming, setConfirming] = useState<Version | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [reload, setReload] = useState(0)
 
   useEffect(() => {
     let alive = true
@@ -102,7 +108,26 @@ export function ScheduleVersions({ groupId, palette, compact = false }: {
       .catch(() => { if (alive) setItems([]) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [groupId])
+  }, [groupId, reload])
+
+  const restore = async (v: Version) => {
+    if (busy) return
+    setBusy(true); setMsg('')
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/${groupId}/restore-version`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ versionId: v.id }),
+      })
+      const j = await r.json().catch(() => null)
+      if (!r.ok) { setMsg(j?.error ?? 'Restore failed — please retry.'); return }
+      setMsg(j?.armed
+        ? 'Restored. This schedule is armed, so the rank loop will act on the restored plan within 15 minutes.'
+        : 'Restored. This schedule is paused, so nothing runs until you arm it.')
+      setConfirming(null)
+      setReload((n) => n + 1)
+    } catch { setMsg('Request failed — please retry.') }
+    finally { setBusy(false) }
+  }
 
   const rows = useMemo(
     () => items.map((v, i) => ({ v, diff: describeDiff(v, items[i + 1], palette.name) })),
@@ -121,6 +146,27 @@ export function ScheduleVersions({ groupId, palette, compact = false }: {
 
   return (
     <div className={`h10-ver ${compact ? 'compact' : ''}`}>
+      {msg && <div className="h10-ver-msg">{msg}</div>}
+      {confirming && (
+        <div className="h10-ntm-back" onClick={() => { if (!busy) setConfirming(null) }}>
+          <div className="h10-ntm" role="dialog" aria-modal="true" aria-label="Restore plan" onClick={(e) => e.stopPropagation()}>
+            <div className="h10-ntm-h"><b>Restore this plan</b></div>
+            <div className="h10-ntm-sub">
+              Replaces the current windows and baseline with the version saved{' '}
+              <b>{new Date(confirming.createdAt).toLocaleString()}</b>. Campaigns, portfolio scope and
+              armed/paused state are untouched, and the restore is itself recorded — so you can undo it.
+              {' '}Bids already sent to Amazon are <b>not</b> reverted.
+            </div>
+            <div className="h10-ntm-f">
+              <button type="button" className="cancel" onClick={() => setConfirming(null)} disabled={busy}>Cancel</button>
+              <span className="grow" />
+              <button type="button" className="apply" onClick={() => void restore(confirming)} disabled={busy}>
+                {busy ? 'Restoring…' : 'Restore'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {rows.map(({ v, diff }, i) => (
         <div className={`h10-ver-r ${i === 0 ? 'current' : ''}`} key={v.id}>
           <div className="mark" aria-hidden="true"><span className="dot" />{i < rows.length - 1 && <span className="line" />}</div>
@@ -131,6 +177,12 @@ export function ScheduleVersions({ groupId, palette, compact = false }: {
               <span className="at" title={new Date(v.createdAt).toLocaleString()}>{new Date(v.createdAt).toLocaleString()}</span>
             </div>
             <ul className="diff">{diff.map((d, k) => <li key={k}>{d}</li>)}</ul>
+            {/* The current plan is already in effect, so only earlier versions can be restored. */}
+            {i > 0 && (
+              <button type="button" className="h10-ver-restore" onClick={() => setConfirming(v)} disabled={busy}>
+                <RotateCcw size={12} /> Restore this plan
+              </button>
+            )}
             {/* The shape at that point in time — the fastest way to see an evening block move. */}
             <WeekShape
               windows={v.windows}

@@ -1043,3 +1043,9 @@
    because the whole point is that there is no number worth showing. */
 .h10-arm-fit.thin { display: block; }
 .h10-arm-fit.thin .txt { display: block; color: #6b7480; }
+/* HX.8b — restore, on the version it would bring back. Understated: the plan in effect is the one
+   at the top, and restoring is the exception rather than the expected action. */
+.h10-ver-restore { display: inline-flex; align-items: center; gap: 5px; margin: 2px 0 8px; border: 1px solid #d8dde4; background: #fff; border-radius: 7px; padding: 4px 9px; font-size: 11.5px; font-weight: 600; color: #3a4452; cursor: pointer; }
+.h10-ver-restore:hover:not(:disabled) { border-color: #1f6fde; color: #1f6fde; background: #f8fafc; }
+.h10-ver-restore:disabled { opacity: .5; cursor: default; }
+.h10-ver-msg { margin-bottom: 10px; padding: 9px 11px; font-size: 12.5px; line-height: 1.5; color: #0a4ba8; background: #eef4fd; border-radius: 7px; }
