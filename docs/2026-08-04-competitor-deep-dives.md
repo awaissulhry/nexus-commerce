@@ -9,7 +9,7 @@
 > Teikametrics, Intentwise, Scale Insights, BidX, M19), and §0 reconciles its conclusions with ADX.
 Each entry: what they are → architecture → full feature inventory → what to take (mapped to our code) → where we already lead → what to refuse.
 
-Queue: **Pacvue** ✅ · **Rithum** ✅ · **Perpetua** ✅ · **Teikametrics** ✅ · **Intentwise** ✅ · **BidX** ✅ · Scale Insights · M19 · + leaders as found.
+Queue: **Pacvue** ✅ · **Rithum** ✅ · **Perpetua** ✅ · **Teikametrics** ✅ · **Intentwise** ✅ · **BidX** ✅ · **Scale Insights** ✅ · **M19** ✅ — complete.
 
 ---
 
@@ -505,5 +505,111 @@ And we can compute it better than any of them: `ProductProfitDaily` + real Amazo
 BidX contributes no capability we lack. What it contributes is a **price signal**: the closest European competitor sets its payback threshold at more than twice Xavia's entire ad spend.
 
 The useful conclusion is not "so don't bother." It is that at this volume the winning system is **small, legible and cheap to run** — which is precisely the direction ADX has been moving since the approach review, and an argument against ever reinstating the 51-rule estate.
+
+---
+
+# 7 & 8. Scale Insights and M19 — the two poles
+
+Taken together because they bracket the design space, and because where they *converge* is the finding.
+
+---
+
+## 7. Scale Insights — the deepest rule engine in the market
+
+Tagline: **"Absurd Control."** Positioning is control, not intelligence.
+
+**Pricing is the surprise.** Per automated ASIN: $78/mo for 5 ASINs up to $688 for 100 — **or a "1% Plan" charging 1% of ad spend for unlimited ASINs.** At Xavia's ~€4.5k/month that is **~€45/month.** Unlike BidX, this *is* priced for our volume.
+
+### The 11 named algorithms
+
+| Rule | What it does |
+|---|---|
+| **Dayparting** | Schedule activity at specific hours |
+| **Status** | Pause/enable on performance thresholds |
+| **Bidding** | Optimise keyword/target bids to goal |
+| **Placement** | Adjust **Top of Search %** or **Product Page %** |
+| **Import** | Harvest performing search terms into keywords |
+| **Negative** | Add underperformers as negatives |
+| **⭐ Whitelist** | **Prevents negation of specified keywords** |
+| **⭐ Revive** | **Raises bids on keywords that used to perform but have no recent traffic** |
+| **Negative Word** | Add non-performers as negative *phrase* |
+| **⭐ Blacklist** | Auto-negate blacklisted terms |
+| **Daily Budget** | Adjust budget by performance **and weekday** |
+
+### The three ideas worth taking
+
+**① Whitelist / Blacklist as keyword-level protection.** "Never negate this keyword" and "always negate that one." This is the entity-bounds principle applied to keywords — the same shape as `maxBid` on a campaign. **Any harvest-and-negate automation without a whitelist is dangerous**, and ours has none. Our `🌾 Auto harvest & negate` rule is enabled with cap 3 and nothing protects a brand term from being negated by it.
+
+**② The Revive rule.** Raise bids on keywords that previously converted but have gone quiet. Genuinely novel, and directly a *coverage* mechanic: a term that stopped delivering is lost page-one presence, and nothing in our stack notices. It is the natural complement to the bid ladder.
+
+**③ Preview + step-by-step calculation transparency.** Simulate a rule against real account data without committing, and show the arithmetic. This is their differentiator, and it is **exactly ADX.6's Foresight plus ADX.3's Attribution** — validated as the thing a control-positioned product leads with.
+
+Also noted: they build **dayparting campaigns with 24 ad groups** to get hourly analysis. A structural workaround for not having AMS. We have AMS, so we skip it — and it is a reminder that our substrate is genuinely better than a €45/month tool's.
+
+---
+
+## 8. M19 — the purest algorithmic
+
+Products: PPC Optimization · TACoS Management · Account 360 · Amazon DSP · DSP Reporting · **Top of Search Rankings Optimizer** · **Autopilot** (100% automated) · Product 360 · Keyword Tracker · Product Timeline Events.
+
+### The four-stage model
+
+1. **Keyword Exploration** — AI tests thousands of keywords for untapped ranking opportunities
+2. **Daily Conversion Prediction** — a conversion prediction per ASIN×keyword pair, every day
+3. **Bid Adaptation** — real-time adjustment against competition intensity
+4. **Piloting** — feedback loop toward the operator's goals
+
+### ⭐ What the operator still controls — the important part
+
+Even here, at the algorithmic extreme, five dials remain:
+
+- Business goals / ACoS targets
+- Monthly budgets
+- **Force product visibility** — override visibility regardless of economics
+- **Competition tactics intensity** — how hard to fight back
+- Performance targets
+
+Two of those are **overrides**, not targets. *Force product visibility* is precisely our `allOut` flag. *Competition tactics intensity* is a dial we do not have — a single "how aggressive" setting rather than per-target parameters.
+
+They also ship a named **Top of Search Rankings Optimizer** — a whole product for the goal this project started with.
+
+---
+
+## The convergence — the most important result in this research
+
+| | Scale Insights | M19 |
+|---|---|---|
+| Model | 11 algorithms, 200+ parameters | Opaque ML, 4 stages |
+| Operator sets | Everything | Five dials |
+| Positioning | "Absurd Control" | "Save massive time" |
+
+**Opposite poles. Both converge on the same two requirements:**
+
+1. **The operator must be able to bound it.** Scale Insights via whitelists, blacklists and caps. M19 via ACoS target, budget cap, force-visibility and competition intensity. *Neither ships an unbounded optimiser.*
+2. **The operator must be able to see why.** Scale Insights ships preview and step-by-step calculation. M19 ships Account 360, Keyword Tracker and Product Timeline Events.
+
+**Bounds and provenance are not a rule-engine feature or an ML feature. They are the price of admission at both extremes.**
+
+That is ADX.3 (attribution) and ADX.4 (bounds on the entity), independently required by the two most philosophically opposed products in the category. Combined with Teikametrics exposing `ACOS Limit` + `Bid Modifier` around a proprietary model, and the desktop study's Tier-1 #4, this is now **four independent arrivals** at the same conclusion.
+
+The industry's own 2026 summary agrees, and states the residual honestly:
+
+> The category shifted from rule builders to AI agents — "sellers approving rather than operating." But *"automation follows rules, AI learns patterns — neither sets the strategy."*
+
+Which is the whole argument for the ADX ordering: fix the machine, bound it, make it explain itself — then decide the strategy yourself, because nothing on the market will do that part.
+
+## What to take from both
+
+1. **Whitelist / blacklist on keywords** (Scale Insights) — protection primitives. Our harvest-and-negate rule is live with no protection at all.
+2. **A Revive mechanic** — recover lost page-one presence on terms that went quiet.
+3. **Preview + calculation transparency** — confirmed as the control-product differentiator.
+4. **A single "competition intensity" dial** (M19) — one operator control above the per-target parameters.
+5. **Weekday-aware budget** (Scale Insights) — we have hour-of-day, not day-of-week.
+
+## What to refuse
+
+- 200+ parameters. Scale Insights' depth is its product; for us it is the 51-rule failure again.
+- Autopilot / 100% automation with an opaque model.
+- Algorithmic keyword exploration at our volume.
 
 ---
