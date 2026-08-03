@@ -492,6 +492,46 @@ Redirect `/marketing/advertising/*` and `/marketing/ads-console/*` into `/market
 
 ---
 
+## Part 5b — APPROACH REVIEW 2026-08-04: goals-first, not rules-first
+
+### The finding
+
+**There are two implementations of rank defense, and only one works.**
+
+The rule set's dominant actions are `set_placement_multiplier` (102 instances), `raise_bids_for_rank_defense` (100), `defend_top_of_search`, `refresh_dayparting`. Those are the exact job of `ad-rank-defend` + `ad-dayparting` — which already run cleanly with 5,311 applied mutations. Eight enabled rules duplicate the engine outright, including literal doubles: *"Hold top rank ≥ 45% — XAVIA GALE…"* exists twice, *"Auto-maintain dayparting — XAVIA GALE…"* twice.
+
+**ADX.1 and ADX.2 created this risk rather than resolving it.** Contention measured at zero in ADX.0 only because nothing executed. Now that rules execute and propose, those eight would generate proposals fighting rank-defend over the same placement multipliers. The original authority hypothesis was right about mechanism and wrong about timing: repair is what activates it.
+
+### The fork
+
+| | **A — rules-first** | **B — goals-first (recommended)** |
+|---|---|---|
+| Model | 36 if-then rules + an Authority layer to arbitrate | Rank engine owns placement/bid-for-rank/dayparting **exclusively**; rules keep only what it can't do |
+| Conflict | Arbitrated at runtime (ADX.5) | Removed by design — no overlap to arbitrate |
+| Attention | 201 matches/tick → ~19k proposals/day | ~22 curated rules, reviewable |
+| Fit to goal | Rules have no vocabulary for SERP coverage | `lanes`, motion profiles, `targetISPct`, CPC ceilings already model it |
+
+**Recommend B.** Separation beats arbitration; it is the goal-based model the market converged on (Perpetua); and the market's own verdict is that plain if-then engines no longer differentiate now that Amazon's native automation is free. Thirty-six rules is not less attention than one goal — it is more.
+
+### Consequences for the plan
+
+- **ADX.5 (Authority) drops from prerequisite to probably-never.** If rules never touch placement, there is no contention to arbitrate.
+- **The main line becomes the SERP work**, not the rule work: `lanes` + TOS defense + the bid ladder + coverage measurement + ad-type stacking.
+- **13 phases collapse to roughly 6.**
+
+### Revised shortest path
+
+1. **Consolidate the rule set** — 36 enabled → 22; disable the 8 engine duplicates + 6 functional duplicates. Reversible (`enabled` flag), nothing deleted. *Script ready: `scripts/_adx-consolidate.mts`; apply blocked pending operator approval.*
+2. **Attribution + pins** (ADX.3/4) — the control primitives that survive the revision.
+3. **One family, one full coverage loop** — GALE or AIREON: `lanes` for multi-placement, a bid ladder across the ASINs sharing a keyword set, TOS defense scoped to that family alone.
+4. **Measure it** — TOS-IS + placement report + a coverage view on Analytics.
+5. **Prove multi-slot occupancy, then widen.**
+6. **SB / SBV / SD** for ad-type stacking.
+
+Step 3 is the substantive change in approach: **one vertical slice, end to end, visible** — rather than platform-wide phases. Nothing here has ever been used, and the fastest route to trusting it is watching one loop work on one family, not completing a programme.
+
+---
+
 ## Part 6 — Open questions for the gate
 
 1. **Does the diagnosis match your experience?** §1.10 argues control was lost to missing authority/attribution/exemption, not to missing features. ADX.0 tests this against your data by measuring how often two engines moved the same bid. If the conflict rate comes back near zero, the diagnosis is wrong and ADX.1–4 should be re-scoped — worth knowing before building on it. If it's high, that single number is the justification for the whole plan.
