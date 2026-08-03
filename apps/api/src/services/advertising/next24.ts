@@ -201,3 +201,57 @@ export function buildNext24(
     },
   }
 }
+
+/**
+ * RDX/G2 — what changes if this event is armed.
+ *
+ * `Arm` flips `enabled` and the engine picks the event up on its next tick, which on a live
+ * schedule is a bid change within 15 minutes. The plan document asked for a dry-run diff before
+ * anything arms; this is it.
+ *
+ * Both sides are produced by buildNext24 over the SAME slots — once with the event's plan and once
+ * without — so the comparison inherits every rule the preview already applies (window vs baseline,
+ * the engine's bias band, suppression, all-out's ignored ACoS cap) instead of restating them. Two
+ * rows differ only where the governing target genuinely differs.
+ */
+export interface PlanDiffRow { at: string; dow: number; hour: number; from: string | null; to: string | null }
+export interface PlanDiff {
+  hoursChanged: number
+  hoursSame: number
+  changed: PlanDiffRow[]
+  /** hours the event would run all-out, and of those how many have no CPC ceiling at all */
+  allOutHours: number
+  unboundedHours: number
+  suppressedHours: number
+  byTarget: Array<{ key: string; gained: number; lost: number; net: number }>
+}
+
+export function diffPlans(before: Next24Row[], after: Next24Row[]): PlanDiff {
+  const changed: PlanDiffRow[] = []
+  const gained = new Map<string, number>()
+  const lost = new Map<string, number>()
+  let same = 0
+  const n = Math.min(before.length, after.length)
+  for (let i = 0; i < n; i++) {
+    const a = before[i], b = after[i]
+    if (a.targetKey === b.targetKey) { same++; continue }
+    changed.push({ at: b.at, dow: b.dow, hour: b.hour, from: a.targetName ?? a.targetKey, to: b.targetName ?? b.targetKey })
+    if (a.targetKey) lost.set(a.targetKey, (lost.get(a.targetKey) ?? 0) + 1)
+    if (b.targetKey) gained.set(b.targetKey, (gained.get(b.targetKey) ?? 0) + 1)
+  }
+  const keys = new Set([...gained.keys(), ...lost.keys()])
+  return {
+    hoursChanged: changed.length,
+    hoursSame: same,
+    changed,
+    // Counted over the event's OWN hours, not just the changed ones: an event that holds all-out
+    // in an hour the weekly plan already held all-out is still an all-out hour being armed.
+    allOutHours: after.slice(0, n).filter((h) => h.allOut).length,
+    unboundedHours: after.slice(0, n).filter((h) => h.unbounded).length,
+    suppressedHours: after.slice(0, n).filter((h) => h.suppressed).length,
+    byTarget: [...keys].map((key) => {
+      const g = gained.get(key) ?? 0, l = lost.get(key) ?? 0
+      return { key, gained: g, lost: l, net: g - l }
+    }).sort((a, b) => Math.abs(b.net) - Math.abs(a.net) || b.gained - a.gained),
+  }
+}

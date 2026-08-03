@@ -19,7 +19,8 @@
  * weeks early is the mistake the feature exists to prevent.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarClock, Trash2, Plus } from 'lucide-react'
+import { CalendarClock, Trash2, Plus, AlertTriangle } from 'lucide-react'
+import { createPortal } from 'react-dom'
 import { H10Select } from '../../campaigns/FilterDropdown'
 import type { TargetPalette } from './ScheduleVersions'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -31,6 +32,21 @@ interface EventRow {
 }
 interface Template { id: string; name: string; windows: unknown[]; defaultTargetKey: string | null }
 
+/** RDX/G2 — GET :id/events/:eventId/arm-preview */
+interface ArmPreview {
+  expired?: boolean
+  event: { name: string }
+  group: { enabled: boolean }
+  campaigns: { total: number; archived: number; writeGated: number; gatedNames: string[] }
+  spanHours: number; previewedHours: number; truncated: boolean
+  diff: {
+    hoursChanged: number; hoursSame: number
+    allOutHours: number; unboundedHours: number; suppressedHours: number
+    changed: Array<{ at: string; dow: number; hour: number; from: string | null; to: string | null }>
+  }
+}
+
+const DOW3 = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const PHASE_TONE: Record<Phase, string> = { draft: 'arch', upcoming: 'ok', live: 'bad', past: 'arch' }
 const PHASE_LABEL: Record<Phase, string> = { draft: 'Draft', upcoming: 'Upcoming', live: 'Live now', past: 'Ended' }
 
@@ -52,6 +68,9 @@ export function ScheduleEvents({ groupId, palette, targetKeys }: {
   const [adding, setAdding] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  // RDX/G2 — arming is the one irreversible-feeling action here, so it goes through a diff first.
+  const [arming, setArming] = useState<EventRow | null>(null)
+  const [armPrev, setArmPrev] = useState<ArmPreview | null>(null)
 
   // form
   const [name, setName] = useState('')
@@ -147,9 +166,23 @@ export function ScheduleEvents({ groupId, palette, targetKeys }: {
                 <span className="nm">{e.name}</span>
                 <span className="meta">{fmt(e.startsAt)} → {fmt(e.endsAt)} · {describe(e)}</span>
               </span>
-              {/* A past event is history: arming it would do nothing, so the control is not offered. */}
+              {/* A past event is history: arming it would do nothing, so the control is not offered.
+
+                  Disarming is immediate: it can only ever return the schedule to its weekly plan,
+                  and putting a dialog in front of the safe direction trains people through it.
+                  Arming shows the diff first — that is the direction that changes bids. */}
               {e.phase !== 'past' && (
-                <button type="button" className="h10-am-btn bulk" disabled={busy} onClick={() => void setEnabled(e, !e.enabled)}>
+                <button
+                  type="button" className="h10-am-btn bulk" disabled={busy}
+                  onClick={() => {
+                    if (e.enabled) { void setEnabled(e, false); return }
+                    setArming(e); setArmPrev(null); setErr('')
+                    void fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/${groupId}/events/${e.id}/arm-preview`, { cache: 'no-store' })
+                      .then((r) => r.json())
+                      .then((j) => setArmPrev(j?.diff || j?.expired ? (j as ArmPreview) : null))
+                      .catch(() => setArmPrev(null))
+                  }}
+                >
                   {e.enabled ? 'Disarm' : 'Arm'}
                 </button>
               )}
@@ -157,6 +190,81 @@ export function ScheduleEvents({ groupId, palette, targetKeys }: {
             </div>
           ))}
       </div>
+
+      {arming && typeof document !== 'undefined' && createPortal(
+        <div className="h10-ntm-back" onClick={() => { if (!busy) { setArming(null); setArmPrev(null) } }}>
+          <div className="h10-ntm wide" role="dialog" aria-modal="true" aria-label={`Arm ${arming.name}`} onClick={(ev) => ev.stopPropagation()}>
+            <div className="h10-ntm-h"><b>Arm “{arming.name}”?</b></div>
+            <div className="h10-ntm-sub">
+              While it runs, this event&rsquo;s plan replaces the weekly one. The schedule reverts on its
+              own when the event ends — there is nothing to undo afterwards.
+            </div>
+            <div className="h10-ntm-b">
+              {!armPrev ? <div className="h10-d2-empty">Working out what would change…</div>
+                : armPrev.expired ? <div className="h10-d2-none"><b>This event has already ended.</b> Arming it would change nothing.</div>
+                : (
+                  <div className="h10-d2-diff">
+                    <div className="sum">
+                      <span><b>{armPrev.diff.hoursChanged}</b> hour{armPrev.diff.hoursChanged === 1 ? '' : 's'} change target</span>
+                      {armPrev.diff.hoursSame > 0 && <span className="muted">{armPrev.diff.hoursSame} unchanged</span>}
+                      <span className="muted">
+                        {armPrev.spanHours}h event
+                        {armPrev.truncated && <> · showing the first {armPrev.previewedHours}h</>}
+                      </span>
+                    </div>
+
+                    {/* The same warning E1 gives, at the moment it can still be acted on. */}
+                    {armPrev.diff.unboundedHours > 0 && (
+                      <div className="h10-d2-note bad">
+                        <AlertTriangle size={13} />
+                        <span>
+                          <b>{armPrev.diff.unboundedHours} of these hours run all-out with no CPC ceiling.</b>{' '}
+                          All-out ignores the ACoS cap by design, so nothing bounds the bid in{' '}
+                          {armPrev.diff.unboundedHours === 1 ? 'that hour' : 'those hours'}{' '}
+                          but Amazon&rsquo;s 900% limit.
+                        </span>
+                      </div>
+                    )}
+                    {armPrev.diff.allOutHours > 0 && armPrev.diff.unboundedHours === 0 && (
+                      <div className="h10-d2-note"><AlertTriangle size={13} /><span><b>{armPrev.diff.allOutHours} all-out hour{armPrev.diff.allOutHours === 1 ? '' : 's'}</b> — the ACoS cap is ignored, bounded by the target&rsquo;s max CPC.</span></div>
+                    )}
+                    {/* Arming an event on a paused schedule is harmless and easy to misread as live. */}
+                    {!armPrev.group.enabled && (
+                      <div className="h10-d2-note"><span>The schedule itself is <b>off</b>, so arming this event writes nothing to Amazon until the schedule is armed too.</span></div>
+                    )}
+                    {armPrev.campaigns.writeGated > 0 && (
+                      <div className="h10-d2-note"><AlertTriangle size={13} /><span><b>{armPrev.campaigns.writeGated} of {armPrev.campaigns.total} campaigns cannot write to Amazon</b> ({armPrev.campaigns.gatedNames.join(', ')}) — the event will be recorded and held locally for {armPrev.campaigns.writeGated === 1 ? 'it' : 'them'}.</span></div>
+                    )}
+
+                    {armPrev.diff.changed.length > 0 && (
+                      <div className="rows">
+                        {armPrev.diff.changed.map((c) => (
+                          <div className="r" key={c.at}>
+                            <span className="t">{DOW3[c.dow]} {String(c.hour).padStart(2, '0')}:00</span>
+                            <span className="f">{c.from ?? 'nothing'}</span>
+                            <span className="a">→</span>
+                            <span className="v">{c.to ?? 'nothing'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              {err && <div className="h10-ntm-err">{err}</div>}
+            </div>
+            <div className="h10-ntm-f">
+              <button type="button" className="cancel" onClick={() => { setArming(null); setArmPrev(null) }} disabled={busy}>Cancel</button>
+              <span className="grow" />
+              {armPrev && !armPrev.expired && (
+                <button type="button" className="apply" disabled={busy} onClick={() => { const e = arming; setArming(null); setArmPrev(null); void setEnabled(e, true) }}>
+                  {busy ? 'Arming…' : 'Arm event'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {!adding ? (
         <button type="button" className="h10-rp-link" onClick={() => setAdding(true)}><Plus size={12} /> Add an event</button>
