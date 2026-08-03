@@ -9,7 +9,7 @@
 > Teikametrics, Intentwise, Scale Insights, BidX, M19), and §0 reconciles its conclusions with ADX.
 Each entry: what they are → architecture → full feature inventory → what to take (mapped to our code) → where we already lead → what to refuse.
 
-Queue: **Pacvue** ✅ · **Rithum** ✅ · **Perpetua** ✅ · **Teikametrics** ✅ · Intentwise · Scale Insights · BidX · M19 · + leaders as found.
+Queue: **Pacvue** ✅ · **Rithum** ✅ · **Perpetua** ✅ · **Teikametrics** ✅ · **Intentwise** ✅ · Scale Insights · BidX · M19 · + leaders as found.
 
 ---
 
@@ -358,5 +358,85 @@ Their generative-AI listing editor consumes campaign data. We own the PIM and th
 The most *architecturally* useful entry so far, precisely because it is the least ambitious. Teikametrics does one thing — bids — inside operator-set bounds, at hourly cadence, and refuses to touch structure. That is a coherent product, and it is very close to what the ADX rank engine already is.
 
 Its existence is also mild evidence that our €150/day account does not need ML: their measured result is 10–20% ACOS improvement for sellers at $5–15k/month, i.e. an order of magnitude above us, and the prior desktop study already concluded rules-first at this volume.
+
+---
+
+# 5. Intentwise
+
+## 5.1 What it is
+
+**Analytics-first**, with execution layered on top — the inverse of every other company here. 21 marketplaces, 4,000+ connected accounts. Three product layers:
+
+| Layer | Products |
+|---|---|
+| **Foundation** (infrastructure) | **AI Gateway (MCP)** · Data Store · Data Pipelines |
+| **Intelligence** (visibility) | Product 360 · **Intentwise Explore** (AMC) · AI diagnostics + anomaly detection · shopper intelligence · dashboards |
+| **Optimize** (execution) | DSP · Walmart · Criteo · Instacart · Target Roundel · TikTok · AI automation · audience activation · performance orchestration |
+
+Their framing: the platform connects **five signal types — advertising, pricing, retail, inventory, and competition.** Nexus has four of those natively. **Competition is the one we have nothing for**, which is the same gap Perpetua identified from the other direction.
+
+## 5.2 ⭐ How Share of Voice actually works — the implementable spec
+
+Intentwise documents their SOV mechanics publicly, and this is the most operationally useful page found in the entire study. Combined with Perpetua's §3.3, we now have a complete specification.
+
+**Collection**
+- **Scrape page 1 of Amazon search results** for selected keywords, **4× daily**
+- **Rotate IP addresses across regions** for a representative national view
+- (Perpetua runs the same idea **hourly** across 100k+ terms)
+
+**Coverage — all three placement classes**
+- Organic (non-sponsored) listings
+- Sponsored Product ads
+- Branded headline (Sponsored Brands) ads
+
+**Formula**
+```
+SOV = (your brand's total appearances ÷ total appearances by all brands on page 1) × 100
+```
+
+**Dimensions:** brand (competitor comparison) · keyword · product/ASIN · time (daily/weekly/monthly) · **position metrics — best and average rank**. 13 months of history.
+
+**Operational use:** benchmark against competitors, **spot gaps between organic and ad visibility**, track ranking shifts.
+
+That last one is worth pausing on: separating organic from paid visibility per keyword tells you *which lever to pull*. High organic and low paid means stop buying what you already own. Low organic and low paid means the term is genuinely open. Our whole coverage goal is unmeasurable without that split.
+
+## 5.3 The decision this forces — and it is not a small one
+
+Every SOV product in this market is built on **scraping Amazon search results**. Amazon's ToS prohibits automated scraping of its pages. The vendors do it at scale and sell the output.
+
+So ADX.8 has three honest options, and this should be an explicit operator decision rather than an engineering default:
+
+| Option | What it means | Risk |
+|---|---|---|
+| **A. Build a collector** | Scrape page 1 for our keyword set on a schedule | ToS violation; IP blocking; the account is the asset at risk |
+| **B. Buy the data** | DataHawk, Intentwise and others sell SOV feeds | Cost; external dependency; but the ToS exposure is theirs |
+| **C. Approximate** | `topOfSearchImpressionShare` + SQP brand share + our own `KeywordRank` | Free, in-policy, already partly built — but tells us *our* share, never *who else is on the page* |
+
+**My recommendation: C now, B if C proves insufficient, and A not at all.** The asset at risk in option A is the selling account itself, and no coverage metric is worth that. Option C is weaker than what competitors have, and I would rather say so plainly than quietly build a scraper into an ads platform that also runs the listings.
+
+Notably, our keyword set is *tens* of terms across a few families — not 100k. If B is ever needed, it is a small purchase, not an enterprise data contract.
+
+## 5.4 Other features of note
+
+- **AI Gateway (MCP)** — they expose their analytics to AI assistants over Model Context Protocol. A 2026 pattern worth noting for the backlog; Nexus already has an Ask-AI surface and MCP servers in the stack.
+- **Anomaly detection** as a first-class product, not a rule. We have `ads-anomaly-guard` running (2,009 runs/14d) but it is not surfaced as an operator-facing product.
+- **Editable rules** — earlier research placed Intentwise firmly in the "define your own rules for full control" camp, which is consistent with the analytics-first posture.
+
+## 5.5 What to take
+
+1. **The SOV specification** (§5.2) — formula, dimensions, organic/paid split, best-and-average position. Adopt the *model* even under option C, so the metric is comparable if we ever change data source.
+2. **The organic-vs-paid visibility gap** as the headline diagnostic for the coverage goal.
+3. **The three-layer separation** — Foundation / Intelligence / Optimize. Nexus's three consoles are an accident; Intentwise's three layers are a decision. Worth borrowing as an organising principle for the surviving console: data → visibility → execution.
+
+## 5.6 What to refuse
+
+- **Scraping.** See §5.3.
+- **21-marketplace breadth**, DSP, and the retail-media network integrations.
+
+## 5.7 Verdict
+
+Intentwise contributes the **implementable definition of the metric our entire stated goal depends on**, and forces the one genuinely uncomfortable decision in this research: the industry measures page-one ownership by scraping, and we should not.
+
+That means accepting a weaker measurement (option C) or buying it (option B) — and being explicit that our coverage numbers are not directly comparable to a Pacvue or Perpetua dashboard. Better to know that now than to discover it after building the ladder.
 
 ---
