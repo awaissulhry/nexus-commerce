@@ -3029,3 +3029,18 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-dd-opt { position: relative; }
 /* The multi-select popover scrolls, so its search box must stay put while the list moves under it. */
 .h10-ms-pop .h10-dd-search { position: sticky; top: 0; z-index: 1; background: #fff; }
+
+/* ── HX.5 — account Change Log ─────────────────────────────────────────────────────────────
+   Mirrors the eBay change log's chrome so both channels read the same way. */
+.h10-cl-origin { display: inline-flex; flex-direction: column; line-height: 1.3; min-width: 0; }
+.h10-cl-origin .k { font-size: 10.5px; font-weight: 700; color: #8a93a1; text-transform: uppercase; letter-spacing: .3px; }
+.h10-cl-origin .n { font-size: 12.5px; font-weight: 600; color: #2b3440; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-cl-change { display: inline-flex; flex-direction: column; min-width: 0; font-size: 12.5px; color: #3a4452; }
+.h10-cl-change b { font-weight: 700; color: #1c2530; }
+.h10-cl-change em { font-style: normal; font-size: 11.5px; color: #8a93a1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-cl-none { color: #b0b7c1; font-size: 11.5px; }
+.h10-cl-win { display: inline-flex; align-items: center; gap: 10px; }
+/* An amber count, not red: a failed delivery is something to look at, and the Delivery filter is
+   the way to look at it — the label says so in its tooltip. */
+.h10-cl-alert { font-size: 11.5px; font-weight: 700; color: #9a6700; background: #fdf3d3; border-radius: 6px; padding: 4px 9px; white-space: nowrap; }
+.h10-cl-select { height: 30px; border: 1px solid #d8dde4; border-radius: 7px; background: #fff; font-size: 12.5px; color: #2b3440; padding: 0 8px; }
