@@ -28,6 +28,25 @@ interface Coverage {
 }
 export interface ScheduleOption { value: string; label: string }
 
+/**
+ * C2 — structural integrity, folded into the coverage strip rather than given a panel of its own.
+ * Coverage answers "what is not managed"; this answers "what is managed but broken". Same question
+ * shape, same place to look.
+ *
+ * Each finding is something that should be impossible, so a non-empty result is a bug in the data
+ * rather than an opinion about it — which is why a clean result says so in one word instead of
+ * being silent. A check you cannot see is a check you stop trusting.
+ */
+interface Integrity {
+  clean: boolean; issues: number
+  checked: { groups: number; schedules: number }
+  emptyGroups: Array<{ id: string; name: string }>
+  doubleHeld: Array<{ campaignId: string; schedules: number }>
+  ungrouped: Array<{ id: string; campaignId: string; enabled: boolean }>
+  archivedHolding: Array<{ scheduleId: string; campaignId: string; campaignName: string | null }>
+  missingCampaign: Array<{ scheduleId: string; campaignId: string }>
+}
+
 const eur = (cents: number) => `€${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 
 export function CoveragePanel({ market, schedules, onChanged }: {
@@ -38,6 +57,7 @@ export function CoveragePanel({ market, schedules, onChanged }: {
   onChanged?: () => void
 }) {
   const [data, setData] = useState<Coverage | null>(null)
+  const [integrity, setIntegrity] = useState<Integrity | null>(null)
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [sel, setSel] = useState<Set<string>>(new Set())
@@ -57,6 +77,17 @@ export function CoveragePanel({ market, schedules, onChanged }: {
   }, [market])
 
   useEffect(() => { void load(); setSel(new Set()); setMsg('') }, [load])
+
+  // Independent of the market filter: a structural fault is a fault regardless of which market you
+  // happen to be looking at.
+  useEffect(() => {
+    let alive = true
+    void fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/integrity`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => { if (alive) setIntegrity(typeof j?.issues === 'number' ? j : null) })
+      .catch(() => { if (alive) setIntegrity(null) })
+    return () => { alive = false }
+  }, [])
 
   const pct = useMemo(() => {
     if (!data || data.total === 0) return 0
@@ -104,11 +135,26 @@ export function CoveragePanel({ market, schedules, onChanged }: {
             {data.uncoveredSpendCents > 0 && <> · <b>{eur(data.uncoveredSpendCents)}</b> spent in {data.windowDays} days</>}
           </span>
         )}
+        {integrity && (
+          integrity.clean
+            ? <span className="h10-cov-int ok" title={`No structural faults across ${integrity.checked.groups} schedules and ${integrity.checked.schedules} member rows — no empty groups, no campaign held twice, no orphaned or archived-but-enabled rows.`}>structure clean</span>
+            : <span className="h10-cov-int bad" title="Structural faults — expand for detail">{integrity.issues} structural issue{integrity.issues === 1 ? '' : 's'}</span>
+        )}
         <span className="grow" />
         <span className="bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>
         <span className="pct">{pct}%</span>
         {!clean && <ChevronDown size={15} className={`chev ${open ? 'on' : ''}`} />}
       </button>
+
+      {integrity && !integrity.clean && (
+        <div className="h10-cov-int-list">
+          {integrity.emptyGroups.length > 0 && <div><b>{integrity.emptyGroups.length} schedule{integrity.emptyGroups.length === 1 ? '' : 's'} with no campaigns</b> — cannot run: {integrity.emptyGroups.slice(0, 4).map((g) => g.name).join(', ')}</div>}
+          {integrity.doubleHeld.length > 0 && <div><b>{integrity.doubleHeld.length} campaign{integrity.doubleHeld.length === 1 ? '' : 's'} held by more than one schedule</b> — the engine is competing with itself.</div>}
+          {integrity.ungrouped.length > 0 && <div><b>{integrity.ungrouped.length} schedule row{integrity.ungrouped.length === 1 ? '' : 's'} with no parent</b> — invisible in this list but still read by the rank loop.</div>}
+          {integrity.archivedHolding.length > 0 && <div><b>{integrity.archivedHolding.length} archived campaign{integrity.archivedHolding.length === 1 ? '' : 's'} holding an enabled schedule</b> — reads as working, can never run.</div>}
+          {integrity.missingCampaign.length > 0 && <div><b>{integrity.missingCampaign.length} schedule{integrity.missingCampaign.length === 1 ? '' : 's'} pointing at a campaign that no longer exists.</b></div>}
+        </div>
+      )}
 
       {open && !clean && (
         <div className="h10-cov-b">

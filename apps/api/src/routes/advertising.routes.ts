@@ -7843,6 +7843,65 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  /**
+   * C2 — the DPS Phase-0 truth pass, made permanent.
+   *
+   * That audit was run once, by hand, and found 8 zero-member groups plus 12 stranded
+   * single-campaign rows from a backfill. Every one of those conditions can recur, and none of them
+   * is visible anywhere: a group with no members renders as a normal row, and an archived campaign
+   * holding an enabled schedule looks like a working schedule.
+   *
+   * Structural only — nothing here is about performance. Each finding is something that should be
+   * impossible, so a non-empty result is a bug in the data rather than an opinion about it.
+   */
+  fastify.get('/advertising/rank-schedule-groups/integrity', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=30')
+
+    const [groups, schedules] = await Promise.all([
+      prisma.rankScheduleGroup.findMany({ select: { id: true, name: true, enabled: true, createdAt: true } }),
+      prisma.adSchedule.findMany({ select: { id: true, campaignId: true, groupId: true, enabled: true } }),
+    ])
+    const byGroup = new Map<string, number>()
+    for (const s of schedules) if (s.groupId) byGroup.set(s.groupId, (byGroup.get(s.groupId) ?? 0) + 1)
+
+    // A group with no members cannot run — it is the residue of the duplicate-save bug DPS.1 fixed,
+    // or of a save that removed every campaign.
+    const emptyGroups = groups.filter((g) => !byGroup.get(g.id)).map((g) => ({ id: g.id, name: g.name }))
+
+    // One campaign, one schedule is an application-level invariant with no DB constraint behind it,
+    // so it has to be checked rather than assumed. Two enabled schedules on one campaign means the
+    // engine is fighting itself.
+    const seen = new Map<string, string[]>()
+    for (const s of schedules) { const a = seen.get(s.campaignId) ?? []; a.push(s.id); seen.set(s.campaignId, a) }
+    const doubleHeld = [...seen.entries()].filter(([, v]) => v.length > 1).map(([campaignId, ids]) => ({ campaignId, schedules: ids.length }))
+
+    // Execution rows with no group: invisible in the console (the list shows groups) but still read
+    // by the cron. A schedule nobody can see is still spending money.
+    const ungrouped = schedules.filter((s) => !s.groupId).map((s) => ({ id: s.id, campaignId: s.campaignId, enabled: s.enabled }))
+
+    const campaignIds = [...new Set(schedules.map((s) => s.campaignId))]
+    const camps = campaignIds.length
+      ? await prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, name: true, status: true } })
+      : []
+    const campById = new Map(camps.map((c) => [c.id, c]))
+    // An archived campaign holding an ENABLED schedule reads as a working schedule and can never run.
+    const archivedHolding = schedules
+      .filter((s) => s.enabled && campById.get(s.campaignId)?.status === 'ARCHIVED')
+      .map((s) => ({ scheduleId: s.id, campaignId: s.campaignId, campaignName: campById.get(s.campaignId)?.name ?? null }))
+    // A member campaign that no longer exists at all — the schedule can never resolve.
+    const missingCampaign = schedules
+      .filter((s) => !campById.has(s.campaignId))
+      .map((s) => ({ scheduleId: s.id, campaignId: s.campaignId }))
+
+    const issues = emptyGroups.length + doubleHeld.length + ungrouped.length + archivedHolding.length + missingCampaign.length
+    return {
+      clean: issues === 0,
+      issues,
+      checked: { groups: groups.length, schedules: schedules.length },
+      emptyGroups, doubleHeld, ungrouped, archivedHolding, missingCampaign,
+    }
+  })
+
   fastify.post('/advertising/rank-schedule-groups', async (request, reply) => {
     const b = request.body as Record<string, unknown>
     if (!b?.name || !String(b.name).trim()) { reply.status(400); return { error: 'name is required' } }

@@ -980,3 +980,10 @@
 .h10-arm-missed .m { font-size: 11.5px; color: #7a5200; background: #fdf3d3; border-radius: 6px; padding: 3px 8px; white-space: nowrap; }
 .h10-arm-missed .m b { font-weight: 700; }
 .h10-arm-note { margin-top: 9px; font-size: 11.5px; color: #8a93a1; line-height: 1.5; }
+/* C2 — structural integrity, alongside coverage. A clean result says so rather than staying
+   silent: a check you cannot see is a check you stop trusting. */
+.h10-cov-int { font-size: 11.5px; font-weight: 600; border-radius: 6px; padding: 3px 9px; white-space: nowrap; }
+.h10-cov-int.ok { color: #0a7d48; background: #e3f5ec; }
+.h10-cov-int.bad { color: #a3211a; background: #fbdedb; font-weight: 700; }
+.h10-cov-int-list { border-top: 1px solid #eef1f5; padding: 10px 16px; display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: #7a5200; background: #fffdf6; }
+.h10-cov-int-list b { color: #1c2530; }
