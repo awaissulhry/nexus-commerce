@@ -2,14 +2,19 @@
 
 /**
  * CBN.2d — shared Ad-console page header (Helium 10 Ads match): eyebrow + title +
- * subtitle on the left; Learn · Share Feedback · Data Sync · Date range · Market
+ * subtitle on the left; Learn · Change Log · Data Sync · Date range · Market
  * selector · Action ▾ on the right. Reused by every /marketing/ads page.
+ *
+ * The Change Log sits here rather than in the sidebar, deliberately: it belongs to whatever you
+ * are looking at, and the sidebar is kept small on purpose. It replaced a mailto "Share Feedback"
+ * link, which was the least-used control in the header and the only one that left the product.
  * CBN.2f — the date control is the full DateRangePicker (its range is local to the
  * header for now; lift it when the campaigns list endpoint becomes date-aware).
  */
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Video, ExternalLink, RefreshCw, ChevronDown } from 'lucide-react'
+import { usePathname } from 'next/navigation'
+import { Video, RefreshCw, ChevronDown, History } from 'lucide-react'
 import { DateRangePicker } from './DateRangePicker'
 import { EbayMark } from './EbayMark'
 import { MarketSelect } from './MarketSelect'
@@ -61,6 +66,8 @@ export function AdsPageHeader({
   // pages pass 'ebay' so the header stops showing the amazon wordmark.
   channel?: 'amazon' | 'ebay'
 }) {
+  const pathname = usePathname()
+  const changeLogHref = channel === 'ebay' ? '/marketing/ads/ebay/change-log' : '/marketing/ads/changelog'
   const [open, setOpen] = useState<'' | 'action'>('')
   const close = () => setOpen('')
   const [dateRange, setDateRange] = useState(() => { const e = new Date(); e.setHours(0, 0, 0, 0); const s = new Date(e); s.setDate(s.getDate() - 6); return { start: s, end: e } })
@@ -82,7 +89,15 @@ export function AdsPageHeader({
       </div>
       <div className="h10-hdr-r">
         {showLearn && <button type="button" className="h10-hbtn"><Video size={15} /> Learn</button>}
-        <a className="h10-hbtn ghost" href="mailto:feedback@nexus-commerce.app?subject=Ads%20feedback"><ExternalLink size={14} /> Share Feedback</a>
+        {/* Channel-aware: the eBay console has its own complete change log, and sending an eBay
+            operator to the Amazon one would be worse than showing nothing. Hidden when you are
+            already there. Navigates in place rather than a new tab — this is top-level console
+            navigation, unlike the drawer's link, where a new tab exists to preserve the drawer. */}
+        {pathname !== changeLogHref && (
+          <Link className="h10-hbtn ghost" href={changeLogHref} title="Every change Nexus made to this account — what changed, what caused it, and whether it reached the channel">
+            <History size={14} /> Change Log
+          </Link>
+        )}
         {showDataSync && <button type="button" className="h10-hbtn ghost" onClick={onDataSync} disabled={syncing}><RefreshCw size={14} className={syncing ? 'spin' : ''} /> Data Sync</button>}
 
         {showDateRange && <DateRangePicker value={dateRange} onChange={(s, e) => { setDateRange({ start: s, end: e }); onDateRange?.(s, e) }} />}
