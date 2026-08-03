@@ -14,11 +14,12 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import { ChevronDown, Equal } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { rangeBounds } from '../_shell/AdsPageHeader'
+import { useChangeAnnotations, AnnotationToggle, AnnotationTooltipRows, type DayAnnotation } from './ChangeAnnotations'
 
 // ── metric catalog (order + units match the H10 dropdown) ───────────────────
 type Unit = 'eur' | 'pct' | 'count'
@@ -147,8 +148,9 @@ function Swatch({ color, label, dashed }: { color: string; label: string; dashed
 }
 
 // ── hover tooltip (date header + four series, values right-aligned) ──────────
-function GraphTooltip({ active, payload, leftKey, rightKey }: {
+function GraphTooltip({ active, payload, leftKey, rightKey, annotations }: {
   active?: boolean; payload?: Array<{ payload: ChartPoint }>; leftKey?: string; rightKey?: string
+  annotations?: Map<string, DayAnnotation>
 }) {
   if (!active || !payload?.length || !leftKey || !rightKey) return null
   const p = payload[0]?.payload
@@ -170,6 +172,9 @@ function GraphTooltip({ active, payload, leftKey, rightKey }: {
           <span className="v">{it.v}</span>
         </div>
       ))}
+      {/* HX.9 — what changed that day, in the same hover card as what happened. Reading them
+          together is the entire point; two separate surfaces make it a memory exercise. */}
+      {annotations?.get(p.date) && <AnnotationTooltipRows day={annotations.get(p.date)!} />}
     </div>
   )
 }
@@ -213,6 +218,19 @@ export function AdManagerGraph({ market, rangePreset }: { market: string; rangeP
 
   const data = useMemo(() => buildPoints(rows, leftKey, rightKey), [rows, leftKey, rightKey])
   const L = META[leftKey], R = META[rightKey]
+
+  // HX.9 — change markers over the same window the chart is already showing.
+  const [annOn, setAnnOn] = useState(true)
+  const [annRoutine, setAnnRoutine] = useState(false)
+  const annRange = useMemo(() => {
+    if (!data.length) return { start: null as Date | null, end: null as Date | null }
+    // Bound the fetch by the data actually plotted, not the requested range: an empty tail would
+    // otherwise pull changes for days the chart does not draw.
+    const s0 = new Date(`${data[0].date}T00:00:00`)
+    const e0 = new Date(`${data[data.length - 1].date}T23:59:59`)
+    return { start: s0, end: e0 }
+  }, [data])
+  const { byDate: annotations, total: annTotal } = useChangeAnnotations(annRange.start, annRange.end, { enabled: annOn, includeRoutine: annRoutine })
   const subtitle = `${dayLong(startStr)} - ${dayLong(endStr)}`
 
   // drag-to-resize grip (top-centre, matching H10's card grip position)
@@ -247,6 +265,7 @@ export function AdManagerGraph({ market, rangePreset }: { market: string; rangeP
         <Swatch color={LEFT_AVG} label={`${L?.label ?? leftKey} 7-Day Average`} dashed />
         <Swatch color={RIGHT_COLOR} label={R?.label ?? rightKey} />
         <Swatch color={RIGHT_AVG} label={`${R?.label ?? rightKey} 7-Day Average`} dashed />
+        <AnnotationToggle on={annOn} onToggle={setAnnOn} includeRoutine={annRoutine} onToggleRoutine={setAnnRoutine} total={annTotal} />
       </div>
 
       <div className="h10-gchart" style={{ height }}>
@@ -271,8 +290,18 @@ export function AdManagerGraph({ market, rangePreset }: { market: string; rangeP
                 yAxisId="right" orientation="right" domain={[0, 'auto']} tickFormatter={(v: number) => fmtAxis(v, R?.unit ?? 'count')}
                 tickLine={false} axisLine={false} tick={{ fontSize: 11.5, fill: '#6b7480' }} width={58}
               />
+              {/* Drawn before the lines so a marker never sits on top of the data it annotates.
+                  Amber when a change that day failed to reach Amazon — the one case worth the eye. */}
+              {annOn && [...annotations.values()].map((d) => (
+                <ReferenceLine
+                  key={d.date} yAxisId="left" x={d.date}
+                  stroke={d.failed > 0 ? '#e0a52e' : '#c2cbd8'}
+                  strokeDasharray="3 3" strokeWidth={1}
+                  label={{ value: '', position: 'top' }}
+                />
+              ))}
               <Tooltip
-                content={<GraphTooltip leftKey={leftKey} rightKey={rightKey} />}
+                content={<GraphTooltip leftKey={leftKey} rightKey={rightKey} annotations={annotations} />}
                 cursor={{ stroke: '#c2cbd8', strokeWidth: 1 }}
                 wrapperStyle={{ outline: 'none' }}
               />
