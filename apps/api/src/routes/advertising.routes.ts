@@ -6717,6 +6717,39 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send(`\uFEFF${body}`)
   })
 
+  /**
+   * HX.7 — undo one recorded change.
+   *
+   * GET previews (what would happen, and whether it is even allowed). POST performs it. The preview
+   * exists because the answer is frequently "no, and here is why" — already undone, never landed,
+   * outside the 24-hour window — and a button that fails on click teaches people not to trust it.
+   *
+   * The reversal itself goes through ads-mutation, so it inherits the write-gate, the outbound
+   * queue and the audit trail: an undo is a change like any other and is recorded as one.
+   */
+  fastify.get('/advertising/changes/:actionLogId/undo-preview', async (request, reply) => {
+    const { actionLogId } = request.params as { actionLogId: string }
+    reply.header('Cache-Control', 'no-store')
+    const { previewRollbackOfAction } = await import('../services/advertising/rollback.service.js')
+    return await previewRollbackOfAction(actionLogId)
+  })
+
+  fastify.post('/advertising/changes/:actionLogId/undo', async (request, reply) => {
+    const { actionLogId } = request.params as { actionLogId: string }
+    const b = (request.body ?? {}) as { reason?: string; userId?: string }
+    reply.header('Cache-Control', 'no-store')
+    const { rollbackByActionLogId } = await import('../services/advertising/rollback.service.js')
+    const r = await rollbackByActionLogId({
+      actionLogId,
+      actor: (b.userId ? `user:${b.userId}` : 'user:console') as never,
+      // Prefixed "Undo:" — the marker /campaigns/:id/history already uses to render a row as a
+      // reversal rather than as a fresh change.
+      reason: `Undo: ${b.reason ?? 'operator undo from the change log'}`,
+    })
+    if (!r.ok && !r.reversed) reply.status(409)
+    return r
+  })
+
   fastify.get('/advertising/events', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
     const { listEvents } = await import('../services/advertising/ads-events.service.js')
@@ -8250,6 +8283,93 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         enabled: b.enabled === true,
       },
     })
+  })
+
+  /**
+   * RDX/G2 — dry-run an event BEFORE arming it.
+   *
+   * Arming flips `enabled` and the engine swaps the schedule's whole plan on its next tick — on a
+   * live schedule, a bid change within 15 minutes with nothing shown first. The plan document
+   * asked for a diff before anything arms; this produces it.
+   *
+   * Both sides come from buildNext24 over the same slots — once with the event's plan, once with
+   * the weekly one — so the comparison inherits the preview's rules rather than restating them.
+   * Capped at one week: past 168 hours the weekly pattern repeats and the extra rows add length
+   * without adding information. Truncation is reported, never silent.
+   */
+  fastify.get('/advertising/rank-schedule-groups/:id/events/:eventId/arm-preview', async (request, reply) => {
+    const { id, eventId } = request.params as { id: string; eventId: string }
+    const [group, ev] = await Promise.all([
+      prisma.rankScheduleGroup.findUnique({ where: { id } }),
+      prisma.rankScheduleEvent.findUnique({ where: { id: eventId } }),
+    ])
+    if (!group) { reply.status(404); return { error: 'schedule not found' } }
+    if (!ev || ev.groupId !== id) { reply.status(404); return { error: 'event not found on this schedule' } }
+
+    const TZ_OK = new Set(['Europe/Rome', 'Europe/London', 'Europe/Madrid', 'Europe/Paris', 'Europe/Berlin', 'America/Los_Angeles', 'America/New_York', 'UTC'])
+    const tz = TZ_OK.has(group.timezone ?? '') ? group.timezone : 'Europe/Rome'
+
+    // Only the part of the event still in the future can change anything — an event that started
+    // yesterday is armed for the remainder, not retroactively.
+    const now = new Date()
+    const from = ev.startsAt > now ? ev.startsAt : now
+    if (ev.endsAt <= from) {
+      return { event: { id: ev.id, name: ev.name, startsAt: ev.startsAt, endsAt: ev.endsAt, enabled: ev.enabled }, expired: true, timezone: tz }
+    }
+    const HOUR = 3600_000
+    const spanHours = Math.ceil((ev.endsAt.getTime() - from.getTime()) / HOUR)
+    const previewedHours = Math.min(spanHours, 168)
+
+    const slots = await prisma.$queryRaw<Array<{ at: Date; dow: number; hour: number }>>`
+      SELECT gs AS at,
+             EXTRACT(DOW  FROM gs AT TIME ZONE ${tz})::int AS dow,
+             EXTRACT(HOUR FROM gs AT TIME ZONE ${tz})::int AS hour
+      FROM generate_series(
+        date_trunc('hour', ${from}::timestamptz),
+        date_trunc('hour', ${from}::timestamptz) + make_interval(hours => ${previewedHours - 1}),
+        interval '1 hour'
+      ) gs
+    `
+
+    const targets = await prisma.rankTarget.findMany()
+    const lib = new Map(targets.map((t) => [t.key, {
+      key: t.key, name: t.name, color: t.color,
+      biasPct: t.biasPct, maxBiasPct: t.maxBiasPct, maxCpcCents: t.maxCpcCents,
+      acosCapPct: t.acosCapPct, allOut: t.allOut, pause: t.pause,
+    }]))
+    const { buildNext24, diffPlans } = await import('../services/advertising/next24.js')
+    const base = slots.map((s) => ({ at: (s.at instanceof Date ? s.at : new Date(s.at)).toISOString(), dow: Number(s.dow), hour: Number(s.hour) }))
+
+    const weekly = buildNext24(base, group.windows as never, group.defaultTargetKey, lib)
+    const withEvent = buildNext24(
+      base.map((b) => ({ ...b, plan: { windows: ev.windows as never, defaultTargetKey: ev.defaultTargetKey, eventName: ev.name } })),
+      group.windows as never, group.defaultTargetKey, lib,
+    )
+    const diff = diffPlans(weekly.hours, withEvent.hours)
+
+    // The blast radius, on the same screen as the diff: a schedule whose campaigns are all
+    // write-gated records the change and pushes nothing, which looks identical to success.
+    const members = await prisma.adSchedule.findMany({ where: { groupId: id }, select: { campaignId: true, enabled: true } })
+    const camps = members.length
+      ? await prisma.campaign.findMany({ where: { id: { in: members.map((m) => m.campaignId) } }, select: { id: true, name: true, status: true, liveBidWritesEnabled: true } })
+      : []
+    const gated = camps.filter((c) => !c.liveBidWritesEnabled)
+
+    reply.header('Cache-Control', 'private, max-age=10')
+    return {
+      event: { id: ev.id, name: ev.name, startsAt: ev.startsAt, endsAt: ev.endsAt, enabled: ev.enabled },
+      // Arming an event on a DISABLED schedule changes nothing until the schedule itself is armed.
+      group: { id: group.id, name: group.name, enabled: group.enabled },
+      campaigns: {
+        total: camps.length,
+        archived: camps.filter((c) => c.status === 'ARCHIVED').length,
+        writeGated: gated.length,
+        gatedNames: gated.slice(0, 5).map((c) => c.name),
+      },
+      timezone: tz,
+      spanHours, previewedHours, truncated: spanHours > previewedHours,
+      diff,
+    }
   })
 
   fastify.patch('/advertising/rank-schedule-groups/:id/events/:eventId', async (request, reply) => {

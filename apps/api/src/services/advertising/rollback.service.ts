@@ -210,6 +210,70 @@ async function reverseOne(
  * Quartile and Trellis are all called out for its absence. We already had the
  * primitive; this just points it at imports.
  */
+/**
+ * HX.7 — undo ONE recorded change.
+ *
+ * The service already reversed a whole rule execution or a whole change set. What the change log
+ * needs is the single row in front of you: "put that one bid back".
+ *
+ * Deliberately reuses reverseOne and the same 24-hour horizon rather than inventing a second set of
+ * rules — an undo that behaved differently depending on which button you pressed would be worse
+ * than no undo at all.
+ *
+ * GROUPING IS PRESERVED. If the row belongs to a change set, the whole set reverses together, the
+ * way Google Ads does it: one operation that wrote four fields is one thing the operator did, and
+ * unpicking a quarter of it would leave the entity in a state that never existed. The caller is
+ * told how many rows came with it so the confirm can say so BEFORE it happens.
+ */
+export async function previewRollbackOfAction(actionLogId: string): Promise<{
+  found: boolean; eligible: boolean; reason?: string
+  actionType?: string; entityType?: string; entityId?: string
+  groupedWith?: number; changeSetId?: string | null; at?: Date
+}> {
+  const log = await prisma.advertisingActionLog.findUnique({ where: { id: actionLogId } })
+  if (!log) return { found: false, eligible: false, reason: 'That change no longer exists.' }
+  const base = { found: true, actionType: log.actionType, entityType: log.entityType, entityId: log.entityId, changeSetId: log.executionId, at: log.createdAt }
+  if (log.rolledBackAt) return { ...base, eligible: false, reason: 'Already undone.' }
+  if (log.amazonResponseStatus !== 'SUCCESS' && log.amazonResponseStatus !== 'PENDING') {
+    // Nothing reached Amazon, so there is nothing to put back.
+    return { ...base, eligible: false, reason: `This change never landed (${log.amazonResponseStatus ?? 'unknown'}) — there is nothing to reverse.` }
+  }
+  if (Date.now() - log.createdAt.getTime() > ROLLBACK_WINDOW_MS) {
+    return { ...base, eligible: false, reason: `Older than the ${ROLLBACK_WINDOW_HOURS}-hour undo window. Amazon's own state has usually moved on, so restoring an old snapshot can do more harm than the change it reverses.` }
+  }
+  const groupedWith = log.executionId
+    ? await prisma.advertisingActionLog.count({ where: { executionId: log.executionId, rolledBackAt: null, createdAt: { gte: new Date(Date.now() - ROLLBACK_WINDOW_MS) } } })
+    : 1
+  return { ...base, eligible: true, groupedWith }
+}
+
+export async function rollbackByActionLogId(args: {
+  actionLogId: string
+  actor: AdsActor
+  reason: string
+}): Promise<RollbackOutcome> {
+  const log = await prisma.advertisingActionLog.findUnique({ where: { id: args.actionLogId } })
+  if (!log) return { ok: false, reversed: 0, skipped: 0, failed: 0, details: [], reason: 'That change no longer exists.' }
+  // A grouped row reverses with its set, so the entity never lands in a state that never existed.
+  if (log.executionId) return rollbackByChangeSetId({ changeSetId: log.executionId, actor: args.actor, reason: args.reason })
+
+  const out: RollbackOutcome = { ok: true, reversed: 0, skipped: 0, failed: 0, details: [] }
+  if (log.rolledBackAt) { out.skipped = 1; out.reason = 'Already undone.'; return out }
+  if (Date.now() - log.createdAt.getTime() > ROLLBACK_WINDOW_MS) {
+    out.expired = true; out.windowHours = ROLLBACK_WINDOW_HOURS
+    out.reason = `Older than the ${ROLLBACK_WINDOW_HOURS}-hour undo window.`
+    return out
+  }
+  const r = await reverseOne(log as never, args.actor, args.reason)
+  if (r.ok) {
+    out.reversed = 1
+    await prisma.advertisingActionLog.update({ where: { id: log.id }, data: { rolledBackAt: new Date(), rollbackReason: args.reason } }).catch(() => {})
+  } else if (r.skipped) out.skipped = 1
+  else { out.failed = 1; out.ok = false; out.reason = r.reason }
+  out.details.push({ id: log.id, actionType: log.actionType, ...r } as never)
+  return out
+}
+
 export async function rollbackByChangeSetId(args: {
   changeSetId: string
   actor: AdsActor

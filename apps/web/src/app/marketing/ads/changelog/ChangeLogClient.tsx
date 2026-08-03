@@ -19,6 +19,7 @@
  * filterable — "show me everything that failed to land" is the question this page exists for.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { RotateCcw } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../campaigns/_grid/AdsDataGrid'
 // One definition of "routine", shared with the chart annotations — the same split, for the same
@@ -28,6 +29,10 @@ import { getBackendUrl } from '@/lib/backend-url'
 
 interface Origin { kind: string; id: string | null; name: string }
 interface Delivery { state: string; attempts: number; lastError: string | null }
+interface UndoPreview {
+  found: boolean; eligible: boolean; reason?: string
+  actionType?: string; groupedWith?: number; at?: string
+}
 interface ChangeRow {
   id: string; at: string; actor: string | null; source: string
   origin: Origin
@@ -100,6 +105,41 @@ export function ChangeLogClient() {
    * question; it is just not the one you open a change log to ask.
    */
   const [showRoutine, setShowRoutine] = useState(false)
+  // HX.7 — undo. Confirmed rather than immediate, and previewed before the confirm, because the
+  // answer is frequently "no, and here is why".
+  const [undoing, setUndoing] = useState<{ row: ChangeRow; preview: UndoPreview | null } | null>(null)
+  const [undoBusy, setUndoBusy] = useState(false)
+  const [undoMsg, setUndoMsg] = useState('')
+
+  const openUndo = useCallback(async (r: ChangeRow) => {
+    setUndoing({ row: r, preview: null }); setUndoMsg('')
+    // The id is prefixed by the feed: 'a:' for an operation row, 'h:' for a field row. Only
+    // operation rows carry the before/after snapshot an undo needs.
+    const id = r.id.startsWith('a:') ? r.id.slice(2) : null
+    if (!id) { setUndoing({ row: r, preview: { found: false, eligible: false, reason: 'This row records a value change, not the operation behind it — there is no snapshot to restore from.' } }); return }
+    try {
+      const j = await fetch(`${getBackendUrl()}/api/advertising/changes/${id}/undo-preview`, { cache: 'no-store' }).then((x) => x.json())
+      setUndoing({ row: r, preview: j })
+    } catch { setUndoing({ row: r, preview: { found: false, eligible: false, reason: 'Could not check whether this can be undone.' } }) }
+  }, [])
+
+  const doUndo = useCallback(async () => {
+    if (!undoing || undoBusy) return
+    const id = undoing.row.id.startsWith('a:') ? undoing.row.id.slice(2) : null
+    if (!id) return
+    setUndoBusy(true)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/changes/${id}/undo`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+      })
+      const j = await r.json().catch(() => null)
+      setUndoMsg(r.ok && j?.reversed
+        ? `Undone — ${j.reversed} change${j.reversed === 1 ? '' : 's'} reversed. The reversal is queued through the normal write path and appears in this log as its own entry.`
+        : (j?.reason ?? 'Could not undo that change.'))
+      if (r.ok && j?.reversed) { setUndoing(null); load() }
+    } catch { setUndoMsg('Request failed — please retry.') }
+    finally { setUndoBusy(false) }
+  }, [undoing, undoBusy, load])
   const fetched = useMemo(() => rows ?? [], [rows])
   const routineCount = useMemo(() => fetched.filter((r) => isRoutine(r.field)).length, [fetched])
   const allRows = useMemo(
@@ -149,6 +189,16 @@ export function ChangeLogClient() {
           <b>{val(r.oldValue, r.field)}</b> → <b>{val(r.newValue, r.field)}</b>
           {r.reason && <em title={r.reason}>{r.reason}</em>}
         </span>
+      ),
+    },
+    {
+      // Only operation rows carry a before/after snapshot, so only they can be reversed. Offering
+      // the control on a value row that cannot use it would be a promise the page cannot keep.
+      key: 'undo', label: '', metric: false, sortable: false,
+      render: (r) => (
+        r.id.startsWith('a:')
+          ? <button type="button" className="h10-cl-undo" title="Undo this change" onClick={(e) => { e.stopPropagation(); void openUndo(r) }}><RotateCcw size={12} /></button>
+          : null
       ),
     },
     {
@@ -223,6 +273,40 @@ export function ChangeLogClient() {
             </button>
           ))}
           {originFilter && <button type="button" className="clr" onClick={() => setOriginFilter(null)}>Clear</button>}
+        </div>
+      )}
+
+      {undoMsg && !undoing && <div className="h10-am-latest">{undoMsg}</div>}
+      {undoing && (
+        <div className="h10-ntm-back" onClick={() => { if (!undoBusy) { setUndoing(null); setUndoMsg('') } }}>
+          <div className="h10-ntm" role="dialog" aria-modal="true" aria-label="Undo change" onClick={(e) => e.stopPropagation()}>
+            <div className="h10-ntm-h"><b>Undo this change</b></div>
+            <div className="h10-ntm-sub">
+              {!undoing.preview ? 'Checking…'
+                : !undoing.preview.eligible ? undoing.preview.reason
+                : (
+                  <>
+                    Restores what <b>{fieldLabel(undoing.row.field)}</b> was before this change, on{' '}
+                    <b>{undoing.row.entity.name ?? undoing.row.entity.type.toLowerCase()}</b>.
+                    {undoing.preview.groupedWith && undoing.preview.groupedWith > 1 && (
+                      <> This was one of <b>{undoing.preview.groupedWith}</b> changes made by a single
+                      operation, and all of them reverse together — undoing part of it would leave the
+                      entity in a state that never existed.</>
+                    )}
+                    {' '}The reversal is pushed to Amazon through the normal write path, so it honours the
+                    campaign&rsquo;s write-gate and is itself recorded here.
+                  </>
+                )}
+            </div>
+            {undoMsg && <div className="h10-ntm-b"><div className="h10-ntm-err">{undoMsg}</div></div>}
+            <div className="h10-ntm-f">
+              <button type="button" className="cancel" onClick={() => { setUndoing(null); setUndoMsg('') }} disabled={undoBusy}>Close</button>
+              <span className="grow" />
+              {undoing.preview?.eligible && (
+                <button type="button" className="apply danger" onClick={() => void doUndo()} disabled={undoBusy}>{undoBusy ? 'Undoing…' : 'Undo'}</button>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
