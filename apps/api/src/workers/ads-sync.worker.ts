@@ -195,7 +195,11 @@ async function dispatchToAmazon(
       return { ok: res.ok, rawResponse: res.rawResponse, error: res.error ?? null }
     }
     if (payload.entityType === 'AD_TARGET') {
-      const res = await updateTarget(ctx, payload.externalId, patch)
+      // DL.1 — the kind decides the endpoint: keyword ids live under /sp/keywords, product and
+      // auto target ids under /sp/targets. One indexed read, negligible beside the HTTP call it
+      // precedes, and it is what stops product/auto bid writes being rejected forever.
+      const t = await prisma.adTarget.findUnique({ where: { id: payload.entityId }, select: { kind: true } })
+      const res = await updateTarget(ctx, payload.externalId, patch, t?.kind ?? null)
       return { ok: res.ok, rawResponse: res.rawResponse, error: res.error ?? null }
     }
     if (payload.entityType === 'PRODUCT_AD') {

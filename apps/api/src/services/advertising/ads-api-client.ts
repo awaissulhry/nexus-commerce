@@ -1072,19 +1072,62 @@ export interface TargetPatch {
   bid?: number
 }
 
+/**
+ * DL.1 — a target's bid/state update must go to the endpoint that owns its id.
+ *
+ * This function used to PUT /sp/keywords for EVERY AdTarget. That is correct only for keyword
+ * targets: a product or auto target's external id is a `targetId` living under /sp/targets, so
+ * Amazon answered `entityNotFoundError` at `$.keywords[0].keywordId` and rejected the write.
+ *
+ * Measured on live data before the fix, the split was total — 413 keyword writes APPLIED, and
+ * every one of the 27 product/auto targets FAILED, forever, with zero successes ever recorded.
+ * That silently disabled rank control on an entire product-targeting campaign (GALE | IT | PAT)
+ * and the three auto campaigns, while the engine reported "applied" and retried every 15 minutes.
+ *
+ * `kind` comes from AdTarget.kind. It is optional and falls back to the keyword path, which is the
+ * previous behaviour — an unknown kind therefore cannot become a NEW failure mode, and keyword
+ * targets (the overwhelming majority, and the ones that already worked) are untouched.
+ */
 export async function updateTarget(
   ctx: ClientContext,
   externalTargetId: string,
   patch: TargetPatch,
+  kind?: string | null,
 ): Promise<{ ok: boolean; mode: AdsMode; rawResponse: unknown; error?: string | null }> {
+  // PRODUCT (ASIN/category targeting) and AUTO (close/loose/complements/substitutes) are
+  // targeting clauses. Anything else — including a null kind — keeps the keyword path.
+  const k = (kind ?? '').toUpperCase()
+  const isTargetingClause = k === 'PRODUCT' || k === 'AUTO'
+
   if (adsMode() === 'sandbox') {
     logger.info('[ADS-SANDBOX] updateTarget', {
       profileId: ctx.profileId,
       externalTargetId,
       patch,
+      kind: k || null,
+      route: isTargetingClause ? '/sp/targets' : '/sp/keywords',
     })
-    return { ok: true, mode: 'sandbox', rawResponse: { sandbox: true, patch } }
+    return { ok: true, mode: 'sandbox', rawResponse: { sandbox: true, patch, route: isTargetingClause ? 'targets' : 'keywords' } }
   }
+
+  if (isTargetingClause) {
+    // v3: PUT /sp/targets — same batch shape as the CREATE path already uses (POST /sp/targets
+    // with `targetingClauses`), keyed by targetId rather than keywordId.
+    const v3Target: Record<string, unknown> = { targetId: externalTargetId }
+    if (patch.state) v3Target.state = patch.state.toUpperCase()
+    if (patch.bid != null) v3Target.bid = patch.bid
+    const response = await liveCall<unknown>({
+      ...ctx,
+      method: 'PUT',
+      path: '/sp/targets',
+      body: { targetingClauses: [v3Target] },
+      contentType: 'application/vnd.spTargetingClause.v3+json',
+      acceptHeader: 'application/vnd.spTargetingClause.v3+json',
+    })
+    const parsed = v3BatchResult(response, 'targetingClauses')
+    return { ok: parsed.ok, mode: 'live', rawResponse: response, error: parsed.error }
+  }
+
   // v3: PUT /sp/keywords with batch body.
   const v3Keyword: Record<string, unknown> = { keywordId: externalTargetId }
   if (patch.state) v3Keyword.state = patch.state.toUpperCase()
