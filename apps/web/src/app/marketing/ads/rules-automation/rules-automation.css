@@ -706,6 +706,8 @@
 /* A computed cell, not an input — same footprint as the field beside it so the row of
    knobs stays on one baseline, but visibly not editable. */
 .h10-mcalc b { font-size: 12px; font-weight: 700; color: #1c2530; padding: 4px 0; }
+/* MB.2 — the engine clamped what you typed; say so where you typed it. */
+.h10-mwarn { font-size: 10.5px; font-weight: 600; color: #c2410c; background: #fff4ed; border: 1px solid #fde3d3; border-radius: 6px; padding: 5px 8px; margin-top: 8px; }
 .h10-mkeep { flex-direction: row; align-items: center; gap: 5px; }
 .h10-mkeep select { font: inherit; font-size: 11.5px; border: 1px solid #d8dde4; border-radius: 6px; padding: 3px 6px; }
 .h10-mrecipes { display: flex; align-items: center; gap: 6px; margin-top: 9px; flex-wrap: wrap; }

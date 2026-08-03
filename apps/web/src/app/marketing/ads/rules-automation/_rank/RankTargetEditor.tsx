@@ -23,8 +23,56 @@ type OvField = 'biasPct' | 'targetISPct' | 'acosCapPct' | 'maxCpcCents' | 'floor
 // this set, so adding the Min-bid floor could not leave one conversion behind.
 const EURO_FIELDS = new Set<OvField>(['maxCpcCents', 'floorBidCents'])
 const isEuro = (f: OvField) => EURO_FIELDS.has(f)
-// MB.1 — the engine's legacy floor: what a Min-bid target holds when nothing is set.
+// MB.1 — the engine's legacy floor: what a Min-bid target holds when nothing is set. Also
+// Amazon's own SP minimum, which normaliseFloorCents clamps up to — mirrored here so the
+// readouts can never promise a floor the engine will refuse to use.
 const DEFAULT_FLOOR_CENTS = 2
+const eurStr = (c: number | null | undefined) => (c == null ? '' : (c / 100).toFixed(2))
+/**
+ * MB.2 — euros → cents, accepting BOTH decimal separators.
+ *
+ * These fields are `type="text"` rather than `type="number"` on purpose: a number input
+ * renders its value through the browser's locale, so on a comma-decimal locale the "." key
+ * is dropped and "0.10" lands as 0. Parsing both separators ourselves is the only way the
+ * same keystrokes mean the same money everywhere.
+ */
+const parseEuro = (raw: string): number | null => {
+  const s = raw.trim().replace(',', '.')
+  if (s === '') return null
+  const n = Number(s)
+  return Number.isFinite(n) ? Math.round(n * 100) : null
+}
+
+/**
+ * MB.2 — a money field that lets you type.
+ *
+ * The previous inputs were controlled on the CANONICAL value: every keystroke re-rendered
+ * `(cents/100).toFixed(2)`, so the moment you typed "0" the box became "0.00" and the caret
+ * jumped — "0.10" was unenterable. Holding the raw keystrokes in a draft while committing
+ * the parsed value on each change keeps the field editable and the state correct; the draft
+ * is dropped on blur so the box settles back to canonical form.
+ */
+function EuroInput({ dkey, cents, placeholder, disabled, draft, setDraft, onCommit }: {
+  dkey: string
+  cents: number | null | undefined
+  placeholder?: string
+  disabled?: boolean
+  draft: Record<string, string>
+  setDraft: React.Dispatch<React.SetStateAction<Record<string, string>>>
+  onCommit: (raw: string) => void
+}) {
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      disabled={disabled}
+      value={draft[dkey] ?? eurStr(cents)}
+      placeholder={placeholder}
+      onChange={e => { const v = e.target.value; setDraft(d => ({ ...d, [dkey]: v })); onCommit(v) }}
+      onBlur={() => setDraft(d => { const n = { ...d }; delete n[dkey]; return n })}
+    />
+  )
+}
 // BL.9 — a scope override can also carry a per-product/campaign BLEND (its own lanes +
 // base-bid), so a blend can be campaign-specific, not just the global library default.
 type Ov = Partial<Record<OvField, number>> & { keepClimbing?: boolean; lanes?: BlendLane[]; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
@@ -74,6 +122,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
   const [changed, setChanged] = useState(false)
   const [adding, setAdding] = useState(false)
   const [motionOpen, setMotionOpen] = useState<Record<string, boolean>>({}) // per-target Motion drawer
+  const [draft, setDraft] = useState<Record<string, string>>({}) // MB.2 — in-flight money keystrokes
   const [blendOpen, setBlendOpen] = useState<Record<string, boolean>>({}) // BL — per-target Blend drawer
   const [form, setForm] = useState<{ name: string; color: string; scope: 'global' | 'scope' } & Ov>({ name: '', color: '#3aa873', scope: scopeKind === 'campaign' ? 'scope' : 'scope' })
 
@@ -87,7 +136,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
   // fresh `{}` and onSaveScopeOverrides a fresh fn on every parent render — keeping them
   // in deps would re-run this on each parent re-render and wipe the operator's in-modal
   // edits. They're read here at open-time (and onSave is read live in save()).
-  useEffect(() => { if (open) { load(); setOv({ ...(scopeOverrides || {}) }); setLib({}); setView(onSaveScopeOverrides ? 'scope' : 'global'); setMsg(''); setChanged(false); setAdding(false) } }, [open, load]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (open) { load(); setOv({ ...(scopeOverrides || {}) }); setLib({}); setDraft({}); setView(onSaveScopeOverrides ? 'scope' : 'global'); setMsg(''); setChanged(false); setAdding(false) } }, [open, load]) // eslint-disable-line react-hooks/exhaustive-deps
   // RGD.6 — Esc closes the modal (a11y)
   useEffect(() => { if (!open) return; const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(changed) }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k) }, [open, changed, onClose])
 
@@ -98,8 +147,12 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
   const defOf = (t: RankTarget, f: OvField): number | null => (lib[t.id]?.[f] as number | null | undefined) ?? (t[f] as number | null)
   const effOf = (t: RankTarget, f: OvField): number | null => (view === 'scope' && ov[t.key]?.[f] != null ? ov[t.key]![f]! : defOf(t, f))
   // MB.2 — the effective floor for a Min-bid target at the active scope (blank = the 2¢ the
-  // engine has always used).
-  const floorOf = (t: RankTarget): number => effOf(t, 'floorBidCents') ?? DEFAULT_FLOOR_CENTS
+  // engine has always used). Clamped exactly as normaliseFloorCents clamps it server-side:
+  // typing 0.00 must not let this page report a €0.00 floor the engine will never apply.
+  const floorOf = (t: RankTarget): number => Math.max(DEFAULT_FLOOR_CENTS, effOf(t, 'floorBidCents') ?? DEFAULT_FLOOR_CENTS)
+  // Did the operator ask for something below Amazon's minimum? Then say so, rather than
+  // silently showing the clamped number as though it were what they typed.
+  const floorClamped = (t: RankTarget): boolean => { const v = effOf(t, 'floorBidCents'); return v != null && v < DEFAULT_FLOOR_CENTS }
   /**
    * MB.2 — what a click actually costs in a Min-bid hour.
    *
@@ -211,8 +264,9 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
     setChanged(true)
     setOv(m => {
       const next = { ...m }; const cur = { ...(next[key] || {}) }
-      if (raw === '') delete cur[f]
-      else cur[f] = isEuro(f) ? Math.round(Number(raw) * 100) : Math.round(Number(raw))
+      if (raw.trim() === '') delete cur[f]
+      else if (isEuro(f)) { const c = parseEuro(raw); if (c != null) cur[f] = c }
+      else cur[f] = Math.round(Number(raw))
       if (Object.keys(cur).length) next[key] = cur; else delete next[key]
       return next
     })
@@ -221,7 +275,15 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
   // global-view: edit the library draft (saved via PATCH)
   const setLibField = (id: string, f: keyof RankTarget, raw: string | number) => {
     setChanged(true)
-    setLib(m => ({ ...m, [id]: { ...(m[id] || {}), [f]: raw === '' ? null : (isEuro(f as OvField) ? Math.round(Number(raw) * 100) : (f === 'name' || f === 'color' ? raw : Math.round(Number(raw)))) } }))
+    if (isEuro(f as OvField)) {
+      // A half-typed value ("0.") parses to a number and commits; genuinely unparseable
+      // input leaves the last good value in place while the draft keeps the keystrokes.
+      const c = typeof raw === 'string' && raw.trim() === '' ? null : parseEuro(String(raw))
+      if (c === null && String(raw).trim() !== '') return
+      setLib(m => ({ ...m, [id]: { ...(m[id] || {}), [f]: c } }))
+      return
+    }
+    setLib(m => ({ ...m, [id]: { ...(m[id] || {}), [f]: raw === '' ? null : (f === 'name' || f === 'color' ? raw : Math.round(Number(raw))) } }))
   }
 
   const save = async () => {
@@ -311,11 +373,13 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                   if (view === 'scope') {
                     const v = ov[t.key]?.[f.f]
                     const ph = defOf(t, f.f)
-                    return <span key={f.f} className="fld"><input type="number" disabled={!scopeAvailable} value={v == null ? '' : isEuro(f.f) ? eur(v) : v} placeholder={ph == null ? blank : isEuro(f.f) ? eur(ph) : String(ph)} onChange={e => setScope(t.key, f.f, e.target.value)} step={isEuro(f.f) ? '0.01' : '1'} /></span>
+                    if (isEuro(f.f)) return <span key={f.f} className="fld"><EuroInput dkey={`s:${t.key}:${f.f}`} cents={v} placeholder={ph == null ? blank : eur(ph)} disabled={!scopeAvailable} draft={draft} setDraft={setDraft} onCommit={raw => setScope(t.key, f.f, raw)} /></span>
+                    return <span key={f.f} className="fld"><input type="number" disabled={!scopeAvailable} value={v == null ? '' : v} placeholder={ph == null ? blank : String(ph)} onChange={e => setScope(t.key, f.f, e.target.value)} step="1" /></span>
                   }
                   const lv = (lib[t.id]?.[f.f] as number | null | undefined)
                   const val = lv !== undefined ? lv : (t[f.f] as number | null)
-                  return <span key={f.f} className="fld"><input type="number" value={val == null ? '' : isEuro(f.f) ? eur(val) : val} placeholder={blank} onChange={e => setLibField(t.id, f.f, e.target.value)} step={isEuro(f.f) ? '0.01' : '1'} /></span>
+                  if (isEuro(f.f)) return <span key={f.f} className="fld"><EuroInput dkey={`g:${t.id}:${f.f}`} cents={val} placeholder={blank} draft={draft} setDraft={setDraft} onCommit={raw => setLibField(t.id, f.f, raw)} /></span>
+                  return <span key={f.f} className="fld"><input type="number" value={val == null ? '' : val} placeholder={blank} onChange={e => setLibField(t.id, f.f, e.target.value)} step="1" /></span>
                 })}
                 <span className="act">
                   {/* MB.2 — Min bid gets the same drawer affordance as every other target; only its CONTENTS differ. */}
@@ -341,14 +405,15 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                     <label className="h10-mfield" title="The bid every keyword and ad group is held at during these hours. Blank = €0.02, the engine's long-standing floor and Amazon's own minimum.">
                       <span>Floor €</span>
                       {view === 'scope'
-                        ? <input type="number" min={0.02} step="0.01" disabled={!scopeAvailable} value={eur(ov[t.key]?.floorBidCents)} placeholder={eur(defOf(t, 'floorBidCents')) || '0.02'} onChange={e => setScope(t.key, 'floorBidCents', e.target.value)} />
-                        : <input type="number" min={0.02} step="0.01" value={eur((lib[t.id]?.floorBidCents as number | null | undefined) !== undefined ? (lib[t.id]!.floorBidCents as number | null) : t.floorBidCents)} placeholder="0.02" onChange={e => setLibField(t.id, 'floorBidCents', e.target.value)} />}
+                        ? <EuroInput dkey={`s:${t.key}:floorBidCents`} cents={ov[t.key]?.floorBidCents} placeholder={eur(defOf(t, 'floorBidCents')) || '0.02'} disabled={!scopeAvailable} draft={draft} setDraft={setDraft} onCommit={raw => setScope(t.key, 'floorBidCents', raw)} />
+                        : <EuroInput dkey={`g:${t.id}:floorBidCents`} cents={(lib[t.id]?.floorBidCents as number | null | undefined) !== undefined ? (lib[t.id]!.floorBidCents as number | null) : t.floorBidCents} placeholder="0.02" draft={draft} setDraft={setDraft} onCommit={raw => setLibField(t.id, 'floorBidCents', raw)} />}
                     </label>
                     <label className="h10-mfield h10-mcalc" title="Amazon charges base bid × (1 + placement %). This is that arithmetic, not a setting.">
                       <span>Per click</span>
                       <b>{eurLbl(floorOf(t) * (100 + (effOf(t, 'biasPct') ?? 0)) / 100)}</b>
                     </label>
                   </div>
+                  {floorClamped(t) && <div className="h10-mwarn">That is under Amazon&apos;s €0.02 minimum — the engine will hold €0.02, which is what the figures here show.</div>}
                   <div className="h10-mnote">{effCpcNote(t)}. {effOf(t, 'biasPct') == null
                     ? <>Set <b>Placement %</b> on this row to take control of the multiplier — leave it blank and these hours inherit whatever the previous window left behind (an all-out hour can leave +300%).</>
                     : <>Placement is pinned, so this cost is the whole story.</>} Floors under €0.02 are raised to €0.02 — Amazon rejects anything lower.</div>
