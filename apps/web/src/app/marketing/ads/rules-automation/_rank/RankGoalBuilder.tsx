@@ -313,6 +313,7 @@ export function RankGoalBuilder() {
               </div>
               {/* E1/E3 — what arming this actually does, at the point the choice is made. */}
               <ArmPreview
+                groupId={groupId ?? undefined}
                 campaignIds={selCampaigns.map((c) => c.id)}
                 windows={savedPlan?.windows ?? []}
                 baselineKey={savedPlan?.baselineKey ?? ''}

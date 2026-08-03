@@ -26,6 +26,12 @@ export interface RankTargetLite {
   key: string; name: string; color: string | null
   maxBiasPct: number | null; maxCpcCents: number | null; acosCapPct: number | null; allOut: boolean
 }
+interface Fit {
+  hasData: boolean; weeks: number; campaigns: number
+  windowHours: number; totalHours: number
+  share: { spend: number; sales: number; orders: number; impressions: number }
+  missed: Array<{ dow: number; hour: number; salesCents: number; costCents: number; orders: number }>
+}
 interface Blast {
   campaigns: number; adGroups: number; targets: number; markets: string[]
   writeOpen: number; writeGated: number; gatedNames: string[]; archived: number
@@ -60,7 +66,12 @@ function runs(slots: Array<{ hour: number; key: string }>): Array<{ from: number
   return out
 }
 
-export function ArmPreview({ campaignIds, windows, baselineKey, targets, showSchedule = true }: {
+const DOW_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const eur = (c: number) => `€${(c / 100).toFixed(0)}`
+
+export function ArmPreview({ groupId, campaignIds, windows, baselineKey, targets, showSchedule = true }: {
+  /** Present only when editing a saved schedule — window fit needs real history to measure against. */
+  groupId?: string
   campaignIds: string[]
   windows: unknown[]
   baselineKey: string
@@ -70,6 +81,17 @@ export function ArmPreview({ campaignIds, windows, baselineKey, targets, showSch
   showSchedule?: boolean
 }) {
   const [blast, setBlast] = useState<Blast | null>(null)
+  const [fit, setFit] = useState<Fit | null>(null)
+
+  useEffect(() => {
+    if (!groupId) { setFit(null); return }
+    let alive = true
+    void fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/${groupId}/window-fit?weeks=8`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => { if (alive) setFit(j?.hasData ? j : null) })
+      .catch(() => { if (alive) setFit(null) })
+    return () => { alive = false }
+  }, [groupId])
 
   // Keyed on the JOINED ids, not the array: the parent rebuilds `campaignIds` on every render, so
   // depending on the array itself would refetch forever.
@@ -136,6 +158,35 @@ export function ArmPreview({ campaignIds, windows, baselineKey, targets, showSch
           </div>
         )}
       </div>}
+
+      {/* E2 — measured, not simulated. */}
+      {fit && (
+        <div className="h10-arm-sec">
+          <div className="h10-arm-hd">Window fit · last {fit.weeks} weeks</div>
+          <div className="h10-arm-fit">
+            <span className="big">{fit.share.sales}%</span>
+            <span className="txt">
+              of sales happened in the <b>{fit.windowHours}</b> of 168 hours this plan pushes in
+              {' '}({fit.share.spend}% of spend, {fit.share.orders}% of orders).
+            </span>
+          </div>
+          {/* The actionable half: demand the plan currently leaves on its baseline. */}
+          {fit.missed.length > 0 && (
+            <div className="h10-arm-missed">
+              <span className="lbl">Best hours you are not pushing in</span>
+              {fit.missed.map((m) => (
+                <span className="m" key={`${m.dow}-${m.hour}`} title={`${m.orders} order${m.orders === 1 ? '' : 's'}, ${eur(m.costCents)} spend`}>
+                  {DOW_SHORT[m.dow]} {hh(m.hour)} · <b>{eur(m.salesCents)}</b>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="h10-arm-note">
+            Measured against real Marketing Stream demand — not a prediction. What a different bid
+            would have won is unknowable; whether these are the hours that sell is not.
+          </div>
+        </div>
+      )}
 
       {/* E3 */}
       {blast && (

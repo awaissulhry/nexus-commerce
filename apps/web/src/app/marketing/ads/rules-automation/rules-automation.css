@@ -969,3 +969,14 @@
 .h10-tpl-r .meta { font-size: 11.5px; color: #8a93a1; }
 .h10-tpl-r .del { border: 0; background: none; color: #b0b7c1; cursor: pointer; padding: 5px; border-radius: 6px; display: inline-flex; flex-shrink: 0; }
 .h10-tpl-r .del:hover { background: #fbdedb; color: #a3211a; }
+/* E2 — window fit. The headline number is the share of SALES, not of spend: spend follows the bid
+   you set, sales follow the demand you were aiming at. */
+.h10-arm-fit { display: flex; align-items: baseline; gap: 11px; }
+.h10-arm-fit .big { font-size: 26px; font-weight: 800; color: #0a7d48; line-height: 1; }
+.h10-arm-fit .txt { font-size: 12.5px; color: #3a4452; line-height: 1.5; }
+.h10-arm-fit .txt b { color: #1c2530; font-weight: 700; }
+.h10-arm-missed { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 10px; }
+.h10-arm-missed .lbl { font-size: 11px; font-weight: 700; color: #8a93a1; text-transform: uppercase; letter-spacing: .3px; }
+.h10-arm-missed .m { font-size: 11.5px; color: #7a5200; background: #fdf3d3; border-radius: 6px; padding: 3px 8px; white-space: nowrap; }
+.h10-arm-missed .m b { font-weight: 700; }
+.h10-arm-note { margin-top: 9px; font-size: 11.5px; color: #8a93a1; line-height: 1.5; }

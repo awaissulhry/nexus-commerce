@@ -3372,78 +3372,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const empty = { weeks, windowDays, timezone: tz, from: null as string | null, to: null as string | null, coverage: { daysWithData: 0, firstDay: null as string | null, lastDay: null as string | null }, hasData: false, cells: [] as unknown[] }
     if (!ids.length) return empty
 
-    const camps = await prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, externalCampaignId: true } })
-    if (!camps.length) return empty
-    const localIds = camps.map((c) => c.id)
-    const extIds = camps.map((c) => c.externalCampaignId).filter(Boolean) as string[]
-    const scope = Prisma.sql`("localEntityId" IN (${Prisma.join(localIds)})${extIds.length ? Prisma.sql` OR "entityId" IN (${Prisma.join(extIds)})` : Prisma.empty})`
-    // Rows converted to local wall-clock and clipped to the window. The coarse `date` bounds keep
-    // the index usable; the exact bound is on ts_local, because the window is a LOCAL one.
-    const windowed = Prisma.sql`
-      SELECT t.ts_local, t."costMicros", t."orders7d", t."sales7dCents", t."impressions", t."clicks"
-      FROM (
-        SELECT (("date" + (("hour")::text || ' hours')::interval) AT TIME ZONE 'UTC' AT TIME ZONE ${tz}) AS ts_local,
-               "costMicros", "orders7d", "sales7dCents", "impressions", "clicks"
-        FROM "AmazonAdsHourlyPerformance"
-        WHERE "entityType" = 'CAMPAIGN'
-          AND "date" >= (((now() AT TIME ZONE ${tz})::date - ${windowDays + 2}::int))
-          AND "date" <= (((now() AT TIME ZONE ${tz})::date + 1))
-          AND ${scope}
-      ) t
-      WHERE t.ts_local >= (((now() AT TIME ZONE ${tz})::date - ${windowDays}::int)::timestamp)
-        AND t.ts_local <  (((now() AT TIME ZONE ${tz})::date)::timestamp)`
-
-    const rows = await prisma.$queryRaw<Array<{ dow: number; hour: number; cost: bigint | null; orders: bigint | null; sales: bigint | null; impressions: bigint | null; clicks: bigint | null }>>`
-      SELECT EXTRACT(DOW FROM ts_local)::int AS dow,
-             EXTRACT(HOUR FROM ts_local)::int AS hour,
-             SUM("costMicros") AS cost, SUM(COALESCE("orders7d", 0)) AS orders,
-             SUM(COALESCE("sales7dCents", 0)) AS sales, SUM("impressions") AS impressions, SUM("clicks") AS clicks
-      FROM (${windowed}) w
-      GROUP BY dow, hour ORDER BY dow, hour`
-
-    // What the window actually resolved to, and how much of it holds data. Marketing Stream is
-    // never backfilled, so a 13-week window over a 4-week-old campaign is mostly empty — the UI
-    // states this rather than letting the operator read a sparse grid as a real pattern.
-    const meta = await prisma.$queryRaw<Array<{ from_day: Date; to_day: Date; days: bigint; first_day: Date | null; last_day: Date | null }>>`
-      SELECT ((now() AT TIME ZONE ${tz})::date - ${windowDays}::int) AS from_day,
-             ((now() AT TIME ZONE ${tz})::date - 1) AS to_day,
-             (SELECT COUNT(DISTINCT ts_local::date) FROM (${windowed}) w2) AS days,
-             (SELECT MIN(ts_local)::date FROM (${windowed}) w3) AS first_day,
-             (SELECT MAX(ts_local)::date FROM (${windowed}) w4) AS last_day`
-    const m = meta[0]
+    // E2 — one definition of hourly demand, shared with window-fit. The subtleties here (whole
+    // weeks, DB clock, today excluded, buckets floored, ratios derived after flooring) were each a
+    // real defect once; a second copy would lose one of them.
+    const { hourlyCells } = await import('../services/advertising/ads-hourly.service.js')
+    const { cells, restatedCells, meta: m } = await hourlyCells({ campaignIds: ids, windowDays, tz })
+    if (!cells.length && !m) return empty
     const day = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null)
-
-    /**
-     * DPS.4b — floor every bucket at zero, and say how often that was needed.
-     *
-     * ~3% of Marketing Stream rows are RESTATEMENTS carrying negative counts (Amazon retracting
-     * invalid traffic). When the correction lands inside the window but the original it corrects
-     * falls outside it, the bucket nets below zero — measured live: two buckets at −1 impression.
-     * A negative impression count is not a fact about any hour, and the grid renders anything ≤ 0
-     * as "0", so those buckets silently made the visible cells disagree with the totals.
-     *
-     * Flooring makes every cell a number you can defend, and `restatedCells` keeps it visible
-     * rather than swallowed — silently clamping would be the same class of mistake.
-     */
-    const floor0 = (n: number) => (n > 0 ? n : 0)
-    let restatedCells = 0
-    const cells = rows.map((r) => {
-      const rawCost = Math.round(Number(r.cost ?? 0n) / 10_000)
-      const rawSales = Number(r.sales ?? 0n)
-      const rawOrders = Number(r.orders ?? 0n)
-      const rawImpr = Number(r.impressions ?? 0n)
-      const rawClicks = Number(r.clicks ?? 0n)
-      if (rawCost < 0 || rawSales < 0 || rawOrders < 0 || rawImpr < 0 || rawClicks < 0) restatedCells++
-      const costCents = floor0(rawCost)
-      const salesCents = floor0(rawSales)
-      return {
-        dow: r.dow, hour: r.hour, costCents, salesCents,
-        orders: floor0(rawOrders), impressions: floor0(rawImpr), clicks: floor0(rawClicks),
-        // derived AFTER flooring, so a ratio can never be built from a negative component
-        acos: salesCents > 0 ? Math.round((costCents / salesCents) * 1000) / 10 : null,
-        roas: costCents > 0 ? Math.round((salesCents / costCents) * 100) / 100 : null,
-      }
-    })
     reply.header('Cache-Control', 'private, max-age=300')
     return {
       weeks, windowDays, timezone: tz,
@@ -7833,6 +7768,79 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       } catch (e) { failed.push({ id: gid, error: (e as Error)?.message ?? 'failed' }) }
     }
     return { applied: applied.length, failed, template: { id: tpl.id, name: tpl.name } }
+  })
+
+  /**
+   * E2 — window fit: do this schedule's windows point at the hours that actually convert?
+   *
+   * NOT a backtest, and deliberately not called one. Simulating "what would different bids have
+   * produced" needs a counterfactual we do not have — you cannot know what a bid you never placed
+   * would have won. What IS knowable, and is the question worth answering, is whether the hours a
+   * plan pushes in are the hours the account sells in. That is measurable against real Marketing
+   * Stream demand, with no modelling and nothing to mislead.
+   *
+   * Reads the SAME hourly service the heatmap draws from, so the numbers here and the grid on the
+   * page can never disagree about when the account sells.
+   */
+  fastify.get('/advertising/rank-schedule-groups/:id/window-fit', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const q = request.query as { weeks?: string; tz?: string }
+    reply.header('Cache-Control', 'private, max-age=60')
+
+    const group = await prisma.rankScheduleGroup.findUnique({ where: { id } })
+    if (!group) { reply.status(404); return { error: 'not found' } }
+    const members = await prisma.adSchedule.findMany({ where: { groupId: id }, select: { campaignId: true } })
+    const campaignIds = [...new Set(members.map((m) => m.campaignId))]
+
+    const { hourlyCells, resolveWeeks, TZ_ALLOWED } = await import('../services/advertising/ads-hourly.service.js')
+    const tz = TZ_ALLOWED.has(q.tz ?? '') ? (q.tz as string) : (group.timezone || 'Europe/Rome')
+    const { weeks, windowDays } = resolveWeeks(q.weeks)
+    const { cells } = await hourlyCells({ campaignIds, windowDays, tz })
+    if (!cells.length) return { hasData: false, weeks, timezone: tz, campaigns: campaignIds.length }
+
+    const { resolveActiveTargetKey } = await import('../services/advertising/rank-controller.js')
+    const baseline = group.defaultTargetKey ?? null
+    // "Pushed" means an hour where a WINDOW governs — i.e. the plan deliberately holds something
+    // other than its baseline there. Baseline hours are not idle, they are simply not the hours the
+    // plan singles out, and conflating the two would score every plan as 100% covered.
+    const pushed = (dow: number, hour: number) => {
+      const k = resolveActiveTargetKey(group.windows as never, baseline, dow, hour)
+      return !!k && k !== baseline
+    }
+
+    const zero = () => ({ hours: 0, costCents: 0, salesCents: 0, orders: 0, clicks: 0, impressions: 0 })
+    const inW = zero(), outW = zero()
+    for (const c of cells) {
+      const t = pushed(c.dow, c.hour) ? inW : outW
+      t.hours++
+      t.costCents += c.costCents; t.salesCents += c.salesCents
+      t.orders += c.orders; t.clicks += c.clicks; t.impressions += c.impressions
+    }
+    // Hours the plan does NOT single out, ranked by the sales they produced anyway. This is the
+    // actionable half: demand the schedule is currently leaving on its baseline.
+    const missed = cells
+      .filter((c) => !pushed(c.dow, c.hour) && c.salesCents > 0)
+      .sort((a, b) => b.salesCents - a.salesCents)
+      .slice(0, 6)
+      .map((c) => ({ dow: c.dow, hour: c.hour, salesCents: c.salesCents, costCents: c.costCents, orders: c.orders }))
+
+    const pct = (a: number, b: number) => (a + b > 0 ? Math.round((a / (a + b)) * 1000) / 10 : 0)
+    // Windows are declared over all 168 hours of a week; the cells only cover hours that carry data.
+    let windowHours = 0
+    for (let d = 0; d < 7; d++) for (let h = 0; h < 24; h++) if (pushed(d, h)) windowHours++
+
+    return {
+      hasData: true, weeks, timezone: tz, campaigns: campaignIds.length,
+      windowHours, totalHours: 168,
+      inWindow: inW, outWindow: outW,
+      share: {
+        spend: pct(inW.costCents, outW.costCents),
+        sales: pct(inW.salesCents, outW.salesCents),
+        orders: pct(inW.orders, outW.orders),
+        impressions: pct(inW.impressions, outW.impressions),
+      },
+      missed,
+    }
   })
 
   fastify.post('/advertising/rank-schedule-groups', async (request, reply) => {
