@@ -20,6 +20,7 @@ import { RankPlanBody, type RankPlanHandle, type RankPlanStatus } from './RankPl
 import { detectScheduleConflicts, type MembershipMap } from './scheduleConflicts'
 import { ScheduleVersionsSection } from '../dayparting/ScheduleVersions'
 import { ArmPreview, type RankTargetLite } from '../dayparting/ArmPreview'
+import { ScheduleEvents } from '../dayparting/ScheduleEvents'
 import { getBackendUrl } from '@/lib/backend-url'
 
 // Adtomic-style atom mark — same glyph the other builders use in the top bar.
@@ -52,6 +53,8 @@ const STEPS = [
 // HX.8 — the history step only exists once the schedule does: a schedule being created for the
 // first time has nothing to show, and an empty step in the nav is worse than no step.
 const HISTORY_STEP = { id: 'history', label: 'Change history' }
+// G3 — like history, only meaningful once the schedule exists: an event attaches to a saved group.
+const EVENTS_STEP = { id: 'events', label: 'Event overrides' }
 
 export function RankGoalBuilder() {
   const router = useRouter()
@@ -245,7 +248,7 @@ export function RankGoalBuilder() {
 
       <div className="h10-rb-body" ref={scrollRef}>
         <nav className="h10-rb-nav" role="tablist" aria-label="Rank schedule steps">
-          {(groupId ? [...STEPS, HISTORY_STEP] : STEPS).map((s) => (
+          {(groupId ? [...STEPS, EVENTS_STEP, HISTORY_STEP] : STEPS).map((s) => (
             <button key={s.id} type="button" role="tab" aria-selected={active === s.id} className={`h10-rb-step ${active === s.id ? 'on' : ''}`} onClick={() => goto(s.id)}>{s.label}</button>
           ))}
         </nav>
@@ -325,6 +328,7 @@ export function RankGoalBuilder() {
 
             {/* HX.8 — what the OPERATOR changed, right where the plan is edited. Distinct from the
                 list page's Activity drawer, which shows what the ENGINE did to Amazon. */}
+            {groupId && <ScheduleEvents groupId={groupId} palette={palette} targetKeys={targetRows.map((t) => t.key)} />}
             {groupId && <ScheduleVersionsSection groupId={groupId} palette={palette} />}
 
             <div className="h10-rb-foot">
