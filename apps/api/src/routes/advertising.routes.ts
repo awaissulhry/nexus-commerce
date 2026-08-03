@@ -7497,6 +7497,50 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       }
     } catch { /* best-effort */ }
 
+    /**
+     * B4 — what each schedule is actually spending and earning.
+     *
+     * The list could say what a schedule DOES but never whether it is worth keeping. Aggregated
+     * across each group's member campaigns over a fixed 30-day window (the page carries no date
+     * control, so the window is stated in the column tip rather than left implicit).
+     *
+     * Sourced from AmazonAdsDailyPerformance, not the hourly Marketing Stream table: AMS is not
+     * backfilled and covers 39 of 216 campaigns, so a schedule over newer campaigns would read as
+     * earning nothing rather than as having no hourly history.
+     */
+    const perfByCampaign = new Map<string, { costCents: number; salesCents: number; orders: number; clicks: number; impressions: number }>()
+    try {
+      const since = new Date(Date.now() - 30 * 24 * 3600 * 1000)
+      const campRows = memberCampaignIds.length
+        ? await prisma.campaign.findMany({ where: { id: { in: memberCampaignIds } }, select: { id: true, externalCampaignId: true } })
+        : []
+      const extToLocal = new Map(campRows.filter((c) => c.externalCampaignId).map((c) => [c.externalCampaignId as string, c.id]))
+      if (campRows.length) {
+        const rows = await prisma.amazonAdsDailyPerformance.findMany({
+          where: {
+            entityType: 'CAMPAIGN',
+            date: { gte: since },
+            OR: [
+              { localEntityId: { in: campRows.map((c) => c.id) } },
+              ...(extToLocal.size ? [{ entityId: { in: [...extToLocal.keys()] } }] : []),
+            ],
+          },
+          select: { localEntityId: true, entityId: true, costMicros: true, sales7dCents: true, orders7d: true, clicks: true, impressions: true },
+        })
+        for (const r of rows) {
+          const cid = r.localEntityId ?? extToLocal.get(r.entityId)
+          if (!cid) continue
+          const e = perfByCampaign.get(cid) ?? { costCents: 0, salesCents: 0, orders: 0, clicks: 0, impressions: 0 }
+          e.costCents += Number((r.costMicros ?? 0n) / 10_000n)
+          e.salesCents += r.sales7dCents ?? 0
+          e.orders += r.orders7d ?? 0
+          e.clicks += r.clicks ?? 0
+          e.impressions += r.impressions ?? 0
+          perfByCampaign.set(cid, e)
+        }
+      }
+    } catch { /* best-effort — the list must render without performance */ }
+
     const { resolveActiveTargetKey } = await import('../services/advertising/rank-controller.js')
     const items = groups.map((g) => {
       const ms = byGroup.get(g.id) ?? []
@@ -7521,6 +7565,18 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         membersEnabled: ms.filter((m) => m.enabled).length,
         membersTotal: ms.length,
         failedWrites: ms.reduce((n, m) => n + (failedByActor.get(`automation:rank-defend-${m.id}`) ?? 0), 0),
+        // B4 — summed across members. ACoS is derived from the SUMS, never averaged from
+        // per-campaign ACoS values: averaging ratios weights a EUR 2 campaign the same as a EUR 200 one.
+        performance: (() => {
+          const t = { costCents: 0, salesCents: 0, orders: 0, clicks: 0, impressions: 0 }
+          for (const m of ms) {
+            const e = perfByCampaign.get(m.campaignId)
+            if (!e) continue
+            t.costCents += e.costCents; t.salesCents += e.salesCents
+            t.orders += e.orders; t.clicks += e.clicks; t.impressions += e.impressions
+          }
+          return { ...t, acos: t.salesCents > 0 ? Math.round((t.costCents / t.salesCents) * 1000) / 10 : null, windowDays: 30 }
+        })(),
         governedElsewhere: ms.filter((m) => governed.has(m.campaignId)).length,
       }
     })
@@ -7768,6 +7824,61 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       } catch (e) { failed.push({ id: gid, error: (e as Error)?.message ?? 'failed' }) }
     }
     return { applied: applied.length, failed, template: { id: tpl.id, name: tpl.name } }
+  })
+
+  /**
+   * RDX/D2 — add painted hours to an existing schedule, additively.
+   *
+   * `apply-template` above sets `windows: tpl.windows` — it REPLACES the plan. That is right for
+   * "use this shape" and wrong for "also push in these three evening hours": a 92-window schedule
+   * would be cut down to the three hours just painted. This is the additive path.
+   *
+   * `dryRun` returns the diff and writes nothing. Preview and commit run the SAME mergeWindows
+   * call, so what the operator approves is what lands — a separately-computed preview would be
+   * free to disagree with the write.
+   */
+  fastify.post('/advertising/rank-schedule-groups/:id/merge-windows', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as { windows?: unknown; dryRun?: boolean }
+    const painted = Array.isArray(b?.windows) ? b.windows : []
+    if (!painted.length) { reply.status(400); return { error: 'windows[] required' } }
+
+    const group = await prisma.rankScheduleGroup.findUnique({ where: { id } })
+    if (!group) { reply.status(404); return { error: 'not found' } }
+
+    const { mergeWindows, isUsableWindow } = await import('../services/advertising/merge-windows.js')
+    const usable = painted.filter(isUsableWindow)
+    if (!usable.length) { reply.status(400); return { error: 'no usable windows — each needs a targetKey and endHour > startHour' } }
+
+    const { windows, diff } = mergeWindows(group.windows as never, usable as never, group.defaultTargetKey)
+
+    // Named targets must exist, or the merge writes hours the engine cannot resolve — the same
+    // hole E1 reports as "deleted target", except here we would be creating it ourselves.
+    const wanted = [...new Set(usable.map((w) => String((w as { targetKey?: string }).targetKey)))]
+    const known = await prisma.rankTarget.findMany({ where: { key: { in: wanted } }, select: { key: true } })
+    const missing = wanted.filter((k) => !known.some((t) => t.key === k))
+    if (missing.length) { reply.status(400); return { error: `unknown target${missing.length === 1 ? '' : 's'}: ${missing.join(', ')}` } }
+
+    if (b?.dryRun) return { dryRun: true, group: { id: group.id, name: group.name, enabled: group.enabled }, added: usable.length, diff }
+
+    const members = await prisma.adSchedule.findMany({ where: { groupId: id }, select: { campaignId: true } })
+    const { saveRankScheduleGroup } = await import('../services/advertising/ads-create.service.js')
+    await saveRankScheduleGroup({
+      id: group.id,
+      name: group.name,
+      campaignIds: members.map((m) => m.campaignId),
+      windows,
+      // Only the windows change. `enabled` in particular is carried through untouched, so merging
+      // into a paused schedule can never arm it — same guarantee apply-template makes.
+      defaultTargetKey: group.defaultTargetKey,
+      targetOverrides: group.targetOverrides,
+      enabled: group.enabled,
+      timezone: group.timezone,
+      portfolioId: group.portfolioId,
+      marketplace: group.marketplace,
+    } as never)
+
+    return { ok: true, group: { id: group.id, name: group.name, enabled: group.enabled }, added: usable.length, diff }
   })
 
   /**

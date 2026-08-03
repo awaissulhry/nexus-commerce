@@ -36,6 +36,8 @@ interface RankRow {
   // RDX/B2 — the raw window array, kept so "Save as template" can persist the real shape rather
   // than the count the Windows column renders.
   windowsRaw: unknown[]
+  // RDX/B4 — 30-day totals across the member campaigns. ACoS is derived server-side from the sums.
+  spendCents: number; salesCents: number; orders: number; acos: number | null
 }
 type TargetMeta = { name: string; color: string | null }
 
@@ -47,6 +49,7 @@ const FALLBACK: Record<string, TargetMeta> = {
   'pause': { name: 'Min bid', color: '#d97757' },
   'own-top-allout': { name: 'Own Top — All-Out', color: '#b91c1c' },
 }
+const eur = (cents: number) => (cents === 0 ? '\u2014' : `\u20ac${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`)
 const builderHref = (id?: string) => `/marketing/ads/rules-automation/builder/dayparting-schedule${id ? `?groupId=${id}` : ''}`
 
 export function RankGoalsList({ market = 'all', reloadSignal = 0 }: { market?: string; reloadSignal?: number } = {}) {
@@ -106,6 +109,10 @@ export function RankGoalsList({ market = 'all', reloadSignal = 0 }: { market?: s
             lastEvaluatedAt,
             marketplaces: Array.isArray(g.marketplaces) ? (g.marketplaces as string[]) : [],
             windowsRaw: wins,
+            spendCents: Number((g.performance as { costCents?: number } | undefined)?.costCents ?? 0),
+            salesCents: Number((g.performance as { salesCents?: number } | undefined)?.salesCents ?? 0),
+            orders: Number((g.performance as { orders?: number } | undefined)?.orders ?? 0),
+            acos: (g.performance as { acos?: number | null } | undefined)?.acos ?? null,
             health: scheduleHealth({
               enabled: g.enabled !== false,
               lastEvaluatedAt,
@@ -225,6 +232,31 @@ export function RankGoalsList({ market = 'all', reloadSignal = 0 }: { market?: s
       sortValue: (r) => ({ bad: 0, warn: 1, muted: 2, ok: 3 })[r.health.tone],
       tip: 'Whether this schedule is actually working. Status only tells you whether it is switched on.',
       render: (r) => <span className={`h10-pill ${r.health.tone}`} title={r.health.detail}>{r.health.label}</span>,
+    },
+    // RDX/B4 — hidden by default: the page's job is control, and four metric columns would push
+    // Health and Now-holding off a narrow screen. One click in Customise brings them back.
+    {
+      key: 'spend', label: 'Spend 30d', metric: true, sortable: true, defaultHidden: true,
+      sortValue: (r) => r.spendCents, tip: 'Ad spend across this schedule\u2019s campaigns over the last 30 days.',
+      render: (r) => <span>{eur(r.spendCents)}</span>,
+      total: (rows) => <span>{eur(rows.reduce((n, r) => n + r.spendCents, 0))}</span>,
+    },
+    {
+      key: 'sales', label: 'Sales 30d', metric: true, sortable: true, defaultHidden: true,
+      sortValue: (r) => r.salesCents, tip: 'Attributed ad sales over the last 30 days.',
+      render: (r) => <span>{eur(r.salesCents)}</span>,
+      total: (rows) => <span>{eur(rows.reduce((n, r) => n + r.salesCents, 0))}</span>,
+    },
+    {
+      key: 'acos', label: 'ACoS 30d', metric: true, sortable: true, defaultHidden: true,
+      // Unmeasurable sorts LAST rather than as 0%, which would read as perfect efficiency.
+      sortValue: (r) => (r.acos == null ? Number.MAX_SAFE_INTEGER : r.acos),
+      tip: 'Spend \u00f7 sales across the whole schedule. Derived from the summed totals, not averaged across campaigns.',
+      render: (r) => (r.acos == null ? <span className="h10-rg-none" title="No attributed sales in the window">\u2014</span> : <span>{r.acos}%</span>),
+      total: (rows) => {
+        const c = rows.reduce((n, r) => n + r.spendCents, 0), sl = rows.reduce((n, r) => n + r.salesCents, 0)
+        return <span>{sl > 0 ? `${Math.round((c / sl) * 1000) / 10}%` : '\u2014'}</span>
+      },
     },
     { key: 'status', label: 'Status', metric: false, sortable: true, sortValue: (r) => (r.enabled ? 0 : 1), render: (r) => <span className={`h10-pill ${r.enabled ? 'ok' : 'warn'}`}>{r.enabled ? 'Active' : 'Paused'}</span> },
     // eslint-disable-next-line react-hooks/exhaustive-deps
