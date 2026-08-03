@@ -18,6 +18,7 @@
 import { Worker, type Job } from 'bullmq'
 import prisma from '../db.js'
 import { claimEntityWrite, dispatchPayloadFromMutations, settleAdMutations } from '../services/advertising/ads-mutation.service.js'
+import { isRetryableSyncError } from '../services/advertising/ads-write-reconcile.service.js'
 import { ADS_STALE_INTENT_MS, classifyCrashedWrite } from '../services/ads-core/ad-mutation-state.js'
 import { redis } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
@@ -420,30 +421,52 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
   }
   // Failure path: bump retryCount; if at max, mark dead.
   const nextRetry = row.retryCount + 1
+  /**
+   * DL.2 — a write Amazon will never accept is dead on the FIRST failure.
+   *
+   * Retrying is only meaningful for transient conditions (429, 5xx, timeout). A 4xx logic
+   * error — entity gone, malformed, unauthorised — returns the same answer every time, so
+   * re-sending it just burns the remaining attempts and buries the real signal.
+   *
+   * This is what turned one routing bug into 198 failures in a week: every product/auto bid
+   * write was rejected with entityNotFoundError, and each one still spent 3 attempts, every
+   * 15 minutes, for six days. `isRetryableSyncError` already encoded the right rule — the
+   * reconcile SWEEP used it to decide what to re-push, while the primary dispatch path that
+   * creates the failures did not.
+   *
+   * The classifier gives unknown/empty errors the benefit of the doubt, so an unrecognised
+   * failure keeps today's retry behaviour and this cannot make a transient fault terminal.
+   */
+  const permanent = !isRetryableSyncError(result.error)
+  const terminal = permanent || nextRetry >= row.maxRetries
+  if (permanent) {
+    logger.warn('[ads-sync] permanent write rejection — not retrying', {
+      queueId, entityType: payload.entityType, entityId: payload.entityId, attempt: nextRetry, error: result.error?.slice(0, 200),
+    })
+  }
   await prisma.outboundSyncQueue.update({
     where: { id: queueId },
     data: {
-      syncStatus: nextRetry >= row.maxRetries ? 'FAILED' : 'PENDING',
-      isDead: nextRetry >= row.maxRetries,
-      diedAt: nextRetry >= row.maxRetries ? new Date() : null,
+      syncStatus: terminal ? 'FAILED' : 'PENDING',
+      isDead: terminal,
+      diedAt: terminal ? new Date() : null,
       errorMessage: result.error,
-      errorCode: 'AMAZON_API_ERROR',
+      // A permanent rejection is a different diagnosis from a transient API error, and the
+      // console filters on this code — keep them distinguishable.
+      errorCode: permanent ? 'AMAZON_PERMANENT_REJECTION' : 'AMAZON_API_ERROR',
       retryCount: nextRetry,
-      nextRetryAt:
-        nextRetry < row.maxRetries
-          ? new Date(Date.now() + Math.pow(2, nextRetry) * 60 * 1000)
-          : null,
+      nextRetryAt: terminal ? null : new Date(Date.now() + Math.pow(2, nextRetry) * 60 * 1000),
     },
   })
   // AX-ZD.1 — a retryable transient is still in flight, so the typed rows stay
   // PENDING and keep suppressing drift on their fields; only a dead row is
   // terminal. Same split as the audit log below, for the same reason.
-  await settleAdMutations(queueId, nextRetry >= row.maxRetries ? 'FAILED' : 'PENDING', {
-    isDead: nextRetry >= row.maxRetries, error: result.error,
+  await settleAdMutations(queueId, terminal ? 'FAILED' : 'PENDING', {
+    isDead: terminal, error: result.error,
   })
   // AD.4 — mark the linked AdvertisingActionLog as FAILED only on
   // terminal failure (so retryable transients don't pollute the audit).
-  if (nextRetry >= row.maxRetries) {
+  if (terminal) {
     await prisma.advertisingActionLog
       .updateMany({
         where: { outboundQueueId: queueId, amazonResponseStatus: 'PENDING' },
