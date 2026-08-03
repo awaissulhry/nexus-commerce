@@ -1038,3 +1038,8 @@
 .h10-n24-t td.gd span { display: block; font-size: 11px; white-space: nowrap; }
 .h10-n24-t td.gd .ao { color: #9a3a24; font-weight: 700; }
 .h10-n24-t td.gd .bad { color: #9a3a24; font-weight: 700; }
+
+/* RDX/E2 — the fit block when there is not enough evidence to state a share. No big number,
+   because the whole point is that there is no number worth showing. */
+.h10-arm-fit.thin { display: block; }
+.h10-arm-fit.thin .txt { display: block; color: #6b7480; }

@@ -24,11 +24,31 @@ import { getBackendUrl } from '@/lib/backend-url'
 
 export interface RankTargetLite {
   key: string; name: string; color: string | null
+  /** The bias the loop HOLDS (Placement %). Without it the ceiling below cannot be stated: for a
+   *  non-all-out target with no maxBiasPct the ceiling IS the floor, not 900%. */
+  biasPct?: number | null
   maxBiasPct: number | null; maxCpcCents: number | null; acosCapPct: number | null; allOut: boolean
+  pause?: boolean
+}
+
+/**
+ * Mirror of `biasBand` in apps/api/src/services/advertising/rank-controller.ts — the [floor,
+ * ceiling] the engine derives before it moves anything. Duplicated deliberately and minimally:
+ * this panel must also describe an UNSAVED plan being edited, which no server endpoint can read.
+ * Keep the two in step; rank-controller is the source of truth.
+ */
+function band(t: RankTargetLite): { floor: number; ceiling: number } {
+  const floor = Math.max(0, Math.min(900, Math.round(t.biasPct ?? 0)))
+  const ceiling = t.allOut ? (t.maxBiasPct ?? 900) : (t.maxBiasPct ?? floor)
+  return { floor, ceiling: Math.max(floor, ceiling) }
 }
 interface Fit {
   hasData: boolean; weeks: number; campaigns: number
   windowHours: number; totalHours: number
+  /** RDX/E2 — how much evidence is behind `share`. Absent on an older API build. */
+  coverage?: { daysWithData: number; daysInWindow: number; sufficientForShare: boolean }
+  inWindow: { hours: number; costCents: number; salesCents: number; orders: number; clicks: number; impressions: number }
+  outWindow: { hours: number; costCents: number; salesCents: number; orders: number; clicks: number; impressions: number }
   share: { spend: number; sales: number; orders: number; impressions: number }
   missed: Array<{ dow: number; hour: number; salesCents: number; costCents: number; orders: number }>
 }
@@ -144,15 +164,35 @@ export function ArmPreview({ groupId, campaignIds, windows, baselineKey, targets
             {ceilings.map((t) => (
               <span key={t.key} className="c">
                 <b>{t.name}</b>
-                {t.allOut
-                  ? <em>ignores the ACoS cap — holds at any cost up to the CPC ceiling</em>
-                  : (
-                    <em>
-                      up to {t.maxBiasPct ?? 900}% bias
-                      {t.acosCapPct != null ? ` · ACoS cap ${t.acosCapPct}%` : ' · no ACoS cap'}
-                      {t.maxCpcCents != null ? ` · max CPC €${(t.maxCpcCents / 100).toFixed(2)}` : ''}
-                    </em>
-                  )}
+                {/*
+                  Every clause here was wrong before RDX/E2 measured it against the engine:
+                   · "up to {maxBiasPct ?? 900}% bias" told the operator EVERY target could reach
+                     900%. For a non-all-out target with no maxBiasPct the ceiling is the FLOOR —
+                     it holds at its Placement %, it does not climb. Most targets read 900% here.
+                   · "holds at any cost up to the CPC ceiling" implied a ceiling exists. On
+                     `own-top-allout` maxCpcCents is null, so there is none — the one case where
+                     the sentence most needed to warn, it reassured instead.
+                   · A Min-bid target was described as "up to 900% bias · no ACoS cap" when it in
+                     fact floors bids to ~2¢ and never reaches the placement stage at all.
+                */}
+                {t.pause ? (
+                  <em>holds bids at the ~2¢ floor — delivery continues, prior bids restored after</em>
+                ) : t.allOut ? (
+                  <em>
+                    {band(t).floor}% → up to {band(t).ceiling}% bias · ignores the ACoS cap
+                    {t.maxCpcCents != null
+                      ? ` · max CPC €${(t.maxCpcCents / 100).toFixed(2)}`
+                      : ' · NO CPC ceiling — nothing bounds the bid but Amazon’s 900% cap'}
+                  </em>
+                ) : (
+                  <em>
+                    {band(t).ceiling > band(t).floor
+                      ? `${band(t).floor}% → up to ${band(t).ceiling}% bias`
+                      : `holds ${band(t).floor}% bias`}
+                    {t.acosCapPct != null ? ` · ACoS cap ${t.acosCapPct}%` : ' · no ACoS cap'}
+                    {t.maxCpcCents != null ? ` · max CPC €${(t.maxCpcCents / 100).toFixed(2)}` : ''}
+                  </em>
+                )}
               </span>
             ))}
           </div>
@@ -160,18 +200,61 @@ export function ArmPreview({ groupId, campaignIds, windows, baselineKey, targets
       </div>}
 
       {/* E2 — measured, not simulated. */}
-      {fit && (
+      {fit && (() => {
+        /**
+         * RDX/E2 — do not state a share the data cannot support.
+         *
+         * This rendered "0% of sales happened in the 130 of 168 hours this plan pushes in" for a
+         * 10-campaign schedule whose entire 8-week window held TWO impressions on ONE day. Every
+         * number was accurate and the sentence was misleading: at the moment of arming it reads as
+         * a verdict on the plan, when it is really the absence of evidence. Marketing Stream is
+         * per-campaign and never backfilled, so a schedule's own coverage is routinely a small
+         * fraction of the account's — the account heatmap looking healthy says nothing about it.
+         *
+         * Two separate gates, because they fail differently:
+         *   · under a week of data → weekday samples are unequal, so the ratio is an artefact
+         *   · a full week but zero sales → the denominator is zero; "0%" would be read as "the
+         *     wrong hours" rather than "nothing sold at all"
+         */
+        const cov = fit.coverage
+        const enoughDays = cov ? cov.sufficientForShare : true
+        const anySales = fit.inWindow.salesCents + fit.outWindow.salesCents > 0
+        const canStateShare = enoughDays && anySales
+        return (
         <div className="h10-arm-sec">
           <div className="h10-arm-hd">Window fit · last {fit.weeks} weeks</div>
-          <div className="h10-arm-fit">
-            <span className="big">{fit.share.sales}%</span>
-            <span className="txt">
-              of sales happened in the <b>{fit.windowHours}</b> of 168 hours this plan pushes in
-              {' '}({fit.share.spend}% of spend, {fit.share.orders}% of orders).
-            </span>
-          </div>
-          {/* The actionable half: demand the plan currently leaves on its baseline. */}
-          {fit.missed.length > 0 && (
+          {canStateShare ? (
+            <div className="h10-arm-fit">
+              <span className="big">{fit.share.sales}%</span>
+              <span className="txt">
+                of sales happened in the <b>{fit.windowHours}</b> of 168 hours this plan pushes in
+                {' '}({fit.share.spend}% of spend, {fit.share.orders}% of orders).
+              </span>
+            </div>
+          ) : (
+            <div className="h10-arm-fit thin">
+              <span className="txt">
+                {!enoughDays ? (
+                  <>
+                    <b>Not enough hourly data to judge this plan’s hours yet.</b> These campaigns have{' '}
+                    {cov?.daysWithData ?? 0} day{(cov?.daysWithData ?? 0) === 1 ? '' : 's'} of Marketing Stream
+                    data in the last {fit.weeks} weeks — under a full week, some weekdays are sampled and others
+                    are not, so any share would be an artefact of which days happened to be captured.
+                  </>
+                ) : (
+                  <>
+                    <b>No sales recorded for these campaigns in the last {fit.weeks} weeks</b>, so there is no
+                    split to report. The plan still pushes in <b>{fit.windowHours}</b> of 168 hours.
+                  </>
+                )}{' '}
+                Marketing Stream fills forward and is never backfilled, so this fills in as the schedule runs.
+              </span>
+            </div>
+          )}
+          {/* The actionable half: demand the plan currently leaves on its baseline. Suppressed
+              alongside the share — it is drawn from the same sample, so "your best hours" off one
+              captured day would be noise presented as a recommendation. */}
+          {canStateShare && fit.missed.length > 0 && (
             <div className="h10-arm-missed">
               <span className="lbl">Best hours you are not pushing in</span>
               {fit.missed.map((m) => (
@@ -181,12 +264,16 @@ export function ArmPreview({ groupId, campaignIds, windows, baselineKey, targets
               ))}
             </div>
           )}
-          <div className="h10-arm-note">
-            Measured against real Marketing Stream demand — not a prediction. What a different bid
-            would have won is unknowable; whether these are the hours that sell is not.
-          </div>
+          {/* The note only earns its confidence when a share was actually stated. */}
+          {canStateShare && (
+            <div className="h10-arm-note">
+              Measured against real Marketing Stream demand — not a prediction. What a different bid
+              would have won is unknowable; whether these are the hours that sell is not.
+            </div>
+          )}
         </div>
-      )}
+        )
+      })()}
 
       {/* E3 */}
       {blast && (

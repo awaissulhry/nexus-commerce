@@ -7795,8 +7795,31 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { hourlyCells, resolveWeeks, TZ_ALLOWED } = await import('../services/advertising/ads-hourly.service.js')
     const tz = TZ_ALLOWED.has(q.tz ?? '') ? (q.tz as string) : (group.timezone || 'Europe/Rome')
     const { weeks, windowDays } = resolveWeeks(q.weeks)
-    const { cells } = await hourlyCells({ campaignIds, windowDays, tz })
+    const { cells, meta } = await hourlyCells({ campaignIds, windowDays, tz })
     if (!cells.length) return { hasData: false, weeks, timezone: tz, campaigns: campaignIds.length }
+
+    /**
+     * RDX/E2 — how much evidence is actually behind the share below.
+     *
+     * This mattered on a live surface: IT AIRMESH (10 campaigns) had TWO impressions across ONE day
+     * in an 8-week window, and the arm-time preview rendered "0% of sales happened in the 130 of
+     * 168 hours this plan pushes in" under a note reading "measured against real Marketing Stream
+     * demand". Nothing there was false, and the whole thing was misleading — it reads as a verdict
+     * on the plan when the truth is that there is no data. Marketing Stream is per-campaign and is
+     * never backfilled, so a schedule's own coverage is routinely a fraction of the account's.
+     *
+     * A share needs at least one full week, so every weekday is sampled once; below that a day×hour
+     * ratio is an artefact of which days happened to be captured. The caller is given the numbers
+     * and the verdict, and decides how to say it.
+     */
+    const daysWithData = Number(meta?.days ?? 0)
+    const coverage = {
+      daysWithData,
+      daysInWindow: windowDays,
+      // Below a full week the weekday samples are unequal by construction — the same defect
+      // DPS.4b fixed for the heatmap, which is fatal for a ratio rather than merely skewing it.
+      sufficientForShare: daysWithData >= 7,
+    }
 
     const { resolveActiveTargetKey } = await import('../services/advertising/rank-controller.js')
     const baseline = group.defaultTargetKey ?? null
@@ -7832,7 +7855,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return {
       hasData: true, weeks, timezone: tz, campaigns: campaignIds.length,
       windowHours, totalHours: 168,
+      coverage,
       inWindow: inW, outWindow: outW,
+      // Kept whatever the coverage, so the caller can still show the raw totals; `coverage` says
+      // whether the ratio is worth stating. Zeroes here are ambiguous by nature — "no sales in
+      // those hours" and "no data at all" produce the identical 0.
       share: {
         spend: pct(inW.costCents, outW.costCents),
         sales: pct(inW.salesCents, outW.salesCents),
