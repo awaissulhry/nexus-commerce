@@ -19,6 +19,7 @@ import { CampaignSection, toCampaign, type SchedCampaign } from '../_schedule/Ca
 import { RankPlanBody, type RankPlanHandle, type RankPlanStatus } from './RankPlanBody'
 import { detectScheduleConflicts, type MembershipMap } from './scheduleConflicts'
 import { ScheduleVersionsSection } from '../dayparting/ScheduleVersions'
+import { ArmPreview, type RankTargetLite } from '../dayparting/ArmPreview'
 import { getBackendUrl } from '@/lib/backend-url'
 
 // Adtomic-style atom mark — same glyph the other builders use in the top bar.
@@ -128,6 +129,7 @@ export function RankGoalBuilder() {
   // DPS.1 — ids this session minted itself. When the plan body creates a group we push ?groupId= into
   // the URL so the page is shareable and refresh-safe; that would otherwise re-fire the loader below
   // and re-fetch name + members we already hold. Skipping our own id keeps the save silent.
+  const [savedPlan, setSavedPlan] = useState<{ windows: unknown[]; baselineKey: string } | null>(null)
   const selfCreated = useRef<string | null>(null)
   const onGroupCreated = useCallback((id: string) => {
     selfCreated.current = id
@@ -150,6 +152,9 @@ export function RankGoalBuilder() {
           const g = await fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/${groupId}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null)
           if (!alive || !g?.id) return
           if (g.name) setName(String(g.name))
+          // E1 — the saved plan, read from the server. The live in-editor plan belongs to
+          // RankPlanBody, which is off-limits, so the preview shows what is SAVED and says so.
+          setSavedPlan({ windows: Array.isArray(g.windows) ? g.windows : [], baselineKey: String(g.defaultTargetKey ?? '') })
           const ids = (Array.isArray(g.campaignIds) ? g.campaignIds : []) as unknown[]
           const sel = ids.map((cid) => byId.get(String(cid))).filter(Boolean).map((c) => toCampaign(c as Record<string, unknown>))
           if (sel.length) setSelCampaigns(sel)
@@ -172,6 +177,8 @@ export function RankGoalBuilder() {
   // HX.8 — rank-target swatches for the change-history week shapes. Fetched here in the SHELL, not
   // read out of RankPlanBody: that section is off-limits, and it owns its own copy for the editor.
   const [tmeta, setTmeta] = useState<Record<string, { name: string; color: string | null }>>({})
+  // E1 needs the guardrails too (ceiling, ACoS cap, max CPC), not just the swatch.
+  const [targetRows, setTargetRows] = useState<RankTargetLite[]>([])
   useEffect(() => {
     let alive = true
     void fetch(`${getBackendUrl()}/api/advertising/rank-targets`, { cache: 'no-store' })
@@ -183,6 +190,7 @@ export function RankGoalBuilder() {
           if (t.key) m[t.key] = { name: String(t.name ?? t.key), color: t.color ?? null }
         }
         setTmeta(m)
+        setTargetRows((Array.isArray(j?.items) ? j.items : []) as RankTargetLite[])
       })
       .catch(() => {})
     return () => { alive = false }
@@ -303,6 +311,14 @@ export function RankGoalBuilder() {
                   <span className="b"><span className="t">Automate</span><span className="d">Have the engine hold this rank automatically on its cadence (real Amazon pushes still honour each campaign&apos;s write-gate).</span></span>
                 </label>
               </div>
+              {/* E1/E3 — what arming this actually does, at the point the choice is made. */}
+              <ArmPreview
+                campaignIds={selCampaigns.map((c) => c.id)}
+                windows={savedPlan?.windows ?? []}
+                baselineKey={savedPlan?.baselineKey ?? ''}
+                targets={targetRows}
+                showSchedule={!!savedPlan}
+              />
               <p className="h10-rb-hint-note">Removing a campaign here, or deleting the schedule, stops the engine holding that rank — current Amazon bids stay as last set (nothing is reverted).</p>
             </section>
 

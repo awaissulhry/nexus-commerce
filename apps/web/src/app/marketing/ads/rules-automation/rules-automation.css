@@ -913,3 +913,38 @@
    reachable rather than being pushed a screen away. */
 .h10-act-list { max-height: 420px; overflow-y: auto; }
 .h10-hist-b .h10-act-list { max-height: none; }
+
+/* RDX/D1 — selection bar. Appears under the grid only once hours are painted, so the panel is
+   unchanged until the operator actually starts authoring. */
+.h10-dp-selbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding: 10px 12px; background: #f4f8fe; border: 1px solid #d4e4fb; border-radius: 9px; }
+.h10-dp-selbar .cnt { font-size: 12.5px; color: #2b3440; }
+.h10-dp-selbar .cnt b { font-weight: 700; }
+.h10-dp-selbar .cnt em { font-style: normal; color: #8a93a1; }
+.h10-dp-selbar .grow { flex: 1; }
+.h10-dp-selbar .lbl { font-size: 12px; color: #5b6573; }
+.h10-dp-selbar .nm { height: 30px; min-width: 190px; border: 1px solid #d8dde4; border-radius: 7px; padding: 0 9px; font: inherit; font-size: 12.5px; color: #1c2530; background: #fff; }
+.h10-dp-selbar .nm::placeholder { color: #aeb6c2; }
+.h10-dp-selmsg { margin: 8px 0 0; font-size: 12px; color: #0a7d48; }
+
+/* ── E1/E3 — arm preview, in the builder's Control section ─────────────────────────────────
+   Sits between the Manual/Automate choice and the action, because that is the moment the
+   question "what will this actually do" is being asked. */
+.h10-arm { margin-top: 12px; border: 1px solid #e6e9ee; border-radius: 9px; overflow: hidden; }
+.h10-arm-sec { padding: 12px 14px; }
+.h10-arm-sec + .h10-arm-sec { border-top: 1px solid #eef1f5; }
+.h10-arm-hd { font-size: 11px; font-weight: 700; color: #6b7480; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 8px; }
+/* Runs, not 24 separate cells: "18:00–23:00 Own Top" is the unit an operator reasons in. */
+.h10-arm-runs { display: flex; flex-wrap: wrap; gap: 6px; }
+.h10-arm-runs .run { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; background: #f8fafc; border: 1px solid #eef1f5; border-radius: 7px; padding: 4px 9px; }
+.h10-arm-runs .run .sw { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.h10-arm-runs .run .tm { font-variant-numeric: tabular-nums; color: #6b7480; }
+.h10-arm-runs .run .nm { font-weight: 600; color: #2b3440; }
+.h10-arm-ceil { margin-top: 9px; display: flex; flex-direction: column; gap: 3px; }
+.h10-arm-ceil .c { font-size: 11.5px; color: #8a93a1; }
+.h10-arm-ceil .c b { color: #3a4452; font-weight: 700; margin-right: 6px; }
+.h10-arm-ceil .c em { font-style: normal; }
+.h10-arm-blast { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12.5px; color: #6b7480; }
+.h10-arm-blast b { color: #1c2530; font-weight: 700; }
+.h10-arm-warn { display: flex; align-items: flex-start; gap: 8px; margin-top: 9px; padding: 9px 11px; font-size: 12.5px; line-height: 1.5; color: #7a5200; background: #fdf3d3; border-radius: 7px; }
+.h10-arm-warn svg { flex-shrink: 0; margin-top: 1px; }
+.h10-arm-ok { display: flex; align-items: center; gap: 7px; margin-top: 9px; font-size: 12.5px; color: #0a7d48; }

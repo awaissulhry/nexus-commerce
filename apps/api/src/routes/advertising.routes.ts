@@ -7743,6 +7743,48 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const members = await prisma.adSchedule.findMany({ where: { groupId: id }, select: { id: true, campaignId: true, name: true, enabled: true } })
     return { ...group, members, campaignIds: members.map((m) => m.campaignId) }
   })
+  /**
+   * E3 — blast radius: what arming this schedule would actually touch.
+   *
+   * "Automate" on the builder currently commits to an engine that writes to Amazon every 15
+   * minutes, and the only number in front of the operator is how many campaigns they picked. The
+   * entities beneath those campaigns are what the writes land on, and the write-gate decides
+   * whether they land at all.
+   *
+   * The gated count is the point. A campaign with liveBidWritesEnabled = false records the change
+   * locally and pushes NOTHING — which looks identical to success everywhere except here. Arming a
+   * plan over campaigns that are all gated shut is the failure this is meant to prevent.
+   */
+  fastify.get('/advertising/rank-schedule-groups/blast-radius', async (request, reply) => {
+    const q = request.query as { campaignIds?: string }
+    const ids = (q.campaignIds ?? '').split(',').map((x) => x.trim()).filter(Boolean)
+    reply.header('Cache-Control', 'private, max-age=5')
+    if (!ids.length) return { campaigns: 0, adGroups: 0, targets: 0, markets: [], writeOpen: 0, writeGated: 0, gatedNames: [], archived: 0 }
+
+    const camps = await prisma.campaign.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true, marketplace: true, status: true, liveBidWritesEnabled: true },
+    })
+    const groups = await prisma.adGroup.findMany({ where: { campaignId: { in: ids } }, select: { id: true } })
+    const targets = groups.length
+      // Negatives carry no spend bid, so the rank loop never writes to them — counting them would
+      // overstate the reach.
+      ? await prisma.adTarget.count({ where: { adGroupId: { in: groups.map((g) => g.id) }, isNegative: false } })
+      : 0
+    const gated = camps.filter((c) => !c.liveBidWritesEnabled)
+
+    return {
+      campaigns: camps.length,
+      adGroups: groups.length,
+      targets,
+      markets: [...new Set(camps.map((c) => c.marketplace).filter(Boolean))].sort(),
+      writeOpen: camps.length - gated.length,
+      writeGated: gated.length,
+      gatedNames: gated.slice(0, 8).map((c) => c.name),
+      archived: camps.filter((c) => c.status === 'ARCHIVED').length,
+    }
+  })
+
   fastify.post('/advertising/rank-schedule-groups', async (request, reply) => {
     const b = request.body as Record<string, unknown>
     if (!b?.name || !String(b.name).trim()) { reply.status(400); return { error: 'name is required' } }
