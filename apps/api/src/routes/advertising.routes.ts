@@ -6736,6 +6736,52 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     })
   })
 
+  /**
+   * HX.10 — the change feed as a CSV.
+   *
+   * Server-side rather than a client-side dump of the grid, for one reason that matters: the page
+   * fetches a capped window (500 rows) for rendering, and an export that silently stopped at the
+   * same cap would look complete and not be. This runs its own query with a much higher ceiling.
+   *
+   * It exports the WINDOW AND SCOPE — the same query params the page uses — not the grid's
+   * client-side column filters. Filtering a spreadsheet is easy; discovering that a "complete"
+   * export was truncated is not.
+   */
+  fastify.get('/advertising/changes.csv', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const parseDate = (v?: string) => { if (!v) return undefined; const d = new Date(v); return Number.isNaN(d.getTime()) ? undefined : d }
+    const { listChanges } = await import('../services/advertising/ads-changes.service.js')
+    const { items, from, to } = await listChanges({
+      groupId: q.groupId,
+      from: parseDate(q.from), to: parseDate(q.to),
+      source: q.source as never, originKind: q.originKind as never, originId: q.originId,
+      entityType: q.entityType, entityId: q.entityId, campaignId: q.campaignId,
+      field: q.field, deliveryState: q.deliveryState,
+      limit: 10_000,
+    })
+
+    // Uses the shared csv helpers (lib/csv.ts) rather than hand-rolled escaping: a reason string
+    // routinely contains commas ("blend: Top 100\u2192115, Rest 0\u21920") and Amazon errors contain
+    // embedded quotes, and there is no reason for a second implementation of RFC 4180 here.
+    const { csvDocument } = await import('../lib/csv.js')
+    const body = csvDocument(
+      ['when', 'source', 'originKind', 'origin', 'entityType', 'entityId', 'entity', 'campaign', 'field', 'oldValue', 'newValue', 'delivery', 'attempts', 'error', 'reason'],
+      items.map((r) => [
+        r.at, r.source, r.origin.kind, r.origin.name,
+        r.entity.type, r.entity.id, r.entity.name ?? '',
+        r.campaign?.name ?? '', r.field, r.oldValue ?? '', r.newValue ?? '',
+        // "no record" rather than blank: an empty delivery cell reads as success in a spreadsheet,
+        // and not knowing whether Amazon took a change is the one thing this export must not imply.
+        r.delivery?.state ?? 'no record', r.delivery?.attempts ?? '', r.delivery?.lastError ?? '', r.reason ?? '',
+      ]),
+    )
+    const day = (d: Date) => d.toISOString().slice(0, 10)
+    reply.header('Content-Type', 'text/csv; charset=utf-8')
+    reply.header('Content-Disposition', `attachment; filename="nexus-ads-changes_${day(from)}_${day(to)}.csv"`)
+    // A UTF-8 BOM so Excel renders accented campaign names instead of mojibake.
+    return reply.send(`\uFEFF${body}`)
+  })
+
   fastify.get('/advertising/events', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
     const { listEvents } = await import('../services/advertising/ads-events.service.js')

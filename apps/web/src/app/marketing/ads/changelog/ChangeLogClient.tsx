@@ -183,6 +183,15 @@ export function ChangeLogClient() {
         defaultSort={{ key: '__first', dir: 'desc' }}
         customizable
         storageKey="h10-amazon-changelog-cols"
+        // HX.10 — exports the same WINDOW the page is showing, server-side. Deliberately not a dump
+        // of the rendered rows: the page fetches a capped 500 for rendering, and an export that
+        // stopped at the same cap would look complete and not be. Column filters are not applied —
+        // filtering a spreadsheet is easy, discovering a silently truncated export is not.
+        exportable
+        onExport={() => {
+          const from = new Date(Date.now() - Number(days) * 24 * 3600 * 1000).toISOString()
+          window.location.href = `${getBackendUrl()}/api/advertising/changes.csv?from=${encodeURIComponent(from)}`
+        }}
         // The window selector rides the toolbar rather than the header's date picker, which this
         // page hides — one control, in the place the grid's other controls already live.
         toolbarRight={(
