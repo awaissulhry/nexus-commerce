@@ -3,7 +3,7 @@
 **Date:** 2026-08-04 · **Companion to:** `2026-08-04-ads-market-research.md`
 Each entry: what they are → architecture → full feature inventory → what to take (mapped to our code) → where we already lead → what to refuse.
 
-Queue: **Pacvue** ✅ · Rithum (ex-ChannelAdvisor) · Perpetua · Teikametrics · Intentwise · Scale Insights · BidX · M19 · + leaders as found.
+Queue: **Pacvue** ✅ · **Rithum** ✅ · Perpetua · Teikametrics · Intentwise · Scale Insights · BidX · M19 · + leaders as found.
 
 ---
 
@@ -115,5 +115,79 @@ We already compute profit-native ACOS from real fees + COGS — arguably deeper 
 Pacvue's genuine innovations for us are **retail-aware activation**, **SOV defense/expansion as an intent vocabulary**, and **budget flighting**. Two of the three are already built and switched off.
 
 The uncomfortable and useful conclusion: the closest thing to an industry leader in this category has one idea we don't have (flighting), one we have and don't surface (margin as the headline), and one we have and haven't turned on (retail guard).
+
+---
+
+# 2. Rithum (ex-ChannelAdvisor + CommerceHub + Dsco)
+
+## 2.1 What it is
+
+A **global commerce operations platform** — "list, market, and optimize products across all major commerce channels," with fulfilment and delivery attached. Formed by merging **ChannelAdvisor** (brand multichannel commerce), **CommerceHub/OrderStream** (B2B supplier networks) and **Dsco** (product content), rebranded 2024. **600+ marketplace network**, managed-service tier supports up to **250,000 active ASINs**.
+
+This is the closest analogue to **Nexus as a whole product** — PIM + listings + inventory + orders + ads — which makes it a far more instructive comparison than another pure ads tool.
+
+## 2.2 Product lines
+
+| For brands | For retailers |
+|---|---|
+| Marketplace Listings (600+) · Inventory Management · Order Management · Commerce Insights | Dropship · Private Marketplaces · SupplyExplorer · Commerce Insights |
+| **Retail Media Advertising** · Paid Search & Shopping Ads · Product Feeds | Shipping Optimization · Delivery Date Prediction · Label Management · Delivery Insights |
+
+**RithumIQ** — the proprietary intelligence engine across all of it.
+
+## 2.3 The advertising layer — and the finding that matters
+
+**What the platform does:**
+- Campaign management across Amazon, Walmart, Target from one hub; onsite retail media formats
+- "Streamline bidding, pacing, and budget allocation with scalable, commerce-focused automation"
+- Bidding and keyword automation that incorporates **product-level data**
+- Campaign activation on a **custom schedule**
+- **RithumIQ**: "AI-driven inventory, pricing, and **margin** data insights… to target smarter"
+- **Closed-loop reporting** — ties spend to sales at ASIN level for profitability measurement
+
+**What is conspicuously absent from their published materials** (I looked specifically): dayparting, share of voice, placement modifiers, bid trajectories, impression-share targeting. Not "they don't have it" — but it isn't part of how they sell the product.
+
+**And there is a separate Managed Services tier where humans do the work:** ad targeting, bid management, campaign development, keyword management — "human expertise focuses on strategy and optimization; the platform handles execution." 1P accounts spending $25k+/mo additionally get content optimisation, A+ consultation, promotional management.
+
+## 2.4 The strategic read — this is the most important entry so far
+
+| | Catalog / inventory depth | Ads automation depth |
+|---|---|---|
+| **Pacvue** | Shallow — integrations, Buy Box/BSR upsold to higher tiers | **Deep** |
+| **Rithum** | **Deep** — 600+ marketplaces, listings, inventory, orders, dropship | Shallow — *plus a team of humans* |
+| **Nexus** | **Deep** — owns the PIM outright | **Deep** — rank engine, motion profiles, blended lanes |
+
+**Rithum is the canonical multichannel commerce platform, and its answer to advertising depth is to sell you people.** That is a strong market signal: joining deep catalogue to deep ads automation is hard enough that the leader in catalogue outsources the ads half to a services organisation.
+
+It also reframes what Nexus is. Not "a worse Pacvue with a PIM bolted on" — the combination itself is the unoccupied position, and the two nearest players each solve only one half.
+
+## 2.5 What to take
+
+### ① RithumIQ's framing: catalogue data as a *targeting* input, not just a guard
+
+This is the single idea worth taking, and it is a genuine advance on Pacvue.
+
+- **Pacvue** uses retail signals as a **gate**: pause if out of stock, don't spend without the Buy Box.
+- **Rithum** frames them as **targeting**: use inventory, pricing and margin "to target smarter" — let the catalogue decide *which* products deserve budget.
+
+Gate → allocator. That is the natural extension of `ads-retail-readiness.service`, and it lands directly on the dormant **APS (advertisable product selection)** series: rank advertisable products by margin × stock cover × Buy Box, and let budget follow the ranking rather than merely being blocked by it.
+
+We are unusually well-placed for this — `true-profit-rollup.service` already computes real per-product profit from actual fees + COGS, which is exactly the input RithumIQ is built to supply.
+
+### ② Closed-loop ASIN-level profitability as the reporting spine
+
+We have the data (`true-profit-rollup`). What they do better is make "every ad dollar tied to its outcome at ASIN level" the *shape of the report*, not a metric among many. Same lesson as Pacvue's Net PPM%, arrived at independently — which makes it worth acting on.
+
+## 2.6 What to refuse
+
+- **The managed-services model.** Their existence is a diagnosis, not a template: the market's most complete catalogue platform concluded that operators cannot run ads from software alone. The correct response is to make the system self-explaining, which is precisely the ADX control programme — not to accept the premise and hire people.
+- **Breadth.** 600+ marketplaces, 250k ASINs. Xavia is ~279 master SKUs on three channels. Every design decision they made for scale is wrong for us.
+- **Generic automation.** "Streamline bidding, pacing and budget allocation" is what you write when there is no mechanism to name. Compare `targetISPct` + `stepUpPct` + `maxCpcCents`.
+
+## 2.7 Verdict
+
+Rithum contributes **one strong idea** — catalogue as allocator rather than gate — and **one strategic clarification**, which is more valuable: the two nearest competitors each own one half of what Nexus is attempting, and neither owns both.
+
+The uncomfortable corollary: if the catalogue leader needed a services team to make ads work, the risk for Nexus is not missing features. It is that the system becomes something only a specialist can drive. That is the same failure already observed here — 51 rules, three consoles, nothing in use.
 
 ---
