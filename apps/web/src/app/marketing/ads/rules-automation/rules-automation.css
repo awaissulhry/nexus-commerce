@@ -987,3 +987,54 @@
 .h10-cov-int.bad { color: #a3211a; background: #fbdedb; font-weight: 700; }
 .h10-cov-int-list { border-top: 1px solid #eef1f5; padding: 10px 16px; display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: #7a5200; background: #fffdf6; }
 .h10-cov-int-list b { color: #1c2530; }
+
+/* ── RDX/E1 — the next-24-hours preview in the schedule drawer ───────────────────────────────
+   Reads as a continuation of the h10-hist-* drawer shell, not a new kind of surface: the summary
+   block borrows the coverage strip's note styling, and the table borrows the history row's rhythm.
+   Column widths are fixed so the Bid column lines up down the 24 rows — a ragged edge there makes
+   "hold 75%" and "45% → up to 300%" hard to compare at a glance, which is the whole job. */
+.h10-n24 { padding-bottom: 12px; }
+.h10-n24-sum { padding: 14px 20px 12px; border-bottom: 1px solid #eef1f5; }
+.h10-n24-sum .hdr { font-size: 12.5px; color: #4a5462; margin: 0 0 8px; line-height: 1.5; }
+.h10-n24-sum .hdr b { color: #1c2530; font-weight: 700; }
+.h10-n24-sum .hdr .tz { color: #8a93a1; }
+.h10-n24-sum .note { display: flex; align-items: flex-start; gap: 7px; font-size: 12px; line-height: 1.5; color: #4a5462; margin: 0 0 7px; padding: 8px 10px; border-radius: 7px; background: #f6f8fa; }
+.h10-n24-sum .note svg { flex: none; margin-top: 1px; }
+/* Every note is icon(optional) + ONE span. A bare <b> beside a text node would become two flex
+   items and collapse into a narrow left column. */
+.h10-n24-sum .note > span { flex: 1; min-width: 0; }
+.h10-n24-sum .note.off { background: #f1f4f8; color: #5a6472; }
+.h10-n24-sum .note.warn { background: #fdf6e7; color: #7a5c15; }
+.h10-n24-sum .note.bad { background: #fdefec; color: #9a3a24; }
+.h10-n24-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; }
+.h10-n24-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: #4a5462; }
+.h10-n24-legend i { width: 9px; height: 9px; border-radius: 2px; background: #c3cad4; flex: none; }
+.h10-n24-legend em { font-style: normal; color: #8a93a1; }
+
+.h10-n24-t { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
+.h10-n24-t th { text-align: left; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #8a93a1; padding: 9px 8px; border-bottom: 1px solid #eef1f5; position: sticky; top: 0; background: #fff; z-index: 1; }
+.h10-n24-t th:first-child, .h10-n24-t td:first-child { padding-left: 20px; }
+.h10-n24-t th:last-child, .h10-n24-t td:last-child { padding-right: 20px; }
+.h10-n24-t th:nth-child(1) { width: 84px; }
+.h10-n24-t th:nth-child(3) { width: 118px; }
+.h10-n24-t th:nth-child(4) { width: 108px; }
+.h10-n24-t td { padding: 7px 8px; border-bottom: 1px solid #f4f6f9; vertical-align: top; color: #3a4450; }
+/* A change of governing target is a bid write — the rule marks where each one falls. */
+.h10-n24-t tr.chg td { border-top: 1px solid #dfe4ea; }
+.h10-n24-t td.hr { color: #6b7480; white-space: nowrap; }
+.h10-n24-t td.hr b { color: #1c2530; font-weight: 800; }
+.h10-n24-t td.hr em { display: block; font-style: normal; font-size: 10.5px; color: #9aa2ae; }
+.h10-n24-t td.tg i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: #c3cad4; margin-right: 6px; vertical-align: 1px; }
+.h10-n24-t td.tg em { font-style: normal; font-size: 10.5px; color: #9aa2ae; margin-left: 6px; }
+.h10-n24-t td.tg .miss { color: #9a3a24; display: inline-flex; align-items: center; gap: 4px; }
+.h10-n24-t .none { color: #b3bac4; }
+.h10-n24-t td.bd .hold { display: inline-flex; align-items: center; gap: 4px; color: #4a5462; }
+.h10-n24-t td.bd .chase { display: inline-flex; align-items: center; gap: 4px; color: #1c7a4a; white-space: nowrap; }
+.h10-n24-t td.bd .hold, .h10-n24-t td.bd .sup { white-space: nowrap; }
+.h10-n24-t td.bd .chase b { font-weight: 700; }
+.h10-n24-t td.bd .chase.risk { color: #9a3a24; }
+.h10-n24-t td.bd .sup { color: #8a93a1; }
+.h10-n24-t td.gd { color: #6b7480; }
+.h10-n24-t td.gd span { display: block; font-size: 11px; white-space: nowrap; }
+.h10-n24-t td.gd .ao { color: #9a3a24; font-weight: 700; }
+.h10-n24-t td.gd .bad { color: #9a3a24; font-weight: 700; }

@@ -48,19 +48,42 @@ export interface LaneSpec {
 export interface ScheduleWindow { days?: number[]; startHour?: number; endHour?: number; bidMultiplierPct?: number; targetKey?: string }
 
 /**
- * Which target governs (day, hour): a window covering the moment with a targetKey
- * wins; otherwise the schedule baseline ("for the rest, hold Y"). null => no
- * goal-mode target here (legacy multiplier-only schedule).
+ * Which WINDOW governs (day, hour) — the first one covering the moment that names a target.
+ * `endHour` is EXCLUSIVE, which is the contract the authoring side (selectionToWindows) collapses
+ * painted cells to. Split out of resolveActiveTargetKey so the E1 preview can say whether an hour
+ * came from a window or from the baseline WITHOUT re-implementing this rule; a second copy of it
+ * would be free to drift from the engine, which is exactly what a preview must never do.
  */
-export function resolveActiveTargetKey(windows: ScheduleWindow[] | null | undefined, defaultTargetKey: string | null | undefined, day: number, hour: number): string | null {
+export function resolveActiveWindow(windows: ScheduleWindow[] | null | undefined, day: number, hour: number): ScheduleWindow | null {
   for (const w of windows ?? []) {
     if (!w?.targetKey) continue
     const days = w.days && w.days.length ? w.days : [0, 1, 2, 3, 4, 5, 6]
     const start = w.startHour ?? 0
     const end = w.endHour ?? 24
-    if (days.includes(day) && hour >= start && hour < end) return w.targetKey
+    if (days.includes(day) && hour >= start && hour < end) return w
   }
-  return defaultTargetKey ?? null
+  return null
+}
+
+/**
+ * Which target governs (day, hour): a window covering the moment with a targetKey
+ * wins; otherwise the schedule baseline ("for the rest, hold Y"). null => no
+ * goal-mode target here (legacy multiplier-only schedule).
+ */
+export function resolveActiveTargetKey(windows: ScheduleWindow[] | null | undefined, defaultTargetKey: string | null | undefined, day: number, hour: number): string | null {
+  return resolveActiveWindow(windows, day, hour)?.targetKey ?? defaultTargetKey ?? null
+}
+
+/**
+ * The [floor, ceiling] placement-bias band a target may occupy — the same two numbers computeStep
+ * derives before it moves anything, exported so the preview quotes the engine rather than
+ * paraphrasing it. floor = "the bid we hold" (Placement %); the loop only goes above it when a
+ * ceiling is raised above it, or all-out (which defaults the ceiling to the 900% cap).
+ */
+export function biasBand(target: Pick<RankTargetSpec, 'biasPct' | 'maxBiasPct' | 'allOut'>): { floor: number; ceiling: number } {
+  const floor = clamp(target.biasPct ?? 0, 0, 900)
+  const ceiling = target.allOut ? (target.maxBiasPct ?? 900) : (target.maxBiasPct ?? floor)
+  return { floor, ceiling: Math.max(floor, ceiling) }
 }
 
 export interface Observed {
@@ -100,9 +123,8 @@ export function computeStep(target: RankTargetSpec, obs: Observed, opts: { maxPc
   // Climb/Ease step makes that move gradual instead; the bid only goes ABOVE the floor when a
   // Ceiling is raised above it — then it chases the [floor, ceiling] band (signal-driven, or
   // always with keepClimbing / all-out) and eases back toward the floor, never below it.
-  const floor = clamp(target.biasPct ?? 0, 0, 900) // the bid we hold = Placement %
-  const ceiling = target.allOut ? (target.maxBiasPct ?? 900) : (target.maxBiasPct ?? floor)
-  const maxPct = Math.min(opts.maxPct ?? 900, Math.max(floor, ceiling))
+  const { floor, ceiling } = biasBand(target) // floor = the bid we hold = Placement %
+  const maxPct = Math.min(opts.maxPct ?? 900, ceiling) // biasBand already lifts ceiling to >= floor
   const climbStep = target.stepUpPct ?? stepFor(target) // up increment %/cyc (also the chase rate)
   const easeStep = target.stepDownPct ?? climbStep // down increment %/cyc
   const rampUp = target.stepUpPct != null // climb step SET → ramp up to the floor; blank → snap up

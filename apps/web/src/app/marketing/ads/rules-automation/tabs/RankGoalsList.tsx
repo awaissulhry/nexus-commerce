@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plus, ExternalLink, History } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { NoDataIllus } from '../_shared/NoDataIllus'
-import { ScheduleActivityDrawer } from '../dayparting/ScheduleActivityDrawer'
+import { ScheduleActivityDrawer, type DrawerTab } from '../dayparting/ScheduleActivityDrawer'
 import { ScheduleRowActions } from '../dayparting/ScheduleRowActions'
 import { WeekShape } from '../dayparting/WeekShape'
 import { TemplateLibrary } from '../dayparting/TemplateLibrary'
@@ -53,7 +53,7 @@ export function RankGoalsList({ market = 'all', reloadSignal = 0 }: { market?: s
   const [rows, setRows] = useState<RankRow[]>([])
   const [loading, setLoading] = useState(true)
   const [sel, setSel] = useState<Set<string>>(new Set())
-  const [activity, setActivity] = useState<{ id: string; name: string } | null>(null) // RDX/A4
+  const [activity, setActivity] = useState<{ id: string; name: string; tab: DrawerTab } | null>(null) // RDX/A4 + E1
   const [tplFor, setTplFor] = useState<string[] | null>(null) // F2 — bulk apply a template
   // Applying a template rewrites the plan, so the Week shape and window count on screen go stale.
   // A local counter alongside the parent's reloadSignal, so the list can refresh itself.
@@ -262,7 +262,7 @@ export function RankGoalsList({ market = 'all', reloadSignal = 0 }: { market?: s
         <a className="h10-nt-open" href={builderHref(r.id)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Manage</a>
         {/* RDX/A4 — row click opens Activity too, but an explicit affordance keeps it discoverable
             next to Manage rather than relying on someone guessing the row is clickable. */}
-        <button type="button" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); setActivity({ id: r.id, name: r.name }) }}><History size={11} /> Activity</button>
+        <button type="button" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); setActivity({ id: r.id, name: r.name, tab: 'activity' }) }}><History size={11} /> Activity</button>
       </span>
       {r.portfolioName && <span className="rg-pfbadge" title={`Portfolio schedule · ${r.portfolioName}`}>Portfolio · {r.portfolioName}</span>}
       <ScheduleRowActions row={r} onRenamed={renameRow} onDeleted={removeRow} />
@@ -320,9 +320,11 @@ export function RankGoalsList({ market = 'all', reloadSignal = 0 }: { market?: s
         </span>
       )}
       toolbarRight={<a className="h10-am-btn primary" href={builderHref()}><Plus size={13} /> Rank Schedule</a>}
-      onRowClick={(r) => setActivity({ id: r.id, name: r.name })}
+      /* RDX/E1 — a plain row click opens the forward view ("what is this about to do"), which is
+         the more useful default; the explicit Activity button still opens the history it names. */
+      onRowClick={(r) => setActivity({ id: r.id, name: r.name, tab: 'next24' })}
     />
-    {activity && <ScheduleActivityDrawer group={activity} palette={palette} onClose={() => setActivity(null)} />}
+    {activity && <ScheduleActivityDrawer group={activity} palette={palette} initialTab={activity.tab} onClose={() => setActivity(null)} />}
     {tplFor && (
       <TemplateLibrary
         groupIds={tplFor}

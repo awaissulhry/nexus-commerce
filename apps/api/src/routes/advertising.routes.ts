@@ -7844,6 +7844,78 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
+   * RDX/E1 — the next 24 hours of this schedule, hour by hour, before it is armed.
+   *
+   * The builder shows which hours are painted. It does not show what each hour's target does to a
+   * bid, and it does not show where that bid is allowed to climb to — two schedules that look
+   * identical on the grid can differ ninefold in what they permit. This lists the governing target
+   * per hour with its floor, its ceiling, and its guardrails, so "arm this" is a decision made
+   * against numbers rather than colours.
+   *
+   * The window starts at the CURRENT hour, not the next one, on purpose: row 0 is what the engine
+   * is doing right now, so the operator can check the preview against live behaviour instead of
+   * having to trust it.
+   *
+   * Slots come from the DATABASE clock in the schedule's own timezone — Railway containers have
+   * drifted hours before now, and a preview computed off a skewed container clock would name the
+   * wrong hours with total confidence.
+   */
+  fastify.get('/advertising/rank-schedule-groups/:id/next-24h', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const group = await prisma.rankScheduleGroup.findUnique({ where: { id } })
+    if (!group) { reply.status(404); return { error: 'not found' } }
+
+    // The timezone reaches AT TIME ZONE, so it is whitelisted rather than trusted, exactly as the
+    // heatmap does — even though it arrives from our own row rather than a query string.
+    const TZ_OK = new Set(['Europe/Rome', 'Europe/London', 'Europe/Madrid', 'Europe/Paris', 'Europe/Berlin', 'America/Los_Angeles', 'America/New_York', 'UTC'])
+    const tz = TZ_OK.has(group.timezone ?? '') ? group.timezone : 'Europe/Rome'
+
+    // now() is timestamptz, so a single AT TIME ZONE converts it to local wall-clock — the
+    // double-cast the stored-timestamp columns need would be wrong here.
+    const slots = await prisma.$queryRaw<Array<{ at: Date; dow: number; hour: number }>>`
+      SELECT gs AS at,
+             EXTRACT(DOW  FROM gs AT TIME ZONE ${tz})::int AS dow,
+             EXTRACT(HOUR FROM gs AT TIME ZONE ${tz})::int AS hour
+      FROM generate_series(
+        date_trunc('hour', now()),
+        date_trunc('hour', now()) + interval '23 hours',
+        interval '1 hour'
+      ) gs
+    `
+
+    const [targets, members] = await Promise.all([
+      prisma.rankTarget.findMany(),
+      prisma.adSchedule.findMany({ where: { groupId: id }, select: { campaignId: true, enabled: true } }),
+    ])
+    const { buildNext24 } = await import('../services/advertising/next24.js')
+    const lib = new Map(targets.map((t) => [t.key, {
+      key: t.key, name: t.name, color: t.color,
+      biasPct: t.biasPct, maxBiasPct: t.maxBiasPct, maxCpcCents: t.maxCpcCents,
+      acosCapPct: t.acosCapPct, allOut: t.allOut, pause: t.pause,
+    }]))
+
+    const { hours, summary } = buildNext24(
+      slots.map((s) => ({ at: (s.at instanceof Date ? s.at : new Date(s.at)).toISOString(), dow: Number(s.dow), hour: Number(s.hour) })),
+      (group.windows as Parameters<typeof buildNext24>[1]) ?? [],
+      group.defaultTargetKey,
+      lib,
+    )
+
+    reply.header('Cache-Control', 'private, max-age=30')
+    return {
+      groupId: group.id,
+      name: group.name,
+      timezone: tz,
+      // A disabled schedule resolves targets exactly the same way but writes nothing. Saying so
+      // here stops the preview from reading as a prediction when it is really a rehearsal.
+      enabled: group.enabled,
+      members: { total: members.length, enabled: members.filter((m) => m.enabled).length },
+      hours,
+      summary,
+    }
+  })
+
+  /**
    * C2 — the DPS Phase-0 truth pass, made permanent.
    *
    * That audit was run once, by hand, and found 8 zero-member groups plus 12 stranded
