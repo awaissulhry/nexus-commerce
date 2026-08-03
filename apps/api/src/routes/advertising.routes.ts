@@ -7974,6 +7974,26 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  /**
+   * HX.11 — retention preview and manual sweep.
+   *
+   * GET previews (counts only, deletes nothing). POST with ?apply=1 actually prunes; without it the
+   * POST is still a dry run, so a mistyped call cannot delete anything.
+   */
+  fastify.get('/advertising/retention/preview', async (_request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    const { runAdsRetentionOnce, RETENTION_DAYS } = await import('../jobs/ads-retention.job.js')
+    const r = await runAdsRetentionOnce({ dryRun: true })
+    return { ...r, policy: RETENTION_DAYS }
+  })
+  fastify.post('/advertising/retention/run', async (request, reply) => {
+    const q = request.query as { apply?: string }
+    const dryRun = q.apply !== '1'
+    reply.header('Cache-Control', 'no-store')
+    const { runAdsRetentionOnce } = await import('../jobs/ads-retention.job.js')
+    return await runAdsRetentionOnce({ dryRun })
+  })
+
   fastify.post('/advertising/rank-schedule-groups', async (request, reply) => {
     const b = request.body as Record<string, unknown>
     if (!b?.name || !String(b.name).trim()) { reply.status(400); return { error: 'name is required' } }

@@ -1391,6 +1391,7 @@ async function start() {
       const { startBudgetEnforceCron } = await import('./jobs/ad-budget-enforce.job.js');
       const { startAutopilotCron } = await import('./jobs/ad-autopilot.job.js');
       // RS.5 — rank-defend loop (self-gated on NEXUS_ENABLE_RANK_DEFEND=1).
+      const { startAdsRetentionCron } = await import('./jobs/ads-retention.job.js');
       const { startRankDefendCron } = await import('./jobs/ad-rank-defend.job.js');
       markCronStep('ads:import ads-budget-pacing');
       await import('./services/advertising/ads-budget-pacing.service.js');
@@ -1429,6 +1430,8 @@ async function start() {
       startBudgetScheduleCron();
       startAutopilotCron();
       startRankDefendCron();
+      // HX.11 — prunes the ads history tables. OFF unless NEXUS_ENABLE_ADS_RETENTION=1, because it deletes.
+      startAdsRetentionCron();
       startAllAdvertisingCrons();
       startAdvertisingRuleEvaluatorCron();
       startBudgetPoolRebalanceCron();
