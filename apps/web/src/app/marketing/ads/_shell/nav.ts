@@ -65,7 +65,9 @@ export const ADS_NAV: NavItem[] = [
   { label: 'Rules & Automation', route: 'rules-automation', Icon: Wand2 },
   { label: 'AMC', route: 'amc', Icon: Users, children: [{ label: 'AMC Insights', route: 'amc' }, { label: 'Audience Insights', route: 'amc/audiences' }] },
   { label: 'Reporting', route: 'reporting', Icon: PieChart, children: [{ label: 'Brand Metrics', route: 'reporting/brand-metrics' }] },
-  { label: 'Change Log', route: 'changelog', Icon: History },
+  // The Amazon Change Log is reached from the header of the pages that produce changes, not from
+  // here — the rail is kept short on purpose, and 99% of recorded changes come from one page.
+  // The eBay rail keeps its own entry: that console has no equivalent header link.
   { label: 'Training & Resources', route: 'training', Icon: HelpCircle, external: 'https://advertising.amazon.com' },
   { label: 'Settings', route: 'account-settings', Icon: Settings },
 ]
