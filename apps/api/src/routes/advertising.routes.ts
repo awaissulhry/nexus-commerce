@@ -7398,6 +7398,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       acosCapPct: (b.acosCapPct as number | null) ?? null,
       maxCpcCents: (b.maxCpcCents as number | null) ?? null,
       biasPct: (b.biasPct as number | null) ?? null,
+      // MB.1 — Min-bid floor in cents; only meaningful with pause:true. null = legacy 2¢.
+      floorBidCents: (b.floorBidCents as number | null) ?? null,
       // MP — motion profile (how the loop moves the bias); all default to today's behaviour.
       jumpStartPct: (b.jumpStartPct as number | null) ?? null,
       stepUpPct: (b.stepUpPct as number | null) ?? null,
@@ -7421,7 +7423,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const b = request.body as Record<string, unknown>
     const data: Record<string, unknown> = {}
-    for (const k of ['name', 'placement', 'targetISPct', 'acosCapPct', 'maxCpcCents', 'biasPct', 'jumpStartPct', 'stepUpPct', 'stepDownPct', 'maxBiasPct', 'keepClimbing', 'pause', 'allOut', 'color', 'sortOrder', 'bidMode', 'bidValueCents', 'bidDeltaPct']) if (b[k] !== undefined) data[k] = b[k]
+    for (const k of ['name', 'placement', 'targetISPct', 'acosCapPct', 'maxCpcCents', 'biasPct', 'floorBidCents', 'jumpStartPct', 'stepUpPct', 'stepDownPct', 'maxBiasPct', 'keepClimbing', 'pause', 'allOut', 'color', 'sortOrder', 'bidMode', 'bidValueCents', 'bidDeltaPct']) if (b[k] !== undefined) data[k] = b[k]
     if (b.lanes !== undefined) data.lanes = Array.isArray(b.lanes) ? b.lanes : [] // BL — [] = clear blend
     try { return await prisma.rankTarget.update({ where: { id }, data }) } catch { reply.status(404); return { error: 'not found' } }
   })
@@ -7439,7 +7441,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const t = await prisma.rankTarget.findUnique({ where: { id }, select: { key: true } })
     const d = (t ? BUILTIN_RANK_TARGETS.find((x) => x.key === t.key) : null) as Record<string, unknown> | null
     if (!d) { reply.status(404); return { error: 'not_a_builtin' } }
-    return await prisma.rankTarget.update({ where: { id }, data: { name: d.name, placement: d.placement, targetISPct: d.targetISPct ?? null, acosCapPct: d.acosCapPct ?? null, maxCpcCents: d.maxCpcCents ?? null, biasPct: d.biasPct ?? null, jumpStartPct: (d.jumpStartPct as number | null) ?? null, stepUpPct: (d.stepUpPct as number | null) ?? null, stepDownPct: (d.stepDownPct as number | null) ?? null, maxBiasPct: (d.maxBiasPct as number | null) ?? null, keepClimbing: !!d.keepClimbing, color: d.color ?? null, pause: !!d.pause, allOut: !!d.allOut, lanes: [], bidMode: null, bidValueCents: null, bidDeltaPct: null } as never })
+    return await prisma.rankTarget.update({ where: { id }, data: { name: d.name, placement: d.placement, targetISPct: d.targetISPct ?? null, acosCapPct: d.acosCapPct ?? null, maxCpcCents: d.maxCpcCents ?? null, biasPct: d.biasPct ?? null, floorBidCents: (d.floorBidCents as number | null) ?? null, jumpStartPct: (d.jumpStartPct as number | null) ?? null, stepUpPct: (d.stepUpPct as number | null) ?? null, stepDownPct: (d.stepDownPct as number | null) ?? null, maxBiasPct: (d.maxBiasPct as number | null) ?? null, keepClimbing: !!d.keepClimbing, color: d.color ?? null, pause: !!d.pause, allOut: !!d.allOut, lanes: [], bidMode: null, bidValueCents: null, bidDeltaPct: null } as never })
   })
 
   // RDX/A2 — (weekday, hour) in a schedule's own timezone. Mirrors nowInTz in

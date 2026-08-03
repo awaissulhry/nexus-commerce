@@ -7,6 +7,9 @@ import type { RankTargetSpec } from '../services/advertising/rank-controller.js'
 // still respects a profit ceiling.
 const allOut: RankTargetSpec = { key: 'own-top-allout', placement: 'PLACEMENT_TOP', targetISPct: 90, acosCapPct: null, maxCpcCents: null, biasPct: 150, pause: false, allOut: true }
 const ownTop: RankTargetSpec = { key: 'own-top', placement: 'PLACEMENT_TOP', targetISPct: 70, acosCapPct: 45, maxCpcCents: null, biasPct: 100, pause: false, allOut: false }
+// MB.1 — the Min-bid target as seeded: no floor and no placement, both of which the engine
+// reads as "behave exactly as you did before MB.1".
+const minBid: RankTargetSpec = { key: 'pause', placement: 'PLACEMENT_TOP', targetISPct: null, acosCapPct: null, maxCpcCents: null, biasPct: null, pause: true, floorBidCents: null, allOut: false }
 
 describe('RD.5 effectiveSpec — family guardrails', () => {
   it('passes through unchanged with no flags', () => {
@@ -51,6 +54,18 @@ describe('RTC applyTargetOverrides — per-scope merge', () => {
   it('ignores null/undefined maps and treats 0 as a real override', () => {
     expect(applyTargetOverrides(ownTop, null, undefined).biasPct).toBe(100)
     expect(applyTargetOverrides(ownTop, { 'own-top': { biasPct: 0 } }).biasPct).toBe(0)
+  })
+  // MB.1 — a campaign can hold a different Min-bid floor from the library default. The merge
+  // must treat it like every other scalar: campaign beats product, absent means inherit.
+  it('MB.1 — carries a per-scope Min-bid floor, most-specific scope winning', () => {
+    expect(applyTargetOverrides(minBid, { pause: { floorBidCents: 10 } }).floorBidCents).toBe(10)
+    expect(applyTargetOverrides(minBid, { pause: { floorBidCents: 10 } }, { pause: { floorBidCents: 25 } }).floorBidCents).toBe(25)
+  })
+  it('MB.1 — no override leaves the floor null, which the engine reads as the legacy 2¢', () => {
+    expect(applyTargetOverrides(minBid, { 'own-top': { floorBidCents: 10 } }).floorBidCents).toBeNull()
+  })
+  it('MB.1 — a Min-bid placement is overridable per campaign like any other bias', () => {
+    expect(applyTargetOverrides(minBid, { pause: { biasPct: 0 } }).biasPct).toBe(0)
   })
 })
 

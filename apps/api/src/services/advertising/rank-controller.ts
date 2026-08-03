@@ -15,6 +15,10 @@ export interface RankTargetSpec {
   maxCpcCents: number | null // hard bid ceiling (runaway guard); applied at the bid layer (RS.5)
   biasPct: number | null // starting placement-bias % on entry
   pause: boolean
+  // MB.1 — for a `pause` (Min bid) target: the bid floor in cents it holds during its
+  // hours. null = the engine's legacy 2¢. Read by the job's pause branch, not by
+  // computeStep — a Min-bid hour never reaches the placement controller.
+  floorBidCents?: number | null
   allOut: boolean // ignore acosCapPct — hold the slot at any cost up to maxCpc
   // MP v2 — motion profile: HOW the loop moves the bid. floor = biasPct (Placement %); blank knobs => snap to it both ways.
   jumpStartPct?: number | null // DORMANT in v2 — computeStep ignores it (snap-to-Placement made the opening jump redundant)

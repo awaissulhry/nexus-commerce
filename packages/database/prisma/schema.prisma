@@ -2652,6 +2652,12 @@ model Campaign {
   // NP — set while the campaign is bid-suppressed (no-pause: bids at the floor
   // instead of status=PAUSED). Fast "is suppressed" flag + when it started.
   bidsSuppressedAt    DateTime?
+  // MB.1 — WHICH floor the campaign is currently suppressed at. Before this, the floor
+  // was one module constant (2¢) so "already suppressed" implied "suppressed at the right
+  // value" and re-flooring was a no-op. With a per-target floor, two Min-bid windows can
+  // want different floors back-to-back, and this is how the engine notices. null on rows
+  // suppressed before MB.1 → read as the legacy 2¢.
+  bidsSuppressedFloorCents Int?
   /// AX2.2 — WRITE truth: when we last pushed to Amazon and how it went.
   /// Stamped by ads-sync.worker. Never stamped by a read, so a successful
   /// settings read can't mask a failed bid write.
@@ -14356,6 +14362,11 @@ model RankTarget {
   maxBiasPct      Int? // ceiling the climb won't exceed; null = 900
   keepClimbing    Boolean  @default(false) // after the jump, keep stepping to the ceiling even with NO signal (bounded by ceiling + ACOS cap)
   pause           Boolean  @default(false) // this target = pause delivery in the window
+  // MB.1 — the floor a `pause` (Min bid) target holds bids at, in cents. null = the
+  // engine's legacy 2¢ constant, so every existing Min-bid window behaves exactly as
+  // before until an operator sets a number. Amazon's own SP minimum is 2¢, so values
+  // below that are clamped up rather than rejected. Ignored unless `pause` is true.
+  floorBidCents   Int?
   // RS.1.1 — "all-out": the defend loop IGNORES acosCapPct and holds the slot at
   // any cost up to maxCpcCents (null maxCpc = truly unbounded). For windows where
   // winning the rank matters more than margin. maxCpcCents stays a runaway guard.

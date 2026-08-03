@@ -22,7 +22,7 @@ import { computeStep, resolveActiveTargetKey, isRankLoss, type RankTargetSpec, t
 import { analyzeTopOfSearch, setSearchPlacement, buildBlendedAdjustments } from '../services/advertising/ads-top-of-search.service.js'
 import { sqpImpressionShareForAsins } from '../services/advertising/sqp.service.js'
 import { updateCampaignWithSync, updateAdGroupWithSync, type AdsActor } from '../services/advertising/ads-mutation.service.js'
-import { suppressCampaignBids, restoreCampaignBids, applyBaseBidDelta, revertBaseBidDelta } from '../services/advertising/ads-bid-suppression.service.js'
+import { suppressCampaignBids, restoreCampaignBids, refloorCampaignBids, normaliseFloorCents, applyBaseBidDelta, revertBaseBidDelta } from '../services/advertising/ads-bid-suppression.service.js'
 import { detectSelfCompetition, type CampaignTargeting, type SelfCompetitionConflict } from '../services/advertising/rank-self-competition.js'
 
 // Clock source for time-of-day window resolution: the DATABASE clock, not the container's process
@@ -54,12 +54,12 @@ function nowInTz(tz: string, leadMinutes = 0, baseNow?: Date): { day: number; ho
   return { day: dayIdx < 0 ? 0 : dayIdx, hour }
 }
 
-interface RankTargetRow { key: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; allOut: boolean; jumpStartPct?: number | null; stepUpPct?: number | null; stepDownPct?: number | null; maxBiasPct?: number | null; keepClimbing?: boolean; lanes?: unknown; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
-const toSpec = (t: RankTargetRow): RankTargetSpec => ({ key: t.key, placement: t.placement, targetISPct: t.targetISPct, acosCapPct: t.acosCapPct, maxCpcCents: t.maxCpcCents, biasPct: t.biasPct, pause: t.pause, allOut: t.allOut, jumpStartPct: t.jumpStartPct ?? null, stepUpPct: t.stepUpPct ?? null, stepDownPct: t.stepDownPct ?? null, maxBiasPct: t.maxBiasPct ?? null, keepClimbing: !!t.keepClimbing, lanes: Array.isArray(t.lanes) ? (t.lanes as LaneSpec[]) : null, bidMode: t.bidMode ?? null, bidValueCents: t.bidValueCents ?? null, bidDeltaPct: t.bidDeltaPct ?? null })
+interface RankTargetRow { key: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; floorBidCents?: number | null; allOut: boolean; jumpStartPct?: number | null; stepUpPct?: number | null; stepDownPct?: number | null; maxBiasPct?: number | null; keepClimbing?: boolean; lanes?: unknown; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
+const toSpec = (t: RankTargetRow): RankTargetSpec => ({ key: t.key, placement: t.placement, targetISPct: t.targetISPct, acosCapPct: t.acosCapPct, maxCpcCents: t.maxCpcCents, biasPct: t.biasPct, pause: t.pause, floorBidCents: t.floorBidCents ?? null, allOut: t.allOut, jumpStartPct: t.jumpStartPct ?? null, stepUpPct: t.stepUpPct ?? null, stepDownPct: t.stepDownPct ?? null, maxBiasPct: t.maxBiasPct ?? null, keepClimbing: !!t.keepClimbing, lanes: Array.isArray(t.lanes) ? (t.lanes as LaneSpec[]) : null, bidMode: t.bidMode ?? null, bidValueCents: t.bidValueCents ?? null, bidDeltaPct: t.bidDeltaPct ?? null })
 
 // RTC — merge per-scope target overrides onto a spec, keyed by the spec's own target
 // key. Maps apply in order, so later (more specific) wins: product then campaign.
-type TargetOverride = { biasPct?: number; targetISPct?: number; acosCapPct?: number; maxCpcCents?: number; jumpStartPct?: number; stepUpPct?: number; stepDownPct?: number; maxBiasPct?: number; keepClimbing?: boolean; lanes?: LaneSpec[]; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
+type TargetOverride = { biasPct?: number; targetISPct?: number; acosCapPct?: number; maxCpcCents?: number; floorBidCents?: number; jumpStartPct?: number; stepUpPct?: number; stepDownPct?: number; maxBiasPct?: number; keepClimbing?: boolean; lanes?: LaneSpec[]; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
 type TargetOverrideMap = Record<string, TargetOverride> | null | undefined
 export function applyTargetOverrides(spec: RankTargetSpec, ...maps: TargetOverrideMap[]): RankTargetSpec {
   let out = spec
@@ -72,6 +72,9 @@ export function applyTargetOverrides(spec: RankTargetSpec, ...maps: TargetOverri
       ...(o.targetISPct != null ? { targetISPct: o.targetISPct } : {}),
       ...(o.acosCapPct != null ? { acosCapPct: o.acosCapPct } : {}),
       ...(o.maxCpcCents != null ? { maxCpcCents: o.maxCpcCents } : {}),
+      // MB.1 — a campaign can hold a different Min-bid floor from the library default
+      // (a hero SKU floored at 10¢ where the rest of the family sits at 2¢).
+      ...(o.floorBidCents != null ? { floorBidCents: o.floorBidCents } : {}),
       // MP — motion knobs are overridable per product/campaign too (campaign wins).
       ...(o.jumpStartPct != null ? { jumpStartPct: o.jumpStartPct } : {}),
       ...(o.stepUpPct != null ? { stepUpPct: o.stepUpPct } : {}),
@@ -148,7 +151,7 @@ export interface RankDefendSummary { evaluated: number; applied: number; decisio
 
 const pctOf = (f: number | null): number | null => (f != null ? Math.round(f * 100) : null)
 type SigMap = Map<string, { currentPct: number; topIS: number | null; topAcos: number | null }>
-interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; bidsSuppressedAt?: Date | null; deliveryReasons?: string[] }
+interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; bidsSuppressedAt?: Date | null; bidsSuppressedFloorCents?: number | null; deliveryReasons?: string[] }
 
 // RD.4 — one per-campaign decision body, shared by the schedule loop and the
 // product-plan fan-out. `write` gates ALL actuation (pause / resume / placement
@@ -235,12 +238,44 @@ async function decideAndMaybeApply(
   // bid to the floor (~2¢) and keeps the campaign ENABLED — NEVER status=PAUSED, which
   // disrupts Amazon's algorithm. Prior bids are remembered for exact restore. Idempotent.
   if (spec.pause) {
+    // MB.1 — the floor is the target's own (per-campaign overridable), not a constant.
+    const floor = normaliseFloorCents(spec.floorBidCents)
+    // Already floored at exactly this value → nothing to do, and deliberately no scan. The
+    // pre-MB.1 code did no database work at all on a suppressed campaign, and a Min-bid
+    // baseline can hold 54 hours a week across every campaign in a group; re-deriving an
+    // unchanged answer four times an hour is load bought for nothing.
+    const atFloorAlready = !!camp.bidsSuppressedAt && normaliseFloorCents(camp.bidsSuppressedFloorCents) === floor
     let suppressed = 0
-    if (ctx.write && !camp.bidsSuppressedAt) {
-      try { suppressed = await suppressCampaignBids(camp.id, { actor: ctx.actor as AdsActor, reason: 'rank — pause target → bids floored (no-pause)' }) } catch (e) { logger.warn('[rank-defend] bid-suppress failed', { campaignId: camp.id, error: (e as Error).message }) }
+    if (ctx.write && !atFloorAlready) {
+      try {
+        // Not-yet-suppressed → suppress at this floor. Already suppressed at a DIFFERENT
+        // floor → move it, which is the case suppressCampaignBids refuses by design.
+        suppressed = camp.bidsSuppressedAt
+          ? await refloorCampaignBids(camp.id, { actor: ctx.actor as AdsActor, floorCents: floor, reason: `rank — Min bid → floor €${(floor / 100).toFixed(2)}` })
+          : await suppressCampaignBids(camp.id, { actor: ctx.actor as AdsActor, floorCents: floor, reason: `rank — Min bid → bids floored to €${(floor / 100).toFixed(2)} (no-pause)` })
+      } catch (e) { logger.warn('[rank-defend] bid-suppress failed', { campaignId: camp.id, error: (e as Error).message }) }
     }
     applied += suppressed
-    return { decision: { ...base, action: 'pause', reason: 'target = Min bid → bids at floor ~2¢ (campaign live, restorable)', nextPct: currentPct, lossDetected: false, applied: suppressed > 0 || (ctx.write && !!camp.bidsSuppressedAt) }, applied }
+    // MB.3 — placement during Min-bid hours. Until now the multipliers were left exactly as
+    // the PREVIOUS window set them, so a Min-bid hour following an all-out one still carried
+    // Top +300% and the floored bid served at ~4× its face value. A Placement % on the
+    // Min-bid target now governs that too; leaving it blank keeps the old behaviour, which is
+    // what every already-saved schedule has.
+    let placeNote = ''
+    let placed = false
+    if (spec.biasPct != null) {
+      const want = Math.max(0, Math.min(900, Math.round(spec.biasPct)))
+      if (currentPct !== want) {
+        placeNote = ` · ${shortPlace(spec.placement)} ${currentPct}→${want}%`
+        if (ctx.write) {
+          // Floor first, then the multiplier: for one tick the campaign is at the floored bid
+          // with the OLD multiplier, never at the old bid with a new one.
+          try { await setSearchPlacement(camp.id, spec.placement, want, { actor: ctx.actor, reason: `rank — Min bid placement ${currentPct}→${want}%` }); applied++; placed = true } catch (e) { logger.warn('[rank-defend] min-bid placement failed', { campaignId: camp.id, error: (e as Error).message }) }
+        }
+      } else placeNote = ` · ${shortPlace(spec.placement)} held ${want}%`
+    }
+    const reason = `target = Min bid → bids at floor €${(floor / 100).toFixed(2)} (campaign live, restorable)${placeNote}`
+    return { decision: { ...base, action: 'pause', reason, nextPct: spec.biasPct != null ? Math.max(0, Math.min(900, Math.round(spec.biasPct))) : currentPct, lossDetected: false, applied: suppressed > 0 || placed || (ctx.write && !!camp.bidsSuppressedAt) }, applied }
   }
   // Serve target → restore any no-pause bid suppression (exact prior bids), UNLESS the
   // target's own base-bid directive is 'suppress' (then we keep bids floored on purpose).
@@ -420,7 +455,7 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
 
   // Union of schedule + plan campaigns → one campaign load + one signal pass.
   const unionIds = [...new Set([...schedules.map((s) => s.campaignId), ...governed])]
-  const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true, acos: true, spend: true, bidsSuppressedAt: true, deliveryReasons: true } })
+  const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true, acos: true, spend: true, bidsSuppressedAt: true, bidsSuppressedFloorCents: true, deliveryReasons: true } })
   const campById = new Map(campaigns.map((c) => [c.id, c]))
   // RTC — per-campaign (campaign-scope) target overrides for every campaign in play.
   const schedOverrides = new Map<string, TargetOverrideMap>()

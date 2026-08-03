@@ -17,8 +17,14 @@ import { Save, Plus, Trash2, RotateCcw, Info, SlidersHorizontal, Layers } from '
 import { getBackendUrl } from '@/lib/backend-url'
 import { RankBlendEditor, type BlendLane } from './RankBlendEditor'
 
-interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; allOut: boolean; color: string | null; builtIn: boolean; scopeProductId: string | null; scopeCampaignId: string | null; jumpStartPct: number | null; stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean; lanes?: BlendLane[] | null; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
-type OvField = 'biasPct' | 'targetISPct' | 'acosCapPct' | 'maxCpcCents' | 'jumpStartPct' | 'stepUpPct' | 'stepDownPct' | 'maxBiasPct'
+interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; floorBidCents: number | null; allOut: boolean; color: string | null; builtIn: boolean; scopeProductId: string | null; scopeCampaignId: string | null; jumpStartPct: number | null; stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean; lanes?: BlendLane[] | null; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
+type OvField = 'biasPct' | 'targetISPct' | 'acosCapPct' | 'maxCpcCents' | 'floorBidCents' | 'jumpStartPct' | 'stepUpPct' | 'stepDownPct' | 'maxBiasPct'
+// MB.2 — fields stored in CENTS and edited in euros. Every ×100 / ÷100 in this file reads
+// this set, so adding the Min-bid floor could not leave one conversion behind.
+const EURO_FIELDS = new Set<OvField>(['maxCpcCents', 'floorBidCents'])
+const isEuro = (f: OvField) => EURO_FIELDS.has(f)
+// MB.1 — the engine's legacy floor: what a Min-bid target holds when nothing is set.
+const DEFAULT_FLOOR_CENTS = 2
 // BL.9 — a scope override can also carry a per-product/campaign BLEND (its own lanes +
 // base-bid), so a blend can be campaign-specific, not just the global library default.
 type Ov = Partial<Record<OvField, number>> & { keepClimbing?: boolean; lanes?: BlendLane[]; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
@@ -88,10 +94,33 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
   if (!open) return null
 
   const eur = (c: number | null | undefined) => (c == null ? '' : (c / 100).toFixed(2))
+  const eurLbl = (c: number) => `€${(c / 100).toFixed(2)}` // MB.2 — read-only computed cell
   const defOf = (t: RankTarget, f: OvField): number | null => (lib[t.id]?.[f] as number | null | undefined) ?? (t[f] as number | null)
   const effOf = (t: RankTarget, f: OvField): number | null => (view === 'scope' && ov[t.key]?.[f] != null ? ov[t.key]![f]! : defOf(t, f))
+  // MB.2 — the effective floor for a Min-bid target at the active scope (blank = the 2¢ the
+  // engine has always used).
+  const floorOf = (t: RankTarget): number => effOf(t, 'floorBidCents') ?? DEFAULT_FLOOR_CENTS
+  /**
+   * MB.2 — what a click actually costs in a Min-bid hour.
+   *
+   * The floor is a BASE bid; Amazon charges base × (1 + placement %). With the placement
+   * left alone — every schedule saved before MB.3 — the multiplier is whatever the previous
+   * window happened to leave behind, which can be +300%. Stating "€0.02" alone would be the
+   * same half-truth the row told before, so the unknown is named rather than hidden.
+   */
+  const effCpcNote = (t: RankTarget): string => {
+    const f = floorOf(t)
+    const b = effOf(t, 'biasPct')
+    if (b == null) return `€${(f / 100).toFixed(2)} base · × whatever multiplier the previous window left`
+    return `≈ €${((f * (100 + b)) / 10000).toFixed(2)} per click · €${(f / 100).toFixed(2)} base at ${placeLabel(t.placement)} +${b}%`
+  }
   const describe = (t: RankTarget): string => {
-    if (t.pause) return 'Floors bids to ~€0.02 (campaign stays live, restorable) — never pauses'
+    if (t.pause) {
+      const b = effOf(t, 'biasPct')
+      const f = floorOf(t)
+      const place = b == null ? 'placement left unchanged' : `${placeLabel(t.placement)} → ${b}% · ≈ €${((f * (100 + b)) / 10000).toFixed(2)}/click`
+      return `Floors bids to €${(f / 100).toFixed(2)} · ${place} · campaign stays live, restorable — never pauses`
+    }
     // BL — a blended target drives multiple placements at once; summarise the blend.
     // BL.9 — in scope view a per-campaign/product override blend wins over the global one.
     const blend = effBlend(t)
@@ -183,7 +212,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
     setOv(m => {
       const next = { ...m }; const cur = { ...(next[key] || {}) }
       if (raw === '') delete cur[f]
-      else cur[f] = f === 'maxCpcCents' ? Math.round(Number(raw) * 100) : Math.round(Number(raw))
+      else cur[f] = isEuro(f) ? Math.round(Number(raw) * 100) : Math.round(Number(raw))
       if (Object.keys(cur).length) next[key] = cur; else delete next[key]
       return next
     })
@@ -192,7 +221,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
   // global-view: edit the library draft (saved via PATCH)
   const setLibField = (id: string, f: keyof RankTarget, raw: string | number) => {
     setChanged(true)
-    setLib(m => ({ ...m, [id]: { ...(m[id] || {}), [f]: raw === '' ? null : (f === 'maxCpcCents' ? Math.round(Number(raw) * 100) : (f === 'name' || f === 'color' ? raw : Math.round(Number(raw)))) } }))
+    setLib(m => ({ ...m, [id]: { ...(m[id] || {}), [f]: raw === '' ? null : (isEuro(f as OvField) ? Math.round(Number(raw) * 100) : (f === 'name' || f === 'color' ? raw : Math.round(Number(raw)))) } }))
   }
 
   const save = async () => {
@@ -258,28 +287,73 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                   <span className="desc">{describe(t)}</span>
                 </span>
                 {FIELDS.map(f => {
-                  if (t.pause || (t.allOut && f.f === 'acosCapPct')) return <span key={f.f} className="fld">—</span>
+                  // MB.2 — a Min-bid row used to render four dashes: no floor, no placement, no
+                  // control of any kind. Placement % is now the ONE editable field here (it is
+                  // the lever that decides what the floored bid actually costs), the floor lives
+                  // in the drawer next to the explanation it needs, and the two chase knobs stay
+                  // n/a because Min bid holds no share — but they now say WHY.
+                  if (t.pause) {
+                    if (f.f === 'targetISPct') return <span key={f.f} className="fld h10-rte-na" title="Min bid holds no impression share — there is nothing to chase, so no target to set">n/a</span>
+                    if (f.f === 'acosCapPct') return <span key={f.f} className="fld h10-rte-na" title="An ACOS cap only eases a climbing bid. Min bid never climbs.">n/a</span>
+                    // Not a ceiling to set: floor × placement already determines the cost exactly.
+                    // Putting that computed number under a "Max CPC" header would misname it.
+                    if (f.f === 'maxCpcCents') return <span key={f.f} className="fld h10-rte-na" title={`No ceiling to set — the cost is fully determined: ${effCpcNote(t)}`}>n/a</span>
+                    // biasPct falls through to the editable input below.
+                  }
+                  if (t.allOut && f.f === 'acosCapPct') return <span key={f.f} className="fld">—</span>
                   // RM2 — Target IS is now fed by SQP brand impression share for Rest of Search, so
                   // it's editable for non-Top too; only ACOS stays n/a (Amazon exposes no Rest ACOS).
                   if (f.f === 'acosCapPct' && t.placement !== 'PLACEMENT_TOP')
                     return <span key={f.f} className="fld h10-rte-na" title="Top of Search only — Amazon exposes no ACOS for Rest/Product placements">n/a</span>
+                  // MB.2 — blank on a Min-bid placement means "leave the multiplier alone", not
+                  // "zero". A dash would read as the latter.
+                  const blank = t.pause && f.f === 'biasPct' ? 'keep' : '—'
                   if (view === 'scope') {
                     const v = ov[t.key]?.[f.f]
                     const ph = defOf(t, f.f)
-                    return <span key={f.f} className="fld"><input type="number" disabled={!scopeAvailable} value={v == null ? '' : f.f === 'maxCpcCents' ? eur(v) : v} placeholder={ph == null ? '—' : f.f === 'maxCpcCents' ? eur(ph) : String(ph)} onChange={e => setScope(t.key, f.f, e.target.value)} step={f.f === 'maxCpcCents' ? '0.01' : '1'} /></span>
+                    return <span key={f.f} className="fld"><input type="number" disabled={!scopeAvailable} value={v == null ? '' : isEuro(f.f) ? eur(v) : v} placeholder={ph == null ? blank : isEuro(f.f) ? eur(ph) : String(ph)} onChange={e => setScope(t.key, f.f, e.target.value)} step={isEuro(f.f) ? '0.01' : '1'} /></span>
                   }
                   const lv = (lib[t.id]?.[f.f] as number | null | undefined)
                   const val = lv !== undefined ? lv : (t[f.f] as number | null)
-                  return <span key={f.f} className="fld"><input type="number" value={val == null ? '' : f.f === 'maxCpcCents' ? eur(val) : val} onChange={e => setLibField(t.id, f.f, e.target.value)} step={f.f === 'maxCpcCents' ? '0.01' : '1'} /></span>
+                  return <span key={f.f} className="fld"><input type="number" value={val == null ? '' : isEuro(f.f) ? eur(val) : val} placeholder={blank} onChange={e => setLibField(t.id, f.f, e.target.value)} step={isEuro(f.f) ? '0.01' : '1'} /></span>
                 })}
                 <span className="act">
-                  {!t.pause && <button type="button" className="h10-kebab" title="Motion — how the bid moves (jump / climb / ease / ceiling)" aria-expanded={mOpen} style={mOpen ? { color: '#3730a3' } : undefined} onClick={() => setMotionOpen(m => ({ ...m, [t.id]: !m[t.id] }))}><SlidersHorizontal size={13} /></button>}
+                  {/* MB.2 — Min bid gets the same drawer affordance as every other target; only its CONTENTS differ. */}
+                  <button type="button" className="h10-kebab" title={t.pause ? 'Min bid — the floor bids are held at, and what a click then costs' : 'Motion — how the bid moves (jump / climb / ease / ceiling)'} aria-expanded={mOpen} style={mOpen ? { color: t.pause ? '#c2410c' : '#3730a3' } : undefined} onClick={() => setMotionOpen(m => ({ ...m, [t.id]: !m[t.id] }))}><SlidersHorizontal size={13} /></button>
                   {!t.pause && <button type="button" className="h10-kebab" disabled={view === 'scope' && !scopeAvailable} title={view === 'scope' ? `Blend for ${scopeLabel} — drive Top + Rest of Search + Product pages at once (+ base bid), just here` : 'Blend — drive Top + Rest of Search + Product pages at once (+ base bid)'} aria-expanded={!!blendOpen[t.id]} style={blendOpen[t.id] ? { color: '#7c3aed' } : undefined} onClick={() => setBlendOpen(m => ({ ...m, [t.id]: !m[t.id] }))}><Layers size={13} /></button>}
                   {view === 'scope' && hasOverride(t) && <button type="button" className="h10-kebab" title="Clear override (use default)" onClick={() => clearOverride(t.key)}><RotateCcw size={13} /></button>}
                   {view === 'global' && t.builtIn && <button type="button" className="h10-kebab" title="Reset to default" onClick={() => void resetTarget(t.id)}><RotateCcw size={13} /></button>}
                   {view === 'global' && !t.builtIn && <button type="button" className="h10-kebab" title="Delete custom" style={{ color: '#cc1100' }} onClick={() => void deleteTarget(t.id, t.name)}><Trash2 size={13} /></button>}
                 </span>
               </div>
+              {/*
+                MB.2 — the Min-bid drawer. Sibling of the Motion drawer below, deliberately in
+                the same idiom. The floor lives HERE rather than as a sixth table column because
+                it is the one field only this row can use, and because the number is meaningless
+                without the sentence next to it: €0.02 is a BASE bid, and what it costs per click
+                depends on a placement multiplier this modal cannot see until MB.3 sets one.
+              */}
+              {mOpen && t.pause && (
+                <div className="h10-rte-motion h10-rte-minbid">
+                  <div className="h10-mtitle"><SlidersHorizontal size={12} /> Min bid — what these hours do{view === 'scope' ? ` · override for ${scopeLabel}` : ''}</div>
+                  <div className="h10-msub">Every bid in the campaign drops to the floor and the campaign stays <b>ENABLED</b> — it is never paused, because a real pause disrupts Amazon&apos;s algorithm. Each prior bid is remembered and restored exactly when a serving target takes over.</div>
+                  <div className="h10-mfields">
+                    <label className="h10-mfield" title="The bid every keyword and ad group is held at during these hours. Blank = €0.02, the engine's long-standing floor and Amazon's own minimum.">
+                      <span>Floor €</span>
+                      {view === 'scope'
+                        ? <input type="number" min={0.02} step="0.01" disabled={!scopeAvailable} value={eur(ov[t.key]?.floorBidCents)} placeholder={eur(defOf(t, 'floorBidCents')) || '0.02'} onChange={e => setScope(t.key, 'floorBidCents', e.target.value)} />
+                        : <input type="number" min={0.02} step="0.01" value={eur((lib[t.id]?.floorBidCents as number | null | undefined) !== undefined ? (lib[t.id]!.floorBidCents as number | null) : t.floorBidCents)} placeholder="0.02" onChange={e => setLibField(t.id, 'floorBidCents', e.target.value)} />}
+                    </label>
+                    <label className="h10-mfield h10-mcalc" title="Amazon charges base bid × (1 + placement %). This is that arithmetic, not a setting.">
+                      <span>Per click</span>
+                      <b>{eurLbl(floorOf(t) * (100 + (effOf(t, 'biasPct') ?? 0)) / 100)}</b>
+                    </label>
+                  </div>
+                  <div className="h10-mnote">{effCpcNote(t)}. {effOf(t, 'biasPct') == null
+                    ? <>Set <b>Placement %</b> on this row to take control of the multiplier — leave it blank and these hours inherit whatever the previous window left behind (an all-out hour can leave +300%).</>
+                    : <>Placement is pinned, so this cost is the whole story.</>} Floors under €0.02 are raised to €0.02 — Amazon rejects anything lower.</div>
+                </div>
+              )}
               {mOpen && !t.pause && (
                 <div className="h10-rte-motion">
                   <div className="h10-mtitle"><SlidersHorizontal size={12} /> Motion — how the bid moves{view === 'scope' ? ` · override for ${scopeLabel}` : ''}</div>
