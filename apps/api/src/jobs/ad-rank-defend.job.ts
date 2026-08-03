@@ -517,12 +517,44 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
   // A campaign skipped because a family plan governs it is deliberately NOT stamped:
   // that schedule genuinely did not run, and the console reports it as governed
   // elsewhere rather than pretending it ticked.
+  /**
+   * G2 — dated event overrides.
+   *
+   * An event replaces the weekly plan for the dates it covers: Black Friday, a launch week. Loaded
+   * once per tick for every group in play, so the per-schedule loop below stays a map lookup.
+   *
+   * INERT WITHOUT DATA. No enabled event covering `now` means this map is empty and every schedule
+   * resolves exactly as before — which is why this can ship without a behaviour gate.
+   *
+   * Overlapping events resolve to the one that STARTED LATEST. A lead-out authored to begin while
+   * an event is still running is a deliberate hand-over, not a conflict, and "most recently begun
+   * wins" is the rule that makes that read correctly.
+   */
+  const eventByGroup = new Map<string, { windows: unknown; defaultTargetKey: string | null; name: string }>()
+  try {
+    const groupIds = [...new Set(schedules.map((s) => s.groupId).filter(Boolean))] as string[]
+    if (groupIds.length) {
+      const at = clockNow ?? new Date()
+      const events = await prisma.rankScheduleEvent.findMany({
+        where: { groupId: { in: groupIds }, enabled: true, startsAt: { lte: at }, endsAt: { gt: at } },
+        orderBy: { startsAt: 'asc' },
+        select: { groupId: true, windows: true, defaultTargetKey: true, name: true },
+      })
+      for (const e of events) eventByGroup.set(e.groupId, { windows: e.windows, defaultTargetKey: e.defaultTargetKey, name: e.name })
+      if (events.length) logger.info('[rank-defend] event overrides active', { count: events.length, names: events.map((e) => e.name) })
+    }
+  } catch (e) { logger.warn('[rank-defend] event lookup failed — falling back to weekly plans', { error: (e as Error).message }) }
+
   const receipts = new Map<string, string | null>() // AdSchedule.id → resolved target key
   for (const s of schedules) {
     if (governed.has(s.campaignId)) continue
     const camp = campById.get(s.campaignId); if (!camp) continue
     const { day, hour } = nowInTz(s.timezone || 'Europe/Rome', 0, clockNow)
-    const key = resolveActiveTargetKey(s.windows as ScheduleWindow[], s.defaultTargetKey, day, hour)
+    // The event supplies the plan; everything else about the schedule is unchanged.
+    const ev = s.groupId ? eventByGroup.get(s.groupId) : undefined
+    const planWindows = (ev ? ev.windows : s.windows) as ScheduleWindow[]
+    const planBaseline = ev ? ev.defaultTargetKey : s.defaultTargetKey
+    const key = resolveActiveTargetKey(planWindows, planBaseline, day, hour)
     // Stamped even when the schedule resolves to nothing — "we looked, nothing was due"
     // is what distinguishes an idle schedule from a cron that has stopped running.
     receipts.set(s.id, key)

@@ -14182,8 +14182,43 @@ model RankScheduleGroup {
   createdBy        String?
   schedules        AdSchedule[]
   versions         RankScheduleVersion[]
+  events           RankScheduleEvent[]
 
   @@index([marketplace])
+}
+
+// G1 — a DATED override on a rank schedule: Black Friday, Prime Day, a launch week.
+//
+// The weekly plan answers "what do we do every Tuesday". This answers "what do we do on THESE
+// dates instead", which the weekly grid cannot express at all — today the only way to run an event
+// is to hand-edit the plan and remember to hand-revert it, and forgetting the revert is how an
+// all-out Black Friday plan quietly runs through December.
+//
+// Lead-in / event / lead-out is expressed as SEPARATE rows rather than one object with three
+// phases: the phases have different plans and different lengths, they are frequently adjusted
+// independently, and modelling them as one row would force every edit to touch all three.
+model RankScheduleEvent {
+  id       String            @id @default(cuid())
+  groupId  String
+  group    RankScheduleGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name     String
+  // Absolute instants. The schedule's own timezone decides which local hours these cover, so an
+  // event authored for Rome does not silently shift when read from another zone.
+  startsAt DateTime
+  endsAt   DateTime
+  // Same shape as the weekly plan, so the engine's window resolution is reused unchanged rather
+  // than reimplemented for events.
+  windows          Json    @default("[]")
+  defaultTargetKey String?
+  // Off by default is deliberate: an event is authored ahead of time, and arming it early is
+  // exactly the mistake this feature exists to prevent.
+  enabled   Boolean  @default(false)
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId, startsAt])
+  @@index([enabled, startsAt, endsAt])
 }
 
 // HX.8 — plan-edit history for a rank schedule.

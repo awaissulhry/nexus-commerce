@@ -8185,6 +8185,67 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
+  // ── G1 — dated event overrides on a rank schedule ──────────────────────────
+  fastify.get('/advertising/rank-schedule-groups/:id/events', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    reply.header('Cache-Control', 'private, max-age=10')
+    const items = await prisma.rankScheduleEvent.findMany({ where: { groupId: id }, orderBy: { startsAt: 'asc' } })
+    const now = new Date()
+    return {
+      items: items.map((e) => ({
+        ...e,
+        // Computed rather than stored: a stored status is wrong the moment the clock moves past it.
+        phase: !e.enabled ? 'draft' : e.endsAt <= now ? 'past' : e.startsAt > now ? 'upcoming' : 'live',
+      })),
+      count: items.length,
+    }
+  })
+
+  fastify.post('/advertising/rank-schedule-groups/:id/events', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as { name?: string; startsAt?: string; endsAt?: string; windows?: unknown; defaultTargetKey?: string | null; enabled?: boolean }
+    const group = await prisma.rankScheduleGroup.findUnique({ where: { id }, select: { id: true } })
+    if (!group) { reply.status(404); return { error: 'schedule not found' } }
+    if (!b?.name?.trim()) { reply.status(400); return { error: 'name is required' } }
+    const startsAt = new Date(String(b.startsAt)), endsAt = new Date(String(b.endsAt))
+    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) { reply.status(400); return { error: 'startsAt and endsAt must be valid dates' } }
+    // A zero-or-negative span would be an event that can never resolve — refuse it rather than
+    // store something the engine will silently never pick up.
+    if (endsAt <= startsAt) { reply.status(400); return { error: 'endsAt must be after startsAt' } }
+    return await prisma.rankScheduleEvent.create({
+      data: {
+        groupId: id, name: b.name.trim(), startsAt, endsAt,
+        windows: (b.windows as object) ?? [], defaultTargetKey: b.defaultTargetKey ?? null,
+        // Explicitly opt in to arming. Authoring an event early is the normal case; arming it early
+        // is the mistake.
+        enabled: b.enabled === true,
+      },
+    })
+  })
+
+  fastify.patch('/advertising/rank-schedule-groups/:id/events/:eventId', async (request, reply) => {
+    const { id, eventId } = request.params as { id: string; eventId: string }
+    const b = request.body as Record<string, unknown>
+    const ev = await prisma.rankScheduleEvent.findUnique({ where: { id: eventId }, select: { groupId: true, startsAt: true, endsAt: true } })
+    if (!ev || ev.groupId !== id) { reply.status(404); return { error: 'event not found on this schedule' } }
+    const data: Record<string, unknown> = {}
+    for (const k of ['name', 'windows', 'defaultTargetKey', 'enabled']) if (b[k] !== undefined) data[k] = b[k]
+    if (b.startsAt !== undefined) data.startsAt = new Date(String(b.startsAt))
+    if (b.endsAt !== undefined) data.endsAt = new Date(String(b.endsAt))
+    const s2 = (data.startsAt as Date) ?? ev.startsAt, e2 = (data.endsAt as Date) ?? ev.endsAt
+    if (Number.isNaN(s2.getTime()) || Number.isNaN(e2.getTime()) || e2 <= s2) { reply.status(400); return { error: 'endsAt must be after startsAt' } }
+    if (!Object.keys(data).length) { reply.status(400); return { error: 'nothing to update' } }
+    return await prisma.rankScheduleEvent.update({ where: { id: eventId }, data })
+  })
+
+  fastify.delete('/advertising/rank-schedule-groups/:id/events/:eventId', async (request, reply) => {
+    const { id, eventId } = request.params as { id: string; eventId: string }
+    const ev = await prisma.rankScheduleEvent.findUnique({ where: { id: eventId }, select: { groupId: true } })
+    if (!ev || ev.groupId !== id) { reply.status(404); return { error: 'event not found on this schedule' } }
+    await prisma.rankScheduleEvent.delete({ where: { id: eventId } })
+    return { ok: true }
+  })
+
   fastify.post('/advertising/rank-schedule-groups', async (request, reply) => {
     const b = request.body as Record<string, unknown>
     if (!b?.name || !String(b.name).trim()) { reply.status(400); return { error: 'name is required' } }
