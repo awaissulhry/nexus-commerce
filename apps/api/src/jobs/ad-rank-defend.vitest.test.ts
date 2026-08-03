@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { effectiveSpec, applyTargetOverrides, groupReceipts, isGoalMode } from './ad-rank-defend.job.js'
+import { effectiveSpec, applyTargetOverrides, groupReceipts, isGoalMode, pickActiveEvents } from './ad-rank-defend.job.js'
 import type { RankTargetSpec } from '../services/advertising/rank-controller.js'
 
 // RD.5 — family guardrail target transform (pure). OOS/lost-buybox → pause (stop
@@ -138,5 +138,55 @@ describe('RDX/A1 the two crons cannot both stamp one schedule', () => {
   })
   it('a baseline alone is enough to make it rank-defend’s', () => {
     expect(isGoalMode([], 'own-top')).toBe(true)
+  })
+})
+
+// G2 — event overrides decide what the engine HOLDS, so the selection rule is pinned here. The
+// no-events case matters most: it is the property that let this ship without a behaviour gate.
+describe('G2 pickActiveEvents — which event governs right now', () => {
+  const at = new Date('2026-11-28T12:00:00Z')
+  const ev = (o: Partial<{ groupId: string; startsAt: string; endsAt: string; enabled: boolean; name: string }>) => ({
+    groupId: o.groupId ?? 'g1',
+    startsAt: new Date(o.startsAt ?? '2026-11-28T00:00:00Z'),
+    endsAt: new Date(o.endsAt ?? '2026-11-29T00:00:00Z'),
+    enabled: o.enabled ?? true,
+    name: o.name ?? 'e',
+  })
+
+  it('returns nothing when there are no events — the property that makes this inert', () => {
+    expect(pickActiveEvents([], at).size).toBe(0)
+  })
+
+  it('ignores events that have not started or have already ended', () => {
+    expect(pickActiveEvents([ev({ startsAt: '2026-12-01T00:00:00Z', endsAt: '2026-12-02T00:00:00Z' })], at).size).toBe(0)
+    expect(pickActiveEvents([ev({ startsAt: '2026-11-01T00:00:00Z', endsAt: '2026-11-02T00:00:00Z' })], at).size).toBe(0)
+  })
+
+  it('ignores disabled events, however well they cover the moment', () => {
+    expect(pickActiveEvents([ev({ enabled: false })], at).size).toBe(0)
+  })
+
+  it('treats the range as half-open, so back-to-back events never both apply', () => {
+    // A lead-in ending exactly when the event begins must hand over cleanly at the boundary.
+    const boundary = new Date('2026-11-28T00:00:00Z')
+    const leadIn = ev({ name: 'lead-in', startsAt: '2026-11-27T00:00:00Z', endsAt: '2026-11-28T00:00:00Z' })
+    const main = ev({ name: 'event', startsAt: '2026-11-28T00:00:00Z', endsAt: '2026-11-29T00:00:00Z' })
+    const picked = pickActiveEvents([leadIn, main], boundary)
+    expect(picked.size).toBe(1)
+    expect(picked.get('g1')?.name).toBe('event')
+  })
+
+  it('resolves an overlap to the latest-STARTED, not the newest row or the longest', () => {
+    const main = ev({ name: 'event', startsAt: '2026-11-27T00:00:00Z', endsAt: '2026-11-30T00:00:00Z' })
+    const leadOut = ev({ name: 'lead-out', startsAt: '2026-11-28T06:00:00Z', endsAt: '2026-11-29T00:00:00Z' })
+    // Order reversed on purpose: the answer must not depend on input order.
+    expect(pickActiveEvents([leadOut, main], at).get('g1')?.name).toBe('lead-out')
+    expect(pickActiveEvents([main, leadOut], at).get('g1')?.name).toBe('lead-out')
+  })
+
+  it('keeps groups independent — one schedule in an event never affects another', () => {
+    const picked = pickActiveEvents([ev({ groupId: 'g1', name: 'bf' }), ev({ groupId: 'g2', name: 'launch' })], at)
+    expect(picked.get('g1')?.name).toBe('bf')
+    expect(picked.get('g2')?.name).toBe('launch')
   })
 })

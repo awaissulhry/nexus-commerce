@@ -100,6 +100,31 @@ export const isGoalMode = (windows: unknown, defaultTargetKey: string | null): b
  * Pure + exported so the stamping can be tested without a database: mis-grouping here would
  * silently write the WRONG target key onto a schedule, which is worse than writing none.
  */
+/**
+ * G2 — which event governs a schedule right now.
+ *
+ * Pure and exported because this decides what the engine HOLDS: picking the wrong event, or
+ * picking one at all when none applies, changes live bids. The rules are small enough to state and
+ * therefore small enough to test, which is the only reason to trust them.
+ *
+ *  · An event covers [startsAt, endsAt) — half-open, so back-to-back events (a lead-in ending
+ *    exactly when the event begins) never both apply for one instant.
+ *  · Overlaps resolve to the LATEST-STARTED. A lead-out authored to begin while the event is still
+ *    running is a deliberate hand-over, not a conflict.
+ *  · Disabled events are invisible. Authoring ahead of time is the normal case.
+ */
+export interface RankEventLike { groupId: string; startsAt: Date; endsAt: Date; enabled?: boolean; name?: string }
+export function pickActiveEvents<T extends RankEventLike>(events: T[], at: Date): Map<string, T> {
+  const out = new Map<string, T>()
+  for (const e of events) {
+    if (e.enabled === false) continue
+    if (!(e.startsAt <= at && e.endsAt > at)) continue
+    const cur = out.get(e.groupId)
+    if (!cur || e.startsAt > cur.startsAt) out.set(e.groupId, e)
+  }
+  return out
+}
+
 export function groupReceipts(receipts: Map<string, string | null>): Map<string | null, string[]> {
   const byKey = new Map<string | null, string[]>()
   for (const [id, key] of receipts) {
@@ -538,9 +563,11 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
       const events = await prisma.rankScheduleEvent.findMany({
         where: { groupId: { in: groupIds }, enabled: true, startsAt: { lte: at }, endsAt: { gt: at } },
         orderBy: { startsAt: 'asc' },
-        select: { groupId: true, windows: true, defaultTargetKey: true, name: true },
+        select: { groupId: true, windows: true, defaultTargetKey: true, name: true, startsAt: true, endsAt: true },
       })
-      for (const e of events) eventByGroup.set(e.groupId, { windows: e.windows, defaultTargetKey: e.defaultTargetKey, name: e.name })
+      for (const [gid, e] of pickActiveEvents(events.map((e) => ({ ...e, enabled: true })), at)) {
+        eventByGroup.set(gid, { windows: e.windows, defaultTargetKey: e.defaultTargetKey, name: e.name })
+      }
       if (events.length) logger.info('[rank-defend] event overrides active', { count: events.length, names: events.map((e) => e.name) })
     }
   } catch (e) { logger.warn('[rank-defend] event lookup failed — falling back to weekly plans', { error: (e as Error).message }) }
