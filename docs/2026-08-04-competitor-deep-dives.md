@@ -9,7 +9,7 @@
 > Teikametrics, Intentwise, Scale Insights, BidX, M19), and §0 reconciles its conclusions with ADX.
 Each entry: what they are → architecture → full feature inventory → what to take (mapped to our code) → where we already lead → what to refuse.
 
-Queue: **Pacvue** ✅ · **Rithum** ✅ · **Perpetua** ✅ · **Teikametrics** ✅ · **Intentwise** ✅ · Scale Insights · BidX · M19 · + leaders as found.
+Queue: **Pacvue** ✅ · **Rithum** ✅ · **Perpetua** ✅ · **Teikametrics** ✅ · **Intentwise** ✅ · **BidX** ✅ · Scale Insights · M19 · + leaders as found.
 
 ---
 
@@ -438,5 +438,72 @@ Notably, our keyword set is *tens* of terms across a few families — not 100k. 
 Intentwise contributes the **implementable definition of the metric our entire stated goal depends on**, and forces the one genuinely uncomfortable decision in this research: the industry measures page-one ownership by scraping, and we should not.
 
 That means accepting a weaker measurement (option C) or buying it (option B) — and being explicit that our coverage numbers are not directly comparable to a Pacvue or Perpetua dashboard. Better to know that now than to discover it after building the ladder.
+
+---
+
+# 6. BidX
+
+## 6.1 What it is
+
+**German, rule-based, European-focused** — and therefore the most *geographically* relevant company in this study. Xavia sells Amazon IT primarily with DE/FR/ES; BidX is popular with exactly that seller. **€495/month.** English *and* German support, live training, 20+ webinars a year.
+
+Products: BidX Platform · **BidX App** (mobile — the only one in this study) · Amazon DSP · AMC · **iMetrify** (measurement) · Seller Suite.
+
+Coverage: SP, SB, SD, Amazon DSP, Walmart, plus external Google / Facebook / Instagram / TikTok.
+
+## 6.2 The rules engine — the closest analogue to what we just repaired
+
+BidX is plainly **"If X then Y"**: set conditions, take actions. The documented behaviours are the same primitives as our `automation-templates.ts` — promote high-performing keywords, reduce bids on poor performers, pause keywords with no sales, harvest negatives, allocate budget.
+
+They also automate the **whole campaign lifecycle**: setup, structure, ongoing optimisation, DSP, AMC analytics. **Campaign Creator** claims 12× faster creation, with ChatGPT integration.
+
+There is nothing here we do not already have — which is itself the finding. Our `AutomationRule` engine, once repaired and consolidated to 22 rules, is feature-comparable to a €495/month product. The gap was never capability; it was that ours had never executed successfully.
+
+## 6.3 ⭐ The number that should recalibrate the whole programme
+
+> **BidX is "worth the spend for brands above €10K monthly Amazon ad volume."**
+
+Xavia runs **~€150/day ≈ €4.5k/month**.
+
+We are **well below the threshold at which the closest European competitor believes paid PPC tooling pays for itself.** That is not an argument against automating — the account still needs to run unattended. It is an argument about *what kind* of automation is worth owning at this spend:
+
+- Cheap to operate, not merely cheap to build
+- Few levers, deeply understood, rather than many levers shallowly configured
+- Failure modes that are obvious rather than statistical
+
+It independently supports three decisions already taken: goals-first over 51 rules, the consolidation from 36 enabled rules to 22, and the prior desktop study's "rules first, ML only if volume justifies it — at €150/day it will not."
+
+It also sets a fair yardstick for ADX. The question is not "does Nexus match Pacvue," it is **"does Nexus beat manual management at €4.5k/month spend"** — a much lower and more honest bar, and one nothing in the account currently clears, because the automation layer has never run.
+
+## 6.4 The free tools — the best packaging idea in the study
+
+BidX ships three free diagnostics as lead generation:
+- **PPC audit**
+- **Wasted Ad Spend Analyzer**
+- **TACoS Calculator**
+
+The middle one matters. "Wasted Ad Spend" is a **single euro figure that says how much you are losing right now** — the entire diagnostic collapsed into one number an operator can act on without expertise.
+
+This converges exactly with the prior desktop study's Tier-2 recommendation — *"a counted problems board, lifecycle-shaped, every row priced in €"* — and with Pacvue's alerts board where every row carries a dollar value. **Three independent arrivals at the same idea.**
+
+And we can compute it better than any of them: `ProductProfitDaily` + real Amazon fees + COGS means our "wasted spend" figure is actual margin lost, not an estimate from ACOS.
+
+## 6.5 What to take
+
+1. **A single "wasted ad spend" number**, computed from real margin, on the ads dashboard. Cheapest possible expression of "the tool owes you a way to see it" (Quartile's constraint).
+2. **The €10k calibration** as a standing sanity check on every future ADX phase: would this be worth owning at €4.5k/month?
+3. **Mobile check-in** *(backlog)* — BidX is alone in shipping an app. For an operator whose goal is "doesn't require my attention," the right mobile surface is not a console but a digest with a kill switch.
+
+## 6.6 What to refuse
+
+- **Full-lifecycle campaign automation** including structure creation — same refusal as Perpetua and Quartile.
+- **External channels** (Google/Meta/TikTok) and Walmart.
+- **ChatGPT campaign creation.** Prod AI is gated on a provider/billing issue anyway, and campaign structure is the one thing every failure mode in this study says to keep human.
+
+## 6.7 Verdict
+
+BidX contributes no capability we lack. What it contributes is a **price signal**: the closest European competitor sets its payback threshold at more than twice Xavia's entire ad spend.
+
+The useful conclusion is not "so don't bother." It is that at this volume the winning system is **small, legible and cheap to run** — which is precisely the direction ADX has been moving since the approach review, and an argument against ever reinstating the 51-rule estate.
 
 ---
