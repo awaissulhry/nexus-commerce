@@ -40,7 +40,7 @@ const WINDOWS = [
 
 export interface ScopeOption { value: string; label: string }
 
-export function HourlyPerformance({ scopes }: { scopes: ScopeOption[] }) {
+export function HourlyPerformance({ scopes, market = 'all' }: { scopes: ScopeOption[]; market?: string }) {
   const [scope, setScope] = useState('all')
   const [metric, setMetric] = useState('Spend')
   const [weeks, setWeeks] = useState('8')
@@ -56,7 +56,10 @@ export function HourlyPerformance({ scopes }: { scopes: ScopeOption[] }) {
     let alive = true
     setLoading(true)
     // scope 'all' → whole account; anything else is a RankScheduleGroup id → its member campaigns.
-    const qs = scope === 'all' ? `scope=all&weeks=${weeks}` : `groupId=${encodeURIComponent(scope)}&weeks=${weeks}`
+    // RDX/B1 — the header's market switch narrows the grid too, so it means the same thing here
+    // as it does on the list below. 'all' sends nothing, keeping the original request shape.
+    const mk = market && market !== 'all' ? `&marketplace=${encodeURIComponent(market)}` : ''
+    const qs = (scope === 'all' ? `scope=all&weeks=${weeks}` : `groupId=${encodeURIComponent(scope)}&weeks=${weeks}`) + mk
     void fetch(`${getBackendUrl()}/api/advertising/dayparting/heatmap?${qs}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((j) => {
@@ -68,7 +71,7 @@ export function HourlyPerformance({ scopes }: { scopes: ScopeOption[] }) {
       .catch(() => { if (alive) { setRaw([]); setHasData(false); setMeta(null) } })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [scope, weeks])
+  }, [scope, weeks, market])
 
   const cells = useMemo<HeatCell[]>(() => {
     const read = metricVal(metric).f
@@ -94,7 +97,8 @@ export function HourlyPerformance({ scopes }: { scopes: ScopeOption[] }) {
         <div className="h10-dp-panelttl">
           <h3>Hourly performance</h3>
           <p>
-            Amazon Marketing Stream, {metric} by day and hour, Europe/Rome.
+            Amazon Marketing Stream, {metric} by day and hour, Europe/Rome
+            {market && market !== 'all' ? <>, {market} only</> : null}.
             {peak ? <> Busiest: <b>{peak}</b>.</> : null}
           </p>
           {/* The exact range summed, and how many of its days actually carry data. Every weekday in

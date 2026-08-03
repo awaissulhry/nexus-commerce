@@ -814,7 +814,7 @@ ACTION_HANDLERS.set_placement_multiplier = async (action, context, meta): Promis
   const c = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { dynamicBidding: true } })
   const db = (c?.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
   const others = (db.placementBidding ?? []).filter((x) => x.placement !== placement)
-  const res = await updatePlacementBidding({ campaignId, adjustments: [...others, { placement, percentage: pct }] })
+  const res = await updatePlacementBidding({ campaignId, adjustments: [...others, { placement, percentage: pct }], actor: `automation:rule-${meta.ruleId}`, reason: `rule ${action.type}` })
   return { type: action.type, ok: res.ok !== false, output: { campaignId, placement, percentage: pct, mode: res.mode } }
 }
 
@@ -1102,7 +1102,7 @@ ACTION_HANDLERS.placement_apply = async (action, context, meta): Promise<ActionR
   if (next === current) return { type: action.type, ok: true, output: { campaignId: id, placement, noChange: true } }
   const { updatePlacementBidding } = await import('./ads-create.service.js')
   const others = (db.placementBidding ?? []).filter((x) => x.placement !== placement)
-  const res = await updatePlacementBidding({ campaignId: id, adjustments: [...others, { placement, percentage: next }] })
+  const res = await updatePlacementBidding({ campaignId: id, adjustments: [...others, { placement, percentage: next }], actor: `automation:rule-${meta.ruleId}`, reason: `rule ${action.type}: ${current}% \u2192 ${next}%` })
   return { type: action.type, ok: res.ok !== false, output: { campaignId: id, placement, percentage: next, mode: res.mode } }
 }
 

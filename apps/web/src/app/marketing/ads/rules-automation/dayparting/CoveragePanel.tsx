@@ -1,0 +1,154 @@
+'use client'
+
+/**
+ * RDX/C1 — what this account is NOT covering.
+ *
+ * The list below answers "what do my schedules do". This answers the more expensive question:
+ * which campaigns are spending with no rank control at all. An uncovered campaign isn't idle —
+ * it runs on whatever bid it was last left on, with nothing holding it in peak hours and nothing
+ * easing it off at 3am.
+ *
+ * Collapsed by default to a single honest line, because on a healthy account this should be
+ * boring. It expands to the uncovered campaigns ranked by spend, so the first thing you see is
+ * the money at stake rather than an alphabetical list of names.
+ *
+ * "Governed" is counted separately from "covered": a campaign run by a Rank Director family plan
+ * is deliberately controlled, just not by a schedule. Folding it into the gap would manufacture
+ * work that doesn't exist.
+ */
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ChevronDown, ShieldCheck, Plus } from 'lucide-react'
+import { H10Select } from '../../campaigns/FilterDropdown'
+import { getBackendUrl } from '@/lib/backend-url'
+
+interface OpenCampaign { id: string; name: string; marketplace: string | null; status: string; spendCents: number; impressions: number; clicks: number }
+interface Coverage {
+  total: number; covered: number; governed: number; uncovered: number
+  windowDays: number; uncoveredSpendCents: number; truncated: number; items: OpenCampaign[]
+}
+export interface ScheduleOption { value: string; label: string }
+
+const eur = (cents: number) => `€${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+
+export function CoveragePanel({ market, schedules, onChanged }: {
+  market: string
+  /** Schedules a campaign can be added to (id → name). */
+  schedules: ScheduleOption[]
+  /** Fired after a successful add so the list above can refresh its member counts. */
+  onChanged?: () => void
+}) {
+  const [data, setData] = useState<Coverage | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [open, setOpen] = useState(false)
+  const [sel, setSel] = useState<Set<string>>(new Set())
+  const [target, setTarget] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const load = useCallback(() => {
+    setLoading(true)
+    const qs = new URLSearchParams({ days: '30', limit: '50' })
+    if (market && market !== 'all') qs.set('marketplace', market)
+    return fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/coverage?${qs.toString()}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => setData(j && typeof j.total === 'number' ? j : null))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false))
+  }, [market])
+
+  useEffect(() => { void load(); setSel(new Set()); setMsg('') }, [load])
+
+  const pct = useMemo(() => {
+    if (!data || data.total === 0) return 0
+    return Math.round(((data.covered + data.governed) / data.total) * 100)
+  }, [data])
+
+  const toggle = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+
+  const addToSchedule = async () => {
+    if (!target || !sel.size || busy) return
+    setBusy(true); setMsg('')
+    try {
+      // A dedicated endpoint, not a PATCH: sending campaignIds alone through the group PATCH would
+      // wipe the schedule's windows and baseline (see the route's comment).
+      const r = await fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/${target}/campaigns`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignIds: [...sel] }),
+      })
+      if (!r.ok) { setMsg('Could not add those campaigns — please retry.'); return }
+      const name = schedules.find((s) => s.value === target)?.label ?? 'the schedule'
+      setMsg(`Added ${sel.size} campaign${sel.size === 1 ? '' : 's'} to ${name}. They inherit its windows and baseline, and its enabled state — so a paused schedule still runs nothing.`)
+      setSel(new Set())
+      await load()
+      onChanged?.()
+    } catch { setMsg('Request failed — please retry.') }
+    finally { setBusy(false) }
+  }
+
+  if (loading && !data) return null
+  if (!data || data.total === 0) return null
+
+  const clean = data.uncovered === 0
+
+  return (
+    <div className={`h10-cov ${clean ? 'ok' : ''}`}>
+      <button type="button" className="h10-cov-hd" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        {clean ? <ShieldCheck size={15} className="ic" /> : <span className="dot" aria-hidden="true" />}
+        <span className="ttl">
+          <b>{data.covered + data.governed} of {data.total}</b> campaigns are under rank control
+          {data.governed > 0 && <span className="sub"> · {data.governed} by a family plan</span>}
+        </span>
+        {!clean && (
+          <span className="gap">
+            {data.uncovered} uncovered
+            {data.uncoveredSpendCents > 0 && <> · <b>{eur(data.uncoveredSpendCents)}</b> spent in {data.windowDays} days</>}
+          </span>
+        )}
+        <span className="grow" />
+        <span className="bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>
+        <span className="pct">{pct}%</span>
+        {!clean && <ChevronDown size={15} className={`chev ${open ? 'on' : ''}`} />}
+      </button>
+
+      {open && !clean && (
+        <div className="h10-cov-b">
+          <div className="h10-cov-note">
+            Ranked by spend over the last {data.windowDays} days. These campaigns hold no rank schedule and
+            no family plan — they run on whatever bid was last set.
+          </div>
+
+          <div className="h10-cov-list">
+            {data.items.map((c) => (
+              <label key={c.id} className={`h10-cov-r ${sel.has(c.id) ? 'on' : ''}`}>
+                <input type="checkbox" checked={sel.has(c.id)} onChange={() => toggle(c.id)} aria-label={`Select ${c.name}`} />
+                <span className="nm" title={c.name}>{c.name}</span>
+                {c.marketplace && <span className="mk">{c.marketplace}</span>}
+                <span className="sp">{c.spendCents > 0 ? eur(c.spendCents) : '—'}</span>
+              </label>
+            ))}
+          </div>
+
+          {data.truncated > 0 && (
+            <div className="h10-cov-note muted">+{data.truncated} more uncovered campaign{data.truncated === 1 ? '' : 's'} below this list&rsquo;s top 50 by spend.</div>
+          )}
+
+          <div className="h10-cov-act">
+            <H10Select
+              width={280}
+              options={[{ value: '', label: schedules.length ? 'Add selected to schedule…' : 'No schedules to add to yet' }, ...schedules]}
+              value={target}
+              onChange={setTarget}
+              ariaLabel="Schedule to add the selected campaigns to"
+              searchable
+              searchPlaceholder="Search schedules…"
+            />
+            <button type="button" className="h10-am-btn primary" disabled={!target || !sel.size || busy} onClick={() => void addToSchedule()}>
+              <Plus size={13} /> {busy ? 'Adding…' : `Add ${sel.size || ''}`.trim()}
+            </button>
+            {msg && <span className="h10-cov-msg">{msg}</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

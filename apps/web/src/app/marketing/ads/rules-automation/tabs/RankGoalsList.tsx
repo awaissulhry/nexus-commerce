@@ -11,13 +11,31 @@
  * builder's target palette, and persisted group-level enable/pause.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, ExternalLink } from 'lucide-react'
+import { Plus, ExternalLink, History } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { NoDataIllus } from '../_shared/NoDataIllus'
+import { ScheduleActivityDrawer } from '../dayparting/ScheduleActivityDrawer'
+import { ScheduleRowActions } from '../dayparting/ScheduleRowActions'
+import { WeekShape } from '../dayparting/WeekShape'
+import { scheduleHealth, relTime, type Health } from '../dayparting/scheduleHealth'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface SchedWindow { targetKey?: string }
-interface RankRow { id: string; name: string; baseline: string; baselineKey: string; baselineColor: string | null; windows: number; campaigns: number; enabled: boolean; portfolioId: string | null; portfolioName: string | null }
+interface RankRow {
+  id: string; name: string; baseline: string; baselineKey: string; baselineColor: string | null
+  windows: number; campaigns: number; enabled: boolean; portfolioId: string | null; portfolioName: string | null
+  // RDX/A3 — runtime from the group endpoint. `active*` is what the schedule resolves to RIGHT NOW
+  // (recomputed server-side each request); `baseline*` above stays the out-of-window default. The
+  // two differ exactly while a window is open, which is the whole point of showing both.
+  activeKey: string; activeName: string; activeColor: string | null
+  lastEvaluatedAt: string | null; health: Health
+  // RDX/B1 — every market this group's member campaigns sit in. A SET, not a scalar: a
+  // portfolio-scoped group can legitimately span IT + DE, and the stored column can't say so.
+  marketplaces: string[]
+  // RDX/B2 — the raw window array, kept so "Save as template" can persist the real shape rather
+  // than the count the Windows column renders.
+  windowsRaw: unknown[]
+}
 type TargetMeta = { name: string; color: string | null }
 
 // Fallbacks used until /rank-targets resolves (built-in keys + the builder palette colors).
@@ -30,10 +48,14 @@ const FALLBACK: Record<string, TargetMeta> = {
 }
 const builderHref = (id?: string) => `/marketing/ads/rules-automation/builder/dayparting-schedule${id ? `?groupId=${id}` : ''}`
 
-export function RankGoalsList() {
+export function RankGoalsList({ market = 'all', reloadSignal = 0 }: { market?: string; reloadSignal?: number } = {}) {
   const [rows, setRows] = useState<RankRow[]>([])
   const [loading, setLoading] = useState(true)
   const [sel, setSel] = useState<Set<string>>(new Set())
+  const [activity, setActivity] = useState<{ id: string; name: string } | null>(null) // RDX/A4
+  // RDX/B3 — the resolved RankTarget palette, so the week strip colours cells by the same swatches
+  // the builder's paint grid uses. Seeded with FALLBACK so a row renders before /rank-targets lands.
+  const [tmetaState, setTmetaState] = useState<Record<string, TargetMeta>>(FALLBACK)
 
   useEffect(() => {
     let alive = true
@@ -58,6 +80,10 @@ export function RankGoalsList() {
           const meta = tmeta[key]
           const wins = Array.isArray(g.windows) ? (g.windows as SchedWindow[]) : []
           const pid = g.portfolioId ? String(g.portfolioId) : null
+          const members = Number(g.membersTotal ?? g.campaignCount ?? 0)
+          const activeKey = String(g.activeTargetKey ?? '')
+          const ameta = tmeta[activeKey]
+          const lastEvaluatedAt = g.lastEvaluatedAt ? String(g.lastEvaluatedAt) : null
           return {
             id: String(g.id),
             name: String(g.name ?? 'Rank schedule'),
@@ -69,14 +95,28 @@ export function RankGoalsList() {
             enabled: g.enabled !== false,
             portfolioId: pid,
             portfolioName: pid ? (pmeta[pid] ?? pid) : null,
+            activeKey,
+            activeName: ameta?.name ?? (activeKey || '—'),
+            activeColor: ameta?.color ?? null,
+            lastEvaluatedAt,
+            marketplaces: Array.isArray(g.marketplaces) ? (g.marketplaces as string[]) : [],
+            windowsRaw: wins,
+            health: scheduleHealth({
+              enabled: g.enabled !== false,
+              lastEvaluatedAt,
+              failedWrites: Number(g.failedWrites ?? 0),
+              governedElsewhere: Number(g.governedElsewhere ?? 0),
+              membersTotal: members,
+            }),
           }
         })
-        if (alive) setRows(mapped)
+        if (alive) { setRows(mapped); setTmetaState(tmeta) }
       } catch { if (alive) setRows([]) }
       finally { if (alive) setLoading(false) }
     })()
     return () => { alive = false }
-  }, [])
+    // reloadSignal — bumped when C1 adds campaigns to a schedule, so member counts stay true.
+  }, [reloadSignal])
 
   // Persisted group-level enable/pause (PATCH cascades to every member schedule). Optimistic; reverts
   // the affected row(s) if the PATCH fails.
@@ -90,9 +130,29 @@ export function RankGoalsList() {
     if (failed.size) setRows((rs) => rs.map((r) => (failed.has(r.id) ? { ...r, enabled: !enabled } : r)))
   }, [])
 
+  // HX.8 — one palette object, shared with the drawer so a historical week shape is coloured by the
+  // same swatches as the live one. Memoised: passing a fresh object each render would re-run the
+  // version list's diff memo on every keystroke in the grid's search box.
+  const palette = useMemo(() => ({
+    color: (k: string) => tmetaState[k]?.color ?? null,
+    name: (k: string) => tmetaState[k]?.name ?? k,
+  }), [tmetaState])
+
+  // RDX/B2 — local reconciliation after a row action. The list already holds everything the row
+  // needs, so a full refetch would only cost a round-trip and a flash of the loading state.
+  const renameRow = useCallback((id: string, name: string) => {
+    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, name } : r)))
+  }, [])
+  const removeRow = useCallback((id: string) => {
+    setRows((rs) => rs.filter((r) => r.id !== id))
+    // A deleted row must not linger in the selection and get swept into a later bulk Enable/Pause.
+    setSel((s) => { if (!s.has(id)) return s; const n = new Set(s); n.delete(id); return n })
+  }, [])
+
   const columns: GridColumn<RankRow>[] = useMemo(() => [
     {
       key: 'baseline', label: 'Baseline rank', metric: false, sortable: true, sortValue: (r) => r.baseline,
+      tip: 'The rank held outside every window — "for the rest of the week, hold Y".',
       render: (r) => (
         <span className="h10-rg-chip" style={r.baselineColor ? { borderColor: r.baselineColor } : undefined} title={r.baseline}>
           <span className="sw" style={{ background: r.baselineColor ?? '#99a1ac' }} />
@@ -100,17 +160,90 @@ export function RankGoalsList() {
         </span>
       ),
     },
+    {
+      // RDX/A3 — the column the page most obviously lacked. At 22:00 the list used to still read
+      // "Rest of Search" because Baseline was the only rank shown; this is what the engine is
+      // actually holding this hour, resolved server-side in the schedule's own timezone.
+      key: 'nowHolding', label: 'Now holding', metric: false, sortable: true, sortValue: (r) => r.activeName,
+      tip: 'The rank this schedule resolves to right now. Differs from Baseline while a window is open.',
+      render: (r) => (
+        r.activeKey
+          ? (
+            <span className={`h10-rg-chip ${r.activeKey !== r.baselineKey ? 'live' : ''}`} style={r.activeColor ? { borderColor: r.activeColor } : undefined} title={r.activeKey !== r.baselineKey ? `In a window — holding ${r.activeName} instead of the ${r.baseline} baseline` : r.activeName}>
+              <span className="sw" style={{ background: r.activeColor ?? '#99a1ac' }} />
+              <span className="lbl">{r.activeName}</span>
+            </span>
+          )
+          : <span className="h10-rg-none" title="No window is open and no baseline is set, so this schedule holds nothing right now.">—</span>
+      ),
+    },
+    {
+      // RDX/B1 — the column that makes the header's market switch mean something. Multi-market
+      // groups list every market rather than collapsing to the first one.
+      key: 'market', label: 'Market', metric: false, sortable: true, sortValue: (r) => r.marketplaces.join(','),
+      tip: 'The marketplaces this schedule\u2019s campaigns sit in, derived from the campaigns themselves.',
+      render: (r) => (
+        r.marketplaces.length === 0
+          ? <span className="h10-rg-none" title="No market resolved — the member campaigns carry no marketplace.">—</span>
+          : <span className="h10-rg-mkts">{r.marketplaces.map((m) => <span key={m} className="mk">{m}</span>)}</span>
+      ),
+    },
     { key: 'campaigns', label: 'Campaigns', metric: true, sortable: true, sortValue: (r) => r.campaigns, render: (r) => <span>{r.campaigns}</span> },
-    { key: 'windows', label: 'Windows', metric: true, sortable: true, sortValue: (r) => r.windows, render: (r) => <span>{r.windows}</span> },
+    {
+      // RDX/B3 — was `windows.length`. The key stays 'windows' so anyone with a saved column
+      // layout keeps the column instead of silently losing it.
+      key: 'windows', label: 'Week shape', metric: false, sortable: true, sortValue: (r) => r.windows,
+      tip: 'When this schedule departs from its baseline. One row per weekday (Mon\u2013Sun), one cell per hour. Hover for the summary.',
+      render: (r) => (
+        <span className="h10-wkcell">
+          <WeekShape
+            windows={r.windowsRaw}
+            baselineKey={r.baselineKey}
+            colorOf={(k) => tmetaState[k]?.color ?? null}
+            nameOf={(k) => tmetaState[k]?.name ?? k}
+            baselineName={r.baseline}
+          />
+          <span className="n">{r.windows === 0 ? 'no windows' : `${r.windows} window${r.windows === 1 ? '' : 's'}`}</span>
+        </span>
+      ),
+    },
+    {
+      // Sorts on the timestamp, renders the relative string — sorting on "4m ago" as text would
+      // order it alphabetically. Never-run rows sort last rather than first.
+      key: 'lastRun', label: 'Last run', metric: false, sortable: true,
+      sortValue: (r) => (r.lastEvaluatedAt ? -new Date(r.lastEvaluatedAt).getTime() : Number.MAX_SAFE_INTEGER),
+      tip: 'When the rank loop last evaluated this schedule. It runs every 15 minutes.',
+      render: (r) => <span className={r.health.tone === 'warn' && r.health.label === 'Stale' ? 'h10-rg-warn' : undefined} title={r.lastEvaluatedAt ? new Date(r.lastEvaluatedAt).toLocaleString() : 'Never evaluated'}>{relTime(r.lastEvaluatedAt)}</span>,
+    },
+    {
+      key: 'health', label: 'Health', metric: false, sortable: true,
+      sortValue: (r) => ({ bad: 0, warn: 1, muted: 2, ok: 3 })[r.health.tone],
+      tip: 'Whether this schedule is actually working. Status only tells you whether it is switched on.',
+      render: (r) => <span className={`h10-pill ${r.health.tone}`} title={r.health.detail}>{r.health.label}</span>,
+    },
     { key: 'status', label: 'Status', metric: false, sortable: true, sortValue: (r) => (r.enabled ? 0 : 1), render: (r) => <span className={`h10-pill ${r.enabled ? 'ok' : 'warn'}`}>{r.enabled ? 'Active' : 'Paused'}</span> },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [])
+  ], [tmetaState])
+
+  // RDX/B1 — the header's market switch, applied. Kept OUTSIDE the grid's own filter set on
+  // purpose: it is a page-level scope that the heatmap above obeys too, not a column filter you
+  // tick off in the Filters accordion. A group whose market can't be resolved is hidden by an
+  // explicit market choice rather than leaking into every market.
+  const visibleRows = useMemo(
+    () => (!market || market === 'all' ? rows : rows.filter((r) => r.marketplaces.includes(market))),
+    [rows, market],
+  )
+  // Schedules exist, but none in the chosen market — a different situation from an empty account.
+  const narrowedToEmpty = !loading && rows.length > 0 && visibleRows.length === 0
 
   const filters: GridFilter[] = useMemo(() => {
     const baselines = Array.from(new Set(rows.map((r) => r.baselineKey).filter(Boolean)))
     const nameOf = (k: string) => rows.find((r) => r.baselineKey === k)?.baseline ?? k
     return [
       { key: 'status', label: 'Status', kind: 'select', placeholder: 'Any status', options: [{ value: 'active', label: 'Active' }, { value: 'paused', label: 'Paused' }], value: (r) => ((r as RankRow).enabled ? 'active' : 'paused') },
+      // RDX/A3 — "show me only the schedules that are actually broken" is the first question this
+      // page should be able to answer, so health is filterable, not just visible.
+      { key: 'health', label: 'Health', kind: 'multiselect', placeholder: 'Any health', options: [{ value: 'bad', label: 'Writes failing' }, { value: 'warn', label: 'Needs attention' }, { value: 'ok', label: 'OK' }, { value: 'muted', label: 'Idle' }], value: (r) => (r as RankRow).health.tone },
       { key: 'baseline', label: 'Baseline', kind: 'multiselect', placeholder: 'Any baseline', options: baselines.map((k) => ({ value: k, label: nameOf(k) })), value: (r) => (r as RankRow).baselineKey },
     ]
   }, [rows])
@@ -122,14 +255,19 @@ export function RankGoalsList() {
       <span className="rg-namew">
         <a className="h10-nt-name rg-name" href={builderHref(r.id)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title={r.name}>{r.name}</a>
         <a className="h10-nt-open" href={builderHref(r.id)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Manage</a>
+        {/* RDX/A4 — row click opens Activity too, but an explicit affordance keeps it discoverable
+            next to Manage rather than relying on someone guessing the row is clickable. */}
+        <button type="button" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); setActivity({ id: r.id, name: r.name }) }}><History size={11} /> Activity</button>
       </span>
       {r.portfolioName && <span className="rg-pfbadge" title={`Portfolio schedule · ${r.portfolioName}`}>Portfolio · {r.portfolioName}</span>}
+      <ScheduleRowActions row={r} onRenamed={renameRow} onDeleted={removeRow} />
     </span>
   )
 
   return (
+    <>
     <AdsDataGrid<RankRow>
-      rows={rows}
+      rows={visibleRows}
       loading={loading}
       rowId={(r) => r.id}
       enabledFirst={(r) => r.enabled}
@@ -156,8 +294,17 @@ export function RankGoalsList() {
       searchValue={(r) => r.name}
       pagerCentered
       defaultSort={{ key: '__first', dir: 'asc' }}
-      emptyLabel="No rank schedules yet."
-      emptyNode={(
+      emptyLabel={narrowedToEmpty ? `No rank schedules in ${market}.` : 'No rank schedules yet.'}
+      // RDX/B1 — "no schedules yet" would be a lie when the account has 16 and you simply picked a
+      // market none of them serve, and offering "Create Rank Schedule" there points at the wrong
+      // fix. Narrowed-to-empty gets its own copy, and no CTA.
+      emptyNode={narrowedToEmpty ? (
+        <span className="h10-rr-empty">
+          <NoDataIllus size={104} />
+          <b>No rank schedules in {market}.</b>
+          <span className="sub">{rows.length} schedule{rows.length === 1 ? '' : 's'} exist in other markets — switch the market selector to see them.</span>
+        </span>
+      ) : (
         <span className="h10-rr-empty">
           <NoDataIllus size={104} />
           <b>No rank schedules yet — create one named schedule to hold a rank across many campaigns.</b>
@@ -165,6 +312,9 @@ export function RankGoalsList() {
         </span>
       )}
       toolbarRight={<a className="h10-am-btn primary" href={builderHref()}><Plus size={13} /> Rank Schedule</a>}
+      onRowClick={(r) => setActivity({ id: r.id, name: r.name })}
     />
+    {activity && <ScheduleActivityDrawer group={activity} palette={palette} onClose={() => setActivity(null)} />}
+    </>
   )
 }

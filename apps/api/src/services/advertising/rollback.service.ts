@@ -93,7 +93,9 @@ async function reverseOne(
       const beforeAdj = before.adjustments as Array<{ placement: string; percentage: number }> | undefined
       if (!Array.isArray(beforeAdj)) return { ok: true, skipped: true, reason: 'no prior placement snapshot to restore' }
       const { updatePlacementBidding } = await import('./ads-create.service.js')
-      const r = await updatePlacementBidding({ campaignId: log.entityId, adjustments: beforeAdj })
+      // HX.1 — the 'Undo:' reason prefix is the same marker /campaigns/:id/history already uses to
+      // flag a row as an undo, so a reversal reads as one everywhere rather than as a fresh change.
+      const r = await updatePlacementBidding({ campaignId: log.entityId, adjustments: beforeAdj, actor, reason: `Undo: ${log.actionType}${reason ? ` — ${reason}` : ''}` })
       return r.ok ? { ok: true } : { ok: false, reason: 'placement restore failed' }
     }
     // AX-IE.9 — inverting a CREATE.

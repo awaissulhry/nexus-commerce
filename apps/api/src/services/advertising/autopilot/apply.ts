@@ -80,7 +80,7 @@ export async function applyPlanActions(opts: {
         const cur = db.placementBidding?.find((x) => x.placement === 'PLACEMENT_TOP')?.percentage ?? 0
         const next = clamp(Math.round(cur + (after.raiseTosPct ?? -(after.lowerTosPct ?? 0))), 0, 200)
         if (next !== cur) {
-          await setSearchPlacement(campaignId, 'PLACEMENT_TOP', next)
+          await setSearchPlacement(campaignId, 'PLACEMENT_TOP', next, { actor: 'automation:autopilot', reason: `Top-of-Search bid ${cur}% \u2192 ${next}%` })
           applied += 1
           decisions.push({ module: 'placement', campaignId, action: 'PLACEMENT', before: { tosPct: cur }, after: { tosPct: next }, reason: `Top-of-Search bid ${cur}% → ${next}%`, status: 'APPLIED' })
         } else {

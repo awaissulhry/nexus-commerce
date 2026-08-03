@@ -101,13 +101,13 @@ const REST_BID_KEY = 'PLACEMENT_REST_OF_SEARCH'
 const clampPct = (p: number) => Math.max(0, Math.min(MAX_PCT, Math.round(p)))
 
 // PP — generic: set ONE placement's bias, preserving the others.
-export async function applyPlacementBias(campaignId: string, placement: string, percentage: number): Promise<unknown> {
+export async function applyPlacementBias(campaignId: string, placement: string, percentage: number, opts?: { actor?: string; reason?: string }): Promise<unknown> {
   const { updatePlacementBidding } = await import('./ads-create.service.js')
   const c = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { dynamicBidding: true } })
   const db = (c?.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
   const others = (db.placementBidding ?? []).filter((x) => x.placement !== placement)
   const adjustments = [...others, { placement, percentage: clampPct(percentage) }]
-  return updatePlacementBidding({ campaignId, adjustments })
+  return updatePlacementBidding({ campaignId, adjustments, actor: opts?.actor, reason: opts?.reason })
 }
 
 // PP — set the ACTIVE search placement to `percentage` AND zero the OTHER search
@@ -131,16 +131,24 @@ export function buildSearchPlacementAdjustments(existing: Array<{ placement: str
 // (no DB → unit-testable). Re-exported here so existing import sites resolve unchanged.
 export { buildBlendedAdjustments, MANAGED_PLACEMENTS } from './ads-placement-math.js'
 
-export async function setSearchPlacement(campaignId: string, placement: string, percentage: number): Promise<unknown> {
+/**
+ * HX.1 — `opts` carries the actor and reason down to the audit trail.
+ *
+ * This function is how the rank loop physically holds a rank, and it used to forward no attribution
+ * at all — so every placement change in the account was logged with a null actor and could not be
+ * traced to the schedule, family plan or operator that caused it. Optional so existing manual /
+ * recommendation call sites keep working unchanged; they simply record no actor, as before.
+ */
+export async function setSearchPlacement(campaignId: string, placement: string, percentage: number, opts?: { actor?: string; reason?: string }): Promise<unknown> {
   const { updatePlacementBidding } = await import('./ads-create.service.js')
   const c = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { dynamicBidding: true } })
   const db = (c?.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
-  return updatePlacementBidding({ campaignId, adjustments: buildSearchPlacementAdjustments(db.placementBidding ?? [], placement, percentage) })
+  return updatePlacementBidding({ campaignId, adjustments: buildSearchPlacementAdjustments(db.placementBidding ?? [], placement, percentage), actor: opts?.actor, reason: opts?.reason })
 }
 
 // Back-compat wrapper for the Top-of-Search recommendation / manual paths.
-export async function applyTopOfSearch(campaignId: string, percentage: number): Promise<unknown> {
-  return applyPlacementBias(campaignId, TOP_BID_KEY, percentage)
+export async function applyTopOfSearch(campaignId: string, percentage: number, opts?: { actor?: string; reason?: string }): Promise<unknown> {
+  return applyPlacementBias(campaignId, TOP_BID_KEY, percentage, opts)
 }
 
 /** Auto-apply every raise/lower recommendation (within the step/cap guardrails). */
@@ -149,7 +157,7 @@ export async function applyTopOfSearchRecommendations(opts: { windowDays?: numbe
   let applied = 0
   for (const r of rows) {
     if (r.action !== 'keep' && r.recommendedPct !== r.currentPct) {
-      await applyTopOfSearch(r.campaignId, r.recommendedPct)
+      await applyTopOfSearch(r.campaignId, r.recommendedPct, { actor: 'automation:tos-optimizer', reason: r.reason })
       applied += 1
     }
   }
@@ -204,7 +212,7 @@ export async function defendTopOfSearch(opts: {
   let skippedNotAllowlisted = 0
   for (const r of actionable) {
     if (allowed && !allowed.has(r.campaignId)) { skippedNotAllowlisted += 1; continue }
-    await applyTopOfSearch(r.campaignId, r.recommendedPct)
+    await applyTopOfSearch(r.campaignId, r.recommendedPct, { actor: 'automation:tos-optimizer', reason: r.reason })
     applied += 1
   }
   return { evaluated: rows.length, changed: actionable.length, applied, skippedNotAllowlisted, skippedPaused, dryRun: false, sample }

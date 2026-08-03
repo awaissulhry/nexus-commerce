@@ -14130,7 +14130,13 @@ model AdSchedule {
   // null = legacy behaviour (no baseline; gaps mean paused).
   defaultTargetKey String?
   // Last status the cron applied, to avoid redundant writes/churn.
-  lastApplied      String? // ENABLED | PAUSED
+  // TWO writers, and they mean different things — read it alongside the row's mode:
+  //  · ad-dayparting (classic bidMultiplierPct mode) writes 'ENABLED' | 'PAUSED'.
+  //  · ad-rank-defend (goal mode) writes the resolved RankTarget.key it is holding
+  //    ('own-top', 'defend-top', …), or null when nothing was due that tick — RDX/A1.
+  // Every live row is goal mode, so in practice this holds a target key. Treat it as an
+  // opaque label; never branch on it without checking isGoalMode(windows, defaultTargetKey).
+  lastApplied      String?
   lastEvaluatedAt  DateTime?
   // AU.3 — bid snapshot taken when entering a bid-multiplier window.
   // JSON: { [adTargetId]: originalBidCents }. Cleared when exiting/restoring.
@@ -14168,8 +14174,35 @@ model RankScheduleGroup {
   updatedAt        DateTime     @updatedAt
   createdBy        String?
   schedules        AdSchedule[]
+  versions         RankScheduleVersion[]
 
   @@index([marketplace])
+}
+
+// HX.8 — plan-edit history for a rank schedule.
+//
+// Distinct from the ACTIVITY trail (CampaignBidHistory / AdvertisingActionLog), which records what
+// the ENGINE did to Amazon. This records what the OPERATOR did to the plan: which windows moved,
+// when, and by whom. Without it `saveRankScheduleGroup` overwrites `windows` in place and the
+// question "what changed, and when did this schedule start behaving differently" is unanswerable.
+//
+// Append-only snapshot, written on save only when something meaningful actually differs from the
+// latest version — a re-save that changes nothing must not manufacture a version.
+model RankScheduleVersion {
+  id               String            @id @default(cuid())
+  groupId          String
+  group            RankScheduleGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  // The plan as it stood AFTER this save. Diffing is done against the previous row.
+  name             String
+  windows          Json              @default("[]")
+  defaultTargetKey String?
+  // Member count at the time, so "went from 11 campaigns to 1" is visible without storing the ids.
+  campaignCount    Int               @default(0)
+  enabled          Boolean           @default(true)
+  changedBy        String?
+  createdAt        DateTime          @default(now())
+
+  @@index([groupId, createdAt(sort: Desc)])
 }
 
 // BS — Budget Schedule (Helium 10 "Budget Schedules" tab). An hourly/daily schedule that

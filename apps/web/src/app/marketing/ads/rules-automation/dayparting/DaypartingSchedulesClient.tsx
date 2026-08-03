@@ -16,6 +16,7 @@ import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { RankGoalsList } from '../tabs/RankGoalsList'
 import { HourlyPerformance, type ScopeOption } from './HourlyPerformance'
+import { CoveragePanel, type ScheduleOption } from './CoveragePanel'
 import { getBackendUrl } from '@/lib/backend-url'
 
 export function DaypartingSchedulesClient() {
@@ -25,6 +26,12 @@ export function DaypartingSchedulesClient() {
   // DPS.4 — the heatmap can be narrowed to one schedule, so it needs the schedule names. Only
   // groups that actually hold campaigns can produce a heatmap, so empty ones are left out.
   const [scopes, setScopes] = useState<ScopeOption[]>([])
+  // RDX/C1 — the coverage panel can add a campaign to ANY schedule, including one that currently
+  // holds none, so it needs the unfiltered list (unlike the heatmap scope above).
+  const [allSchedules, setAllSchedules] = useState<ScheduleOption[]>([])
+  // Adding campaigns changes member counts in the list below, so the panel nudges it to reload
+  // rather than leaving a stale count on screen.
+  const [reload, setReload] = useState(0)
 
   useEffect(() => {
     let alive = true
@@ -43,6 +50,9 @@ export function DaypartingSchedulesClient() {
         const items = (Array.isArray(d?.items) ? d.items : []) as Array<{ id?: string; name?: string; campaignCount?: number }>
         setScopes(items
           .filter((g) => g.id && Number(g.campaignCount ?? 0) > 0)
+          .map((g) => ({ value: String(g.id), label: String(g.name ?? g.id) })))
+        setAllSchedules(items
+          .filter((g) => g.id)
           .map((g) => ({ value: String(g.id), label: String(g.name ?? g.id) })))
       })
       .catch(() => {})
@@ -68,9 +78,13 @@ export function DaypartingSchedulesClient() {
         primaryAction={{ label: 'Rank Schedule', icon: <Plus size={15} />, href: '/marketing/ads/rules-automation/builder/dayparting-schedule' }}
       />
       <RulesTabs active="dayparting" />
-      {/* Look first, author second — the grid sits above the list of schedules it justifies. */}
-      <HourlyPerformance scopes={scopes} />
-      <RankGoalsList />
+      {/* Look first, author second — the grid sits above the list of schedules it justifies.
+          RDX/B1 — both now receive `market`. Until B1 the header's market switch was a dead
+          control: it held state, rendered, accepted clicks, and nothing consumed it. */}
+      <HourlyPerformance scopes={scopes} market={market} />
+      {/* RDX/C1 — the gap, stated between the evidence and the schedules that act on it. */}
+      <CoveragePanel market={market} schedules={allSchedules} onChanged={() => setReload((n) => n + 1)} />
+      <RankGoalsList market={market} reloadSignal={reload} />
     </div>
   )
 }

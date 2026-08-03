@@ -27,9 +27,20 @@ async function resolveCtx(marketplace: string): Promise<{ profileId: string; reg
   return conn ? { profileId: conn.profileId, region: (conn.region as AdsRegion) ?? 'EU' } : null
 }
 
-async function audit(actionType: string, entityType: string, entityId: string, payloadAfter: object, userId?: string, payloadBefore: object = {}) {
+/**
+ * HX.1 — the audit row for a local ads operation.
+ *
+ * `status` used to be hardcoded 'SUCCESS'. That was wrong for any caller that pushes to Amazon
+ * inline and can observe the push failing — most visibly updatePlacementBidding, which computes
+ * `lastSyncStatus: 'FAILED'` and then logged the same write as a success. Every audit row is read
+ * downstream as evidence that a change landed, so a hardcoded SUCCESS is worse than no row at all.
+ *
+ * Callers that only touch local state keep the default; callers that attempt a live push pass what
+ * actually happened.
+ */
+async function audit(actionType: string, entityType: string, entityId: string, payloadAfter: object, userId?: string, payloadBefore: object = {}, status: 'SUCCESS' | 'FAILED' | 'PENDING' = 'SUCCESS') {
   await prisma.advertisingActionLog.create({
-    data: { userId: userId ?? null, actionType, entityType, entityId, payloadBefore, payloadAfter, amazonResponseStatus: 'SUCCESS' },
+    data: { userId: userId ?? null, actionType, entityType, entityId, payloadBefore, payloadAfter, amazonResponseStatus: status },
   }).catch(() => {})
 }
 
@@ -638,6 +649,12 @@ export interface PlacementBiddingInput {
   adjustments: Array<{ placement: string; percentage: number }>
   biddingStrategy?: 'legacyForSales' | 'autoForSales' | 'manual'
   userId?: string
+  // HX.1 — who caused this. Distinct from `userId` (a human id) because most placement writes come
+  // from automation: `automation:rank-defend-<AdSchedule.id>` / `automation:rank-plan-<id>`. The
+  // console resolves that prefix back to the schedule's name, so a change reads
+  // "IT AIREON raised Top-of-Search bias" rather than showing an unattributed row.
+  actor?: string
+  reason?: string
 }
 export async function updatePlacementBidding(input: PlacementBiddingInput): Promise<{ ok: boolean; adjustments: Array<{ placement: string; percentage: number }>; mode: string }> {
   const c = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, dynamicBidding: true } })
@@ -672,9 +689,48 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
     }
   }
   await prisma.campaign.update({ where: { id: input.campaignId }, data: { dynamicBidding: db as never, ...(syncStamp ?? {}), ...(input.biddingStrategy ? { biddingStrategy: input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES' } : {}) } })
-  await audit('update_placement_bidding', 'CAMPAIGN', input.campaignId, { adjustments, mode }, input.userId, { adjustments: priorAdjustments })
-  logger.info('[AX2.2] updatePlacementBidding', { campaignId: input.campaignId, adjustments, mode })
-  return { ok: true, adjustments, mode }
+
+  /**
+   * HX.2 — placement writes join the audit spine.
+   *
+   * This is the single most-executed ads write we make: rank-defend holds a rank by moving the
+   * placement bias, every 15 minutes, across every enabled schedule. Until now it wrote ONLY an
+   * AdvertisingActionLog row — no CampaignBidHistory, and (because the push is inline rather than
+   * queued) no AdMutation. Every history surface in the console reads those two tables, so the
+   * dominant action of the whole rank system was invisible in all of them: the schedule activity
+   * drawer rendered "No changes recorded yet" for a schedule doing its job correctly.
+   *
+   * ONE ROW PER CHANGED PLACEMENT, not one row for the set — that matches how CampaignBidHistory
+   * is designed (a single field's old → new) and makes the diff read as
+   * "PLACEMENT_TOP 100 → 115" instead of an opaque blob. Unchanged placements write nothing, so a
+   * tick that moves only Top-of-Search doesn't manufacture three rows of noise.
+   */
+  const priorPct = new Map(priorAdjustments.map((a) => [a.placement, a.percentage]))
+  const changed = adjustments.filter((a) => priorPct.get(a.placement) !== a.percentage)
+  if (changed.length) {
+    await prisma.campaignBidHistory.createMany({
+      data: changed.map((a) => ({
+        entityType: 'CAMPAIGN',
+        entityId: input.campaignId,
+        campaignId: input.campaignId,
+        field: a.placement,
+        oldValue: priorPct.has(a.placement) ? String(priorPct.get(a.placement)) : null,
+        newValue: String(a.percentage),
+        // HX.1 — without an actor these rows can't be attributed to the schedule, plan or person
+        // that caused them, which is the whole point of the history. 'system' only when a caller
+        // genuinely has no actor to give.
+        changedBy: input.actor ?? input.userId ?? 'system',
+        reason: input.reason ?? null,
+      })),
+    }).catch(() => { /* best-effort — an audit row must never fail the write it describes */ })
+  }
+
+  // HX.1 — the real outcome. `syncStamp` is null when nothing was pushed live (sandbox, gated, or
+  // no external id), in which case the row is a truthful local-only SUCCESS.
+  const auditStatus = syncStamp ? (syncStamp.lastSyncStatus === 'SUCCESS' ? 'SUCCESS' : 'FAILED') : 'SUCCESS'
+  await audit('update_placement_bidding', 'CAMPAIGN', input.campaignId, { adjustments, mode, ...(syncStamp?.lastSyncError ? { error: syncStamp.lastSyncError } : {}) }, input.actor ?? input.userId, { adjustments: priorAdjustments }, auditStatus)
+  logger.info('[AX2.2] updatePlacementBidding', { campaignId: input.campaignId, adjustments, mode, status: auditStatus })
+  return { ok: auditStatus !== 'FAILED', adjustments, mode }
 }
 
 export interface NewNegativeProductTarget { adGroupId: string; asin: string; userId?: string }
@@ -789,7 +845,19 @@ export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Prom
   const overrides = (input.targetOverrides ?? {}) as Record<string, unknown>
   const enabled = input.enabled !== false
   const tz = input.timezone || 'Europe/Rome'
-  const gdata = { name, marketplace: input.marketplace ?? null, timezone: tz, windows: windows as never, defaultTargetKey: input.defaultTargetKey ?? null, targetOverrides: overrides as never, enabled, portfolioId: input.portfolioId ?? null }
+  // RDX/B1 — derive the group's market from its members when the caller doesn't state one.
+  // The rank builder has never sent `marketplace`, so this column was null on every live row and
+  // the console's market switch had nothing to filter on. Derived only when the members agree:
+  // a group spanning IT + DE has no single market, and guessing one would be worse than null.
+  let marketplace = (input.marketplace as string | null | undefined) ?? null
+  if (!marketplace && campaignIds.length) {
+    try {
+      const mc = await prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { marketplace: true } })
+      const distinct = [...new Set(mc.map((c) => c.marketplace).filter(Boolean) as string[])]
+      if (distinct.length === 1) marketplace = distinct[0]
+    } catch { /* best-effort — a failed derive must not block the save */ }
+  }
+  const gdata = { name, marketplace, timezone: tz, windows: windows as never, defaultTargetKey: input.defaultTargetKey ?? null, targetOverrides: overrides as never, enabled, portfolioId: input.portfolioId ?? null }
   // DPS.1 — belt-and-braces against duplicate groups. The client now sends the id it minted on the
   // first save, but a stale bundle (or a double-submit) can still arrive with no id. Since the block
   // below REBINDS each campaign's schedule to whichever group saved last, a blind create would strand
@@ -832,6 +900,33 @@ export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Prom
   }
   // Campaigns removed from the group → drop their (now-orphaned) execution rows.
   await prisma.adSchedule.deleteMany({ where: { groupId: group.id, campaignId: { notIn: campaignIds.length ? campaignIds : ['__none__'] } } })
+  /**
+   * HX.8 — snapshot the plan as it now stands.
+   *
+   * `saveRankScheduleGroup` overwrites `windows` in place, so before this there was no way to answer
+   * "what did we change, and when did this schedule start behaving differently" — the first question
+   * worth asking when a schedule stops performing.
+   *
+   * Written only when something MEANINGFUL differs from the latest snapshot. The builder saves on
+   * every "Save Changes" click and the coverage panel re-saves a group just to append a campaign; a
+   * naive append would bury the real edits under identical rows. Campaign count is part of the
+   * comparison because "went from 11 campaigns to 1" is a plan change even when the windows didn't move.
+   */
+  try {
+    const last = await prisma.rankScheduleVersion.findFirst({ where: { groupId: group.id }, orderBy: { createdAt: 'desc' }, select: { name: true, windows: true, defaultTargetKey: true, campaignCount: true, enabled: true } })
+    const changed = !last
+      || last.name !== name
+      || (last.defaultTargetKey ?? null) !== (input.defaultTargetKey ?? null)
+      || last.campaignCount !== campaignIds.length
+      || last.enabled !== enabled
+      || JSON.stringify(last.windows) !== JSON.stringify(windows)
+    if (changed) {
+      await prisma.rankScheduleVersion.create({
+        data: { groupId: group.id, name, windows: windows as never, defaultTargetKey: input.defaultTargetKey ?? null, campaignCount: campaignIds.length, enabled, changedBy: input.userId ?? null },
+      })
+    }
+  } catch (e) { logger.warn('[HX.8] version snapshot failed', { id: group.id, error: (e as Error).message }) }
+
   logger.info('[Phase3] saveRankScheduleGroup', { id: group.id, name, members: campaignIds.length, moved })
   return { id: group.id, members: campaignIds.length, moved }
 }

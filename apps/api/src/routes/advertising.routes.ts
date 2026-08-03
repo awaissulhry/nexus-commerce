@@ -3325,7 +3325,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // DPS.4 — three ways to name the campaigns, so the Rank & Dayparting Schedules page can ask for
     // "the whole account" or "this schedule" without pushing 200+ cuids through a query string.
     // `campaignIds` is the original contract and is untouched.
-    const q = request.query as { campaignIds?: string; windowDays?: string; weeks?: string; tz?: string; scope?: string; groupId?: string }
+    const q = request.query as { campaignIds?: string; windowDays?: string; weeks?: string; tz?: string; scope?: string; groupId?: string; marketplace?: string }
     let ids = (q.campaignIds ?? '').split(',').map((s) => s.trim()).filter(Boolean)
     if (!ids.length && q.groupId) {
       const members = await prisma.adSchedule.findMany({ where: { groupId: String(q.groupId) }, select: { campaignId: true } })
@@ -3334,6 +3334,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!ids.length && q.scope === 'all') {
       const all = await prisma.campaign.findMany({ where: { status: { not: 'ARCHIVED' } }, select: { id: true } })
       ids = all.map((c) => c.id)
+    }
+    // RDX/B1 — narrow to one market. Applied to whichever campaign set was resolved above (account,
+    // schedule members, or an explicit list) so the page's market switch means the same thing on the
+    // grid as it does on the list below it. Absent or 'all' = every market, the previous behaviour.
+    const market = q.marketplace && q.marketplace !== 'all' ? String(q.marketplace) : null
+    if (market && ids.length) {
+      const inMarket = await prisma.campaign.findMany({ where: { id: { in: ids }, marketplace: market }, select: { id: true } })
+      ids = inMarket.map((c) => c.id)
     }
     // whitelist the timezone — it reaches AT TIME ZONE, so never trust the raw param
     const TZ_OK = new Set(['Europe/Rome', 'Europe/London', 'Europe/Madrid', 'Europe/Paris', 'Europe/Berlin', 'America/Los_Angeles', 'America/New_York', 'UTC'])
@@ -6704,6 +6712,29 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── AX3.14: Advertising Events log ──────────────────────────────────
+  /**
+   * HX.4 — the unified change feed. One row shape over every recorded write, replacing the ten
+   * per-object surfaces that each read a different subset of five tables.
+   *
+   * Supersedes `/advertising/events` for new work: that endpoint derives `source` from which COLUMN
+   * is populated (`executionId ? Automation : userId ? Operator`), but the mutation path stores
+   * automation actors in `userId` — so it reports every automated write as an operator action. This
+   * one derives source from the actor STRING, which is where the truth actually lives.
+   */
+  fastify.get('/advertising/changes', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    reply.header('Cache-Control', 'private, max-age=10')
+    const parseDate = (s?: string) => { if (!s) return undefined; const d = new Date(s); return Number.isNaN(d.getTime()) ? undefined : d }
+    const { listChanges } = await import('../services/advertising/ads-changes.service.js')
+    return listChanges({
+      from: parseDate(q.from), to: parseDate(q.to),
+      source: q.source as never, originKind: q.originKind as never, originId: q.originId,
+      entityType: q.entityType, entityId: q.entityId, campaignId: q.campaignId,
+      field: q.field, deliveryState: q.deliveryState,
+      limit: q.limit ? Number(q.limit) : undefined,
+    })
+  })
+
   fastify.get('/advertising/events', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
     const { listEvents } = await import('../services/advertising/ads-events.service.js')
@@ -7396,15 +7427,122 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return await prisma.rankTarget.update({ where: { id }, data: { name: d.name, placement: d.placement, targetISPct: d.targetISPct ?? null, acosCapPct: d.acosCapPct ?? null, maxCpcCents: d.maxCpcCents ?? null, biasPct: d.biasPct ?? null, jumpStartPct: (d.jumpStartPct as number | null) ?? null, stepUpPct: (d.stepUpPct as number | null) ?? null, stepDownPct: (d.stepDownPct as number | null) ?? null, maxBiasPct: (d.maxBiasPct as number | null) ?? null, keepClimbing: !!d.keepClimbing, color: d.color ?? null, pause: !!d.pause, allOut: !!d.allOut, lanes: [], bidMode: null, bidValueCents: null, bidDeltaPct: null } as never })
   })
 
+  // RDX/A2 — (weekday, hour) in a schedule's own timezone. Mirrors nowInTz in
+  // ad-rank-defend.job.ts so the console resolves the active target exactly the way the cron
+  // does; a private copy there and here beats exporting a job internal into the route layer.
+  const scheduleNowInTz = (tz: string): { day: number; hour: number } => {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: 'numeric', hour12: false }).formatToParts(new Date())
+    const wk = parts.find((p) => p.type === 'weekday')?.value ?? 'Sun'
+    const dayIdx = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(wk)
+    let hour = parseInt(parts.find((p) => p.type === 'hour')?.value ?? '0', 10) % 24
+    if (Number.isNaN(hour)) hour = 0
+    return { day: dayIdx < 0 ? 0 : dayIdx, hour }
+  }
+
   // ── Phase 3 — named rank-schedule GROUPS (one named schedule spanning many campaigns). The group
   // is the authoring/management layer; member AdSchedule rows (materialized on save) are the
   // per-campaign execution layer the rank-defend cron already runs (engine untouched). ──
   fastify.get('/advertising/rank-schedule-groups', async (_request, reply) => {
     reply.header('Cache-Control', 'private, max-age=5')
     const groups = await prisma.rankScheduleGroup.findMany({ orderBy: { name: 'asc' } })
-    const counts = await prisma.adSchedule.groupBy({ by: ['groupId'], _count: { _all: true }, where: { groupId: { not: null } } })
-    const byGroup = new Map(counts.map((c) => [c.groupId as string, c._count._all]))
-    return { items: groups.map((g) => ({ ...g, campaignCount: byGroup.get(g.id) ?? 0 })), count: groups.length }
+    // RDX/A2 — the list needs RUNTIME, not just configuration. Every field added below is
+    // additive; `campaignCount` and the spread group keep their existing shape and meaning.
+    const members = await prisma.adSchedule.findMany({
+      where: { groupId: { not: null } },
+      select: { id: true, groupId: true, campaignId: true, enabled: true, lastEvaluatedAt: true, lastApplied: true },
+    })
+    const byGroup = new Map<string, typeof members>()
+    for (const m of members) { const g = m.groupId as string; const arr = byGroup.get(g) ?? []; arr.push(m); byGroup.set(g, arr) }
+
+    // RDX/B1 — a group's market, derived from the campaigns it actually holds.
+    //
+    // `RankScheduleGroup.marketplace` exists on the model but the builder never sent it, so it is
+    // null on every live row — which is why the page's market switch filtered nothing. Deriving it
+    // from members is both self-healing (a campaign moving market is reflected immediately) and
+    // truthful in a way the scalar column cannot be: a portfolio-scoped group can legitimately span
+    // IT + DE, so this returns the SET. The scalar stays for the unambiguous case and for anything
+    // querying the column directly.
+    const memberCampaignIds = [...new Set(members.map((m) => m.campaignId))]
+    const marketByCampaign = new Map<string, string | null>()
+    if (memberCampaignIds.length) {
+      const mc = await prisma.campaign.findMany({ where: { id: { in: memberCampaignIds } }, select: { id: true, marketplace: true } })
+      for (const c of mc) marketByCampaign.set(c.id, c.marketplace ?? null)
+    }
+
+    // Campaigns a Rank Director family plan governed on its last tick. rank-defend SKIPS
+    // these in its schedule loop, so a member campaign appearing here sits inside the
+    // schedule but is NOT controlled by it — previously invisible, and the reason a
+    // schedule can read "Active" while doing nothing at all.
+    // Read off ProductRankPlan.lastSummary rather than re-resolving families live:
+    // resolution is expensive and this endpoint runs on every page load.
+    const governed = new Set<string>()
+    try {
+      const plans = await prisma.productRankPlan.findMany({ where: { enabled: true }, select: { lastSummary: true } })
+      for (const p of plans) {
+        const decs = (p.lastSummary as { decisions?: Array<{ campaignId?: string }> } | null)?.decisions
+        for (const d of decs ?? []) if (d?.campaignId) governed.add(d.campaignId)
+      }
+    } catch { /* best-effort — a governance read must never blank the list */ }
+
+    // Amazon writes this schedule asked for that ended FAILED in the last 24h. The actor
+    // string is the join key: rank-defend writes `automation:rank-defend-<AdSchedule.id>`
+    // and ads-mutation persists it verbatim onto AdMutation.actor. This is what stops the
+    // status pill reading green over an engine whose writes are dead-lettering.
+    //
+    // HX.3 — TWO delivery sources, because this system has two write paths.
+    //
+    // Queued writes (bid suppression, base-bid, resume) go through ads-mutation and land in
+    // AdMutation with a state machine. Placement writes — which is what "hold a rank" physically
+    // means, and by far the most frequent action — push to Amazon INLINE and create no AdMutation
+    // row at all. Counting only AdMutation therefore returned a structural zero for the dominant
+    // action: a schedule whose every placement push was failing reported `failedWrites: 0` and the
+    // Health column rendered "OK". That is the false-green this column exists to eliminate, so
+    // both sources are counted here.
+    const failedByActor = new Map<string, number>()
+    const bump = (actor: string, n: number) => failedByActor.set(actor, (failedByActor.get(actor) ?? 0) + n)
+    try {
+      const since = new Date(Date.now() - 24 * 3600 * 1000)
+      const actors = members.map((m) => `automation:rank-defend-${m.id}`)
+      if (actors.length) {
+        const [queued, inline] = await Promise.all([
+          prisma.adMutation.groupBy({ by: ['actor'], where: { state: 'FAILED', actor: { in: actors }, updatedAt: { gte: since } }, _count: { _all: true } }),
+          // HX.1 made this status truthful — it was hardcoded SUCCESS, so a failed placement push
+          // was logged as a success. The actor lands in `userId` (the audit table's one actor column).
+          prisma.advertisingActionLog.groupBy({ by: ['userId'], where: { amazonResponseStatus: 'FAILED', userId: { in: actors }, createdAt: { gte: since } }, _count: { _all: true } }),
+        ])
+        for (const r of queued) bump(r.actor, r._count._all)
+        for (const r of inline) if (r.userId) bump(r.userId, r._count._all)
+      }
+    } catch { /* best-effort */ }
+
+    const { resolveActiveTargetKey } = await import('../services/advertising/rank-controller.js')
+    const items = groups.map((g) => {
+      const ms = byGroup.get(g.id) ?? []
+      const stamped = ms.filter((m) => m.lastEvaluatedAt) as Array<(typeof ms)[number] & { lastEvaluatedAt: Date }>
+      stamped.sort((a, b) => b.lastEvaluatedAt.getTime() - a.lastEvaluatedAt.getTime())
+      const { day, hour } = scheduleNowInTz(g.timezone || 'Europe/Rome')
+      const marketplaces = [...new Set(ms.map((m) => marketByCampaign.get(m.campaignId)).filter(Boolean) as string[])].sort()
+      return {
+        ...g,
+        // Derived wins over the stored scalar, which is null on every pre-B1 row. Reported as a set
+        // because a group spanning two markets has two, and collapsing that to one would be a lie.
+        marketplace: marketplaces.length === 1 ? marketplaces[0] : (g.marketplace ?? null),
+        marketplaces,
+        campaignCount: ms.length,
+        // What this schedule resolves to at THIS moment, in its own timezone. Computed the
+        // same way the cron computes it, never stored — a stored value would go stale on
+        // the hour. The list's existing "Baseline" column is the out-of-window default and
+        // stays as it is; these two disagree exactly when a window is open, which is the point.
+        activeTargetKey: resolveActiveTargetKey(g.windows as never, g.defaultTargetKey, day, hour),
+        lastEvaluatedAt: stamped[0]?.lastEvaluatedAt ?? null,
+        lastApplied: stamped[0]?.lastApplied ?? null,
+        membersEnabled: ms.filter((m) => m.enabled).length,
+        membersTotal: ms.length,
+        failedWrites: ms.reduce((n, m) => n + (failedByActor.get(`automation:rank-defend-${m.id}`) ?? 0), 0),
+        governedElsewhere: ms.filter((m) => governed.has(m.campaignId)).length,
+      }
+    })
+    return { items, count: groups.length }
   })
   // Guardrail data — which campaigns are currently held by a group, so the builder can warn that
   // saving would MOVE a campaign out of another schedule (one campaign → one schedule row).
@@ -7415,6 +7553,142 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     for (const r of rows) { if (r.group) map[r.campaignId] = { groupId: r.group.id, groupName: r.group.name } }
     return { items: map, count: Object.keys(map).length }
   })
+  /**
+   * RDX/C1 — what the account is NOT covering.
+   *
+   * The list answers "what do my schedules do". It has never answered "what is running with no
+   * rank control at all", and that is the more expensive question: an uncovered campaign is
+   * spending against whatever bid it was last left on, with nothing holding or easing it.
+   *
+   * A campaign counts as covered if it holds an AdSchedule row, OR if a Rank Director family plan
+   * governed it on its last tick — the plan path is deliberate control, not a gap (and
+   * ad-rank-defend.job.ts skips plan-governed campaigns in its schedule loop, so a campaign in
+   * both is genuinely run by the plan).
+   *
+   * Spend comes from AmazonAdsDailyPerformance, not the hourly Marketing Stream table the heatmap
+   * draws: AMS is not backfilled and covers a minority of campaigns, so ranking "biggest uncovered
+   * spender" off it would quietly hide the campaigns that have been running longest.
+   */
+  fastify.get('/advertising/rank-schedule-groups/coverage', async (request, reply) => {
+    const q = request.query as { days?: string; marketplace?: string; limit?: string }
+    const days = Math.max(1, Math.min(90, Number(q.days ?? 30) || 30))
+    const limit = Math.max(1, Math.min(200, Number(q.limit ?? 50) || 50))
+    const market = q.marketplace && q.marketplace !== 'all' ? String(q.marketplace) : null
+    reply.header('Cache-Control', 'private, max-age=15')
+
+    const campaigns = await prisma.campaign.findMany({
+      where: { status: { not: 'ARCHIVED' }, ...(market ? { marketplace: market } : {}) },
+      select: { id: true, name: true, externalCampaignId: true, marketplace: true, status: true },
+    })
+    if (!campaigns.length) return { total: 0, covered: 0, governed: 0, uncovered: 0, windowDays: days, uncoveredSpendCents: 0, items: [] }
+
+    const scheduled = new Set((await prisma.adSchedule.findMany({ select: { campaignId: true } })).map((s) => s.campaignId))
+    const governed = new Set<string>()
+    try {
+      const plans = await prisma.productRankPlan.findMany({ where: { enabled: true }, select: { lastSummary: true } })
+      for (const p of plans) {
+        const decs = (p.lastSummary as { decisions?: Array<{ campaignId?: string }> } | null)?.decisions
+        for (const d of decs ?? []) if (d?.campaignId) governed.add(d.campaignId)
+      }
+    } catch { /* best-effort */ }
+
+    const open = campaigns.filter((c) => !scheduled.has(c.id) && !governed.has(c.id))
+
+    // Spend per uncovered campaign. Rows key on either the local FK or the external id, matching
+    // how the heatmap resolves the same ambiguity.
+    const spendById = new Map<string, { cost: bigint; impressions: number; clicks: number }>()
+    if (open.length) {
+      const since = new Date(Date.now() - days * 24 * 3600 * 1000)
+      const localIds = open.map((c) => c.id)
+      const extIds = open.map((c) => c.externalCampaignId).filter(Boolean) as string[]
+      try {
+        const rows = await prisma.amazonAdsDailyPerformance.findMany({
+          where: {
+            entityType: 'CAMPAIGN',
+            date: { gte: since },
+            OR: [{ localEntityId: { in: localIds } }, ...(extIds.length ? [{ entityId: { in: extIds } }] : [])],
+          },
+          select: { localEntityId: true, entityId: true, costMicros: true, impressions: true, clicks: true },
+        })
+        const byExt = new Map(open.filter((c) => c.externalCampaignId).map((c) => [c.externalCampaignId as string, c.id]))
+        for (const r of rows) {
+          const cid = r.localEntityId ?? byExt.get(r.entityId)
+          if (!cid) continue
+          const cur = spendById.get(cid) ?? { cost: 0n, impressions: 0, clicks: 0 }
+          cur.cost += r.costMicros ?? 0n
+          cur.impressions += r.impressions ?? 0
+          cur.clicks += r.clicks ?? 0
+          spendById.set(cid, cur)
+        }
+      } catch { /* best-effort — coverage counts still stand without spend */ }
+    }
+
+    const micros = (v: bigint) => Number(v / 10_000n) // micros → cents, integer-safe
+    const items = open
+      .map((c) => {
+        const s = spendById.get(c.id)
+        return {
+          id: c.id, name: c.name, marketplace: c.marketplace, status: c.status,
+          spendCents: s ? micros(s.cost) : 0,
+          impressions: s?.impressions ?? 0,
+          clicks: s?.clicks ?? 0,
+        }
+      })
+      .sort((a, b) => b.spendCents - a.spendCents || a.name.localeCompare(b.name))
+
+    return {
+      total: campaigns.length,
+      covered: campaigns.filter((c) => scheduled.has(c.id)).length,
+      governed: campaigns.filter((c) => !scheduled.has(c.id) && governed.has(c.id)).length,
+      uncovered: open.length,
+      windowDays: days,
+      marketplace: market,
+      uncoveredSpendCents: items.reduce((n, i) => n + i.spendCents, 0),
+      // Truncation is disclosed rather than silent: a "top 50" list that looks complete is how a
+      // long tail of small spenders stays invisible.
+      truncated: Math.max(0, items.length - limit),
+      items: items.slice(0, limit),
+    }
+  })
+
+  /**
+   * RDX/C1 — append campaigns to an existing schedule.
+   *
+   * This exists as a dedicated route because the obvious client-side alternative is a trap:
+   * PATCH /rank-schedule-groups/:id with only `campaignIds` routes into saveRankScheduleGroup,
+   * whose `gdata` reads `input.windows ?? []` and `input.defaultTargetKey ?? null` — so a PATCH
+   * that omits them WIPES the schedule's windows and baseline while appearing to just add a
+   * campaign. Reading those fields off the stored group here keeps that impossible.
+   */
+  fastify.post('/advertising/rank-schedule-groups/:id/campaigns', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as { campaignIds?: unknown }
+    const add = Array.isArray(b?.campaignIds) ? b.campaignIds.map(String).filter(Boolean) : []
+    if (!add.length) { reply.status(400); return { error: 'campaignIds[] required' } }
+
+    const group = await prisma.rankScheduleGroup.findUnique({ where: { id } })
+    if (!group) { reply.status(404); return { error: 'not found' } }
+    const members = await prisma.adSchedule.findMany({ where: { groupId: id }, select: { campaignId: true } })
+    const campaignIds = [...new Set([...members.map((m) => m.campaignId), ...add])]
+
+    const { saveRankScheduleGroup } = await import('../services/advertising/ads-create.service.js')
+    try {
+      const r = await saveRankScheduleGroup({
+        id: group.id,
+        name: group.name,
+        campaignIds,
+        windows: group.windows,
+        defaultTargetKey: group.defaultTargetKey,
+        targetOverrides: group.targetOverrides,
+        enabled: group.enabled,
+        timezone: group.timezone,
+        portfolioId: group.portfolioId,
+        marketplace: group.marketplace,
+      } as never)
+      return { ...r, added: add.length }
+    } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   fastify.get('/advertising/rank-schedule-groups/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const group = await prisma.rankScheduleGroup.findUnique({ where: { id } })
@@ -7422,6 +7696,142 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const members = await prisma.adSchedule.findMany({ where: { groupId: id }, select: { id: true, campaignId: true, name: true, enabled: true } })
     return { ...group, members, campaignIds: members.map((m) => m.campaignId) }
   })
+  /**
+   * RDX/A4 — what this schedule actually DID, hour by hour.
+   *
+   * No new logging was needed. rank-defend calls decideAndMaybeApply with
+   * `actor: automation:rank-defend-<AdSchedule.id>`, and ads-mutation.service persists that
+   * string verbatim onto BOTH CampaignBidHistory.changedBy (the intent: field, old → new)
+   * and AdMutation.actor (the delivery: PENDING/IN_FLIGHT/APPLIED/FAILED + lastError).
+   * So the timeline is a join of two already-populated tables on one key.
+   *
+   * The join between them is (entityId, field, previousValue, intendedValue) — both rows are
+   * written from the same fieldChanges array on the same write path, so the pair matches
+   * exactly. A repeated change (bias 100→115 happens often) yields several candidates, so we
+   * take the one CLOSEST IN TIME to the history row rather than the newest, which would
+   * otherwise stamp last night's failure onto this morning's successful write.
+   */
+  fastify.get('/advertising/rank-schedule-groups/:id/activity', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const q = request.query as { limit?: string; campaignId?: string }
+    const limit = Math.max(1, Math.min(200, Number(q.limit ?? 60) || 60))
+    reply.header('Cache-Control', 'private, max-age=5')
+
+    const members = await prisma.adSchedule.findMany({ where: { groupId: id }, select: { id: true, campaignId: true } })
+    if (!members.length) return { items: [], count: 0, members: [] }
+    const scoped = q.campaignId ? members.filter((m) => m.campaignId === q.campaignId) : members
+    if (!scoped.length) return { items: [], count: 0, members: [] }
+    const actors = scoped.map((m) => `automation:rank-defend-${m.id}`)
+
+    const camps = await prisma.campaign.findMany({ where: { id: { in: members.map((m) => m.campaignId) } }, select: { id: true, name: true } })
+    const campName = new Map(camps.map((c) => [c.id, c.name]))
+
+    const history = await prisma.campaignBidHistory.findMany({
+      where: { changedBy: { in: actors } },
+      orderBy: { changedAt: 'desc' },
+      take: limit,
+      select: { id: true, entityType: true, entityId: true, campaignId: true, field: true, oldValue: true, newValue: true, changedAt: true, changedBy: true, reason: true },
+    })
+    if (!history.length) return { items: [], count: 0, members: members.map((m) => ({ campaignId: m.campaignId, name: campName.get(m.campaignId) ?? m.campaignId })) }
+
+    // Delivery states for the same actors, bounded to the span the history rows cover.
+    const oldest = history[history.length - 1].changedAt
+    const mutations = await prisma.adMutation.findMany({
+      where: { actor: { in: actors }, createdAt: { gte: new Date(oldest.getTime() - 5 * 60_000) } },
+      select: { entityId: true, field: true, previousValue: true, intendedValue: true, state: true, attempts: true, lastError: true, createdAt: true },
+    })
+    const mkey = (entityId: string, field: string, prev: string | null, next: string | null) => `${entityId}|${field}|${prev ?? ''}|${next ?? ''}`
+    const byKey = new Map<string, typeof mutations>()
+    for (const m of mutations) { const k = mkey(m.entityId, m.field, m.previousValue, m.intendedValue); const arr = byKey.get(k) ?? []; arr.push(m); byKey.set(k, arr) }
+
+    /**
+     * HX.3 — delivery for the INLINE path.
+     *
+     * Placement writes never create an AdMutation row (they push to Amazon directly rather than
+     * through the queue), so the join above finds nothing for them and every placement change
+     * would render "no delivery record" — technically true, and misleading, because we DO know the
+     * outcome: HX.1 made AdvertisingActionLog.amazonResponseStatus truthful for exactly this path.
+     * Matched on (entityId, actor) nearest in time, the same rule the queued join uses.
+     */
+    const placementLogs = await prisma.advertisingActionLog.findMany({
+      where: { actionType: 'update_placement_bidding', userId: { in: actors }, createdAt: { gte: new Date(oldest.getTime() - 5 * 60_000) } },
+      select: { entityId: true, createdAt: true, amazonResponseStatus: true, payloadAfter: true },
+    })
+    const placementByEntity = new Map<string, typeof placementLogs>()
+    for (const p of placementLogs) { const arr = placementByEntity.get(p.entityId) ?? []; arr.push(p); placementByEntity.set(p.entityId, arr) }
+    const PLACEMENT_FIELDS = new Set(['PLACEMENT_TOP', 'PLACEMENT_REST_OF_SEARCH', 'PLACEMENT_PRODUCT_PAGE'])
+
+    const scheduleByActor = new Map(scoped.map((m) => [`automation:rank-defend-${m.id}`, m.campaignId]))
+    const items = history.map((h) => {
+      const cands = byKey.get(mkey(h.entityId, h.field, h.oldValue, h.newValue)) ?? []
+      let best: (typeof mutations)[number] | null = null
+      let bestGap = Number.POSITIVE_INFINITY
+      for (const c of cands) {
+        const gap = Math.abs(c.createdAt.getTime() - h.changedAt.getTime())
+        if (gap < bestGap) { bestGap = gap; best = c }
+      }
+      // HX.3 — a placement row has no AdMutation; take its outcome from the inline audit row.
+      let inline: { state: string; attempts: number; lastError: string | null } | null = null
+      if (!best && PLACEMENT_FIELDS.has(h.field)) {
+        let bp: (typeof placementLogs)[number] | null = null
+        let bpGap = Number.POSITIVE_INFINITY
+        for (const p of placementByEntity.get(h.entityId) ?? []) {
+          const gap = Math.abs(p.createdAt.getTime() - h.changedAt.getTime())
+          if (gap < bpGap) { bpGap = gap; bp = p }
+        }
+        if (bp) {
+          const err = (bp.payloadAfter as { error?: string } | null)?.error ?? null
+          inline = { state: bp.amazonResponseStatus === 'FAILED' ? 'FAILED' : 'APPLIED', attempts: 1, lastError: err }
+        }
+      }
+      const cid = h.campaignId ?? scheduleByActor.get(h.changedBy) ?? null
+      return {
+        id: h.id,
+        at: h.changedAt,
+        campaignId: cid,
+        campaignName: cid ? (campName.get(cid) ?? cid) : null,
+        entityType: h.entityType,
+        entityId: h.entityId,
+        field: h.field,
+        oldValue: h.oldValue,
+        newValue: h.newValue,
+        reason: h.reason,
+        // null = we hold the intent but found no matching mutation row and no inline audit row
+        // (pre-AX-ZD writes, or a change that never reached the outbound path). Shown as
+        // "no delivery record", never as success.
+        delivery: best ? { state: best.state, attempts: best.attempts, lastError: best.lastError } : inline,
+      }
+    })
+    return { items, count: items.length, members: members.map((m) => ({ campaignId: m.campaignId, name: campName.get(m.campaignId) ?? m.campaignId })) }
+  })
+
+  /**
+   * HX.8 — plan-edit history: what the OPERATOR changed, as opposed to what the engine did.
+   *
+   * Deliberately separate from `/activity` (which reports bid + placement moves). Mixing them would
+   * bury three plan edits under a thousand automated bid changes, and they answer different
+   * questions: "why is this schedule behaving differently" vs "what did it do last night".
+   *
+   * Returns raw snapshots newest-first; the DIFF is computed client-side against the builder's own
+   * `rank-grid-model`, so "which hours moved" is derived by exactly the same code that paints the
+   * grid. A second server-side implementation would be free to drift from what the operator sees.
+   */
+  fastify.get('/advertising/rank-schedule-groups/:id/versions', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const q = request.query as { limit?: string }
+    const take = Math.max(1, Math.min(100, Number(q.limit ?? 30) || 30))
+    reply.header('Cache-Control', 'private, max-age=5')
+    const group = await prisma.rankScheduleGroup.findUnique({ where: { id }, select: { id: true } })
+    if (!group) { reply.status(404); return { error: 'not found' } }
+    const items = await prisma.rankScheduleVersion.findMany({
+      where: { groupId: id },
+      orderBy: { createdAt: 'desc' },
+      take,
+      select: { id: true, name: true, windows: true, defaultTargetKey: true, campaignCount: true, enabled: true, changedBy: true, createdAt: true },
+    })
+    return { items, count: items.length }
+  })
+
   fastify.post('/advertising/rank-schedule-groups', async (request, reply) => {
     const b = request.body as Record<string, unknown>
     if (!b?.name || !String(b.name).trim()) { reply.status(400); return { error: 'name is required' } }
@@ -7437,6 +7847,21 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const data: Record<string, unknown> = {}
       for (const k of ['name', 'windows', 'defaultTargetKey', 'targetOverrides', 'enabled', 'marketplace', 'portfolioId', 'timezone']) if (b[k] !== undefined) data[k] = b[k]
       if (!Object.keys(data).length) { reply.status(400); return { error: 'nothing to update' } }
+      // RDX/B2 — a rename must not manufacture the duplicate DPS.1 spent a phase eliminating.
+      // saveRankScheduleGroup adopts an existing (name, portfolioId) group rather than minting a
+      // rival, but this lightweight PATCH bypasses that path entirely — so without this guard,
+      // renaming "IT AIRMESH 2" to "IT AIRMESH" would recreate the exact collision by hand.
+      if (typeof data.name === 'string') {
+        const nm = String(data.name).trim()
+        if (!nm) { reply.status(400); return { error: 'name is required' } }
+        data.name = nm
+        const self = await prisma.rankScheduleGroup.findUnique({ where: { id }, select: { portfolioId: true } })
+        const twin = await prisma.rankScheduleGroup.findFirst({
+          where: { name: nm, portfolioId: self?.portfolioId ?? null, NOT: { id } },
+          select: { id: true },
+        })
+        if (twin) { reply.status(409); return { error: `Another schedule in this scope is already called "${nm}".` } }
+      }
       try {
         const g = await prisma.rankScheduleGroup.update({ where: { id }, data })
         if (b.enabled !== undefined) await prisma.adSchedule.updateMany({ where: { groupId: id }, data: { enabled: !!b.enabled } })

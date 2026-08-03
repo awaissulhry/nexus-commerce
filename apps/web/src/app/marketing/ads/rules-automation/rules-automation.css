@@ -762,3 +762,144 @@
 .h10-dp-panelrange { margin: 4px 0 0; font-size: 11.5px; color: #8a93a1; }
 .h10-dp-panelrange b { color: #2b3440; font-weight: 600; }
 .h10-dp-panelrange .warn { color: #b45309; font-weight: 600; }
+
+/* ── RDX/A3 — health, as distinct from status ──────────────────────────────────────────────
+   Status has always meant `enabled` and nothing more. These tones carry the second signal:
+   whether the schedule is actually working. `ok`/`warn` already exist in ads.css; a failing
+   write needs a tone that cannot be mistaken for a warning, and an idle schedule needs one
+   that recedes rather than competing with the rows that need attention. */
+.h10-pill.bad { color: #a3211a; background: #fbdedb; }
+.h10-pill.muted { color: #6b7480; background: #eef1f5; }
+/* The active rank differs from the baseline only while a window is open — that is the moment
+   the operator most needs to notice, so the chip gains weight instead of staying uniform. */
+.h10-rg-chip.live { border-color: #1f6fde; box-shadow: 0 0 0 1px rgba(31,111,222,.18); font-weight: 700; }
+.h10-rg-none { color: #b0b7c1; }
+.h10-rg-warn { color: #b45309; font-weight: 600; }
+
+/* ── RDX/A4 — schedule activity drawer ─────────────────────────────────────────────────────
+   Reuses the h10-hist-* shell from the rule execution-history drawer so the two read as one
+   object, but wider: these rows carry intent AND delivery, which the 460px shell cannot hold. */
+.h10-hist.wide { width: 620px; }
+.h10-act-bar { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid #eef1f5; flex-wrap: wrap; }
+.h10-act-alert { font-size: 12px; font-weight: 700; color: #a3211a; background: #fbdedb; border-radius: 6px; padding: 4px 9px; }
+/* Hour buckets — the grain the schedule itself thinks in ("what did it do at 22:00"). */
+.h10-act-hr { position: sticky; top: 0; z-index: 1; background: #f8fafc; border-bottom: 1px solid #eef1f5; padding: 6px 20px; font-size: 11px; font-weight: 700; color: #6b7480; text-transform: uppercase; letter-spacing: .3px; }
+.h10-act-r { display: grid; grid-template-columns: 108px 1fr auto auto; align-items: center; gap: 10px; padding: 10px 20px; border-bottom: 1px solid #f1f4f8; font-size: 12.5px; }
+.h10-act-r .fld { font-weight: 700; color: #2b3440; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-act-r .chg { min-width: 0; color: #3a4452; }
+.h10-act-r .chg b { font-weight: 700; color: #1c2530; }
+.h10-act-r .chg i, .h10-act-r .chg em { display: block; font-style: normal; font-size: 11.5px; color: #8a93a1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Delivery is a separate column from intent on purpose: a change we asked for is not a change
+   Amazon took, and the list used to imply it was. */
+.h10-act-r .dlv { font-size: 11px; font-weight: 700; border-radius: 5px; padding: 3px 8px; white-space: nowrap; }
+.h10-act-r .dlv.ok { color: #0a4ba8; background: #d2e6fc; }
+.h10-act-r .dlv.bad { color: #a3211a; background: #fbdedb; }
+.h10-act-r .dlv.dry { color: #9a6700; background: #fdf3d3; }
+.h10-act-r .dlv.muted, .h10-act-r .dlv.none { color: #8a93a1; background: #eef1f5; }
+.h10-act-r .dlv .att { margin-left: 4px; opacity: .75; font-weight: 600; }
+.h10-act-r .when { color: #8a93a1; white-space: nowrap; }
+
+/* RDX/B1 — market chips. A group can span more than one marketplace, so this renders a set rather
+   than a single value; the codes are short enough that two or three sit inline without wrapping. */
+.h10-rg-mkts { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.h10-rg-mkts .mk { font-size: 11px; font-weight: 700; letter-spacing: .3px; color: #3a4452; background: #eef1f5; border-radius: 4px; padding: 2px 6px; }
+/* The narrowed-to-empty explanation under the headline. Pulled up against the 14px flex gap so it
+   reads as one block with the line above rather than a second, unrelated message. */
+.h10-rr-empty .sub { margin-top: -8px; max-width: 420px; text-align: center; font-size: 12.5px; color: #8a93a1; line-height: 1.5; }
+
+/* ── RDX/B2 — row actions ──────────────────────────────────────────────────────────────────
+   The trigger lives in the sticky first column so it can't be hidden by column customisation
+   (a destructive action you can accidentally hide is worse than no action). Visible on hover
+   and on keyboard focus, matching the Manage/Activity buttons beside it. */
+.h10-rowmenu-btn { opacity: 0; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #d8dde4; background: #fff; color: #6b7480; border-radius: 7px; padding: 3px 5px; cursor: pointer; transition: opacity .1s; flex-shrink: 0; }
+.h10-am-grid tbody tr:hover .h10-rowmenu-btn, .h10-rowmenu-btn:focus-visible, .h10-rowmenu-btn[aria-expanded='true'] { opacity: 1; }
+.h10-rowmenu-btn:hover { background: #f1f4f8; color: #1c2530; border-color: #1f6fde; }
+/* Fixed, not absolute: the grid card clips overflow, which would cut the last item off. */
+/* Portalled to document.body, so these z-indexes finally compete at the top level instead of
+   inside the sticky name column's stacking context. Above the app sidebar and the console's own
+   fixed layers (the date picker and tooltip sit at 1000). */
+.h10-rowmenu-back { position: fixed; inset: 0; z-index: 1200; }
+.h10-rowmenu { position: fixed; z-index: 1201; width: 210px; background: #fff; border: 1px solid #e6e9ee; border-radius: 9px; box-shadow: 0 12px 32px rgba(20,28,38,.18); padding: 5px; display: flex; flex-direction: column; }
+.h10-rowmenu button { display: flex; align-items: center; gap: 9px; width: 100%; border: 0; background: none; text-align: left; font-size: 12.5px; font-weight: 600; color: #2b3440; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+.h10-rowmenu button:hover { background: #f1f4f8; }
+.h10-rowmenu button.danger { color: #a3211a; }
+.h10-rowmenu button.danger:hover { background: #fbdedb; }
+/* Dialog feedback lines, reusing the shared h10-ntm modal chrome. */
+.h10-ntm-err { margin-top: 10px; font-size: 12.5px; font-weight: 600; color: #a3211a; }
+.h10-ntm-ok { font-size: 12.5px; color: #3a4452; line-height: 1.5; }
+
+/* ── RDX/B3 — the week-shape strip ─────────────────────────────────────────────────────────
+   7 rows (Mon→Sun, matching the big heatmap above) × 24 hour cells. Sized so a whole week fits
+   the height of one grid row: 3px cells with 1px gutters = 95×27px. Untouched hours are drawn
+   at low opacity by the component, so what stands out is where the schedule LEAVES its baseline. */
+.h10-wkcell { display: inline-flex; align-items: center; gap: 9px; }
+.h10-wkcell .n { font-size: 11.5px; color: #8a93a1; white-space: nowrap; }
+.h10-wkshape { display: inline-flex; flex-direction: column; gap: 1px; cursor: default; }
+.h10-wkshape .row { display: flex; align-items: center; gap: 1px; }
+.h10-wkshape .dl { width: 7px; margin-right: 2px; font-size: 6.5px; line-height: 1; font-weight: 700; color: #b0b7c1; text-align: center; user-select: none; }
+.h10-wkshape .c { width: 3px; height: 3px; border-radius: 1px; }
+/* Every 6th hour gets a hairline so 06:00/12:00/18:00 are findable without an axis row. */
+.h10-wkshape .c.tick { box-shadow: -1px 0 0 0 #ffffff; }
+
+/* ── RDX/C1 — coverage strip ───────────────────────────────────────────────────────────────
+   Collapsed to one line by default: on a healthy account this should be boring, and a large
+   permanent panel for "nothing to do" would push the schedules it relates to off the fold. */
+.h10-cov { background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+.h10-cov-hd { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; padding: 11px 16px; cursor: pointer; text-align: left; font-size: 12.5px; color: #3a4452; }
+.h10-cov.ok .h10-cov-hd { cursor: default; }
+.h10-cov-hd .ic { color: #0a7d48; flex-shrink: 0; }
+/* An amber dot, not red: uncovered campaigns are a gap to review, not a failure. */
+.h10-cov-hd .dot { width: 8px; height: 8px; border-radius: 50%; background: #e0a52e; flex-shrink: 0; }
+.h10-cov-hd .ttl b { color: #1c2530; font-weight: 700; }
+.h10-cov-hd .ttl .sub { color: #8a93a1; }
+.h10-cov-hd .gap { color: #9a6700; background: #fdf3d3; border-radius: 6px; padding: 3px 9px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.h10-cov-hd .gap b { font-weight: 800; }
+.h10-cov-hd .grow { flex: 1; }
+.h10-cov-hd .bar { width: 120px; height: 6px; border-radius: 3px; background: #eef1f5; overflow: hidden; flex-shrink: 0; }
+.h10-cov-hd .bar span { display: block; height: 100%; background: #1f6fde; border-radius: 3px; }
+.h10-cov.ok .h10-cov-hd .bar span { background: #0a7d48; }
+.h10-cov-hd .pct { font-weight: 700; color: #1c2530; min-width: 34px; text-align: right; }
+.h10-cov-hd .chev { color: #8a93a1; transition: transform .12s; }
+.h10-cov-hd .chev.on { transform: rotate(180deg); }
+.h10-cov-b { border-top: 1px solid #eef1f5; padding: 12px 16px 14px; }
+.h10-cov-note { font-size: 12px; color: #8a93a1; line-height: 1.5; margin-bottom: 10px; }
+.h10-cov-note.muted { margin: 8px 0 0; font-style: italic; }
+/* Capped so a long uncovered tail scrolls inside the panel instead of burying the schedule list. */
+.h10-cov-list { max-height: 260px; overflow-y: auto; border: 1px solid #eef1f5; border-radius: 8px; }
+.h10-cov-r { display: flex; align-items: center; gap: 10px; padding: 7px 11px; border-bottom: 1px solid #f4f6f9; font-size: 12.5px; cursor: pointer; }
+.h10-cov-r:last-child { border-bottom: 0; }
+.h10-cov-r:hover { background: #f8fafc; }
+.h10-cov-r.on { background: #eef4fd; }
+.h10-cov-r .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #2b3440; font-weight: 600; }
+.h10-cov-r .mk { font-size: 11px; font-weight: 700; color: #3a4452; background: #eef1f5; border-radius: 4px; padding: 2px 6px; }
+.h10-cov-r .sp { font-variant-numeric: tabular-nums; font-weight: 700; color: #1c2530; min-width: 70px; text-align: right; }
+.h10-cov-act { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.h10-cov-msg { font-size: 12px; color: #3a4452; line-height: 1.5; flex: 1; min-width: 240px; }
+
+/* ── HX.8 — plan-edit history (change list) ────────────────────────────────────────────────
+   A timeline, not a table: the question is "what moved and when", which reads as a sequence.
+   Used in two places — the Activity drawer's Changes tab and the builder — so it sizes from its
+   container rather than assuming either. */
+.h10-act-tabs { display: flex; gap: 2px; padding: 10px 20px 0; border-bottom: 1px solid #eef1f5; }
+.h10-act-tabs button { border: 0; background: none; font-size: 12.5px; font-weight: 700; color: #6b7480; padding: 8px 12px; border-bottom: 2px solid transparent; cursor: pointer; }
+.h10-act-tabs button:hover { color: #1c2530; }
+.h10-act-tabs button.on { color: #1f6fde; border-bottom-color: #1f6fde; }
+.h10-ver { padding: 14px 20px 18px; }
+.h10-ver.compact { padding: 0; }
+.h10-ver-r { display: grid; grid-template-columns: 16px 1fr; gap: 12px; }
+/* The rail: a dot per version joined by a line, so the sequence is legible without dates. */
+.h10-ver-r .mark { display: flex; flex-direction: column; align-items: center; padding-top: 5px; }
+.h10-ver-r .mark .dot { width: 9px; height: 9px; border-radius: 50%; background: #c9d1db; flex-shrink: 0; }
+.h10-ver-r.current .mark .dot { background: #1f6fde; box-shadow: 0 0 0 3px rgba(31,111,222,.16); }
+.h10-ver-r .mark .line { flex: 1; width: 2px; background: #eef1f5; margin: 4px 0 0; }
+.h10-ver-r .body { padding-bottom: 18px; min-width: 0; }
+.h10-ver-r .hd { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.h10-ver-r .hd b { color: #1c2530; font-weight: 700; }
+.h10-ver-r .hd .by { color: #3a4452; font-weight: 600; }
+.h10-ver-r .hd .at { color: #b0b7c1; font-size: 11.5px; margin-left: auto; white-space: nowrap; }
+.h10-ver-r .diff { margin: 6px 0 8px; padding-left: 16px; font-size: 12.5px; color: #3a4452; line-height: 1.6; }
+.h10-ver-r .diff li { list-style: disc; }
+/* HX.5 — the quiet way through to the account-wide change log. Understated on purpose: this is a
+   secondary path out of a drawer, not a call to action. */
+.h10-act-all { margin-left: auto; font-size: 12px; font-weight: 600; color: #1f6fde; text-decoration: none; white-space: nowrap; }
+.h10-act-all:hover { text-decoration: underline; }

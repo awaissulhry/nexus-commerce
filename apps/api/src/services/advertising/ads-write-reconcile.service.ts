@@ -178,7 +178,9 @@ export async function reconcileFailedAmazonWrites(
       pushSample('CAMPAIGN', c.id, adjustments.map((a) => `${a.placement}:${a.percentage}`).join(','))
       if (dryRun) continue
       try {
-        const r = await updatePlacementBidding({ campaignId: c.id, adjustments })
+        // HX.1 — attributed, so a re-push is distinguishable in the change log from the original
+        // write that failed. Without this the sweep's writes looked like they came from nowhere.
+        const r = await updatePlacementBidding({ campaignId: c.id, adjustments, actor: 'automation:ads-write-reconcile', reason: 're-push after a failed live write' })
         if (r.ok) campaigns++
       } catch (e) {
         logger.warn('[ads-write-reconcile] placement re-push failed', { campaignId: c.id, error: (e as Error).message })

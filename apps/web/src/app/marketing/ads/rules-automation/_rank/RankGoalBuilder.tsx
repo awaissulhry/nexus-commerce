@@ -18,6 +18,7 @@ import { ScheduleBuilder } from '../_schedule/ScheduleBuilder'
 import { CampaignSection, toCampaign, type SchedCampaign } from '../_schedule/CampaignSection'
 import { RankPlanBody, type RankPlanHandle, type RankPlanStatus } from './RankPlanBody'
 import { detectScheduleConflicts, type MembershipMap } from './scheduleConflicts'
+import { ScheduleVersionsSection } from '../dayparting/ScheduleVersions'
 import { getBackendUrl } from '@/lib/backend-url'
 
 // Adtomic-style atom mark — same glyph the other builders use in the top bar.
@@ -47,6 +48,9 @@ const STEPS = [
   { id: 'plan', label: 'Rank goal & schedule' },
   { id: 'control', label: 'Control' },
 ]
+// HX.8 — the history step only exists once the schedule does: a schedule being created for the
+// first time has nothing to show, and an empty step in the nav is worse than no step.
+const HISTORY_STEP = { id: 'history', label: 'Change history' }
 
 export function RankGoalBuilder() {
   const router = useRouter()
@@ -165,6 +169,29 @@ export function RankGoalBuilder() {
     return () => { alive = false }
   }, [groupId, scheduleId])
 
+  // HX.8 — rank-target swatches for the change-history week shapes. Fetched here in the SHELL, not
+  // read out of RankPlanBody: that section is off-limits, and it owns its own copy for the editor.
+  const [tmeta, setTmeta] = useState<Record<string, { name: string; color: string | null }>>({})
+  useEffect(() => {
+    let alive = true
+    void fetch(`${getBackendUrl()}/api/advertising/rank-targets`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!alive) return
+        const m: Record<string, { name: string; color: string | null }> = {}
+        for (const t of (Array.isArray(j?.items) ? j.items : []) as Array<{ key?: string; name?: string; color?: string | null }>) {
+          if (t.key) m[t.key] = { name: String(t.name ?? t.key), color: t.color ?? null }
+        }
+        setTmeta(m)
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+  const palette = useMemo(() => ({
+    color: (k: string) => tmeta[k]?.color ?? null,
+    name: (k: string) => tmeta[k]?.name ?? k,
+  }), [tmeta])
+
   // RGD.7 — the builder owns ONE action + a Manual/Automate Control section, matching every other
   // rule type. The rank plan body exposes save(enabled) via a ref + reports its status up.
   const [control, setControl] = useState<'manual' | 'automate'>('manual')
@@ -210,7 +237,7 @@ export function RankGoalBuilder() {
 
       <div className="h10-rb-body" ref={scrollRef}>
         <nav className="h10-rb-nav" role="tablist" aria-label="Rank schedule steps">
-          {STEPS.map((s) => (
+          {(groupId ? [...STEPS, HISTORY_STEP] : STEPS).map((s) => (
             <button key={s.id} type="button" role="tab" aria-selected={active === s.id} className={`h10-rb-step ${active === s.id ? 'on' : ''}`} onClick={() => goto(s.id)}>{s.label}</button>
           ))}
         </nav>
@@ -278,6 +305,10 @@ export function RankGoalBuilder() {
               </div>
               <p className="h10-rb-hint-note">Removing a campaign here, or deleting the schedule, stops the engine holding that rank — current Amazon bids stay as last set (nothing is reverted).</p>
             </section>
+
+            {/* HX.8 — what the OPERATOR changed, right where the plan is edited. Distinct from the
+                list page's Activity drawer, which shows what the ENGINE did to Amazon. */}
+            {groupId && <ScheduleVersionsSection groupId={groupId} palette={palette} />}
 
             <div className="h10-rb-foot">
               <button type="button" className="h10-rb-btn ghost" onClick={close}>Cancel</button>

@@ -95,6 +95,21 @@ export function applyTargetOverrides(spec: RankTargetSpec, ...maps: TargetOverri
 export const isGoalMode = (windows: unknown, defaultTargetKey: string | null): boolean =>
   !!defaultTargetKey || (Array.isArray(windows) && windows.some((w) => w && typeof w === 'object' && (w as { targetKey?: string }).targetKey))
 
+/**
+ * RDX/A1 — collapse per-schedule receipts into one UPDATE per distinct resolved target key.
+ * Pure + exported so the stamping can be tested without a database: mis-grouping here would
+ * silently write the WRONG target key onto a schedule, which is worse than writing none.
+ */
+export function groupReceipts(receipts: Map<string, string | null>): Map<string | null, string[]> {
+  const byKey = new Map<string | null, string[]>()
+  for (const [id, key] of receipts) {
+    const arr = byKey.get(key) ?? []
+    arr.push(id)
+    byKey.set(key, arr)
+  }
+  return byKey
+}
+
 export interface RankDefendDecision {
   campaignId: string; campaignName: string; targetKey: string; action: string; reason: string
   currentPct: number; nextPct: number; achievedISPct: number | null; achievedAcosPct: number | null; lossDetected: boolean; applied: boolean
@@ -235,13 +250,16 @@ async function decideAndMaybeApply(
     }
     const adjustments = buildBlendedAdjustments(cdb.placementBidding ?? [], driven)
     const changed = !samePlacements(cdb.placementBidding ?? [], adjustments)
+    // HX.1 — computed BEFORE the write so the audit row carries the same explanation the console
+    // shows in the decision preview. A history entry without a reason is just a number moving.
+    const blendReason = `blend: ${laneDecisions.map((l) => `${shortPlace(l.placement)} ${l.fromPct}→${l.toPct}`).join(', ')}`
     if (ctx.write && changed) {
-      try { const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js'); await updatePlacementBidding({ campaignId: camp.id, adjustments }); applied++ } catch (e) { logger.warn('[rank-defend] blended apply failed', { campaignId: camp.id, error: (e as Error).message }) }
+      try { const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js'); await updatePlacementBidding({ campaignId: camp.id, adjustments, actor: ctx.actor, reason: blendReason }); applied++ } catch (e) { logger.warn('[rank-defend] blended apply failed', { campaignId: camp.id, error: (e as Error).message }) }
     }
     const baseApplied = await applyBaseBidDirective(camp, spec, ctx)
     applied += baseApplied
     const head = laneDecisions.find((l) => l.placement === 'PLACEMENT_TOP') ?? laneDecisions[0]
-    const reason = `blend: ${laneDecisions.map((l) => `${shortPlace(l.placement)} ${l.fromPct}→${l.toPct}`).join(', ')}${baseBidNote(spec)}`
+    const reason = `${blendReason}${baseBidNote(spec)}`
     return { decision: { ...base, action: head?.action ?? 'hold', reason, nextPct: head?.toPct ?? currentPct, lossDetected: loss, applied: (ctx.write && changed) || baseApplied > 0, lanes: laneDecisions, baseBid: spec.bidMode && spec.bidMode !== 'hold' ? { mode: spec.bidMode, valueCents: spec.bidValueCents } : null }, applied }
   }
 
@@ -263,7 +281,9 @@ async function decideAndMaybeApply(
   if (otherCur > 0) reason = `${reason} · dropping ${otherSearch === 'PLACEMENT_TOP' ? 'Top' : 'Rest'} ${otherCur}→0`
   const willApply = ctx.write && (targetChanges || otherCur > 0)
   if (willApply) {
-    try { await setSearchPlacement(camp.id, spec.placement, targetChanges ? nextPct : currentPct); applied++ } catch (e) { logger.warn('[rank-defend] apply failed', { campaignId: camp.id, error: (e as Error).message }) }
+    // HX.1 — attribute the write. Without the actor this row lands with userId:null and cannot be
+    // traced back to the schedule or plan that made it.
+    try { await setSearchPlacement(camp.id, spec.placement, targetChanges ? nextPct : currentPct, { actor: ctx.actor, reason }); applied++ } catch (e) { logger.warn('[rank-defend] apply failed', { campaignId: camp.id, error: (e as Error).message }) }
   }
   const baseApplied = await applyBaseBidDirective(camp, spec, ctx)
   applied += baseApplied
@@ -487,15 +507,41 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
   }
 
   // ── Schedules (skip plan-governed campaigns). Existing behaviour preserved. ──
+  //
+  // RDX/A1 — receipts. Every schedule this loop actually LOOKED AT records when it was
+  // evaluated and which target it resolved to. Before this, only ProductRankPlan got a
+  // summary (line ~485), so every group-materialised AdSchedule row read
+  // `lastApplied: null` forever and the console could not answer "when did this last
+  // run / what is it holding right now".
+  //
+  // A campaign skipped because a family plan governs it is deliberately NOT stamped:
+  // that schedule genuinely did not run, and the console reports it as governed
+  // elsewhere rather than pretending it ticked.
+  const receipts = new Map<string, string | null>() // AdSchedule.id → resolved target key
   for (const s of schedules) {
     if (governed.has(s.campaignId)) continue
     const camp = campById.get(s.campaignId); if (!camp) continue
     const { day, hour } = nowInTz(s.timezone || 'Europe/Rome', 0, clockNow)
     const key = resolveActiveTargetKey(s.windows as ScheduleWindow[], s.defaultTargetKey, day, hour)
+    // Stamped even when the schedule resolves to nothing — "we looked, nothing was due"
+    // is what distinguishes an idle schedule from a cron that has stopped running.
+    receipts.set(s.id, key)
     if (!key) continue
-    const target = targetByKey.get(key); if (!target) continue
+    // A resolved key with no RankTarget behind it is a dangling reference (the target was
+    // deleted after the schedule was authored). Nothing is held, so record nothing held.
+    const target = targetByKey.get(key); if (!target) { receipts.set(s.id, null); continue }
     const { decision, applied: a } = await decideAndMaybeApply(camp, key, applyTargetOverrides(toSpec(target), s.targetOverrides as TargetOverrideMap), null, { write: !dryRun, actor: `automation:rank-defend-${s.id}`, sigByCampaign, lossByCampaign, sqpByCampaign })
     decisions.push(decision); applied += a
+  }
+  // Grouped by resolved key so the 33 live schedules cost ~2 statements rather than 33.
+  // Best-effort, exactly like the plan summary above — a receipt must never fail a tick.
+  if (!dryRun && receipts.size > 0) {
+    const byKey = groupReceipts(receipts)
+    const stampedAt = clockNow ?? new Date()
+    for (const [key, ids] of byKey) {
+      try { await prisma.adSchedule.updateMany({ where: { id: { in: ids } }, data: { lastEvaluatedAt: stampedAt, lastApplied: key } }) }
+      catch (e) { logger.warn('[rank-defend] receipt write failed', { count: ids.length, error: (e as Error).message }) }
+    }
   }
 
   return { evaluated: decisions.length, applied, decisions, plans: planSummaries }
