@@ -21,6 +21,7 @@ import { H10Select } from '../../campaigns/FilterDropdown'
 import { DaypartingHeatmap, type HeatCell } from '../_schedule/DaypartingHeatmap'
 import { CHART_METRICS } from '../_schedule/scheduleConfig'
 import { metricVal, type RawCell } from '../_schedule/heatMetrics'
+import { selectionToWindows, selectionHourCount } from './selectionToWindows'
 import { getBackendUrl } from '@/lib/backend-url'
 
 /**
@@ -51,6 +52,53 @@ export function HourlyPerformance({ scopes, market = 'all' }: { scopes: ScopeOpt
   // rather than echoing what was asked for — Marketing Stream is not backfilled, so a long window
   // over a young campaign is mostly empty and the operator must be able to see that.
   const [meta, setMeta] = useState<{ from: string | null; to: string | null; weeks: number; daysWithData: number; restatedCells: number } | null>(null)
+
+  // RDX/D1 — paint hours off the evidence, save them as a schedule template.
+  const [sel, setSel] = useState<Set<string>>(new Set())
+  const [selTarget, setSelTarget] = useState('own-top')
+  const [tplName, setTplName] = useState('')
+  const [savingTpl, setSavingTpl] = useState(false)
+  const [tplMsg, setTplMsg] = useState('')
+  const [targets, setTargets] = useState<Array<{ key: string; name: string }>>([])
+  // Selection only makes sense over a grid that is actually showing data.
+  const selectable = hasData
+  const selWindows = useMemo(() => selectionToWindows(sel, selTarget), [sel, selTarget])
+  const selHours = useMemo(() => selectionHourCount(selWindows), [selWindows])
+
+  useEffect(() => {
+    let alive = true
+    void fetch(`${getBackendUrl()}/api/advertising/rank-targets`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!alive) return
+        const items = (Array.isArray(j?.items) ? j.items : []) as Array<{ key?: string; name?: string }>
+        setTargets(items.filter((t) => t.key).map((t) => ({ key: String(t.key), name: String(t.name ?? t.key) })))
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+  const targetOpts = useMemo(
+    () => (targets.length ? targets : [{ key: 'own-top', name: 'Own Top of Search' }]).map((t) => ({ value: t.key, label: t.name })),
+    [targets],
+  )
+
+  const saveTemplate = async () => {
+    if (!tplName.trim() || !selWindows.length || savingTpl) return
+    setSavingTpl(true); setTplMsg('')
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/rank-templates`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        // Windows only — no baseline. A selection says "push in these hours"; what to hold the
+        // REST of the week is a separate decision the operator makes in the builder.
+        body: JSON.stringify({ name: tplName.trim(), windows: selWindows, defaultTargetKey: null }),
+      })
+      const j = await r.json().catch(() => null)
+      if (!r.ok || !j?.id) { setTplMsg('Could not save that template — please retry.'); return }
+      setTplMsg(`Saved “${tplName.trim()}” — ${selWindows.length} window${selWindows.length === 1 ? '' : 's'}, ${selHours} hour${selHours === 1 ? '' : 's'}. Open a schedule and use Templates… to apply it.`)
+      setTplName(''); setSel(new Set())
+    } catch { setTplMsg('Could not save that template — please retry.') }
+    finally { setSavingTpl(false) }
+  }
 
   useEffect(() => {
     let alive = true
@@ -120,13 +168,43 @@ export function HourlyPerformance({ scopes, market = 'all' }: { scopes: ScopeOpt
           <H10Select width={150} options={WINDOWS} value={weeks} onChange={setWeeks} ariaLabel="Heatmap period" />
         </div>
       </div>
+      {/* RDX/D1 — paint the hours you just read, and hand them to the builder as a template.
+          Deliberately NOT a direct "create schedule": the builder's plan section is ringfenced, and
+          creating a draft group per selection would resurrect the orphan-group problem DPS.1/2
+          fixed. A template is the seam that already exists on both ends — the builder's Templates…
+          modal loads windows + baseline with no change to it whatsoever. */}
+      {selectable && selWindows.length > 0 && (
+        <div className="h10-dp-selbar">
+          <span className="cnt">
+            <b>{selHours}</b> hour{selHours === 1 ? '' : 's'} selected
+            <em> · {selWindows.length} window{selWindows.length === 1 ? '' : 's'}</em>
+          </span>
+          <span className="grow" />
+          <span className="lbl">Hold</span>
+          <H10Select width={168} options={targetOpts} value={selTarget} onChange={setSelTarget} ariaLabel="Rank target for the selection" />
+          <input
+            className="nm"
+            value={tplName}
+            onChange={(e) => setTplName(e.target.value)}
+            placeholder="Template name…"
+            aria-label="Template name"
+          />
+          <button type="button" className="h10-am-btn primary sm" disabled={!tplName.trim() || savingTpl} onClick={() => void saveTemplate()}>
+            {savingTpl ? 'Saving…' : 'Save as template'}
+          </button>
+          {/* Clear resets the draft entirely — leaving a half-typed name behind produced a
+              concatenated nonsense name on the next save. */}
+          <button type="button" className="h10-am-btn sm" onClick={() => { setSel(new Set()); setTplMsg(''); setTplName('') }}>Clear</button>
+        </div>
+      )}
+      {tplMsg && <p className="h10-dp-selmsg">{tplMsg}</p>}
       {!loading && !hasData ? (
         <div className="h10-dp-panelempty">
           No hourly data for this selection yet. Amazon Marketing Stream fills forward from the day it
           was switched on — it is not backfilled — so a newly-added campaign takes a while to appear.
         </div>
       ) : (
-        <DaypartingHeatmap cells={cells} unit={metricVal(metric).unit} loading={loading} />
+        <DaypartingHeatmap cells={cells} unit={metricVal(metric).unit} loading={loading} selectable={selectable} selected={sel} onSelectedChange={setSel} />
       )}
     </div>
   )

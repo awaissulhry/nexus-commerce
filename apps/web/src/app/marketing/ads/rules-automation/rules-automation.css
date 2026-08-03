@@ -948,3 +948,7 @@
 .h10-arm-warn { display: flex; align-items: flex-start; gap: 8px; margin-top: 9px; padding: 9px 11px; font-size: 12.5px; line-height: 1.5; color: #7a5200; background: #fdf3d3; border-radius: 7px; }
 .h10-arm-warn svg { flex-shrink: 0; margin-top: 1px; }
 .h10-arm-ok { display: flex; align-items: center; gap: 7px; margin-top: 9px; font-size: 12.5px; color: #0a7d48; }
+/* The shared primary button's disabled state resolves to near-white text on a near-white fill in
+   this bar, so "Save as template" read as an empty box until a name was typed. Scoped here rather
+   than changed globally — every other console button keeps its existing look. */
+.h10-dp-selbar .h10-am-btn.primary:disabled { background: #eef2f8; color: #8a93a1; border-color: #d8dde4; }

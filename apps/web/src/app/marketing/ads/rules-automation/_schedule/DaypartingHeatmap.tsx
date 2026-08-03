@@ -11,11 +11,14 @@
  * Colours sampled from the recording legend at native res:
  *   >0 #f2f9fb · >1 #cae8fc · >2 #50a8fc · >3 #0562e1 · >4 #0048ab · >5 #002e65
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './dayparting.css'
 
 export interface HeatCell { dow: number; hour: number; value: number } // dow 0=Sun..6=Sat
 export type MetricUnit = 'eur' | 'pct' | 'int'
+
+// Stable identity so the `selected ?? EMPTY_SET` default never triggers a re-render loop.
+const EMPTY_SET: Set<string> = new Set()
 
 const SCALE = ['#f2f9fb', '#cae8fc', '#50a8fc', '#0562e1', '#0048ab', '#002e65']
 // MON-first display order mapped to Postgres DOW (0=Sun..6=Sat)
@@ -34,14 +37,41 @@ const fmt = (v: number, unit: MetricUnit): string =>
 // cell text stays legible on dark fills
 const cellText = (bucket: number) => (bucket >= 3 ? '#fff' : '#1c2530')
 
-export function DaypartingHeatmap({ cells, unit = 'eur', loading = false, thresholds }: {
+export function DaypartingHeatmap({ cells, unit = 'eur', loading = false, thresholds, selectable = false, selected, onSelectedChange }: {
   cells: HeatCell[]
   unit?: MetricUnit
   loading?: boolean
   /** 5 ascending bucket boundaries (b1..b5); value < b1 → palest, ≥ b5 → darkest. Defaults to data quantiles. */
   thresholds?: [number, number, number, number, number]
+  /**
+   * RDX/D1 — opt-in drag-select, so hours can be painted straight off the evidence.
+   * OFF by default: the schedule builder renders this same component read-only and must behave
+   * exactly as before. Selection keys are `${dow}:${hour}` (see selectionToWindows).
+   */
+  selectable?: boolean
+  selected?: Set<string>
+  onSelectedChange?: (next: Set<string>) => void
 }) {
   const [hover, setHover] = useState<{ dow: number; hour: number; x: number; y: number } | null>(null)
+  // Drag paints one mode for the whole gesture — decided by the first cell — so dragging across a
+  // mixed run doesn't flicker cells on and off under the cursor.
+  const [drag, setDrag] = useState<null | { mode: 'add' | 'remove' }>(null)
+  const sel = selected ?? EMPTY_SET
+  const paint = (dow: number, hour: number, mode: 'add' | 'remove') => {
+    if (!onSelectedChange) return
+    const key = `${dow}:${hour}`
+    if (mode === 'add' ? sel.has(key) : !sel.has(key)) return // no-op keeps React from re-rendering
+    const next = new Set(sel)
+    if (mode === 'add') next.add(key); else next.delete(key)
+    onSelectedChange(next)
+  }
+  // A drag can end anywhere, including outside the grid, so release is tracked on the window.
+  useEffect(() => {
+    if (!drag) return
+    const end = () => setDrag(null)
+    window.addEventListener('mouseup', end)
+    return () => window.removeEventListener('mouseup', end)
+  }, [drag])
   const lookup = useMemo(() => { const m = new Map<string, number>(); for (const c of cells) m.set(`${c.dow}:${c.hour}`, c.value); return m }, [cells])
 
   // bucket boundaries: explicit, else 5 evenly-spaced steps up to the max non-zero value
@@ -67,12 +97,22 @@ export function DaypartingHeatmap({ cells, unit = 'eur', loading = false, thresh
             {Array.from({ length: 24 }, (_, h) => {
               const v = lookup.get(`${r.dow}:${h}`) ?? 0
               const b = bucketOf(v)
+              const isSel = selectable && sel.has(`${r.dow}:${h}`)
               return (
                 <span
                   key={h}
-                  className="h10-dp-cell"
+                  className={`h10-dp-cell${selectable ? ' pick' : ''}${isSel ? ' sel' : ''}`}
                   style={{ background: SCALE[b], color: cellText(b) }}
-                  onMouseEnter={(e) => setHover({ dow: r.dow, hour: h, x: e.currentTarget.offsetLeft, y: e.currentTarget.offsetTop })}
+                  onMouseDown={selectable ? (e) => {
+                    e.preventDefault() // stop the browser text-selecting across the grid mid-drag
+                    const mode: 'add' | 'remove' = sel.has(`${r.dow}:${h}`) ? 'remove' : 'add'
+                    setDrag({ mode })
+                    paint(r.dow, h, mode)
+                  } : undefined}
+                  onMouseEnter={(e) => {
+                    setHover({ dow: r.dow, hour: h, x: e.currentTarget.offsetLeft, y: e.currentTarget.offsetTop })
+                    if (selectable && drag) paint(r.dow, h, drag.mode)
+                  }}
                   onMouseLeave={() => setHover(null)}
                 >{v > 0 ? fmt(v, unit) : 0}</span>
               )
