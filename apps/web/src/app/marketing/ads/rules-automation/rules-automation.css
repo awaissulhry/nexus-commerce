@@ -952,3 +952,20 @@
    this bar, so "Save as template" read as an empty box until a name was typed. Scoped here rather
    than changed globally — every other console button keeps its existing look. */
 .h10-dp-selbar .h10-am-btn.primary:disabled { background: #eef2f8; color: #8a93a1; border-color: #d8dde4; }
+
+/* ── F1/F2 — template library modal ────────────────────────────────────────────────────────
+   Wider than the shared h10-ntm confirm, because each row carries a week-shape strip: you pick a
+   template by looking at its plan, not by trusting its name. */
+.h10-ntm.wide { width: 620px; max-width: calc(100vw - 32px); }
+.h10-ntm-h .x { border: 0; background: none; color: #8a93a1; cursor: pointer; padding: 3px; border-radius: 6px; display: inline-flex; margin-left: auto; }
+.h10-ntm-h .x:hover { background: #f1f4f8; color: #1c2530; }
+.h10-tpl-list { max-height: 340px; overflow-y: auto; border: 1px solid #eef1f5; border-radius: 8px; }
+.h10-tpl-r { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid #f4f6f9; cursor: pointer; }
+.h10-tpl-r:last-child { border-bottom: 0; }
+.h10-tpl-r:hover { background: #f8fafc; }
+.h10-tpl-r.on { background: #eef4fd; }
+.h10-tpl-r .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.h10-tpl-r .nm { font-size: 13px; font-weight: 700; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-tpl-r .meta { font-size: 11.5px; color: #8a93a1; }
+.h10-tpl-r .del { border: 0; background: none; color: #b0b7c1; cursor: pointer; padding: 5px; border-radius: 6px; display: inline-flex; flex-shrink: 0; }
+.h10-tpl-r .del:hover { background: #fbdedb; color: #a3211a; }

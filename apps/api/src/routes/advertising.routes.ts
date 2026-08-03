@@ -7785,6 +7785,56 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  /**
+   * F2 — apply one template's plan to many schedules at once.
+   *
+   * A dedicated endpoint, not N client-side PATCHes, because the obvious approach is silently
+   * broken: PATCH /rank-schedule-groups/:id WITHOUT campaignIds takes the lightweight path, which
+   * updates the GROUP row and cascades only `enabled` to members. The member AdSchedule rows keep
+   * their old windows — and those are what the rank-defend cron actually reads. The group would
+   * show the new plan while the engine kept running the old one, which is worse than failing.
+   *
+   * Routing each group back through saveRankScheduleGroup with its OWN campaign list re-materialises
+   * the members, so what the console shows and what the engine runs stay the same thing.
+   */
+  fastify.post('/advertising/rank-schedule-groups/apply-template', async (request, reply) => {
+    const b = request.body as { templateId?: string; groupIds?: unknown }
+    const groupIds = Array.isArray(b?.groupIds) ? b.groupIds.map(String).filter(Boolean) : []
+    if (!b?.templateId) { reply.status(400); return { error: 'templateId required' } }
+    if (!groupIds.length) { reply.status(400); return { error: 'groupIds[] required' } }
+
+    const tpl = await prisma.rankScheduleTemplate.findUnique({ where: { id: String(b.templateId) } })
+    if (!tpl) { reply.status(404); return { error: 'template not found' } }
+
+    const { saveRankScheduleGroup } = await import('../services/advertising/ads-create.service.js')
+    const applied: string[] = []
+    const failed: Array<{ id: string; error: string }> = []
+    for (const gid of groupIds) {
+      try {
+        const g = await prisma.rankScheduleGroup.findUnique({ where: { id: gid } })
+        if (!g) { failed.push({ id: gid, error: 'not found' }); continue }
+        const members = await prisma.adSchedule.findMany({ where: { groupId: gid }, select: { campaignId: true } })
+        await saveRankScheduleGroup({
+          id: g.id,
+          name: g.name,
+          campaignIds: members.map((m) => m.campaignId),
+          // The template supplies the PLAN. Everything else — name, campaigns, portfolio binding,
+          // timezone, and crucially `enabled` — is the group's own and is carried through, so
+          // applying a template can never arm a schedule the operator had paused.
+          windows: tpl.windows,
+          defaultTargetKey: tpl.defaultTargetKey,
+          targetOverrides: g.targetOverrides,
+          enabled: g.enabled,
+          timezone: g.timezone,
+          portfolioId: g.portfolioId,
+          marketplace: g.marketplace,
+        } as never)
+        applied.push(gid)
+      } catch (e) { failed.push({ id: gid, error: (e as Error)?.message ?? 'failed' }) }
+    }
+    return { applied: applied.length, failed, template: { id: tpl.id, name: tpl.name } }
+  })
+
   fastify.post('/advertising/rank-schedule-groups', async (request, reply) => {
     const b = request.body as Record<string, unknown>
     if (!b?.name || !String(b.name).trim()) { reply.status(400); return { error: 'name is required' } }

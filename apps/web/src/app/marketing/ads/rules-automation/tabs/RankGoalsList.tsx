@@ -17,6 +17,7 @@ import { NoDataIllus } from '../_shared/NoDataIllus'
 import { ScheduleActivityDrawer } from '../dayparting/ScheduleActivityDrawer'
 import { ScheduleRowActions } from '../dayparting/ScheduleRowActions'
 import { WeekShape } from '../dayparting/WeekShape'
+import { TemplateLibrary } from '../dayparting/TemplateLibrary'
 import { scheduleHealth, relTime, type Health } from '../dayparting/scheduleHealth'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -53,6 +54,10 @@ export function RankGoalsList({ market = 'all', reloadSignal = 0 }: { market?: s
   const [loading, setLoading] = useState(true)
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [activity, setActivity] = useState<{ id: string; name: string } | null>(null) // RDX/A4
+  const [tplFor, setTplFor] = useState<string[] | null>(null) // F2 — bulk apply a template
+  // Applying a template rewrites the plan, so the Week shape and window count on screen go stale.
+  // A local counter alongside the parent's reloadSignal, so the list can refresh itself.
+  const [selfReload, setSelfReload] = useState(0)
   // RDX/B3 — the resolved RankTarget palette, so the week strip colours cells by the same swatches
   // the builder's paint grid uses. Seeded with FALLBACK so a row renders before /rank-targets lands.
   const [tmetaState, setTmetaState] = useState<Record<string, TargetMeta>>(FALLBACK)
@@ -116,7 +121,7 @@ export function RankGoalsList({ market = 'all', reloadSignal = 0 }: { market?: s
     })()
     return () => { alive = false }
     // reloadSignal — bumped when C1 adds campaigns to a schedule, so member counts stay true.
-  }, [reloadSignal])
+  }, [reloadSignal, selfReload])
 
   // Persisted group-level enable/pause (PATCH cascades to every member schedule). Optimistic; reverts
   // the affected row(s) if the PATCH fails.
@@ -285,6 +290,9 @@ export function RankGoalsList({ market = 'all', reloadSignal = 0 }: { market?: s
         <span className="h10-bulkrow">
           <button type="button" className="h10-am-btn bulk" onClick={() => { void setEnabled(ids, true); clear() }}>Enable</button>
           <button type="button" className="h10-am-btn bulk" onClick={() => { void setEnabled(ids, false); clear() }}>Pause</button>
+          {/* F2 — the place N schedules are already selected is the place to apply one plan to
+              all of them. No new page, no new nav. */}
+          <button type="button" className="h10-am-btn bulk" onClick={() => setTplFor(ids)}>Apply template…</button>
         </span>
       )}
       customizable
@@ -315,6 +323,17 @@ export function RankGoalsList({ market = 'all', reloadSignal = 0 }: { market?: s
       onRowClick={(r) => setActivity({ id: r.id, name: r.name })}
     />
     {activity && <ScheduleActivityDrawer group={activity} palette={palette} onClose={() => setActivity(null)} />}
+    {tplFor && (
+      <TemplateLibrary
+        groupIds={tplFor}
+        groupNames={rows.filter((r) => tplFor.includes(r.id)).map((r) => r.name)}
+        palette={palette}
+        onClose={() => setTplFor(null)}
+        // A template rewrites the plan, so the list's Week shape and window count are stale until
+        // it reloads.
+        onApplied={() => { setSel(new Set()); setSelfReload((n) => n + 1) }}
+      />
+    )}
     </>
   )
 }
