@@ -1,9 +1,15 @@
 # Competitor Deep Dives — one company at a time
 
 **Date:** 2026-08-04 · **Companion to:** `2026-08-04-ads-market-research.md`
+
+> **Prior art:** `~/Desktop/COMMERCE-PLATFORM-RESEARCH` already covers **Pacvue, Rithum, Skai, Quartile,
+> Stackline** (~90 files) — the enterprise commerce / retail-media tier — with a UI teardown per company.
+> Its advertising research is complete only for Pacvue; the other four have index files only.
+> **This document covers the ads-native optimisation tier that study never scoped** (Perpetua,
+> Teikametrics, Intentwise, Scale Insights, BidX, M19), and §0 reconciles its conclusions with ADX.
 Each entry: what they are → architecture → full feature inventory → what to take (mapped to our code) → where we already lead → what to refuse.
 
-Queue: **Pacvue** ✅ · **Rithum** ✅ · Perpetua · Teikametrics · Intentwise · Scale Insights · BidX · M19 · + leaders as found.
+Queue: **Pacvue** ✅ · **Rithum** ✅ · **Perpetua** ✅ · Teikametrics · Intentwise · Scale Insights · BidX · M19 · + leaders as found.
 
 ---
 
@@ -189,5 +195,110 @@ We have the data (`true-profit-rollup`). What they do better is make "every ad d
 Rithum contributes **one strong idea** — catalogue as allocator rather than gate — and **one strategic clarification**, which is more valuable: the two nearest competitors each own one half of what Nexus is attempting, and neither owns both.
 
 The uncomfortable corollary: if the catalogue leader needed a services team to make ads work, the risk for Nexus is not missing features. It is that the system becomes something only a specialist can drive. That is the same failure already observed here — 51 rules, three consoles, nothing in use.
+
+---
+
+# 3. Perpetua
+
+## 3.1 What it is
+
+The **pure goal-based, algorithmic** pole of the market — the exact opposite of Scale Insights or BidX. Founded as Perpetua Labs, acquired by **Ascential** (2021), absorbed **Sellics**, and carried into **Omnicom** when it bought Ascential's digital-commerce arm (Flywheel Digital) for ~$835M. **$695/mo entry**, with spend caps on lower tiers.
+
+## 3.2 The goal model
+
+The operator does not build campaigns. They pick a **strategic objective** —
+
+> **Growth · Profitability · Brand defense · Awareness**
+
+— give it a **target ACOS and a budget**, and the engine handles keyword harvesting, bid optimisation and campaign structure autonomously. Bids adjust daily against the target; on Amazon Marketing Stream, hourly.
+
+Named surfaces: Marketplace Advertising Optimization (Amazon, Walmart), Display, Video, Market Intelligence Reporting, Total Sales Analytics, Retail Intelligence, Digital Shelf Insights. Optimisation is "contextual, conversion-based bidding algorithms" plus a smart-recommendation engine and automated negative matching.
+
+## 3.3 ⭐ The Share of Voice module — the most valuable finding in this document
+
+Perpetua added an SOV module in 2025. The mechanics matter more than the feature:
+
+- **Share of voice is explicitly *not* available via Amazon Marketing Stream** — Perpetua says so directly. It must be sourced independently.
+- They track it **hourly, across 100,000+ terms**, with operator-added custom terms.
+- **Keyword-level share against *named competitors*.**
+- They publish strategy guidance on combining **hourly AMS performance data with hourly SOV data** to drive dayparting.
+
+**That is precisely the architecture our SERP-coverage goal requires, and it names the half we are missing.**
+
+| Signal | Source | Nexus status |
+|---|---|---|
+| Hourly ad performance | Amazon Marketing Stream | ✅ 24 subs live, IT/DE/FR/ES |
+| Hourly **share of voice** | Independent collection (not Amazon) | ❌ **absent** |
+
+Everything in ADX.8 (coverage measurement) has been reasoning about `topOfSearchImpressionShare` and STIS — which tell us *our own* impression share, not **who else is on the page**. Perpetua confirms the industry answer: you cannot get competitive SOV from Amazon, so you collect it yourself, hourly, against a named competitor set.
+
+This also settles a design question in ADX.10: the bid ladder needs a feedback signal, and our own impression share is not it. **"Do we own this page?" is a different question from "what share of impressions did we get?"** — and only the first one answers the goal you actually stated.
+
+## 3.4 Goal categories as the operator's entry point
+
+Growth / Profitability / Brand defense / Awareness is a better front door than our `RankTarget` keys (`own-top`, `defend-top`, `own-top-allout`), which name *mechanism*. Combined with Pacvue's **defense vs expansion** framing, the synthesis is:
+
+| Operator intent | Our mechanism |
+|---|---|
+| **Defend** a term we own | `defend-top`, self-ASIN targeting, lower `maxBiasPct` |
+| **Expand** onto a term we don't | `own-top`, bid ladder, `keepClimbing` |
+| **Profit** | `acosCapPct` binding, `allOut: false` |
+| **Suppress** | `pause: true` + `floorBidCents` |
+
+Same engine. The change is that an operator picks an intent and the parameters follow, rather than picking parameters and inferring the intent.
+
+## 3.5 The criticisms — and why they matter more than the features
+
+Perpetua is the market's purest "trust the algorithm" product, so its failure modes are the strongest available evidence about that design:
+
+1. **"Too slow to learn, does not understand seasonality, not smart enough to differentiate pricing tiers across ASINs."** The recurring complaint is not that the model is wrong — it is that **the operator cannot tell it what it does not know.** A moto-jacket seller knows the season changed; the model discovers it weeks later from conversion data.
+2. **No margin visibility** (established earlier in this research).
+3. Spend caps on lower tiers → overage or forced upgrade when Q4 surges.
+4. Predatory annual contracts, difficult cancellation, unresponsive support.
+
+**Point 1 is the decisive one for ADX.** It is the empirical case against going fully algorithmic, and the strongest external validation of the **inspectable goal engine** position: `RankTarget` is a closed loop *whose setpoint and motion profile the operator sets directly*. When you know the season turned, you change `targetISPct` today — you don't wait for the model to notice.
+
+Perpetua's users are complaining about the absence of exactly the control this system already has.
+
+## 3.6 What to take
+
+1. **Independently-collected hourly SOV against a named competitor set.** The missing half of the coverage loop. Scope it small — our shared keyword set is tens of terms, not 100k.
+2. **Goal categories as the authoring entry point** for rank schedules (§3.4).
+3. **Seasonality as an operator input, not an inference.** Their top complaint is our free win: `RankScheduleEvent` already models dated overrides.
+
+## 3.7 What to refuse
+
+- **Autonomous campaign structure creation.** Perpetua builds and restructures campaigns itself. Combined with Quartile's documented structural lock-in, the constraint from the prior research holds: *automation should leave behind a structure a human could still run by hand.*
+- **The opaque model.** Their single most-cited weakness.
+- **Spend-cap pricing.** Not applicable, but it explains why their tier boundaries shape the product.
+
+## 3.8 Verdict
+
+Perpetua contributes **one missing capability** (hourly competitive SOV, independently collected) and **one strong negative result**: the market's purest algorithmic product is most criticised for the operator's inability to override it. That is the clearest external argument yet that goals-first was the right call — provided the goals stay inspectable.
+
+---
+
+# 0. Reconciliation with `COMMERCE-PLATFORM-RESEARCH`
+
+*(Numbered 0 because it re-frames everything above.)*
+
+The prior study reached several conclusions independently of this one. Where they converge, confidence is high; where the prior study is sharper, ADX should adopt its formulation.
+
+### Convergent — treat as settled
+- **Commerce state should drive ad spend** — prior study: 5 of 5 companies. This document reached it twice independently (Pacvue's retail-aware activation, Rithum's catalogue-as-allocator). **`NEXUS_ADS_RETAIL_GUARD_APPLY` being absent is now the single best-supported finding across both studies.**
+- **Rules encode operator intent that a model cannot infer** — prior study §2.5; this document §3.5 (Perpetua's top complaint). Same conclusion from opposite directions.
+- **Intraday optimisation runs on AMS** — prior study §2.4; confirmed here, with Perpetua adding that **SOV is the exception that AMS cannot supply**.
+
+### Adopt from the prior study — better than my formulation
+**"Automation bounds belong on the entity"** (Tier-1 #4) supersedes ADX.4's "pins."
+
+> *A rule saying "never bid above €2" can be edited, bypassed, or fail to apply to entities created later. A `maxBid` column applies to every rule, every algorithm and every future feature — automatically. Safety by construction, not by rule correctness.*
+
+That is strictly stronger. ADX.4 should ship `minBid` / `maxBid` / `targetAcos` as **columns on campaign/portfolio** and `minPrice` / `maxPrice` / cost floor on the product — not an exemption table consulted by the write gate. A column cannot be bypassed by a future engine that forgets to check.
+
+### Adopt — Quartile's failure modes as ADX design constraints
+1. **Automation must leave behind a structure a human could still run by hand.** (Nexus already honours this by suppressing at €0.02 rather than pausing.)
+2. **Anything that creates entities needs a retirement path designed at the same time.** Directly relevant to ADX.10's bid ladder and any harvest automation.
+3. **If automation makes the account too big to see, the tool owes you a way to see it.** This is the Control Console's actual mandate, stated better than ADX stated it.
 
 ---
