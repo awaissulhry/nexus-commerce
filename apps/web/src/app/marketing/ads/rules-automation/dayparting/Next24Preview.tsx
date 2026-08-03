@@ -17,7 +17,7 @@
  * a preview that paraphrased the engine would be free to drift from it.
  */
 import { useEffect, useState } from 'react'
-import { AlertTriangle, TrendingUp } from 'lucide-react'
+import { AlertTriangle, TrendingUp, CalendarClock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface Row {
@@ -28,6 +28,7 @@ interface Row {
   targetName: string | null
   color: string | null
   source: 'window' | 'baseline' | 'none'
+  eventName: string | null
   floorPct: number | null
   ceilingPct: number | null
   canChase: boolean
@@ -54,6 +55,7 @@ interface Payload {
     hoursUnbounded: number
     maxCeilingPct: number | null
     missingTargetKeys: string[]
+    events: Array<{ name: string; hours: number }>
   }
 }
 
@@ -99,6 +101,19 @@ export function Next24Preview({ groupId }: { groupId: string }) {
             <span>This schedule is <b>off</b> — these hours are what it <i>would</i> do. Nothing below will be written to Amazon until it is turned on.</span>
           </p>
         )}
+
+        {/* RDX/G2 — a dated event replaces the weekly plan while it runs. Stated first: every
+            row below is being resolved against a different plan than the one on the grid, and
+            without saying so the table looks like the weekly schedule misbehaving. */}
+        {s.events.map((e) => (
+          <p className="note evt" key={e.name}>
+            <CalendarClock size={13} />
+            <span>
+              The event <b>{e.name}</b> governs {e.hours} of the next 24 hours — its plan replaces the
+              weekly one for those hours, and the schedule reverts on its own when the event ends.
+            </span>
+          </p>
+        ))}
 
         {s.hoursUncovered > 0 && (
           <p className="note warn">
@@ -175,6 +190,9 @@ export function Next24Preview({ groupId }: { groupId: string }) {
                       <i style={h.color ? { background: h.color } : undefined} />
                       <span>{h.targetName}</span>
                       {h.source === 'baseline' && <em title="Not painted — this is the schedule’s baseline for the rest of the week">baseline</em>}
+                      {/* Per-row too, not just in the summary: with a hand-over mid-window the
+                          only way to see WHERE the plan changes is on the hour it changes. */}
+                      {h.eventName && <em className="evt" title={`The dated event “${h.eventName}” governs this hour instead of the weekly plan`}>{h.eventName}</em>}
                     </>
                   ) : (
                     <span className="none">no target</span>

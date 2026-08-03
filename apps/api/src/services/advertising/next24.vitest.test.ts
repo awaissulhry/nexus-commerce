@@ -96,6 +96,33 @@ describe('buildNext24', () => {
     expect(summary.maxCeilingPct).toBe(900)
   })
 
+  it('a dated event replaces the plan for the hours it covers — windows AND baseline', () => {
+    // RDX/G2 — ad-rank-defend swaps the whole plan for an armed event. If the preview kept the
+    // group's baseline while taking the event's windows it would invent a third behaviour that
+    // neither the plan nor the engine has.
+    const weekly = [{ days: [1], startHour: 0, endHour: 24, targetKey: 'own-top' }]
+    const eventPlan = { windows: [{ days: [1], startHour: 20, endHour: 24, targetKey: 'defend' }], defaultTargetKey: 'pause', eventName: 'Black Friday' }
+    const slots = slotsFrom(1, 18).map((s, i) => (i < 4 ? { ...s, plan: eventPlan } : s))
+    const { hours, summary } = buildNext24(slots, weekly, 'own-top', lib(OWN_TOP, ALL_OUT, SUPPRESS))
+
+    // 18:00 and 19:00 are inside the event but outside its windows → the EVENT's baseline governs
+    expect(hours[0]).toMatchObject({ hour: 18, targetKey: 'pause', source: 'baseline', eventName: 'Black Friday' })
+    expect(hours[1]).toMatchObject({ hour: 19, targetKey: 'pause', eventName: 'Black Friday' })
+    // 20:00, 21:00 are inside an event window
+    expect(hours[2]).toMatchObject({ hour: 20, targetKey: 'defend', source: 'window', eventName: 'Black Friday' })
+    // 22:00 is past the event → back to the weekly plan, and the hand-over is visible
+    expect(hours[4]).toMatchObject({ hour: 22, targetKey: 'own-top', eventName: null })
+    expect(summary.events).toEqual([{ name: 'Black Friday', hours: 4 }])
+  })
+
+  it('reports no events when none are armed, and never leaks the plan into a row', () => {
+    const { hours, summary } = buildNext24(slotsFrom(1, 0), null, 'own-top', lib(OWN_TOP))
+    expect(summary.events).toEqual([])
+    expect(hours[0].eventName).toBeNull()
+    // `plan` carries a full windows array; spreading the slot would copy it into all 24 rows.
+    expect(hours[0]).not.toHaveProperty('plan')
+  })
+
   it('crosses midnight into the next weekday', () => {
     const windows = [{ days: [2], startHour: 0, endHour: 6, targetKey: 'defend' }]
     const { hours } = buildNext24(slotsFrom(1, 20), windows, 'own-top', lib(OWN_TOP, ALL_OUT))

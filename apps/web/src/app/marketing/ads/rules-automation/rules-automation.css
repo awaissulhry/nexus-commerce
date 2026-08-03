@@ -1006,6 +1006,8 @@
 .h10-n24-sum .note.off { background: #f1f4f8; color: #5a6472; }
 .h10-n24-sum .note.warn { background: #fdf6e7; color: #7a5c15; }
 .h10-n24-sum .note.bad { background: #fdefec; color: #9a3a24; }
+/* A dated event is not a fault — it is a deliberate override — so it reads as information. */
+.h10-n24-sum .note.evt { background: #eef4fd; color: #24487a; }
 .h10-n24-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; }
 .h10-n24-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: #4a5462; }
 .h10-n24-legend i { width: 9px; height: 9px; border-radius: 2px; background: #c3cad4; flex: none; }
@@ -1026,6 +1028,7 @@
 .h10-n24-t td.hr em { display: block; font-style: normal; font-size: 10.5px; color: #9aa2ae; }
 .h10-n24-t td.tg i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: #c3cad4; margin-right: 6px; vertical-align: 1px; }
 .h10-n24-t td.tg em { font-style: normal; font-size: 10.5px; color: #9aa2ae; margin-left: 6px; }
+.h10-n24-t td.tg em.evt { color: #2f5da8; background: #eef4fd; border-radius: 4px; padding: 1px 5px; }
 .h10-n24-t td.tg .miss { color: #9a3a24; display: inline-flex; align-items: center; gap: 4px; }
 .h10-n24-t .none { color: #b3bac4; }
 .h10-n24-t td.bd .hold { display: inline-flex; align-items: center; gap: 4px; color: #4a5462; }

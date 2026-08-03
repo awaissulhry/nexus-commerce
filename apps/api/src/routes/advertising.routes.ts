@@ -8025,6 +8025,32 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       prisma.rankTarget.findMany(),
       prisma.adSchedule.findMany({ where: { groupId: id }, select: { campaignId: true, enabled: true } }),
     ])
+    /**
+     * RDX/G2 — a dated event replaces the weekly plan while it runs, so the preview must resolve
+     * per hour against whichever plan the engine would actually use. Without this the preview
+     * would show the weekly plan for the whole span of an armed event while the engine ran the
+     * event's — a preview disagreeing with the engine, which is the one thing it must never do.
+     *
+     * The selection rule is copied from ad-rank-defend.job.ts deliberately: enabled, covering the
+     * instant, and on overlap the one that STARTED LATEST (the job orders by startsAt ascending
+     * and lets the last write win). A lead-out beginning while an event still runs is a hand-over,
+     * not a conflict.
+     */
+    const first = slots[0]?.at, last = slots[slots.length - 1]?.at
+    const events = first && last
+      ? await prisma.rankScheduleEvent.findMany({
+        where: { groupId: id, enabled: true, startsAt: { lte: new Date(last) }, endsAt: { gt: new Date(first) } },
+        orderBy: { startsAt: 'asc' },
+        select: { name: true, startsAt: true, endsAt: true, windows: true, defaultTargetKey: true },
+      })
+      : []
+    const planFor = (iso: string) => {
+      const t = new Date(iso)
+      let win: (typeof events)[number] | undefined
+      for (const e of events) if (e.startsAt <= t && e.endsAt > t) win = e // ascending → latest start wins
+      return win ? { windows: win.windows as never, defaultTargetKey: win.defaultTargetKey, eventName: win.name } : undefined
+    }
+
     const { buildNext24 } = await import('../services/advertising/next24.js')
     const lib = new Map(targets.map((t) => [t.key, {
       key: t.key, name: t.name, color: t.color,
@@ -8033,7 +8059,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }]))
 
     const { hours, summary } = buildNext24(
-      slots.map((s) => ({ at: (s.at instanceof Date ? s.at : new Date(s.at)).toISOString(), dow: Number(s.dow), hour: Number(s.hour) })),
+      slots.map((s) => {
+        const at = (s.at instanceof Date ? s.at : new Date(s.at)).toISOString()
+        return { at, dow: Number(s.dow), hour: Number(s.hour), plan: planFor(at) }
+      }),
       (group.windows as Parameters<typeof buildNext24>[1]) ?? [],
       group.defaultTargetKey,
       lib,
