@@ -22,7 +22,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, ArrowDown, ArrowUp, ChevronDown, Download, RefreshCw, Search, Settings2, Sigma, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, ArrowDown, ArrowUp, ChevronDown, Download, Link2, RefreshCw, Search, Settings2, Sigma, AlertTriangle } from 'lucide-react'
 import { DataGrid, type Column } from '@/design-system/components/DataGrid'
 import { H10Select } from '../campaigns/FilterDropdown'
 import { MultiSelect } from '@/design-system/components/MultiSelect'
@@ -30,6 +30,7 @@ import { Pagination } from '@/design-system/components/Pagination'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { SavedReportBar } from './SavedReportBar'
 import { CustomMetricsModal } from './CustomMetricsModal'
+import { ShareLinkModal } from './ShareLinkModal'
 import { ReportSummary } from './ReportSummary'
 import { fetchSummary, type CompareMode, type SummaryResult } from './summary-api'
 import {
@@ -89,6 +90,7 @@ export function ReportRunner({ reportId }: { reportId: string }) {
   const [colsOpen, setColsOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [metricsOpen, setMetricsOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -228,6 +230,14 @@ export function ReportRunner({ reportId }: { reportId: string }) {
         reportId={params.reportId}
         available={colOptions}
         onChanged={() => setParams((p) => ({ ...p }))}
+      />
+
+      <ShareLinkModal
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        reportId={params.reportId}
+        reportTitle={result?.title ?? params.reportId}
+        query={params as unknown as Record<string, unknown>}
       />
 
       <Link href="/marketing/ads/reporting" className="rpt-back">
@@ -405,6 +415,15 @@ export function ReportRunner({ reportId }: { reportId: string }) {
           </button>
 
           <div className="h10-custwrap">
+            {/* RPT.15 — a share is a disclosure, so it sits beside Export rather
+                than hidden in a menu: both hand data to someone else. */}
+            <button
+              type="button"
+              className="h10-am-btn"
+              onClick={() => setShareOpen(true)}
+            >
+              <Link2 size={13} /> Share
+            </button>
             <button
               type="button"
               className={`h10-am-btn ${exportOpen ? 'on' : ''}`}

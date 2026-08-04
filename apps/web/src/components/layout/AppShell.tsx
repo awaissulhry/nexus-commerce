@@ -26,6 +26,9 @@ const STANDALONE_PREFIXES = [
   '/marketing/ads-console',
   '/marketing/ads',
   '/products/next',
+  // RPT.15 — a shared report is viewed by someone with no account. No sidebar,
+  // no command palette, no banners: they see one table and nothing else about us.
+  '/shared',
   // Phase S3 — auth surfaces render full-screen, no app chrome.
   '/login',
   '/403',
