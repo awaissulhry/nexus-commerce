@@ -6337,7 +6337,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       where: {
         startedAt: { gte: weekAgo },
         ruleId: { in: rules.map((r) => r.id) },
-        NOT: { errorMessage: 'DAILY_CAP_EXCEEDED' },
+        // Must spell out the null branch. `NOT: { errorMessage: 'X' }` becomes
+        // NOT (errorMessage = 'X'), which is NULL — not TRUE — for a null errorMessage, so
+        // three-valued logic drops the row. Every SUCCESS and DRY_RUN has a null
+        // errorMessage, so the terse form silently zeroed `acted` and `proposed` for every
+        // rule on the board while correctly removing the cap rows.
+        OR: [
+          { errorMessage: null },
+          { errorMessage: { not: 'DAILY_CAP_EXCEEDED' } },
+        ],
       },
       _count: { _all: true },
     })
