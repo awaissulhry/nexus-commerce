@@ -12604,6 +12604,25 @@ model AutomationRule {
   enabled Boolean @default(false)
   dryRun  Boolean @default(true)
 
+  /// ADX N2 — the intensity dial. `dryRun` is a binary, and a binary is why 21 rules sat
+  /// stuck asking permission: there was no way to move one a single notch and watch it.
+  ///
+  ///   OFF     — `enabled=false` handles this; kept in the vocabulary for completeness
+  ///   OBSERVE — evaluates and records what it WOULD do. No proposal, no write. The quiet
+  ///             mode for a rule you are not ready to hear from yet.
+  ///   PROPOSE — evaluates and queues an AdsRuleSuggestion for approval. Today's default.
+  ///   AUTO    — acts, within its own caps and whatever ads-write-gate.ts enforces.
+  ///
+  /// The ramp WITHIN auto is `maxExecutionsPerDay`, which already exists: "act, but at most
+  /// five times today" is a real intensity control and needs no new machinery. Pacvue ships
+  /// the same idea as a conservative→aggressive dial and their own research calls it the
+  /// underrated leg of governance — it is how trust gets built incrementally rather than
+  /// wagered all at once.
+  ///
+  /// `enabled` still gates evaluation, so the evaluator's queries are untouched. Backfilled
+  /// from dryRun so behaviour is identical on the day this ships.
+  autonomyLevel String @default("PROPOSE")
+
   maxExecutionsPerDay     Int?    @default(100)
   maxValueCentsEur        Int?
   // AD.3 — per-rule daily SUM cap across executions, complementary to
@@ -14969,4 +14988,223 @@ model AmazonFamilyWorkbook {
 
   @@unique([familyKey, marketplace])
   @@index([marketplace])
+}
+
+// ── RPT.5 — saved report definitions ─────────────────────────────────────
+//
+// A saved report is a NAMED, REUSABLE ReportQuery: the report id plus its
+// filters, grouping, columns and sort — never a page number, because "page 3"
+// is a scroll position, not part of what the report means.
+//
+// It is deliberately the unit that later phases consume: RPT.6 schedules a
+// saved report by id, RPT.8 binds a Google Sheet to one. Those must not each
+// invent their own way of remembering a query.
+model SavedReport {
+  id          String  @id @default(cuid())
+  /// Which spec this runs — 'campaign', 'search-term', … (REPORT_SPECS key).
+  reportId    String
+  name        String
+  description String?
+  /// The ReportQuery, minus pagination. Shape owned by ads-report-runner.
+  query       Json
+  ownerId     String  @default("default-user")
+  /// Bumped on every content change; always equals the newest version row.
+  version     Int     @default(1)
+  isArchived  Boolean @default(false)
+
+  lastRunAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  versions  SavedReportVersion[]
+  schedules ReportSchedule[]
+
+  @@index([ownerId, isArchived, updatedAt])
+  @@index([reportId])
+}
+
+// Every save appends a version; nothing is ever rewritten. Restoring an old
+// version writes a NEW version with the old content rather than deleting the
+// ones after it — history you can edit is not history.
+model SavedReportVersion {
+  id            String      @id @default(cuid())
+  savedReportId String
+  savedReport   SavedReport @relation(fields: [savedReportId], references: [id], onDelete: Cascade)
+  version       Int
+  name          String
+  description   String?
+  query         Json
+  /// Human summary of what changed versus the previous version.
+  changeNote    String?
+  createdBy     String      @default("default-user")
+  createdAt     DateTime    @default(now())
+
+  @@unique([savedReportId, version])
+  @@index([savedReportId, createdAt])
+}
+
+// ── RPT.6 — scheduled delivery of a saved report ─────────────────────────
+//
+// A schedule points at a SavedReport and adds three things the definition
+// deliberately does not carry: who receives it, in what format, and — the one
+// that makes scheduling actually work — a RELATIVE window.
+//
+// A saved report stores absolute dates. Sending that on a cron would mail the
+// same frozen fortnight every week forever, which is the classic way a
+// scheduled report becomes wallpaper nobody reads. `windowMode` re-resolves the
+// range at send time instead.
+model ReportSchedule {
+  id            String      @id @default(cuid())
+  savedReportId String
+  savedReport   SavedReport @relation(fields: [savedReportId], references: [id], onDelete: Cascade)
+
+  /// Comma-separated recipients.
+  recipients String
+  format     String @default("xlsx") // csv | xlsx
+  /// saved | last7 | last30 | last90 | prevWeek | prevMonth | monthToDate
+  windowMode String @default("last30")
+
+  frequency  String // daily | weekly | monthly
+  /// Europe/Rome local hour, 0-23.
+  hourLocal  Int    @default(8)
+  /// 1 = Monday … 7 = Sunday. Weekly only.
+  dayOfWeek  Int?
+  /// 1-28. Monthly only — never 29-31, so a schedule cannot skip February.
+  dayOfMonth Int?
+
+  isActive   Boolean   @default(true)
+  lastSentAt DateTime?
+  lastStatus String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deliveries ReportDelivery[]
+
+  @@index([isActive, frequency, hourLocal])
+  @@index([savedReportId])
+}
+
+// Every attempt is recorded, including dry runs and failures. The freshness
+// fields are the point: a spreadsheet that arrived on time can still be built on
+// week-old data, and the delivery log is the only place that can say so after
+// the fact.
+model ReportDelivery {
+  id         String         @id @default(cuid())
+  scheduleId String
+  schedule   ReportSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  /// SENT | DRY_RUN | FAILED
+  status     String
+  format     String
+  recipients String
+  rows       Int     @default(0)
+  fileName   String?
+  fileBytes  Int?
+
+  /// The window actually queried, after windowMode was resolved.
+  windowFrom String?
+  windowTo   String?
+  /// Freshest day present per market at the moment of sending.
+  freshness  Json?
+  /// Set when a market was behind its cadence when this went out.
+  staleNote  String?
+
+  messageId  String?
+  error      String?
+  durationMs Int?
+  createdAt  DateTime @default(now())
+
+  @@index([scheduleId, createdAt])
+  @@index([status, createdAt])
+}
+
+// ── RPT.7 — imported Amazon console reports ──────────────────────────────
+//
+// Amazon's unified reporting export carries a grain the Ads API cannot return:
+// search term × target × ad × placement × marketplace. It also predates our own
+// search-term ingest by about five weeks. So it is worth having — but it CANNOT
+// be merged into AmazonAdsSearchTerm, because its `Date range` is a per-row
+// lifetime window (5,440 distinct values in one file, mixing single days and
+// multi-week spans), not a daily time series. Summing across overlapping windows
+// would double-count. It therefore lives in its own table, labelled as what it
+// is, and is never mixed with API data.
+model AdsConsoleImport {
+  id       String @id @default(cuid())
+  fileName String
+  fileSize Int
+  /// unified-report — the only shape supported today; others register later.
+  format   String @default("unified-report")
+  /// PREVIEW | COMMITTED | FAILED
+  status   String @default("PREVIEW")
+
+  /// Per-row arithmetic, kept so a committed import can still explain itself.
+  rowsRead        Int @default(0)
+  rowsMerged      Int @default(0)
+  rowsNew         Int @default(0)
+  rowsUnchanged   Int @default(0)
+  rowsConflicting Int @default(0)
+  rowsSkipped     Int @default(0)
+  rowsErrored     Int @default(0)
+
+  /// Window and totals actually present in the file — the import's own receipt.
+  windowStart DateTime? @db.Date
+  windowEnd   DateTime? @db.Date
+  impressions BigInt    @default(0)
+  clicks      BigInt    @default(0)
+  costCents   BigInt    @default(0)
+  salesCents  BigInt    @default(0)
+  purchases   Int       @default(0)
+
+  /// Row-level problems, each naming the offending field and value.
+  errors      Json?
+  notes       String?
+  uploadedBy  String    @default("default-user")
+  createdAt   DateTime  @default(now())
+  committedAt DateTime?
+
+  rows AdsConsoleRow[]
+
+  @@index([status, createdAt])
+}
+
+model AdsConsoleRow {
+  id       String           @id @default(cuid())
+  importId String
+  import   AdsConsoleImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  /// The row's own aggregation window — NOT a single day.
+  windowStart DateTime @db.Date
+  windowEnd   DateTime @db.Date
+
+  marketplace   String
+  adProduct     String
+  campaignId    String
+  campaignName  String?
+  portfolioName String?
+  adGroupId     String?
+  adGroupName   String?
+  adId          String?
+  asin          String?
+  sku           String?
+  placement     String?
+  targetId      String?
+  targeting     String?
+  matchType     String?
+  searchTerm    String?
+
+  impressions Int @default(0)
+  clicks      Int @default(0)
+  costCents   Int @default(0)
+  salesCents  Int @default(0)
+  purchases   Int @default(0)
+  /// How many CSV lines folded into this row — Amazon splits traffic and
+  /// conversions across separate lines for the same key.
+  sourceRows  Int @default(1)
+
+  createdAt DateTime @default(now())
+
+  @@unique([importId, windowStart, windowEnd, campaignId, adGroupId, adId, targetId, searchTerm, placement, marketplace], map: "AdsConsoleRow_natural_key")
+  @@index([importId, searchTerm])
+  @@index([marketplace, windowStart])
 }

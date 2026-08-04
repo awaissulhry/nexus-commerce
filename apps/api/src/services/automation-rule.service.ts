@@ -575,9 +575,27 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
     }
   }
 
+  // ADX N2 — the intensity dial resolves the rule's effective level. `enabled` still gates
+  // evaluation upstream, and when autonomyLevel is missing or unrecognised resolveAutonomy
+  // falls back to the old dryRun binary — so a row written by an older deploy behaves
+  // exactly as it did before.
+  const { resolveAutonomy, levelActs, levelProposes } = await import('./advertising/ads-autonomy.js')
+  const declared = resolveAutonomy(rule as { enabled: boolean; dryRun: boolean; autonomyLevel?: string | null })
+
+  // ADX N2 — account-wide SUGGEST (shouldForceDryRun) DEMOTES an AUTO rule to PROPOSE
+  // rather than silencing it. Getting this wrong is not hypothetical: the first cut of
+  // this change made an AUTO rule go quiet under forceDryRun, and the ADX.2 test written
+  // for exactly that case caught it. A mode whose entire purpose is "nothing acts,
+  // everything asks" must not stop things asking.
+  //
+  // An OBSERVE rule stays OBSERVE. The operator has said they do not want proposals from
+  // that one, and an account-level setting should not override a per-rule instruction
+  // that is already quieter than it.
+  const level = args.forceDryRun && declared === 'AUTO' ? 'PROPOSE' : declared
+
   // EA3 — Manual-control ads rules are propose-only: force dry-run so they generate suggestions
-  // (audit "would do X" rows) but never auto-apply. Automate rules respect rule.dryRun + autonomy.
-  const dryRun = rule.dryRun || !!args.forceDryRun || adsManualSuggest
+  // (audit "would do X" rows) but never auto-apply. Automate rules respect the dial + autonomy.
+  const dryRun = !levelActs(level) || !!args.forceDryRun || adsManualSuggest
   const actions = (rule.actions ?? []) as unknown as Action[]
   const actionResults: ActionResult[] = []
   let valueSpentCentsEur = 0
@@ -683,7 +701,11 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
   //
   // Excluded: isTestRun. Not forceDryRun — the cron sets that for the whole account when
   // autonomy is SUGGEST, which is precisely when suggestions are the point.
-  if (rule.domain === 'advertising' && dryRun && !args.isTestRun) {
+  // ADX N2 — OBSERVE evaluates and records but stays silent. Without it the only way to
+  // quieten a noisy rule is to switch it off, which also stops the evidence you need to
+  // decide whether to trust it. adsManualSuggest still forces the propose path for
+  // builder rules explicitly marked control='manual'.
+  if (rule.domain === 'advertising' && dryRun && !args.isTestRun && (levelProposes(level) || adsManualSuggest)) {
     void import('./advertising/ads-suggestions.service.js').then((m) =>
       m.generateSuggestionsFromExecution({
         ruleId: rule.id, ruleName: rule.name, trigger: rule.trigger, executionId: exec.id,
