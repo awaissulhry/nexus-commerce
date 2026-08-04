@@ -34,8 +34,14 @@ interface Camp {
   // a fraction (0.3 = 30%); placements hold the ToS/PDP/RoS bid multipliers (%).
   targetAcos?: number | null; bidAutomation?: boolean
   placements?: { tos: number | null; pdp: number | null; ros: number | null }
-  // P3 — UI-only until Amazon fields exist (bid algorithm + min/max bid/budget range)
+  // P3 — UI-only until Amazon fields exist (bid algorithm + min/max budget range)
   bidAlgorithm?: string | null
+  // ADX G2 — minMaxBid is NO LONGER a placeholder. It is now derived from the real
+  // Campaign.minBidCents / maxBidCents columns, which ads-write-gate.ts enforces on
+  // every write to Amazon. `minMaxBid` stays in EUR because the whole grid renders
+  // money that way; the cents are the wire format.
+  minBidCents?: number | null
+  maxBidCents?: number | null
   minMaxBid?: { min: number | null; max: number | null } | null
   minMaxBudget?: { min: number | null; max: number | null } | null
 }
@@ -251,7 +257,7 @@ const COL_TIPS: Record<string, string> = {
   ...RANGE_TIPS,
   bidRule: 'Custom Bid Rule - Create your own bid change logic using PPC metrics available in Analytics',
   targetAcos: 'Only if "Target ACoS" is selected for the Bid Algorithm. This selection dictates the ACoS goal. Click the Edit Campaigns button to edit the displayed ACoS',
-  minMaxBid: 'Max bid settings do not currently take into account placement modifiers. CPCs may be higher than max bid due to placement modifiers.',
+  minMaxBid: 'An absolute floor and ceiling on any bid in this campaign, enforced on every write to Amazon. Note these are BASE bids: placement modifiers stack on top, so an effective CPC can still exceed the max. Deliberate suppression (retail guard, budget cap, Min-bid windows) is exempt from the floor.',
   bidAutomation: 'Active will automate the keyword bid suggestions currently found on the Suggestions page. Changes will be recorded in the Change Log',
   minMaxBudget: 'The Minimum and Maximum Budget limits for this campaign will be used by Budget Manager. Minimum Budget: the lowest daily budget this campaign can receive. Maximum Budget: the highest daily budget this campaign can receive.',
   ntbOrdersPct: 'The percentage of total orders that are new-to-brand. Only relevant for SB and SD',
@@ -768,7 +774,16 @@ export function CampaignsGrid() {
       const qs = opts?.range ? `&startDate=${ymd(opts.range.start)}&endDate=${ymd(opts.range.end)}` : ''
       const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500${qs}`, { cache: 'no-store' })
       const d = await r.json()
-      setRows((d.items ?? []) as Camp[])
+      // ADX G2 — derive the display range from the persisted cents. Before this the
+      // column was UI-only: the editor updated local state, toasted "Amazon field
+      // pending", and threw the value away on refresh.
+      const centsToEur = (v: number | null | undefined) => (v == null ? null : v / 100)
+      setRows(((d.items ?? []) as Camp[]).map((c) => ({
+        ...c,
+        minMaxBid: (c.minBidCents != null || c.maxBidCents != null)
+          ? { min: centsToEur(c.minBidCents), max: centsToEur(c.maxBidCents) }
+          : null,
+      })))
     } catch { /* ignore */ } finally { setLoading(false); setSyncing(false) }
   }, [])
 
@@ -1037,10 +1052,30 @@ export function CampaignsGrid() {
     setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, bidAlgorithm } : x)))
     toast(`Bid algorithm → ${BID_ALGOS.find((a) => a.value === bidAlgorithm)?.label ?? bidAlgorithm} · ${c.name} (local — Amazon field pending)`)
   }
-  const setCampaignMinMaxBid = (c: Camp, mm: { min: number | null; max: number | null } | null) => {
+  /**
+   * ADX G2 — persists to Campaign.minBidCents / maxBidCents, which ads-write-gate.ts
+   * enforces on every write to Amazon. Local governance: nothing is pushed to Amazon,
+   * which has no concept of these.
+   *
+   * The server refuses a one-sided change that would leave min > max, because that
+   * makes a campaign unwritable by anything — every bid at once below the floor and
+   * above the ceiling. Local state is only updated once the server has accepted.
+   */
+  const setCampaignMinMaxBid = async (c: Camp, mm: { min: number | null; max: number | null } | null) => {
     setEditPop(null)
-    setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, minMaxBid: mm } : x)))
-    toast(`Min/Max bid updated · ${c.name} (local — Amazon field pending)`)
+    const toCents = (v: number | null | undefined) => (v == null ? null : Math.round(v * 100))
+    const minBidCents = toCents(mm?.min)
+    const maxBidCents = toCents(mm?.max)
+    const r = await patchWrite(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/guardrails`, { minBidCents, maxBidCents })
+    if (r.outcome === 'applied' || r.outcome === 'queued') {
+      setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, minBidCents, maxBidCents, minMaxBid: mm } : x)))
+      const label = mm && (mm.min != null || mm.max != null)
+        ? `${mm.min != null ? eur(mm.min) : '—'} – ${mm.max != null ? eur(mm.max) : '—'}`
+        : 'cleared'
+      toast(`Bid bounds → ${label} · ${c.name}`)
+    } else {
+      toast(`Bid bounds refused · ${c.name}${r.error ? ` — ${r.error}` : ''}`)
+    }
   }
   const setCampaignMinMaxBudget = (c: Camp, mm: { min: number | null; max: number | null } | null) => {
     setEditPop(null)
