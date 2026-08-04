@@ -15,6 +15,8 @@
  * index. Nothing else in the bar changes.
  */
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
+import { getBackendUrl } from '@/lib/backend-url'
 
 export interface RulesTab {
   key: string
@@ -45,6 +47,46 @@ export const RULES_TABS: RulesTab[] = [
 
 export const rulesTabByKey = (key: string): RulesTab | undefined => RULES_TABS.find((t) => t.key === key)
 
+/**
+ * Which ACTION TYPES belong to each tab.
+ *
+ * These tabs used to filter with `actions[0].type === <tab key>` — comparing an action type
+ * against a tab key. Those are different vocabularies and the comparison could never be true,
+ * so all five live tabs rendered empty. Measured on prod 2026-08-05: the Negative Targeting
+ * tab read "Showing 0 Negative Targeting Rules" while five negation rules existed and three
+ * were enabled. Same shape as the KEYWORD/AD_TARGET grain mismatch — two halves of one
+ * feature disagreeing about the name of the thing they exchange.
+ *
+ * Two rules this map has to follow:
+ *
+ *   · Match ANY action on the rule, not `actions[0]`. Rules routinely pair a change with a
+ *     `notify`, and ordering inside the array is incidental — filtering on the first element
+ *     hides a bid rule because someone listed the notification first.
+ *   · A rule may legitimately appear under more than one tab. `harvest_and_negate` both
+ *     promotes a converting term and negates a wasteful one, so it belongs to both; filing it
+ *     under one would hide it from an operator looking in the other.
+ *
+ * Deliberately unmapped: notify, alert_operator, retail_guard, the pause_* family and
+ * archive_keyword. They are real actions but none of these five tabs is their home, and
+ * inventing a home would misfile them where nobody would think to look. They remain visible
+ * on Apply Rules, which lists every rule regardless of type.
+ */
+export const RULE_TAB_ACTION_TYPES: Record<string, string[]> = {
+  bid: ['bid_to_target_acos', 'bid_up', 'bid_down', 'lower_bid_to_floor', 'raise_bids_for_rank_defense'],
+  budget: ['adjust_ad_budget'],
+  placement: ['set_placement_multiplier', 'defend_top_of_search'],
+  'keyword-harvest': ['promote_to_exact', 'harvest_and_negate'],
+  'negative-targeting': ['harvest_and_negate', 'add_negative_exact', 'add_negative_phrase', 'sync_negatives_across_campaigns'],
+}
+
+/** True when any of the rule's actions belongs to `tabKey`. */
+export function ruleBelongsToTab(actions: unknown, tabKey: string): boolean {
+  const want = RULE_TAB_ACTION_TYPES[tabKey]
+  if (!want) return false
+  const list = Array.isArray(actions) ? actions : []
+  return list.some((a) => want.includes(String((a as { type?: unknown })?.type ?? '')))
+}
+
 /** Where clicking a tab goes. Routed tabs get a real path; the rest ride the index's ?tab= param. */
 export function rulesTabHref(tab: RulesTab): string {
   if (tab.routed) return `${RULES_BASE}/${tab.key}`
@@ -56,20 +98,47 @@ export function rulesTabHref(tab: RulesTab): string {
  * wherever you are. Links (not buttons) so middle-click / cmd-click / back all behave.
  */
 export function RulesTabs({ active }: { active: string }) {
+  // Counts in the tab labels, so the information architecture does the prioritising: you see
+  // where the work is before clicking anything. Computed from RULE_TAB_ACTION_TYPES — the same
+  // map the lists filter by — so a label can never claim a number its tab won't show.
+  //
+  // Only the five mapped tabs get a count. The rest genuinely have no number to state here, and
+  // a blank is honest where a 0 would read as "nothing to do".
+  const [counts, setCounts] = useState<Record<string, number> | null>(null)
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const j = await fetch(`${getBackendUrl()}/api/advertising/automation-rules`, { cache: 'no-store' }).then((r) => r.json())
+        const all = (Array.isArray(j?.rules) ? j.rules : Array.isArray(j?.items) ? j.items : Array.isArray(j) ? j : []) as Array<Record<string, unknown>>
+        const next: Record<string, number> = {}
+        for (const key of Object.keys(RULE_TAB_ACTION_TYPES)) {
+          next[key] = all.filter((r) => ruleBelongsToTab(r.actions, key)).length
+        }
+        if (alive) setCounts(next)
+      } catch { /* a failed count must never blank the navigation */ }
+    })()
+    return () => { alive = false }
+  }, [])
+
   return (
     <div className="h10-cd-tabs h10-rules-tabs" role="tablist" aria-label="Rule types">
-      {RULES_TABS.map((t) => (
-        <Link
-          key={t.key}
-          href={rulesTabHref(t)}
-          role="tab"
-          aria-selected={t.key === active}
-          className={`h10-cd-tab ${t.key === active ? 'on' : ''}`}
-          scroll={false}
-        >
-          {t.label}
-        </Link>
-      ))}
+      {RULES_TABS.map((t) => {
+        const n = counts?.[t.key]
+        return (
+          <Link
+            key={t.key}
+            href={rulesTabHref(t)}
+            role="tab"
+            aria-selected={t.key === active}
+            className={`h10-cd-tab ${t.key === active ? 'on' : ''}`}
+            scroll={false}
+          >
+            {t.label}
+            {n != null && <span className="h10-cd-tabn">{n}</span>}
+          </Link>
+        )
+      })}
     </div>
   )
 }

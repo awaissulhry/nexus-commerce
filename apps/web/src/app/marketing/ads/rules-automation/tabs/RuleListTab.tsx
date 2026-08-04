@@ -14,6 +14,7 @@ import { Plus, Trash2, ExternalLink, Clock, X } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type GridEditMode } from '../../campaigns/_grid/AdsDataGrid'
 import { H10Select } from '../../campaigns/FilterDropdown'
 import { getBackendUrl } from '@/lib/backend-url'
+import { ruleBelongsToTab } from '../_shared/tabs'
 
 export interface RuleRow { id: string; name: string; automation: boolean; criteria: string; freqDay: string; freqTime: string; live?: boolean }
 
@@ -56,7 +57,9 @@ export function RuleListTab({ noun, seed, onAddRule, liveType, editHref, emptyNo
       try {
         const j = await fetch(`${getBackendUrl()}/api/advertising/automation-rules`).then((r) => r.json())
         const all = (Array.isArray(j?.rules) ? j.rules : Array.isArray(j?.items) ? j.items : Array.isArray(j) ? j : []) as Array<Record<string, unknown>>
-        const mine = all.filter((r) => { const a = (Array.isArray(r.actions) ? r.actions[0] : null) as { type?: string } | null; return a?.type === liveType })
+        // `liveType` is the TAB KEY, not an action type — see RULE_TAB_ACTION_TYPES for why
+        // comparing the two directly matched nothing and emptied every live tab.
+        const mine = all.filter((r) => ruleBelongsToTab(r.actions, liveType))
         if (alive) setRows(mine.map(ruleToRow))
       } catch { if (alive) setRows([]) }
     })()
