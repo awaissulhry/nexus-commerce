@@ -144,3 +144,49 @@ negate exactly the terms the coverage strategy exists to own.
 
 **Do not auto-negate from this list.** It is a diagnosis surface, not an action queue,
 until the coverage work says which of those terms are ones we intend to win.
+
+
+---
+
+## RETRACTION — the "already built, never connected" finding was false
+
+The correction above states that `TARGETING_REPORT_TYPE_ID`, `ingestTargetRows` and
+`runTargetingReportCycle` "have existed, fully implemented" and that nothing ever called
+them — the seventh instance of something built and not wired.
+
+**That is wrong.** Those definitions were the *parallel session's uncommitted work*,
+sitting in the shared working tree while I read the file. They were minutes old, not
+archaeological. `runTargetingReportCycle` did not exist in `main` at all: verified with
+`git show 9fe009095:apps/api/src/services/advertising/ads-reports.service.ts`, which
+contains zero matches for it.
+
+Two consequences.
+
+**I broke the build on main.** Commit `9fe009095` (08:00) imports and calls
+`runTargetingReportCycle` three times and includes only `ads-sync.job.ts` plus this doc.
+The symbol's definition lived in the other session's uncommitted edits, so `main` had a
+file importing something that was not there. It stayed broken until their commit
+`3cd85e31a` (08:11), whose message says "and repair the build on main". Eleven minutes.
+
+**The pre-push hook cannot catch this.** It builds the WORKING TREE, not the commit — a
+hazard already documented in this repo. Their uncommitted definition was present
+locally, so everything compiled and the push reported "All workspaces build cleanly"
+while main did not compile at all.
+
+### The guard that was missing
+
+Staging specific files by name is exactly as dangerous as `git commit --only` in a shared
+tree. Before treating anything found in a working file as pre-existing, check whether it
+is actually in `main`:
+
+```
+git diff HEAD --stat <file>              # is this file dirty right now?
+git show HEAD:<file> | grep -c <symbol>  # does main really have it?
+```
+
+Neither was run. Both would have taken seconds and would have prevented a false finding,
+a false commit message, a false entry in this document, and eleven minutes of broken main.
+
+The "count of things built but not connected" repeated through this engagement should be
+read down by one, and any instance discovered by reading a dirty file should be treated
+as unverified unless checked against `main`.
