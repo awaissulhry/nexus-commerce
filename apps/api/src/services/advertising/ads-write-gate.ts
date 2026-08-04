@@ -143,6 +143,17 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
   // campaignId (every existing-entity bid/state mutation), the campaign must be
   // explicitly on the allowlist. `undefined` = a creation flow with no campaign
   // to gate → skip this check. `null` = resolution failed → deny.
+  //
+  // ADX G5 — this is now a real containment layer rather than a claim. Every one of
+  // the account's 216 campaigns was allowlisted, so "default-deny" denied nothing.
+  // Measured over 90 days, 134 of them (133 PAUSED, 1 ARCHIVED) had received zero
+  // writes and held no enabled schedule; those are now denied, leaving 82 — the
+  // ENABLED set, which still covers all 33 scheduled campaigns.
+  //
+  // FOOTGUN: re-enabling a PAUSED campaign does NOT re-allowlist it. The write will
+  // be denied here with this exact reason, which is visible and recoverable — flip it
+  // back via PATCH /advertising/campaigns/:id/live-writes. That is the intended
+  // trade: an explicit deny an operator can see beats a silent write they cannot.
   if (ctx.campaignId !== undefined) {
     if (!ctx.campaignId) {
       return {
