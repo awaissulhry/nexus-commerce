@@ -72,6 +72,20 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
   const spendRows = await prisma.amazonAdsDailyPerformance.groupBy({ by: ['marketplace'], where: { entityType: 'CAMPAIGN', date: { gte: start, lt: end } }, _sum: { costMicros: true } })
   const mtdByMkt = new Map(spendRows.map((r) => [r.marketplace, Math.round(Number(r._sum.costMicros ?? 0) / 10_000)]))
 
+  // Month-to-date spend PER CAMPAIGN. Pacing used to divide the envelope in proportion to
+  // each campaign's nominal daily budget, which is not a measure of what it consumes: this
+  // account carries ~EUR 1,956/day of budget against ~EUR 92/day of spend, so budgets are
+  // ~21x actual use and rank the campaigns almost arbitrarily. Scaling them all by one
+  // factor left idle campaigns untouched and crushed the ones actually delivering —
+  // measured on 2026-08-05, 13 of 54 spending campaigns would have been capped BELOW their
+  // current spend, EUR 60.52/day of a EUR 92/day account. Share now follows spend.
+  const campSpendRows = await prisma.amazonAdsDailyPerformance.groupBy({
+    by: ['localEntityId'],
+    where: { entityType: 'CAMPAIGN', date: { gte: start, lt: end }, localEntityId: { not: null } },
+    _sum: { costMicros: true },
+  })
+  const mtdByCamp = new Map(campSpendRows.map((r) => [r.localEntityId as string, Math.round(Number(r._sum.costMicros ?? 0) / 10_000)]))
+
   const planDecisions: PlanDecision[] = []
   let budgetChanges = 0, suppressing = 0, restoring = 0, netDelta = 0
 
@@ -83,10 +97,23 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
     const cal = ((p.calendar as unknown as Array<{ day: number; pct: number }>) ?? [])
     const limByCamp = new Map(((p.campaignLimits as unknown as CampaignLimit[]) ?? []).map((l) => [l.campaignId, l]))
 
+    // CORRECTIVE, not prescriptive. Pacing exists to stop a cap being breached, so it may
+    // only act when the month is actually heading past it. Rewriting every daily budget to
+    // the pacing target regardless meant a cap bound hardest when it was least needed:
+    // on 2026-08-05 this account was EUR 367 into a EUR 4,000 month — 91% under, projecting
+    // ~EUR 2,850 — and pacing still proposed cutting 82 campaigns by EUR 1,826/day.
+    //
+    // A daily budget is a CEILING, not a target. Leaving it above the pacing line costs
+    // nothing while spend is under it, and preserves the headroom a campaign needs on the
+    // days it converts.
+    const daysElapsed = Math.max(1, dayOfMonth)
+    const projectedCents = cap > 0 ? Math.round(mtd + (mtd / daysElapsed) * remainingDays) : 0
+    const pacingNeeded = p.autoPacing && cap > 0 && projectedCents > cap
+
     // Today's whole-market target: calendar-weighted share of the remaining
     // envelope (so a tentpole day pulls forward), else an even daily split.
     let todayTarget: number | null = null
-    if (p.autoPacing) {
+    if (pacingNeeded) {
       if (cal.length) {
         const rem = cal.filter((c) => c.day >= dayOfMonth)
         const sumRem = rem.reduce((s, c) => s + c.pct, 0) || 1
@@ -100,13 +127,20 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
     const camps = await prisma.campaign.findMany({ where: { marketplace: p.marketplace, status: 'ENABLED' }, select: { id: true, name: true, dailyBudget: true, bidsSuppressedAt: true } })
     const curById = new Map(camps.map((c) => [c.id, Math.round(Number(c.dailyBudget ?? 0) * 100)]))
     const curTotal = camps.reduce((s, c) => s + (curById.get(c.id) ?? 0), 0)
+    const spendTotal = camps.reduce((s, c) => s + (mtdByCamp.get(c.id) ?? 0), 0)
 
     const decisions: CampaignDecision[] = camps.map((c) => {
       const cur = curById.get(c.id) ?? 0
       let target: number | null = null
       let clamp: CampaignDecision['clamp'] = null
-      if (p.autoPacing && todayTarget != null) {
-        const share = curTotal > 0 ? cur / curTotal : camps.length ? 1 / camps.length : 0
+      if (pacingNeeded && todayTarget != null) {
+        // Share of SPEND, falling back to share of budget only when the marketplace has no
+        // spend at all this month (a fresh month, or a market that has not delivered yet) —
+        // otherwise a campaign that consumes nothing would claim budget from one that does.
+        const campMtd = mtdByCamp.get(c.id) ?? 0
+        const share = spendTotal > 0
+          ? campMtd / spendTotal
+          : curTotal > 0 ? cur / curTotal : camps.length ? 1 / camps.length : 0
         let t = Math.round(todayTarget * share)
         const lim = limByCamp.get(c.id)
         const minC = lim?.minCents ?? FLOOR_CENTS
