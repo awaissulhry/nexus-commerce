@@ -196,6 +196,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           portfolioId: true,
           // P2 (Trading Desk Ad Manager): placement multipliers live here.
           dynamicBidding: true,
+          // ADX G2 — the absolute bid bounds the write gate enforces, so the grid can
+          // show at a glance which campaigns are unbounded.
+          minBidCents: true,
+          maxBidCents: true,
         },
       })
       // P2 — derive inline placement multipliers (ToS/PDP/RoS) from
@@ -763,10 +767,33 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // Pass 0/null to clear a cap.
   fastify.patch('/advertising/campaigns/:id/guardrails', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const b = request.body as { maxBidChangePct?: number | null; maxWritesPerDay?: number | null }
-    const c = await prisma.campaign.findUnique({ where: { id }, select: { dynamicBidding: true } })
+    const b = request.body as {
+      maxBidChangePct?: number | null; maxWritesPerDay?: number | null
+      // ADX G2 — absolute bid bounds. Real COLUMNS, not dynamicBidding JSON, because
+      // ads-write-gate.ts reads them on every write and a column cannot be missed by a
+      // future engine that forgets to look in the blob. Complementary to the two above:
+      // maxBidChangePct clamps how far one move may swing, cpcCeiling caps against the
+      // target's HISTORICAL CPC (useless for a keyword with no history), and these cap
+      // the absolute value. Extended onto this route rather than a new one — a second
+      // Fastify registration of the same path is a boot crash.
+      minBidCents?: number | null; maxBidCents?: number | null
+    }
+    const c = await prisma.campaign.findUnique({
+      where: { id }, select: { dynamicBidding: true, name: true, minBidCents: true, maxBidCents: true },
+    })
     if (!c) { reply.status(404); return { error: 'campaign not found' } }
     const db = (c.dynamicBidding ?? {}) as Record<string, unknown>
+
+    let boundsData: Record<string, number | null> = {}
+    if (b.minBidCents !== undefined || b.maxBidCents !== undefined) {
+      const { validateGuardrails } = await import('../services/advertising/ads-guardrails.js')
+      const v = validateGuardrails(
+        { minBidCents: b.minBidCents, maxBidCents: b.maxBidCents },
+        [{ name: c.name, minBidCents: c.minBidCents, maxBidCents: c.maxBidCents }],
+      )
+      if (!v.ok) { reply.status(400); return { ok: false, error: v.error } }
+      boundsData = v.data
+    }
     if (b.maxBidChangePct !== undefined) {
       const pct = b.maxBidChangePct == null ? 0 : Math.max(0, Math.min(500, Number(b.maxBidChangePct)))
       if (pct > 0) db.maxBidChangePct = pct
@@ -777,8 +804,28 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       if (n > 0) db.maxWritesPerDay = n
       else delete db.maxWritesPerDay
     }
-    await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never } })
-    return { ok: true, maxBidChangePct: db.maxBidChangePct ?? null, maxWritesPerDay: db.maxWritesPerDay ?? null }
+    await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never, ...boundsData } })
+
+    // ADX A2 — record WHY, using the evidence column that phase added. Bid bounds are
+    // local governance: nothing is pushed to Amazon, which has no concept of them.
+    if (Object.keys(boundsData).length > 0) {
+      await prisma.advertisingActionLog.create({
+        data: {
+          userId: actorFromHeaders(request.headers as Record<string, unknown>),
+          actionType: 'set_campaign_bid_bounds', entityType: 'CAMPAIGN', entityId: id,
+          payloadBefore: { minBidCents: c.minBidCents, maxBidCents: c.maxBidCents },
+          payloadAfter: boundsData, amazonResponseStatus: 'SUCCESS',
+          evidence: { metric: 'operator_guardrail', note: 'Absolute bid bounds; enforced at the write gate, never pushed to Amazon.' },
+        },
+      }).catch(() => { /* an audit row must never fail the write it describes */ })
+    }
+    return {
+      ok: true,
+      maxBidChangePct: db.maxBidChangePct ?? null,
+      maxWritesPerDay: db.maxWritesPerDay ?? null,
+      minBidCents: boundsData.minBidCents !== undefined ? boundsData.minBidCents : c.minBidCents,
+      maxBidCents: boundsData.maxBidCents !== undefined ? boundsData.maxBidCents : c.maxBidCents,
+    }
   })
 
   // ── CBN.2h.6: Bid Automation + Target ACoS (Ad Manager Bulk Actions) ────
