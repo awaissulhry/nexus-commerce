@@ -15218,3 +15218,31 @@ model AdsConsoleRow {
   @@index([importId, searchTerm])
   @@index([marketplace, windowStart])
 }
+
+// ── RPT.12 — operator-defined metrics ────────────────────────────────────
+//
+// A custom metric is a FORMULA over the report's existing metrics, compiled to
+// SQL by ads-metric-formula.ts. It is stored, not evaluated, so it behaves like
+// a built-in: aggregated in SQL, correct at every grouping and in the totals row,
+// and identical across the grid, the export and the scheduled email.
+//
+// Scoped to one report because a formula references that report's metric ids;
+// `sales - cost` means nothing on a report with neither.
+model CustomMetric {
+  id          String  @id @default(cuid())
+  reportId    String
+  name        String
+  formula     String
+  /// money | pct | ratio | int — drives rendering, exactly like a built-in.
+  format      String  @default("ratio")
+  /// higher | lower | null — null means neither direction is an improvement.
+  betterWhen  String?
+  description String?
+  ownerId     String  @default("default-user")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([reportId, name])
+  @@index([reportId])
+}
