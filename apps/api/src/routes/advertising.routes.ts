@@ -6107,10 +6107,36 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       where: { id },
       select: {
         id: true, domain: true, name: true, enabled: true, dryRun: true,
-        createdAt: true, evaluationCount: true, matchCount: true,
+        createdAt: true, evaluationCount: true, matchCount: true, actions: true,
       },
     })
     if (!rule || rule.domain !== 'advertising') return reply.code(404).send({ error: 'not_found' })
+
+    // ADX N3 — the eight checks below are about EVIDENCE: has this rule run long enough,
+    // matched often enough, is the connection live. None of them ask what the rule
+    // actually DOES, so a rule that creates negatives could graduate on the strength of
+    // having done so quietly for a fortnight.
+    //
+    // A bid is a number the engine can move back. A negative is a thing that now exists
+    // and that nobody will notice later. The ceiling is judged by the rule's most
+    // dangerous action and it is not overridable here — a structural rule stays at
+    // PROPOSE until it has a retirement path, which is a design decision, not a
+    // question of how much evidence has accumulated.
+    const { graduationCeiling } = await import('../services/advertising/ads-graduation.js')
+    const protectionCount = await prisma.adKeywordProtection.count({ where: { mode: 'WHITELIST' } })
+    const ceiling = graduationCeiling({
+      actionTypes: (Array.isArray(rule.actions) ? rule.actions : [])
+        .map((a) => String((a as { type?: unknown })?.type ?? '')).filter(Boolean),
+      hasKeywordProtections: protectionCount > 0,
+    })
+    if (ceiling.maxLevel !== 'AUTO') {
+      return reply.code(409).send({
+        error: 'above_graduation_ceiling',
+        maxLevel: ceiling.maxLevel,
+        blockedBy: ceiling.blockedBy,
+        message: ceiling.reason,
+      })
+    }
 
     // Re-validate gate server-side — never trust the client's gate result
     const conn = await prisma.amazonAdsConnection.findFirst({
@@ -6140,8 +6166,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
     const updated = await prisma.automationRule.update({
       where: { id },
-      data: { dryRun: false },
-      select: { id: true, name: true, dryRun: true, enabled: true },
+      // ADX N2 — set the dial as well as the legacy binary, so the two cannot disagree
+      // about whether this rule acts.
+      data: { dryRun: false, autonomyLevel: 'AUTO' },
+      select: { id: true, name: true, dryRun: true, enabled: true, autonomyLevel: true },
     })
     logger.info('[ADS-GRADUATE] rule graduated to live', {
       ruleId: id, ruleName: rule.name, profileId: conn?.profileId,
