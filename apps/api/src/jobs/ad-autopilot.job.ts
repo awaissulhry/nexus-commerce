@@ -14,25 +14,53 @@ import { runConductorCycle, type PlanModules } from '../services/advertising/aut
 import { DEFAULT_GUARDRAILS, type CampaignSignals, type Goal, type Guardrails } from '../services/advertising/autopilot/presets.js'
 import { syncLinkedRules, mirrorRuleDecisions } from '../services/advertising/autopilot/coordination.js'
 import { applyPlanActions } from '../services/advertising/autopilot/apply.js'
+import { microsToCents } from '../services/ads-core/metrics-math.js'
+import { ruleWindowBounds } from '@nexus/shared/data-vintage'
 
 /** Assemble per-campaign signals from Campaign aggregates + AdTarget perf roll-up. */
 export async function gatherSignals(campaignIds: string[]): Promise<CampaignSignals[]> {
   if (!campaignIds.length) return []
-  const [campaigns, targets] = await Promise.all([
+  // ADX — spend/sales/clicks/orders came from AdTarget's stored aggregates, which are 0
+  // across all 5,204 targets and will stay 0: the only writer, ads-metrics-ingest, was
+  // deliberately retired in H.2e (2026-05-18). So every signal this function produced
+  // was zero, across 1,341 autopilot runs, and the conductor has been planning against
+  // an account that looked completely idle.
+  //
+  // Performance now comes from AmazonAdsDailyPerformance at CAMPAIGN grain — already
+  // populated, already the level these signals are consumed at, and no dependency on
+  // the target-grain ingest. AdTarget is still read, but only for bidCents, which is
+  // genuine entity state from structure sync rather than a performance roll-up.
+  const { since, until } = ruleWindowBounds(14) // excludes the provisional D-0/D-1 tail
+  const [campaigns, targets, perf] = await Promise.all([
     prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, dailyBudget: true, trueProfitMarginPct: true, deliveryReasons: true, impressions: true } }),
-    prisma.adTarget.findMany({ where: { isNegative: false, adGroup: { campaignId: { in: campaignIds } } }, select: { spendCents: true, salesCents: true, clicks: true, ordersCount: true, bidCents: true, adGroup: { select: { campaignId: true } } } }),
+    prisma.adTarget.findMany({ where: { isNegative: false, adGroup: { campaignId: { in: campaignIds } } }, select: { bidCents: true, adGroup: { select: { campaignId: true } } } }),
+    prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['localEntityId'],
+      where: { entityType: 'CAMPAIGN', localEntityId: { in: campaignIds }, date: { gte: since, lte: until } },
+      _sum: { costMicros: true, sales7dCents: true, clicks: true, orders7d: true },
+    }),
   ])
   const agg = new Map<string, { spend: number; sales: number; clicks: number; orders: number; bidSum: number; bidN: number }>()
+  const blank = () => ({ spend: 0, sales: 0, clicks: 0, orders: 0, bidSum: 0, bidN: 0 })
+  for (const p of perf) {
+    if (!p.localEntityId) continue
+    const a = agg.get(p.localEntityId) ?? blank()
+    a.spend = microsToCents(p._sum.costMicros)
+    a.sales = p._sum.sales7dCents ?? 0
+    a.clicks = p._sum.clicks ?? 0
+    a.orders = p._sum.orders7d ?? 0
+    agg.set(p.localEntityId, a)
+  }
+  // Average current bid stays a target-level read — it is entity state, not performance.
   for (const t of targets) {
     const cid = t.adGroup?.campaignId
     if (!cid) continue
-    const a = agg.get(cid) ?? { spend: 0, sales: 0, clicks: 0, orders: 0, bidSum: 0, bidN: 0 }
-    a.spend += t.spendCents ?? 0; a.sales += t.salesCents ?? 0; a.clicks += t.clicks ?? 0; a.orders += t.ordersCount ?? 0
+    const a = agg.get(cid) ?? blank()
     if ((t.bidCents ?? 0) > 0) { a.bidSum += t.bidCents; a.bidN += 1 }
     agg.set(cid, a)
   }
   return campaigns.map((c) => {
-    const a = agg.get(c.id) ?? { spend: 0, sales: 0, clicks: 0, orders: 0, bidSum: 0, bidN: 0 }
+    const a = agg.get(c.id) ?? blank()
     // trueProfitMarginPct may be stored as a fraction (0.35) or a percent (35) — normalize to percent.
     const rawMargin = c.trueProfitMarginPct != null ? Number(c.trueProfitMarginPct) : null
     const marginPct = rawMargin == null ? null : rawMargin <= 1.5 ? rawMargin * 100 : rawMargin
