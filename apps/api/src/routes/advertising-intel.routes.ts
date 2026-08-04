@@ -644,6 +644,13 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // RPT.9 — per-feed pipeline health: is every feed landing, how late, what failed.
+  fastify.get('/advertising/reporting/pipeline', async (_request, reply) => {
+    const { pipelineHealth } = await import('../services/advertising/ads-pipeline-health.service.js')
+    reply.header('Cache-Control', 'private, max-age=60')
+    return pipelineHealth()
+  })
+
   // ── RPT.7 — importing Amazon console exports ────────────────────────────
   fastify.get('/advertising/reporting/imports', async (_request, reply) => {
     const { listImports } = await import('../services/advertising/ads-console-import.service.js')

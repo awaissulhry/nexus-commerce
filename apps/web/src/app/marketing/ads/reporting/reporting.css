@@ -530,3 +530,10 @@ select.rpt-input { height: 32px; }
   font-weight: 500; font-size: 11px; color: var(--text-tertiary);
   white-space: nowrap;
 }
+
+/* RPT.9 — pipeline health */
+.rpt-alerts { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+.rpt-alerts li { font-size: 12.5px; line-height: 1.5; }
+.rpt-feed { white-space: normal; }
+.rpt-feed .t { display: block; font-weight: 650; color: var(--text-primary); }
+.rpt-feed .s { display: block; margin-top: 1px; font-size: 11px; color: var(--text-tertiary); }

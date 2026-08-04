@@ -254,7 +254,12 @@ export function ReportingClient() {
                 entry.id === 'pipeline' ? (
                   <article key={entry.id} className="rpt-card">
                     <div className="rpt-card-hd">
-                      <h3>{entry.title}</h3>
+                      <h3>
+                        <Link href="/marketing/ads/reporting/pipeline" className="rpt-open">
+                          {entry.title}
+                          <ArrowRight size={13} aria-hidden />
+                        </Link>
+                      </h3>
                       <Pill tone={STATE_META.ready.tone}>{STATE_META.ready.label}</Pill>
                     </div>
                     <p className="rpt-answers">{entry.answers}</p>
