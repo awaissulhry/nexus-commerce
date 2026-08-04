@@ -35,9 +35,34 @@ export interface FeedHealth {
   note: string | null
 }
 
+/**
+ * Two feeds asserting things that cannot both be true.
+ *
+ * Every check above measures ONE feed against its own expectations, and that is
+ * exactly how Italy went missing for a week: the reports feed was internally
+ * consistent — jobs created, completed, no errors — and merely looked "stale".
+ * Nothing compared it against a second, independent source that knew the ads
+ * were still running.
+ *
+ * A contradiction needs no threshold tuning and no baseline. It is simply two
+ * facts that cannot coexist, which makes it the cheapest possible alarm and the
+ * hardest to explain away.
+ */
+export type ContradictionKind = 'spend-without-rows' | 'impossible-value'
+
+export interface Contradiction {
+  kind: ContradictionKind
+  marketplace: string
+  date: string
+  severity: 'critical' | 'warning'
+  detail: string
+}
+
 export interface PipelineHealth {
   asOf: string
   feeds: FeedHealth[]
+  /** Empty is the healthy state. */
+  contradictions: Contradiction[]
   jobs: {
     reportJobs: Array<{ status: string; n: number }>
     exportFailures: { total: number; recoverable: number; note: string }
@@ -89,6 +114,91 @@ const FEEDS: FeedDef[] = [
 const EXTRA_WHERE: Record<string, string> = {
   'daily-perf': `"entityType" IN ('CAMPAIGN','PRODUCT_AD')`,
   targeting: `"entityType" = 'AD_TARGET'`,
+}
+
+/** Money below this in a day is rounding noise, not a missing report. */
+const SPEND_FLOOR_EUR = 0.5
+
+/**
+ * The check that would have caught the Italy outage on day one.
+ *
+ * AMS arrives by SQS push and the v3 reports by async pull — two entirely
+ * separate paths. If AMS recorded spend on a day the reports have no rows for,
+ * one of them is wrong, and it is never the money.
+ *
+ * The last two days are excluded: the reports legitimately lag, and flagging
+ * that would train everyone to ignore this panel.
+ *
+ * AMS coverage is per-CAMPAIGN, so its ABSENCE proves nothing — a market with no
+ * AMS rows is simply unverifiable here and is skipped rather than reported clean.
+ */
+async function detectContradictions(): Promise<Contradiction[]> {
+  const out: Contradiction[] = []
+
+  const spendNoRows = await prisma
+    .$queryRawUnsafe<Array<{ marketplace: string; day: string; spend: number; impressions: number }>>(`
+      WITH ams AS (
+        SELECT "marketplace", "date",
+               SUM("costMicros") / 1e6           AS spend,
+               SUM("impressions")::bigint        AS impressions
+        FROM "AmazonAdsHourlyPerformance"
+        WHERE "date" BETWEEN CURRENT_DATE - 16 AND CURRENT_DATE - 2
+        GROUP BY 1, 2
+      ),
+      rep AS (
+        SELECT "marketplace", "date", COUNT(*)::bigint AS rows
+        FROM "AmazonAdsDailyPerformance"
+        WHERE "date" BETWEEN CURRENT_DATE - 16 AND CURRENT_DATE - 2
+          AND "entityType" IN ('CAMPAIGN', 'PRODUCT_AD')
+        GROUP BY 1, 2
+      )
+      SELECT a."marketplace", a."date"::text AS day,
+             ROUND(a.spend::numeric, 2) AS spend, a.impressions
+      FROM ams a
+      LEFT JOIN rep r ON r."marketplace" = a."marketplace" AND r."date" = a."date"
+      WHERE a.spend >= ${SPEND_FLOOR_EUR} AND COALESCE(r.rows, 0) = 0
+      ORDER BY a."date" DESC, a."marketplace"`)
+    .catch(() => [])
+
+  for (const r of spendNoRows) {
+    const spend = Number(r.spend) || 0
+    out.push({
+      kind: 'spend-without-rows',
+      marketplace: r.marketplace,
+      date: r.day,
+      severity: 'critical',
+      detail: `the hourly feed recorded €${spend.toFixed(2)} of spend (${Number(r.impressions).toLocaleString()} impressions) but the daily report holds no rows for this day — spend cannot exist without a report`,
+    })
+  }
+
+  // Impossible values. Amazon sends restatements as adjustments, so a feed that
+  // accumulates instead of replacing can drive a counter below zero. Measured
+  // 2026-08-02: IT -930 and DE -140 impressions.
+  const impossible = await prisma
+    .$queryRawUnsafe<Array<{ marketplace: string; day: string; impressions: number; clicks: number }>>(`
+      SELECT "marketplace", "date"::text AS day,
+             SUM("impressions")::bigint AS impressions, SUM("clicks")::bigint AS clicks
+      FROM "AmazonAdsHourlyPerformance"
+      WHERE "date" > CURRENT_DATE - 30
+      GROUP BY 1, 2
+      HAVING SUM("impressions") < 0 OR SUM("clicks") < 0
+      ORDER BY 2 DESC`)
+    .catch(() => [])
+
+  for (const r of impossible) {
+    const parts: string[] = []
+    if (Number(r.impressions) < 0) parts.push(`${Number(r.impressions)} impressions`)
+    if (Number(r.clicks) < 0) parts.push(`${Number(r.clicks)} clicks`)
+    out.push({
+      kind: 'impossible-value',
+      marketplace: r.marketplace,
+      date: r.day,
+      severity: 'warning',
+      detail: `the hourly feed totals ${parts.join(' and ')} — a negative count cannot occur, so restatement adjustments are being accumulated rather than replacing the original value`,
+    })
+  }
+
+  return out
 }
 
 export async function pipelineHealth(): Promise<PipelineHealth> {
@@ -167,6 +277,10 @@ export async function pipelineHealth(): Promise<PipelineHealth> {
       `SELECT COUNT(*)::int AS n FROM "AmazonReportRun" WHERE "status" = 'DONE' AND "rowCount" IS NULL`),
   ])
 
+  const contradictions = await detectContradictions()
+
+  // Contradictions are NOT folded into `alerts`: they outrank a late feed and get
+  // their own surface, and duplicating them would just teach people to skim.
   const alerts: string[] = []
   for (const f of feeds) {
     if (f.status === 'late') alerts.push(`${f.label} is ${f.lagDays} days behind — expected within ${GRACE_DAYS[f.cadence]} for a ${f.cadence} feed.`)
@@ -178,6 +292,7 @@ export async function pipelineHealth(): Promise<PipelineHealth> {
   return {
     asOf: new Date().toISOString(),
     feeds,
+    contradictions,
     jobs: {
       reportJobs: reportJobs.map((r) => ({ status: r.status, n: Number(r.n) })),
       exportFailures: {

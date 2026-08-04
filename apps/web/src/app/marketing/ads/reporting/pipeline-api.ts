@@ -17,9 +17,22 @@ export interface FeedHealth {
   note: string | null
 }
 
+/**
+ * Two independent feeds asserting things that cannot both be true. Ranked above
+ * a late feed: "the money moved but no report exists" is a defect, not a delay.
+ */
+export interface Contradiction {
+  kind: 'spend-without-rows' | 'impossible-value'
+  marketplace: string
+  date: string
+  severity: 'critical' | 'warning'
+  detail: string
+}
+
 export interface PipelineHealth {
   asOf: string
   feeds: FeedHealth[]
+  contradictions: Contradiction[]
   jobs: {
     reportJobs: Array<{ status: string; n: number }>
     exportFailures: { total: number; recoverable: number; note: string }

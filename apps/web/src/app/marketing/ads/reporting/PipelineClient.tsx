@@ -74,6 +74,28 @@ export function PipelineClient() {
 
       {err && <div className="rpt-lede is-error"><AlertTriangle size={16} aria-hidden /><span>{err}</span></div>}
 
+      {/* Ranked above the feed alerts: a late feed is a delay, but two feeds
+          disagreeing about whether money moved is a defect. This is the check
+          that would have surfaced the Italy outage in a day rather than a month. */}
+      {h && h.contradictions.length > 0 && (
+        <div className="rpt-lede is-error">
+          <AlertTriangle size={16} aria-hidden />
+          <span>
+            <b>
+              {h.contradictions.length} contradiction{h.contradictions.length === 1 ? '' : 's'} between feeds.
+            </b>{' '}
+            Two independent sources disagree — one of them is wrong.
+            <ul className="rpt-alerts">
+              {h.contradictions.map((c) => (
+                <li key={`${c.kind}-${c.marketplace}-${c.date}`}>
+                  <b>{c.marketplace} {c.date}</b> — {c.detail}
+                </li>
+              ))}
+            </ul>
+          </span>
+        </div>
+      )}
+
       {h && h.alerts.length > 0 && (
         <div className="rpt-lede is-warn">
           <AlertTriangle size={16} aria-hidden />
@@ -83,8 +105,11 @@ export function PipelineClient() {
           </span>
         </div>
       )}
-      {h && h.alerts.length === 0 && (
-        <div className="rpt-lede"><CheckCircle2 size={16} aria-hidden /><span>Every feed is landing within its expected cadence.</span></div>
+      {h && h.alerts.length === 0 && h.contradictions.length === 0 && (
+        <div className="rpt-lede">
+          <CheckCircle2 size={16} aria-hidden />
+          <span>Every feed is landing within its expected cadence, and no two feeds disagree.</span>
+        </div>
       )}
 
       <div className="h10-am-card">
