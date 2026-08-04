@@ -139,17 +139,27 @@ async function resolveOrigins(rows: ChangeRow[]): Promise<void> {
 const DEDUPE_WINDOW_MS = 10_000
 function dedupe(operations: ChangeRow[], fields: ChangeRow[]): ChangeRow[] {
   if (!operations.length || !fields.length) return operations
-  const byEntity = new Map<string, number[]>()
+  const byEntity = new Map<string, ChangeRow[]>()
   for (const f of fields) {
     const arr = byEntity.get(f.entity.id) ?? []
-    arr.push(f.at.getTime())
+    arr.push(f)
     byEntity.set(f.entity.id, arr)
   }
   return operations.filter((op) => {
-    const times = byEntity.get(op.entity.id)
-    if (!times) return true
+    const rows = byEntity.get(op.entity.id)
+    if (!rows) return true
     const t = op.at.getTime()
-    return !times.some((ft) => Math.abs(ft - t) <= DEDUPE_WINDOW_MS)
+    const covered = rows.filter((f) => Math.abs(f.at.getTime() - t) <= DEDUPE_WINDOW_MS)
+    if (!covered.length) return true
+
+    // The operation row is the ONLY carrier of evidence — CampaignBidHistory has no such
+    // column, so its rows are built with evidence: null. Dropping the operation row therefore
+    // discarded every why-chip on the feed: 722 rows carried evidence and the endpoint
+    // returned it on 0 of 500. Hand it to the field rows that replace it before letting go.
+    if (op.evidence) {
+      for (const f of covered) if (!f.evidence) f.evidence = op.evidence
+    }
+    return false
   })
 }
 
