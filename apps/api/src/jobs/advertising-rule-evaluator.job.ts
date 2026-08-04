@@ -315,44 +315,54 @@ interface UnderperformContext {
 }
 
 async function buildUnderperformContexts(): Promise<UnderperformContext[]> {
-  const rows = await prisma.adTarget.findMany({
-    where: {
-      status: 'ENABLED',
-      spendCents: { gte: UNDERPERFORM_SPEND_MIN_CENTS },
-      salesCents: 0,
-    },
+  // ADX — this read AdTarget.spendCents / salesCents, which are 0 across all 5,204
+  // targets and will stay 0: the only job that wrote them, ads-metrics-ingest, was
+  // deliberately retired in H.2e (2026-05-18) when the async report pipeline replaced
+  // it. So this trigger could never match, and re-arming that job to feed it would
+  // duplicate the modern pipeline and burn Amazon report quota for data we already have.
+  //
+  // Sourced from AmazonAdsDailyPerformance instead, exactly like its four siblings.
+  // The emitted context shape is unchanged, because rule conditions reference
+  // adTarget.spendCents and adTarget.salesCents by path and must keep resolving.
+  const { since, until } = ruleWindowBounds(14) // excludes the provisional D-0/D-1 tail
+  const perf = await prisma.amazonAdsDailyPerformance.groupBy({
+    by: ['localEntityId', 'marketplace'],
+    where: { entityType: 'AD_TARGET', date: { gte: since, lte: until }, localEntityId: { not: null } },
+    _sum: { costMicros: true, sales7dCents: true },
+  })
+  const candidates = perf.filter((r) =>
+    microsToCents(r._sum.costMicros) >= UNDERPERFORM_SPEND_MIN_CENTS
+    && (r._sum.sales7dCents ?? 0) === 0)
+  if (candidates.length === 0) return []
+
+  const targets = await prisma.adTarget.findMany({
+    where: { id: { in: candidates.map((c) => c.localEntityId as string) }, status: 'ENABLED' },
     select: {
-      id: true,
-      externalTargetId: true,
-      kind: true,
-      expressionValue: true,
-      bidCents: true,
-      spendCents: true,
-      salesCents: true,
+      id: true, externalTargetId: true, kind: true, expressionValue: true, bidCents: true,
       adGroup: {
-        select: {
-          id: true,
-          name: true,
-          campaign: { select: { id: true, name: true, marketplace: true } },
-        },
+        select: { id: true, name: true, campaign: { select: { id: true, name: true, marketplace: true } } },
       },
     },
   })
-  return rows.map((t) => ({
-    trigger: 'AD_TARGET_UNDERPERFORMING' as const,
-    marketplace: t.adGroup?.campaign?.marketplace ?? null,
-    adTarget: {
-      id: t.id,
-      externalTargetId: t.externalTargetId,
-      kind: t.kind,
-      expressionValue: t.expressionValue,
-      bidCents: t.bidCents,
-      spendCents: t.spendCents,
-      salesCents: t.salesCents,
-    },
-    adGroup: { id: t.adGroup.id, name: t.adGroup.name },
-    campaign: { id: t.adGroup.campaign.id, name: t.adGroup.campaign.name },
-  }))
+  const spendBy = new Map(candidates.map((c) => [c.localEntityId as string, microsToCents(c._sum.costMicros)]))
+
+  return targets
+    .filter((t) => t.adGroup?.campaign)
+    .map((t) => ({
+      trigger: 'AD_TARGET_UNDERPERFORMING' as const,
+      marketplace: t.adGroup!.campaign!.marketplace ?? null,
+      adTarget: {
+        id: t.id,
+        externalTargetId: t.externalTargetId,
+        kind: t.kind,
+        expressionValue: t.expressionValue,
+        bidCents: t.bidCents,
+        spendCents: spendBy.get(t.id) ?? 0,
+        salesCents: 0, // by construction — these are the zero-sale candidates
+      },
+      adGroup: { id: t.adGroup!.id, name: t.adGroup!.name },
+      campaign: { id: t.adGroup!.campaign!.id, name: t.adGroup!.campaign!.name },
+    }))
 }
 
 // ── Cron tick ──────────────────────────────────────────────────────────
