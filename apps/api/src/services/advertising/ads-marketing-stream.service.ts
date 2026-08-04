@@ -181,6 +181,36 @@ export async function ingestMarketingStream(messages: AmsMessage[]): Promise<Ams
       // via EXCLUDE_AMS_DAILY rather than deleted.)
       // CD.11 — also write the hourly row (the genuine AMS edge: hour grain).
       const localEntityId = await resolveLocalId(campaignId, marketplace)
+
+      // AMS sends corrections as DELTAS, which is why `update` increments rather
+      // than replaces. A negative delta is therefore normal — but only against a
+      // baseline. When the original record was never received (the month AMS was
+      // RBAC-blocked, a queue gap, an hour predating the subscription) the upsert
+      // falls through to `create` and stores the delta itself as an absolute
+      // count. That produced 905 rows holding NEGATIVE impressions across 46
+      // days, totalling -5,478, and every SUM over an affected window was
+      // understated.
+      //
+      // A correction with nothing to correct is unapplicable: there is no
+      // original to reduce. Recording nothing is strictly more truthful than
+      // recording an impossible count, so it is skipped and logged — the gap
+      // stays visible instead of being encoded as bad data.
+      const negativeDelta = isTraffic && ((m.impressions ?? 0) < 0 || (m.clicks ?? 0) < 0)
+      if (negativeDelta) {
+        const existing = await prisma.amazonAdsHourlyPerformance.findUnique({
+          where: { profileId_adProduct_entityType_entityId_date_hour: { profileId, adProduct, entityType: 'CAMPAIGN', entityId: campaignId, date, hour } },
+          select: { id: true },
+        })
+        if (!existing) {
+          logger.warn('[AX.12] AMS correction with no baseline — skipped', {
+            campaignId, marketplace, date: date.toISOString().slice(0, 10), hour,
+            impressions: m.impressions ?? 0, clicks: m.clicks ?? 0,
+          })
+          result.skipped++
+          continue
+        }
+      }
+
       await prisma.amazonAdsHourlyPerformance.upsert({
         where: { profileId_adProduct_entityType_entityId_date_hour: { profileId, adProduct, entityType: 'CAMPAIGN', entityId: campaignId, date, hour } },
         create: {
@@ -193,6 +223,23 @@ export async function ingestMarketingStream(messages: AmsMessage[]): Promise<Ams
           ? { impressions: { increment: m.impressions ?? 0 }, clicks: { increment: m.clicks ?? 0 }, costMicros: { increment: costMicros }, reportedAt: new Date(), ...(localEntityId ? { localEntityId } : {}) }
           : { sales7dCents: { increment: salesCents }, orders7d: { increment: m.attributed_conversions_1d ?? 0 }, units7d: { increment: m.attributed_units_ordered_1d ?? 0 }, reportedAt: new Date(), ...(localEntityId ? { localEntityId } : {}) },
       })
+
+      // A delta larger than the baseline can still drive a counter below zero,
+      // which Prisma cannot express as a conditional clamp inside the upsert.
+      // GREATEST is applied only when something actually went negative, so the
+      // common path costs nothing.
+      if (negativeDelta) {
+        await prisma.$executeRawUnsafe(
+          `UPDATE "AmazonAdsHourlyPerformance"
+              SET "impressions" = GREATEST(0, "impressions"),
+                  "clicks"      = GREATEST(0, "clicks"),
+                  "costMicros"  = GREATEST(0, "costMicros")
+            WHERE "profileId" = $1 AND "adProduct" = $2 AND "entityType" = 'CAMPAIGN'
+              AND "entityId" = $3 AND "date" = $4 AND "hour" = $5
+              AND ("impressions" < 0 OR "clicks" < 0 OR "costMicros" < 0)`,
+          profileId, adProduct, campaignId, date, hour,
+        )
+      }
       result.upserted++
     } catch (e) { logger.warn('[AX.12] AMS ingest row failed', { campaignId, error: (e as Error).message }); result.skipped++ }
   }
