@@ -397,6 +397,18 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
   return { evaluations, matches, capped, failed }
 }
 
+// ADX — nine queries in this file read `entityType: 'KEYWORD'` from
+// AmazonAdsDailyPerformance. Nothing has ever written that value. The ingest writes
+// 'AD_TARGET' (ads-reports.service, ingestTargetRows) and the schema documents the
+// vocabulary as CAMPAIGN | AD_GROUP | AD_TARGET | PRODUCT_AD | SEARCH_TERM | PLACEMENT.
+//
+// So every target-grain trigger was reading a value that does not exist — and would
+// have gone on reading it even after the targeting report cron started producing rows.
+// Two halves of one feature, both fully implemented, disagreeing about the name of the
+// thing they exchange.
+//
+// Separately still dead: nothing ingests AD_GROUP grain, so the ad-group builder below
+// has no producer at all — a different failure from a mismatched name.
 // ── CAMPAIGN_PERFORMANCE_BUDGET (AME.12) ──────────────────────────────
 // Performance/ROAS-guardrail budget rules. Yields every enabled campaign with
 // its windowed ROAS/ACOS (from the daily table — accurate, not the stale stored
@@ -460,7 +472,7 @@ async function buildZeroImpressionContexts() {
   const { since, until } = ruleWindowBounds(7) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
   const perf = await prisma.amazonAdsDailyPerformance.groupBy({
     by: ['localEntityId', 'marketplace'],
-    where: { entityType: 'KEYWORD', date: { gte: since, lte: until }, costMicros: { gt: 0n } },
+    where: { entityType: 'AD_TARGET', date: { gte: since, lte: until }, costMicros: { gt: 0n } },
     _sum: { impressions: true, costMicros: true },
     having: { impressions: { _sum: { equals: 0 } } },
   })
@@ -480,7 +492,7 @@ async function buildLowCtrContexts() {
   const { since, until } = ruleWindowBounds(14) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
   const perf = await prisma.amazonAdsDailyPerformance.groupBy({
     by: ['localEntityId', 'marketplace'],
-    where: { entityType: 'KEYWORD', date: { gte: since, lte: until } },
+    where: { entityType: 'AD_TARGET', date: { gte: since, lte: until } },
     _sum: { impressions: true, clicks: true, costMicros: true },
   })
   return perf
@@ -506,8 +518,8 @@ async function buildCvrDropContexts() {
   const thisWeekStart = new Date(); thisWeekStart.setUTCDate(thisWeekStart.getUTCDate() - 7); thisWeekStart.setUTCHours(0, 0, 0, 0)
   const prevWeekStart = new Date(thisWeekStart); prevWeekStart.setUTCDate(thisWeekStart.getUTCDate() - 7)
   const [thisWeek, prevWeek] = await Promise.all([
-    prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId', 'marketplace'], where: { entityType: 'KEYWORD', date: { gte: thisWeekStart }, clicks: { gt: 0 } }, _sum: { clicks: true, orders7d: true } }),
-    prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId', 'marketplace'], where: { entityType: 'KEYWORD', date: { gte: prevWeekStart, lt: thisWeekStart }, clicks: { gt: 0 } }, _sum: { clicks: true, orders7d: true } }),
+    prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId', 'marketplace'], where: { entityType: 'AD_TARGET', date: { gte: thisWeekStart }, clicks: { gt: 0 } }, _sum: { clicks: true, orders7d: true } }),
+    prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId', 'marketplace'], where: { entityType: 'AD_TARGET', date: { gte: prevWeekStart, lt: thisWeekStart }, clicks: { gt: 0 } }, _sum: { clicks: true, orders7d: true } }),
   ])
   const prevMap = new Map(prevWeek.map((p) => [p.localEntityId, { cvr: (p._sum.orders7d ?? 0) / Math.max(1, p._sum.clicks ?? 1) }]))
   return thisWeek
@@ -537,7 +549,7 @@ async function buildWastedKeywordContexts() {
   const { since, until } = ruleWindowBounds(14) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
   const perf = await prisma.amazonAdsDailyPerformance.groupBy({
     by: ['localEntityId', 'marketplace'],
-    where: { entityType: 'KEYWORD', date: { gte: since, lte: until } },
+    where: { entityType: 'AD_TARGET', date: { gte: since, lte: until } },
     _sum: { costMicros: true, orders7d: true, clicks: true },
   })
   return perf
@@ -601,7 +613,7 @@ async function buildHighAcosKeywordContexts() {
     const { since, until } = ruleWindowBounds(14) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
     const perf = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId', 'marketplace'],
-      where: { entityType: 'KEYWORD', date: { gte: since, lte: until } },
+      where: { entityType: 'AD_TARGET', date: { gte: since, lte: until } },
       _sum: { costMicros: true, sales7dCents: true, orders7d: true },
     })
     return perf
@@ -625,7 +637,7 @@ async function buildScaleOpportunityContexts() {
     const { since, until } = ruleWindowBounds(14) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
     const perf = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId', 'marketplace'],
-      where: { entityType: 'KEYWORD', date: { gte: since, lte: until } },
+      where: { entityType: 'AD_TARGET', date: { gte: since, lte: until } },
       _sum: { costMicros: true, sales7dCents: true, orders7d: true, clicks: true },
     })
     return perf
@@ -782,8 +794,8 @@ async function buildRisingStarContexts() {
     const thisWeekStart = new Date(); thisWeekStart.setUTCDate(thisWeekStart.getUTCDate() - 7); thisWeekStart.setUTCHours(0, 0, 0, 0)
     const prevWeekStart = new Date(thisWeekStart); prevWeekStart.setUTCDate(thisWeekStart.getUTCDate() - 7)
     const [thisWk, prevWk] = await Promise.all([
-      prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId', 'marketplace'], where: { entityType: 'KEYWORD', date: { gte: thisWeekStart } }, _sum: { orders7d: true, costMicros: true, sales7dCents: true } }),
-      prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId'], where: { entityType: 'KEYWORD', date: { gte: prevWeekStart, lt: thisWeekStart } }, _sum: { orders7d: true } }),
+      prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId', 'marketplace'], where: { entityType: 'AD_TARGET', date: { gte: thisWeekStart } }, _sum: { orders7d: true, costMicros: true, sales7dCents: true } }),
+      prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId'], where: { entityType: 'AD_TARGET', date: { gte: prevWeekStart, lt: thisWeekStart } }, _sum: { orders7d: true } }),
     ])
     const prevMap = new Map(prevWk.map((p) => [p.localEntityId, p._sum.orders7d ?? 0]))
     return thisWk
