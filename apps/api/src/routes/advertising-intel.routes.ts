@@ -644,6 +644,57 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── RPT.12 — operator-defined metrics ───────────────────────────────────
+  // Under the same ads.view prefix rule: a custom metric is a formula over data
+  // the caller can already read, and touches nothing on the account.
+  fastify.get('/advertising/reporting/custom-metrics', async (request, reply) => {
+    const q = request.query as { reportId?: string }
+    const { listCustomMetrics } = await import('../services/advertising/ads-custom-metrics.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return { items: await listCustomMetrics(q.reportId) }
+  })
+
+  // Compile without saving — powers the live check while a formula is typed.
+  fastify.get('/advertising/reporting/custom-metrics/preview', async (request, reply) => {
+    const q = request.query as { reportId?: string; formula?: string }
+    const svc = await import('../services/advertising/ads-custom-metrics.service.js')
+    try {
+      return svc.previewFormula(String(q.reportId ?? ''), String(q.formula ?? ''))
+    } catch (err) {
+      if (err instanceof svc.CustomMetricError) { reply.code(err.status); return { error: err.message } }
+      throw err
+    }
+  })
+
+  fastify.post('/advertising/reporting/custom-metrics', async (request, reply) => {
+    const svc = await import('../services/advertising/ads-custom-metrics.service.js')
+    try { reply.code(201); return await svc.createCustomMetric(request.body as never) }
+    catch (err) {
+      if (err instanceof svc.CustomMetricError) { reply.code(err.status); return { error: err.message } }
+      throw err
+    }
+  })
+
+  fastify.patch('/advertising/reporting/custom-metrics/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const svc = await import('../services/advertising/ads-custom-metrics.service.js')
+    try { return await svc.updateCustomMetric(id, request.body as never) }
+    catch (err) {
+      if (err instanceof svc.CustomMetricError) { reply.code(err.status); return { error: err.message } }
+      throw err
+    }
+  })
+
+  fastify.delete('/advertising/reporting/custom-metrics/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const svc = await import('../services/advertising/ads-custom-metrics.service.js')
+    try { await svc.deleteCustomMetric(id); return { ok: true } }
+    catch (err) {
+      if (err instanceof svc.CustomMetricError) { reply.code(err.status); return { error: err.message } }
+      throw err
+    }
+  })
+
   // RPT.9 — per-feed pipeline health: is every feed landing, how late, what failed.
   fastify.get('/advertising/reporting/pipeline', async (_request, reply) => {
     const { pipelineHealth } = await import('../services/advertising/ads-pipeline-health.service.js')

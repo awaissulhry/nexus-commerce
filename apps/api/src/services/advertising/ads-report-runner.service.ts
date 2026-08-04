@@ -99,7 +99,20 @@ export async function runReport(q: ReportQuery): Promise<ReportResult> {
   const spec = getSpec(q.reportId)
 
   const dimById = new Map(spec.dimensions.map((d) => [d.id, d]))
-  const metricById = new Map(spec.metrics.map((m) => [m.id, m]))
+  // RPT.12 — operator-defined metrics join the registry as ordinary members
+  // rather than getting their own evaluation path, which is what keeps them
+  // consistent across the grid, the totals row, the export and the email.
+  const { resolveCustomMetrics } = await import('./ads-custom-metrics.service.js')
+  const custom = await resolveCustomMetrics(spec.id)
+  const allMetrics = [
+    ...spec.metrics,
+    ...custom.map((c) => ({
+      id: c.id, label: c.label, kind: 'metric' as const,
+      format: c.format, align: 'right' as const, sql: c.sql,
+      help: 'Custom metric.',
+    })),
+  ]
+  const metricById = new Map(allMetrics.map((m) => [m.id, m]))
 
   // ── grouping ────────────────────────────────────────────────────────────
   const requestedGroup = (q.groupBy ?? []).filter((id) => dimById.has(id))
@@ -130,7 +143,7 @@ export async function runReport(q: ReportQuery): Promise<ReportResult> {
     outCols.push({ id: m.id, label: m.label, kind: 'metric', format: m.format, align: m.align, help: m.help })
   }
   if (!outCols.some((c) => c.kind === 'metric')) {
-    for (const m of spec.metrics.slice(0, 5)) {
+    for (const m of allMetrics.slice(0, 5)) {
       selects.push(`${m.sql} AS ${alias(m.id)}`)
       outCols.push({ id: m.id, label: m.label, kind: 'metric', format: m.format, align: m.align, help: m.help })
     }
@@ -215,7 +228,13 @@ export async function runReport(q: ReportQuery): Promise<ReportResult> {
       sort: { col: sortCol, dir: sortDir === 'ASC' ? 'asc' : 'desc' },
     },
     options: {
-      columns: specColumns(spec),
+      columns: [
+        ...specColumns(spec),
+        ...custom.map((c) => ({
+          id: c.id, label: c.label, kind: 'metric' as const,
+          format: c.format, align: 'right' as const, help: 'Custom metric.',
+        })),
+      ],
       dimensions: spec.dimensions.map((d) => ({ id: d.id, label: d.label })),
       marketplaces: optMarkets,
       adProducts: optAdProducts,

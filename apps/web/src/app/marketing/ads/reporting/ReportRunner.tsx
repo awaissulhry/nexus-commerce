@@ -22,13 +22,14 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, ArrowDown, ArrowUp, ChevronDown, Download, RefreshCw, Search, Settings2, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, ArrowDown, ArrowUp, ChevronDown, Download, RefreshCw, Search, Settings2, Sigma, AlertTriangle } from 'lucide-react'
 import { DataGrid, type Column } from '@/design-system/components/DataGrid'
 import { H10Select } from '../campaigns/FilterDropdown'
 import { MultiSelect } from '@/design-system/components/MultiSelect'
 import { Pagination } from '@/design-system/components/Pagination'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { SavedReportBar } from './SavedReportBar'
+import { CustomMetricsModal } from './CustomMetricsModal'
 import { ReportSummary } from './ReportSummary'
 import { fetchSummary, type CompareMode, type SummaryResult } from './summary-api'
 import {
@@ -87,6 +88,7 @@ export function ReportRunner({ reportId }: { reportId: string }) {
   const [filtersOpen, setFiltersOpen] = useState(true)
   const [colsOpen, setColsOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
+  const [metricsOpen, setMetricsOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -219,6 +221,14 @@ export function ReportRunner({ reportId }: { reportId: string }) {
       />
 
       <SavedReportBar params={params} onApply={setParams} />
+
+      <CustomMetricsModal
+        open={metricsOpen}
+        onClose={() => setMetricsOpen(false)}
+        reportId={params.reportId}
+        available={colOptions}
+        onChanged={() => setParams((p) => ({ ...p }))}
+      />
 
       <Link href="/marketing/ads/reporting" className="rpt-back">
         <ArrowLeft size={14} aria-hidden /> All reports
@@ -389,6 +399,10 @@ export function ReportRunner({ reportId }: { reportId: string }) {
               </>
             )}
           </div>
+
+          <button type="button" className="h10-am-btn" onClick={() => setMetricsOpen(true)}>
+            <Sigma size={13} /> Metrics
+          </button>
 
           <div className="h10-custwrap">
             <button

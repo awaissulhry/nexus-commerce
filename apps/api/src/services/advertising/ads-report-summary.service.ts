@@ -100,13 +100,22 @@ export async function reportSummary(
 
   // Which metrics get a tile: the caller's choice, else the spec's default
   // columns filtered to metrics, else the first five.
-  const byId = new Map(spec.metrics.map((m) => [m.id, m]))
+  // Same registry the runner sees, custom metrics included, so a KPI tile and
+  // its column can never disagree.
+  const { resolveCustomMetrics } = await import('./ads-custom-metrics.service.js')
+  const custom = await resolveCustomMetrics(spec.id)
+  const allMetrics = [
+    ...spec.metrics,
+    ...custom.map((c) => ({ id: c.id, label: c.label, format: c.format, sql: c.sql })),
+  ]
+  const customDirection = new Map(custom.map((c) => [c.id, c.betterWhen]))
+  const byId = new Map(allMetrics.map((m) => [m.id, m]))
   const wanted = (q.metrics ?? []).filter((id) => byId.has(id))
   const chosen = (wanted.length
     ? wanted
     : spec.defaultColumns.filter((id) => byId.has(id))
   ).slice(0, 6)
-  const metrics = (chosen.length ? chosen : spec.metrics.slice(0, 5).map((m) => m.id)).map((id) => byId.get(id)!)
+  const metrics = (chosen.length ? chosen : allMetrics.slice(0, 5).map((m) => m.id)).map((id) => byId.get(id)!)
 
   const totalsFor = async (from: string | null, to: string | null) => {
     const { whereSql, params } = buildFiltersFor(spec, { ...q, from, to })
@@ -137,7 +146,7 @@ export async function reportSummary(
     const deltaPct = c != null && p != null && p !== 0 ? (c - p) / Math.abs(p) : null
     return {
       id: m.id, label: m.label, format: m.format,
-      betterWhen: METRIC_DIRECTION[m.id] ?? null,
+      betterWhen: customDirection.get(m.id) ?? METRIC_DIRECTION[m.id] ?? null,
       current: c, previous: p, deltaPct,
     }
   })

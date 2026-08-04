@@ -537,3 +537,25 @@ select.rpt-input { height: 32px; }
 .rpt-feed { white-space: normal; }
 .rpt-feed .t { display: block; font-weight: 650; color: var(--text-primary); }
 .rpt-feed .s { display: block; margin-top: 1px; font-size: 11px; color: var(--text-tertiary); }
+
+/* RPT.12 — custom metrics */
+.rpt-cm-list { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.rpt-cm-list li { padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: 6px; }
+.rpt-cm-list .hd { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.rpt-cm-list code {
+  font-size: 11.5px; padding: 1px 5px; border-radius: 4px;
+  background: var(--surface-sunken); color: var(--text-secondary);
+}
+.rpt-cm-list .hd > button { margin-left: auto; }
+.rpt-cm-list .broken { margin-top: 3px; font-size: 11.5px; color: var(--status-danger-strong); }
+.rpt-cm-check {
+  display: flex; align-items: center; gap: 5px;
+  margin: 8px 0 0; font-size: 12px;
+}
+.rpt-cm-check.ok { color: var(--status-success-strong); }
+.rpt-cm-check.bad { color: var(--status-danger-strong); }
+.rpt-cm-avail { margin: 10px 0 0; font-size: 11.5px; line-height: 1.7; color: var(--text-tertiary); }
+.rpt-cm-avail code {
+  font-size: 11px; padding: 1px 5px; margin-right: 4px; border-radius: 4px;
+  background: var(--surface-sunken); color: var(--text-secondary);
+}

@@ -193,6 +193,7 @@ const ENTRIES: Entry[] = [
   // never touches campaigns, bids or budgets, so it sits with the other reporting
   // reads rather than behind ads.campaigns.manage.
   P(F.adsView, (m, p) => p.startsWith('/api/advertising/reporting/imports')),
+  P(F.adsView, (m, p) => p.startsWith('/api/advertising/reporting/custom-metrics')),
   P(F.adsView, (m, p) => isRead(m) && pfx('/api/advertising')(m, p)),
   P(F.adsAutomationManage, has('/autopilot')),
   P(F.adsAutomationManage, has('/automation')),
