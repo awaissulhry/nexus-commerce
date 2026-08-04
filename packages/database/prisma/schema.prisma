@@ -2635,23 +2635,23 @@ model Campaign {
   // AD.1 — Trading Desk fields. marketplace + externalCampaignId are
   // additive: null = legacy Phase-1 stub row; non-null = synced from
   // Amazon Ads API (or sandbox fixture). Existing rows keep working.
-  marketplace         String? // 'IT' | 'DE' | 'FR' | 'ES' | 'UK'
-  externalCampaignId  String? // Amazon-issued ID (campaignId in Ads API)
-  portfolioId         String? // Amazon Ads Portfolio grouping
+  marketplace              String? // 'IT' | 'DE' | 'FR' | 'ES' | 'UK'
+  externalCampaignId       String? // Amazon-issued ID (campaignId in Ads API)
+  portfolioId              String? // Amazon Ads Portfolio grouping
   // AD.2 — currency for dailyBudget. Defaults EUR; non-EUR marketplaces
   // (e.g. UK GBP) override at sync time from the Ads API profile.
-  dailyBudgetCurrency String          @default("EUR")
-  biddingStrategy     BiddingStrategy @default(LEGACY_FOR_SALES)
+  dailyBudgetCurrency      String          @default("EUR")
+  biddingStrategy          BiddingStrategy @default(LEGACY_FOR_SALES)
   // True Profit aggregates (computed by true-profit-rollup.service).
   // acos = spend / sales (Amazon's metric). roas = sales / spend.
   // trueProfit nets COGS + referral + FBA + storage + refunds.
-  acos                Decimal?        @db.Decimal(8, 4)
-  roas                Decimal?        @db.Decimal(8, 4)
-  trueProfitCents     Int             @default(0)
-  trueProfitMarginPct Decimal?        @db.Decimal(8, 4)
+  acos                     Decimal?        @db.Decimal(8, 4)
+  roas                     Decimal?        @db.Decimal(8, 4)
+  trueProfitCents          Int             @default(0)
+  trueProfitMarginPct      Decimal?        @db.Decimal(8, 4)
   // NP — set while the campaign is bid-suppressed (no-pause: bids at the floor
   // instead of status=PAUSED). Fast "is suppressed" flag + when it started.
-  bidsSuppressedAt    DateTime?
+  bidsSuppressedAt         DateTime?
   // MB.1 — WHICH floor the campaign is currently suppressed at. Before this, the floor
   // was one module constant (2¢) so "already suppressed" implied "suppressed at the right
   // value" and re-flooring was a no-op. With a per-target floor, two Min-bid windows can
@@ -2661,14 +2661,14 @@ model Campaign {
   /// AX2.2 — WRITE truth: when we last pushed to Amazon and how it went.
   /// Stamped by ads-sync.worker. Never stamped by a read, so a successful
   /// settings read can't mask a failed bid write.
-  lastSyncedAt        DateTime?
-  lastSyncStatus      AdSyncStatus?
-  lastSyncError       String?
+  lastSyncedAt             DateTime?
+  lastSyncStatus           AdSyncStatus?
+  lastSyncError            String?
   /// AX2.2 — READ freshness: when the 20-minute settings sync last actually
   /// observed this campaign on Amazon. Distinct from lastSyncedAt, which the
   /// console previously displayed as "last synced" while it really meant
   /// "last written" (observed spread: ES 5m, DE/FR ~2h, one IT campaign 34d).
-  settingsSyncedAt    DateTime?
+  settingsSyncedAt         DateTime?
 
   // ── Phase 2: v1 unified API additions ─────────────────────────────────
   // adProduct is the v1 discriminator. The legacy `type` enum stays for
@@ -2728,6 +2728,26 @@ model Campaign {
   // count is stale and treated as 0.
   liveBidWritesToday   Int     @default(0)
   liveBidWritesDay     String?
+
+  // ADX A1 — automation bounds ON THE ENTITY, not in a rule.
+  //
+  // A rule saying "never bid above €2" can be edited, bypassed, or simply fail to
+  // apply to entities created later. These columns apply to EVERY engine, every
+  // rule and every future feature automatically, because ads-write-gate.ts consults
+  // them on the way to Amazon and there is no other way out. Safety by construction
+  // rather than by rule correctness.
+  //
+  // Reached independently by Scale Insights (caps + whitelists around 200+
+  // parameters), M19 (ACoS target + budget cap + force-visibility around opaque ML),
+  // Teikametrics (ACOS Limit + Bid Modifier around a proprietary model) and the
+  // COMMERCE-PLATFORM-RESEARCH study (Rithum's per-SKU Min/Max Price, Quartile's
+  // per-portfolio TargetACOS/Min Bid/Max Bid). Neither pole of the market ships an
+  // unbounded optimiser.
+  //
+  // NULL = unbounded, which is today's behaviour for every existing row.
+  minBidCents   Int?
+  maxBidCents   Int?
+  targetAcosPct Int?
 
   adGroups   AdGroup[]
   bidHistory CampaignBidHistory[]
@@ -2945,12 +2965,12 @@ model AmazonAdsConnection {
   // the backfill uses createdAt as a conservative floor and flags it, so the UI can
   // never present a guess as a fact. Cleared the first time a real consent or
   // rotation stamps it.
-  tokenIssuedAt          DateTime?
-  tokenExpiresAt         DateTime?
-  tokenIssuedAtIsEstimate Boolean  @default(false)
+  tokenIssuedAt           DateTime?
+  tokenExpiresAt          DateTime?
+  tokenIssuedAtIsEstimate Boolean   @default(false)
 
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([marketplace, isActive])
   @@index([tokenExpiresAt])
@@ -3217,12 +3237,12 @@ model AmazonAdsPlacementReport {
 // AmazonAdsExportJob, whose URL is minted on completion and whose split cron
 // stages produced 670 `s3_download_400` failures.)
 model DataKioskQueryJob {
-  id          String @id @default(cuid())
+  id            String   @id @default(cuid())
   // 'economics' | 'salesAndTraffic'
-  queryType   String
+  queryType     String
   marketplaceId String
-  startDate   DateTime @db.Date
-  endDate     DateTime @db.Date
+  startDate     DateTime @db.Date
+  endDate       DateTime @db.Date
 
   externalQueryId String
   // PENDING | IN_PROGRESS | DONE | FATAL
@@ -3267,13 +3287,13 @@ model AmazonEconomicsDaily {
 
   currencyCode String @default("EUR")
 
-  unitsOrdered            Int      @default(0)
-  netProductSales         Decimal? @db.Decimal(14, 2)
-  averageSellingPrice     Decimal? @db.Decimal(14, 2)
+  unitsOrdered        Int      @default(0)
+  netProductSales     Decimal? @db.Decimal(14, 2)
+  averageSellingPrice Decimal? @db.Decimal(14, 2)
   // netProceeds.perUnit is NULL in ~9% of rows (105/1127 measured) — nullable
   // on purpose. netProceeds.total was never null.
-  netProceedsTotal        Decimal? @db.Decimal(14, 2)
-  netProceedsPerUnit      Decimal? @db.Decimal(14, 2)
+  netProceedsTotal    Decimal? @db.Decimal(14, 2)
+  netProceedsPerUnit  Decimal? @db.Decimal(14, 2)
 
   // Amazon returns `fees` and `ads` as arrays with NO identifying field — a
   // 3-fee row is three bare amounts with no way to tell referral from FBA.
@@ -3281,10 +3301,10 @@ model AmazonEconomicsDaily {
   // trustworthy; the labelled breakdown lives on `economicsPreview(feeTypes:)`
   // and is a separate integration. Counts are kept so a future mapping can be
   // reconciled against what was stored.
-  feesTotal  Decimal? @db.Decimal(14, 2)
-  feesCount  Int      @default(0)
-  adsTotal   Decimal? @db.Decimal(14, 2)
-  adsCount   Int      @default(0)
+  feesTotal Decimal? @db.Decimal(14, 2)
+  feesCount Int      @default(0)
+  adsTotal  Decimal? @db.Decimal(14, 2)
+  adsCount  Int      @default(0)
 
   // Operator-entered in Seller Central. Null in 1120/1127 and 1127/1127
   // respectively at time of writing — absent, NOT zero.
@@ -3344,7 +3364,7 @@ model AmazonAdsBrandMetric {
 //    return byte-identical payloads with lookbackPeriod="1w", so the grain is
 //    always weekly and computationDate is the week's computation date.
 model AmazonAdsBrandBuildingMetric {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   profileId   String
   marketplace String
   brandName   String
@@ -3606,7 +3626,24 @@ model AdvertisingActionLog {
   amazonResponseStatus String? // 'SUCCESS' | 'FAILED' | 'PENDING'
   rolledBackAt         DateTime?
   rollbackReason       String?
-  createdAt            DateTime  @default(now())
+
+  // ADX A2 — WHY the write happened, not just what changed and who did it.
+  //
+  // payloadBefore/payloadAfter answer "what", userId answers "who". Neither answers
+  // the question an operator actually asks when a bid moves, which is "on what
+  // evidence". Without it the audit log can only be read by someone who already
+  // knows how the engine works — which is most of why this system felt
+  // uncontrollable even where it ran correctly.
+  //
+  // Shape is AdWriteEvidence (see ads-evidence.ts): metric, observed, threshold,
+  // windowDays, sampleSize, targetKey, note. sampleSize matters more than it looks:
+  // AMS coverage is per-campaign and some schedules hold 1-5 days of data where the
+  // account has 56, so a decision resting on thin data should say so on its face.
+  //
+  // Nullable — every existing row keeps today's behaviour, and a caller with nothing
+  // structured to say simply omits it.
+  evidence  Json?
+  createdAt DateTime @default(now())
 
   @@index([executionId, createdAt(sort: Desc)])
   @@index([entityType, entityId, createdAt(sort: Desc)])
@@ -6214,13 +6251,11 @@ model ImportJob {
 
   /**
    * AX-IE.5 — dry-run plan handshake.
-   *
    * planToken is a fingerprint of the computed plan. Apply must present it and it
    * must still match, which closes the window between "operator approved this
    * preview" and "apply ran": if anything moved underneath — the file re-staged,
    * an entity changed on Amazon — the token no longer matches and apply refuses
    * rather than executing a plan nobody agreed to.
-   *
    * planSummary holds the counts and blast-radius figures the operator was shown,
    * so what they approved is recoverable after the fact rather than recomputed.
    */
@@ -6288,12 +6323,11 @@ model ImportJobRow {
   createdAt   DateTime  @default(now())
   completedAt DateTime?
 
-  @@index([jobId, status])
-  @@index([targetId])
-
   /// Phase 2 — apply idempotency. Without this, two concurrent /bulk/apply
   /// POSTs both passed the plan-token check and both wrote every row.
   @@unique([jobId, rowIndex])
+  @@index([jobId, status])
+  @@index([targetId])
 }
 
 // ── W8.4: Scheduled imports ───────────────────────────────────────
@@ -13791,7 +13825,7 @@ model AdMutation {
 /// entities, and so a PARTIAL outcome stays legible (`notOnAmazon` lists
 /// campaigns that landed locally but never reached Amazon).
 model AdBlueprintApplication {
-  id String @id @default(cuid())
+  id                 String    @id @default(cuid())
   /// AX3.4 — null when the run replicated a LIVE source (a portfolio, some
   /// campaigns, or single ad groups) rather than a saved blueprint. Saving a
   /// blueprint is an optional action at the end of the builder, not a
@@ -13834,10 +13868,10 @@ model AdBlueprintApplication {
   /// created ten live campaigns nobody could see. The run is now detached and
   /// this column is how it is watched — and how a reconnecting browser finds a
   /// run already in flight instead of starting a second one.
-  progress       Json?
+  progress  Json?
   /// AX3.8 — set when execution begins, so a RUNNING row that stops advancing
   /// can be told apart from one that never started.
-  startedAt      DateTime?
+  startedAt DateTime?
 
   @@index([blueprintId])
   @@index([status])
@@ -13851,19 +13885,57 @@ model AdBlueprintApplication {
 /// `sharedTargets` list — the exact keywords that would make two of our own
 /// products bid against each other if the structure were replicated verbatim.
 /// Read side only: nothing here creates anything on Amazon.
+/// ADX A1 — keyword protection. The counterpart to the bid bounds on Campaign:
+/// bounds protect the money, this protects the targeting.
+///
+/// WHITELIST = never negate this term. Harvest-and-negate automation without a
+/// whitelist is dangerous, and ours ran enabled with nothing protecting a brand
+/// term from being negated by it. Scale Insights ships Whitelist and Blacklist as
+/// two of its eleven named algorithms for exactly this reason.
+///
+/// BLACKLIST = always negate this term, everywhere, regardless of performance.
+///
+/// Matching is on the lowercased, whitespace-collapsed term. `isPrefix` widens it
+/// to a prefix match so "xavia" can protect every branded variant without listing
+/// them. Scope narrows by marketplace and/or campaign; both null = account-wide.
+///
+/// Enforced in ads-write-gate.ts, the single chokepoint every write passes through,
+/// so no engine can bypass it by forgetting to check.
+model AdKeywordProtection {
+  id          String   @id @default(cuid())
+  /// WHITELIST | BLACKLIST
+  mode        String
+  /// Lowercased, whitespace-collapsed match text.
+  term        String
+  /// When true, `term` matches as a prefix rather than exactly.
+  isPrefix    Boolean  @default(false)
+  /// null = every marketplace.
+  marketplace String?
+  /// null = every campaign.
+  campaignId  String?
+  reason      String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([mode, term])
+  @@index([marketplace])
+  @@index([campaignId])
+}
+
 model AdBlueprint {
-  id               String   @id @default(cuid())
-  name             String   @unique
-  description      String?
-  marketplace      String
-  adProduct        String   @default("SPONSORED_PRODUCTS")
-  productToken     String
-  competitorTokens String[] @default([])
+  id                String   @id @default(cuid())
+  name              String   @unique
+  description       String?
+  marketplace       String
+  adProduct         String   @default("SPONSORED_PRODUCTS")
+  productToken      String
+  competitorTokens  String[] @default([])
   sourceCampaignIds String[] @default([])
-  doc              Json
-  createdBy        String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  doc               Json
+  createdBy         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@index([marketplace])
 }
@@ -14174,17 +14246,17 @@ model AdSchedule {
 // One group = one row in the Dayparting Schedules list; its member AdSchedule rows (via groupId)
 // remain the per-campaign execution layer the rank-defend cron already runs (engine untouched).
 model RankScheduleGroup {
-  id               String       @id @default(cuid())
+  id               String                @id @default(cuid())
   name             String // compulsory (validated at the API/UI layer, Phase 3)
   marketplace      String?
-  timezone         String       @default("Europe/Rome")
-  windows          Json         @default("[]") // canonical windows (authoring source of truth)
+  timezone         String                @default("Europe/Rome")
+  windows          Json                  @default("[]") // canonical windows (authoring source of truth)
   defaultTargetKey String? // canonical baseline RankTarget.key
-  targetOverrides  Json         @default("{}") // per-campaign overrides { campaignId: { targetKey: {...} } }
+  targetOverrides  Json                  @default("{}") // per-campaign overrides { campaignId: { targetKey: {...} } }
   portfolioId      String? // Phase 5 — portfolio-scoped group (auto-includes the portfolio's campaigns)
-  enabled          Boolean      @default(true)
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  enabled          Boolean               @default(true)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
   createdBy        String?
   schedules        AdSchedule[]
   versions         RankScheduleVersion[]
@@ -14204,24 +14276,24 @@ model RankScheduleGroup {
 // phases: the phases have different plans and different lengths, they are frequently adjusted
 // independently, and modelling them as one row would force every edit to touch all three.
 model RankScheduleEvent {
-  id       String            @id @default(cuid())
-  groupId  String
-  group    RankScheduleGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  name     String
+  id               String            @id @default(cuid())
+  groupId          String
+  group            RankScheduleGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name             String
   // Absolute instants. The schedule's own timezone decides which local hours these cover, so an
   // event authored for Rome does not silently shift when read from another zone.
-  startsAt DateTime
-  endsAt   DateTime
+  startsAt         DateTime
+  endsAt           DateTime
   // Same shape as the weekly plan, so the engine's window resolution is reused unchanged rather
   // than reimplemented for events.
-  windows          Json    @default("[]")
+  windows          Json              @default("[]")
   defaultTargetKey String?
   // Off by default is deliberate: an event is authored ahead of time, and arming it early is
   // exactly the mistake this feature exists to prevent.
-  enabled   Boolean  @default(false)
-  createdBy String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  enabled          Boolean           @default(false)
+  createdBy        String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   @@index([groupId, startsAt])
   @@index([enabled, startsAt, endsAt])

@@ -346,7 +346,18 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
   // writesEnabledAt + value-cap.
   const payloadValueCents = estimatePayloadValueCents(payload)
   const campaignId = await resolveCampaignId(payload)
-  const gate = await checkAdsWriteGate({ marketplace, payloadValueCents, campaignId })
+  // ADX A1 — hand the gate the field and intended value so Campaign.minBidCents /
+  // maxBidCents can bind this write. A payload carries one field in the common case;
+  // when it carries several we surface the bid field, which is the bounded one.
+  const bidChange = payload.fieldChanges.find((c) => c.field === 'bid' || c.field === 'defaultBid')
+  const intendedBidCents = bidChange?.newValue != null ? Number(bidChange.newValue) : null
+  const gate = await checkAdsWriteGate({
+    marketplace,
+    payloadValueCents,
+    campaignId,
+    field: bidChange?.field ?? payload.fieldChanges[0]?.field ?? null,
+    intendedValueCents: Number.isFinite(intendedBidCents ?? NaN) ? intendedBidCents : null,
+  })
   if (gate.allowed === false) {
     logGateDeny({ queueId, marketplace, payloadValueCents }, gate.reason, gate.deniedAt)
     await prisma.outboundSyncQueue.update({

@@ -21,6 +21,7 @@ import {
   type AdsRegion,
 } from './ads-api-client.js'
 import { checkAdsWriteGate } from './ads-write-gate.js'
+import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 
 async function resolveCtx(marketplace: string): Promise<{ profileId: string; region: AdsRegion } | null> {
   const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true, region: true } })
@@ -38,9 +39,11 @@ async function resolveCtx(marketplace: string): Promise<{ profileId: string; reg
  * Callers that only touch local state keep the default; callers that attempt a live push pass what
  * actually happened.
  */
-async function audit(actionType: string, entityType: string, entityId: string, payloadAfter: object, userId?: string, payloadBefore: object = {}, status: 'SUCCESS' | 'FAILED' | 'PENDING' = 'SUCCESS') {
+async function audit(actionType: string, entityType: string, entityId: string, payloadAfter: object, userId?: string, payloadBefore: object = {}, status: 'SUCCESS' | 'FAILED' | 'PENDING' = 'SUCCESS', evidence?: AdWriteEvidence | null) {
   await prisma.advertisingActionLog.create({
-    data: { userId: userId ?? null, actionType, entityType, entityId, payloadBefore, payloadAfter, amazonResponseStatus: status },
+    // ADX A2 — `evidence` carries WHY. packEvidence() returns null rather than {} so an
+    // empty object never masquerades as captured reasoning.
+    data: { userId: userId ?? null, actionType, entityType, entityId, payloadBefore, payloadAfter, amazonResponseStatus: status, evidence: (packEvidence(evidence) ?? undefined) as never },
   }).catch(() => {})
 }
 
@@ -655,6 +658,10 @@ export interface PlacementBiddingInput {
   // "IT AIREON raised Top-of-Search bias" rather than showing an unattributed row.
   actor?: string
   reason?: string
+  // ADX A2 — the RankTarget key this write was serving ('own-top', 'defend-top', …),
+  // recorded as structured evidence so a placement move can be traced back to the
+  // intent that caused it rather than only to the schedule that ran.
+  targetKey?: string
 }
 export async function updatePlacementBidding(input: PlacementBiddingInput): Promise<{ ok: boolean; adjustments: Array<{ placement: string; percentage: number }>; mode: string }> {
   const c = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, dynamicBidding: true } })
@@ -728,7 +735,30 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
   // HX.1 — the real outcome. `syncStamp` is null when nothing was pushed live (sandbox, gated, or
   // no external id), in which case the row is a truthful local-only SUCCESS.
   const auditStatus = syncStamp ? (syncStamp.lastSyncStatus === 'SUCCESS' ? 'SUCCESS' : 'FAILED') : 'SUCCESS'
-  await audit('update_placement_bidding', 'CAMPAIGN', input.campaignId, { adjustments, mode, ...(syncStamp?.lastSyncError ? { error: syncStamp.lastSyncError } : {}) }, input.actor ?? input.userId, { adjustments: priorAdjustments }, auditStatus)
+  // ADX A2 — the same `?? 'system'` fallback as the CampaignBidHistory rows twenty lines up.
+  // Without it the two records of ONE write disagreed: history said 'system', the audit log said
+  // nothing at all. Measured on prod 2026-08-04: 10,120 update_placement_bidding audit rows with a
+  // null actor — a third of the entire advertising audit log — of which 2,524 landed in the last
+  // seven days, so this was ongoing rather than legacy. Placement bias is the rank engine's primary
+  // actuator and runs to +900%, which makes it the worst thing in the account to be unable to
+  // attribute. A caller that supplies no actor should still produce a row that says so.
+  await audit(
+    'update_placement_bidding', 'CAMPAIGN', input.campaignId,
+    { adjustments, mode, ...(syncStamp?.lastSyncError ? { error: syncStamp.lastSyncError } : {}) },
+    input.actor ?? input.userId ?? 'system',
+    { adjustments: priorAdjustments },
+    auditStatus,
+    // ADX A2 — what this write was chasing. The caller's `reason` is already a readable
+    // sentence ("rank — Min bid placement 150→300%"); structuring the numbers beside it
+    // is what makes "show me every placement move above 300%" answerable.
+    {
+      targetKey: input.targetKey,
+      metric: 'placementBidding',
+      observed: priorAdjustments.find((a) => a.placement === adjustments[0]?.placement)?.percentage ?? null,
+      threshold: adjustments[0]?.percentage ?? null,
+      note: input.reason ?? undefined,
+    },
+  )
   logger.info('[AX2.2] updatePlacementBidding', { campaignId: input.campaignId, adjustments, mode, status: auditStatus })
   return { ok: auditStatus !== 'FAILED', adjustments, mode }
 }

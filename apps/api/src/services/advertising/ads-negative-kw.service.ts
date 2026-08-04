@@ -162,6 +162,11 @@ export async function createNegative(
     marketplace: args.marketplace,
     payloadValueCents: 0, // negative-keyword creation is a structural
                           // change with no monetary value
+    // ADX A1 — hand the gate the term so an operator-whitelisted keyword can never
+    // be negated. Checked at the chokepoint rather than here, because this service
+    // is not the only caller that can negate a term.
+    isNegation: true,
+    keywordText: args.keywordText ?? null,
   })
   if (gate.allowed === false) {
     logger.warn('[ads-negative-kw] write gate denied', {

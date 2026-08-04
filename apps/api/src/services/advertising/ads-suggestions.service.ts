@@ -19,6 +19,13 @@ function extractEntity(context: unknown): Entity | null {
   return null
 }
 
+/**
+ * ADX A2.1 — action types that tell the operator something rather than propose a change.
+ * A notification has nothing to approve or dismiss, so it belongs in the activity feed,
+ * not the suggestions queue. `log_only` is included for the same reason.
+ */
+const NON_PROPOSAL_ACTIONS = new Set(['notify', 'alert_operator', 'log_only'])
+
 // stable change-kind key (intent, not current value) so the same proposed change dedupes.
 function proposedKey(action: Record<string, unknown>): string {
   const parts = [String(action.type ?? '')]
@@ -43,8 +50,23 @@ export async function generateSuggestionsFromExecution(args: {
       const res = args.actionResults[i]
       const action = args.actions[i] ?? {}
       // only surface ACTIONABLE proposals — skip failures, no-change, allowlist-skips
-      const out = (res.output ?? {}) as { noChange?: boolean; skipped?: string; noActiveWindow?: boolean }
+      const out = (res.output ?? {}) as { noChange?: boolean; skipped?: string; noActiveWindow?: boolean; wouldChange?: unknown }
       if (res.ok === false || out.noChange || out.skipped || out.noActiveWindow) continue
+
+      // ADX A2.1 — a suggestion is a CHANGE an operator can approve or dismiss. Two
+      // categories were passing the filter above and drowning the queue.
+      //
+      // Measured on prod 2026-08-04, the first time this pipeline had ever produced
+      // anything: of 227 pending rows, 117 were notifications, 48 were results that
+      // explicitly reported changing nothing, and only 11 were a specific change to a
+      // specific entity. A 5% signal rate. The 22 surviving rules were producing good
+      // proposals — promote "motorradjacke herren sommer" to exact and negate it in
+      // broad, trim GALE BROAD DE by 15% on ACOS — and they were unfindable.
+      //
+      // This was my own regression: ADX.2 made every matched dry-run propose, without
+      // asking whether the action was the kind of thing you approve.
+      if (NON_PROPOSAL_ACTIONS.has(String(action.type ?? ''))) continue
+      if (out.wouldChange === 0 || out.wouldChange === '0') continue
       const key = proposedKey(action)
       // upsert on the dedupe key — keep one row per rule×entity×change; don't resurrect a
       // dismissed/applied row (the operator already decided).

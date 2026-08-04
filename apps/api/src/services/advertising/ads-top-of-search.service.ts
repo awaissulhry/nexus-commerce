@@ -169,9 +169,15 @@ export async function applyTopOfSearchRecommendations(opts: { windowDays?: numbe
 // top slot when ROAS allows and eases off when it doesn't. Shared by the
 // scheduled cron (top-of-search-defense) and the defend_top_of_search rule
 // action. Live writes are clipped (±STEP_PCT, ≤MAX_PCT) AND restricted to
-// allowlisted campaigns when allowlistedOnly — placement writes go through
-// updatePlacementBidding which hits the write-gate WITHOUT a campaignId, so the
-// A.2a per-campaign allowlist (Campaign.liveBidWritesEnabled) is enforced here.
+// allowlisted campaigns when allowlistedOnly.
+//
+// ADX A2 — this comment used to say placement writes hit the write-gate WITHOUT a
+// campaignId, so the A.2a per-campaign allowlist had to be enforced here instead.
+// That is no longer true: C1 added `campaignId` to the gate call in
+// updatePlacementBidding, so the allowlist now binds placement writes at the
+// chokepoint like every other write. The `allowlistedOnly` filter below is a second,
+// earlier check — belt and braces, not the only guard. Left stale, the old wording
+// asserted a safety hole that had already been closed, which is its own hazard.
 export interface DefendTosResult {
   evaluated: number
   changed: number

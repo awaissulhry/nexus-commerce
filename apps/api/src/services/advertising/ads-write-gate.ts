@@ -27,6 +27,11 @@ export type GateDeniedAt =
   | 'value_cap'
   | 'campaign_allowlist'
   | 'daily_cap'
+  // ADX A1 — bounds live on the entity (Campaign.minBidCents/maxBidCents) rather
+  // than inside a rule, so they bind every engine automatically.
+  | 'entity_bounds'
+  // ADX A1 — an operator-protected term may not be negated by any automation.
+  | 'keyword_protected'
 
 export type GateDecision =
   | { allowed: true; mode: 'sandbox' }
@@ -43,6 +48,24 @@ export interface GateContext {
   // resolve a campaign for an existing-entity mutation and failed → deny in
   // live mode, so an unattributable write can never slip through.
   campaignId?: string | null
+
+  // ── ADX A1 ────────────────────────────────────────────────────────────────
+  /** The single field being changed ('bid' | 'defaultBid' | 'dailyBudget' | …). */
+  field?: string | null
+  /** Intended new value in cents, when the field is numeric. */
+  intendedValueCents?: number | null
+  /** The keyword text, when this write negates a term. */
+  keywordText?: string | null
+  /** True when the write adds a negative keyword / suppresses a term. */
+  isNegation?: boolean
+}
+
+/** Fields whose value is a bid in cents, and therefore subject to entity bid bounds. */
+const BID_FIELDS = new Set(['bid', 'defaultBid'])
+
+/** Normalise a keyword for protection matching: lowercase, collapse whitespace. */
+export function normaliseTerm(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
 function maxWriteValueCents(): number {
@@ -117,13 +140,39 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
     }
     const campaign = await prisma.campaign.findUnique({
       where: { id: ctx.campaignId },
-      select: { liveBidWritesEnabled: true, dynamicBidding: true, liveBidWritesToday: true, liveBidWritesDay: true },
+      select: {
+        liveBidWritesEnabled: true, dynamicBidding: true, liveBidWritesToday: true, liveBidWritesDay: true,
+        minBidCents: true, maxBidCents: true,
+      },
     })
     if (!campaign?.liveBidWritesEnabled) {
       return {
         allowed: false,
         reason: `campaign ${ctx.campaignId} is not on the live-write allowlist (Campaign.liveBidWritesEnabled=false)`,
         deniedAt: 'campaign_allowlist',
+      }
+    }
+
+    // ADX A1 — entity bid bounds. Deliberately a DENY rather than a silent clamp:
+    // clamping would rewrite an engine's intent without telling anyone, and the whole
+    // point of this phase is that the operator can see why something did not happen.
+    // A denial leaves the bid where it was, which is the safe direction for both a
+    // ceiling (refuse the raise) and a floor (refuse the cut).
+    if (ctx.field && BID_FIELDS.has(ctx.field) && Number.isFinite(ctx.intendedValueCents ?? NaN)) {
+      const v = ctx.intendedValueCents as number
+      if (campaign.maxBidCents != null && v > campaign.maxBidCents) {
+        return {
+          allowed: false,
+          reason: `bid ${v}¢ exceeds Campaign.maxBidCents=${campaign.maxBidCents}¢ on ${ctx.campaignId}`,
+          deniedAt: 'entity_bounds',
+        }
+      }
+      if (campaign.minBidCents != null && v < campaign.minBidCents) {
+        return {
+          allowed: false,
+          reason: `bid ${v}¢ is below Campaign.minBidCents=${campaign.minBidCents}¢ on ${ctx.campaignId}`,
+          deniedAt: 'entity_bounds',
+        }
       }
     }
     // WC — the maxWritesPerDay DAILY cap is intentionally DISABLED (operator decision:
@@ -134,6 +183,36 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
     // clamps below, plus cpcCeiling) so no single write can set a wild bid, and the Ads
     // client's 429 backoff (ads-api-client.ts) paces bursts against Amazon's rate limits.
     // liveBidWritesToday is still recorded (see recordWrite) for observability only.
+  }
+
+  // ADX A1 — keyword protection. A whitelisted term may not be negated by anything.
+  // Checked here rather than in the harvest service because the harvest service is
+  // not the only thing that can negate a term, and a protection that only some
+  // callers honour is not a protection.
+  if (ctx.isNegation && ctx.keywordText) {
+    const term = normaliseTerm(ctx.keywordText)
+    if (term) {
+      const protections = await prisma.adKeywordProtection.findMany({
+        where: {
+          mode: 'WHITELIST',
+          AND: [
+            { OR: [{ marketplace: null }, { marketplace: ctx.marketplace }] },
+            { OR: [{ campaignId: null }, { campaignId: ctx.campaignId ?? undefined }] },
+          ],
+        },
+        select: { term: true, isPrefix: true, reason: true },
+      })
+      const hit = protections.find((p) =>
+        p.isPrefix ? term.startsWith(normaliseTerm(p.term)) : term === normaliseTerm(p.term),
+      )
+      if (hit) {
+        return {
+          allowed: false,
+          reason: `"${term}" is whitelisted against negation${hit.reason ? ` (${hit.reason})` : ''}`,
+          deniedAt: 'keyword_protected',
+        }
+      }
+    }
   }
 
   // Value cap: blast-radius limit per write. Composite actions are

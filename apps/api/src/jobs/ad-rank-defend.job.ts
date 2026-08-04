@@ -334,7 +334,7 @@ async function decideAndMaybeApply(
     // shows in the decision preview. A history entry without a reason is just a number moving.
     const blendReason = `blend: ${laneDecisions.map((l) => `${shortPlace(l.placement)} ${l.fromPct}→${l.toPct}`).join(', ')}${capped.length ? ` · CPC ceiling €${((spec.maxCpcCents ?? 0) / 100).toFixed(2)} capped ${capped.join(', ')}${cpcCap?.baseAlone ? ' (base bid ALONE exceeds it)' : ''}` : ''}`
     if (ctx.write && changed) {
-      try { const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js'); await updatePlacementBidding({ campaignId: camp.id, adjustments, actor: ctx.actor, reason: blendReason }); applied++ } catch (e) { logger.warn('[rank-defend] blended apply failed', { campaignId: camp.id, error: (e as Error).message }) }
+      try { const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js'); await updatePlacementBidding({ campaignId: camp.id, adjustments, actor: ctx.actor, reason: blendReason, targetKey: spec.key }); applied++ } catch (e) { logger.warn('[rank-defend] blended apply failed', { campaignId: camp.id, error: (e as Error).message }) }
     }
     const baseApplied = await applyBaseBidDirective(camp, spec, ctx)
     applied += baseApplied
