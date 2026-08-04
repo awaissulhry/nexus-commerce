@@ -192,6 +192,7 @@ import { startSalesReportIngestCron } from "./jobs/sales-report-ingest.job.js";
 import { startDataKioskCrons } from "./jobs/data-kiosk.job.js";
 import { startForecastCron } from "./jobs/forecast.job.js";
 import { startDashboardDigestCron } from "./jobs/dashboard-digest.job.js";
+import { startAdsReportScheduleCron } from "./jobs/ads-report-schedule.job.js";
 import { startPricingCron } from "./jobs/pricing-refresh.job.js";
 import { startRepricerCron } from "./jobs/repricer.job.js";
 import { startCatalogRefreshCron } from "./jobs/catalog-refresh.job.js";
@@ -947,6 +948,9 @@ async function start() {
     // is the safe default in dev.
     if (process.env.NEXUS_ENABLE_DASHBOARD_DIGEST_CRON === '1') {
       startDashboardDigestCron();
+      // RPT.6 — scheduled delivery of saved ads reports (own gate; dry-run unless
+      // NEXUS_ENABLE_OUTBOUND_EMAILS is also set).
+      startAdsReportScheduleCron();
     }
 
     // G.1 + G.2 — Nightly FX refresh + snapshot recompute. Gated

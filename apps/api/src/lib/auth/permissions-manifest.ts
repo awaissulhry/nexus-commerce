@@ -180,6 +180,19 @@ const ENTRIES: Entry[] = [
   RW(F.adsAutomationManage, F.adsAutomationManage, pfx('/api/internal/bidding')),
 
   // ── Advertising ─────────────────────────────────────────────────
+  // RPT.5 — saved report definitions. Scoped ABOVE the catch-all on purpose:
+  // without this, saving a personal view falls through to the /api/advertising
+  // write rule and demands `ads.campaigns.manage`, so an analyst with read access
+  // could look at a report but not save the filters they just set. A saved report
+  // is a named query over data the caller can already read — it changes nothing
+  // about the account and touches no channel. Still mapped (never PUBLIC), and
+  // still scoped to this exact prefix; every other advertising write is unchanged.
+  P(F.adsView, (m, p) => p.startsWith('/api/advertising/reporting/saved')),
+  P(F.adsView, (m, p) => p.startsWith('/api/advertising/reporting/schedules')),
+  // RPT.7 — importing a console export writes only to the import's OWN tables and
+  // never touches campaigns, bids or budgets, so it sits with the other reporting
+  // reads rather than behind ads.campaigns.manage.
+  P(F.adsView, (m, p) => p.startsWith('/api/advertising/reporting/imports')),
   P(F.adsView, (m, p) => isRead(m) && pfx('/api/advertising')(m, p)),
   P(F.adsAutomationManage, has('/autopilot')),
   P(F.adsAutomationManage, has('/automation')),

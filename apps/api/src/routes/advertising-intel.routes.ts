@@ -475,6 +475,323 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   // (returns the same analyzeDayparting() full intel) — the cockpit "When" panel
   // (RC2.T1) consumes that one. Do NOT re-declare it here: a duplicate Fastify
   // route is a BOOT CRASH, not a 4xx.
+
+  // RPT.2 — live coverage behind the Reporting library: per report, how much data
+  // we hold and how stale each MARKET is. Read-only grouped aggregates; the GET
+  // falls under the /api/advertising read rule, so it already requires ads.view.
+  fastify.get('/advertising/reporting/coverage', async (_request, reply) => {
+    const { getReportingCoverage } = await import('../services/advertising/ads-reporting-coverage.service.js')
+    const coverage = await getReportingCoverage()
+    // Short cache: the underlying feeds move at most hourly, and this page is a
+    // landing surface people bounce through.
+    reply.header('Cache-Control', 'private, max-age=120')
+    return coverage
+  })
+
+  // RPT.3 — run a report. GET, not POST, and deliberately so: the RBAC manifest
+  // maps reads under /api/advertising to ads.view, while a POST there would
+  // demand ads.campaigns.manage. Running a report is a read.
+  fastify.get('/advertising/reporting/run', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const list = (v?: string) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : [])
+    const { runReport, ReportError } = await import('../services/advertising/ads-report-runner.service.js')
+    try {
+      const result = await runReport({
+        reportId: String(q.reportId ?? ''),
+        from: q.from ?? null,
+        to: q.to ?? null,
+        marketplaces: list(q.marketplaces),
+        adProducts: list(q.adProducts),
+        search: q.search ?? null,
+        groupBy: list(q.groupBy),
+        columns: list(q.columns),
+        sort: q.sortCol ? { col: q.sortCol, dir: q.sortDir === 'asc' ? 'asc' : 'desc' } : null,
+        page: q.page ? Number(q.page) : 1,
+        pageSize: q.pageSize ? Number(q.pageSize) : 50,
+      })
+      reply.header('Cache-Control', 'private, max-age=60')
+      return result
+    } catch (err) {
+      if (err instanceof ReportError) {
+        reply.code(err.status)
+        return { error: err.message }
+      }
+      throw err
+    }
+  })
+
+  // RPT.11 — TACoS, the ad-vs-organic split and wasted spend. Read-only.
+  fastify.get('/advertising/reporting/business-context', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { businessContext } = await import('../services/advertising/ads-business-context.service.js')
+    const to = q.to ?? new Date().toISOString().slice(0, 10)
+    const from = q.from ?? (() => { const d = new Date(`${to}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - 29); return d.toISOString().slice(0, 10) })()
+    reply.header('Cache-Control', 'private, max-age=300')
+    return businessContext({ from, to, minClicks: q.minClicks ? Number(q.minClicks) : undefined })
+  })
+
+  // RPT.10 — KPI totals, period comparison and the trend series for a report.
+  // Separate from /run so the grid stays fast and the chart loads alongside it.
+  fastify.get('/advertising/reporting/summary', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const list = (v?: string) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : [])
+    const { reportSummary } = await import('../services/advertising/ads-report-summary.service.js')
+    const { ReportError } = await import('../services/advertising/ads-report-runner.service.js')
+    try {
+      const out = await reportSummary({
+        reportId: String(q.reportId ?? ''),
+        from: q.from ?? null, to: q.to ?? null,
+        marketplaces: list(q.marketplaces), adProducts: list(q.adProducts),
+        search: q.search ?? null, groupBy: list(q.groupBy), columns: list(q.columns),
+        sort: null, page: 1,
+        compare: (q.compare === 'none' || q.compare === 'yoy' ? q.compare : 'previous'),
+        metrics: list(q.metrics),
+      })
+      reply.header('Cache-Control', 'private, max-age=60')
+      return out
+    } catch (err) {
+      if (err instanceof ReportError) { reply.code(err.status); return { error: err.message } }
+      throw err
+    }
+  })
+
+  // ── RPT.5 — saved report definitions ────────────────────────────────────
+  // All methods here map to ads.view (see permissions-manifest): a saved report
+  // is a named query over data the caller can already read.
+  fastify.get('/advertising/reporting/saved', async (request, reply) => {
+    const q = request.query as { reportId?: string }
+    const { listSavedReports } = await import('../services/advertising/ads-saved-reports.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return { items: await listSavedReports(q.reportId) }
+  })
+
+  fastify.get('/advertising/reporting/saved/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const svc = await import('../services/advertising/ads-saved-reports.service.js')
+    try {
+      return await svc.getSavedReport(id)
+    } catch (err) {
+      if (err instanceof svc.SavedReportError) { reply.code(err.status); return { error: err.message } }
+      throw err
+    }
+  })
+
+  fastify.get('/advertising/reporting/saved/:id/versions', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const svc = await import('../services/advertising/ads-saved-reports.service.js')
+    try {
+      return { items: await svc.listVersions(id) }
+    } catch (err) {
+      if (err instanceof svc.SavedReportError) { reply.code(err.status); return { error: err.message } }
+      throw err
+    }
+  })
+
+  fastify.post('/advertising/reporting/saved', async (request, reply) => {
+    const body = request.body as { name?: string; description?: string; query?: Record<string, unknown> }
+    const svc = await import('../services/advertising/ads-saved-reports.service.js')
+    try {
+      const created = await svc.createSavedReport({
+        name: String(body?.name ?? ''),
+        description: body?.description ?? null,
+        query: (body?.query ?? {}) as never,
+      })
+      reply.code(201)
+      return created
+    } catch (err) {
+      if (err instanceof svc.SavedReportError) { reply.code(err.status); return { error: err.message } }
+      throw err
+    }
+  })
+
+  fastify.patch('/advertising/reporting/saved/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = request.body as { name?: string; description?: string; query?: Record<string, unknown> }
+    const svc = await import('../services/advertising/ads-saved-reports.service.js')
+    try {
+      return await svc.updateSavedReport(id, {
+        name: body?.name,
+        description: body?.description,
+        query: body?.query as never,
+      })
+    } catch (err) {
+      if (err instanceof svc.SavedReportError) { reply.code(err.status); return { error: err.message } }
+      throw err
+    }
+  })
+
+  fastify.post('/advertising/reporting/saved/:id/restore', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = request.body as { version?: number }
+    const svc = await import('../services/advertising/ads-saved-reports.service.js')
+    try {
+      return await svc.restoreVersion(id, Number(body?.version))
+    } catch (err) {
+      if (err instanceof svc.SavedReportError) { reply.code(err.status); return { error: err.message } }
+      throw err
+    }
+  })
+
+  fastify.delete('/advertising/reporting/saved/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const svc = await import('../services/advertising/ads-saved-reports.service.js')
+    try {
+      await svc.archiveSavedReport(id)
+      return { ok: true }
+    } catch (err) {
+      if (err instanceof svc.SavedReportError) { reply.code(err.status); return { error: err.message } }
+      throw err
+    }
+  })
+
+  // ── RPT.7 — importing Amazon console exports ────────────────────────────
+  fastify.get('/advertising/reporting/imports', async (_request, reply) => {
+    const { listImports } = await import('../services/advertising/ads-console-import.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return { items: await listImports() }
+  })
+
+  // Upload → PREVIEW. Parses, stages and reports the arithmetic. Writes nothing
+  // that any report can see until the operator commits.
+  fastify.post('/advertising/reporting/imports/preview', async (request, reply) => {
+    const body = request.body as { fileName?: string; content?: string }
+    const svc = await import('../services/advertising/ads-console-import.service.js')
+    try {
+      const content = String(body?.content ?? '')
+      if (!content.trim()) { reply.code(400); return { error: 'The file is empty' } }
+      return await svc.previewImport(String(body?.fileName ?? 'upload.csv'), content.length, content)
+    } catch (err) {
+      reply.code(400); return { error: (err as Error).message }
+    }
+  })
+
+  fastify.post('/advertising/reporting/imports/:id/commit', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const svc = await import('../services/advertising/ads-console-import.service.js')
+    try { return await svc.commitImport(id) } catch (err) { reply.code(400); return { error: (err as Error).message } }
+  })
+
+  fastify.delete('/advertising/reporting/imports/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const svc = await import('../services/advertising/ads-console-import.service.js')
+    try { await svc.discardImport(id); return { ok: true } } catch (err) { reply.code(400); return { error: (err as Error).message } }
+  })
+
+  // The error file: one line per problem, naming the field and offending value.
+  fastify.get('/advertising/reporting/imports/:id/errors', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const svc = await import('../services/advertising/ads-console-import.service.js')
+    try {
+      const out = await svc.errorCsv(id)
+      reply.header('Content-Type', 'text/csv; charset=utf-8')
+        .header('Content-Disposition', `attachment; filename="${out.filename}"`)
+      return reply.send(out.body)
+    } catch (err) { reply.code(400); return { error: (err as Error).message } }
+  })
+
+  // ── RPT.6 — scheduled delivery ──────────────────────────────────────────
+  // Same ads.view mapping as saved reports: a schedule is a delivery preference
+  // for data the caller can already read.
+  fastify.get('/advertising/reporting/schedules', async (_request, reply) => {
+    const { listSchedules } = await import('../services/advertising/ads-report-schedules-crud.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return { items: await listSchedules() }
+  })
+
+  fastify.get('/advertising/reporting/schedules/:id/deliveries', async (request) => {
+    const { id } = request.params as { id: string }
+    const { listDeliveries } = await import('../services/advertising/ads-report-schedules-crud.service.js')
+    return { items: await listDeliveries(id) }
+  })
+
+  fastify.post('/advertising/reporting/schedules', async (request, reply) => {
+    const svc = await import('../services/advertising/ads-report-schedules-crud.service.js')
+    try {
+      reply.code(201)
+      return await svc.createSchedule(request.body as never)
+    } catch (err) {
+      reply.code(400); return { error: (err as Error).message }
+    }
+  })
+
+  fastify.patch('/advertising/reporting/schedules/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const svc = await import('../services/advertising/ads-report-schedules-crud.service.js')
+    try {
+      return await svc.updateSchedule(id, request.body as never)
+    } catch (err) {
+      reply.code(400); return { error: (err as Error).message }
+    }
+  })
+
+  fastify.delete('/advertising/reporting/schedules/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const svc = await import('../services/advertising/ads-report-schedules-crud.service.js')
+    try {
+      await svc.deleteSchedule(id)
+      return { ok: true }
+    } catch (err) {
+      reply.code(400); return { error: (err as Error).message }
+    }
+  })
+
+  // Run one schedule immediately — the SAME path the cron takes, so a manual
+  // test exercises exactly what will happen at the scheduled hour rather than a
+  // convenient approximation. Still honours NEXUS_ENABLE_OUTBOUND_EMAILS, so
+  // this is a true dry run until outbound email is switched on.
+  fastify.post('/advertising/reporting/schedules/:id/run', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { runSchedule } = await import('../services/advertising/ads-report-schedules.service.js')
+    try {
+      return await runSchedule(id)
+    } catch (err) {
+      reply.code(400); return { error: (err as Error).message }
+    }
+  })
+
+  // RPT.4 — download the FULL result set as CSV or XLSX. Same parameters as /run
+  // and the same runner underneath, so what downloads is what the grid showed.
+  fastify.get('/advertising/reporting/export', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const list = (v?: string) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : [])
+    const format = q.format === 'xlsx' ? 'xlsx' : 'csv'
+    const { exportReport } = await import('../services/advertising/ads-report-export.service.js')
+    const { ReportError } = await import('../services/advertising/ads-report-runner.service.js')
+    try {
+      const out = await exportReport({
+        reportId: String(q.reportId ?? ''),
+        from: q.from ?? null,
+        to: q.to ?? null,
+        marketplaces: list(q.marketplaces),
+        adProducts: list(q.adProducts),
+        search: q.search ?? null,
+        groupBy: list(q.groupBy),
+        columns: list(q.columns),
+        sort: q.sortCol ? { col: q.sortCol, dir: q.sortDir === 'asc' ? 'asc' : 'desc' } : null,
+      }, format)
+      // The manifest also rides on the response so a CSV — which carries no
+      // manifest sheet — is still self-describing to whatever fetched it.
+      reply
+        .header('Content-Type', out.contentType)
+        .header('Content-Disposition', `attachment; filename="${out.filename}"`)
+        .header('Cache-Control', 'no-store')
+        .header('X-Nexus-Report', out.manifest.reportId)
+        .header('X-Nexus-Report-Rows', String(out.manifest.rows))
+        // Split into ASCII fields on purpose: the manifest's window string uses an
+        // arrow, and a non-Latin-1 byte in a header value makes Node reject the
+        // entire response — the download fails with a JSON error instead of a file.
+        .header('X-Nexus-Report-From', out.manifest.dataFirstDay ?? '')
+        .header('X-Nexus-Report-To', out.manifest.dataLastDay ?? '')
+        .header('X-Nexus-Report-Generated', out.manifest.generatedAt)
+      return reply.send(out.body)
+    } catch (err) {
+      if (err instanceof ReportError) {
+        reply.code(err.status)
+        return { error: err.message }
+      }
+      throw err
+    }
+  })
 }
 
 export default advertisingIntelRoutes
