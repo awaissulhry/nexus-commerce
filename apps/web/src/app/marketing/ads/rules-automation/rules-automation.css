@@ -1117,3 +1117,23 @@
 
 /* RDX/G2 — the arm-confirm reuses the D2 diff shell; only the alarming variant is new. */
 .h10-d2-note.bad { background: #fdefec; color: #9a3a24; }
+
+/* ── ADX G4 — protected terms ─────────────────────────────────────────────
+   Matches the h10-* language the rest of this console uses. Spacing mirrors
+   .h10-rb-sec's existing rhythm so the panel sits flush with the rule list
+   above it rather than reading as a bolted-on block. */
+.h10-pt-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 12px; }
+.h10-pt-input { flex: 1 1 200px; min-width: 160px; height: 30px; padding: 0 9px; font-size: 12px;
+  border: 1px solid var(--border-default, #d8dde3); border-radius: 6px; background: var(--bg-input, #fff); }
+.h10-pt-input.reason { flex: 1 1 180px; }
+.h10-pt-sel { height: 30px; padding: 0 8px; font-size: 12px; border-radius: 6px;
+  border: 1px solid var(--border-default, #d8dde3); background: var(--bg-input, #fff); }
+.h10-pt-ck { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; white-space: nowrap; }
+.h10-pt-hd { margin: 12px 0 5px; font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--text-tertiary, #7b8794); }
+.h10-pt-term { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.h10-pt-term b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-pt-flag { flex: none; padding: 1px 5px; border-radius: 4px; font-size: 10px; font-style: normal;
+  background: var(--bg-subtle, #eef1f5); color: var(--text-secondary, #55606d); }
+.h10-pt-reason { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-size: 11px; color: var(--text-tertiary, #7b8794); }

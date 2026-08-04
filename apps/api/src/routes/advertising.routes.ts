@@ -9076,6 +9076,62 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return result
   })
 
+  // ── ADX G4 — protected keywords ─────────────────────────────────────────────
+  //
+  // WHITELIST = never negate this term. BLACKLIST = always negate it.
+  //
+  // Enforced in ads-write-gate.ts, the single chokepoint every write to Amazon passes
+  // through — deliberately NOT in the harvest service, because harvest is not the only
+  // caller that can negate a term and a protection only some callers honour is not a
+  // protection.
+  //
+  // This exists because "Auto harvest & negate" has been enabled with nothing at all
+  // stopping it negating a brand term, and it is currently proposing negations on the
+  // generic terms the account most wants to own.
+  fastify.get('/advertising/keyword-protections', async (request) => {
+    const q = request.query as { mode?: string; marketplace?: string }
+    const where: Record<string, unknown> = {}
+    if (q.mode === 'WHITELIST' || q.mode === 'BLACKLIST') where.mode = q.mode
+    if (q.marketplace) where.marketplace = q.marketplace
+    const items = await prisma.adKeywordProtection.findMany({
+      where, orderBy: [{ mode: 'asc' }, { term: 'asc' }], take: 1000,
+    })
+    return { items }
+  })
+
+  fastify.post('/advertising/keyword-protections', async (request, reply) => {
+    const b = request.body as {
+      mode?: string; term?: string; isPrefix?: boolean
+      marketplace?: string | null; campaignId?: string | null; reason?: string | null
+    }
+    const mode = b.mode === 'BLACKLIST' ? 'BLACKLIST' : 'WHITELIST'
+    const { normaliseTerm } = await import('../services/advertising/ads-write-gate.js')
+    const term = normaliseTerm(String(b.term ?? ''))
+    if (!term) { reply.code(400); return { ok: false, error: 'term required' } }
+    // Same normalisation the gate matches on, so what an operator types is what binds.
+    const existing = await prisma.adKeywordProtection.findFirst({
+      where: { mode, term, marketplace: b.marketplace ?? null, campaignId: b.campaignId ?? null },
+      select: { id: true },
+    })
+    if (existing) { reply.code(409); return { ok: false, error: 'already protected', id: existing.id } }
+    const row = await prisma.adKeywordProtection.create({
+      data: {
+        mode, term, isPrefix: !!b.isPrefix,
+        marketplace: b.marketplace ?? null, campaignId: b.campaignId ?? null,
+        reason: b.reason ?? null, createdBy: actorFromHeaders(request.headers as Record<string, unknown>),
+      },
+    })
+    return { ok: true, item: row }
+  })
+
+  fastify.delete('/advertising/keyword-protections/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const row = await prisma.adKeywordProtection.findUnique({ where: { id } })
+    if (!row) { reply.code(404); return { ok: false, error: 'not_found' } }
+    await prisma.adKeywordProtection.delete({ where: { id } })
+    return { ok: true }
+  })
+
   fastify.patch('/advertising/ad-groups/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const body = request.body as {

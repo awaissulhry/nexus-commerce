@@ -26,6 +26,7 @@ import { RuleTypeModal } from './_shared/RuleTypeModal'
 import { NoDataIllus } from './_shared/NoDataIllus'
 import { RulesTabs, rulesTabByKey, RULES_TABS } from './_shared/tabs'
 import { RuleListTab } from './tabs/RuleListTab'
+import { ProtectedTermsPanel } from './ProtectedTermsPanel'
 import { SovTrackerTab } from './tabs/SovTrackerTab'
 import { BudgetScheduleTab } from './_schedule/BudgetScheduleTab'
 import { TAB_RULES } from './tabs/placeholderSeeds'
@@ -362,6 +363,10 @@ export function RulesAutomationClient() {
           )}
         />
       ) : tab === 'negative-targeting' ? (
+        <>
+        {/* ADX G4 — protection sits above the rules that negate, because it is their
+            opposite: those decide what gets negated, this decides what never can be. */}
+        <ProtectedTermsPanel />
         <RuleListTab
           noun="Negative Targeting Rule"
           seed={[]}
@@ -376,6 +381,7 @@ export function RulesAutomationClient() {
             </span>
           )}
         />
+        </>
       ) : TAB_RULES[tab] ? (
         <RuleListTab noun={TAB_RULES[tab].noun} seed={TAB_RULES[tab].rows} onAddRule={() => setShowRuleType(true)} />
       ) : (
