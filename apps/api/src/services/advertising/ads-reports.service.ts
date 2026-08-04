@@ -517,9 +517,12 @@ export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
     logger.warn('[ads-reports] unknown reportTypeId', { jobId, reportTypeId: job.reportTypeId })
   }
 
+  // ingestedAt records that this job was PROCESSED, whatever it found. It is
+  // deliberately separate from rowsIngested: conflating the two is what let five
+  // campaign-less profiles re-enter the queue on every tick and starve IT.
   await prisma.amazonAdsReportJob.update({
     where: { id: jobId },
-    data: { rowsIngested: upserted },
+    data: { rowsIngested: upserted, ingestedAt: new Date() },
   })
 
   return { jobId, rowsIngested: upserted }

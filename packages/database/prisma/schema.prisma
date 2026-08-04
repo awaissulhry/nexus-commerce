@@ -3439,8 +3439,16 @@ model AmazonAdsReportJob {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   completedAt      DateTime?
+  // Set once ingest has actually PROCESSED this job, whatever it found.
+  // rowsIngested used to double as this marker, which was wrong: a report that
+  // legitimately contains no rows is indistinguishable from one nobody touched.
+  // Five EU profiles have no campaigns at all, so 38 of ~68 daily jobs were
+  // permanently re-selected on every tick and starved the real markets — IT
+  // completes last of nine and was never reached. See RPT notes 2026-08-05.
+  ingestedAt       DateTime?
 
   @@index([status, lastPolledAt])
+  @@index([ingestedAt, completedAt])
   @@index([profileId, adProduct, createdAt(sort: Desc)])
   @@index([externalReportId])
 }

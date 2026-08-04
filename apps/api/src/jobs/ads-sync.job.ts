@@ -79,6 +79,7 @@ let reportCreateStTask: ReturnType<typeof cron.schedule> | null = null
 let reportCreatePlTask: ReturnType<typeof cron.schedule> | null = null
 let reportCreateApTask: ReturnType<typeof cron.schedule> | null = null
 let reportCreateTgTask: ReturnType<typeof cron.schedule> | null = null
+let reportGapFillTask: ReturnType<typeof cron.schedule> | null = null
 let reportPollTask: ReturnType<typeof cron.schedule> | null = null
 let brandMetricsTask: ReturnType<typeof cron.schedule> | null = null
 let reportIngestTask: ReturnType<typeof cron.schedule> | null = null
@@ -306,6 +307,29 @@ export async function runReportCreateCron(): Promise<void> {
   }).catch((err) => logger.error('ads-report-create cron: failure', { error: String(err) }))
 }
 
+// 02:05 UTC daily — re-request days that produced no rows.
+//
+// Runs AFTER the normal create so it never races it, and it deliberately never
+// touches yesterday (Amazon is still settling that day). Without this, a day
+// that came back empty stayed empty forever: that is how Italy lost 2026-07-28
+// through 08-04 while spending over €100/day.
+export async function runReportGapFillCron(): Promise<void> {
+  await recordCronRun('ads-report-gapfill', async () => {
+    const { runGapFillCycle } = await import('../services/advertising/ads-report-gapfill.service.js')
+    const r = await runGapFillCycle({ lookbackDays: 14, maxJobs: 30 })
+    const markets = [...new Set(r.gaps.map((g) => g.marketplace))].join(',') || 'none'
+    return `gaps=${r.gapsFound} markets=${markets} created=${r.jobsCreated} skipped=${r.jobsSkipped} errors=${r.errors.length}`
+  }).catch((err) => logger.error('ads-report-gapfill cron: failure', { error: String(err) }))
+}
+
+export function startReportGapFillCron(): void {
+  if (reportGapFillTask) { logger.warn('ads-report-gapfill already started'); return }
+  const schedule = process.env.NEXUS_ADS_REPORT_GAPFILL_SCHEDULE ?? '5 2 * * *'
+  if (!cron.validate(schedule)) { logger.error('ads-report-gapfill: invalid schedule', { schedule }); return }
+  reportGapFillTask = cron.schedule(schedule, () => { void runReportGapFillCron() })
+  logger.info('ads-report-gapfill cron: scheduled', { schedule })
+}
+
 export function startReportCreateCron(): void {
   if (reportCreateTask) { logger.warn('ads-report-create already started'); return }
   const schedule = process.env.NEXUS_ADS_REPORT_CREATE_SCHEDULE ?? '15 1 * * *'
@@ -444,31 +468,62 @@ export function startReportPollCron(): void {
   logger.info('ads-report-poll cron: scheduled', { schedule })
 }
 
+/**
+ * How long a completed report's signed S3 URL stays usable. Amazon's TTL is an
+ * hour; 50 minutes keeps a safety margin. This is a real external constraint, so
+ * it stays — the fix for missed work is to drain the queue fast enough to never
+ * reach it, and to re-request any date that ends up with nothing.
+ */
+const INGEST_URL_TTL_MS = 50 * 60 * 1000
+
 // Every 15 min at :07 — ingest COMPLETED jobs (download S3 + write rows)
 export async function runReportIngestCron(): Promise<void> {
   await recordCronRun('ads-report-ingest', async () => {
-    // Same filter pattern as v1 exports: skip already-ingested AND
-    // skip jobs whose signed URL has likely expired. Reports API has
-    // no urlExpiresAt column; use completedAt > now-50min as proxy
-    // (Amazon's S3 URLs have a 1-hour TTL — 50min gives safety margin).
-    const fiftyMinAgo = new Date(Date.now() - 50 * 60 * 1000)
+    // Select on `ingestedAt IS NULL` — NOT on rowsIngested.
+    //
+    // rowsIngested = 0 was doing double duty as "not yet ingested", but it is
+    // also the right answer for a report with no rows. PL/SE/NL/UK/IE have no
+    // campaigns, so 38 of ~68 daily jobs were permanently zero-row: they never
+    // left the selection set and were re-downloaded on EVERY tick, consuming the
+    // whole budget. IT is the largest account and so completes LAST of the nine
+    // profiles every day — it sat at the back of that queue and lost 7 days of
+    // performance data (2026-07-28 → 08-04) while spending €100+/day.
+    //
+    // No `take` cap. The cap was 10 against ~68 jobs landing in one 30-second
+    // burst; work that missed the window was dropped silently and permanently,
+    // because yesterday() requests each date exactly once and never revisits it.
+    // Now that finished jobs leave the set for good, the set drains and stays small.
+    const staleAfter = new Date(Date.now() - INGEST_URL_TTL_MS)
     const jobs = await prisma.amazonAdsReportJob.findMany({
       where: {
         status: 'COMPLETED',
         location: { not: null },
-        rowsIngested: 0,
-        completedAt: { gt: fiftyMinAgo },
+        ingestedAt: null,
+        completedAt: { gt: staleAfter },
       },
       select: { id: true },
       orderBy: { completedAt: 'asc' },
-      take: 10,
     })
-    let ingested = 0; let errors = 0
+    let ingested = 0; let errors = 0; let rows = 0
     for (const job of jobs) {
-      try { await ingestCompletedJob(job.id); ingested++ }
-      catch (err) { errors++; logger.error('report ingest error', { jobId: job.id, error: String(err) }) }
+      try {
+        const r = await ingestCompletedJob(job.id)
+        ingested++
+        rows += r.rowsIngested
+      } catch (err) {
+        errors++
+        logger.error('report ingest error', { jobId: job.id, error: String(err) })
+      }
     }
-    return `ingested=${ingested} errors=${errors}`
+    // Jobs whose URL aged out before anyone reached them. Under the old code
+    // these vanished without a trace; count them so the failure is visible.
+    const stranded = await prisma.amazonAdsReportJob.count({
+      where: { status: 'COMPLETED', ingestedAt: null, completedAt: { lte: staleAfter } },
+    })
+    if (stranded > 0) {
+      logger.warn('[ads-report-ingest] jobs stranded past their URL TTL', { stranded })
+    }
+    return `jobs=${jobs.length} ingested=${ingested} rows=${rows} errors=${errors} stranded=${stranded}`
   }).catch((err) => logger.error('ads-report-ingest cron: failure', { error: String(err) }))
 }
 
@@ -698,6 +753,9 @@ export function startAllAdvertisingCrons(): void {
   startReportCreateTgCron()
   startReportPollCron()
   startReportIngestCron()
+  // Closes the loop on the four create crons above: any day they failed to
+  // populate gets requested again instead of staying empty forever.
+  startReportGapFillCron()
   startSearchTermCleanupCron()
   // Phase 1: Brand Metrics — brand funnel vs category benchmarks (weekly).
   startBrandMetricsCron()
