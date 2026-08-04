@@ -1,10 +1,9 @@
+import { ReportRunner } from '../ReportRunner'
+
+// Brand Metrics keeps its own route because it is a rail child, but it is the
+// same runner as every other report — no second implementation to drift.
+export const dynamic = 'force-dynamic'
+
 export default function Page() {
-  return (
-    <div className="h10-stub">
-      <div className="crumb">Helium 10 Ads</div>
-      <h1>Brand Metrics</h1>
-      <p>This screen is being rebuilt to match Adtomic — filled in as we work through each page.</p>
-      <div className="panel">Brand Metrics — pixel-match in progress.</div>
-    </div>
-  )
+  return <ReportRunner reportId="brand-metrics" />
 }

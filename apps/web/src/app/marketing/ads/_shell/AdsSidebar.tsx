@@ -50,9 +50,17 @@ export function AdsSidebar() {
     return pathname === href || pathname.startsWith(`${href}/`)
   }
 
-  // Collapsible parents (AMC, Reporting) toggle their submenu open/closed on click —
-  // independent of navigation, exactly like H10. Seed each group open iff the active
-  // route is inside it, so deep-linking to a sub-page lands with the group expanded.
+  // Collapsible parents (AMC, Reporting) are TWO-TARGET rows, ported verbatim from the
+  // commerce rail (_shared/AppRail.tsx): the label is a Link that navigates to the parent's
+  // own page, and the chevron is a separate button that expands the submenu without
+  // navigating. Before RPT.1 the whole row was a toggle-only <button>, so `Reporting` and
+  // `AMC` were the only rail items you could not click through to — their pages were
+  // reachable only by typing the URL. Every class used here (.h10-parent-link,
+  // .h10-parent-chev, .h10-item.section) already exists in ads.css, which both rails share,
+  // so this is JSX-only: no new CSS, and the two rails cannot drift.
+  //
+  // Seed each group open iff the active route is inside it, so deep-linking to a sub-page
+  // lands with the group expanded.
   const [open, setOpen] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {}
     for (const it of nav)
@@ -88,25 +96,41 @@ export function AdsSidebar() {
         {nav.map((it) => {
           const href = `${ADS_BASE}/${it.route}`
           const hasChildren = !!it.children?.length
-          const active = !it.external && isActive(it.route)
+          // A parent is "section-active" (subtle chip) when you're on one of its children,
+          // and "exact-active" (full fill) only on its own page — so the collapsed rail still
+          // shows which section you're in without claiming you're on the parent page.
+          const childRouteActive = hasChildren && it.children!.some((c) => isActive(c.route))
+          const exactActive = !it.external && isActive(it.route) && !childRouteActive
           const isOpen = hasChildren && !!open[it.route]
-          const body = (
+          const bodyInner = (
             <>
               <span className="ico"><it.Icon size={20} /></span>
               <span className="lbl">{it.label}</span>
               {it.route === 'suggestions' && pendingSuggestions > 0 && <span className="h10-nav-badge" aria-label={`${pendingSuggestions} pending suggestions`}>{pendingSuggestions > 99 ? '99+' : pendingSuggestions}</span>}
-              {hasChildren && <ChevronDown className={`chev ${isOpen ? 'open' : ''}`} size={16} aria-hidden />}
-              {it.external && <ExternalLink className="ext" size={14} aria-hidden />}
             </>
           )
           return (
             <div key={it.route} className="h10-group">
               {it.external ? (
-                <a href={it.external} target="_blank" rel="noopener noreferrer" className="h10-item">{body}</a>
+                <a href={it.external} target="_blank" rel="noopener noreferrer" className="h10-item">
+                  {bodyInner}
+                  <ExternalLink className="ext" size={14} aria-hidden />
+                </a>
               ) : hasChildren ? (
-                <button type="button" className={`h10-item ${active ? 'on' : ''}`} aria-expanded={isOpen} onClick={() => toggle(it.route)}>{body}</button>
+                <div className={`h10-item h10-parent ${exactActive ? 'on' : childRouteActive ? 'section' : ''}`}>
+                  <Link href={href} className="h10-parent-link" aria-current={exactActive ? 'page' : undefined}>{bodyInner}</Link>
+                  <button
+                    type="button"
+                    className="h10-parent-chev"
+                    aria-label={isOpen ? `Collapse ${it.label}` : `Expand ${it.label}`}
+                    aria-expanded={isOpen}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggle(it.route) }}
+                  >
+                    <ChevronDown className={`chev ${isOpen ? 'open' : ''}`} size={16} aria-hidden />
+                  </button>
+                </div>
               ) : (
-                <Link href={href} className={`h10-item ${active ? 'on' : ''}`}>{body}</Link>
+                <Link href={href} className={`h10-item ${exactActive ? 'on' : ''}`} aria-current={exactActive ? 'page' : undefined}>{bodyInner}</Link>
               )}
               {hasChildren && isOpen && (
                 <div className="h10-sub">

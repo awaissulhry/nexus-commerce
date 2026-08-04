@@ -120,7 +120,10 @@ export function AdsPageHeader({
           primaryAction.href
             ? <Link href={primaryAction.href} className="h10-hbtn primary">{primaryAction.icon}{primaryAction.label}</Link>
             : <button type="button" className="h10-hbtn primary" onClick={primaryAction.onClick}>{primaryAction.icon}{primaryAction.label}</button>
-        ) : (
+        ) : actions?.length ? (
+          // RPT.1 — only render Action ▾ when there is at least one action. Pages with
+          // neither `primaryAction` nor `actions` (Change Log, Reporting) were showing a
+          // primary button that opened an empty popover.
           <div className="h10-hsel">
             <button type="button" className="h10-hbtn primary" onClick={() => setOpen(open === 'action' ? '' : 'action')}><ChevronDown size={14} /> Action</button>
             {open === 'action' && <>
@@ -132,7 +135,7 @@ export function AdsPageHeader({
               </div>
             </>}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   )

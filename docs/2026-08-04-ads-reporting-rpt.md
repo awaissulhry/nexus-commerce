@@ -222,7 +222,65 @@ Ten phases. **Each is separately gated: nothing starts until you approve it, and
 
 ---
 
-## 6. What I am not proposing
+## 6. RPT.0 RESULTS — ground truth, measured 2026-08-04
+
+Read-only, against prod. Harnesses: `apps/api/scripts/_rpt0-ground-truth.mts` and `_rpt0b-verify.mts` (local, uncommitted). Nothing was modified.
+
+### 6.1 What each table actually holds
+
+| Table | Rows | Window | Days | Lag | Verdict |
+|---|---|---|---|---|---|
+| `AmazonAdsDailyPerformance` | **25,812** | Mar 22 → Aug 02 | 134 | 1d | ✅ the spine |
+| `CampaignMetric` (unified mirror) | 25,319 | Mar 22 → Aug 02 | 132 | 1d | ✅ AMAZON 25,153 · EBAY 166 |
+| `AmazonAdsHourlyPerformance` (AMS) | 11,107 | May 21 → Aug 03 | 72 | 0d | ⚠️ IT only, in practice |
+| `AmazonAdsSearchTerm` | 9,513 | May 20 → Aug 02 | 71 | 1d | ✅ but shallow history |
+| `SearchQueryPerformance` | 9,232 | May 17 → Jul 19 | 10 wk | 15d | ✅ weekly by design |
+| `AmazonAdsPlacementReport` | 3,205 | Apr 15 → Aug 02 | **43** | 1d | ⚠️ sparse + dirty |
+| `AmazonEconomicsDaily` (Data Kiosk) | 1,127 | **Jul 19 → Jul 25 only** | 7 | 9d | ⚠️ one manual backfill |
+| `AmazonAdsBrandBuildingMetric` | 73 | Jun 20 → Jul 18 | 5 wk | 16d | ✅ weekly by design |
+| `EbayListingEconomics` | 44 | Jul 10 → Aug 03 | 5 | 1d | ❌ unusable (see 6.2-G) |
+
+### 6.2 Seven findings
+
+**A. ⚠️ IT — the primary market — is systematically the stalest.** Not a one-off:
+
+| | DE | FR | ES | **IT** |
+|---|---|---|---|---|
+| Daily perf, last day | Aug 02 | Aug 02 | Jul 31 | **Jul 27** (−6d) |
+| Search terms, last day | Aug 02 | Aug 02 | Aug 02 | **Jul 26** (−7d) |
+
+IT is 52% of all daily rows (13,393 of 25,812). **Any report defaulting to "last 7 days" will show the biggest market as nearly empty.** This must be diagnosed before RPT.3 picks a default window, and the library must surface per-market freshness rather than one global "as of".
+
+**B. ⚠️ The placement table's `marketplace` column is polluted.** 183 rows carry raw Amazon marketplace IDs instead of country codes — `A1PA6795UKMFR9` (121 rows), `APJ6JRA9NG5V4` (38), `A13V1IB3VIYZZH` (12), `A1RKKUPIHCS9HS` (12). All fall in Apr 15 – May 20, so the normalisation was fixed later and the old rows were never backfilled. Grouping by marketplace today yields **8 buckets for 4 markets**. Needs a read-time normaliser or a one-off backfill (additive, pre-approved).
+
+**C. ✅ The 1,002 zero-row Sponsored Brands jobs are correct, not broken.** `sbCampaigns` (529 jobs) and `sbSearchTerm` (473 jobs) have ingested 0 rows — which looked like silent breakage. It isn't: **only 4 SB campaigns exist and all 4 are PAUSED** (3 IT, 1 DE). Sponsored Display: 15 campaigns, **all PAUSED**. The account is effectively **Sponsored Products only** — 82 ENABLED campaigns (70 IT, 8 DE, 2 FR, 2 ES). *Consequence for RPT.2: the library must distinguish "no data because nothing is running" from "no data because ingest is broken", or six reports will look failed when they are simply idle.*
+
+**D. ❌ Target-level performance is not ingested at all — the industry's #1 report cannot be served.** `AmazonAdsDailyPerformance` contains only `CAMPAIGN` (3,608) and `PRODUCT_AD` (22,204). **No `AD_GROUP`, no `AD_TARGET` rows**, and the report-job breakdown has no `spTargeting` entry — we never request it. Meanwhile **5,204 AdTargets exist locally** (4,180 KEYWORD · 764 PRODUCT · 179 AUTO · 32 PRODUCT_CATEGORY · 28 PRODUCT_AUDIENCE · 14 AUDIENCE · 7 PRODUCT_CATEGORY_AUDIENCE). The `impressions`/`clicks`/`spendCents` columns on `AdTarget` are **lifetime counters from entity sync, not a time series** — they cannot answer "how did this keyword do last week".
+
+Every market guide ranks the Targeting report *essential, weekly*. **This is a new-ingest scope item, not a UI item**, and it is the single biggest gap RPT.0 found.
+
+**E. ❌ `AmazonReportRun.rowCount` is never populated.** 4,775 runs, **0 with a row count**, max is `null` — including 1,718 successful Brand Analytics SQP runs. The freshness surface can say a report *ran* but never *how much came back*, so "succeeded with zero rows" and "succeeded with 9,000 rows" are indistinguishable. A defect RPT.9 must fix at the source, not paper over.
+
+**F. ❌ `s3_download_400` is still accruing, daily.** 724 total on `AmazonAdsExportJob` (memory recorded 670 on 2026-07-29 — **+54 in five days, ~11/day**), with failures on every single day through Aug 03. This is the known split-cron-stage bug: the signed URL is minted on completion and expires before a later cron stage downloads it. Not fixed. Belongs to RPT.9.
+
+**G. ❌ eBay margin data is unusable.** All 44 `EbayListingEconomics` rows are `dataStatus = MISSING_COGS`, IT only. Contribution margin, break-even ad rate and break-even CPC are therefore all meaningless. Any eBay profitability report ships blank until COGS is loaded.
+
+**Healthy, for the record:** the cron fleet is fully alive — `ads-report-poll` (2,010 runs/14d), `ads-report-ingest` (1,339), `ads-v1-export-poll` (4,020), `ebay-ads-report-poll` (6,700, 2 failures), `sqp-ingest`, `tos-is-ingest`, `ads-brand-metrics`, `ads-metrics-reconcile` all firing on schedule. All 4,263 `AmazonAdsReportJob` rows are COMPLETED. eBay: 201 tasks, 200 clean, 1 quota back-off.
+
+### 6.3 What RPT.0 changes in the plan
+
+| # | Change | Affects |
+|---|---|---|
+| 1 | **Add a Targeting-report ingest** (`spTargeting`, groupBy `targeting`) as its own gated item. Without it there is no keyword-level time series to report on. | new phase, before RPT.3 can claim a Targeting report |
+| 2 | **Diagnose the IT lag before choosing a default window**, and show freshness **per market**, never one global figure. | RPT.2, RPT.3 |
+| 3 | **Normalise `marketplace`** at read time (and consider a one-off backfill of the 183 placement rows). | RPT.3 |
+| 4 | **The library must separate "idle" from "broken"** — six reports have no data because nothing is running, and that must read as a status, not a failure. | RPT.2 |
+| 5 | **`rowCount` and `s3_download_400` are real defects**, not display problems. RPT.9 fixes causes. | RPT.9 |
+| 6 | **Your imported CSV is worth more than first estimated.** It carries Apr 12 → May 19 search-term history that `AmazonAdsSearchTerm` (starts May 20) simply does not have — about **five extra weeks** — at a grain including placement and advertised product that the API cannot return. | RPT.7 |
+
+---
+
+## 7. What I am not proposing
 
 - Deleting anything. The legacy tree stays until H1.2 is separately gated.
 - Touching flat-file editors, FBA quantity, or any existing import path.

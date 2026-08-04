@@ -1,10 +1,9 @@
+import { ReportingClient } from './ReportingClient'
+
+// Matches every other page in this console (dashboard, trust, campaigns, portfolios,
+// health) — the catalogue is static today but RPT.2 makes it read live coverage.
+export const dynamic = 'force-dynamic'
+
 export default function Page() {
-  return (
-    <div className="h10-stub">
-      <div className="crumb">Helium 10 Ads</div>
-      <h1>Reporting</h1>
-      <p>This screen is being rebuilt to match Adtomic — filled in as we work through each page.</p>
-      <div className="panel">Reporting — pixel-match in progress.</div>
-    </div>
-  )
+  return <ReportingClient />
 }
