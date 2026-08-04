@@ -53,6 +53,8 @@ interface AdMutationPayload {
   fieldChanges: Array<{ field: string; oldValue: string | null; newValue: string | null }>
   actor: string
   reason: string | null
+  /** ADX G1 — deliberate suppression/restore. Exempts the write from the MIN bid bound. */
+  force?: boolean
 }
 
 /**
@@ -357,6 +359,9 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     campaignId,
     field: bidChange?.field ?? payload.fieldChanges[0]?.field ?? null,
     intendedValueCents: Number.isFinite(intendedBidCents ?? NaN) ? intendedBidCents : null,
+    // ADX G1 — suppression drives bids to ~2¢ under the no-pause rule; a min bound
+    // must not block it.
+    isSuppression: payload.force === true,
   })
   if (gate.allowed === false) {
     logGateDeny({ queueId, marketplace, payloadValueCents }, gate.reason, gate.deniedAt)

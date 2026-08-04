@@ -114,6 +114,20 @@ interface EnqueueArgs {
   actor: AdsActor
   reason: string | null
   applyImmediately: boolean // when true, holdUntil = NOW (no grace)
+  /**
+   * ADX G1 — deliberate suppression / restore, not optimisation.
+   *
+   * `force` already meant "bypass the 5¢ floor" locally (NP). It now travels to the
+   * write gate as well, because ADX A1 added Campaign.minBidCents and a floor that
+   * blocks a safety action is worse than no floor: suppressCampaignBids drives bids to
+   * ~2¢, which is how the retail guard, budget stop-over-spend and Min-bid dayparting
+   * windows all work under the no-pause rule. Without this the first operator to set a
+   * min bound above 2¢ would have silently broken every one of them.
+   *
+   * The gate skips only the MINIMUM on a forced write. The maximum still binds — a
+   * "suppression" that raises a bid is not a suppression.
+   */
+  force?: boolean
 }
 
 async function enqueueOutbound(args: EnqueueArgs): Promise<string> {
@@ -154,6 +168,9 @@ async function createQueueRow(tx: Tx, args: EnqueueArgs, holdUntil: Date): Promi
         fieldChanges: args.fieldChanges,
         actor: args.actor,
         reason: args.reason,
+        // ADX G1 — the worker hands this to the write gate so a deliberate
+        // suppression is not blocked by Campaign.minBidCents.
+        ...(args.force ? { force: true } : {}),
       } as object,
       holdUntil,
       externalListingId: args.externalId,
@@ -802,6 +819,7 @@ export async function updateAdGroupWithSync(args: {
     actor: args.actor,
     reason: args.reason ?? null,
     applyImmediately: args.applyImmediately ?? false,
+    force: args.force,
   })
 
   const bidHistoryIds = await writeBidHistory({
@@ -1005,6 +1023,7 @@ export async function updateAdTargetWithSync(args: {
     actor: args.actor,
     reason: args.reason ?? null,
     applyImmediately: args.applyImmediately ?? false,
+    force: args.force,
   })
 
   const bidHistoryIds = await writeBidHistory({

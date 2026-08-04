@@ -91,6 +91,40 @@ describe('ADX A1 — entity bid bounds', () => {
   })
 })
 
+describe('ADX G1 — suppression is exempt from the MIN bound', () => {
+  // suppressCampaignBids drives bids to ~2¢: it is how the retail guard, budget
+  // stop-over-spend and Min-bid dayparting windows all suppress delivery under the
+  // no-pause rule. A1's min bound would have silently disabled every one of them the
+  // moment anyone set a min above 2¢. A floor that blocks a safety action is worse
+  // than no floor.
+  it('THE BUG: without the exemption, a min bound blocks suppression to 2c', async () => {
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, minBidCents: 10 })
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 2 })
+    expect(r.allowed).toBe(false)
+    if (r.allowed === false) expect(r.deniedAt).toBe('entity_bounds')
+  })
+
+  it('THE FIX: a forced suppression write passes the same min bound', async () => {
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, minBidCents: 10 })
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 2, isSuppression: true })
+    expect(r.allowed).toBe(true)
+  })
+
+  it('the MAXIMUM still binds — a "suppression" that raises a bid is not one', async () => {
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, maxBidCents: 50 })
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 400, isSuppression: true })
+    expect(r.allowed).toBe(false)
+    if (r.allowed === false) expect(r.deniedAt).toBe('entity_bounds')
+  })
+
+  it('the allowlist still binds on a forced write', async () => {
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, liveBidWritesEnabled: false, minBidCents: 10 })
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 2, isSuppression: true })
+    expect(r.allowed).toBe(false)
+    if (r.allowed === false) expect(r.deniedAt).toBe('campaign_allowlist')
+  })
+})
+
 describe('ADX A1 — keyword protection', () => {
   it('denies negating a whitelisted term', async () => {
     protectionFindMany.mockResolvedValue([{ term: 'giacca moto xavia', isPrefix: false, reason: 'brand term' }])

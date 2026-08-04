@@ -58,6 +58,19 @@ export interface GateContext {
   keywordText?: string | null
   /** True when the write adds a negative keyword / suppresses a term. */
   isNegation?: boolean
+  /**
+   * ADX G1 — a deliberate bid suppression or restore (`force` in the mutation layer),
+   * not an optimisation. Exempts the write from the MINIMUM bid bound only.
+   *
+   * suppressCampaignBids drives bids to ~2¢, which is how the retail guard, budget
+   * stop-over-spend and Min-bid dayparting windows all suppress delivery under the
+   * no-pause rule. A1 added Campaign.minBidCents; without this exemption the first
+   * operator to set a min above 2¢ would have silently disabled every one of them —
+   * a floor blocking a safety action is worse than no floor.
+   *
+   * The MAXIMUM still binds: a "suppression" that raises a bid is not a suppression.
+   */
+  isSuppression?: boolean
 }
 
 /** Fields whose value is a bid in cents, and therefore subject to entity bid bounds. */
@@ -167,7 +180,7 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
           deniedAt: 'entity_bounds',
         }
       }
-      if (campaign.minBidCents != null && v < campaign.minBidCents) {
+      if (campaign.minBidCents != null && v < campaign.minBidCents && !ctx.isSuppression) {
         return {
           allowed: false,
           reason: `bid ${v}¢ is below Campaign.minBidCents=${campaign.minBidCents}¢ on ${ctx.campaignId}`,
