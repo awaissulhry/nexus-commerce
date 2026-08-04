@@ -6326,9 +6326,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     ])
 
     const weekAgo = new Date(Date.now() - 7 * 86_400_000)
+    // DAILY_CAP_EXCEEDED rows are the ENGINE declining to run a rule, not the rule failing.
+    // They were also written by the self-ratcheting cap bug fixed on 2026-08-04, which left
+    // 109,551 of them in the last week alone — enough to show a healthy rule as "5,093 failed"
+    // and make every row on this board look broken. The cap counter already excludes them;
+    // the trust signal must exclude them for the same reason, or the board argues against
+    // rules on the strength of a defect they had no part in.
     const recent = await prisma.automationRuleExecution.groupBy({
       by: ['ruleId', 'status'],
-      where: { startedAt: { gte: weekAgo }, ruleId: { in: rules.map((r) => r.id) } },
+      where: {
+        startedAt: { gte: weekAgo },
+        ruleId: { in: rules.map((r) => r.id) },
+        NOT: { errorMessage: 'DAILY_CAP_EXCEEDED' },
+      },
       _count: { _all: true },
     })
     const weekBy = new Map<string, Record<string, number>>()
