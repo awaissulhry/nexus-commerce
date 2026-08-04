@@ -6298,6 +6298,132 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       recentExecutions: recent.map((e) => ({ ...e, rollbackAvailable: now - new Date(e.startedAt).getTime() < 24 * 3600 * 1000 })),
     }
   })
+  // ── ADX N4 — the autonomy board ─────────────────────────────────────────────
+  //
+  // Ten rules act on their own and none of it was visible or adjustable from the UI:
+  // the dial was database-only. Automation an operator cannot steer is the same shape
+  // as the problem this programme set out to fix, and Quartile's documented failure mode
+  // says it directly — if automation makes the account too big to see, the tool owes you
+  // a way to see it.
+  //
+  // Sits under /advertising/autonomy/* beside status, pause-all and resume rather than
+  // under /automation-rules/, where a static `autonomy` segment would shadow the
+  // existing `:id` route.
+  fastify.get('/advertising/autonomy/rules', async () => {
+    const [rules, protectionCount] = await Promise.all([
+      prisma.automationRule.findMany({
+        where: { domain: 'advertising' },
+        select: {
+          id: true, name: true, trigger: true, enabled: true, dryRun: true, autonomyLevel: true,
+          actions: true, maxExecutionsPerDay: true, maxValueCentsEur: true,
+          maxDailyAdSpendCentsEur: true, scopeMarketplace: true,
+          evaluationCount: true, matchCount: true, executionCount: true,
+          lastEvaluatedAt: true, lastMatchedAt: true, lastExecutedAt: true, createdAt: true,
+        },
+        orderBy: [{ enabled: 'desc' }, { name: 'asc' }],
+      }),
+      prisma.adKeywordProtection.count({ where: { mode: 'WHITELIST' } }),
+    ])
+
+    const weekAgo = new Date(Date.now() - 7 * 86_400_000)
+    const recent = await prisma.automationRuleExecution.groupBy({
+      by: ['ruleId', 'status'],
+      where: { startedAt: { gte: weekAgo }, ruleId: { in: rules.map((r) => r.id) } },
+      _count: { _all: true },
+    })
+    const weekBy = new Map<string, Record<string, number>>()
+    for (const g of recent) {
+      const m = weekBy.get(g.ruleId) ?? {}
+      m[g.status] = g._count._all
+      weekBy.set(g.ruleId, m)
+    }
+
+    const { resolveAutonomy } = await import('../services/advertising/ads-autonomy.js')
+    const { graduationCeiling } = await import('../services/advertising/ads-graduation.js')
+
+    const items = rules.map((r) => {
+      const actionTypes = (Array.isArray(r.actions) ? r.actions : [])
+        .map((a) => String((a as { type?: unknown })?.type ?? '')).filter(Boolean)
+      const ceiling = graduationCeiling({ actionTypes, hasKeywordProtections: protectionCount > 0 })
+      const week = weekBy.get(r.id) ?? {}
+      return {
+        id: r.id,
+        name: r.name,
+        trigger: r.trigger,
+        marketplace: r.scopeMarketplace,
+        level: resolveAutonomy(r),
+        ceiling: ceiling.maxLevel,
+        ceilingReason: ceiling.reason,
+        blockedBy: ceiling.blockedBy,
+        actionTypes: actionTypes.filter((t) => !['notify', 'alert_operator', 'log_only'].includes(t)),
+        caps: {
+          perDay: r.maxExecutionsPerDay,
+          perExecutionCents: r.maxValueCentsEur,
+          perDayCents: r.maxDailyAdSpendCentsEur,
+        },
+        // The accountability strip: what it has actually done, not what it might do.
+        week: {
+          acted: (week.SUCCESS ?? 0) + (week.PARTIAL ?? 0),
+          proposed: week.DRY_RUN ?? 0,
+          failed: week.FAILED ?? 0,
+        },
+        lifetime: { evaluations: r.evaluationCount, matches: r.matchCount, executions: r.executionCount },
+        lastEvaluatedAt: r.lastEvaluatedAt,
+        lastMatchedAt: r.lastMatchedAt,
+        lastExecutedAt: r.lastExecutedAt,
+        ageDays: Math.floor((Date.now() - r.createdAt.getTime()) / 86_400_000),
+      }
+    })
+    return { items, protectedTerms: protectionCount }
+  })
+
+  fastify.patch('/advertising/autonomy/rules/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = request.body as { level?: string }
+    const { isAutonomyLevel } = await import('../services/advertising/ads-autonomy.js')
+    const { graduationCeiling, isLevelAllowed } = await import('../services/advertising/ads-graduation.js')
+    if (!isAutonomyLevel(body.level)) { reply.code(400); return { ok: false, error: 'level must be OFF | OBSERVE | PROPOSE | AUTO' } }
+
+    const rule = await prisma.automationRule.findUnique({
+      where: { id }, select: { id: true, name: true, domain: true, actions: true },
+    })
+    if (!rule || rule.domain !== 'advertising') { reply.code(404); return { ok: false, error: 'not_found' } }
+
+    const protectionCount = await prisma.adKeywordProtection.count({ where: { mode: 'WHITELIST' } })
+    const ceiling = graduationCeiling({
+      actionTypes: (Array.isArray(rule.actions) ? rule.actions : [])
+        .map((a) => String((a as { type?: unknown })?.type ?? '')).filter(Boolean),
+      hasKeywordProtections: protectionCount > 0,
+    })
+    // The ceiling is not overridable from here. A structural rule stays gated because of
+    // what it does, not because of how much evidence has accumulated.
+    if (!isLevelAllowed(body.level, ceiling.maxLevel)) {
+      reply.code(409)
+      return { ok: false, error: 'above_ceiling', maxLevel: ceiling.maxLevel, message: ceiling.reason, blockedBy: ceiling.blockedBy }
+    }
+
+    // `enabled` remains the on/off, and dryRun is kept in step so the two cannot disagree
+    // about whether this rule acts.
+    const updated = await prisma.automationRule.update({
+      where: { id },
+      data: {
+        autonomyLevel: body.level,
+        enabled: body.level !== 'OFF',
+        dryRun: body.level !== 'AUTO',
+      },
+      select: { id: true, name: true, autonomyLevel: true, enabled: true, dryRun: true },
+    })
+    await prisma.advertisingActionLog.create({
+      data: {
+        userId: actorFromHeaders(request.headers as Record<string, unknown>),
+        actionType: 'set_rule_autonomy', entityType: 'RULE', entityId: id,
+        payloadBefore: {}, payloadAfter: { level: body.level }, amazonResponseStatus: 'SUCCESS',
+        evidence: { metric: 'operator_autonomy', note: `${rule.name} → ${body.level}` },
+      },
+    }).catch(() => { /* an audit row must never fail the write it describes */ })
+    return { ok: true, rule: updated }
+  })
+
   fastify.post('/advertising/autonomy/pause-all', async (_request) => {
     const enabled = await prisma.automationRule.findMany({ where: { domain: 'advertising', enabled: true }, select: { id: true } })
     const ids = enabled.map((r) => r.id)

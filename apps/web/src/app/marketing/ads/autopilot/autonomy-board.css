@@ -1,0 +1,64 @@
+/* ADX N4 — the autonomy board. Matches the h10-* language of this console.
+   Density over minimalism: every row carries its dial, its evidence and its cap,
+   because the decision the operator makes here needs all three at once. */
+.h10-ab { padding: 14px 16px 20px; }
+
+.h10-ab-top { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.h10-ab-stat { flex: 1 1 130px; padding: 9px 12px; border: 1px solid #e2e6eb; border-radius: 8px; background: #fff; }
+.h10-ab-stat b { display: block; font-size: 20px; line-height: 1.15; color: #1c2530; }
+.h10-ab-stat span { font-size: 11px; color: #7b8794; }
+.h10-ab-stat.warn { border-color: #e8c48d; background: #fdf7ee; }
+.h10-ab-stat.warn b { color: #9a5b12; }
+
+.h10-ab-note { display: flex; align-items: flex-start; gap: 7px; margin: 0 0 12px;
+  padding: 8px 10px; border-radius: 7px; background: #fdf1e3; color: #9a5b12; font-size: 12px; }
+.h10-ab-note.bad { background: #fdeceb; color: #98261d; }
+
+.h10-ab-grp { margin-bottom: 14px; }
+.h10-ab-grp-hd { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+  color: #7b8794; margin-bottom: 5px; }
+.h10-ab-grp-hd b { color: #1c2530; }
+.h10-ab-grp-hd.auto b { color: #1c7c4a; }
+
+.h10-ab-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.h10-ab-row { display: grid; grid-template-columns: minmax(0, 2fr) auto minmax(0, 1.1fr) auto;
+  align-items: center; gap: 12px; padding: 8px 11px; border: 1px solid #e6e9ee; border-radius: 8px;
+  background: #fff; font-size: 12px; }
+.h10-ab-row.capped { border-left: 3px solid #e8c48d; }
+
+.h10-ab-main { min-width: 0; }
+.h10-ab-name { display: block; font-weight: 600; color: #1c2530;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-ab-acts { display: block; font-size: 10.5px; color: #7b8794;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-ab-mk { margin-left: 6px; padding: 0 4px; border-radius: 3px; background: #eef1f5;
+  font-style: normal; font-size: 10px; }
+
+.h10-ab-dial { display: inline-flex; border: 1px solid #dfe4ea; border-radius: 7px; overflow: hidden; }
+.h10-ab-notch { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px;
+  border: 0; border-right: 1px solid #eef1f5; background: #fbfcfd; color: #55606d;
+  font-size: 11px; cursor: pointer; white-space: nowrap; }
+.h10-ab-notch:last-child { border-right: 0; }
+.h10-ab-notch:hover:not(:disabled) { background: #f0f3f7; }
+.h10-ab-notch.on { background: #1c7c4a; color: #fff; font-weight: 600; }
+.h10-ab-notch:disabled { opacity: .38; cursor: not-allowed; }
+
+.h10-ab-week { font-size: 11px; color: #55606d; white-space: nowrap; }
+.h10-ab-week .acted { font-weight: 700; color: #1c7c4a; }
+.h10-ab-week .prop { font-weight: 700; color: #2b6cb0; }
+.h10-ab-week .fail { font-weight: 700; color: #98261d; }
+.h10-ab-week em { display: block; font-style: normal; font-size: 10px; color: #9aa5b1; }
+
+.h10-ab-caps { font-size: 10.5px; color: #7b8794; white-space: nowrap; }
+
+.h10-ab-why { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 6px;
+  margin-top: 2px; padding-top: 6px; border-top: 1px dashed #eef1f5;
+  font-size: 11px; color: #9a5b12; }
+
+.h10-ab-foot { display: flex; align-items: flex-start; gap: 6px; margin: 16px 0 0;
+  font-size: 11px; color: #7b8794; }
+
+@media (max-width: 1100px) {
+  .h10-ab-row { grid-template-columns: 1fr; gap: 6px; }
+  .h10-ab-dial { align-self: flex-start; }
+}
