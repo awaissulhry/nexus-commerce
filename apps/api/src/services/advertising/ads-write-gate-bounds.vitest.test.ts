@@ -152,6 +152,26 @@ describe('ADX A1 — keyword protection', () => {
     expect(r.allowed).toBe(true)
   })
 
+  it('CONTAINS catches the brand wherever it appears — the case prefix misses', async () => {
+    // Amazon returns "giacca moto xavia". Prefix would not match it; that is the whole
+    // reason CONTAINS exists.
+    protectionFindMany.mockResolvedValue([{ term: 'xavia', isPrefix: false, matchType: 'CONTAINS', reason: 'brand' }])
+    const r = await checkAdsWriteGate({ ...base, isNegation: true, keywordText: 'giacca moto xavia' })
+    expect(r.allowed).toBe(false)
+  })
+
+  it('CONTAINS still lets an unrelated term through', async () => {
+    protectionFindMany.mockResolvedValue([{ term: 'xavia', isPrefix: false, matchType: 'CONTAINS', reason: null }])
+    const r = await checkAdsWriteGate({ ...base, isNegation: true, keywordText: 'motorradjacke herren' })
+    expect(r.allowed).toBe(true)
+  })
+
+  it('a null matchType falls back to isPrefix — pre-existing rows unchanged', async () => {
+    protectionFindMany.mockResolvedValue([{ term: 'xavia', isPrefix: true, matchType: null, reason: null }])
+    expect((await checkAdsWriteGate({ ...base, isNegation: true, keywordText: 'xavia gale' })).allowed).toBe(false)
+    expect((await checkAdsWriteGate({ ...base, isNegation: true, keywordText: 'gale xavia' })).allowed).toBe(true)
+  })
+
   it('allows negating an unprotected term', async () => {
     protectionFindMany.mockResolvedValue([{ term: 'xavia', isPrefix: false, reason: null }])
     const r = await checkAdsWriteGate({ ...base, isNegation: true, keywordText: 'motorradjacke herren sommer' })

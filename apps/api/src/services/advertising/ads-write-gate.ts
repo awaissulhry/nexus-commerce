@@ -224,11 +224,20 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
             { OR: [{ campaignId: null }, { campaignId: ctx.campaignId ?? undefined }] },
           ],
         },
-        select: { term: true, isPrefix: true, reason: true },
+        select: { term: true, isPrefix: true, matchType: true, reason: true },
       })
-      const hit = protections.find((p) =>
-        p.isPrefix ? term.startsWith(normaliseTerm(p.term)) : term === normaliseTerm(p.term),
-      )
+      // ADX G4 — CONTAINS is the mode brand protection actually needs. Amazon returns
+      // search terms like "giacca moto xavia", which neither equals "xavia" nor starts
+      // with it, so a prefix-only whitelist would have looked like it protected the brand
+      // while missing every term where the brand is not the first word.
+      // matchType null falls back to isPrefix so pre-existing rows are unchanged.
+      const hit = protections.find((p) => {
+        const t = normaliseTerm(p.term)
+        const mode = p.matchType ?? (p.isPrefix ? 'PREFIX' : 'EXACT')
+        if (mode === 'CONTAINS') return term.includes(t)
+        if (mode === 'PREFIX') return term.startsWith(t)
+        return term === t
+      })
       if (hit) {
         return {
           allowed: false,

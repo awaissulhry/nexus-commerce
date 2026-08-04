@@ -13926,8 +13926,18 @@ model AdKeywordProtection {
   mode        String
   /// Lowercased, whitespace-collapsed match text.
   term        String
-  /// When true, `term` matches as a prefix rather than exactly.
+  /// Legacy flag, kept so existing rows keep working. `matchType` supersedes it.
   isPrefix    Boolean  @default(false)
+  /// EXACT | PREFIX | CONTAINS.
+  ///
+  /// CONTAINS exists because brand protection needs it and the other two cannot do it:
+  /// Amazon hands back search terms like "giacca moto xavia", which neither equals
+  /// "xavia" nor starts with it. A prefix-only whitelist would have looked like it was
+  /// protecting the brand while silently missing every term where the brand is not the
+  /// first word — the majority of them.
+  ///
+  /// Null falls back to isPrefix, so rows written before this column behave unchanged.
+  matchType   String?
   /// null = every marketplace.
   marketplace String?
   /// null = every campaign.
