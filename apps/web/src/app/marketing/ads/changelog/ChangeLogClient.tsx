@@ -38,7 +38,42 @@ interface ChangeRow {
   origin: Origin
   entity: { type: string; id: string; name: string | null }
   field: string; oldValue: string | null; newValue: string | null; reason: string | null
+  /** ADX G6 — the numbers behind the prose (AdvertisingActionLog.evidence). */
+  evidence: Evidence | null
   delivery: Delivery | null; undoable: boolean
+}
+
+/**
+ * ADX G6 — why a change happened, not just what changed and who did it.
+ * Every field optional: a write with nothing numeric to say still records a note,
+ * and most writers do not emit this yet, so null is normal rather than an error.
+ */
+interface Evidence {
+  targetKey?: string; metric?: string
+  observed?: number | null; threshold?: number | null
+  windowDays?: number | null; sampleSize?: number | null
+  sampleUnit?: 'rows' | 'days' | 'impressions'
+  note?: string
+}
+
+/**
+ * Compact one-liner: "TOS IS 31 vs 45 · 3 days". Deliberately terse because it sits
+ * inside a grid cell; the full object goes in the title attribute.
+ */
+function fmtEvidence(e: Evidence): string {
+  const bits: string[] = []
+  if (e.metric) bits.push(e.metric.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase())
+  if (e.observed != null && e.threshold != null) bits.push(`${e.observed} vs ${e.threshold}`)
+  else if (e.observed != null) bits.push(String(e.observed))
+  if (e.sampleSize != null) bits.push(`${e.sampleSize} ${e.sampleUnit ?? 'rows'}`)
+  else if (e.windowDays != null) bits.push(`${e.windowDays}d`)
+  return bits.join(' · ')
+}
+
+/** Thin data should be visible on its face — some schedules hold 1-5 days where the account has 56. */
+function isThin(e: Evidence): boolean {
+  if (e.sampleUnit === 'days' && typeof e.sampleSize === 'number') return e.sampleSize < 7
+  return e.sampleUnit === 'rows' && e.sampleSize === 0
 }
 
 const SOURCE_LABELS: Record<string, { label: string; cls: string; tip: string }> = {
@@ -188,6 +223,18 @@ export function ChangeLogClient() {
         <span className="h10-cl-change">
           <b>{val(r.oldValue, r.field)}</b> → <b>{val(r.newValue, r.field)}</b>
           {r.reason && <em title={r.reason}>{r.reason}</em>}
+          {/* ADX G6 — the evidence behind the change. `reason` is prose an engine wrote
+              for a human; this is the numbers it wrote it from. */}
+          {r.evidence && fmtEvidence(r.evidence) && (
+            <em
+              className={`h10-cl-ev${isThin(r.evidence) ? ' thin' : ''}`}
+              title={isThin(r.evidence)
+                ? `Thin data — this decision rests on very little.\n${JSON.stringify(r.evidence, null, 1)}`
+                : JSON.stringify(r.evidence, null, 1)}
+            >
+              {fmtEvidence(r.evidence)}
+            </em>
+          )}
         </span>
       ),
     },

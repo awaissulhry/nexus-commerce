@@ -3037,6 +3037,13 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-cl-origin .n { font-size: 12.5px; font-weight: 600; color: #2b3440; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-cl-change { display: inline-flex; flex-direction: column; min-width: 0; font-size: 12.5px; color: #3a4452; }
 .h10-cl-change b { font-weight: 700; color: #1c2530; }
+/* ADX G6 — the evidence behind a change, beside the prose reason. Muted by default;
+   a thin-data decision is tinted so "this rests on 3 days" is legible at a glance
+   without opening anything. Sits with its h10-cl-* siblings rather than in a separate
+   stylesheet, which is what this console already does. */
+.h10-cl-ev { align-self: flex-start; margin-top: 1px; padding: 1px 5px; border-radius: 4px;
+  font-size: 10px; font-style: normal; background: #eef1f5; color: #7b8794; }
+.h10-cl-ev.thin { background: #fdf1e3; color: #9a5b12; }
 .h10-cl-change em { font-style: normal; font-size: 11.5px; color: #8a93a1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-cl-none { color: #b0b7c1; font-size: 11.5px; }
 .h10-cl-win { display: inline-flex; align-items: center; gap: 10px; }

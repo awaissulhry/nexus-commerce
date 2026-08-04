@@ -38,6 +38,17 @@ export interface ChangeRow {
   oldValue: string | null
   newValue: string | null
   reason: string | null
+  /**
+   * ADX G6 — WHY the change happened, from AdvertisingActionLog.evidence (A2).
+   *
+   * `reason` is prose an engine wrote for a human; this is the numbers behind it —
+   * metric, observed, threshold, windowDays, sampleSize, targetKey. The pair is what
+   * makes "why did this bid move" answerable without reading code.
+   *
+   * null on every historical row and on any writer that has not been taught to emit
+   * it yet, which is most of them. Absent evidence is normal, not an error.
+   */
+  evidence: Record<string, unknown> | null
   delivery: { state: string; attempts: number; lastError: string | null } | null
   undoable: boolean
 }
@@ -207,7 +218,7 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       },
       orderBy: { createdAt: 'desc' },
       take: fetchN,
-      select: { id: true, createdAt: true, actionType: true, entityType: true, entityId: true, userId: true, amazonResponseStatus: true, rolledBackAt: true, payloadAfter: true },
+      select: { id: true, createdAt: true, actionType: true, entityType: true, entityId: true, userId: true, amazonResponseStatus: true, rolledBackAt: true, payloadAfter: true, evidence: true },
     }),
   ])
 
@@ -219,6 +230,9 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       entity: { type: h.entityType, id: h.entityId, name: null },
       campaign: h.campaignId ? { id: h.campaignId, name: null } : null,
       field: h.field, oldValue: h.oldValue, newValue: h.newValue, reason: h.reason,
+      // CampaignBidHistory has no evidence column — these rows carry the value change,
+      // and the paired AdvertisingActionLog row carries the reasoning.
+      evidence: null,
       delivery: null,
       // Mirrors the rule /campaigns/:id/history already applies: only a target bid, only while the
       // prior value is known and recent. HX.7 is what will make this actionable.
@@ -235,6 +249,9 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       campaign: o.entityType === 'CAMPAIGN' ? { id: o.entityId, name: null } : null,
       field: o.actionType, oldValue: null, newValue: after.note ?? null,
       reason: after.error ?? (o.rolledBackAt ? 'rolled back' : null),
+      // ADX G6 — the numbers behind the prose. Null on historical rows and on any
+      // writer not yet emitting it, which is most of them; absent is normal.
+      evidence: (o.evidence ?? null) as Record<string, unknown> | null,
       delivery: o.amazonResponseStatus
         ? { state: o.amazonResponseStatus === 'SUCCESS' ? 'APPLIED' : o.amazonResponseStatus, attempts: 1, lastError: after.error ?? null }
         : null,
