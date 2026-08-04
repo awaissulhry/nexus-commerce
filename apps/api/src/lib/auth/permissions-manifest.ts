@@ -194,6 +194,23 @@ const ENTRIES: Entry[] = [
   // reads rather than behind ads.campaigns.manage.
   P(F.adsView, (m, p) => p.startsWith('/api/advertising/reporting/imports')),
   P(F.adsView, (m, p) => p.startsWith('/api/advertising/reporting/custom-metrics')),
+  // RPT.15 — resolving a share token is intentionally UNAUTHENTICATED: the whole
+  // point is handing a number to someone with no account. It MUST sit above the
+  // generic advertising read rule below, which would otherwise demand a session
+  // and make every link 401.
+  //
+  // What keeps this safe is not the auth layer but the endpoint's shape: the
+  // query was frozen when the link was minted, the caller supplies nothing but
+  // an unguessable token, only a hash of that token is stored, expiry is
+  // mandatory and re-checked per request, and missing/expired/revoked are
+  // indistinguishable in the response. Scoped to this exact path — note the
+  // `/public/` segment, which no other route uses.
+  P(PUBLIC, (m, p) => isRead(m) && p.startsWith('/api/advertising/reporting/public/share/')),
+  // Managing links is a reporting action, not a campaign write: it changes
+  // nothing about the account and touches no channel. Same reasoning as saved
+  // reports above, and it must precede the read-only rule so POST and DELETE do
+  // not fall through to ads.campaigns.manage.
+  P(F.adsView, (m, p) => p.startsWith('/api/advertising/reporting/shares')),
   P(F.adsView, (m, p) => isRead(m) && pfx('/api/advertising')(m, p)),
   P(F.adsAutomationManage, has('/autopilot')),
   P(F.adsAutomationManage, has('/automation')),

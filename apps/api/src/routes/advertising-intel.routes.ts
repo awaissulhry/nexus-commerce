@@ -647,6 +647,69 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   // ── RPT.12 — operator-defined metrics ───────────────────────────────────
   // Under the same ads.view prefix rule: a custom metric is a formula over data
   // the caller can already read, and touches nothing on the account.
+  // ── RPT.15 share links ──────────────────────────────────────────────
+  // Three authenticated routes for managing links, and ONE public route that
+  // resolves a token. The public route is the only unauthenticated way into the
+  // reporting engine, so it takes nothing from the caller but the token itself —
+  // the query it runs was frozen when the link was minted.
+
+  fastify.get('/advertising/reporting/shares', async (_request, reply) => {
+    const { listShareLinks } = await import('../services/advertising/ads-report-shares.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return { items: await listShareLinks() }
+  })
+
+  fastify.post('/advertising/reporting/shares', async (request, reply) => {
+    const body = request.body as { reportId?: string; query?: Record<string, unknown>; label?: string; ttlDays?: number }
+    const svc = await import('../services/advertising/ads-report-shares.service.js')
+    if (!body?.reportId || !body?.query) {
+      return reply.code(400).send({ error: 'reportId and query are required' })
+    }
+    try {
+      const out = await svc.createShareLink({
+        reportId: body.reportId,
+        query: body.query as never,
+        label: body.label ?? null,
+        ttlDays: body.ttlDays,
+      })
+      reply.header('Cache-Control', 'no-store')
+      // The token is shown once and is unrecoverable afterwards — it is not stored.
+      return { ...out, note: 'Copy this link now. Only a hash is stored, so it cannot be shown again.' }
+    } catch (e) {
+      const err = e as { status?: number; message?: string }
+      return reply.code(err.status ?? 400).send({ error: err.message ?? 'Could not create the link' })
+    }
+  })
+
+  fastify.delete('/advertising/reporting/shares/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const svc = await import('../services/advertising/ads-report-shares.service.js')
+    try {
+      return { link: await svc.revokeShareLink(id) }
+    } catch (e) {
+      const err = e as { status?: number; message?: string }
+      return reply.code(err.status ?? 400).send({ error: err.message ?? 'Could not revoke the link' })
+    }
+  })
+
+  // PUBLIC — see permissions-manifest. Unauthenticated by design.
+  fastify.get('/advertising/reporting/public/share/:token', async (request, reply) => {
+    const { token } = request.params as { token: string }
+    const svc = await import('../services/advertising/ads-report-shares.service.js')
+    try {
+      const out = await svc.resolveShareLink(token)
+      // Never cached: revocation must take effect on the very next request, and
+      // a shared report must not linger in an intermediary.
+      reply.header('Cache-Control', 'no-store, private')
+      reply.header('X-Robots-Tag', 'noindex, nofollow')
+      return out
+    } catch (e) {
+      const err = e as { status?: number; message?: string }
+      // Same response for missing, expired and revoked — see the service.
+      return reply.code(err.status ?? 404).send({ error: err.message ?? 'This link is not valid, or has expired' })
+    }
+  })
+
   fastify.get('/advertising/reporting/custom-metrics', async (request, reply) => {
     const q = request.query as { reportId?: string }
     const { listCustomMetrics } = await import('../services/advertising/ads-custom-metrics.service.js')

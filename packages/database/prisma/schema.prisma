@@ -15025,6 +15025,35 @@ model AmazonFamilyWorkbook {
 // It is deliberately the unit that later phases consume: RPT.6 schedules a
 // saved report by id, RPT.8 binds a Google Sheet to one. Those must not each
 // invent their own way of remembering a query.
+/**
+ * RPT.15 — a read-only, expiring link to one report result.
+ *
+ * The token is NEVER stored. Only its SHA-256 hash is, so a database disclosure
+ * does not hand over working links — the same reason password hashes exist. The
+ * raw token is returned exactly once, at creation.
+ *
+ * `query` is FROZEN at creation and is the only query the public endpoint will
+ * ever run. The endpoint accepts no filter, no grouping and no column input from
+ * the caller: otherwise a single leaked link would become an unauthenticated
+ * query interface over the entire reporting engine.
+ */
+model ReportShareLink {
+  id          String    @id @default(cuid())
+  tokenHash   String    @unique
+  reportId    String
+  query       Json
+  label       String?
+  createdBy   String    @default("default-user")
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  viewCount   Int       @default(0)
+  lastViewedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([createdBy, createdAt])
+  @@index([expiresAt])
+}
+
 model SavedReport {
   id          String  @id @default(cuid())
   /// Which spec this runs — 'campaign', 'search-term', … (REPORT_SPECS key).
