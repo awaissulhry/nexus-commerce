@@ -154,6 +154,22 @@ export const ADVERTISED_PRODUCT_COLUMNS: string[] = [
   'sales7d', 'purchases7d', 'unitsSoldClicks7d',
 ]
 
+// RPT — targeting (keyword and product-target) performance, grouped by
+// ['targeting']. This is the report every practitioner guide ranks first and
+// the one gap RPT.0 called out: daily performance held CAMPAIGN and PRODUCT_AD
+// rows only, so "how did this keyword do last week" was unanswerable. The
+// counters already on AdTarget are lifetime totals from entity sync, not a
+// series, so they cannot substitute.
+//
+// Ingested into AmazonAdsDailyPerformance entityType='AD_TARGET', keyed by the
+// Amazon keyword/target id and joined to the local AdTarget by externalTargetId.
+export const TARGETING_REPORT_TYPE_ID = 'spTargeting'
+export const TARGETING_COLUMNS: string[] = [
+  'date', 'campaignId', 'adGroupId', 'keywordId', 'keyword', 'keywordType', 'matchType',
+  'impressions', 'clicks', 'cost',
+  'sales7d', 'purchases7d', 'unitsSoldClicks7d',
+]
+
 // ── Stage 1: create a report job ─────────────────────────────────────
 
 export interface CreateReportJobResult {
@@ -493,6 +509,8 @@ export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
     upserted = await ingestSearchTermRows(job, rows, marketplace, currencyCode)
   } else if (job.reportTypeId === PLACEMENT_REPORT_TYPE_ID) {
     upserted = await ingestPlacementRows(job, rows, marketplace, currencyCode)
+  } else if (job.reportTypeId === TARGETING_REPORT_TYPE_ID) {
+    upserted = await ingestTargetRows(job, rows, marketplace, currencyCode)
   } else if (job.reportTypeId === ADVERTISED_PRODUCT_REPORT_TYPE_ID) {
     upserted = await ingestProductAdRows(job, rows, marketplace, currencyCode)
   } else {
@@ -737,6 +755,75 @@ async function ingestPlacementRows(
 // product-centric console can roll up per-product spend/sales/ACOS. Rows that
 // don't match a local ad still land (localEntityId null) for the Unmatched
 // ASIN bucket. Also refreshes the AdProductAd running aggregates.
+/**
+ * Targeting rows → AmazonAdsDailyPerformance entityType='AD_TARGET'.
+ *
+ * `keywordId` carries the id for BOTH manual keywords and auto/product targets —
+ * Amazon reuses the column — so it is the entity key regardless of kind, and the
+ * local join is by AdTarget.externalTargetId.
+ *
+ * A target we do not hold locally is still ingested with localEntityId = null.
+ * Dropping it would silently lose spend: auto-targeting clauses are created by
+ * Amazon, not by us, and are exactly the rows an operator needs to see.
+ */
+async function ingestTargetRows(
+  job: { id: string; profileId: string; adProduct: string },
+  rows: ReportRow[],
+  marketplace: string,
+  currencyCode: string,
+): Promise<number> {
+  let upserted = 0
+  const cache = new Map<string, { id: string } | null>()
+  const resolveTarget = async (targetId: string): Promise<{ id: string } | null> => {
+    if (cache.has(targetId)) return cache.get(targetId)!
+    const local = await prisma.adTarget.findFirst({
+      where: { externalTargetId: targetId },
+      select: { id: true },
+    })
+    cache.set(targetId, local)
+    return local
+  }
+  for (const r of rows) {
+    if (!r.date) continue
+    const targetId = r.keywordId != null ? String(r.keywordId) : null
+    if (!targetId) continue
+    const date = new Date(r.date)
+    if (Number.isNaN(date.getTime())) continue
+    const local = await resolveTarget(targetId)
+    const sales7dCents = toCents(r.sales7d)
+    try {
+      await prisma.amazonAdsDailyPerformance.upsert({
+        where: {
+          profileId_adProduct_entityType_entityId_date: {
+            profileId: job.profileId, adProduct: job.adProduct,
+            entityType: 'AD_TARGET', entityId: targetId, date,
+          },
+        },
+        create: {
+          profileId: job.profileId, marketplace, adProduct: job.adProduct,
+          date, entityType: 'AD_TARGET', entityId: targetId, localEntityId: local?.id ?? null,
+          impressions: r.impressions ?? 0, clicks: r.clicks ?? 0,
+          costMicros: toMicros(r.cost), currencyCode,
+          sales7dCents, orders7d: r.purchases7d ?? 0, units7d: r.unitsSoldClicks7d ?? 0,
+          reportRunId: job.id, reportedAt: new Date(),
+        },
+        update: {
+          marketplace, localEntityId: local?.id ?? null,
+          impressions: r.impressions ?? 0, clicks: r.clicks ?? 0,
+          costMicros: toMicros(r.cost), currencyCode,
+          sales7dCents, orders7d: r.purchases7d ?? 0, units7d: r.unitsSoldClicks7d ?? 0,
+          reportedAt: new Date(),
+        },
+      })
+      upserted += 1
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      logger.warn('[ads-reports] target row upsert failed', { jobId: job.id, targetId, error: msg.slice(0, 200) })
+    }
+  }
+  return upserted
+}
+
 async function ingestProductAdRows(
   job: { id: string; profileId: string; adProduct: string },
   rows: ReportRow[],
@@ -1020,6 +1107,50 @@ export async function runAdvertisedProductReportCycle(
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         result.errors.push(`${profile.profileId} ${day} advertised-product: ${msg.slice(0, 400)}`)
+      }
+    }
+  }
+  return result
+}
+
+/** One targeting report per active profile per day in the range. */
+export async function runTargetingReportCycle(
+  args: { startDate: string; endDate: string },
+): Promise<CreationCycleResult> {
+  const result: CreationCycleResult = { jobsCreated: 0, jobsSkipped: 0, errors: [] }
+  const profiles = await prisma.amazonAdsConnection.findMany({
+    where: { isActive: true },
+    select: { profileId: true, region: true, marketplace: true },
+  })
+  const days = enumerateDays(args.startDate, args.endDate)
+  for (const profile of profiles) {
+    const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
+      ? (profile.region as AdsRegion) : 'EU'
+    const meta = await prisma.amazonAdsProfile.findUnique({
+      where: { profileId: profile.profileId },
+      select: { currencyCode: true },
+    })
+    const currencyCode = meta?.currencyCode ?? 'EUR'
+    for (const day of days) {
+      try {
+        const out = await createReportJob({
+          profileId: profile.profileId,
+          region,
+          marketplace: profile.marketplace,
+          currencyCode,
+          adProduct: 'SPONSORED_PRODUCTS',
+          reportTypeId: TARGETING_REPORT_TYPE_ID,
+          startDate: day,
+          endDate: day,
+          groupBy: ['targeting'],
+          columns: TARGETING_COLUMNS,
+          timeUnit: 'DAILY',
+        })
+        if (out.alreadyExisted) result.jobsSkipped += 1
+        else result.jobsCreated += 1
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        result.errors.push(`${profile.profileId} ${day} targeting: ${msg.slice(0, 400)}`)
       }
     }
   }

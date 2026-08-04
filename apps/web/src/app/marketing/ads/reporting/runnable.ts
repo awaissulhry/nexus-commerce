@@ -9,6 +9,7 @@
 export const RUNNABLE_REPORT_IDS: string[] = [
   'campaign',
   'advertised-product',
+  'targeting',
   'sb-sd',
   'search-term',
   'placement',
