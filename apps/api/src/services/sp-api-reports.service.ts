@@ -110,6 +110,37 @@ function getClient(): SellingPartner {
   return cachedClient
 }
 
+/**
+ * RPT.9 — how many rows a report actually returned.
+ *
+ * `AmazonReportRun.rowCount` was NEVER populated: 4,775 runs, zero with a
+ * count, including 1,718 successful Brand Analytics pulls. The column and the
+ * setter both existed — the single call site simply never passed the value — so
+ * "succeeded with 0 rows" and "succeeded with 9,000 rows" were indistinguishable,
+ * and a feed that quietly went empty looked identical to a healthy one.
+ *
+ * Returns NULL, never 0, when the shape is unrecognised. A guessed zero would
+ * recreate exactly the ambiguity this is meant to remove.
+ */
+export function deriveRowCount(payload: unknown): number | null {
+  if (payload == null) return null
+  // Flat-file reports arrive as TSV text with a header line.
+  if (typeof payload === 'string') {
+    const trimmed = payload.trim()
+    if (!trimmed) return 0
+    const lines = trimmed.split(/\r?\n/)
+    return Math.max(0, lines.length - 1)
+  }
+  if (Array.isArray(payload)) return payload.length
+  if (typeof payload === 'object') {
+    // JSON reports nest their rows under one array property (salesAndTrafficByDate,
+    // dataByAsin, …). Take the longest array rather than guessing a key name.
+    const arrays = Object.values(payload as Record<string, unknown>).filter(Array.isArray) as unknown[][]
+    if (arrays.length) return Math.max(...arrays.map((a) => a.length))
+  }
+  return null
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -143,6 +174,7 @@ export async function fetchSpApiReport<T = unknown>(
       await completeReportRun(runId, {
         reportId: result.reportId,
         reportDocumentId: result.reportDocumentId,
+        rowCount: deriveRowCount(result.payload),
         freshAsOf: args.dataEndTime ?? new Date(),
       })
     return result

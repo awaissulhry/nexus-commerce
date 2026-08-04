@@ -326,17 +326,70 @@ export interface IngestResult {
   breakdown?: Record<string, number> // AF.1 — targets ingest diagnostics
 }
 
+/**
+ * Re-mint a job's presigned download URL from Amazon and persist it.
+ * Returns the fresh URL, or null when Amazon no longer offers one.
+ */
+async function remintExportUrl(job: { id: string; profileId: string; resource: string; externalExportId: string }): Promise<string | null> {
+  const conn = await prisma.amazonAdsConnection.findUnique({ where: { profileId: job.profileId }, select: { region: true } })
+  const region: AdsRegion = (conn?.region === 'NA' || conn?.region === 'FE') ? (conn.region as AdsRegion) : 'EU'
+  const status = await liveCall<{ status: string; url?: string; urlExpiresAt?: string }>({
+    profileId: job.profileId, region, method: 'GET',
+    path: `/exports/${job.externalExportId}`,
+    acceptHeader: RESOURCE_MIME[job.resource as V1Resource],
+  })
+  if ((status.status ?? '').toUpperCase() !== 'COMPLETED' || !status.url) return null
+  await prisma.amazonAdsExportJob.update({
+    where: { id: job.id },
+    data: {
+      url: status.url,
+      urlExpiresAt: status.urlExpiresAt ? new Date(status.urlExpiresAt) : null,
+      lastPolledAt: new Date(),
+    },
+  })
+  return status.url
+}
+
+/** Re-mint if the URL is missing or within a minute of lapsing. */
+const URL_SAFETY_MARGIN_MS = 60_000
+
 export async function ingestCompletedExport(jobId: string): Promise<IngestResult> {
   const job = await prisma.amazonAdsExportJob.findUnique({ where: { id: jobId } })
   if (!job) return { jobId, resource: 'campaigns', rowsIngested: 0, error: 'job_not_found' }
-  if (job.status !== 'COMPLETED' || !job.url) {
+  if (job.status !== 'COMPLETED') {
     return { jobId, resource: job.resource as V1Resource, rowsIngested: 0, error: `not_ingestable: status=${job.status}` }
+  }
+
+  // RPT.9 — mint-then-download in ONE pass.
+  //
+  // This used to `fetch(job.url)` with whatever URL the POLL stage had written,
+  // possibly minutes earlier. Amazon's presigned link is short-lived, so a link
+  // written by one cron tick was routinely dead by the time a later tick
+  // downloaded it: 727 `s3_download_400` failures and still climbing ~11/day.
+  // refreshExpiredCompletedExports existed but ran as its own stage, which is a
+  // race, not a fix. Checking expiry immediately before the GET — and re-minting
+  // inline — is the same lesson the Brand Metrics and Data Kiosk contracts
+  // record: poll and download must happen in the same pass.
+  let url = job.url
+  const expiringSoon = !job.urlExpiresAt || job.urlExpiresAt.getTime() - Date.now() < URL_SAFETY_MARGIN_MS
+  if (!url || expiringSoon) {
+    url = await remintExportUrl(job).catch(() => null)
+    if (!url) {
+      return { jobId, resource: job.resource as V1Resource, rowsIngested: 0, error: 'url_unavailable' }
+    }
   }
 
   // Download + decompress + parse
   let records: unknown[]
   try {
-    const res = await fetch(job.url)
+    let res = await fetch(url)
+    // A link can still lapse between the check and the request, and Amazon
+    // answers a dead link with 400/403. Re-mint once and retry rather than
+    // banking the failure — the data is still there, only the link is stale.
+    if ((res.status === 400 || res.status === 403)) {
+      const fresh = await remintExportUrl(job).catch(() => null)
+      if (fresh) res = await fetch(fresh)
+    }
     if (!res.ok) throw new Error(`s3_download_${res.status}`)
     const buf = Buffer.from(await res.arrayBuffer())
     const isGzip = buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b
