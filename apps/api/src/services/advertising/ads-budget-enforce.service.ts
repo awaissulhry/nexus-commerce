@@ -25,6 +25,8 @@ import { suppressCampaignBids, restoreCampaignBids } from './ads-bid-suppression
 import { currentMonth } from './ads-budget-manager.service.js'
 
 const FLOOR_CENTS = 100 // €1/day — Amazon's minimum campaign budget
+/** Actor prefix this engine stamps on Campaign.bidsSuppressedBy when it suppresses. */
+const BUDGET_ACTOR_PREFIX = 'automation:budget-'
 
 interface CampaignLimit { campaignId: string; minCents?: number | null; maxCents?: number | null }
 
@@ -124,7 +126,7 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
       }
     }
 
-    const camps = await prisma.campaign.findMany({ where: { marketplace: p.marketplace, status: 'ENABLED' }, select: { id: true, name: true, dailyBudget: true, bidsSuppressedAt: true } })
+    const camps = await prisma.campaign.findMany({ where: { marketplace: p.marketplace, status: 'ENABLED' }, select: { id: true, name: true, dailyBudget: true, bidsSuppressedAt: true, bidsSuppressedBy: true } })
     const curById = new Map(camps.map((c) => [c.id, Math.round(Number(c.dailyBudget ?? 0) * 100)]))
     const curTotal = camps.reduce((s, c) => s + (curById.get(c.id) ?? 0), 0)
     const spendTotal = camps.reduce((s, c) => s + (mtdByCamp.get(c.id) ?? 0), 0)
@@ -151,8 +153,15 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
         target = t
       }
       const currentlySuppressed = !!c.bidsSuppressedAt
+      // Only this engine's own suppressions may be restored. `bidsSuppressedAt` is shared
+      // state — the rank engine's Min-bid windows, dayparting and the retail guard all set
+      // it — so "suppressed and under cap" is not evidence that budget enforcement did it.
+      // Without this the cron lifted 33 live Min-bid suppressions every time it ran, which
+      // is the no-pause mechanism being fought by another engine on the same field. A null
+      // owner predates the column and is read as NOT MINE, so legacy rows are left alone.
+      const suppressedByBudget = (c.bidsSuppressedBy ?? '').startsWith(BUDGET_ACTOR_PREFIX)
       const suppress = p.stopOverSpend && capReached && !currentlySuppressed
-      const restore = p.stopOverSpend && !capReached && currentlySuppressed
+      const restore = p.stopOverSpend && !capReached && currentlySuppressed && suppressedByBudget
       return { id: c.id, name: c.name, currentDailyCents: cur, targetDailyCents: target, deltaCents: target != null ? target - cur : 0, clamp, suppress, restore, currentlySuppressed }
     })
 

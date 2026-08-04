@@ -93,7 +93,7 @@ export async function suppressCampaignBids(
     } catch (e) { logger.warn('[no-pause] suppress target threw — skipping', { adTargetId: t.id, error: (e as Error).message }) }
   }
 
-  await prisma.campaign.update({ where: { id: campaignId }, data: { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: floor } })
+  await prisma.campaign.update({ where: { id: campaignId }, data: { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: floor, bidsSuppressedBy: opts.actor } })
   logger.info('[no-pause] suppressed campaign bids', { campaignId, floor, groups: groups.length, targets: targets.length, touched })
   return touched
 }
@@ -203,7 +203,7 @@ export async function restoreCampaignBids(
 
   // MB.1 — the floor stamp is cleared with the flag it belongs to. Leaving it set would
   // make the next suppression look like it was already at that floor and skip the re-floor.
-  if (failed === 0) await prisma.campaign.update({ where: { id: campaignId }, data: { bidsSuppressedAt: null, bidsSuppressedFloorCents: null } })
+  if (failed === 0) await prisma.campaign.update({ where: { id: campaignId }, data: { bidsSuppressedAt: null, bidsSuppressedFloorCents: null, bidsSuppressedBy: null } })
   else logger.warn('[no-pause] restore incomplete — bidsSuppressedAt kept set; next serving tick retries', { campaignId, failed, touched })
   logger.info('[no-pause] restored campaign bids', { campaignId, groups: groups.length, targets: targets.length, touched, failed })
   return touched

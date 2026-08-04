@@ -2658,6 +2658,14 @@ model Campaign {
   // want different floors back-to-back, and this is how the engine notices. null on rows
   // suppressed before MB.1 → read as the legacy 2¢.
   bidsSuppressedFloorCents Int?
+  // ADX A3 — WHICH engine suppressed this campaign, as the actor string that did it.
+  // Several engines share `bidsSuppressedAt` (rank Min-bid windows, dayparting, the retail
+  // guard, budget stop-over-spend) and none could tell its own suppressions from another's.
+  // Budget enforcement restores any suppressed campaign once spend is back under cap, so
+  // without this it lifts the rank engine's Min-bid dayparting suppressions — 33 campaigns
+  // were in exactly that state when this was found. null means "suppressed before this
+  // column existed, owner unknown", which every engine must read as NOT MINE.
+  bidsSuppressedBy         String?
   /// AX2.2 — WRITE truth: when we last pushed to Amazon and how it went.
   /// Stamped by ads-sync.worker. Never stamped by a read, so a successful
   /// settings read can't mask a failed bid write.
