@@ -27,6 +27,7 @@ import { isContradictoryOrphan } from '../ads-core/amazon-entity-gone.js'
 import {
   IN_FLIGHT_STATES, isBelievablyPending, isBlockingWrite, isTerminal, stateForQueueStatus,
 } from '../ads-core/ad-mutation-state.js'
+import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 
 // Conservative grace window. Operators have 5 min to cancel before
 // the worker actually calls Amazon. Override via env for testing.
@@ -86,6 +87,18 @@ export async function writeAdvertisingActionLog(args: {
    * executions were simply its first user.
    */
   changeSetId?: string | null
+  /**
+   * ADX A2 — the measurement the decision rested on. Optional because an operator edit
+   * or a rollback genuinely has nothing numeric to say; `packEvidence` returns null
+   * rather than `{}` so "no evidence" stays distinguishable from "evidence captured".
+   *
+   * Until this parameter existed, every write through this function was structurally
+   * incapable of recording evidence, whatever the caller knew. Measured on prod
+   * 2026-08-05: update_placement_bidding wrote it on 100% of 764 rows because it calls
+   * `audit()` directly, while AD_BID_UPDATE wrote it on 0 of 968 — not because the rank
+   * engine lacked the numbers, but because there was nowhere to put them.
+   */
+  evidence?: AdWriteEvidence | null
 }): Promise<string> {
   const row = await prisma.advertisingActionLog.create({
     data: {
@@ -98,6 +111,9 @@ export async function writeAdvertisingActionLog(args: {
       payloadAfter: args.payloadAfter,
       outboundQueueId: args.outboundQueueId,
       amazonResponseStatus: 'PENDING',
+      // `as never` matches the existing audit() writer in ads-create.service.ts: AdWriteEvidence
+      // is a closed interface and Prisma's InputJsonValue wants an index signature.
+      evidence: (packEvidence(args.evidence) ?? undefined) as never,
     },
     select: { id: true },
   })
@@ -575,6 +591,8 @@ export interface CampaignPatch {
 export async function updateCampaignWithSync(args: {
   campaignId: string
   patch: CampaignPatch
+  /** ADX A2 — the measurement behind this write; threaded to AdvertisingActionLog.evidence. */
+  evidence?: AdWriteEvidence | null
   actor: AdsActor
   reason?: string | null
   applyImmediately?: boolean
@@ -719,6 +737,7 @@ export async function updateCampaignWithSync(args: {
     actor: args.actor,
     actionType: syncType,
     entityType: 'CAMPAIGN',
+    evidence: args.evidence ?? null,
     entityId: args.campaignId,
     payloadBefore,
     payloadAfter,
@@ -738,6 +757,8 @@ export interface AdGroupPatch {
 export async function updateAdGroupWithSync(args: {
   adGroupId: string
   patch: AdGroupPatch
+  /** ADX A2 — the measurement behind this write; threaded to AdvertisingActionLog.evidence. */
+  evidence?: AdWriteEvidence | null
   actor: AdsActor
   reason?: string | null
   applyImmediately?: boolean
@@ -841,6 +862,7 @@ export async function updateAdGroupWithSync(args: {
     actor: args.actor,
     actionType: syncType,
     entityType: 'AD_GROUP',
+    evidence: args.evidence ?? null,
     entityId: args.adGroupId,
     payloadBefore,
     payloadAfter,
@@ -904,6 +926,8 @@ export interface AdTargetPatch {
 export async function updateAdTargetWithSync(args: {
   adTargetId: string
   patch: AdTargetPatch
+  /** ADX A2 — the measurement behind this write; threaded to AdvertisingActionLog.evidence. */
+  evidence?: AdWriteEvidence | null
   actor: AdsActor
   reason?: string | null
   applyImmediately?: boolean
@@ -1045,6 +1069,7 @@ export async function updateAdTargetWithSync(args: {
     actor: args.actor,
     actionType: syncType,
     entityType: 'AD_TARGET',
+    evidence: args.evidence ?? null,
     entityId: args.adTargetId,
     payloadBefore,
     payloadAfter,

@@ -38,6 +38,7 @@ import { evaluateAllRulesForTrigger } from '../services/automation-rule.service.
 import { microsToCents } from '../services/ads-core/metrics-math.js'
 import cron from 'node-cron'
 import { ruleWindowBounds } from '@nexus/shared/data-vintage'
+import type { AdWriteEvidence } from '../services/advertising/ads-evidence.js'
 
 // Trigger thresholds — env-tunable for testing.
 const FBA_AGE_DAYS_LTE = Number(process.env.NEXUS_AD_FBA_AGE_DAYS_LTE ?? 30)
@@ -312,6 +313,14 @@ interface UnderperformContext {
   }
   adGroup: { id: string; name: string }
   campaign: { id: string; name: string }
+  /**
+   * ADX A2 — the measurement that made this a match, stated by the builder that made it.
+   *
+   * The trigger knows its own metric, threshold and window; the action handler does not
+   * and would have to guess. Declaring it here means a bid cut can be read later as
+   * "spend without sales 412 vs 200 over 14d" instead of only "bid_down 20% via rule".
+   */
+  evidence: AdWriteEvidence
 }
 
 async function buildUnderperformContexts(): Promise<UnderperformContext[]> {
@@ -351,6 +360,15 @@ async function buildUnderperformContexts(): Promise<UnderperformContext[]> {
     .map((t) => ({
       trigger: 'AD_TARGET_UNDERPERFORMING' as const,
       marketplace: t.adGroup!.campaign!.marketplace ?? null,
+      evidence: {
+        targetKey: 'AD_TARGET_UNDERPERFORMING',
+        metric: 'spendWithoutSales',
+        observed: spendBy.get(t.id) ?? 0,
+        threshold: UNDERPERFORM_SPEND_MIN_CENTS,
+        windowDays: 14,
+        sampleUnit: 'days' as const,
+        sampleSize: 14,
+      },
       adTarget: {
         id: t.id,
         externalTargetId: t.externalTargetId,

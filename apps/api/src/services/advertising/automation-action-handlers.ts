@@ -34,6 +34,7 @@
 import { ACTION_HANDLERS, type ActionResult, getFieldPath } from '../automation-rule.service.js'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import type { AdWriteEvidence } from './ads-evidence.js'
 import {
   updateCampaignWithSync,
   updateAdGroupWithSync,
@@ -97,6 +98,19 @@ async function checkDailySpendCap(
   return { allowed: true, spentTodayCents, capCents: cap }
 }
 
+/**
+ * ADX A2 — forward the trigger's own evidence onto the write it causes.
+ *
+ * The context builder states the measurement that made the rule match (metric, observed,
+ * threshold, window); this hands it to the mutation so AdvertisingActionLog.evidence
+ * records WHY, not just what. Returns null when the trigger declared nothing, which keeps
+ * "no evidence" distinguishable from "{}" — see packEvidence.
+ */
+function ctxEvidence(context: unknown): AdWriteEvidence | null {
+  const e = (context as { evidence?: AdWriteEvidence } | null | undefined)?.evidence
+  return e && typeof e === 'object' ? e : null
+}
+
 function ctxCampaignId(action: Record<string, unknown>, context: unknown): string | null {
   return (
     (action.campaignId as string | undefined) ??
@@ -143,6 +157,7 @@ ACTION_HANDLERS.bid_down = async (action, context, meta): Promise<ActionResult> 
       }
     }
     const res = await updateAdTargetWithSync({
+      evidence: ctxEvidence(context),
       adTargetId: id,
       patch: { bidCents: newBid },
       actor: RULE_ACTOR(meta.ruleId),
@@ -169,6 +184,7 @@ ACTION_HANDLERS.bid_down = async (action, context, meta): Promise<ActionResult> 
       }
     }
     const res = await updateAdGroupWithSync({
+      evidence: ctxEvidence(context),
       adGroupId: id,
       patch: { defaultBidCents: newBid },
       actor: RULE_ACTOR(meta.ruleId),
@@ -218,6 +234,7 @@ ACTION_HANDLERS.bid_up = async (action, context, meta): Promise<ActionResult> =>
       return { type: action.type, ok: false, error: cap.error, estimatedValueCentsEur: 0 }
     }
     const res = await updateAdTargetWithSync({
+      evidence: ctxEvidence(context),
       adTargetId: id,
       patch: { bidCents: newBid },
       actor: RULE_ACTOR(meta.ruleId),
@@ -243,6 +260,7 @@ ACTION_HANDLERS.pause_ad_group = async (action, context, meta): Promise<ActionRe
     return { type: action.type, ok: true, output: { dryRun: true, adGroupId: id, wouldSet: 'PAUSED' } }
   }
   const res = await updateAdGroupWithSync({
+    evidence: ctxEvidence(context),
     adGroupId: id,
     patch: { status: 'PAUSED' },
     actor: RULE_ACTOR(meta.ruleId),
@@ -1016,7 +1034,7 @@ ACTION_HANDLERS.lower_bid_to_floor = async (action, context, meta): Promise<Acti
   const floorCents = Math.max(5, Number(action.floorCents ?? 5))
   if (!id) return { type: action.type, ok: false, error: 'No adTarget.id' }
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, adTargetId: id, bidCents: floorCents } }
-  const res = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: floorCents }, actor: RULE_ACTOR(meta.ruleId), reason: 'lower_bid_to_floor via rule' })
+  const res = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: floorCents }, actor: RULE_ACTOR(meta.ruleId), reason: 'lower_bid_to_floor via rule' , evidence: ctxEvidence(context) })
   return { type: action.type, ok: res.ok, error: res.error ?? undefined, output: { adTargetId: id, bidCents: floorCents, outboundQueueId: res.outboundQueueId } }
 }
 
@@ -1125,7 +1143,7 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
   const nextCents = Math.round(nextEur * 100)
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, adTargetId: id, wouldChange: `${t.bidCents}¢ → ${nextCents}¢` } }
   if (nextCents === t.bidCents) return { type: action.type, ok: true, output: { adTargetId: id, noChange: true } }
-  const res = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: nextCents }, actor: RULE_ACTOR(meta.ruleId), reason: (action.reason as string) ?? `bid_apply via rule ${meta.ruleId}` })
+  const res = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: nextCents }, actor: RULE_ACTOR(meta.ruleId), reason: (action.reason as string) ?? `bid_apply via rule ${meta.ruleId}` , evidence: ctxEvidence(context) })
   return { type: action.type, ok: res.ok, error: res.error ?? undefined, output: { adTargetId: id, newBidCents: nextCents, outboundQueueId: res.outboundQueueId } }
 }
 
