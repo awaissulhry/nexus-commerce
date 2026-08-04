@@ -46,6 +46,7 @@ import {
   runSearchTermReportCycle,
   runPlacementReportCycle,
   runAdvertisedProductReportCycle,
+  runTargetingReportCycle,
   pollPendingJobs,
   ingestCompletedJob,
   cleanupOldSearchTerms,
@@ -77,6 +78,7 @@ let reportCreateTask: ReturnType<typeof cron.schedule> | null = null
 let reportCreateStTask: ReturnType<typeof cron.schedule> | null = null
 let reportCreatePlTask: ReturnType<typeof cron.schedule> | null = null
 let reportCreateApTask: ReturnType<typeof cron.schedule> | null = null
+let reportCreateTgTask: ReturnType<typeof cron.schedule> | null = null
 let reportPollTask: ReturnType<typeof cron.schedule> | null = null
 let brandMetricsTask: ReturnType<typeof cron.schedule> | null = null
 let reportIngestTask: ReturnType<typeof cron.schedule> | null = null
@@ -386,6 +388,38 @@ export async function runReportCreateApCron(): Promise<void> {
   }).catch((err) => logger.error('ads-report-create-ap cron: failure', { error: String(err) }))
 }
 
+// 02:00 UTC daily — targeting reports (SP keyword / product / auto targets).
+//
+// ADX — runTargetingReportCycle has existed, fully implemented, since the report
+// service was written: the spTargeting spec, its columns, the ingest dispatch and
+// ingestTargetRows are all there. Nothing ever called it, so no AD_TARGET grain was
+// ever ingested — 0 rows in AmazonAdsDailyPerformance and AdTarget.spendCents 0 across
+// all 5,204 targets.
+//
+// That silently disabled every target-grain rule. KEYWORD_LOW_CTR,
+// KEYWORD_ZERO_IMPRESSIONS, KEYWORD_WASTED_SPEND, KEYWORD_HIGH_ACOS and
+// AD_TARGET_UNDERPERFORMING have matched zero times between them, not because their
+// conditions are wrong but because they had nothing to evaluate. Every rule that DOES
+// match runs on campaign or search-term grain, both of which are wired.
+//
+// Runs after the search-term cycle (01:30) and before the poll, so the day's jobs are
+// created together.
+export async function runReportCreateTgCron(): Promise<void> {
+  await recordCronRun('ads-report-create-tg', async () => {
+    const { startDate, endDate } = yesterday()
+    const result = await runTargetingReportCycle({ startDate, endDate })
+    return `created=${result.jobsCreated} skipped=${result.jobsSkipped} errors=${result.errors.length}`
+  }).catch((err) => logger.error('ads-report-create-tg cron: failure', { error: String(err) }))
+}
+
+export function startReportCreateTgCron(): void {
+  if (reportCreateTgTask) { logger.warn('ads-report-create-tg already started'); return }
+  const schedule = process.env.NEXUS_ADS_REPORT_CREATE_TG_SCHEDULE ?? '0 2 * * *'
+  if (!cron.validate(schedule)) { logger.error('ads-report-create-tg: invalid schedule', { schedule }); return }
+  reportCreateTgTask = cron.schedule(schedule, () => { void runReportCreateTgCron() })
+  logger.info('ads-report-create-tg cron: scheduled', { schedule })
+}
+
 export function startReportCreateApCron(): void {
   if (reportCreateApTask) { logger.warn('ads-report-create-ap already started'); return }
   const schedule = process.env.NEXUS_ADS_REPORT_CREATE_AP_SCHEDULE ?? '50 1 * * *'
@@ -661,6 +695,7 @@ export function startAllAdvertisingCrons(): void {
   startReportCreateStCron()
   startReportCreatePlCron()
   startReportCreateApCron()
+  startReportCreateTgCron()
   startReportPollCron()
   startReportIngestCron()
   startSearchTermCleanupCron()

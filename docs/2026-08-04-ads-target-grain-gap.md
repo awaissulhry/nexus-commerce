@@ -1,6 +1,6 @@
 # The AD_TARGET grain is never ingested — and it silently disables a class of rules
 
-**Date:** 2026-08-04 · **Status:** diagnosed, precisely located, **not fixed**
+**Date:** 2026-08-04 · **Status:** ✅ FIXED — one cron registration. The original diagnosis below was wrong about the cause; the correction is at the end.
 **Found while:** computing the wasted-spend figure for ADX N6.
 
 ---
@@ -59,3 +59,38 @@ The finding is precise and the fix is well-signposted. That is the useful delive
 
 - Six enabled rules stay permanently dead until this lands.
 - The N6 wasted-spend surface is still unbuilt; the number exists (EUR 1,958 / 30d) but should be sanity-checked against campaign spend (EUR 2,264 / 30d) before being published as a headline — the two come from different reports with different attribution windows.
+
+
+---
+
+## CORRECTION — the cause was not a missing report type
+
+Everything above about the *symptom* is accurate: 0 AD_TARGET rows, `AdTarget.spendCents`
+0 across 5,204 targets, and every target-grain rule dead while every campaign- and
+search-term-grain rule matches. That part stands.
+
+The diagnosed *cause* was wrong. I concluded `spTargeting` was never requested because a
+grep of `ads-reports.service.ts` did not surface it. It is there, and so is everything
+around it:
+
+- `TARGETING_REPORT_TYPE_ID = 'spTargeting'` and `TARGETING_COLUMNS` — line 166
+- the ingest dispatch branch — line 512
+- `ingestTargetRows()`, fully implemented with target resolution and caching — line 769
+- `runTargetingReportCycle()`, fully implemented — line 1105
+
+**`runTargetingReportCycle` was never called.** The search-term and advertised-product
+cycles are wired into `ads-sync.job.ts` with crons; the targeting one was not. One
+missing registration, and a whole grain of data — plus five rules — went dark.
+
+**Fix:** `ads-report-create-tg`, 02:00 UTC daily, mirroring `ads-report-create-st`.
+Schedule overridable via `NEXUS_ADS_REPORT_CREATE_TG_SCHEDULE`.
+
+The plan in the section above — write the spec, write the ingest, write the backfill —
+would have rebuilt four things that already existed. Reading the dispatch before writing
+the fix is what caught it, and it is the seventh time in this programme that something
+fully built turned out simply not to be connected.
+
+**Still true:** `AdTarget.spendCents` remains 0 and will stay 0 — the daily table is
+populated by this cron, but the stored aggregates on `AdTarget` are a separate write
+that nothing performs. Rules reading those columns rather than the daily table will
+still see nothing. That is a genuine remaining gap, smaller than the one diagnosed here.
