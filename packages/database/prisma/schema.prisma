@@ -3021,6 +3021,52 @@ model AmazonAdsProfile {
 
 // Amazon-native portfolio (campaign grouping). Linked to Campaign via
 // Campaign.portfolioId (already exists as a string column).
+/// ACR.3 (Stage 2.1/3) — the curated keyword set a family DELIBERATELY covers.
+///
+/// The Coverage board derives from whatever SQP happens to return; the pilot needs intent:
+/// which terms this family is trying to own, which ASIN leads each term, and what the family
+/// is willing to pay. One set per portfolio; terms are rows so per-term state (lead, caps,
+/// status) has a home. The engine reads THIS, never raw SQP, so "what is automation trying to
+/// do" is always answerable from one table.
+model KeywordCoverageSet {
+  id                  String   @id @default(cuid())
+  /// External portfolio id — matches Campaign.portfolioId and the cockpit URLs.
+  portfolioId         String
+  marketplace         String
+  name                String
+  enabled             Boolean  @default(false)
+  /// Family-level guardrails the engine must respect (pilot: hard caps, per plan §4.4).
+  dailySpendCapCents  Int?
+  acosCapPct          Decimal? @db.Decimal(6, 2)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  createdBy           String?
+  terms               KeywordCoverageTerm[]
+
+  @@unique([portfolioId, marketplace, name])
+  @@index([portfolioId])
+}
+
+model KeywordCoverageTerm {
+  id            String   @id @default(cuid())
+  setId         String
+  set           KeywordCoverageSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+  term          String
+  /// The ASIN assigned to LEAD this term (highest bid / ToS defense); others support.
+  leadAsin      String?
+  /// ACTIVE | PAUSED | RETIRED — retirement is recorded, not deleted, so reclaim has history.
+  status        String   @default("ACTIVE")
+  /// Per-term ceiling; null inherits the set's guardrails.
+  maxCpcCents   Int?
+  targetSharePct Decimal? @db.Decimal(6, 2)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([setId, term])
+  @@index([setId, status])
+}
+
 model AmazonAdsPortfolio {
   id                  String    @id @default(cuid())
   profileId           String
