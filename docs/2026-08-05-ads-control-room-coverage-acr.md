@@ -660,21 +660,26 @@ A redirect is only honest when the destination answers the same question. These 
 |---|---|---|
 | **R1** | Roll back a whole rule **execution** (24h window, `POST /actions/:executionId/rollback`). Changelog undoes ONE change; an execution touches many entities. | Drawer on the per-rule execution history that `rules-automation/tabs/RuleListTab.tsx` already renders |
 | **R2** | Per-rule impact over a window — runs, terms negated, bids adjusted, campaigns guarded (`/automation-analytics`). | Summary strip on `/ads/rules-automation` Apply Rules |
-| **R3** | North-star planner: pick profit/balanced/growth → read the plain-language plan → apply (`/autopilot/simulate` + `/apply`). Overlaps Recommendations, which ranks the same bid engine's actions individually. | Panel on `/ads/recommendations` — **or drop; operator call** |
-| **R4** | N-gram intelligence over the 9,746 stored search terms — which word fragments burn budget. | Second view on the `search-term` report at `/ads/reporting/search-term` |
+| **R3** | North-star planner: pick profit/balanced/growth → read the plain-language plan → apply (`/autopilot/simulate` + `/apply`). Overlaps Recommendations, which ranks the same bid engine's actions individually. | ✅ Panel on `/ads/recommendations` (operator decision 2026-08-05) |
+| **R4** | N-gram intelligence over the 9,746 stored search terms — which word fragments burn budget. | ⛔ **PARKED — Analytics-owned.** `ReportingClient.tsx` records the standing split verbatim: *"Interpretation — coverage, funnel, n-grams, momentum — belongs to Analytics next door. (Operator decision, 2026-08-04.)"* Filing it under Reporting would contradict that decision, and `/ads/analytics` belongs to another session. `/marketing/advertising/ngrams` therefore stays live and is NOT redirected |
 | **R5** | **Per-SKU × day P&L** — revenue, COGS, fees, ad spend, refunds, margin band, per-row coverage badge. The Dashboard shows `trueProfitMargin30dPct` and a coverage explainer but never the rows behind it. | Tab on `/ads/dashboard` — the drill-down for a number the dashboard already prints |
 | **R6** | Writing a custom annotation (`POST /events/custom`). `ChangeAnnotations.tsx` plots operator notes on the campaign chart; nothing in the new console can create one. | "Add note" action on `/ads/changelog` |
-| **R7** | Modeled iROAS (branded vs non-branded lift, hand-set factors). Not measured — modeled from two tuning constants. | Panel on `/ads/reporting` — **or drop as unsubstantiated; operator call** |
-| **R8** | Keyword-graduation journey + the cross-match negation plan (Exact owns the term; negate it in Phrase/Broad/Auto). Prevents a product bidding against itself. | Panel on `/ads/rules-automation?tab=negative-targeting` |
+| **R7** | Modeled iROAS (branded vs non-branded lift, hand-set factors). Not measured — modeled from two tuning constants. | ✅ Panel on `/ads/reporting`, labelled *modeled* on its face (operator decision 2026-08-05) |
+| **R8** | Keyword-graduation journey + the cross-match negation plan (Exact owns the term; negate it in Phrase/Broad/Auto). Prevents a product bidding against itself. | ⛔ **PARKED — Analytics-owned**, same standing split as R4 (which names "funnel" explicitly). `/marketing/advertising/funnel` stays live and is NOT redirected. Note for whoever takes it: the *journey view* is interpretation, but `POST /funnel/cross-match` is an ACTION and would sit naturally on `?tab=negative-targeting` — the page may want splitting rather than moving whole |
 | **R9** | Creating a budget pool at all. **0 pools exist**, yet `budget-pool-rebalance.job.ts` and `ads-control-room.service.ts` both read them — the engine is live with no way to feed it. | Tab on `/ads/budget-manager` |
-| **R10** | FBA aged-stock heatmap. **0 rows** — `fba-storage-age-ingest` has never populated, so the page and the `/fulfillment/replenishment` tile that deep-links into it are both empty today. | None — delete, and drop the tile's dead deep-link. **Operator call** |
-| **R11** | Google Shopping + Meta catalog feed exports. A live feature (`/api/feed-export`) that has nothing to do with Amazon ads and only lives here by accident. | Move out of the ads tree entirely — a tab on `/marketing/content`. **Operator call** |
+| **R10** | FBA aged-stock heatmap. **0 rows** — `fba-storage-age-ingest` has never populated, so the page and the `/fulfillment/replenishment` tile that deep-links into it are both empty today. | ✅ Delete, and drop the tile's dead deep-link (operator decision 2026-08-05). The ingest and both endpoints stay; if it ever populates, the data wants a home in fulfillment, not in the ads console |
+| **R11** | Google Shopping + Meta catalog feed exports. A live feature (`/api/feed-export`) that has nothing to do with Amazon ads and only lives here by accident. | ✅ Tab on `/marketing/content` (operator decision 2026-08-05) — out of the ads tree entirely |
 | **R12** | Amazon endpoint probe console (12+ live probes per profile). Operator diagnostics with no replacement. | Panel on `/ads/health` |
 
 **Sequencing.** Ports land first, each verified on prod; redirects follow; the tree is deleted last, in one
 commit, once nothing links into it. Redirects are permanent `redirect()` server components so bookmarks and
 the operator runbook keep working. Anything ported obeys the light-only rule for `/marketing/ads` — no `.dark`
 blocks (gate decision 4).
+
+**Two routes survive this pass.** R4 (`/ngrams`) and R8 (`/funnel`) are interpretation surfaces that a
+standing operator decision assigns to Analytics, and Analytics belongs to another session. They keep working
+at their current URLs; the legacy `layout.tsx` is reduced to a bare passthrough so they no longer render the
+retired sidebar. Everything else in the tree is ported, redirected or deleted.
 
 ---
 
