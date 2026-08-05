@@ -84,9 +84,23 @@ export async function getCoverageScoreboard(args: {
   marketplace?: string
   week?: string
   limit?: number
+  /**
+   * ACR.6 — the family lens. `asins` scopes OUR side of every number to one family's products
+   * (the market side is the whole query market either way — that is what share is measured
+   * against). `campaignIds` scopes the keyword-held counts to the family's own campaigns, so
+   * "kws" answers "does THIS family bid this term", not "does anyone".
+   */
+  asins?: string[]
+  campaignIds?: string[]
 }): Promise<CoverageScoreboard> {
   const marketplace = args.marketplace ?? 'IT'
   const limit = Math.max(10, Math.min(500, args.limit ?? 100))
+  const asinFilter = args.asins?.length
+    ? `AND s.asin IN (${args.asins.map((a) => `'${a.replace(/'/g, "''")}'`).join(',')})`
+    : ''
+  const campFilter = args.campaignIds?.length
+    ? `AND c.id IN (${args.campaignIds.map((a) => `'${a.replace(/'/g, "''")}'`).join(',')})`
+    : ''
 
   const weekRows = await prisma.$queryRawUnsafe<{ week: string; rows: bigint; ours: bigint }[]>(`
     SELECT "startDate"::text AS week, COUNT(*) AS rows, SUM("impressionsBrand") AS ours
@@ -147,9 +161,9 @@ export async function getCoverageScoreboard(args: {
               JOIN "Campaign" c ON c.id = g."campaignId"
             WHERE LOWER(t."expressionValue") = LOWER(s."searchQuery")
               AND c.marketplace = $1 AND t.kind = 'KEYWORD'
-              AND t."isNegative" = false) AS targets
+              AND t."isNegative" = false ${campFilter}) AS targets
     FROM "SearchQueryPerformance" s
-    WHERE s.marketplace = $1 AND s."startDate" = $2::date
+    WHERE s.marketplace = $1 AND s."startDate" = $2::date ${asinFilter}
     GROUP BY 1
     HAVING SUM(s."impressionsTotal") >= ${MIN_MARKET_IMPRESSIONS}
     ORDER BY SUM(s."impressionsTotal") DESC
@@ -183,8 +197,8 @@ export async function getCoverageScoreboard(args: {
     FROM (
       SELECT MAX("impressionsTotal") AS m, SUM("impressionsBrand") AS o,
              MAX("purchasesTotal") AS mb, SUM("purchasesBrand") AS ob
-      FROM "SearchQueryPerformance"
-      WHERE marketplace = $1 AND "startDate" = $2::date
+      FROM "SearchQueryPerformance" s
+      WHERE marketplace = $1 AND "startDate" = $2::date ${asinFilter}
       GROUP BY "searchQuery"
     ) x
   `, marketplace, week)

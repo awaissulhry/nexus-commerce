@@ -84,7 +84,10 @@ function stakeFraction(proposedKey: string, action: Record<string, unknown>): { 
   }
 }
 
-export async function pricePendingProposals(limit = 15): Promise<ProposalPricing> {
+export async function pricePendingProposals(
+  limit = 15,
+  opts: { campaignIds?: string[] } = {},
+): Promise<ProposalPricing> {
   const pending = await prisma.adsRuleSuggestion.findMany({
     where: { status: 'pending' },
     select: {
@@ -105,9 +108,10 @@ export async function pricePendingProposals(limit = 15): Promise<ProposalPricing
   const targets = targetIds.length
     ? await prisma.adTarget.findMany({
       where: { id: { in: targetIds } },
-      select: { id: true, externalTargetId: true, expressionValue: true },
+      select: { id: true, externalTargetId: true, expressionValue: true, adGroup: { select: { campaignId: true } } },
     })
     : []
+  const campByTarget = new Map(targets.map((t) => [t.id, t.adGroup.campaignId]))
   const extByLocal = new Map(targets.map((t) => [t.id, t.externalTargetId]))
   const labelByLocal = new Map(targets.map((t) => [t.id, t.expressionValue]))
 
@@ -124,7 +128,18 @@ export async function pricePendingProposals(limit = 15): Promise<ProposalPricing
     salesCents: Number(r._sum.sales7dCents ?? 0),
   }]))
 
-  const priced: PricedProposal[] = pending.map((p) => {
+  // ACR.6 — the family lens: keep only proposals whose entity resolves into the given
+  // campaigns. A proposal that cannot be resolved to a campaign is dropped rather than kept,
+  // because "unknown scope" shown inside a family cockpit reads as "this family's".
+  const scope = opts.campaignIds?.length ? new Set(opts.campaignIds) : null
+  const inScope = scope
+    ? pending.filter((p) =>
+      p.entityType === 'CAMPAIGN'
+        ? scope.has(p.entityId)
+        : p.entityType === 'AD_TARGET' && scope.has(campByTarget.get(p.entityId) ?? ''))
+    : pending
+
+  const priced: PricedProposal[] = inScope.map((p) => {
     const action = (p.proposedAction ?? {}) as Record<string, unknown>
     const { frac, direction } = stakeFraction(p.proposedKey, action)
     const ext = extByLocal.get(p.entityId)
@@ -151,7 +166,7 @@ export async function pricePendingProposals(limit = 15): Promise<ProposalPricing
 
   const reduce = priced.filter((p) => p.direction === 'reduce')
   return {
-    pending: pending.length,
+    pending: inScope.length,
     priced: priced.filter((p) => p.spendAtStakeCents != null).length,
     spendAtStakeCents: reduce.reduce((a, p) => a + (p.spendAtStakeCents ?? 0), 0),
     recoverableCents: reduce.filter((p) => p.recoverable).reduce((a, p) => a + (p.spendAtStakeCents ?? 0), 0),

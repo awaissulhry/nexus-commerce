@@ -8,6 +8,7 @@
  * container, no direct spend). Assign / rename / archive / budgets land in P2–P3.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { RefreshCw, Plus, Pencil, Archive, Wallet, Search } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { Button } from '@/design-system/primitives/Button'
@@ -232,7 +233,9 @@ function PortfoliosInner() {
                 <tr key={r.portfolioId}>
                   <td>
                     <span className="pf-name">
-                      <span className="pf-name-main">{r.name}</span>
+                      {/* ACR.6 — the name opens the Family Cockpit: campaigns, coverage,
+                          contested keywords and automation posture for THIS portfolio. */}
+                      <Link href={`/marketing/ads/portfolios/${r.portfolioId}`} className="pf-name-main pf-name-link">{r.name}</Link>
                       {r.state && <span className={`pf-state ${stateClass(r.state)}`}>{r.state}</span>}
                       <span className={`pf-src${r.source === 'local' ? ' pf-src--local' : ''}`}>{r.source}</span>
                     </span>

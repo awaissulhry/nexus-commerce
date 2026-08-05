@@ -9293,6 +9293,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     catch (e) { reply.status(500); return { error: (e as Error)?.message ?? 'overview failed', portfolios: [], lastSyncedAt: null } }
   })
 
+  /**
+   * ACR.6 — the Family Cockpit: one portfolio, everything that governs it, one read.
+   * Composition only — every control the page offers is an endpoint that already exists.
+   */
+  fastify.get('/advertising/portfolios/:id/cockpit', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { getFamilyCockpit } = await import('../services/advertising/ads-family-cockpit.service.js')
+    const r = await getFamilyCockpit(id)
+    if (!r) { reply.status(404); return { error: 'portfolio not found' } }
+    reply.header('Cache-Control', 'private, max-age=30')
+    return r
+  })
+
   // Portfolios P2/P3 — rename / archive / set budget-cap (gated live PUT to Amazon + local mirror).
   fastify.patch('/advertising/portfolios/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
