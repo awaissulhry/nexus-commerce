@@ -721,6 +721,16 @@ one request instead of a constant nobody can check.
 `lookback = 2` (five of AIREON's live days). The first clean full week, 2026-08-02, follows from
 roughly 08-16. Whichever is chosen, **both** families must be requested.
 
+**And how much signal that week can even contain — sized before spending the reports (2026-08-06,
+daily-performance grain, no quota used):** AIREON in the 07-26 week did 49,687 impressions and
+€41.95 — really live — but its placement split is 25,313 detail-page against **1,677 SERP
+impressions for the whole family for the whole week** (1,250 rest-of-search + 427 top). Spread
+over ~20 children and dozens of queries, per-(query × ASIN) cells land in single digits, so
+expect a mostly-empty SQP answer even on a correctly published week. The metric that will
+actually move first is the placement mix — which is what an AIREON coverage set exists to
+change — and SQP granularity becomes informative *after* that shift, not before. Calibrate
+disappointment accordingly when the ~08-09 request runs.
+
 **What unblocks it:** `_acr24-sqp-widen.mts` resolves ASINs from the **catalogue** by family instead of from stored rows, jackets first. With AIREON measured alongside GALE the within-term control exists and the experiment decides. **It can only run on Railway** — the local SP-API refresh token is revoked (`invalid grant parameter : refresh_token`), so 13 requested reports returned 13 failures and wrote nothing. Cost when run: ~6 minutes of Amazon report generation per ten ASINs, one report per ASIN, upserting in place on `(marketplace, period, startDate, searchQuery, asin)`.
 
 ### ACR.2.4c — the widen's execution record, its WRONG first reading, and what survives
