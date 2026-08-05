@@ -6309,6 +6309,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // Sits under /advertising/autonomy/* beside status, pause-all and resume rather than
   // under /automation-rules/, where a static `autonomy` segment would shadow the
   // existing `:id` route.
+  /**
+   * ACR.1.2 — the Control Room's Levers view.
+   *
+   * Deliberately ONE call returning both halves. The engines and the rules were previously
+   * two different surfaces with two different vocabularies, and that split is the reason an
+   * operator could look at "AI Control" and not see the four biggest bid movers in the
+   * account. Two endpoints would have rebuilt the same seam in a new place.
+   */
+  fastify.get('/advertising/control-room/levers', async () => {
+    const { getEngineLevers } = await import('../services/advertising/ads-control-room.service.js')
+    const { levers, global } = await getEngineLevers()
+    return { engines: levers, global }
+  })
+
   fastify.get('/advertising/autonomy/rules', async () => {
     const [rules, protectionCount] = await Promise.all([
       prisma.automationRule.findMany({
