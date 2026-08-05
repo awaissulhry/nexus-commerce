@@ -1224,7 +1224,32 @@ The new branch mirrors bid_down's structure with bid_up's own spend estimate and
 because raising a bid costs money and lowering one does not (`AdGroup.spendCents` gives the estimate
 the same shape as the ad_target branch).
 
-**Shipped behind a dry-run, by operator decision 2026-08-05.** Repairing the handler alone would
+**🔴 TWO CORRECTIONS TO THE PARAGRAPH ABOVE, both found by verifying instead of assuming.**
+
+1. **"A one-way ratchet" overstated it.** The handler asymmetry was real, but no `bid_down` on an
+   ad group has ever fired either: `Reduce bids on ACOS spike` (bid_down · ad_group · enabled ·
+   AUTO) has 2,469 executions all-time and **zero** `bid_down` action results in its last 500
+   SUCCESS/PARTIAL runs. Neither direction was moving ad-group bids. What was true is the code gap;
+   what was not true is that cuts were landing while raises failed.
+2. **The rule is misconfigured beyond the handler.** After the fix the error simply moved —
+   `Unsupported target=ad_group` → **`No adGroup.id in context`**. Its trigger is
+   `CAMPAIGN_PERFORMANCE_BUDGET`, which supplies campaign-grained context, while its action targets
+   `ad_group`; nothing can resolve an ad group from a campaign trigger. Its condition
+   (`campaign.acos ≤ 0.35`) also does not match its own description (">30% of orders new-to-brand,
+   from ntbOrders14d"). The template itself needs redesigning — a trigger that yields ad groups, or
+   an action at campaign grain. **120,007 all-time executions have produced nothing.**
+
+**🔴 AND THE SAFETY FLIP WAS INERT — `dryRun` is a dead field.** `resolveAutonomy` reads
+`autonomyLevel` first, falling back to the `dryRun` binary only when that column is null or `'OFF'`.
+**All 51 advertising rules carry an explicit `autonomyLevel`, so `dryRun` cannot bind on any of
+them.** Setting `dryRun=true` left the rule resolving to **AUTO** — able to write — while its row
+read `dryRun=true`: a safety measure that is worse than none, because it reads as protection.
+Caught only because executions kept recording `dryRun=false` afterwards. Fixed by setting
+`autonomyLevel='PROPOSE'` and verifying through `resolveAutonomy`/`levelActs` themselves rather than
+by re-reading the field. **10 of 51 advertising rules currently resolve to a level that can write**
+(`scripts/_acr6-autonomy-check.mts` lists them).
+
+**Shipped behind PROPOSE, by operator decision 2026-08-05.** Repairing the handler alone would
 have taken a 30-day-dead rule straight to writing live bids in one deploy — +10% per fire against
 282 enabled ad groups, condition `campaign.acos ≤ 35%`, its own caps of 10 executions/day and
 €200/day. A rule with **zero successful executions has zero evidence**, which is the exact bar this
