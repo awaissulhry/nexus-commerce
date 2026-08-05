@@ -453,6 +453,16 @@ And pooled — the honest single number — **0.30% where we bid, 0.265% where w
 
 **4. The blunt summary: we are absent.** Across 588 measured terms and 4.19M impressions in one week, we took **11,968** — **0.29%**. Market purchases on every head term run 4–18 a week; ours are **0**. At a third of a percent of impressions that is arithmetic, not a conversion problem.
 
+### ACR.7 / 7b — drag-to-scope SHIPPED 2026-08-05: the Automation Dock, and a binding that means it
+
+**Operator direction:** an always-on panel of every automation, draggable onto portfolios and campaigns; no emojis in rule names — colour carries the grouping.
+
+**The bug the feature forced into the open: rule scoping was partially decorative.** All three evaluators pre-filtered rules by `scopeMarketplace` per context — but only as a skip-check; the evaluation call re-queried and ran EVERY enabled rule for the trigger. A DE-scoped rule fired on IT contexts whenever any rule passed the check. Fixed by passing the filtered survivors into `evaluateAllRulesForTrigger` via a new `ruleIds` parameter (all three domains), with the full ladder enforced by a pure predicate: marketplace → portfolio (external id) → campaign (local id), and a campaign/portfolio-scoped rule **never fires on contexts with no campaign identity**. 10 tests.
+
+**ACR.7b closed the second half.** Firing scope alone would still let a bound harvest rule SWEEP marketplace-wide from one firing. `resolveRuleSweepScope(ruleId)` now bounds both sweep actions — `harvest_and_negate` through the same `adGroupExternalIds` parameter the wizard-sources path already used (binding ∩ sources when both exist: a binding narrows, never widens), `sync_negatives_across_campaigns` by campaign set. **Fail-closed:** a binding resolving to zero campaigns sweeps nothing. Proven on prod, bind→measure→unbind: unscoped 16 negatives / 14 graduations → bound to `Xavia GALE IT` **4 / 1, zero candidates outside the binding**.
+
+**The dock:** one component on the Control Room (in the formerly empty right side), Portfolios and the Family Cockpit. Category swatch (server-fixed hex: blue bids · amber budget · green harvest · red negation · purple placement · teal protection · slate alerts), plain-text names (24 emoji names renamed on prod, seed rename-map extended so a reseed cannot resurrect them), compact Off/Obs/Prop/Auto dial, week counts, and — when bound — a visible scope chip with one-click unbind. Drops: portfolio rows (Portfolios), cockpit header (portfolio-wide), campaign rows (campaign-only) → `PATCH /autonomy/rules/:id/scope`, which validates the target and clears the other scope. Layout dead-space fix from operator screenshot: with-dock pages take the full viewport.
+
 ### ACR.6 — the Family Cockpit SHIPPED 2026-08-05 (`/marketing/ads/portfolios/[id]`)
 
 **The surface the engagement was opened for**, verified live on prod against `Xavia GALE IT`. One aggregate read (`GET /portfolios/:id/cockpit`), four tabs, and **every control is an endpoint that already existed** — the cockpit adds no write path:
