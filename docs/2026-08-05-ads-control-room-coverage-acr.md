@@ -576,6 +576,106 @@ Ready in `scripts/_acr4-coverage-campaign.mts`: SP · EXACT · own campaign · �
 - Port the last legacy interpretation surfaces to Analytics tabs; redirect `/marketing/advertising/*` and `/marketing/ads-console/*`; delete after zero traffic.
 - *Exit:* one UI over one engine — the control risk of three consoles gone.
 
+#### ACR.6.0 — the retirement map for `/marketing/advertising` (measured 2026-08-05, nothing deleted yet)
+
+41 routes across 8 shared files. Every legacy page is API-backed — none of this is UI-only scaffolding, so
+retiring a *page* never retires an *engine*: `advertising.routes.ts` keeps every endpoint below, and the
+Control Room, Recommendations and Health already read several of them.
+
+Row counts are from `scripts/_stage6-usage-probe.mts` (read-only, prod, 2026-08-05). They are the deciding
+evidence for three surfaces: **a page with a create button and zero rows after a year was never adopted**,
+and that is a different fact from "the feature is unfinished".
+
+| # | Legacy route | What it actually is | Prod rows | Destination | Action |
+|---|---|---|---|---|---|
+| 1 | `/advertising` | 5-card Trading Desk landing | — | `/ads/dashboard` | redirect |
+| 2 | `/analytics` | TACOS + ACOS daily trend, inline SVG | — | `/ads/dashboard` (daily spend/ACOS chart); TACoS itself in `/ads/reporting` business context | redirect |
+| 3 | `/campaigns` | campaign roster + inline budget/status edit | live | `/ads/campaigns` | redirect |
+| 4 | `/campaigns/[id]` | campaign detail + bid history | live | `/ads/campaigns/[id]` (id preserved) | redirect |
+| 5 | `/campaigns/[id]/ad-groups/[adGroupId]` | ad-group drill-down | live | `/ads/campaigns/[id]/ad-groups/[agId]` | redirect |
+| 6 | `/create` | single-campaign builder | — | `/ads/campaign-builder/single` | redirect |
+| 7 | `/architect` | paste keywords → SKAG / match-split / auto-funnel → create | — | `/ads/campaign-builder/sp-super-wizard` (same job, naming rules + structure templates on top) | redirect |
+| 8 | `/goals` | full-funnel goal builder (`/goals/suggest-targets`) | — | `/ads/ai-advertising/new-goal` (AI Goal, `/ai-goals`) | redirect |
+| 9 | `/automation` | rules command centre | live | `/ads/rules-automation` | redirect |
+| 10 | `/automation/new` | rule builder | — | `/ads/rules-automation` (the "+ Rule" type modal picks the slug) | redirect |
+| 11 | `/automation/[id]` | rule editor (read + enable/dryRun toggle) | live | `/ads/rules-automation/builder/<slug>?ruleId=<id>` — the new builder already supports `?ruleId=`; the legacy page resolves type→slug server-side before redirecting | redirect (resolving) |
+| 12 | `/automation/library` | 35+ static templates, search + category filter | — | `/ads/rules-automation` type modal | redirect |
+| 13 | `/automation/health` | fleet health | live | `/ads/health` | redirect |
+| 14 | `/automation/executions` | account-wide execution feed | 727,015 | `/ads/rules-automation/control-room?tab=activity` | redirect |
+| 15 | `/automation/executions/[id]` | per-execution action timeline + **rollback** | 34,114 log rows | see **gap R1** | port → redirect |
+| 16 | `/automation/analytics` | per-rule impact over a window | live | see **gap R2** | port → redirect |
+| 17 | `/autopilot` | north star → plain-language plan → apply (`/autopilot/simulate`) | live | see **gap R3** | decide |
+| 18 | `/bid-optimizer` | target-ACOS bid preview/apply | live | `/ads/recommendations` (bid engine feeds the ranked inbox) | redirect |
+| 19 | `/harvest` | harvest + negate preview/apply | live | `/ads/recommendations`; rules at `?tab=keyword-harvest` | redirect |
+| 20 | `/pacing` | budget pacing preview/apply | live | `/ads/recommendations` | redirect |
+| 21 | `/share-of-voice` | SOV + impression share | live | `/ads/rules-automation?tab=share-of-voice` | redirect |
+| 22 | `/retail-readiness` | out-of-stock / lost-Buy-Box guard | live | `/ads/health` (already renders it) | redirect |
+| 23 | `/momentum` | live momentum | live | `/ads/dashboard` (momentum block) | redirect |
+| 24 | `/insights` | 4 rule-based insight types | live | `/ads/recommendations` | redirect |
+| 25 | `/recommendations` | AI + rules feed | live | `/ads/recommendations` (explicitly ported in E3) | redirect |
+| 26 | `/budget-manager` | plans + enforcement | live | `/ads/budget-manager` | redirect |
+| 27 | `/dayparting` | schedules + demand intel | live | `/ads/rules-automation/dayparting` | redirect |
+| 28 | `/reports` | report-job queue + manual triggers | live | `/ads/reporting/pipeline` | redirect |
+| 29 | `/search-terms` | account-wide search-term explorer | 9,746 | `/ads/reporting/search-term` | redirect |
+| 30 | `/ngrams` | n-gram intelligence over those terms | 9,746 | see **gap R4** | port → redirect |
+| 31 | `/profit` | **per-SKU × day P&L** — revenue, COGS, fees, ad spend, margin band, coverage badge | **854 rows (160 in 30d)** | see **gap R5** | port → redirect |
+| 32 | `/events` | change timeline + **custom annotations** (`POST /events/custom`) | 25,597 in 30d | `/ads/changelog` covers the feed; the note-writing does not exist — **gap R6** | port → redirect |
+| 33 | `/incrementality` | modeled iROAS (branded vs non-branded lift) | derived | see **gap R7** | decide |
+| 34 | `/funnel` | keyword-graduation journey + cross-match negation plan | live | see **gap R8** | decide |
+| 35 | `/budget-pools` | multi-marketplace pools + rebalance strategy | **0 pools** | see **gap R9** | decide |
+| 36 | `/budget-pools/[id]` | pool detail, allocations, rebalance history | **0 allocations** | ditto | decide |
+| 37 | `/dsp` | Amazon DSP Plus builder (Performance+ / Brand+) | **0 DSP campaigns** | none — DSP entitlement is refused at Amazon (`reference_amazon_stack_entitlements`) | delete |
+| 38 | `/audiences` | AMC-style no-SQL audiences | **0 audiences** | none — AMC likewise refused | delete |
+| 39 | `/storage-age` | FBA aged-stock heatmap + LTS projection | **0 rows** | ingest has never populated; deep-linked from `/fulfillment/replenishment` — **gap R10** | decide |
+| 40 | `/feeds` | Google Shopping + Meta catalog feed exports (`/api/feed-export`) | live | not an Amazon-ads surface at all — misfiled here — **gap R11** | decide |
+| 41 | `/debug` | Amazon endpoint probe console (operator diagnostics) | — | no equivalent; operator-only — **gap R12** | decide |
+
+Shared files retired with the tree: `_shared/AdvertisingNav.tsx` (already a no-op returning `null`),
+`AdvertisingSidebar.tsx`, `DateRangePicker.tsx`, `DetailSkeleton.tsx`, `EnableWritesButton.tsx`,
+`WriteModeBanner.tsx`, `formatters.ts`, `rule-catalog.ts`, `layout.tsx`. `rule-catalog.ts` is imported by
+`/automation/[id]` and the library — both go, so it goes; **verified by import graph with comments stripped,
+not by grep**, per today's false-orphan incident.
+
+Inbound links to rewrite (grep, `apps/web`): `_shared/app-nav.ts` (the "Advertising (classic)" child),
+`lib/auth/nav-permissions.ts`, `products/[id]/edit/tabs/AdsTab.tsx` (5 links), `marketing/campaigns/page.tsx`
+(redirect target) + `MarketingCampaignsClient.tsx`, `marketing/reviews/automation/page.tsx` (2),
+`fulfillment/replenishment/_shared/StorageAgeTile.tsx`, `marketing/ads-console/campaigns/CampaignsTable.tsx` (2),
+and the legacy sidebar itself.
+
+**`apps/api` is already clean.** Every `href` a service hands the Today board or the inbox points at
+`/marketing/ads/*` (`ads-today-board.service.ts`, `ads-suggestions.service.ts`, the eBay services). The only
+`/marketing/advertising` string in `apps/api/src` is a placeholder **API** route in `marketing.routes.ts:10`
+(`GET /marketing/advertising` → `{items:[],count:0}`) — an endpoint path, not a web link, and out of scope.
+One href does point at the *other* legacy console — `ad-rank-defend.job.ts:475` → `/marketing/ads-console/rank`
+— which belongs to the rank engine another session owns and is left alone.
+
+**Out of scope here:** `/marketing/ads-console/*` (the third console, 11 routes) is Stage 6's other half and
+is entangled with the rank engine; it is a separate pass.
+
+##### The 12 gaps — what a redirect would actually destroy
+
+A redirect is only honest when the destination answers the same question. These twelve do not yet.
+
+| Gap | What is lost | Proposed home (no new rail entry) |
+|---|---|---|
+| **R1** | Roll back a whole rule **execution** (24h window, `POST /actions/:executionId/rollback`). Changelog undoes ONE change; an execution touches many entities. | Drawer on the per-rule execution history that `rules-automation/tabs/RuleListTab.tsx` already renders |
+| **R2** | Per-rule impact over a window — runs, terms negated, bids adjusted, campaigns guarded (`/automation-analytics`). | Summary strip on `/ads/rules-automation` Apply Rules |
+| **R3** | North-star planner: pick profit/balanced/growth → read the plain-language plan → apply (`/autopilot/simulate` + `/apply`). Overlaps Recommendations, which ranks the same bid engine's actions individually. | Panel on `/ads/recommendations` — **or drop; operator call** |
+| **R4** | N-gram intelligence over the 9,746 stored search terms — which word fragments burn budget. | Second view on the `search-term` report at `/ads/reporting/search-term` |
+| **R5** | **Per-SKU × day P&L** — revenue, COGS, fees, ad spend, refunds, margin band, per-row coverage badge. The Dashboard shows `trueProfitMargin30dPct` and a coverage explainer but never the rows behind it. | Tab on `/ads/dashboard` — the drill-down for a number the dashboard already prints |
+| **R6** | Writing a custom annotation (`POST /events/custom`). `ChangeAnnotations.tsx` plots operator notes on the campaign chart; nothing in the new console can create one. | "Add note" action on `/ads/changelog` |
+| **R7** | Modeled iROAS (branded vs non-branded lift, hand-set factors). Not measured — modeled from two tuning constants. | Panel on `/ads/reporting` — **or drop as unsubstantiated; operator call** |
+| **R8** | Keyword-graduation journey + the cross-match negation plan (Exact owns the term; negate it in Phrase/Broad/Auto). Prevents a product bidding against itself. | Panel on `/ads/rules-automation?tab=negative-targeting` |
+| **R9** | Creating a budget pool at all. **0 pools exist**, yet `budget-pool-rebalance.job.ts` and `ads-control-room.service.ts` both read them — the engine is live with no way to feed it. | Tab on `/ads/budget-manager` |
+| **R10** | FBA aged-stock heatmap. **0 rows** — `fba-storage-age-ingest` has never populated, so the page and the `/fulfillment/replenishment` tile that deep-links into it are both empty today. | None — delete, and drop the tile's dead deep-link. **Operator call** |
+| **R11** | Google Shopping + Meta catalog feed exports. A live feature (`/api/feed-export`) that has nothing to do with Amazon ads and only lives here by accident. | Move out of the ads tree entirely — a tab on `/marketing/content`. **Operator call** |
+| **R12** | Amazon endpoint probe console (12+ live probes per profile). Operator diagnostics with no replacement. | Panel on `/ads/health` |
+
+**Sequencing.** Ports land first, each verified on prod; redirects follow; the tree is deleted last, in one
+commit, once nothing links into it. Redirects are permanent `redirect()` server components so bookmarks and
+the operator runbook keep working. Anything ported obeys the light-only rule for `/marketing/ads` — no `.dark`
+blocks (gate decision 4).
+
 ---
 
 ## Part 6 — Gate decisions (status 2026-08-05)
