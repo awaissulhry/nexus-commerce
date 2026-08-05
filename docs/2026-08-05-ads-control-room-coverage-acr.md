@@ -1402,6 +1402,45 @@ done. Reverting is one field.
 
 ⏳ Still open: reviewing a week of its proposals, then deciding whether it graduates to live.
 
+##### ACR.6.2 — why the AUTO rules do nothing, and the trap in fixing it
+
+Nine rules resolve to AUTO. Chasing what they actually emit lands on one cause upstream of every
+rule's configuration, and then on a hazard in the obvious repair.
+
+**The cause.** `AmazonAdsDailyPerformance` carries **5,806 AD_TARGET rows** for the last 30 days
+(€3,257.86, 5,996 clicks). `AdTarget.spendCents` / `.clicks` / `.salesCents` are **zero across all
+5,204 rows**; `AdGroup.spendCents` is zero across all 285. `previewBidOptimization` filters
+`ENABLED, isNegative=false, spendCents > 0` — the first two leave 2,685 targets, the third leaves
+**0**. So it returns no proposals, every run reports `applied: 0` truthfully, and four AUTO rules
+have produced ~1,174 successful executions that changed nothing.
+
+**This is a decommission, not a bug.** `ad-autopilot.job.ts` records it: the only writer,
+`ads-metrics-ingest`, was **deliberately retired in H.2e (2026-05-18)**, and that job has already
+migrated its own signals to `AmazonAdsDailyPerformance` at CAMPAIGN grain. Resurrecting the ingest
+would be the wrong direction; repointing readers at the daily table is the right one. (My first
+read of this called it a broken denormaliser — corrected.)
+
+**The migration is viable.** Target-grain rows exist and the join key is exact: all 458 distinct
+`entityId`s resolve to an `AdTarget` via `externalTargetId` — checked, not assumed.
+
+**🔴 And doing it naively would cost money.** Modelling the migrated engine against live data
+(`scripts/_acr6-bidopt-whatif.mts`, read-only) it emits **103 proposals — of which 51 RAISE bids on
+targets currently under 5¢**, carrying **€1,316.41** of 30d spend. This account does not pause; it
+silences by dropping bids to ~2¢, and `FLOOR_CENTS` is 5 — so the engine's own hard-cut arithmetic
+`max(FLOOR, bid × 0.5)` becomes a **raise** for anything already suppressed. Half its output was
+un-suppression of what an operator deliberately silenced.
+
+**Guarded ahead of the fact** (`1898e0f00`): the candidate filter now excludes
+`suppressedFromBidCents IS NOT NULL` and any bid below the floor. Both are needed — 451 of the 600
+sub-floor targets carry the marker, the rest do not. Inert today and proven so: the engine still
+returns 0 proposals and the guard excludes no reachable row.
+
+Two smaller results from the same sweep. **"Reduce bids on ACOS spike" does fire** — 539 `bid_down`
+results in 30d, every one `VALUE_CAP_EXCEEDED`; it is capped, not broken, which refines the earlier
+note that it emitted nothing (that probe read only SUCCESS/PARTIAL rows; these failures are in
+FAILED ones). **"Alert: ACOS spike" emitting no non-notify actions is correct** — it is an
+alert-only rule, not an idle one.
+
 **4. The strip hid its own failure.** It returned `null` on a failed fetch, reasoning that a zeroed
 banner would read as "the fleet did nothing". True of a zero; false of a 500 — and it is why the bug
 above was invisible on prod until the schema was read. A failure now says so in one muted line.
