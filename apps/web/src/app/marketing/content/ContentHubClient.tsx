@@ -17,6 +17,7 @@ import {
   BarChart3,
   Brain,
   BarChart2,
+  Rss,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { useTranslations } from '@/lib/i18n/use-translations'
@@ -212,6 +213,10 @@ export default function ContentHubClient({
     { href: '/marketing/content/mapping',     label: 'Mapping Canvas',  icon: Layers,    exact: false },
     { href: '/marketing/content/brand-brain', label: 'Brand Brain',     icon: Brain,     exact: false },
     { href: '/marketing/content/analytics',   label: 'Analytics',       icon: BarChart2, exact: false },
+    // ACR.6 (R11) — Cross-RMN feeds arrive from the retired /marketing/advertising tree. They were
+    // never an ads surface: a channel feed is what the catalogue says about a product, leaving the
+    // building. A tab here, never a sidebar entry.
+    { href: '/marketing/content/feeds',       label: 'Channel Feeds',   icon: Rss,       exact: false },
   ]
 
   return (
