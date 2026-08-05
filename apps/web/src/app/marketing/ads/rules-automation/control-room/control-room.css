@@ -1,0 +1,116 @@
+/**
+ * ACR.1 — Control Room styles.
+ *
+ * Light only, by operator decision (2026-08-05): `.h10-shell` pins this console light with
+ * `color-scheme: light` and hard-coded hex, so a `.dark` block here would produce dark cards
+ * inside a permanently light shell — worse than no dark support at all.
+ *
+ * Follows the h10 language the rest of the console uses (same greys, radii, 13px body) rather
+ * than importing the design system for one page, which would read as a foreign element beside
+ * the schedule and rules surfaces it sits with.
+ */
+
+.acr { padding: 20px 24px 48px; max-width: 1180px; }
+
+.acr-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.acr-head h1 { font-size: 20px; font-weight: 650; color: #1c2530; margin: 0 0 4px; letter-spacing: -0.01em; }
+.acr-sub { font-size: 13px; color: #667485; margin: 0; }
+
+.acr-refresh {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  font-size: 12px; color: #46536a; background: #fff;
+  border: 1px solid #d7dee7; border-radius: 6px; padding: 6px 11px; cursor: pointer;
+}
+.acr-refresh:hover { background: #f4f6f9; border-color: #c3cdd9; }
+
+/* ── account state ───────────────────────────────────────────────────────── */
+.acr-status {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  border: 1px solid #d7dee7; border-radius: 9px; padding: 14px 16px; background: #fff;
+  margin-bottom: 14px;
+}
+.acr-status.stopped { border-color: #f0c2c2; background: #fdf6f6; }
+.acr-status-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.acr-status-main strong { font-size: 14px; color: #1c2530; }
+.acr-status-detail { font-size: 12.5px; color: #667485; margin-top: 2px; }
+
+.acr-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.acr-dot.running { background: #1a9d6a; box-shadow: 0 0 0 3px rgba(26, 157, 106, 0.15); }
+.acr-dot.stopped { background: #d4453f; box-shadow: 0 0 0 3px rgba(212, 69, 63, 0.15); }
+
+.acr-status-actions { flex-shrink: 0; }
+.acr-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 550; border-radius: 6px; padding: 7px 13px; cursor: pointer;
+  border: 1px solid transparent;
+}
+.acr-btn:disabled { opacity: 0.55; cursor: default; }
+.acr-btn.stop { background: #fff; color: #b3352f; border-color: #e6bcba; }
+.acr-btn.stop:hover:not(:disabled) { background: #fdf2f2; border-color: #d99a97; }
+.acr-btn.go { background: #1a9d6a; color: #fff; }
+.acr-btn.go:hover:not(:disabled) { background: #16875b; }
+
+/* ── banners ─────────────────────────────────────────────────────────────── */
+.acr-banner {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 12.5px; border-radius: 7px; padding: 10px 13px; margin-bottom: 12px; line-height: 1.45;
+}
+.acr-banner svg { flex-shrink: 0; margin-top: 1px; }
+.acr-banner.err { background: #fdf2f2; border: 1px solid #e6bcba; color: #9c2f2a; }
+.acr-banner.warn { background: #fff8ec; border: 1px solid #ecd9ae; color: #8a6320; }
+
+/* ── engine rows ─────────────────────────────────────────────────────────── */
+.acr-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+
+.acr-row {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 24px;
+  border: 1px solid #dfe5ec; border-radius: 9px; padding: 14px 16px; background: #fff;
+}
+.acr-row.flagged { border-color: #ecd9ae; background: #fffdf8; }
+.acr-row-main { min-width: 0; flex: 1; }
+
+.acr-row-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acr-row-name strong { font-size: 13.5px; color: #1c2530; font-weight: 600; }
+
+.acr-mode {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+  border-radius: 4px; padding: 2px 7px; border: 1px solid transparent;
+}
+.acr-mode.auto { background: #e8f6ef; color: #14724d; border-color: #bfe3d2; }
+.acr-mode.propose { background: #eef3fd; color: #2a5399; border-color: #c8d8f5; }
+.acr-mode.observe { background: #f2f4f7; color: #4d5b6e; border-color: #dde3ea; }
+.acr-mode.off { background: #f7f8fa; color: #7a869a; border-color: #e3e7ed; }
+
+.acr-tag {
+  font-size: 10.5px; color: #6b7789; background: #f2f4f7;
+  border: 1px solid #e0e5ec; border-radius: 4px; padding: 2px 6px; cursor: help;
+}
+
+.acr-what { font-size: 12.5px; color: #56637a; margin: 5px 0 0; }
+/* The answer to "why is it like this" — muted but always present, never truncated. */
+.acr-why { font-size: 12px; color: #7b8798; margin: 3px 0 0; font-style: italic; }
+.acr-warn { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #8a6320; margin: 7px 0 0; font-style: normal; }
+
+/* ── facts ───────────────────────────────────────────────────────────────── */
+.acr-facts {
+  display: grid; grid-template-columns: minmax(96px, 168px) repeat(3, minmax(78px, auto));
+  gap: 0 20px; margin: 0; flex-shrink: 0;
+}
+.acr-facts div { min-width: 0; }
+.acr-facts dt { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: #8d97a6; margin: 0 0 3px; }
+.acr-facts dd { font-size: 12.5px; color: #34404f; margin: 0; white-space: nowrap; }
+/* "Governs" carries the only free-text value here ("82 of 216 campaigns allowlisted",
+   "33 schedules · 0 product plans"). nowrap on that cell pushes the whole row past the
+   page width, so it alone wraps and is capped — the other three are short by construction. */
+.acr-facts div:first-child dd { white-space: normal; line-height: 1.35; }
+.acr-facts dd.bad { color: #b3352f; }
+
+.acr-empty { font-size: 13px; color: #7b8798; padding: 28px 0; }
+.acr-foot { font-size: 12px; color: #8d97a6; margin: 18px 0 0; line-height: 1.55; max-width: 76ch; }
+
+/* Below ~980px the facts grid crowds the description — stack instead of squeezing. */
+@media (max-width: 980px) {
+  .acr-row { flex-direction: column; gap: 12px; }
+  .acr-facts { grid-template-columns: repeat(4, 1fr); width: 100%; }
+}

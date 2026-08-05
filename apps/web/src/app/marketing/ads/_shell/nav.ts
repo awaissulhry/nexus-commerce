@@ -62,7 +62,18 @@ export const ADS_NAV: NavItem[] = [
   // AX-IE.8 — the bulksheet round trip: download current state, edit in Excel or
   // Numbers, upload, preview what it would do, apply, undo.
   { label: 'Bulk Operations', route: 'bulk', Icon: FileSpreadsheet },
-  { label: 'Rules & Automation', route: 'rules-automation', Icon: Wand2 },
+  // ACR.1 — the Control Room hangs off Rules & Automation as a chevron child (operator
+  // decision 2026-08-05), the same shape AMC and Reporting already use.
+  //
+  // NOT an 11th tab in the rules tab bar: those tabs are each one rule TYPE, while the
+  // Control Room governs every engine — rank/dayparting, budget enforcement, pools, harvest,
+  // the anomaly breaker — most of which are not rules at all. Filing it as a rule type would
+  // repeat the category error that made the old autonomy board feel smaller than the machine.
+  //
+  // "AI Control" (route: autopilot) stays for now. It is retired once this surface has been
+  // used in anger — replacing a working page before its replacement is proven is the wrong
+  // order, and keeping both lets them be compared.
+  { label: 'Rules & Automation', route: 'rules-automation', Icon: Wand2, children: [{ label: 'Control Room', route: 'rules-automation/control-room' }] },
   { label: 'AMC', route: 'amc', Icon: Users, children: [{ label: 'AMC Insights', route: 'amc' }, { label: 'Audience Insights', route: 'amc/audiences' }] },
   { label: 'Reporting', route: 'reporting', Icon: PieChart, children: [{ label: 'Brand Metrics', route: 'reporting/brand-metrics' }] },
   // The Amazon Change Log is reached from the header of the pages that produce changes, not from
