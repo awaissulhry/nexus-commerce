@@ -41,6 +41,10 @@ interface ChangeRow {
   /** ADX G6 — the numbers behind the prose (AdvertisingActionLog.evidence). */
   evidence: Evidence | null
   delivery: Delivery | null; undoable: boolean
+  /** ACR.4.3 — the operation-row id an undo needs. Present on field rows that could be paired
+   *  with the record behind them; null when there is nothing to reverse. */
+  undoActionLogId?: string | null
+  undoBlockedReason?: string
 }
 
 /**
@@ -182,10 +186,19 @@ export function ChangeLogClient() {
 
   const openUndo = useCallback(async (r: ChangeRow) => {
     setUndoing({ row: r, preview: null }); setUndoMsg('')
-    // The id is prefixed by the feed: 'a:' for an operation row, 'h:' for a field row. Only
-    // operation rows carry the before/after snapshot an undo needs.
-    const id = r.id.startsWith('a:') ? r.id.slice(2) : null
-    if (!id) { setUndoing({ row: r, preview: { found: false, eligible: false, reason: 'This row records a value change, not the operation behind it — there is no snapshot to restore from.' } }); return }
+    /**
+     * ACR.4.3 — prefer the resolved handle over the id prefix.
+     *
+     * This used to read `r.id.startsWith('a:')` and refuse every field row with "there is no
+     * snapshot to restore from". That was true of the ROW and false of the change: the feed
+     * carried 80 bid rows marked undoable that all refused on click, because the snapshot lives
+     * on the operation row the field row was never joined to. It is joined now.
+     */
+    const id = r.undoActionLogId ?? (r.id.startsWith('a:') ? r.id.slice(2) : null)
+    if (!id) {
+      setUndoing({ row: r, preview: { found: false, eligible: false, reason: r.undoBlockedReason ?? 'This change could not be matched to a reversible record, so there is no snapshot to restore from.' } })
+      return
+    }
     try {
       const j = await fetch(`${getBackendUrl()}/api/advertising/changes/${id}/undo-preview`, { cache: 'no-store' }).then((x) => x.json())
       setUndoing({ row: r, preview: j })
@@ -194,7 +207,7 @@ export function ChangeLogClient() {
 
   const doUndo = useCallback(async () => {
     if (!undoing || undoBusy) return
-    const id = undoing.row.id.startsWith('a:') ? undoing.row.id.slice(2) : null
+    const id = undoing.row.undoActionLogId ?? (undoing.row.id.startsWith('a:') ? undoing.row.id.slice(2) : null)
     if (!id) return
     setUndoBusy(true)
     try {

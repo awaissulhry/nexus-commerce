@@ -74,6 +74,35 @@ describe('placements: absent means 0%, in both spellings', () => {
   })
 })
 
+describe('bids match on cents, both ends', () => {
+  const bidOp = (before: number, after: number) => ({
+    payloadBefore: { status: 'ENABLED', bidCents: before },
+    payloadAfter: { status: 'ENABLED', bidCents: after },
+  })
+
+  /**
+   * These were the rows that exposed the gap: the all-source feed carried 80 of them, every one
+   * flagged undoable, none with a handle, and the changelog refused all 80 on click with "there
+   * is no snapshot to restore from" — true of the ROW, false of the change.
+   */
+  it('history cents pair directly with payload cents', () => {
+    expect(opMatchesField(bidOp(26, 20), row('bid', '26', '20'), 'AD_BID_UPDATE')).toBe(true)
+    expect(opMatchesField(bidOp(43, 5), row('bid', '43', '5'), 'AD_BID_UPDATE')).toBe(true)
+  })
+
+  /** The clamped-write walk (45→34→26→20) puts several ops on one target sharing endpoints. */
+  it('a step of the same walk does not match its neighbour', () => {
+    const r = row('bid', '26', '20')
+    expect(opMatchesField(bidOp(34, 26), r, 'AD_BID_UPDATE')).toBe(false)
+    expect(opMatchesField(bidOp(26, 34), r, 'AD_BID_UPDATE')).toBe(false)
+    expect(opMatchesField(bidOp(26, 20), r, 'AD_BID_UPDATE')).toBe(true)
+  })
+
+  it('a null bid is not zero', () => {
+    expect(opMatchesField(bidOp(0, 20), row('bid', null, '20'), 'AD_BID_UPDATE')).toBe(false)
+  })
+})
+
 describe('anything unrecognised refuses rather than guesses', () => {
   it('an action type with no matching rule never pairs', () => {
     expect(opMatchesField(budgetOp(1, 2), row('dailyBudget', '1', '2'), 'some_other_action')).toBe(false)

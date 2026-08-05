@@ -242,6 +242,13 @@ export function opMatchesField(
     return sameNumber(before.dailyBudget, row.oldValue) && sameNumber(after.dailyBudget, row.newValue)
   }
 
+  if (actionType === 'AD_BID_UPDATE') {
+    // Both sides are whole cents on this account, so no scaling — but match on BOTH ends for the
+    // same reason budgets do: a target's bid is rewritten repeatedly and a shared endpoint is not
+    // identity.
+    return sameNumber(before.bidCents, row.oldValue) && sameNumber(after.bidCents, row.newValue)
+  }
+
   if (actionType === 'update_placement_bidding') {
     // The field name IS the placement key ('PLACEMENT_TOP'), and the payload carries an array of
     // adjustments. A placement ABSENT from the array means 0% — the rank engine writes a partial
@@ -411,6 +418,11 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
   const PAIRED: Array<{ fieldMatches: (f: string) => boolean; actionType: string }> = [
     { fieldMatches: (f) => PLACEMENT_FIELDS.has(f), actionType: 'update_placement_bidding' },
     { fieldMatches: (f) => f === 'dailyBudget', actionType: 'AD_BUDGET_UPDATE' },
+    // Bids too. They never appear in the automation-scoped feed today (0 of 400), but the
+    // all-source feed the changelog reads carries 80 of them — every one claiming `undoable`
+    // with no way to act on it. Their values pair exactly: history "26 → 20" against an op
+    // carrying bidCents 26 → 20, same units, same entity id.
+    { fieldMatches: (f) => f === 'bid', actionType: 'AD_BID_UPDATE' },
   ]
   for (const pair of PAIRED) {
     const cand = ops.filter((o) => o.actionType === pair.actionType)
@@ -444,8 +456,17 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
        * the row simply says it cannot be undone rather than offering a button aimed at its
        * neighbour.
        */
+      /**
+       * For any row this pass touches, the pairing verdict is AUTHORITATIVE — `undoable` is
+       * assigned here, true or false, rather than left at whatever the row constructor guessed.
+       * Bid rows made that necessary: their constructor sets `undoable` from age alone, so a bid
+       * with no matching record would otherwise keep a true flag it cannot act on, which is the
+       * state this whole change exists to remove.
+       */
       const exact = cands.filter((c) => opMatchesField(c, r, pair.actionType))
       if (exact.length === 0) {
+        r.undoable = false
+        r.undoActionLogId = null
         r.undoBlockedReason = 'This change could not be matched to a reversible record with certainty, so undo is not offered.'
         continue
       }
@@ -462,10 +483,9 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       else if (!inWindow) r.undoBlockedReason = `Older than the ${rollbackWindowLabel(chosen.actionType)} undo window for this kind of change.`
       else if (!hasRestorableBefore(chosen.payloadBefore)) r.undoBlockedReason = 'No prior value was recorded, so there is nothing to restore.'
 
-      if (landed && chosen.rolledBackAt == null && inWindow && hasRestorableBefore(chosen.payloadBefore)) {
-        r.undoable = true
-        r.undoActionLogId = chosen.id
-      }
+      const usable = landed && chosen.rolledBackAt == null && inWindow && hasRestorableBefore(chosen.payloadBefore)
+      r.undoable = usable
+      r.undoActionLogId = usable ? chosen.id : null
     }
   }
 
