@@ -739,6 +739,44 @@ ACTION_HANDLERS.resume_campaign = async (action, context, meta): Promise<ActionR
   return { type: action.type, ok: res.ok, error: res.error ?? undefined, output: { campaignId: id, outboundQueueId: res.outboundQueueId } }
 }
 
+/**
+ * ACR.7b — resolve a rule's drag-binding into the entity sets its SWEEPS may touch.
+ *
+ * Scope enforcement at the evaluator governs WHERE a rule fires. Sweep actions
+ * (harvest_and_negate, sync_negatives_across_campaigns) then act marketplace-wide from a
+ * single firing — so without this, binding a harvest rule to the GALE portfolio changed which
+ * tick triggered it and nothing about what it swept. The cockpit said so honestly; this
+ * closes it: a bound rule's sweep is restricted to the campaigns inside its binding.
+ *
+ * Fail-closed on purpose: a scope that resolves to zero campaigns (portfolio emptied, campaign
+ * archived) sweeps NOTHING rather than falling back to everything — the same rule the wizard
+ * sources path already follows ("resolves to [] and harvests nothing").
+ */
+async function resolveRuleSweepScope(ruleId: string): Promise<{
+  scoped: boolean
+  campaignIds: string[]
+  adGroupExternalIds: string[]
+}> {
+  const rule = await prisma.automationRule.findUnique({
+    where: { id: ruleId },
+    select: { scopePortfolioId: true, scopeCampaignId: true },
+  }).catch(() => null)
+  if (!rule || (rule.scopePortfolioId == null && rule.scopeCampaignId == null)) {
+    return { scoped: false, campaignIds: [], adGroupExternalIds: [] }
+  }
+  const campaigns = await prisma.campaign.findMany({
+    where: rule.scopeCampaignId ? { id: rule.scopeCampaignId } : { portfolioId: rule.scopePortfolioId },
+    select: { id: true, adGroups: { select: { externalAdGroupId: true } } },
+  })
+  return {
+    scoped: true,
+    campaignIds: campaigns.map((c) => c.id),
+    adGroupExternalIds: campaigns
+      .flatMap((c) => c.adGroups.map((g) => g.externalAdGroupId))
+      .filter((x): x is string => !!x),
+  }
+}
+
 // ── AU.1: harvest_and_negate ──────────────────────────────────────────
 // Runs automated keyword harvesting: promotes high-converting search terms
 // to exact-match campaigns (graduation) and negates wasters. Designed for
@@ -774,6 +812,15 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
     }
   }
 
+  // ACR.7b — a drag-bound rule sweeps only inside its binding. When the wizard ALSO scoped
+  // it to specific ad groups, the binding still bounds the sweep: intersect, never widen.
+  const sweep = await resolveRuleSweepScope(meta.ruleId)
+  if (sweep.scoped) {
+    adGroupExternalIds = adGroupExternalIds
+      ? adGroupExternalIds.filter((id) => sweep.adGroupExternalIds.includes(id))
+      : sweep.adGroupExternalIds
+  }
+
   const preview = await previewHarvest({ windowDays, minSpendCents, minOrders, adGroupExternalIds })
   if (meta.dryRun) {
     return {
@@ -781,7 +828,8 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
       ok: true,
       output: {
         dryRun: true,
-        scoped: !!sources,
+        scoped: !!sources || sweep.scoped,
+        ruleScope: sweep.scoped ? { adGroups: sweep.adGroupExternalIds.length, campaigns: sweep.campaignIds.length } : null,
         // H.4 — nothing to harvest this tick → noChange, so the Suggestions generator skips an empty card.
         noChange: preview.negatives.length === 0 && preview.graduations.length === 0 && preview.productNegatives.length === 0 && preview.productGraduations.length === 0,
         wouldNegate: preview.negatives.length,
@@ -947,8 +995,16 @@ ACTION_HANDLERS.sync_negatives_across_campaigns = async (action, context, meta):
   const keyword = (action.keyword as string | undefined) ?? (context as any)?.searchTerm?.query ?? (context as any)?.adTarget?.expressionValue
   const marketplace = (action.marketplace as string | undefined) ?? (context as any).marketplace
   if (!keyword || !marketplace) return { type: action.type, ok: false, error: 'keyword + marketplace required' }
-  const campaigns = await prisma.campaign.findMany({ where: { marketplace, status: 'ENABLED', externalCampaignId: { not: null } }, select: { id: true, externalCampaignId: true } })
-  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, wouldNegateIn: campaigns.length } }
+  // ACR.7b — a drag-bound rule negates only inside its binding, not across the marketplace.
+  const sweep = await resolveRuleSweepScope(meta.ruleId)
+  const campaigns = await prisma.campaign.findMany({
+    where: {
+      marketplace, status: 'ENABLED', externalCampaignId: { not: null },
+      ...(sweep.scoped ? { id: { in: sweep.campaignIds } } : {}),
+    },
+    select: { id: true, externalCampaignId: true },
+  })
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, wouldNegateIn: campaigns.length, ruleScoped: sweep.scoped } }
   const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true } })
   const { createNegative } = await import('./ads-negative-kw.service.js')
   let added = 0; const errors: string[] = []

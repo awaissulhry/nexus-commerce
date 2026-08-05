@@ -313,7 +313,7 @@ export async function getFamilyCockpit(externalPortfolioId: string): Promise<Fam
        */
       notes: [
         'Bid, budget and rank engines act only on campaigns whose live-writes switch below is ON — that switch is this family’s hard boundary, enforced at the write gate.',
-        'Harvest, negate and promote rules are marketplace-scoped today, not portfolio-scoped: a rule that matches will act across the whole marketplace. Their proposals for this family appear below; per-family rule scoping is a planned engine change.',
+        'Drag a rule from the dock onto this page to bind it here. A bound rule fires only on this family’s events AND its harvest/negate sweeps touch only this family’s campaigns — both enforced in the engine, not just displayed. Unbind from the chip on the rule.',
         'Rank & dayparting schedules are per-campaign and listed per row — manage them on the Rank & Dayparting page.',
       ],
     },
