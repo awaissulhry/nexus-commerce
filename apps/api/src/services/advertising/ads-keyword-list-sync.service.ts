@@ -54,7 +54,30 @@ export function archiveAllowed(toArchive: number, liveTotal: number): boolean {
 export async function archiveMissingTargets(localAdGroupIds: string[], seenExternalIds: Set<string>, scope: Record<string, unknown>): Promise<number> {
   if (localAdGroupIds.length === 0) return 0
   const live = await prisma.adTarget.findMany({
-    where: { adGroupId: { in: localAdGroupIds }, externalTargetId: { not: null }, status: { in: ['ENABLED', 'PAUSED'] }, ...scope },
+    where: {
+      adGroupId: { in: localAdGroupIds }, externalTargetId: { not: null }, status: { in: ['ENABLED', 'PAUSED'] },
+      /**
+       * ACR Stage 5 — **a function may only archive what its fetch could have seen.**
+       *
+       * Every caller of this reads `/sp/keywords/list`, `/sp/negativeKeywords/list` or
+       * `/sp/targets/list`. Those endpoints return Sponsored Products entities ONLY, so an SB or
+       * SD target is never in `seenExternalIds` — not because Amazon deleted it, but because we
+       * asked the wrong API. Without this scope every SB/SD target within the given ad groups is
+       * archived as "deleted" while Amazon serves it.
+       *
+       * MEASURED ON PROD 2026-08-05, hours after Stage 5 reconciled them: 88 SB keywords were
+       * re-archived within ~30 minutes, in waves of ≤50%, until all 78 IT rows read ARCHIVED
+       * while Amazon still reported 60 enabled + 18 paused. This is the identical defect
+       * `reconcileCampaignDeletions` (H.12) had one level up, fixed in 643384b8f with the same
+       * one-line scope — the fix simply never reached targets.
+       *
+       * Note the two existing guards did NOT catch it. H.9 tracks fetch ERRORS, and this fetch
+       * succeeds; `archiveAllowed` caps one pass at 50%, which only spreads a total wipe across
+       * a few passes. A wrong-family fetch is indistinguishable from a real deletion to both.
+       */
+      adGroup: { campaign: { adProduct: 'SPONSORED_PRODUCTS' } },
+      ...scope,
+    },
     select: { id: true, externalTargetId: true },
   })
   const toArchive = live.filter((t) => t.externalTargetId && !seenExternalIds.has(t.externalTargetId)).map((t) => t.id)
