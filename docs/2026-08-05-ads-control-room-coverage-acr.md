@@ -465,6 +465,35 @@ And pooled — the honest single number — **0.30% where we bid, 0.265% where w
 
 **First preview against the GALE draft (read-only):** 28 of 97 terms have championed targets (the rest are organic-only — the engine does not invent keywords); 4 would step DOWN under the waste guard (€41/€33/€23/€21 of 30d spend, no sales at target grain); 24 hold with "no target share set" — **the controller refuses to move without a setpoint. The operator's two-minute pass (retire noise terms, set target shares, enable) is what arms it.**
 
+### ACR.1.2b / 1.3b / 1.6 — the four deferred surfaces SHIPPED 2026-08-05 (`db91ba7d0`)
+
+The Levers row-expand drawer, per-dimension authority pins, the editable Guardrails grid, and the Ad Manager Automation column. Verified live on prod, all four.
+
+**The pins are the substance, so they are enforced where they cannot be forgotten.** `Campaign` gained `pinPlacement`/`pinBids`/`pinBudget` + `pinnedBy`/`pinnedAt`/`pinNote` (migration `20260805g_acr12b_authority_pins`, default false so no existing row changes). Checked in `ads-write-gate` on the **same read** as the A1 bounds and **before** them — a pin is the broader refusal, and an operator told "bid exceeds the max" would raise the max and watch nothing happen.
+
+**Two properties pinned by tests, because both are exactly how this ships decorative:**
+
+- **The gate has always surfaced ONE representative field.** The worker picks the bid field for the A1 bounds, so a payload carrying a bid *and* a budget change arrives as `field: 'bid'`. A pin checked against that alone holds on every single-field payload a test naturally writes and **silently passes the combined one**. The worker now passes `fields: payload.fieldChanges.map(c => c.field)`; the resolver takes the whole list.
+- **`updatePlacementBidding` pushes inline, not through the queue**, so it has no `fieldChanges` at all and nothing to derive a dimension from. It names its dimension explicitly. Without that the placement pin would have been the one pin that never bound anything — on the rank engine's primary actuator, which runs to +900%.
+
+**Suppression is exempt from the BIDS pin only**, following ADX G1 and ACR.0.7 exactly: suppression is how the retail guard, budget stop-over-spend and Min-bid windows stop delivery under the no-pause rule, so a pin that blocked it would mean "I will manage bids myself" silently also meant "stop protecting me from overspend", and would freeze bids HIGH at the moment we most want them low. **`pinBudget` gets no such exemption** — pacing writes `dailyBudget`, which is an optimisation, not a safety action. **A pin also binds the operator's own writes**, deliberately: `actor` is free text and a third of the advertising audit log carried a NULL actor as recently as 2026-08-04, so a pin that trusted it would be honoured exactly as often as that string happened to be right.
+
+**Proved on prod, on a real row** (`scripts/_acr12-gate-proof.mts`, forcing `NEXUS_AMAZON_ADS_MODE=live` — in sandbox the gate short-circuits on its first line, so a sandbox run passes without evaluating a single check). Pinning bids on `DE_Auto_Close`: bid write **DENIED [authority_pin]** · suppression to 2¢ **ALLOWED** · budget **ALLOWED** · placement **ALLOWED** · status **ALLOWED** · multi-field bid+budget **DENIED**. Both test writes reverted; the account is back to 0 pinned · 0 with a min bid.
+
+**Run now reaches all ten engines.** Six had no manual trigger of any kind, and they were the ones an operator most wants to force — rank-defend, harvest, the bid optimiser. Registered against their `*Once` functions, **not** the `*Cron` wrappers: every `run*Cron` opens its own `recordCronRun` and so does the trigger route, so wrapping the cron form writes **two CronRun rows per manual run** — one labelled `manual` saying "manual trigger", one carrying the real numbers labelled `cron`. The drawer reads exactly that table. (The five pre-existing ads entries still double-write; left alone rather than changed in passing.)
+
+**The engine→evidence actor map is measured, not read out of the code** (`scripts/_acr12-engine-evidence.mts`): prod carries `automation:rank-defend-*` (17,183 action-log · 19,338 bid-history rows), `budget-manager-cron` (105), `auto-harvest` (10, last 07-27), `auto-bid` (0), `tos-optimizer` (0). **So an engine with no rows is the normal case here**, and the drawer distinguishes three reasons — writes no per-entity rows by design · wrote nothing in the window · has never run — instead of one blank list that reads like a failure. Live: Top-of-Search defense reads *"This engine has never run. It is off, so that is expected."* and *"Its cron has never been armed, so it has never written anything."*
+
+**Guardrails.** 0 of 216 campaigns have a minimum bid — a count that was true and unusable, naming work and giving nowhere to do it. Now a per-campaign grid with inline min/max bid edit through the **existing** `PATCH /campaigns/:id/guardrails` (which validates the *pair*, so a one-sided edit cannot leave a campaign every bid is simultaneously below the floor and above the ceiling of), pin toggles, and the allowlist toggle.
+
+**Ad Manager.** An Automation column reading the **same endpoint** as the Guardrails grid, so the two cannot drift. Bound-rule counts **exclude account-wide rules on purpose**: all 22 enabled advertising rules are account-wide today, so folding them in would print "22" on all 216 rows and say nothing about any of them; the count is in the tooltip instead.
+
+**Own CSS throughout.** The console's other drawers use `h10-hist-*` from `rules-automation.css`, which reaches the Control Room only because a parent layout happens to import it — the borrowed-classes coupling that shipped Coverage unstyled. Light only, no `.dark` rules. *Not* the shared DataGrid, matching the four tabs already on this page: the DS stylesheets carry `.dark` rules and `.h10-shell` pins this console light.
+
+*One copy defect the live proof caught that no type could:* a single shared dimension label produced **"this campaign's bids is held by hand"** in the deny reason. Split into noun+verb. A refusal is the one sentence that has to read cleanly, because it is the one an operator stops to argue with. 45 gate tests.
+
+**Still open from this slice:** `PATCH /advertising/campaigns/:id` never accepted `minBidCents`/`maxBidCents` and still does not — `/guardrails` is the route that owns bid bounds and already validates them, so the grid uses that rather than giving one setting two doors. The `/campaigns/:id/delivery` canary's gate preview still passes no `field`, so it reports "allowed" on a pinned campaign; it is a generic preview, left alone. `.h10-pill.bad` is referenced by the delivery column but has never been defined in `ads.css`, so those pills render uncoloured — pre-existing, not touched.
+
 ### ACR.7 / 7b — drag-to-scope SHIPPED 2026-08-05: the Automation Dock, and a binding that means it
 
 **Operator direction:** an always-on panel of every automation, draggable onto portfolios and campaigns; no emojis in rule names — colour carries the grouping.
@@ -756,7 +785,19 @@ The builder reads every launch back through the existing `POST /advertising/laun
 
 That makes three: campaign create, ad-group create, product-ad create. **When touching any ads write path, assume `/sp/*` is hardcoded until proven otherwise.**
 
-*Not built:* SD targets and SB ad groups/creative (a created campaign is a shell — it needs an ad group and at least one product ad before it can serve), SBV, and the un-pause decision on the existing 19 (an operator call — it changes what spends). The browser round-trip stays unverified locally: `adsMode()` is `sandbox` without `railway run`, and pointing the local UI at prod would hit an API that predates `dryRun`.
+#### The shell became a launch
+
+A campaign alone cannot serve, so the builder now authors the whole structure in sequence — **campaign → ad group → product ads → targets → `verifyLaunch`** — through the existing endpoints (`adgroups/create`, `product-ads/create`, `targets/create`); `advertising.routes.ts` still needed no edit. Products are picked from `/api/products/search?advertisableOn=AMAZON_<mkt>` and re-scoped on marketplace change, because a Milan SKU is not advertisable in Germany.
+
+SD targeting is offered as the two plays the blueprint names: **defensive self-ASIN targeting** (wall competitors off pages we already own, on by default) and competitor ASINs, or — under T00030 — views-remarketing audiences on the selected products. The form refuses to submit with zero products, and says plainly when zero targets are planned that *the campaign will not serve*.
+
+**Corrected an own-goal while wiring this.** Stage 5's first pass created SD ad groups and product ads PAUSED alongside the campaign. Amazon's entity states are hierarchical — a paused campaign delivers nothing regardless — so born-paused children buy no safety and create a worse trap: the operator enables the campaign, still sees zero delivery, and reads it as a broken feature rather than a second switch they never set. **Pause at the campaign level only; children are born ENABLED.**
+
+Each step reports itself. Once the campaign exists on Amazon a later failure leaves a *real* half-built campaign, so "which step failed" is the difference between a small fix and a hunt through Seller Central.
+
+*Not built:* SB ad groups/creative (SB needs a headline, logo and landing page — a fuller creative step), SBV, and the un-pause decision on the existing 19 (an operator call — it changes what spends).
+
+*Verification limits, stated plainly:* the create round-trip cannot be exercised locally — `adsMode()` is `sandbox` without `railway run`, and pointing the local UI at prod would hit an API that predates `dryRun` and would therefore *create* instead of preview. The UI itself was verified on a clean local build; the product search fails locally (auth + cross-origin) and now says so honestly rather than rendering "no products", which would be a failure disguised as a measured zero — the same defect class as the unmeasured-week rule at the top of this file.
 
 ### Stage 6 — One console
 - Port the last legacy interpretation surfaces to Analytics tabs; redirect `/marketing/advertising/*` and `/marketing/ads-console/*`; delete after zero traffic.
@@ -904,6 +945,48 @@ return 200; `/ngrams` and `/funnel` still return 200 and do NOT redirect). Guard
 currently carries in-flight TypeScript errors from concurrent sessions (control-room, SB/SD campaign
 builder). Nothing here is blocked on those; the push is. Re-run the same redirect sweep against the
 deployed URL once the tree compiles.
+
+##### ACR.6.1 — what the prod screenshots found that the redirect sweep could not
+
+Verifying the redirects proved routing; it said nothing about whether the eight ported panels were
+*right*. Reading them against their endpoints, and then against prod, turned up three defects — all
+of them invisible to `tsc`, and two only visible on screen.
+
+**1. The P&L panel and the KPI above it answered different questions.** Measured live: the panel
+footer read **Margin 16.1%** directly beneath a **True margin (30d) 37%** KPI, with 268 of 500 rows
+carrying no cost price. Two causes, and the first fix alone would not have been enough:
+- *Window.* The panel fetched `limit=500` with no date filter — the most recent 500 of 854 lifetime
+  rows — while `/advertising/summary` computes over `date >= now-30d`. Different populations.
+- *Denominator.* `/advertising/summary` divides profit by the revenue of rows **that could be
+  priced** (ACR.0.5 chose this deliberately: dividing partial profit by total revenue understates
+  margin in exact proportion to missing cost data). The panel divided by all revenue.
+
+  Fixed to the same window and the same denominator rule, with the coverage share printed under the
+  figure the way the KPI prints its own. `8c124ca01`, `41bb3ad03`.
+
+**2. 🔴 Three automation endpoints have been returning 500 to every caller.**
+`/advertising/automation-analytics`, `/automation-feed` and `/automation-impact` all filtered
+`domain: 'advertising'` **flat on `AutomationRuleExecution`**, which has no such column — `domain`
+lives on `AutomationRule`. Each where-clause carried an `as never` cast, which is precisely what
+stopped `tsc` objecting, and this workspace is not strict. Prisma rejects it at runtime with
+*Unknown argument `domain`*.
+
+Proven on prod, not inferred (`scripts/_acr6-analytics-probe.mts`, read-only). Routed through the
+relation the same filter returns **3,577** advertising executions in 30 days — against **522,985**
+across all domains, so the relation filter is also what bounds the scan.
+
+The consequence for Stage 6: the legacy page R2 was ported *from* had been rendering an error state
+all along. Nobody noticed, because a broken endpoint and an idle account looked identical.
+`69f64f6f6`.
+
+**3. The strip hid its own failure.** It returned `null` on a failed fetch, reasoning that a zeroed
+banner would read as "the fleet did nothing". True of a zero; false of a 500 — and it is why the bug
+above was invisible on prod until the schema was read. A failure now says so in one muted line.
+
+Its three captions were also wrong, corrected in `bc2d8526e`: `totalRuns` excludes `NO_MATCH` ticks
+(so it is "runs that acted", not "evaluations"), `rules[]` is grouped from those executions (so its
+length is "rules that ran", not the 51 that exist), and the query never filters `dryRun` (so counts
+can mix written with merely proposed).
 
 **Nav.** "Advertising (classic)" is gone from `app-nav.ts` — a menu offering classic beside current teaches
 operators the current one is optional. `nav-permissions.ts` keeps its `/marketing/advertising` mapping on

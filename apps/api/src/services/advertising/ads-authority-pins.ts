@@ -105,10 +105,16 @@ export interface PinDenial {
   reason: string
 }
 
-const PIN_LABEL: Record<AuthorityDimension, string> = {
-  placement: 'placement',
-  bids: 'bids',
-  budget: 'budget',
+/**
+ * The noun and its verb, per dimension. Two fields rather than one because "bids" is plural
+ * and the other two are not: a single label produced "this campaign's bids is held by hand"
+ * in the live deny reason, and a refusal an operator reads is not the place for broken
+ * grammar — it undermines the sentence at the moment it most needs to be believed.
+ */
+const PIN_LABEL: Record<AuthorityDimension, { noun: string; verb: string }> = {
+  placement: { noun: 'placement', verb: 'is' },
+  bids: { noun: 'bids', verb: 'are' },
+  budget: { noun: 'budget', verb: 'is' },
 }
 
 /**
@@ -133,11 +139,12 @@ export function pinDenial(
     if (d === 'bids' && write.isSuppression) continue
     const where = write.campaignId ? ` on ${write.campaignId}` : ''
     const note = pins.pinNote ? ` (${pins.pinNote})` : ''
+    const { noun, verb } = PIN_LABEL[d]
     return {
       dimension: d,
       reason:
-        `${PIN_LABEL[d]} is pinned${where}${note} — this campaign's ${PIN_LABEL[d]} ` +
-        'is held by hand. Clear the pin in the Control Room to let automation write it again.',
+        `${noun} is pinned${where}${note} — this campaign's ${noun} ${verb} held by hand. ` +
+        'Clear the pin in the Control Room to let automation write it again.',
     }
   }
   return null

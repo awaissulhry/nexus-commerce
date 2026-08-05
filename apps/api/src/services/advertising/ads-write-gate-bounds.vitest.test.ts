@@ -312,7 +312,17 @@ describe('ACR.1.2b — pins bind AT THE GATE', () => {
     if (r.allowed === false) {
       expect(r.deniedAt).toBe('authority_pin')
       expect(r.reason).toContain('bids is pinned')
+      // Caught by reading the live deny on prod, not by a type: one shared label produced
+      // "this campaign's bids is held by hand". A refusal is exactly the sentence that has
+      // to read cleanly, because it is the one an operator stops to argue with.
+      expect(r.reason).toContain("campaign's bids are held by hand")
     }
+  })
+
+  it('the singular dimensions keep the singular verb', async () => {
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, pinBudget: true })
+    const r = await checkAdsWriteGate({ ...base, field: 'dailyBudget', intendedValueCents: 900 })
+    if (r.allowed === false) expect(r.reason).toContain("campaign's budget is held by hand")
   })
 
   it('denies a budget write on a budget-pinned campaign', async () => {

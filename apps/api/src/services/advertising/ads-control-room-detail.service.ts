@@ -28,7 +28,6 @@
  * removing.
  */
 import prisma from '../../db.js'
-import { CRON_REGISTRY } from '../../jobs/cron-registry.js'
 import { pinnedDimensions, type AuthorityDimension } from './ads-authority-pins.js'
 
 const DAY = 86_400_000
@@ -163,6 +162,9 @@ export async function getEngineDetail(key: string, opts: { days?: number } = {})
    * route will answer 404 for is worse than no button, and a second list is how the two
    * drift apart.
    */
+  // Imported lazily: `cron-registry` statically pulls in every job module in the platform,
+  // and a read-only detail endpoint has no business dragging that graph in at module load.
+  const { CRON_REGISTRY } = await import('../../jobs/cron-registry.js')
   const runnable = !!cron && Object.prototype.hasOwnProperty.call(CRON_REGISTRY, cron)
 
   const [runRows, grouped] = await Promise.all([
