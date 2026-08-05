@@ -449,6 +449,24 @@ And pooled — the honest single number — **0.30% where we bid, 0.265% where w
 
 **4. The blunt summary: we are absent.** Across 588 measured terms and 4.19M impressions in one week, we took **11,968** — **0.29%**. Market purchases on every head term run 4–18 a week; ours are **0**. At a third of a percent of impressions that is arithmetic, not a conversion problem.
 
+### ACR.2.4 — the fourth two-vocabularies defect, and the first one I wrote
+
+**`AdTarget.expressionType` is the MATCH TYPE. It says nothing about negativity — `isNegative` does.** Measured on prod: **1,068 targets are stored as `expressionType = 'EXACT'` with `isNegative = true`**, and only **20 rows in the whole table** use the `NEGATIVE_*` spelling. So the natural-looking `WHERE expressionType NOT LIKE 'NEGATIVE%'` silently includes **2,034 negative keywords**.
+
+| what it broke | before | corrected |
+|---|---|---|
+| Coverage board, keywords on `giacca moto uomo` | 147 | **85** |
+| Coverage board, `giacca moto` | 170 | **100** |
+| GALE IT contested (term × match) pairs | **103** | **13** |
+| …of which had performance evidence | 16 of 103 | **13 of 13** |
+| "enabled keywords that ever serve" | 15.1% | **32.7%** |
+
+On the coverage board it inverted a column's meaning: **a term we had explicitly excluded ourselves from read as a term we hold.** On the consolidation analysis it manufactured 90 phantom conflicts — negative keywords ranked against positives as if they contested the same auction.
+
+The corrected consolidation is a better artefact than the original: **13 contested pairs, 15 duplicate targets, and every one decidable on the 30-day target-grain backfill** rather than 103 pairs of which 87 were coin-tosses.
+
+*This is the fourth instance of the same defect class today — after `EXACT`/`_EXACT`, the rule tabs filtering on a word no rule uses, and the SQP parser's invented keys. It is also the first one I wrote myself, in code shipped an hour earlier.* Recorded in [[reference_adtarget_isnegative_not_expressiontype]].
+
 - **2.1** `KeywordCoverageSet` model + authoring (pilot family's shared keywords, ~tens of terms).
 - **2.2** Scoreboard tab fed by ToS-IS + SQP + within-account SOV + `KeywordRank` (manual/CSV ingest to start) + position-weighted score.
 - **2.3** Conflicts tab (surface the two existing endpoints).
