@@ -248,6 +248,61 @@ ACTION_HANDLERS.bid_up = async (action, context, meta): Promise<ActionResult> =>
       output: { target, id, newBidCents: newBid, outboundQueueId: res.outboundQueueId },
     }
   }
+  /**
+   * ACR.6 — this branch was missing, and its absence was a one-way ratchet.
+   *
+   * `bid_down` has handled BOTH `ad_target` and `ad_group` since it was written; `bid_up` handled
+   * only `ad_target` and fell through to "Unsupported target=ad_group". The two are mirror-image
+   * actions authored together, so this is an oversight rather than a decision — and the effect on
+   * prod was that automation could lower ad-group bids but never raise them. Measured 2026-08-05:
+   * "Reduce bids on ACOS spike" (bid_down · ad_group · enabled · live) worked, while "New-to-brand
+   * optimizer" (bid_up · ad_group · enabled · live) failed 2,032 times in 30 days with this exact
+   * error, its runs completing so every run-based health read showed it fine.
+   *
+   * Structure mirrors bid_down's ad_group branch; the spend estimate and the daily-cap check are
+   * bid_up's own, because raising a bid costs money and lowering one does not. AdGroup carries
+   * `spendCents`, so the estimate is the same shape as the ad_target branch above.
+   */
+  if (target === 'ad_group') {
+    const id = ctxAdGroupId(action, context)
+    if (!id) return { type: action.type, ok: false, error: 'No adGroup.id in context' }
+    const ag = await prisma.adGroup.findUnique({
+      where: { id },
+      select: { defaultBidCents: true, spendCents: true },
+    })
+    if (!ag) return { type: action.type, ok: false, error: 'AdGroup not found' }
+    const newBid = applyBidPercent(ag.defaultBidCents, percent)
+    estimated = Math.max(
+      0,
+      Math.round((ag.spendCents / 30) * (newBid / Math.max(1, ag.defaultBidCents) - 1)),
+    )
+    if (meta.dryRun) {
+      return {
+        type: action.type,
+        ok: true,
+        estimatedValueCentsEur: estimated,
+        output: { dryRun: true, target, id, wouldChange: `${ag.defaultBidCents}→${newBid} cents`, estimatedDailySpendCents: estimated },
+      }
+    }
+    const cap = await checkDailySpendCap(meta.ruleId, estimated)
+    if (!cap.allowed) {
+      return { type: action.type, ok: false, error: cap.error, estimatedValueCentsEur: 0 }
+    }
+    const res = await updateAdGroupWithSync({
+      evidence: ctxEvidence(context),
+      adGroupId: id,
+      patch: { defaultBidCents: newBid },
+      actor: RULE_ACTOR(meta.ruleId),
+      reason: `bid_up ${percent}% via rule ${meta.ruleId}`,
+    })
+    return {
+      type: action.type,
+      ok: res.ok,
+      error: res.error ?? undefined,
+      estimatedValueCentsEur: estimated,
+      output: { target, id, newBidCents: newBid, outboundQueueId: res.outboundQueueId },
+    }
+  }
   return { type: action.type, ok: false, error: `Unsupported target=${target}` }
 }
 
