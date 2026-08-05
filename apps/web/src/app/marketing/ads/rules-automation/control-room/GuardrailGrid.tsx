@@ -45,6 +45,8 @@ interface Row {
   suppressedAt: string | null
   suppressedBy: string | null
   pins: { placement: boolean; bids: boolean; budget: boolean }
+  /** Server-ordered list of the pinned dimensions — the same order the API renders them in. */
+  pinnedDimensions: Dim[]
   pinNote: string | null
   pinnedBy: string | null
   boundRules: Array<{ id: string; name: string; level: string; enabled: boolean }>
@@ -76,6 +78,16 @@ export function GuardrailGrid() {
   const [draft, setDraft] = useState<Record<string, string>>({})
   // ACR.1.3c — bulk selection. 0 of 216 campaigns have a minimum bid; setting them one at
   // a time across the 82 managed ones is the job this grid exists for and could not do.
+  /**
+   * ACR.1.3d — the gap filter.
+   *
+   * This grid exists because 0 of 216 campaigns have a minimum bid, and until now it could
+   * show that number but not the rows behind it: an operator had to scan 82 rows for blank
+   * boxes. Client-side on purpose — the server already returns the whole managed set, and a
+   * round trip to answer "which of these are blank" would be slower and could disagree with
+   * what is on screen.
+   */
+  const [gap, setGap] = useState<'' | 'no-min' | 'no-max' | 'no-bounds' | 'pinned' | 'suppressed'>('')
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [bulkMin, setBulkMin] = useState('')
   const [bulkMax, setBulkMax] = useState('')
@@ -170,7 +182,21 @@ export function GuardrailGrid() {
     [g],
   )
 
-  const selectedRows = useMemo(() => (g?.rows ?? []).filter((r) => sel.has(r.id)), [g, sel])
+  const shown = useMemo(() => {
+    const rows = g?.rows ?? []
+    switch (gap) {
+      case 'no-min': return rows.filter((r) => r.minBidCents == null)
+      case 'no-max': return rows.filter((r) => r.maxBidCents == null)
+      case 'no-bounds': return rows.filter((r) => r.minBidCents == null && r.maxBidCents == null)
+      case 'pinned': return rows.filter((r) => r.pinnedDimensions.length > 0)
+      case 'suppressed': return rows.filter((r) => r.suppressedAt)
+      default: return rows
+    }
+  }, [g, gap])
+
+  // Selection follows what is VISIBLE. A row filtered out of view must not stay silently
+  // selected and then receive a bulk write the operator can no longer see.
+  const selectedRows = useMemo(() => shown.filter((r) => sel.has(r.id)), [shown, sel])
 
   /**
    * Run one PATCH per selected campaign against the endpoints that already exist, rather
@@ -213,10 +239,27 @@ export function GuardrailGrid() {
       : `${label}: ${ok} campaign${ok === 1 ? '' : 's'} saved`)
   }
 
+  /**
+   * Clearing is a SEPARATE action from setting, not an empty box.
+   *
+   * An empty field has to keep meaning "leave this alone", because the alternative — empty
+   * means clear — turns "set a max on these 40 campaigns" into "set a max and wipe every
+   * min" for anyone who did not fill both boxes. Pins already have an explicit ✕; bounds
+   * now have the same, so neither destructive action can be reached by leaving something
+   * blank.
+   */
+  const clearBulkBounds = (which: 'min' | 'max' | 'both') => runBulk(
+    which === 'both' ? 'Bounds cleared' : `${which === 'min' ? 'Min' : 'Max'} cleared`,
+    () => (which === 'both'
+      ? { minBidCents: null, maxBidCents: null }
+      : which === 'min' ? { minBidCents: null } : { maxBidCents: null }),
+    (row) => `/api/advertising/campaigns/${row.id}/guardrails`,
+  )
+
   const applyBulkBounds = async () => {
     const min = bulkMin.trim()
     const max = bulkMax.trim()
-    if (min === '' && max === '') { say('Enter a min, a max, or both'); return }
+    if (min === '' && max === '') { say('Enter a min, a max, or both — or use ✕ to clear'); return }
     const toCents = (s: string) => (s === '' ? undefined : Math.round(Number(s) * 100))
     if ((min !== '' && !Number.isFinite(toCents(min))) || (max !== '' && !Number.isFinite(toCents(max)))) {
       say('Bounds must be numbers'); return
@@ -248,8 +291,8 @@ export function GuardrailGrid() {
     (row) => `/api/advertising/campaigns/${row.id}/live-writes`,
   )
 
-  const allShownSelected = !!g?.rows.length && g.rows.every((r) => sel.has(r.id))
-  const toggleAll = () => setSel(allShownSelected ? new Set() : new Set((g?.rows ?? []).map((r) => r.id)))
+  const allShownSelected = shown.length > 0 && shown.every((r) => sel.has(r.id))
+  const toggleAll = () => setSel(allShownSelected ? new Set() : new Set(shown.map((r) => r.id)))
   const toggleOne = (id: string) => setSel((s) => {
     const n = new Set(s)
     if (n.has(id)) n.delete(id); else n.add(id)
@@ -312,13 +355,23 @@ export function GuardrailGrid() {
           <input type="checkbox" checked={managedOnly} onChange={(e) => setManagedOnly(e.target.checked)} />
           Managed only
         </label>
+        {/* The grid's actual job, as a filter. Counts are live so the option itself says how
+            much work each one represents. */}
+        <select value={gap} onChange={(e) => setGap(e.target.value as typeof gap)} aria-label="Show only campaigns with a gap">
+          <option value="">Any bounds state</option>
+          <option value="no-min">No min bid ({(g?.rows ?? []).filter((r) => r.minBidCents == null).length})</option>
+          <option value="no-max">No max bid ({(g?.rows ?? []).filter((r) => r.maxBidCents == null).length})</option>
+          <option value="no-bounds">No bounds at all ({(g?.rows ?? []).filter((r) => r.minBidCents == null && r.maxBidCents == null).length})</option>
+          <option value="pinned">Pinned ({(g?.rows ?? []).filter((r) => r.pinnedDimensions.length > 0).length})</option>
+          <option value="suppressed">Suppressed ({(g?.rows ?? []).filter((r) => r.suppressedAt).length})</option>
+        </select>
         {/* Filter state is always visible with a way back, per the console's standing rule. */}
-        {(search || market || !managedOnly) && (
-          <button type="button" className="acr-gg-reset" onClick={() => { setSearch(''); setMarket(''); setManagedOnly(true) }}>
+        {(search || market || !managedOnly || gap) && (
+          <button type="button" className="acr-gg-reset" onClick={() => { setSearch(''); setMarket(''); setManagedOnly(true); setGap('') }}>
             Reset
           </button>
         )}
-        <span className="acr-gg-count">{g ? `${g.rows.length} shown of ${g.totals.campaigns}` : ''}</span>
+        <span className="acr-gg-count">{g ? `${shown.length} shown of ${g.totals.campaigns}` : ''}</span>
       </div>
 
       {/* ACR.1.3c — the bulk bar. Appears only with a selection, so it never occupies space
@@ -347,6 +400,13 @@ export function GuardrailGrid() {
               {bulkBusy === 'Bounds' ? <Loader2 size={13} className="acr-spin" /> : null}
               Set bounds
             </button>
+            {/* Explicit, because an empty box must keep meaning "leave alone". */}
+            <span className="acr-gg-bulk-pin">
+              <button type="button" disabled={!!bulkBusy} className="off"
+                title="Clear the MINIMUM bid on the selection" onClick={() => void clearBulkBounds('min')}>✕ min</button>
+              <button type="button" disabled={!!bulkBusy} className="off"
+                title="Clear the MAXIMUM bid on the selection" onClick={() => void clearBulkBounds('max')}>✕ max</button>
+            </span>
           </span>
 
           <span className="acr-gg-bulk-grp">
@@ -371,7 +431,7 @@ export function GuardrailGrid() {
         </div>
       )}
 
-      {!g ? <div className="acr-empty">Loading…</div> : g.rows.length === 0 ? (
+      {!g ? <div className="acr-empty">Loading…</div> : shown.length === 0 ? (
         <div className="acr-empty">No campaigns match these filters.</div>
       ) : (
         <div className="acr-gg-scroll">
@@ -384,7 +444,7 @@ export function GuardrailGrid() {
                     aria-label={allShownSelected ? 'Clear selection' : 'Select every campaign shown'}
                     // Says what it will actually do: it selects the FILTERED rows, not the
                     // account. With "Managed only" on, that is 82 of 216.
-                    title={`Select the ${g.rows.length} campaigns currently shown`}
+                    title={`Select the ${shown.length} campaigns currently shown`}
                   />
                 </th>
                 <th className="acr-gg-name-h">Campaign</th>
@@ -399,7 +459,7 @@ export function GuardrailGrid() {
               </tr>
             </thead>
             <tbody>
-              {g.rows.map((r) => (
+              {shown.map((r) => (
                 <tr key={r.id} className={`${saving === r.id ? 'saving' : ''} ${sel.has(r.id) ? 'sel' : ''}`.trim() || undefined}>
                   <td className="acr-gg-sel">
                     <input

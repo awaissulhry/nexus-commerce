@@ -129,14 +129,33 @@ interface DeliveryState {
   connections: Array<{ marketplace: string; mode: string; writable: boolean; everWritten: boolean }>
   campaigns: Record<string, DeliveryCampaign>
 }
+/**
+ * ACR.1.6b — `bad` was doing two incompatible jobs, and doing neither.
+ *
+ * Measured on prod: `.h10-pill.bad` has never been defined in ads.css. Every pill using it
+ * rendered with a transparent background and default body-colour text — 18 "Gated" pills on
+ * the first page alone, beside "Live" as a proper blue chip. The single state an operator
+ * most needs to notice was the one that did not look like a state at all.
+ *
+ * Defining `bad` red would have been the obvious fix and the wrong one, because the class
+ * covered three states that are not the same kind of fact:
+ *   · failed         — a write to Amazon FAILED. That is a defect and should be red.
+ *   · gated          — default-deny. 134 of 216 campaigns, and the SAFE state by design.
+ *   · market_blocked — no writable connection for that marketplace. Structural, not broken.
+ *
+ * Painting 134 deliberately-unmanaged campaigns red would manufacture an emergency out of
+ * the containment boundary working exactly as intended — the same category error as
+ * rendering "unknown" as €0. So the two neutral states get their own muted class, and `bad`
+ * now means what its name says.
+ */
 const DELIVERY_PILL: Record<DeliveryCampaign['state'], { label: string; cls: string; hint: string }> = {
-  live:           { label: 'Live',     cls: 'ok',   hint: 'Last write reached Amazon.' },
-  pending:        { label: 'Pending',  cls: 'warn', hint: 'Write is queued but has not reached Amazon yet.' },
-  failed:         { label: 'Failed',   cls: 'bad',  hint: 'The last write to Amazon failed.' },
-  sandbox:        { label: 'Sandbox',  cls: 'warn', hint: 'SANDBOX mode — changes are local only and are never sent to Amazon.' },
-  gated:          { label: 'Gated',    cls: 'bad',  hint: 'Live bid writes are disabled for this campaign, so changes stay local.' },
-  market_blocked: { label: 'No write', cls: 'bad',  hint: 'This marketplace has no writable production connection — changes stay local.' },
-  unknown:        { label: '—',        cls: '',     hint: 'No write has been attempted yet.' },
+  live:           { label: 'Live',     cls: 'ok',    hint: 'Last write reached Amazon.' },
+  pending:        { label: 'Pending',  cls: 'warn',  hint: 'Write is queued but has not reached Amazon yet.' },
+  failed:         { label: 'Failed',   cls: 'bad',   hint: 'The last write to Amazon failed.' },
+  sandbox:        { label: 'Sandbox',  cls: 'warn',  hint: 'SANDBOX mode — changes are local only and are never sent to Amazon.' },
+  gated:          { label: 'Gated',    cls: 'muted', hint: 'Live bid writes are disabled for this campaign, so changes stay local. This is the default-deny state, not a fault.' },
+  market_blocked: { label: 'No write', cls: 'muted', hint: 'This marketplace has no writable production connection — changes stay local.' },
+  unknown:        { label: '—',        cls: '',      hint: 'No write has been attempted yet.' },
 }
 const ALL_COLS: ColDef[] = [
   { key: 'delivery', label: 'Amazon Delivery' },

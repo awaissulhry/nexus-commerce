@@ -20,20 +20,31 @@ import { envEnabled } from '../utils/env-flag.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
+/**
+ * ACR.1.2d — the tick's work AND its summary, without the CronRun wrapper, so the
+ * manual-trigger registry can call it and produce ONE honest row.
+ *
+ * It also matters that the ENV READS live here rather than in the registry: this engine's
+ * behaviour is configured by NEXUS_TOS_TARGET_ACOS / _IS, and a hand-run that read those
+ * somewhere else could act on different settings than the schedule does. A manual run must
+ * be the same run.
+ */
+export async function runTosDefenseOnce(): Promise<string> {
+  const { defendTopOfSearch } = await import('../services/advertising/ads-top-of-search.service.js')
+  const targetAcos = Number(process.env.NEXUS_TOS_TARGET_ACOS)
+  const targetIS = Number(process.env.NEXUS_TOS_TARGET_IS) // 0–1; when set, the loop holds this top-of-search impression share (ACOS-bounded)
+  const r = await defendTopOfSearch({
+    allowlistedOnly: true,
+    dryRun: false,
+    targetAcos: Number.isFinite(targetAcos) && targetAcos > 0 ? targetAcos : undefined,
+    targetIS: Number.isFinite(targetIS) && targetIS > 0 && targetIS <= 1 ? targetIS : undefined,
+  })
+  return `evaluated=${r.evaluated} changed=${r.changed} applied=${r.applied} skipped=${r.skippedNotAllowlisted}`
+}
+
 export async function runTosDefenseCron(): Promise<void> {
   try {
-    await recordCronRun('top-of-search-defense', async () => {
-      const { defendTopOfSearch } = await import('../services/advertising/ads-top-of-search.service.js')
-      const targetAcos = Number(process.env.NEXUS_TOS_TARGET_ACOS)
-      const targetIS = Number(process.env.NEXUS_TOS_TARGET_IS) // 0–1; when set, the loop holds this top-of-search impression share (ACOS-bounded)
-      const r = await defendTopOfSearch({
-        allowlistedOnly: true,
-        dryRun: false,
-        targetAcos: Number.isFinite(targetAcos) && targetAcos > 0 ? targetAcos : undefined,
-        targetIS: Number.isFinite(targetIS) && targetIS > 0 && targetIS <= 1 ? targetIS : undefined,
-      })
-      return `evaluated=${r.evaluated} changed=${r.changed} applied=${r.applied} skipped=${r.skippedNotAllowlisted}`
-    })
+    await recordCronRun('top-of-search-defense', runTosDefenseOnce)
   } catch (err) {
     logger.error('top-of-search-defense cron: failure', { error: err instanceof Error ? err.message : String(err) })
   }
