@@ -415,7 +415,7 @@ Verified on the 10:30 tick: placement writes carry **`mode=live`**, not `local` 
 **The two blockers were described as "time, not work". One of those was wrong, and both are now being caused rather than waited for.**
 
 - **2.1 ✅ SQP repair is no longer forward-only (2026-08-05).** The parser fix repaired nothing already stored, so all **9,278 rows across 10 weeks and 4 markets carried `impressionsBrand = 0`** and the coverage baseline was unusable. But Amazon still publishes those weeks, and `ingestSqp` upserts on `(marketplace, period, startDate, searchQuery, asin)` — so re-reading a past week **repairs the stored rows in place** rather than duplicating them. `scripts/_acr2-sqp-backfill.mts` does exactly that, deriving its weeks from the service's own `periodWindow()` (hand-rolling those dates is what produced both of 2026-08-05's harness bugs: `dataEndTime` must be a Saturday, and the lookback must be ≥2) and passing the stored ASINs **explicitly**, so the upsert lands on the existing rows instead of writing a correct-but-different set beside them.
-  *Result, IT:* week 2026-07-19 → **583 of 588 rows** now carry our own impressions; 2026-07-12 → **778 of 966**. The residual is rows belonging to ASINs outside the requested top-10 — widening the ASIN set repairs those too, at roughly six minutes of Amazon report generation per week per ten ASINs.
+  *Result, IT — backfill COMPLETE for six weeks (2026-06-14 → 2026-07-19):* **5,047 of 6,460 rows now carry our own impressions, from 0.** All 60 reports succeeded, zero failed ASINs. The residual 1,413 belong to ASINs outside the requested top-10; widening the set repairs those too, at roughly six minutes of Amazon report generation per week per ten ASINs.
 
 - **2.2 ✅ AD_TARGET grain was not "accumulating" — it had run once (2026-08-05).** The consolidation analysis could rank nothing because every (term × match) pair tied at zero sales, and the reason given was that the grain was young. Measured: `spTargeting` had **18 jobs in total, covering exactly two days** — 2026-07-28 (a first manual run) and 2026-08-04 (the first scheduled one). The cycle was added 2026-08-04 and has since run correctly; there was no defect, but there was also no history and none was going to appear faster than one day per day. `scripts/_acr2-target-backfill.mts` requested the missing **29 days across the 4 profiles that have campaigns** — 116 jobs, which the existing poll and ingest crons drain on their own.
 
@@ -470,6 +470,23 @@ On the coverage board it inverted a column's meaning: **a term we had explicitly
 The corrected consolidation is a better artefact than the original: **13 contested pairs, 15 duplicate targets, and every one decidable on the 30-day target-grain backfill** rather than 103 pairs of which 87 were coin-tosses.
 
 *This is the fourth instance of the same defect class today — after `EXACT`/`_EXACT`, the rule tabs filtering on a word no rule uses, and the SQP parser's invented keys. It is also the first one I wrote myself, in code shipped an hour earlier.* Recorded in [[reference_adtarget_isnegative_not_expressiontype]].
+
+### 🔴 ACR.2.5 — the console and the engine name DIFFERENT winners on 83 keywords
+
+There are two live implementations of *"which of our campaigns should own this keyword"*, and they are not the same rule:
+
+| | rule | what it does |
+|---|---|---|
+| **RD.6** `detectSelfCompetition` | `[acos ?? +∞, −spendCents]` | what the rank engine **acts on**, every 15 minutes |
+| **RC3.2** `pickChampion` | orders>0 → clicks≥3 → lowest ACOS → most orders → **lowest bid**; else most impressions; else **highest bid** | what the operator is **shown** on `/campaigns/:id/keyword-conflicts` |
+
+Measured on IT: **302 distinct (term × match) keys, 183 contested by two or more campaigns, and the two rules disagree on 83 of them — 45%.**
+
+The disagreement is systematic, not noise. Almost none of these keywords has sold, so RC3.2 falls all the way through to its *highest bid* tie-break while RD.6 ranks on *spend*. Concretely, on 71+ phrase keywords the rank engine keeps `GALE | IT | Phrase | Category` while the conflicts view names `IT-AIRMESH-SP-Category-Phrase`.
+
+**Why it matters:** an operator reading the Conflicts view and retiring the "loser" would be retiring the campaign the engine is actively promoting on its next tick. The plan's own principle — *"the champion rule mirrors `rank-self-competition.ts` so the manual and automatic paths cannot disagree"* — is currently not true of the shipped pair.
+
+**Deliberately not resolved here.** The two rules answer subtly different questions: RD.6 demotes a *bid multiplier* (continuous, reversible), RC3.2 advises a *structural retirement* (irreversible). A stricter rule for the irreversible action is defensible — what is not defensible is that neither documents the difference and the numbers contradict. **Which rule wins is an operator decision**, and changing a live engine's decision rule is not something to do silently.
 
 - **2.1** `KeywordCoverageSet` model + authoring (pilot family's shared keywords, ~tens of terms).
 - **2.2** Scoreboard tab fed by ToS-IS + SQP + within-account SOV + `KeywordRank` (manual/CSV ingest to start) + position-weighted score.
