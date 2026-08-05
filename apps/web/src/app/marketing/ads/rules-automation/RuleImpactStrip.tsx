@@ -12,9 +12,21 @@
  * A strip rather than a page, and deliberately small: it belongs beside the rules it describes, and
  * the per-rule detail already exists one click away in each row's execution-history drawer.
  *
- * `totalRuns` counts evaluations, which is almost always far larger than the number of changes —
- * most ticks match nothing. That gap is the honest headline, so both numbers are shown rather than
- * the flattering one alone.
+ * WHAT THE ENDPOINT ACTUALLY RETURNS — read before relabelling anything here. All three of these
+ * were wrong in the first cut of this component, and every one of them would have rendered a
+ * plausible number under a false caption:
+ *
+ *   · `totalRuns` is NOT evaluations. The query filters `status IN ('SUCCESS','PARTIAL')`, so ticks
+ *     that matched nothing (`NO_MATCH`) are absent. It is "runs that did something", which makes
+ *     "evaluations run" an overstatement of engine activity, not an understatement.
+ *   · `rules[]` is built by grouping those executions, so its length is "rules that RAN in the
+ *     window", not the size of the fleet. The tab bar above renders counts from
+ *     `/automation-rules` — every rule that EXISTS — so captioning this denominator as the fleet
+ *     puts two disagreeing totals on one screen.
+ *   · The query does not filter `dryRun`, and a dry-run execution can carry status SUCCESS (that is
+ *     exactly what RuleListTab renders as "Proposed"). So these counts mix things that were written
+ *     with things that were only proposed. ACR keeps finding this same collapse of intent and
+ *     delivery, so the caption says so rather than implying every count reached Amazon.
  */
 import { useEffect, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -73,12 +85,18 @@ export function RuleImpactStrip() {
       </div>
 
       <div className="h10-imp-n">
-        <span className="h10-imp-s"><b>{intl(changes)}</b><i>change{changes === 1 ? '' : 's'} made</i></span>
-        <span className="h10-imp-s"><b>{intl(data.totalRuns)}</b><i>evaluations run</i></span>
+        <span className="h10-imp-s" title="Bids, negatives and guards the rule engine recorded. Includes dry-run proposals — a rule on dry-run still reports what it would have done.">
+          <b>{intl(changes)}</b><i>actions recorded</i>
+        </span>
+        <span className="h10-imp-s" title="Executions that finished SUCCESS or PARTIAL. Ticks that matched nothing are not counted here.">
+          <b>{intl(data.totalRuns)}</b><i>runs that acted</i>
+        </span>
         <span className="h10-imp-s"><b>{intl(t.bids)}</b><i>bids adjusted</i></span>
         <span className="h10-imp-s"><b>{intl(t.negated)}</b><i>terms negated</i></span>
         <span className="h10-imp-s"><b>{intl(t.guarded)}</b><i>campaigns guarded</i></span>
-        <span className="h10-imp-s"><b>{intl(active.length)}<em> / {intl(data.rules.length)}</em></b><i>rules that did something</i></span>
+        <span className="h10-imp-s" title="Of the rules that ran in this window — not of every rule you have. The tab counts above are the full fleet.">
+          <b>{intl(active.length)}<em> / {intl(data.rules.length)}</em></b><i>of the rules that ran</i>
+        </span>
       </div>
 
       {top.length > 0 && (
