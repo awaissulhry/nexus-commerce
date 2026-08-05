@@ -61,6 +61,22 @@ const hhmm = (iso: string, tz: string) => {
   }
 }
 
+/**
+ * The cadence label, spoken in the SAME clock as the times beside it.
+ *
+ * `describeCron` reports UTC, because that is the frame node-cron evaluates in. The next-fire
+ * times render in the account timezone. Printed side by side that produced a row reading
+ * "daily 06:30 UTC · next 08:30" — one event, two clocks, which is exactly the kind of quiet
+ * contradiction this tab exists to prevent. For fixed daily/weekly schedules the clock is taken
+ * from the first real fire instead; interval cadences ("every 15 min") carry no clock and are
+ * left alone. The raw expression stays in the tooltip either way.
+ */
+const cadenceIn = (e: Engine, tz: string): string => {
+  const m = /^(daily|weekly, )(.*) UTC$/.exec(e.cadence)
+  if (!m || e.nextFires.length === 0) return e.cadence
+  return m[1] === 'daily' ? `daily ${hhmm(e.nextFires[0], tz)}` : `weekly, ${hhmm(e.nextFires[0], tz)}`
+}
+
 /** Chip colours follow what the target DOES, not a palette — suppression must never read as "on". */
 const targetTone = (key: string): string =>
   key === 'pause' ? 'sup' : key.includes('allout') ? 'hot' : 'norm'
@@ -191,7 +207,7 @@ export function ForesightTab() {
           <li key={e.key} className={`acr-fs-engine ${e.canWrite ? '' : 'blocked'}`}>
             <div className="acr-fs-engine-main">
               <strong>{e.name}</strong>
-              <span className="acr-fs-cadence" title={e.cron}>{e.cadence}</span>
+              <span className="acr-fs-cadence" title={`${e.cron} (UTC) — shown in ${f.timezone}`}>{cadenceIn(e, f.timezone)}</span>
               {e.canWrite
                 ? <span className="acr-fs-can yes"><Check size={11} /> can write</span>
                 : <span className="acr-fs-can no"><Ban size={11} /> cannot write</span>}

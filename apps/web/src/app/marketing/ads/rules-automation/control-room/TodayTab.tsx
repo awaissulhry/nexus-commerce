@@ -149,19 +149,31 @@ export function TodayTab() {
                     <h3>{e.title}</h3>
                   </div>
                   <p className="acr-exc-detail">{e.detail}</p>
-                  <div className="acr-exc-foot">
-                    {/* The price, or an honest statement of why there isn't one. Never a €0. */}
-                    <span className={`acr-exc-amount ${e.amountCents == null ? 'unknown' : ''}`}>
-                      {e.amountCents == null ? '—' : eur(e.amountCents)}
-                      <em>{e.amountNote}</em>
-                    </span>
-                    {age && <span className="acr-exc-age">oldest: {age}</span>}
-                    {e.action && (
-                      <Link href={e.action.href} className="acr-exc-go">
-                        {e.action.label} <ArrowRight size={13} />
-                      </Link>
-                    )}
-                  </div>
+                </div>
+
+                {/*
+                  The price sits in its own column so the € values line up down the page and can
+                  be compared at a glance — the reason this board is priced at all.
+
+                  A row with no computable cost does NOT render a dash here. Six rows each opening
+                  with an em-dash read as a bulleted list rather than as "no value", which is how
+                  the first cut looked on prod. The note carries the meaning on its own.
+                */}
+                <div className="acr-exc-side">
+                  {e.amountCents == null ? (
+                    <p className="acr-exc-noprice">{e.amountNote}</p>
+                  ) : (
+                    <>
+                      <span className="acr-exc-amount">{eur(e.amountCents)}</span>
+                      <span className="acr-exc-amount-note">{e.amountNote}</span>
+                    </>
+                  )}
+                  {age && <span className="acr-exc-age">oldest: {age}</span>}
+                  {e.action && (
+                    <Link href={e.action.href} className="acr-exc-go">
+                      {e.action.label} <ArrowRight size={13} />
+                    </Link>
+                  )}
                 </div>
               </li>
             )

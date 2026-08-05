@@ -248,11 +248,19 @@ export function ControlRoomClient() {
       <RulesSection />
       </>}
 
-      <p className="acr-foot">
-        Every write also passes the gate: a per-campaign allowlist, entity bid bounds, protected
-        terms, and a per-payload cap. A mode here decides whether something acts; the gate decides
-        whether the account lets it.
-      </p>
+      {/*
+        Levers only. This sentence is about the relationship between a MODE and the gate, so it
+        belongs under the modes. Rendered on every tab it landed directly beneath each tab's own
+        closing note — two grey paragraphs in a row saying different things, which is how it
+        looked on prod and reads as duplicated boilerplate rather than as either point.
+      */}
+      {tab === 'levers' && (
+        <p className="acr-foot">
+          Every write also passes the gate: a per-campaign allowlist, entity bid bounds, protected
+          terms, and a per-payload cap. A mode here decides whether something acts; the gate decides
+          whether the account lets it.
+        </p>
+      )}
     </div>
   )
 }
