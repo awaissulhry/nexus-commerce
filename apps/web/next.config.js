@@ -7,7 +7,13 @@ const nextConfig = {
   // dev with NEXT_DEV_ISOLATED=1 puts its artifacts in `.next-dev`, which the
   // prod build never touches. No-op wherever the env var is unset (prod, Vercel,
   // the pre-push build) → safe to commit.
-  distDir: process.env.NEXT_DEV_ISOLATED === '1' ? '.next-dev' : '.next',
+  // NEXT_DIST_DIR is the explicit override, and it exists for the PRE-PUSH build. The hook used
+  // to `rm -rf .next && next build` into the shared dir, so two sessions pushing at once deleted
+  // each other's output mid-build — observed 2026-08-06 with three concurrent pushes, each dying
+  // on ENOENT for a file its own build had just written (_ssgManifest.js, pages-manifest.json).
+  // Guaranteed, not flaky: any overlap fails. Unset in prod and on Vercel, so behaviour there is
+  // byte-identical to before.
+  distDir: process.env.NEXT_DIST_DIR || (process.env.NEXT_DEV_ISOLATED === '1' ? '.next-dev' : '.next'),
   // This prevents Turbopack from breaking the Prisma connection
   serverExternalPackages: ["@prisma/client", "pg", "@nexus/database"],
   // PERF — client-side Router Cache. Next 15 defaults staleTimes.dynamic to 0,
