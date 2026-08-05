@@ -3166,3 +3166,11 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 /* HX.6b — the campaign History tab. The shared change list ships its own row styling; this only
    gives it the card the other tabs sit in. */
 .h10-cd-hist { background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; overflow: hidden; }
+
+/* ── ACR.6 (R6) — operator notes, written from the Change Log ──────────────────
+   Reuses the h10-ntm-* modal shell so the note dialog and the undo dialog on the
+   same page read as one control, not two. */
+.h10-cl-noteh { margin: 0 0 10px; font-size: 12.5px; line-height: 1.6; color: #6b7480; }
+.h10-cl-notei { width: 100%; resize: vertical; border: 1px solid #d8dde4; border-radius: 8px; padding: 9px 11px; font: inherit; font-size: 13px; color: #1c2530; background: #fff; }
+.h10-cl-notei:focus { outline: 2px solid #cfe0f8; outline-offset: -1px; }
+.h10-cl-notee { margin-top: 8px; font-size: 12px; color: #c0392b; }

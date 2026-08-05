@@ -19,7 +19,7 @@
  * filterable — "show me everything that failed to land" is the question this page exists for.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { RotateCcw } from 'lucide-react'
+import { RotateCcw, StickyNote } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../campaigns/_grid/AdsDataGrid'
 // One definition of "routine", shared with the chart annotations — the same split, for the same
@@ -145,6 +145,40 @@ export function ChangeLogClient() {
   const [undoing, setUndoing] = useState<{ row: ChangeRow; preview: UndoPreview | null } | null>(null)
   const [undoBusy, setUndoBusy] = useState(false)
   const [undoMsg, setUndoMsg] = useState('')
+
+  /**
+   * ACR.6 (R6) — writing an operator note.
+   *
+   * `ChangeAnnotations.tsx` already PLOTS operator notes on the campaign performance chart, and
+   * this log already renders them in the feed. Neither could create one: the only writer of
+   * `POST /advertising/events/custom` was the legacy `/marketing/advertising/events` page that
+   * Stage 6 retires, so the console read a kind of row it could not produce.
+   *
+   * It belongs here rather than on the chart because a note is a change-log entry — "we changed the
+   * hero image", "supplier raised the price" — that explains a movement the machine did not cause.
+   * That is the one class of event nothing else in this system can record.
+   */
+  const [noteOpen, setNoteOpen] = useState(false)
+  const [noteText, setNoteText] = useState('')
+  const [noteBusy, setNoteBusy] = useState(false)
+  const [noteMsg, setNoteMsg] = useState('')
+
+  const saveNote = useCallback(async () => {
+    const note = noteText.trim()
+    if (!note) return
+    setNoteBusy(true); setNoteMsg('')
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/events/custom`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { setNoteMsg(j?.error ?? 'Could not save the note.'); return }
+      setNoteOpen(false); setNoteText('')
+      setNoteMsg('Note added to the log.')
+      load()
+    } catch (e) { setNoteMsg((e as Error).message || 'Could not save the note.') } finally { setNoteBusy(false) }
+  }, [noteText, load])
 
   const openUndo = useCallback(async (r: ChangeRow) => {
     setUndoing({ row: r, preview: null }); setUndoMsg('')
@@ -295,6 +329,7 @@ export function ChangeLogClient() {
         subtitle="Every change Nexus made to this Amazon account — what changed, what caused it, and whether it reached Amazon."
         markets={[]} market="all" onMarketChange={() => {}}
         showLearn={false} showDataSync={false} showDateRange={false}
+        primaryAction={{ label: 'Add note', icon: <StickyNote size={15} />, onClick: () => { setNoteOpen(true); setNoteMsg('') } }}
       />
 
       {error && (
@@ -320,6 +355,39 @@ export function ChangeLogClient() {
             </button>
           ))}
           {originFilter && <button type="button" className="clr" onClick={() => setOriginFilter(null)}>Clear</button>}
+        </div>
+      )}
+
+      {noteMsg && !noteOpen && <div className="h10-am-latest">{noteMsg}</div>}
+      {noteOpen && (
+        <div className="h10-ntm-back" onClick={() => { if (!noteBusy) setNoteOpen(false) }}>
+          <div className="h10-ntm" role="dialog" aria-modal="true" aria-label="Add a note" onClick={(e) => e.stopPropagation()}>
+            <div className="h10-ntm-h"><b>Add a note to the log</b></div>
+            <div className="h10-ntm-b">
+              <p className="h10-cl-noteh">
+                For the changes this system did not make — a price move, a new hero image, a stock-out, a
+                competitor launch. Notes appear in this feed and as markers on the campaign performance
+                chart, so a later &ldquo;why did that week look like that&rdquo; has an answer.
+              </p>
+              <textarea
+                className="h10-cl-notei"
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder="e.g. Raised the IT price by €4 across the GALE family"
+                aria-label="Note"
+                rows={3}
+                autoFocus
+              />
+              {noteMsg && <div className="h10-cl-notee">{noteMsg}</div>}
+            </div>
+            <div className="h10-ntm-f">
+              <button type="button" className="cancel" disabled={noteBusy} onClick={() => setNoteOpen(false)}>Cancel</button>
+              <span className="grow" />
+              <button type="button" className="apply" disabled={noteBusy || !noteText.trim()} onClick={() => void saveNote()}>
+                {noteBusy ? 'Saving…' : 'Add note'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
