@@ -24,6 +24,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Save, AlertTriangle, Lock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { GuardrailGrid } from './GuardrailGrid'
+import { ProtectedTermsPanel } from '../ProtectedTermsPanel'
 
 interface Guardrails {
   actionsPerHour: { effective: number; set: number | null; default: number }
@@ -169,6 +170,26 @@ export function GuardrailsTab() {
       {/* ACR.1.3b — the rows behind the counts above. A coverage number with no way to move it
           is a report, not a control. */}
       <GuardrailGrid />
+
+      {/*
+        ACR.1.3f — the protected-terms panel, SECOND MOUNT.
+
+        The card above counts protected terms and stops there, which is the same defect the
+        grid was built to remove: a number describing work with nowhere to do it. Protection
+        belongs on this tab because it is a bound of exactly the kind this tab is about — it
+        is enforced at `ads-write-gate`, beside the allowlist, the bid bounds and the pins,
+        and refuses the write outright (`keyword_protected`).
+
+        The SAME component the Negative Targeting tab mounts, with no props and no copy of
+        its markup — the doc's "one implementation, two mounts". Its `h10-pt-*` styles come
+        from `rules-automation.css`, which the parent layout loads for this route; verified
+        in the deployed CSSOM before mounting rather than assumed, since borrowed classes
+        that turn out not to cascade are what shipped the Coverage page unstyled.
+      */}
+      <div className="acr-sec-head"><h2>Protected terms</h2>
+        <span className="acr-sec-count">Refused at the same gate as the bounds above — no automation may negate these</span>
+      </div>
+      <ProtectedTermsPanel />
     </div>
   )
 }
