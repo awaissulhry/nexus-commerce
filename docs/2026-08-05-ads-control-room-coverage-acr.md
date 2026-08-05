@@ -983,7 +983,38 @@ The consequence for Stage 6: the legacy page R2 was ported *from* had been rende
 all along. Nobody noticed, because a broken endpoint and an idle account looked identical.
 `69f64f6f6`.
 
-**3. The strip hid its own failure.** It returned `null` on a failed fetch, reasoning that a zeroed
+**🔴 3. The fleet emits six action types; the impact endpoint counted three of them — and none of
+the failures.** Once the endpoint returned data at all, prod read **"0 actions recorded" beside
+"3,622 runs that acted"**, which is not a coherent sentence. Measured rather than assumed
+(`_acr6-actiontypes-probe.mts`, `_acr6-actionvalues-probe.mts`, both read-only):
+
+| action type | results, 30d | ok | counted before? |
+|---|---|---|---|
+| `notify` | 3,587 | 3,587 | no (correctly — it is not a change) |
+| **`bid_up`** | **2,032** | **0** | no — **every one fails** |
+| `bid_to_target_acos` | 1,080 | 1,080 | yes, and `applied` sums to **0** |
+| `retail_guard` | 387 | 387 | yes, and `paused` sums to **0** |
+| `adjust_ad_budget` | 88 | 88 | **no** — real queued budget writes, uncounted |
+| `alert_operator` | 44 | 44 | no (correctly) |
+| `harvest_and_negate` | **0** | — | yes, but it never occurs |
+
+The three counted types covered **20.3%** of 7,218 action results, and one of the three never
+appears. So the surface reported "0 actions" on an account that was changing budgets that week. The
+other zeros are true, and now provably so.
+
+**The largest signal in the data was invisible: 2,032 failed `bid_up` actions in 30 days, every one
+`Unsupported target=ad_group`, all from a single rule — "New-to-brand optimizer".** Its *runs*
+complete (they count as SUCCESS/PARTIAL), so every run-based health read shows it working while
+every action inside it fails. Failed actions are now counted, excluded from the "recorded" total,
+and the worst offender is named on its own line.
+
+⏳ **OPEN, operator/engine call — not taken here:** the rule itself is still broken. `bid_up` against
+`target=ad_group` is unsupported by the action handler, so this rule has done nothing but burn
+executions for at least 30 days. Fixing it means changing rule behaviour (or the handler's
+ad-group support), which is an engine decision rather than a console one. `7045c208b` makes it
+visible; it does not make it work.
+
+**4. The strip hid its own failure.** It returned `null` on a failed fetch, reasoning that a zeroed
 banner would read as "the fleet did nothing". True of a zero; false of a 500 — and it is why the bug
 above was invisible on prod until the schema was read. A failure now says so in one muted line.
 
