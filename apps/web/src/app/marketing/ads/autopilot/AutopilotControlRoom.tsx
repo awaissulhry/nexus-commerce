@@ -4,12 +4,22 @@
  * AC P-D — Autopilot control room. Plan picker + goal/autonomy controls + the React Flow control
  * canvas + the real-time decision feed (SSE). Reads/writes AutopilotPlans; toggling a module node
  * PATCHes the plan; the live feed streams AutopilotDecisions (ours + mirrored harvest/negate).
+ *
+ * NOT MOUNTED. Nothing imports this — it is preserved deliberately for the SSE/decision-feed
+ * logic, which `page.tsx` records as returning in a later phase. Kept rather than deleted, but
+ * do not mistake it for a live surface.
+ *
+ * ACR.1.6 — this is NOT the Control Room. That one is a real, mounted page at
+ * `/marketing/ads/rules-automation/control-room`. Its stylesheet used to share this file's
+ * basename (`control-room.css`), which made a grep for "who imports control-room.css" return
+ * both and report this dead component as live. Renamed to `autopilot-control-room.css` so the
+ * two cannot be confused again.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Sparkles, Play, Radio, LineChart } from 'lucide-react'
 import { AutopilotCanvas, type CanvasConfig } from './AutopilotCanvas'
 import { getBackendUrl } from '@/lib/backend-url'
-import './control-room.css'
+import './autopilot-control-room.css'
 
 interface Plan { id: string; name: string; goal: string; autonomy: string; modules: Record<string, { on?: boolean }>; marketplace: string; campaignIds: string[]; lastDecisionAt?: string | null }
 interface Decision { id: string; at: string; module: string; action: string; reason: string; status: string; source: string; campaignId?: string | null }

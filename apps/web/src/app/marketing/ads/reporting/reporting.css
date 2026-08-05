@@ -1,10 +1,12 @@
 /**
  * RPT.1 — Reporting landing (report library).
  *
- * Tokens only; no raw hex, so light/dark and any palette change follow — the same
- * rule trust.css states. The console themes off a `.dark` CLASS, not the OS media
- * query, so `prefers-color-scheme` must never appear in here: it would go dark on a
- * light app whenever the operating system happened to be dark.
+ * Tokens only; no raw hex, so a palette change follows — the same rule trust.css states.
+ *
+ * ACR.1.6 — this file used to carry two `.dark` overrides. It no longer does: the ads console
+ * is deliberately light and `.h10-shell` pins the DS tokens to prove it (ads.css). Do not add
+ * `.dark` rules or `prefers-color-scheme` here; both would fire on an operator whose OS is dark
+ * (useTheme defaults to 'system') and paint dark chart colours onto a permanently white card.
  */
 
 .rpt {
@@ -318,10 +320,15 @@ select.rpt-input { height: 32px; }
 /* ── RPT.10 · KPI tiles, comparison and trend ───────────────────────────── */
 
 /* The one validated accent. Single-series charts throughout, so hue never
-   encodes identity — these values pass all six dataviz checks against this
-   console's real card surfaces (#ffffff light, #18263b dark). */
+   encodes identity — this value passes all six dataviz checks against this
+   console's card surface (#ffffff).
+
+   ACR.1.6 — the dark variant is gone because the surface it was tuned for cannot occur here:
+   `.h10-shell` now pins the DS tokens light (see ads.css), so a card under this console is
+   always #ffffff. Keeping a `.dark` override would have put a dark-tuned accent on a white
+   card the moment an operator's OS went dark — and `useTheme` defaults to 'system', so that
+   was reachable without anyone choosing it. */
 .rpt-summary { --rpt-series-1: #2a78d6; --rpt-grid: rgba(20, 28, 38, .14); }
-.dark .rpt-summary { --rpt-series-1: #3987e5; --rpt-grid: rgba(255, 255, 255, .14); }
 
 .rpt-summary {
   display: flex; flex-direction: column; gap: 10px;
@@ -408,11 +415,10 @@ select.rpt-input { height: 32px; }
 .rpt-biz-kpi .sub { font-size: 11.5px; color: var(--text-secondary); }
 
 /* Two fills with a 2px surface gap between them; both are also labelled in
-   text below, so the split never depends on colour alone. */
+   text below, so the split never depends on colour alone. ACR.1.6 — light-only, as above. */
 .rpt-split { display: flex; gap: 2px; height: 10px; margin: 5px 0 3px; }
 .rpt-split .ad { background: #2a78d6; border-radius: 3px 0 0 3px; }
 .rpt-split .org { background: var(--surface-sunken); border: 1px solid var(--border-subtle); border-radius: 0 3px 3px 0; }
-.dark .rpt-split .ad { background: #3987e5; }
 
 .rpt-biz-markets { overflow-x: auto; }
 .rpt-biz-markets table { width: 100%; border-collapse: collapse; font-size: 12.5px; }

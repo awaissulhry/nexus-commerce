@@ -65,6 +65,75 @@
    instead of the global `antialiased` that thins it. Fixes "our text is too thin
    vs H10" at the root so it cascades to the grid, filters, and sidebar. */
 .h10-shell { position: relative; padding-left: var(--rail-reserve, 66px); font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: auto; -moz-osx-font-smoothing: auto; }
+
+/*
+ * ACR.1.6 — the ads console is deliberately light. This is what makes that true.
+ *
+ * Operator decision 2026-08-05: no dark mode here. The shell already pinned its own chrome
+ * (`--h10-rail-*` above) and set `color-scheme: light` — but it never pinned the DESIGN SYSTEM
+ * semantic tokens, and several ads pages (reporting, trust, suggestions, launch receipt) render
+ * DS components that read them. So on `.dark` those pages drew slate-900 cards and slate-50 text
+ * inside a shell whose own background is hard-coded #f4f6f9. Dark cards on a light page.
+ *
+ * That was live, not hypothetical. `useTheme` defaults to `'system'` and subscribes to
+ * `prefers-color-scheme`, and `AppNavRail` mounts it app-wide — so every operator whose OS is in
+ * dark mode has had `.dark` on <html> the whole time without ever touching a toggle.
+ *
+ * The fix is the one `/products/next` already uses (`.productsNextLight`): re-declare every token
+ * the `.dark` blocks override, back to its `:root` value, scoped to this shell. Custom properties
+ * inherit, so declaring them here beats an ancestor `.dark` for everything inside.
+ *
+ * Pin ALL of them or none. A subset leaves a half-dark palette — light cards with light text —
+ * which is worse than either extreme and much harder to notice in review.
+ *
+ * Values are copied from globals.css `:root` and tokens.css `:root`. globals.css stores
+ * space-separated RGB triplets on purpose (Tailwind composes them as `rgb(var(--x) / <alpha>)`),
+ * so they must be written in that form here too, not as hex.
+ */
+.h10-shell {
+  /* Text */
+  --text-primary: 15 23 42;
+  --text-secondary: 71 85 105;
+  --text-tertiary: 100 116 139;
+  --text-disabled: 148 163 184;
+  --text-inverse: 248 250 252;
+  --text-link: 37 99 235;
+
+  /* Surfaces */
+  --surface-canvas: 248 250 252;
+  --surface-card: 255 255 255;
+  --surface-raised: 255 255 255;
+  --surface-sunken: 241 245 249;
+  --surface-overlay: 15 23 42;
+
+  /* Borders */
+  --border-subtle: 226 232 240;
+  --border-default: 203 213 225;
+  --border-strong: 148 163 184;
+
+  /* Status — soft=fill, line=border, strong=text; strong-on-soft passes AA on light. */
+  --success-soft: 236 253 245; --success-line: 167 243 208; --success-strong: 4 120 87;
+  --warning-soft: 255 251 235; --warning-line: 253 230 138; --warning-strong: 180 83 9;
+  --danger-soft: 255 241 242; --danger-line: 254 205 211; --danger-strong: 190 18 60;
+  --info-soft: 239 246 255; --info-line: 191 219 254; --info-strong: 29 78 216;
+
+  --accent: 99 102 241;
+
+  /* The DS's own h10-* semantic aliases (tokens.css). Expressed through the primitive ramp,
+     which the .dark block never touches, so there is one source of truth for the hex. */
+  --h10-text: var(--h10-grey-900);
+  --h10-text-2: var(--h10-grey-600);
+  --h10-text-3: var(--h10-grey-500);
+  --h10-text-disabled: var(--h10-grey-400);
+  --h10-text-inverse: var(--h10-white);
+  --h10-bg: var(--h10-grey-50);
+  --h10-surface: var(--h10-white);
+  --h10-surface-raised: var(--h10-grey-25);
+  --h10-surface-sunken: var(--h10-grey-100);
+  --h10-border: var(--h10-grey-200);
+  --h10-border-subtle: var(--h10-grey-150);
+  --h10-border-strong: var(--h10-grey-300);
+}
 .h10-rail {
   position: absolute; left: 0; top: 0; height: 100%;
   width: 66px; z-index: 50;

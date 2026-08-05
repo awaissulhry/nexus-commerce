@@ -119,7 +119,7 @@ export function RankBlendEditor({ target, busy, scopeNote, onSave, onClose }: {
       <div className="h10-mrecipes" style={{ justifyContent: 'flex-end', gap: 6 }}>
         <span className="grow" style={{ fontSize: 10, color: '#8a93a1' }}>{enabledCount === 0 ? 'No lanes → single-placement (legacy)' : `${enabledCount} placement${enabledCount > 1 ? 's' : ''} driven at once`}</span>
         <button type="button" className="h10-btn sm" onClick={onClose}>Cancel</button>
-        <button type="button" className="h10-btn dark sm" disabled={busy} onClick={save}><Save size={12} /> {busy ? 'Saving…' : 'Save blend'}</button>
+        <button type="button" className="h10-btn primary sm" disabled={busy} onClick={save}><Save size={12} /> {busy ? 'Saving…' : 'Save blend'}</button>
       </div>
     </div>
   )

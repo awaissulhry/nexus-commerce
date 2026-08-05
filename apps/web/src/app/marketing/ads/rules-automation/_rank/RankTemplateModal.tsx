@@ -48,7 +48,7 @@ export function RankTemplateModal({ open, onClose, currentWindows, currentBaseli
         <div className="hd">Schedule templates<span className="grow" /><button type="button" className="h10-kebab" onClick={onClose} aria-label="Close">✕</button></div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '10px 15px', borderBottom: '1px solid #d8dde4' }}>
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Name this schedule (e.g. Evenings push)" style={{ flex: 1, border: '1px solid #d8dde4', borderRadius: 6, padding: '6px 9px', font: 'inherit', fontSize: 12.5 }} onKeyDown={e => { if (e.key === 'Enter') void saveNew() }} />
-          <button type="button" className="h10-btn dark sm" disabled={busy || !currentWindows.length} onClick={() => void saveNew()} title={currentWindows.length ? 'Save the current painted schedule as a new template' : 'Paint a schedule first'}><Save size={13} /> Save current</button>
+          <button type="button" className="h10-btn primary sm" disabled={busy || !currentWindows.length} onClick={() => void saveNew()} title={currentWindows.length ? 'Save the current painted schedule as a new template' : 'Paint a schedule first'}><Save size={13} /> Save current</button>
         </div>
         <div className="list">
           {items.length === 0 && <div className="h10-rp-empty">No templates yet — name the current schedule above and Save it.</div>}

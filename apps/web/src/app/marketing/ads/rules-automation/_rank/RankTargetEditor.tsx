@@ -473,7 +473,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                 Add to: <label><input type="radio" checked={form.scope === 'scope'} onChange={() => setForm(f => ({ ...f, scope: 'scope' }))} disabled={scopeKind === 'product' ? !productId : !campaignId} /> {scopeKind === 'product' ? 'This product only' : 'This campaign only'}</label>
                 <label><input type="radio" checked={form.scope === 'global'} onChange={() => setForm(f => ({ ...f, scope: 'global' }))} /> Global (everywhere)</label>
                 <span className="grow" />
-                <button type="button" className="h10-btn dark sm" disabled={busy} onClick={() => void addCustom()}>Add target</button>
+                <button type="button" className="h10-btn primary sm" disabled={busy} onClick={() => void addCustom()}>Add target</button>
                 <button type="button" className="h10-btn sm" onClick={() => setAdding(false)}>Cancel</button>
               </div>
             </div>
@@ -484,7 +484,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
           {!adding && <button type="button" className="h10-btn" onClick={() => setAdding(true)}><Plus size={13} /> Add target</button>}
           <span className="grow" />
           <button type="button" className="h10-btn" onClick={() => onClose(changed)}>Close</button>
-          {((view === 'scope' && scopeAvailable) || view === 'global') && <button type="button" className="h10-btn dark" disabled={busy || !changed} onClick={() => void save()}><Save size={13} /> {busy ? 'Saving…' : view === 'scope' ? 'Save overrides' : 'Save defaults'}</button>}
+          {((view === 'scope' && scopeAvailable) || view === 'global') && <button type="button" className="h10-btn primary" disabled={busy || !changed} onClick={() => void save()}><Save size={13} /> {busy ? 'Saving…' : view === 'scope' ? 'Save overrides' : 'Save defaults'}</button>}
         </div>
       </div>
     </div>
