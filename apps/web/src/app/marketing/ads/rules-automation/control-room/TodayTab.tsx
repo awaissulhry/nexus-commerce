@@ -149,20 +149,20 @@ export function TodayTab() {
                     <h3>{e.title}</h3>
                   </div>
                   <p className="acr-exc-detail">{e.detail}</p>
+                  {/*
+                    When there is no € the note is a CAVEAT — a sentence explaining what could not
+                    be measured. Right-aligning a sentence in a 216px column gives three ragged
+                    lines, so prose stays on the left where the measure is, and the right column
+                    holds only figures. A dash is not used: six rows each opening with an em-dash
+                    read as a bulleted list rather than as "no value".
+                  */}
+                  {e.amountCents == null && <p className="acr-exc-noprice">{e.amountNote}</p>}
                 </div>
 
-                {/*
-                  The price sits in its own column so the € values line up down the page and can
-                  be compared at a glance — the reason this board is priced at all.
-
-                  A row with no computable cost does NOT render a dash here. Six rows each opening
-                  with an em-dash read as a bulleted list rather than as "no value", which is how
-                  the first cut looked on prod. The note carries the meaning on its own.
-                */}
+                {/* Figures only, fixed width, so the € values form a straight edge down the page
+                    and can be compared at a glance — the reason the board is priced at all. */}
                 <div className="acr-exc-side">
-                  {e.amountCents == null ? (
-                    <p className="acr-exc-noprice">{e.amountNote}</p>
-                  ) : (
+                  {e.amountCents != null && (
                     <>
                       <span className="acr-exc-amount">{eur(e.amountCents)}</span>
                       <span className="acr-exc-amount-note">{e.amountNote}</span>
