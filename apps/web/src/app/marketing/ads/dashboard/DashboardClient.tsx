@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { ProfitPanel } from './ProfitPanel'
 import { eur, intl, roas as roasFmt } from '../_canvas/format'
 import './dashboard.css'
 
@@ -241,6 +242,10 @@ export function DashboardClient() {
           )}
         </div>
       </div>
+
+      {/* ACR.6 (R5) — the ledger behind the "True margin (30d)" KPI above. Ported from the legacy
+          /marketing/advertising/profit grid, which was the only place these rows were readable. */}
+      <ProfitPanel market={market} />
     </div>
   )
 }

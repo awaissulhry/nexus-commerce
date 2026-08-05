@@ -56,3 +56,35 @@
 .dash-pl-bar { flex: 1; height: 7px; background: #eef0f3; border-radius: 4px; overflow: hidden; }
 .dash-pl-bar > span { display: block; height: 100%; background: #1f6fde; border-radius: 4px; }
 .dash-pl-v { width: 34px; text-align: right; font-weight: 700; color: #5b6573; }
+
+/* ── ACR.6 (R5) — true-profit ledger: the rows behind the margin KPI ────────── */
+.dash-pnl-count { font-size: 10.5px; font-weight: 700; color: #8a93a1; }
+.dash-pnl-tot { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 12px; }
+.dash-pnl-t { background: #f8f9fb; border: 1px solid #eef0f3; border-radius: 9px; padding: 8px 11px; }
+.dash-pnl-t .k { display: block; font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: #8a93a1; }
+.dash-pnl-t .v { display: block; margin-top: 3px; font-size: 15px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+.dash-pnl-t .v.b-good { color: #067d62; } .dash-pnl-t .v.b-warn { color: #b87503; } .dash-pnl-t .v.b-bad { color: #e5484d; }
+
+/* The table is wider than the card on a narrow window, so it scrolls inside its own box —
+   the page body must never scroll sideways. */
+.dash-pnl-scroll { max-height: 420px; overflow: auto; border: 1px solid #eef0f3; border-radius: 9px; }
+.dash-pnl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.dash-pnl thead th { position: sticky; top: 0; z-index: 1; background: #f8f9fb; text-align: left; padding: 7px 10px; font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: #8a93a1; border-bottom: 1px solid #e3e7ec; white-space: nowrap; }
+.dash-pnl th.r, .dash-pnl td.r { text-align: right; }
+.dash-pnl tbody td { padding: 6px 10px; border-top: 1px solid #f3f4f6; color: #37495b; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dash-pnl tbody tr:first-child td { border-top: 0; }
+.dash-pnl tbody tr:hover td { background: #fafbfc; }
+.dash-pnl .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.dash-pnl .dim { color: #9aa3b0; }
+.dash-pnl .pos { color: #067d62; font-weight: 700; }
+.dash-pnl .neg { color: #e5484d; font-weight: 700; }
+.dash-pnl-sku { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #1f6fde; text-decoration: none; font-weight: 700; }
+.dash-pnl-sku:hover { text-decoration: underline; }
+.dash-pnl-b { display: inline-block; min-width: 40px; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; background: #eef0f3; color: #5b6573; }
+.dash-pnl-b.b-good { background: #e6f4ef; color: #067d62; }
+.dash-pnl-b.b-warn { background: #fff4e0; color: #b87503; }
+.dash-pnl-b.b-bad { background: #fdeaea; color: #e5484d; }
+.dash-pnl-cov { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; }
+.dash-pnl-cov.ok { background: #e6f4ef; color: #067d62; }
+.dash-pnl-cov.part { background: #fff4e0; color: #b87503; }
+.dash-pnl-cov.thin { background: #eef0f3; color: #8a93a1; }
