@@ -4,7 +4,7 @@
  * surface renders the identical swatch.
  */
 .adock {
-  width: 316px; flex-shrink: 0; align-self: flex-start;
+  width: 352px; flex-shrink: 0; align-self: flex-start;
   position: sticky; top: 14px; max-height: calc(100vh - 28px);
   display: flex; flex-direction: column;
   border: 1px solid #dfe5ec; border-radius: 10px; background: #fff; padding: 13px 0 6px;
@@ -57,7 +57,7 @@
 .adock-dial { display: inline-flex; margin-top: 5px; border: 1px solid #e0e5ec; border-radius: 5px; overflow: hidden; }
 .adock-notch {
   font-size: 10px; font-weight: 700; color: #7a869a; background: #fff;
-  border: 0; border-right: 1px solid #edf0f4; width: 24px; padding: 3px 0; cursor: pointer;
+  border: 0; border-right: 1px solid #edf0f4; min-width: 34px; padding: 3px 6px; cursor: pointer;
 }
 .adock-notch:last-child { border-right: 0; }
 .adock-notch:hover:not(:disabled):not(.on) { background: #f4f6f9; }

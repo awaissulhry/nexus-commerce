@@ -377,6 +377,8 @@ a.acr-refresh { text-decoration: none; }
 }
 
 /* ── ACR.7 — the dock claims the empty right side ────────────────────────── */
-.acr--with-dock { display: flex; gap: 18px; align-items: flex-start; max-width: 1500px; }
+/* Full width when the dock is present — a capped row strands dead space to the dock's right
+   on wide screens (operator screenshot, 2026-08-05). The main column keeps its own measure. */
+.acr--with-dock { display: flex; gap: 20px; align-items: flex-start; max-width: none; }
 .acr-maincol { min-width: 0; flex: 1; }
 @media (max-width: 1100px) { .acr--with-dock { flex-direction: column; } .acr--with-dock .adock { position: static; width: 100%; max-height: 420px; } }

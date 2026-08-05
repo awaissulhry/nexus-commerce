@@ -118,6 +118,6 @@
 }
 
 /* ── ACR.7 — dock beside the cockpit ─────────────────────────────────────── */
-.fc--with-dock { display: flex; gap: 18px; align-items: flex-start; }
+.fc--with-dock { display: flex; gap: 20px; align-items: flex-start; max-width: none; }
 .fc-maincol { min-width: 0; flex: 1; }
 @media (max-width: 1100px) { .fc--with-dock { flex-direction: column; } .fc--with-dock .adock { position: static; width: 100%; max-height: 420px; } }

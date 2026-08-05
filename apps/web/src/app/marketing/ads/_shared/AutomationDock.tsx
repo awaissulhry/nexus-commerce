@@ -112,7 +112,12 @@ export function AutomationDock({ title = 'Automations', onChanged }: { title?: s
   }
 
   const cats = [...new Map((rules ?? []).map((r) => [r.category, { color: r.categoryColor, label: r.categoryLabel }])).entries()]
-  const visible = (rules ?? []).filter((r) => filter === 'all' || r.category === filter)
+    .sort((a, b) => a[1].label.localeCompare(b[1].label))
+  // Colour is the taxonomy, so the list reads in colour blocks: category, then name.
+  const CAT_ORDER = ['bid', 'budget', 'harvest', 'negative', 'placement', 'guard', 'alert']
+  const visible = (rules ?? [])
+    .filter((r) => filter === 'all' || r.category === filter)
+    .sort((a, b) => (CAT_ORDER.indexOf(a.category) - CAT_ORDER.indexOf(b.category)) || a.name.localeCompare(b.name))
 
   return (
     <aside className="adock" aria-label="Automation rules">
@@ -168,13 +173,16 @@ export function AutomationDock({ title = 'Automations', onChanged }: { title?: s
               <div className="adock-dial" role="group" aria-label={`Autonomy for ${r.name}`}>
                 {LEVELS.map((l) => {
                   const above = RANK[l] > RANK[r.ceiling]
+                  // Full mini-words, not initials — OFF and OBSERVE both start with O, and a
+                  // control whose states are indistinguishable is not a control.
+                  const label = l === 'OFF' ? 'Off' : l === 'OBSERVE' ? 'Obs' : l === 'PROPOSE' ? 'Prop' : 'Auto'
                   return (
                     <button key={l} type="button"
                       className={`adock-notch ${r.level === l ? `on ${l.toLowerCase()}` : ''}`}
                       disabled={above || busy === r.id}
                       title={above ? `Capped at ${r.ceiling} by graduation` : l}
                       onClick={() => void setLevel(r, l)}>
-                      {l.charAt(0)}
+                      {label}
                     </button>
                   )
                 })}
