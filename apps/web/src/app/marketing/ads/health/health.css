@@ -77,3 +77,47 @@
 .hl-metric-v.danger { color: #e5484d; } .hl-metric-v.ok { color: #067d62; }
 .hl-risk { margin-top: 10px; display: flex; align-items: flex-start; gap: 8px; background: #fdf4f4; border: 1px solid #f3c0c2; border-radius: 9px; padding: 9px 12px; font-size: 12px; color: #b3261e; }
 .hl-risk b { font-weight: 800; }
+
+/* ── ACR.6 (R12) — endpoint probe panel ───────────────────────────────────────
+   Collapsed by default: it is a diagnostic, and every run costs about a dozen
+   real Amazon requests. */
+.hl-pb-t { width: 100%; border: 0; background: none; padding: 0; cursor: pointer; text-align: left; font: inherit; font-size: 13px; font-weight: 800; color: #1c2530; }
+.hl-pb-t svg.open { transform: rotate(180deg); }
+.hl-pb-lede { margin: 0 0 12px; font-size: 12.5px; line-height: 1.6; color: #5b6573; }
+.hl-pb-ctl { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 11px; }
+.hl-pb-seg { display: inline-flex; border: 1px solid #dfe3e9; border-radius: 7px; overflow: hidden; }
+.hl-pb-seg button { border: 0; border-right: 1px solid #eef0f3; background: #fff; padding: 5px 11px; font-size: 11.5px; font-weight: 700; color: #5b6573; cursor: pointer; }
+.hl-pb-seg button:last-child { border-right: 0; }
+.hl-pb-seg button.on { background: #1f6fde; color: #fff; }
+.hl-pb-seg button:disabled { opacity: .5; cursor: default; }
+.hl-pb-run { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #1f6fde; background: #1f6fde; color: #fff; border-radius: 7px; padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.hl-pb-run:disabled { opacity: .5; cursor: default; }
+.hl-pb-copy { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #dfe3e9; background: #fff; color: #5b6573; border-radius: 7px; padding: 5px 10px; font-size: 11.5px; font-weight: 700; cursor: pointer; }
+.hl-pb-spin { animation: hl-pb-rot .9s linear infinite; }
+@keyframes hl-pb-rot { to { transform: rotate(360deg); } }
+.hl-pb-err { margin-bottom: 11px; padding: 9px 12px; border-radius: 8px; background: #fdeaea; color: #b3261e; font-size: 12px; line-height: 1.55; }
+.hl-pb-err pre { margin: 8px 0 0; padding: 8px; border-radius: 6px; background: #fbdcdc; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+.hl-pb-meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 9px; font-size: 11.5px; color: #8a93a1; }
+.hl-pb-meta b { color: #37495b; }
+.hl-pb-meta b.ok { color: #067d62; } .hl-pb-meta b.bad { color: #e5484d; }
+.hl-pb-meta .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.hl-pb-meta .grow { flex: 1; } .hl-pb-meta .r { text-align: right; }
+
+.hl-pb-scroll { overflow-x: auto; border: 1px solid #eef0f3; border-radius: 9px; }
+.hl-pb { width: 100%; border-collapse: collapse; font-size: 12px; }
+.hl-pb thead th { background: #f8f9fb; text-align: left; padding: 7px 10px; font-size: 9px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: #8a93a1; border-bottom: 1px solid #e3e7ec; white-space: nowrap; }
+.hl-pb th.r, .hl-pb td.r { text-align: right; }
+.hl-pb-r { cursor: pointer; }
+.hl-pb-r > td { padding: 6px 10px; border-top: 1px solid #f3f4f6; color: #37495b; white-space: nowrap; }
+.hl-pb-r:hover > td { background: #fafbfc; }
+.hl-pb-r .chev { width: 22px; color: #9aa3b0; }
+.hl-pb-r .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.hl-pb-r .dim { color: #8a93a1; }
+.hl-pb-r .st { font-weight: 800; font-variant-numeric: tabular-nums; }
+.hl-pb-r .st.ok { color: #067d62; } .hl-pb-r .st.bad { color: #b3261e; }
+.hl-pb-r .st.warn { color: #b87503; } .hl-pb-r .st.them { color: #7c3aed; }
+.hl-pb-d > td { padding: 10px 14px 12px 32px; background: #fafbfc; border-top: 1px solid #f3f4f6; }
+.hl-pb-k { font-size: 9px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: #8a93a1; margin: 8px 0 3px; }
+.hl-pb-k:first-child { margin-top: 0; }
+.hl-pb-d pre { margin: 0; padding: 8px 10px; border-radius: 6px; background: #f1f4f8; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #37495b; overflow-x: auto; max-height: 190px; }
+.hl-pb-d pre.wrap { white-space: pre-wrap; word-break: break-all; }

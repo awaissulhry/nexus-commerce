@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Package, Bot, ChevronRight, ShieldCheck } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { ProbePanel } from './ProbePanel'
 import { getBackendUrl } from '@/lib/backend-url'
 import { intl } from '../_canvas/format'
 import './health.css'
@@ -242,6 +243,10 @@ export function HealthClient() {
           </>
         )}
       </div>
+
+      {/* ACR.6 (R12) — the only surface that answers "is it us or is it them" with evidence.
+          Last, and collapsed: diagnostics, not a daily view. */}
+      <ProbePanel />
     </div>
   )
 }
