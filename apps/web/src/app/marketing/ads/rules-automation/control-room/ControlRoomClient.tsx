@@ -28,6 +28,7 @@ import { Zap, Eye, MessageSquare, Power, AlertTriangle, ShieldAlert, Play, Squar
 import { getBackendUrl } from '@/lib/backend-url'
 import { RulesSection } from './RulesSection'
 import { GuardrailsTab } from './GuardrailsTab'
+import { ActivityTab } from './ActivityTab'
 import './control-room.css'
 
 type Mode = 'OFF' | 'OBSERVE' | 'PROPOSE' | 'AUTO'
@@ -61,7 +62,9 @@ const ago = (iso: string | null) => {
 
 export function ControlRoomClient() {
   const params = useSearchParams()
-  const tab = params.get('tab') === 'guardrails' ? 'guardrails' : 'levers'
+  const raw = params.get('tab')
+  const tab: 'levers' | 'guardrails' | 'activity' =
+    raw === 'guardrails' ? 'guardrails' : raw === 'activity' ? 'activity' : 'levers'
   const [engines, setEngines] = useState<Engine[] | null>(null)
   const [global, setGlobal] = useState<Global | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -155,17 +158,10 @@ export function ControlRoomClient() {
         </div>
       )}
 
-      <div className="acr-sec-head">
-        <h2>Engines</h2>
-        <span className="acr-sec-count">
-          {engines ? `${engines.length} total · ${acting} acting on their own` : ''}
-        </span>
-      </div>
-
       {/* Deep-linkable, like every other tab bar in this console: a tab you cannot bookmark
           or send to someone is a tab that only exists while you are looking at it. */}
       <nav className="acr-tabs" role="tablist" aria-label="Control Room views">
-        {(['levers', 'guardrails'] as const).map((t) => (
+        {(['levers', 'guardrails', 'activity'] as const).map((t) => (
           <Link
             key={t}
             href={`/marketing/ads/rules-automation/control-room?tab=${t}`}
@@ -174,12 +170,19 @@ export function ControlRoomClient() {
             className={`acr-tab ${tab === t ? 'on' : ''}`}
             scroll={false}
           >
-            {t === 'levers' ? 'Levers' : 'Guardrails'}
+            {t === 'levers' ? 'Levers' : t === 'guardrails' ? 'Guardrails' : 'Activity'}
           </Link>
         ))}
       </nav>
 
-      {tab === 'guardrails' ? <GuardrailsTab /> : <>
+      {tab === 'guardrails' ? <GuardrailsTab /> : tab === 'activity' ? <ActivityTab /> : <>
+      <div className="acr-sec-head">
+        <h2>Engines</h2>
+        <span className="acr-sec-count">
+          {engines ? `${engines.length} total · ${acting} acting on their own` : ''}
+        </span>
+      </div>
+
       {engines === null ? (
         <div className="acr-empty">Loading…</div>
       ) : engines.length === 0 ? (
