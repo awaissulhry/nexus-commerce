@@ -37,6 +37,18 @@ const SEND_HOUR = 8
 const eur = (cents: number) => `€${(cents / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
 
+/**
+ * Rule names on this account are not short labels — several are whole product titles, e.g.
+ * "Hold top rank ≥ 45% — XAVIA GALE Giacca Da Uomo - Giubbotto Moto Impermeabile E Ventilata
+ * Con Protezione Di Livello 2 | Per Tutte Le Stagioni (IT)" at 145 characters. A table cell
+ * cannot shrink below its content's minimum width, so ONE of those drags the whole table past
+ * the 680px body and every email client then either scrolls sideways or shrinks the text to
+ * fit. Truncating the label is the only lever that keeps the layout; the full name is a click
+ * away in the Control Room.
+ */
+const RULE_NAME_MAX = 44
+const shortName = (s: string) => (s.length <= RULE_NAME_MAX ? s : `${s.slice(0, RULE_NAME_MAX - 1).trimEnd()}…`)
+
 /** Recipients, operator-controlled. No default: mailing someone who never asked is worse than
  *  not mailing at all, and an empty list is a state the panel can show and fix. */
 export function digestRecipients(): string[] {
@@ -51,7 +63,7 @@ export function renderWeeklyDigest(d: WeeklyDigest): string {
 
   const ruleRows = d.rules.slice(0, 12).map((r) => `
     <tr>
-      <td style="padding:4px 12px 4px 0;color:#1c2530">${esc(r.name)}</td>
+      <td style="padding:4px 12px 4px 0;color:#1c2530" title="${esc(r.name)}">${esc(shortName(r.name))}</td>
       <td style="padding:4px 10px 4px 0;color:#5b6573;font-size:12px">${esc(r.level)}</td>
       <td style="padding:4px 10px 4px 0;text-align:right">${r.acted.toLocaleString('en-IE')}</td>
       <td style="padding:4px 10px 4px 0;text-align:right">${r.proposed.toLocaleString('en-IE')}</td>
@@ -113,13 +125,16 @@ export function renderWeeklyDigest(d: WeeklyDigest): string {
   <p style="margin:0 0 14px;color:#8a93a1;font-size:12px">${esc(c.note)}</p>` : ''}
 
   <h3 style="margin:18px 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#5b6573">Per rule</h3>
-  <table style="border-collapse:collapse;font-size:13px;width:100%">
+  <!-- Explicit widths: table-layout:fixed splits six columns EVENLY, which gave the rule name
+       ~113px of a 680px body and wrapped every label over three lines. The name needs the room;
+       the counts are at most four digits. -->
+  <table style="border-collapse:collapse;font-size:13px;width:100%;max-width:680px;table-layout:fixed">
     <tr style="text-align:left;color:#5b6573;font-size:12px">
-      <th style="padding:0 12px 4px 0">Rule</th><th style="padding:0 10px 4px 0">Mode</th>
-      <th style="padding:0 10px 4px 0;text-align:right">Acted</th>
-      <th style="padding:0 10px 4px 0;text-align:right">Proposed</th>
-      <th style="padding:0 10px 4px 0;text-align:right">You applied</th>
-      <th style="padding:0 0 4px;text-align:right">Failed</th>
+      <th style="padding:0 12px 4px 0;width:40%">Rule</th><th style="padding:0 10px 4px 0;width:12%">Mode</th>
+      <th style="padding:0 10px 4px 0;text-align:right;width:10%">Acted</th>
+      <th style="padding:0 10px 4px 0;text-align:right;width:13%">Proposed</th>
+      <th style="padding:0 10px 4px 0;text-align:right;width:14%">You applied</th>
+      <th style="padding:0 0 4px;text-align:right;width:11%">Failed</th>
     </tr>
     ${ruleRows}
   </table>

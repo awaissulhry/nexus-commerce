@@ -322,7 +322,8 @@ export async function getTodayBoard(): Promise<TodayBoard> {
       severity: 'info',
       title: ready > 0
         ? `${ready} rule${ready === 1 ? '' : 's'} ${ready === 1 ? 'is' : 'are'} ready to graduate to Auto`
-        : `${unseen} rule${unseen === 1 ? '' : 's'} ${unseen === 1 ? 'has' : 'have'} never shown you what they would do`,
+        // "1 rule … they" — the noun and the verb were pluralised and the pronoun was not.
+        : `${unseen} rule${unseen === 1 ? '' : 's'} ${unseen === 1 ? 'has' : 'have'} never shown you what ${unseen === 1 ? 'it' : 'they'} would do`,
       detail:
         (ready > 0
           ? `You applied their proposals unchanged in ${graduation.weeksRequired}+ separate weeks with no failures. Graduating one is a single click and reversible; nothing moves on its own. `

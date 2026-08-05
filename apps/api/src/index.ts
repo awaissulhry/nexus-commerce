@@ -467,12 +467,36 @@ app.addHook('onRequest', (request, reply, done) => {
 // non-HTML responses, so downloads (PDF/CSV/ZIP) are unaffected, while
 // any HTML error page is locked down. HSTS pins TLS; nosniff blocks MIME
 // sniffing; frame denial blocks clickjacking.
-app.addHook('onSend', (_request, reply, payload, done) => {
+/**
+ * ACR.4.2 — routes that render an EMAIL for the operator to look at.
+ *
+ * These return our own generated HTML whose entire meaning is carried by inline `style`
+ * attributes, and `default-src 'none'` blocks every one of them. Measured: the weekly-digest
+ * preview served 101 inline styles and the browser applied zero, so the operator clicking
+ * "Preview" saw an unstyled wall of text and would reasonably conclude the digest was broken.
+ * The mail itself is fine — no CSP reaches an inbox — so the preview was lying about the
+ * product, which is the one thing a preview must never do.
+ *
+ * `style-src 'unsafe-inline'` is added for these paths ONLY. Everything else stays denied:
+ * no scripts, no images, no fonts, no connections, no framing. The payload is server-generated
+ * from our own template with every interpolation escaped.
+ */
+const HTML_PREVIEW_PATHS = ['/api/advertising/digest/weekly/preview']
+
+app.addHook('onSend', (request, reply, payload, done) => {
   reply.header('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
   reply.header('X-Content-Type-Options', 'nosniff')
   reply.header('X-Frame-Options', 'DENY')
   reply.header('Referrer-Policy', 'no-referrer')
-  reply.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
+  // Set here rather than in the route: this hook runs AFTER the handler, so a header the
+  // handler sets would be silently overwritten.
+  const isPreview = HTML_PREVIEW_PATHS.some((p) => (request.url ?? '').split('?')[0] === p)
+  reply.header(
+    'Content-Security-Policy',
+    isPreview
+      ? "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'"
+      : "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+  )
   done(null, payload)
 });
 
