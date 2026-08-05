@@ -3210,3 +3210,11 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
    campaigns are in it. */
 .h10-pill.bad { color: #a3342b; background: #fdeceb; }
 .h10-pill.muted { color: #6b7480; background: #eef1f5; }
+
+/* ACR.1.6c — `caution` was referenced and never defined, so the super-wizard's
+   ADVICE ("that's a lot of campaigns — consider trimming") rendered in the exact
+   amber of the BLOCKER above it ("nothing to create yet"), which additionally
+   carries role="alert". The author separated the two semantically and the visual
+   half of that never existed. Advice now reads as advice. Found by sweeping for
+   the `.h10-pill.bad` shape rather than by noticing it. */
+.h10-spw-cs-pwarn.caution { color: #46536a; background: #f4f7fb; border-color: #d7e2f0; }
