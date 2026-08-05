@@ -358,6 +358,11 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     payloadValueCents,
     campaignId,
     field: bidChange?.field ?? payload.fieldChanges[0]?.field ?? null,
+    // ACR.1.2b — the authority pins need EVERY field, not the one representative field the
+    // A1 bounds want. A payload carrying both a bid and a budget change would otherwise be
+    // judged against whichever one `field` happened to surface, so a budget pin would hold
+    // on single-field payloads and silently miss the combined one.
+    fields: payload.fieldChanges.map((c) => c.field),
     intendedValueCents: Number.isFinite(intendedBidCents ?? NaN) ? intendedBidCents : null,
     // ADX G1 — suppression drives bids to ~2¢ under the no-pause rule; a min bound
     // must not block it.

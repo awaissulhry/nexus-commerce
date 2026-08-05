@@ -2760,6 +2760,36 @@ model Campaign {
   maxBidCents   Int?
   targetAcosPct Int?
 
+  // ACR.1.2b — PER-DIMENSION AUTHORITY PINS ("hands off placement / bids / budget").
+  //
+  // The bounds above say how FAR automation may move a number. These say whether it may
+  // touch that number at all, per dimension, per campaign. Quartile's pattern: an operator
+  // who can hand back one dimension is far more willing to let automation keep the rest,
+  // and today the only available answer is the allowlist — all of it or none of it.
+  //
+  // Enforced in ads-write-gate.ts beside minBidCents/maxBidCents, on the same read, for
+  // the same reason those live on the entity: a pin that is only honoured by the engines
+  // that remember to look is decorative, and decorative controls are the defect class this
+  // whole programme exists to remove. A column cannot be forgotten by an engine written
+  // next year.
+  //
+  // FALSE = automation may write this dimension, which is every existing row's behaviour.
+  //
+  // NOTE the deliberate asymmetry, following ADX G1 and ACR.0.7 exactly: a bid SUPPRESSION
+  // (retail guard, budget stop-over-spend, Min-bid windows — the no-pause rule's way of
+  // stopping delivery) is exempt from pinBids. A pin that blocked suppression would mean
+  // "I will manage bids myself" silently also meant "stop protecting me from overspend",
+  // and would freeze bids HIGH at the moment we most want them low. pinBudget has no such
+  // exemption: budget pacing writes dailyBudget, which is not a safety action.
+  pinPlacement Boolean   @default(false)
+  pinBids      Boolean   @default(false)
+  pinBudget    Boolean   @default(false)
+  /// Accountability for the pin itself — who pinned it, when, and why. A pin an operator
+  /// finds later with no author is indistinguishable from a bug.
+  pinnedAt     DateTime?
+  pinnedBy     String?
+  pinNote      String?
+
   adGroups   AdGroup[]
   bidHistory CampaignBidHistory[]
 

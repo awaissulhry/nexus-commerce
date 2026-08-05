@@ -244,6 +244,56 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'ad-dayparting': () => runDaypartingCron(),
   'budget-pool-rebalance': () => runBudgetPoolRebalanceCron(),
 
+  /**
+   * ACR.1.2 — the six Control Room engines that had NO manual trigger of any kind.
+   *
+   * The Levers view lists twelve engines; only six were reachable from this registry, and
+   * the missing ones were the ones an operator most wants to force — rank-defend,
+   * harvest, the bid optimiser. "Run now" on the half that happened to be registered is
+   * not a control surface.
+   *
+   * Registered against the `*Once` functions rather than the `*Cron` wrappers ON PURPOSE.
+   * Every `run*Cron` opens its own `recordCronRun`, and so does the trigger route — so
+   * wrapping the cron form writes TWO CronRun rows per manual run: one saying
+   * `triggeredBy=manual` with the summary "manual trigger", and a nested one carrying the
+   * real numbers labelled `triggeredBy=cron`. The Levers drawer reads exactly this table,
+   * and a manual run that appears twice, once mislabelled and once uninformative, is the
+   * two-vocabularies defect in miniature. Calling `*Once` leaves the route's wrapper as
+   * the single row, and these lambdas hand it the same summary string the scheduled tick
+   * would have produced.
+   *
+   * (The five ads entries above predate this and still double-write. Left alone here
+   * rather than changed in passing — they are someone else's rows to reason about.)
+   *
+   * These engines write live bids. That is the point: a manual run does exactly what the
+   * scheduled tick does, and every write still passes ads-write-gate — the account halt,
+   * the per-campaign allowlist, the entity bounds and the authority pins all bind a
+   * manual run identically.
+   */
+  'ad-rank-defend': () => import('./ad-rank-defend.job.js').then(async (m) => {
+    const r = await m.runRankDefendOnce()
+    return `evaluated=${r.evaluated} applied=${r.applied}`
+  }),
+  'ad-budget-enforce': () => import('./ad-budget-enforce.job.js').then((m) => m.runBudgetEnforceOnce()),
+  'ads-auto-bid': () => import('../services/advertising/ads-auto-bid.service.js').then(async (m) => {
+    const r = await m.runAutoBidOnce()
+    return r.skipped ? `skipped=${r.skipped}` : `proposed=${r.proposed} applied=${r.applied} dryRun=${r.dryRun}`
+  }),
+  'ads-auto-harvest': () => import('../services/advertising/ads-auto-harvest.service.js').then(async (m) => {
+    const r = await m.runAutoHarvestOnce()
+    return r.skipped
+      ? `skipped=${r.skipped}`
+      : `neg=${r.negativesAdded}/${r.proposedNegatives} grad=${r.keywordsGraduated}/${r.proposedGraduations} dryRun=${r.dryRun}`
+  }),
+  'ads-anomaly-guard': () => import('../services/advertising/ads-anomaly-guard.service.js').then(async (m) => {
+    const r = await m.runAnomalyGuardOnce()
+    return `tripped=${r.tripped} actions=${r.actionsLastHour}/${r.thresholds.maxActionsPerHour} spend=${r.spendLastHourCents}/${r.thresholds.maxHourlySpendCentsEur}c`
+  }),
+  'ads-structural-reconcile': () => import('../services/advertising/ads-structural-reconcile.service.js').then(async (m) => {
+    const r = await m.runStructuralReconcileOnce()
+    return `campaigns=${r.campaignsChecked} entities=${r.entitiesChecked} verified=${r.verified} mismatch=${r.mismatch} driftOpened=${r.driftRowsOpened}`
+  }),
+
   // SR.1 — Sentient Review Loop. Gated by NEXUS_ENABLE_REVIEW_INGEST=1.
   'review-ingest': () => runReviewIngestCron(),
   'review-spike-detector': () => runReviewSpikeDetectorCron(),

@@ -19,6 +19,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { adsMode } from './ads-api-client.js'
+import { dimensionsForWrite, pinDenial, type AuthorityDimension } from './ads-authority-pins.js'
 
 export type GateDeniedAt =
   | 'env'
@@ -34,6 +35,8 @@ export type GateDeniedAt =
   | 'keyword_protected'
   // ACR.0.7 — the account is halted (anomaly breaker or operator) or autonomy is OFF.
   | 'automation_halted'
+  // ACR.1.2b — the campaign's placement/bids/budget is pinned: held by hand.
+  | 'authority_pin'
 
 export type GateDecision =
   | { allowed: true; mode: 'sandbox' }
@@ -54,6 +57,25 @@ export interface GateContext {
   // ── ADX A1 ────────────────────────────────────────────────────────────────
   /** The single field being changed ('bid' | 'defaultBid' | 'dailyBudget' | …). */
   field?: string | null
+
+  // ── ACR.1.2b ──────────────────────────────────────────────────────────────
+  /**
+   * EVERY field this write changes. `field` above stays what it always was — the one
+   * bounded bid field the A1 bounds judge — and this is the whole list.
+   *
+   * The distinction matters: a payload can carry several changes, and the worker has
+   * always surfaced exactly one of them to the gate. An authority pin checked against
+   * that single field would hold on the single-field payloads a test naturally writes
+   * and silently let a multi-field payload through. Falls back to `field` when a caller
+   * supplies only the old shape, so nothing regresses.
+   */
+  fields?: Array<string | null | undefined> | null
+  /**
+   * The dimension this write belongs to, when the caller knows it and no field name
+   * carries it. `updatePlacementBidding` pushes multipliers inline rather than through
+   * the queue, so it has no `fieldChanges` to derive from and names its dimension here.
+   */
+  dimension?: AuthorityDimension | null
   /** Intended new value in cents, when the field is numeric. */
   intendedValueCents?: number | null
   /** The keyword text, when this write negates a term. */
@@ -202,6 +224,8 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       select: {
         liveBidWritesEnabled: true, dynamicBidding: true, liveBidWritesToday: true, liveBidWritesDay: true,
         minBidCents: true, maxBidCents: true,
+        // ACR.1.2b — same read, so a pin costs no extra query.
+        pinPlacement: true, pinBids: true, pinBudget: true, pinNote: true,
       },
     })
     if (!campaign?.liveBidWritesEnabled) {
@@ -210,6 +234,35 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
         reason: `campaign ${ctx.campaignId} is not on the live-write allowlist (Campaign.liveBidWritesEnabled=false)`,
         deniedAt: 'campaign_allowlist',
       }
+    }
+
+    /**
+     * ACR.1.2b — per-dimension authority pins, checked BEFORE the bounds.
+     *
+     * Order is deliberate, following the halt-before-allowlist precedent: a pin is the
+     * broader refusal ("automation may not write this dimension at all") and a bound the
+     * narrower one ("not that far"). Report the bound first and an operator clearing it
+     * would be told the wrong thing about why their campaign is quiet.
+     *
+     * This binds EVERY write through the gate, including an operator's own PATCH from the
+     * Ad Manager — deliberately. The gate cannot reliably tell a person from an engine:
+     * `actor` is free text, and a third of the advertising audit log carried a NULL actor
+     * as recently as 2026-08-04 (see ads-create.service.ts). A pin that trusted that
+     * string would be honoured exactly as often as the string happened to be right, which
+     * is the decorative-control defect this phase exists to remove. Unpinning is one click
+     * and is itself audited.
+     */
+    const dimensions = dimensionsForWrite({
+      fields: ctx.fields?.length ? ctx.fields : [ctx.field],
+      dimension: ctx.dimension ?? null,
+    })
+    const pinned = pinDenial(campaign, {
+      dimensions,
+      isSuppression: ctx.isSuppression,
+      campaignId: ctx.campaignId,
+    })
+    if (pinned) {
+      return { allowed: false, reason: pinned.reason, deniedAt: 'authority_pin' }
     }
 
     // ADX A1 — entity bid bounds. Deliberately a DENY rather than a silent clamp:

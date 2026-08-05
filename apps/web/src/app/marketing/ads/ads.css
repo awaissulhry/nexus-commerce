@@ -3174,3 +3174,31 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-cl-notei { width: 100%; resize: vertical; border: 1px solid #d8dde4; border-radius: 8px; padding: 9px 11px; font: inherit; font-size: 13px; color: #1c2530; background: #fff; }
 .h10-cl-notei:focus { outline: 2px solid #cfe0f8; outline-offset: -1px; }
 .h10-cl-notee { margin-top: 8px; font-size: 12px; color: #c0392b; }
+
+/* ── ACR.1.6 — the Ad Manager "Automation" column ─────────────────────────
+   What automation is ALLOWED to do to a campaign, beside "Amazon Delivery" which
+   says whether our last write landed. Light only: this console pins itself light
+   (`.h10-shell` sets color-scheme: light), so no `.dark` block here. */
+.h10-auto-cell { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+
+.h10-auto-state {
+  display: inline-block; font-size: 11px; font-weight: 600;
+  border-radius: 5px; padding: 3px 9px; white-space: nowrap;
+}
+.h10-auto-state.on { color: #0a4ba8; background: #d2e6fc; }
+/* Not red: "off-limits" is the safe, default-deny state, not a failure. */
+.h10-auto-state.off { color: #6b7480; background: #eef1f5; }
+
+/* Amber, matching the Control Room grid: a pin is a withdrawal of authority and must
+   not read as "healthy". */
+.h10-auto-pin {
+  display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .01em;
+  color: #8a6320; background: #fdf4e6; border: 1px solid #f0dcbb;
+  border-radius: 4px; padding: 1.5px 5px;
+}
+.h10-auto-rules {
+  display: inline-block; min-width: 18px; text-align: center;
+  font-size: 10px; font-weight: 700; color: #2a5399;
+  background: #eef3fd; border: 1px solid #c8d8f5; border-radius: 4px; padding: 1.5px 5px;
+}
+.h10-auto-sup { font-size: 12px; font-weight: 700; color: #9a6700; line-height: 1; }

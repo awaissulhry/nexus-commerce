@@ -32,6 +32,7 @@ import { ActivityTab } from './ActivityTab'
 import { TodayTab } from './TodayTab'
 import { AutomationDock } from '../../_shared/AutomationDock'
 import { ForesightTab } from './ForesightTab'
+import { LeverDrawer } from './LeverDrawer'
 import './control-room.css'
 
 type Mode = 'OFF' | 'OBSERVE' | 'PROPOSE' | 'AUTO'
@@ -76,6 +77,9 @@ export function ControlRoomClient() {
   const [global, setGlobal] = useState<Global | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // ACR.1.2b — the engine whose drawer is open. Row-level state, not routed: a drawer is a
+  // detail of the row you clicked, and the tab bar above it is already the deep-linkable part.
+  const [open, setOpen] = useState<Engine | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -212,7 +216,15 @@ export function ControlRoomClient() {
           {engines.map((e) => {
             const M = MODE_META[e.mode]
             return (
-              <li key={e.key} className={`acr-row ${e.warning ? 'flagged' : ''}`}>
+              <li
+                key={e.key}
+                className={`acr-row openable ${e.warning ? 'flagged' : ''}`}
+                onClick={() => setOpen(e)}
+                onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setOpen(e) } }}
+                role="button"
+                tabIndex={0}
+                aria-label={`${e.name} — open run history and evidence`}
+              >
                 <div className="acr-row-main">
                   <div className="acr-row-name">
                     <strong>{e.name}</strong>
@@ -240,6 +252,7 @@ export function ControlRoomClient() {
                       {e.runs7d} run{e.runs7d === 1 ? '' : 's'}{e.failures7d > 0 ? ` · ${e.failures7d} failed` : ''}
                     </dd>
                   </div>
+                  <div><dt>Detail</dt><dd className="acr-row-open">Open →</dd></div>
                 </dl>
               </li>
             )
@@ -268,6 +281,16 @@ export function ControlRoomClient() {
       {/* ACR.7 — the always-on dock in the space that was empty. Same component as the
           Portfolios page and the Family Cockpit; drops land there, edits land here too. */}
       <AutomationDock onChanged={() => void load()} />
+
+      {/* ACR.1.2b — the engine's own record. Reloads the rows after a manual run so the
+          "Last run" fact behind the drawer cannot disagree with what the drawer just did. */}
+      {open && (
+        <LeverDrawer
+          engine={{ key: open.key, name: open.name, what: open.what, cron: open.cron, mode: open.mode }}
+          onClose={() => setOpen(null)}
+          onRan={() => void load()}
+        />
+      )}
     </div>
   )
 }

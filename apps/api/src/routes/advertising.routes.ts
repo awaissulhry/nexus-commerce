@@ -10519,6 +10519,111 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     logger.warn('[ACR42-DIGEST-SEND]', { status: r.status, recipients: r.recipients.length, actor: actorFromHeaders(request.headers as Record<string, unknown>) })
     return r
   })
+
+  /**
+   * ACR.1.2b — one engine's own record: run history, last output, evidence samples, and
+   * whether it can be fired by hand. Backs the Levers row-expand drawer.
+   *
+   * Deliberately NOT cached. The drawer's whole job is to answer "what did this thing just
+   * do", and it is the surface an operator opens immediately after pressing Run now.
+   */
+  fastify.get('/advertising/control-room/engine/:key', async (request, reply) => {
+    const { key } = request.params as { key: string }
+    const q = request.query as { days?: string }
+    const { getEngineDetail } = await import('../services/advertising/ads-control-room-detail.service.js')
+    const detail = await getEngineDetail(key, { days: q.days ? Number(q.days) : undefined })
+    if (!detail) { reply.status(404); return { error: `unknown engine '${key}'` } }
+    reply.header('Cache-Control', 'no-store')
+    return detail
+  })
+
+  /**
+   * ACR.1.3b — the per-campaign guardrail grid: bounds, pins, allowlist, suppression owner.
+   *
+   * Turns the Guardrails tab's read-only counts into the rows behind them. The counts were
+   * true and useless: "0 of 216 campaigns have a minimum bid" tells an operator there is
+   * work to do and gives them nowhere to do it.
+   */
+  fastify.get('/advertising/control-room/guardrail-grid', async (request, reply) => {
+    const q = request.query as { marketplace?: string; managedOnly?: string; search?: string; limit?: string }
+    const { getGuardrailGrid } = await import('../services/advertising/ads-control-room-detail.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return getGuardrailGrid({
+      marketplace: q.marketplace || null,
+      managedOnly: q.managedOnly === '1' || q.managedOnly === 'true',
+      search: q.search || null,
+      limit: q.limit ? Number(q.limit) : undefined,
+    })
+  })
+
+  /**
+   * ACR.1.2b — set or clear a campaign's per-dimension authority pins.
+   *
+   * A separate route from /guardrails on purpose: that one validates a min/max PAIR through
+   * `validateGuardrails`, and pins have no such interdependence. Folding them in would put
+   * two unrelated validation shapes behind one body.
+   *
+   * The write is audited with the same evidence column the bounds use — a pin an operator
+   * finds later with no author is indistinguishable from a bug, which is why the columns
+   * carry pinnedBy/pinnedAt at all.
+   */
+  fastify.patch('/advertising/campaigns/:id/pins', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = request.body as {
+      pinPlacement?: boolean; pinBids?: boolean; pinBudget?: boolean; pinNote?: string | null
+    }
+    const c = await prisma.campaign.findUnique({
+      where: { id },
+      select: { id: true, name: true, pinPlacement: true, pinBids: true, pinBudget: true, pinNote: true },
+    })
+    if (!c) { reply.status(404); return { error: 'campaign not found' } }
+
+    const data: Record<string, unknown> = {}
+    if (b.pinPlacement !== undefined) data.pinPlacement = !!b.pinPlacement
+    if (b.pinBids !== undefined) data.pinBids = !!b.pinBids
+    if (b.pinBudget !== undefined) data.pinBudget = !!b.pinBudget
+    if (b.pinNote !== undefined) data.pinNote = b.pinNote?.trim() ? b.pinNote.trim().slice(0, 280) : null
+    if (Object.keys(data).length === 0) { reply.status(400); return { ok: false, error: 'no pin fields supplied' } }
+
+    const actor = actorFromHeaders(request.headers as Record<string, unknown>)
+    const nextPlacement = (data.pinPlacement as boolean | undefined) ?? c.pinPlacement
+    const nextBids = (data.pinBids as boolean | undefined) ?? c.pinBids
+    const nextBudget = (data.pinBudget as boolean | undefined) ?? c.pinBudget
+    const anyPinned = nextPlacement || nextBids || nextBudget
+    // Stamp the author only while something is actually pinned. Keeping a pinnedBy on a
+    // fully-cleared campaign would leave the grid showing an owner for a pin that is gone.
+    data.pinnedBy = anyPinned ? actor : null
+    data.pinnedAt = anyPinned ? new Date() : null
+    if (!anyPinned) data.pinNote = null
+
+    await prisma.campaign.update({ where: { id }, data: data as never })
+
+    await prisma.advertisingActionLog.create({
+      data: {
+        userId: actor,
+        actionType: 'set_campaign_authority_pins', entityType: 'CAMPAIGN', entityId: id,
+        payloadBefore: { pinPlacement: c.pinPlacement, pinBids: c.pinBids, pinBudget: c.pinBudget, pinNote: c.pinNote },
+        payloadAfter: { pinPlacement: nextPlacement, pinBids: nextBids, pinBudget: nextBudget, pinNote: (data.pinNote as string | null) ?? null },
+        amazonResponseStatus: 'SUCCESS',
+        evidence: {
+          metric: 'operator_authority_pin',
+          note: 'Per-dimension hands-off pin; enforced at the write gate, never pushed to Amazon.',
+        },
+      },
+    }).catch(() => { /* an audit row must never fail the write it describes */ })
+
+    logger.warn('[ADS-AUTHORITY-PIN]', {
+      campaignId: id, name: c.name, actor,
+      pinPlacement: nextPlacement, pinBids: nextBids, pinBudget: nextBudget,
+    })
+
+    return {
+      ok: true, campaignId: id,
+      pinPlacement: nextPlacement, pinBids: nextBids, pinBudget: nextBudget,
+      pinNote: (data.pinNote as string | null) ?? null,
+      pinnedBy: data.pinnedBy as string | null, pinnedAt: data.pinnedAt as Date | null,
+    }
+  })
 }
 
 export default advertisingRoutes

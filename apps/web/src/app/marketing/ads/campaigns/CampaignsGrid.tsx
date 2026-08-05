@@ -104,6 +104,25 @@ interface DeliveryCampaign {
   verifiedAt: string | null
   stale: boolean
 }
+// ACR.1.6 — GET /advertising/control-room/guardrail-grid (the Control Room's own rows).
+interface AuthorityRow {
+  id: string
+  managed: boolean
+  minBidCents: number | null
+  maxBidCents: number | null
+  pins: { placement: boolean; bids: boolean; budget: boolean }
+  pinNote: string | null
+  pinnedBy: string | null
+  suppressedBy: string | null
+  suppressedAt: string | null
+  boundRules: Array<{ id: string; name: string; level: string; enabled: boolean }>
+}
+interface AuthorityState {
+  byId: Record<string, AuthorityRow>
+  /** Rules that govern EVERY campaign because nothing narrows them. Not a per-row count. */
+  accountWideRules: number
+}
+
 interface DeliveryState {
   adsMode: string
   sandbox: boolean
@@ -121,6 +140,10 @@ const DELIVERY_PILL: Record<DeliveryCampaign['state'], { label: string; cls: str
 }
 const ALL_COLS: ColDef[] = [
   { key: 'delivery', label: 'Amazon Delivery' },
+  // ACR.1.6 — what automation is allowed to do to this campaign, beside what actually
+  // reached Amazon. The two belong together: "Amazon Delivery" answers whether our last
+  // write landed, this answers whether the next one is even permitted to be attempted.
+  { key: 'automation', label: 'Automation' },
   { key: 'bidAlgorithm', label: 'Bid Algorithm' },
   { key: 'status', label: 'Status' },
   { key: 'minMaxBudget', label: 'Min/Max Budget' },
@@ -169,7 +192,9 @@ const COL_BY_KEY: Record<string, ColDef> = Object.fromEntries(ALL_COLS.map((c) =
 const ALL_KEYS = ALL_COLS.map((c) => c.key)
 // H10 ships with every column visible (Select All on).
 const DEFAULT_VISIBLE = ALL_KEYS
-const COLS_KEY = 'h10-am-columns-v3' // bumped: AX2.1 added the Amazon Delivery column
+// Bumped whenever a column is ADDED: the visible set is persisted per operator, so a new
+// key would otherwise be invisible to everyone who has ever opened Customize Columns.
+const COLS_KEY = 'h10-am-columns-v4' // v3: AX2.1 Amazon Delivery · v4: ACR.1.6 Automation
 
 // Physical grid columns. Most checklist items are one column; "Bid Algorithm"
 // expands to the Adtomic cluster. `metric` → numeric/sortable cell (renderCol);
@@ -181,7 +206,7 @@ const CLUSTER: PhysCol[] = [
   { key: 'minMaxBid', label: 'Min/Max Bid', metric: false },
   { key: 'bidAutomation', label: 'Bid Automation', metric: false },
 ]
-const SETTINGS_KEYS = new Set(['delivery', 'status', 'minMaxBudget', 'rules', 'biddingStrategy', 'bidMultiplier', 'startDate', 'endDate', 'dailyBudget', 'curBudgetUtil', 'avgBudgetUtil'])
+const SETTINGS_KEYS = new Set(['delivery', 'automation', 'status', 'minMaxBudget', 'rules', 'biddingStrategy', 'bidMultiplier', 'startDate', 'endDate', 'dailyBudget', 'curBudgetUtil', 'avgBudgetUtil'])
 function physCols(itemKey: string): PhysCol[] {
   if (itemKey === 'bidAlgorithm') return CLUSTER
   const it = COL_BY_KEY[itemKey]
@@ -767,6 +792,28 @@ export function CampaignsGrid() {
   }, [])
   useEffect(() => { void loadDelivery() }, [loadDelivery])
 
+  /**
+   * ACR.1.6 — grid-wide automation authority, from the SAME endpoint the Control Room's
+   * Guardrails grid reads.
+   *
+   * Deliberately not folded into /advertising/campaigns: that response is shared by several
+   * callers and shaped around metrics, and reusing this one endpoint means the Ad Manager's
+   * Automation column and the Guardrails tab cannot drift apart — they are the same rows.
+   */
+  const [authority, setAuthority] = useState<AuthorityState | null>(null)
+  const loadAuthority = useCallback(async () => {
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/control-room/guardrail-grid?limit=500`, { cache: 'no-store' })
+      if (!r.ok) return
+      const j = (await r.json()) as { rows: AuthorityRow[]; accountWideRules: number }
+      setAuthority({
+        byId: Object.fromEntries((j.rows ?? []).map((x) => [x.id, x])),
+        accountWideRules: j.accountWideRules ?? 0,
+      })
+    } catch { /* advisory — never block the grid on it */ }
+  }, [])
+  useEffect(() => { void loadAuthority() }, [loadAuthority])
+
   const load = useCallback(async (opts?: { sync?: boolean; range?: { start: Date; end: Date } }) => {
     if (opts?.sync) setSyncing(true)
     try {
@@ -1215,6 +1262,51 @@ export function CampaignsGrid() {
         return (
           <span className={`h10-pill ${p.cls}`} title={bits.join('\n')}>
             {p.label}{d?.pending ? ` ${d.pending}` : ''}{d?.stale ? ' \u29D7' : ''}
+          </span>
+        )
+      }
+      /**
+       * ACR.1.6 — three facts about who may change this campaign, in the order that decides
+       * whether anything happens at all:
+       *   1. allowlisted?  — default-deny; if not, nothing automated reaches Amazon.
+       *   2. pinned?       — per-dimension hands-off, enforced at the same write gate.
+       *   3. bound rules   — rules dragged onto THIS campaign.
+       *
+       * The account-wide rule count is shown in the tooltip and never added to the badge.
+       * Measured 2026-08-05, all 22 enabled advertising rules are account-wide, so folding
+       * them in would print "22" on all 216 rows and say nothing about any of them.
+       */
+      case 'automation': {
+        const a = authority?.byId?.[c.id]
+        if (!a) return <span className="h10-auto-cell"><span className="h10-pill">—</span></span>
+        const pins = ([['placement', 'Plc'], ['bids', 'Bid'], ['budget', 'Bgt']] as const)
+          .filter(([k]) => a.pins[k])
+        const bound = a.boundRules.length
+        const tip = [
+          a.managed
+            ? 'Managed: automation may write to this campaign.'
+            : 'Not managed: every automated write here is refused at the gate (default-deny). Re-enabling a paused campaign does not re-allowlist it.',
+          pins.length
+            ? `Hands off: ${pins.map(([, s]) => s).join(', ')}${a.pinnedBy ? ` — pinned by ${a.pinnedBy}` : ''}${a.pinNote ? ` (${a.pinNote})` : ''}`
+            : 'No dimension is pinned.',
+          bound ? `Bound rules: ${a.boundRules.map((r) => r.name).join(', ')}` : 'No rule is bound to this campaign.',
+          authority?.accountWideRules
+            ? `${authority.accountWideRules} enabled rule(s) govern every campaign because nothing narrows them.`
+            : '',
+          a.suppressedAt ? `Bids suppressed by ${a.suppressedBy?.replace('automation:', '') ?? 'an unknown owner'}.` : '',
+          a.minBidCents != null || a.maxBidCents != null
+            ? `Bid bounds: ${a.minBidCents != null ? eur(a.minBidCents / 100) : '—'} – ${a.maxBidCents != null ? eur(a.maxBidCents / 100) : '—'}`
+            : 'No bid bounds set.',
+        ].filter(Boolean).join('\n')
+        return (
+          <span className="h10-auto-cell" title={tip}>
+            {/* Own class rather than `h10-pill bad`: that modifier is used by the delivery
+                column but has never been defined in ads.css, so it renders uncoloured.
+                Defining it here would silently restyle a column this change is not about. */}
+            <span className={`h10-auto-state ${a.managed ? 'on' : 'off'}`}>{a.managed ? 'Managed' : 'Off-limits'}</span>
+            {pins.map(([k, s]) => <span key={k} className="h10-auto-pin">{s}</span>)}
+            {bound > 0 && <span className="h10-auto-rules">{bound}</span>}
+            {a.suppressedAt && <span className="h10-auto-sup" aria-label="bids suppressed">↓</span>}
           </span>
         )
       }

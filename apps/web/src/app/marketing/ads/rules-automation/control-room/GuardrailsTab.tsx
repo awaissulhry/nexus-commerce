@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Save, AlertTriangle, Lock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { GuardrailGrid } from './GuardrailGrid'
 
 interface Guardrails {
   actionsPerHour: { effective: number; set: number | null; default: number }
@@ -158,11 +159,16 @@ export function GuardrailsTab() {
           <div><dt>Per-write ceiling</dt><dd>{eur(g.maxWriteValueCents)} <Lock size={11} /></dd></div>
         </dl>
         <p className="acr-note">
-          Bid bounds are set per campaign on the Ad Manager grid. The per-write ceiling and the
-          live-mode flag (<code>{g.adsMode}</code>{g.envKill ? ', kill switch SET' : ''}) come from
-          the environment and need a deploy to change — shown here so the full set is in one place.
+          Bid bounds and per-dimension pins are editable in the grid below, and on the Ad Manager
+          grid one campaign at a time. The per-write ceiling and the live-mode flag
+          (<code>{g.adsMode}</code>{g.envKill ? ', kill switch SET' : ''}) come from the environment
+          and need a deploy to change — shown here so the full set is in one place.
         </p>
       </div>
+
+      {/* ACR.1.3b — the rows behind the counts above. A coverage number with no way to move it
+          is a report, not a control. */}
+      <GuardrailGrid />
     </div>
   )
 }

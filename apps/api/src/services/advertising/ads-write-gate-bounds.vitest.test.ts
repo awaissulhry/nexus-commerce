@@ -37,11 +37,14 @@ vi.mock('./ads-automation-state.service.js', () => ({
 }))
 
 const { checkAdsWriteGate, normaliseTerm } = await import('./ads-write-gate.js')
+const { dimensionForField, dimensionsForWrite, pinDenial, pinnedDimensions } = await import('./ads-authority-pins.js')
 
 const LIVE_CONN = { profileId: 'p1', mode: 'production', writesEnabledAt: new Date() }
 const OPEN_CAMPAIGN = {
   liveBidWritesEnabled: true, dynamicBidding: null, liveBidWritesToday: 0, liveBidWritesDay: null,
   minBidCents: null as number | null, maxBidCents: null as number | null,
+  // ACR.1.2b — unpinned is every existing row's state, so the default fixture carries it.
+  pinPlacement: false, pinBids: false, pinBudget: false, pinNote: null as string | null,
 }
 
 beforeEach(() => {
@@ -248,5 +251,152 @@ describe('ACR.0.7 — account halt', () => {
     // Both would deny; the reported reason must be the halt, or an operator resuming
     // automation would be told the campaign is the problem.
     if (r.allowed === false) expect(r.deniedAt).toBe('automation_halted')
+  })
+})
+
+/**
+ * ACR.1.2b — per-dimension authority pins.
+ *
+ * The bounds say how far automation may move a number; a pin says whether it may touch
+ * that number at all. The point of testing at the GATE rather than only at the resolver
+ * is that a pin enforced anywhere else is decorative — which is the defect class this
+ * whole programme removes, and one this feature could very easily have shipped as.
+ */
+describe('ACR.1.2b — the pin resolver (pure)', () => {
+  it('maps the mutation service\'s own field vocabulary', () => {
+    expect(dimensionForField('bid')).toBe('bids')
+    expect(dimensionForField('defaultBid')).toBe('bids')
+    expect(dimensionForField('biddingStrategy')).toBe('bids')
+    expect(dimensionForField('dailyBudget')).toBe('budget')
+    expect(dimensionForField('PLACEMENT_TOP')).toBe('placement')
+  })
+
+  it('an UNMAPPED field belongs to no dimension — a pin is not a campaign-wide freeze', () => {
+    // A pin says "hands off this dimension". Pausing, renaming and re-portfolioing a
+    // campaign are governed by the allowlist; giving one concept two controls is how they
+    // eventually disagree.
+    expect(dimensionForField('status')).toBeNull()
+    expect(dimensionForField('name')).toBeNull()
+    expect(dimensionForField('portfolioId')).toBeNull()
+    expect(dimensionForField(null)).toBeNull()
+  })
+
+  it('collects EVERY dimension a multi-field write touches', () => {
+    const d = dimensionsForWrite({ fields: ['bid', 'dailyBudget', 'status'] })
+    expect(d.sort()).toEqual(['bids', 'budget'])
+  })
+
+  it('an explicit dimension survives an empty field list — the inline placement path', () => {
+    expect(dimensionsForWrite({ fields: [], dimension: 'placement' })).toEqual(['placement'])
+  })
+
+  it('reports the pinned dimensions in a stable order', () => {
+    expect(pinnedDimensions({ pinPlacement: true, pinBids: false, pinBudget: true }))
+      .toEqual(['placement', 'budget'])
+  })
+
+  it('carries the operator\'s note into the reason — a refusal should say whose decision it was', () => {
+    const d = pinDenial(
+      { pinPlacement: false, pinBids: true, pinBudget: false, pinNote: 'holding €0.40 for the GALE test' },
+      { dimensions: ['bids'], campaignId: 'camp-1' },
+    )
+    expect(d?.reason).toContain('holding €0.40 for the GALE test')
+  })
+})
+
+describe('ACR.1.2b — pins bind AT THE GATE', () => {
+  it('denies a bid write on a bids-pinned campaign', async () => {
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, pinBids: true })
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150 })
+    expect(r.allowed).toBe(false)
+    if (r.allowed === false) {
+      expect(r.deniedAt).toBe('authority_pin')
+      expect(r.reason).toContain('bids is pinned')
+    }
+  })
+
+  it('denies a budget write on a budget-pinned campaign', async () => {
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, pinBudget: true })
+    const r = await checkAdsWriteGate({ ...base, field: 'dailyBudget', intendedValueCents: 5000 })
+    expect(r.allowed).toBe(false)
+    if (r.allowed === false) expect(r.deniedAt).toBe('authority_pin')
+  })
+
+  it('denies the inline placement push on a placement-pinned campaign', async () => {
+    // updatePlacementBidding has no fieldChanges to derive from, so it names its dimension.
+    // Placement bias is the rank engine's primary actuator and runs to +900%; if any pin
+    // had to work, it is this one.
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, pinPlacement: true })
+    const r = await checkAdsWriteGate({ ...base, dimension: 'placement', payloadValueCents: 0 })
+    expect(r.allowed).toBe(false)
+    if (r.allowed === false) expect(r.deniedAt).toBe('authority_pin')
+  })
+
+  it('a pin binds ONE dimension — the others still write', async () => {
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, pinBudget: true })
+    expect((await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150 })).allowed).toBe(true)
+    expect((await checkAdsWriteGate({ ...base, dimension: 'placement' })).allowed).toBe(true)
+  })
+
+  it('does not touch dimensionless writes — a pinned campaign can still be paused', async () => {
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, pinBids: true, pinBudget: true, pinPlacement: true })
+    const r = await checkAdsWriteGate({ ...base, field: 'status', intendedValueCents: null })
+    expect(r.allowed).toBe(true)
+  })
+
+  it('THE BUG A SINGLE-FIELD TEST WOULD MISS: a multi-field payload is judged on all of them', async () => {
+    // The worker surfaces ONE representative field to the gate (the bid field, for the A1
+    // bounds). A payload carrying a bid AND a budget change would therefore arrive with
+    // `field: 'bid'` — so a budget pin checked against `field` alone would hold on every
+    // single-field payload a test naturally writes, and silently pass the combined one.
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, pinBudget: true })
+    const r = await checkAdsWriteGate({
+      ...base, field: 'bid', intendedValueCents: 150, fields: ['bid', 'dailyBudget'],
+    })
+    expect(r.allowed).toBe(false)
+    if (r.allowed === false) expect(r.deniedAt).toBe('authority_pin')
+  })
+
+  it('falls back to `field` when a caller supplies no list — no call site regresses', async () => {
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, pinBids: true })
+    const r = await checkAdsWriteGate({ ...base, field: 'defaultBid', intendedValueCents: 60 })
+    expect(r.allowed).toBe(false)
+  })
+
+  it('STILL ALLOWS suppression on a bids-pinned campaign — the ADX G1 / ACR.0.7 asymmetry', async () => {
+    // Suppression drives bids to ~2¢ and is how the retail guard, budget stop-over-spend
+    // and Min-bid windows stop delivery under the no-pause rule. A pin that blocked it
+    // would mean "I'll manage bids myself" silently also meant "stop protecting me from
+    // overspend", and would freeze bids HIGH exactly when we want them low.
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, pinBids: true })
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 2, isSuppression: true })
+    expect(r.allowed).toBe(true)
+  })
+
+  it('the BUDGET pin has no suppression exemption — pacing is not a safety action', async () => {
+    // Stop-over-spend suppresses BIDS. Nothing safety-critical writes dailyBudget, so the
+    // exemption that rescues the bids pin must not be copied onto this one.
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, pinBudget: true })
+    const r = await checkAdsWriteGate({ ...base, field: 'dailyBudget', intendedValueCents: 100, isSuppression: true })
+    expect(r.allowed).toBe(false)
+  })
+
+  it('the PIN is reported before the BOUND — the broader refusal wins', async () => {
+    // Both would deny. An operator who was told "bid exceeds the max" would raise the max
+    // and watch nothing happen, because the real answer is that they pinned the dimension.
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, pinBids: true, maxBidCents: 100 })
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 900 })
+    if (r.allowed === false) expect(r.deniedAt).toBe('authority_pin')
+  })
+
+  it('the allowlist still wins over a pin — the outer gate is reported first', async () => {
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, liveBidWritesEnabled: false, pinBids: true })
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150 })
+    if (r.allowed === false) expect(r.deniedAt).toBe('campaign_allowlist')
+  })
+
+  it('an unpinned campaign is unchanged — every existing row behaves as before', async () => {
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150, fields: ['bid', 'dailyBudget'] })
+    expect(r.allowed).toBe(true)
   })
 })

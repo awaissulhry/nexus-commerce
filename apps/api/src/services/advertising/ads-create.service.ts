@@ -699,7 +699,11 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
     if (ctx) {
       // C1 — pass campaignId so placement writes honour the SAME per-campaign live-write allowlist
       // as every bid write (previously omitted → placement bias bypassed the allowlist entirely).
-      const gate = await checkAdsWriteGate({ marketplace: c.marketplace, campaignId: input.campaignId, payloadValueCents: 0 })
+      // ACR.1.2b — this path pushes multipliers inline rather than through the queue, so it
+      // has no fieldChanges for the gate to derive a dimension from. It names its own.
+      // Without this the placement pin would be the one pin that never bound anything —
+      // and placement bias is the rank engine's primary actuator, running to +900%.
+      const gate = await checkAdsWriteGate({ marketplace: c.marketplace, campaignId: input.campaignId, payloadValueCents: 0, dimension: 'placement' })
       if (!gate.allowed) {
         gateDenial = (gate as { reason?: string }).reason ?? 'write gate denied'
         logger.warn('[AX2.2] placement write gated', { campaignId: input.campaignId, reason: gateDenial })
