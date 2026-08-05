@@ -7,10 +7,17 @@
  *
  * Self-gated on NEXUS_ENABLE_AMAZON_ADS_CRON, the same switch every other ads cron respects, so a
  * credential-less environment stays dormant instead of logging failures every six hours.
+ *
+ * That gate must go through `envEnabled`, not a `=== 'true'` compare. It read the flag strictly for
+ * months while index.ts read it tolerantly, so on a prod that sets the flag to `1` the whole ads
+ * fleet started and this one job silently did not — which is why ADX.0 measured zero runs in 14 days
+ * and read it as "confirmed off, as predicted". The account had nothing comparing it against Amazon
+ * on a schedule, and `ads-sync-integrity` was already reporting that symptom without the cause.
  */
 import cron from 'node-cron'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
+import { envEnabled } from '../utils/env-flag.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
@@ -39,7 +46,7 @@ export async function runStructuralReconcileCron(): Promise<void> {
 
 export function startStructuralReconcileCron(): void {
   if (scheduledTask) { logger.warn('ads-structural-reconcile already started'); return }
-  if (process.env.NEXUS_ENABLE_AMAZON_ADS_CRON !== 'true') {
+  if (!envEnabled('NEXUS_ENABLE_AMAZON_ADS_CRON')) {
     logger.info('ads-structural-reconcile cron: not scheduled (NEXUS_ENABLE_AMAZON_ADS_CRON is off)')
     return
   }

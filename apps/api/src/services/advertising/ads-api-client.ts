@@ -153,6 +153,30 @@ interface LiveCallOptions {
   // type as Accept header — same value as Content-Type for symmetric
   // negotiation. Defaults to '*/*' (let server pick).
   acceptHeader?: string
+  /**
+   * ACR.0.6 — skip the OutboundApiCallLog row for this call.
+   *
+   * Reserved for genuine busy-waits: `fetchReport` polls a report's status every
+   * 10s up to 60 times, so logging each poll would write ~60 rows per report to
+   * say "still pending". The create, the download and every other ads call ARE
+   * logged. Never set this to quieten a call that can fail meaningfully.
+   */
+  skipCallLog?: boolean
+}
+
+/**
+ * Collapse ids out of an ads API path so `operation` stays low-cardinality:
+ *   /reporting/reports/90a5aead-…  →  /reporting/reports/:id
+ *   /sp/campaigns/123456789        →  /sp/campaigns/:id
+ * Without this, every report id would become its own operation and the
+ * per-operation failure counts the Control Room needs would be meaningless.
+ */
+function adsOperationName(method: string, path: string): string {
+  const normalized = path
+    .split('?')[0]
+    .replace(/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '/:id')
+    .replace(/\/\d{6,}/g, '/:id')
+  return `ads ${method} ${normalized}`
 }
 
 interface AdsCredentials {
@@ -362,16 +386,49 @@ export async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
   if (opts.profileId !== 'n/a') {
     headers['Amazon-Advertising-API-Scope'] = opts.profileId
   }
-  const res = await fetchWithRetry(`${base}${opts.path}`, {
-    method: opts.method,
-    headers,
-    body: opts.body != null ? JSON.stringify(opts.body) : undefined,
-  }, { region: opts.region, isWrite: opts.method !== 'GET' })
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`[ADS-LIVE] ${opts.method} ${opts.path} → ${res.status}: ${text}`)
+  const doCall = async (): Promise<T> => {
+    const res = await fetchWithRetry(`${base}${opts.path}`, {
+      method: opts.method,
+      headers,
+      body: opts.body != null ? JSON.stringify(opts.body) : undefined,
+    }, { region: opts.region, isWrite: opts.method !== 'GET' })
+    if (!res.ok) {
+      const text = await res.text()
+      // ACR.0.6 — carry the status and body ON the error, not only inside the
+      // message. parseError() in the call-log service reads `err.statusCode` /
+      // `err.body`; without them every ads failure classified as NETWORK/null,
+      // which is exactly how nine nightly timeouts stayed indistinguishable
+      // from an auth failure or a throttle.
+      const err = new Error(`[ADS-LIVE] ${opts.method} ${opts.path} → ${res.status}: ${text}`) as Error & {
+        statusCode: number; body: string
+      }
+      err.statusCode = res.status
+      err.body = text
+      throw err
+    }
+    return res.json() as T
   }
-  return res.json() as T
+
+  if (opts.skipCallLog) return doCall()
+
+  // ACR.0.6 — the ads client was the ONLY channel integration writing no
+  // OutboundApiCallLog row. SP-API, all six eBay services, settlements, pricing
+  // and refunds all record here. That gap is why a job failing on all 9 profiles
+  // every night for months left no trace to query, and needed a live probe to
+  // diagnose. liveCall is the single chokepoint, so one wrap covers everything.
+  const { recordApiCall } = await import('../outbound-api-call-log.service.js')
+  return recordApiCall<T>(
+    {
+      channel: 'AMAZON',
+      operation: adsOperationName(opts.method, opts.path),
+      endpoint: opts.path,
+      method: opts.method,
+      // Only retained on failure by the recorder. No credentials: headers and
+      // tokens are deliberately not passed.
+      requestPayload: { profileId: opts.profileId, region: opts.region, body: opts.body },
+    },
+    doCall,
+  )
 }
 
 // ── Public methods ─────────────────────────────────────────────────────
@@ -1362,6 +1419,19 @@ export interface ReportRequest {
    *  the campaign group-by rejects adGroupId/keywordId/adId/orders*). The main
    *  ingestion omits this, so it is unaffected. */
   columnsOverride?: string[]
+  /**
+   * ACR.0.2 — how long to wait for Amazon to generate this report, in minutes.
+   *
+   * Defaults to 10, which is what every caller got before and is right for an
+   * interactive path. It is NOT right for a nightly batch job: ToS-IS asked for a
+   * campaigns report every night for months and every profile hit this ceiling
+   * while the report was still PENDING — a 100% failure that looked like SUCCESS.
+   *
+   * Raise it only for background jobs, and only as far as the job's own cadence
+   * tolerates: profiles are fetched in parallel, so the ceiling is roughly the
+   * job's wall-clock, not a multiple of it.
+   */
+  pollMinutes?: number
 }
 
 export async function fetchReport(
@@ -1414,8 +1484,10 @@ export async function fetchReport(
 
   logger.info('[ADS-LIVE] report created, polling', { reportId })
 
-  // Poll for up to 10 minutes (60 × 10 s)
-  for (let attempt = 0; attempt < 60; attempt++) {
+  // Poll every 10s up to the caller's ceiling (default 10 minutes = 60 attempts).
+  const pollMinutes = Math.max(1, Math.min(60, req.pollMinutes ?? 10))
+  const maxAttempts = pollMinutes * 6
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await new Promise((r) => setTimeout(r, 10_000))
     const status = await liveCall<{
       status: string
@@ -1425,6 +1497,10 @@ export async function fetchReport(
       ...ctx,
       method: 'GET',
       path: `/reporting/reports/${reportId}`,
+      // A status poll repeated every 10s; logging each one would write ~60 rows
+      // per report saying "still pending". The create above and the timeout
+      // below are both logged, which is what makes a stuck report visible.
+      skipCallLog: true,
     })
     if (status.status === 'COMPLETED' && status.location) {
       logger.info('[ADS-LIVE] report ready, downloading', { reportId, fileSize: status.fileSize })
@@ -1439,7 +1515,28 @@ export async function fetchReport(
     logger.debug('[ADS-LIVE] report pending', { reportId, attempt, status: status.status })
   }
 
-  throw new Error(`[ADS-LIVE] report ${reportId} timed out after 10 minutes`)
+  // ACR.0.6 — record the timeout as a real failed call.
+  //
+  // The polls above are deliberately unlogged, and this throw happens outside
+  // liveCall, so without this the single most important ads failure mode would
+  // leave no row at all: create succeeds, polls are silent, then an exception
+  // the caller may swallow. That is exactly how ToS-IS failed on all 9 profiles
+  // nightly for months while every surface reported SUCCESS.
+  const { recordApiCall } = await import('../outbound-api-call-log.service.js')
+  return recordApiCall<ReportRow[]>(
+    {
+      channel: 'AMAZON',
+      operation: 'ads report timeout GET /reporting/reports/:id',
+      endpoint: `/reporting/reports/${reportId}`,
+      method: 'GET',
+      requestPayload: { reportId, profileId: ctx.profileId, region: ctx.region, reportType: req.reportType, waitedMinutes: pollMinutes },
+    },
+    async () => {
+      const err = new Error(`[ADS-LIVE] report ${reportId} timed out after ${pollMinutes} minutes`) as Error & { statusCode: number }
+      err.statusCode = 504 // gateway-timeout shape: we gave up waiting, Amazon did not refuse
+      throw err
+    },
+  )
 }
 
 // ── Convenience helpers ────────────────────────────────────────────────

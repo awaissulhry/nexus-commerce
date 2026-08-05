@@ -49,7 +49,19 @@ export async function ingestTopOfSearchIS(opts: { windowDays?: number; marketpla
       // Campaign group-by only allows campaign-level columns — request a clean
       // minimal set (the base set's adGroupId/keywordId/adId/orders* are rejected
       // by the campaigns report). topOfSearchImpressionShare confirmed allowed.
-      rows = (await fetchReport(ctx, { reportType: 'campaigns', startDate: fmt(start), endDate: fmt(end), columnsOverride: ['date', 'campaignId', 'impressions', 'topOfSearchImpressionShare'] })) as unknown[]
+      // ACR.0.2 — pollMinutes 45, not the 10-minute default.
+      //
+      // Measured 2026-08-05: this report was still PENDING at the 10-minute ceiling on
+      // every profile, every night, which is the entire reason topOfSearchIS is null on
+      // all 3,383 placement rows. The request is accepted and the column is valid — a
+      // control request without it timed out identically — so the only defect was
+      // giving a batch report an interactive deadline.
+      //
+      // 45 is safe here specifically because profiles run in PARALLEL below, so this is
+      // the job's worst-case wall-clock, not 9× it, and it runs at 02:30 with nothing
+      // downstream waiting on it. If it still times out, the failure is now a logged
+      // 504 with the report id rather than a number in a summary nobody reads.
+      rows = (await fetchReport(ctx, { reportType: 'campaigns', startDate: fmt(start), endDate: fmt(end), columnsOverride: ['date', 'campaignId', 'impressions', 'topOfSearchImpressionShare'], pollMinutes: 45 })) as unknown[]
     } catch (e) {
       local.error = `${conn.profileId}: ${(e as Error).message}`
       return local
@@ -80,6 +92,13 @@ export async function ingestTopOfSearchIS(opts: { windowDays?: number; marketpla
     out.rowsFetched += p.rowsFetched; out.withIS += p.withIS; out.rowsUpdated += p.rowsUpdated
     if (p.error) out.errors.push(p.error)
     for (const s of p.sample) if (out.sample.length < 5) out.sample.push(s)
+  }
+  // ACR.0.2 — log the error TEXT, not just its count. Logging `errors: out.errors.length`
+  // is why nine identical nightly failures were only ever visible as the number 9.
+  if (out.errors.length) {
+    logger.error('[tos-is-ingest] profile failures', {
+      failed: out.errors.length, ofProfiles: out.profiles, errors: out.errors.slice(0, 5),
+    })
   }
   logger.info('[tos-is-ingest] done', { profiles: out.profiles, rowsFetched: out.rowsFetched, withIS: out.withIS, rowsUpdated: out.rowsUpdated, errors: out.errors.length })
   return out

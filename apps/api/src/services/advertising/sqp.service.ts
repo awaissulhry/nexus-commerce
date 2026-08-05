@@ -76,9 +76,21 @@ export function share(brand: number, total: number): number { return total > 0 ?
 
 /**
  * Defensively map an SQP report payload to flat rows. The report nests counts
- * under per-stage objects with brandCount/totalCount (or asinCount); field names
- * differ across report versions, so we try the common spellings and fall back to
- * 0. Pure + unit-tested.
+ * under per-stage objects; field names differ across report versions, so we try
+ * the known spellings and fall back to 0. Pure + unit-tested.
+ *
+ * ACR.0.2 — the "our side" counts were reading 0 on every one of 9,232 prod rows while
+ * the totals read 53.1M. The candidate list here was `brandCount ?? asinCount ?? brand`,
+ * none of which appears anywhere else in the codebase, and the unit test asserts against
+ * a fixture written from the same assumption — so the parser had only ever been proven
+ * self-consistent, never correct. The totals worked by luck: `totalQueryImpressionCount`
+ * is a real Amazon key and happened to be in that list.
+ *
+ * Amazon's real ASIN-level report prefixes each stage's own count with the stage name
+ * (`asinImpressionCount`, `asinClickCount`, `asinCartAddCount`, `asinPurchaseCount`), and
+ * the brand-level variant uses `brand…`. Both mean "our count" for our purposes, so both
+ * are accepted. Adding candidates to a `??` chain cannot regress the existing behaviour —
+ * an absent key falls through exactly as before.
  */
 export function parseSqp(payload: unknown): SqpRow[] {
   const root = (payload ?? {}) as Record<string, unknown>
@@ -105,16 +117,40 @@ export function parseSqp(payload: unknown): SqpRow[] {
       searchQueryVolume: num(r.searchQueryVolume ?? sqd.searchQueryVolume),
       searchQueryRank: r.searchQueryScore != null ? num(r.searchQueryScore) : sqd.searchQueryScore != null ? num(sqd.searchQueryScore) : null,
       impressionsTotal: num(imp.totalCount ?? imp.totalQueryImpressionCount ?? imp.total),
-      impressionsBrand: num(imp.brandCount ?? imp.asinCount ?? imp.brand),
+      impressionsBrand: num(imp.asinImpressionCount ?? imp.brandImpressionCount ?? imp.brandCount ?? imp.asinCount ?? imp.brand),
       clicksTotal: num(clk.totalCount ?? clk.totalClickCount ?? clk.total),
-      clicksBrand: num(clk.brandCount ?? clk.asinCount ?? clk.brand),
+      clicksBrand: num(clk.asinClickCount ?? clk.brandClickCount ?? clk.brandCount ?? clk.asinCount ?? clk.brand),
       cartAddsTotal: num(cart.totalCount ?? cart.totalCartAddCount ?? cart.total),
-      cartAddsBrand: num(cart.brandCount ?? cart.asinCount ?? cart.brand),
+      cartAddsBrand: num(cart.asinCartAddCount ?? cart.brandCartAddCount ?? cart.brandCount ?? cart.asinCount ?? cart.brand),
       purchasesTotal: num(pur.totalCount ?? pur.totalPurchaseCount ?? pur.total),
-      purchasesBrand: num(pur.brandCount ?? pur.asinCount ?? pur.brand),
+      purchasesBrand: num(pur.asinPurchaseCount ?? pur.brandPurchaseCount ?? pur.brandCount ?? pur.asinCount ?? pur.brand),
     })
   }
+  warnIfOurCountsNeverParsed(out, rowsRaw)
   return out
+}
+
+/**
+ * ACR.0.2 — the detector for the failure that hid this bug for months: rows arrive, totals
+ * populate, and every "our side" count is 0. That is nearly impossible as a fact about a
+ * live account (we would have to appear in no search we impressed on) and near-certain as a
+ * key-name mismatch, so it is worth one loud line rather than silence.
+ *
+ * Logs the offending row's real stage keys, which is the single piece of information that
+ * turns "the numbers look wrong" into a one-line fix.
+ */
+function warnIfOurCountsNeverParsed(rows: SqpRow[], raw: unknown[]): void {
+  if (!rows.length) return
+  const anyTotals = rows.some((r) => r.impressionsTotal > 0)
+  const anyOurs = rows.some((r) => r.impressionsBrand > 0 || r.clicksBrand > 0 || r.purchasesBrand > 0)
+  if (!anyTotals || anyOurs) return
+  const sample = (raw[0] ?? {}) as Record<string, unknown>
+  const stage = (sample.impressionData ?? sample.impressions ?? {}) as Record<string, unknown>
+  logger.warn('[sqp] parsed totals but ZERO of our own counts across every row — key-name mismatch, not an account fact', {
+    rows: rows.length,
+    impressionDataKeysSeen: Object.keys(stage),
+    triedForOurCount: ['asinImpressionCount', 'brandImpressionCount', 'brandCount', 'asinCount', 'brand'],
+  })
 }
 
 async function resolveMarketplaceId(code: string): Promise<string | null> {

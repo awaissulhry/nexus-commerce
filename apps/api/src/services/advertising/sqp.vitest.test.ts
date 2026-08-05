@@ -39,6 +39,55 @@ describe('share', () => {
 })
 
 describe('parseSqp', () => {
+  /**
+   * ACR.0.2 — every fixture below this line was WRITTEN FROM THE PARSER'S OWN ASSUMPTION,
+   * never from a captured Amazon payload. They all passed while prod produced 9,232 rows
+   * whose "our side" counts were 0 and whose totals were 53.1M, because the totals list
+   * happened to contain a real key and the brand list did not contain any.
+   *
+   * A green suite proved the parser self-consistent, not correct. Keep them (they pin the
+   * fallbacks), but treat a CAPTURED payload as the only source of truth about shape.
+   */
+  /**
+   * VERBATIM from a payload Amazon returned on 2026-08-05 (IT, ASIN B0BMSH19GY, week of
+   * 2026-07-19), captured by `scripts/_acr02-sqp-shape.mts`. Not hand-written — this is the
+   * only fixture in this file whose shape is evidence rather than assumption.
+   */
+  it('reads the metric-prefixed ASIN keys Amazon actually returns', () => {
+    const rows = parseSqp({
+      dataByAsin: [{
+        startDate: '2026-07-19', endDate: '2026-07-25', asin: 'B0BMSH19GY',
+        searchQueryData: { searchQuery: 'giubbotto moto uomo estivo', searchQueryScore: 6, searchQueryVolume: 816 },
+        impressionData: { totalQueryImpressionCount: 20110, asinImpressionCount: 230, asinImpressionShare: 1.14 },
+        clickData: { totalClickCount: 542, asinClickCount: 5, asinClickShare: 0.92 },
+        cartAddData: { totalCartAddCount: 11, asinCartAddCount: 0, asinCartAddShare: 0 },
+        purchaseData: { totalPurchaseCount: 1, asinPurchaseCount: 0, asinPurchaseShare: 0 },
+      }],
+    })
+    expect(rows).toHaveLength(1)
+    const r = rows[0]
+    expect(r.searchQuery).toBe('giubbotto moto uomo estivo')
+    expect(r.searchQueryVolume).toBe(816)
+    expect(r.searchQueryRank).toBe(6)
+    // The regression that mattered: our own counts must never silently read 0.
+    expect(r.impressionsBrand).toBe(230)
+    expect(r.impressionsTotal).toBe(20110)
+    expect(r.clicksBrand).toBe(5)
+    // Amazon ships asinImpressionShare as a PERCENT (1.14). We store 0..1 computed from
+    // counts, so the two agree only after scaling — never store Amazon's value raw.
+    expect(share(r.impressionsBrand, r.impressionsTotal) * 100).toBeCloseTo(1.14, 2)
+  })
+
+  it('still reads the brand-level spelling', () => {
+    const rows = parseSqp({
+      dataByAsin: [{
+        searchQuery: 'casco',
+        impressionData: { totalQueryImpressionCount: 400, brandImpressionCount: 100 },
+      }],
+    })
+    expect(rows[0].impressionsBrand).toBe(100)
+  })
+
   it('maps the nested brandCount/totalCount funnel shape', () => {
     const payload = {
       dataByDepartmentAndSearchQuery: [

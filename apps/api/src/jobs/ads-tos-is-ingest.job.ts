@@ -18,7 +18,17 @@ export async function runTosIsIngestCron(): Promise<void> {
     await recordCronRun('tos-is-ingest', async () => {
       const { ingestTopOfSearchIS } = await import('../services/advertising/ads-tos-is-ingest.service.js')
       const r = await ingestTopOfSearchIS({ windowDays: 7 })
-      return `profiles=${r.profiles} rowsFetched=${r.rowsFetched} withIS=${r.withIS} rowsUpdated=${r.rowsUpdated} errors=${r.errors.length}`
+      const head = `profiles=${r.profiles} rowsFetched=${r.rowsFetched} withIS=${r.withIS} rowsUpdated=${r.rowsUpdated} errors=${r.errors.length}`
+      // ACR.0.2: a job whose every profile failed must not read as SUCCESS.
+      //
+      // This ran `profiles=9 … errors=9` — a 100% failure — for months under a green
+      // CronRun, because the summary carried the error COUNT and never a message. Throwing
+      // here is what makes the row FAILED and puts the cause where somebody will find it.
+      if (r.errors.length && r.errors.length >= r.profiles) {
+        throw new Error(`${head} — every profile failed: ${r.errors.slice(0, 3).join(' | ')}`)
+      }
+      // A partial failure stays SUCCESS (some profiles delivered) but still says what broke.
+      return r.errors.length ? `${head} — ${r.errors.slice(0, 3).join(' | ')}` : head
     })
   } catch (err) {
     logger.error('tos-is-ingest cron: failure', { error: err instanceof Error ? err.message : String(err) })
