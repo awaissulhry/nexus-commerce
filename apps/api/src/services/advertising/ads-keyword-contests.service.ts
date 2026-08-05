@@ -139,10 +139,19 @@ export async function getAccountKeywordContests(args: {
       AND t."expressionValue" IS NOT NULL
     GROUP BY 1, 2, 3, 4, 5, 6, 7, 8`, String(windowDays), marketplace)
 
-  const grain = await prisma.$queryRawUnsafe<{ days: bigint }[]>(`
-    SELECT COUNT(DISTINCT date) AS days FROM "AmazonAdsDailyPerformance"
+  const grain = await prisma.$queryRawUnsafe<{ days: bigint; first: Date | null; last: Date | null }[]>(`
+    SELECT COUNT(DISTINCT date) AS days, MIN(date) AS first, MAX(date) AS last
+    FROM "AmazonAdsDailyPerformance"
     WHERE "entityType" = 'AD_TARGET' AND date > now() - ($1 || ' days')::interval`, String(windowDays))
   const daysWithData = Number(grain[0]?.days ?? 0)
+  // Read the range rather than assert it. The previous note hardcoded "the grain began
+  // accumulating on 2026-07-28" — true of the two-day state ACR.2.2 measured, and false the
+  // moment its backfill landed 29 more. It then sat next to "covers 29 of the last 30 days",
+  // which it directly contradicts: a grain starting 07-28 could show at most nine.
+  // toISOString, not String(): a Date stringifies to "Tue Jul 07 2026 …" in the server locale,
+  // and slice(0,10) then yields "Tue Jul 07" — a label, not a date an operator can sort or paste.
+  const grainFirst = grain[0]?.first ? grain[0].first.toISOString().slice(0, 10) : null
+  const grainLast = grain[0]?.last ? grain[0].last.toISOString().slice(0, 10) : null
 
   // One contest per (term × match). Match type is part of the key on purpose: the same word
   // held as EXACT by one campaign and BROAD by another is not the same auction.
@@ -250,7 +259,9 @@ export async function getAccountKeywordContests(args: {
       'No AD_TARGET-grain rows in the window, so every contest below is decided on bids alone. ' +
       'Champions read "highest bid, no traffic yet" — that is the absence of evidence, not a verdict.')
   } else if (daysWithData < windowDays) {
-    notes.push(`AD_TARGET grain covers ${daysWithData} of the last ${windowDays} days — the grain began accumulating on 2026-07-28.`)
+    notes.push(
+      `AD_TARGET grain covers ${daysWithData} of the last ${windowDays} days` +
+      (grainFirst && grainLast ? ` (${grainFirst} → ${grainLast})` : '') + '.')
   }
   if (crossPortfolio > 0) {
     notes.push(
