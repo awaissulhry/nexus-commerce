@@ -64,6 +64,23 @@ const band = (m: number | null): 'good' | 'warn' | 'bad' | 'none' => {
 
 const cents = (c: number) => eur2(c / 100)
 
+/**
+ * THE WINDOW HAS TO MATCH THE KPI ABOVE IT.
+ *
+ * `/advertising/summary` computes "True margin (30d)" over `date >= now-30d`, across every row.
+ * The first cut of this panel fetched `limit=500` with no date filter, which on prod meant the
+ * most recent 500 of 854 lifetime rows — a different population, so its footer margin and the KPI
+ * two inches above it would quote different percentages for the same account and both be "right".
+ * That is the same defect shape as the 100-of-150 grid under an all-150 total found earlier in this
+ * programme, and it is invisible to tsc.
+ *
+ * So: same 30 days, stated on the panel. 160 rows on prod, comfortably inside the cap — but the cap
+ * is still reported if it ever binds, because a silently truncated ledger under a whole-account
+ * headline is exactly what this comment exists to prevent.
+ */
+const WINDOW_DAYS = 30
+const ROW_CAP = 500
+
 export function ProfitPanel({ market }: { market: string }) {
   const [rows, setRows] = useState<ProfitRow[] | null>(null)
   const [error, setError] = useState(false)
@@ -73,7 +90,8 @@ export function ProfitPanel({ market }: { market: string }) {
     setRows(null)
     setError(false)
     const mp = market === 'all' ? '' : `&marketplace=${market}`
-    fetch(`${getBackendUrl()}/api/advertising/profit/daily?limit=500${mp}`, { cache: 'no-store' })
+    const from = new Date(Date.now() - WINDOW_DAYS * 24 * 3600 * 1000).toISOString().slice(0, 10)
+    fetch(`${getBackendUrl()}/api/advertising/profit/daily?limit=${ROW_CAP}&dateFrom=${from}${mp}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => { if (alive) setRows(Array.isArray(d?.items) ? d.items : []) })
       .catch(() => { if (alive) setError(true) })
@@ -102,11 +120,12 @@ export function ProfitPanel({ market }: { market: string }) {
   return (
     <div className="dash-card">
       <div className="dash-card-h">
-        True profit · per SKU, per day
+        True profit · per SKU, per day · last {WINDOW_DAYS} days
         {rows != null && rows.length > 0 && (
           <span className="dash-pnl-count">
             {intl(rows.length)} row{rows.length === 1 ? '' : 's'}
             {t.priced < rows.length && ` · ${intl(rows.length - t.priced)} without a cost price`}
+            {rows.length >= ROW_CAP && ` · capped at ${intl(ROW_CAP)}, totals cover only these`}
           </span>
         )}
       </div>
@@ -117,7 +136,7 @@ export function ProfitPanel({ market }: { market: string }) {
         <div className="dash-empty">Could not load the profit ledger.</div>
       ) : rows.length === 0 ? (
         <div className="dash-empty">
-          No P&amp;L rows yet — the true-profit rollup has not run for this market.
+          No P&amp;L rows in the last {WINDOW_DAYS} days for this market — the true-profit rollup has not run.
         </div>
       ) : (
         <>
