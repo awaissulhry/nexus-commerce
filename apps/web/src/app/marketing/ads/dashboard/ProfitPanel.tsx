@@ -102,20 +102,40 @@ export function ProfitPanel({ market }: { market: string }) {
 
   // Totals over every row fetched, not just the visible slice — a footer that only added up what
   // you can see would disagree with itself the moment you scrolled.
+  //
+  // `pricedRevenue` is tracked separately from `revenue` and it is the whole point. See below.
   const t = (rows ?? []).reduce(
     (a, r) => {
       a.revenue += r.grossRevenueCents
       a.cogs += r.cogsCents
       a.fees += r.referralFeesCents + r.fbaFulfillmentFeesCents + r.fbaStorageFeesCents
       a.adSpend += r.advertisingSpendCents
-      if (r.trueProfitCents != null) { a.profit += r.trueProfitCents; a.priced += 1 }
+      if (r.trueProfitCents != null) {
+        a.profit += r.trueProfitCents
+        a.pricedRevenue += r.grossRevenueCents
+        a.priced += 1
+      }
       return a
     },
-    { revenue: 0, cogs: 0, fees: 0, adSpend: 0, profit: 0, priced: 0 },
+    { revenue: 0, cogs: 0, fees: 0, adSpend: 0, profit: 0, pricedRevenue: 0, priced: 0 },
   )
-  // Only claim a margin when at least one row could compute a profit — an all-null sum divided by
-  // revenue is a confident 0%, which is the one number that reads as "measured, and it is zero".
-  const totalMargin = t.priced > 0 && t.revenue > 0 ? t.profit / t.revenue : null
+
+  /**
+   * MARGIN IS PROFIT ÷ THE REVENUE THAT COULD BE PRICED — not ÷ all revenue.
+   *
+   * `/advertising/summary` does exactly this (ACR.0.5): it sums `trueProfitCents` and
+   * `grossRevenueCents` over rows `WHERE trueProfitCents IS NOT NULL`, because dividing a partial
+   * profit by total revenue understates margin in exact proportion to how much cost data is
+   * missing. This panel divided by total revenue and therefore printed **16.1%** directly beneath
+   * a KPI reading **37%** — measured on prod, both "right", neither trustworthy next to the other.
+   *
+   * With 268 of 500 rows carrying no cost price, that gap was not a rounding difference; it was the
+   * panel silently answering a different question from the headline it sits under. Same window,
+   * same denominator rule, and the coverage share is stated so a reader can see how much of the
+   * account the figure actually speaks for.
+   */
+  const totalMargin = t.priced > 0 && t.pricedRevenue > 0 ? t.profit / t.pricedRevenue : null
+  const coveredPct = t.revenue > 0 ? (t.pricedRevenue / t.revenue) * 100 : 0
 
   return (
     <div className="dash-card">
@@ -142,16 +162,23 @@ export function ProfitPanel({ market }: { market: string }) {
         <>
           <div className="dash-pnl-tot">
             {([
-              ['Revenue', cents(t.revenue)],
-              ['COGS', cents(t.cogs)],
-              ['Fees', cents(t.fees)],
-              ['Ad spend', cents(t.adSpend)],
-              ['True profit', cents(t.profit)],
-              ['Margin', totalMargin != null ? `${(totalMargin * 100).toFixed(1)}%` : '—'],
-            ] as const).map(([k, v]) => (
+              ['Revenue', cents(t.revenue), undefined],
+              ['COGS', cents(t.cogs), undefined],
+              ['Fees', cents(t.fees), undefined],
+              ['Ad spend', cents(t.adSpend), undefined],
+              ['True profit', cents(t.profit), t.priced < (rows?.length ?? 0) ? `over ${intl(t.priced)} priced row${t.priced === 1 ? '' : 's'}` : undefined],
+              [
+                'Margin',
+                totalMargin != null ? `${(totalMargin * 100).toFixed(1)}%` : '—',
+                // Same sentence the KPI above uses, for the same reason: a margin that covers
+                // 40% of revenue and one that covers all of it must not look identical.
+                totalMargin != null && coveredPct < 99.5 ? `covers ${coveredPct.toFixed(0)}% of revenue` : undefined,
+              ],
+            ] as const).map(([k, v, sub]) => (
               <div className="dash-pnl-t" key={k}>
                 <span className="k">{k}</span>
                 <span className={`v${k === 'Margin' ? ` b-${band(totalMargin)}` : ''}`}>{v}</span>
+                {sub && <span className="s">{sub}</span>}
               </div>
             ))}
           </div>

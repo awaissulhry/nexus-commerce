@@ -64,6 +64,9 @@
 .dash-pnl-t .k { display: block; font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: #8a93a1; }
 .dash-pnl-t .v { display: block; margin-top: 3px; font-size: 15px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
 .dash-pnl-t .v.b-good { color: #067d62; } .dash-pnl-t .v.b-warn { color: #b87503; } .dash-pnl-t .v.b-bad { color: #e5484d; }
+/* The coverage caption under a total — a margin over 40% of revenue and one over
+   all of it must not read the same. Mirrors the KPI strip's own explainer. */
+.dash-pnl-t .s { display: block; margin-top: 2px; font-size: 10px; line-height: 1.35; color: #8a93a1; }
 
 /* The table is wider than the card on a narrow window, so it scrolls inside its own box —
    the page body must never scroll sideways. */
