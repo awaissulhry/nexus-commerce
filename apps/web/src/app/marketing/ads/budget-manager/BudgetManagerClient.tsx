@@ -15,7 +15,7 @@
  * engine that acts on them (and floors bids instead of pausing) lands in BM.B3.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Info, Settings, MoreVertical, ChevronDown, ChevronLeft, ChevronRight, Pencil, AlertTriangle, BadgeDollarSign, Sparkles, Network, Search } from 'lucide-react'
+import { Info, Settings, MoreVertical, ChevronDown, ChevronLeft, ChevronRight, Pencil, AlertTriangle, BadgeDollarSign, Sparkles, Network, Search, Wallet } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridSelectFilter } from '../campaigns/_grid/AdsDataGrid'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -25,6 +25,7 @@ import '@/design-system/styles/components.css'
 import { Modal, Drawer } from '@/design-system/components'
 import './budget-manager.css'
 import { ControlPlane } from './ControlPlane'
+import { BudgetPoolsDrawer } from './BudgetPoolsDrawer'
 
 // ── types (mirror ads-budget-manager.service BudgetManagerResult) ──────────
 interface SpendSlice { month: string; budgetCents: number; spendCents: number | null; pct: number | null; daily: number[] }
@@ -275,6 +276,9 @@ export function BudgetManagerClient() {
   const [enforcement, setEnforcement] = useState<EnforcementResult | null>(null)
   const [canvasOpen, setCanvasOpen] = useState(false)
   const [canvasMarket, setCanvasMarket] = useState('')
+  // ACR.6 (R9) — pools share ONE daily budget across markets; the grid above caps each market for
+  // one month. Different grain, same subject, so: a drawer here rather than a row in the grid.
+  const [poolsOpen, setPoolsOpen] = useState(false)
   const toast = useCallback((m: string) => { setToastMsg(m); window.setTimeout(() => setToastMsg((cur) => (cur === m ? null : cur)), 2600) }, [])
 
   const load = useCallback(async (m: string) => {
@@ -364,6 +368,7 @@ export function BudgetManagerClient() {
         {month !== nowMonth() && <button type="button" className="bm-today" onClick={() => setMonth(nowMonth())}>This month</button>}
         {result && <span className="bm-mb-sum">Budget <b>{eur(result.totals.budgetCents)}</b> · Spent <b>{eur(result.totals.spendCents)}</b>{result.totals.pct != null && <em> ({pctTxt(result.totals.pct)})</em>}</span>}
         <span className="bm-grow" />
+        <button type="button" className="h10-am-btn" onClick={() => setPoolsOpen(true)}><Wallet size={13} /> Budget Pools</button>
         <button type="button" className="h10-am-btn" onClick={() => { setCanvasMarket(enforcement?.plans[0]?.marketplace ?? markets[0] ?? ''); setCanvasOpen(true) }}><Network size={13} /> Allocation Map</button>
         {result && <span className="bm-mb-day">Day {result.dayOfMonth} of {result.daysInMonth}</span>}
       </div>
@@ -401,6 +406,7 @@ export function BudgetManagerClient() {
       {settingsFor && <SettingsModal row={settingsFor} month={month} onClose={() => setSettingsFor(null)} onSaved={() => load(month)} toast={toast} />}
       {moreFor && <MoreDrawer row={moreFor} month={month} onClose={() => setMoreFor(null)} onSaved={() => load(month)} toast={toast} />}
       <FaqDrawer open={faqOpen} onClose={() => setFaqOpen(false)} />
+      <BudgetPoolsDrawer open={poolsOpen} onClose={() => setPoolsOpen(false)} toast={toast} />
       <ControlPlane open={canvasOpen} onClose={() => setCanvasOpen(false)} enforcement={enforcement} month={month} initialMarket={canvasMarket} onCommitted={() => load(month)} toast={toast} />
 
       {toastMsg && <div className="bm-toast" role="status">{toastMsg}</div>}
