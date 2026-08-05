@@ -25,6 +25,7 @@
  */
 import prisma from '../../db.js'
 import { getAutomationState } from './ads-automation-state.service.js'
+import { getCoverageScoreboard } from './ads-coverage.service.js'
 
 export type Severity = 'critical' | 'warning' | 'info'
 
@@ -123,6 +124,7 @@ export async function getTodayBoard(): Promise<TodayBoard> {
   const since24h = new Date(now.getTime() - DAY)
 
   const [
+    coverage,
     waste,
     unbounded,
     pending,
@@ -138,6 +140,9 @@ export async function getTodayBoard(): Promise<TodayBoard> {
     allowlisted,
     withoutFloor,
   ] = await Promise.all([
+    // ACR.2.6 — the coverage board's most actionable fact belongs here too. Fails soft: Today
+    // must still render if SQP is unavailable, because every other row on it is unrelated.
+    getCoverageScoreboard({ marketplace: 'IT', limit: 200 }).catch(() => null),
     wastedSpend(),
     unboundedRankModes(),
     prisma.adsRuleSuggestion.count({ where: { status: 'pending' } }),
@@ -322,6 +327,34 @@ export async function getTodayBoard(): Promise<TodayBoard> {
       action: { label: 'Open product costs', href: '/products/costs' },
       since: null,
     })
+  }
+
+  // ── Big markets with no keyword at all ────────────────────────────────
+  // The one coverage fact that is directly actionable: a term with real volume that nothing of
+  // ours bids on. Deliberately NOT priced — the € of a keyword we do not run is a forecast, and
+  // this board reports measurements. The market size is the fact; its value would be a guess.
+  if (coverage?.measured) {
+    const gaps = coverage.rows
+      .filter((r) => r.targets === 0 && r.marketImpressions >= 25_000)
+      .sort((a, b) => b.marketImpressions - a.marketImpressions)
+    if (gaps.length > 0) {
+      const top = gaps.slice(0, 3).map((g) => `${g.term} (${g.marketImpressions.toLocaleString('en-IE')})`)
+      const totalImpr = gaps.reduce((a, g) => a + g.marketImpressions, 0)
+      ex.push({
+        key: 'coverage-gaps',
+        severity: 'warning',
+        title: `${gaps.length} large search terms have no keyword at all`,
+        detail:
+          `${top.join(' · ')}${gaps.length > 3 ? ` and ${gaps.length - 3} more` : ''}. ` +
+          `${totalImpr.toLocaleString('en-IE')} impressions a week that nothing of ours bids on. ` +
+          'Counted against positive keywords only — a negative on the term is not holding it.',
+        count: gaps.length,
+        amountCents: null,
+        amountNote: `${totalImpr.toLocaleString('en-IE')} weekly impressions unbid — a value here would be a forecast, not a measurement`,
+        action: { label: 'Open Coverage', href: '/marketing/ads/analytics' },
+        since: null,
+      })
+    }
   }
 
   // ── Campaigns automation may write to with no floor ───────────────────

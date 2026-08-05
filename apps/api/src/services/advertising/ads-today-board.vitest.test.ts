@@ -192,6 +192,24 @@ describe('rank modes without a CPC ceiling', () => {
   })
 })
 
+describe('coverage gaps', () => {
+  it('is silent when the coverage week is unmeasured — a gap you cannot see is not a gap', async () => {
+    // getCoverageScoreboard runs against the same mocked prisma and resolves unmeasured.
+    const b = await getTodayBoard()
+    expect(b.exceptions.find((e) => e.key === 'coverage-gaps')).toBeUndefined()
+  })
+
+  it('never prices a keyword we do not run — that would be a forecast', async () => {
+    // Whatever else changes, this row must stay unpriced: the board reports measurements.
+    const b = await getTodayBoard()
+    const row = b.exceptions.find((e) => e.key === 'coverage-gaps')
+    if (row) {
+      expect(row.amountCents).toBeNull()
+      expect(row.amountNote).toMatch(/forecast/)
+    }
+  })
+})
+
 describe('freshness', () => {
   it('only counts refused writes from the last 48 hours', async () => {
     counts.mutationCount.mockResolvedValue(0) // 167 older failures exist, none recent

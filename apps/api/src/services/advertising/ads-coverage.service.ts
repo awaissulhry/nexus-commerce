@@ -130,7 +130,8 @@ export async function getCoverageScoreboard(args: {
            -- are stored as expressionType 'EXACT' with isNegative = true, and only 20 rows in the
            -- whole table use 'NEGATIVE_EXACT'. Filtering on the match-type string therefore counts
            -- 2,034 NEGATIVE keywords as coverage — a term we have explicitly excluded ourselves
-           -- from would have read as a term we hold. Same two-vocabularies trap as EXACT/_EXACT.
+           -- from would have read as a term we hold. Negative-exact has three spellings in this
+           -- table (EXACT, _EXACT, NEGATIVE_EXACT), so the boolean is the only safe discriminator.
            (SELECT COUNT(DISTINCT t.id) FROM "AdTarget" t
               JOIN "AdGroup" g ON g.id = t."adGroupId"
               JOIN "Campaign" c ON c.id = g."campaignId"
