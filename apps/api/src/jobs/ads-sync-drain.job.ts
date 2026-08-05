@@ -24,30 +24,19 @@ import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
-/**
- * ACR.1.2d — the tick's work AND its summary, without the CronRun wrapper.
- *
- * Extracted so the manual-trigger registry can call this directly. Registering the `*Cron`
- * form instead writes TWO CronRun rows per hand-run — the trigger route opens its own
- * `recordCronRun`, and so does the wrapper below — one labelled `manual` carrying nothing
- * and a nested one labelled `cron` carrying the real numbers. The Levers drawer reads
- * exactly this table, so a hand-run appeared twice, mislabelled.
- */
-export async function runAdsSyncDrainOnce(): Promise<string> {
-  const { drainAdsSyncOnce } = await import('../workers/ads-sync.worker.js')
-  const r = await drainAdsSyncOnce(100)
-  // AX-ZD.1 — reclaim/dead-letter counts belong in the summary an operator
-  // actually reads. A sweep that quietly dead-letters a bid change is the
-  // same silent failure this whole phase exists to remove.
-  const swept = r.reclaimed || r.deadLettered
-    ? ` reclaimed=${r.reclaimed} deadLettered=${r.deadLettered}`
-    : ''
-  return `processed=${r.processed}${swept}`
-}
-
 export async function runAdsSyncDrainCron(): Promise<void> {
   try {
-    await recordCronRun('drain-ads-sync', runAdsSyncDrainOnce)
+    await recordCronRun('drain-ads-sync', async () => {
+      const { drainAdsSyncOnce } = await import('../workers/ads-sync.worker.js')
+      const r = await drainAdsSyncOnce(100)
+      // AX-ZD.1 — reclaim/dead-letter counts belong in the summary an operator
+      // actually reads. A sweep that quietly dead-letters a bid change is the
+      // same silent failure this whole phase exists to remove.
+      const swept = r.reclaimed || r.deadLettered
+        ? ` reclaimed=${r.reclaimed} deadLettered=${r.deadLettered}`
+        : ''
+      return `processed=${r.processed}${swept}`
+    })
   } catch (err) {
     logger.error('drain-ads-sync cron: failure', { error: err instanceof Error ? err.message : String(err) })
   }

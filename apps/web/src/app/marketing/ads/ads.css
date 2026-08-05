@@ -3202,11 +3202,3 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
   background: #eef3fd; border: 1px solid #c8d8f5; border-radius: 4px; padding: 1.5px 5px;
 }
 .h10-auto-sup { font-size: 12px; font-weight: 700; color: #9a6700; line-height: 1; }
-
-/* ACR.1.6b — the two pill variants the delivery column has always referenced but
-   ads.css never defined. `bad` rendered transparent with body-colour text, so a
-   FAILED write looked like plain text; `muted` is new, because "gated" and "no
-   write" are the containment boundary working, not faults, and 134 of 216
-   campaigns are in it. */
-.h10-pill.bad { color: #a3342b; background: #fdeceb; }
-.h10-pill.muted { color: #6b7480; background: #eef1f5; }

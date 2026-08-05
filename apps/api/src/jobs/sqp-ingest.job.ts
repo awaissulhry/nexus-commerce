@@ -18,34 +18,27 @@ import { envEnabled } from '../utils/env-flag.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
-/**
- * ACR.1.2d — the tick's work AND its summary, without the CronRun wrapper, so the
- * manual-trigger registry can call it and produce ONE honest row. See the same note on
- * ads-sync-drain.job.ts.
- */
-export async function runSqpIngestOnce(): Promise<string> {
-  const { ingestSqp } = await import('../services/advertising/sqp.service.js')
-  const conns = await prisma.amazonAdsConnection.findMany({ where: { isActive: true }, select: { marketplace: true } })
-  const markets = [...new Set(conns.map((c) => c.marketplace))]
-  let totalRows = 0
-  let ok = 0
-  let failed = 0
-  for (const mkt of markets) {
-    try {
-      const r = await ingestSqp({ marketplaceCode: mkt, period: 'WEEK' })
-      totalRows += r.upserted
-      ok += 1
-    } catch (err) {
-      failed += 1
-      logger.warn('[sqp-ingest] marketplace failed', { marketplace: mkt, error: err instanceof Error ? err.message : String(err) })
-    }
-  }
-  return `markets=${markets.length} ok=${ok} failed=${failed} rows=${totalRows}`
-}
-
 export async function runSqpIngestCron(): Promise<void> {
   try {
-    await recordCronRun('sqp-ingest', runSqpIngestOnce)
+    await recordCronRun('sqp-ingest', async () => {
+      const { ingestSqp } = await import('../services/advertising/sqp.service.js')
+      const conns = await prisma.amazonAdsConnection.findMany({ where: { isActive: true }, select: { marketplace: true } })
+      const markets = [...new Set(conns.map((c) => c.marketplace))]
+      let totalRows = 0
+      let ok = 0
+      let failed = 0
+      for (const mkt of markets) {
+        try {
+          const r = await ingestSqp({ marketplaceCode: mkt, period: 'WEEK' })
+          totalRows += r.upserted
+          ok += 1
+        } catch (err) {
+          failed += 1
+          logger.warn('[sqp-ingest] marketplace failed', { marketplace: mkt, error: err instanceof Error ? err.message : String(err) })
+        }
+      }
+      return `markets=${markets.length} ok=${ok} failed=${failed} rows=${totalRows}`
+    })
   } catch (err) {
     logger.error('sqp-ingest cron: failure', { error: err instanceof Error ? err.message : String(err) })
   }
