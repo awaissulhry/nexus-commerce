@@ -154,14 +154,20 @@ export function RulesSection() {
         ACR.4.1 — stated once, at the top, rather than repeated on every row. Graduation is the
         mechanism that ends daily attention, so what it costs has to be legible before an
         operator meets the first verdict.
+
+        The icon and the sentence are the flex container's only two children. Left as bare text
+        nodes, the emphasised word became its own flex item and the sentence rendered as three
+        side-by-side columns.
       */}
       {grad.size > 0 && (
         <p className="acr-grad-rule">
           <GraduationCap size={13} />
-          A rule is offered the Auto notch after you have applied its proposals <strong>unchanged</strong> in
-          {' '}{weeksRequired} separate weeks with no failures. Running cleanly is not the same evidence and
-          never earns it — nor does any ceiling move: rules that create or destroy things stay gated whatever
-          their history.
+          <span>
+            A rule is offered the Auto notch after you have applied its proposals <strong>unchanged</strong>
+            {' '}in {weeksRequired} separate weeks with no failures. Running cleanly is not the same evidence
+            and never earns it — nor does any ceiling move: rules that create or destroy things stay gated
+            whatever their history.
+          </span>
         </p>
       )}
 

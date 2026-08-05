@@ -282,9 +282,20 @@ export async function getWeeklyDigest(
     }
   } catch { coverage = null }
 
+  /**
+   * Failing rules first, THEN by volume.
+   *
+   * Sorted by volume alone, the account's only genuinely failing rule sat outside the twelve
+   * rows both the panel and the email show — so the header read "40 real failures" above a
+   * table whose every Failed cell was a dash. A summary that can report a failure and then hide
+   * which rule caused it is worse than one that reports neither.
+   */
   const ordered = [...rows.values()]
     .filter((r) => r.acted + r.proposed + r.denied + r.applied + r.failed > 0 || r.declined > 0)
-    .sort((a, b) => (b.acted + b.proposed) - (a.acted + a.proposed) || a.name.localeCompare(b.name))
+    .sort((a, b) =>
+      Number(b.failed > 0) - Number(a.failed > 0)
+      || (b.acted + b.proposed) - (a.acted + a.proposed)
+      || a.name.localeCompare(b.name))
 
   const totals = ordered.reduce(
     (t, r) => ({

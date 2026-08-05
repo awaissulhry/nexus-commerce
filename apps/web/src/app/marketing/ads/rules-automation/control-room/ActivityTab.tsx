@@ -211,7 +211,7 @@ function ThisWeek({ d, onSend, sending, sent }: {
           failure. Kept out of the table so the three columns above stay comparable. */}
       {t.declined > 0 && (
         <p className="acr-week-note">
-          {t.declined.toLocaleString('en-IE')} runs were declined by the engine&rsquo;s own daily cap — the engine
+          {t.declined.toLocaleString('en-IE')}{' '}runs were declined by the engine&rsquo;s own daily cap — the engine
           refusing itself, not a failure and not your decision. Almost all of these are the self-ratcheting
           cap bug fixed on 4 August; the count should fall to near zero from this week on.
         </p>
@@ -255,6 +255,7 @@ export function ActivityTab() {
   const [digest, setDigest] = useState<Digest | null>(null)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState<string | null>(null)
+  const [digestErr, setDigestErr] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -270,7 +271,8 @@ export function ActivityTab() {
       const w = await fetch(`${getBackendUrl()}/api/advertising/digest/weekly?mode=current`, { cache: 'no-store' })
       if (!w.ok) throw new Error(String(w.status))
       setDigest((await w.json()) as Digest)
-    } catch { setDigest(null) }
+      setDigestErr(null)
+    } catch (e) { setDigest(null); setDigestErr((e as Error).message) }
   }, [])
   useEffect(() => { void load() }, [load])
 
@@ -297,7 +299,14 @@ export function ActivityTab() {
 
   return (
     <div className="acr-activity">
-      {digest && <ThisWeek d={digest} onSend={() => void sendTest()} sending={sending} sent={sent} />}
+      {/* The rollup aggregates a week of executions, prices 150 proposals and reads two weeks of
+          coverage — a few seconds even warm. Without this the section simply is not there while
+          it loads, which reads as "there is no rollup" rather than "it is coming". */}
+      {digest
+        ? <ThisWeek d={digest} onSend={() => void sendTest()} sending={sending} sent={sent} />
+        : digestErr
+          ? <div className="acr-banner warn"><AlertTriangle size={15} /> This week&rsquo;s rollup could not be built ({digestErr}). The change feed below is unaffected.</div>
+          : <div className="acr-empty">Summarising this week…</div>}
 
       <div className="acr-sec-head">
         <h2>What automation did</h2>

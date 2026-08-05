@@ -364,7 +364,10 @@ function SuggestionsInner() {
 
   const load = useCallback(async () => {
     try {
-      const j = await fetch(`${getBackendUrl()}/api/advertising/suggestions?status=${status}`).then((r) => r.json())
+      // limit=300 (the endpoint's ceiling), not the default 100. With 150 pending, the default
+      // showed 100 rows under a "Spend at stake" tile computed over all 150 — the grid and the
+      // money disagreeing about which rows they describe.
+      const j = await fetch(`${getBackendUrl()}/api/advertising/suggestions?status=${status}&limit=300`).then((r) => r.json())
       setItems(Array.isArray(j?.items) ? j.items : [])
     } catch { setItems([]) } finally { setLoading(false) }
     // ACR.4.4 — pricing is a separate, slower call and only means anything for pending rows.
@@ -488,6 +491,28 @@ function SuggestionsInner() {
   // whole purpose is to rank by money.
   const stakeSort = (s: Suggestion): number => pricing?.byId[s.id]?.spendAtStakeCents ?? -1
 
+  /**
+   * The default order is the PRICING SERVICE's order — recoverable first, then by size — not
+   * raw € descending.
+   *
+   * Sorting purely by € put the six biggest rows at the top as bid-downs on keywords that are
+   * SELLING (€230.20, €159.60, …), with every pure-waste row buried beneath them. Both orderings
+   * are defensible, but the service argues explicitly for this one: an operator working top-down
+   * should meet the decisions that are pure upside before the ones that involve a trade. Two of
+   * our own components disagreeing about how to rank the same list is worse than either answer.
+   *
+   * The grid preserves `rows` order when no sort is set, so this is the opening view; clicking
+   * "€ at stake" still sorts by € alone, which is what that header should mean.
+   */
+  const ordered = useMemo(() => {
+    if (status !== 'pending' || !pricing) return items
+    return [...items].sort((a, b) => {
+      const pa = pricing.byId[a.id], pb = pricing.byId[b.id]
+      return Number(!!pb?.recoverable) - Number(!!pa?.recoverable)
+        || (pb?.spendAtStakeCents ?? -1) - (pa?.spendAtStakeCents ?? -1)
+    })
+  }, [items, pricing, status])
+
   const columns: GridColumn<Suggestion>[] = [
     { key: 'proposed', label: 'Proposed change', metric: false, sortable: true, sortValue: (s) => s.proposedAction?.type ?? '', render: (s) => <ProposedCell s={s} /> },
     ...(status === 'pending' ? [{
@@ -533,7 +558,7 @@ function SuggestionsInner() {
         <p className="h10-sug-kbd"><Kbd>j</Kbd><Kbd>k</Kbd> move · {status === 'pending' ? <><Kbd>a</Kbd> approve · <Kbd>e</Kbd> dismiss</> : <><Kbd>r</Kbd> restore</>} · <Kbd>o</Kbd> open</p>
       )}
       <AdsDataGrid<Suggestion>
-        rows={items}
+        rows={ordered}
         loading={loading}
         rowId={(s) => s.id}
         noun="suggestion"
@@ -548,10 +573,11 @@ function SuggestionsInner() {
         // on (matches every console grid + sets up S.4 bulk). Bulk-action wiring lands in S.4.
         selectable
         customizable={false}
-        // Pending opens ranked by money, not by recency: 150 rows sorted newest-first is the
+        // Pending opens in `ordered` (pure waste first, then by size) — no defaultSort, because
+        // the grid preserves row order when none is set. 150 rows sorted newest-first is the
         // undifferentiated list nobody acted on. Applied/dismissed keep the chronological view,
         // where "what did I just do" is the actual question.
-        defaultSort={status === 'pending' ? { key: 'stake', dir: 'desc' } : { key: 'when', dir: 'desc' }}
+        defaultSort={status === 'pending' ? undefined : { key: 'when', dir: 'desc' }}
         onRowClick={(s) => setDetailId(s.id)}
         keyboardNav={!detail}
         onRowKey={(s, k) => {
