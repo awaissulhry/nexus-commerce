@@ -118,6 +118,37 @@ export function IconReplicate({ size = 36, style }: P) {
   )
 }
 
+/* ACR Stage 5 — Sponsored Display: a detail-page panel with an ad slot beside it, the
+   inventory SP cannot reach. */
+export function IconDisplay({ size = 36, style }: P) {
+  return (
+    <svg viewBox="0 0 48 48" fill="none" style={box(size, style)} aria-hidden>
+      {/* the page */}
+      <rect x="5" y="9" width="24" height="30" rx="2.5" fill="#e8f1fc" stroke="#2c6fd8" strokeWidth="1.8" />
+      <rect x="9" y="14" width="16" height="9" rx="1.4" fill="#a9cef4" />
+      <path d="M9 27.5h16M9 31.5h11" stroke="#5a9ae6" strokeWidth="1.8" strokeLinecap="round" />
+      {/* the display slot alongside it */}
+      <rect x="33" y="14" width="11" height="20" rx="2" fill="#3f8ae8" stroke="#1b50a4" strokeWidth="1.6" />
+      <path d="M36 20h5M36 24h5M36 28h3" stroke="#e8f1fc" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/* ACR Stage 5 — Sponsored Brands: the headline banner sitting above the result rows. */
+export function IconBanner({ size = 36, style }: P) {
+  return (
+    <svg viewBox="0 0 48 48" fill="none" style={box(size, style)} aria-hidden>
+      {/* the banner — the slot only SB can win */}
+      <rect x="5" y="8" width="38" height="13" rx="2.5" fill="#3f8ae8" stroke="#1b50a4" strokeWidth="1.8" />
+      <circle cx="12.5" cy="14.5" r="3.2" fill="#e8f1fc" />
+      <path d="M19 12h18M19 17h12" stroke="#e8f1fc" strokeWidth="1.8" strokeLinecap="round" />
+      {/* the organic results below it */}
+      <rect x="5" y="26" width="38" height="6" rx="1.6" fill="#e8f1fc" stroke="#a9cef4" strokeWidth="1.4" />
+      <rect x="5" y="35" width="38" height="6" rx="1.6" fill="#e8f1fc" stroke="#a9cef4" strokeWidth="1.4" />
+    </svg>
+  )
+}
+
 /* ── AI-Goal "Select AI Target" icons (simple blue line glyphs in the same circle) ── */
 
 /* Impression & Click — eye. */

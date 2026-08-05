@@ -10,7 +10,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ChevronDown } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { IconAtom, IconQuick, IconCubes, IconRocket, IconCube, IconReplicate } from '../_shell/builder-icons'
+import { IconAtom, IconQuick, IconCubes, IconRocket, IconCube, IconReplicate, IconDisplay, IconBanner } from '../_shell/builder-icons'
 
 const FLAG: Record<string, string> = { IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', GB: '🇬🇧', UK: '🇬🇧', NL: '🇳🇱', SE: '🇸🇪', PL: '🇵🇱', BE: '🇧🇪', IE: '🇮🇪', TR: '🇹🇷', US: '🇺🇸' }
 const MARKET_NAME: Record<string, string> = { IT: 'Italy', DE: 'Germany', FR: 'France', ES: 'Spain', GB: 'United Kingdom', UK: 'United Kingdom', NL: 'Netherlands', SE: 'Sweden', PL: 'Poland', BE: 'Belgium', IE: 'Ireland', TR: 'Türkiye', US: 'United States' }
@@ -23,6 +23,13 @@ const TYPES: TypeCard[] = [
   { key: 'sp-super-wizard', title: 'SP Super Wizard', Icon: IconRocket, bestFor: 'Sellers with customized needs', desc: 'Quickly create multiple campaigns, customize naming rules, ie match types, keyword types ( Brand, Category, Competitor),structure templates.' },
 ]
 const SINGLE: TypeCard = { key: 'single', title: 'Single Campaign', Icon: IconCube, bestFor: 'Experienced Sellers', desc: 'Set up a single Sponsored Product, Sponsored Brand or Sponsored Display campaign that can be added to an existing Rule.' }
+// ACR Stage 5 — the other two ad products. Every builder above this line creates Sponsored
+// Products; SB and SD win page-one slots SP cannot bid on at all, which is why they are the
+// largest untapped coverage lever. Both are dry-run-first and create PAUSED by default.
+// Sponsored Brands Video belongs beside these two and is deliberately absent until video
+// creative exists — see the note on the builder itself.
+const SD_CARD: TypeCard = { key: 'sd', title: 'Sponsored Display', Icon: IconDisplay, bestFor: 'Sellers who want detail-page and off-Amazon reach', desc: 'Product, category and audience targeting that runs on detail pages and off Amazon. It buys different inventory from Sponsored Products, so it stacks with your SP slots instead of competing for them.' }
+const SB_CARD: TypeCard = { key: 'sb', title: 'Sponsored Brands', Icon: IconBanner, bestFor: 'Brand-registered sellers', desc: 'The headline banner above the organic results — logo, custom headline and up to three products. It is the only format that can occupy the top-of-page banner slot.' }
 // AX3.2 — replication is a way of creating campaigns, so it belongs with the
 // other ways of creating campaigns rather than off in the nav rail.
 const REPLICATE: TypeCard = { key: 'replicate', title: 'Replicate Structure', Icon: IconReplicate, bestFor: 'Sellers launching a product like one they already run', desc: 'Copy a portfolio, a set of campaigns or single ad groups onto another product — keywords, negatives, bids, budgets and placement modifiers included. Rename in bulk, edit anything before it is created, and resolve any keyword that would make your two products bid against each other.' }
@@ -99,6 +106,8 @@ export function CampaignBuilder() {
     else if (key === 'quick') router.push('/marketing/ads/campaign-builder/quick')
     else if (key === 'guided') router.push('/marketing/ads/campaign-builder/guided')
     else if (key === 'replicate') router.push('/marketing/ads/campaign-builder/replicate')
+    else if (key === 'sd') router.push('/marketing/ads/campaign-builder/sb-sd?type=SD')
+    else if (key === 'sb') router.push('/marketing/ads/campaign-builder/sb-sd?type=SB')
   }
   return (
     <div className="h10-cb">
@@ -119,6 +128,8 @@ export function CampaignBuilder() {
             {TYPES.map((t) => <TypeCardView key={t.key} t={t} onPick={pick} />)}
             <TypeCardView t={SINGLE} onPick={pick} />
             <TypeCardView t={REPLICATE} onPick={pick} />
+            <TypeCardView t={SD_CARD} onPick={pick} />
+            <TypeCardView t={SB_CARD} onPick={pick} />
           </div>
         </section>
       </div>
