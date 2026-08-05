@@ -106,6 +106,34 @@
 .acr-facts div:first-child dd { white-space: normal; line-height: 1.35; }
 .acr-facts dd.bad { color: #b3352f; }
 
+/* ── section headings ────────────────────────────────────────────────────── */
+.acr-sec-head { display: flex; align-items: baseline; gap: 10px; margin: 22px 0 9px; }
+.acr-sec-head h2 { font-size: 13px; font-weight: 650; color: #34404f; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
+.acr-sec-count { font-size: 12px; color: #8d97a6; }
+.acr-rules { margin-top: 4px; }
+
+/* ── the per-rule dial ───────────────────────────────────────────────────── */
+.acr-row.rule { align-items: center; }
+.acr-dial { display: inline-flex; flex-shrink: 0; border: 1px solid #d7dee7; border-radius: 7px; overflow: hidden; background: #fff; }
+.acr-notch {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; font-weight: 550; color: #5a6779;
+  background: #fff; border: 0; border-right: 1px solid #e4e9ef;
+  padding: 7px 11px; cursor: pointer; white-space: nowrap;
+}
+.acr-notch:last-child { border-right: 0; }
+.acr-notch:hover:not(:disabled):not(.on) { background: #f4f6f9; }
+/* Disabled = above this rule's graduation ceiling. Muted, still legible, keeps its tooltip —
+   an operator must be able to SEE the rung they cannot reach, and why. */
+.acr-notch:disabled { color: #b3bcc9; cursor: not-allowed; background: #fbfcfd; }
+.acr-notch.on { color: #fff; }
+.acr-notch.on.off { background: #7a869a; }
+.acr-notch.on.observe { background: #4d5b6e; }
+.acr-notch.on.propose { background: #2a5399; }
+.acr-notch.on.auto { background: #14724d; }
+
+.acr-ceiling { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #8a6320; margin: 6px 0 0; }
+
 .acr-empty { font-size: 13px; color: #7b8798; padding: 28px 0; }
 .acr-foot { font-size: 12px; color: #8d97a6; margin: 18px 0 0; line-height: 1.55; max-width: 76ch; }
 
@@ -113,4 +141,9 @@
 @media (max-width: 980px) {
   .acr-row { flex-direction: column; gap: 12px; }
   .acr-facts { grid-template-columns: repeat(4, 1fr); width: 100%; }
+  .acr-row.rule { align-items: stretch; }
+  /* The dial is four labelled buttons; below this width it would either overflow the row or
+     squeeze the labels to nothing, so it takes the full width and divides evenly instead. */
+  .acr-dial { width: 100%; }
+  .acr-notch { flex: 1; justify-content: center; padding: 8px 4px; }
 }

@@ -24,6 +24,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Zap, Eye, MessageSquare, Power, AlertTriangle, ShieldAlert, Play, Square, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { RulesSection } from './RulesSection'
 import './control-room.css'
 
 type Mode = 'OFF' | 'OBSERVE' | 'PROPOSE' | 'AUTO'
@@ -149,6 +150,13 @@ export function ControlRoomClient() {
         </div>
       )}
 
+      <div className="acr-sec-head">
+        <h2>Engines</h2>
+        <span className="acr-sec-count">
+          {engines ? `${engines.length} total · ${acting} acting on their own` : ''}
+        </span>
+      </div>
+
       {engines === null ? (
         <div className="acr-empty">Loading…</div>
       ) : engines.length === 0 ? (
@@ -193,9 +201,11 @@ export function ControlRoomClient() {
         </ul>
       )}
 
+      <RulesSection />
+
       <p className="acr-foot">
         Every write also passes the gate: a per-campaign allowlist, entity bid bounds, protected
-        terms, and a per-payload cap. A mode here decides whether an engine acts; the gate decides
+        terms, and a per-payload cap. A mode here decides whether something acts; the gate decides
         whether the account lets it.
       </p>
     </div>
