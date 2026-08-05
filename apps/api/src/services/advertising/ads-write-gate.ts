@@ -32,6 +32,8 @@ export type GateDeniedAt =
   | 'entity_bounds'
   // ADX A1 — an operator-protected term may not be negated by any automation.
   | 'keyword_protected'
+  // ACR.0.7 — the account is halted (anomaly breaker or operator) or autonomy is OFF.
+  | 'automation_halted'
 
 export type GateDecision =
   | { allowed: true; mode: 'sandbox' }
@@ -103,6 +105,39 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
   // Sandbox path — env says we're not in live mode at all.
   if (adsMode() === 'sandbox') {
     return { allowed: true, mode: 'sandbox' }
+  }
+
+  /**
+   * ACR.0.7 — the halt binds HERE, at the one door every write passes.
+   *
+   * It used to bind in each engine, and only two of them ever implemented it:
+   * `ads-auto-bid` and `ads-auto-harvest`. Measured on prod 2026-08-05 while the
+   * breaker was tripped ("264 actions in the last hour, limit 250"), the very next
+   * `ad-rank-defend` tick still reported `evaluated=33 applied=21`, budget
+   * enforcement still ran `(LIVE)`, and the drain kept delivering. A stop button
+   * that four engines have never heard of is not a stop button.
+   *
+   * Same reasoning that put bid bounds on the entity rather than in a rule: a
+   * chokepoint cannot be forgotten by an engine written next year.
+   *
+   * SUPPRESSION IS EXEMPT, following the ADX G1 precedent exactly. Suppression
+   * drives bids to ~2¢ and is how the retail guard, budget stop-over-spend and
+   * Min-bid windows stop delivery under the no-pause rule. Blocking it during a
+   * halt would freeze bids HIGH at the moment we have most reason to want them
+   * low — the halt would increase spend. A halt stops the machine from reaching
+   * for more; it must never block it from letting go.
+   */
+  const { getAutomationState } = await import('./ads-automation-state.service.js')
+  const state = await getAutomationState()
+  if (state.effectivelyStopped && !ctx.isSuppression) {
+    const why = state.haltReason
+      ? `halted: ${state.haltReason}`
+      : state.autonomy === 'OFF' ? 'account autonomy is OFF' : 'automation is stopped'
+    return {
+      allowed: false,
+      reason: `ads automation is stopped (${why}) — resume in the Control Room to allow writes`,
+      deniedAt: 'automation_halted',
+    }
   }
 
   // Env says live, but operator must also enable per-connection writes.

@@ -1,0 +1,11 @@
+-- ACR.0.3 — the global autonomy dial fails safe.
+--
+-- AdsAutomationState is a singleton created by an upsert on first read, so its
+-- column default is the posture an environment nobody has configured runs at.
+-- That default was 'AUTO': full autonomy. A safety dial whose unconfigured
+-- state permits everything is not a safety dial.
+--
+-- Non-destructive by construction: ALTER COLUMN SET DEFAULT changes what future
+-- inserts get and never rewrites an existing row, so whatever posture the
+-- operator has set on production is preserved exactly.
+ALTER TABLE "AdsAutomationState" ALTER COLUMN "autonomy" SET DEFAULT 'SUGGEST';

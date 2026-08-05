@@ -25,6 +25,17 @@ vi.mock('../../db.js', () => ({
 vi.mock('./ads-api-client.js', () => ({ adsMode: () => 'live' }))
 vi.mock('../../utils/logger.js', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }))
 
+// ACR.0.7 — the gate now consults the account halt. Mock it explicitly: without this the
+// state read fails, falls back to "not stopped", and every halt test would pass for the
+// wrong reason.
+const automationState = vi.fn(async () => ({
+  autonomy: 'AUTO', halted: false, haltReason: null as string | null,
+  effectivelyStopped: false, degraded: false,
+}))
+vi.mock('./ads-automation-state.service.js', () => ({
+  get getAutomationState() { return automationState },
+}))
+
 const { checkAdsWriteGate, normaliseTerm } = await import('./ads-write-gate.js')
 
 const LIVE_CONN = { profileId: 'p1', mode: 'production', writesEnabledAt: new Date() }
@@ -38,6 +49,7 @@ beforeEach(() => {
   connFindFirst.mockReset()
   protectionFindMany.mockReset()
   connFindFirst.mockResolvedValue(LIVE_CONN)
+  automationState.mockResolvedValue({ autonomy: 'AUTO', halted: false, haltReason: null, effectivelyStopped: false, degraded: false })
   campaignFindUnique.mockResolvedValue(OPEN_CAMPAIGN)
   protectionFindMany.mockResolvedValue([])
 })
@@ -181,5 +193,60 @@ describe('ADX A1 — keyword protection', () => {
   it('does not consult protections when the write is not a negation', async () => {
     await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 50 })
     expect(protectionFindMany).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * ACR.0.7 — the halt binds at the gate.
+ *
+ * Before this, `isAutomationHalted` was consulted by exactly two engines. On prod, with the
+ * breaker tripped, ad-rank-defend's next tick still applied 21 bid changes and budget
+ * enforcement still ran LIVE. These tests pin the property that made that impossible.
+ */
+describe('ACR.0.7 — account halt', () => {
+  const halted = { autonomy: 'AUTO', halted: true, haltReason: 'Automation runaway: 264 actions in the last hour (limit 250).', effectivelyStopped: true, degraded: false }
+
+  it('denies an ordinary bid write while halted', async () => {
+    automationState.mockResolvedValue(halted)
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150 })
+    expect(r.allowed).toBe(false)
+    if (r.allowed === false) {
+      expect(r.deniedAt).toBe('automation_halted')
+      // The operator must see WHY, not just that something refused.
+      expect(r.reason).toContain('264 actions')
+    }
+  })
+
+  it('denies a budget write while halted', async () => {
+    automationState.mockResolvedValue(halted)
+    expect((await checkAdsWriteGate({ ...base, field: 'dailyBudget', intendedValueCents: 5000 })).allowed).toBe(false)
+  })
+
+  it('STILL ALLOWS suppression while halted — a halt must never freeze bids high', async () => {
+    automationState.mockResolvedValue(halted)
+    // Suppression drives bids to ~2¢ (retail guard, budget stop-over-spend, Min-bid windows).
+    // Blocking it during a halt would raise spend at the moment we most want it cut.
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 2, isSuppression: true })
+    expect(r.allowed).toBe(true)
+  })
+
+  it('denies when autonomy is OFF even though nothing is "halted"', async () => {
+    automationState.mockResolvedValue({ autonomy: 'OFF', halted: false, haltReason: null, effectivelyStopped: true, degraded: false })
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150 })
+    expect(r.allowed).toBe(false)
+    if (r.allowed === false) expect(r.reason).toContain('autonomy is OFF')
+  })
+
+  it('allows normally when the account is running', async () => {
+    expect((await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150 })).allowed).toBe(true)
+  })
+
+  it('checks the halt BEFORE the per-campaign allowlist — the outermost gate wins', async () => {
+    automationState.mockResolvedValue(halted)
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, liveBidWritesEnabled: false })
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150 })
+    // Both would deny; the reported reason must be the halt, or an operator resuming
+    // automation would be told the campaign is the problem.
+    if (r.allowed === false) expect(r.deniedAt).toBe('automation_halted')
   })
 })

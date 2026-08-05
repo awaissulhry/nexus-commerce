@@ -3206,8 +3206,13 @@ model SearchQueryPerformance {
   @@index([asin, startDate])
 }
 
-// Placement-level performance: TOP_OF_SEARCH | PRODUCT_PAGE |
-// REST_OF_SEARCH | HOME_PAGE. Drives placement bid adjustments.
+// Placement-level performance. Drives placement bid adjustments.
+//
+// `placement` holds Amazon's REPORT labels verbatim — measured on prod 2026-08-05:
+//   'Top of Search on-Amazon' (1,017) · 'Other on-Amazon' (1,203) · 'Detail Page on-Amazon' (1,163)
+// NOT the API's enum vocabulary (PLACEMENT_TOP / PLACEMENT_REST_OF_SEARCH / …), which is what
+// the write path uses. Two vocabularies, one column name — this comment previously documented
+// the wrong one, which cost an ACR.0.2 hypothesis. Match on the report labels when reading rows.
 model AmazonAdsPlacementReport {
   id              String   @id @default(cuid())
   profileId       String
@@ -14831,7 +14836,12 @@ model AdsAutomationState {
 
   // Global posture override. OFF = nothing runs; SUGGEST = force every rule to
   // dry-run (propose only); AUTO = respect each rule's own enabled/dryRun.
-  autonomy String @default("AUTO") // OFF | SUGGEST | AUTO
+  //
+  // ACR.0.3: defaults to SUGGEST, not AUTO. This row is created by an upsert on
+  // first read, so the default is what an environment nobody has configured
+  // runs at — and a safety dial whose unconfigured state is "full autonomy" is
+  // not a safety dial. Existing rows keep whatever the operator set.
+  autonomy String @default("SUGGEST") // OFF | SUGGEST | AUTO
 
   // Circuit-breaker. When halted, the evaluator + write-gate refuse automation
   // writes until an operator (or auto-cooldown) resumes.

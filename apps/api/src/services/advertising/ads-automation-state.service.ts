@@ -9,6 +9,18 @@
  *
  * The env kill-switch (NEXUS_ADS_AUTOMATION_KILL=1) remains a deploy-level
  * backstop; this row is the runtime control that needs no redeploy.
+ *
+ * ACR.0.3 — this dial fails SAFE, in both of its two distinct failure modes:
+ *
+ *   • Row missing → the upsert creates it from the schema default, which is
+ *     SUGGEST. An environment nobody has configured proposes; it does not act.
+ *   • Read failed → we cannot confirm we are allowed to write, so the two
+ *     ENFORCEMENT calls answer as if we were not. A skipped tick costs 15
+ *     minutes; a tick that writes because a pooler blip made the safety state
+ *     unreadable costs real money against a decision nobody made.
+ *
+ * Both previously resolved to AUTO, so the control that exists to stop
+ * automation defaulted to permitting it.
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
@@ -25,9 +37,21 @@ export interface AdsAutomationStateView {
   lastCheckedAt: string | null
   // Derived: env kill-switch OR halted OR autonomy=OFF.
   effectivelyStopped: boolean
+  /**
+   * True when the state row could not be read. The posture reported alongside
+   * it is the fail-safe assumption, NOT observed truth — surface it as "cannot
+   * read the safety state" rather than as a setting the operator chose.
+   */
+  degraded: boolean
 }
 
 const SINGLETON = 'singleton'
+
+/**
+ * The posture assumed when the state row cannot be read. Matches the schema
+ * default, so "unconfigured" and "unreadable" behave identically: propose, never act.
+ */
+const FAIL_SAFE_AUTONOMY: Autonomy = 'SUGGEST'
 
 function envKill(): boolean { return process.env.NEXUS_ADS_AUTOMATION_KILL === '1' }
 
@@ -40,8 +64,11 @@ async function getRow() {
 }
 
 export async function getAutomationState(): Promise<AdsAutomationStateView> {
-  const r = await getRow().catch(() => null)
-  const autonomy = (r?.autonomy as Autonomy) ?? 'AUTO'
+  const r = await getRow().catch((err) => {
+    logger.error('[ads-automation] state read failed — reporting the fail-safe posture', { error: String(err) })
+    return null
+  })
+  const autonomy = (r?.autonomy as Autonomy) ?? FAIL_SAFE_AUTONOMY
   const halted = r?.halted ?? false
   return {
     autonomy,
@@ -53,20 +80,37 @@ export async function getAutomationState(): Promise<AdsAutomationStateView> {
     maxActionsPerHour: r?.maxActionsPerHour ?? null,
     lastCheckedAt: r?.lastCheckedAt?.toISOString() ?? null,
     effectivelyStopped: envKill() || halted || autonomy === 'OFF',
+    degraded: r == null,
   }
 }
 
-/** True when NO automation writes should fire (env kill, operator/auto halt, or OFF). */
+/**
+ * True when NO automation writes should fire (env kill, operator/auto halt, or OFF).
+ *
+ * Fails CLOSED: an unreadable state row halts this tick rather than writing blind.
+ */
 export async function isAutomationHalted(): Promise<boolean> {
   if (envKill()) return true
-  const r = await getRow().catch(() => null)
-  return (r?.halted ?? false) || (r?.autonomy ?? 'AUTO') === 'OFF'
+  const r = await getRow().catch((err) => {
+    logger.error('[ads-automation] halt check could not read state — treating as halted', { error: String(err) })
+    return null
+  })
+  if (r == null) return true
+  return r.halted || r.autonomy === 'OFF'
 }
 
-/** True when automation may evaluate but must only PROPOSE (force dry-run). */
+/**
+ * True when automation may evaluate but must only PROPOSE (force dry-run).
+ *
+ * Fails CLOSED: an unreadable state row proposes rather than acts.
+ */
 export async function shouldForceDryRun(): Promise<boolean> {
-  const r = await getRow().catch(() => null)
-  return (r?.autonomy ?? 'AUTO') === 'SUGGEST'
+  const r = await getRow().catch((err) => {
+    logger.error('[ads-automation] dry-run check could not read state — forcing dry-run', { error: String(err) })
+    return null
+  })
+  if (r == null) return true
+  return r.autonomy === 'SUGGEST'
 }
 
 export async function haltAutomation(reason: string, by: string): Promise<void> {
