@@ -20,7 +20,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ExternalLink, Mail, Eye, Send, CheckCircle2 } from 'lucide-react'
+import { AlertTriangle, ExternalLink, Mail, Eye, Send, CheckCircle2, Undo2, ShieldAlert } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 /**
@@ -43,6 +43,16 @@ interface Digest {
   effect: { budgetDeltaCents: number; budgetMoves: number; bidMoves: number; placementMoves: number; note: string }
   proposals: { pending: number; priced: number; spendAtStakeCents: number; recoverableCents: number }
   graduation: { ready: number; unseen: number; unreviewed: number; readyNames: string[]; unseenNames: string[] }
+  breaker: {
+    tripsThisWeek: Array<{ at: string; reason: string }>
+    maxActionsPerHour: number
+    maxHourlySpendCents: number
+    spendThresholdIsDefault: boolean
+    peakHourSpendCents: number
+    peakHoursSampled: number
+    tripNote: string
+    spendNote: string
+  }
   coverage: { marketplace: string; week: string | null; priorWeek: string | null; share: number | null; priorShare: number | null; deltaPct: number | null; terms: number; measured: boolean; note: string } | null
   delivery: { failedWrites: number; deadLetters: number }
 }
@@ -64,6 +74,9 @@ interface Change {
   reason: string | null
   evidence: Record<string, unknown> | null
   delivery: { state: string; attempts: number; lastError: string | null } | null
+  undoable: boolean
+  undoActionLogId: string | null
+  undoBlockedReason?: string
 }
 
 const when = (iso: string) => {
@@ -171,6 +184,39 @@ function ThisWeek({ d, onSend, sending, sent }: {
           figure above being read as "the total effect of automation this week". */}
       <p className="acr-week-note">{d.effect.note}</p>
 
+      {/*
+        ACR.4.3 — the breaker. A trip HALTS every engine until resumed, so it is the loudest thing
+        that can happen to this account and it left no durable record anywhere. Shown whenever it
+        fired, and also when its spend limit is the unset code default — a guard set above
+        anything the account can do is not protecting anything, and only a number next to a
+        measurement makes that visible.
+      */}
+      {d.breaker.tripsThisWeek.length > 0 && (
+        <div className="acr-breaker tripped">
+          <ShieldAlert size={14} />
+          <div>
+            <strong>
+              The breaker tripped {d.breaker.tripsThisWeek.length === 1 ? 'once' : `${d.breaker.tripsThisWeek.length} times`} this week.
+            </strong>
+            {d.breaker.tripsThisWeek.map((t) => (
+              <div key={t.at} className="acr-breaker-trip">
+                {new Date(t.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} — {t.reason}
+              </div>
+            ))}
+            <p>{d.breaker.tripNote}</p>
+          </div>
+        </div>
+      )}
+      {d.breaker.spendThresholdIsDefault && (
+        <div className="acr-breaker">
+          <ShieldAlert size={14} />
+          <div>
+            <strong>Ad spend has no operator-set hourly limit.</strong>
+            <p>{d.breaker.spendNote}</p>
+          </div>
+        </div>
+      )}
+
       {(g.ready > 0 || g.unseen > 0) && (
         <p className={`acr-week-grad ${g.ready > 0 ? 'ready' : 'unseen'}`}>
           {g.ready > 0
@@ -256,6 +302,9 @@ export function ActivityTab() {
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState<string | null>(null)
   const [digestErr, setDigestErr] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState<string | null>(null)
+  const [undoing, setUndoing] = useState<string | null>(null)
+  const [undoMsg, setUndoMsg] = useState<{ id: string; ok: boolean; text: string } | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -293,6 +342,30 @@ export function ActivityTab() {
       )
     } catch (e) { setSent((e as Error).message) } finally { setSending(false) }
   }, [])
+
+  /**
+   * Undo one change. The server re-checks everything this UI checked — window, already-undone,
+   * whether it reached Amazon — so a race (the row ageing out while the confirm is open, or a
+   * second tab undoing it first) comes back as a refusal rather than a wrong write. Its words
+   * are shown verbatim, because it knows why and the client is only guessing.
+   */
+  const doUndo = useCallback(async (c: Change) => {
+    if (!c.undoActionLogId) return
+    setUndoing(c.id)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/changes/${c.undoActionLogId}/undo`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'undone from the Control Room activity feed' }),
+      })
+      const j = (await r.json()) as { ok?: boolean; reversed?: number; reason?: string }
+      const ok = r.ok && j.ok !== false && (j.reversed ?? 0) > 0
+      setUndoMsg({ id: c.id, ok, text: ok ? 'Reversed — the previous value is on its way back to Amazon.' : (j.reason ?? `Could not undo (${r.status}).`) })
+      setConfirming(null)
+      if (ok) await load()
+    } catch (e) {
+      setUndoMsg({ id: c.id, ok: false, text: (e as Error).message })
+    } finally { setUndoing(null) }
+  }, [load])
 
   if (err) return <div className="acr-banner err" role="alert"><AlertTriangle size={15} /> {err}</div>
   if (rows === null) return <div className="acr-empty">Loading…</div>
@@ -346,6 +419,40 @@ export function ActivityTab() {
               </div>
               {c.reason && <div className="acr-change-why">{c.reason}</div>}
               {c.evidence && <Evidence e={c.evidence} />}
+
+              {/*
+                ACR.4.3 — reversibility, on the row that did the thing.
+                Two-step on purpose: this writes to Amazon, restoring a value the engine has
+                since moved on from, and a single mis-click on a feed you are SCROLLING is the
+                easiest way to cause the incident this button exists to fix. The confirm names
+                the value it will put back so the decision is made on the number, not the verb.
+              */}
+              {c.undoable && c.undoActionLogId && (
+                confirming === c.id ? (
+                  <div className="acr-undo confirming">
+                    <span>
+                      Put <strong>{c.field}</strong> back to <strong>{c.oldValue ?? 'its previous value'}</strong>?
+                      This writes to Amazon.
+                    </span>
+                    <button type="button" className="acr-undo-btn go" disabled={undoing === c.id} onClick={() => void doUndo(c)}>
+                      {undoing === c.id ? 'Undoing…' : 'Yes, undo'}
+                    </button>
+                    <button type="button" className="acr-undo-btn" onClick={() => setConfirming(null)}>Cancel</button>
+                  </div>
+                ) : (
+                  <div className="acr-undo">
+                    <button type="button" className="acr-undo-btn" onClick={() => { setConfirming(c.id); setUndoMsg(null) }}>
+                      <Undo2 size={12} /> Undo
+                    </button>
+                    {undoMsg?.id === c.id && <span className={`acr-undo-msg ${undoMsg.ok ? 'ok' : 'bad'}`}>{undoMsg.text}</span>}
+                  </div>
+                )
+              )}
+              {/* A row that cannot be reversed says why, rather than simply lacking a control —
+                  the difference between "not allowed" and "not built". */}
+              {!c.undoable && c.undoBlockedReason && (
+                <div className="acr-undo blocked">{c.undoBlockedReason}</div>
+              )}
             </li>
           ))}
         </ul>

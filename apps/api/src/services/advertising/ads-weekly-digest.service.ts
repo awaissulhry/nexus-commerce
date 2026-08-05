@@ -33,6 +33,11 @@ import { getGraduationBoard } from './ads-graduation-readiness.service.js'
 import { getCoverageScoreboard } from './ads-coverage.service.js'
 
 const DAY = 86_400_000
+
+// Mirrors ads-anomaly-guard's own fallbacks. Duplicated rather than imported so a digest read can
+// never drag the guard's module (and its side-effecting integrity check) into a request path.
+const DEFAULT_MAX_ACTIONS_PER_HOUR = 250
+const DEFAULT_MAX_HOURLY_SPEND_CENTS = 50_000
 const OPERATOR_TIMEZONE = 'Europe/Rome'
 
 export interface DigestRuleRow {
@@ -79,6 +84,33 @@ export interface WeeklyDigest {
   }
   proposals: { pending: number; priced: number; spendAtStakeCents: number; recoverableCents: number }
   graduation: { ready: number; unseen: number; unreviewed: number; readyNames: string[]; unseenNames: string[] }
+  /**
+   * ACR.4.3 — the circuit breaker, in the summary that is meant to replace watching.
+   *
+   * Two facts an operator cannot otherwise get. First, TRIPS: `haltAutomation` writes to a
+   * singleton and `resumeAutomation` NULLS IT OUT, so the moment you resume, the trip is erased.
+   * The only durable trace is the operator notification it fans out — which is what this reads.
+   *
+   * Second, the THRESHOLD GAP. `maxHourlySpendCentsEur` is unset on prod, so the guard falls
+   * back to €500/hour on an account whose busiest hour is a rounding error against it. A safety
+   * net configured above anything that can happen is not a safety net, and nothing in the console
+   * said so — the number sat next to no measurement of what it was guarding.
+   */
+  breaker: {
+    tripsThisWeek: Array<{ at: string; reason: string }>
+    maxActionsPerHour: number
+    maxHourlySpendCents: number
+    /** True when no operator value is set and the code default is what is actually enforced. */
+    spendThresholdIsDefault: boolean
+    /** The busiest single hour in the window — what the threshold is really being asked about. */
+    peakHourSpendCents: number
+    /** Hours of data behind that peak. 0 means "unknown", never "quiet". */
+    peakHoursSampled: number
+    /** What a trip means. Only meaningful when one happened. */
+    tripNote: string
+    /** The state of the hourly spend limit. Always meaningful, trip or no trip. */
+    spendNote: string
+  }
   coverage: {
     marketplace: string
     week: string | null
@@ -163,7 +195,7 @@ export async function getWeeklyDigest(
 ): Promise<WeeklyDigest> {
   const win = digestWindow(mode, now)
 
-  const [rules, execs, suggestions, budgetActions, actionCounts, proposals, graduation, coverageLatest, failedWrites, deadLetters] = await Promise.all([
+  const [rules, execs, suggestions, budgetActions, actionCounts, proposals, graduation, coverageLatest, haltNotices, guardState, peakHourRows, failedWrites, deadLetters] = await Promise.all([
     prisma.automationRule.findMany({
       where: { domain: 'advertising' },
       select: { id: true, name: true, autonomyLevel: true, enabled: true, dryRun: true },
@@ -203,6 +235,29 @@ export async function getWeeklyDigest(
     // finished, adding its full latency to the wall clock instead of hiding inside it. Only the
     // PRIOR week's read has to wait, because which week that is comes out of this one.
     getCoverageScoreboard({ marketplace: 'IT', limit: 200 }).catch(() => null),
+    // ACR.4.3 — breaker trips. Notifications are fanned out one row PER OPERATOR, so the same
+    // trip appears as many times as there are profiles; deduped by timestamp+body below.
+    prisma.notification.findMany({
+      where: { type: 'ads-automation-halt', createdAt: { gte: win.from, lte: win.to } },
+      select: { createdAt: true, body: true, title: true },
+      orderBy: { createdAt: 'desc' },
+    }).catch(() => []),
+    prisma.adsAutomationState.findFirst({
+      select: { maxActionsPerHour: true, maxHourlySpendCentsEur: true },
+    }).catch(() => null),
+    // The busiest hour in the window, which is what the hourly threshold is actually guarding.
+    // `hours` alongside `peak`: with no rows at all, MAX coalesces to 0 and a €0.00 peak reads as
+    // "the account spent nothing" when it means "this window has no hourly data". Last week has
+    // none — the feed only reaches back a few days — so without the count the note would have
+    // confidently described an unguarded threshold using a number that was really an absence.
+    prisma.$queryRawUnsafe<{ peak: bigint | number | null; hours: bigint | number }[]>(`
+      SELECT COALESCE(MAX(hour_cost), 0) AS peak, COUNT(*) AS hours FROM (
+        SELECT SUM("costMicros") AS hour_cost
+        FROM "AmazonAdsHourlyPerformance"
+        WHERE "entityType" = 'CAMPAIGN' AND date >= $1::date AND date <= $2::date
+        GROUP BY date, hour
+      ) x
+    `, isoDate(win.from), isoDate(win.to)).catch(() => []),
     prisma.adMutation.count({ where: { state: 'FAILED', createdAt: { gte: win.from, lte: win.to } } }).catch(() => 0),
     prisma.outboundSyncQueue.count({ where: { isDead: true, createdAt: { gte: win.from, lte: win.to } } }).catch(() => 0),
   ])
@@ -322,10 +377,46 @@ export async function getWeeklyDigest(
     { acted: 0, proposed: 0, denied: 0, applied: 0, declined: 0, failed: 0 },
   )
 
+  // ── the breaker ───────────────────────────────────────────────────────────
+  // One notification row per operator profile per trip, so the same event repeats. Keyed on the
+  // minute + text rather than the id, which differs per recipient.
+  const seenTrip = new Set<string>()
+  const tripsThisWeek: Array<{ at: string; reason: string }> = []
+  for (const n of haltNotices) {
+    const reason = (n.body ?? n.title ?? 'Automation halted').trim()
+    const key = `${n.createdAt.toISOString().slice(0, 16)}|${reason}`
+    if (seenTrip.has(key)) continue
+    seenTrip.add(key)
+    tripsThisWeek.push({ at: n.createdAt.toISOString(), reason })
+  }
+  const spendThresholdIsDefault = guardState?.maxHourlySpendCentsEur == null
+  const maxHourlySpendCents = guardState?.maxHourlySpendCentsEur ?? DEFAULT_MAX_HOURLY_SPEND_CENTS
+  const peakHourSpendCents = Math.round(Number(peakHourRows[0]?.peak ?? 0) / 10_000)
+  const peakHoursSampled = Number(peakHourRows[0]?.hours ?? 0)
+  const breaker = {
+    tripsThisWeek,
+    maxActionsPerHour: guardState?.maxActionsPerHour ?? DEFAULT_MAX_ACTIONS_PER_HOUR,
+    maxHourlySpendCents,
+    spendThresholdIsDefault,
+    peakHourSpendCents,
+    peakHoursSampled,
+    // Two notes, because they answer different questions and a trip does not stop the threshold
+    // from also being wrong. Rendering one string in both places printed the trip sentence under
+    // the spend heading — the panel saying something true about the wrong subject.
+    tripNote: 'A trip HALTS every engine until you resume it, so this is the account stopping rather than a warning. The halt state is cleared on resume, so this row is the only record that it happened.',
+    spendNote: !spendThresholdIsDefault
+      ? `The hourly spend limit is operator-set at ${(maxHourlySpendCents / 100).toFixed(0)} EUR/hour.`
+      : peakHoursSampled === 0
+        // No hourly rows for this window: say so instead of quoting a peak that is really an absence.
+        ? `No hourly spend limit is set, so the guard enforces its ${(DEFAULT_MAX_HOURLY_SPEND_CENTS / 100).toFixed(0)} EUR/hour code default. There is no hourly spend data for this window, so how close the account came to it cannot be shown.`
+        : `No hourly spend limit is set, so the guard enforces its ${(DEFAULT_MAX_HOURLY_SPEND_CENTS / 100).toFixed(0)} EUR/hour code default. The busiest of ${peakHoursSampled.toLocaleString('en-IE')} hours this week reached ${(peakHourSpendCents / 100).toFixed(2)} EUR — a limit that far above anything the account does cannot fire, so ad spend is effectively unguarded.`,
+  }
+
   return {
     generatedAt: now.toISOString(),
     window: { from: isoDate(win.from), to: isoDate(win.to), label: win.label, complete: win.complete },
     gates: gateState(),
+    breaker,
     totals,
     rules: ordered,
     effect: {

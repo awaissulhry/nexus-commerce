@@ -32,6 +32,46 @@ const ROLLBACK_WINDOW_MS = 24 * 60 * 60 * 1000
 /** Surfaced to the UI so the button can explain itself rather than no-op. */
 export const ROLLBACK_WINDOW_HOURS = ROLLBACK_WINDOW_MS / 3_600_000
 
+/**
+ * ACR.4.3 — how long a SINGLE action stays reversible, by what it changed.
+ *
+ * Stage 4's exit condition asks for "every action reversible for 7 days". Applied flat, that
+ * would be wrong for the one thing this account changes most: the rank engine re-evaluates bids
+ * HOURLY, so a seven-day-old bid has been superseded a hundred times and restoring it moves real
+ * money against a decision nobody is making today. That is precisely the reasoning behind
+ * `ADS_STALE_INTENT_MS = 24h` in the delivery model, and behind this file's original 24h.
+ *
+ * Budgets and placements are different in kind, not degree. They change a handful of times a
+ * week — 195 budget moves and ~2,500 placement moves against 11,140 bid rows in seven days — and
+ * a budget of €4.14 from last Tuesday is still a meaningful number to go back to. So the window
+ * follows what was changed:
+ *
+ *   bids            24h — superseded by the next engine tick
+ *   budgets         7d  — set deliberately, changed rarely
+ *   placements      7d  — same
+ *   anything else   24h — default-deny, matching the original constant
+ *
+ * Deliberately NOT applied to `rollbackByChangeSetId`. A change set (a bulksheet import) can mix
+ * every action type at once, and "undo the whole upload" means one atomic horizon rather than a
+ * per-row one — a set that half-reverses is worse than one that refuses.
+ */
+const LONG_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
+const LONG_WINDOW_ACTIONS = new Set([
+  'AD_BUDGET_UPDATE',
+  'update_placement_bidding',
+  'adjust_ad_budget',
+])
+
+export function rollbackWindowMsFor(actionType: string): number {
+  return LONG_WINDOW_ACTIONS.has(actionType) ? LONG_WINDOW_MS : ROLLBACK_WINDOW_MS
+}
+
+/** The window as a human phrase, so a refusal can name its own rule. */
+export function rollbackWindowLabel(actionType: string): string {
+  return LONG_WINDOW_ACTIONS.has(actionType) ? '7-day' : `${ROLLBACK_WINDOW_HOURS}-hour`
+}
+
 export interface RollbackOutcome {
   ok: boolean
   reversed: number
@@ -238,9 +278,16 @@ export async function previewRollbackOfAction(actionLogId: string): Promise<{
     // Nothing reached Amazon, so there is nothing to put back.
     return { ...base, eligible: false, reason: `This change never landed (${log.amazonResponseStatus ?? 'unknown'}) — there is nothing to reverse.` }
   }
-  if (Date.now() - log.createdAt.getTime() > ROLLBACK_WINDOW_MS) {
-    return { ...base, eligible: false, reason: `Older than the ${ROLLBACK_WINDOW_HOURS}-hour undo window. Amazon's own state has usually moved on, so restoring an old snapshot can do more harm than the change it reverses.` }
+  if (Date.now() - log.createdAt.getTime() > rollbackWindowMsFor(log.actionType)) {
+    return {
+      ...base,
+      eligible: false,
+      reason: `Older than the ${rollbackWindowLabel(log.actionType)} undo window for this kind of change. Amazon's own state has usually moved on, so restoring an old snapshot can do more harm than the change it reverses.`,
+    }
   }
+  // A grouped row reverses with its whole set, and the SET's horizon is the flat one — so the
+  // count must use the same window the set rollback will, or this would promise more rows than
+  // that path is willing to touch.
   const groupedWith = log.executionId
     ? await prisma.advertisingActionLog.count({ where: { executionId: log.executionId, rolledBackAt: null, createdAt: { gte: new Date(Date.now() - ROLLBACK_WINDOW_MS) } } })
     : 1
@@ -259,9 +306,9 @@ export async function rollbackByActionLogId(args: {
 
   const out: RollbackOutcome = { ok: true, reversed: 0, skipped: 0, failed: 0, details: [] }
   if (log.rolledBackAt) { out.skipped = 1; out.reason = 'Already undone.'; return out }
-  if (Date.now() - log.createdAt.getTime() > ROLLBACK_WINDOW_MS) {
-    out.expired = true; out.windowHours = ROLLBACK_WINDOW_HOURS
-    out.reason = `Older than the ${ROLLBACK_WINDOW_HOURS}-hour undo window.`
+  if (Date.now() - log.createdAt.getTime() > rollbackWindowMsFor(log.actionType)) {
+    out.expired = true; out.windowHours = rollbackWindowMsFor(log.actionType) / 3_600_000
+    out.reason = `Older than the ${rollbackWindowLabel(log.actionType)} undo window for this kind of change.`
     return out
   }
   const r = await reverseOne(log as never, args.actor, args.reason)

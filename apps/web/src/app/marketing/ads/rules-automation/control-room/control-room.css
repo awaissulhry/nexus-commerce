@@ -739,3 +739,34 @@ a.acr-refresh { text-decoration: none; }
 .acr-gg-selh, .acr-gg-sel { width: 32px; padding-right: 0 !important; text-align: center; }
 .acr-gg-tbl tr.sel td { background: #f5f9ff; }
 .acr-gg-tbl tr.sel:hover td { background: #eef4fd; }
+
+/* ── ACR.4.3 · undo, on the row that did the thing ───────────────────────── */
+.acr-undo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 7px 0 0; font-size: 11.5px; }
+.acr-undo.blocked { color: #98a2b1; font-style: italic; }
+.acr-undo.confirming { color: #8a6320; background: #fdf9f2; border: 1px solid #f0dcbb; border-radius: 6px; padding: 7px 10px; }
+.acr-undo.confirming strong { color: #6b4d15; font-weight: 650; }
+.acr-undo-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11.5px; font-weight: 550; color: #56637a;
+  background: #fff; border: 1px solid #d7dee7; border-radius: 5px; padding: 3px 9px; cursor: pointer;
+}
+.acr-undo-btn:hover:not(:disabled) { background: #f4f6f9; color: #34404f; }
+.acr-undo-btn:disabled { color: #b3bcc9; cursor: not-allowed; }
+/* The committing step is the only one tinted — the first click must not look like the action. */
+.acr-undo-btn.go { color: #fff; background: #a3342b; border-color: #a3342b; }
+.acr-undo-btn.go:hover:not(:disabled) { background: #8f2d25; }
+.acr-undo-msg { font-size: 11.5px; }
+.acr-undo-msg.ok { color: #14724d; }
+.acr-undo-msg.bad { color: #a3342b; }
+
+/* The breaker: a trip is the account STOPPING, so it outranks everything else on the panel. */
+.acr-breaker {
+  display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0;
+  padding: 10px 12px; border-radius: 7px; font-size: 12.5px; line-height: 1.55;
+  color: #8a6320; background: #fdf9f2; border: 1px solid #f0dcbb;
+}
+.acr-breaker.tripped { color: #a3342b; background: #fdf6f5; border-color: #f3cbc7; }
+.acr-breaker svg { flex: none; margin-top: 2px; }
+.acr-breaker strong { display: block; font-weight: 650; }
+.acr-breaker p { margin: 4px 0 0; color: #7b8798; font-size: 11.5px; }
+.acr-breaker-trip { margin-top: 3px; font-variant-numeric: tabular-nums; }

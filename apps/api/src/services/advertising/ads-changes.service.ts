@@ -20,6 +20,7 @@
  */
 
 import prisma from '../../db.js'
+import { rollbackWindowMsFor, rollbackWindowLabel } from './rollback.service.js'
 
 export type ChangeSource = 'automation' | 'operator' | 'system' | 'external'
 export interface ChangeOrigin { kind: 'schedule' | 'plan' | 'rule' | 'job' | 'manual' | 'unknown'; id: string | null; name: string }
@@ -51,6 +52,16 @@ export interface ChangeRow {
   evidence: Record<string, unknown> | null
   delivery: { state: string; attempts: number; lastError: string | null } | null
   undoable: boolean
+  /**
+   * ACR.4.3 — the AdvertisingActionLog id `POST /advertising/changes/:id/undo` needs.
+   *
+   * A CampaignBidHistory row has no such id of its own, so an undoable field row carries the id
+   * of the operation row it was paired with. Null when there is nothing to undo — the UI must
+   * key the button on this, not on `undoable` alone, or it has nowhere to send the request.
+   */
+  undoActionLogId: string | null
+  /** Why this row cannot be undone, when it cannot. Absent on undoable rows. */
+  undoBlockedReason?: string
 }
 
 /**
@@ -183,6 +194,27 @@ export interface ListChangesOpts {
 
 const UNDO_WINDOW_MS = 24 * 3600 * 1000
 
+/**
+ * Action types `reverseOne` can genuinely put back. Anything absent renders as not-undoable
+ * rather than as a button that fails — an undo that 409s is worse than no undo, because the
+ * operator has already decided to trust it by the time they find out.
+ */
+const REVERSIBLE_ACTIONS = new Set([
+  'update_placement_bidding',
+  'AD_BUDGET_UPDATE',
+  'adjust_ad_budget',
+  'AD_BID_UPDATE',
+])
+
+/**
+ * `payloadBefore` is NOT NULL in the schema, so "it exists" is not evidence of anything —
+ * `reverseOne` restores FROM it, and `{}` produces an empty patch and a no-op undo. An object
+ * with at least one key is the weakest honest test that there is a prior state to go back to.
+ */
+function hasRestorableBefore(before: unknown): boolean {
+  return before != null && typeof before === 'object' && Object.keys(before as object).length > 0
+}
+
 export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: ChangeRow[]; count: number; from: Date; to: Date; members: Array<{ campaignId: string; name: string }> }> {
   // A group scope resolves to its members' actor strings up front, so the DB filters on
   // changedBy rather than post-filtering a wide read.
@@ -228,7 +260,12 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       },
       orderBy: { createdAt: 'desc' },
       take: fetchN,
-      select: { id: true, createdAt: true, actionType: true, entityType: true, entityId: true, userId: true, amazonResponseStatus: true, rolledBackAt: true, payloadAfter: true, evidence: true },
+      // payloadBefore is selected for the undo test only. The column is NOT NULL in the schema,
+      // so its mere presence proves nothing — `reverseOne` restores FROM it, and an empty object
+      // yields an empty patch. Cheap here because this query is bounded by `take`; the same
+      // column over an unbounded week cost 1.9s in the weekly digest, which is why that one
+      // reads it for a single action type instead.
+      select: { id: true, createdAt: true, actionType: true, entityType: true, entityId: true, userId: true, amazonResponseStatus: true, rolledBackAt: true, payloadBefore: true, payloadAfter: true, evidence: true },
     }),
   ])
 
@@ -246,7 +283,11 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       delivery: null,
       // Mirrors the rule /campaigns/:id/history already applies: only a target bid, only while the
       // prior value is known and recent. HX.7 is what will make this actionable.
+      // A bid. 24h on purpose — see rollbackWindowMsFor: the rank engine supersedes these hourly.
       undoable: h.entityType === 'AD_TARGET' && h.field === 'bid' && h.oldValue != null && now - h.changedAt.getTime() < UNDO_WINDOW_MS,
+      // Filled by the pairing pass below for placement and budget rows. A bid row keeps null:
+      // its undo runs through the per-campaign history path, not this action-log endpoint.
+      undoActionLogId: null,
     }
   })
 
@@ -265,7 +306,25 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       delivery: o.amazonResponseStatus
         ? { state: o.amazonResponseStatus === 'SUCCESS' ? 'APPLIED' : o.amazonResponseStatus, attempts: 1, lastError: after.error ?? null }
         : null,
-      undoable: false,
+      /**
+       * ACR.4.3 — these were hard-coded `false` while a working undo endpoint sat behind them.
+       * `POST /advertising/changes/:actionLogId/undo` reverses exactly these rows — placement
+       * snapshots, campaign budget/status, and bulksheet creates — so the feed was hiding a
+       * capability rather than lacking one.
+       *
+       * The conditions mirror what `reverseOne` will actually accept, so the affordance cannot
+       * promise something the server then refuses: it must have reached Amazon, it must not be
+       * already undone, it must carry a before-snapshot to restore, and it must be inside the
+       * window for ITS kind of change. Same rule object as the rollback service — one rule, two
+       * readers, which is the only way these two stay in agreement.
+       */
+      undoable:
+        (o.amazonResponseStatus === 'SUCCESS' || o.amazonResponseStatus === 'PENDING')
+        && o.rolledBackAt == null
+        && hasRestorableBefore(o.payloadBefore)
+        && REVERSIBLE_ACTIONS.has(o.actionType)
+        && now - o.createdAt.getTime() < rollbackWindowMsFor(o.actionType),
+      undoActionLogId: o.id,
     }
   })
 
@@ -280,17 +339,53 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
    * misleading, since we do know what happened.
    */
   const PLACEMENT_FIELDS = new Set(['PLACEMENT_TOP', 'PLACEMENT_REST_OF_SEARCH', 'PLACEMENT_PRODUCT_PAGE'])
-  const placementOps = ops.filter((o) => o.actionType === 'update_placement_bidding')
-  const placementByEntity = new Map<string, typeof placementOps>()
-  for (const o of placementOps) { const a = placementByEntity.get(o.entityId) ?? []; a.push(o); placementByEntity.set(o.entityId, a) }
-  for (const r of fieldRows) {
-    if (!PLACEMENT_FIELDS.has(r.field)) continue
-    const cands = placementByEntity.get(r.entity.id)
-    if (!cands?.length) continue
-    let best = cands[0], gap = Math.abs(cands[0].createdAt.getTime() - r.at.getTime())
-    for (const c of cands.slice(1)) { const g = Math.abs(c.createdAt.getTime() - r.at.getTime()); if (g < gap) { gap = g; best = c } }
-    const err = (best.payloadAfter as { error?: string } | null)?.error ?? null
-    r.delivery = { state: best.amazonResponseStatus === 'FAILED' ? 'FAILED' : 'APPLIED', attempts: 1, lastError: err }
+  /**
+   * ACR.4.3 — the same pairing now carries the UNDO HANDLE as well as delivery.
+   *
+   * A field row is the readable half of an event (before → after) and the operation row is the
+   * reversible half (it owns the id `POST /changes/:id/undo` takes and the snapshot `reverseOne`
+   * restores from). The feed shows the readable half and dedupe discards the other, so undo was
+   * unreachable for exactly the two action types that are reversible for seven days — placement
+   * and budget. Measured before this change: 200 automation rows, 0 undoable, of which 172 were
+   * placements and 28 were budgets, every one of them backed by a reversible operation row.
+   *
+   * Budget field rows are paired the same way placement rows already were. Both match on entity
+   * and then NEAREST IN TIME, because an entity can be written repeatedly within one feed window
+   * and the newest operation row is not necessarily the one this field row describes.
+   */
+  const PAIRED: Array<{ fieldMatches: (f: string) => boolean; actionType: string }> = [
+    { fieldMatches: (f) => PLACEMENT_FIELDS.has(f), actionType: 'update_placement_bidding' },
+    { fieldMatches: (f) => f === 'dailyBudget', actionType: 'AD_BUDGET_UPDATE' },
+  ]
+  for (const pair of PAIRED) {
+    const cand = ops.filter((o) => o.actionType === pair.actionType)
+    if (!cand.length) continue
+    const byEntity = new Map<string, typeof cand>()
+    for (const o of cand) { const a = byEntity.get(o.entityId) ?? []; a.push(o); byEntity.set(o.entityId, a) }
+    for (const r of fieldRows) {
+      if (!pair.fieldMatches(r.field)) continue
+      const cands = byEntity.get(r.entity.id)
+      if (!cands?.length) continue
+      let best = cands[0], gap = Math.abs(cands[0].createdAt.getTime() - r.at.getTime())
+      for (const c of cands.slice(1)) { const g = Math.abs(c.createdAt.getTime() - r.at.getTime()); if (g < gap) { gap = g; best = c } }
+      const err = (best.payloadAfter as { error?: string } | null)?.error ?? null
+      r.delivery = { state: best.amazonResponseStatus === 'FAILED' ? 'FAILED' : 'APPLIED', attempts: 1, lastError: err }
+
+      // The undo verdict is the operation row's, not the field row's — it is the thing that
+      // would actually be reversed. Same predicate the op rows use, so a paired row and a bare
+      // op row can never disagree about the same event.
+      const landed = best.amazonResponseStatus === 'SUCCESS' || best.amazonResponseStatus === 'PENDING'
+      const inWindow = now - best.createdAt.getTime() < rollbackWindowMsFor(best.actionType)
+      if (best.rolledBackAt != null) r.undoBlockedReason = 'Already undone.'
+      else if (!landed) r.undoBlockedReason = 'This change never reached Amazon, so there is nothing to reverse.'
+      else if (!inWindow) r.undoBlockedReason = `Older than the ${rollbackWindowLabel(best.actionType)} undo window for this kind of change.`
+      else if (!hasRestorableBefore(best.payloadBefore)) r.undoBlockedReason = 'No prior value was recorded, so there is nothing to restore.'
+
+      if (landed && best.rolledBackAt == null && inWindow && hasRestorableBefore(best.payloadBefore)) {
+        r.undoable = true
+        r.undoActionLogId = best.id
+      }
+    }
   }
 
   let items = [...fieldRows, ...dedupe(opRows, fieldRows)].sort((a, b) => b.at.getTime() - a.at.getTime())
