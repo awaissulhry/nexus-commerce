@@ -32,9 +32,41 @@ export async function runAdsReportSchedulesOnce(): Promise<{ due: number; sent: 
   return summary
 }
 
+/**
+ * ACR.4.2 — the weekly autonomy digest, on the same hourly tick.
+ *
+ * Deliberately NOT a third env flag. This flag already means "the ads scheduled-email
+ * dispatcher runs", and the digest is exactly that; adding another gate would make un-gating
+ * the rail a two-step operation for no extra safety, since NEXUS_ENABLE_OUTBOUND_EMAILS still
+ * independently decides whether anything leaves.
+ *
+ * Its own CronRun row, though, rather than folding into the report-schedule summary. A job that
+ * reports SUCCESS while a component inside it fails is the exact shape that hid seven nights of
+ * ToS-IS failures behind a green tick (ACR.0.2), and the digest is now the surface an operator
+ * is being asked to trust INSTEAD of looking.
+ */
+async function runWeeklyDigestTick(): Promise<void> {
+  const { dispatchWeeklyDigestIfDue, DIGEST_JOB_NAME } = await import('../services/advertising/ads-weekly-digest-mail.service.js')
+  let outcome: string | null = null
+  // Peek first: recordCronRun writes a row every time it is called, and a row per hour for a
+  // job that only acts on Mondays would bury the ones that mean something.
+  const probe = await dispatchWeeklyDigestIfDue().catch((err) => {
+    logger.error('[ads-weekly-digest] tick failed', { err: (err as Error).message })
+    return null
+  })
+  if (!probe) return
+  outcome = `status=${probe.status} window=${probe.window} recipients=${probe.recipients.length}${probe.reason ? ` reason=${probe.reason.slice(0, 120)}` : ''}`
+  await recordCronRun(DIGEST_JOB_NAME, async () => {
+    // The send already happened above; this records it. A FAILED send must fail the CronRun,
+    // or "the digest goes out on Mondays" becomes an assumption nobody can check.
+    if (probe.status === 'FAILED') throw new Error(probe.reason ?? 'digest send failed')
+    return outcome!
+  }).catch(() => { /* the run log must never break the job it describes */ })
+}
+
 export function startAdsReportScheduleCron(): void {
   if (process.env.NEXUS_ENABLE_ADS_REPORT_SCHEDULE_CRON !== '1') {
-    logger.info('[ads-report-schedule] cron disabled (NEXUS_ENABLE_ADS_REPORT_SCHEDULE_CRON != 1)')
+    logger.info('[ads-report-schedule] cron disabled (NEXUS_ENABLE_ADS_REPORT_SCHEDULE_CRON != 1) — no saved-report schedules and no weekly digest will dispatch')
     return
   }
   if (task) return
@@ -44,6 +76,7 @@ export function startAdsReportScheduleCron(): void {
     void runAdsReportSchedulesOnce().catch((err) => {
       logger.error('[ads-report-schedule] tick failed', { err: (err as Error).message })
     })
+    void runWeeklyDigestTick()
   })
-  logger.info('[ads-report-schedule] cron started (hourly at :05)')
+  logger.info('[ads-report-schedule] cron started (hourly at :05, incl. weekly digest)')
 }

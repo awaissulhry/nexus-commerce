@@ -20,8 +20,35 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ExternalLink } from 'lucide-react'
+import { AlertTriangle, ExternalLink, Mail, Eye, Send, CheckCircle2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+
+/**
+ * ACR.4.3 — "This week", above the feed.
+ *
+ * The feed answers "what happened to this bid". The rollup answers the question a weekly
+ * reviewer actually arrives with: what did the machine do this week, what did it ask me, and
+ * what is that worth. Same service the Monday email is built from, so the screen and the inbox
+ * cannot disagree about the same week — one builder, two consumers.
+ */
+interface DigestRule {
+  ruleId: string; name: string; level: string
+  acted: number; proposed: number; denied: number; applied: number; declined: number; failed: number
+}
+interface Digest {
+  window: { from: string; to: string; label: string; complete: boolean }
+  gates: { cronFlag: string; cronEnabled: boolean; outboundFlag: string; outboundEnabled: boolean; state: 'off' | 'dry-run' | 'live'; explanation: string }
+  totals: { acted: number; proposed: number; denied: number; applied: number; declined: number; failed: number }
+  rules: DigestRule[]
+  effect: { budgetDeltaCents: number; budgetMoves: number; bidMoves: number; placementMoves: number; note: string }
+  proposals: { pending: number; priced: number; spendAtStakeCents: number; recoverableCents: number }
+  graduation: { ready: number; unseen: number; unreviewed: number; readyNames: string[]; unseenNames: string[] }
+  coverage: { marketplace: string; week: string | null; priorWeek: string | null; share: number | null; priorShare: number | null; deltaPct: number | null; terms: number; measured: boolean; note: string } | null
+  delivery: { failedWrites: number; deadLetters: number }
+}
+
+const eur = (cents: number) =>
+  new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(cents / 100)
 
 interface Change {
   id: string
@@ -78,9 +105,156 @@ function Evidence({ e }: { e: Record<string, unknown> }) {
   )
 }
 
+/** The week's rollup + the digest that will carry it. */
+function ThisWeek({ d, onSend, sending, sent }: {
+  d: Digest
+  onSend: () => void
+  sending: boolean
+  sent: string | null
+}) {
+  const t = d.totals
+  const g = d.graduation
+  const c = d.coverage
+  const api = getBackendUrl()
+
+  return (
+    <section className="acr-week">
+      <div className="acr-sec-head">
+        <h2>This week</h2>
+        <span className="acr-sec-count">
+          {d.window.label}{d.window.complete ? '' : ' · still running'}
+        </span>
+      </div>
+
+      <div className="acr-week-tiles">
+        <div className="acr-week-tile">
+          <span className="k">Acted</span>
+          <b>{t.acted.toLocaleString('en-IE')}</b>
+          <span className="s">{t.proposed.toLocaleString('en-IE')} proposed</span>
+        </div>
+        <div className="acr-week-tile">
+          <span className="k">You decided</span>
+          <b>{(t.applied + t.denied).toLocaleString('en-IE')}</b>
+          <span className="s">{t.applied} applied · {t.denied} declined</span>
+        </div>
+        <div className={`acr-week-tile${d.effect.budgetDeltaCents < 0 ? ' good' : ''}`}>
+          <span className="k">Daily budget</span>
+          <b>{d.effect.budgetDeltaCents >= 0 ? '+' : '−'}{eur(Math.abs(d.effect.budgetDeltaCents))}</b>
+          <span className="s">over {d.effect.budgetMoves.toLocaleString('en-IE')} changes</span>
+        </div>
+        <div className={`acr-week-tile${d.proposals.recoverableCents > 0 ? ' warn' : ''}`}>
+          <span className="k">Waiting on you</span>
+          <b>{d.proposals.pending.toLocaleString('en-IE')}</b>
+          <span className="s">{eur(d.proposals.recoverableCents)} pure waste</span>
+        </div>
+        {c && c.share != null && (
+          <div className="acr-week-tile">
+            <span className="k">Coverage {c.marketplace}</span>
+            <b>{(c.share * 100).toFixed(2)}%</b>
+            <span className="s">
+              {c.deltaPct != null
+                ? `${c.deltaPct >= 0 ? '+' : ''}${c.deltaPct.toFixed(2)}pp vs ${c.priorWeek}`
+                : 'no prior week yet'}
+            </span>
+          </div>
+        )}
+        {t.failed > 0 && (
+          <div className="acr-week-tile bad">
+            <span className="k">Failed</span>
+            <b>{t.failed.toLocaleString('en-IE')}</b>
+            <span className="s">real failures</span>
+          </div>
+        )}
+      </div>
+
+      {/* Bid moves are counted, never priced. Saying so once, here, is what stops the budget
+          figure above being read as "the total effect of automation this week". */}
+      <p className="acr-week-note">{d.effect.note}</p>
+
+      {(g.ready > 0 || g.unseen > 0) && (
+        <p className={`acr-week-grad ${g.ready > 0 ? 'ready' : 'unseen'}`}>
+          {g.ready > 0
+            ? <><strong>{g.ready} ready to graduate:</strong> {g.readyNames.join(' · ')}.</>
+            : <><strong>{g.unseen} never queued a proposal:</strong> {g.unseenNames.join(' · ')} — so no evidence can accumulate.</>}
+        </p>
+      )}
+
+      {d.rules.length > 0 && (
+        <table className="acr-week-table">
+          <thead>
+            <tr>
+              <th>Rule</th><th>Mode</th>
+              <th className="n">Acted</th><th className="n">Proposed</th>
+              <th className="n">You applied</th><th className="n">You declined</th><th className="n">Failed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {d.rules.slice(0, 12).map((r) => (
+              <tr key={r.ruleId}>
+                <td>{r.name}</td>
+                <td><span className={`acr-mode ${r.level.toLowerCase()}`}>{r.level}</span></td>
+                <td className="n">{r.acted || '—'}</td>
+                <td className="n">{r.proposed || '—'}</td>
+                <td className="n">{r.applied || '—'}</td>
+                <td className="n">{r.denied || '—'}</td>
+                <td className={`n${r.failed > 0 ? ' bad' : ''}`}>{r.failed || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {d.rules.length > 12 && (
+        <p className="acr-week-note">{d.rules.length - 12} more rules ran this week; the twelve busiest are shown.</p>
+      )}
+
+      {/* The engine declining itself is not the operator declining it, and neither is a
+          failure. Kept out of the table so the three columns above stay comparable. */}
+      {t.declined > 0 && (
+        <p className="acr-week-note">
+          {t.declined.toLocaleString('en-IE')} runs were declined by the engine&rsquo;s own daily cap — the engine
+          refusing itself, not a failure and not your decision. Almost all of these are the self-ratcheting
+          cap bug fixed on 4 August; the count should fall to near zero from this week on.
+        </p>
+      )}
+
+      {/*
+        ACR.4.2 — the gate, surfaced rather than flipped. The operator asked to decide from here
+        after reading a real digest, so this states exactly what is true right now and offers
+        both a preview and a test send that go through the identical code path Monday will use.
+      */}
+      <div className={`acr-digest ${d.gates.state}`}>
+        <div className="acr-digest-head">
+          <Mail size={14} />
+          <strong>
+            Weekly digest — {d.gates.state === 'off' ? 'not scheduled' : d.gates.state === 'dry-run' ? 'scheduled, nothing leaves' : 'scheduled and sending'}
+          </strong>
+        </div>
+        <p>{d.gates.explanation}</p>
+        <p className="acr-digest-flags">
+          <code>{d.gates.cronFlag}</code> {d.gates.cronEnabled ? 'on' : 'not set'}
+          {' · '}
+          <code>{d.gates.outboundFlag}</code> {d.gates.outboundEnabled ? 'on' : 'not true'}
+        </p>
+        <div className="acr-digest-actions">
+          <a className="acr-btn ghost" href={`${api}/api/advertising/digest/weekly/preview?mode=previous`} target="_blank" rel="noopener noreferrer">
+            <Eye size={13} /> Preview last week&rsquo;s
+          </a>
+          <button type="button" className="acr-btn ghost" onClick={onSend} disabled={sending}>
+            <Send size={13} /> {sending ? 'Sending…' : 'Send me a test'}
+          </button>
+          {sent && <span className="acr-digest-sent"><CheckCircle2 size={13} /> {sent}</span>}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function ActivityTab() {
   const [rows, setRows] = useState<Change[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [digest, setDigest] = useState<Digest | null>(null)
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -90,14 +264,41 @@ export function ActivityTab() {
       setRows(Array.isArray(j?.items) ? (j.items as Change[]) : [])
       setErr(null)
     } catch (e) { setErr((e as Error).message); setRows([]) }
+    // The rollup is a separate read and fails soft: the change feed is the tab's reason to
+    // exist and must render whether or not the week can be summarised.
+    try {
+      const w = await fetch(`${getBackendUrl()}/api/advertising/digest/weekly?mode=current`, { cache: 'no-store' })
+      if (!w.ok) throw new Error(String(w.status))
+      setDigest((await w.json()) as Digest)
+    } catch { setDigest(null) }
   }, [])
   useEffect(() => { void load() }, [load])
+
+  const sendTest = useCallback(async () => {
+    setSending(true); setSent(null)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/digest/weekly/send`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'previous' }),
+      })
+      const j = (await r.json()) as { status?: string; reason?: string; recipients?: string[] }
+      // A DRY_RUN is not a failure and must not be reported as a success either — the whole
+      // point of this button is telling the operator which of the two just happened.
+      setSent(
+        j.status === 'SENT' ? `Sent to ${(j.recipients ?? []).join(', ')}`
+          : j.status === 'DRY_RUN' ? 'Built and logged — nothing was mailed (outbound email is off)'
+            : j.reason ?? j.status ?? 'Unknown result',
+      )
+    } catch (e) { setSent((e as Error).message) } finally { setSending(false) }
+  }, [])
 
   if (err) return <div className="acr-banner err" role="alert"><AlertTriangle size={15} /> {err}</div>
   if (rows === null) return <div className="acr-empty">Loading…</div>
 
   return (
     <div className="acr-activity">
+      {digest && <ThisWeek d={digest} onSend={() => void sendTest()} sending={sending} sent={sent} />}
+
       <div className="acr-sec-head">
         <h2>What automation did</h2>
         <span className="acr-sec-count">

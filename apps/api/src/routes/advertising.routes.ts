@@ -10477,6 +10477,48 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'private, max-age=120')
     return getGraduationBoard()
   })
+  /**
+   * ACR.4.3 — the week's rollup. One builder, two consumers: this feeds the Control Room's
+   * "This week" panel AND the Monday email, so the screen and the inbox cannot disagree about
+   * the same week.
+   *
+   * `mode=current` is week-to-date (what an operator standing in Activity means by "this
+   * week"); `previous` is the last complete Mon–Sun, which is what a Monday email must cover.
+   */
+  fastify.get('/advertising/digest/weekly', async (request, reply) => {
+    const q = request.query as { mode?: string }
+    const mode = q.mode === 'previous' ? 'previous' : 'current'
+    const { getWeeklyDigest } = await import('../services/advertising/ads-weekly-digest.service.js')
+    reply.header('Cache-Control', 'private, max-age=120')
+    return getWeeklyDigest(mode)
+  })
+
+  /** The rendered email, exactly as it would arrive. Preview and send share one renderer. */
+  fastify.get('/advertising/digest/weekly/preview', async (request, reply) => {
+    const q = request.query as { mode?: string }
+    const mode = q.mode === 'current' ? 'current' : 'previous'
+    const { getWeeklyDigest } = await import('../services/advertising/ads-weekly-digest.service.js')
+    const { renderWeeklyDigest } = await import('../services/advertising/ads-weekly-digest-mail.service.js')
+    const html = renderWeeklyDigest(await getWeeklyDigest(mode))
+    reply.header('content-type', 'text/html; charset=utf-8')
+    return reply.send(html)
+  })
+
+  /**
+   * Send one now. Honours the transport's own gate, so with NEXUS_ENABLE_OUTBOUND_EMAILS unset
+   * this builds and logs a real digest and mails nothing — which is the point: the operator can
+   * see exactly what would arrive before deciding whether to un-gate the rail.
+   */
+  fastify.post('/advertising/digest/weekly/send', async (request, reply) => {
+    const body = (request.body ?? {}) as { to?: string; mode?: string }
+    const to = (body.to ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+    const mode = body.mode === 'current' ? 'current' : 'previous'
+    const { sendWeeklyDigest } = await import('../services/advertising/ads-weekly-digest-mail.service.js')
+    const r = await sendWeeklyDigest({ mode, to: to.length ? to : undefined })
+    if (r.status === 'FAILED') reply.code(502)
+    logger.warn('[ACR42-DIGEST-SEND]', { status: r.status, recipients: r.recipients.length, actor: actorFromHeaders(request.headers as Record<string, unknown>) })
+    return r
+  })
 }
 
 export default advertisingRoutes

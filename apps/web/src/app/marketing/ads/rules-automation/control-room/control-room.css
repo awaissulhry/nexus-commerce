@@ -422,3 +422,62 @@ a.acr-refresh { text-decoration: none; }
 }
 .acr-notch.earned:hover:not(:disabled) { background: #e8f6ef; }
 .acr-row.rule.graduable { border-color: #cfe8dc; }
+/* ── ACR.4.3 · "This week" rollup + ACR.4.2 digest gate ──────────────────── */
+/* Light-only, self-contained. Same colour vocabulary as the rest of the room. */
+
+.acr-week { margin: 0 0 26px; }
+.acr-week-tiles {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(146px, 1fr));
+  gap: 10px; margin: 0 0 10px;
+}
+.acr-week-tile {
+  display: flex; flex-direction: column; gap: 2px;
+  border: 1px solid #e4e9f0; border-radius: 8px; background: #fff; padding: 11px 13px;
+}
+.acr-week-tile .k { font-size: 11px; font-weight: 600; color: #8d97a6; text-transform: uppercase; letter-spacing: .04em; }
+.acr-week-tile b { font-size: 20px; font-weight: 660; color: #1c2530; font-variant-numeric: tabular-nums; line-height: 1.25; }
+.acr-week-tile .s { font-size: 11.5px; color: #7b8798; }
+.acr-week-tile.good b { color: #14724d; }
+.acr-week-tile.warn b { color: #8a6320; }
+.acr-week-tile.bad { border-color: #f3cbc7; background: #fdf7f6; }
+.acr-week-tile.bad b { color: #a3342b; }
+
+.acr-week-note { font-size: 11.5px; line-height: 1.55; color: #8d97a6; margin: 8px 0 0; max-width: 92ch; }
+
+.acr-week-grad { font-size: 12.5px; line-height: 1.55; margin: 10px 0 0; padding: 9px 12px; border-radius: 7px; }
+.acr-week-grad.ready { color: #14724d; background: #f2fbf7; border: 1px solid #cfe8dc; }
+.acr-week-grad.unseen { color: #8a6320; background: #fdf9f2; border: 1px solid #f0dcbb; }
+
+.acr-week-table { width: 100%; border-collapse: collapse; margin: 14px 0 0; font-size: 12.5px; }
+.acr-week-table th {
+  text-align: left; font-size: 11px; font-weight: 600; color: #8d97a6;
+  text-transform: uppercase; letter-spacing: .04em; padding: 0 10px 6px 0; border-bottom: 1px solid #e4e9f0;
+}
+.acr-week-table th.n, .acr-week-table td.n { text-align: right; font-variant-numeric: tabular-nums; }
+.acr-week-table td { padding: 6px 10px 6px 0; border-bottom: 1px solid #f1f4f8; color: #34404f; }
+.acr-week-table td:last-child, .acr-week-table th:last-child { padding-right: 0; }
+.acr-week-table td.bad { color: #a3342b; font-weight: 600; }
+.acr-week-table .acr-mode { font-size: 10px; padding: 1px 5px; }
+
+/* The gate, stated rather than flipped. */
+.acr-digest { margin: 18px 0 0; padding: 12px 14px; border-radius: 8px; border: 1px solid #e4e9f0; background: #fbfcfd; }
+.acr-digest.off { border-color: #e0e5ec; }
+.acr-digest.dry-run { border-color: #f0dcbb; background: #fdfaf4; }
+.acr-digest.live { border-color: #cfe8dc; background: #f6fcf9; }
+.acr-digest-head { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #34404f; margin: 0 0 5px; }
+.acr-digest-head svg { color: #8d97a6; }
+.acr-digest p { font-size: 12.5px; line-height: 1.55; color: #56637a; margin: 0 0 6px; max-width: 92ch; }
+.acr-digest-flags { font-size: 11.5px; color: #8d97a6; }
+.acr-digest-flags code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+  background: #eef1f5; border-radius: 3px; padding: 1px 4px; color: #56637a;
+}
+.acr-digest-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 9px; }
+.acr-btn.ghost {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 550; color: #34404f; text-decoration: none;
+  background: #fff; border: 1px solid #d7dee7; border-radius: 6px; padding: 6px 11px; cursor: pointer;
+}
+.acr-btn.ghost:hover:not(:disabled) { background: #f4f6f9; }
+.acr-btn.ghost:disabled { color: #b3bcc9; cursor: not-allowed; }
+.acr-digest-sent { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #14724d; }
