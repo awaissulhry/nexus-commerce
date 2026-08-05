@@ -517,7 +517,24 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
       void recordCronRun(
         jobName,
         async () => {
-          await handler()
+          /**
+           * ACR.1.2b — KEEP the handler's summary. This threw the result away and wrote the
+           * literal string "manual trigger", so every manually-triggered run in the platform
+           * recorded a row that said only that it had been triggered manually — which the
+           * `triggeredBy` column already says. Measured: a hand-run of
+           * `ads-structural-reconcile` landed `SUCCESS · "manual trigger"` beside scheduled
+           * rows carrying `campaigns=215 entities=7790 verified=6849 mismatch=731 …`.
+           *
+           * That is the whole value of a run: an operator presses the button precisely to
+           * find out what happened, and got the one row that could not tell them. The
+           * fallback is kept for handlers that genuinely return nothing.
+           */
+          const result = await handler()
+          if (typeof result === 'string' && result.trim()) return result
+          if (result && typeof result === 'object' && 'summary' in result) {
+            const s = (result as { summary?: unknown }).summary
+            if (typeof s === 'string' && s.trim()) return s
+          }
           return 'manual trigger'
         },
         { triggeredBy: 'manual' },

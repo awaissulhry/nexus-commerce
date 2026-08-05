@@ -1268,6 +1268,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       select: {
         id: true, name: true, marketplace: true, liveBidWritesEnabled: true,
         liveBidWritesToday: true, liveBidWritesDay: true, dynamicBidding: true,
+        // ACR.1.2b — so the gate preview below can pick a bid INSIDE this campaign's own
+        // bounds, and therefore report on authority rather than on arithmetic.
+        minBidCents: true, maxBidCents: true,
       },
     })
     if (!campaign) { reply.status(404); return { error: 'campaign not found' } }
@@ -1319,8 +1322,28 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       .filter((x): x is NonNullable<typeof x> => x != null)
 
     // Live gate dry-run for this campaign (representative small bid write).
+    //
+    // ACR.1.2b — it now says it IS a bid write. The docblock always claimed that, but the
+    // call passed no `field`, so the gate skipped every field-scoped check and a campaign
+    // whose bid pin would refuse the next real write was previewed here as "allowed".
+    //
+    // The bid VALUE is deliberately clamped into the campaign's own bounds, because this
+    // canary answers "may automation write to this campaign", not "is 50¢ an acceptable
+    // number". Passing a flat 50¢ would report `entity_bounds` on any campaign with a
+    // minimum above that — a campaign automation can write perfectly well, at 80¢ — and the
+    // Ad Manager renders this as a red "Gated" pill. Reporting a bound as a permission
+    // failure is the same category error as reporting unknown as zero.
+    // Ceiling first, then floor. The other order leaves a campaign with only a max below
+    // 50¢ probing above its own ceiling — the exact false denial this clamp exists to stop.
+    // (min > max cannot occur: validateGuardrails refuses to store that pair.)
+    let probeBid = 50
+    if (campaign.maxBidCents != null) probeBid = Math.min(probeBid, campaign.maxBidCents)
+    if (campaign.minBidCents != null) probeBid = Math.max(probeBid, campaign.minBidCents)
     const { checkAdsWriteGate } = await import('../services/advertising/ads-write-gate.js')
-    const gate = await checkAdsWriteGate({ marketplace: campaign.marketplace, payloadValueCents: 50, campaignId: id })
+    const gate = await checkAdsWriteGate({
+      marketplace: campaign.marketplace, payloadValueCents: 50, campaignId: id,
+      field: 'bid', intendedValueCents: probeBid,
+    })
     const gateInfo = gate.allowed === false
       ? { allowed: false as const, reason: gate.reason, deniedAt: gate.deniedAt }
       : { allowed: true as const, mode: gate.mode }

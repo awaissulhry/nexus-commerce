@@ -96,6 +96,27 @@ const EVIDENCE: Record<string, EvidenceSource> = {
     writesEntities: false,
     emptyNote: 'Read-only by design: it records drift and never repairs a bid.',
   },
+  'coverage-engine': {
+    actors: ['automation:coverage-engine'],
+    writesEntities: true,
+    emptyNote: 'No coverage set is enabled yet, so it has held no term.',
+  },
+}
+
+/**
+ * The fallback for an engine this file has never heard of.
+ *
+ * Engines arrive: `coverage-engine` appeared on the Levers board from another workstream
+ * hours after this file was written, and its drawer 404'd because the cron name lived in a
+ * SECOND map here. That map is gone (see `getEngineDetail`), but the evidence sources still
+ * have to be declared per engine, and a missing declaration must read as a missing
+ * declaration — not as "this engine has never done anything", which is a claim.
+ */
+const UNMAPPED: EvidenceSource = {
+  writesEntities: false,
+  emptyNote:
+    'This engine has no evidence source mapped yet, so its writes cannot be listed here. '
+    + 'The run history above is complete regardless.',
 }
 
 export interface EngineRun {
@@ -135,26 +156,30 @@ export interface EngineDetail {
   writesEntities: boolean
 }
 
-/** Levers engine key → the CronRun jobName it reports under. Mirrors ads-control-room.service. */
-const ENGINE_CRON: Record<string, string | null> = {
-  'rank-defend': 'ad-rank-defend',
-  dayparting: 'ad-dayparting',
-  'budget-enforce': 'ad-budget-enforce',
-  'budget-pools': 'budget-pool-rebalance',
-  'auto-bid': 'ads-auto-bid',
-  'auto-harvest': 'ads-auto-harvest',
-  'anomaly-guard': 'ads-anomaly-guard',
-  'tos-defense': 'top-of-search-defense',
-  'write-delivery': 'drain-ads-sync',
-  'structural-reconcile': 'ads-structural-reconcile',
-}
-
+/**
+ * The engine's cron name comes from the LEVERS SERVICE, which is the thing that defines the
+ * engine in the first place — not from a second map here.
+ *
+ * It WAS a second map, and it broke within hours: another workstream added `coverage-engine`
+ * to the Levers board, the row rendered with an "Open →" like every other, and the drawer
+ * 404'd because this file had never heard of it. Two lists of the same engines is the
+ * two-vocabularies defect this whole programme keeps finding, hit here on my own code —
+ * and the version where the row exists but its detail does not is the worst shape of it,
+ * because the board looks complete.
+ *
+ * Costs one extra read per drawer open. The guarantee bought is that the drawer cannot
+ * describe a different set of engines than the rows that open it, ever, including engines
+ * added by someone else next week.
+ */
 export async function getEngineDetail(key: string, opts: { days?: number } = {}): Promise<EngineDetail | null> {
-  const cron = ENGINE_CRON[key]
-  if (cron === undefined) return null
+  const { getEngineLevers } = await import('./ads-control-room.service.js')
+  const { levers } = await getEngineLevers()
+  const lever = levers.find((l) => l.key === key)
+  if (!lever) return null
+  const cron = lever.cron
   const days = Math.min(Math.max(opts.days ?? 14, 1), 60)
   const since = new Date(Date.now() - days * DAY)
-  const src = EVIDENCE[key]
+  const src = EVIDENCE[key] ?? UNMAPPED
 
   /**
    * Whether "Run now" is offered is decided by the SAME registry the trigger route
@@ -210,7 +235,7 @@ export async function getEngineDetail(key: string, opts: { days?: number } = {})
 
   let evidence: EngineEvidenceRow[] = []
   let evidenceNote: string | null = null
-  if (src?.writesEntities) {
+  if (src.writesEntities) {
     const actorWhere = src.actorPrefix
       ? { userId: { startsWith: src.actorPrefix } }
       : { userId: { in: src.actors ?? [] } }
@@ -244,7 +269,7 @@ export async function getEngineDetail(key: string, opts: { days?: number } = {})
     }))
     if (!evidence.length) evidenceNote = src.emptyNote
   } else {
-    evidenceNote = src?.emptyNote ?? 'This engine writes no per-entity rows.'
+    evidenceNote = src.emptyNote
   }
 
   return {
@@ -260,7 +285,7 @@ export async function getEngineDetail(key: string, opts: { days?: number } = {})
     lastSummary: runs[0]?.summary ?? null,
     evidence,
     evidenceNote,
-    writesEntities: src?.writesEntities ?? false,
+    writesEntities: src.writesEntities,
   }
 }
 
