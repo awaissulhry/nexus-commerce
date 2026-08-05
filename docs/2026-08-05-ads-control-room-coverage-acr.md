@@ -681,6 +681,51 @@ standing operator decision assigns to Analytics, and Analytics belongs to anothe
 at their current URLs; the legacy `layout.tsx` is reduced to a bare passthrough so they no longer render the
 retired sidebar. Everything else in the tree is ported, redirected or deleted.
 
+##### ACR.6 — SHIPPED 2026-08-05 (local; prod verification pending a green push)
+
+**101 files, ~13,900 lines deleted.** 39 of 41 routes now 308 into `/marketing/ads`.
+
+Ports landed first, one commit each, before anything was redirected:
+
+| Gap | Landed as | Commit |
+|---|---|---|
+| R5 | `ProfitPanel` on `/ads/dashboard` — per-SKU × day P&L under the margin KPI it explains | `fad64dbe8` |
+| R9 | `BudgetPoolsDrawer` on `/ads/budget-manager` — create/enable/allocate/rebalance/history | `74d2a531d` |
+| R7 | `IncrementalityPanel` on `/ads/reporting` — collapsed, labelled *modeled* in three places | `a0293f1a0` |
+| R3 | `AccountPlanPanel` on `/ads/recommendations` — north star → plan → Modal-confirmed apply | `39a084172` |
+| R1 + R2 | Execution rollback in the rule history drawer; fleet-impact strip on Apply Rules | `1adc14f28` |
+| R6 | "Add note" on `/ads/changelog` — the console can finally write the row it already reads | `3e02983e8` |
+| R12 | `ProbePanel` on `/ads/health` — probe rows kept, the stale Phase-B/C verdict dropped | `719982e41` |
+| R11 | `/marketing/content/feeds` + a Content tab; preview fetch moved client-side | `bc133aa60` |
+
+Retirement: `9ab7cb52b`.
+
+**Three deletions, each on measured evidence rather than judgement:** DSP (0 campaigns ever created),
+AMC audiences (0 rows) — both entitlements refused at Amazon — and FBA storage-age (0 rows, ingest never
+ran), whose dead deep-link from the replenishment tile went with it.
+
+**Redirects live in `next.config.js`, not as `redirect()` stubs.** A tree of one-line files is a tree that
+gets edited back into pages; putting them in config is what let the directory actually be deleted. Real
+308s, so bookmarks and the runbook keep working. Array order is load-bearing and commented — every literal
+`/automation/*` path precedes `/automation/:id`.
+
+**Verified** against a running local server (all 39 sources → 308 with the expected target, including
+`:id` and `:id/ad-groups/:agId` pass-through and the `?tab=` destinations; all 16 distinct destinations
+return 200; `/ngrams` and `/funnel` still return 200 and do NOT redirect). Guards green: link targets
+(243 static · 115 breadcrumb · 197 template-literal), DS ratchet, P3 tokens, i18n parity.
+
+⏳ **Prod verification is still outstanding.** The pre-push hook builds the working tree, and the tree
+currently carries in-flight TypeScript errors from concurrent sessions (control-room, SB/SD campaign
+builder). Nothing here is blocked on those; the push is. Re-run the same redirect sweep against the
+deployed URL once the tree compiles.
+
+**Nav.** "Advertising (classic)" is gone from `app-nav.ts` — a menu offering classic beside current teaches
+operators the current one is optional. `nav-permissions.ts` keeps its `/marketing/advertising` mapping on
+purpose: the parked pages are still ads surfaces, and dropping it would fall through to the `/marketing`
+prefix and gate them on `pages.marketing`.
+
+**`apps/api` needed no change.** Every service href already pointed at `/marketing/ads/*`.
+
 ---
 
 ## Part 6 — Gate decisions (status 2026-08-05)
