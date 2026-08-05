@@ -700,3 +700,42 @@ a.acr-refresh { text-decoration: none; }
 .acr-btn.ghost:hover:not(:disabled) { background: #f4f6f9; }
 .acr-btn.ghost:disabled { color: #b3bcc9; cursor: not-allowed; }
 .acr-digest-sent { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #14724d; }
+
+/* ── ACR.1.3c — bulk edit ─────────────────────────────────────────────────
+   Appears only with a selection, so it never occupies space while you are just
+   reading the grid. */
+.acr-gg-bulk {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  border: 1px solid #c8d8f5; background: #f5f9ff; border-radius: 8px;
+  padding: 9px 13px; margin-bottom: 10px;
+}
+.acr-gg-bulk > strong { font-size: 12.5px; color: #2a5399; white-space: nowrap; }
+.acr-gg-bulk-grp { display: inline-flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.acr-gg-bulk-grp label {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; color: #46536a; white-space: nowrap;
+}
+.acr-gg-bulk-lbl {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em;
+  color: #8d97a6; white-space: nowrap;
+}
+.acr-gg-bulk .acr-btn { padding: 5px 11px; font-size: 12px; }
+.acr-gg-bulk .acr-gg-toggle { padding: 5px 10px; }
+.acr-gg-bulk .acr-gg-reset { margin-left: auto; }
+
+/* Set / clear as one control, so "pin" and "unpin" cannot be confused for a toggle
+   whose current state means something across a mixed selection. */
+.acr-gg-bulk-pin { display: inline-flex; }
+.acr-gg-bulk-pin button {
+  font-size: 10.5px; font-weight: 650; cursor: pointer;
+  border: 1px solid #f0dcbb; background: #fdf4e6; color: #8a6320;
+  padding: 4px 7px;
+}
+.acr-gg-bulk-pin button:first-child { border-radius: 4px 0 0 4px; border-right: none; }
+.acr-gg-bulk-pin button.off { border-radius: 0 4px 4px 0; background: #fff; color: #9aa4b2; border-color: #e3e7ed; }
+.acr-gg-bulk-pin button:disabled { opacity: 0.55; cursor: default; }
+.acr-gg-bulk-pin button:hover:not(:disabled) { filter: brightness(0.97); }
+
+.acr-gg-selh, .acr-gg-sel { width: 32px; padding-right: 0 !important; text-align: center; }
+.acr-gg-tbl tr.sel td { background: #f5f9ff; }
+.acr-gg-tbl tr.sel:hover td { background: #eef4fd; }

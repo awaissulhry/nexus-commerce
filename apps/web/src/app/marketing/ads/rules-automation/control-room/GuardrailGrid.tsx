@@ -74,6 +74,12 @@ export function GuardrailGrid() {
   const [toast, setToast] = useState<string | null>(null)
   // Which cell is being typed in, so a re-render mid-edit cannot yank the value away.
   const [draft, setDraft] = useState<Record<string, string>>({})
+  // ACR.1.3c — bulk selection. 0 of 216 campaigns have a minimum bid; setting them one at
+  // a time across the 82 managed ones is the job this grid exists for and could not do.
+  const [sel, setSel] = useState<Set<string>>(new Set())
+  const [bulkMin, setBulkMin] = useState('')
+  const [bulkMax, setBulkMax] = useState('')
+  const [bulkBusy, setBulkBusy] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -164,6 +170,92 @@ export function GuardrailGrid() {
     [g],
   )
 
+  const selectedRows = useMemo(() => (g?.rows ?? []).filter((r) => sel.has(r.id)), [g, sel])
+
+  /**
+   * Run one PATCH per selected campaign against the endpoints that already exist, rather
+   * than inventing a bulk route.
+   *
+   * SEQUENTIAL and per-campaign on purpose. `validateGuardrails` judges the RESULTING PAIR
+   * for each campaign separately, so "set max to 50" legitimately succeeds on most of a
+   * selection and is refused on the ones whose min is already 80 — a campaign nothing could
+   * write to afterwards. A bulk endpoint would have to choose between failing all of them
+   * or hiding the partial result; doing it here lets the bar report exactly what happened,
+   * and every write still lands its own audit row.
+   */
+  const runBulk = async (
+    label: string,
+    body: (row: Row) => Record<string, unknown> | null,
+    path: (row: Row) => string,
+  ) => {
+    if (bulkBusy || !selectedRows.length) return
+    setBulkBusy(label)
+    let ok = 0
+    const refused: Array<{ name: string; why: string }> = []
+    for (const row of selectedRows) {
+      const b = body(row)
+      if (!b) continue
+      try {
+        const r = await fetch(`${getBackendUrl()}${path(row)}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b),
+        })
+        const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string }
+        if (!r.ok || j.ok === false) refused.push({ name: row.name, why: j.error ?? `HTTP ${r.status}` })
+        else ok++
+      } catch (e) { refused.push({ name: row.name, why: (e as Error).message }) }
+    }
+    setBulkBusy(null)
+    await load()
+    // Name the first refusal rather than only counting them: "2 refused" sends an operator
+    // hunting, and the reason is almost always the same one for every row in the batch.
+    say(refused.length
+      ? `${ok} saved · ${refused.length} refused — ${refused[0].name}: ${refused[0].why}`
+      : `${label}: ${ok} campaign${ok === 1 ? '' : 's'} saved`)
+  }
+
+  const applyBulkBounds = async () => {
+    const min = bulkMin.trim()
+    const max = bulkMax.trim()
+    if (min === '' && max === '') { say('Enter a min, a max, or both'); return }
+    const toCents = (s: string) => (s === '' ? undefined : Math.round(Number(s) * 100))
+    if ((min !== '' && !Number.isFinite(toCents(min))) || (max !== '' && !Number.isFinite(toCents(max)))) {
+      say('Bounds must be numbers'); return
+    }
+    await runBulk(
+      'Bounds',
+      () => {
+        const b: Record<string, unknown> = {}
+        // Only send what was typed. Sending an untouched field as null would CLEAR the
+        // other bound on every selected campaign — a silent mass-erase behind a save.
+        if (min !== '') b.minBidCents = toCents(min)
+        if (max !== '') b.maxBidCents = toCents(max)
+        return b
+      },
+      (row) => `/api/advertising/campaigns/${row.id}/guardrails`,
+    )
+    setBulkMin(''); setBulkMax('')
+  }
+
+  const applyBulkPin = (dim: typeof DIMS[number], value: boolean) => runBulk(
+    `${dim.key} ${value ? 'pinned' : 'unpinned'}`,
+    () => ({ [dim.field]: value }),
+    (row) => `/api/advertising/campaigns/${row.id}/pins`,
+  )
+
+  const applyBulkManaged = (enabled: boolean) => runBulk(
+    enabled ? 'Managed' : 'Off-limits',
+    () => ({ enabled }),
+    (row) => `/api/advertising/campaigns/${row.id}/live-writes`,
+  )
+
+  const allShownSelected = !!g?.rows.length && g.rows.every((r) => sel.has(r.id))
+  const toggleAll = () => setSel(allShownSelected ? new Set() : new Set((g?.rows ?? []).map((r) => r.id)))
+  const toggleOne = (id: string) => setSel((s) => {
+    const n = new Set(s)
+    if (n.has(id)) n.delete(id); else n.add(id)
+    return n
+  })
+
   const box = (row: Row, which: 'min' | 'max') => {
     const key = `${row.id}:${which}`
     const stored = cents(which === 'min' ? row.minBidCents : row.maxBidCents)
@@ -229,6 +321,56 @@ export function GuardrailGrid() {
         <span className="acr-gg-count">{g ? `${g.rows.length} shown of ${g.totals.campaigns}` : ''}</span>
       </div>
 
+      {/* ACR.1.3c — the bulk bar. Appears only with a selection, so it never occupies space
+          while you are reading. Every control writes through the same per-campaign endpoint
+          the inline edits use. */}
+      {selectedRows.length > 0 && (
+        <div className="acr-gg-bulk" role="region" aria-label="Bulk edit">
+          <strong>{selectedRows.length} selected</strong>
+
+          <span className="acr-gg-bulk-grp">
+            <label>
+              Min €
+              <input
+                className="acr-gg-num" inputMode="decimal" value={bulkMin} placeholder="—"
+                onChange={(e) => setBulkMin(e.target.value)} aria-label="Bulk minimum bid"
+              />
+            </label>
+            <label>
+              Max €
+              <input
+                className="acr-gg-num" inputMode="decimal" value={bulkMax} placeholder="—"
+                onChange={(e) => setBulkMax(e.target.value)} aria-label="Bulk maximum bid"
+              />
+            </label>
+            <button type="button" className="acr-btn go" disabled={!!bulkBusy} onClick={() => void applyBulkBounds()}>
+              {bulkBusy === 'Bounds' ? <Loader2 size={13} className="acr-spin" /> : null}
+              Set bounds
+            </button>
+          </span>
+
+          <span className="acr-gg-bulk-grp">
+            <span className="acr-gg-bulk-lbl">Hands off</span>
+            {DIMS.map((d) => (
+              <span key={d.key} className="acr-gg-bulk-pin">
+                <button type="button" disabled={!!bulkBusy} title={`Pin ${d.key} on the selection. ${d.hint}`}
+                  onClick={() => void applyBulkPin(d, true)}>{d.short}</button>
+                <button type="button" disabled={!!bulkBusy} className="off" title={`Clear the ${d.key} pin on the selection`}
+                  onClick={() => void applyBulkPin(d, false)}>✕</button>
+              </span>
+            ))}
+          </span>
+
+          <span className="acr-gg-bulk-grp">
+            <span className="acr-gg-bulk-lbl">Automation</span>
+            <button type="button" className="acr-gg-toggle on" disabled={!!bulkBusy} onClick={() => void applyBulkManaged(true)}>Managed</button>
+            <button type="button" className="acr-gg-toggle" disabled={!!bulkBusy} onClick={() => void applyBulkManaged(false)}>Off-limits</button>
+          </span>
+
+          <button type="button" className="acr-gg-reset" onClick={() => setSel(new Set())}>Clear</button>
+        </div>
+      )}
+
       {!g ? <div className="acr-empty">Loading…</div> : g.rows.length === 0 ? (
         <div className="acr-empty">No campaigns match these filters.</div>
       ) : (
@@ -236,6 +378,15 @@ export function GuardrailGrid() {
           <table className="acr-gg-tbl">
             <thead>
               <tr>
+                <th className="acr-gg-selh">
+                  <input
+                    type="checkbox" checked={allShownSelected} onChange={toggleAll}
+                    aria-label={allShownSelected ? 'Clear selection' : 'Select every campaign shown'}
+                    // Says what it will actually do: it selects the FILTERED rows, not the
+                    // account. With "Managed only" on, that is 82 of 216.
+                    title={`Select the ${g.rows.length} campaigns currently shown`}
+                  />
+                </th>
                 <th className="acr-gg-name-h">Campaign</th>
                 <th>Managed</th>
                 <th title="Absolute floor, in euros. Enforced on every write to Amazon.">Min bid</th>
@@ -249,7 +400,13 @@ export function GuardrailGrid() {
             </thead>
             <tbody>
               {g.rows.map((r) => (
-                <tr key={r.id} className={saving === r.id ? 'saving' : undefined}>
+                <tr key={r.id} className={`${saving === r.id ? 'saving' : ''} ${sel.has(r.id) ? 'sel' : ''}`.trim() || undefined}>
+                  <td className="acr-gg-sel">
+                    <input
+                      type="checkbox" checked={sel.has(r.id)} onChange={() => toggleOne(r.id)}
+                      aria-label={`Select ${r.name}`}
+                    />
+                  </td>
                   <td className="acr-gg-name">
                     <span className="n" title={r.name}>{r.name}</span>
                     <span className="m">
