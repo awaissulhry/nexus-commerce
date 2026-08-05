@@ -68,3 +68,39 @@ describe('detail aggregation', () => {
     expect(de.detail!.lastSyncedAt).toBe('2026-06-30T08:00:00Z')
   })
 })
+
+/**
+ * ACR.0.5 — unknown profit must not render as 0% margin.
+ *
+ * The API now sends null for trueProfitCents when no cost price is loaded, instead of the
+ * confident 0 it used to compute against a zero COGS. Measured on prod 2026-08-05: costPrice
+ * is null on 362/362 products, so this is every campaign, not an edge case.
+ */
+describe('ACR.0.5 — unknown profit vs zero profit', () => {
+  const base = { id: 'c1', name: 'GALE | IT | Exact', marketplace: 'IT', spend: '100', sales: '400' }
+
+  it('a null trueProfitCents leaves BOTH profit and margin undefined', () => {
+    const objs = campaignsToObjects([{ ...base, trueProfitCents: null }] as never)
+    const c = objs.find((o) => o.id === 'c:c1')!
+    expect(c.detail?.trueProfitCents).toBeUndefined()
+    // The bug: margin was computed from a coerced 0 and rendered "0%" — a claim, not an absence.
+    expect(c.detail?.marginPct).toBeUndefined()
+  })
+
+  it('a real profit still produces a real margin', () => {
+    const objs = campaignsToObjects([{ ...base, trueProfitCents: '8000' }] as never)
+    const c = objs.find((o) => o.id === 'c:c1')!
+    expect(c.detail?.trueProfitCents).toBe(8000)
+    expect(c.detail?.marginPct).toBeCloseTo(0.2, 5) // €80 profit on €400 sales
+  })
+
+  it('a market roll-up of entirely-unknown campaigns reports unknown, not 0', () => {
+    const objs = campaignsToObjects([
+      { ...base, id: 'c1', trueProfitCents: null },
+      { ...base, id: 'c2', trueProfitCents: null },
+    ] as never)
+    const market = objs.find((o) => o.id === 'm:IT')!
+    expect(market.detail?.trueProfitCents).toBeUndefined()
+    expect(market.detail?.marginPct).toBeUndefined()
+  })
+})

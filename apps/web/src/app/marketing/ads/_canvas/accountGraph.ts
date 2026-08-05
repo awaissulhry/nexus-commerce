@@ -39,7 +39,17 @@ function healthFromAcos(acos?: number): Health {
 
 const deriveAcos = (spend: number, sales: number) => (sales > 0 ? spend / sales : undefined)
 const deriveRoas = (spend: number, sales: number) => (spend > 0 ? sales / spend : undefined)
-const deriveMargin = (trueProfitCents: number, sales: number) => (sales > 0 ? trueProfitCents / 100 / sales : undefined)
+/**
+ * ACR.0.5 — margin is undefined when profit is UNKNOWN, not 0%.
+ *
+ * The API now sends a null trueProfitCents when no cost price is loaded (it previously sent a
+ * confident 0 computed against a zero COGS). Coercing that null to 0 here and dividing gives
+ * a margin of exactly 0%, which reads as "this campaign earns nothing" — the opposite of
+ * "we cannot know". The trueProfit cell already rendered '—' correctly via `|| undefined`;
+ * only the margin beside it claimed a number.
+ */
+const deriveMargin = (trueProfitCents: number | null, sales: number) =>
+  (trueProfitCents != null && sales > 0 ? trueProfitCents / 100 / sales : undefined)
 const maxIso = (a: string | null, b?: string | null) => (!a ? b ?? null : !b ? a : b > a ? b : a)
 
 const NO_PF = 'none'
@@ -51,9 +61,12 @@ interface Agg {
   clicks: number
   orders: number
   trueProfitCents: number
+  /** True once any member contributed a KNOWN profit. Without it, a roll-up of
+   *  entirely-unknown children would report a confident 0. */
+  hasProfit: boolean
   lastSyncedAt: string | null
 }
-const emptyAgg = (): Agg => ({ spend: 0, sales: 0, impressions: 0, clicks: 0, orders: 0, trueProfitCents: 0, lastSyncedAt: null })
+const emptyAgg = (): Agg => ({ spend: 0, sales: 0, impressions: 0, clicks: 0, orders: 0, trueProfitCents: 0, hasProfit: false, lastSyncedAt: null })
 
 function detailFromAgg(a: Agg): OpsDetail {
   return {
@@ -62,8 +75,8 @@ function detailFromAgg(a: Agg): OpsDetail {
     impressions: a.impressions || undefined,
     clicks: a.clicks || undefined,
     orders: a.orders || undefined,
-    trueProfitCents: a.trueProfitCents || undefined,
-    marginPct: deriveMargin(a.trueProfitCents, a.sales),
+    trueProfitCents: a.hasProfit ? a.trueProfitCents : undefined,
+    marginPct: deriveMargin(a.hasProfit ? a.trueProfitCents : null, a.sales),
     lastSyncedAt: a.lastSyncedAt,
   }
 }
@@ -83,7 +96,7 @@ export function campaignsToObjects(campaigns: ApiCampaign[], portfolios: ApiPort
     const impressions = num(c.impressions) ?? 0
     const clicks = num(c.clicks) ?? 0
     const orders = num(c.orders) ?? num(c.ppcOrders) ?? 0
-    const trueProfitCents = num(c.trueProfitCents) ?? 0
+    const trueProfitCents = num(c.trueProfitCents) ?? null
     const acos = num(c.acos) ?? deriveAcos(spend, sales)
 
     const ma = marketAgg.get(market) ?? emptyAgg()
@@ -94,7 +107,7 @@ export function campaignsToObjects(campaigns: ApiCampaign[], portfolios: ApiPort
       a.impressions += impressions
       a.clicks += clicks
       a.orders += orders
-      a.trueProfitCents += trueProfitCents
+      if (trueProfitCents != null) { a.trueProfitCents += trueProfitCents; a.hasProfit = true }
       a.lastSyncedAt = maxIso(a.lastSyncedAt, c.lastSyncedAt)
     }
     marketAgg.set(market, ma)
@@ -114,7 +127,7 @@ export function campaignsToObjects(campaigns: ApiCampaign[], portfolios: ApiPort
         impressions: impressions || undefined,
         clicks: clicks || undefined,
         orders: orders || undefined,
-        trueProfitCents: trueProfitCents || undefined,
+        trueProfitCents: trueProfitCents ?? undefined,
         marginPct: deriveMargin(trueProfitCents, sales),
         status: c.status ?? undefined,
         adType: c.type ?? undefined,
