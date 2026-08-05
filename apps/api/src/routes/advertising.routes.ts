@@ -27,6 +27,7 @@ import { testConnection, adsMode, listPortfolios, createPortfolio, type AdsRegio
 import { AMS_DAILY_MARKER, EXCLUDE_AMS_DAILY } from '../services/ads-core/ams-daily.js'
 import { allocate, microsToCents, toEurCents } from '../services/ads-core/metrics-math.js'
 import { detectKeywordConflicts } from '../services/advertising/keyword-conflicts.service.js'
+import { PROFIT_UNKNOWN_REASON } from '../services/advertising/profit-coverage.js'
 import { getFxRate } from '../services/fx-rate.service.js'
 import {
   runFbaStorageAgeIngestOnce,
@@ -1956,15 +1957,26 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const now = new Date()
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
 
-    const [campaignCount, agg, agedCritical] = await Promise.all([
+    /**
+     * ACR.0.5 — the margin headline is computed over the rows that HAVE a profit, not over
+     * all of them. Prisma's `_sum` skips nulls, so dividing a partial profit by total
+     * revenue would understate margin in exact proportion to how much cost data is missing,
+     * and `?? 0` on an all-null sum reported a confident 0% — the one number that reads as
+     * "we measured this and it is zero". Null plus a coverage share instead.
+     */
+    const [campaignCount, agg, covered, agedCritical] = await Promise.all([
       prisma.campaign.count({ where: { status: { in: ['ENABLED', 'PAUSED'] } } }),
       prisma.productProfitDaily.aggregate({
         where: { date: { gte: thirtyDaysAgo } },
         _sum: {
           grossRevenueCents: true,
           advertisingSpendCents: true,
-          trueProfitCents: true,
         },
+      }),
+      prisma.productProfitDaily.aggregate({
+        where: { date: { gte: thirtyDaysAgo }, trueProfitCents: { not: null } },
+        _sum: { grossRevenueCents: true, trueProfitCents: true },
+        _count: true,
       }),
       prisma.fbaStorageAge.count({
         where: { daysToLtsThreshold: { lte: 30, not: null } },
@@ -1972,8 +1984,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     ])
 
     const grossCents = agg._sum.grossRevenueCents ?? 0
-    const trueProfitCents = agg._sum.trueProfitCents ?? 0
-    const marginPct = grossCents > 0 ? (trueProfitCents / grossCents) * 100 : null
+    const knownRows = covered._count ?? 0
+    const knownGrossCents = covered._sum.grossRevenueCents ?? 0
+    const trueProfitCents = knownRows > 0 ? (covered._sum.trueProfitCents ?? 0) : null
+    const marginPct =
+      trueProfitCents != null && knownGrossCents > 0
+        ? (trueProfitCents / knownGrossCents) * 100
+        : null
 
     reply.header('Cache-Control', 'private, max-age=120')
     return {
@@ -1982,6 +1999,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       grossRevenue30dCents: grossCents,
       trueProfit30dCents: trueProfitCents,
       trueProfitMargin30dPct: marginPct,
+      // What share of 30d revenue the profit figure above actually covers. 0 means the
+      // number is absent because no product has a cost price, not because profit is zero.
+      trueProfitCoverage: {
+        rowsWithCost: knownRows,
+        revenueCoveredCents: knownGrossCents,
+        revenuePct: grossCents > 0 ? (knownGrossCents / grossCents) * 100 : 0,
+        reason: knownRows === 0 ? PROFIT_UNKNOWN_REASON : null,
+      },
       agedSkusFlagged: agedCritical,
       mode: adsMode(),
     }

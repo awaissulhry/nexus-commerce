@@ -2645,9 +2645,12 @@ model Campaign {
   // True Profit aggregates (computed by true-profit-rollup.service).
   // acos = spend / sales (Amazon's metric). roas = sales / spend.
   // trueProfit nets COGS + referral + FBA + storage + refunds.
+  /// ACR.0.5 — nullable, and today ALWAYS null: measured 2026-08-05, no code path writes
+  /// these two columns, so all 216 campaigns carried a hardcoded 0 that the console
+  /// rendered as "True profit €0.00" — a claim, not a default. See ProductProfitDaily.
   acos                     Decimal?        @db.Decimal(8, 4)
   roas                     Decimal?        @db.Decimal(8, 4)
-  trueProfitCents          Int             @default(0)
+  trueProfitCents          Int?            @db.Integer
   trueProfitMarginPct      Decimal?        @db.Decimal(8, 4)
   // NP — set while the campaign is bid-suppressed (no-pause: bids at the floor
   // instead of status=PAUSED). Fast "is suppressed" flag + when it started.
@@ -3561,7 +3564,12 @@ model ProductProfitDaily {
   returnsRefundsCents     Int @default(0)
   otherFeesCents          Int @default(0)
 
-  trueProfitCents     Int      @default(0)
+  /// ACR.0.5 — nullable because "unknown" is a real state and 0 is not it.
+  /// trueProfit subtracts cogsCents; with no cost price loaded cogsCents is 0, so the
+  /// subtraction returns revenue-minus-fees and calls it profit — the most flattering
+  /// number the formula can produce, presented as fact. NULL when coverage.hasCostPrice
+  /// is false. Every component stays stored, so this recomputes the moment COGS lands.
+  trueProfitCents     Int?     @db.Integer
   trueProfitMarginPct Decimal? @db.Decimal(8, 4)
 
   // { hasCostPrice, hasReferralFee, hasFbaFee, hasAdSpend } booleans

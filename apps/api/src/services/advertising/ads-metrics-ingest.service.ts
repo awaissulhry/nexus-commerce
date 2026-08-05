@@ -22,6 +22,7 @@ import {
   type AdsRegion,
   type ReportRow,
 } from './ads-api-client.js'
+import { coverageWithCost, marginOrUnknown, profitOrUnknown } from './profit-coverage.js'
 
 interface IngestSummary {
   profileCount: number
@@ -257,23 +258,23 @@ async function backfillAdSpendToProfit(
       })
       if (!existing) continue
 
-      const trueProfitCents =
+      // ACR.0.5 — third writer of the same column, same rule: no cost price, no profit
+      // claim. All three must agree or whichever job ran last decides what the console says.
+      const trueProfitCents = profitOrUnknown(
+        existing,
         existing.grossRevenueCents -
-        existing.cogsCents -
-        existing.referralFeesCents -
-        existing.fbaFulfillmentFeesCents -
-        existing.fbaStorageFeesCents -
-        spendCents -
-        existing.returnsRefundsCents -
-        existing.otherFeesCents
+          existing.cogsCents -
+          existing.referralFeesCents -
+          existing.fbaFulfillmentFeesCents -
+          existing.fbaStorageFeesCents -
+          spendCents -
+          existing.returnsRefundsCents -
+          existing.otherFeesCents,
+      )
 
-      const marginPct =
-        existing.grossRevenueCents > 0
-          ? trueProfitCents / existing.grossRevenueCents
-          : null
+      const marginPct = marginOrUnknown(trueProfitCents, existing.grossRevenueCents)
 
-      const prevCoverage =
-        (existing.coverage as Record<string, boolean> | null) ?? {}
+      const coverage = coverageWithCost(existing.coverage, existing, { hasAdSpend: true })
 
       await prisma.productProfitDaily.update({
         where: {
@@ -287,7 +288,7 @@ async function backfillAdSpendToProfit(
           advertisingSpendCents: spendCents,
           trueProfitCents,
           trueProfitMarginPct: marginPct,
-          coverage: { ...prevCoverage, hasAdSpend: true },
+          coverage,
         },
       })
       updated += 1

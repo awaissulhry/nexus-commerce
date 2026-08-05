@@ -25,7 +25,7 @@ interface Base {
   id: string; name: string; type: 'SP' | 'SB' | 'SD'; adProduct: string | null; status: string
   marketplace: string | null; externalCampaignId: string | null; dailyBudget: string; biddingStrategy: string
   impressions: number; clicks: number; spend: string; sales: string; acos: string | null; roas: string | null
-  trueProfitCents: number; deliveryStatus: string | null; deliveryReasons: string[]
+  trueProfitCents: number | null; deliveryStatus: string | null; deliveryReasons: string[]
   startDate?: string | null; endDate?: string | null; portfolioId?: string | null; placements?: Placements
 }
 interface V1 { impressions?: number; clicks?: number; costUnits?: number; salesCents?: number; orders?: number; acos?: number | null; roas?: number | null }
@@ -33,7 +33,9 @@ interface AdGroup { id: string; name: string; status: string; impressions?: numb
 interface Row {
   b: Base; impr: number; clicks: number; spendC: number; salesC: number; orders: number
   ctr: number | null; cpc: number | null; cpm: number | null; cvr: number | null; aov: number | null
-  acos: number | null; roas: number | null; budgetC: number; trueProfitC: number; marginPct: number | null
+  acos: number | null; roas: number | null; budgetC: number
+  // ACR.0.5 — trueProfitC null means "no cost price loaded", which is not the claim €0 makes.
+  trueProfitC: number | null; marginPct: number | null
 }
 
 const TABS = [{ k: '', label: 'All' }, { k: 'SP', label: 'Sponsored Products' }, { k: 'SB', label: 'Sponsored Brands' }, { k: 'SD', label: 'Display, Video & Audio' }]
@@ -156,7 +158,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
     const spendC = m.costUnits != null ? Math.round(m.costUnits * 100) : Math.round(parseFloat(b.spend || '0') * 100)
     const salesC = m.salesCents ?? Math.round(parseFloat(b.sales || '0') * 100)
     const orders = m.orders ?? 0
-    const trueProfitC = b.trueProfitCents ?? 0
+    const trueProfitC = b.trueProfitCents ?? null
     return {
       b, impr, clicks, spendC, salesC, orders,
       ctr: impr > 0 ? clicks / impr : null, cpc: clicks > 0 ? spendC / clicks : null,
@@ -165,7 +167,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
       acos: m.acos ?? (b.acos != null ? parseFloat(b.acos) : salesC > 0 ? spendC / salesC : null),
       roas: m.roas ?? (b.roas != null ? parseFloat(b.roas) : spendC > 0 ? salesC / spendC : null),
       budgetC: Math.round(parseFloat(b.dailyBudget || '0') * 100),
-      trueProfitC, marginPct: salesC > 0 ? trueProfitC / salesC : null,
+      trueProfitC, marginPct: trueProfitC != null && salesC > 0 ? trueProfitC / salesC : null,
     }
   }), [raw, metrics])
 
@@ -195,7 +197,8 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
       case 'acos': return r.acos ?? -1
       case 'roas': return r.roas ?? -1
       case 'aov': return r.aov ?? -1
-      case 'trueProfit': return r.trueProfitC
+      // Unknown sorts to the bottom, like every other nullable metric here.
+      case 'trueProfit': return r.trueProfitC ?? Number.NEGATIVE_INFINITY
       case 'marginPct': return r.marginPct ?? -1
       default: return -1
     }
@@ -293,7 +296,9 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
       case 'acos': return pct(r.acos, 1)
       case 'roas': return x2(r.roas)
       case 'aov': return eur(r.aov)
-      case 'trueProfit': return <span style={{ color: r.trueProfitC < 0 ? '#cc1100' : r.trueProfitC > 0 ? 'var(--green)' : undefined, fontWeight: 500 }}>{eur(r.trueProfitC)}</span>
+      case 'trueProfit': return r.trueProfitC == null
+        ? <span className="sub" title="No cost price loaded for this campaign's products yet — true profit can't be computed.">—</span>
+        : <span style={{ color: r.trueProfitC < 0 ? '#cc1100' : r.trueProfitC > 0 ? 'var(--green)' : undefined, fontWeight: 500 }}>{eur(r.trueProfitC)}</span>
       case 'marginPct': return <span style={{ color: r.marginPct != null && r.marginPct < 0 ? '#cc1100' : undefined }}>{pct(r.marginPct, 1)}</span>
       default: return <span className="sub">—</span>   // viewableImpr, dpv, units, ntb*, tacos (no data yet)
     }
@@ -351,7 +356,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
       case 'acos': return r.acos != null ? (r.acos * 100).toFixed(1) : ''
       case 'roas': return r.roas != null ? r.roas.toFixed(2) : ''
       case 'aov': return r.aov != null ? (r.aov / 100).toFixed(2) : ''
-      case 'trueProfit': return (r.trueProfitC / 100).toFixed(2)
+      case 'trueProfit': return r.trueProfitC != null ? (r.trueProfitC / 100).toFixed(2) : ''
       case 'marginPct': return r.marginPct != null ? (r.marginPct * 100).toFixed(1) : ''
       default: return ''
     }

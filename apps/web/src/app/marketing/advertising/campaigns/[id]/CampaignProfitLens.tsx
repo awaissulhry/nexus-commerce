@@ -13,7 +13,11 @@ import { Coins } from 'lucide-react'
 
 const eur = (c: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100)
 
-export function CampaignProfitLens({ trueProfitCents, trueProfitMarginPct, lifetimeSpendCents }: { trueProfitCents: number; trueProfitMarginPct: string | null; lifetimeSpendCents: number }) {
+export function CampaignProfitLens({ trueProfitCents, trueProfitMarginPct, lifetimeSpendCents }: { trueProfitCents: number | null; trueProfitMarginPct: string | null; lifetimeSpendCents: number }) {
+  // ACR.0.5 — the whole panel's premise is that we know the landed cost. With no cost price
+  // loaded it rendered "True profit €0.00" and "0.00× per ad €" over real spend, which is a
+  // measurement, not a placeholder. Absent is the honest render.
+  if (trueProfitCents == null) return null
   if (trueProfitCents === 0 && lifetimeSpendCents === 0) return null
   const margin = trueProfitMarginPct != null ? parseFloat(trueProfitMarginPct) : null
   const profitPerAdEur = lifetimeSpendCents > 0 ? trueProfitCents / lifetimeSpendCents : null

@@ -6,7 +6,12 @@ import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { eur, intl, roas as roasFmt } from '../_canvas/format'
 import './dashboard.css'
 
-interface Summary { campaignCount?: number; adSpend30dCents?: number; trueProfitMargin30dPct?: number | null; mode?: string }
+interface Summary {
+  campaignCount?: number; adSpend30dCents?: number; trueProfitMargin30dPct?: number | null; mode?: string
+  // ACR.0.5 — why the margin is '—'. revenuePct is the share of 30d revenue the profit
+  // figure covers, so a dash can distinguish "no cost data" from "we broke even".
+  trueProfitCoverage?: { rowsWithCost?: number; revenuePct?: number; reason?: string | null }
+}
 interface TrendSummary { impressions?: number; clicks?: number; orders?: number; spendCents?: number; salesCents?: number; acos?: number; roas?: number }
 interface TrendRow { date: string; adSpendCents?: number; acos?: number }
 interface Trends { rows?: TrendRow[]; summary?: TrendSummary; previous?: TrendSummary }
@@ -87,14 +92,20 @@ export function DashboardClient() {
   const tp = trends?.previous ?? {}
   const spend = n(ts.spendCents) != null ? n(ts.spendCents)! / 100 : undefined
   const sales = n(ts.salesCents) != null ? n(ts.salesCents)! / 100 : undefined
-  const kpis = [
+  const cov = summary?.trueProfitCoverage
+  const marginNote = summary?.trueProfitMargin30dPct != null
+    ? (cov?.revenuePct != null && cov.revenuePct < 99.5
+        ? `Covers ${cov.revenuePct.toFixed(0)}% of 30d revenue — the rest has no cost price loaded.`
+        : undefined)
+    : (cov?.reason ?? 'No cost price loaded, so true margin cannot be computed yet.')
+  const kpis: { k: string; v: string; d: React.ReactNode; t?: string }[] = [
     { k: 'Campaigns', v: intl(n(summary?.campaignCount)), d: null },
     { k: 'Spend (30d)', v: eur(spend), d: <Delta cur={n(ts.spendCents)} prev={n(tp.spendCents)} neutral /> },
     { k: 'Sales (30d)', v: eur(sales), d: <Delta cur={n(ts.salesCents)} prev={n(tp.salesCents)} goodUp /> },
     { k: 'ACoS', v: acosPct(n(ts.acos)), d: <Delta cur={n(ts.acos)} prev={n(tp.acos)} goodUp={false} /> },
     { k: 'ROAS', v: roasFmt(n(ts.roas)), d: <Delta cur={n(ts.roas)} prev={n(tp.roas)} goodUp /> },
     { k: 'Orders', v: intl(n(ts.orders)), d: <Delta cur={n(ts.orders)} prev={n(tp.orders)} goodUp /> },
-    { k: 'True margin (30d)', v: marginPct(summary?.trueProfitMargin30dPct), d: null },
+    { k: 'True margin (30d)', v: marginPct(summary?.trueProfitMargin30dPct), d: null, t: marginNote },
   ]
 
   const chartData = (trends?.rows ?? []).map((r) => ({
@@ -125,8 +136,11 @@ export function DashboardClient() {
       {/* KPI strip */}
       <div className="dash-kpis">
         {kpis.map((kp) => (
-          <div className="dash-kpi" key={kp.k}>
-            <div className="dash-kpi-k">{kp.k}</div>
+          <div className="dash-kpi" key={kp.k} title={kp.t}>
+            <div className="dash-kpi-k">
+              {kp.k}
+              {!loading && kp.t ? <span className="dash-kpi-why" aria-label={kp.t}>?</span> : null}
+            </div>
             <div className="dash-kpi-v">{loading ? '…' : kp.v}{kp.d}</div>
           </div>
         ))}

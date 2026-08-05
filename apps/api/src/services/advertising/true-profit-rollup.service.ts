@@ -20,6 +20,7 @@
 import prisma from '../../db.js'
 import { getCachedReferralResolver } from '../amazon-real-fees.service.js'
 import { logger } from '../../utils/logger.js'
+import { coverageWithCost, marginOrUnknown, profitOrUnknown } from './profit-coverage.js'
 
 interface RollupSummary {
   datesProcessed: string[]
@@ -155,14 +156,18 @@ async function upsertRow(args: {
   referralFeesCents: number
   coverage: CoverageFlags
 }): Promise<void> {
-  const trueProfit =
-    args.grossRevenueCents -
-    args.cogsCents -
-    args.referralFeesCents
-  const marginPct =
-    args.grossRevenueCents > 0
-      ? trueProfit / args.grossRevenueCents
-      : null
+  // ACR.0.5 — null when the cost isn't known, rather than revenue-minus-fees wearing the
+  // name "true profit". `coverage` is rebuilt from the row so a stale true self-corrects.
+  const trueProfit = profitOrUnknown(
+    args,
+    args.grossRevenueCents - args.cogsCents - args.referralFeesCents,
+  )
+  const marginPct = marginOrUnknown(trueProfit, args.grossRevenueCents)
+  const coverage = coverageWithCost(args.coverage, args, {
+    hasReferralFee: args.coverage.hasReferralFee,
+    hasFbaFee: args.coverage.hasFbaFee,
+    hasAdSpend: args.coverage.hasAdSpend,
+  })
 
   await prisma.productProfitDaily.upsert({
     where: {
@@ -187,7 +192,7 @@ async function upsertRow(args: {
       otherFeesCents: 0,
       trueProfitCents: trueProfit,
       trueProfitMarginPct: marginPct,
-      coverage: args.coverage as unknown as object,
+      coverage: coverage as unknown as object,
     },
     update: {
       unitsSold: args.unitsSold,
@@ -196,7 +201,7 @@ async function upsertRow(args: {
       referralFeesCents: args.referralFeesCents,
       trueProfitCents: trueProfit,
       trueProfitMarginPct: marginPct,
-      coverage: args.coverage as unknown as object,
+      coverage: coverage as unknown as object,
     },
   })
 }
@@ -428,25 +433,24 @@ export async function fillAdSpend(
        *
        * Subtracting a cogsCents of 0 produces revenue-minus-fees and calls it profit, which
        * is not conservative — it is the most flattering possible answer, and it was being
-       * shown as "True profit" on every campaign in the console. `coverage.hasCostPrice` has
-       * recorded the truth all along and nothing read it.
+       * shown as "True profit" on every campaign in the console.
        *
-       * Null means unknown. Consumers already handle a null (the column is nullable); a
-       * wrong number is what they could not handle.
+       * The first cut of this read `coverage.hasCostPrice`, which was wrong twice over: the
+       * flag was written `true` for the 122 products whose stored cost was literally 0 (714
+       * rows), and the column it wrote null into was `Int NOT NULL`, so Prisma would have
+       * rejected every patch at 03:00. `costIsKnown` judges the row's own numbers instead.
        */
-      const cov = ((row.coverage as Record<string, unknown>) ?? {})
-      const hasCost = cov.hasCostPrice === true
-      const trueProfit = hasCost
-        ? row.grossRevenueCents
+      const trueProfit = profitOrUnknown(
+        row,
+        row.grossRevenueCents
           - row.cogsCents
           - row.referralFeesCents
           - row.fbaFulfillmentFeesCents
           - advertisingSpendCents
-          - row.returnsRefundsCents
-        : null
-      const marginPct =
-        trueProfit != null && row.grossRevenueCents > 0 ? trueProfit / row.grossRevenueCents : null
-      const coverage = { ...cov, hasAdSpend: true }
+          - row.returnsRefundsCents,
+      )
+      const marginPct = marginOrUnknown(trueProfit, row.grossRevenueCents)
+      const coverage = coverageWithCost(row.coverage, row, { hasAdSpend: true })
 
       await prisma.productProfitDaily.update({
         where: { productId_marketplace_date: { productId, marketplace, date: start } },

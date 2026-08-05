@@ -607,7 +607,10 @@ ACTION_HANDLERS.reroute_marketplace_budget = async (action, _context, meta): Pro
   // Spread the cut across enabled campaigns on toMarketplace.
   const toCamps = await prisma.campaign.findMany({
     where: { marketplace: toMarketplace, status: 'ENABLED' },
-    orderBy: { trueProfitCents: 'desc' },
+    // ACR.0.5 — nulls last. trueProfitCents is nullable now ("no cost price loaded"), and
+    // Postgres sorts NULLS FIRST on DESC, which would have handed the budget to the
+    // campaigns we know least about while calling them the most profitable.
+    orderBy: { trueProfitCents: { sort: 'desc', nulls: 'last' } },
     take: 5, // top-5 most-profitable campaigns absorb the shift
     select: { id: true, dailyBudget: true, name: true },
   })

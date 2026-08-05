@@ -19,6 +19,7 @@
  */
 
 import prisma from '../../db.js'
+import { costIsKnown } from './profit-coverage.js'
 
 export interface ProfitComponents {
   grossRevenueCents: number
@@ -81,7 +82,8 @@ export interface TargetAcosResult {
   tacop: number | null // ad spend / true profit (null if profit ≤ 0)
   grossRevenueCents: number
   adSpendCents: number
-  trueProfitCents: number
+  /** ACR.0.5 — null when no cost price is loaded, so callers can't read "unknown" as "€0". */
+  trueProfitCents: number | null
 }
 
 /**
@@ -117,7 +119,7 @@ export async function computeProductTargetAcos(opts: {
   const s = rows._sum
   const gross = s.grossRevenueCents ?? 0
   const adSpend = s.advertisingSpendCents ?? 0
-  const trueProfit = s.trueProfitCents ?? 0
+  const trueProfit = s.trueProfitCents // null when every row in the window lacks a cost price
   const dataPoints = rows._count ?? 0
   /**
    * ACR.0.5 — revenue without a cost price cannot produce a break-even ACOS.
@@ -134,8 +136,7 @@ export async function computeProductTargetAcos(opts: {
    *
    * A missing cost belongs in the same branch as missing data: fall back and say so.
    */
-  const cogs = s.cogsCents ?? 0
-  const costMissing = gross > 0 && cogs <= 0
+  const costMissing = !costIsKnown({ grossRevenueCents: gross, cogsCents: s.cogsCents ?? 0 })
   if (dataPoints === 0 || gross <= 0 || costMissing) {
     return {
       productId: opts.productId, marketplace: opts.marketplace ?? null, windowDays, dataPoints,
@@ -159,9 +160,9 @@ export async function computeProductTargetAcos(opts: {
     basis: 'profit-data',
     breakevenAcos: be,
     targetAcos: be == null ? FALLBACK_TARGET_ACOS : targetFromBreakeven(be, { mode: opts.mode, profitShare: opts.profitShare }),
-    marginPct: gross > 0 ? trueProfit / gross : null,
+    marginPct: trueProfit != null && gross > 0 ? trueProfit / gross : null,
     tacos: gross > 0 ? adSpend / gross : null,
-    tacop: trueProfit > 0 ? adSpend / trueProfit : null,
+    tacop: trueProfit != null && trueProfit > 0 ? adSpend / trueProfit : null,
     grossRevenueCents: gross, adSpendCents: adSpend, trueProfitCents: trueProfit,
   }
 }

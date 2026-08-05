@@ -24,6 +24,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { fetchSpApiReport } from '../sp-api-reports.service.js'
 import { getRealFbaPerUnitResolver } from '../amazon-real-fees.service.js'
+import { coverageWithCost, marginOrUnknown, profitOrUnknown } from './profit-coverage.js'
 
 // SP-API marketplace ID for Amazon IT (Xavia primary). For a multi-
 // marketplace setup, loop over all active ChannelConnection marketplaceIds.
@@ -229,16 +230,20 @@ export async function runFbaFeesIngest(opts: {
       ).perUnitCents
       const effectivePerUnitCents = realPerUnitCents ?? feePerUnitCents
       const fbaFulfillmentFeesCents = effectivePerUnitCents * row.unitsSold
-      const trueProfit =
+      // ACR.0.5 — a cost of zero against real revenue is a missing cost, not a free
+      // product, and this writer would otherwise overwrite the roll-up's honest null
+      // with a confident revenue-minus-fees figure the next time fees land.
+      const trueProfit = profitOrUnknown(
+        row,
         row.grossRevenueCents
-        - row.cogsCents
-        - row.referralFeesCents
-        - fbaFulfillmentFeesCents
-        - row.advertisingSpendCents
-        - row.returnsRefundsCents
-      const marginPct =
-        row.grossRevenueCents > 0 ? trueProfit / row.grossRevenueCents : null
-      const coverage = { ...((row.coverage as object) ?? {}), hasFbaFee: true }
+          - row.cogsCents
+          - row.referralFeesCents
+          - fbaFulfillmentFeesCents
+          - row.advertisingSpendCents
+          - row.returnsRefundsCents,
+      )
+      const marginPct = marginOrUnknown(trueProfit, row.grossRevenueCents)
+      const coverage = coverageWithCost(row.coverage, row, { hasFbaFee: true })
 
       try {
         await prisma.productProfitDaily.update({

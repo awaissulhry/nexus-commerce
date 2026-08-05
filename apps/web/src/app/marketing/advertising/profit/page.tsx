@@ -30,7 +30,8 @@ interface ProfitRow {
   fbaStorageFeesCents: number
   advertisingSpendCents: number
   returnsRefundsCents: number
-  trueProfitCents: number
+  // ACR.0.5 — null when the product has no cost price loaded; not the same as zero profit.
+  trueProfitCents: number | null
   trueProfitMarginPct: string | null
   coverage: { hasCostPrice?: boolean; hasReferralFee?: boolean; hasFbaFee?: boolean; hasAdSpend?: boolean } | null
   product: { id: string; sku: string; name: string } | null
@@ -62,13 +63,14 @@ export default async function ProfitPage() {
       acc.fees += r.referralFeesCents + r.fbaFulfillmentFeesCents + r.fbaStorageFeesCents
       acc.adSpend += r.advertisingSpendCents
       acc.refunds += r.returnsRefundsCents
-      acc.profit += r.trueProfitCents
+      if (r.trueProfitCents != null) { acc.profit += r.trueProfitCents; acc.profitRows += 1 }
       acc.units += r.unitsSold
       return acc
     },
-    { revenue: 0, cogs: 0, fees: 0, adSpend: 0, refunds: 0, profit: 0, units: 0 },
+    { revenue: 0, cogs: 0, fees: 0, adSpend: 0, refunds: 0, profit: 0, profitRows: 0, units: 0 },
   )
-  const totalMargin = totals.revenue > 0 ? totals.profit / totals.revenue : null
+  // Only claim a total margin when at least one row could actually compute a profit.
+  const totalMargin = totals.profitRows > 0 && totals.revenue > 0 ? totals.profit / totals.revenue : null
 
   return (
     <div className="px-4 py-4">
@@ -165,12 +167,15 @@ export default async function ProfitPage() {
                     </td>
                     <td
                       className={`px-3 py-2 text-right tabular-nums ${
-                        r.trueProfitCents >= 0
-                          ? 'text-emerald-700 dark:text-emerald-300'
-                          : 'text-rose-700 dark:text-rose-300'
+                        r.trueProfitCents == null
+                          ? 'text-tertiary'
+                          : r.trueProfitCents >= 0
+                            ? 'text-emerald-700 dark:text-emerald-300'
+                            : 'text-rose-700 dark:text-rose-300'
                       }`}
+                      title={r.trueProfitCents == null ? 'No cost price loaded for this product yet' : undefined}
                     >
-                      {formatEur(r.trueProfitCents)}
+                      {r.trueProfitCents == null ? '—' : formatEur(r.trueProfitCents)}
                     </td>
                     <td className="px-3 py-2 text-right">
                       <span

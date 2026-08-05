@@ -40,7 +40,8 @@ interface SummaryPayload {
   campaignCount: number
   adSpend30dCents: number
   grossRevenue30dCents: number
-  trueProfit30dCents: number
+  // ACR.0.5 — null when no product has a cost price loaded, so the card can say why.
+  trueProfit30dCents: number | null
   trueProfitMargin30dPct: number | null
   agedSkusFlagged: number
   mode: 'sandbox' | 'live'
@@ -118,7 +119,7 @@ export default async function AdvertisingLandingPage() {
       campaignCount: 0,
       adSpend30dCents: 0,
       grossRevenue30dCents: 0,
-      trueProfit30dCents: 0,
+      trueProfit30dCents: null,
       trueProfitMargin30dPct: null,
       agedSkusFlagged: 0,
       mode: 'sandbox',
@@ -238,9 +239,11 @@ export default async function AdvertisingLandingPage() {
           label="True Profit 30d"
           value={formatPct(summary.trueProfitMargin30dPct)}
           sublabel={
-            summary.grossRevenue30dCents > 0
-              ? `${formatEur(summary.trueProfit30dCents)} of ${formatEur(summary.grossRevenue30dCents)}`
-              : 'No P&L data'
+            summary.trueProfit30dCents == null
+              ? 'No cost price loaded yet'
+              : summary.grossRevenue30dCents > 0
+                ? `${formatEur(summary.trueProfit30dCents)} of ${formatEur(summary.grossRevenue30dCents)}`
+                : 'No P&L data'
           }
           tone={
             summary.trueProfitMargin30dPct == null

@@ -277,6 +277,7 @@ async function computeProfitWeights(
   // in the marketplace).
   const perAllocProfit = new Map<string, number>()
   const perMarketplaceProfit = new Map<string, number>()
+  let allocsWithoutProfit = 0
   for (const a of allocs) {
     if (!a.campaignId) {
       perAllocProfit.set(a.id, 0)
@@ -301,6 +302,14 @@ async function computeProfitWeights(
       },
       _sum: { trueProfitCents: true },
     })
+    /**
+     * ACR.0.5 — an unknown profit and a zero profit both weigh 0, and that is the right
+     * mechanic (you cannot weight by a number you do not have; the caller already degrades
+     * to "keep current budgets" when every weight is 0). What was missing is the reason:
+     * with no cost price loaded anywhere, PROFIT_WEIGHTED silently becomes a no-op that
+     * looks identical to "every campaign broke exactly even". Count it and say so.
+     */
+    if (agg._sum.trueProfitCents == null) allocsWithoutProfit += 1
     // Floor at 0 — losing money shouldn't pull MORE budget toward you.
     const profit = Math.max(0, agg._sum.trueProfitCents ?? 0)
     perAllocProfit.set(a.id, profit)
@@ -314,6 +323,8 @@ async function computeProfitWeights(
     inputs: {
       windowDays: 30,
       perMarketplaceTrueProfitCents: Object.fromEntries(perMarketplaceProfit),
+      allocationsWithUnknownProfit: allocsWithoutProfit,
+      allocationsTotal: allocs.length,
     },
   }
 }

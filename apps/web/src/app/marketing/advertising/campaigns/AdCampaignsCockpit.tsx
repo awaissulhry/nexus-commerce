@@ -33,7 +33,7 @@ interface CampaignBase {
   status: string; marketplace: string | null; externalCampaignId: string | null
   dailyBudget: string; biddingStrategy: string
   impressions: number; clicks: number; spend: string; sales: string
-  acos: string | null; roas: string | null; trueProfitCents: number; trueProfitMarginPct: string | null
+  acos: string | null; roas: string | null; trueProfitCents: number | null; trueProfitMarginPct: string | null
   deliveryStatus: string | null; deliveryReasons: string[]
   portfolioName?: string | null; startDate?: string | null; endDate?: string | null; lastSyncedAt?: string | null
 }

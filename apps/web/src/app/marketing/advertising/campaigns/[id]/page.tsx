@@ -38,7 +38,7 @@ interface CampaignDetail {
     sales: string
     acos: string | null
     roas: string | null
-    trueProfitCents: number
+    trueProfitCents: number | null
     trueProfitMarginPct: string | null
     lastSyncedAt: string | null
     lastSyncStatus: string | null
