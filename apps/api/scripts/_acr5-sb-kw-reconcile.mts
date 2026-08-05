@@ -13,7 +13,7 @@ config(); config({ path: resolve('/Users/awais/nexus-commerce/.env') })
 
 const { PrismaClient } = await import('@prisma/client')
 const prisma = new PrismaClient()
-const { reconcileSbKeywords } = await import('../src/services/advertising/ads-sb-keyword-reconcile.service.js')
+const { reconcileSbKeywords } = await import('../src/services/advertising/ads-family-reconcile.service.js')
 
 const apply = process.env.APPLY === '1'
 console.log(`\n${apply ? '⚠️  APPLYING (Amazon → local)' : 'DRY RUN — nothing will be written'}\n`)
