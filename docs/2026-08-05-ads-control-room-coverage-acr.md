@@ -417,6 +417,38 @@ Verified on the 10:30 tick: placement writes carry **`mode=live`**, not `local` 
 
 - **2.3 🔴 FOUND WHILE MEASURING: half of all report jobs ask profiles that cannot answer.** Over 30 days, **938 of 1,845 jobs (51%)** went to the five active EU profiles (IE/NL/PL/SE/UK) that carry **no campaigns at all**. Every one COMPLETED with `rowsIngested = 0`, so the waste was invisible in every health surface — it read as a working pipeline. `ads-report-gapfill.service.ts` already refuses to do this and says why in its own docblock; the five daily creation cycles predate the rule. Now stated once in `activeProfilesWithCampaigns()` and used by all five. Counts campaigns of **any status and any ad product** on purpose: filtering to ENABLED would also drop the **634 SB/SD jobs a month** that return nothing today (15 SD and 4 SB campaigns exist, all disabled) — but a campaign enabled at noon would lose its own day, and whether those ad products are dormant is an operator's call, not a silent one.
 
+### ACR.2.1 — THE COVERAGE BASELINE, on repaired data (`scripts/_acr21-coverage-probe.mts` / `_acr21-confound.mts`, read-only)
+
+**IT, week 2026-07-19, 588 rows now carrying our own impressions.** This is the first time the question the whole programme exists to answer has been answerable.
+
+**1. The opening ask is already happening.** *"Several products which fall into the same category and have exactly the same search keywords — make them appear on the same page."* Measured, they already do:
+
+| term | our ASINs on the SERP | market impressions | our combined share |
+|---|---|---|---|
+| `giacca moto estiva uomo` | **10** | 1,105,060 | 0.19% |
+| `giacca moto uomo` | **8** | 328,824 | 0.36% |
+| `giacca moto` | **7** | 212,002 | 0.31% |
+| `giubbotto moto uomo estivo` | 6 | 120,660 | 0.35% |
+| `giubbino moto` | 6 | 19,842 | 0.84% |
+
+**So multi-product SERP presence is not the missing capability — it is the status quo.** Amazon's per-ASIN dedupe (Part 3) is already letting 3–10 of our products share a page. What is missing is *share*: on the biggest term we hold 0.19% of a million impressions with ten products on the page. **This reframes Stage 3 — the engine's job is not to get more of our ASINs onto the page, it is to make each appearance command more of it.** That is a bid and rank problem, not a structural one.
+
+**2. Large markets we do not bid on at all.** `accessori moto` **366,958** impressions and zero targets. `moto` 231,502, zero. `gilet refrigerante` 93,869, zero. `protezioni moto estive` 58,896 — **four of our ASINs already appear organically** and we bid on none of it. Competitor brand terms are wide open too: `airoh` 88,068 · `agv` · `ls2` · `ducati`, no targets on any.
+
+**3. A result that says the opposite of what it means, caught by checking.** Terms we bid on average **0.53%** share; terms we do not average **1.87%**. Read naively that says our own bidding suppresses us. It is a **Simpson's paradox**: 343 of the 476 untargeted terms are sub-1k-impression tail queries where two organic impressions is a large percentage. Split by market size, bidding is associated with *higher* share in every comparable bucket:
+
+| market size | share where we bid | where we don't | ratio |
+|---|---|---|---|
+| 100k+ | 0.188% | 0.033% | **5.7×** |
+| 25k–100k | 0.294% | 0.026% | **11×** |
+| 5k–25k | 0.44% | 0.198% | 2.2× |
+| 1k–5k | 0.842% | 0.699% | 1.2× |
+| under 1k | 0.427% *(n=1)* | 1.637% | *the only reversal, on one term* |
+
+And pooled — the honest single number — **0.30% where we bid, 0.265% where we do not**. Nearly identical, and both tiny. *Never quote the average-of-ratios on this table; it inverts the conclusion.*
+
+**4. The blunt summary: we are absent.** Across 588 measured terms and 4.19M impressions in one week, we took **11,968** — **0.29%**. Market purchases on every head term run 4–18 a week; ours are **0**. At a third of a percent of impressions that is arithmetic, not a conversion problem.
+
 - **2.1** `KeywordCoverageSet` model + authoring (pilot family's shared keywords, ~tens of terms).
 - **2.2** Scoreboard tab fed by ToS-IS + SQP + within-account SOV + `KeywordRank` (manual/CSV ingest to start) + position-weighted score.
 - **2.3** Conflicts tab (surface the two existing endpoints).
