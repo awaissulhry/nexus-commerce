@@ -55,6 +55,7 @@ interface Contest {
   unportfolioed: boolean
   bothTop: boolean
   activeContenders: number
+  championHasEvidence: boolean
   spend30dCents: number
   sales30dCents: number
   impressions30d: number
@@ -76,8 +77,15 @@ const eur = (c: number) => `€${(c / 100).toFixed(2)}`
 const pct = (v: number | null) => (v == null ? '—' : `${Math.round(v * 100)}%`)
 const intl = (v: number) => v.toLocaleString('en-IE')
 
-/** A champion picked with no traffic to go on is a tie-break, not a finding. */
-const isBlind = (c: Contest) => c.championReason.startsWith('highest bid')
+/**
+ * A champion picked with no traffic to go on is a tie-break, not a finding.
+ *
+ * This used to string-match `championReason.startsWith('highest bid')` — coupling a safety
+ * warning to human-readable prose, so rewording `pickChampion`'s reason would have silently
+ * stopped tagging the rows an operator must not act on. The server now derives it from the
+ * contenders and says so in a field.
+ */
+const isBlind = (c: Contest) => !c.championHasEvidence
 
 export function ConflictsTab({ market }: { market: string }) {
   const [board, setBoard] = useState<Board | null>(null)

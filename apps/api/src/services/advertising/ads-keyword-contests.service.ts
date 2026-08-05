@@ -34,6 +34,7 @@
  */
 import prisma from '../../db.js'
 import { pickChampion, tosBiasOf, acosOf, cvrOf, type Contender } from './keyword-conflicts.service.js'
+import { contestFlags, NO_PORTFOLIO } from './ads-contest-flags.js'
 
 export interface ContestContender extends Contender {
   /** Amazon's external portfolio id, or null for campaigns in no portfolio. */
@@ -56,6 +57,12 @@ export interface KeywordContest {
   bothTop: boolean
   /** Contenders that actually took impressions in the window. The rest are dormant claims. */
   activeContenders: number
+  /**
+   * False when NO contender has spend, sales or impressions — the engine's ordering ties
+   * across the board and the champion is a bid tie-break. Computed from the contenders, never
+   * from `championReason`'s wording, so rewording the reason cannot silently drop the warning.
+   */
+  championHasEvidence: boolean
   spend30dCents: number
   sales30dCents: number
   impressions30d: number
@@ -79,9 +86,6 @@ export interface ContestBoard {
   contests: KeywordContest[]
   notes: string[]
 }
-
-/** Sentinel for "campaign is in no portfolio" — a NUL cannot collide with a real portfolio id. */
-const NO_PORTFOLIO = '\u0000none'
 
 type Row = {
   term: string; match: string; campaign_id: string; campaign: string; status: string
@@ -205,7 +209,7 @@ export async function getAccountKeywordContests(args: {
     contenders.sort((a, b) => b.spendCents - a.spendCents || b.impressions - a.impressions)
 
     const champ = pickChampion(contenders)
-    const portfolioKeys = new Set(contenders.map((c) => c.portfolioId ?? NO_PORTFOLIO))
+    const flags = contestFlags(contenders)
     for (const c of contenders) { allCampaigns.add(c.campaignId); allPortfolios.add(c.portfolioId ?? NO_PORTFOLIO) }
 
     contests.push({
@@ -214,14 +218,15 @@ export async function getAccountKeywordContests(args: {
       contenders,
       championId: champ.championId,
       championReason: champ.reason,
-      crossPortfolio: portfolioKeys.size > 1,
-      portfolios: portfolioKeys.size,
-    unportfolioed: contenders.some((c) => !c.portfolioId),
-      // A top-of-search BIAS on a campaign that took no impressions is an intent, not a
-      // collision. Requiring impressions keeps this flag meaning "these two are actually in
-      // the same auction" — most contenders on this board are dormant claims (see below).
-      bothTop: contenders.filter((c) => c.tosBias > 0 && c.impressions > 0).length >= 2,
-      activeContenders: contenders.filter((c) => c.impressions > 0).length,
+      // Every flag below comes from ads-contest-flags.ts, which is unit-tested. In particular
+      // `championHasEvidence` is derived from the contenders and NOT from championReason's
+      // wording — the UI used to detect "no evidence" by string-matching that prose.
+      crossPortfolio: flags.crossPortfolio,
+      portfolios: flags.portfolios,
+      unportfolioed: flags.unportfolioed,
+      bothTop: flags.bothTop,
+      activeContenders: flags.activeContenders,
+      championHasEvidence: flags.hasEvidence,
       spend30dCents: contenders.reduce((s, c) => s + c.spendCents, 0),
       sales30dCents: contenders.reduce((s, c) => s + c.salesCents, 0),
       impressions30d: contenders.reduce((s, c) => s + c.impressions, 0),
@@ -252,7 +257,7 @@ export async function getAccountKeywordContests(args: {
       `${crossPortfolio} of ${contests.length} contests span two or more portfolios. ` +
       'These are invisible from a campaign page and from a family cockpit alike — both sit inside one of the boxes.')
   }
-  const tied = contests.filter((c) => c.championReason.startsWith('highest bid')).length
+  const tied = contests.filter((c) => !c.championHasEvidence).length
   if (tied > 0) {
     notes.push(
       `${tied} contests have no performance signal at all, so the engine's ordering ties and the champion is decided by bid. ` +
