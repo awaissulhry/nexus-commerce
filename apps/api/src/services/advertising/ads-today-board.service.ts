@@ -27,6 +27,7 @@ import prisma from '../../db.js'
 import { getAutomationState } from './ads-automation-state.service.js'
 import { getCoverageScoreboard } from './ads-coverage.service.js'
 import { pricePendingProposals } from './ads-proposal-pricing.service.js'
+import { getGraduationBoard } from './ads-graduation-readiness.service.js'
 
 export type Severity = 'critical' | 'warning' | 'info'
 
@@ -126,6 +127,7 @@ export async function getTodayBoard(): Promise<TodayBoard> {
 
   const [
     proposals,
+    graduation,
     coverage,
     waste,
     unbounded,
@@ -145,6 +147,9 @@ export async function getTodayBoard(): Promise<TodayBoard> {
   ] = await Promise.all([
     // ACR.5 — priced, so the row is a decision rather than a count. Fails soft like the rest.
     pricePendingProposals(5).catch(() => null),
+    // ACR.4.1 — graduation is the only row here that is good news, and it belongs for the same
+    // reason as the rest: it is live, it is checkable, and it needs a human. Fails soft.
+    getGraduationBoard().catch(() => null),
     // ACR.2.6 — the coverage board's most actionable fact belongs here too. Fails soft: Today
     // must still render if SQP is unavailable, because every other row on it is unrelated.
     getCoverageScoreboard({ marketplace: 'IT', limit: 200 }).catch(() => null),
@@ -292,6 +297,46 @@ export async function getTodayBoard(): Promise<TodayBoard> {
         : 'no priced proposal covers spend that produced nothing',
       action: { label: 'Review proposals', href: '/marketing/ads/suggestions' },
       since: iso(pendingOldest?.createdAt),
+    })
+  }
+
+  // ── Automation that has earned more rope ──────────────────────────────
+  /**
+   * ACR.4.1 — the only row on this board that is an opportunity rather than a problem, and the
+   * one that ends the daily loop: a rule you have repeatedly agreed with can stop asking.
+   *
+   * Two conditions, deliberately reported as one row rather than two, because they are the same
+   * question — "which rules should change hands?" — asked from opposite directions:
+   *   · READY  — evidence exists; the notch is waiting for a click.
+   *   · UNSEEN — it has matched hundreds of times and queued nothing, so no evidence can ever
+   *     accumulate. Left alone it will sit at PROPOSE forever looking healthy.
+   *
+   * No row when neither is true. "Nothing needs you" has to stay sayable.
+   */
+  if (graduation && (graduation.totals.ready > 0 || graduation.totals.unseen > 0)) {
+    const ready = graduation.totals.ready
+    const unseen = graduation.totals.unseen
+    const unseenNames = graduation.others.filter((o) => o.verdict === 'unseen').map((o) => o.name)
+    ex.push({
+      key: 'graduation',
+      severity: 'info',
+      title: ready > 0
+        ? `${ready} rule${ready === 1 ? '' : 's'} ${ready === 1 ? 'is' : 'are'} ready to graduate to Auto`
+        : `${unseen} rule${unseen === 1 ? '' : 's'} ${unseen === 1 ? 'has' : 'have'} never shown you what they would do`,
+      detail:
+        (ready > 0
+          ? `You applied their proposals unchanged in ${graduation.weeksRequired}+ separate weeks with no failures. Graduating one is a single click and reversible; nothing moves on its own. `
+          : '') +
+        (unseen > 0
+          ? `${unseenNames.slice(0, 3).join(' · ')}${unseenNames.length > 3 ? ` and ${unseenNames.length - 3} more` : ''} ${unseen === 1 ? 'has' : 'have'} matched repeatedly without queuing a single proposal — so no evidence can accumulate and ${unseen === 1 ? 'it' : 'they'} will sit at Propose indefinitely looking healthy.`
+          : ''),
+      count: ready + unseen,
+      amountCents: null,
+      // Graduation has no € — it changes who decides, not what is spent. Saying so beats a
+      // dash, which on this board reads as "we could not work it out".
+      amountNote: 'No € — this changes who decides, not what is spent',
+      action: { label: 'Open Levers', href: '/marketing/ads/rules-automation/control-room?tab=levers' },
+      since: null,
     })
   }
 

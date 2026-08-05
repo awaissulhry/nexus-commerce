@@ -382,3 +382,43 @@ a.acr-refresh { text-decoration: none; }
 .acr--with-dock { display: flex; gap: 20px; align-items: flex-start; max-width: none; }
 .acr-maincol { min-width: 0; flex: 1; }
 @media (max-width: 1100px) { .acr--with-dock { flex-direction: column; } .acr--with-dock .adock { position: static; width: 100%; max-height: 420px; } }
+
+/* ── ACR.4.1 · graduation evidence ───────────────────────────────────────── */
+/* Light-only and self-contained, like the rest of this stylesheet. Colours reuse the dial's
+   own vocabulary so a verdict and a notch that mean the same thing look the same: green is
+   Auto, blue is Propose, amber is a caution the ceiling did not raise. */
+
+.acr-grad-rule {
+  display: flex; align-items: flex-start; gap: 7px;
+  font-size: 12px; line-height: 1.55; color: #6b7789;
+  background: #f7f9fc; border: 1px solid #e4e9f0; border-radius: 7px;
+  padding: 9px 12px; margin: 0 0 10px; max-width: 92ch;
+}
+.acr-grad-rule svg { flex: none; margin-top: 2px; color: #8d97a6; }
+.acr-grad-rule strong { color: #34404f; font-weight: 650; }
+
+.acr-grad-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10.5px; font-weight: 650; letter-spacing: .01em;
+  border: 1px solid; border-radius: 4px; padding: 2px 6px; cursor: help;
+}
+.acr-grad-chip.ready { background: #e8f6ef; color: #14724d; border-color: #bfe3d2; }
+.acr-grad-chip.unreviewed { background: #eef3fd; color: #2a5399; border-color: #c8d8f5; }
+.acr-grad-chip.unseen { background: #fdf4e6; color: #8a6320; border-color: #f0dcbb; }
+.acr-grad-chip.failing { background: #fdeceb; color: #a3342b; border-color: #f3cbc7; }
+
+/* The evidence sentence. Not italic like .acr-why — that one is the engine explaining its own
+   state, this one is a judgement about the rule, and they must not read as one voice. */
+.acr-grad-why { font-size: 11.5px; line-height: 1.5; color: #7b8798; margin: 6px 0 0; max-width: 84ch; }
+.acr-grad-why.ready { color: #14724d; }
+.acr-grad-why.unseen { color: #8a6320; }
+.acr-grad-why.failing { color: #a3342b; }
+
+/* The earned notch. An invitation, never a pre-selection: it is outlined, not filled, so it
+   cannot be mistaken at a glance for the level the rule is already at. */
+.acr-notch.earned {
+  color: #14724d; background: #f2fbf7;
+  box-shadow: inset 0 0 0 1.5px #7fc9a7;
+}
+.acr-notch.earned:hover:not(:disabled) { background: #e8f6ef; }
+.acr-row.rule.graduable { border-color: #cfe8dc; }
