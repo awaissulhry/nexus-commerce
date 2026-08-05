@@ -126,12 +126,17 @@ export async function getCoverageScoreboard(args: {
            COUNT(DISTINCT s.asin) FILTER (WHERE s."impressionsBrand" > 0) AS our_asins,
            SUM(s."purchasesTotal") AS market_buys,
            SUM(s."purchasesBrand") AS our_buys,
+           -- Negativity is isNegative, NOT the match type. Measured 2026-08-05: 1,068 targets
+           -- are stored as expressionType 'EXACT' with isNegative = true, and only 20 rows in the
+           -- whole table use 'NEGATIVE_EXACT'. Filtering on the match-type string therefore counts
+           -- 2,034 NEGATIVE keywords as coverage — a term we have explicitly excluded ourselves
+           -- from would have read as a term we hold. Same two-vocabularies trap as EXACT/_EXACT.
            (SELECT COUNT(DISTINCT t.id) FROM "AdTarget" t
               JOIN "AdGroup" g ON g.id = t."adGroupId"
               JOIN "Campaign" c ON c.id = g."campaignId"
             WHERE LOWER(t."expressionValue") = LOWER(s."searchQuery")
               AND c.marketplace = $1 AND t.kind = 'KEYWORD'
-              AND t."expressionType" NOT LIKE 'NEGATIVE%') AS targets
+              AND t."isNegative" = false) AS targets
     FROM "SearchQueryPerformance" s
     WHERE s.marketplace = $1 AND s."startDate" = $2::date
     GROUP BY 1
