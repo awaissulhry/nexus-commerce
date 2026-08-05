@@ -672,6 +672,25 @@ So the column ships reading **"—" with the reason stated on the page**, never 
 
 **What unblocks it:** `_acr24-sqp-widen.mts` resolves ASINs from the **catalogue** by family instead of from stored rows, jackets first. With AIREON measured alongside GALE the within-term control exists and the experiment decides. **It can only run on Railway** — the local SP-API refresh token is revoked (`invalid grant parameter : refresh_token`), so 13 requested reports returned 13 failures and wrote nothing. Cost when run: ~6 minutes of Amazon report generation per ten ASINs, one report per ASIN, upserting in place on `(marketplace, period, startDate, searchQuery, asin)`.
 
+### ACR.2.4c — the widen RAN 2026-08-05, and the answer is not "unmeasured" any more: AIREON is measured ABSENT
+
+All six CREMA-E-VINO children were requested for the same week GALE is measured on (2026-07-19, Saturday-ended, `periodWindow` lookback 2). Every report succeeded; every report was empty: `rows=0 upserted=0 failedAsins=0`. That includes the family's TOP ad-impression child (`B0F4N9WHTM`, crema S, 10,562 impressions/30d) and crema XL at 8,542. This is no longer a self-perpetuating-scope artefact — the ASINs were requested explicitly and Amazon answered with nothing.
+
+**And it is not because AIREON is dark.** The 11 enabled AIREON campaigns served ~97k ad impressions and ~€102 in 30 days. The placement report explains the contradiction in one line — where those impressions actually are:
+
+| placement | impressions | share |
+|---|---|---|
+| Detail Page | 66,362 | **88.7%** |
+| Rest of search | 6,816 | 9.1% |
+| Top of Search | 1,604 | 2.1% |
+
+**AIREON's delivery is a detail-page business.** ~8.4k SERP impressions in 30 days, spread over 11 campaigns × dozens of queries × 25 children, puts every (query × ASIN) cell below SQP's reporting floor. Compare GALE: ~415k SERP impressions over the same window — a ~50× gap in search presence between the two families. The auto + category campaigns are buying product-page visibility, not page one.
+
+**Consequences, in order:**
+1. **The variation experiment stays undecidable** — not starved by scope now, but by reality: there is no AIREON search presence to compare within-term. Running the NERO-NEO colourway's remaining reports would confirm, not inform (top NERO child = 6.5k impr/30d, below crema's measured-zero top child) — spot-checked rather than blanket-run, stated here rather than silently skipped.
+2. **The route to the operator's original ask — several products on one page — is now concrete:** GALE holds the (single) family tile; AIREON must be *put into search* on the giacca head terms before any parent-structure question matters. That is exactly a coverage set for the AIREON portfolio: a few exact keyword targets on head terms with real bids, engine-held — not eleven campaigns spraying detail pages.
+3. **A listing-identity gap surfaced on the way:** the AIREON campaigns advertise ASINs that are NOT in our Product catalogue — `B0H8QTNY62` carries 7.8k impressions/30d across all 11 campaigns and we do not track it as a product (several more B0H8\* siblings at zero). Likely fallout of the variation rebuild. It corrupts any per-ASIN family lens (catalogue-derived widen missed it; a future AIREON coverage set could propose the wrong lead ASIN) and wants reconciling before an AIREON set is seeded.
+
 *Note for whoever runs it:* widening repairs the board's honesty but **will move the published baseline** — the pooled 0.76% is currently computed over ten ASINs of one family, and adding families raises our measured impressions against an unchanged market denominator.
 
 ### 🔴 ACR.2.4b — the coverage board measures 4% of the advertised catalogue, and says so now
@@ -768,11 +787,47 @@ two spellings, and the code picked the one Amazon does not send.
 SB/SD create paths, so it could not be committed without sweeping that work. If it is lost, the
 one-line change above is the whole fix.
 
-**Not yet proven end-to-end.** Two supervised runs from a laptop got as far as Amazon and failed
-on *environment*, not on this bug: the first died when the ads quota ledger correctly failed
-closed with no Redis, the second on a `Connection terminated due to connection timeout` from the
-Railway-injected `DATABASE_URL` while the report was still legitimately `PENDING`. The contract
-finding above is nonetheless direct evidence, independent of those runs.
+**🔴 A SECOND DEFECT SAT DIRECTLY BEHIND IT, and could not fire while the first was live.**
+Fixing the key made the download branch reachable for the first time, and it failed instantly:
+
+```
+Unexpected token '\u001f', "\u001f\u008b\b\u0000…" is not valid JSON
+```
+
+`1f 8b` is the **gzip magic number**. Reports are requested as `format: GZIP_JSON` and S3 serves
+those bytes **raw — no `Content-Encoding` header** — so `fetch` does not transparently inflate
+them and `.json()` chokes. The code comment claimed "download + parse JSON/gzip"; it only ever
+did JSON. That defect is exactly as old as the first one and had **never once executed**, because
+nothing had ever reached the download. Fixed by sniffing the magic bytes rather than trusting the
+requested format, so an uncompressed report type would still work.
+
+*The general lesson, which is the reusable part: ACR.0.2 measured a **symptom** (the job times
+out), inferred a **cause** (Amazon is slow), and shipped a fix for the inference. Neither real
+defect was timing-related, and the second was undiscoverable until the first was gone — so no
+amount of raising the ceiling could ever have surfaced it.*
+
+**✅ PROVEN END-TO-END, live against the production profile 2026-08-05:**
+
+```
+[ADS-LIVE] report ready, downloading   fileSize=9933
+[ADS-LIVE] report decoded              gzip=true bytes=9933 chars=118237
+[tos-is-ingest] done   rowsFetched=1156  withIS=911  rowsUpdated=497  errors=0
+```
+
+**497 `AmazonAdsPlacementReport` rows now carry a real `topOfSearchIS`, up from ZERO in every
+market for all time.** Sanity-checked: values span 0–100% with a mean of 27.08%, so the
+percent-vs-fraction normalisation is right. Highest holders are `GALE | IT | PAT` at **62.8%**
+over 21 days on 9,393 impressions, and `IT_Auto_Substitute` at 57.2%.
+
+The Coverage board's ToS-IS column is live on that data — `tosIsMeasured: true`, and
+`giacca moto estiva uomo` reads **13.36%**, `giacca moto uomo` **20.92%**. Note the two numbers
+answer different questions and should not be compared directly: `share` is our impressions
+against the whole query market; ToS-IS is our share of the top-of-search auctions we were
+*eligible for*. A low share with a high ToS-IS means we win the slots we contest and contest
+very few.
+
+*Both fixes are in `ads-api-client.ts` (`7f4463609`), committed together with another session's
+SB/SD create paths because they could not be separated.*
 
 *Operational note for anyone reproducing this:* `railway run --service "@nexus/api"` injects
 production env into a local process and **does** reach Amazon (the "Railway-only" belief was
