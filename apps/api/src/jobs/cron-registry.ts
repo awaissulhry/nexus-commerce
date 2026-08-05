@@ -94,13 +94,13 @@ import { runAdvertisingRuleEvaluatorCron } from './advertising-rule-evaluator.jo
 import { runMarketingRuleEvaluatorCron } from './marketing-rule-evaluator.job.js'
 import { runMarketingSyncDrainCron } from './marketing-sync-drain.job.js'
 import { runMarketingAmazonShadowBackfillCron } from './marketing-amazon-shadow-backfill.job.js'
-import { runAdsSyncDrainCron } from './ads-sync-drain.job.js'
-import { runTosDefenseCron } from './ads-tos-defense.job.js'
+import { runAdsSyncDrainOnce } from './ads-sync-drain.job.js'
+import { runTosDefenseOnce } from './ads-tos-defense.job.js'
 import { runAmsSqsPoll } from './ams-sqs-poll.job.js'
-import { runSqpIngestCron } from './sqp-ingest.job.js'
-import { runDaypartingCron } from './ad-dayparting.job.js'
+import { runSqpIngestOnce } from './sqp-ingest.job.js'
+import { runDaypartingOnce } from './ad-dayparting.job.js'
 // AD.5 — cross-marketplace BudgetPool rebalancer.
-import { runBudgetPoolRebalanceCron } from './budget-pool-rebalance.job.js'
+import { runBudgetPoolRebalanceOnce } from './budget-pool-rebalance.job.js'
 // SR.1 — Sentient Review Loop ingest + spike detector.
 import {
   runReviewIngestCron,
@@ -231,18 +231,36 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   // CampaignMetric) from the canonical Campaign / AmazonAdsDailyPerformance
   // tables. Idempotent, scoped to channel=AMAZON, never touches canonical rows.
   'marketing-amazon-shadow-backfill': () => runMarketingAmazonShadowBackfillCron(),
+  /**
+   * ACR.1.2d — the five ads entries below now match the six added for the Control Room:
+   * registered against the function that does the work and returns the summary, NOT the
+   * `*Cron` wrapper that opens its own `recordCronRun`.
+   *
+   * Registering the wrapper wrote TWO CronRun rows per manual trigger — one labelled
+   * `manual` whose summary was the literal "manual trigger", and a nested one labelled
+   * `cron` carrying the real numbers. So a hand-run appeared twice in the Levers drawer,
+   * once uninformative and once claiming to have been scheduled. Two records of one event
+   * that disagree about what caused it is this programme's signature defect; it had simply
+   * been invisible while nothing rendered the table.
+   */
   // Apex A.2c — Redis-free autonomous drain of queued ad bid/budget/state writes.
-  'drain-ads-sync': () => runAdsSyncDrainCron(),
+  'drain-ads-sync': () => runAdsSyncDrainOnce(),
   // Apex D.2 — autonomous Top-of-Search placement-multiplier defense (allowlisted).
-  'top-of-search-defense': () => runTosDefenseCron(),
+  'top-of-search-defense': () => runTosDefenseOnce(),
   // Option C — TOS impression-share ingest (parallel per marketplace, daily).
   'tos-is-ingest': () => import('./ads-tos-is-ingest.job.js').then(m => m.runTosIsIngestCron()),
   // Apex B.1 — drain the AMS SQS queue (hourly SP/SD/SB stream) into hourly perf.
   'ams-sqs-poll': () => runAmsSqsPoll(),
   // Apex E.1 — ingest Brand Analytics Search Query Performance (competitive share).
-  'sqp-ingest': () => runSqpIngestCron(),
-  'ad-dayparting': () => runDaypartingCron(),
-  'budget-pool-rebalance': () => runBudgetPoolRebalanceCron(),
+  'sqp-ingest': () => runSqpIngestOnce(),
+  'ad-dayparting': async () => {
+    const r = await runDaypartingOnce()
+    return `evaluated=${r.evaluated} changed=${r.changed}`
+  },
+  'budget-pool-rebalance': async () => {
+    const s = await runBudgetPoolRebalanceOnce()
+    return `pools=${s.poolsConsidered} rebalanced=${s.poolsRebalanced} live=${s.poolsAppliedLive} skipped=${s.poolsSkipped} shift=${s.totalShiftCents}¢ ${s.durationMs}ms`
+  },
 
   /**
    * ACR.1.2 — the six Control Room engines that had NO manual trigger of any kind.
