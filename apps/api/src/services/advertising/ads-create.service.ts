@@ -18,6 +18,7 @@ import {
   createCampaign, createAdGroup, createKeyword, createProductAd,
   createTarget, createNegativeProductTarget, createNegativeKeyword, createSdTarget, createSbAd, updateCampaign,
   listNegativeKeywords, listAdGroupsV3, listCampaignsServing, listCampaignsV3,
+  createSdCampaign, createSbCampaign, createSdAdGroup, createSdProductAd, createSbAdGroup, listSbAds, createSbKeyword,
   type AdsRegion,
 } from './ads-api-client.js'
 import { checkAdsWriteGate } from './ads-write-gate.js'
@@ -51,43 +52,135 @@ export interface NewCampaign {
   name: string; type: 'SP' | 'SB' | 'SD'; marketplace: string
   targetingType?: 'MANUAL' | 'AUTO'; dailyBudgetEur: number
   biddingStrategy?: 'legacyForSales' | 'autoForSales' | 'manual'; portfolioId?: string; userId?: string
+  /** SD only. T00020 = contextual product/category, T00030 = audiences. */
+  sdTactic?: 'T00020' | 'T00030'
+  /** SB only. Brand Registry binding; resolved from an existing SB campaign when omitted. */
+  brandEntityId?: string
+  /**
+   * ACR Stage 5 — start the campaign live.
+   *
+   * **Defaults per ad product, deliberately asymmetric.** SP keeps its existing behaviour
+   * (born ENABLED): the five SP flows are wizards whose entire purpose is launching a
+   * structure the operator just reviewed budget-by-budget, and GALE's 11 live campaigns
+   * were launched that way. Silently flipping SP to PAUSED would break every one of them.
+   *
+   * SB and SD default to PAUSED. They are new paths with no reviewed-launch ritual behind
+   * them yet, and the 19 existing SB/SD campaigns carry €1,040/day of standing budgets —
+   * an accidental enable there is an accidental four-figure daily spend. The operator opts
+   * in explicitly, per the standing rule that a creation flow goes live only when budgets
+   * have been set deliberately.
+   */
+  startEnabled?: boolean
+  /** Return the exact payload without calling Amazon. Nothing local is written either. */
+  dryRun?: boolean
 }
-export async function createCampaignLocal(input: NewCampaign): Promise<{ id: string; externalCampaignId: string | null; mode: string }> {
+
+/**
+ * ACR Stage 5 — the campaign create, routed to the ad product's OWN endpoint family.
+ *
+ * This function has accepted `type: 'SP' | 'SB' | 'SD'` since AX.4 and has always mapped it
+ * onto the correct local `adProduct` column — while unconditionally calling `createCampaign`,
+ * which is `/sp/campaigns`. An SB or SD create would therefore have produced a Sponsored
+ * Products campaign on Amazon carrying an SB/SD name, and a local row confidently labelled
+ * with an ad product that did not match the thing that was created. It was never hit only
+ * because no UI offered SB or SD — precisely the gap Stage 5 exists to close.
+ *
+ * Same class of defect as the `/sp/*` verification trap in AX-VT.4: assuming one endpoint
+ * family speaks for all three.
+ */
+export async function createCampaignLocal(input: NewCampaign): Promise<{ id: string; externalCampaignId: string | null; mode: string; dryRun?: unknown }> {
   const ctx = await resolveCtx(input.marketplace)
+  // SP preserves its long-standing born-ENABLED behaviour; SB/SD are born PAUSED. See the
+  // `startEnabled` docblock — this asymmetry is the point, not an oversight.
+  const startEnabled = input.startEnabled ?? (input.type === 'SP')
+  const state: 'enabled' | 'paused' = startEnabled ? 'enabled' : 'paused'
   let externalId: string | null = null, mode = 'local'
+  let dryRunPayload: unknown
+
+  // SB cannot be created without a Brand Registry binding. Rather than fail late inside
+  // Amazon's error array, resolve it from an existing SB campaign and fail here if absent.
+  // Scoped to the SAME marketplace on purpose: a brand entity is a per-marketplace Brand
+  // Registry binding, so borrowing DE's entity for an IT campaign is not a fallback, it is a
+  // wrong answer. Caught by the Stage 5 dry run, which resolved a DE entity for an IT create.
+  let brandEntityId = input.brandEntityId
+  if (input.type === 'SB' && !brandEntityId) {
+    const sibling = await prisma.campaign.findFirst({
+      where: { adProduct: 'SPONSORED_BRANDS', marketplace: input.marketplace, brandEntityId: { not: null } },
+      select: { brandEntityId: true },
+    })
+    brandEntityId = sibling?.brandEntityId ?? undefined
+    if (!brandEntityId) throw new Error(`SB campaigns need a brandEntityId and none could be resolved from an existing SB campaign in ${input.marketplace} — check Brand Registry for that marketplace`)
+  }
+
   if (ctx) {
     const gate = await checkAdsWriteGate({ marketplace: input.marketplace, payloadValueCents: Math.round(input.dailyBudgetEur * 100) })
-    if (gate.allowed) {
-      // AX-VT.1 — portfolioId travels with the create. It used to be collected by
-      // every builder, stored on the local row below, and dropped right here.
-      const r = await createCampaign(ctx, { name: input.name, targetingType: input.targetingType ?? 'MANUAL', dailyBudget: input.dailyBudgetEur, biddingStrategy: input.biddingStrategy, state: 'enabled', portfolioId: input.portfolioId })
-      externalId = r.externalId; mode = r.mode
+    if (gate.allowed || input.dryRun) {
+      const common = { name: input.name, dailyBudget: input.dailyBudgetEur, state, portfolioId: input.portfolioId, dryRun: input.dryRun }
+      const r = input.type === 'SD'
+        ? await createSdCampaign(ctx, { ...common, tactic: input.sdTactic ?? 'T00020' })
+        : input.type === 'SB'
+          ? await createSbCampaign(ctx, { ...common, brandEntityId: brandEntityId! })
+          // AX-VT.1 — portfolioId travels with the create. It used to be collected by
+          // every builder, stored on the local row below, and dropped right here.
+          : await createCampaign(ctx, { ...common, targetingType: input.targetingType ?? 'MANUAL', biddingStrategy: input.biddingStrategy })
+      if (r.mode === 'dry-run') dryRunPayload = r.rawResponse
+      else { externalId = r.externalId; mode = r.mode }
     }
   }
+
+  // A dry run must not leave a local row behind — that is the whole point of asking first.
+  if (input.dryRun) {
+    return { id: '', externalCampaignId: null, mode: 'dry-run', dryRun: dryRunPayload ?? { note: 'no active ads connection for this marketplace; nothing would be sent' } }
+  }
+
   const adProduct = { SP: 'SPONSORED_PRODUCTS', SB: 'SPONSORED_BRANDS', SD: 'SPONSORED_DISPLAY' }[input.type]
   const campaign = await prisma.campaign.create({
     data: {
-      name: input.name, type: input.type, adProduct, status: 'ENABLED', marketplace: input.marketplace,
+      name: input.name, type: input.type, adProduct,
+      status: startEnabled ? 'ENABLED' : 'PAUSED',
+      marketplace: input.marketplace,
       externalCampaignId: externalId, dailyBudget: input.dailyBudgetEur, biddingStrategy: (input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES'),
       portfolioId: input.portfolioId || null,
+      ...(brandEntityId ? { brandEntityId } : {}),
       startDate: new Date(), lastSyncStatus: externalId ? 'SUCCESS' : 'PENDING',
     },
   })
-  await audit('create_campaign', 'CAMPAIGN', campaign.id, { name: input.name, externalId, mode }, input.userId)
-  logger.info('[AX.4] createCampaignLocal', { id: campaign.id, externalId, mode })
+  await audit('create_campaign', 'CAMPAIGN', campaign.id, { name: input.name, type: input.type, externalId, mode, state }, input.userId)
+  logger.info('[AX.4] createCampaignLocal', { id: campaign.id, type: input.type, externalId, mode, state })
   return { id: campaign.id, externalCampaignId: externalId, mode }
 }
 
-export interface NewAdGroup { campaignId: string; name: string; defaultBidEur: number; userId?: string }
+export interface NewAdGroup { campaignId: string; name: string; defaultBidEur: number; userId?: string; startEnabled?: boolean }
 export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: string; externalAdGroupId: string | null }> {
-  const campaign = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true } })
+  const campaign = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, adProduct: true } })
   if (!campaign) throw new Error('campaign not found')
   let externalId: string | null = null
+  // ACR Stage 5 — same endpoint-family split as the campaign create above. An SD ad group
+  // carries `tactic` and `creativeType` and must agree with its campaign's tactic; posting it
+  // to `/sp/adGroups` would attach it to nothing.
+  const isSd = campaign.adProduct === 'SPONSORED_DISPLAY'
+  const isSb = campaign.adProduct === 'SPONSORED_BRANDS'
+  /**
+   * **Pause at the CAMPAIGN level only.** Amazon's entity states are hierarchical: a paused
+   * campaign delivers nothing whatever its children say. So born-paused ad groups buy no extra
+   * safety — they only create the trap where an operator enables the campaign and still sees
+   * zero delivery, which reads as a broken feature rather than a second switch they never set.
+   * Children are born ENABLED; the campaign is the gate.
+   */
+  const state: 'enabled' | 'paused' = (input.startEnabled ?? true) ? 'enabled' : 'paused'
   if (campaign.externalCampaignId && campaign.marketplace) {
     const ctx = await resolveCtx(campaign.marketplace)
     if (ctx) {
       const gate = await checkAdsWriteGate({ marketplace: campaign.marketplace, payloadValueCents: Math.round(input.defaultBidEur * 100) })
-      if (gate.allowed) { const r = await createAdGroup(ctx, { externalCampaignId: campaign.externalCampaignId, name: input.name, defaultBid: input.defaultBidEur, state: 'enabled' }); externalId = r.externalId }
+      if (gate.allowed) {
+        const r = isSd
+          ? await createSdAdGroup(ctx, { externalCampaignId: campaign.externalCampaignId, name: input.name, defaultBid: input.defaultBidEur, state })
+          // SB ad groups take no bid at all — see CreateSbAdGroupInput.
+          : isSb
+            ? await createSbAdGroup(ctx, { externalCampaignId: campaign.externalCampaignId, name: input.name, state })
+            : await createAdGroup(ctx, { externalCampaignId: campaign.externalCampaignId, name: input.name, defaultBid: input.defaultBidEur, state })
+        externalId = r.externalId
+      }
     }
   }
   const ag = await prisma.adGroup.create({ data: { campaignId: input.campaignId, name: input.name, defaultBidCents: Math.round(input.defaultBidEur * 100), status: 'ENABLED', externalAdGroupId: externalId } })
@@ -97,8 +190,19 @@ export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: strin
 
 export interface NewKeyword { adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE' | 'BROAD'; bidEur: number; userId?: string }
 export async function createKeywordLocal(input: NewKeyword): Promise<{ id: string; externalTargetId: string | null }> {
-  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true } } } })
+  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true } } } })
   if (!ag) throw new Error('ad group not found')
+  /**
+   * ACR Stage 5 — the FIFTH place `/sp/*` was hardcoded.
+   *
+   * SB is keyword-targeted (this account's SB ad groups are literally "Broad Only" / "Phrase
+   * Only" / "Exact Only", carrying 95 keywords), so pushing an SB keyword to `/sp/keywords`
+   * would attach it to nothing and answer 200 — the same silent no-op as the other four.
+   *
+   * SB keywords are on the LEGACY v3 API (`/sb/keywords`, `application/vnd.sbkeyword.v3+json`),
+   * not `/sb/v4/*` — see `createSbKeyword`.
+   */
+  const isSbKeyword = ag.campaign?.adProduct === 'SPONSORED_BRANDS'
   // H.1 — idempotent. A positive keyword is uniquely identified by (ad group, match type, text).
   // Harvest rules run on a schedule and re-surface the same converting term every tick; return the
   // existing target instead of piling up duplicate rows (Amazon rejects the dup keyword too). Text
@@ -113,7 +217,11 @@ export async function createKeywordLocal(input: NewKeyword): Promise<{ id: strin
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
       const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: Math.round(input.bidEur * 100) })
-      if (gate.allowed) { const r = await createKeyword(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, keywordText: input.keywordText, matchType: input.matchType, bid: input.bidEur, state: 'enabled' }); externalId = r.externalId }
+      if (gate.allowed) {
+        const args = { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, keywordText: input.keywordText, matchType: input.matchType, bid: input.bidEur, state: 'enabled' as const }
+        const r = isSbKeyword ? await createSbKeyword(ctx, args) : await createKeyword(ctx, args)
+        externalId = r.externalId
+      }
     }
   }
   const t = await prisma.adTarget.create({ data: { adGroupId: input.adGroupId, kind: 'KEYWORD', expressionType: input.matchType, expressionValue: input.keywordText, bidCents: Math.round(input.bidEur * 100), status: 'ENABLED', externalTargetId: externalId } })
@@ -158,21 +266,41 @@ export async function resolveSellerSku(
 }
 
 export async function createProductAdLocal(input: NewProductAd): Promise<{ id: string; externalAdId: string | null }> {
-  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true } } } })
+  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true } } } })
   if (!ag) throw new Error('ad group not found')
   const resolved = await resolveSellerSku(input)
   let externalId: string | null = null
+  // ACR Stage 5 — third instance of the endpoint-family split. `/sp/productAds` returns nothing
+  // useful for an SD ad group, so an SD ad pushed there attaches to nothing and reports success.
+  const isSd = ag.campaign?.adProduct === 'SPONSORED_DISPLAY'
+  /**
+   * SB has no "product ad" at all. Its unit is a CREATIVE — headline, brand logo asset, landing
+   * page and up to three ASINs — created at `/sb/v4/ads` by `createSbAdLocal` (AX2.9). Falling
+   * through to `/sp/productAds` here would be the same silent no-op as the other three families,
+   * so this fails loudly and names the function that does the job.
+   */
+  if (ag.campaign?.adProduct === 'SPONSORED_BRANDS') {
+    throw new Error('Sponsored Brands has no product ad — use createSbAdLocal() to create an SB creative')
+  }
   if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
       const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0 })
       if (gate.allowed) {
-        if (!resolved) throw new Error(`no seller SKU for "${input.asin ?? input.sku ?? '?'}" — a Sponsored Products ad needs one`)
-        const r = await createProductAd(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, sku: resolved.sku, state: 'enabled' })
+        // SD takes either identifier; SP genuinely needs the seller SKU, so only SP hard-fails.
+        if (!resolved && !isSd) throw new Error(`no seller SKU for "${input.asin ?? input.sku ?? '?'}" — a Sponsored Products ad needs one`)
+        const r = isSd
+          // ENABLED like the SP path: the campaign is the delivery gate, not the ad. See the
+          // `state` docblock in createAdGroupLocal.
+          ? await createSdProductAd(ctx, {
+              externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId,
+              sku: resolved?.sku ?? input.sku, asin: resolved?.asin ?? input.asin, state: 'enabled',
+            })
+          : await createProductAd(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, sku: resolved!.sku, state: 'enabled' })
         externalId = r.externalId
         // Amazon answers 200 with an empty success list when it rejects an ad.
         // Silence here is what made 200 phantom product ads look like a clean run.
-        if (!externalId) throw new Error(`Amazon did not create the ad for "${resolved.sku}": ${JSON.stringify(r.rawResponse).slice(0, 200)}`)
+        if (!externalId) throw new Error(`Amazon did not create the ad for "${resolved?.sku ?? input.asin ?? '?'}": ${JSON.stringify(r.rawResponse).slice(0, 200)}`)
       }
     }
   }
@@ -614,7 +742,16 @@ export async function createTargetLocal(input: NewTarget): Promise<{ id: string;
 // envelope is sent to SB v4 /sb/ads behind the write gate. ───────────────
 export interface NewSbAd {
   adGroupId: string
-  brandName: string; headline: string; logoAssetId?: string
+  /**
+   * ACR Stage 5 — brand name / logo / landing page are now OPTIONAL.
+   *
+   * They are still required by Amazon, but they no longer have to come from the caller: when
+   * omitted they are read off an existing SB campaign in the same marketplace by
+   * `resolveSbTemplate`. That is what makes SB launchable without first building an
+   * asset-upload flow, and it is why this stayed one function instead of becoming a second
+   * template-aware creator beside it.
+   */
+  brandName?: string; headline: string; logoAssetId?: string
   creativeType?: 'productCollection' | 'storeSpotlight' | 'video'
   landingType?: 'store' | 'productList' | 'url'; landingUrl?: string
   asins: string[]; userId?: string
@@ -622,22 +759,36 @@ export interface NewSbAd {
 export async function createSbAdLocal(input: NewSbAd): Promise<{ id: string; externalAdId: string | null; mode: string }> {
   const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true } } } })
   if (!ag) throw new Error('ad group not found')
-  const asins = input.asins.map((a) => a.trim()).filter(Boolean)
+  // Amazon caps a product-collection creative at three products.
+  const asins = input.asins.map((a) => a.trim()).filter(Boolean).slice(0, 3)
   if (asins.length === 0) throw new Error('at least one ASIN required')
+  // ACR Stage 5 — fill anything the caller left out from this account's own brand assets.
+  const tpl = (input.brandName && input.logoAssetId) || !ag.campaign?.marketplace
+    ? null
+    : await resolveSbTemplate(ag.campaign.marketplace)
+  const brandName = input.brandName ?? tpl?.brandName
+  const logoAssetId = input.logoAssetId ?? tpl?.logoAssetId
+  if (!brandName) throw new Error(`an SB creative needs a brand name, and none could be read from an existing SB campaign in ${ag.campaign?.marketplace ?? '?'}`)
   const creativeType = input.creativeType ?? 'productCollection'
-  const landingType = input.landingType ?? 'productList'
+  const landingType = input.landingType ?? tpl?.landingType ?? 'productList'
+  const landingUrl = input.landingUrl ?? tpl?.landingUrl
   let externalId: string | null = null, mode = 'local'
   if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
       const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0 })
       if (gate.allowed) {
-        const r = await createSbAd(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, brandName: input.brandName, headline: input.headline, logoAssetId: input.logoAssetId, creativeType, landingType, landingUrl: input.landingUrl, asins, state: 'enabled' })
+        const r = await createSbAd(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, brandName, headline: input.headline, logoAssetId, creativeType, landingType, landingUrl, asins, state: 'enabled' })
         externalId = r.externalId; mode = r.mode
+        // Same silence-is-failure rule the SP product-ad path learned the hard way: Amazon
+        // answers 200 with an empty success list when it REJECTS a creative (unusable logo,
+        // ineligible ASIN, bad headline). Without this, a rejected creative stored a local row
+        // with externalAdId null and looked like a clean launch.
+        if (!externalId) throw new Error(`Amazon did not create the SB creative: ${JSON.stringify(r.rawResponse).slice(0, 300)}`)
       }
     }
   }
-  const creativeJson = { brandName: input.brandName, headline: input.headline, logoAssetId: input.logoAssetId ?? null, creativeType, landingType, landingUrl: input.landingUrl ?? null, asins }
+  const creativeJson = { brandName, headline: input.headline, logoAssetId: logoAssetId ?? null, creativeType, landingType, landingUrl: landingUrl ?? null, asins }
   const ad = await prisma.adProductAd.create({ data: { adGroupId: input.adGroupId, asin: asins[0], status: 'ENABLED', externalAdId: externalId, adType: 'BRAND_AD', creativeJson: creativeJson as never } })
   await audit('create_sb_ad', 'PRODUCT_AD', ad.id, { ...creativeJson, externalId, mode }, input.userId)
   logger.info('[AX2.9] createSbAdLocal', { id: ad.id, externalId, mode, asins: asins.length })
@@ -797,6 +948,53 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
   )
   logger.info('[AX2.2] updatePlacementBidding', { campaignId: input.campaignId, adjustments, mode, status: auditStatus })
   return { ok: auditStatus !== 'FAILED', adjustments, mode }
+}
+
+/**
+ * ACR Stage 5 — create an SB creative by borrowing this account's own brand assets.
+ *
+ * SB is the one family that cannot be launched from structured fields alone: an ad needs a brand
+ * logo living in Amazon's asset library, a brand name registered to the Brand Registry entity,
+ * and a landing page. Building an asset-upload flow is a project of its own — but the account
+ * already HAS all three, on the 4 existing SB campaigns. Stage 5.1 planned for exactly this
+ * ("the 4 paused SB campaigns as templates"), and reading them back is what makes SB reachable
+ * now rather than after a creative-management build.
+ *
+ * Template is resolved per MARKETPLACE, for the same reason `brandEntityId` is: a brand logo
+ * asset and an Amazon store URL belong to one marketplace's Brand Registry.
+ *
+ * Returns the template it used, so the caller can show the operator whose creative was cloned
+ * rather than silently inheriting someone else's headline.
+ */
+export interface SbTemplate {
+  brandName: string
+  logoAssetId?: string
+  landingType: 'store' | 'productList' | 'url'
+  landingUrl?: string
+  sourceCampaign: string
+}
+
+export async function resolveSbTemplate(marketplace: string): Promise<SbTemplate | null> {
+  const ctx = await resolveCtx(marketplace)
+  if (!ctx) return null
+  const sb = await prisma.campaign.findMany({
+    where: { adProduct: 'SPONSORED_BRANDS', marketplace, externalCampaignId: { not: null } },
+    select: { externalCampaignId: true, name: true },
+  })
+  const ids = sb.map((c) => c.externalCampaignId!).filter(Boolean)
+  if (!ids.length) return null
+  const ads = await listSbAds(ctx, { externalCampaignIds: ids })
+  // Prefer a PUBLISHED creative — a rejected or draft one is not a template worth cloning.
+  const best = ads.find((a) => a.creative?.creativeStatus === 'PUBLISHED' && a.creative?.brandLogoAssetID) ?? ads[0]
+  if (!best?.creative) return null
+  const src = sb.find((c) => c.externalCampaignId === String(best.campaignId))
+  return {
+    brandName: best.creative.brandName ?? '',
+    logoAssetId: best.creative.brandLogoAssetID,
+    landingType: best.landingPage?.url ? 'url' : 'productList',
+    landingUrl: best.landingPage?.url,
+    sourceCampaign: src?.name ?? String(best.campaignId ?? '?'),
+  }
 }
 
 export interface NewNegativeProductTarget { adGroupId: string; asin: string; userId?: string }

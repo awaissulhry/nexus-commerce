@@ -17,10 +17,31 @@ const reportJobFindFirst = vi.fn(async () => null)
 const reportJobCreate = vi.fn(async () => ({ id: 'job-1' }))
 const adsProfileFindUnique = vi.fn(async () => ({ currencyCode: 'EUR' }))
 
+/**
+ * ACR Stage 5 — `deliveringAdProducts()` asks `campaign.groupBy` a SECOND question, keyed by
+ * ad product rather than marketplace. These tests are about the MARKETPLACE filter, so the
+ * dispatcher answers that second question generously: every marketplace that has campaigns is
+ * treated as having an enabled SP and SB campaign. Ad-product dormancy is tested on its own
+ * below, where it can be asserted rather than incidentally assumed.
+ */
+const perfGroupBy = vi.fn(async () => [] as Array<Record<string, unknown>>)
+const campaignGroupByDispatch = async (args: { by?: string[] }) => {
+  const rows = await campaignGroupBy(args)
+  if (!args?.by?.includes('adProduct')) return rows
+  // A test that returns ad-product rows itself is asserting the gate directly — never overwrite
+  // its answer with the generous default, or the assertion silently tests the default instead.
+  if ((rows as Array<Record<string, unknown>>).some((r) => 'adProduct' in r)) return rows
+  return (rows as Array<{ marketplace: string }>).flatMap((r) => [
+    { marketplace: r.marketplace, adProduct: 'SPONSORED_PRODUCTS', _count: { _all: 1 } },
+    { marketplace: r.marketplace, adProduct: 'SPONSORED_BRANDS', _count: { _all: 1 } },
+  ])
+}
+
 vi.mock('../../db.js', () => ({
   default: {
     amazonAdsConnection: { get findMany() { return connFindMany } },
-    campaign: { get groupBy() { return campaignGroupBy } },
+    campaign: { groupBy: (args: { by?: string[] }) => campaignGroupByDispatch(args) },
+    amazonAdsDailyPerformance: { get groupBy() { return perfGroupBy } },
     amazonAdsReportJob: { get findFirst() { return reportJobFindFirst }, get create() { return reportJobCreate } },
     amazonAdsProfile: { get findUnique() { return adsProfileFindUnique } },
   },
@@ -72,7 +93,9 @@ describe('report cycles skip profiles that cannot answer', () => {
   })
 
   it('a marketplace whose campaigns are ALL paused is still asked — status is not the test', async () => {
-    // 15 SD + 4 SB campaigns on this account are all disabled. Their days still belong to them.
+    // The MARKETPLACE filter is deliberately status-blind: a campaign enabled at noon must not
+    // lose its own day. (ACR Stage 5 later added a separate per-AD-PRODUCT dormancy gate, which
+    // is what skips the never-delivered SB/SD. Different question, different test — below.)
     campaignGroupBy.mockResolvedValue([{ marketplace: 'PL', _count: { _all: 3 } }])
     await mod.runTargetingReportCycle({ startDate: '2026-08-01', endDate: '2026-08-01' })
     expect(createdFor).toContain('p-pl')
@@ -111,5 +134,66 @@ describe('report cycles skip profiles that cannot answer', () => {
       await run()
       expect(new Set(createdFor)).toEqual(new Set(['p-it']))
     }
+  })
+})
+
+/**
+ * ACR Stage 5 — the per-ad-product dormancy gate.
+ *
+ * Measured on prod 2026-08-05: 653 of 1,882 report jobs in 30 days (35%) were SB/SD requests
+ * that could only ever return zero rows, because all 19 SB/SD campaigns are paused and have
+ * never delivered an impression. The gate removes exactly those and nothing else.
+ *
+ * The naive version of this fix — filter to `status = ENABLED` — was explicitly rejected in the
+ * original docblock for a good reason: a campaign enabled at noon would lose its own day. Both
+ * halves of the OR are therefore tested, because dropping either one loses real data.
+ */
+describe('ACR Stage 5 — dormant ad products are not asked about', () => {
+  beforeEach(() => { perfGroupBy.mockResolvedValue([]) })
+
+  const enabled = (marketplace: string, adProduct: string) => ({ marketplace, adProduct, _count: { _all: 1 } })
+
+  it('skips an ad product with no enabled campaigns and no recent delivery', async () => {
+    campaignGroupBy.mockImplementation(async (args: { by?: string[] }) =>
+      args?.by?.includes('adProduct') ? [enabled('IT', 'SPONSORED_PRODUCTS')] : [{ marketplace: 'IT', _count: { _all: 5 } }])
+    perfGroupBy.mockResolvedValue([{ marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', _sum: { impressions: 5000 } }])
+
+    const r = await mod.runReportCreationCycle({ startDate: '2026-08-01', endDate: '2026-08-01' })
+    // SP asked; SB and SD skipped rather than asked-and-wasted.
+    expect(r.jobsCreated).toBe(1)
+  })
+
+  it('asks about a campaign enabled TODAY that has never delivered — no lost day', async () => {
+    // The exact case the ENABLED-only filter was rejected for. SB has zero impressions ever,
+    // but it is enabled right now, so its first day must still be collected.
+    campaignGroupBy.mockImplementation(async (args: { by?: string[] }) =>
+      args?.by?.includes('adProduct')
+        ? [enabled('IT', 'SPONSORED_PRODUCTS'), enabled('IT', 'SPONSORED_BRANDS')]
+        : [{ marketplace: 'IT', _count: { _all: 5 } }])
+    perfGroupBy.mockResolvedValue([]) // nothing has ever delivered
+
+    const r = await mod.runReportCreationCycle({ startDate: '2026-08-01', endDate: '2026-08-01' })
+    expect(r.jobsCreated).toBe(2) // SP + SB, not SD
+  })
+
+  it('keeps asking about a campaign paused TODAY whose tail data is still arriving', async () => {
+    // The mirror case. Nothing is enabled, but SD delivered inside the window, so pausing a
+    // campaign must not silently truncate its final days of reporting.
+    campaignGroupBy.mockImplementation(async (args: { by?: string[] }) =>
+      args?.by?.includes('adProduct') ? [] : [{ marketplace: 'IT', _count: { _all: 5 } }])
+    perfGroupBy.mockResolvedValue([{ marketplace: 'IT', adProduct: 'SPONSORED_DISPLAY', _sum: { impressions: 42 } }])
+
+    const r = await mod.runReportCreationCycle({ startDate: '2026-08-01', endDate: '2026-08-01' })
+    expect(r.jobsCreated).toBe(1) // SD only
+  })
+
+  it('a delivered-zero row does not count as delivery', async () => {
+    // groupBy returns the row with a 0 sum rather than omitting it; 0 is dormant, not active.
+    campaignGroupBy.mockImplementation(async (args: { by?: string[] }) =>
+      args?.by?.includes('adProduct') ? [] : [{ marketplace: 'IT', _count: { _all: 5 } }])
+    perfGroupBy.mockResolvedValue([{ marketplace: 'IT', adProduct: 'SPONSORED_DISPLAY', _sum: { impressions: 0 } }])
+
+    const r = await mod.runReportCreationCycle({ startDate: '2026-08-01', endDate: '2026-08-01' })
+    expect(r.jobsCreated).toBe(0)
   })
 })

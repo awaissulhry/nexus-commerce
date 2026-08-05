@@ -10697,6 +10697,23 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return r
   })
 
+  // ── ACR Stage 5: the SB creative template ───────────────────────────
+  // Read-only. An SB ad needs a brand name, a brand logo living in Amazon's asset library and a
+  // landing page — none of which our database holds. Rather than build an asset-upload flow,
+  // this reads them off an existing SB campaign in the SAME marketplace (a brand entity, logo
+  // asset and store URL all belong to one marketplace's Brand Registry). The builder shows the
+  // operator which campaign's creative is being cloned before anything is created.
+  fastify.get('/advertising/sb-template', async (request, reply) => {
+    const marketplace = String((request.query as Record<string, unknown>)?.marketplace ?? '').toUpperCase()
+    if (!marketplace) { reply.status(400); return { error: 'marketplace required' } }
+    const { resolveSbTemplate } = await import('../services/advertising/ads-create.service.js')
+    try {
+      const template = await resolveSbTemplate(marketplace)
+      // null is a real answer — "this marketplace has no SB creative to clone" — not an error.
+      return { marketplace, template, usable: !!(template?.brandName && template?.logoAssetId) }
+    } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+
   // ACR.3 — the coverage engine's paper trail: OBSERVE would-dos and AUTO applied writes,
   // joined back to terms. The observe week is only as good as its record.
   fastify.get('/advertising/coverage-engine/log', async (request, reply) => {

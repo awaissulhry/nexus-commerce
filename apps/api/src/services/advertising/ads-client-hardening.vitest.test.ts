@@ -7,6 +7,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { QuotaLedger, MemoryQuotaStore, type QuotaStore } from '../ads-core/quota-ledger.js'
+import { isMutatingCall } from './ads-api-client.js'
 
 describe('Amazon quota — regional, not per-connection', () => {
   it('two profiles in one region share one bucket', async () => {
@@ -85,5 +86,43 @@ describe('retry policy', () => {
     expect(pick('30', 4000)).toBe(30_000)
     expect(pick(null, 4000)).toBe(4000)
     expect(pick('not-a-number', 4000)).toBe(4000)
+  })
+})
+
+describe('read/write classification — Amazon reads through POST', () => {
+  // ACR Stage 5. Classifying by HTTP verb made every v3/v4 `/list` a WRITE, so all
+  // ten of them fail-CLOSED on a store outage. The write ledger fails closed because
+  // an unmetered write can mutate the live account; a list call cannot mutate anything.
+  it('POST .../list is a READ across every ad-product family', () => {
+    for (const path of [
+      '/sp/campaigns/list', '/sp/adGroups/list', '/sp/keywords/list',
+      '/sp/targets/list', '/sp/productAds/list', '/sp/negativeKeywords/list',
+      '/sb/v4/campaigns/list', '/portfolios/list', '/eligibility/product/list',
+    ]) {
+      expect(isMutatingCall('POST', path)).toBe(false)
+    }
+  })
+
+  it('GET is always a read — including SD, which reads through GET with a query string', () => {
+    expect(isMutatingCall('GET', '/sd/campaigns?campaignIdFilter=1,2,3')).toBe(false)
+    expect(isMutatingCall('GET', '/sd/targets')).toBe(false)
+    expect(isMutatingCall('GET', '/v2/profiles')).toBe(false)
+  })
+
+  it('real mutations stay fail-closed', () => {
+    // The entity creates — the calls that spend money if they escape the gate.
+    expect(isMutatingCall('POST', '/sp/campaigns')).toBe(true)
+    expect(isMutatingCall('POST', '/sd/targets')).toBe(true)
+    expect(isMutatingCall('POST', '/sb/v4/ads')).toBe(true)
+    expect(isMutatingCall('PUT', '/sp/campaigns')).toBe(true)
+    expect(isMutatingCall('DELETE', '/sp/keywords')).toBe(true)
+    // Creating a report job is not an account mutation, but it IS resource
+    // creation and stays with the writes deliberately.
+    expect(isMutatingCall('POST', '/reporting/reports')).toBe(true)
+  })
+
+  it('a path that merely CONTAINS "list" is not a list endpoint', () => {
+    expect(isMutatingCall('POST', '/sp/listings/publish')).toBe(true)
+    expect(isMutatingCall('POST', '/sp/list/create')).toBe(true)
   })
 })

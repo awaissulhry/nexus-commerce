@@ -928,10 +928,9 @@ export interface CreationCycleResult {
  * first campaign is picked up by the next run; and a marketplace with zero campaigns has, by
  * definition, nothing for a report to contain.
  *
- * Deliberately counts campaigns of ANY status and ANY ad product. Filtering to ENABLED would
- * also skip the 634 SB/SD jobs a month that return nothing today — but a campaign enabled at
- * noon would then lose its own day, and "this ad product is dormant" is an operator's call to
- * make, not a silent one. Reported instead.
+ * Deliberately counts campaigns of ANY status and ANY ad product — the per-ad-product question
+ * is a separate gate, `deliveringAdProducts()` below, because it needs a rule this one can't
+ * express. Kept as the coarse marketplace filter it always was.
  */
 async function activeProfilesWithCampaigns(): Promise<Array<{ profileId: string; region: string; marketplace: string }>> {
   const profiles = await prisma.amazonAdsConnection.findMany({
@@ -956,6 +955,67 @@ async function activeProfilesWithCampaigns(): Promise<Array<{ profileId: string;
   return kept
 }
 
+/**
+ * ACR Stage 5 — which (marketplace, adProduct) pairs can a report possibly have rows for?
+ *
+ * The marketplace filter above removed the five empty EU profiles. What survived it was the
+ * other half of the same waste: measured on prod 2026-08-05, **653 of 1,882 report jobs in 30
+ * days — 35% — were SB/SD requests that completed with `rowsIngested: 0` every single night**,
+ * because all 19 SB/SD campaigns are PAUSED and have never delivered an impression (€0.00
+ * lifetime spend, verified against Amazon's own `/sd/*` and `/sb/v4/*` endpoints). Nothing was
+ * broken; we were asking a question that has no answer.
+ *
+ * The gate deliberately is NOT `status = ENABLED`. The previous docblock named the reason and
+ * it is a real one: a campaign enabled at noon would lose its own day. So a pair is kept when
+ * EITHER side says data is possible:
+ *
+ *   1. **≥1 ENABLED campaign right now** — catches the enabled-at-noon case on the very next
+ *      cycle, with no lost day and no operator action. This is what makes it self-enabling:
+ *      the moment SB/SD go live, their reports resume by themselves.
+ *   2. **impressions within the lookback window** — catches the mirror case, a campaign paused
+ *      today whose tail data is still arriving. Without this, pausing a campaign would silently
+ *      truncate its final days of reporting.
+ *
+ * Only a pair that is both dormant AND has delivered nothing recently is skipped. That is
+ * precisely the 653 jobs, and precisely nothing else.
+ */
+const DELIVERY_LOOKBACK_DAYS = 14
+
+export async function deliveringAdProducts(
+  marketplaces: string[],
+  lookbackDays = DELIVERY_LOOKBACK_DAYS,
+): Promise<Map<string, Set<AdProduct>>> {
+  const keep = new Map<string, Set<AdProduct>>()
+  if (marketplaces.length === 0) return keep
+  const add = (marketplace: string, adProduct: string) => {
+    if (!keep.has(marketplace)) keep.set(marketplace, new Set())
+    keep.get(marketplace)!.add(adProduct as AdProduct)
+  }
+
+  // (1) Anything enabled right now.
+  const enabled = await prisma.campaign.groupBy({
+    by: ['marketplace', 'adProduct'],
+    where: { marketplace: { in: marketplaces }, status: 'ENABLED', adProduct: { not: null } },
+    _count: { _all: true },
+  })
+  for (const row of enabled) {
+    if (row._count._all > 0 && row.adProduct) add(row.marketplace, row.adProduct)
+  }
+
+  // (2) Anything that actually delivered inside the lookback window.
+  const since = new Date(Date.now() - lookbackDays * 86_400_000)
+  const delivered = await prisma.amazonAdsDailyPerformance.groupBy({
+    by: ['marketplace', 'adProduct'],
+    where: { marketplace: { in: marketplaces }, date: { gte: since } },
+    _sum: { impressions: true },
+  })
+  for (const row of delivered) {
+    if ((row._sum.impressions ?? 0) > 0) add(row.marketplace, row.adProduct)
+  }
+
+  return keep
+}
+
 export async function runReportCreationCycle(
   args: { startDate: string; endDate: string; adProducts?: AdProduct[] } = { startDate: '', endDate: '' },
 ): Promise<CreationCycleResult> {
@@ -963,6 +1023,8 @@ export async function runReportCreationCycle(
   const adProducts = args.adProducts ?? ['SPONSORED_PRODUCTS', 'SPONSORED_DISPLAY', 'SPONSORED_BRANDS']
 
   const profiles = await activeProfilesWithCampaigns()
+  const delivering = await deliveringAdProducts(profiles.map((p) => p.marketplace))
+  const dormant: string[] = []
 
   for (const profile of profiles) {
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
@@ -976,6 +1038,10 @@ export async function runReportCreationCycle(
     const currencyCode = meta?.currencyCode ?? 'EUR'
 
     for (const adProduct of adProducts) {
+      if (!delivering.get(profile.marketplace)?.has(adProduct)) {
+        dormant.push(`${profile.marketplace}/${adProduct}`)
+        continue
+      }
       try {
         const out = await createReportJob({
           profileId: profile.profileId,
@@ -999,6 +1065,13 @@ export async function runReportCreationCycle(
     }
   }
 
+  // Never skip silently — a dormant pair must be visible as a decision, not read as coverage.
+  if (dormant.length > 0) {
+    logger.info('[ads-reports] skipping dormant ad products (no enabled campaigns, no recent delivery)', {
+      skipped: dormant, lookbackDays: DELIVERY_LOOKBACK_DAYS,
+    })
+  }
+
   return result
 }
 
@@ -1013,6 +1086,9 @@ export async function runSearchTermReportCycle(
     .filter((p) => SEARCH_TERM_REPORT_TYPE_ID[p] != null)
 
   const profiles = await activeProfilesWithCampaigns()
+  // Same dormancy gate as the campaign cycle — 183 of the 653 wasted jobs were `sbSearchTerm`.
+  const delivering = await deliveringAdProducts(profiles.map((p) => p.marketplace))
+  const dormant: string[] = []
 
   for (const profile of profiles) {
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
@@ -1027,6 +1103,10 @@ export async function runSearchTermReportCycle(
       const reportTypeId = SEARCH_TERM_REPORT_TYPE_ID[adProduct]
       const columns = SEARCH_TERM_COLUMNS[adProduct]
       if (!reportTypeId || !columns) continue
+      if (!delivering.get(profile.marketplace)?.has(adProduct)) {
+        dormant.push(`${profile.marketplace}/${adProduct}`)
+        continue
+      }
 
       try {
         const out = await createReportJob({
@@ -1049,6 +1129,11 @@ export async function runSearchTermReportCycle(
         result.errors.push(`${profile.profileId} ${adProduct} search-term: ${msg.slice(0, 800)}`)
       }
     }
+  }
+  if (dormant.length > 0) {
+    logger.info('[ads-reports] skipping dormant ad products for search-term reports', {
+      skipped: dormant, lookbackDays: DELIVERY_LOOKBACK_DAYS,
+    })
   }
   return result
 }

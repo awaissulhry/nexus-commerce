@@ -20,7 +20,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import {
   listCampaignsV3, listAdGroupsV3, listKeywords, listTargets, listProductAds,
-  listSdCampaigns, listSdAdGroups, listSdProductAds, listSdTargets, listSbCampaigns,
+  listSdCampaigns, listSdAdGroups, listSdProductAds, listSdTargets, listSbCampaigns, listSbAdGroups, listSbAds, listSbKeywords,
   ALL_STATES, type AdsRegion,
 } from './ads-api-client.js'
 import {
@@ -55,9 +55,13 @@ export interface LaunchVerification extends LaunchVerificationSummary {
   problems: string[]
   /**
    * Local entities we could NOT check, because no Amazon read is wired up for their (kind,
-   * ad-product) pair — SB ad groups and ads, today. Reported rather than hidden: a silent skip
-   * makes an unverifiable launch look like a verified one, which is the failure this whole phase
-   * exists to remove. Does NOT set ok:false — the launch may be perfectly fine; we just can't say.
+   * ad-product) pair. Reported rather than hidden: a silent skip makes an unverifiable launch
+   * look like a verified one, which is the failure this whole phase exists to remove. Does NOT
+   * set ok:false — the launch may be perfectly fine; we just can't say.
+   *
+   * ACR Stage 5 closed the SB gap this used to name: ad groups and ads via `/sb/v4/adGroups/list`
+   * and `/sb/v4/ads/list`, and keywords via the LEGACY `/sb/keywords` (v3 mime — the v4 path does
+   * not exist). SB is now covered for every kind a builder creates.
    */
   uncovered: number
   errors: string[]
@@ -177,6 +181,35 @@ export async function verifyLaunch(campaignIds: string[], source: VerifySource =
     if (sbExtIds.length) {
       try { for (const c of await listSbCampaigns(ctx, { externalCampaignIds: sbExtIds })) (amzCampaigns ??= new Map()).set(c.campaignId, c); mark('CAMPAIGN', 'SB') }
       catch (e) { errors.push(`read SB campaigns ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
+      // ACR Stage 5 — SB coverage used to stop at CAMPAIGN, so every SB ad group and ad was
+      // reported `uncovered`. That was tolerable while nothing created them; now that the
+      // builder does, it would leave verification blind exactly where the new writes happen.
+      try {
+        for (const g of await listSbAdGroups(ctx, { externalCampaignIds: sbExtIds })) {
+          // No defaultBid on the SB resource — deliberately absent so verifyEntity skips it
+          // rather than comparing the local bid against a field Amazon does not have.
+          if (g.adGroupId) (amzAdGroups ??= new Map()).set(g.adGroupId, { adGroupId: g.adGroupId, name: g.name, state: g.state } as never)
+        }
+        mark('AD_GROUP', 'SB')
+      } catch (e) { errors.push(`read SB adGroups ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
+      try {
+        for (const a of await listSbAds(ctx, { externalCampaignIds: sbExtIds })) {
+          // An SB creative has no SKU; only state is comparable, which verifyEntity handles by
+          // skipping every field neither side reports.
+          if (a.adId) (amzProductAds ??= new Map()).set(a.adId, { adId: a.adId, state: a.state } as never)
+        }
+        mark('PRODUCT_AD', 'SB')
+      } catch (e) { errors.push(`read SB ads ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
+      try {
+        for (const k of await listSbKeywords(ctx, { externalCampaignIds: sbExtIds })) {
+          // Legacy v3 shape: numeric ids and LOWERCASE matchType/state. `normaliseForCompare`
+          // already case-folds, so 'exact' and 'EXACT' do not read as a mismatch.
+          if (k.keywordId != null) (amzKeywords ??= new Map()).set(String(k.keywordId), {
+            keywordId: String(k.keywordId), keywordText: k.keywordText, matchType: k.matchType, state: k.state, bid: k.bid,
+          } as never)
+        }
+        mark('KEYWORD', 'SB')
+      } catch (e) { errors.push(`read SB keywords ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
     }
 
     {
