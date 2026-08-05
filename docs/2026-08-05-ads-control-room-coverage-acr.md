@@ -629,6 +629,52 @@ So the column ships reading **"—" with the reason stated on the page**, never 
 
 *Note for whoever runs it:* widening repairs the board's honesty but **will move the published baseline** — the pooled 0.76% is currently computed over ten ASINs of one family, and adding families raises our measured impressions against an unchanged market denominator.
 
+### 🔴 ACR.2.4b — the coverage board measures 4% of the advertised catalogue, and says so now
+
+Following ACR.2.4's finding that every measured ASIN is one variation family, the obvious next
+question is how much of the account the board actually sees. Measured on prod 2026-08-05 (IT):
+
+| | |
+|---|---|
+| ASINs in the live catalogue | 244 |
+| ASINs advertised on Amazon IT | **250** |
+| ASINs with any SQP row | 22 |
+| ASINs SQP actually **measures** (`impressionsBrand > 0`) | **10** |
+
+**So "Share of page one: 0.76%" is GALE's share, presented as the account's.** Eleven whole
+families have **no SQP row whatsoever** — AIREON (25 ASINs), REGAL (25), VENTRA (25), MOSS (22),
+MISANO (16), AIRMESH (13), the glove and slider lines. The market denominator is the whole query
+market either way, so **every share on this board is a FLOOR** — understated by exactly whatever
+the eleven unmeasured families hold, which is unknown.
+
+That is the same defect class the programme keeps catching, one level up: not a zero that means
+unmeasured, but a *ratio* whose numerator covers 4% of the catalogue while its denominator covers
+all of it. ACR.2.1's "**we are absent** … 0.29%" and ACR.2.7's corrected 0.76% are both
+one-family numbers. The direction of the remaining error is known — understatement — and its size
+is not. **The board now states its own scope in a note** rather than implying an account-wide
+fact from one product's data. *(The family-lens call from the cockpit passes `asins`, so the note
+is suppressed there — it would be telling an operator that a deliberately scoped view is scoped.)*
+
+**A second correction to ACR.2.1, from `updatedAt`.** That entry attributed the residual 1,413
+zero rows to ASIN scope: *"the residual belong to ASINs outside the requested top-10"*. Since
+`ingestSqp` upserts, any row a backfill touched carries a post-fix timestamp whether or not its
+value changed — so the two cases separate cleanly, and they are not what was assumed:
+
+| | rows | meaning |
+|---|---|---|
+| ASINs never re-read since the parser fix | **681** (11 ASINs) | genuinely **UNMEASURED** |
+| zeros on ASINs that *were* re-read | **967** | **genuine zeros** — Amazon reported no impressions |
+
+So the majority of the residual is **not** a scope problem and widening the ASIN set will not
+repair it. Eight of the eleven never-re-read ASINs are more GALE children (`…-BLACK-MEN-M`,
+`…-YELLOW-MEN-L`, `…-YELLOW-MEN-3XL`); the rest are X-Tuta. *`scripts/_acr24-widen-scope.mts`
+prints the exact list, and `_acr24-board-scope.mts` the ratio above.*
+
+**What this means for the widen:** repairing the 11 stale ASINs deepens GALE and still yields no
+control group. The experiment needs a **complete second family**, which is a create-not-repair
+operation — those ASINs have no rows to upsert onto. Priority stays AIREON, and the payoff is now
+larger than the variation question alone: it is the first honest account-level coverage number.
+
 - **2.1** `KeywordCoverageSet` model + authoring (pilot family's shared keywords, ~tens of terms).
 - **2.2** Scoreboard tab fed by ToS-IS + SQP + within-account SOV + `KeywordRank` (manual/CSV ingest to start) + position-weighted score.
 - **2.3** Conflicts tab (surface the two existing endpoints).
