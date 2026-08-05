@@ -337,7 +337,22 @@ Verified on the 10:30 tick: placement writes carry **`mode=live`**, not `local` 
 - **ACR.0.6's own operation names exploded the cardinality they exist to prevent.** Export ids are base64-ish, so both id rules missed them and the first deploy produced six distinct operations in one tick for the same call. The obvious repair is wrong in the other direction: a character class containing `/` swallows whole paths, collapsing `/reporting/reports` to `/:id`. Caught by testing before shipping; now scoped to a single segment containing a digit, with 5 tests covering the paths the greedy version broke.
 
 ### Stage 1 — The Control Room (the rebuild)
-- **1.1** Today tab (status band, One Number, priced exception board, digest, boundary counts). Backend: a `control-room/summary` aggregation endpoint composing existing services; no new write paths.
+- **1.1 / 1.4 ✅ DONE 2026-08-05 — the Today board, and it lands first.** `GET /advertising/control-room/today` + `TodayTab.tsx`. Today is now the Control Room's default tab; Levers is one click away. Rationale: the operator's goal is *not to have to look*, so the tab that says "nothing needs you" — credibly — is the one that should open.
+
+  **Every source was measured on prod before it was written** (`_acr14-today-inventory.mts`, `_acr14-recheck.mts`); candidates with no real rows were not built. Two of the ones I was about to build said something different from what I expected:
+
+  - **The all-out CPC risk is inverted.** The standing note said the ALL-OUT hours were unbounded. Measured: `own-top-allout` is the **only** rank mode carrying a CPC ceiling (€2.00 — set between 08-03 and 08-05). The unbounded modes are the everyday ones: **Rest of Search (825 scheduled windows), Defend Top (660), Own Top of Search (495)**, all `maxCpcCents = null`. Their ACOS caps are not a substitute — an ACOS cap bounds efficiency *after* the spend, not the price of a click. This is the board's only CRITICAL today, and putting it on a live surface is what stops it going stale in a note again. `pause` is exempt: it only drives bids down.
+  - **Two headlines would have described something that is not happening.** 167 ad mutations failed between 07-28 and 08-02 and **none since**; and of 58 pending proposals, **57 arrived in the last 48 hours** while the single "oldest" is a `__ea manual` test row from 2026-06-20. A board that leads with "waiting 46 days" or shouts about a fixed failure is a board an operator learns to scroll past — and then it is worth nothing on the day something real appears. Every window on this board is short enough that a fixed condition clears itself.
+
+  **Two properties, pinned by 9 tests**, because a well-meaning `?? 0` breaks either without failing a typecheck:
+  1. *It can say "nothing needs you."* An empty board renders as a confident empty state.
+  2. *It never prints a confident zero.* Where the € is computable it is shown; where it is not, `amountCents` is null and `amountNote` says what the missing number would have measured. Same rule as ACR.0.5 — a €0 beside a real problem ranks that problem last.
+
+  **Live rows at ship time:** 1 critical · 5 warning · 1 info · headline **€76.20 recoverable across 7 targets** (10+ clicks, zero conversions, 30 days). The others: 58 proposals waiting · 4 enabled campaigns not serving (3 out of budget, 1 incomplete) · 5 ads jobs failed in 24h · 223 of 223 advertised products with no cost price · 82 of 82 allowlisted campaigns with no minimum bid.
+
+  *Detail worth keeping:* **action links were checked against the routes that exist**, not the ones that sound right. `/marketing/ads/search-terms` and `/products/import` do not exist; the real destinations are Recommendations (its Negative Harvesting lane) and `/products/costs`. The pre-push link checker cannot catch these — they are strings returned by the API, not hrefs in a component.
+
+- ~~**1.1** Today tab (status band, One Number, priced exception board, digest, boundary counts).~~ *(shipped above; the digest folds into Foresight rather than duplicating the same rows in past tense)*
 - **1.2** Levers tab (engine rows + drawer with per-rule dials; unified mode vocabulary; per-dimension pins enforced at the gate — one new `CampaignAutomationPin` field-set, additive migration).
 - **1.3** Guardrails tab (bounds grid over existing A1/G2 columns; shared protected-terms panel; account chips).
 - **1.4** Activity tab (changelog embed + why-search + nightly stored audit with diff — new `AdsAuditSnapshot` model, additive).
