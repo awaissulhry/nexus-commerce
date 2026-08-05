@@ -310,6 +310,23 @@ Verified on the 10:30 tick: placement writes carry **`mode=live`**, not `local` 
 - **1.6** Housekeeping: orphan deletion, docblock fix, rail relabel, Ad Manager autonomy column, dark-mode sweep per the decision.
 - *Exit:* every engine visible, bounded, explainable, previewable, and steerable from one page; AutonomyBoard content reachable as drawers; no regression in what the board could do.
 
+### ACR.2.0 — GALE baseline, measured 2026-08-05 (`scripts/_acr2-gale-baseline.mts`, read-only)
+
+**Operator decisions:** pilot family = **GALE**. Objective = **coverage, with hard family spend + ACOS guardrails** — chosen on the evidence rather than deferred: the coverage-vs-profit tension assumes you win enough slots that spreading them between your own ASINs costs something, and at ~1% share that is not the situation. The binding constraint is total visibility, not allocation. Profit mode answers a question already answered (we know how to be efficient; we are not visible).
+
+| Fact | Value |
+|---|---|
+| ENABLED GALE campaigns | **24** (+6 PAUSED, none allowlisted) |
+| 30-day performance | 762,615 impr · 2,939 clicks · **€1,870 spend** · €4,329 sales · 51 orders (**ACOS 43%**, ROAS 2.3×) |
+| Rank governance | 12 campaigns on enabled schedules, all `defaultTargetKey=rest-of-search`, all `lastApplied=own-top` |
+
+**Self-overlap is severe and is the first thing the pilot should address.** `giacca moto` is carried by **8 campaigns across 42 targets**; `giacca moto uomo` by 8 campaigns / 34 targets; ~20 more terms sit on 4+ campaigns each, in every match type at once (BROAD, EXACT, PHRASE, and both legacy `_EXACT`/`_PHRASE` spellings). Many of those campaigns run **€1/day budgets** — so the family is simultaneously fragmented *and* starved, which is the worst combination for learning: no single campaign accumulates enough signal on any term to be decided about.
+
+**🔴 The SQP repair is FORWARD-ONLY — the baseline is not usable yet.** Section 4 returned no rows and section 5 shows 0% on every term, because the **9,232 stored rows are still the zeroed ones**. `parseSqp` is fixed and deployed, but nothing re-reads a report already ingested: `SearchQueryPerformance` is upserted at ingest time, so the corrected mapping only applies to reports fetched from now on. The nightly `sqp-ingest` (03:45, lookback 2 weeks) will write correct rows going forward; the history stays wrong until re-requested.
+*Consequence:* **do not start the pilot against today's share numbers.** Either wait for a few nightly cycles, or re-request the recent weeks per ASIN (each report takes minutes, so a full backfill is hours, not a command). The head-term figures quoted earlier in this document (0.6–1.5%) came from a **live capture**, not from the table, and remain the only trustworthy share data we have.
+
+**Headroom, once the data is real:** the market sizes are large and our presence is small — `accessori moto` 183k impressions, `giacca moto estiva uomo` 110k, `motorradjacke herren` 97k (DE), `dainese` 29k. That is where coverage has somewhere to go.
+
 ### Stage 2 — Coverage measurement (read-only; Analytics stub becomes real)
 - **2.1** `KeywordCoverageSet` model + authoring (pilot family's shared keywords, ~tens of terms).
 - **2.2** Scoreboard tab fed by ToS-IS + SQP + within-account SOV + `KeywordRank` (manual/CSV ingest to start) + position-weighted score.
