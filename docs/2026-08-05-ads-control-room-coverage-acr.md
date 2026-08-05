@@ -327,6 +327,18 @@ Verified on the 10:30 tick: placement writes carry **`mode=live`**, not `local` 
 
 **Headroom, once the data is real:** the market sizes are large and our presence is small — `accessori moto` 183k impressions, `giacca moto estiva uomo` 110k, `motorradjacke herren` 97k (DE), `dainese` 29k. That is where coverage has somewhere to go.
 
+### ACR.2.0b — the consolidation analysis (`scripts/_acr2-gale-consolidate.mts`, read-only, proposes nothing applied)
+
+**103 contested (term × match) pairs** across 383 campaign-term rows in GALE IT alone. Champion rule mirrors `rank-self-competition.ts` exactly (lowest ACOS · unknown ranks worst · ties to higher spend) so the manual and automatic paths cannot disagree.
+
+**The structural finding, and it is the useful one: campaign names do not describe their contents.** `GALE BROAD IT` holds 6 EXACT, 6 BROAD, 6 `_EXACT` and 6 `_PHRASE` targets. `GALE | IT | Broad | Category` holds 28 BROAD **and** 28 `_EXACT`. So "which campaign owns the exact-match version of this term" cannot be answered by reading names, and any consolidation done by name would be wrong. **Both `EXACT` and `_EXACT` spellings coexist inside the same campaign** — one match type, two vocabularies, which is the same class of defect as the rule-tab and SQP bugs found today.
+
+**Two corrections to what the first pass appeared to show — both caught by checking, not by reasoning:**
+- *I nearly reported a CTR collapse.* Individual terms showed 1 click per 2,221 impressions, which reads as catastrophic. At campaign grain over 30 days GALE IT is **CTR 0.345% · CVR 0.96% · CPC €0.53** — an ordinary Amazon SP profile. The per-term figures were a thin 7-day target-grain slice covering only some targets, and were not representative of anything.
+- *The champion selection is not yet trustworthy.* Every GALE IT pair shows €0.00 sales at target grain, so ACOS is null everywhere, every row ties, and the tie-breaker (spend) picks essentially arbitrarily. Account-wide the target grain *does* carry sales (602 rows, €244 spend, €1,351 sales, 17 orders) — GALE IT simply has none inside the 7 days that grain has existed.
+
+**Therefore: consolidation is justified structurally, but not yet term-by-term.** Retiring a keyword on no evidence is precisely the irreversible structural change the research says to keep human and slow. The defensible sequence is (1) let AD_TARGET history reach ~3 weeks, (2) re-run this analysis, (3) act on the subset that has sales evidence, (4) then the coverage ladder — which will be measuring against a structure that can actually accumulate signal.
+
 ### Stage 2 — Coverage measurement (read-only; Analytics stub becomes real)
 - **2.1** `KeywordCoverageSet` model + authoring (pilot family's shared keywords, ~tens of terms).
 - **2.2** Scoreboard tab fed by ToS-IS + SQP + within-account SOV + `KeywordRank` (manual/CSV ingest to start) + position-weighted score.
