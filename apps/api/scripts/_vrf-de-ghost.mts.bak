@@ -1,0 +1,39 @@
+/** READ-ONLY verifier for the "DE grid shows two languages" finding. No writes. */
+const { default: prisma } = await import('../src/db.js')
+
+// 1) eBay ChannelListing rows by region + their aspect keys
+const cls = await prisma.channelListing.findMany({
+  where: { channel: 'EBAY' },
+  select: { id: true, region: true, externalId: true, status: true, categoryId: true, flatFileSnapshot: true, product: { select: { sku: true } } },
+})
+const byRegion = new Map<string, number>()
+for (const c of cls) byRegion.set(c.region ?? 'null', (byRegion.get(c.region ?? 'null') ?? 0) + 1)
+console.log('EBAY ChannelListing by region:', [...byRegion.entries()])
+
+const nonIT = cls.filter((c) => (c.region ?? '').toUpperCase() !== 'IT')
+console.log('\nNON-IT eBay listings:', nonIT.length)
+for (const c of nonIT) {
+  const snap = (c.flatFileSnapshot ?? {}) as Record<string, unknown>
+  const aspects = Object.entries(snap).filter(([k, v]) => k.startsWith('aspect_') && typeof v === 'string' && v.trim() !== '')
+  console.log(` region=${c.region} sku=${c.product?.sku} status=${c.status} cat=${c.categoryId ?? (snap.category_id as string) ?? '?'} itemId=${c.externalId ?? '-'}`)
+  console.log('   aspects:', aspects.map(([k, v]) => `${k}=${String(v).slice(0, 30)}`).join(' | ') || '(none)')
+}
+
+// 2) SharedListingMembership by marketplace
+const sm = await prisma.sharedListingMembership.groupBy({ by: ['marketplace'], _count: { _all: true } }).catch(() => null)
+console.log('\nSharedListingMembership by marketplace:', sm)
+
+// 3) Stored CategorySchema rows for EBAY
+const cs = await prisma.categorySchema.findMany({
+  where: { channel: 'EBAY' },
+  select: { marketplace: true, productType: true, fetchedAt: true, isActive: true, schemaDefinition: true },
+})
+console.log('\nStored EBAY CategorySchema rows:', cs.length)
+for (const s of cs) {
+  const def = (s.schemaDefinition ?? {}) as { aspects?: Array<{ id?: string; label?: string }> }
+  const names = (def.aspects ?? []).slice(0, 12).map((a) => a.id)
+  console.log(` mp=${s.marketplace} cat=${s.productType} active=${s.isActive} fetched=${s.fetchedAt?.toISOString?.()} nAspects=${def.aspects?.length ?? 0}`)
+  console.log('   first ids:', names.join(', '))
+}
+
+await prisma.$disconnect()

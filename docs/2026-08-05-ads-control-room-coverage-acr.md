@@ -453,6 +453,23 @@ And pooled — the honest single number — **0.30% where we bid, 0.265% where w
 
 **4. The blunt summary: we are absent.** Across 588 measured terms and 4.19M impressions in one week, we took **11,968** — **0.29%**. Market purchases on every head term run 4–18 a week; ours are **0**. At a third of a percent of impressions that is arithmetic, not a conversion problem.
 
+### 🔴 ACR.2.7 — CORRECTION: the scoreboard understated every multi-ASIN share by the number of our ASINs on the term
+
+**SQP market columns are QUERY-level totals duplicated identically on every ASIN row.** Verified 2026-08-05: `giacca moto estiva uomo` week 2026-07-19 holds 10 rows, each reading `impressionsTotal = 110,506`, `distinct_totals = 1`. My scoreboard SUMMED them — multiplying the market by our ASIN count and **understating share exactly where coverage is strongest**. Brand columns are per-ASIN counts and were correctly summed; the ground-truth cross-checks (686 for B0BMSH19GY; `accessori moto` 183k in Part 2) all confirm.
+
+**Corrected numbers (IT, week 2026-07-19) — these supersede ACR.2.1's:**
+
+| | published | corrected |
+|---|---|---|
+| Pooled share of page one | 0.29% | **0.76%** |
+| `giacca moto estiva uomo` | 0.19% | **1.88%** (2,078 of 110,506) |
+| `giacca moto uomo` | 0.36% | **2.87%** |
+| `giacca moto` | 0.31% | **2.19%** |
+| `accessori moto` (unbid) | 366,958 mkt | **183,479** |
+| bid vs unbid, pooled | 0.30% vs 0.265% | **1.57% vs 0.41%** |
+
+The bid-vs-unbid contrast is now stark instead of ambiguous: **1.88% vs 0.067% at 100k+, 1.76% vs 0.026% at 25k–100k** — bidding is associated with ~30–70× the share on head terms, and the earlier Simpson's-paradox hedge mostly dissolves. The five recommended gap keywords keep their relevance verdicts and CVRs (ratios cancelled the duplication) but their true weekly volumes are ½–¼ of what was quoted; `accessori moto uomo` (15.3k) and `paraschiena moto livello 2` (15.6k) drop below the 25k gate. Fix: `MAX` for market columns, `SUM` for brand columns, pooled over per-term de-duplicated totals — service + probes.
+
 ### ACR.2.4 — the fourth two-vocabularies defect, and the first one I wrote
 
 **`AdTarget.expressionType` is the MATCH TYPE. It says nothing about negativity — `isNegative` does.** Measured on prod: **1,068 targets are stored as `expressionType = 'EXACT'` with `isNegative = true`**, and only **20 rows in the whole table** use the `NEGATIVE_*` spelling. So the natural-looking `WHERE expressionType NOT LIKE 'NEGATIVE%'` silently includes **2,034 negative keywords**.

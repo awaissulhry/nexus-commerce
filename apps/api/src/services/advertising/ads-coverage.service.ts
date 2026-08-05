@@ -121,10 +121,20 @@ export async function getCoverageScoreboard(args: {
     market_buys: bigint; our_buys: bigint; targets: bigint
   }[]>(`
     SELECT s."searchQuery" AS term,
-           SUM(s."impressionsTotal") AS market_impr,
+           /**
+            * MAX, not SUM. SQP rows are per (term, ASIN) and the market-level columns
+            * (impressionsTotal, clicksTotal, purchasesTotal…) carry the QUERY total duplicated
+            * identically on every ASIN row — verified 2026-08-05: giacca moto estiva uomo holds
+            * 10 rows each reading 110,506, distinct_totals = 1. Summing them multiplied the
+            * market by the number of OUR ASINs on the term, which understated every multi-ASIN
+            * share by that factor (0.19% published where the truth was 1.88%) — and punished
+            * exactly the terms where coverage is strongest. Brand columns are per-ASIN counts,
+            * so those are the ones that SUM.
+            */
+           MAX(s."impressionsTotal") AS market_impr,
            SUM(s."impressionsBrand") AS our_impr,
            COUNT(DISTINCT s.asin) FILTER (WHERE s."impressionsBrand" > 0) AS our_asins,
-           SUM(s."purchasesTotal") AS market_buys,
+           MAX(s."purchasesTotal") AS market_buys,
            SUM(s."purchasesBrand") AS our_buys,
            -- Negativity is isNegative, NOT the match type. Measured 2026-08-05: 1,068 targets
            -- are stored as expressionType 'EXACT' with isNegative = true, and only 20 rows in the
@@ -163,14 +173,20 @@ export async function getCoverageScoreboard(args: {
 
   // Pooled over the WHOLE week, not just the returned page — a total that changes when you
   // change the row limit is not a total.
+  // Pooled the same way: per-term market totals once each (inner MAX), our counts summed.
   const pooled = await prisma.$queryRawUnsafe<{
     terms: bigint; market_impr: bigint; our_impr: bigint; market_buys: bigint; our_buys: bigint
   }[]>(`
-    SELECT COUNT(DISTINCT "searchQuery") AS terms,
-           SUM("impressionsTotal") AS market_impr, SUM("impressionsBrand") AS our_impr,
-           SUM("purchasesTotal") AS market_buys, SUM("purchasesBrand") AS our_buys
-    FROM "SearchQueryPerformance"
-    WHERE marketplace = $1 AND "startDate" = $2::date
+    SELECT COUNT(*) AS terms,
+           SUM(m) AS market_impr, SUM(o) AS our_impr,
+           SUM(mb) AS market_buys, SUM(ob) AS our_buys
+    FROM (
+      SELECT MAX("impressionsTotal") AS m, SUM("impressionsBrand") AS o,
+             MAX("purchasesTotal") AS mb, SUM("purchasesBrand") AS ob
+      FROM "SearchQueryPerformance"
+      WHERE marketplace = $1 AND "startDate" = $2::date
+      GROUP BY "searchQuery"
+    ) x
   `, marketplace, week)
   const t = pooled[0]
   const marketImpr = Number(t?.market_impr ?? 0)

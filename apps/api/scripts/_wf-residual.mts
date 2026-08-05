@@ -1,0 +1,30 @@
+/** READ-ONLY: what is left over from the routing bug — false orphans, and the 27 ex-failing targets. */
+const { default: prisma } = await import('../src/db.js')
+console.log('═══ The 4 orphaned AUTO targets — real or false? ═══')
+const orph = await prisma.adTarget.findMany({ where: { orphanedAt: { not: null } }, select: { id: true, kind: true, expressionType: true, externalTargetId: true, orphanedAt: true, orphanReason: true, status: true, bidCents: true, lastSyncStatus: true, lastSyncError: true, adGroup: { select: { name: true, campaign: { select: { name: true, marketplace: true } } } } } })
+for (const t of orph) {
+  console.log(`  ${t.kind}/${t.expressionType} ext=${t.externalTargetId} · ${t.adGroup?.campaign?.name} / ${t.adGroup?.name}`)
+  console.log(`    orphanedAt=${t.orphanedAt?.toISOString()}  reason="${t.orphanReason}"`)
+  console.log(`    lastSyncStatus=${t.lastSyncStatus} err=${(t.lastSyncError ?? '').replace(/\s+/g,' ').slice(0,150)}`)
+}
+console.log('\n═══ The 27 targets that failed before the fix — where are they now? ═══')
+const failed = await prisma.adMutation.findMany({ where: { state: 'FAILED', entityType: 'AD_TARGET', updatedAt: { gte: new Date(Date.now() - 7 * 864e5) } }, select: { entityId: true }, distinct: ['entityId'] })
+const ids = failed.map((r) => r.entityId)
+const now = await prisma.adTarget.groupBy({ by: ['lastSyncStatus'], where: { id: { in: ids } }, _count: { _all: true } })
+console.log(`  ${ids.length} targets · current lastSyncStatus: ${now.map((r) => `${r.lastSyncStatus ?? 'never'}=${r._count._all}`).join('  ')}`)
+const stillBad = await prisma.adTarget.findMany({ where: { id: { in: ids }, OR: [{ lastSyncStatus: 'FAILED' }, { orphanedAt: { not: null } }] }, select: { kind: true, externalTargetId: true, lastSyncStatus: true, orphanedAt: true, adGroup: { select: { campaign: { select: { name: true } } } } } })
+console.log(`  still FAILED or orphaned: ${stillBad.length}`)
+for (const t of stillBad) console.log(`    ${t.kind} ext=${t.externalTargetId} sync=${t.lastSyncStatus} orphaned=${t.orphanedAt ? 'YES' : 'no'} · ${t.adGroup?.campaign?.name}`)
+
+console.log('\n═══ Dead-lettered queue rows: still there, and would a retry now work? ═══')
+const q = await prisma.outboundSyncQueue.count({ where: { syncStatus: 'FAILED' } })
+const qRecent = await prisma.outboundSyncQueue.count({ where: { syncStatus: 'FAILED', updatedAt: { gte: new Date('2026-08-03T01:00:00Z') } } })
+console.log(`  FAILED rows total: ${q} · updated since the fix: ${qRecent}`)
+
+console.log('\n═══ Anything failing right now, any entity type? ═══')
+const H6 = new Date(Date.now() - 6 * 3600 * 1000)
+const recent = await prisma.adMutation.groupBy({ by: ['state', 'entityType'], where: { updatedAt: { gte: H6 } }, _count: { _all: true } })
+for (const r of recent) console.log(`  last 6h: ${r.state.padEnd(10)} ${r.entityType.padEnd(10)} ${r._count._all}`)
+const recentLog = await prisma.advertisingActionLog.groupBy({ by: ['amazonResponseStatus'], where: { createdAt: { gte: H6 } }, _count: { _all: true } })
+for (const r of recentLog) console.log(`  last 6h actionLog: ${String(r.amazonResponseStatus).padEnd(8)} ${r._count._all}`)
+await prisma.$disconnect()

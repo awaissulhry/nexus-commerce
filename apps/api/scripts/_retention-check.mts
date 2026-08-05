@@ -1,0 +1,6 @@
+const { default: prisma } = await import('../src/db.js')
+const p = await (prisma as any).dataRetentionPolicy.findFirst()
+console.log('DataRetentionPolicy row:', p ? JSON.stringify(p) : 'NONE — sweep is a no-op, WebhookEvent grows unbounded')
+const runs = await prisma.cronRun.findMany({ where: { jobName: { contains: 'retention' } }, orderBy: { startedAt: 'desc' }, take: 3, select: { jobName: true, startedAt: true, status: true, outputSummary: true } })
+for (const r of runs) console.log(`${r.startedAt.toISOString()} ${r.jobName} ${r.status} ${String(r.outputSummary ?? '').slice(0,120)}`)
+await prisma.$disconnect()

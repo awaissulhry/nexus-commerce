@@ -26,6 +26,7 @@
 import prisma from '../../db.js'
 import { getAutomationState } from './ads-automation-state.service.js'
 import { getCoverageScoreboard } from './ads-coverage.service.js'
+import { pricePendingProposals } from './ads-proposal-pricing.service.js'
 
 export type Severity = 'critical' | 'warning' | 'info'
 
@@ -124,6 +125,7 @@ export async function getTodayBoard(): Promise<TodayBoard> {
   const since24h = new Date(now.getTime() - DAY)
 
   const [
+    proposals,
     coverage,
     waste,
     unbounded,
@@ -141,6 +143,8 @@ export async function getTodayBoard(): Promise<TodayBoard> {
     allowlisted,
     withoutFloor,
   ] = await Promise.all([
+    // ACR.5 — priced, so the row is a decision rather than a count. Fails soft like the rest.
+    pricePendingProposals(5).catch(() => null),
     // ACR.2.6 — the coverage board's most actionable fact belongs here too. Fails soft: Today
     // must still render if SQP is unavailable, because every other row on it is unrelated.
     getCoverageScoreboard({ marketplace: 'IT', limit: 200 }).catch(() => null),
@@ -259,17 +263,33 @@ export async function getTodayBoard(): Promise<TodayBoard> {
 
   // ── Proposals waiting on a human ──────────────────────────────────────
   if (pending > 0) {
+    /**
+     * ACR.5 — priced. An undifferentiated list of 150 is rationally ignored, because nothing
+     * distinguishes the proposal covering €400 of dead spend from the one covering 30 cents.
+     *
+     * The headline € is the RECOVERABLE part only — trailing spend on targets that produced no
+     * sales at all. The wider "spend at stake" figure includes bid-downs on keywords that ARE
+     * selling, and those are trades rather than savings; leading with that number would make
+     * cutting a winner look like the best idea on the board.
+     */
+    const recoverable = proposals?.recoverableCents ?? 0
+    const atStake = proposals?.spendAtStakeCents ?? 0
     ex.push({
       key: 'decisions-waiting',
-      severity: pendingOld > 0 ? 'warning' : 'info',
+      severity: recoverable >= 10_000 || pendingOld > 0 ? 'warning' : 'info',
       title: `${pending} proposal${pending === 1 ? '' : 's'} waiting for you`,
       detail:
         `Rules in PROPOSE mode queue their changes instead of applying them. ${pending - pendingOld} arrived recently; ` +
         `${pendingOld === 0 ? 'none are' : `${pendingOld} ${pendingOld === 1 ? 'is' : 'are'}`} older than a week. ` +
-        `Nothing here has been applied, so whatever they were reacting to is still true.`,
+        (proposals && proposals.priced > 0
+          ? `${proposals.priced} of them resolve to a keyword with 30 days of history, covering €${(atStake / 100).toFixed(0)} of trailing spend. ` +
+            'Nothing here has been applied, so whatever they were reacting to is still true.'
+          : 'Nothing here has been applied, so whatever they were reacting to is still true.'),
       count: pending,
-      amountCents: null,
-      amountNote: 'Proposals carry no € estimate yet',
+      amountCents: recoverable > 0 ? recoverable : null,
+      amountNote: recoverable > 0
+        ? 'trailing spend on keywords that produced no sales — the part that is pure recovery'
+        : 'no priced proposal covers spend that produced nothing',
       action: { label: 'Review proposals', href: '/marketing/ads/suggestions' },
       since: iso(pendingOldest?.createdAt),
     })

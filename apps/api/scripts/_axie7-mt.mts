@@ -1,0 +1,5 @@
+const { default: p } = await import('../src/db.js')
+const ids = process.argv.slice(2)
+const t = await p.adTarget.findMany({ where: { externalTargetId: { in: ids } }, select: { externalTargetId: true, expressionValue: true, expressionType: true, bidCents: true } })
+for (const x of t) console.log(`DB   ${x.externalTargetId} "${x.expressionValue}" type=${x.expressionType} bid=${x.bidCents}c`)
+await p.$disconnect()

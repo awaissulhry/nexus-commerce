@@ -1,0 +1,10 @@
+/** READ-ONLY: did the sweep's writes land? (independent of the hung process) */
+const { default: prisma } = await import('../src/db.js')
+const t30 = new Date(Date.now() - 40 * 60_000)
+const stamped = await prisma.sharedListingMembership.count({ where: { lastError: { startsWith: 'readback:' }, updatedAt: { gte: t30 } } })
+const healRows = await prisma.outboundSyncQueue.count({ where: { targetChannel: 'EBAY', syncType: 'QUANTITY_UPDATE', createdAt: { gte: t30 } } })
+const healPending = await prisma.outboundSyncQueue.count({ where: { targetChannel: 'EBAY', syncType: 'QUANTITY_UPDATE', createdAt: { gte: t30 }, isDead: false, syncStatus: { in: ['PENDING', 'IN_PROGRESS', 'FAILED'] } } })
+const resolved = await prisma.syncHealthLog.count({ where: { channel: 'EBAY', conflictType: 'CHANNEL_QTY_READBACK', resolutionStatus: 'RESOLVED', resolvedAt: { gte: t30 } } })
+const open = await prisma.syncHealthLog.count({ where: { channel: 'EBAY', conflictType: 'CHANNEL_QTY_READBACK', resolutionStatus: 'UNRESOLVED' } })
+console.log(`stamped40m=${stamped} healRowsCreated40m=${healRows} healStillQueued=${healPending} resolved40m=${resolved} openLogs=${open}`)
+await prisma.$disconnect()

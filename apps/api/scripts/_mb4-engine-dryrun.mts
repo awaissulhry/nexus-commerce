@@ -1,0 +1,11 @@
+/** READ-ONLY: the REAL rank-defend loop in dryRun (write:false). Exercises decideAndMaybeApply. */
+const { runRankDefendOnce } = await import('../src/jobs/ad-rank-defend.job.js')
+const r = await runRankDefendOnce({ dryRun: true })
+console.log(`\nevaluated=${r.evaluated} applied=${r.applied} (dryRun → applied must be 0)\n`)
+const capped = r.decisions.filter((d) => /CPC ceiling/.test(d.reason))
+console.log(`decisions mentioning the CPC ceiling: ${capped.length}/${r.decisions.length}`)
+for (const d of capped) console.log(`  ${d.campaignName?.padEnd(34).slice(0,34)} ${d.targetKey.padEnd(15)} ${d.action.padEnd(6)} ${d.currentPct}→${d.nextPct}%  ${d.reason}`)
+console.log('\n— a sample of the rest —')
+for (const d of r.decisions.filter((d) => !/CPC ceiling/.test(d.reason)).slice(0, 6)) console.log(`  ${d.campaignName?.padEnd(34).slice(0,34)} ${d.targetKey.padEnd(15)} ${d.action.padEnd(6)} ${d.currentPct}→${d.nextPct}%  ${d.reason.slice(0,90)}`)
+const { default: prisma } = await import('../src/db.js')
+await prisma.$disconnect()

@@ -1,0 +1,6 @@
+const { default: prisma } = await import('/Users/awais/nexus-commerce/apps/api/src/db.js')
+const kids = await prisma.product.findMany({ where: { parent: { sku: 'WATERPROOF-OVERJACKET-BLACK-MEN' } }, select: { sku: true, id: true } })
+const lv = await prisma.stockLevel.findMany({ where: { productId: { in: kids.map(k=>k.id) }, location: { type: 'WAREHOUSE' } }, select: { productId: true, available: true } })
+const m = new Map(lv.map(l=>[l.productId,l.available]))
+for (const k of kids) console.log(k.sku, m.get(k.id) ?? 0)
+await prisma.$disconnect()

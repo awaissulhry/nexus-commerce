@@ -1,0 +1,5 @@
+const { default: p } = await import('../src/db.js')
+const c = await p.campaign.findMany({ where: { name: { in: ['AIR MESH BROAD','AIR MESH EXACT','AIR MESH PHRASE'] } }, select: { name: true, dailyBudget: true }, orderBy: { name: 'asc' } })
+const t = await p.adTarget.findMany({ where: { expressionValue: { in: ['giacca da moto','giacca moto uomo'] }, isNegative: false }, select: { expressionValue: true, bidCents: true }, orderBy: { expressionValue: 'asc' }, take: 4 })
+console.log('STATE ' + c.map(x=>`${x.name}=${x.dailyBudget}`).join(' ') + ' | ' + t.map(x=>`${x.expressionValue}=${x.bidCents}c`).join(' '))
+await p.$disconnect()

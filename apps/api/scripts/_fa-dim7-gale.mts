@@ -1,0 +1,11 @@
+const { default: prisma } = await import('../src/db.js')
+const p = await prisma.product.findFirst({ where: { sku: 'GALE-JACKET' }, select: { id: true, sku: true, parentId: true, totalStock: true, fulfillmentMethod: true } })
+console.log('GALE-JACKET', JSON.stringify(p))
+const lv = await prisma.stockLevel.findMany({ where: { productId: p!.id }, select: { quantity: true, available: true, location: { select: { code: true, type: true } } } })
+console.log('ledger', JSON.stringify(lv))
+const q = await prisma.outboundSyncQueue.findMany({ where: { productId: p!.id, syncType: 'QUANTITY_UPDATE' }, select: { createdAt: true, syncStatus: true, payload: true, externalListingId: true }, orderBy: { createdAt: 'desc' }, take: 5 })
+console.log('recent pushes', JSON.stringify(q, null, 1))
+// which SC row would exist for item 257584954808?
+const mem = await prisma.sharedListingMembership.count({ where: { itemId: '257584954808', status: 'ACTIVE' } })
+console.log('ACTIVE memberships on item 257584954808:', mem)
+await prisma.$disconnect()

@@ -1,0 +1,5 @@
+const { default: prisma } = await import('../src/db.js')
+const blanks = await prisma.sharedListingMembership.count({ where: { status: 'ACTIVE', itemId: '' } })
+const total = await prisma.sharedListingMembership.count({ where: { status: 'ACTIVE' } })
+console.log('ACTIVE memberships with EMPTY itemId:', blanks, 'of', total)
+await prisma.$disconnect()

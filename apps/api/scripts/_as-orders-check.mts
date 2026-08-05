@@ -1,0 +1,13 @@
+/** READ-ONLY: eBay orders ingest + trading readback + watchdog after final deploy. */
+const { default: prisma } = await import('../src/db.js')
+const eo = await prisma.cronRun.findMany({ where: { jobName: 'ebay-orders-sync' }, orderBy: { startedAt: 'desc' }, take: 4, select: { startedAt: true, outputSummary: true } })
+console.log('== ebay-orders-sync ==')
+for (const r of eo) console.log(`  ${r.startedAt.toISOString().slice(11, 19)} ${(r.outputSummary ?? '').slice(0, 160)}`)
+const orders = await prisma.order.findMany({ where: { channel: 'EBAY' }, orderBy: { createdAt: 'desc' }, take: 6, select: { channelOrderId: true, status: true, totalPrice: true, currencyCode: true, purchaseDate: true, createdAt: true, items: { select: { sku: true, quantity: true } } } })
+console.log(`== EBAY orders in DB: ${orders.length ? '' : 'NONE'} ==`)
+for (const o of orders) console.log(`  ${o.channelOrderId} ${o.status} €${o.totalPrice} ${o.currencyCode} purchased=${o.purchaseDate?.toISOString().slice(0, 16)} items=${o.items.map((i) => `${i.sku}x${i.quantity}`).join(',')}`)
+const rb = await prisma.cronRun.findMany({ where: { jobName: 'ebay-readback' }, orderBy: { startedAt: 'desc' }, take: 2, select: { startedAt: true, outputSummary: true, errorMessage: true } })
+console.log('== ebay-readback ==')
+for (const r of rb) console.log(`  ${r.startedAt.toISOString().slice(11, 19)} ${(r.outputSummary ?? r.errorMessage ?? '').slice(0, 200)}`)
+await prisma.$disconnect()
+process.exit(0)
