@@ -68,4 +68,37 @@ describe('pickChampion', () => {
   it('empty input is safe', () => {
     expect(pickChampion([]).championId).toBe('')
   })
+
+  // ACR.4 — the property that matters more than any individual case: this function ADVISES a
+  // retirement while rank-self-competition ACTS on the same contest every 15 minutes. Where the
+  // engine has an opinion, this must reach the same one, or an operator retires the campaign the
+  // engine is promoting. Measured before the fix: they disagreed on 83 of 183 live contests.
+  it('never contradicts the engine when the engine has an opinion', () => {
+    const cases: Contender[][] = [
+      // engine decides on ACOS
+      [C({ campaignId: 'lo', acos: 0.2, spendCents: 100, orders: 1, clicks: 5, salesCents: 500 }),
+       C({ campaignId: 'hi', acos: 0.6, spendCents: 9999, orders: 1, clicks: 5, salesCents: 500 })],
+      // engine decides on spend (both unproven)
+      [C({ campaignId: 'big', spendCents: 5000, impressions: 1 }),
+       C({ campaignId: 'small', spendCents: 10, impressions: 90000 })],
+      // engine decides on spend, one has an ACOS
+      [C({ campaignId: 'proven', acos: 0.4, orders: 2, clicks: 9, spendCents: 10, salesCents: 25 }),
+       C({ campaignId: 'unproven', spendCents: 99999, impressions: 99999 })],
+    ]
+    for (const contenders of cases) {
+      const rankKey = (c: Contender): [number, number] => [c.acos ?? Number.POSITIVE_INFINITY, -c.spendCents]
+      const engineWinner = [...contenders].sort((a, b) => {
+        const ra = rankKey(a), rb = rankKey(b)
+        return ra[0] - rb[0] || ra[1] - rb[1]
+      })[0]!.campaignId
+      expect(pickChampion(contenders).championId).toBe(engineWinner)
+    }
+  })
+
+  it('still discriminates where the engine is tied — that is the whole reason it exists', () => {
+    // Identical to the engine (no acos, no spend), so RD.6 would pick arbitrarily.
+    const quiet = C({ campaignId: 'quiet', impressions: 40 })
+    const loud = C({ campaignId: 'loud', impressions: 9000 })
+    expect(pickChampion([quiet, loud]).championId).toBe('loud')
+  })
 })

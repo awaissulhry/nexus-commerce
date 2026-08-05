@@ -20,7 +20,7 @@
 import prisma from '../../db.js'
 import { getCachedReferralResolver } from '../amazon-real-fees.service.js'
 import { logger } from '../../utils/logger.js'
-import { coverageWithCost, marginOrUnknown, profitOrUnknown } from './profit-coverage.js'
+import { coverageWithCost, estimateCogsCents, marginOrUnknown, profitOrUnknown } from './profit-coverage.js'
 
 interface RollupSummary {
   datesProcessed: string[]
@@ -31,7 +31,10 @@ interface RollupSummary {
 }
 
 interface CoverageFlags {
+  /** A REAL cost price, from Product.costPrice or a non-zero weighted average. Never the estimate. */
   hasCostPrice: boolean
+  /** ACR.4 — cogsCents came from the operator's interim estimate, not from data. */
+  costEstimated?: boolean
   hasReferralFee: boolean
   hasFbaFee: boolean
   hasAdSpend: boolean
@@ -164,6 +167,7 @@ async function upsertRow(args: {
   )
   const marginPct = marginOrUnknown(trueProfit, args.grossRevenueCents)
   const coverage = coverageWithCost(args.coverage, args, {
+    costEstimated: args.coverage.costEstimated === true,
     hasReferralFee: args.coverage.hasReferralFee,
     hasFbaFee: args.coverage.hasFbaFee,
     hasAdSpend: args.coverage.hasAdSpend,
@@ -241,7 +245,18 @@ export async function runTrueProfitRollupOnce(
     try {
       const sales = await aggregateSalesForDay(day)
       for (const sale of sales) {
-        const cogsPerUnitCents = await lookupCostPrice(sale.productId)
+        const realCogsPerUnitCents = await lookupCostPrice(sale.productId)
+        /**
+         * ACR.4 — fall back to the operator's interim estimate, anchored to what this product
+         * actually sold for TODAY rather than to a catalogue price, so a discounted or clearance
+         * day is estimated at its own economics. `estimateCogsCents` caps it below the price;
+         * see profit-coverage.ts for why a flat figure was measured to be harmful here.
+         */
+        const unitPriceCents = sale.unitsSold > 0
+          ? Math.round(sale.grossRevenueCents / sale.unitsSold)
+          : null
+        const estimated = realCogsPerUnitCents == null ? estimateCogsCents(unitPriceCents) : null
+        const cogsPerUnitCents = realCogsPerUnitCents ?? estimated
         const referralPct = await lookupReferralFeePct(sale.productId, sale.marketplace)
         const cogsCents =
           cogsPerUnitCents != null ? cogsPerUnitCents * sale.unitsSold : 0
@@ -259,7 +274,11 @@ export async function runTrueProfitRollupOnce(
           cogsCents,
           referralFeesCents,
           coverage: {
-            hasCostPrice: cogsPerUnitCents != null,
+            // Only a REAL cost sets this. An estimate is marked separately so no surface and no
+            // bid decision can mistake the two — the whole point of ACR.0.5 was that a number
+            // meaning "we guessed" must not render as one meaning "we measured".
+            hasCostPrice: realCogsPerUnitCents != null,
+            costEstimated: estimated != null,
             hasReferralFee: referralPct != null,
             // AD.1 doesn't wire FBA fees or ad spend yet; those flags
             // flip true in AD.2's metrics-ingest + financial-events

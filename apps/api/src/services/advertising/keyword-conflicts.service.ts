@@ -53,41 +53,57 @@ export function tosBiasOf(dynamicBidding: unknown): number {
 }
 
 /**
- * Pick the contender that should OWN a contested keyword. Efficiency first: among
- * those that actually convert, lowest ACOS wins; then most orders; then — if no
- * one has sold yet — the most-established (impressions) or, with no traffic at
- * all, the strongest intent (highest bid). Pure + deterministic for tests.
+ * Pick the contender that should OWN a contested keyword.
+ *
+ * ── ACR.4: aligned to the engine, 2026-08-05 ────────────────────────────────────────────────
+ * This function ADVISES an operator to retire a campaign's claim on a keyword. `RD.6`
+ * `detectSelfCompetition` DECIDES the same contest every 15 minutes and acts on it. They used
+ * different ladders, and measured on prod they named different winners on **83 of 183 contested
+ * keywords (45%)** — so an operator retiring the "loser" shown here could be retiring the
+ * campaign the engine was actively promoting.
+ *
+ * The fix is not to swap this for the engine's rule wholesale: the engine ranks on
+ * `[acos ?? +∞, −spend]` alone, which leaves every unproven keyword tied and gives an operator
+ * nothing to read. Instead the engine's ordering is PRIMARY and this function's extra signals
+ * only break what the engine leaves tied. The result cannot contradict the engine — wherever
+ * the engine has an opinion it wins — while still discriminating where the engine shrugs.
+ *
+ * Ladder, in order:
+ *   1. lowest ACOS   (engine primary; unknown ACOS ranks worst)
+ *   2. higher spend  (engine tie-break; more proven)
+ *   3. more impressions, then more clicks   ← only reached when the engine is tied
+ *   4. higher bid                            ← only when there is no traffic at all
+ *
+ * Pure + deterministic for tests.
  */
 export function pickChampion(contenders: Contender[]): { championId: string; reason: string } {
   if (contenders.length === 0) return { championId: '', reason: '' }
 
-  const withSales = contenders.filter((c) => c.orders > 0)
-  if (withSales.length > 0) {
-    // Trust ACOS only where there's enough click signal; otherwise fall back to it
-    // anyway (an order is an order) but prefer the click-backed ones.
-    const trusted = withSales.filter((c) => c.clicks >= MIN_CLICKS)
-    const pool = trusted.length > 0 ? trusted : withSales
-    const best = [...pool].sort((a, b) => {
-      const aa = a.acos ?? Infinity
-      const ba = b.acos ?? Infinity
-      if (aa !== ba) return aa - ba
-      if (b.orders !== a.orders) return b.orders - a.orders
-      return a.bidCents - b.bidCents
-    })[0]!
-    const pct = best.acos != null ? `${Math.round(best.acos * 100)}%` : '—'
-    return { championId: best.campaignId, reason: `best ACOS ${pct}` }
-  }
+  const sorted = [...contenders].sort((a, b) => {
+    // 1-2: exactly rank-self-competition.ts's rankKey. Do not reorder these two.
+    const aa = a.acos ?? Number.POSITIVE_INFINITY
+    const ba = b.acos ?? Number.POSITIVE_INFINITY
+    if (aa !== ba) return aa - ba
+    if (a.spendCents !== b.spendCents) return b.spendCents - a.spendCents
+    // 3-4: the engine is indifferent from here, so this is free to be more useful.
+    if (a.impressions !== b.impressions) return b.impressions - a.impressions
+    if (a.clicks !== b.clicks) return b.clicks - a.clicks
+    return b.bidCents - a.bidCents
+  })
+  const best = sorted[0]!
 
-  const withClicks = contenders.filter((c) => c.clicks > 0)
-  if (withClicks.length > 0) {
-    // Nobody has sold; keep the most-established (impressions) and step the rest
-    // down so we stop paying twice for an unproven keyword.
-    const best = [...withClicks].sort((a, b) => b.impressions - a.impressions || b.clicks - a.clicks)[0]!
-    return { championId: best.campaignId, reason: 'most traffic, no sales yet' }
+  // The reason describes what actually decided it, so an operator can see how thin the
+  // evidence is. MIN_CLICKS still governs whether an ACOS is worth quoting as a reason.
+  if (best.acos != null && best.orders > 0) {
+    const pct = `${Math.round(best.acos * 100)}%`
+    return {
+      championId: best.campaignId,
+      reason: best.clicks >= MIN_CLICKS ? `best ACOS ${pct}` : `best ACOS ${pct} (thin: ${best.clicks} clicks)`,
+    }
   }
-
-  const best = [...contenders].sort((a, b) => b.bidCents - a.bidCents)[0]!
-  return { championId: best.campaignId, reason: 'highest bid' }
+  if (contenders.some((c) => c.spendCents > 0)) return { championId: best.campaignId, reason: 'most spend, no sales yet' }
+  if (contenders.some((c) => c.impressions > 0)) return { championId: best.campaignId, reason: 'most traffic, no sales yet' }
+  return { championId: best.campaignId, reason: 'highest bid, no traffic yet' }
 }
 
 // ── Prisma-backed detection ────────────────────────────────────────────────

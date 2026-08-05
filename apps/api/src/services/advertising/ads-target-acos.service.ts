@@ -73,7 +73,7 @@ export interface TargetAcosResult {
   marketplace: string | null
   windowDays: number
   dataPoints: number
-  basis: 'profit-data' | 'fallback'
+  basis: 'profit-data' | 'estimated-cost' | 'fallback'
   // Fractions (0..1+). targetAcos is always set (fallback when no data).
   breakevenAcos: number | null
   targetAcos: number
@@ -137,10 +137,35 @@ export async function computeProductTargetAcos(opts: {
    * A missing cost belongs in the same branch as missing data: fall back and say so.
    */
   const costMissing = !costIsKnown({ grossRevenueCents: gross, cogsCents: s.cogsCents ?? 0 })
-  if (dataPoints === 0 || gross <= 0 || costMissing) {
+
+  /**
+   * ACR.4 — an ESTIMATED cost must not set a bid target.
+   *
+   * The operator's interim €50 makes the profit surfaces useful, but it is a guess, and this
+   * function is the one place a cost turns into money: callers act only on `basis: 'profit-data'`.
+   * Measured before shipping it — against a catalogue running €21.98–€399.95 and an account
+   * currently at 38% actual ACOS, the estimate implies targets of 11–29%, so trusting it here
+   * would cut bids across the board. That is the opposite of the coverage it exists to support.
+   *
+   * So estimated rows take the documented fallback and say `estimated-cost` rather than
+   * `fallback`, which lets a caller opt in later without this function having to guess for them.
+   * The moment a real cost lands the row stops being estimated and the target becomes live.
+   */
+  const rowsWithEstimate = await prisma.productProfitDaily.count({
+    where: {
+      productId: opts.productId,
+      ...(opts.marketplace ? { marketplace: opts.marketplace } : {}),
+      date: { gte: since },
+      coverage: { path: ['costEstimated'], equals: true },
+    },
+  }).catch(() => 0)
+  const costIsEstimate = rowsWithEstimate > 0 && rowsWithEstimate >= dataPoints
+
+  if (dataPoints === 0 || gross <= 0 || costMissing || costIsEstimate) {
     return {
       productId: opts.productId, marketplace: opts.marketplace ?? null, windowDays, dataPoints,
-      basis: 'fallback', breakevenAcos: null, targetAcos: FALLBACK_TARGET_ACOS,
+      basis: costIsEstimate && !costMissing ? 'estimated-cost' : 'fallback',
+      breakevenAcos: null, targetAcos: FALLBACK_TARGET_ACOS,
       marginPct: null, tacos: null, tacop: null,
       grossRevenueCents: gross, adSpendCents: adSpend, trueProfitCents: trueProfit,
     }
