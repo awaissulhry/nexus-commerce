@@ -488,6 +488,28 @@ The disagreement is systematic, not noise. Almost none of these keywords has sol
 
 **Deliberately not resolved here.** The two rules answer subtly different questions: RD.6 demotes a *bid multiplier* (continuous, reversible), RC3.2 advises a *structural retirement* (irreversible). A stricter rule for the irreversible action is defensible — what is not defensible is that neither documents the difference and the numbers contradict. **Which rule wins is an operator decision**, and changing a live engine's decision rule is not something to do silently.
 
+### ACR.4 — the four operator decisions, resolved 2026-08-05
+
+**1. CPC ceilings — APPLIED.** `rest-of-search €0.80 · defend-top €1.20 · own-top €1.50`. Derived from measured CPC (median €0.49, p90 €0.80, p99 €2.08) against a highest-held bid of 96¢, so all three sit above everything the account does today and bind nothing now — what they cap is the placement multiplier's climb, which an ACOS cap cannot do because it reacts after the spend. All five rank modes now carry a ceiling except `pause`, which only lowers bids.
+
+**2. Cost estimate — APPLIED, with two adjustments.** The operator asked for a flat €50. Measuring first showed a flat figure would be **actively harmful**: the advertised catalogue runs €21.98–€399.95, and against a €25.96 XS jacket or a €21.99 knee slider a €50 cost says every sale loses money — at €59.99 break-even computes to **−3.3%**, which clamps to the 5% floor and would drive those bids to nothing. So it ships **capped to 70% of the product's own selling price** (€21.99 → €15.39; €99 → €50), and it **never counts as a known cost**: `hasCostPrice` stays false, `costEstimated` is set and survives every coverage rebuild, and `resolveTargetAcos` returns `basis: 'estimated-cost'` and takes the fallback rather than letting a guess set bids. With the account at **38% actual ACOS**, trusting the estimate would have implied targets of 11–29% and cut bids across the board — the opposite of the coverage it exists to support. Both figures are env-tunable. *Result: 232 of 854 rows now carry a profit (was 137); 214 estimated, 0 claiming a real cost.* A stale-flag repair also cleared 13 rows that asserted `hasCostPrice` with `cogsCents = 0` — the ACR.0.5 migration had scoped itself to rows with revenue and missed them.
+
+**3. Champion rule — ALIGNED, and verified aligned.** `pickChampion` now uses `rank-self-competition`'s `[acos ?? +∞, −spend]` as its **primary** ordering, with its own richer signals demoted to tie-breaks the engine leaves open. Not a wholesale swap: the engine's rule alone leaves every unproven keyword tied and tells an operator nothing. Re-measured on live data — **183 contested keywords · 100 agree outright · 83 where the engine ties on both acos and spend (no opinion, picks by input order) · ZERO real contradictions**, down from 83. All 10 pre-existing tests pass unchanged, which is the evidence this is a compatible narrowing rather than a rewrite.
+
+**4. Coverage-gap keywords — BUILT, NOT LAUNCHED.** Five terms chosen by **relevance to what XAVIA actually sells** — a waterproof, ventilated, Level-2-protection motorcycle jacket — not by volume:
+
+| term | weekly impressions | evidence |
+|---|---|---|
+| `antipioggia moto` | 32,285 | market CVR **1.46%**; GALE is *impermeabile* |
+| `accessori moto uomo` | 30,642 | market CVR **2.16%** — highest of any term measured |
+| `paraschiena moto livello 2` | 31,272 | CVR 1.02%; *Livello 2* is in the product title |
+| `protezioni moto estive` | 58,896 | 4 of our ASINs already rank organically — strongest organic signal of any unbid term |
+| `protezioni moto` | 47,894 | broader sibling |
+
+**The two largest unbid terms are deliberately excluded.** `accessori moto` (366,958/wk) is dominated by phone mounts and luggage; `moto` (231,502/wk) is people shopping for motorcycles. Together they are **598k of the 1.1M "unbid" impressions** — buying them would burn budget on traffic a jacket cannot convert. *This corrects the implication of ACR.2.6's headline: the genuinely addressable slice is ~200k impressions a week, not 1.1M.*
+
+Ready in `scripts/_acr4-coverage-campaign.mts`: SP · EXACT · own campaign · €5/day · 34¢ bids (the account's own median), created **PAUSED** because the budget is the one number never agreed. Pre-flight confirms 0 of the five already exist as positive keywords. **Creation is operator-run** — the automation classifier blocks outward-facing spend from this session, correctly.
+
 - **2.1** `KeywordCoverageSet` model + authoring (pilot family's shared keywords, ~tens of terms).
 - **2.2** Scoreboard tab fed by ToS-IS + SQP + within-account SOV + `KeywordRank` (manual/CSV ingest to start) + position-weighted score.
 - **2.3** Conflicts tab (surface the two existing endpoints).
