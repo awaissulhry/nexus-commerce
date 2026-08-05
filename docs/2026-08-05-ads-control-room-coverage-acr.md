@@ -890,6 +890,30 @@ against the whole query market; ToS-IS is our share of the top-of-search auction
 *eligible for*. A low share with a high ToS-IS means we win the slots we contest and contest
 very few.
 
+**✅ AND THE REAL NIGHTLY PATH, not a hand-rolled equivalent.** The proof above called
+`ingestTopOfSearchIS()` directly (IT-only, 30 days). The cron calls `runTosIsIngestCron()` →
+`recordCronRun()` → all nine profiles at `windowDays: 7`, and it is the **wrapper** that decides
+SUCCESS vs FAILED — the exact classification that recorded nine-of-nine failures as green for
+twelve nights. Run through that entry point on 2026-08-05:
+
+```
+status      SUCCESS
+triggeredBy cron
+summary     profiles=9 rowsFetched=540 withIS=407 rowsUpdated=256 errors=0
+ToS-IS rows across all markets: 497 → 561
+```
+
+**`errors=0`, against `errors=9` on each of the previous twelve nights.** Nine reports
+downloaded and decoded. Note the five profiles with no campaigns return zero rows *without*
+erroring, so ACR.2.3's wasted-report finding concerns the gapfill job, not this one.
+
+**Blast radius — bounded, and checked rather than assumed.** `fetchReport` has exactly two
+callers: this job, and `ads-metrics-ingest` (campaigns/adGroups/keywords/productAds), which was
+**retired in H.2e on 2026-05-18** (`cron-registry.ts:85`) and is not scheduled. Every other
+report path goes through `sp-api-reports.service.ts`, which uses the SP-API SDK's
+`getReportDocument` and handles decompression itself. So the defect repaired exactly one job and
+there is no second silent victim.
+
 *Both fixes are in `ads-api-client.ts` (`7f4463609`), committed together with another session's
 SB/SD create paths because they could not be separated.*
 
