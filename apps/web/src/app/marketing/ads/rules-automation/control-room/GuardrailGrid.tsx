@@ -42,6 +42,12 @@ interface Row {
   maxBidCents: number | null
   dailyBudgetCents: number | null
   targetAcosPct: number | null
+  /**
+   * ADX — a multiple of the target's HISTORICAL CPC, not an absolute cap. It is the third
+   * bid guardrail and the one that does nothing for a keyword with no history, which is why
+   * the absolute min/max columns exist beside it rather than instead of it.
+   */
+  cpcCeiling: { enabled: boolean; multiple: number } | null
   suppressedAt: string | null
   suppressedBy: string | null
   pins: { placement: boolean; bids: boolean; budget: boolean }
@@ -140,6 +146,36 @@ export function GuardrailGrid() {
       // Put the stored value back in the box: leaving the rejected number on screen would
       // read as saved.
       setDraft((d) => ({ ...d, [`${row.id}:min`]: cents(row.minBidCents), [`${row.id}:max`]: cents(row.maxBidCents) }))
+    } finally { setSaving(null) }
+  }
+
+  /**
+   * The CPC ceiling through its own long-standing endpoint. Empty box = disabled, which is
+   * why this sends `enabled:false` rather than omitting the field: the stored shape is
+   * `{enabled, multiple}` and leaving `enabled` true with no multiple would keep a ceiling
+   * running at the server's 1.5 default that the operator believes they just cleared.
+   */
+  const saveCpcCeiling = async (row: Row, multiple: number | null) => {
+    const cur = row.cpcCeiling
+    if ((cur?.enabled ? cur.multiple : null) === multiple) return
+    setSaving(row.id)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${row.id}/cpc-ceiling`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(multiple == null ? { enabled: false } : { enabled: true, multiple }),
+      })
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string }
+      if (!r.ok || j.ok === false) throw new Error(j.error ?? `HTTP ${r.status}`)
+      setG((s) => s && {
+        ...s,
+        rows: s.rows.map((x) => (x.id === row.id
+          ? { ...x, cpcCeiling: multiple == null ? null : { enabled: true, multiple } }
+          : x)),
+      })
+      say(multiple == null ? `CPC ceiling cleared · ${row.name}` : `CPC ceiling → ${multiple}× · ${row.name}`)
+    } catch (e) {
+      say(`Refused · ${(e as Error).message}`)
+      setDraft((d) => ({ ...d, [`${row.id}:cpc`]: cur?.enabled ? String(cur.multiple) : '' }))
     } finally { setSaving(null) }
   }
 
@@ -328,6 +364,40 @@ export function GuardrailGrid() {
     )
   }
 
+  /** Same commit-on-blur contract as the bid boxes; the server clamps to 1–10. */
+  const cpcBox = (row: Row) => {
+    const key = `${row.id}:cpc`
+    const stored = row.cpcCeiling?.enabled ? String(row.cpcCeiling.multiple) : ''
+    const value = draft[key] ?? stored
+    const commit = () => {
+      if (draft[key] === undefined) return
+      const raw = (draft[key] ?? '').trim()
+      setDraft((d) => { const n = { ...d }; delete n[key]; return n })
+      if (raw === '') { void saveCpcCeiling(row, null); return }
+      const n = Number(raw)
+      if (!Number.isFinite(n)) return
+      void saveCpcCeiling(row, Math.max(1, Math.min(10, n)))
+    }
+    return (
+      <span className="acr-gg-cpc">
+        <input
+          className="acr-gg-num narrow"
+          inputMode="decimal"
+          placeholder="—"
+          aria-label={`CPC ceiling multiple for ${row.name}`}
+          value={value}
+          onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+            if (e.key === 'Escape') setDraft((d) => { const n = { ...d }; delete n[key]; return n })
+          }}
+        />
+        {(draft[key] ?? stored) !== '' && <span className="x">×</span>}
+      </span>
+    )
+  }
+
   return (
     <div className="acr-gg">
       {err && <div className="acr-banner err" role="alert"><AlertTriangle size={15} /> {err}</div>}
@@ -453,6 +523,7 @@ export function GuardrailGrid() {
                 <th title="Absolute ceiling, in euros. Placement modifiers stack on top, so an effective CPC can still exceed it.">Max bid</th>
                 <th>Budget/day</th>
                 <th>Target ACoS</th>
+                <th title="A multiple of the target's HISTORICAL CPC — so it caps nothing on a keyword with no history, which is why the absolute Min/Max bid columns exist beside it. Blank = off. Clamped 1–10.">CPC ceiling</th>
                 <th title="Hands off, per dimension. Enforced at the write gate.">Hands off</th>
                 <th>Suppressed</th>
                 <th title="Rules bound to this campaign by dragging one onto it.">Bound rules</th>
@@ -491,6 +562,7 @@ export function GuardrailGrid() {
                   <td>{box(r, 'max')}</td>
                   <td className="acr-gg-ro">{eur(r.dailyBudgetCents)}</td>
                   <td className="acr-gg-ro">{r.targetAcosPct != null ? `${r.targetAcosPct}%` : '—'}</td>
+                  <td>{cpcBox(r)}</td>
                   <td>
                     <div className="acr-gg-pins">
                       {DIMS.map((d) => (
