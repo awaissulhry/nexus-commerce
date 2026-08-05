@@ -9354,6 +9354,44 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
    * ACR.6 — the Family Cockpit: one portfolio, everything that governs it, one read.
    * Composition only — every control the page offers is an endpoint that already exists.
    */
+  /**
+   * ACR.3 — coverage sets: the curated per-family keyword intent (Stage 2.1).
+   * Seeded from measured evidence only; a set is a DRAFT (disabled) until the operator enables
+   * it, and the pilot engine reads enabled sets exclusively.
+   */
+  fastify.post('/advertising/portfolios/:id/coverage-set/seed', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { seedCoverageSet } = await import('../services/advertising/ads-coverage-sets.service.js')
+    try {
+      return await seedCoverageSet({ portfolioId: id, createdBy: String(actorFromHeaders(request.headers as Record<string, unknown>)) })
+    } catch (e) { reply.status(400); return { error: (e as Error).message } }
+  })
+
+  fastify.get('/advertising/portfolios/:id/coverage-set', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { getCoverageSet } = await import('../services/advertising/ads-coverage-sets.service.js')
+    const r = await getCoverageSet(id)
+    if (!r) { reply.status(404); return { error: 'no coverage set for this portfolio yet' } }
+    reply.header('Cache-Control', 'private, max-age=30')
+    return r
+  })
+
+  fastify.patch('/advertising/coverage-sets/:setId', async (request, reply) => {
+    const { setId } = request.params as { setId: string }
+    const body = request.body as { enabled?: boolean; dailySpendCapCents?: number | null; acosCapPct?: number | null; name?: string }
+    const { updateCoverageSet } = await import('../services/advertising/ads-coverage-sets.service.js')
+    try { await updateCoverageSet({ setId, patch: body }); return { ok: true } }
+    catch (e) { reply.status(400); return { ok: false, error: (e as Error).message } }
+  })
+
+  fastify.patch('/advertising/coverage-terms/:termId', async (request, reply) => {
+    const { termId } = request.params as { termId: string }
+    const body = request.body as { leadAsin?: string | null; status?: 'ACTIVE' | 'PAUSED' | 'RETIRED'; maxCpcCents?: number | null; targetSharePct?: number | null }
+    const { updateCoverageTerm } = await import('../services/advertising/ads-coverage-sets.service.js')
+    try { await updateCoverageTerm({ termId, patch: body }); return { ok: true } }
+    catch (e) { reply.status(400); return { ok: false, error: (e as Error).message } }
+  })
+
   fastify.get('/advertising/portfolios/:id/cockpit', async (request, reply) => {
     const { id } = request.params as { id: string }
     const { getFamilyCockpit } = await import('../services/advertising/ads-family-cockpit.service.js')
@@ -10425,6 +10463,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       recoverableCents: p.recoverableCents,
       byId,
     }
+  })
+
+  /**
+   * ACR.4.1 — which PROPOSE rules have earned the next notch.
+   *
+   * Read-only by design. Graduation happens through PATCH /advertising/autonomy/rules/:id like
+   * every other level change, so there is exactly one write path, one ceiling check and one
+   * audit row — and no endpoint anywhere that can promote a rule without an operator clicking.
+   */
+  fastify.get('/advertising/autonomy/graduation', async (_request, reply) => {
+    const { getGraduationBoard } = await import('../services/advertising/ads-graduation-readiness.service.js')
+    reply.header('Cache-Control', 'private, max-age=120')
+    return getGraduationBoard()
   })
 }
 
