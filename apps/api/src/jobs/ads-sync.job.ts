@@ -91,6 +91,7 @@ let keywordBidResyncTask: ReturnType<typeof cron.schedule> | null = null
 let anomalyGuardTask: ReturnType<typeof cron.schedule> | null = null
 let autoBidTask: ReturnType<typeof cron.schedule> | null = null
 let autoHarvestTask: ReturnType<typeof cron.schedule> | null = null
+let coverageEngineTask: ReturnType<typeof cron.schedule> | null = null
 let campaignSettingsSyncTask: ReturnType<typeof cron.schedule> | null = null
 
 // ── fba-storage-age-ingest ────────────────────────────────────────────
@@ -721,6 +722,26 @@ export function startAutoHarvestCron(): void {
   logger.info('ads-auto-harvest cron: scheduled', { schedule })
 }
 
+// ACR.3 — the coverage engine: holds each term of an ENABLED coverage set at its target share.
+// OBSERVE by default (NEXUS_COVERAGE_ENGINE_MODE=off|observe|auto): decisions log as would-do
+// and nothing writes until BOTH a set is enabled AND the mode is raised to auto. Daily at 07:10,
+// after the report ingest has landed yesterday's grain.
+export async function runCoverageEngineCron(): Promise<void> {
+  await recordCronRun('ads-coverage-engine', async () => {
+    const { runCoverageEngineOnce } = await import('../services/advertising/ads-coverage-engine.service.js')
+    const r = await runCoverageEngineOnce()
+    return `mode=${r.mode} sets=${r.setsEnabled} terms=${r.termsEvaluated} up=${r.ups} down=${r.downs} hold=${r.holds} applied=${r.applied} blocked=${r.blocked}`
+  }).catch((err) => logger.error('ads-coverage-engine cron: failure', { error: String(err) }))
+}
+
+export function startCoverageEngineCron(): void {
+  if (coverageEngineTask) { logger.warn('ads-coverage-engine already started'); return }
+  const schedule = process.env.NEXUS_COVERAGE_ENGINE_SCHEDULE ?? '10 7 * * *'
+  if (!cron.validate(schedule)) { logger.error('ads-coverage-engine: invalid schedule', { schedule }); return }
+  coverageEngineTask = cron.schedule(schedule, () => { void runCoverageEngineCron() })
+  logger.info('ads-coverage-engine cron: scheduled', { schedule })
+}
+
 export function startV1ExportIngestCron(): void {
   if (v1ExportIngestTask) { logger.warn('ads-v1-export-ingest already started'); return }
   const schedule = process.env.NEXUS_ADS_V1_EXPORT_INGEST_SCHEDULE ?? '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
@@ -773,9 +794,15 @@ export function startAllAdvertisingCrons(): void {
   startAutoBidCron()
   // TD.2 — automatic keyword harvest + prune.
   startAutoHarvestCron()
+  // ACR.3 — coverage engine (observe-first; enabled sets only).
+  startCoverageEngineCron()
 }
 
 export function stopAllAdvertisingCrons(): void {
+  if (coverageEngineTask) {
+    coverageEngineTask.stop()
+    coverageEngineTask = null
+  }
   if (fbaStorageAgeTask) {
     fbaStorageAgeTask.stop()
     fbaStorageAgeTask = null

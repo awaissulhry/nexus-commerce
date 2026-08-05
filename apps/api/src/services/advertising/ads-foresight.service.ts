@@ -110,6 +110,7 @@ const ENGINE_CRONS: { key: string; name: string; env: string; fallback: string; 
   { key: 'structural-reconcile', name: 'Account reconcile', env: 'NEXUS_ADS_STRUCTURAL_RECONCILE_SCHEDULE', fallback: '35 */6 * * *' },
   { key: 'settings-sync', name: 'Settings sync', env: 'NEXUS_ADS_SETTINGS_SYNC_SCHEDULE', fallback: '*/20 * * * *' },
   { key: 'true-profit-rollup', name: 'True profit roll-up', env: 'NEXUS_TRUE_PROFIT_ROLLUP_SCHEDULE', fallback: '0 3 * * *' },
+  { key: 'coverage-engine', name: 'Coverage engine', env: 'NEXUS_COVERAGE_ENGINE_SCHEDULE', fallback: '10 7 * * *' },
 ]
 
 export async function getForesight(): Promise<Foresight> {

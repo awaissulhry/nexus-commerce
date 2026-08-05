@@ -176,9 +176,10 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
     'ad-rank-defend', 'ad-dayparting', 'ad-budget-enforce', 'budget-pool-rebalance',
     'ads-auto-bid', 'ads-auto-harvest', 'ads-anomaly-guard', 'top-of-search-defense',
     'tos-is-ingest', 'sqp-ingest', 'ads-structural-reconcile', 'drain-ads-sync',
+    'ads-coverage-engine',
   ]
 
-  const [state, facts, enabledSchedules, enabledPlans, budgetPlans, pools, allowlisted, totalCampaigns] = await Promise.all([
+  const [state, facts, enabledSchedules, enabledPlans, budgetPlans, pools, allowlisted, totalCampaigns, coverageSets] = await Promise.all([
     getAutomationState(),
     cronFacts(CRONS),
     prisma.adSchedule.count({ where: { enabled: true } }),
@@ -193,6 +194,7 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
     prisma.budgetPool.count().catch(() => 0),
     prisma.campaign.count({ where: { liveBidWritesEnabled: true } }),
     prisma.campaign.count(),
+    prisma.keywordCoverageSet.count({ where: { enabled: true } }).catch(() => 0),
   ])
 
   const adsCron = envEnabled('NEXUS_ENABLE_AMAZON_ADS_CRON')
@@ -310,6 +312,16 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
       masterOff ? 'OFF' : 'AUTO',
       masterOff?.why ?? 'The only path a change reaches Amazon by',
       `${allowlisted} of ${totalCampaigns} campaigns allowlisted`, 'gated'),
+
+    mk('coverage-engine', 'Coverage engine', 'Holds each term of an enabled coverage set at its target share, inside its caps',
+      'ads-coverage-engine', 'daily 07:10',
+      masterOff ? 'OFF'
+        : (process.env.NEXUS_COVERAGE_ENGINE_MODE ?? 'observe').toLowerCase() === 'auto' ? 'AUTO'
+          : (process.env.NEXUS_COVERAGE_ENGINE_MODE ?? 'observe').toLowerCase() === 'off' ? 'OFF' : 'OBSERVE',
+      masterOff?.why ?? ((process.env.NEXUS_COVERAGE_ENGINE_MODE ?? 'observe').toLowerCase() === 'auto'
+        ? 'Writing — enabled coverage sets only, through the gate'
+        : 'Observe-first: logs would-do bids; writes need NEXUS_COVERAGE_ENGINE_MODE=auto AND an enabled set'),
+      `${coverageSets} enabled coverage sets`, 'gated'),
 
     mk('structural-reconcile', 'Account reconcile', 'Compares the whole account against Amazon and records disagreement',
       'ads-structural-reconcile', 'every 6 h',

@@ -46,6 +46,10 @@ const rows = await prisma.$queryRawUnsafe<Row[]>(`
   WHERE UPPER(c.name) LIKE '%GALE%' AND c.marketplace='IT' AND c.status='ENABLED'
     AND t.kind='KEYWORD' AND t."isNegative"=false AND t.status='ENABLED'
     AND COALESCE(t."bidCents",0) > ${FLOOR_CENTS}
+    -- A target with no external id never existed on Amazon: it cannot serve, cannot spend,
+    -- and a bid write for it is correctly CANCELLED as local-only. 26 SKAG rows were exactly
+    -- this shape; counting them kept the dry run reporting work that does not exist.
+    AND t."externalTargetId" IS NOT NULL
   GROUP BY 1,2,3,4`)
 
 const byKey = new Map<string, Row[]>()

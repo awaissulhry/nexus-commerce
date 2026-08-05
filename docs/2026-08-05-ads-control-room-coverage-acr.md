@@ -435,6 +435,8 @@ Verified on the 10:30 tick: placement writes carry **`mode=live`**, not `local` 
 | `giubbotto moto uomo estivo` | 6 | 120,660 | 0.35% |
 | `giubbino moto` | 6 | 19,842 | 0.84% |
 
+> **🔴 SUPERSEDED by ACR.2.4 (the variation experiment), below.** All ten of those ASINs are children of ONE Amazon parent (`B0F7J163XJ`, the GALE jacket). Part 3.1's own rule — *true variations of one parent collapse to one tile* — makes this **one tile credited across ten children over a week**, not ten tiles. The paragraph that follows reads the count as multi-product presence; it is not. Read ACR.2.4 before acting on it.
+
 **So multi-product SERP presence is not the missing capability — it is the status quo.** Amazon's per-ASIN dedupe (Part 3) is already letting 3–10 of our products share a page. What is missing is *share*: on the biggest term we hold 0.19% of a million impressions with ten products on the page. **This reframes Stage 3 — the engine's job is not to get more of our ASINs onto the page, it is to make each appearance command more of it.** That is a bid and rank problem, not a structural one.
 
 **2. Large markets we do not bid on at all.** `accessori moto` **366,958** impressions and zero targets. `moto` 231,502, zero. `gilet refrigerante` 93,869, zero. `protezioni moto estive` 58,896 — **four of our ASINs already appear organically** and we bid on none of it. Competitor brand terms are wide open too: `airoh` 88,068 · `agv` · `ls2` · `ducati`, no targets on any.
@@ -452,6 +454,16 @@ Verified on the 10:30 tick: placement writes carry **`mode=live`**, not `local` 
 And pooled — the honest single number — **0.30% where we bid, 0.265% where we do not**. Nearly identical, and both tiny. *Never quote the average-of-ratios on this table; it inverts the conclusion.*
 
 **4. The blunt summary: we are absent.** Across 588 measured terms and 4.19M impressions in one week, we took **11,968** — **0.29%**. Market purchases on every head term run 4–18 a week; ours are **0**. At a third of a percent of impressions that is arithmetic, not a conversion problem.
+
+### ACR.3 — STAGE 3 UNDERWAY 2026-08-05: consolidation applied, coverage sets live, the engine built OBSERVE-first
+
+**Consolidation (operator-approved "I approve"):** applied through the gated mutation path as one revertible change-set (`acr3-gale-consolidation-20260805`). 78 loser targets: **52 floored at 5¢**, **25 correctly CANCELLED as `local-only: no_external_id`** (SKAG rows that never existed on Amazon — cannot serve, cannot spend; the recompute now excludes phantoms), 1 in flight at time of writing. Champions untouched at their real bids (36¢/42¢/34¢ verified). The SKAG duplication (`SV=2k+/6k+/LessThan_1k_Key=1` holding one keyword across ~26 ad groups) is retired in favour of the championed category campaigns.
+
+**KeywordCoverageSet (Stage 2.1):** model + service + routes + cockpit authoring panel, verified live. Seeded `Xavia GALE IT — coverage`: **97 terms from measured evidence**, each with live market/share and a proposed lead ASIN (the family ASIN already taking the most impressions). Draft until enabled; seeding is idempotent by (set, term) so re-seeds never undo operator edits; an unmeasured week seeds nothing.
+
+**The engine (`ads-coverage-engine.service.ts`, cron `ads-coverage-engine` daily 07:10):** a bid ladder, not a structure builder — presence was measured to be the status quo; share is the gap, and share is a bid problem. Reads ENABLED sets only. Per ACTIVE term it moves ONE bid — the championed target's, by the engine ordering — with the guard order as the policy: **family ACOS cap outranks coverage · waste guard (≥€20/30d, no sales) outranks the share gap · daily family cap blocks ups, never decays · no setpoint or unmeasured week → hold, stated.** Steps ±12/−6%, floor 5¢, and **never unbounded**: a term with no ceiling gets the 120¢ default (the ACR.1.4 rule). OBSERVE default (`NEXUS_COVERAGE_ENGINE_MODE=off|observe|auto`): would-dos log to AdvertisingActionLog; writes require mode=auto AND an enabled set, and go through `updateAdTargetWithSync` tagged `coverage-engine-<date>`. On the Levers board and Foresight like every engine. 11 ladder tests.
+
+**First preview against the GALE draft (read-only):** 28 of 97 terms have championed targets (the rest are organic-only — the engine does not invent keywords); 4 would step DOWN under the waste guard (€41/€33/€23/€21 of 30d spend, no sales at target grain); 24 hold with "no target share set" — **the controller refuses to move without a setpoint. The operator's two-minute pass (retire noise terms, set target shares, enable) is what arms it.**
 
 ### ACR.7 / 7b — drag-to-scope SHIPPED 2026-08-05: the Automation Dock, and a binding that means it
 
@@ -548,6 +560,75 @@ The disagreement is systematic, not noise. Almost none of these keywords has sol
 
 Ready in `scripts/_acr4-coverage-campaign.mts`: SP · EXACT · own campaign · €5/day · 34¢ bids (the account's own median), created **PAUSED** because the budget is the one number never agreed. Pre-flight confirms 0 of the five already exist as positive keywords. **Creation is operator-run** — the automation classifier blocks outward-facing spend from this session, correctly.
 
+### ACR.2.3 — the Conflicts tab: the contest is BETWEEN portfolios, and no existing surface could show it
+
+**`/marketing/ads/analytics` → Conflicts, account-wide.** `detectKeywordConflicts` needs a campaign to stand on and the Family Cockpit stands inside one portfolio; the contest that actually exists is between them, so neither could render it. Measured live on IT:
+
+| | |
+|---|---|
+| contested (term × match) pairs | **300** |
+| …spanning two or more portfolios | **127** |
+| campaigns involved | 97, across 6 portfolios **+ unfiled** |
+| 30d spend on contested terms | €885.49 |
+| …that went to a campaign the champion rule does NOT pick | **€299.70** |
+
+That €299.70 is deliberately *not* labelled recoverable: Part 3.2 established we never bid against ourselves — the same keyword enters the auction once. It sizes the consolidation question, it is not a bill.
+
+**`pickChampion` is imported, not reimplemented.** ACR.4 aligned it to the engine's `[acos ?? +∞, −spend]` so the manual and automatic paths cannot name different winners; a second copy of that ladder here would have re-opened the 83-keyword divergence of ACR.2.5. What differs is only scope and source: this reads the **AD_TARGET grain over 30 days** (29 days present) rather than the lifetime counters denormalised onto `AdTarget`, because a lifetime counter and a 30-day window disagree by construction on any campaign older than a month.
+
+**Two things the measured data forced into the design.**
+
+1. **Most contenders are dormant, and an undifferentiated list hides the collision.** `giacca moto uomo` EXACT is claimed by **21 campaigns; 5 took an impression in 30 days**. Contenders with no traffic collapse behind a disclosure and the header reads "5 of 21 active".
+2. **144 of 300 contests have no performance signal at all**, so the engine's ordering ties and `pickChampion` falls through to *highest bid*. Those are tagged **"no evidence"** and say plainly: *leave this one alone* — retiring a loser there is a coin toss, which is precisely the failure ACR.2.5 warned about.
+
+The head contest is worth reading on its own: on `giacca moto uomo` EXACT, `GALE EXACT IT` (unfiled, 300% ToS bias) spent **€110.56 at 128% ACOS** while the champion `IT-AIREON-SP-Category-Exact` spent €3.98 at 4%.
+
+*Two defects caught while building it, both silent-by-shape:* joining `AdProductAd` in the metrics query to collect ASINs fanned each (target × day) row out once per product ad, **inflating every SUM by the ad count** with the result shape unchanged; and keying contests as `` `${term} ${match}` `` and splitting the key back on a space would have **shredded every multi-word term** — which is every term that matters here. ASINs now load in their own query; term and match are read off the rows, never parsed out of the key.
+
+### ACR.2.2b — position: the score is real, Amazon's own ToS-IS is still UNMEASURED
+
+**The scoreboard now answers *where* on page one, not just *how much*.** Three columns added to `ads-coverage.service.ts` (additive — the Family Cockpit and Today board consume it unchanged): position-weighted score, top mix, ToS-IS.
+
+**🔴 `topOfSearchIS` is NULL on all 3,552 placement rows, in every market, for all time.** The metric the plan has assumed since §4.3 has never once landed. The cause is settled, not guessed: `tos-is-ingest` has run **twelve consecutive nights at ~622 seconds** — the old 10-minute poll ceiling — each one logging **SUCCESS with `errors=9`**, a 100% failure wearing a green badge. ACR.0.2's fix (`pollMinutes: 45`, plus throwing when every profile fails) is committed and pushed in `498e2b5c2`, but **today's 02:30 run predates it**; the first run under the fix is the next 02:30. It cannot be exercised from here — the local ads client is sandbox-mode (`[ADS-SANDBOX] fetchReport` returns four synthetic rows), so this one is Railway-only, like the eligibility API.
+
+So the column ships reading **"—" with the reason stated on the page**, never 0%. A zero there would assert we never reach the top of the page, which is a conclusion an operator would act on.
+
+**The position weight is measured from our own account, not borrowed.** Rather than an industry CTR-decay constant, the weight is the ratio of our own rest-of-search CTR to our own top-of-search CTR, IT/90d:
+
+| placement | impressions | CTR |
+|---|---|---|
+| Top of Search | 37,712 | **3.784%** |
+| Rest of search ("Other on-Amazon") | 377,052 | **0.482%** |
+| Detail page | 1,225,544 | 0.067% *(excluded — not a SERP)* |
+
+→ **a rest-of-search impression is worth 0.127 of a top one to us.** `pwScore = share × (topMix + (1 − topMix) × 0.127)`, returned with its inputs so the number is auditable.
+
+**The result, and it is not flattering:** pooled share **0.76% → 0.41% position-weighted**, because our top mix on the terms we hold runs only **10–23%**. We hold what little we hold near the bottom of the page. Position also genuinely re-ranks the board — `abbigliamento moto` and `giubbotto moto uomo 4 stagioni` each climb five places on it while `giubbotto moto` drops.
+
+**The honest limit, stated on the page:** placement data is per CAMPAIGN, so a term inherits the placement mix of the campaigns holding it — a campaign with fifty keywords has one mix applied to all fifty. Directional, not per-keyword truth; every input is nonetheless a measured impression from our own account. Terms no campaign of ours holds get `positionBasis: 'no-holding-campaign'` and a null score rather than an invented one — **109 of 142 rows**, which is itself the finding that we bid almost nothing on this board.
+
+### 🔴 ACR.2.4 — the variation experiment: ACR.2.1's headline was measuring ONE listing, and AIREON is not in the data at all
+
+*(Numbering note: this is Stage 2's **2.4**, the variation experiment, as defined in the phase list below. The earlier section also titled ACR.2.4 — the `isNegative` two-vocabularies defect — is separately numbered and unrelated.)*
+
+**The question: do two child ASINs of one parent ever co-occupy a SERP — does AIREON's unified parent cost coverage?** Two facts settle what can and cannot be concluded today.
+
+**1. Every measured ASIN in SQP is a child of ONE Amazon parent.** All 10 ASINs carrying impressions share `parentAsin = B0F7J163XJ` — they are sizes and colours of the single GALE jacket listing (`GALE-JACKET-BLACK-MEN-XL`, `…-YELLOW-MEN-M`, …). Checked against Amazon's `parentAsin`, not our internal `Product.parentId`, because our hierarchy need not match Amazon's variation family.
+
+**This overturns ACR.2.1's headline.** That entry read "on `giacca moto estiva uomo`, **ten** of our ASINs already appear on the SERP" and concluded *"multi-product SERP presence is not the missing capability — it is the status quo"*. But Part 3.1 of this very plan states the rule: **"True variations of one parent collapse to one tile."** By our own adopted model of Amazon, those ten ASINs are **one tile**, credited to whichever child was featured across a week of searches — not ten tiles. Ten rows in a weekly per-ASIN report is not ten slots on a page.
+
+*So the operator's original ask — several products on the same page — is **not** already satisfied. It is unmet, and Stage 3's reframing ("the engine's job is not to get more of our ASINs onto the page") rests on a miscount and should be re-opened.*
+
+**2. AIREON has ZERO rows in `SearchQueryPerformance`** — 0 of 25 ASINs, in any week. The question cannot be answered about AIREON at all right now; the answer is not "no", it is "not in the dataset".
+
+**Why the data is shaped this way, and it is a self-perpetuating scope.** `_acr2-sqp-backfill.mts` picks its ASINs from *what is already stored*, most-covered first, top 10 (line 43). **An ASIN with no rows can therefore never be selected** — the backfill can only ever deepen the ASINs it already has. That is why six weeks of repair produced ten ASINs of one family and left 12 more, plus all of AIREON, untouched.
+
+**The experiment itself is built and correct; it is starved, not wrong.** `_acr24-variation.mts` discriminates the two hypotheses that a raw count cannot: under a rotating single slot a family's share is flat in *k* and per-child share falls as 1/*k*; under independent slots per-child share is flat and family share rises with *k*. Every comparison is **within-term**, so market size and term breadth are held fixed by construction. Run today it returns **zero discriminating terms — because a within-term control needs a second family on the same term, and only one family is measured.** A single-family fallback (share vs *k*, banded by market size) is reported in the script but does not separate the hypotheses: *k* is endogenous — the same relevance that puts more children on a term also raises share — and both hypotheses survive it.
+
+**What unblocks it:** `_acr24-sqp-widen.mts` resolves ASINs from the **catalogue** by family instead of from stored rows, jackets first. With AIREON measured alongside GALE the within-term control exists and the experiment decides. **It can only run on Railway** — the local SP-API refresh token is revoked (`invalid grant parameter : refresh_token`), so 13 requested reports returned 13 failures and wrote nothing. Cost when run: ~6 minutes of Amazon report generation per ten ASINs, one report per ASIN, upserting in place on `(marketplace, period, startDate, searchQuery, asin)`.
+
+*Note for whoever runs it:* widening repairs the board's honesty but **will move the published baseline** — the pooled 0.76% is currently computed over ten ASINs of one family, and adding families raises our measured impressions against an unchanged market denominator.
+
 - **2.1** `KeywordCoverageSet` model + authoring (pilot family's shared keywords, ~tens of terms).
 - **2.2** Scoreboard tab fed by ToS-IS + SQP + within-account SOV + `KeywordRank` (manual/CSV ingest to start) + position-weighted score.
 - **2.3** Conflicts tab (surface the two existing endpoints).
@@ -571,6 +652,65 @@ Ready in `scripts/_acr4-coverage-campaign.mts`: SP · EXACT · own campaign · �
 ### Stage 5 — Ad-type stacking (the biggest missing lever)
 - **5.1** SB create/optimize path (existing product imagery; the 4 paused SB campaigns as templates), **5.2** SD, **5.3** SBV if video assets exist. Separate budget pools so they stack without touching SP bids. Coverage scoreboard gains SB/SD presence columns.
 - *Exit:* one query can hold SB banner + multiple SP slots + SD simultaneously.
+
+### ACR.5 — the SB/SD audit, and the create paths that never existed (2026-08-05)
+
+**Operator gate answered: GO** — build the create paths. SBV deferred (video creative planned, not yet available); a documented seam is left in the builder. Report polling gated on delivery.
+
+#### The audit — the premise was wrong, in our favour (`scripts/_acr5-sbsd-state.mts`, `_acr5-sbsd-amazon.mts`)
+
+The plan said the SB/SD campaigns were "disabled/archived", and memory recorded 15 SD `ARCHIVED` locally on 2026-07-30 against at least 3 `PAUSED` on Amazon. **Both halves are now stale: all 19 are `PAUSED` locally and `PAUSED` on Amazon — 19/19 agree, budgets match to the cent, zero not-returned.** The mis-archive healed itself once `reconcileCampaignDeletions` was scoped to `SPONSORED_PRODUCTS` (643384b8f) and the settings sync re-read Amazon's real state. There was no repair work to do.
+
+Read through each family's OWN endpoints, never `/sp/*` — SD via `GET /sd/campaigns`, SB via `POST /sb/v4/campaigns/list`.
+
+**They were never a channel — not "stopped", never started.** SD: 26 performance rows, all zero, €0.00 lifetime, 0 impressions. SB: no performance rows at all. Against SP's €22,336.92 and 18.8M impressions. So "dormant by choice vs abandoned" was a false dichotomy: they were *never launched*.
+
+#### 🔴 Three defects the audit found
+
+1. **Every v3/v4 `/list` read was classified as a WRITE.** `isWrite: opts.method !== 'GET'` — but Amazon reads through POST, so all **ten** list endpoints (SP campaigns/adGroups/keywords/targets/productAds/negativeKeywords, portfolios, eligibility, SB) took the write ledger's `failMode: 'closed'`. That inverts the asymmetry the two ledgers exist to express: writes fail closed because they can *mutate the live account*; a `/list` cannot mutate anything. Surfaced when a degraded Redis blocked the SB read while the GET-based SD read beside it sailed through. Fixed with `isMutatingCall()`; re-verified with Redis still down — `agree=19, readErrors=0`.
+2. **`createCampaignLocal` was SP-only on the wire.** It has taken `type: 'SP' | 'SB' | 'SD'` since AX.4 and mapped it onto the right local `adProduct` — while unconditionally calling `/sp/campaigns`. An SB/SD create would have produced a *Sponsored Products* campaign wearing an SB/SD name, with a local row confidently mislabelled. Never hit only because no UI offered SB or SD. The blueprint path (`type: c.adProduct ?? 'SP'`) could already reach it. Same class as the AX-VT.4 `/sp/*` verification trap: assuming one endpoint family speaks for all three.
+3. **653 of 1,882 report jobs/month (35%) could only ever return zero.** All `COMPLETED`, all `ingestedAt` set, all `rowsIngested: 0` — because paused campaigns that never delivered have no data. Not a parser bug; a targeting bug. `sdCampaigns` 270, `sbCampaigns` 200, `sbSearchTerm` 183.
+
+#### The create paths — modelled on ground truth, not documentation (`_acr5-sbsd-shapes.mts`)
+
+The three families share almost no conventions, and every disagreement is silent (Amazon answers 200 with an empty success array). Captured from this account's own live entities:
+
+| field | SP (v3) | SD (legacy) | SB (v4) |
+|---|---|---|---|
+| body | `{campaigns:[…]}` | **bare ARRAY** | `{campaigns:[…]}` |
+| campaignId | string | **number** | string |
+| startDate | `2026-08-05` | **`20260805`** | `2026-08-05` |
+| state | `PAUSED` | `paused` | `PAUSED` |
+| budgetType | `DAILY` | `daily` | `DAILY` |
+| extras | targetingType, dynamicBidding | tactic, costType, deliveryProfile | brandEntityId, goal, kpi, bidding |
+
+`brandEntityId` already exists (`ENTITY3LAY8CBA0R3XI` for IT) — **SB is not blocked on Brand Registry.**
+
+**Safety properties, all verified by dry run against prod:** every create supports `dryRun` (returns the exact payload, calls nothing, writes no local row — campaign count 216 → 216); SB/SD are born **PAUSED** while **SP keeps its born-ENABLED behaviour** (the five SP wizards and GALE's 11 live campaigns depend on it — flipping SP silently would have broken them).
+
+Two further defects the dry run itself caught: `brandEntityId` resolved from *any* marketplace (a DE entity for an IT create — brand entities are per-marketplace), and SP ignored `dryRun` entirely, falling through to the sandbox branch and reporting a reassuring, wrong "no active ads connection".
+
+⚠️ **Deploy API before web.** `dryRun` is an ordinary field: an API that predates it ignores it and *creates*. Web and API deploy independently, so a button labelled "Preview" would spend money in that window. The builder now requires the response to say `mode: 'dry-run'` and warns loudly otherwise.
+
+⚠️ **Standing budgets total ~€1,040/day** across the 19 paused campaigns (SD €985, SB €55). Un-pausing without re-budgeting authorises ~4× the current SP daily run rate.
+
+#### The scoreboard now attributes share by ad type
+
+`CoverageScoreboard.adTypeMix` — impressions/clicks/spend per ad product from our own `AmazonAdsDailyPerformance`, because SQP's `impressionsBrand` has no ad-product dimension at all and cannot answer this.
+
+**SD is deliberately NOT attributed per term, and that is not a gap to fix.** SD is not search-driven — Amazon reports no search term for it — so a per-term SP/SB/SD split would require inventing the SD half. It is reported at marketplace level, where it is true. `searchAttributable: false` says so on the row.
+
+Baseline measured 2026-08-05, all four markets: **SP 100%, SB and SD dormant, `activeAdProducts: 1` everywhere.** IT 1,188,662 impressions / €1,597.39; DE 279,873 / €1,016.82; ES 129,094 / €159.26; FR 58,190 / €93.34. This is the instrument that makes the stacking hypothesis falsifiable — until an SB or SD campaign runs, Stage 5's premise is untested rather than proven.
+
+#### Launch verification and the third family split
+
+The builder reads every launch back through the existing `POST /advertising/launches/verify` (AX-VT.4) — no change to `advertising.routes.ts`, which stays append-only for the concurrent session. `verifyLaunch` already splits by `Campaign.adProduct` and reads each family from its own endpoints; **SB coverage is CAMPAIGN-only**, so SB ad groups and ads come back as `uncovered` rather than being counted as verified. The receipt is asymmetric on purpose, following `LaunchReceipt`: verified gets one quiet line, not-verified shows what disagreed and stays on screen.
+
+**A third instance of the same endpoint-family trap, found while wiring this:** `createProductAdLocal` called `/sp/productAds` for every ad product. An SD product ad pushed there attaches to nothing and reports success. Added `createSdProductAd` (`POST /sd/productAds`, bare array, numeric ids, lowercase state — read off the account's 230 existing SD ads). SD accepts `asin` OR `sku`, so unlike SP it does not hard-fail when no seller SKU resolves (`resolveSellerSku` — see [[reference_amazon_sp_create_traps]]).
+
+That makes three: campaign create, ad-group create, product-ad create. **When touching any ads write path, assume `/sp/*` is hardcoded until proven otherwise.**
+
+*Not built:* SD targets and SB ad groups/creative (a created campaign is a shell — it needs an ad group and at least one product ad before it can serve), SBV, and the un-pause decision on the existing 19 (an operator call — it changes what spends). The browser round-trip stays unverified locally: `adsMode()` is `sandbox` without `railway run`, and pointing the local UI at prod would hit an API that predates `dryRun`.
 
 ### Stage 6 — One console
 - Port the last legacy interpretation surfaces to Analytics tabs; redirect `/marketing/advertising/*` and `/marketing/ads-console/*`; delete after zero traffic.
