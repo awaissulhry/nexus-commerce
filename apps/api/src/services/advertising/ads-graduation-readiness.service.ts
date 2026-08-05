@@ -63,6 +63,13 @@ const WINDOW_DAYS = 56
  */
 const STALE_AFTER_DAYS = 14
 
+/**
+ * Matches after which "it has never proposed anything" stops being early days and becomes a
+ * fact about the rule. Twenty is low deliberately: the point is to catch the state, and a rule
+ * that has matched twenty times without queuing once is already telling you what it is.
+ */
+const UNSEEN_MIN_RUNS = 20
+
 const DAY = 86_400_000
 
 export type Verdict = 'ready' | 'unreviewed' | 'unseen' | 'building' | 'failing' | 'capped'
@@ -180,6 +187,13 @@ export async function getGraduationBoard(now = new Date()): Promise<GraduationBo
      * compiles to NOT (errorMessage = X), which is NULL — not TRUE — for the null errorMessage
      * every SUCCESS and DRY_RUN carries, so the terse form silently drops every clean row and
      * this board would report zero evidence for everything. Same trap the rules route hit.
+     *
+     * And the exclusion is load-bearing, not cosmetic. Measured over this window on prod:
+     * 693,743 FAILED executions, of which 693,704 are DAILY_CAP_EXCEEDED — rows the engine
+     * wrote when it DECLINED to run a rule, almost all of them from the self-ratcheting cap
+     * bug fixed 2026-08-04 (the newest is 2026-08-03). Exactly 39 are real failures. Without
+     * the exclusion every rule on this board reads as catastrophically broken and nothing
+     * could ever graduate; with it, the 39 still count, which is the entire point.
      */
     prisma.automationRuleExecution.findMany({
       where: {
@@ -250,9 +264,16 @@ export async function getGraduationBoard(now = new Date()): Promise<GraduationBo
     } else if (decisionWeeks >= GRADUATION_WEEKS && stale) {
       verdict = 'building'
       summary = `${decisionWeeks} clean weeks, but the last one was ${lastDecision ? daysAgo(lastDecision, now) : 'a while ago'}. Evidence older than ${STALE_AFTER_DAYS} days describes an account that has since moved.`
-    } else if (cleanWeeks >= GRADUATION_WEEKS && mine.length === 0) {
+    } else if (runs.length >= UNSEEN_MIN_RUNS && mine.length === 0) {
+      /**
+       * Checked BEFORE the week thresholds, because this is a qualitative state and not a
+       * quantity of history. Measured: AIREON — Target ACoS bidding has matched 546 times
+       * across 2 weeks and queued nothing. Ranked purely by weeks it read as "2 of the 3
+       * needed" — on track — when the truth is that no amount of further running will produce
+       * evidence, because this rule does not put anything in front of you to agree with.
+       */
       verdict = 'unseen'
-      summary = `${runs.length.toLocaleString('en-IE')} runs across ${cleanWeeks} weeks, no failures — and it has never queued a single proposal. You have never seen what it would actually do, which makes this the riskiest row here, not the safest.`
+      summary = `${runs.length.toLocaleString('en-IE')} matches across ${cleanWeeks} week${cleanWeeks === 1 ? '' : 's'}, no failures — and not one queued proposal. You have never seen what it would actually do, so there is nothing here to agree with. That makes it the riskiest row on this board, not the safest.`
     } else if (cleanWeeks >= GRADUATION_WEEKS && pending > 0) {
       verdict = 'unreviewed'
       summary = `${cleanWeeks} weeks of clean runs, and ${pending} proposal${pending === 1 ? '' : 's'} waiting on you. It works; you have not yet said whether you agree. Working the priced queue is what turns this into evidence.`
@@ -264,6 +285,7 @@ export async function getGraduationBoard(now = new Date()): Promise<GraduationBo
       summary = runs.length === 0
         ? 'Has not run inside the window. There is nothing to judge it on yet.'
         : `${cleanWeeks} of the ${GRADUATION_WEEKS} weeks needed, ${clean.length} proposal${clean.length === 1 ? '' : 's'} applied unchanged.`
+          + (pending > 0 ? ` ${pending} ${pending === 1 ? 'is' : 'are'} waiting on you — deciding them is what builds the rest.` : '')
     }
 
     const ready = verdict === 'ready'
