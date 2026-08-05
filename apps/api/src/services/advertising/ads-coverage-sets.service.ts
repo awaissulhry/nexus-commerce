@@ -30,6 +30,7 @@ export interface CoverageSetSummary {
     status: string
     maxCpcCents: number | null
     targetSharePct: number | null
+    isControl: boolean
     /** Live evidence, joined at read time so the set never stores stale measurements. */
     marketImpressions: number | null
     ourImpressions: number | null
@@ -166,6 +167,7 @@ export async function getCoverageSet(portfolioId: string): Promise<CoverageSetSu
         status: t.status,
         maxCpcCents: t.maxCpcCents,
         targetSharePct: t.targetSharePct != null ? Number(t.targetSharePct) : null,
+        isControl: t.isControl,
         marketImpressions: ev?.marketImpressions ?? null,
         ourImpressions: ev?.ourImpressions ?? null,
         share: ev?.share ?? null,
@@ -192,7 +194,7 @@ export async function updateCoverageSet(args: {
 
 export async function updateCoverageTerm(args: {
   termId: string
-  patch: { leadAsin?: string | null; status?: 'ACTIVE' | 'PAUSED' | 'RETIRED'; maxCpcCents?: number | null; targetSharePct?: number | null }
+  patch: { leadAsin?: string | null; status?: 'ACTIVE' | 'PAUSED' | 'RETIRED'; maxCpcCents?: number | null; targetSharePct?: number | null; isControl?: boolean }
 }): Promise<void> {
   await prisma.keywordCoverageTerm.update({
     where: { id: args.termId },
@@ -201,6 +203,7 @@ export async function updateCoverageTerm(args: {
       ...(args.patch.status ? { status: args.patch.status } : {}),
       ...(args.patch.maxCpcCents !== undefined ? { maxCpcCents: args.patch.maxCpcCents } : {}),
       ...(args.patch.targetSharePct !== undefined ? { targetSharePct: args.patch.targetSharePct } : {}),
+      ...(args.patch.isControl != null ? { isControl: args.patch.isControl } : {}),
     },
   })
 }

@@ -3089,6 +3089,9 @@ model KeywordCoverageTerm {
   /// Per-term ceiling; null inherits the set's guardrails.
   maxCpcCents   Int?
   targetSharePct Decimal? @db.Decimal(6, 2)
+  /// ACR.3 — control group: the engine NEVER touches a control term. Without a held-out
+  /// set, week-over-week share moves cannot be attributed to the engine vs the market.
+  isControl     Boolean  @default(false)
   notes         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

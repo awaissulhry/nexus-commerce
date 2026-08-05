@@ -143,6 +143,8 @@ export interface EngineRunSummary {
   setsConsidered: number
   setsEnabled: number
   termsEvaluated: number
+  /** Held-out control terms the engine deliberately did not evaluate. */
+  controlsSkipped: number
   decisions: EngineTermDecision[]
   ups: number
   downs: number
@@ -158,7 +160,7 @@ export interface EngineRunSummary {
 export async function runCoverageEngineOnce(opts: { previewSetId?: string } = {}): Promise<EngineRunSummary> {
   const mode = engineMode()
   const summary: EngineRunSummary = {
-    mode, setsConsidered: 0, setsEnabled: 0, termsEvaluated: 0,
+    mode, setsConsidered: 0, setsEnabled: 0, termsEvaluated: 0, controlsSkipped: 0,
     decisions: [], ups: 0, downs: 0, holds: 0, applied: 0, blocked: 0,
   }
   if (mode === 'off' && !opts.previewSetId) return summary
@@ -167,6 +169,7 @@ export async function runCoverageEngineOnce(opts: { previewSetId?: string } = {}
     where: opts.previewSetId ? { id: opts.previewSetId } : { enabled: true },
     include: { terms: { where: { status: 'ACTIVE' } } },
   })
+  let controlsSkipped = 0
   summary.setsConsidered = sets.length
   summary.setsEnabled = sets.filter((s) => s.enabled).length
   if (sets.length === 0) return summary
@@ -204,6 +207,13 @@ export async function runCoverageEngineOnce(opts: { previewSetId?: string } = {}
     const weekDate = week[0]?.w ?? null
 
     for (const term of set.terms) {
+      /**
+       * Control group — the engine NEVER touches a control term, in any mode, preview
+       * included. Without held-out terms a week of share movement proves nothing: the market
+       * moves too. The skip is counted, not silent, so the summary always shows the split.
+       */
+      if (term.isControl) { controlsSkipped += 1; continue }
+
       // The championed target: the family's best ENABLED positive keyword on this exact term,
       // by the engine ordering (ACOS → spend → impressions). The engine moves ONE bid per
       // term — the champion's — because consolidation already floored the rest.
@@ -317,8 +327,9 @@ export async function runCoverageEngineOnce(opts: { previewSetId?: string } = {}
     }
   }
 
+  summary.controlsSkipped = controlsSkipped
   logger.info('[coverage-engine] tick', {
-    mode, sets: summary.setsEnabled, terms: summary.termsEvaluated,
+    mode, sets: summary.setsEnabled, terms: summary.termsEvaluated, controls: controlsSkipped,
     ups: summary.ups, downs: summary.downs, holds: summary.holds,
     applied: summary.applied, blocked: summary.blocked,
   })

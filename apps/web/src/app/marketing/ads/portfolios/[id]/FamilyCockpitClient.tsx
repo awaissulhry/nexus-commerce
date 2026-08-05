@@ -53,8 +53,16 @@ interface PricedProposal {
 }
 interface CoverageSetTerm {
   id: string; term: string; leadAsin: string | null; status: string
-  maxCpcCents: number | null; targetSharePct: number | null
+  maxCpcCents: number | null; targetSharePct: number | null; isControl: boolean
   marketImpressions: number | null; ourImpressions: number | null; share: number | null; familyKeywords: number | null
+}
+interface EnginePreviewDecision {
+  term: string; campaignName: string; action: string
+  currentBidCents: number; nextBidCents: number; reason: string; share: number | null
+}
+interface EnginePreview {
+  mode: string; termsEvaluated: number; controlsSkipped: number
+  ups: number; downs: number; holds: number; decisions: EnginePreviewDecision[]
 }
 interface CoverageSet {
   id: string; name: string; enabled: boolean
@@ -95,6 +103,8 @@ export function FamilyCockpitClient() {
   const [dropMsg, setDropMsg] = useState<string | null>(null)
   const [covSet, setCovSet] = useState<CoverageSet | null>(null)
   const [covSetBusy, setCovSetBusy] = useState(false)
+  const [preview, setPreview] = useState<EnginePreview | null>(null)
+  const [previewBusy, setPreviewBusy] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -129,6 +139,14 @@ export function FamilyCockpitClient() {
       })
       await loadCovSet()
     } finally { setCovSetBusy(false) }
+  }
+  const previewEngine = async () => {
+    if (!covSet) return
+    setPreviewBusy(true)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/coverage-sets/${covSet.id}/preview`, { method: 'POST' })
+      setPreview(r.ok ? ((await r.json()) as EnginePreview) : null)
+    } finally { setPreviewBusy(false) }
   }
   const patchCovTerm = async (termId: string, patch: Record<string, unknown>) => {
     setCovSetBusy(true)
@@ -334,6 +352,11 @@ export function FamilyCockpitClient() {
               the terms this family deliberately owns — the pilot engine reads THIS, never raw data
             </span>
             <span className="fc-bulk">
+              {covSet && (
+                <button type="button" className="fc-btn sm" disabled={previewBusy} onClick={() => void previewEngine()}>
+                  {previewBusy ? 'Previewing…' : 'Preview engine decisions'}
+                </button>
+              )}
               <button type="button" className="fc-btn sm" disabled={covSetBusy} onClick={() => void seedCovSet()}>
                 {covSet ? 'Re-seed from evidence' : 'Seed from evidence'}
               </button>
@@ -383,7 +406,9 @@ export function FamilyCockpitClient() {
                   <thead><tr>
                     <th className="l">Term</th><th>Market</th><th>Share</th>
                     <th className="l" title="The family ASIN that leads this term — highest bid, ToS defense. Others support.">Lead ASIN</th>
-                    <th>Max CPC ¢</th><th>Target share %</th><th>Status</th>
+                    <th>Max CPC ¢</th><th>Target share %</th>
+                    <th title="Control terms are held out: the engine never touches them, so week-over-week share moves are attributable to the engine rather than the market.">Control</th>
+                    <th>Status</th>
                   </tr></thead>
                   <tbody>
                     {covSet.terms.filter((t) => t.status !== 'RETIRED').map((t) => (
@@ -428,6 +453,14 @@ export function FamilyCockpitClient() {
                             }} /></span>
                         </td>
                         <td>
+                          <button type="button" className={`fc-switch ${t.isControl ? 'on' : ''}`}
+                            disabled={covSetBusy}
+                            title={t.isControl ? 'Held out — the engine never touches this term. Click to hand it to the engine.' : 'Engine-managed. Click to hold it out as a control.'}
+                            onClick={() => void patchCovTerm(t.id, { isControl: !t.isControl })}>
+                            {t.isControl ? 'control' : 'engine'}
+                          </button>
+                        </td>
+                        <td>
                           <button type="button" className={`fc-status ${t.status === 'ACTIVE' ? 'enabled' : 'paused'}`}
                             disabled={covSetBusy}
                             title={t.status === 'ACTIVE' ? 'Pause this term in the set' : 'Reactivate'}
@@ -440,6 +473,38 @@ export function FamilyCockpitClient() {
                   </tbody>
                 </table>
               </div>
+
+              {preview && (
+                <>
+                  <div className="fc-sec-head"><h2>Engine preview</h2>
+                    <span className="fc-sec-sub">
+                      what the engine would do right now — {preview.termsEvaluated} evaluated · {preview.ups} up · {preview.downs} down · {preview.holds} hold
+                      {preview.controlsSkipped > 0 ? ` · ${preview.controlsSkipped} control held out` : ''}
+                      {' '}· preview never applies
+                    </span>
+                  </div>
+                  {preview.decisions.filter((d) => d.action !== 'hold').length === 0 ? (
+                    <div className="fc-banner ok"><Check size={15} /> No bid would move — every evaluated term is holding, capped, or awaiting a target.</div>
+                  ) : (
+                    <div className="fc-tablewrap" style={{ marginBottom: 18 }}>
+                      <table className="fc-table">
+                        <thead><tr><th className="l">Term</th><th>Move</th><th>Bid</th><th className="l">Why</th><th className="l">Campaign</th></tr></thead>
+                        <tbody>
+                          {preview.decisions.filter((d) => d.action !== 'hold').map((d) => (
+                            <tr key={d.term}>
+                              <td className="l">{d.term}</td>
+                              <td className={`num ${d.action === 'up' ? 'multi' : 'none'}`}>{d.action.toUpperCase()}</td>
+                              <td className="num">{d.currentBidCents}¢ → {d.nextBidCents}¢</td>
+                              <td className="l">{d.reason}</td>
+                              <td className="l">{d.campaignName}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
             </>
           )}
 

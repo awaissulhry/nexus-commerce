@@ -9384,6 +9384,30 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     catch (e) { reply.status(400); return { ok: false, error: (e as Error).message } }
   })
 
+  /**
+   * ACR.3 — "what would the engine do, right now". Evaluates ONE set (draft or enabled) and
+   * never applies, regardless of engine mode — the operator's feedback loop while setting
+   * targets, instead of waiting for tomorrow's 07:10 tick.
+   */
+  fastify.post('/advertising/coverage-sets/:setId/preview', async (request, reply) => {
+    const { setId } = request.params as { setId: string }
+    const { runCoverageEngineOnce } = await import('../services/advertising/ads-coverage-engine.service.js')
+    const r = await runCoverageEngineOnce({ previewSetId: setId })
+    reply.header('Cache-Control', 'no-store')
+    return {
+      mode: r.mode,
+      termsEvaluated: r.termsEvaluated,
+      controlsSkipped: r.controlsSkipped,
+      ups: r.ups, downs: r.downs, holds: r.holds,
+      decisions: r.decisions.map((d) => ({
+        term: d.term, campaignName: d.campaignName,
+        action: d.decision.action, currentBidCents: d.currentBidCents,
+        nextBidCents: d.decision.nextBidCents, reason: d.decision.reason,
+        share: d.share,
+      })),
+    }
+  })
+
   fastify.patch('/advertising/coverage-terms/:termId', async (request, reply) => {
     const { termId } = request.params as { termId: string }
     const body = request.body as { leadAsin?: string | null; status?: 'ACTIVE' | 'PAUSED' | 'RETIRED'; maxCpcCents?: number | null; targetSharePct?: number | null }
@@ -10477,48 +10501,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'private, max-age=120')
     return getGraduationBoard()
   })
-  /**
-   * ACR.4.3 — the week's rollup. One builder, two consumers: this feeds the Control Room's
-   * "This week" panel AND the Monday email, so the screen and the inbox cannot disagree about
-   * the same week.
-   *
-   * `mode=current` is week-to-date (what an operator standing in Activity means by "this
-   * week"); `previous` is the last complete Mon–Sun, which is what a Monday email must cover.
-   */
-  fastify.get('/advertising/digest/weekly', async (request, reply) => {
-    const q = request.query as { mode?: string }
-    const mode = q.mode === 'previous' ? 'previous' : 'current'
-    const { getWeeklyDigest } = await import('../services/advertising/ads-weekly-digest.service.js')
-    reply.header('Cache-Control', 'private, max-age=120')
-    return getWeeklyDigest(mode)
-  })
-
-  /** The rendered email, exactly as it would arrive. Preview and send share one renderer. */
-  fastify.get('/advertising/digest/weekly/preview', async (request, reply) => {
-    const q = request.query as { mode?: string }
-    const mode = q.mode === 'current' ? 'current' : 'previous'
-    const { getWeeklyDigest } = await import('../services/advertising/ads-weekly-digest.service.js')
-    const { renderWeeklyDigest } = await import('../services/advertising/ads-weekly-digest-mail.service.js')
-    const html = renderWeeklyDigest(await getWeeklyDigest(mode))
-    reply.header('content-type', 'text/html; charset=utf-8')
-    return reply.send(html)
-  })
-
-  /**
-   * Send one now. Honours the transport's own gate, so with NEXUS_ENABLE_OUTBOUND_EMAILS unset
-   * this builds and logs a real digest and mails nothing — which is the point: the operator can
-   * see exactly what would arrive before deciding whether to un-gate the rail.
-   */
-  fastify.post('/advertising/digest/weekly/send', async (request, reply) => {
-    const body = (request.body ?? {}) as { to?: string; mode?: string }
-    const to = (body.to ?? '').split(',').map((s) => s.trim()).filter(Boolean)
-    const mode = body.mode === 'current' ? 'current' : 'previous'
-    const { sendWeeklyDigest } = await import('../services/advertising/ads-weekly-digest-mail.service.js')
-    const r = await sendWeeklyDigest({ mode, to: to.length ? to : undefined })
-    if (r.status === 'FAILED') reply.code(502)
-    logger.warn('[ACR42-DIGEST-SEND]', { status: r.status, recipients: r.recipients.length, actor: actorFromHeaders(request.headers as Record<string, unknown>) })
-    return r
-  })
 
   /**
    * ACR.1.2b — one engine's own record: run history, last output, evidence samples, and
@@ -10623,6 +10605,73 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       pinNote: (data.pinNote as string | null) ?? null,
       pinnedBy: data.pinnedBy as string | null, pinnedAt: data.pinnedAt as Date | null,
     }
+  })
+
+  /**
+   * ACR.2.3 — account-wide keyword contests (the Analytics > Conflicts tab).
+   *
+   * The per-campaign endpoint above answers "who contests MY keywords" and the Family Cockpit
+   * answers it inside one portfolio. Neither can show the contest that actually exists here:
+   * measured on prod, 127 of IT's 294 contested (term x match) pairs span two or more
+   * portfolios, and `Xavia GALE IT` has no internal contest at all.
+   *
+   * Read-only. Cached briefly — the AD_TARGET grain is daily, so two requests a minute apart
+   * cannot legitimately differ, and the 30-day aggregation is the expensive part.
+   */
+  fastify.get('/advertising/coverage/contests', async (request, reply) => {
+    const q = request.query as { marketplace?: string; windowDays?: string; limit?: string; crossPortfolioOnly?: string }
+    const { getAccountKeywordContests } = await import('../services/advertising/ads-keyword-contests.service.js')
+    const board = await getAccountKeywordContests({
+      marketplace: q.marketplace,
+      windowDays: q.windowDays ? Number(q.windowDays) : undefined,
+      limit: q.limit ? Number(q.limit) : undefined,
+      crossPortfolioOnly: q.crossPortfolioOnly === 'true',
+    })
+    reply.header('Cache-Control', 'private, max-age=120')
+    return board
+  })
+
+  /**
+   * ACR.4.3 — the week's rollup. One builder, two consumers: this feeds the Control Room's
+   * "This week" panel AND the Monday email, so the screen and the inbox cannot disagree about
+   * the same week.
+   *
+   * `mode=current` is week-to-date (what an operator standing in Activity means by "this
+   * week"); `previous` is the last complete Mon–Sun, which is what a Monday email must cover.
+   */
+  fastify.get('/advertising/digest/weekly', async (request, reply) => {
+    const q = request.query as { mode?: string }
+    const mode = q.mode === 'previous' ? 'previous' : 'current'
+    const { getWeeklyDigest } = await import('../services/advertising/ads-weekly-digest.service.js')
+    reply.header('Cache-Control', 'private, max-age=120')
+    return getWeeklyDigest(mode)
+  })
+
+  /** The rendered email, exactly as it would arrive. Preview and send share one renderer. */
+  fastify.get('/advertising/digest/weekly/preview', async (request, reply) => {
+    const q = request.query as { mode?: string }
+    const mode = q.mode === 'current' ? 'current' : 'previous'
+    const { getWeeklyDigest } = await import('../services/advertising/ads-weekly-digest.service.js')
+    const { renderWeeklyDigest } = await import('../services/advertising/ads-weekly-digest-mail.service.js')
+    const html = renderWeeklyDigest(await getWeeklyDigest(mode))
+    reply.header('content-type', 'text/html; charset=utf-8')
+    return reply.send(html)
+  })
+
+  /**
+   * Send one now. Honours the transport's own gate, so with NEXUS_ENABLE_OUTBOUND_EMAILS unset
+   * this builds and logs a real digest and mails nothing — which is the point: the operator can
+   * see exactly what would arrive before deciding whether to un-gate the rail.
+   */
+  fastify.post('/advertising/digest/weekly/send', async (request, reply) => {
+    const body = (request.body ?? {}) as { to?: string; mode?: string }
+    const to = (body.to ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+    const mode = body.mode === 'current' ? 'current' : 'previous'
+    const { sendWeeklyDigest } = await import('../services/advertising/ads-weekly-digest-mail.service.js')
+    const r = await sendWeeklyDigest({ mode, to: to.length ? to : undefined })
+    if (r.status === 'FAILED') reply.code(502)
+    logger.warn('[ACR42-DIGEST-SEND]', { status: r.status, recipients: r.recipients.length, actor: actorFromHeaders(request.headers as Record<string, unknown>) })
+    return r
   })
 }
 
