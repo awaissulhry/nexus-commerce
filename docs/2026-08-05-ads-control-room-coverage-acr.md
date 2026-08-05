@@ -734,11 +734,83 @@ larger than the variation question alone: it is the first honest account-level c
 - **3.5 Widen-or-stop gate** — including the honest option that coverage isn't worth buying at this spend.
 - *Exit:* measured multi-slot occupancy with known cost, or a data-backed decision to consolidate instead.
 
-### Stage 4 — Autonomy completion ("no daily attention")
-- **4.1** Graduate levers one category at a time (bids → budget → negations-once-whitelist-populated), each on its accountability strip evidence; structural actions stay gated forever.
-- **4.2** Morning digest (in-app panel; optional email through the existing double-gated report-schedule rail).
-- **4.3** Breaker tightening: spend-excursion trip wired to the digest; 7-day undo surfaced on every automated action row.
-- *Exit:* routine work happens unattended; the digest is the only routine touchpoint; every action reversible for 7 days.
+### Stage 4 — Autonomy completion ("no daily attention") — ✅ SHIPPED 2026-08-05
+
+Commits: `6b7d57538` priced Suggestions · graduation readiness (its route landed inside
+`87b573f63`, a sibling session's commit) · `6b182b937` digest + Activity rollup · `92aa37bd4`
+and `b26feb87d` fixes found by looking · `2e59a9d22` tests · `b1a305d20` perf · `f8b72f296`
+ACR.4.3. Verified on live prod (Vercel + Railway), screenshots taken on the real console.
+
+- **4.1 ✅ Graduation runs on evidence — and the evidence does not exist yet, which is the finding.**
+  Measured BEFORE building: 151 `AdsRuleSuggestion` rows — 150 pending, **one ever applied**
+  (2026-06-23), none dismissed, none edited. Six rules sit at PROPOSE with an AUTO ceiling and
+  not one has a single operator decision behind it. So the strict bar — proposals applied
+  *unchanged* in ≥3 distinct weeks, no failures — correctly surfaces nothing, and the board says
+  so rather than inventing a reason to say yes.
+  `appliedResult.override` is what makes "without modification" measurable: the apply route
+  already records an operator's edit, and an applied-**with**-an-edit proposal is agreement with
+  the intent and disagreement with the number — and the number is what would run unattended.
+  Graduation is never automatic: the only write path remains `PATCH /advertising/autonomy/rules/:id`,
+  which re-checks the ceiling. The ceiling machinery is untouched and still caps 6 structural
+  rules regardless of history.
+  **Two tracks, labelled, because a board that can only say no gets closed.** Rules that have RUN
+  clean are shown under their own verdict and never under the word *ready* — running is not
+  agreeing. The verdict that earned its place is **UNSEEN**: *AIREON — Target ACoS bidding* has
+  matched **564 times across 2 weeks with zero failures and has never queued a single proposal.*
+  Ranked by weeks it read "2 of the 3 needed" — on track. It is not on track: no amount of
+  further running can produce evidence from a rule that never puts a decision in front of you.
+  So UNSEEN is judged qualitatively, before any week threshold.
+  *Load-bearing detail:* 693,743 FAILED executions in the 56-day window, of which **693,704 are
+  `DAILY_CAP_EXCEEDED`** (the self-ratcheting cap bug fixed 2026-08-04) and exactly **39 are
+  real**. Any per-rule health read must exclude the cap rows — spelling out the null branch, or
+  three-valued logic drops every clean row — else every rule reads as catastrophically broken.
+- **4.2 ✅ Weekly digest — built, and the gate SURFACED rather than flipped.**
+  The email rail was not merely gated off, it was **empty**: `ReportSchedule=0, SavedReport=0,
+  ReportDelivery=0`, and **`NEXUS_ENABLE_ADS_REPORT_SCHEDULE_CRON` is not set on Railway at all**,
+  so `startAdsReportScheduleCron()` has always returned early and no scheduled ads email has ever
+  dispatched. There was also nothing to un-gate *into* — that rail mails a saved-report
+  spreadsheet, which is not "what acted, what's proposed, recoverable €, coverage trend".
+  So the digest is its own builder on the same rail and the same two-gate discipline, with no
+  third flag. **Confirmed on the prod panel: `NEXUS_ENABLE_OUTBOUND_EMAILS` is ON.** That makes
+  the operator decision concrete and slightly counter-intuitive: setting the cron flag to `1`
+  **mails for real, not as a dry run**, and `NEXUS_ADS_DIGEST_RECIPIENTS` must be set first or
+  every run logs `SKIPPED — no recipients`. Two variables, in that order. Preview and "Send me a
+  test" go through the identical path Monday will use.
+  One builder, two consumers (panel + email) so the screen and the inbox cannot disagree.
+  Idempotency comes from `CronRun`, not a new table — this digest hangs off no `SavedReport`, so
+  `ReportDelivery` cannot hold it.
+- **4.3 ✅ Undo per action class, and a breaker that admits its own gap.**
+  **"7-day undo" was the wrong instruction for bids, and this codebase already knew.** Undo was
+  24h/bids-only, and that 24h matches `ADS_STALE_INTENT_MS` for a stated reason: the rank engine
+  re-evaluates *hourly*, so a day-old bid is already superseded. Flat 7 days would make 11,140
+  bid rows undoable (vs 2,790), and restoring one is not an undo — it is a new, uninformed
+  decision moving real money. Now per class via `rollbackWindowMsFor()`: **bids 24h · budgets and
+  placements 7d · unknown action types 24h** (default-deny). Deliberately NOT applied to
+  `rollbackByChangeSetId` — a bulksheet import mixes every type, and a half-reversed set is worse
+  than a refusal.
+  **The feed was hiding a capability, not lacking one:** op rows carried `undoable: false`
+  hard-coded while `POST /advertising/changes/:actionLogId/undo` sat there working, and the
+  readable rows (`CampaignBidHistory`) have no action-log id, so the handle had to be joined —
+  the same nearest-in-time pairing that already attached delivery to placement rows, generalised
+  to budgets. **200 automation rows: 0 → 200 undoable, and the flag agrees with the server's own
+  `previewRollbackOfAction` 12/12.** Two-step confirm naming the value it restores.
+  **The hourly SPEND breaker cannot fire:** `maxHourlySpendCentsEur` is unset, so the guard
+  enforces its €500/hour code default against a **peak hour of €20.91** across 67 measured hours
+  — ~24× above anything the account does. Surfaced in the digest and the panel; the number is the
+  operator's to set (`maxActionsPerHour` IS set, at 500).
+  **And a trip leaves almost no record:** `haltAutomation` writes the singleton and
+  `resumeAutomation` **nulls `haltedAt`/`haltReason`**, so resuming erases it. The only durable
+  trace is the `Notification` row (`ads-automation-halt`), fanned out one per operator profile —
+  dedupe by timestamp+body. Prod holds one real trip: 2026-08-04 07:20, 264 actions vs a 250 limit.
+- *Exit:* ✅ met, with one qualification recorded honestly — "every action reversible for 7 days"
+  is deliberately **not** true of bids, and should not be made true of them. Routine work runs
+  unattended; the digest is the single touchpoint once the operator sets its two variables.
+- **What Stage 4 did NOT do, on purpose:** flip any env flag, set any live safety threshold, or
+  graduate any rule. All three are operator decisions and all three are now surfaced with their
+  real numbers next to them.
+- **Open, and blocking nothing:** the graduation board stays empty until the priced queue gets
+  worked — which is the loop closing as designed, not a defect. €495.75 of the 150 pending
+  proposals is spend that produced no sales at all.
 
 ### Stage 5 — Ad-type stacking (the biggest missing lever)
 - **5.1** SB create/optimize path (existing product imagery; the 4 paused SB campaigns as templates), **5.2** SD, **5.3** SBV if video assets exist. Separate budget pools so they stack without touching SP bids. Coverage scoreboard gains SB/SD presence columns.
@@ -1068,4 +1140,20 @@ prefix and gate them on `pages.marketing`.
 5. **COGS** — ✅ DECIDED: import from the commerce platform linked to SKUs; needs building → Stage 0.5 is a real phase, not a data-entry task.
 6. **SOV data** — defaulted to in-policy approximation (operator did not object); buy-a-feed remains the Stage 2 fallback if approximation proves insufficient.
 7. **SBV creative** — unanswered; Stage 5 plans SB + SD, SBV only if video assets surface.
-8. **"Tabliu"** — resolved: the operator meant **Tableau**, i.e. BI dashboards, not an ads tool. Relevant lesson only: the reporting layer should offer composable saved views/dashboards — largely covered by RPT (library, runner, custom metrics, saved versions, share links); a "pin any report view to a dashboard" pattern is noted for a later RPT phase, not ACR scope.
+9. **Graduation evidence bar** — ✅ DECIDED 2026-08-05: **3 clean weeks**, and two tracks kept
+   labelled apart. "Ready" requires proposals applied *unchanged*; rules that merely ran cleanly
+   are shown under their own verdict and never as ready, because running is not agreeing.
+10. **Undo window** — ✅ DECIDED 2026-08-05: **per action class**, not the flat 7 days the Stage 4
+    exit line asks for. Bids stay at 24h (the rank engine supersedes them hourly — same reasoning
+    as `ADS_STALE_INTENT_MS`); budgets and placements get 7 days. The exit criterion is recorded
+    as met-with-qualification rather than quietly reinterpreted.
+11. **Digest delivery** — ⏳ **OPEN, and it is two env vars, in this order.** Outbound email is
+    already ON in prod, so this is not a dry-run switch:
+    `NEXUS_ADS_DIGEST_RECIPIENTS=<addresses>` first (without it every run logs SKIPPED), then
+    `NEXUS_ENABLE_ADS_REPORT_SCHEDULE_CRON=1` to start the Monday dispatcher. Read one from the
+    Control Room → Activity → *Preview last week's* before deciding.
+12. **Hourly spend breaker** — ⏳ **OPEN.** `maxHourlySpendCentsEur` is unset, so the €500/hour
+    code default is what is enforced, against a peak hour of €20.91. Operator picks the number;
+    ~€25/hour is roughly 7× the current hourly average and was the recommendation. Until then ad
+    spend has no effective ceiling — the actions/hour signal (500) is the only live one.
+13. **"Tabliu"** — resolved: the operator meant **Tableau**, i.e. BI dashboards, not an ads tool. Relevant lesson only: the reporting layer should offer composable saved views/dashboards — largely covered by RPT (library, runner, custom metrics, saved versions, share links); a "pin any report view to a dashboard" pattern is noted for a later RPT phase, not ACR scope.
