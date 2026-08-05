@@ -670,6 +670,24 @@ So the column ships reading **"—" with the reason stated on the page**, never 
 
 **The experiment itself is built and correct; it is starved, not wrong.** `_acr24-variation.mts` discriminates the two hypotheses that a raw count cannot: under a rotating single slot a family's share is flat in *k* and per-child share falls as 1/*k*; under independent slots per-child share is flat and family share rises with *k*. Every comparison is **within-term**, so market size and term breadth are held fixed by construction. Run today it returns **zero discriminating terms — because a within-term control needs a second family on the same term, and only one family is measured.** A single-family fallback (share vs *k*, banded by market size) is reported in the script but does not separate the hypotheses: *k* is endogenous — the same relevance that puts more children on a term also raises share — and both hypotheses survive it.
 
+**🔴 RESOLVED 2026-08-05 — AIREON's zero is REAL, and the experiment was structurally impossible
+on this week.** `IT AIREON`'s eleven campaigns **started 2026-07-28**. The measured week is
+**2026-07-19 → 07-25**, which ended three days earlier: AIREON spent **€0.00 and took 0
+impressions** in it. Compare `Xavia GALE IT` (started 07-01, €168.93, 79,986 impressions) and
+`IT_Gale` (03-03, €41.90, 73,439). So the four AIREON reports that returned `parser yielded 0
+rows` were correct — there was nothing to return. No parser defect, no scope artefact.
+
+*And the plan built on it could never have worked:* GALE's measured weeks run 06-14 → 07-19,
+AIREON went live 07-28, so **there is no week in which both families are measured**. Widening
+AIREON on the 07-19 week was doomed before the first report was requested — which is why the
+"blocked on Railway credentials" framing was wrong twice over.
+
+**Corrected plan:** backfill **both** families on a week from **2026-07-26 onward** (the first
+that overlaps AIREON's launch), not AIREON alone on the old one. That means re-requesting GALE
+for the new week too — the two-family control needs both on the *same* SERP, and GALE's existing
+six weeks all predate AIREON. Note 2026-07-26 covers only four of AIREON's live days; the first
+clean full week is 2026-08-02, publishable once Amazon releases it. *(`_acr24-aireon-age.mts`.)*
+
 **What unblocks it:** `_acr24-sqp-widen.mts` resolves ASINs from the **catalogue** by family instead of from stored rows, jackets first. With AIREON measured alongside GALE the within-term control exists and the experiment decides. **It can only run on Railway** — the local SP-API refresh token is revoked (`invalid grant parameter : refresh_token`), so 13 requested reports returned 13 failures and wrote nothing. Cost when run: ~6 minutes of Amazon report generation per ten ASINs, one report per ASIN, upserting in place on `(marketplace, period, startDate, searchQuery, asin)`.
 
 ### ACR.2.4c — the widen RAN 2026-08-05, and the answer is not "unmeasured" any more: AIREON is measured ABSENT
