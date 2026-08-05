@@ -18,6 +18,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Sparkles, AlertTriangle, Check, X, ArrowUpRight, ChevronRight } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { AccountPlanPanel } from './AccountPlanPanel'
 import { Button } from '@/design-system/primitives/Button'
 import { Tag } from '@/design-system/primitives/Tag'
 import { Modal } from '@/design-system/components/Modal'
@@ -211,6 +212,11 @@ function RecommendationsInner() {
           )}
         </div>
       )}
+
+      {/* ACR.6 (R3) — the account-level altitude of the same bid engine: one goal, one plan, one
+          apply. Above the card deck because it frames it; collapsed because its blast radius is
+          the whole account rather than a single card. */}
+      <AccountPlanPanel mode={mode} toast={toast} />
 
       {/* Pending / Applied */}
       <Tabs
