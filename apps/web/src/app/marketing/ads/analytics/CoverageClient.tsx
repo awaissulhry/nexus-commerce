@@ -23,6 +23,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, Info, RefreshCw, Search } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+// Self-contained: this page borrows no class from the Control Room's stylesheet. Reusing
+// `.acr-*` here rendered banners and section heads unstyled on prod, because that sheet is
+// imported by the Control Room and nothing else — a cross-page dependency that only shows up
+// in the browser.
 import './coverage.css'
 
 interface Row {
@@ -101,7 +105,7 @@ export function CoverageClient() {
         showDataSync={false}
       />
 
-      {err && <div className="acr-banner err" role="alert"><AlertTriangle size={15} /> {err}</div>}
+      {err && <div className="cov-banner err" role="alert"><AlertTriangle size={15} /> {err}</div>}
       {loading && !board && <div className="cov-empty">Loading…</div>}
 
       {board && (
@@ -136,23 +140,23 @@ export function CoverageClient() {
                   ))}
                 </select>
               </label>
-              <button type="button" className="acr-refresh" onClick={() => void load(market, week)} disabled={loading}>
+              <button type="button" className="cov-btn" onClick={() => void load(market, week)} disabled={loading}>
                 <RefreshCw size={13} /> {loading ? 'Loading…' : 'Refresh'}
               </button>
             </div>
           </div>
 
           {board.notes.map((n) => (
-            <div key={n.slice(0, 40)} className={`acr-banner ${board.measured ? 'warn' : 'err'}`}>
+            <div key={n.slice(0, 40)} className={`cov-banner ${board.measured ? 'warn' : 'err'}`}>
               <Info size={15} /> <span>{n}</span>
             </div>
           ))}
 
           {board.headroom.length > 0 && (
             <section className="cov-headroom">
-              <div className="acr-sec-head">
+              <div className="cov-sec-head">
                 <h2>Headroom</h2>
-                <span className="acr-sec-count">
+                <span className="cov-sec-count">
                   big markets we hold almost none of — ordered by what is available, not by what we spend
                 </span>
               </div>
@@ -171,9 +175,9 @@ export function CoverageClient() {
             </section>
           )}
 
-          <div className="acr-sec-head">
+          <div className="cov-sec-head">
             <h2>Every term</h2>
-            <span className="acr-sec-count">{rows.length} shown · largest market first</span>
+            <span className="cov-sec-count">{rows.length} shown · largest market first</span>
             <label className="cov-search">
               <Search size={13} />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter terms" />
@@ -216,7 +220,7 @@ export function CoverageClient() {
             </table>
           </div>
 
-          <p className="acr-foot">
+          <p className="cov-foot">
             Search Query Performance, weekly, from Amazon Brand Analytics. &ldquo;Ours on page&rdquo; counts
             distinct ASINs of ours that took at least one impression on that term — several of our
             products already share these pages, so the gap this board measures is share, not presence.

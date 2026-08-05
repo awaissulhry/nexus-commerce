@@ -78,3 +78,40 @@
   .cov-head-list li { grid-template-columns: minmax(0, 1fr) 88px 66px; }
   .cov-head-kw { display: none; }
 }
+
+/* ── borrowed-no-more ────────────────────────────────────────────────────────
+   These five started as `.acr-*` classes reused from the Control Room. That sheet is imported
+   by the Control Room and nothing else, so on prod this page rendered its banners and section
+   heads with no styling at all — an unstyled icon on one line and the text beneath it. Reusing a
+   class name is not reusing a style; the stylesheet has to be loaded. Defined here so the page
+   owns its own appearance. */
+.cov-banner {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 12.5px; border-radius: 7px; padding: 10px 13px; margin-bottom: 10px; line-height: 1.5;
+}
+.cov-banner svg { flex-shrink: 0; margin-top: 1px; }
+.cov-banner.warn { background: #fff8ec; border: 1px solid #ecd9ae; color: #8a6320; }
+/* An unmeasured week is not a warning about the account, it is a hole in the evidence. */
+.cov-banner.err { background: #fdf2f2; border: 1px solid #e6bcba; color: #9c2f2a; }
+
+.cov-sec-head { display: flex; align-items: baseline; gap: 10px; margin: 22px 0 9px; }
+.cov-sec-head h2 { font-size: 13px; font-weight: 650; color: #34404f; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
+.cov-sec-count { font-size: 12px; color: #8d97a6; }
+
+.cov-btn {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  font-size: 12px; color: #46536a; background: #fff;
+  border: 1px solid #d7dee7; border-radius: 6px; padding: 7px 11px; cursor: pointer;
+}
+.cov-btn:hover:not(:disabled) { background: #f4f6f9; border-color: #c3cdd9; }
+.cov-btn:disabled { opacity: 0.55; cursor: default; }
+
+.cov-foot { font-size: 12px; color: #8d97a6; margin: 18px 0 0; line-height: 1.55; max-width: 92ch; }
+
+/* The header component owns the page's outer padding; everything below it needs its own. */
+.cov > .cov-top,
+.cov > .cov-banner,
+.cov > .cov-sec-head,
+.cov > .cov-tablewrap,
+.cov > .cov-headroom,
+.cov > .cov-foot { margin-left: 24px; margin-right: 24px; }
