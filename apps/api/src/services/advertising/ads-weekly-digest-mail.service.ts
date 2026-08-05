@@ -81,6 +81,19 @@ export function renderWeeklyDigest(d: WeeklyDigest): string {
     ${t.acted.toLocaleString('en-IE')} actions taken · ${t.proposed.toLocaleString('en-IE')} proposed
   </p>
 
+  ${d.breaker.tripsThisWeek.length > 0 ? `
+  <div style="padding:12px 14px;border-left:3px solid #a3342b;background:#fdf6f5;margin:0 0 16px">
+    <b>The breaker tripped ${d.breaker.tripsThisWeek.length === 1 ? 'once' : `${d.breaker.tripsThisWeek.length} times`} this week — automation was HALTED.</b>
+    ${d.breaker.tripsThisWeek.map((t) => `<div style="margin-top:3px">${esc(new Date(t.at).toISOString().slice(0, 16).replace('T', ' '))} — ${esc(t.reason)}</div>`).join('')}
+    <div style="color:#5b6573;font-size:12.5px;margin-top:4px">${esc(d.breaker.tripNote)}</div>
+  </div>` : ''}
+
+  ${d.breaker.spendThresholdIsDefault ? `
+  <div style="padding:12px 14px;border-left:3px solid #b87503;background:#fdf9f2;margin:0 0 16px">
+    <b>Ad spend has no operator-set hourly limit.</b>
+    <div style="color:#5b6573;font-size:12.5px;margin-top:4px">${esc(d.breaker.spendNote)}</div>
+  </div>` : ''}
+
   ${d.proposals.pending > 0 ? `
   <div style="padding:12px 14px;border-left:3px solid ${d.proposals.recoverableCents > 0 ? '#c0392b' : '#8d97a6'};background:#fbfcfd;margin:0 0 16px">
     <b>${d.proposals.pending} proposals are waiting on you.</b><br>

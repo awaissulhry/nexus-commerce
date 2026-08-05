@@ -215,6 +215,61 @@ function hasRestorableBefore(before: unknown): boolean {
   return before != null && typeof before === 'object' && Object.keys(before as object).length > 0
 }
 
+/** Money and percentages, compared at the precision they are stored with. */
+function sameNumber(a: unknown, b: string | null): boolean {
+  if (b == null) return false
+  const x = Number(a), y = Number(b)
+  return Number.isFinite(x) && Number.isFinite(y) && Math.abs(x - y) < 0.005
+}
+
+/**
+ * Does this operation row describe the SAME change as this field row?
+ *
+ * Exact agreement on the before AND after value, not proximity. Both sides must match: an op
+ * that happens to share a starting value with a neighbouring change is still the wrong row to
+ * undo, and on this account the same campaign's budget is rewritten repeatedly within seconds.
+ */
+export function opMatchesField(
+  op: { payloadBefore: unknown; payloadAfter: unknown },
+  row: { field: string; oldValue: string | null; newValue: string | null },
+  actionType: string,
+): boolean {
+  const before = op.payloadBefore as Record<string, unknown> | null
+  const after = op.payloadAfter as Record<string, unknown> | null
+  if (!before || !after) return false
+
+  if (actionType === 'AD_BUDGET_UPDATE') {
+    return sameNumber(before.dailyBudget, row.oldValue) && sameNumber(after.dailyBudget, row.newValue)
+  }
+
+  if (actionType === 'update_placement_bidding') {
+    // The field name IS the placement key ('PLACEMENT_TOP'), and the payload carries an array of
+    // adjustments. A placement ABSENT from the array means 0% — the rank engine writes a partial
+    // list — so a missing entry must compare as zero rather than fail to match, or a genuine
+    // 45% → 0% change would never find its own record.
+    const pct = (adj: unknown): number => {
+      const arr = Array.isArray(adj) ? adj as Array<{ placement?: string; percentage?: number }> : []
+      const hit = arr.find((a) => a?.placement === row.field)
+      return Number(hit?.percentage ?? 0)
+    }
+    /**
+     * "Absent" means 0% on BOTH sides, and it has two spellings: a placement missing from the
+     * payload's adjustment array, and a null oldValue on the history row. Mapping only the
+     * payload side left 96 of 200 rows — every `null → 0` placement change, which is most of
+     * them — unable to match a record that described them perfectly. Same one-concept-two-
+     * spellings defect this programme keeps finding; here it was mine, and it made the safety
+     * check refuse work it should have allowed.
+     *
+     * Budgets get NO such coercion: a null budget is unknown, and unknown is not zero.
+     */
+    const rowPct = (v: string | null): string => (v == null ? '0' : v)
+    return sameNumber(pct(before.adjustments), rowPct(row.oldValue))
+      && sameNumber(pct(after.adjustments), rowPct(row.newValue))
+  }
+
+  return false
+}
+
 export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: ChangeRow[]; count: number; from: Date; to: Date; members: Array<{ campaignId: string; name: string }> }> {
   // A group scope resolves to its members' actor strings up front, so the DB filters on
   // changedBy rather than post-filtering a wide read.
@@ -369,21 +424,47 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       let best = cands[0], gap = Math.abs(cands[0].createdAt.getTime() - r.at.getTime())
       for (const c of cands.slice(1)) { const g = Math.abs(c.createdAt.getTime() - r.at.getTime()); if (g < gap) { gap = g; best = c } }
       const err = (best.payloadAfter as { error?: string } | null)?.error ?? null
+      // Delivery keeps the looser nearest-in-time match it has always had: mis-attributing a
+      // delivery chip is cosmetic, and tightening it here would regress rows that resolve today.
       r.delivery = { state: best.amazonResponseStatus === 'FAILED' ? 'FAILED' : 'APPLIED', attempts: 1, lastError: err }
+
+      /**
+       * The UNDO handle is held to a much higher bar than the delivery chip, because the two
+       * failure modes are not comparable: a wrong delivery chip misinforms, a wrong undo handle
+       * WRITES THE WRONG VALUE TO AMAZON.
+       *
+       * Nearest-in-time alone is not safe enough for that. Measured on prod: every campaign with
+       * budget activity has more than one budget op within six hours, the busiest has 36, and two
+       * of them landed NINE SECONDS apart carrying different values (4.14 → 6.46, then
+       * 6.46 → 5.17). Pairing by proximity could hand undo the wrong snapshot and restore 4.14
+       * where 6.46 belonged.
+       *
+       * So the undo handle requires the operation row's own before/after to MATCH the field row's
+       * — an exact agreement about which change this is, not an estimate. No match, no handle:
+       * the row simply says it cannot be undone rather than offering a button aimed at its
+       * neighbour.
+       */
+      const exact = cands.filter((c) => opMatchesField(c, r, pair.actionType))
+      if (exact.length === 0) {
+        r.undoBlockedReason = 'This change could not be matched to a reversible record with certainty, so undo is not offered.'
+        continue
+      }
+      let chosen = exact[0], eGap = Math.abs(exact[0].createdAt.getTime() - r.at.getTime())
+      for (const c of exact.slice(1)) { const g = Math.abs(c.createdAt.getTime() - r.at.getTime()); if (g < eGap) { eGap = g; chosen = c } }
 
       // The undo verdict is the operation row's, not the field row's — it is the thing that
       // would actually be reversed. Same predicate the op rows use, so a paired row and a bare
       // op row can never disagree about the same event.
-      const landed = best.amazonResponseStatus === 'SUCCESS' || best.amazonResponseStatus === 'PENDING'
-      const inWindow = now - best.createdAt.getTime() < rollbackWindowMsFor(best.actionType)
-      if (best.rolledBackAt != null) r.undoBlockedReason = 'Already undone.'
+      const landed = chosen.amazonResponseStatus === 'SUCCESS' || chosen.amazonResponseStatus === 'PENDING'
+      const inWindow = now - chosen.createdAt.getTime() < rollbackWindowMsFor(chosen.actionType)
+      if (chosen.rolledBackAt != null) r.undoBlockedReason = 'Already undone.'
       else if (!landed) r.undoBlockedReason = 'This change never reached Amazon, so there is nothing to reverse.'
-      else if (!inWindow) r.undoBlockedReason = `Older than the ${rollbackWindowLabel(best.actionType)} undo window for this kind of change.`
-      else if (!hasRestorableBefore(best.payloadBefore)) r.undoBlockedReason = 'No prior value was recorded, so there is nothing to restore.'
+      else if (!inWindow) r.undoBlockedReason = `Older than the ${rollbackWindowLabel(chosen.actionType)} undo window for this kind of change.`
+      else if (!hasRestorableBefore(chosen.payloadBefore)) r.undoBlockedReason = 'No prior value was recorded, so there is nothing to restore.'
 
-      if (landed && best.rolledBackAt == null && inWindow && hasRestorableBefore(best.payloadBefore)) {
+      if (landed && chosen.rolledBackAt == null && inWindow && hasRestorableBefore(chosen.payloadBefore)) {
         r.undoable = true
-        r.undoActionLogId = best.id
+        r.undoActionLogId = chosen.id
       }
     }
   }
