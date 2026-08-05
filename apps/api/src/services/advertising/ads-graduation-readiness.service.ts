@@ -136,6 +136,90 @@ const nextNotch = (level: AutonomyLevel, ceiling: AutonomyLevel): AutonomyLevel 
   return ORDER.indexOf(next) <= ORDER.indexOf(ceiling) ? next : null
 }
 
+/** The evidence a verdict is decided from — every field a count or a date, no database. */
+export interface VerdictInput {
+  ceilingIsAuto: boolean
+  ceilingReason: string
+  failures: number
+  decisionWeeks: number
+  cleanWeeks: number
+  editedApplies: number
+  appliedClean: number
+  pending: number
+  proposalsEver: number
+  runs: number
+  lastDecisionAt: Date | null
+}
+
+/**
+ * The whole judgement, as a pure function.
+ *
+ * Extracted from the board so the ORDER of these branches is testable without a database —
+ * and the order is the substance here, not an implementation detail. Two of them would each
+ * have produced a confidently wrong answer if placed differently:
+ *
+ *   · `capped` outranks everything. A structural rule with perfect history is still capped,
+ *     because the ceiling is about what the rule DOES, not what it has done.
+ *   · `unseen` outranks the week thresholds. It is a qualitative state, not a quantity of
+ *     history — a rule that never queues a proposal cannot accumulate evidence by running
+ *     longer, so ranking it by weeks reports progress toward something unreachable.
+ */
+export function decideVerdict(e: VerdictInput, now = new Date()): { verdict: Verdict; summary: string } {
+  const stale = e.lastDecisionAt != null && now.getTime() - e.lastDecisionAt.getTime() > STALE_AFTER_DAYS * DAY
+
+  if (!e.ceilingIsAuto) return { verdict: 'capped', summary: e.ceilingReason }
+
+  if (e.failures > 0) {
+    return {
+      verdict: 'failing',
+      summary: `${e.failures} execution${e.failures === 1 ? '' : 's'} failed in the last ${WINDOW_DAYS} days. A rule that cannot complete its own runs is not a candidate for running them unattended.`,
+    }
+  }
+  if (e.decisionWeeks >= GRADUATION_WEEKS && e.editedApplies === 0 && !stale) {
+    return {
+      verdict: 'ready',
+      summary: `You applied its proposals unchanged in ${e.decisionWeeks} separate weeks, most recently ${e.lastDecisionAt ? daysAgo(e.lastDecisionAt, now) : 'recently'}, and nothing it ran failed. That is agreement, repeated — the evidence AUTO asks for.`,
+    }
+  }
+  if (e.decisionWeeks >= GRADUATION_WEEKS && e.editedApplies > 0) {
+    return {
+      verdict: 'building',
+      summary: `${e.decisionWeeks} weeks of applied proposals, but you corrected the magnitude on ${e.editedApplies} of them. Editing before applying is agreement with the intent and disagreement with the number — and the number is what would run unattended.`,
+    }
+  }
+  if (e.decisionWeeks >= GRADUATION_WEEKS && stale) {
+    return {
+      verdict: 'building',
+      summary: `${e.decisionWeeks} clean weeks, but the last one was ${e.lastDecisionAt ? daysAgo(e.lastDecisionAt, now) : 'a while ago'}. Evidence older than ${STALE_AFTER_DAYS} days describes an account that has since moved.`,
+    }
+  }
+  if (e.runs >= UNSEEN_MIN_RUNS && e.proposalsEver === 0) {
+    return {
+      verdict: 'unseen',
+      summary: `${e.runs.toLocaleString('en-IE')} matches across ${e.cleanWeeks} week${e.cleanWeeks === 1 ? '' : 's'}, no failures — and not one queued proposal. You have never seen what it would actually do, so there is nothing here to agree with. That makes it the riskiest row on this board, not the safest.`,
+    }
+  }
+  if (e.cleanWeeks >= GRADUATION_WEEKS && e.pending > 0) {
+    return {
+      verdict: 'unreviewed',
+      summary: `${e.cleanWeeks} weeks of clean runs, and ${e.pending} proposal${e.pending === 1 ? '' : 's'} waiting on you. It works; you have not yet said whether you agree. Working the priced queue is what turns this into evidence.`,
+    }
+  }
+  if (e.cleanWeeks >= GRADUATION_WEEKS) {
+    return {
+      verdict: 'unreviewed',
+      summary: `${e.cleanWeeks} weeks of clean runs and nothing waiting. It has proposed ${e.proposalsEver} time${e.proposalsEver === 1 ? '' : 's'} in total — too little decided history to graduate on.`,
+    }
+  }
+  return {
+    verdict: 'building',
+    summary: e.runs === 0
+      ? 'Has not run inside the window. There is nothing to judge it on yet.'
+      : `${e.cleanWeeks} of the ${GRADUATION_WEEKS} weeks needed, ${e.appliedClean} proposal${e.appliedClean === 1 ? '' : 's'} applied unchanged.`
+        + (e.pending > 0 ? ` ${e.pending} ${e.pending === 1 ? 'is' : 'are'} waiting on you — deciding them is what builds the rest.` : ''),
+  }
+}
+
 export async function getGraduationBoard(now = new Date()): Promise<GraduationBoard> {
   const since = new Date(now.getTime() - WINDOW_DAYS * DAY)
 
@@ -243,50 +327,19 @@ export async function getGraduationBoard(now = new Date()): Promise<GraduationBo
       runs.filter((e) => e.status !== 'FAILED').map((e) => isoWeek(e.startedAt)),
     ).size
 
-    const capped = ceiling.maxLevel !== 'AUTO'
-    const stale = lastDecision != null && now.getTime() - lastDecision.getTime() > STALE_AFTER_DAYS * DAY
-
-    let verdict: Verdict
-    let summary: string
-
-    if (capped) {
-      verdict = 'capped'
-      summary = ceiling.reason
-    } else if (failures > 0) {
-      verdict = 'failing'
-      summary = `${failures} execution${failures === 1 ? '' : 's'} failed in the last ${WINDOW_DAYS} days. A rule that cannot complete its own runs is not a candidate for running them unattended.`
-    } else if (decisionWeeks >= GRADUATION_WEEKS && edited.length === 0 && !stale) {
-      verdict = 'ready'
-      summary = `You applied its proposals unchanged in ${decisionWeeks} separate weeks, most recently ${lastDecision ? daysAgo(lastDecision, now) : 'recently'}, and nothing it ran failed. That is agreement, repeated — the evidence AUTO asks for.`
-    } else if (decisionWeeks >= GRADUATION_WEEKS && edited.length > 0) {
-      verdict = 'building'
-      summary = `${decisionWeeks} weeks of applied proposals, but you corrected the magnitude on ${edited.length} of them. Editing before applying is agreement with the intent and disagreement with the number — and the number is what would run unattended.`
-    } else if (decisionWeeks >= GRADUATION_WEEKS && stale) {
-      verdict = 'building'
-      summary = `${decisionWeeks} clean weeks, but the last one was ${lastDecision ? daysAgo(lastDecision, now) : 'a while ago'}. Evidence older than ${STALE_AFTER_DAYS} days describes an account that has since moved.`
-    } else if (runs.length >= UNSEEN_MIN_RUNS && mine.length === 0) {
-      /**
-       * Checked BEFORE the week thresholds, because this is a qualitative state and not a
-       * quantity of history. Measured: AIREON — Target ACoS bidding has matched 546 times
-       * across 2 weeks and queued nothing. Ranked purely by weeks it read as "2 of the 3
-       * needed" — on track — when the truth is that no amount of further running will produce
-       * evidence, because this rule does not put anything in front of you to agree with.
-       */
-      verdict = 'unseen'
-      summary = `${runs.length.toLocaleString('en-IE')} matches across ${cleanWeeks} week${cleanWeeks === 1 ? '' : 's'}, no failures — and not one queued proposal. You have never seen what it would actually do, so there is nothing here to agree with. That makes it the riskiest row on this board, not the safest.`
-    } else if (cleanWeeks >= GRADUATION_WEEKS && pending > 0) {
-      verdict = 'unreviewed'
-      summary = `${cleanWeeks} weeks of clean runs, and ${pending} proposal${pending === 1 ? '' : 's'} waiting on you. It works; you have not yet said whether you agree. Working the priced queue is what turns this into evidence.`
-    } else if (cleanWeeks >= GRADUATION_WEEKS) {
-      verdict = 'unreviewed'
-      summary = `${cleanWeeks} weeks of clean runs and nothing waiting. It has proposed ${mine.length} time${mine.length === 1 ? '' : 's'} in total — too little decided history to graduate on.`
-    } else {
-      verdict = 'building'
-      summary = runs.length === 0
-        ? 'Has not run inside the window. There is nothing to judge it on yet.'
-        : `${cleanWeeks} of the ${GRADUATION_WEEKS} weeks needed, ${clean.length} proposal${clean.length === 1 ? '' : 's'} applied unchanged.`
-          + (pending > 0 ? ` ${pending} ${pending === 1 ? 'is' : 'are'} waiting on you — deciding them is what builds the rest.` : '')
-    }
+    const { verdict, summary } = decideVerdict({
+      ceilingIsAuto: ceiling.maxLevel === 'AUTO',
+      ceilingReason: ceiling.reason,
+      failures,
+      decisionWeeks,
+      cleanWeeks,
+      editedApplies: edited.length,
+      appliedClean: clean.length,
+      pending,
+      proposalsEver: mine.length,
+      runs: runs.length,
+      lastDecisionAt: lastDecision,
+    }, now)
 
     const ready = verdict === 'ready'
     return {
