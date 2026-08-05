@@ -43,8 +43,15 @@ git add -- "$VAULT"
 
 # -m must precede the `--` pathspec separator, or git reads the message
 # as a filename and fails with "pathspec '-m' did not match any file(s)".
-git commit --only \
-  -m "vault: auto-commit $(date '+%Y-%m-%d %H:%M')" \
-  -- "$VAULT"
-
-echo "$(date '+%F %T') committed vault changes"
+#
+# `|| true` because --only recomputes the commit from the working tree
+# for the given paths, so a status that looked dirty can still resolve to
+# an empty commit (e.g. a staged deletion of a now-ignored file). That is
+# a no-op, not a failure — it must not kill the launchd job.
+if git commit --only \
+     -m "vault: auto-commit $(date '+%Y-%m-%d %H:%M')" \
+     -- "$VAULT"; then
+  echo "$(date '+%F %T') committed vault changes"
+else
+  echo "$(date '+%F %T') nothing to commit after all (no-op)" >&2
+fi

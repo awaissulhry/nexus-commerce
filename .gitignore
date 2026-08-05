@@ -67,3 +67,6 @@ repomix-output.xml
 
 # Obsidian UI state — rewrites on every pane move, pure commit noise
 obsidian-vault/.obsidian/workspace.json
+
+# Local Claude Code permission overrides — machine-specific, and has held DB credentials
+.claude/settings.local.json
