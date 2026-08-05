@@ -18,7 +18,11 @@
 import '../src/env.js'
 
 const PATTERN = process.argv[2] ?? 'AIREON'
-const LOOKBACK = Math.max(2, Number(process.argv[3] ?? 2) || 2)
+// ACR.2.1 recorded "lookback must be >= 2 — one week back is not published". That guard is kept
+// as the DEFAULT, but no longer as a floor: it was an inference from one failure, and whether a
+// given week is published is a question Amazon answers in one request. Pass 1 deliberately to
+// test the most recently completed week; the failure mode is a clean client error, not a bad write.
+const LOOKBACK = Math.max(1, Number(process.argv[3] ?? 2) || 2)
 const MAX = Math.max(1, Math.min(30, Number(process.argv[4] ?? 14) || 14))
 const DRY = process.argv.includes('--dry')
 
