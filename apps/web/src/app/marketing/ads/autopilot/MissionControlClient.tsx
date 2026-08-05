@@ -5,6 +5,7 @@ import { useAccountGraph } from '../_canvas/useAccountGraph'
 import { useCampaignDetail } from '../_canvas/useCampaignDetail'
 import { eur, eur2, pct, intl, roas, ago } from '../_canvas/format'
 import { resolveCampaigns, stageActions, type ActionSpec, type Staged, type CampaignInput } from '../_canvas/actions'
+import Link from 'next/link'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { OpsObject } from '../_canvas/types'
 import { ActionBar } from './ActionBar'
@@ -174,10 +175,27 @@ export function MissionControlClient() {
           <h1 className="mc-title">Mission Control</h1>
         </div>
         <div className="mc-actions">
-          <span className="mc-chip">All markets</span>
-          <span className="mc-chip">Last 30 days</span>
-          <span className="mc-chip mc-chip--auto">Autonomy: SUGGEST</span>
-          <span className="mc-chip mc-chip--kill">Halt all</span>
+          {/*
+            ACR.1.6 — these were four hard-coded <span>s: "All markets", "Last 30 days",
+            "Autonomy: SUGGEST" and "Halt all". None read anything and none did anything.
+
+            Two of them were not merely decorative, they were WRONG. The account dial has read
+            AUTO throughout; a chip stating SUGGEST tells an operator the account is demoting
+            every write to a proposal when it is not. And "Halt all" is styled as the kill
+            switch — the single most consequential control in the system — while being a span
+            that swallows the click. An operator in a hurry would press it and believe the
+            account had stopped.
+
+            Both now live in the Control Room, where they are real: the status band reads the
+            live dial and Stop everything calls /automation/halt. This page is a MAP, and a map
+            with fake instruments on it is worse than a map with none. The remaining two chips
+            described a filter and a window that the graph does not apply either — it loads
+            every campaign, unfiltered — so they are gone with the rest.
+          */}
+          <span className="mc-chip">{objects.length ? `${objects.length} objects` : 'Loading…'}</span>
+          <Link href="/marketing/ads/rules-automation/control-room" className="mc-chip mc-chip--link">
+            Automation controls →
+          </Link>
         </div>
       </header>
       <div className="mc-body">

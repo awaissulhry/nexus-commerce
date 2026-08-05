@@ -4,8 +4,12 @@
 .mc-title { font-size: 20px; font-weight: 800; color: #1c2530; margin: 0; }
 .mc-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .mc-chip { border: 1px solid #e3e7ec; border-radius: 7px; padding: 5px 10px; font-size: 12px; font-weight: 700; color: #5b6573; background: #fff; }
-.mc-chip--auto { background: #1f6fde; color: #fff; border-color: #1f6fde; }
-.mc-chip--kill { color: #e5484d; border-color: #f3c0c2; }
+/* ACR.1.6 — .mc-chip--auto and .mc-chip--kill are gone with the two hard-coded chips they
+   styled ("Autonomy: SUGGEST", "Halt all"). Both stated account state this page never read and
+   the second imitated the kill switch while being a span. Anything that looks like a control on
+   this page must now BE one — hence the link style below and nothing else. */
+.mc-chip--link { color: #1f6fde; border-color: #c9dcf7; text-decoration: none; }
+.mc-chip--link:hover { background: #f2f7fe; border-color: #a9c8f2; }
 .mc-body { flex: 1; min-height: 0; display: flex; }
 .mc-canvas-wrap { flex: 1; min-width: 0; min-height: 560px; position: relative; }
 
