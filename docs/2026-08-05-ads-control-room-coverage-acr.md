@@ -353,6 +353,22 @@ Verified on the 10:30 tick: placement writes carry **`mode=live`**, not `local` 
   *Detail worth keeping:* **action links were checked against the routes that exist**, not the ones that sound right. `/marketing/ads/search-terms` and `/products/import` do not exist; the real destinations are Recommendations (its Negative Harvesting lane) and `/products/costs`. The pre-push link checker cannot catch these — they are strings returned by the API, not hrefs in a component.
 
 - ~~**1.1** Today tab (status band, One Number, priced exception board, digest, boundary counts).~~ *(shipped above; the digest folds into Foresight rather than duplicating the same rows in past tense)*
+
+- **1.5 ✅ DONE 2026-08-05 — Foresight.** `GET /advertising/control-room/foresight` + `ForesightTab.tsx` + `cron-window.ts`.
+
+  **The tab's rule is that its two sources are not the same kind of thing.** A rank hand-over is a **commitment** — the schedule is stored, so the hour is known and each one is a bid write. An engine tick is an **opportunity** — it will happen, but what it writes depends on data that does not exist yet. Rendering both as one kind of row would make the account look far more determined than it is, so hand-overs get the hour-by-hour timeline with counts and engines get cadence only.
+
+  The rank forecast **reuses `buildNext24`**, the same function the arm-preview uses, over the same `resolveActiveWindow`/`biasBand` the engine runs on. That was RDX/E1's whole point and it now holds account-wide: the forecast cannot say one thing while the engine does another.
+
+  **`cron-window.ts`** evaluates the fleet's real expressions by walking the window minute by minute and testing each field. An exhaustive walk cannot drift the way last-plus-interval arithmetic does across a `7,22,37,52` list or a DST boundary, and it reads the **same env var with the same default each job reads**, so an override moves the forecast rather than leaving it confidently stale. Day-of-month and day-of-week together are a **union**, per crontab. `describeCron` parses before it formats — without that, `describeCron('not a cron')` returns `"weekly, 0a:not UTC"`, authoritative-looking and meaningless, which is the exact failure this tab exists to prevent.
+
+  **Two "no ceiling" counts, deliberately kept distinct.** `unbounded` keeps `next24`'s narrow all-out-with-no-ceiling meaning (other callers depend on it); `noCpcCeiling` counts hours governed by **any** mode without a ceiling. Reporting only the first would have Foresight saying "0 unbounded hours" beside Today's "3 rank modes can bid without a price ceiling" — one fact in two vocabularies that disagree, the defect class this whole engagement keeps finding.
+
+  **Measured live:** 33 enabled schedules of 45 · **319 scheduled bid changes in 24 h** · **15 of 24 hours** governed by a mode with no CPC ceiling — and the *all-out* hours are the bounded ones, visible in the timeline as `no cap` dropping from 33 to 11 exactly when 22 schedules switch to Own Top — All-Out. The daily shape reads at a glance: top-of-search and all-out through the day, **Min bid 00:00–08:00** (bids to ~2¢, delivery continues), Defend Top from 09:00.
+
+  A **stopped account reports `scheduledBidChanges: null`**, not a number, with the hours still populated and labelled a rehearsal — a count there would read as "this WILL happen" on an account where nothing will.
+
+  *29 tests* (19 cron, 10 foresight).
 - **1.2** Levers tab (engine rows + drawer with per-rule dials; unified mode vocabulary; per-dimension pins enforced at the gate — one new `CampaignAutomationPin` field-set, additive migration).
 - **1.3** Guardrails tab (bounds grid over existing A1/G2 columns; shared protected-terms panel; account chips).
 - **1.4** Activity tab (changelog embed + why-search + nightly stored audit with diff — new `AdsAuditSnapshot` model, additive).
