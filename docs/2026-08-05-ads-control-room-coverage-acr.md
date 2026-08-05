@@ -272,7 +272,17 @@ Each phase separately gated; nothing starts without operator approval. Verificat
 
   **Surfaces:** dashboard "True margin (30d)" carries a `?` affordance stating *why* it is a dash; the ads-console Ad Manager grid renders `—` with a tooltip and exports empty rather than `0.00`, and sorts unknowns last; the legacy Campaign Profit Lens **does not render at all** without a cost (it had been showing "True profit €0.00 · 0.00× per ad €" over real spend); the legacy profit page dashes the cell and only claims a total margin when at least one row could compute one.
 
-  **Migration effect, verified against prod inside a rolled-back transaction** (`_acr05-migration-dryrun.mts` — DDL is transactional, so this proves the SQL applies without persisting): **714** ProductProfitDaily rows → unknown, **137** keep a real profit (the no-revenue burn days, which are legitimately computable), **216 of 216** campaigns → unknown instead of a confident €0. Every input component stays stored, so all of it recomputes the moment COGS lands.
+  **Migration effect, dry-run then confirmed live.** `_acr05-migration-dryrun.mts` applied the SQL inside a transaction and rolled it back (Postgres DDL is transactional, so this proves the migration before the deploy carries it); `_acr05-verify-live.mts` then confirmed the same numbers on prod after `52ecfbb9e` landed at 12:12 UTC:
+
+  | | before | after |
+  |---|---|---|
+  | ProductProfitDaily rows claiming a profit | 851 | **137** |
+  | …rows saying "unknown" | 0 | **714** |
+  | …rows whose `hasCostPrice` was true | 742 | **137** |
+  | Campaigns claiming a profit | 216 | **0** |
+  | Rows with revenue, no cost, and a profit anyway | **714** | **0** |
+
+  The **137 survivors are all zero-revenue rows** — days a product sold nothing and burned fees and ad spend. 65 of them carry a genuine loss (largest −€21.76), which is knowledge worth keeping: nothing sold genuinely costs nothing, so their profit is computable and negative. Every input component stays stored, so all 714 recompute the moment COGS lands.
 - ~~**0.5** COGS pipeline — **a real build, per operator 2026-08-05:**~~ *(superseded by the measurement above)* costs come from the commerce platform and link to SKUs. Import path (file upload and/or API pull) → populate the existing `Product.costPrice`/`weightedAvgCostCents` fields → freshness surfaced (a stale cost is as misleading as a missing one). Unblocks profit-native bidding, margin-true wasted-spend, break-even columns. Until it lands, every € figure renders honestly labeled "ACOS-estimated".
 - *Exit:* reconcile running · coverage feeds landing data or root-caused · dial fails safe · COGS loaded or explicitly deferred.
 
