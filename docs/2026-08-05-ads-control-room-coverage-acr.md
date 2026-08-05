@@ -720,6 +720,68 @@ control group. The experiment needs a **complete second family**, which is a cre
 operation — those ASINs have no rows to upsert onto. Priority stays AIREON, and the payoff is now
 larger than the variation question alone: it is the first honest account-level coverage number.
 
+### 🔴 ACR.0.2-bis — the ToS-IS diagnosis was WRONG, and the shipped fix cannot work
+
+**The report was never slow. The client cannot find the download URL.**
+
+Measured live against Amazon on 2026-08-05 (`scripts/_acr23-report-status.mts`, read-only), on a
+report the ingest was polling at attempt 52:
+
+```
+status       = COMPLETED                                  ← terminal
+url          = https://offline-report-storage-eu-west-1-prod.s3…   ← the download URL
+location     = undefined                                  ← what the client tests for
+createdAt    = 19:52:11
+generatedAt  = 19:52:37                                   ← 26 SECONDS. fileSize 9,944 bytes.
+```
+
+The full key set Amazon returns is `configuration, createdAt, endDate, failureReason, fileSize,
+generatedAt, name, reportId, startDate, status, updatedAt, url, urlExpiresAt`. **There is no
+`location` key at all.** The poll loop's success branch was:
+
+```ts
+if (status.status === 'COMPLETED' && status.location) { …download… }
+```
+
+so it was never taken. Every finished report fell through to the `pending` branch and polled
+until the ceiling, where the job recorded a timeout.
+
+**This invalidates ACR.0.2's recorded cause and its fix.** That entry states the report "was
+still PENDING at the 10-minute ceiling on every profile, every night" — an inference from the
+symptom, not a measurement; the status was `COMPLETED` within half a minute. Raising
+`pollMinutes` 10 → 45 therefore **cannot** work: it only makes each nightly failure take 45
+minutes instead of 10. The `pollMinutes` parameter is harmless and can stay, but it fixed
+nothing, and tonight's run under it would have failed exactly as the previous twelve did.
+
+**This is the fourth two-vocabularies defect in this programme** — after `EXACT`/`_EXACT`, the
+rule tabs filtering on a word no rule uses, and `expressionType` vs `isNegative`. One concept,
+two spellings, and the code picked the one Amazon does not send.
+
+**Fix (in `ads-api-client.ts`, working tree — see the note below):**
+1. `const downloadUrl = status.url ?? status.location` — accept both, so a future Amazon change
+   in either direction cannot re-break it.
+2. A `COMPLETED` report carrying no usable URL now **throws**, naming the keys it did receive.
+   Logging that state as "pending" is precisely how this hid for months: the failure mode and
+   the healthy-but-slow mode were indistinguishable in the logs.
+
+⚠️ **The code change is UNCOMMITTED**, in a file that also holds ~420 lines of another session's
+SB/SD create paths, so it could not be committed without sweeping that work. If it is lost, the
+one-line change above is the whole fix.
+
+**Not yet proven end-to-end.** Two supervised runs from a laptop got as far as Amazon and failed
+on *environment*, not on this bug: the first died when the ads quota ledger correctly failed
+closed with no Redis, the second on a `Connection terminated due to connection timeout` from the
+Railway-injected `DATABASE_URL` while the report was still legitimately `PENDING`. The contract
+finding above is nonetheless direct evidence, independent of those runs.
+
+*Operational note for anyone reproducing this:* `railway run --service "@nexus/api"` injects
+production env into a local process and **does** reach Amazon (the "Railway-only" belief was
+wrong — it was a credentials problem, not a network one). Three traps come with it: `REDIS_URL`
+resolves only inside Railway (`env -u REDIS_URL`), the ads quota ledger then fails closed
+(`NEXUS_AMAZON_ADS_QUOTA_MODE=off`, supervised runs only), and **secrets appear in the process
+table** — never `pgrep -fl` those processes, and never `pkill -f "railway run"`, which kills
+every concurrent one.
+
 - **2.1** `KeywordCoverageSet` model + authoring (pilot family's shared keywords, ~tens of terms).
 - **2.2** Scoreboard tab fed by ToS-IS + SQP + within-account SOV + `KeywordRank` (manual/CSV ingest to start) + position-weighted score.
 - **2.3** Conflicts tab (surface the two existing endpoints).
@@ -883,7 +945,66 @@ SD targeting is offered as the two plays the blueprint names: **defensive self-A
 
 Each step reports itself. Once the campaign exists on Amazon a later failure leaves a *real* half-built campaign, so "which step failed" is the difference between a small fix and a hunt through Seller Central.
 
-*Not built:* SB ad groups/creative (SB needs a headline, logo and landing page — a fuller creative step), SBV, and the un-pause decision on the existing 19 (an operator call — it changes what spends).
+#### SB completed — and a fourth `/sp/*`, this one in my own new code
+
+Wiring the launch sequence exposed that `createAdGroupLocal` special-cased SD and let **SB fall through to `/sp/adGroups`** — the same trap a fourth time, now inside code written this session. Added `createSbAdGroup` (`POST /sb/v4/adGroups`, v4 mime, string ids, UPPERCASE state, and **no `defaultBid` at all** — SB bids at target level; the 5 live SB ad groups return only `{adGroupId, campaignId, name, state}`). `createProductAdLocal` now refuses SB loudly instead of silently posting to `/sp/productAds`: **SB has no product ad**, its unit is a creative.
+
+**SB is launchable without building an asset-upload flow.** An SB ad needs a brand logo in Amazon's asset library, a registered brand name and a landing page — none of which our database holds. `resolveSbTemplate()` reads them off the existing SB campaigns, exactly as Stage 5.1 planned. Verified live:
+
+| | brand name | logo asset | landing page | cloned from |
+|---|---|---|---|---|
+| IT | Xavia Racing Italia | `amzn1.assetlibrary.asset1.46bf…` | `amazon.it/stores/page/5F31D4DF…` | MISANO JACKET BRAND |
+| DE | Xavia Racing Germany | `amzn1.assetlibrary.asset1.8990…` | `amazon.de/stores/page/49CD4D20…` | Brand (Jackets) |
+
+The brand names differ per marketplace, which is why the template is marketplace-scoped like `brandEntityId` — cloning DE's assets into an IT ad would have shipped the wrong brand name.
+
+**Reused rather than rebuilt.** A first pass added `createSbAdViaTemplate`, then found `createSbAdLocal` + `POST /advertising/sb-creatives/create` had existed since AX2.9. The duplicate was deleted and `createSbAdLocal`'s `brandName`/`logoAssetId`/`landingUrl` made optional with a template fallback — so every existing caller gained the capability instead of a second creator appearing beside the first. It also gained the SP path's silence-is-failure guard: Amazon answers 200 with an empty success list when it *rejects* a creative, which previously stored a local row and looked like a clean launch. One route appended (`GET /advertising/sb-template`), no duplicates.
+
+#### Verification closed where the new writes are
+
+`verifyLaunch` read back **campaigns only** for SB, so every SB ad group and ad counted as `uncovered` — verification was blind at precisely the entities Stage 5 started creating. Added `listSbAdGroups` / `listSbAds` and wired both into the coverage map. Run over the 4 existing SB campaigns on prod:
+
+| kind | checked | verdict |
+|---|---|---|
+| CAMPAIGN | 4 | all VERIFIED |
+| AD_GROUP | 6 | all VERIFIED |
+| PRODUCT_AD | 6 | all VERIFIED |
+
+**16 verified · 0 mismatch · 0 MISSING_ON_AMAZON.** Twelve entities newly covered with zero invented failures — the property AX-VT.4 cares about most, since a verifier that manufactures failures gets switched off. The SB ad group's absent `defaultBid` compares correctly because `verifyEntity` skips any field Amazon does not report. `uncovered` is now 88 SB positive keywords, which no builder creates; the docstring names that instead of the SB gap it used to describe.
+
+#### 🔴 SB keywords — a fifth `/sp/*`, and a wrong conclusion corrected
+
+**406 is a lead; 404 is a dead end. I read them as the same failure and was wrong.**
+
+First pass concluded the SB keyword endpoint was unreachable: `/sb/v4/keywords/list` answers 403 with an AWS-gateway error, and so does the catalogued `/sb/v4/negativeKeywords/list` control, which looked systemic. But the probe had also returned **`GET /sb/keywords` → 406 "No match for accept header"** — and 406 means *the path exists and only content negotiation failed*. Walking Accept headers against it found the answer immediately:
+
+```
+GET /sb/keywords   Accept: application/vnd.sbkeyword.v3+json
+→ [{"keywordId":115320718119093,"adGroupId":451325355136482,"campaignId":484743497652875,
+    "keywordText":"giacca pelle uomo","matchType":"exact","state":"enabled","bid":1.67}]
+```
+
+**SB keywords are on the LEGACY v3 API**, with SD's conventions — bare array, numeric ids, lowercase `matchType`/`state` — not SB v4's. `createKeywordLocal` now routes them there; SB is fully launchable and `uncovered` is **0**.
+
+#### 🔴 …which immediately surfaced 88 keywords of real drift
+
+With SB keywords finally readable, `verifyLaunch` over the 4 SB campaigns returns **104 entities, 0 uncovered, 0 MISSING_ON_AMAZON — and 88 KEYWORD mismatches.** Confirmed real, not a reader artefact (`scripts/_acr5-sb-kw-drift.mts`):
+
+| | local DB | Amazon |
+|---|---|---|
+| IT | all `ARCHIVED` | **60 enabled**, 18 paused |
+| DE | all `ARCHIVED` | **10 enabled** |
+| bids | flat 50c (18 rows at 0c) | 38 distinct bids, **€0.68 – €2.05** |
+
+Our database believes every SB keyword is archived at a placeholder 50c. Amazon holds 70 enabled keywords bidding up to €2.05. The 18 local rows at 0c correspond exactly to Amazon's 18 paused ones, so state was partially captured while bids were flattened wholesale.
+
+**This is the same family as the SD/SB campaign mis-archive** ([[reference_ads_portfolio_membership_truth]]) — SP-only reconciliation writing over entities it could never see — now visible one level down. **Not auto-healed:** un-archiving 88 keywords changes what the engines manage and what bids get pushed, so it is the operator's call, exactly as the campaign mis-archive was. It matters most on the day SB resumes: the engines would optimise against a fiction.
+
+#### The `servable` bug this exposed was mine
+
+`finishLaunch` marked SB `servable` without any keywords — so the builder would have created an SB campaign that sits at zero impressions forever and reported success. Corrected: neither family serves on ads alone — SD needs targets, SB needs keywords — and the builder now requires them, creates them, and reports per step. The builder gained a Keywords section (match type + one-per-line entry) and refuses to submit an SB launch with none.
+
+*Not built:* SBV, and the un-pause decision on the existing 19 plus the 88 drifted keywords (operator calls — both change what spends).
 
 *Verification limits, stated plainly:* the create round-trip cannot be exercised locally — `adsMode()` is `sandbox` without `railway run`, and pointing the local UI at prod would hit an API that predates `dryRun` and would therefore *create* instead of preview. The UI itself was verified on a clean local build; the product search fails locally (auth + cross-origin) and now says so honestly rather than rendering "no products", which would be a failure disguised as a measured zero — the same defect class as the unmeasured-week rule at the top of this file.
 
