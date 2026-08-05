@@ -24,6 +24,39 @@ const MAX_DOWN = 0.5 // never cut a bid by more than 50% in one pass
 const MAX_UP = 0.25 // never raise by more than 25% in one pass
 const MIN_CLICKS = 5 // need signal before acting
 
+/** Trailing window when reading the daily table. Matches the 30d the console reports on. */
+const DAILY_WINDOW_DAYS = 30
+
+export type BidMetricSource = 'legacy' | 'daily'
+
+/**
+ * ACR.4.5 — where this engine's per-target metrics come from.
+ *
+ * `legacy` reads `AdTarget.spendCents/.clicks/.salesCents/.ordersCount`. Those columns are ZERO
+ * on all 5,204 rows and will stay zero: their only writer is `ads-metrics-ingest`, whose cron
+ * was retired in H.2e and never started since — measured, zero `CronRun` rows have ever existed
+ * for it. The replacement (the Phase 11 v1-export pipeline) populates `AmazonAdsDailyPerformance`
+ * and does not denormalise. So `legacy` means "propose nothing", which is exactly what four AUTO
+ * rules have been doing across ~1,174 successful, empty executions.
+ *
+ * `daily` rolls the same figures up from `AmazonAdsDailyPerformance` — the move
+ * `ad-autopilot.job.ts` already made for its own signals. Deliberately NOT re-starting the
+ * retired ingest: that would recreate a second copy of the truth, and a denormalised copy is a
+ * copy that drifts.
+ *
+ * **Default is `legacy`, so deploying this changes nothing.** The switch is one env var, and it
+ * is a real switch: this function is the shared upstream of the APPLY path too
+ * (`ads-auto-bid`, `autopilot/apply`), so flipping it does not merely reveal proposals — it lets
+ * four AUTO rules start writing bids. Measured on prod with the suppression guard below in
+ * force: 52 proposals, net −314¢, touching €1,555 of 30-day spend, and 300 suppressed/sub-floor
+ * targets correctly excluded. A caller can pass `source` explicitly to inspect the `daily` view
+ * without arming anything.
+ */
+export function resolveSource(explicit?: BidMetricSource): BidMetricSource {
+  if (explicit) return explicit
+  return process.env.NEXUS_BID_OPTIMIZER_SOURCE === 'daily' ? 'daily' : 'legacy'
+}
+
 export interface BidProposal {
   targetId: string; expression: string; matchType: string
   currentBidCents: number; proposedBidCents: number; deltaCents: number
@@ -34,7 +67,7 @@ export interface BidProposal {
 }
 
 export async function previewBidOptimization(
-  opts: { targetAcos?: number; campaignId?: string; profitMode?: boolean; mode?: AcosMode; bayesian?: boolean } = {},
+  opts: { targetAcos?: number; campaignId?: string; profitMode?: boolean; mode?: AcosMode; bayesian?: boolean; source?: BidMetricSource } = {},
 ): Promise<{ targetAcos: number; profitMode: boolean; bayesian: boolean; proposals: BidProposal[] }> {
   const flatTargetAcos = opts.targetAcos ?? 0.3 // 30% default fallback
   const profitMode = opts.profitMode ?? false
@@ -58,15 +91,45 @@ export async function previewBidOptimization(
    * repoints this at AmazonAdsDailyPerformance, as ad-autopilot.job.ts already did for its own
    * signals, cannot un-suppress the account as a side effect of turning the lights back on.
    */
+  /**
+   * ACR.4.5 — the metric overlay. Everything below this point is untouched: the same guard, the
+   * same Bayesian and profit-mode branches, the same clamps. Only where four numbers come from
+   * changes, which is the whole of the fix and the reason it is safe to make.
+   */
+  const source = resolveSource(opts.source)
+  let dailyMetrics: Map<string, { spendCents: number; salesCents: number; clicks: number; ordersCount: number }> | null = null
+  if (source === 'daily') {
+    const since = new Date(Date.now() - DAILY_WINDOW_DAYS * 86_400_000)
+    const perf = await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['localEntityId'],
+      where: { entityType: 'AD_TARGET', date: { gte: since }, localEntityId: { not: null } },
+      _sum: { costMicros: true, clicks: true, sales7dCents: true, orders7d: true },
+    })
+    dailyMetrics = new Map()
+    for (const p of perf) {
+      const spendCents = Math.round(Number(p._sum.costMicros ?? 0) / 10_000)
+      // `spendCents > 0` was the legacy WHERE clause; it becomes this filter, so the engine still
+      // only considers targets that actually spent something.
+      if (spendCents <= 0) continue
+      dailyMetrics.set(p.localEntityId!, {
+        spendCents,
+        salesCents: Number(p._sum.sales7dCents ?? 0),
+        clicks: Number(p._sum.clicks ?? 0),
+        ordersCount: Number(p._sum.orders7d ?? 0),
+      })
+    }
+  }
+
   const where: Record<string, unknown> = {
     status: 'ENABLED',
     isNegative: false,
-    spendCents: { gt: 0 },
     suppressedFromBidCents: null,
     bidCents: { gte: FLOOR_CENTS },
+    // An empty map matches nothing, which is the correct answer when no target spent anything.
+    ...(dailyMetrics ? { id: { in: [...dailyMetrics.keys()] } } : { spendCents: { gt: 0 } }),
   }
   if (opts.campaignId) where.adGroup = { campaignId: opts.campaignId }
-  const targets = await prisma.adTarget.findMany({
+  const rawTargets = await prisma.adTarget.findMany({
     where, take: 2000,
     select: {
       id: true, expressionValue: true, expressionType: true, bidCents: true, spendCents: true,
@@ -74,6 +137,15 @@ export async function previewBidOptimization(
       adGroup: { select: { campaign: { select: { marketplace: true } } } },
     },
   })
+
+  // Overlay, rather than a parallel code path — a second implementation of this arithmetic is
+  // how the two would drift.
+  const targets = dailyMetrics
+    ? rawTargets.map((t) => {
+      const m = dailyMetrics!.get(t.id)
+      return m ? { ...t, spendCents: m.spendCents, salesCents: m.salesCents, clicks: m.clicks, ordersCount: m.ordersCount } : t
+    })
+    : rawTargets
 
   // Apex C.3 — Bayesian sparse-data path: fit a pooled CR prior + pool AOV from
   // the corpus, so we can make a principled (gentle) decision on low-click
