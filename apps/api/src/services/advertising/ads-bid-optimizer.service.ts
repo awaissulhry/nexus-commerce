@@ -39,7 +39,32 @@ export async function previewBidOptimization(
   const flatTargetAcos = opts.targetAcos ?? 0.3 // 30% default fallback
   const profitMode = opts.profitMode ?? false
   const bayesian = opts.bayesian ?? false
-  const where: Record<string, unknown> = { status: 'ENABLED', isNegative: false, spendCents: { gt: 0 } }
+  /**
+   * ACR.6 — SUPPRESSED TARGETS ARE EXCLUDED, and this guard predates the bug it prevents.
+   *
+   * This account does not pause; it silences by dropping bids to ~2¢ (no-pause policy), and
+   * `suppressedFromBidCents` records the bid to restore when the campaign resumes. FLOOR_CENTS is
+   * 5, so this engine's own "hard cut" arithmetic — `max(FLOOR, bid × 0.5)` — turns into a RAISE
+   * for anything already below the floor. A cut that raises a bid is not a cut.
+   *
+   * Measured on prod 2026-08-05 (`scripts/_acr6-bidopt-whatif.mts`, read-only): had this engine
+   * been fed live metrics, 51 of the 103 proposals it would have generated were raises on targets
+   * bidding under 5¢, carrying €1,316.41 of 30d spend that would have resumed. 451 of the 600
+   * sub-floor targets carry the marker; the rest are sub-floor without it, which is why both
+   * conditions are needed rather than either alone.
+   *
+   * This costs nothing today — the engine proposes zero, because `spendCents` is 0 on every row
+   * since its only writer (ads-metrics-ingest) was retired in H.2e. It is here so that whoever
+   * repoints this at AmazonAdsDailyPerformance, as ad-autopilot.job.ts already did for its own
+   * signals, cannot un-suppress the account as a side effect of turning the lights back on.
+   */
+  const where: Record<string, unknown> = {
+    status: 'ENABLED',
+    isNegative: false,
+    spendCents: { gt: 0 },
+    suppressedFromBidCents: null,
+    bidCents: { gte: FLOOR_CENTS },
+  }
   if (opts.campaignId) where.adGroup = { campaignId: opts.campaignId }
   const targets = await prisma.adTarget.findMany({
     where, take: 2000,
