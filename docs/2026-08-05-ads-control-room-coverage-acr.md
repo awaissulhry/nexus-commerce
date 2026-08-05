@@ -510,6 +510,26 @@ The Levers row-expand drawer, per-dimension authority pins, the editable Guardra
 
 **Account left exactly as found:** 216 campaigns · 82 managed · 0 with a min bid · 82 with a max · **0 pinned, 0 orphaned `pinnedBy`**.
 
+### ACR.1.2d / 1.6b — a pill that never had a colour, and manual runs that logged twice
+
+**The delivery column's most important state had no styling at all.** `.h10-pill.bad` has been referenced there since AX2.1 and **has never existed in `ads.css`**. Measured on prod by reading computed style, not by looking: every pill using it rendered `background: transparent` with default body-colour text — 18 "Gated" pills on the first page alone, beside "Live" as a proper blue chip. The state an operator most needs to notice was the one that did not look like a state.
+
+Defining `bad` red would have been the obvious fix and the wrong one, because the class covered **a genuine failure and two neutral facts**: `failed` (a write to Amazon failed — a defect), `gated` (default-deny, **134 of 216 campaigns**, the containment boundary working exactly as designed) and `market_blocked` (structural). Painting 134 deliberately-unmanaged campaigns red manufactures an emergency out of a working guardrail — the same category error as rendering *unknown* as €0. The neutral pair now uses `muted`; `bad` means what its name says. Verified live: `Gated` → `h10-pill muted`, `rgb(238,241,245)` on `rgb(107,116,128)`; Live and Pending untouched.
+
+**Manual triggers are now uniform across all engines.** The five pre-existing ads registry entries were registered against their `*Cron` wrappers, each of which opens its own `recordCronRun` — so a hand-run wrote **two** rows: one labelled `manual` carrying nothing, and a nested one labelled `cron` carrying the real numbers. Two records of one event that disagree about what caused it; invisible only because nothing rendered that table until the Levers drawer. Each job now exports the function that does the work *and* returns its summary, and its `*Cron` wrapper calls that — so the **scheduled path is byte-identical** and only the manual path stops duplicating. `ads-tos-defense` reads its env *inside* that function deliberately: a hand-run must be the same run, not one configured elsewhere.
+
+*Proved on prod with both builds' output adjacent in one table:*
+
+```
+20:30:51.415  SUCCESS  manual  manual trigger          ← old build, row 1 of 2
+20:30:51.506  SUCCESS  cron    evaluated=0 changed=0   ← old build, row 2 of 2
+20:35:12.619  SUCCESS  manual  evaluated=0 changed=0   ← new build, one row
+```
+
+*Measurement note worth keeping:* the first post-fix trigger still logged twice, and the fix was **not** wrong — Railway was coalescing this session's rapid commits and the live build predated the change. `list-deployments` plus `git merge-base --is-ancestor` settled it in one step. On a shared branch, "I pushed it" and "it is running" are different facts, and a 202 from an endpoint that already existed proves neither.
+
+**Guardrails grid, two additions.** Bulk **clear** for bounds as an explicit action — an empty box must keep meaning "leave alone", or "set a max on these 40" silently becomes "and wipe every min" for anyone who did not fill both fields (pins already worked this way). And a **gap filter** — no min / no max / no bounds at all / pinned / suppressed, each carrying its own live count, because the grid exists precisely because 0 of 216 campaigns have a minimum bid and finding those rows meant scanning for blank boxes. Selection follows what is visible, so a row filtered out of view cannot stay silently selected and then receive a bulk write. Verified live: `No min bid (82)` · `No max bid (0)` · `No bounds at all (0)` — self-consistent with the account cards above the grid.
+
 ### ACR.7 / 7b — drag-to-scope SHIPPED 2026-08-05: the Automation Dock, and a binding that means it
 
 **Operator direction:** an always-on panel of every automation, draggable onto portfolios and campaigns; no emojis in rule names — colour carries the grouping.
