@@ -690,11 +690,15 @@ clean full week is 2026-08-02, publishable once Amazon releases it. *(`_acr24-ai
 
 **What unblocks it:** `_acr24-sqp-widen.mts` resolves ASINs from the **catalogue** by family instead of from stored rows, jackets first. With AIREON measured alongside GALE the within-term control exists and the experiment decides. **It can only run on Railway** — the local SP-API refresh token is revoked (`invalid grant parameter : refresh_token`), so 13 requested reports returned 13 failures and wrote nothing. Cost when run: ~6 minutes of Amazon report generation per ten ASINs, one report per ASIN, upserting in place on `(marketplace, period, startDate, searchQuery, asin)`.
 
-### ACR.2.4c — the widen RAN 2026-08-05, and the answer is not "unmeasured" any more: AIREON is measured ABSENT
+### ACR.2.4c — the widen's execution record, its WRONG first reading, and what survives
 
-All six CREMA-E-VINO children were requested for the same week GALE is measured on (2026-07-19, Saturday-ended, `periodWindow` lookback 2). Every report succeeded; every report was empty: `rows=0 upserted=0 failedAsins=0`. That includes the family's TOP ad-impression child (`B0F4N9WHTM`, crema S, 10,562 impressions/30d) and crema XL at 8,542. This is no longer a self-perpetuating-scope artefact — the ASINs were requested explicitly and Amazon answered with nothing.
+**The run record:** all six CREMA-E-VINO children were requested for the 2026-07-19 week (`periodWindow` lookback 2); every report succeeded, every report empty (`rows=0 upserted=0 failedAsins=0`). Two spot-checks replaced the six NERO-NEO reports — stated rather than silently skipped: `B0H8QTNY62` also zero; the NERO-NEO XXL report itself FAILED once (`failedAsins=1`, transient).
 
-**And it is not because AIREON is dark.** The 11 enabled AIREON campaigns served ~97k ad impressions and ~€102 in 30 days. The placement report explains the contradiction in one line — where those impressions actually are:
+**The first reading of those zeros was a third wrong framing — struck here.** This section originally concluded "AIREON is measured ABSENT: its per-(query × ASIN) cells sit below SQP's reporting floor", argued from 30-day ad-impression and placement figures. The RESOLVED block above is the correction: **the campaigns started 2026-07-28 — after the measured week ended — so AIREON had €0.00 and 0 impressions in the requested week, and the zeros carried no information about visibility at all.** Every "impr/30d" figure used to argue a-fortiori postdates the week it was arguing about. After "Railway-only credentials" and "backfill scope", this makes three successive wrong causes for one zero — and this one reached a pushed commit before the one-query timeline check (`_acr24-aireon-age.mts`) landed. The reports themselves were ~14 of Amazon's report quota spent confirming a fact one catalogue query already knew.
+
+**What survives, because it never depended on the SQP week:**
+
+1. **AIREON's *current* delivery shape is detail-page-heavy** — placement report, trailing 30 days (i.e. its live days since 07-28):
 
 | placement | impressions | share |
 |---|---|---|
@@ -702,12 +706,11 @@ All six CREMA-E-VINO children were requested for the same week GALE is measured 
 | Rest of search | 6,816 | 9.1% |
 | Top of Search | 1,604 | 2.1% |
 
-**AIREON's delivery is a detail-page business.** ~8.4k SERP impressions in 30 days, spread over 11 campaigns × dozens of queries × 25 children, puts every (query × ASIN) cell below SQP's reporting floor. Compare GALE: ~415k SERP impressions over the same window — a ~50× gap in search presence between the two families. The auto + category campaigns are buying product-page visibility, not page one.
+~8.4k SERP impressions versus GALE's ~415k over the same trailing window. This does NOT explain the SQP zeros (the timeline does), but it is the live fact that matters for what comes next: the auto + category campaigns are buying product-page visibility, and if that mix persists, AIREON will under-register in SQP even once its weeks are measurable.
 
-**Consequences, in order:**
-1. **The variation experiment stays undecidable** — not starved by scope now, but by reality: there is no AIREON search presence to compare within-term. Two spot-checks were run instead of the six remaining NERO-NEO reports — stated here rather than silently skipped: `B0H8QTNY62` (7.8k impr/30d, the highest-impression untested child) returned **zero rows**; the NERO-NEO XXL report itself FAILED (`failedAsins=1`, one transient report failure, not a zero). The a-fortiori chain covers the gap: every child with more impressions than NERO's best (6.5k) is measured zero — crema S 10.5k, crema XL 8.5k, B0H8QTNY62 7.8k.
-2. **The route to the operator's original ask — several products on one page — is now concrete:** GALE holds the (single) family tile; AIREON must be *put into search* on the giacca head terms before any parent-structure question matters. That is exactly a coverage set for the AIREON portfolio: a few exact keyword targets on head terms with real bids, engine-held — not eleven campaigns spraying detail pages.
-3. **A listing-identity gap surfaced on the way:** the AIREON campaigns advertise ASINs that are NOT in our Product catalogue — `B0H8QTNY62` carries 7.8k impressions/30d across all 11 campaigns and we do not track it as a product (several more B0H8\* siblings at zero). Likely fallout of the variation rebuild. It corrupts any per-ASIN family lens (catalogue-derived widen missed it; a future AIREON coverage set could propose the wrong lead ASIN) and wants reconciling before an AIREON set is seeded.
+2. **The AIREON search push stands as the route to "several products on one page"** — GALE holds one family tile; the second tile needs AIREON *in search* on the head giacca terms: a coverage set for the AIREON portfolio, exact targets, engine-held. Sequenced AFTER the corrected two-family backfill above (week ≥ 07-26; first clean full week 2026-08-02) so its baseline is measured, not asserted.
+
+3. **The listing-identity gap is real and stands on ads data alone:** AIREON campaigns advertise `B0H8*` ASINs absent from the Product catalogue (`B0H8QTNY62`, 7.8k impr over its live days, in all 11 campaigns; several siblings at zero). Likely variation-rebuild fallout. Reconcile before seeding an AIREON coverage set, or the set's lead-ASIN proposals work from a wrong roster.
 
 *Note for whoever runs it:* widening repairs the board's honesty but **will move the published baseline** — the pooled 0.76% is currently computed over ten ASINs of one family, and adding families raises our measured impressions against an unchanged market denominator.
 
