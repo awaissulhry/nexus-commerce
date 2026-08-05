@@ -29,11 +29,12 @@
  *     delivery, so the caption says so rather than implying every count reached Amazon.
  */
 import { useEffect, useState } from 'react'
+import { AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface RuleAnalytics {
   name: string; runs: number; termsNegated: number; bidsAdjusted: number
-  campaignsGuarded: number; lastRun: string
+  campaignsGuarded: number; budgetChanges: number; failedActions: number; lastRun: string
 }
 interface AnalyticsData { windowDays: number; totalRuns: number; rules: RuleAnalytics[] }
 
@@ -80,14 +81,18 @@ export function RuleImpactStrip() {
       negated: a.negated + (r.termsNegated || 0),
       bids: a.bids + (r.bidsAdjusted || 0),
       guarded: a.guarded + (r.campaignsGuarded || 0),
+      budgets: a.budgets + (r.budgetChanges || 0),
+      failed: a.failed + (r.failedActions || 0),
     }),
-    { negated: 0, bids: 0, guarded: 0 },
+    { negated: 0, bids: 0, guarded: 0, budgets: 0, failed: 0 },
   )
-  const changes = t.negated + t.bids + t.guarded
-  const active = data.rules.filter((r) => (r.termsNegated || 0) + (r.bidsAdjusted || 0) + (r.campaignsGuarded || 0) > 0)
-  const top = [...active]
-    .sort((a, b) => (b.termsNegated + b.bidsAdjusted + b.campaignsGuarded) - (a.termsNegated + a.bidsAdjusted + a.campaignsGuarded))
-    .slice(0, 3)
+  const acted = (r: RuleAnalytics) => (r.termsNegated || 0) + (r.bidsAdjusted || 0) + (r.campaignsGuarded || 0) + (r.budgetChanges || 0)
+  const changes = t.negated + t.bids + t.guarded + t.budgets
+  const active = data.rules.filter((r) => acted(r) > 0)
+  const top = [...active].sort((a, b) => acted(b) - acted(a)).slice(0, 3)
+  // The rule burning the most failed actions is worth naming even when nothing succeeded — on prod
+  // that is one rule failing 2,032 times in 30 days, which no "0 changes" headline would surface.
+  const worst = [...data.rules].filter((r) => (r.failedActions || 0) > 0).sort((a, b) => (b.failedActions || 0) - (a.failedActions || 0))[0]
 
   return (
     <section className="h10-imp" aria-label="Automation impact">
@@ -101,26 +106,37 @@ export function RuleImpactStrip() {
       </div>
 
       <div className="h10-imp-n">
-        <span className="h10-imp-s" title="Bids, negatives and guards the rule engine recorded. Includes dry-run proposals — a rule on dry-run still reports what it would have done.">
+        <span className="h10-imp-s" title="Bids, budgets, negatives and guards the rule engine recorded, excluding actions that reported a failure. Includes dry-run proposals — a rule on dry-run still reports what it would have done.">
           <b>{intl(changes)}</b><i>actions recorded</i>
         </span>
         <span className="h10-imp-s" title="Executions that finished SUCCESS or PARTIAL. Ticks that matched nothing are not counted here.">
           <b>{intl(data.totalRuns)}</b><i>runs that acted</i>
         </span>
         <span className="h10-imp-s"><b>{intl(t.bids)}</b><i>bids adjusted</i></span>
+        <span className="h10-imp-s"><b>{intl(t.budgets)}</b><i>budgets changed</i></span>
         <span className="h10-imp-s"><b>{intl(t.negated)}</b><i>terms negated</i></span>
         <span className="h10-imp-s"><b>{intl(t.guarded)}</b><i>campaigns guarded</i></span>
+        <span className={`h10-imp-s${t.failed > 0 ? ' bad' : ''}`} title="Action results that reported ok:false. These did not happen, whatever the run status says.">
+          <b>{intl(t.failed)}</b><i>actions failed</i>
+        </span>
         <span className="h10-imp-s" title="Of the rules that ran in this window — not of every rule you have. The tab counts above are the full fleet.">
           <b>{intl(active.length)}<em> / {intl(data.rules.length)}</em></b><i>of the rules that ran</i>
         </span>
       </div>
 
+      {worst && (
+        <div className="h10-imp-warn" role="status">
+          <AlertTriangle size={13} aria-hidden />
+          <span><b>{intl(worst.failedActions)}</b> failed action{worst.failedActions === 1 ? '' : 's'} from <b>{worst.name}</b> — its runs complete, but the actions inside them do not.</span>
+        </div>
+      )}
+
       {top.length > 0 && (
         <div className="h10-imp-top">
           <span className="lbl">Most active</span>
           {top.map((r) => (
-            <span className="h10-imp-r" key={r.name} title={`${intl(r.runs)} evaluations · last run ${r.lastRun ? new Date(r.lastRun).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : 'never'}`}>
-              {r.name}<em>{intl(r.termsNegated + r.bidsAdjusted + r.campaignsGuarded)}</em>
+            <span className="h10-imp-r" key={r.name} title={`${intl(r.runs)} run${r.runs === 1 ? '' : 's'} · last ${r.lastRun ? new Date(r.lastRun).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : 'never'}`}>
+              {r.name}<em>{intl(acted(r))}</em>
             </span>
           ))}
         </div>

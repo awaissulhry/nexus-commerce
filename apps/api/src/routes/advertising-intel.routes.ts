@@ -139,16 +139,39 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       where: { startedAt: { gte: since }, status: { in: ['SUCCESS', 'PARTIAL'] }, rule: { domain: 'advertising' } },
       select: { actionResults: true, rule: { select: { id: true, name: true } }, startedAt: true },
     })
-    const byRule = new Map<string, { name: string; runs: number; termsNegated: number; bidsAdjusted: number; campaignsGuarded: number; lastRun: string }>()
+    /**
+     * ACR.6 — WHAT THIS COUNTS, MEASURED RATHER THAN ASSUMED.
+     *
+     * The original three lines counted `harvest_and_negate`, `bid_to_target_acos` and
+     * `retail_guard`. Measured over 30 days on prod (scripts/_acr6-actiontypes-probe.mts),
+     * advertising executions emit 7,218 action results across six types, and those three cover
+     * 20.3% of them. `harvest_and_negate` **never appears at all**, while `adjust_ad_budget` —
+     * 88 results, each carrying an `outboundQueueId`, i.e. real queued budget writes — was
+     * counted by nothing. So a surface built on this reported "0 actions" on an account that was
+     * changing budgets that week.
+     *
+     * FAILURES ARE NOW FIRST-CLASS, and they are the largest thing in this data: 2,032 `bid_up`
+     * results in 30 days, every one `ok:false` with "Unsupported target=ad_group", all from a
+     * single rule. An impact view that answers "did the fleet do anything" while silently
+     * dropping 2,032 failures answers it wrongly — and the older read would have shown a
+     * confident, quiet zero.
+     *
+     * Additive to the response shape; the only consumer is the Rules & Automation impact strip.
+     */
+    const byRule = new Map<string, { name: string; runs: number; termsNegated: number; bidsAdjusted: number; campaignsGuarded: number; budgetChanges: number; failedActions: number; lastRun: string }>()
     for (const e of execs) {
       const ruleId = e.rule?.id ?? 'unknown'; const ruleName = e.rule?.name ?? 'Unknown'
-      if (!byRule.has(ruleId)) byRule.set(ruleId, { name: ruleName, runs: 0, termsNegated: 0, bidsAdjusted: 0, campaignsGuarded: 0, lastRun: '' })
+      if (!byRule.has(ruleId)) byRule.set(ruleId, { name: ruleName, runs: 0, termsNegated: 0, bidsAdjusted: 0, campaignsGuarded: 0, budgetChanges: 0, failedActions: 0, lastRun: '' })
       const r = byRule.get(ruleId)!; r.runs++; r.lastRun = e.startedAt.toISOString()
-      for (const a of (e.actionResults as Array<{ type?: string; output?: Record<string, unknown> }> | null) ?? []) {
+      for (const a of (e.actionResults as Array<{ type?: string; ok?: boolean; output?: Record<string, unknown> }> | null) ?? []) {
         const o = a.output ?? {}
+        // An action that reports ok:false did not happen, whatever else it says.
+        if (a.ok === false) { r.failedActions++; continue }
         if (a.type === 'harvest_and_negate') { r.termsNegated += Number(o.negativesAdded ?? 0) }
         if (a.type === 'bid_to_target_acos') { r.bidsAdjusted += Number(o.applied ?? 0) }
         if (a.type === 'retail_guard') { r.campaignsGuarded += Number(o.paused ?? 0) }
+        // One queued budget write per result — there is no count in the output to sum.
+        if (a.type === 'adjust_ad_budget') { r.budgetChanges++ }
       }
     }
     const rules = [...byRule.values()].sort((a, b) => b.runs - a.runs)
