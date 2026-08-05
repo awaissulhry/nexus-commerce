@@ -453,6 +453,17 @@ And pooled — the honest single number — **0.30% where we bid, 0.265% where w
 
 **4. The blunt summary: we are absent.** Across 588 measured terms and 4.19M impressions in one week, we took **11,968** — **0.29%**. Market purchases on every head term run 4–18 a week; ours are **0**. At a third of a percent of impressions that is arithmetic, not a conversion problem.
 
+### ACR.6 — the Family Cockpit SHIPPED 2026-08-05 (`/marketing/ads/portfolios/[id]`)
+
+**The surface the engagement was opened for**, verified live on prod against `Xavia GALE IT`. One aggregate read (`GET /portfolios/:id/cockpit`), four tabs, and **every control is an endpoint that already existed** — the cockpit adds no write path:
+
+- **Overview** — 11 member campaigns with controls inline: the live-writes switch (the family's hard automation boundary, at the write gate), pause/enable, editable daily budget, bounds, schedules, delivery; family bulk writable/read-only; 18 products.
+- **Coverage** — the family lens on corrected SQP: GALE holds **1.88% of `giacca moto estiva uomo`** with 10 ASINs on page and 3 family keywords; `accessori moto` 183k impressions, 2 ASINs organically present, **no family keyword** — the family's next keyword, visible in the family's own cockpit.
+- **Keywords** — contested terms championed by the engine-aligned rule. **Finding: `Xavia GALE IT` has NO internal contest.** The 13 contested pairs from ACR.2.4 live BETWEEN portfolios — the pre-portfolio GALE campaigns (`GALE EXACT IT`, `GALE BROAD IT`, `IT_Gale`…) vs this set — so consolidation is a cross-portfolio cleanup, not an intra-family one.
+- **Automation** — the honest scoping notes (harvest/negate rules are marketplace-scoped today; the page says so instead of drawing a dial that governs nothing), plus this family's **38 pending proposals priced: €199.05 pure-waste recoverable**, each row marked ♦ where the spend produced nothing.
+
+Vitals live: 11/11 writable · €24.38/day · 30d €741.97 → €912.33 (ACOS 81%) · page-one share 0.77%.
+
 ### 🔴 ACR.2.7 — CORRECTION: the scoreboard understated every multi-ASIN share by the number of our ASINs on the term
 
 **SQP market columns are QUERY-level totals duplicated identically on every ASIN row.** Verified 2026-08-05: `giacca moto estiva uomo` week 2026-07-19 holds 10 rows, each reading `impressionsTotal = 110,506`, `distinct_totals = 1`. My scoreboard SUMMED them — multiplying the market by our ASIN count and **understating share exactly where coverage is strongest**. Brand columns are per-ASIN counts and were correctly summed; the ground-truth cross-checks (686 for B0BMSH19GY; `accessori moto` 183k in Part 2) all confirm.
