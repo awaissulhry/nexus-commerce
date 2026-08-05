@@ -51,6 +51,17 @@ interface PricedProposal {
   id: string; ruleName: string | null; proposedKey: string; entityLabel: string | null
   direction: string; spendAtStakeCents: number | null; salesAtStakeCents: number | null; recoverable: boolean
 }
+interface CoverageSetTerm {
+  id: string; term: string; leadAsin: string | null; status: string
+  maxCpcCents: number | null; targetSharePct: number | null
+  marketImpressions: number | null; ourImpressions: number | null; share: number | null; familyKeywords: number | null
+}
+interface CoverageSet {
+  id: string; name: string; enabled: boolean
+  dailySpendCapCents: number | null; acosCapPct: number | null
+  terms: CoverageSetTerm[]
+}
+
 interface Cockpit {
   portfolio: {
     externalPortfolioId: string; name: string; state: string | null; marketplace: string | null
@@ -82,6 +93,8 @@ export function FamilyCockpitClient() {
   const [busy, setBusy] = useState<string | null>(null)
   const [budgetEdit, setBudgetEdit] = useState<Record<string, string>>({})
   const [dropMsg, setDropMsg] = useState<string | null>(null)
+  const [covSet, setCovSet] = useState<CoverageSet | null>(null)
+  const [covSetBusy, setCovSetBusy] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -93,6 +106,39 @@ export function FamilyCockpitClient() {
     } catch (e) { setErr((e as Error).message); setCk(null) } finally { setLoading(false) }
   }, [id])
   useEffect(() => { void load() }, [load])
+
+  const loadCovSet = useCallback(async () => {
+    const r = await fetch(`${getBackendUrl()}/api/advertising/portfolios/${id}/coverage-set`, { cache: 'no-store' })
+    setCovSet(r.ok ? ((await r.json()) as CoverageSet) : null)
+  }, [id])
+  useEffect(() => { void loadCovSet() }, [loadCovSet])
+
+  const seedCovSet = async () => {
+    setCovSetBusy(true)
+    try {
+      await fetch(`${getBackendUrl()}/api/advertising/portfolios/${id}/coverage-set/seed`, { method: 'POST' })
+      await loadCovSet()
+    } finally { setCovSetBusy(false) }
+  }
+  const patchCovSet = async (patch: Record<string, unknown>) => {
+    if (!covSet) return
+    setCovSetBusy(true)
+    try {
+      await fetch(`${getBackendUrl()}/api/advertising/coverage-sets/${covSet.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+      })
+      await loadCovSet()
+    } finally { setCovSetBusy(false) }
+  }
+  const patchCovTerm = async (termId: string, patch: Record<string, unknown>) => {
+    setCovSetBusy(true)
+    try {
+      await fetch(`${getBackendUrl()}/api/advertising/coverage-terms/${termId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+      })
+      await loadCovSet()
+    } finally { setCovSetBusy(false) }
+  }
 
   /* ── the existing write paths, wired ─────────────────────────────────── */
   const toggleLiveWrites = async (c: Campaign) => {
@@ -279,6 +325,124 @@ export function FamilyCockpitClient() {
       {/* ══ Coverage — this family's share of its pages ══ */}
       {tab === 'Coverage' && (
         <>
+          {/* ACR.3 — the coverage SET: what this family is deliberately trying to own. The
+              scoreboard below reports what IS; this panel records INTENT, and the pilot engine
+              reads intent exclusively — enabled sets only, never raw SQP. */}
+          <div className="fc-sec-head">
+            <h2>Coverage set</h2>
+            <span className="fc-sec-sub">
+              the terms this family deliberately owns — the pilot engine reads THIS, never raw data
+            </span>
+            <span className="fc-bulk">
+              <button type="button" className="fc-btn sm" disabled={covSetBusy} onClick={() => void seedCovSet()}>
+                {covSet ? 'Re-seed from evidence' : 'Seed from evidence'}
+              </button>
+            </span>
+          </div>
+          {!covSet ? (
+            <div className="fc-banner warn">
+              <Info size={15} />
+              <span>No coverage set yet. Seeding builds a DRAFT from this family&rsquo;s measured terms — each with a proposed lead ASIN (the one already taking the most impressions). Nothing acts on a draft.</span>
+            </div>
+          ) : (
+            <>
+              <div className="fc-autorow">
+                <div><span className="k">Status</span><span className="v">
+                  <button type="button" className={`fc-switch ${covSet.enabled ? 'on' : ''}`} disabled={covSetBusy}
+                    title={covSet.enabled ? 'The engine reads this set. Click to make it a draft again.' : 'Draft — the engine ignores it. Click to enable.'}
+                    onClick={() => void patchCovSet({ enabled: !covSet.enabled })}>
+                    {covSet.enabled ? <><Check size={11} /> engine reads this</> : <><X size={11} /> draft</>}
+                  </button>
+                </span></div>
+                <div><span className="k">Terms</span><span className="v">{covSet.terms.filter((t) => t.status === 'ACTIVE').length} active · {covSet.terms.length} total</span></div>
+                <div><span className="k">Daily cap</span><span className="v">
+                  <span className="fc-budget"><input
+                    defaultValue={covSet.dailySpendCapCents != null ? (covSet.dailySpendCapCents / 100).toFixed(2) : ''}
+                    placeholder="none"
+                    aria-label="Family daily spend cap (EUR)"
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return
+                      const v = Number((e.target as HTMLInputElement).value)
+                      void patchCovSet({ dailySpendCapCents: Number.isFinite(v) && v > 0 ? Math.round(v * 100) : null })
+                    }} /></span>
+                </span></div>
+                <div><span className="k">ACOS cap %</span><span className="v">
+                  <span className="fc-budget"><input
+                    defaultValue={covSet.acosCapPct ?? ''}
+                    placeholder="none"
+                    aria-label="Family ACOS cap percent"
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return
+                      const v = Number((e.target as HTMLInputElement).value)
+                      void patchCovSet({ acosCapPct: Number.isFinite(v) && v > 0 ? v : null })
+                    }} /></span>
+                </span></div>
+              </div>
+              <div className="fc-tablewrap" style={{ marginBottom: 18 }}>
+                <table className="fc-table">
+                  <thead><tr>
+                    <th className="l">Term</th><th>Market</th><th>Share</th>
+                    <th className="l" title="The family ASIN that leads this term — highest bid, ToS defense. Others support.">Lead ASIN</th>
+                    <th>Max CPC ¢</th><th>Target share %</th><th>Status</th>
+                  </tr></thead>
+                  <tbody>
+                    {covSet.terms.filter((t) => t.status !== 'RETIRED').map((t) => (
+                      <tr key={t.id} className={t.status === 'PAUSED' ? 'off' : ''}>
+                        <td className="l">{t.term}</td>
+                        <td className="num">{intl(t.marketImpressions)}</td>
+                        <td className="num strong">{pct(t.share)}</td>
+                        <td className="l">
+                          <select
+                            value={t.leadAsin ?? ''}
+                            disabled={covSetBusy}
+                            aria-label={`Lead ASIN for ${t.term}`}
+                            onChange={(e) => void patchCovTerm(t.id, { leadAsin: e.target.value || null })}
+                            className="fc-lead-select"
+                          >
+                            <option value="">— none —</option>
+                            {[...new Set(ck.products.map((p) => p.asin).filter(Boolean))].map((a) => (
+                              <option key={a as string} value={a as string}>{a}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="num">
+                          <span className="fc-budget"><input
+                            defaultValue={t.maxCpcCents ?? ''}
+                            placeholder="set"
+                            aria-label={`Max CPC for ${t.term}`}
+                            onKeyDown={(e) => {
+                              if (e.key !== 'Enter') return
+                              const v = Number((e.target as HTMLInputElement).value)
+                              void patchCovTerm(t.id, { maxCpcCents: Number.isFinite(v) && v > 0 ? Math.round(v) : null })
+                            }} /></span>
+                        </td>
+                        <td className="num">
+                          <span className="fc-budget"><input
+                            defaultValue={t.targetSharePct ?? ''}
+                            placeholder="—"
+                            aria-label={`Target share for ${t.term}`}
+                            onKeyDown={(e) => {
+                              if (e.key !== 'Enter') return
+                              const v = Number((e.target as HTMLInputElement).value)
+                              void patchCovTerm(t.id, { targetSharePct: Number.isFinite(v) && v > 0 ? v : null })
+                            }} /></span>
+                        </td>
+                        <td>
+                          <button type="button" className={`fc-status ${t.status === 'ACTIVE' ? 'enabled' : 'paused'}`}
+                            disabled={covSetBusy}
+                            title={t.status === 'ACTIVE' ? 'Pause this term in the set' : 'Reactivate'}
+                            onClick={() => void patchCovTerm(t.id, { status: t.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE' })}>
+                            {t.status === 'ACTIVE' ? 'active' : 'paused'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
           {!cov || covRows.length === 0 ? (
             <div className="fc-banner warn">
               <Info size={15} />
