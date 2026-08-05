@@ -1138,3 +1138,40 @@
   background: var(--bg-subtle, #eef1f5); color: var(--text-secondary, #55606d); }
 .h10-pt-reason { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; font-size: 11px; color: var(--text-tertiary, #7b8794); }
+
+/* ── ACR.6 (R1) — roll back a whole execution, from the history drawer ────────
+   The button lives in the timestamp column so the row keeps its three-column
+   grid; it only renders for runs the server would actually accept. */
+.h10-hist-r .when { display: inline-flex; align-items: center; gap: 8px; }
+.h10-hist-rb { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #f3c9c9; background: #fff; color: #c0392b; border-radius: 6px; padding: 2px 7px; font-size: 11px; font-weight: 700; cursor: pointer; }
+.h10-hist-rb:hover { background: #fde8e8; }
+.h10-hist-undone { display: block; margin-top: 2px; font-style: normal; font-size: 11px; font-weight: 700; color: #15803d; }
+.h10-hist-err { margin: 0 20px 10px; padding: 9px 11px; border-radius: 8px; background: #fde8e8; color: #c0392b; font-size: 12px; line-height: 1.5; }
+.h10-hist-cf { border-top: 1px solid #eef1f5; background: #fcfdfe; padding: 16px 20px; }
+.h10-hist-cf b { display: block; font-size: 13.5px; color: #1c2530; margin-bottom: 5px; }
+.h10-hist-cf p { margin: 0 0 12px; font-size: 12.5px; line-height: 1.6; color: #6b7480; }
+.h10-hist-cf-a { display: flex; justify-content: flex-end; gap: 8px; }
+.h10-hist-cf-a button { border-radius: 7px; padding: 6px 13px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.h10-hist-cf-a .cancel { border: 1px solid #dfe3e9; background: #fff; color: #6b7480; }
+.h10-hist-cf-a .danger { border: 1px solid #c0392b; background: #c0392b; color: #fff; }
+.h10-hist-cf-a button:disabled { opacity: .5; cursor: default; }
+
+/* ── ACR.6 (R2) — fleet-impact strip above the rules grid ─────────────────────
+   Evaluations and changes are shown side by side on purpose: most ticks match
+   nothing, and quoting only the changes would flatter the fleet. */
+.h10-imp { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 11px 15px; margin-bottom: 12px; border: 1px solid #e3e7ec; border-radius: 10px; background: #fff; }
+.h10-imp-l { display: flex; align-items: center; gap: 9px; }
+.h10-imp-k { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: #8a93a1; }
+.h10-imp-seg { display: inline-flex; border: 1px solid #dfe3e9; border-radius: 6px; overflow: hidden; }
+.h10-imp-seg button { border: 0; border-right: 1px solid #eef1f5; background: #fff; padding: 3px 8px; font-size: 11px; font-weight: 700; color: #6b7480; cursor: pointer; }
+.h10-imp-seg button:last-child { border-right: 0; }
+.h10-imp-seg button.on { background: #1f6fde; color: #fff; }
+.h10-imp-n { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.h10-imp-s { display: flex; flex-direction: column; }
+.h10-imp-s b { font-size: 16px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.h10-imp-s b em { font-style: normal; font-size: 12px; font-weight: 700; color: #9aa3b0; }
+.h10-imp-s i { font-style: normal; font-size: 10.5px; color: #8a93a1; margin-top: 1px; }
+.h10-imp-top { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-left: auto; }
+.h10-imp-top .lbl { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: #8a93a1; }
+.h10-imp-r { display: inline-flex; align-items: center; gap: 5px; max-width: 190px; padding: 3px 8px; border-radius: 6px; background: #f1f4f8; font-size: 11.5px; font-weight: 700; color: #2b3440; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-imp-r em { font-style: normal; font-variant-numeric: tabular-nums; color: #1f6fde; }

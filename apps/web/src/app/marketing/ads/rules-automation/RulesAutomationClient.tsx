@@ -25,6 +25,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { RuleTypeModal } from './_shared/RuleTypeModal'
 import { NoDataIllus } from './_shared/NoDataIllus'
 import { RulesTabs, rulesTabByKey, RULES_TABS } from './_shared/tabs'
+import { RuleImpactStrip } from './RuleImpactStrip'
 import { RuleListTab } from './tabs/RuleListTab'
 import { ProtectedTermsPanel } from './ProtectedTermsPanel'
 import { SovTrackerTab } from './tabs/SovTrackerTab'
@@ -263,6 +264,11 @@ export function RulesAutomationClient() {
       />
 
       <RulesTabs active={tab} />
+
+      {/* ACR.6 (R2) — the grid says what is configured; this says whether any of it did anything.
+          Apply Rules only: it is an account-wide figure, and repeating it on every rule-type tab
+          would read as that tab's own number. */}
+      {tab === 'rules' && <RuleImpactStrip />}
 
       {tab === 'rules' ? (
         <AdsDataGrid<Camp>

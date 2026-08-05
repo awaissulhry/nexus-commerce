@@ -10,7 +10,7 @@
  * placeholder rules so the page stays whole.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Plus, Trash2, ExternalLink, Clock, X } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, Clock, X, RotateCcw } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type GridEditMode } from '../../campaigns/_grid/AdsDataGrid'
 import { H10Select } from '../../campaigns/FilterDropdown'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -210,9 +210,40 @@ function BulkModal({ kind, count, nounLower, onApply, onClose }: {
 // F3 — per-rule execution history: recent AutomationRuleExecution audit rows for a live rule.
 interface ExecRow { id: string; status: string; dryRun: boolean; startedAt: string; errorMessage: string | null; actionResults: Array<{ type: string; ok?: boolean; output?: { wouldChange?: string; newDailyBudget?: number; skipped?: string }; error?: string }> }
 const STATUS_TONE: Record<string, string> = { SUCCESS: 'ok', DRY_RUN: 'dry', PARTIAL: 'warn', FAILED: 'bad', NO_MATCH: 'muted', CAP_EXCEEDED: 'warn' }
+
+/**
+ * ACR.6 (R1) — undo a whole execution, not one change at a time.
+ *
+ * The Change Log can undo a single change, which is the right grain when a person made it. An
+ * automation execution is different: one tick of one rule can move a dozen bids across as many
+ * campaigns, and undoing that twelve times — while getting none of them wrong — is not a recovery
+ * path. `POST /actions/:executionId/rollback` reverses the set as one operation, and it was
+ * reachable only from the legacy execution-detail page that Stage 6 retires.
+ *
+ * The server enforces a hard 24h window (409 `rollback_window_expired`) and refuses executions
+ * outside the advertising domain. This mirrors both client-side purely so the button is absent
+ * rather than failing on click — the server remains the authority.
+ *
+ * Dry-run rows never offer it: a proposal wrote nothing, so there is nothing to reverse, and an
+ * enabled button there would imply the run had taken effect.
+ */
+const ROLLBACK_WINDOW_MS = 24 * 60 * 60 * 1000
+interface RollbackResult {
+  ok: boolean; reversed: number; skipped: number; failed: number
+  details: Array<{ actionLogId: string; actionType: string; entityType: string; entityId: string; outcome: 'REVERSED' | 'SKIPPED' | 'FAILED'; reason?: string }>
+}
+const rollbackable = (e: ExecRow) =>
+  !e.dryRun
+  && (e.status === 'SUCCESS' || e.status === 'PARTIAL')
+  && Date.now() - new Date(e.startedAt).getTime() < ROLLBACK_WINDOW_MS
+
 function HistoryDrawer({ rule, onClose }: { rule: { id: string; name: string }; onClose: () => void }) {
   const [items, setItems] = useState<ExecRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [confirming, setConfirming] = useState<ExecRow | null>(null)
+  const [rbBusy, setRbBusy] = useState(false)
+  const [rbResult, setRbResult] = useState<{ execId: string; r: RollbackResult } | null>(null)
+  const [rbError, setRbError] = useState('')
   useEffect(() => {
     let alive = true
     ;(async () => {
@@ -223,6 +254,25 @@ function HistoryDrawer({ rule, onClose }: { rule: { id: string; name: string }; 
     document.addEventListener('keydown', k)
     return () => { alive = false; document.removeEventListener('keydown', k) }
   }, [rule.id, onClose])
+
+  const rollback = async (exec: ExecRow) => {
+    setRbBusy(true); setRbError('')
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/advertising/actions/${exec.id}/rollback`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: `operator rollback from the rule history drawer (${rule.name})` }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setRbError(j?.error === 'rollback_window_expired'
+          ? 'That run is older than 24 hours — the rollback window has closed. Reverse the individual changes from the Change Log instead.'
+          : (j?.error ?? 'Rollback failed.'))
+        return
+      }
+      setRbResult({ execId: exec.id, r: j as RollbackResult })
+      setConfirming(null)
+    } catch (e) { setRbError((e as Error).message || 'Rollback failed.') } finally { setRbBusy(false) }
+  }
   const ago = (iso: string) => { const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000); return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)}m ago` : s < 86400 ? `${Math.floor(s / 3600)}h ago` : `${Math.floor(s / 86400)}d ago` }
   const summary = (e: ExecRow) => {
     const acted = (e.actionResults ?? []).filter((a) => a.ok && a.output && !a.output.skipped)
@@ -233,17 +283,52 @@ function HistoryDrawer({ rule, onClose }: { rule: { id: string; name: string }; 
     <div className="h10-hist-back" onClick={onClose}>
       <div className="h10-hist" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`History — ${rule.name}`}>
         <div className="h10-hist-h"><div><b>Execution history</b><span title={rule.name}>{rule.name}</span></div><button type="button" onClick={onClose} aria-label="Close"><X size={18} /></button></div>
+        {rbError && <div className="h10-hist-err" role="alert">{rbError}</div>}
         <div className="h10-hist-b">
           {loading ? <div className="h10-hist-msg">Loading…</div>
             : items.length === 0 ? <div className="h10-hist-msg">No runs yet. This rule produces audit rows once it&rsquo;s enabled and the evaluator ticks.</div>
-            : items.map((e) => (
-              <div className="h10-hist-r" key={e.id}>
-                <span className={`st ${STATUS_TONE[e.status] ?? 'muted'}`}>{e.dryRun && e.status !== 'NO_MATCH' ? 'Proposed' : e.status === 'SUCCESS' ? 'Applied' : e.status.replace('_', ' ').toLowerCase()}</span>
-                <span className="sum" title={e.errorMessage ?? ''}>{e.errorMessage ?? summary(e)}</span>
-                <span className="when">{ago(e.startedAt)}</span>
-              </div>
-            ))}
+            : items.map((e) => {
+              const done = rbResult?.execId === e.id ? rbResult.r : null
+              return (
+                <div className="h10-hist-r" key={e.id}>
+                  <span className={`st ${STATUS_TONE[e.status] ?? 'muted'}`}>{e.dryRun && e.status !== 'NO_MATCH' ? 'Proposed' : e.status === 'SUCCESS' ? 'Applied' : e.status.replace('_', ' ').toLowerCase()}</span>
+                  <span className="sum" title={e.errorMessage ?? ''}>
+                    {e.errorMessage ?? summary(e)}
+                    {done && (
+                      <em className="h10-hist-undone">
+                        Rolled back — {done.reversed} reversed{done.skipped ? ` · ${done.skipped} skipped` : ''}{done.failed ? ` · ${done.failed} failed` : ''}
+                      </em>
+                    )}
+                  </span>
+                  <span className="when">
+                    {ago(e.startedAt)}
+                    {rollbackable(e) && !done && (
+                      <button type="button" className="h10-hist-rb" onClick={() => { setRbError(''); setConfirming(e) }}>
+                        <RotateCcw size={12} aria-hidden /> Roll back
+                      </button>
+                    )}
+                  </span>
+                </div>
+              )
+            })}
         </div>
+
+        {confirming && (
+          <div className="h10-hist-cf" role="dialog" aria-modal="true" aria-label="Confirm rollback">
+            <b>Roll back this whole run?</b>
+            <p>
+              Every change this execution made is reversed in one operation — bids and budgets return to the
+              values they held before it ran. Changes already overwritten since are skipped rather than forced,
+              and each outcome is reported. The rule itself stays as it is; only this run is undone.
+            </p>
+            <div className="h10-hist-cf-a">
+              <button type="button" className="cancel" disabled={rbBusy} onClick={() => setConfirming(null)}>Cancel</button>
+              <button type="button" className="danger" disabled={rbBusy} onClick={() => void rollback(confirming)}>
+                {rbBusy ? 'Rolling back…' : 'Roll back run'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
