@@ -6373,6 +6373,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return getTodayBoard()
   })
 
+  /**
+   * ACR.1.5 — Foresight: the next 24 hours, before they happen.
+   *
+   * A short cache is right here where `today` takes none: the window is hour-quantised, so two
+   * requests in the same minute cannot legitimately differ, and the rank forecast walks every
+   * enabled schedule through 24 hours.
+   */
+  fastify.get('/advertising/control-room/foresight', async (_request, reply) => {
+    const { getForesight } = await import('../services/advertising/ads-foresight.service.js')
+    reply.header('Cache-Control', 'private, max-age=60')
+    return getForesight()
+  })
+
   fastify.get('/advertising/autonomy/rules', async () => {
     const [rules, protectionCount] = await Promise.all([
       prisma.automationRule.findMany({
