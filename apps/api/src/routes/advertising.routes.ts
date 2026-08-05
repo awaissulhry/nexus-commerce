@@ -6360,6 +6360,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return getAccountGuardrails()
   })
 
+  /**
+   * ACR.1.4 — Today: what needs a human right now, priced.
+   *
+   * Deliberately not cached. Every row here is a live condition an operator may be about to
+   * act on; serving a two-minute-old "3 campaigns are not serving" after they fixed it is
+   * how a board loses its credibility.
+   */
+  fastify.get('/advertising/control-room/today', async (_request, reply) => {
+    const { getTodayBoard } = await import('../services/advertising/ads-today-board.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return getTodayBoard()
+  })
+
   fastify.get('/advertising/autonomy/rules', async () => {
     const [rules, protectionCount] = await Promise.all([
       prisma.automationRule.findMany({

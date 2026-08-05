@@ -29,6 +29,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { RulesSection } from './RulesSection'
 import { GuardrailsTab } from './GuardrailsTab'
 import { ActivityTab } from './ActivityTab'
+import { TodayTab } from './TodayTab'
 import './control-room.css'
 
 type Mode = 'OFF' | 'OBSERVE' | 'PROPOSE' | 'AUTO'
@@ -63,8 +64,11 @@ const ago = (iso: string | null) => {
 export function ControlRoomClient() {
   const params = useSearchParams()
   const raw = params.get('tab')
-  const tab: 'levers' | 'guardrails' | 'activity' =
-    raw === 'guardrails' ? 'guardrails' : raw === 'activity' ? 'activity' : 'levers'
+  const tab: 'today' | 'levers' | 'guardrails' | 'activity' =
+    raw === 'guardrails' ? 'guardrails'
+      : raw === 'activity' ? 'activity'
+        : raw === 'levers' ? 'levers'
+          : 'today'
   const [engines, setEngines] = useState<Engine[] | null>(null)
   const [global, setGlobal] = useState<Global | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -152,16 +156,28 @@ export function ControlRoomClient() {
         </div>
       )}
 
+      {/* Renders on every tab because it is an account-level fact, so it links to where the
+          flagged rows actually are rather than telling you to look at rows this tab has not
+          drawn. Silent on Levers itself, where the rows are already in front of you. */}
       {warnings > 0 && (
         <div className="acr-banner warn">
-          <AlertTriangle size={15} /> {warnings} {warnings === 1 ? 'engine needs' : 'engines need'} attention — see the flagged rows.
+          <AlertTriangle size={15} />
+          <span>
+            {warnings} {warnings === 1 ? 'engine needs' : 'engines need'} attention
+            {tab === 'levers' ? ' — see the flagged rows below.' : ' — '}
+            {tab !== 'levers' && (
+              <Link href="/marketing/ads/rules-automation/control-room?tab=levers" className="acr-link" scroll={false}>
+                open Levers
+              </Link>
+            )}
+          </span>
         </div>
       )}
 
       {/* Deep-linkable, like every other tab bar in this console: a tab you cannot bookmark
           or send to someone is a tab that only exists while you are looking at it. */}
       <nav className="acr-tabs" role="tablist" aria-label="Control Room views">
-        {(['levers', 'guardrails', 'activity'] as const).map((t) => (
+        {(['today', 'levers', 'guardrails', 'activity'] as const).map((t) => (
           <Link
             key={t}
             href={`/marketing/ads/rules-automation/control-room?tab=${t}`}
@@ -170,12 +186,12 @@ export function ControlRoomClient() {
             className={`acr-tab ${tab === t ? 'on' : ''}`}
             scroll={false}
           >
-            {t === 'levers' ? 'Levers' : t === 'guardrails' ? 'Guardrails' : 'Activity'}
+            {t === 'today' ? 'Today' : t === 'levers' ? 'Levers' : t === 'guardrails' ? 'Guardrails' : 'Activity'}
           </Link>
         ))}
       </nav>
 
-      {tab === 'guardrails' ? <GuardrailsTab /> : tab === 'activity' ? <ActivityTab /> : <>
+      {tab === 'today' ? <TodayTab /> : tab === 'guardrails' ? <GuardrailsTab /> : tab === 'activity' ? <ActivityTab /> : <>
       <div className="acr-sec-head">
         <h2>Engines</h2>
         <span className="acr-sec-count">

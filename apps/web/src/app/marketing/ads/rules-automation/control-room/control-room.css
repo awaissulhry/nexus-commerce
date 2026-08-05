@@ -213,3 +213,86 @@
 
 .acr-link { color: #1f6fde; text-decoration: none; display: inline-flex; align-items: center; gap: 3px; }
 .acr-link:hover { text-decoration: underline; }
+
+/* ── Today: the priced exception board ───────────────────────────────────── */
+.acr-today-top {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 24px;
+  border: 1px solid #dfe5ec; border-radius: 9px; background: #fff;
+  padding: 16px 18px; margin: 4px 0 14px;
+}
+.acr-today-hero { min-width: 0; }
+.acr-today-hero-k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: #8d97a6; font-weight: 700; }
+.acr-today-hero-v {
+  font-size: 27px; font-weight: 650; color: #1c2530; line-height: 1.15; margin-top: 3px;
+  display: flex; align-items: baseline; gap: 9px; font-variant-numeric: tabular-nums;
+}
+.acr-today-hero-sub { font-size: 12.5px; font-weight: 500; color: #7b8798; letter-spacing: 0; }
+.acr-today-hero-note { font-size: 12px; color: #7b8798; margin: 5px 0 0; max-width: 62ch; line-height: 1.5; }
+
+.acr-today-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 9px; flex-shrink: 0; }
+.acr-today-counts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.acr-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 650; letter-spacing: 0.02em;
+  border-radius: 4px; padding: 3px 8px; border: 1px solid transparent; white-space: nowrap;
+}
+.acr-pill.critical { background: #fdf2f2; color: #9c2f2a; border-color: #e6bcba; }
+.acr-pill.warning { background: #fff8ec; color: #8a6320; border-color: #ecd9ae; }
+.acr-pill.info { background: #f2f4f7; color: #4d5b6e; border-color: #dde3ea; }
+.acr-pill.ok { background: #e8f6ef; color: #14724d; border-color: #bfe3d2; }
+
+/* "Nothing needs you" must be a real, confident state — not an empty container. */
+.acr-today-clear {
+  display: flex; align-items: flex-start; gap: 12px;
+  border: 1px solid #bfe3d2; background: #f6fbf8; border-radius: 9px; padding: 16px 18px;
+}
+.acr-today-clear svg { color: #1a9d6a; flex-shrink: 0; margin-top: 1px; }
+.acr-today-clear strong { font-size: 13.5px; color: #14724d; }
+.acr-today-clear p { font-size: 12.5px; color: #56637a; margin: 4px 0 0; max-width: 74ch; line-height: 1.55; }
+
+.acr-today-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+
+/* The severity bar is the scan path: you read the left edge, not the labels. */
+.acr-exc { display: flex; border: 1px solid #dfe5ec; border-radius: 9px; background: #fff; overflow: hidden; }
+.acr-exc-bar { width: 3px; flex-shrink: 0; background: #dde3ea; }
+.acr-exc.critical { border-color: #e6bcba; }
+.acr-exc.critical .acr-exc-bar { background: #d4453f; }
+.acr-exc.warning { border-color: #ecd9ae; }
+.acr-exc.warning .acr-exc-bar { background: #d99b2b; }
+.acr-exc-body { padding: 13px 16px; min-width: 0; flex: 1; }
+
+.acr-exc-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.acr-exc-head h3 { font-size: 13.5px; font-weight: 600; color: #1c2530; margin: 0; }
+.acr-exc-sev {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
+  border-radius: 4px; padding: 2px 7px; white-space: nowrap;
+}
+.acr-exc-sev.critical { background: #fdf2f2; color: #9c2f2a; }
+.acr-exc-sev.warning { background: #fff8ec; color: #8a6320; }
+.acr-exc-sev.info { background: #f2f4f7; color: #4d5b6e; }
+
+.acr-exc-detail { font-size: 12.5px; color: #56637a; margin: 6px 0 0; line-height: 1.55; max-width: 96ch; }
+
+.acr-exc-foot { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; margin-top: 10px; }
+.acr-exc-amount {
+  display: inline-flex; align-items: baseline; gap: 7px;
+  font-size: 15px; font-weight: 650; color: #1c2530; font-variant-numeric: tabular-nums;
+}
+/* An absent € is muted so it never competes with a real one for attention — but its note
+   stays at full legibility, because the note is the actual information in that case. */
+.acr-exc-amount.unknown { color: #b3bcc9; }
+.acr-exc-amount em { font-size: 11.5px; font-weight: 500; font-style: normal; color: #8d97a6; }
+.acr-exc-age { font-size: 11.5px; color: #8d97a6; }
+.acr-exc-go {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12.5px; font-weight: 550; color: #1f6fde; text-decoration: none; white-space: nowrap;
+}
+.acr-exc-go:hover { text-decoration: underline; }
+
+@media (max-width: 720px) {
+  .acr-today-top { flex-direction: column; gap: 14px; }
+  .acr-today-meta { align-items: flex-start; }
+  .acr-today-counts { justify-content: flex-start; }
+  .acr-exc-go { margin-left: 0; }
+}
