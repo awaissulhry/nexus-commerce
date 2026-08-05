@@ -171,11 +171,20 @@ interface LiveCallOptions {
  * Without this, every report id would become its own operation and the
  * per-operation failure counts the Control Room needs would be meaningless.
  */
-function adsOperationName(method: string, path: string): string {
+export function adsOperationName(method: string, path: string): string {
   const normalized = path
     .split('?')[0]
     .replace(/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '/:id')
-    .replace(/\/\d{6,}/g, '/:id')
+    .replace(/\/\d{6,}(?=\/|$)/g, '/:id')
+    // Export ids are base64-ish — neither a UUID nor a digit run — so the two rules above
+    // missed them and prod produced six distinct operations in a single tick
+    // ("ads GET /exports/MjM3ZjhmNzIt…"), the exact cardinality explosion this exists to stop.
+    //
+    // Scoped tightly, because the obvious version is wrong: `[A-Za-z0-9+/=_-]{16,}` includes
+    // the slash, so it swallows whole paths — "/reporting/reports" (17 chars) collapsed to
+    // "/:id". This matches ONE segment, and only one that contains a digit, which real path
+    // words ("reporting", "campaigns", "profiles") never do.
+    .replace(/\/(?=[^/]*\d)[A-Za-z0-9+=_-]{16,}(?=\/|$)/g, '/:id')
   return `ads ${method} ${normalized}`
 }
 

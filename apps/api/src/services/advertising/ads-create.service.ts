@@ -678,6 +678,22 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
   // campaign with the push outcome so a failure is observable on lastSyncStatus and
   // the auto-reconcile sweep can re-push it. Only stamp on a real live attempt.
   let syncStamp: { lastSyncedAt: Date; lastSyncStatus: 'SUCCESS' | 'FAILED'; lastSyncError: string | null } | null = null
+  /**
+   * ACR.0.7b — a gate denial must not leave local state claiming a change Amazon never got.
+   *
+   * Previously a gated write skipped the push but still ran the campaign.update below, so
+   * `dynamicBidding.placementBidding` moved locally while Amazon kept the old value — and
+   * because `syncStamp` stays null when gated, `lastSyncStatus` was never set to FAILED, so
+   * the auto-reconcile sweep (which only re-pushes FAILED entities) could never repair it.
+   * Silent, permanent local≠Amazon divergence, recorded as SUCCESS.
+   *
+   * Measured 2026-08-05: with the account halted, one rank-defend tick produced 21 such rows
+   * in 40 seconds. It was survivable before only because the gate almost never denied.
+   *
+   * NOT the same as sandbox: sandbox SHOULD write locally — that is what sandbox is for.
+   * Only a genuine refusal suppresses the local mutation.
+   */
+  let gateDenial: string | null = null
   if (c.externalCampaignId && c.marketplace) {
     const ctx = await resolveCtx(c.marketplace)
     if (ctx) {
@@ -685,7 +701,8 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
       // as every bid write (previously omitted → placement bias bypassed the allowlist entirely).
       const gate = await checkAdsWriteGate({ marketplace: c.marketplace, campaignId: input.campaignId, payloadValueCents: 0 })
       if (!gate.allowed) {
-        logger.warn('[AX2.2] placement write gated', { campaignId: input.campaignId, reason: (gate as { reason?: string }).reason })
+        gateDenial = (gate as { reason?: string }).reason ?? 'write gate denied'
+        logger.warn('[AX2.2] placement write gated', { campaignId: input.campaignId, reason: gateDenial })
       } else {
         const r = await updateCampaign(ctx, c.externalCampaignId, { placementBidding: adjustments, biddingStrategy: input.biddingStrategy })
         mode = r.mode
@@ -695,6 +712,21 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
       }
     }
   }
+  // ACR.0.7b — refused writes change nothing locally. Returning before the audit block too:
+  // a denial is not a placement change, so it must not appear in CampaignBidHistory as
+  // "PLACEMENT_TOP 100 → 115" beside changes that actually happened.
+  if (gateDenial) {
+    await audit(
+      'update_placement_bidding', 'CAMPAIGN', input.campaignId,
+      { adjustments, mode: 'blocked', error: gateDenial },
+      input.actor ?? input.userId ?? 'system',
+      { adjustments: priorAdjustments },
+      'FAILED',
+      { targetKey: input.targetKey, metric: 'placementBidding', note: `blocked: ${gateDenial}` },
+    ).catch(() => { /* an audit row must never fail the write it describes */ })
+    return { ok: false, adjustments: priorAdjustments, mode: 'blocked' }
+  }
+
   await prisma.campaign.update({ where: { id: input.campaignId }, data: { dynamicBidding: db as never, ...(syncStamp ?? {}), ...(input.biddingStrategy ? { biddingStrategy: input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES' } : {}) } })
 
   /**
