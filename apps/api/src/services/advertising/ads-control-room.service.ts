@@ -114,6 +114,63 @@ async function cronFacts(names: string[]) {
   return { lastBy, health }
 }
 
+/**
+ * ACR.1.3 — the account-level bounds, in one read.
+ *
+ * These are the numbers that bind EVERY engine and rule, and until now each lived somewhere
+ * different: two in a DB row, one in an env var, one implied by a column's default-deny, one
+ * only countable by query. Setting the breaker threshold required running a script — which is
+ * a strange thing to say about the control that stops the account.
+ *
+ * `effective` vs `set` is the important distinction. A null threshold is not "no limit", it is
+ * "the code's default", and showing a blank field would read as unbounded. So both are
+ * returned and the UI can say "250 (default)" rather than nothing.
+ */
+export interface AccountGuardrails {
+  actionsPerHour: { effective: number; set: number | null; default: number }
+  spendPerHourCents: { effective: number; set: number | null; default: number }
+  /** Per-payload write ceiling, from env. Read-only here — it needs a deploy to change. */
+  maxWriteValueCents: number
+  /** Quartile's counted boundary of authority: what automation may touch at all. */
+  campaigns: { total: number; managed: number; unmanaged: number }
+  /** Entity bid bounds (ADX A1) — a column, so it cannot be bypassed by a future engine. */
+  bounds: { withMinBid: number; withMaxBid: number }
+  protectedTerms: number
+  adsMode: string
+  envKill: boolean
+}
+
+const DEFAULT_MAX_ACTIONS_PER_HOUR = 250
+const DEFAULT_MAX_HOURLY_SPEND_CENTS = 50_000
+
+export async function getAccountGuardrails(): Promise<AccountGuardrails> {
+  const [state, total, managed, withMin, withMax, protectedTerms] = await Promise.all([
+    getAutomationState(),
+    prisma.campaign.count(),
+    prisma.campaign.count({ where: { liveBidWritesEnabled: true } }),
+    prisma.campaign.count({ where: { minBidCents: { not: null } } }),
+    prisma.campaign.count({ where: { maxBidCents: { not: null } } }),
+    prisma.adKeywordProtection.count({ where: { mode: 'WHITELIST' } }).catch(() => 0),
+  ])
+  const { adsMode } = await import('./ads-api-client.js')
+  return {
+    actionsPerHour: {
+      effective: state.maxActionsPerHour ?? DEFAULT_MAX_ACTIONS_PER_HOUR,
+      set: state.maxActionsPerHour, default: DEFAULT_MAX_ACTIONS_PER_HOUR,
+    },
+    spendPerHourCents: {
+      effective: state.maxHourlySpendCentsEur ?? DEFAULT_MAX_HOURLY_SPEND_CENTS,
+      set: state.maxHourlySpendCentsEur, default: DEFAULT_MAX_HOURLY_SPEND_CENTS,
+    },
+    maxWriteValueCents: Number(process.env.NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS ?? 50_000),
+    campaigns: { total, managed, unmanaged: total - managed },
+    bounds: { withMinBid: withMin, withMaxBid: withMax },
+    protectedTerms,
+    adsMode: adsMode(),
+    envKill: process.env.NEXUS_ADS_AUTOMATION_KILL === '1',
+  }
+}
+
 export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global: { autonomy: string; halted: boolean; degraded: boolean; envKill: boolean } }> {
   const CRONS = [
     'ad-rank-defend', 'ad-dayparting', 'ad-budget-enforce', 'budget-pool-rebalance',

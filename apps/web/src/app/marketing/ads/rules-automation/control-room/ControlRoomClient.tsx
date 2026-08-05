@@ -22,9 +22,12 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { Zap, Eye, MessageSquare, Power, AlertTriangle, ShieldAlert, Play, Square, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RulesSection } from './RulesSection'
+import { GuardrailsTab } from './GuardrailsTab'
 import './control-room.css'
 
 type Mode = 'OFF' | 'OBSERVE' | 'PROPOSE' | 'AUTO'
@@ -57,6 +60,8 @@ const ago = (iso: string | null) => {
 }
 
 export function ControlRoomClient() {
+  const params = useSearchParams()
+  const tab = params.get('tab') === 'guardrails' ? 'guardrails' : 'levers'
   const [engines, setEngines] = useState<Engine[] | null>(null)
   const [global, setGlobal] = useState<Global | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -157,6 +162,24 @@ export function ControlRoomClient() {
         </span>
       </div>
 
+      {/* Deep-linkable, like every other tab bar in this console: a tab you cannot bookmark
+          or send to someone is a tab that only exists while you are looking at it. */}
+      <nav className="acr-tabs" role="tablist" aria-label="Control Room views">
+        {(['levers', 'guardrails'] as const).map((t) => (
+          <Link
+            key={t}
+            href={`/marketing/ads/rules-automation/control-room?tab=${t}`}
+            role="tab"
+            aria-selected={tab === t}
+            className={`acr-tab ${tab === t ? 'on' : ''}`}
+            scroll={false}
+          >
+            {t === 'levers' ? 'Levers' : 'Guardrails'}
+          </Link>
+        ))}
+      </nav>
+
+      {tab === 'guardrails' ? <GuardrailsTab /> : <>
       {engines === null ? (
         <div className="acr-empty">Loading…</div>
       ) : engines.length === 0 ? (
@@ -202,6 +225,7 @@ export function ControlRoomClient() {
       )}
 
       <RulesSection />
+      </>}
 
       <p className="acr-foot">
         Every write also passes the gate: a per-campaign allowlist, entity bid bounds, protected

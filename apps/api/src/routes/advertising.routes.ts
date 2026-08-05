@@ -6323,6 +6323,18 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { engines: levers, global }
   })
 
+  /**
+   * ACR.1.3 — the account-level bounds that bind every engine and rule.
+   *
+   * Read-only. The one writable pair (the breaker thresholds) already has an endpoint at
+   * POST /advertising/automation/thresholds; adding a second write path here would give the
+   * same setting two doors and eventually two behaviours.
+   */
+  fastify.get('/advertising/control-room/guardrails', async () => {
+    const { getAccountGuardrails } = await import('../services/advertising/ads-control-room.service.js')
+    return getAccountGuardrails()
+  })
+
   fastify.get('/advertising/autonomy/rules', async () => {
     const [rules, protectionCount] = await Promise.all([
       prisma.automationRule.findMany({
