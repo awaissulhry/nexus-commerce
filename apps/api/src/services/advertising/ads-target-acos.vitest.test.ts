@@ -58,3 +58,38 @@ describe('targetFromBreakeven', () => {
     expect(profitShareFor('balanced')).toBeGreaterThan(profitShareFor('growth'))
   })
 })
+
+/**
+ * ACR.0.5 — the shape of the defect this guards against, held as a test because the numbers
+ * are the argument.
+ *
+ * With no cost loaded, cogsCents is 0 and breakevenAcos happily returns a large, confident
+ * number. Measured on prod 2026-08-05, that was EVERY product: costPrice null on 362/362 and
+ * weightedAvgCostCents 240 null / 122 zero / 0 real. The service now routes that case to the
+ * `fallback` basis instead, because callers act only on `profit-data`.
+ */
+describe('ACR.0.5 — a zero COGS is a missing cost, not a free product', () => {
+  it('THE TRAP: zero COGS yields a break-even that looks great and is meaningless', () => {
+    const withCost = breakevenAcos({
+      grossRevenueCents: 10000, cogsCents: 4000, referralFeesCents: 1500,
+      fbaFulfillmentFeesCents: 1000, fbaStorageFeesCents: 0, returnsRefundsCents: 0, otherFeesCents: 0,
+    })
+    const withoutCost = breakevenAcos({
+      grossRevenueCents: 10000, cogsCents: 0, referralFeesCents: 1500,
+      fbaFulfillmentFeesCents: 1000, fbaStorageFeesCents: 0, returnsRefundsCents: 0, otherFeesCents: 0,
+    })
+    expect(withCost).toBeCloseTo(0.35, 5)
+    expect(withoutCost).toBeCloseTo(0.75, 5)
+    // The missing-cost answer is not conservative — it is more than twice as permissive.
+    // breakevenAcos is pure and correct given its inputs; the caller must not feed it a
+    // zero it invented, which is what resolveTargetAcos now refuses to do.
+    expect(withoutCost).toBeGreaterThan((withCost as number) * 2)
+  })
+
+  it('targetFromBreakeven propagates the inflation rather than damping it', () => {
+    const share = profitShareFor('balanced')
+    const honest = targetFromBreakeven(0.35, share)
+    const inflated = targetFromBreakeven(0.75, share)
+    expect(inflated).toBeGreaterThan(honest as number)
+  })
+})

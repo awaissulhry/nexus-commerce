@@ -100,14 +100,29 @@ async function aggregateSalesForDay(date: Date): Promise<AggregatedSale[]> {
   return Array.from(map.values())
 }
 
+/**
+ * Cost per unit in cents, or null when we genuinely do not know.
+ *
+ * ACR.0.5 — a ZERO is not a cost, it is a missing cost wearing a number.
+ *
+ * Measured on prod 2026-08-05: `weightedAvgCostCents` is 240 null, **122 zero**, and 0 real,
+ * so the old `!= null` test returned 0 for 122 products and set `coverage.hasCostPrice = true`
+ * alongside it. The row then claimed we knew the cost and that it was nothing — which is why
+ * all 216 campaigns carry a `trueProfitCents` summing to exactly €0 while `costPrice` is null
+ * on every one of the 362 products.
+ *
+ * Nothing this business sells costs nothing, so a zero here is always absence. Returning null
+ * flips `hasCostPrice` to false, and the surfaces downstream can finally tell "we don't know"
+ * apart from "it makes no money" — opposite claims that have been rendering identically.
+ */
 async function lookupCostPrice(productId: string): Promise<number | null> {
   const p = await prisma.product.findUnique({
     where: { id: productId },
     select: { costPrice: true, weightedAvgCostCents: true },
   })
   if (!p) return null
-  if (p.costPrice != null) return Math.round(Number(p.costPrice) * 100)
-  if (p.weightedAvgCostCents != null) return p.weightedAvgCostCents
+  if (p.costPrice != null && Number(p.costPrice) > 0) return Math.round(Number(p.costPrice) * 100)
+  if (p.weightedAvgCostCents != null && p.weightedAvgCostCents > 0) return p.weightedAvgCostCents
   return null
 }
 
@@ -408,16 +423,30 @@ export async function fillAdSpend(
       })
       if (!row) continue // rollup hasn't written this product yet — skip
 
-      const trueProfit =
-        row.grossRevenueCents
-        - row.cogsCents
-        - row.referralFeesCents
-        - row.fbaFulfillmentFeesCents
-        - advertisingSpendCents
-        - row.returnsRefundsCents
+      /**
+       * ACR.0.5 — without a cost price there is no such thing as true profit.
+       *
+       * Subtracting a cogsCents of 0 produces revenue-minus-fees and calls it profit, which
+       * is not conservative — it is the most flattering possible answer, and it was being
+       * shown as "True profit" on every campaign in the console. `coverage.hasCostPrice` has
+       * recorded the truth all along and nothing read it.
+       *
+       * Null means unknown. Consumers already handle a null (the column is nullable); a
+       * wrong number is what they could not handle.
+       */
+      const cov = ((row.coverage as Record<string, unknown>) ?? {})
+      const hasCost = cov.hasCostPrice === true
+      const trueProfit = hasCost
+        ? row.grossRevenueCents
+          - row.cogsCents
+          - row.referralFeesCents
+          - row.fbaFulfillmentFeesCents
+          - advertisingSpendCents
+          - row.returnsRefundsCents
+        : null
       const marginPct =
-        row.grossRevenueCents > 0 ? trueProfit / row.grossRevenueCents : null
-      const coverage = { ...((row.coverage as object) ?? {}), hasAdSpend: true }
+        trueProfit != null && row.grossRevenueCents > 0 ? trueProfit / row.grossRevenueCents : null
+      const coverage = { ...cov, hasAdSpend: true }
 
       await prisma.productProfitDaily.update({
         where: { productId_marketplace_date: { productId, marketplace, date: start } },

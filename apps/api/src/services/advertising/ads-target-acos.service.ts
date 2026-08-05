@@ -119,7 +119,24 @@ export async function computeProductTargetAcos(opts: {
   const adSpend = s.advertisingSpendCents ?? 0
   const trueProfit = s.trueProfitCents ?? 0
   const dataPoints = rows._count ?? 0
-  if (dataPoints === 0 || gross <= 0) {
+  /**
+   * ACR.0.5 — revenue without a cost price cannot produce a break-even ACOS.
+   *
+   * `breakevenAcos` subtracts cogsCents, and cogsCents is 0 for every product with no cost
+   * loaded — which, measured on prod 2026-08-05, is ALL of them: costPrice null on 362/362,
+   * weightedAvgCostCents 240 null / 122 zero / 0 real. With a zero cost the contribution
+   * margin collapses to revenue-minus-fees, so break-even comes back near 0.85 and the
+   * derived target ACOS is the most permissive number the formula can produce.
+   *
+   * That is not a rounding problem, it is the wrong direction: an unbounded-looking budget
+   * for a product whose real margin is unknown. And it mattered because callers act ONLY on
+   * `basis: 'profit-data'` — so the rows with no cost were exactly the rows being trusted.
+   *
+   * A missing cost belongs in the same branch as missing data: fall back and say so.
+   */
+  const cogs = s.cogsCents ?? 0
+  const costMissing = gross > 0 && cogs <= 0
+  if (dataPoints === 0 || gross <= 0 || costMissing) {
     return {
       productId: opts.productId, marketplace: opts.marketplace ?? null, windowDays, dataPoints,
       basis: 'fallback', breakevenAcos: null, targetAcos: FALLBACK_TARGET_ACOS,
