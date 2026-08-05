@@ -4,8 +4,12 @@
  *
  * This is the pilot the whole engagement was opened for: "several products, same keywords —
  * make them appear on the same page… automate it all so it doesn't require my attention."
- * Presence was measured to be the status quo (10 GALE ASINs already share one SERP); SHARE is
- * the gap, and share is a bid problem. So the engine is a bid ladder, not a structure builder:
+ * The engine is a bid ladder, not a structure builder. It moves ONE lever per term — the
+ * championed target's bid — which controls how often the family's tile shows and how much of
+ * the term's impressions it takes. What a bid cannot do is put a SECOND tile on the page:
+ * ACR.2.4 established that the "10 GALE ASINs on one SERP" were one variation family — one
+ * tile — so multi-product presence is NOT the status quo; it needs a second family bidding
+ * the same terms, which is structural, operator-gated work the variation experiment informs.
  *
  *   share below target  → step the family's championed keyword bid UP (within every cap)
  *   share at/above target → DECAY the bid gently to find the cheapest bid that still holds
