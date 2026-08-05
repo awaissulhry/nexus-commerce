@@ -86,7 +86,11 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const q = request.query as { limit?: string; domain?: string }
     const limit = Math.min(200, Math.max(10, Number(q.limit) || 50))
     const execs = await prisma.automationRuleExecution.findMany({
-      where: { domain: 'advertising' } as never,
+      // ACR.6 — `domain` is a column on AutomationRule, NOT on AutomationRuleExecution, so this
+      // filter has to travel through the relation. Written flat with an `as never` it threw
+      // "Unknown argument `domain`" on every call and the route 500'd; the cast is what hid it
+      // from tsc (this workspace is not strict). Verified on prod 2026-08-05.
+      where: { rule: { domain: 'advertising' } },
       orderBy: { startedAt: 'desc' },
       take: limit,
       select: {
@@ -128,7 +132,11 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const days = Math.max(7, Math.min(90, Number(q.windowDays) || 30))
     const since = new Date(); since.setUTCDate(since.getUTCDate() - days); since.setUTCHours(0, 0, 0, 0)
     const execs = await prisma.automationRuleExecution.findMany({
-      where: { startedAt: { gte: since }, domain: 'advertising', status: { in: ['SUCCESS', 'PARTIAL'] } } as never,
+      // ACR.6 — see automation-feed above: `domain` lives on the RULE. This threw on every
+      // call, so this endpoint had never returned data to anything that asked. The relation
+      // filter is also what bounds the scan: 3,577 advertising executions in 30d against
+      // 522,985 across all domains.
+      where: { startedAt: { gte: since }, status: { in: ['SUCCESS', 'PARTIAL'] }, rule: { domain: 'advertising' } },
       select: { actionResults: true, rule: { select: { id: true, name: true } }, startedAt: true },
     })
     const byRule = new Map<string, { name: string; runs: number; termsNegated: number; bidsAdjusted: number; campaignsGuarded: number; lastRun: string }>()
@@ -155,7 +163,8 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const days = Math.max(1, Math.min(90, Number(q.windowDays) || 7))
     const since = new Date(); since.setUTCDate(since.getUTCDate() - days); since.setUTCHours(0, 0, 0, 0)
     const execs = await prisma.automationRuleExecution.findMany({
-      where: { startedAt: { gte: since }, domain: 'advertising', status: { in: ['SUCCESS', 'PARTIAL', 'DRY_RUN'] } } as never,
+      // ACR.6 — same defect, same fix; `domain` is on AutomationRule.
+      where: { startedAt: { gte: since }, status: { in: ['SUCCESS', 'PARTIAL', 'DRY_RUN'] }, rule: { domain: 'advertising' } },
       select: { actionResults: true, dryRun: true, status: true, startedAt: true, rule: { select: { name: true, trigger: true } } },
       orderBy: { startedAt: 'desc' },
       take: 2000,

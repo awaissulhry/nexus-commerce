@@ -55,9 +55,25 @@ export function RuleImpactStrip() {
     return () => { alive = false }
   }, [days])
 
-  // A strip that cannot load its numbers should disappear, not sit there claiming zero — the grid
-  // below is the page, and a broken banner above it would read as "the fleet did nothing".
-  if (failed || !data) return null
+  /**
+   * A FAILURE AND A ZERO ARE DIFFERENT, AND THIS USED TO CONFLATE THEM.
+   *
+   * The first cut returned `null` whenever the fetch failed OR the payload was unusable, reasoning
+   * that a zeroed banner reads as "the fleet did nothing". The zero half of that is right. The
+   * failure half hid a real defect: `/automation-analytics` was throwing on every single call
+   * (`domain` filtered on the execution instead of the rule), and because this component rendered
+   * nothing, prod looked merely empty rather than broken. It took a schema read to find it.
+   *
+   * So: a failure now says it failed, quietly and in one line. Silence is not success.
+   */
+  if (failed || !data) {
+    return (
+      <div className="h10-imp h10-imp-off" role="status">
+        Fleet impact unavailable — the automation-analytics endpoint did not return usable data.
+        The rules below are unaffected.
+      </div>
+    )
+  }
 
   const t = data.rules.reduce(
     (a, r) => ({
