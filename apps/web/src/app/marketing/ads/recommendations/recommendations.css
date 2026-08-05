@@ -131,6 +131,17 @@
 .rec-plan-star span { display: block; margin-top: 2px; font-size: 11.5px; color: #8a93a1; line-height: 1.45; }
 
 .rec-plan-ctl { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+/* The DS secondary button renders BORDERLESS in this console, so "Preview plan" read as bold text
+   rather than a control. Cause (measured on prod 2026-08-05): primitives.css writes
+   `border: 1px solid var(--border-default)`, but globals.css and ads.css define --border-default
+   as a bare Tailwind triplet ("203 213 225") for `rgb(var(--x)/<alpha>)` use. The shorthand becomes
+   `1px solid 203 213 225`, which is invalid, so the declaration is dropped and Tailwind's
+   `border: 0px` preflight wins. Same for background via --surface-card.
+   Scoped literal here rather than a DS-wide change: ~164 DS declarations share that root cause and
+   deciding their intended appearance is not this panel's call. See ACR.6.3. */
+.rec-plan-ctl .h10-ds-btn { border: 1px solid #d8dde4; background: #fff; }
+.rec-plan-ctl .h10-ds-btn:hover:not(:disabled) { background: #f1f4f8; }
+.rec-plan-ctl .h10-ds-btn.rec-btn-live { border-color: #e5484d; background: #e5484d; }
 .rec-plan-f { display: flex; flex-direction: column; gap: 3px; }
 .rec-plan-f > span { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: #8a93a1; }
 .rec-plan-f input { width: 92px; border: 1px solid #dfe3e9; border-radius: 7px; padding: 5px 9px; font-size: 12.5px; color: #1c2530; background: #fff; }
