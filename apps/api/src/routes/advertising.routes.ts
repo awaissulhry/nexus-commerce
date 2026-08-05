@@ -1964,7 +1964,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
      * and `?? 0` on an all-null sum reported a confident 0% — the one number that reads as
      * "we measured this and it is zero". Null plus a coverage share instead.
      */
-    const [campaignCount, agg, covered, agedCritical] = await Promise.all([
+    const [campaignCount, agg, covered, estimatedRows, agedCritical] = await Promise.all([
       prisma.campaign.count({ where: { status: { in: ['ENABLED', 'PAUSED'] } } }),
       prisma.productProfitDaily.aggregate({
         where: { date: { gte: thirtyDaysAgo } },
@@ -1978,6 +1978,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         _sum: { grossRevenueCents: true, trueProfitCents: true },
         _count: true,
       }),
+      // ACR.4 — how much of that profit rests on the interim cost ESTIMATE rather than on a real
+      // cost price. Without this the headline margin reads as measured, which is the exact
+      // confusion ACR.0.5 existed to remove — only now with a plausible number instead of a zero.
+      prisma.productProfitDaily.count({
+        where: {
+          date: { gte: thirtyDaysAgo }, trueProfitCents: { not: null },
+          coverage: { path: ['costEstimated'], equals: true },
+        },
+      }).catch(() => 0),
       prisma.fbaStorageAge.count({
         where: { daysToLtsThreshold: { lte: 30, not: null } },
       }),
@@ -2006,6 +2015,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         revenueCoveredCents: knownGrossCents,
         revenuePct: grossCents > 0 ? (knownGrossCents / grossCents) * 100 : 0,
         reason: knownRows === 0 ? PROFIT_UNKNOWN_REASON : null,
+        // Rows whose cost is the operator's interim estimate, not a measurement.
+        estimatedRows,
+        /** True when EVERY contributing row rests on the estimate — the headline is a guess. */
+        allEstimated: knownRows > 0 && estimatedRows >= knownRows,
       },
       agedSkusFlagged: agedCritical,
       mode: adsMode(),

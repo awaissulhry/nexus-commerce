@@ -135,6 +135,7 @@ export async function getTodayBoard(): Promise<TodayBoard> {
     failedMutationNewest,
     cronFails,
     advertisedWithoutCost,
+    advertisedOnEstimate,
     advertisedTotal,
     state,
     allowlisted,
@@ -160,14 +161,34 @@ export async function getTodayBoard(): Promise<TodayBoard> {
       _count: { _all: true },
       _max: { startedAt: true },
     }).catch(() => []),
-    // ACR.0.5 — the cost gap, counted the same way the profit surfaces now judge it.
+    /**
+     * ACR.4 — count products with no REAL cost price, not products with no cogsCents.
+     *
+     * The interim estimate writes a positive cogsCents, so the original `cogsCents > 0` test
+     * silently started counting estimated products as costed: this row fell from "223 of 223"
+     * to "206 of 223" and downgraded itself from warning to info, reporting progress that had
+     * not happened. `coverage.hasCostPrice` is the flag that means measured, and it is the only
+     * one this row may read.
+     */
     prisma.$queryRawUnsafe<{ n: bigint | number }[]>(`
       SELECT COUNT(DISTINCT pa."productId") AS n
       FROM "AdProductAd" pa
       WHERE pa."productId" IS NOT NULL
         AND NOT EXISTS (
           SELECT 1 FROM "ProductProfitDaily" d
-          WHERE d."productId" = pa."productId" AND d."cogsCents" > 0
+          WHERE d."productId" = pa."productId"
+            AND (d."coverage"->>'hasCostPrice')::boolean IS TRUE
+        )
+    `),
+    // How many of those are at least running on the interim estimate, so the row can say so.
+    prisma.$queryRawUnsafe<{ n: bigint | number }[]>(`
+      SELECT COUNT(DISTINCT pa."productId") AS n
+      FROM "AdProductAd" pa
+      WHERE pa."productId" IS NOT NULL
+        AND EXISTS (
+          SELECT 1 FROM "ProductProfitDaily" d
+          WHERE d."productId" = pa."productId"
+            AND (d."coverage"->>'costEstimated')::boolean IS TRUE
         )
     `),
     prisma.$queryRawUnsafe<{ n: bigint | number }[]>(`
@@ -312,15 +333,19 @@ export async function getTodayBoard(): Promise<TodayBoard> {
 
   // ── No cost data ──────────────────────────────────────────────────────
   const noCost = Number(advertisedWithoutCost[0]?.n ?? 0)
+  const onEstimate = Number(advertisedOnEstimate[0]?.n ?? 0)
   const advertised = Number(advertisedTotal[0]?.n ?? 0)
   if (noCost > 0) {
     ex.push({
       key: 'no-cost-data',
       severity: noCost === advertised ? 'warning' : 'info',
-      title: `${noCost} of ${advertised} advertised products have no cost price`,
+      title: `${noCost} of ${advertised} advertised products have no real cost price`,
       detail:
-        'Every profit figure and every profit-derived bid target falls back while this is true — true profit reads "—" rather than a number, ' +
-        'and target ACOS uses the flat 30% default instead of the product\'s real break-even. Loading costs is an operator action through the product cost grid — no engineering is waiting on it.',
+        (onEstimate > 0
+          ? `${onEstimate} are running on the interim estimate, so their profit figures are shown but labelled — an estimate is not a measurement and never sets a bid target. `
+          : '') +
+        'Target ACOS uses the flat 30% default instead of the product\'s real break-even until a real cost lands. ' +
+        'Loading costs is an operator action through the product cost grid — no engineering is waiting on it.',
       count: noCost,
       amountCents: null,
       amountNote: 'Unmeasurable by definition — this IS the missing measurement',

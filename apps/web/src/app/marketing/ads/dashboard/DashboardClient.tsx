@@ -10,7 +10,11 @@ interface Summary {
   campaignCount?: number; adSpend30dCents?: number; trueProfitMargin30dPct?: number | null; mode?: string
   // ACR.0.5 — why the margin is '—'. revenuePct is the share of 30d revenue the profit
   // figure covers, so a dash can distinguish "no cost data" from "we broke even".
-  trueProfitCoverage?: { rowsWithCost?: number; revenuePct?: number; reason?: string | null }
+  trueProfitCoverage?: {
+    rowsWithCost?: number; revenuePct?: number; reason?: string | null
+    // ACR.4 — how much of the figure rests on the interim cost estimate rather than a real cost.
+    estimatedRows?: number; allEstimated?: boolean
+  }
 }
 interface TrendSummary { impressions?: number; clicks?: number; orders?: number; spendCents?: number; salesCents?: number; acos?: number; roas?: number }
 interface TrendRow { date: string; adSpendCents?: number; acos?: number }
@@ -93,10 +97,20 @@ export function DashboardClient() {
   const spend = n(ts.spendCents) != null ? n(ts.spendCents)! / 100 : undefined
   const sales = n(ts.salesCents) != null ? n(ts.salesCents)! / 100 : undefined
   const cov = summary?.trueProfitCoverage
+  /**
+   * ACR.4 — an ESTIMATED margin must say so on the tile, not only in a tooltip.
+   *
+   * The interim €50 makes this number appear where a dash used to be, and a plausible number is
+   * more misleading than an obvious blank: nothing about "31%" tells you the cost underneath it
+   * was guessed. The label goes in the KPI itself and the detail in the note.
+   */
+  const marginEstimated = summary?.trueProfitMargin30dPct != null && cov?.allEstimated === true
   const marginNote = summary?.trueProfitMargin30dPct != null
-    ? (cov?.revenuePct != null && cov.revenuePct < 99.5
-        ? `Covers ${cov.revenuePct.toFixed(0)}% of 30d revenue — the rest has no cost price loaded.`
-        : undefined)
+    ? marginEstimated
+      ? 'Computed from the interim cost estimate, not from real cost prices. Directional only — it never sets a bid target.'
+      : (cov?.revenuePct != null && cov.revenuePct < 99.5
+          ? `Covers ${cov.revenuePct.toFixed(0)}% of 30d revenue — the rest has no cost price loaded.`
+          : undefined)
     : (cov?.reason ?? 'No cost price loaded, so true margin cannot be computed yet.')
   const kpis: { k: string; v: string; d: React.ReactNode; t?: string }[] = [
     { k: 'Campaigns', v: intl(n(summary?.campaignCount)), d: null },
@@ -105,7 +119,10 @@ export function DashboardClient() {
     { k: 'ACoS', v: acosPct(n(ts.acos)), d: <Delta cur={n(ts.acos)} prev={n(tp.acos)} goodUp={false} /> },
     { k: 'ROAS', v: roasFmt(n(ts.roas)), d: <Delta cur={n(ts.roas)} prev={n(tp.roas)} goodUp /> },
     { k: 'Orders', v: intl(n(ts.orders)), d: <Delta cur={n(ts.orders)} prev={n(tp.orders)} goodUp /> },
-    { k: 'True margin (30d)', v: marginPct(summary?.trueProfitMargin30dPct), d: null, t: marginNote },
+    {
+      k: marginEstimated ? 'True margin (30d) · est.' : 'True margin (30d)',
+      v: marginPct(summary?.trueProfitMargin30dPct), d: null, t: marginNote,
+    },
   ]
 
   const chartData = (trends?.rows ?? []).map((r) => ({
