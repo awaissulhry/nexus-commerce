@@ -62,7 +62,35 @@ const ACTION_LABEL: Record<string, string> = { budget_apply: 'Budget', placement
 const ACTION_TONE: Record<string, TagTone> = { promote_to_exact: 'success', harvest_and_negate: 'success', add_negative_exact: 'warning', bid_apply: 'info', budget_apply: 'info', placement_apply: 'info', dayparting_apply: 'info' }
 const ago = (iso: string) => { const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000); return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)}m ago` : s < 86400 ? `${Math.floor(s / 3600)}h ago` : `${Math.floor(s / 86400)}d ago` }
 
-const srcOf = (s: Suggestion): SuggestionSource => s.source ?? { href: null, label: s.entityName ?? s.entityId, marketplace: s.marketplace }
+// `entityName` is an empty string on some rows rather than null (two pending targets today), and
+// `??` keeps an empty string — which renders a nameless row with nothing to click. Fall through
+// to the id, which is at least identifying.
+const srcOf = (s: Suggestion): SuggestionSource => s.source ?? { href: null, label: s.entityName || s.entityId, marketplace: s.marketplace }
+
+/**
+ * ACR.4.4 — what this proposal puts in play, from the priced-proposals service.
+ *
+ * `spendAtStakeCents` is money the action would REDIRECT, not money it would save — the
+ * service is emphatic about this and the UI must not quietly upgrade it. Only `recoverable`
+ * (spend that produced no sales at all) is honest to call recovery, and it is the only thing
+ * that earns the ♦.
+ */
+interface Priced {
+  spendAtStakeCents: number | null
+  salesAtStakeCents: number | null
+  recoverable: boolean
+  direction: string
+}
+interface Pricing {
+  pending: number
+  priced: number
+  spendAtStakeCents: number
+  recoverableCents: number
+  byId: Record<string, Priced>
+}
+
+const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`
+const eur0 = (cents: number) => `€${Math.round(cents / 100).toLocaleString('en-IE')}`
 
 // Impact — the € delta parsed from the proposed change ("€10.00 → €12.00" ⇒ +2.00). Lets the
 // operator sort the biggest-money moves to the top. Harvest cards have no €, so they score on count.
@@ -170,6 +198,36 @@ function ImpactCell({ s }: { s: Suggestion }) {
   return <span className="h10-sug-impact muted">—</span>
 }
 
+/**
+ * The € at stake, and the ♦ that separates recovery from a trade.
+ *
+ * A row with no price is NOT shown as €0. 37 of the 150 pending proposals point at a target
+ * with no trailing grain behind it, and a confident zero would sort every one of them below a
+ * 30-cent decision — the exact failure this column exists to end.
+ */
+function StakeCell({ p }: { p: Priced | undefined }) {
+  if (!p) return <span className="h10-sug-stake muted" title="Not priced — this proposal's entity has no trailing spend to resolve against">—</span>
+  if (p.spendAtStakeCents == null) {
+    return <span className="h10-sug-stake muted" title="This proposal's target carries no 30-day performance grain, so there is nothing to price it against">not priced</span>
+  }
+  const cls = p.recoverable ? 'waste' : p.direction === 'increase' ? 'up' : ''
+  return (
+    <span
+      className={`h10-sug-stake ${cls}`}
+      title={
+        p.recoverable
+          ? `${eur(p.spendAtStakeCents)} of trailing spend that produced no sales at all — pure recovery.`
+          : p.direction === 'increase'
+            ? `${eur(p.spendAtStakeCents)} of additional spend this would put in play.`
+            : `${eur(p.spendAtStakeCents)} of trailing spend this would redirect. It produced ${eur(p.salesAtStakeCents ?? 0)} of sales, so cutting it is a trade, not a saving.`
+      }
+    >
+      {p.recoverable && <span className="dia" aria-label="pure waste">♦</span>}
+      {p.direction === 'increase' ? '+' : ''}{eur(p.spendAtStakeCents)}
+    </span>
+  )
+}
+
 function RuleCell({ s }: { s: Suggestion }) {
   return (
     <span className="h10-sug-rule">
@@ -194,8 +252,9 @@ function FlowNode({ eyebrow, title, sub, tone, href, last }: { eyebrow: string; 
 
 /** Detail drawer — provenance flow (Signal → Rule → Action → Target, the target a deep link),
  *  optional edit-before-apply for budget/bid magnitudes, and the approve/dismiss actions. */
-function SuggestionDrawer({ suggestion, busy, onClose, onAct }: {
+function SuggestionDrawer({ suggestion, priced, busy, onClose, onAct }: {
   suggestion: Suggestion
+  priced?: Priced
   busy: boolean
   onClose: () => void
   onAct: (id: string, kind: 'apply' | 'dismiss' | 'restore', overrideValue?: number) => Promise<void>
@@ -244,6 +303,25 @@ function SuggestionDrawer({ suggestion, busy, onClose, onAct }: {
           <FlowNode eyebrow="Applies to" title={src.label} sub={ENTITY_LABEL[suggestion.entityType] ?? suggestion.entityType} href={src.href} last />
         </div>
 
+        {/* ACR.4.4 — what this decision is worth, in the service's own terms. The sentence
+            matters as much as the figure: an operator who reads "at stake" as "saved" will
+            approve every proposal to cut a winner. */}
+        {priced && priced.spendAtStakeCents != null && (
+          <div className={`h10-sug-stakebox${priced.recoverable ? ' waste' : ''}`}>
+            <h4>
+              {priced.recoverable ? <><span className="dia">♦</span> Pure waste</> : priced.direction === 'increase' ? 'Additional spend' : 'Spend at stake'}
+              <b>{priced.direction === 'increase' ? '+' : ''}{eur(priced.spendAtStakeCents)}</b>
+            </h4>
+            <p>
+              {priced.recoverable
+                ? <>Trailing 30-day spend on this target that produced <b>no sales at all</b>. Redirecting it costs nothing you are currently earning.</>
+                : priced.direction === 'increase'
+                  ? <>Trailing 30-day spend this would add to. It is an investment, not a saving — the board counts it separately for that reason.</>
+                  : <>Trailing 30-day spend this would <b>redirect</b>, not save. It produced {eur(priced.salesAtStakeCents ?? 0)} of sales, so cutting it trades revenue away with the spend.</>}
+            </p>
+          </div>
+        )}
+
         {/* Edit-before-apply — adjust the magnitude; the rule's own min/max still clamp on the server */}
         {st === 'pending' && editable && (
           <div className="h10-sug-edit">
@@ -281,6 +359,7 @@ function SuggestionsInner() {
   const [bulkProg, setBulkProg] = useState<{ done: number; total: number } | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [status, setStatus] = useState<'pending' | 'applied' | 'dismissed'>('pending')
+  const [pricing, setPricing] = useState<Pricing | null>(null)
   const { toast } = useToast()
 
   const load = useCallback(async () => {
@@ -288,6 +367,15 @@ function SuggestionsInner() {
       const j = await fetch(`${getBackendUrl()}/api/advertising/suggestions?status=${status}`).then((r) => r.json())
       setItems(Array.isArray(j?.items) ? j.items : [])
     } catch { setItems([]) } finally { setLoading(false) }
+    // ACR.4.4 — pricing is a separate, slower call and only means anything for pending rows.
+    // It is fetched AFTER the list and never awaited by it: an unpriced grid is a degraded
+    // page, an empty one is a broken page, and a 30-day aggregate must not be able to cause
+    // the second.
+    if (status !== 'pending') { setPricing(null); return }
+    try {
+      const p = await fetch(`${getBackendUrl()}/api/advertising/suggestions/pricing`).then((r) => r.json())
+      setPricing(p?.byId ? (p as Pricing) : null)
+    } catch { setPricing(null) }
   }, [status])
   useEffect(() => { void load() }, [load])
 
@@ -361,10 +449,17 @@ function SuggestionsInner() {
       { label: 'Pending', value: items.length },
       { label: 'Campaigns affected', value: campaigns.size },
     ]
+    // ACR.4.4 — the two figures that turn a list into a ranked decision. Recoverable leads
+    // because it is the only one that is pure upside; "at stake" is the wider number and
+    // includes bid-downs on keywords that ARE selling, which are trades.
+    if (pricing) {
+      tiles.push({ label: 'Pure waste', value: eur0(pricing.recoverableCents) })
+      tiles.push({ label: 'Spend at stake', value: eur0(pricing.spendAtStakeCents) })
+    }
     if (Math.abs(netDelta) >= 0.005) tiles.push({ label: 'Net daily Δ', value: `${netDelta >= 0 ? '+' : '−'}€${Math.abs(netDelta).toFixed(2)}`, delta: { value: netDelta >= 0 ? 'increase' : 'decrease', positive: netDelta >= 0 } })
     if (harvest > 0) tiles.push({ label: 'Keywords to harvest', value: harvest })
     return tiles
-  }, [items])
+  }, [items, pricing])
 
   // Filters — populated from the data in view.
   const filters = useMemo<GridFilter[]>(() => {
@@ -388,8 +483,22 @@ function SuggestionsInner() {
     }
   }, [group])
 
+  // Unpriced rows sort to the BOTTOM in either direction (-1 sentinel), because "we could not
+  // price this" is not "this is worth nothing" and must never occupy the top of a board whose
+  // whole purpose is to rank by money.
+  const stakeSort = (s: Suggestion): number => pricing?.byId[s.id]?.spendAtStakeCents ?? -1
+
   const columns: GridColumn<Suggestion>[] = [
     { key: 'proposed', label: 'Proposed change', metric: false, sortable: true, sortValue: (s) => s.proposedAction?.type ?? '', render: (s) => <ProposedCell s={s} /> },
+    ...(status === 'pending' ? [{
+      key: 'stake',
+      label: '€ at stake',
+      metric: true,
+      sortable: true,
+      tip: 'Trailing 30-day spend this action would redirect — not money saved. ♦ marks spend that produced no sales at all, the only case where cutting it is pure recovery.',
+      sortValue: stakeSort,
+      render: (s: Suggestion) => <StakeCell p={pricing?.byId[s.id]} />,
+    } as GridColumn<Suggestion>] : []),
     { key: 'impact', label: 'Impact', metric: true, sortable: true, tip: 'Daily € change (or keywords affected). Sort to triage the biggest moves first.', sortValue: impactScore, render: (s) => <ImpactCell s={s} /> },
     { key: 'rule', label: 'Rule', metric: false, sortable: true, sortValue: (s) => s.ruleName ?? '', render: (s) => <RuleCell s={s} /> },
     { key: 'when', label: 'When', metric: false, sortable: true, sortValue: (s) => new Date(s.createdAt).getTime(), render: (s) => <span className="h10-sug-when">{ago(s.createdAt)}</span> },
@@ -439,7 +548,10 @@ function SuggestionsInner() {
         // on (matches every console grid + sets up S.4 bulk). Bulk-action wiring lands in S.4.
         selectable
         customizable={false}
-        defaultSort={{ key: 'when', dir: 'desc' }}
+        // Pending opens ranked by money, not by recency: 150 rows sorted newest-first is the
+        // undifferentiated list nobody acted on. Applied/dismissed keep the chronological view,
+        // where "what did I just do" is the actual question.
+        defaultSort={status === 'pending' ? { key: 'stake', dir: 'desc' } : { key: 'when', dir: 'desc' }}
         onRowClick={(s) => setDetailId(s.id)}
         keyboardNav={!detail}
         onRowKey={(s, k) => {
@@ -486,7 +598,7 @@ function SuggestionsInner() {
           />
         }
       />
-      {detail && <SuggestionDrawer suggestion={detail} busy={!!busy[detail.id]} onClose={() => setDetailId(null)} onAct={act} />}
+      {detail && <SuggestionDrawer suggestion={detail} priced={pricing?.byId[detail.id]} busy={!!busy[detail.id]} onClose={() => setDetailId(null)} onAct={act} />}
     </div>
   )
 }

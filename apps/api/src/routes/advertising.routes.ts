@@ -10385,6 +10385,47 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'private, max-age=10')
     return { items, count: items.length, executionStartedAt: exec.startedAt }
   })
+
+  /**
+   * ACR.4.4 — the € behind every pending proposal, as a map the Suggestions page joins on.
+   *
+   * Deliberately a SECOND endpoint rather than a field on `GET /advertising/suggestions`.
+   * That route is shared with the nav badge and the family cockpit, and pricing costs two
+   * extra aggregate queries over 30 days of target grain — paying that on every consumer to
+   * serve one page is the kind of quiet cost that later gets blamed on "the console is slow".
+   * The page fetches both and joins by id; a pricing failure degrades to an unpriced grid
+   * rather than an empty one.
+   *
+   * `limit` is passed at the pending COUNT, not the default 15: the caller wants a row per
+   * proposal, and the service's own `top` slice exists for boards that want a shortlist.
+   */
+  fastify.get('/advertising/suggestions/pricing', async (_request, reply) => {
+    const { pricePendingProposals } = await import('../services/advertising/ads-proposal-pricing.service.js')
+    const pending = await prisma.adsRuleSuggestion.count({ where: { status: 'pending' } })
+    const p = await pricePendingProposals(Math.max(pending, 1))
+    const byId: Record<string, {
+      spendAtStakeCents: number | null
+      salesAtStakeCents: number | null
+      recoverable: boolean
+      direction: string
+    }> = {}
+    for (const r of p.top) {
+      byId[r.id] = {
+        spendAtStakeCents: r.spendAtStakeCents,
+        salesAtStakeCents: r.salesAtStakeCents,
+        recoverable: r.recoverable,
+        direction: r.direction,
+      }
+    }
+    reply.header('Cache-Control', 'private, max-age=60')
+    return {
+      pending: p.pending,
+      priced: p.priced,
+      spendAtStakeCents: p.spendAtStakeCents,
+      recoverableCents: p.recoverableCents,
+      byId,
+    }
+  })
 }
 
 export default advertisingRoutes

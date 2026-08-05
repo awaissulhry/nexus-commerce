@@ -85,3 +85,21 @@
 .h10-sug-meta > div { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; }
 .h10-sug-meta dt { color: var(--h10-text-3); }
 .h10-sug-meta dd { margin: 0; color: var(--h10-text); font-weight: 500; text-align: right; word-break: break-word; }
+
+/* ACR.4.4 — € at stake. Tabular figures so the column forms a straight edge and can be
+   compared down the page; that alignment is the whole reason the column is priced at all.
+   ♦ marks spend that produced no sales — the only rows where cutting is pure recovery. */
+.h10-sug-stake { display: inline-flex; align-items: baseline; gap: 5px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--h10-text); }
+.h10-sug-stake.waste { color: var(--h10-danger-strong); }
+.h10-sug-stake.up { color: var(--h10-success-strong); }
+.h10-sug-stake.muted { color: var(--h10-text-3); font-weight: 500; font-style: italic; }
+.h10-sug-stake .dia { font-size: 10px; line-height: 1; }
+
+/* Drawer: the figure with the sentence that keeps it honest. */
+.h10-sug-stakebox { margin: 16px 0 0; padding: 12px 14px; border: 1px solid var(--h10-border); border-radius: 8px; background: var(--h10-surface-sunken); }
+.h10-sug-stakebox.waste { border-color: var(--h10-red-500); background: var(--h10-danger-soft); }
+.h10-sug-stakebox h4 { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: var(--h10-text-2); }
+.h10-sug-stakebox h4 b { font-size: 19px; font-weight: 700; letter-spacing: normal; text-transform: none; font-variant-numeric: tabular-nums; color: var(--h10-text); }
+.h10-sug-stakebox.waste h4 b { color: var(--h10-danger-strong); }
+.h10-sug-stakebox h4 .dia { font-size: 11px; margin-right: 4px; }
+.h10-sug-stakebox p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--h10-text-2); }
