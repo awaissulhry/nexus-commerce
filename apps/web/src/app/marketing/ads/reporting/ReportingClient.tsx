@@ -31,6 +31,7 @@ import {
 import { RUNNABLE_REPORT_IDS } from './runnable'
 import { SchedulesPanel } from './SchedulesPanel'
 import { BusinessContextPanel } from './BusinessContextPanel'
+import { IncrementalityPanel } from './IncrementalityPanel'
 import {
   fetchReportingCoverage,
   fmtInt,
@@ -240,6 +241,10 @@ export function ReportingClient() {
       ) : null}
 
       <BusinessContextPanel />
+
+      {/* ACR.6 (R7) — collapsed by default: it is an assumption-driven estimate sitting among
+          measured reports, so it should be opened deliberately rather than read in passing. */}
+      <IncrementalityPanel />
 
       {REPORT_GROUPS.map((group) => {
         const entries = REPORT_CATALOGUE.filter((r) => r.group === group)

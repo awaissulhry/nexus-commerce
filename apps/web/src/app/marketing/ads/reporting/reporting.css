@@ -612,3 +612,91 @@ select.rpt-input { height: 32px; }
 .rpt-share-meta { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .rpt-share-meta b { font-size: 13px; font-weight: 600; }
 .rpt-share-meta span { font-size: 11.5px; color: var(--text-muted); }
+
+/* ── ACR.6 (R7) — incremental return (iROAS), modeled ───────────────────────────
+   Light-only, same as the rest of this file: the ads console does not ship a dark
+   surface, so a `.dark` override here would paint dark values onto a white card. */
+.rpt-iro-t {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 0; background: none; padding: 0; cursor: pointer;
+  font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit;
+}
+.rpt-iro-t svg { transition: transform .15s; color: var(--text-tertiary); }
+.rpt-iro-t svg.open { transform: rotate(180deg); }
+.rpt-iro-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  color: var(--status-warning-strong); opacity: 1;
+}
+
+.rpt-iro {
+  padding: 14px 15px; border: 1px solid var(--border-subtle);
+  border-radius: 8px; background: var(--surface-card);
+}
+.rpt-iro-lede {
+  margin: 0 0 12px; font-size: 12.5px; line-height: 1.6; color: var(--text-secondary);
+}
+.rpt-iro-lede b { color: var(--text-primary); }
+
+.rpt-iro-ctl { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; margin-bottom: 14px; }
+.rpt-iro-seg { display: inline-flex; border: 1px solid var(--border-default); border-radius: 7px; overflow: hidden; }
+.rpt-iro-seg button {
+  border: 0; border-right: 1px solid var(--border-subtle); background: var(--surface-card);
+  padding: 5px 10px; font-size: 11.5px; font-weight: 700; color: var(--text-secondary); cursor: pointer;
+}
+.rpt-iro-seg button:last-child { border-right: 0; }
+.rpt-iro-seg button.on { background: var(--color-primary); color: #fff; }
+.rpt-iro-f { display: flex; flex-direction: column; gap: 3px; }
+.rpt-iro-f > span {
+  font-size: 10px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--text-tertiary);
+}
+.rpt-iro-f input[type='text'], .rpt-iro-f input:not([type]) {
+  border: 1px solid var(--border-default); border-radius: 7px;
+  padding: 5px 9px; font-size: 12.5px; color: var(--text-primary); background: var(--surface-card); width: 180px;
+}
+.rpt-iro-f input[type='range'] { width: 150px; accent-color: var(--color-primary); }
+.rpt-iro-csv {
+  display: inline-flex; align-items: center; gap: 5px; margin-left: auto;
+  border: 1px solid var(--border-default); border-radius: 7px; background: var(--surface-card);
+  padding: 5px 10px; font-size: 12px; font-weight: 700; color: var(--text-secondary); cursor: pointer;
+}
+.rpt-iro-csv:disabled { opacity: .45; cursor: default; }
+
+.rpt-iro-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.rpt-iro-k { display: flex; flex-direction: column; gap: 2px; }
+.rpt-iro-k .lbl {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--text-tertiary);
+}
+/* "est." rides in the label itself — a modelled figure that only says so in a
+   tooltip is a modelled figure nobody knows is modelled. */
+.rpt-iro-k .lbl i { font-style: normal; color: var(--status-warning-strong); }
+.rpt-iro-k .val {
+  font-size: 22px; font-weight: 700; line-height: 1.2;
+  color: var(--text-primary); font-variant-numeric: tabular-nums;
+}
+.rpt-iro-k .val.em { color: var(--status-info-strong); }
+.rpt-iro-k .sub { font-size: 11.5px; color: var(--text-secondary); }
+
+.rpt-iro-scroll { overflow-x: auto; border: 1px solid var(--border-subtle); border-radius: 8px; }
+.rpt-iro-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.rpt-iro-tbl th {
+  background: var(--surface-sunken); text-align: left; padding: 7px 10px;
+  font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 700;
+  color: var(--text-tertiary); border-bottom: 1px solid var(--border-subtle); white-space: nowrap;
+}
+.rpt-iro-tbl th.r, .rpt-iro-tbl td.r { text-align: right; }
+.rpt-iro-tbl td {
+  padding: 6px 10px; border-top: 1px solid var(--border-subtle);
+  color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.rpt-iro-tbl tbody tr:first-child td { border-top: 0; }
+.rpt-iro-tbl .nm { max-width: 260px; overflow: hidden; text-overflow: ellipsis; color: var(--text-primary); }
+.rpt-iro-tbl .dim { color: var(--text-muted); }
+.rpt-iro-tbl .em { color: var(--status-info-strong); }
+.rpt-iro-tbl .em.b { font-weight: 700; }
+.rpt-iro-tbl .empty { text-align: center; padding: 26px 10px; color: var(--text-tertiary); }
+.rpt-iro-b { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10.5px; font-weight: 700; }
+.rpt-iro-b.br { background: #ede9fe; color: #6d28d9; }
+.rpt-iro-b.nb { background: #e0f2fe; color: #0369a1; }
+.rpt-iro-note { margin: 10px 0 0; font-size: 11.5px; color: var(--text-tertiary); line-height: 1.55; }
