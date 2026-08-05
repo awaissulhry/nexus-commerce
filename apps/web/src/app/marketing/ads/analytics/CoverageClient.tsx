@@ -23,6 +23,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, Info, RefreshCw, Search } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { ConflictsTab } from './ConflictsTab'
 // Self-contained: this page borrows no class from the Control Room's stylesheet. Reusing
 // `.acr-*` here rendered banners and section heads unstyled on prod, because that sheet is
 // imported by the Control Room and nothing else — a cross-page dependency that only shows up
@@ -38,6 +39,21 @@ interface Row {
   targets: number
   marketPurchases: number
   ourPurchases: number | null
+  tosIS: number | null
+  topImpressions: number
+  restImpressions: number
+  topMix: number | null
+  pwScore: number | null
+  positionBasis: 'measured' | 'no-paid-impressions' | 'no-holding-campaign' | 'unmeasured-week'
+}
+interface PositionWeight {
+  restWeight: number
+  topCtr: number | null
+  restCtr: number | null
+  topImpressions: number
+  restImpressions: number
+  windowDays: number
+  basis: 'measured' | 'fallback'
 }
 interface Week { startDate: string; rows: number; measured: boolean }
 interface Board {
@@ -53,10 +69,26 @@ interface Board {
   headroom: Row[]
   notes: string[]
   marketplaces: string[]
+  positionWeight: PositionWeight
+  tosIsMeasured: boolean
+  pwTotal: number | null
 }
 
 const intl = (v: number | null) => (v == null ? '—' : v.toLocaleString('en-IE'))
 const pct = (v: number | null) => (v == null ? '—' : `${(v * 100).toFixed(2)}%`)
+const pctOf = (v: number) => `${Math.round(v * 100)}%`
+/**
+ * Why a null here is never rendered as 0%: `positionBasis` names the reason, and a coverage
+ * board that prints 0% for "we have no evidence" says we are absent from the top of the page,
+ * which is a conclusion an operator would act on. Same rule the week-level `measured` flag
+ * already enforces for share.
+ */
+const POSITION_WHY: Record<Row['positionBasis'], string> = {
+  measured: '',
+  'no-paid-impressions': 'we hold this term but bought no search impressions in the window',
+  'no-holding-campaign': 'no campaign of ours holds this term, so any presence here is organic and its page position is unknown',
+  'unmeasured-week': 'the week itself is unmeasured',
+}
 
 /** Share is tiny everywhere, so a linear bar would be invisible. Scaled to the row set's own max. */
 const barWidth = (share: number | null, max: number) =>
@@ -67,6 +99,7 @@ export function CoverageClient() {
   const [market, setMarket] = useState('IT')
   const [week, setWeek] = useState<string | null>(null)
   const [q, setQ] = useState('')
+  const [tab, setTab] = useState<'coverage' | 'conflicts'>('coverage')
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
 
@@ -105,10 +138,25 @@ export function CoverageClient() {
         showDataSync={false}
       />
 
-      {err && <div className="cov-banner err" role="alert"><AlertTriangle size={15} /> {err}</div>}
-      {loading && !board && <div className="cov-empty">Loading…</div>}
+      {/* Tabs, not routes: §4.1 keeps the sidebar untouched, and both views answer one
+          question — how much of page one we hold, and who of ours is fighting over it. */}
+      <div className="cov-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === 'coverage'}
+          className={tab === 'coverage' ? 'on' : undefined} onClick={() => setTab('coverage')}>
+          Coverage scoreboard
+        </button>
+        <button type="button" role="tab" aria-selected={tab === 'conflicts'}
+          className={tab === 'conflicts' ? 'on' : undefined} onClick={() => setTab('conflicts')}>
+          Conflicts
+        </button>
+      </div>
 
-      {board && (
+      {tab === 'conflicts' && <ConflictsTab market={market} />}
+
+      {tab === 'coverage' && err && <div className="cov-banner err" role="alert"><AlertTriangle size={15} /> {err}</div>}
+      {tab === 'coverage' && loading && !board && <div className="cov-empty">Loading…</div>}
+
+      {tab === 'coverage' && board && (
         <>
           <div className="cov-top">
             <div className="cov-hero">
@@ -124,6 +172,17 @@ export function CoverageClient() {
                 Pooled across every term in the week — not an average of per-term percentages,
                 which on this data inverts the conclusion.
               </p>
+              {board.pwTotal != null && (
+                <p className="cov-hero-pw">
+                  <strong>{pct(board.pwTotal)}</strong> position-weighted — the same share
+                  re-expressed in top-of-search-equivalent units, because we hold most of it near
+                  the bottom of the page. A rest-of-search impression is worth{' '}
+                  {pctOf(board.positionWeight.restWeight)} of a top one in this account
+                  {board.positionWeight.basis === 'measured'
+                    ? `, measured from our own CTR over ${board.positionWeight.windowDays} days.`
+                    : ' (fallback — too little placement traffic to measure our own ratio).'}
+                </p>
+              )}
             </div>
 
             <div className="cov-controls">
@@ -193,6 +252,9 @@ export function CoverageClient() {
                   <th>Ours</th>
                   <th className="share">Share of page one</th>
                   <th title="How many of OUR ASINs appear on this SERP. Context — presence is not the constraint.">Ours on page</th>
+                  <th title="Share re-expressed in top-of-search-equivalent units: share × (top mix + rest mix × the account's own measured rest:top CTR ratio).">Position-weighted</th>
+                  <th title="Share of our paid search impressions that sat in top-of-search, from the placement mix of the campaigns holding this term.">Top mix</th>
+                  <th title="Amazon's own top-of-search impression share for the holding campaigns.">ToS-IS</th>
                   <th title="Non-negative keywords targeting this exact term in this marketplace.">Keywords</th>
                   <th>Market buys</th>
                   <th>Ours</th>
@@ -211,6 +273,15 @@ export function CoverageClient() {
                       <span className="cov-bar-v">{pct(r.share)}</span>
                     </td>
                     <td className={r.ourAsins > 1 ? 'multi' : undefined}>{r.ourAsins || '—'}</td>
+                    <td className="pw" title={POSITION_WHY[r.positionBasis] || undefined}>
+                      {r.pwScore != null ? pct(r.pwScore) : <span className="cov-unk">—</span>}
+                    </td>
+                    <td title={POSITION_WHY[r.positionBasis] || undefined}>
+                      {r.topMix != null ? pctOf(r.topMix) : <span className="cov-unk">—</span>}
+                    </td>
+                    <td title={board.tosIsMeasured ? undefined : 'Amazon has not returned this metric yet — the ingest is fixed but has not run.'}>
+                      {r.tosIS != null ? pctOf(r.tosIS) : <span className="cov-unk">—</span>}
+                    </td>
                     <td className={r.targets === 0 ? 'none' : undefined}>{r.targets || 'none'}</td>
                     <td>{intl(r.marketPurchases)}</td>
                     <td>{intl(r.ourPurchases)}</td>

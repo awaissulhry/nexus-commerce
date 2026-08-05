@@ -115,3 +115,98 @@
 .cov > .cov-tablewrap,
 .cov > .cov-headroom,
 .cov > .cov-foot { margin-left: 24px; margin-right: 24px; }
+
+/* ── ACR.2.2b · position columns ─────────────────────────────────────────────
+   The position-weighted score is the number the page is really about now, so it carries the
+   same ink weight as share. An unknown reads as a muted dash with a tooltip that names the
+   reason — never as 0%, which on this board would assert we are absent from the top of the
+   page rather than admitting we cannot see it. */
+.cov-table td.pw { font-weight: 650; color: #1c2530; }
+.cov-unk { color: #b3bcc8; }
+.cov-hero-pw {
+  font-size: 12px; color: #46536a; margin: 7px 0 0; max-width: 74ch; line-height: 1.55;
+  border-top: 1px solid #eef1f5; padding-top: 7px;
+}
+.cov-hero-pw strong { color: #1c2530; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+
+/* ── ACR.2.3 · tabs ──────────────────────────────────────────────────────────
+   Tabs rather than routes: §4.1 adds no sidebar entries, and both views answer one question. */
+.cov-tabs { display: flex; gap: 2px; margin: 0 24px 14px; border-bottom: 1px solid #e3e7ec; }
+.cov-tabs button {
+  font-size: 12.5px; font-weight: 550; color: #7b8798; background: transparent;
+  border: 0; border-bottom: 2px solid transparent; padding: 9px 14px; cursor: pointer;
+  margin-bottom: -1px;
+}
+.cov-tabs button:hover { color: #46536a; }
+.cov-tabs button.on { color: #1f6fde; border-bottom-color: #1f6fde; }
+
+/* ── ACR.2.3 · conflicts ─────────────────────────────────────────────────────
+   One card per contest. Dormant contenders are hidden by default: `giacca moto uomo` is claimed
+   by 19 campaigns and four of them have ever served, so an undifferentiated list of nineteen
+   would bury the collision it exists to show. */
+.cvf-list { margin: 0 24px; display: flex; flex-direction: column; gap: 10px; }
+.cvf-card { border: 1px solid #dfe5ec; border-radius: 9px; background: #fff; overflow: hidden; }
+.cvf-head {
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+  padding: 10px 14px 9px; border-bottom: 1px solid #f0f3f6; background: #fbfcfd;
+}
+.cvf-disc {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; padding: 0; flex-shrink: 0;
+  border: 1px solid #dfe5ec; border-radius: 5px; background: #fff; color: #7b8798; cursor: pointer;
+}
+.cvf-disc:hover { background: #f4f6f9; color: #46536a; }
+.cvf-term { font-size: 13px; font-weight: 650; color: #1c2530; }
+.cvf-match {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.05em; color: #7b8798;
+  background: #eef1f5; border-radius: 4px; padding: 2px 6px;
+}
+.cvf-tag { font-size: 10.5px; font-weight: 650; border-radius: 4px; padding: 2px 7px; }
+/* The contest no existing surface could show. */
+.cvf-tag.cross { background: #eaf2fd; color: #1a5cb8; border: 1px solid #cfe0f7; }
+.cvf-tag.top { background: #fdf0e8; color: #94501c; border: 1px solid #f2d5c2; }
+/* No evidence at all — the champion is a coin toss and the card says so. */
+.cvf-tag.blind { background: #f4f6f9; color: #7b8798; border: 1px solid #e3e7ec; }
+.cvf-counts { font-size: 11.5px; color: #8d97a6; }
+.cvf-money { margin-left: auto; font-size: 12px; color: #46536a; font-variant-numeric: tabular-nums; }
+
+.cvf-champ { font-size: 12.5px; color: #46536a; margin: 0; padding: 9px 14px; line-height: 1.55; border-bottom: 1px solid #f4f6f9; }
+.cvf-champ strong { color: #1c2530; font-weight: 650; }
+.cvf-pf { color: #8d97a6; }
+
+.cvf-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.cvf-table th {
+  text-align: right; padding: 7px 12px; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em; color: #8d97a6;
+  border-bottom: 1px solid #f0f3f6; white-space: nowrap;
+}
+.cvf-table th.l, .cvf-table td.l { text-align: left; }
+.cvf-table td { padding: 6px 12px; text-align: right; border-bottom: 1px solid #f7f9fb; color: #34404f; font-variant-numeric: tabular-nums; }
+.cvf-table tbody tr:last-child td { border-bottom: 0; }
+.cvf-table tr.champ td { background: #f5faf7; }
+.cvf-table tr.dormant td { color: #a6b0bd; }
+.cvf-table td.bad { color: #9c2f2a; font-weight: 600; }
+.cvf-table td.tos { color: #94501c; font-weight: 600; }
+.cvf-pfcell { color: #7b8798; }
+.cvf-pfcell em { font-style: normal; color: #b3bcc8; }
+.cvf-star { color: #1a8a5a; margin-right: 5px; font-size: 11px; }
+
+.cvf-more {
+  display: block; width: 100%; text-align: left;
+  font-size: 11.5px; color: #7b8798; background: #fbfcfd;
+  border: 0; border-top: 1px solid #f0f3f6; padding: 7px 14px; cursor: pointer;
+}
+.cvf-more:hover { background: #f4f6f9; color: #46536a; }
+
+.cvf-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #46536a; cursor: pointer; }
+.cvf-check input { accent-color: #1f6fde; }
+
+.cov > .cvf-list { margin-left: 24px; margin-right: 24px; }
+
+/* Inline code in the footnotes. Without horizontal padding the identifier ran straight into the
+   next word ("pickChampionthe") — the space after </code> collapses against the monospace run,
+   so the separation has to come from the box, not from the whitespace. */
+.cov-foot code {
+  font-size: 11.5px; background: #f1f4f8; color: #46536a;
+  border-radius: 3px; padding: 1px 5px; margin: 0 2px;
+}
