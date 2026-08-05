@@ -10696,6 +10696,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     logger.warn('[ACR42-DIGEST-SEND]', { status: r.status, recipients: r.recipients.length, actor: actorFromHeaders(request.headers as Record<string, unknown>) })
     return r
   })
+
+  // ACR.3 — the coverage engine's paper trail: OBSERVE would-dos and AUTO applied writes,
+  // joined back to terms. The observe week is only as good as its record.
+  fastify.get('/advertising/coverage-engine/log', async (request, reply) => {
+    const raw = Number((request.query as { days?: string }).days ?? 14)
+    const days = Number.isFinite(raw) ? Math.min(60, Math.max(1, raw)) : 14
+    const { getCoverageEngineLog } = await import('../services/advertising/ads-coverage-engine.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return { days, rows: await getCoverageEngineLog(days) }
+  })
 }
 
 export default advertisingRoutes

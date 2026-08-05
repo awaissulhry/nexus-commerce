@@ -69,6 +69,11 @@ interface CoverageSet {
   dailySpendCapCents: number | null; acosCapPct: number | null
   terms: CoverageSetTerm[]
 }
+interface EngineLogRow {
+  at: string; term: string | null; campaignName: string | null; action: 'up' | 'down'
+  fromCents: number | null; toCents: number | null; reason: string | null
+  kind: 'observed' | 'applied'
+}
 
 interface Cockpit {
   portfolio: {
@@ -105,6 +110,7 @@ export function FamilyCockpitClient() {
   const [covSetBusy, setCovSetBusy] = useState(false)
   const [preview, setPreview] = useState<EnginePreview | null>(null)
   const [previewBusy, setPreviewBusy] = useState(false)
+  const [engineLog, setEngineLog] = useState<EngineLogRow[] | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -122,6 +128,13 @@ export function FamilyCockpitClient() {
     setCovSet(r.ok ? ((await r.json()) as CoverageSet) : null)
   }, [id])
   useEffect(() => { void loadCovSet() }, [loadCovSet])
+
+  useEffect(() => {
+    void (async () => {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/coverage-engine/log?days=14`, { cache: 'no-store' })
+      setEngineLog(r.ok ? ((await r.json()) as { rows: EngineLogRow[] }).rows : null)
+    })()
+  }, [id])
 
   const seedCovSet = async () => {
     setCovSetBusy(true)
@@ -504,6 +517,40 @@ export function FamilyCockpitClient() {
                     </div>
                   )}
                 </>
+              )}
+
+              <div className="fc-sec-head"><h2>Engine log</h2>
+                <span className="fc-sec-sub">
+                  every move the scheduled engine recorded in the last 14 days — observed = would-do only, applied = written through the gate
+                </span>
+              </div>
+              {!engineLog || engineLog.length === 0 ? (
+                <div className="fc-banner info"><Info size={15} />
+                  <span>
+                    No engine runs recorded yet. The 07:10 daily run reads <strong>enabled</strong> sets only
+                    {covSet && !covSet.enabled ? ' — this set is still a draft, so the engine is not looking at it' : ''}.
+                    Holds are not logged; the first row appears when a run would actually move a bid.
+                  </span>
+                </div>
+              ) : (
+                <div className="fc-tablewrap" style={{ marginBottom: 18 }}>
+                  <table className="fc-table">
+                    <thead><tr><th className="l">When</th><th className="l">Term</th><th>Move</th><th>Bid</th><th className="l">Why</th><th className="l">Campaign</th><th>Kind</th></tr></thead>
+                    <tbody>
+                      {engineLog.map((r, i) => (
+                        <tr key={`${r.at}-${i}`}>
+                          <td className="l">{new Date(r.at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
+                          <td className="l">{r.term ?? '—'}</td>
+                          <td className={`num ${r.action === 'up' ? 'multi' : 'none'}`}>{r.action.toUpperCase()}</td>
+                          <td className="num">{r.fromCents != null && r.toCents != null ? `${r.fromCents}¢ → ${r.toCents}¢` : '—'}</td>
+                          <td className="l">{r.reason ?? '—'}</td>
+                          <td className="l">{r.campaignName ?? '—'}</td>
+                          <td><span className={`fc-badge ${r.kind}`}>{r.kind}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </>
           )}

@@ -335,3 +335,68 @@ export async function runCoverageEngineOnce(opts: { previewSetId?: string } = {}
   })
   return summary
 }
+
+/* ── the engine's paper trail, readable ──────────────────────────────────────────────────── */
+
+export interface EngineLogRow {
+  at: string
+  term: string | null
+  campaignName: string | null
+  action: 'up' | 'down'
+  fromCents: number | null
+  toCents: number | null
+  reason: string | null
+  /** observed = would-do only (OBSERVE mode); applied = a real write went through the gate. */
+  kind: 'observed' | 'applied'
+}
+
+/**
+ * The observe week is only as good as its record. OBSERVE rows are `coverage_engine_observe`
+ * action-log entries; AUTO writes land as ordinary gated mutations whose executionId carries
+ * the engine's daily change-set tag. Both are keyed by target id, so terms are joined back on.
+ */
+export async function getCoverageEngineLog(days = 14): Promise<EngineLogRow[]> {
+  const since = new Date(Date.now() - days * 86_400_000)
+  const rows = await prisma.advertisingActionLog.findMany({
+    where: {
+      createdAt: { gte: since },
+      OR: [
+        { actionType: 'coverage_engine_observe' },
+        { executionId: { startsWith: 'coverage-engine-' } },
+      ],
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 400,
+  })
+  const targetIds = [...new Set(rows.map((r) => r.entityId))]
+  const targets = targetIds.length === 0 ? [] : await prisma.adTarget.findMany({
+    where: { id: { in: targetIds } },
+    select: {
+      id: true, expressionValue: true,
+      adGroup: { select: { campaign: { select: { name: true } } } },
+    },
+  })
+  const targetById = new Map(targets.map((t) => [t.id, t]))
+  return rows.map((r) => {
+    const t = targetById.get(r.entityId)
+    const before = r.payloadBefore as { bidCents?: number } | null
+    const after = r.payloadAfter as { wouldSetBidCents?: number; bidCents?: number; action?: string } | null
+    const ev = r.evidence as { reason?: string; observed?: string; threshold?: string } | null
+    const observed = r.actionType === 'coverage_engine_observe'
+    const toCents = observed ? after?.wouldSetBidCents ?? null : after?.bidCents ?? null
+    const fromCents = before?.bidCents ?? null
+    return {
+      at: r.createdAt.toISOString(),
+      term: t?.expressionValue ?? null,
+      campaignName: t?.adGroup?.campaign?.name ?? null,
+      action: (after?.action === 'up' || after?.action === 'down')
+        ? after.action
+        : toCents != null && fromCents != null && toCents > fromCents ? 'up' : 'down',
+      fromCents,
+      toCents,
+      // Applied rows have no free-text reason on the log row; share vs target is the substance.
+      reason: ev?.reason ?? (ev?.observed ? `share ${ev.observed} vs target ${ev.threshold ?? 'none'}` : null),
+      kind: observed ? 'observed' : 'applied',
+    }
+  })
+}
