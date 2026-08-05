@@ -202,6 +202,10 @@ export function ConflictsTab({ market }: { market: string }) {
                 )}
               </p>
 
+              {/* A no-evidence contest has zero active contenders, so the table would render as a
+                  bare header row over nothing — which reads as a failed load rather than as
+                  "every claimant here is dormant". The disclosure below carries the count. */}
+              {shown.length > 0 && (
               <table className="cvf-table">
                 <thead>
                   <tr>
@@ -235,6 +239,7 @@ export function ConflictsTab({ market }: { market: string }) {
                   ))}
                 </tbody>
               </table>
+              )}
 
               {!isOpen && dormant.length > 0 && (
                 <button type="button" className="cvf-more" onClick={() => toggle(key)}>

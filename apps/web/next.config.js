@@ -1,16 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // LOCAL PREVIEW ONLY (ACR.2.3 verification) — inert unless NEXUS_PREVIEW_API is set.
-  // Chrome refuses the page's cross-origin fetch to a second local port, so the read-only
-  // preview API is proxied through this origin instead. `rewrites()` returning a bare array is
-  // `afterFiles`, so the app's own /api/* route handlers still win; only paths with no
-  // filesystem route (e.g. /api/advertising/*) are forwarded.
-  async rewrites() {
-    return process.env.NEXUS_PREVIEW_API
-      ? [{ source: '/api/:path*', destination: `${process.env.NEXUS_PREVIEW_API}/api/:path*` }]
-      : []
-  },
   // Local-dev build-dir isolation. When several sessions edit this app at once,
   // any `git push` runs the pre-push hook's `rm -rf .next && next build`, which
   // nukes a running `next dev`'s build dir → 500s on the shared preview. Running
