@@ -911,16 +911,58 @@ export interface CreationCycleResult {
   errors: string[]
 }
 
+/**
+ * The profiles worth asking Amazon about: active connections whose marketplace has campaigns.
+ *
+ * Every creation cycle used `isActive: true` alone. Measured over 30 days on prod, that made
+ * **938 of 1,845 report jobs — 51% — requests that could only ever return zero**, because five
+ * of the nine active EU profiles (IE/NL/PL/SE/UK) carry no campaigns at all. They completed
+ * successfully with `rowsIngested = 0` every night, so nothing looked wrong; they simply spent
+ * Amazon's reporting quota and filled the coverage surfaces with empty successes.
+ *
+ * `ads-report-gapfill.service.ts` already refuses to do this, and says why in its own docblock:
+ * "including them would generate endless jobs that can only ever return zero". The daily cycles
+ * predate that rule. This states it once, for all five of them.
+ *
+ * It cannot lose data. The count is taken live on every cycle, so a marketplace that gains its
+ * first campaign is picked up by the next run; and a marketplace with zero campaigns has, by
+ * definition, nothing for a report to contain.
+ *
+ * Deliberately counts campaigns of ANY status and ANY ad product. Filtering to ENABLED would
+ * also skip the 634 SB/SD jobs a month that return nothing today — but a campaign enabled at
+ * noon would then lose its own day, and "this ad product is dormant" is an operator's call to
+ * make, not a silent one. Reported instead.
+ */
+async function activeProfilesWithCampaigns(): Promise<Array<{ profileId: string; region: string; marketplace: string }>> {
+  const profiles = await prisma.amazonAdsConnection.findMany({
+    where: { isActive: true },
+    select: { profileId: true, region: true, marketplace: true },
+  })
+  if (profiles.length === 0) return []
+  const counts = await prisma.campaign.groupBy({
+    by: ['marketplace'],
+    where: { marketplace: { in: profiles.map((p) => p.marketplace) } },
+    _count: { _all: true },
+  })
+  const has = new Set(counts.filter((c) => c._count._all > 0).map((c) => c.marketplace))
+  const kept = profiles.filter((p) => has.has(p.marketplace))
+  const skipped = profiles.filter((p) => !has.has(p.marketplace))
+  if (skipped.length > 0) {
+    logger.info('[ads-reports] skipping profiles with no campaigns', {
+      skipped: skipped.map((p) => p.marketplace),
+      kept: kept.map((p) => p.marketplace),
+    })
+  }
+  return kept
+}
+
 export async function runReportCreationCycle(
   args: { startDate: string; endDate: string; adProducts?: AdProduct[] } = { startDate: '', endDate: '' },
 ): Promise<CreationCycleResult> {
   const result: CreationCycleResult = { jobsCreated: 0, jobsSkipped: 0, errors: [] }
   const adProducts = args.adProducts ?? ['SPONSORED_PRODUCTS', 'SPONSORED_DISPLAY', 'SPONSORED_BRANDS']
 
-  const profiles = await prisma.amazonAdsConnection.findMany({
-    where: { isActive: true },
-    select: { profileId: true, region: true, marketplace: true },
-  })
+  const profiles = await activeProfilesWithCampaigns()
 
   for (const profile of profiles) {
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
@@ -970,10 +1012,7 @@ export async function runSearchTermReportCycle(
   const adProducts = (args.adProducts ?? ['SPONSORED_PRODUCTS', 'SPONSORED_BRANDS'])
     .filter((p) => SEARCH_TERM_REPORT_TYPE_ID[p] != null)
 
-  const profiles = await prisma.amazonAdsConnection.findMany({
-    where: { isActive: true },
-    select: { profileId: true, region: true, marketplace: true },
-  })
+  const profiles = await activeProfilesWithCampaigns()
 
   for (const profile of profiles) {
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
@@ -1019,10 +1058,7 @@ export async function runPlacementReportCycle(
 ): Promise<CreationCycleResult> {
   // Placement reports are SP-only.
   const result: CreationCycleResult = { jobsCreated: 0, jobsSkipped: 0, errors: [] }
-  const profiles = await prisma.amazonAdsConnection.findMany({
-    where: { isActive: true },
-    select: { profileId: true, region: true, marketplace: true },
-  })
+  const profiles = await activeProfilesWithCampaigns()
 
   for (const profile of profiles) {
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
@@ -1077,10 +1113,7 @@ export async function runAdvertisedProductReportCycle(
   args: { startDate: string; endDate: string },
 ): Promise<CreationCycleResult> {
   const result: CreationCycleResult = { jobsCreated: 0, jobsSkipped: 0, errors: [] }
-  const profiles = await prisma.amazonAdsConnection.findMany({
-    where: { isActive: true },
-    select: { profileId: true, region: true, marketplace: true },
-  })
+  const profiles = await activeProfilesWithCampaigns()
   const days = enumerateDays(args.startDate, args.endDate)
   for (const profile of profiles) {
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
@@ -1121,10 +1154,7 @@ export async function runTargetingReportCycle(
   args: { startDate: string; endDate: string },
 ): Promise<CreationCycleResult> {
   const result: CreationCycleResult = { jobsCreated: 0, jobsSkipped: 0, errors: [] }
-  const profiles = await prisma.amazonAdsConnection.findMany({
-    where: { isActive: true },
-    select: { profileId: true, region: true, marketplace: true },
-  })
+  const profiles = await activeProfilesWithCampaigns()
   const days = enumerateDays(args.startDate, args.endDate)
   for (const profile of profiles) {
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
