@@ -710,6 +710,58 @@ for the new week too — the two-family control needs both on the *same* SERP, a
 six weeks all predate AIREON. Note 2026-07-26 covers only four of AIREON's live days; the first
 clean full week is 2026-08-02, publishable once Amazon releases it. *(`_acr24-aireon-age.mts`.)*
 
+### 🔴 ACR.2.4d — the experiment RUNS now, and its answer is "this data cannot separate the two effects"
+
+**The blocker was never the week.** I framed it four times — revoked credentials, backfill scope,
+AIREON's launch timeline, then "wait for 2026-08-09" — while asking *"why is AIREON empty?"* The
+actual requirement was **any second family on the same SERP**, and AIREON was only ever one
+candidate. One query settles it (`_acr24-live-families.mts`): which portfolios took impressions
+INSIDE 2026-07-19 → 07-25, what they advertised, and whether those roll up to a different Amazon
+parent than GALE's `B0F7J163XJ`. Two answers, both live that week, both unmeasured:
+
+| family | parent | advertised ASINs | that week |
+|---|---|---|---|
+| XAVIA MISANO | `B0C9ZPDPDK` | 9 | €11.86 · 11,473 impr |
+| XAVIA MOSS | `B0D8RWMGTD` | 12 | €8.80 · 13,194 impr |
+
+Backfilled both (21 reports, zero failures): **MISANO 4 ASINs / 35 rows / 265 impressions**,
+**MOSS 4 ASINs / 32 rows / 292 impressions**. The within-term control went from **0 discriminating
+terms to 8**. The mechanism is unblocked permanently.
+
+**And the result is that the measurement is confounded — stated rather than dressed up.**
+
+| k | families | per-ASIN ratio | one-slot predicts | independent predicts |
+|---|---|---|---|---|
+| 2 | 2 | 0.10× | 0.50× | 1.00× |
+| 3 | 4 | 1.97× | 0.33× | 1.00× |
+| 7 | 1 | **31.57×** | 0.14× | 1.00× |
+| 8 | 1 | 3.78× | 0.13× | 1.00× |
+
+Per-ASIN share is **not** decaying as 1/k, which is evidence against the one-tile-rotating
+reading of Part 3.1. But the ratios cannot be quoted as a finding: on `giacca moto uomo` GALE
+holds **2.87% with 8 children** while MISANO holds **0.09% with 1**. The "solo share" is a
+near-zero denominator, and that — not slot mechanics — is what produces a 31× ratio and a 221×
+family/solo. **The design assumed a comparable second family and got a minor line against the
+flagship, so `k` and family strength are now entangled.**
+
+*Adding MOSS changed the table not at all* — 18 cells instead of 17, identical ratios. More weak
+families do not fix a strength confound, which is itself the confirmation.
+
+**So the honest verdict: weekly SQP, in an account with one dominant family, cannot separate
+"how many children a parent has" from "how strong that parent is".** Neither hypothesis is
+established, and the 10-ASINs-on-one-SERP figure from ACR.2.1 remains uninterpretable as slot
+count.
+
+**What would actually answer it**, in order of cost:
+1. **Wait for AIREON to mature.** It is now live with 11 campaigns and €101.87/30d — a
+   *comparable* second family, which MISANO and MOSS are not. Two or three weeks of SQP after
+   2026-07-28 gives a control matched on strength rather than merely present.
+2. **A deliberate intervention**: suppress some GALE children on a head term (never pause —
+   house rule — bid to ~€0.02) and measure whether family share holds or falls. That manipulates
+   `k` while holding family strength fixed, which is the only clean separation available.
+
+*Neither is a data problem to be worked around; both are experiments to be run.*
+
 **When it can run — measured, not guessed (2026-08-05).** Week 2026-07-26 is **not yet
 published**: requested today it ends `FATAL — "A client error occurred. Please double check that
 your parameters are valid"`, Amazon's answer for a week it has not released. The request wrote
