@@ -273,6 +273,34 @@ So the anomaly guard is not a circuit breaker for the account; it is a circuit b
 
 *Consequence to weigh before deploying:* the account is halted **right now**, so this fix takes effect as an immediate account-wide write freeze until the halt is cleared. That is the correct behaviour and it is also a material change — deploy deliberately, with the decision to clear or keep the halt made at the same time.
 
+**SHIPPED 2026-08-05** — commits `4d5635f92` (halt + fail-safe dial), `498e2b5c2` (the three feeds), `caa34e918` (Levers backend). Pre-push built both apps, 82 security tests, RBAC 2,275 routes / 0 unmapped.
+
+#### The breaker threshold — measured, not tuned to silence the alert
+
+`apps/api/scripts/_acr07-breaker-rate.mts` (read-only). What the guard actually counts is **`AutomationRuleExecution` rows for advertising rules only** — `ads-anomaly-guard.service.ts`. It does **not** count rank-defend's mutations, which are **968 of the last 24h** and the largest write source in the account. So "264 actions" never described the account's real activity; it described the rules alone.
+
+| Fact | Value |
+|---|---|
+| Hours of rule activity in the account's ENTIRE history | **4** — 2026-08-04, 04:00→07:00 |
+| Those hours | 27 → 93 → 228 → trip at 264 |
+| `maxActionsPerHour` configured by an operator | **null** — the 250 is a code default |
+| Halted since | 2026-08-04 07:20 · **~29 hours** |
+| Top producer | `🛒 New-to-brand optimizer`, 182 of the 7-day total |
+
+**The breaker fired on the rules' first working day.** ADX.1 repaired the engine that morning; the 27→93→228 ramp is newly-working rules clearing a backlog of conditions that had been matching-and-failing for months, not a runaway. It then halted an account where, thanks to the P0 above, the halt stopped only the two most conservative engines.
+
+Post-consolidation the arithmetic ceiling is far lower: ~22 enabled rules × 4 evaluator ticks/hour ≈ **88/hour** if every rule fired every tick. The 228 reflects the pre-consolidation estate of 36+ enabled rules. **Recommend `maxActionsPerHour = 500`** — ~6× the post-consolidation ceiling, comfortably clear of a legitimate busy hour, and still orders of magnitude below a true runaway (which would be thousands). Left as a set value rather than the null default so it is visibly an operator decision.
+
+**Not changed, and worth knowing:** the spend limb reads `AmazonAdsHourlyPerformance`, which is AMS-fed and IT-heavy/sparse, so €500/h is a weak guard on an account spending ~€6/h on average. And the breaker's blind spot — it cannot see the biggest writer — is a design gap that survives this fix. Both belong on the Control Room's Guardrails tab where a threshold can be set against evidence instead of guessed.
+
+**APPLIED + RESUMED 2026-08-05 10:25 UTC.** `maxActionsPerHour = 500`, halt cleared, attributed to `operator:awais (ACR.0.7 — breaker tuned from measured rate)`. The account had been halted **29 hours** (since 2026-08-04 07:20).
+
+Verified on the 10:30 tick: placement writes carry **`mode=live`**, not `local` or `blocked` — they are reaching Amazon again. Breaker `halted=false`, re-checked 10:30:02, no re-trip. Rule executions this hour: **5 against the 500 limit**. `mode` is now the honest discriminator it was not before: gated writes read `blocked`, sandbox reads `sandbox`, delivered writes read `live`.
+
+#### Two defects the verification itself uncovered — `8ac1a4d4f`
+- **A refused write changed local state and reported success.** `updatePlacementBidding` skipped the push on a denial but still ran `campaign.update`, so local placement bias moved while Amazon kept the old value; and since `syncStamp` stays null on a denial, `lastSyncStatus` was never FAILED, so the reconcile sweep (FAILED-only) could never repair it. Permanent divergence recorded as SUCCESS. Survivable only while the gate never denied — with the halt binding there, one tick produced 21 such rows in 40s. **I misread those SUCCESS rows myself mid-verification and briefly concluded the halt had failed, which is the argument for changing them.** A denial now returns early: no local mutation, no `CampaignBidHistory` row claiming a change that did not happen, audit status FAILED carrying the gate's reason. Sandbox untouched — it *should* write locally.
+- **ACR.0.6's own operation names exploded the cardinality they exist to prevent.** Export ids are base64-ish, so both id rules missed them and the first deploy produced six distinct operations in one tick for the same call. The obvious repair is wrong in the other direction: a character class containing `/` swallows whole paths, collapsing `/reporting/reports` to `/:id`. Caught by testing before shipping; now scoped to a single segment containing a digit, with 5 tests covering the paths the greedy version broke.
+
 ### Stage 1 — The Control Room (the rebuild)
 - **1.1** Today tab (status band, One Number, priced exception board, digest, boundary counts). Backend: a `control-room/summary` aggregation endpoint composing existing services; no new write paths.
 - **1.2** Levers tab (engine rows + drawer with per-rule dials; unified mode vocabulary; per-dimension pins enforced at the gate — one new `CampaignAutomationPin` field-set, additive migration).
