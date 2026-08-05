@@ -8,6 +8,10 @@
 
 // href prefix → page permission (longest prefix wins).
 const NAV_PERMS: Array<[string, string]> = [
+  // ACR.6 — /marketing/advertising is retired to two parked Analytics pages, but the mapping
+  // stays: they are still ads surfaces, and dropping it would fall through to the '/marketing'
+  // prefix below and gate them on pages.marketing instead. Longest prefix wins, so this must
+  // precede '/marketing/ads' — otherwise '/marketing/advertising' matches neither exactly.
   ['/marketing/advertising', 'pages.advertising'],
   ['/marketing/ads', 'pages.advertising'],
   ['/marketing/reviews', 'pages.reviews'],

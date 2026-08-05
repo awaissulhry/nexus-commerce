@@ -149,7 +149,7 @@ export default function ReviewAutomationPage() {
               return (
                 <li key={r.id}>
                   <Link
-                    href={`/marketing/advertising/automation/${r.id}`}
+                    href={`/marketing/ads/rules-automation?rule=${r.id}`}
                     className="block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-950/40"
                   >
                     <div className="flex items-start gap-3">
@@ -213,7 +213,7 @@ export default function ReviewAutomationPage() {
 
       <div className="mt-4 flex items-center gap-3 text-xs">
         <Link
-          href="/marketing/advertising/automation/executions"
+          href="/marketing/ads/rules-automation/control-room?tab=activity"
           className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
         >
           <History className="h-3 w-3" />

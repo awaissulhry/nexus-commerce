@@ -379,7 +379,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
 
       <div className="az-listhead">
         <span className="title">Campaigns <ChevronDown size={18} /></span>
-        <a className="az-btn dark" href="/marketing/advertising/create" target="_blank" rel="noopener noreferrer">Create campaign</a>
+        <a className="az-btn dark" href="/marketing/ads/campaign-builder/single" target="_blank" rel="noopener noreferrer">Create campaign</a>
         <div className="az-search" style={{ minWidth: 300 }}><Search size={15} /><input placeholder="Find a campaign" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
         <span className="az-menuwrap">
           <span className="az-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} onClick={() => setShowFilter((v) => !v)}><Filter size={14} />Filter by{countFilters(filters) > 0 ? ` (${countFilters(filters)})` : ''} <ChevronDown size={14} /></span>
@@ -491,7 +491,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
             <button onClick={() => { window.open(`${TD}/${b.id}`, '_blank', 'noopener'); setMenu(null) }}><Pencil size={15} />Edit in cockpit</button>
             <button onClick={() => { toggleExpand(b.id); setMenu(null) }}><ChevronRight size={15} />{expanded.has(b.id) ? 'Collapse' : 'View'} ad groups</button>
             <button onClick={() => { void toggleActive(b); setMenu(null) }}>{b.status === 'ENABLED' ? <><Pause size={15} />Pause campaign</> : <><Play size={15} />Enable campaign</>}</button>
-            <button onClick={() => { window.open('/marketing/advertising/create', '_blank', 'noopener'); setMenu(null) }}><Copy size={15} />Duplicate…</button>
+            <button onClick={() => { window.open('/marketing/ads/campaign-builder/single', '_blank', 'noopener'); setMenu(null) }}><Copy size={15} />Duplicate…</button>
             <div className="sep" />
             <button className="danger" onClick={() => void archive(b)}><Archive size={15} />Archive</button>
           </div>

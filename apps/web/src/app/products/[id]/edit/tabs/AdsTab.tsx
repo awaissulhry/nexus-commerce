@@ -203,7 +203,7 @@ export function AdsTab({
           SKU / ASIN via AdProductAd. Check back after the next cron tick.
         </p>
         <a
-          href="/marketing/advertising/campaigns"
+          href="/marketing/ads/campaigns"
           target="_blank"
           className="inline-flex items-center gap-1 mt-3 text-xs text-blue-600 dark:text-blue-400 hover:underline"
         >
@@ -314,7 +314,7 @@ export function AdsTab({
                   </td>
                   <td className="px-2 py-1.5">
                     <a
-                      href="/marketing/advertising/campaigns"
+                      href="/marketing/ads/campaigns"
                       target="_blank"
                       className="text-blue-500 hover:text-blue-700 dark:hover:text-blue-300"
                       title="Open Campaigns"
@@ -330,7 +330,7 @@ export function AdsTab({
         {!campaigns.some((c) => c.hasV1Data) && (
           <p className="text-xs text-tertiary mt-1.5">
             No Reports API data yet for this window — run a campaign report cycle from{' '}
-            <a href="/marketing/advertising/reports" target="_blank" className="underline hover:text-slate-600">
+            <a href="/marketing/ads/reporting/pipeline" target="_blank" className="underline hover:text-slate-600">
               Reports
             </a>
             .
@@ -381,7 +381,7 @@ export function AdsTab({
             </table>
           </div>
           <p className="text-xs text-tertiary mt-1">
-            <a href="/marketing/advertising/search-terms" target="_blank" className="hover:underline text-blue-500">
+            <a href="/marketing/ads/reporting/search-term" target="_blank" className="hover:underline text-blue-500">
               View all search terms →
             </a>
           </p>
@@ -499,9 +499,13 @@ export function AdsTab({
       {/* Links */}
       <div className="flex items-center gap-4 pt-1 border-t border-subtle dark:border-slate-800">
         {[
-          { href: '/marketing/advertising/analytics', label: 'Analytics' },
-          { href: '/marketing/advertising/insights',  label: 'Insights' },
-          { href: '/marketing/advertising/campaigns', label: 'All Campaigns' },
+          // ACR.6 — repointed at the one console; /marketing/advertising is retired.
+          // "Insights" was the legacy rule-based insight list, which is now the ranked
+          // Recommendations inbox, so the label follows the destination rather than
+          // sending an operator to a page that no longer calls itself that.
+          { href: '/marketing/ads/dashboard',       label: 'Analytics' },
+          { href: '/marketing/ads/recommendations', label: 'Recommendations' },
+          { href: '/marketing/ads/campaigns',       label: 'All Campaigns' },
         ].map(({ href, label }) => (
           <a
             key={href}

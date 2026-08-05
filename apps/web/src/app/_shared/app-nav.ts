@@ -202,20 +202,24 @@ export function buildAppNav(counts: SidebarCounts, conn: Connections): RailNavIt
     },
 
     // ── Marketing ────────────────────────────────────────────────
-    // H1.1 — the ads console at /marketing/ads had NO entry in this menu, so every operator who
-    // clicked Advertising landed on the legacy tree and the current console was reachable only by
-    // typing its URL. Advertising now opens the console; the older surface keeps an entry because
-    // the H1 audit measured 25 areas there (~7,900 lines — automation, budget-pools, reports,
-    // search-terms, storage-age) with no equivalent yet. Repointing without keeping that link would
-    // strand working pages. Additive: nothing is removed, and nav-permissions already binds BOTH
-    // paths to `pages.advertising`, so access is unchanged either way.
+    // H1.1 added a second child, "Advertising (classic)", because the legacy tree still held ~25
+    // areas with no equivalent — repointing without it would have stranded working pages.
+    //
+    // ACR.6 (Stage 6) removes it. Every one of those areas now either has an equivalent in the
+    // console, was ported into one (P&L, budget pools, iROAS, the account plan, execution rollback,
+    // fleet impact, operator notes, the endpoint probe), or was deleted because prod proved it had
+    // never been used. What remains of /marketing/advertising is two parked interpretation pages
+    // that belong to Analytics; they are reachable by link and do not want a rail entry of their own.
+    //
+    // One console, one entry. A menu that offers "classic" alongside "current" is a menu that
+    // teaches operators the current one is optional.
     {
       label: 'Advertising',
       href: '/marketing/ads',
       Icon: Megaphone,
       children: [
         { label: 'Ads Console', href: '/marketing/ads' },
-        { label: 'Advertising (classic)', href: '/marketing/advertising/campaigns' },
+        { label: 'Reporting', href: '/marketing/ads/reporting' },
       ],
     },
     { label: 'Calendar', href: '/marketing/calendar', Icon: CalendarDays },

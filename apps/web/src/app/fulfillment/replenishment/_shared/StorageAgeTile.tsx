@@ -5,16 +5,20 @@
  * fees within the next 30 days. Hides itself when zero rows match —
  * clean accounts / fresh inventory get no clutter.
  *
- * Click-through deep-links to /marketing/advertising/storage-age
- * (lands in AD.2; AD.1 ships the landing as a basic list).
+ * ACR.6 (Stage 6) — the "Apri Trading Desk" click-through is GONE. It pointed at
+ * /marketing/advertising/storage-age, an ads-console page that has been deleted: the
+ * FbaStorageAge table holds 0 rows on prod because its ingest never populated, so the
+ * heatmap it opened was as empty as the link was dead. This tile computes its own
+ * numbers from the same endpoint and shows them here; there was never a drill-down
+ * worth the trip. If the ingest is fixed, the deeper view belongs in fulfillment
+ * alongside this tile, not back in the ads console.
  *
  * Italian-first strings inline (i18n catalog migration deferred to
  * AD.2 polish wave, mirrors the cannibalization-card precedent).
  */
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { Warehouse, AlertTriangle, ExternalLink } from 'lucide-react'
+import { Warehouse, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface StorageAgeRow {
@@ -109,13 +113,6 @@ export function StorageAgeTile() {
           {data.count} SKU · {critical.length} critici · costi LTS stimati 30g{' '}
           {formatEur(totalFee30dCents)}
         </div>
-        <Link
-          href="/marketing/advertising/storage-age"
-          className="ml-auto inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-        >
-          Apri Trading Desk
-          <ExternalLink className="h-3 w-3" aria-hidden="true" />
-        </Link>
       </div>
 
       {critical.length > 0 && (

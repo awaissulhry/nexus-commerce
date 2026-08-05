@@ -275,8 +275,8 @@ export function MarketingCampaignsClient({
             </span>
           )}
           <div className="ml-auto flex items-center gap-2">
-            <Link href="/marketing/advertising" className="inline-flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" title="Amazon Trading Desk — search terms, reports, aged stock, true profit, feeds">
-              <Target size={14} /> Trading Desk
+            <Link href="/marketing/ads/dashboard" className="inline-flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" title="Ads console — campaigns, rules, reporting, true profit">
+              <Target size={14} /> Ads console
             </Link>
             <Link href="/pricing/promotions" className="inline-flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" title="Promotion scheduler (deals, markdowns, discounts)">
               <Megaphone size={14} /> Promotion scheduler
