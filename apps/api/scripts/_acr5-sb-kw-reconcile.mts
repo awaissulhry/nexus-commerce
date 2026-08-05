@@ -20,7 +20,7 @@ console.log(`\n${apply ? '⚠️  APPLYING (Amazon → local)' : 'DRY RUN — no
 
 const before = await prisma.adTarget.groupBy({
   by: ['status'],
-  where: { kind: 'KEYWORD', isNegative: false, adGroup: { campaign: { adProduct: 'SPONSORED_BRANDS' } } },
+  where: { kind: "KEYWORD", adGroup: { campaign: { adProduct: "SPONSORED_BRANDS" } } },
   _count: { _all: true },
 })
 console.log('local SB keyword rows BEFORE: ' + before.map(b => `${b.status}=${b._count._all}`).join(' '))
@@ -51,7 +51,7 @@ if (r.errors.length) { console.log('\nERRORS:'); for (const e of r.errors) conso
 
 const after = await prisma.adTarget.groupBy({
   by: ['status'],
-  where: { kind: 'KEYWORD', isNegative: false, adGroup: { campaign: { adProduct: 'SPONSORED_BRANDS' } } },
+  where: { kind: "KEYWORD", adGroup: { campaign: { adProduct: "SPONSORED_BRANDS" } } },
   _count: { _all: true },
 })
 console.log('\nlocal SB keyword rows AFTER:  ' + after.map(b => `${b.status}=${b._count._all}`).join(' '))

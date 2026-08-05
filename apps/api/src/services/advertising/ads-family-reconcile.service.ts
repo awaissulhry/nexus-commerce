@@ -18,7 +18,7 @@
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { listSbKeywords, listSdAdGroups, listSdTargets, type AdsRegion } from './ads-api-client.js'
+import { listSbKeywords, listSbNegativeKeywords, listSdAdGroups, listSdTargets, type AdsRegion } from './ads-api-client.js'
 
 export type SbKeywordVerdict =
   /** Local matches Amazon on state and bid. Nothing to do. */
@@ -186,13 +186,24 @@ export async function reconcileSbKeywords(opts: { apply?: boolean; marketplaces?
     const extIds = campaigns.map((c) => c.externalCampaignId).filter((x): x is string => !!x)
     if (!extIds.length) continue
 
+    /**
+     * Positives AND negatives. The wipe hit both — `archiveMissingTargets`' keyword scope is
+     * `{kind:'KEYWORD', OR:[{isNegative:false},{negativeLevel:'AD_GROUP'}]}` — so reconciling
+     * only positives would leave the 7 ad-group negatives archived while Amazon still holds them,
+     * which is the same half-repair that let the SD side sit broken for hours.
+     */
     let remote: Awaited<ReturnType<typeof listSbKeywords>>
-    try { remote = await listSbKeywords(ctx, { externalCampaignIds: extIds }) }
-    catch (e) { errors.push(`read ${marketplace}: ${(e as Error).message.slice(0, 140)}`); continue }
+    try {
+      const [pos, neg] = await Promise.all([
+        listSbKeywords(ctx, { externalCampaignIds: extIds }),
+        listSbNegativeKeywords(ctx, { externalCampaignIds: extIds }),
+      ])
+      remote = [...pos, ...neg]
+    } catch (e) { errors.push(`read ${marketplace}: ${(e as Error).message.slice(0, 140)}`); continue }
 
     const locals = await prisma.adTarget.findMany({
       where: {
-        kind: 'KEYWORD', isNegative: false,
+        kind: 'KEYWORD',
         adGroup: { campaign: { adProduct: 'SPONSORED_BRANDS', marketplace } },
       },
       select: { id: true, externalTargetId: true, expressionValue: true, status: true, bidCents: true },

@@ -238,7 +238,19 @@ export async function upsertCampaignNegativeRows(rows: V3CampaignNegative[], opt
     const scopeIds = scopeCamps.map((c) => c.id)
     if (scopeIds.length) {
       const seenExt = new Set(rows.map((r) => r.campaignNegativeKeywordId).filter((x): x is string => !!x))
-      const live = await prisma.adTarget.findMany({ where: { adGroup: { campaignId: { in: scopeIds } }, isNegative: true, negativeLevel: 'CAMPAIGN', externalTargetId: { not: null }, status: { in: ['ENABLED', 'PAUSED'] } }, select: { id: true, externalTargetId: true } })
+      const live = await prisma.adTarget.findMany({ where: {
+        adGroup: {
+          campaignId: { in: scopeIds },
+          // ACR Stage 5 — same scope as archiveMissingTargets, for the same reason. The fetch
+          // above is `/sp/campaignNegativeKeywords/list`, so an SB or SD campaign negative can
+          // never appear in it and would be archived as deleted. LATENT today (this account has
+          // 20 campaign negatives, all SP) — fixed defensively because the identical omission
+          // has already cost this programme twice, at campaigns and at targets, and the next
+          // SB/SD campaign negative would have made it three.
+          campaign: { adProduct: 'SPONSORED_PRODUCTS' },
+        },
+        isNegative: true, negativeLevel: 'CAMPAIGN', externalTargetId: { not: null }, status: { in: ['ENABLED', 'PAUSED'] },
+      }, select: { id: true, externalTargetId: true } })
       const toArchive = live.filter((t) => t.externalTargetId && !seenExt.has(t.externalTargetId)).map((t) => t.id)
       if (archiveAllowed(toArchive.length, live.length)) {
         archived = (await prisma.adTarget.updateMany({ where: { id: { in: toArchive } }, data: { status: 'ARCHIVED', lastSyncedAt: new Date(), lastSyncStatus: 'SUCCESS', lastSyncError: null } })).count

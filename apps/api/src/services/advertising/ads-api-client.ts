@@ -1444,6 +1444,23 @@ export async function listSbKeywords(ctx: ClientContext, opts: { externalCampaig
   return want.size ? (all ?? []).filter((k) => want.has(String(k.campaignId))) : (all ?? [])
 }
 
+/**
+ * SB NEGATIVE keywords — `/sb/negativeKeywords`, `application/vnd.sbnegativekeyword.v3+json`.
+ *
+ * Its own mime, not the positive one: `/sb/negativeKeywords` answers 406 for
+ * `vnd.sbkeyword.v3+json`. Same legacy family as `listSbKeywords`, and found the same way —
+ * treating 406 as "the path exists, keep trying Accept headers".
+ */
+export async function listSbNegativeKeywords(ctx: ClientContext, opts: { externalCampaignIds?: string[] }): Promise<SbKeywordDTO[]> {
+  if (adsMode() === 'sandbox') return []
+  const all = await liveCall<SbKeywordDTO[]>({
+    ...ctx, method: 'GET', path: '/sb/negativeKeywords',
+    acceptHeader: 'application/vnd.sbnegativekeyword.v3+json',
+  })
+  const want = new Set(opts.externalCampaignIds ?? [])
+  return want.size ? (all ?? []).filter((k) => want.has(String(k.campaignId))) : (all ?? [])
+}
+
 export interface CreateSbKeywordInput {
   externalCampaignId: string
   externalAdGroupId: string
