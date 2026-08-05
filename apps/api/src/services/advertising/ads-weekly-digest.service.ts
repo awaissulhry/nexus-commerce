@@ -163,7 +163,7 @@ export async function getWeeklyDigest(
 ): Promise<WeeklyDigest> {
   const win = digestWindow(mode, now)
 
-  const [rules, execs, suggestions, actions, proposals, graduation, failedWrites, deadLetters] = await Promise.all([
+  const [rules, execs, suggestions, budgetActions, actionCounts, proposals, graduation, coverageLatest, failedWrites, deadLetters] = await Promise.all([
     prisma.automationRule.findMany({
       where: { domain: 'advertising' },
       select: { id: true, name: true, autonomyLevel: true, enabled: true, dryRun: true },
@@ -179,12 +179,30 @@ export async function getWeeklyDigest(
       where: { decidedAt: { gte: win.from, lte: win.to } },
       select: { ruleId: true, status: true },
     }),
+    /**
+     * Two narrow reads, not one wide one.
+     *
+     * Fetching every action-log row in the week WITH both JSON payloads cost 1,896ms for 5,257
+     * rows — the single most expensive thing in this digest, and almost all of it wasted: the
+     * payloads are only read for `AD_BUDGET_UPDATE`, and every other action type contributes a
+     * COUNT. Split, the same answers cost 48ms (195 budget rows) + 29ms (a groupBy). Measured
+     * 2026-08-05; the whole digest went 7.7s → well under half of that.
+     */
     prisma.advertisingActionLog.findMany({
+      where: { createdAt: { gte: win.from, lte: win.to }, actionType: 'AD_BUDGET_UPDATE' },
+      select: { payloadBefore: true, payloadAfter: true },
+    }),
+    prisma.advertisingActionLog.groupBy({
+      by: ['actionType'],
       where: { createdAt: { gte: win.from, lte: win.to } },
-      select: { actionType: true, payloadBefore: true, payloadAfter: true },
+      _count: { _all: true },
     }),
     pricePendingProposals(500).catch(() => null),
     getGraduationBoard(now).catch(() => null),
+    // In the batch rather than after it: this used to run sequentially once everything else had
+    // finished, adding its full latency to the wall clock instead of hiding inside it. Only the
+    // PRIOR week's read has to wait, because which week that is comes out of this one.
+    getCoverageScoreboard({ marketplace: 'IT', limit: 200 }).catch(() => null),
     prisma.adMutation.count({ where: { state: 'FAILED', createdAt: { gte: win.from, lte: win.to } } }).catch(() => 0),
     prisma.outboundSyncQueue.count({ where: { isDead: true, createdAt: { gte: win.from, lte: win.to } } }).catch(() => 0),
   ])
@@ -228,26 +246,25 @@ export async function getWeeklyDigest(
   // ── net effect ────────────────────────────────────────────────────────────
   let budgetDeltaCents = 0
   let budgetMoves = 0
-  let bidMoves = 0
-  let placementMoves = 0
-  for (const a of actions) {
-    if (a.actionType === 'AD_BUDGET_UPDATE') {
-      const before = Number((a.payloadBefore as Record<string, unknown> | null)?.dailyBudget)
-      const after = Number((a.payloadAfter as Record<string, unknown> | null)?.dailyBudget)
-      // Both must be real numbers. A missing side is not a zero — treating it as one would
-      // book the entire budget as a change in whichever direction the null happened to be.
-      if (Number.isFinite(before) && Number.isFinite(after)) {
-        budgetDeltaCents += Math.round((after - before) * 100)
-        budgetMoves += 1
-      }
-    } else if (a.actionType === 'AD_BID_UPDATE') bidMoves += 1
-    else if (a.actionType === 'update_placement_bidding') placementMoves += 1
+  for (const a of budgetActions) {
+    const before = Number((a.payloadBefore as Record<string, unknown> | null)?.dailyBudget)
+    const after = Number((a.payloadAfter as Record<string, unknown> | null)?.dailyBudget)
+    // Both must be real numbers. A missing side is not a zero — treating it as one would
+    // book the entire budget as a change in whichever direction the null happened to be.
+    if (Number.isFinite(before) && Number.isFinite(after)) {
+      budgetDeltaCents += Math.round((after - before) * 100)
+      budgetMoves += 1
+    }
   }
+  const countOf = (type: string) => actionCounts.find((c) => c.actionType === type)?._count._all ?? 0
+  const bidMoves = countOf('AD_BID_UPDATE')
+  const placementMoves = countOf('update_placement_bidding')
 
   // ── coverage trend ────────────────────────────────────────────────────────
   let coverage: WeeklyDigest['coverage'] = null
   try {
-    const latest = await getCoverageScoreboard({ marketplace: 'IT', limit: 200 })
+    const latest = coverageLatest
+    if (!latest) throw new Error('coverage unavailable')
     /**
      * The week key on CoverageWeek is `startDate`, NOT `week` — reading `w.week` yields
      * undefined for every entry, the list filters to empty, and the digest reports "no prior
