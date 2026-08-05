@@ -375,3 +375,8 @@ a.acr-refresh { text-decoration: none; }
   .acr-fs-hour { grid-template-columns: 52px 30px minmax(0, 1fr) auto; }
   .acr-fs-bar, .acr-fs-ticks { display: none; }
 }
+
+/* ── ACR.7 — the dock claims the empty right side ────────────────────────── */
+.acr--with-dock { display: flex; gap: 18px; align-items: flex-start; max-width: 1500px; }
+.acr-maincol { min-width: 0; flex: 1; }
+@media (max-width: 1100px) { .acr--with-dock { flex-direction: column; } .acr--with-dock .adock { position: static; width: 100%; max-height: 420px; } }

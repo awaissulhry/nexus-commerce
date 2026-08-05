@@ -146,7 +146,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
   },
   // ── Autonomous bid optimization (the core paid feature) ─────────────
   {
-    name: '🎯 Bid optimization (profit-native)',
+    name: 'Bid optimization (profit-native)',
     description:
       'Runs daily: adjusts every keyword bid toward its product\'s true profit-based ACOS target using Bayesian smoothing for low-data keywords. Raises bids on underperforming winners, cuts bids on losers. This is the primary thing PPC tools charge €500+/mo for — built in.',
     trigger: 'SCHEDULE',
@@ -162,7 +162,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
   },
   // ── AU.1 — Automated keyword harvesting & negation ──────────────────
   {
-    name: '🌾 Auto harvest & negate',
+    name: 'Auto harvest & negate',
     description:
       'Every run: negates search terms that spent €10+ with zero orders (wasted spend), and promotes terms with 2+ orders to exact-match campaigns (free traffic recovery). The #1 automation feature. Runs up to 3 times per day via the SCHEDULE trigger. Dry-run by default — review the execution log before going live.',
     trigger: 'SCHEDULE',
@@ -178,7 +178,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
   },
   // ── AU.2 — Retail-aware advertising (inventory-linked auto-pause) ───
   {
-    name: '🛡 Retail guard',
+    name: 'Retail guard',
     description:
       'Every 15 min: automatically pauses campaigns advertising out-of-stock products or products that lost the Buy Box — so you never pay for traffic you can\'t convert. Resumes when products are back in stock. Dry-run by default.',
     trigger: 'SCHEDULE',
@@ -194,7 +194,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
   },
   // ── AU.4 — Hard budget failsafe kill-switch ─────────────────────────
   {
-    name: '⛔ Monthly budget cap',
+    name: 'Monthly budget cap',
     description:
       'Instantly pauses ALL enabled campaigns the moment your monthly ad spend hits your cap. Guaranteed never-overspend. Set your cap in the condition (default €2,000 — adjust to your budget). Dry-run by default — enable live when you\'re ready.',
     trigger: 'SCHEDULE',
@@ -213,7 +213,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
 
   // ── Precision triggers — new contexts ──────────────────────────────
   {
-    name: '🔇 Zero-impression kill',
+    name: 'Zero-impression kill',
     description: 'Immediately pauses keywords that are spending budget but getting ZERO impressions — a sign of delivery failure, suppressed listing, or bad match. Catches waste that ACOS rules can\'t see (no impressions = no ACOS).',
     trigger: 'KEYWORD_ZERO_IMPRESSIONS',
     conditions: [{ field: 'adTarget.spendCents', op: 'gte', value: 200 }],
@@ -221,7 +221,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 50, maxValueCentsEur: null, maxDailyAdSpendCentsEur: null, scopeMarketplace: null,
   },
   {
-    name: '📉 Low CTR bid reduction',
+    name: 'Low CTR bid reduction',
     description: 'Cuts bids 25% on keywords with >500 impressions but CTR < 0.2%. Low CTR = poor relevance = wasted impressions. Better to bid less and appear for more qualified traffic.',
     trigger: 'KEYWORD_LOW_CTR',
     conditions: [{ field: 'adTarget.impressions', op: 'gte', value: 500 }, { field: 'adTarget.ctr', op: 'lt', value: 0.002 }],
@@ -229,7 +229,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 100, maxValueCentsEur: null, maxDailyAdSpendCentsEur: null, scopeMarketplace: null,
   },
   {
-    name: '📊 CVR drop alert + bid cut',
+    name: 'CVR drop alert + bid cut',
     description: 'When a keyword\'s conversion rate drops >40% week-over-week, cuts the bid 20% and alerts. CVR drops signal competitor price cuts, review score degradation, or listing quality issues — act immediately.',
     trigger: 'CVR_DROP',
     conditions: [],
@@ -237,7 +237,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 50, maxValueCentsEur: null, maxDailyAdSpendCentsEur: null, scopeMarketplace: null,
   },
   {
-    name: '🗑️ Wasted keyword instant negate',
+    name: 'Wasted keyword instant negate',
     description: 'Negates any keyword that spent €5+ with 5+ clicks and ZERO orders in 14 days. Fires in real-time (every 15 min) rather than waiting for the daily harvest run — stops waste hours faster.',
     trigger: 'KEYWORD_WASTED_SPEND',
     conditions: [{ field: 'adTarget.spendCents', op: 'gte', value: 500 }, { field: 'adTarget.clicks', op: 'gte', value: 5 }],
@@ -245,7 +245,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 200, maxValueCentsEur: null, maxDailyAdSpendCentsEur: null, scopeMarketplace: null,
   },
   {
-    name: '🎯 Auto match-type migration (broad → exact)',
+    name: 'Auto match-type migration (broad → exact)',
     description: 'When a search term from a broad/phrase campaign gets 2+ orders, automatically promotes it to an exact-match keyword in the same ad group AND negates it to prevent cannibalization. The full match-type funnel on autopilot.',
     trigger: 'SEARCH_TERM_CONVERTING',
     conditions: [{ field: 'searchTerm.orders', op: 'gte', value: 2 }],
@@ -253,7 +253,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 100, maxValueCentsEur: null, maxDailyAdSpendCentsEur: null, scopeMarketplace: null,
   },
   {
-    name: '🌐 Account-wide negative sync',
+    name: 'Account-wide negative sync',
     description: 'When a search term wastes €10+ with zero orders, negates it across EVERY campaign in the marketplace simultaneously. Stops one bad term from bleeding across your whole account.',
     trigger: 'KEYWORD_WASTED_SPEND',
     conditions: [{ field: 'adTarget.spendCents', op: 'gte', value: 1000 }],
@@ -261,7 +261,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 20, maxValueCentsEur: null, maxDailyAdSpendCentsEur: null, scopeMarketplace: null,
   },
   {
-    name: '📍 Top-of-Search rank defender',
+    name: 'Top-of-Search rank defender',
     description: 'When impression share drops (detected via low-impressions campaigns), raises all bids 25% to reclaim position. Guards high-value campaigns from being outbid by competitors without manual intervention.',
     trigger: 'KEYWORD_ZERO_IMPRESSIONS',
     conditions: [],
@@ -269,7 +269,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 5, maxValueCentsEur: null, maxDailyAdSpendCentsEur: null, scopeMarketplace: null,
   },
   {
-    name: '💰 Profit protection (pause on margin breach)',
+    name: 'Profit protection (pause on margin breach)',
     description: 'When advertising spend exceeds net margin (you\'re losing money on every sale), immediately pauses the campaign. The bottom-line guardrail — ensures ads are always profitable.',
     trigger: 'AD_SPEND_PROFITABILITY_BREACH',
     conditions: [{ field: 'profit.netCents', op: 'lt', value: -1000 }],
@@ -277,7 +277,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 10, maxValueCentsEur: null, maxDailyAdSpendCentsEur: null, scopeMarketplace: null,
   },
   {
-    name: '🚀 Aggressive growth: raise bids on low-ACOS winners',
+    name: 'Aggressive growth: raise bids on low-ACOS winners',
     description: 'Raises bids 20% on keywords with ACOS below 15% and 3+ orders. Doubles down on what\'s already working — the compounding flywheel that separates growing brands from flat ones.',
     trigger: 'AD_TARGET_UNDERPERFORMING',
     conditions: [{ field: 'campaign.acos', op: 'lte', value: 0.15 }, { field: 'adTarget.ordersCount', op: 'gte', value: 3 }],
@@ -285,7 +285,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 50, maxValueCentsEur: null, maxDailyAdSpendCentsEur: 50000, scopeMarketplace: null,
   },
   {
-    name: '🏋️ Bulk bid floor protection',
+    name: 'Bulk bid floor protection',
     description: 'When a keyword is paused by automation, sets its bid to the minimum (€0.05) instead. This keeps it eligible for re-evaluation data while minimizing waste if it\'s accidentally re-enabled.',
     trigger: 'AD_TARGET_UNDERPERFORMING',
     conditions: [{ field: 'adTarget.spendCents', op: 'gte', value: 2000 }, { field: 'adTarget.salesCents', op: 'eq', value: 0 }],
@@ -293,7 +293,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 100, maxValueCentsEur: null, maxDailyAdSpendCentsEur: null, scopeMarketplace: null,
   },
   {
-    name: '🔄 Campaign ACOS rebalance (cut + scale)',
+    name: 'Campaign ACOS rebalance (cut + scale)',
     description: 'When campaign ACOS is over 50% AND there\'s another campaign under 20% ACOS, cuts the bad campaign\'s budget 20% and raises the winner\'s budget 20%. Automatically shifts money to what works.',
     trigger: 'CAC_SPIKE',
     conditions: [{ field: 'campaign.acos', op: 'gte', value: 0.5 }],
@@ -301,7 +301,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 5, maxValueCentsEur: 20000, maxDailyAdSpendCentsEur: 20000, scopeMarketplace: null,
   },
   {
-    name: '📅 Weekend budget boost',
+    name: 'Weekend budget boost',
     description: 'Raises budgets 30% on Fridays and Saturdays (via dayparting bid multiplier) and restores Sunday — matches higher weekend shopping volume without overspending weekdays.',
     trigger: 'SCHEDULE',
     conditions: [],
@@ -309,7 +309,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 1, maxValueCentsEur: null, maxDailyAdSpendCentsEur: null, scopeMarketplace: null,
   },
   {
-    name: '🧹 Stale campaign cleanup',
+    name: 'Stale campaign cleanup',
     description: 'Archives keywords that have ZERO impressions AND zero clicks in 30 days. Dead keywords hurt Quality Scores and clutter your account. Keep it clean automatically.',
     trigger: 'KEYWORD_ZERO_IMPRESSIONS',
     conditions: [{ field: 'adTarget.spendCents', op: 'eq', value: 0 }],
@@ -317,7 +317,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 200, maxValueCentsEur: null, maxDailyAdSpendCentsEur: null, scopeMarketplace: null,
   },
   {
-    name: '⚡ FBA in-stock resume',
+    name: 'FBA in-stock resume',
     description: 'When a paused campaign\'s products come back into stock, automatically re-enables the campaign. Works as the complement to retail guard — full pause/resume lifecycle without manual intervention.',
     trigger: 'SCHEDULE',
     conditions: [],
@@ -325,7 +325,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 96, maxValueCentsEur: null, maxDailyAdSpendCentsEur: null, scopeMarketplace: null,
   },
   {
-    name: '📣 Daily automation digest',
+    name: 'Daily automation digest',
     description: 'Every morning: runs a dry-run of bid optimization and harvesting and sends an alert with what WOULD change. The daily briefing — see what automation would do before it does it.',
     trigger: 'SCHEDULE',
     conditions: [],
@@ -337,7 +337,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 1, maxValueCentsEur: null, maxDailyAdSpendCentsEur: null, scopeMarketplace: null,
   },
   {
-    name: '🎪 Target ACOS setter (from profit)',
+    name: 'Target ACOS setter (from profit)',
     description: 'Runs daily: recalculates each campaign\'s optimal target ACOS from the product\'s real profit margin and updates the stored target. As your costs change, your bid targets stay correct automatically.',
     trigger: 'SCHEDULE',
     conditions: [],
@@ -345,7 +345,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 1, maxValueCentsEur: null, maxDailyAdSpendCentsEur: null, scopeMarketplace: null,
   },
   {
-    name: '🛒 New-to-brand optimizer',
+    name: 'New-to-brand optimizer',
     description: 'Raises bids 10% on campaigns where >30% of orders are new-to-brand (from ntbOrders14d data). New-to-brand orders are worth more — acquire customers at a premium and LTV justifies the bid.',
     trigger: 'CAMPAIGN_PERFORMANCE_BUDGET',
     conditions: [{ field: 'campaign.acos', op: 'lte', value: 0.35 }],
@@ -353,7 +353,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 10, maxValueCentsEur: null, maxDailyAdSpendCentsEur: 20000, scopeMarketplace: null,
   },
   {
-    name: '⚖️ ACoS convergence (proportional correction)',
+    name: 'ACoS convergence (proportional correction)',
     description: 'Every 6 hours: adjusts bids proportionally using the formula bid × (target_ACOS / actual_ACOS). The cleanest bid-optimization formula — mathematically guaranteed to converge toward target ACOS.',
     trigger: 'CAC_SPIKE',
     conditions: [{ field: 'campaign.acos', op: 'gt', value: 0 }],
@@ -361,7 +361,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 4, maxValueCentsEur: null, maxDailyAdSpendCentsEur: null, scopeMarketplace: null,
   },
   {
-    name: '🏆 Scale budget on ROAS winners',
+    name: 'Scale budget on ROAS winners',
     description: 'Raises daily budget 25% on campaigns achieving ROAS > 5x. These campaigns are generating €5+ for every €1 spent — more budget = more profit. Compound your winners.',
     trigger: 'CAMPAIGN_PERFORMANCE_BUDGET',
     conditions: [{ field: 'campaign.roas', op: 'gte', value: 5 }, { field: 'campaign.budgetUtilization', op: 'gte', value: 0.9 }],
@@ -369,7 +369,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 3, maxValueCentsEur: 50000, maxDailyAdSpendCentsEur: 50000, scopeMarketplace: null,
   },
   {
-    name: '🔍 Exact match discovery engine',
+    name: 'Exact match discovery engine',
     description: 'Every day: scans all converting search terms from auto/broad campaigns and promotes any with 3+ orders to exact-match keywords at a competitive bid. Turns your auto campaigns into a keyword research engine.',
     trigger: 'SCHEDULE',
     conditions: [],
@@ -379,6 +379,40 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
 ]
 
 /** Maps old Italian template names → current English names for rename-on-reseed. */
+/**
+ * ACR.7 — operator decision 2026-08-05: no emojis in rule names ("that makes it way less
+ * professional"). Category COLOUR carries the grouping instead — see ruleCategory(). The seed
+ * matches rules by name, so every old emoji spelling must rename in place exactly like the
+ * Italian names below; without this map a reseed would create emoji-free DUPLICATES beside
+ * the emoji originals.
+ */
+const EMOJI_NAME_MAP: Record<string, string> = {
+  '🎯 Bid optimization (profit-native)': 'Bid optimization (profit-native)',
+  '🌾 Auto harvest & negate': 'Auto harvest & negate',
+  '🛡 Retail guard': 'Retail guard',
+  '⛔ Monthly budget cap': 'Monthly budget cap',
+  '🔇 Zero-impression kill': 'Zero-impression kill',
+  '📉 Low CTR bid reduction': 'Low CTR bid reduction',
+  '📊 CVR drop alert + bid cut': 'CVR drop alert + bid cut',
+  '🗑️ Wasted keyword instant negate': 'Wasted keyword instant negate',
+  '🎯 Auto match-type migration (broad → exact)': 'Auto match-type migration (broad → exact)',
+  '🌐 Account-wide negative sync': 'Account-wide negative sync',
+  '📍 Top-of-Search rank defender': 'Top-of-Search rank defender',
+  '💰 Profit protection (pause on margin breach)': 'Profit protection (pause on margin breach)',
+  '🚀 Aggressive growth: raise bids on low-ACOS winners': 'Aggressive growth: raise bids on low-ACOS winners',
+  '🏋️ Bulk bid floor protection': 'Bulk bid floor protection',
+  '🔄 Campaign ACOS rebalance (cut + scale)': 'Campaign ACOS rebalance (cut + scale)',
+  '📅 Weekend budget boost': 'Weekend budget boost',
+  '🧹 Stale campaign cleanup': 'Stale campaign cleanup',
+  '⚡ FBA in-stock resume': 'FBA in-stock resume',
+  '📣 Daily automation digest': 'Daily automation digest',
+  '🎪 Target ACOS setter (from profit)': 'Target ACOS setter (from profit)',
+  '🛒 New-to-brand optimizer': 'New-to-brand optimizer',
+  '⚖️ ACoS convergence (proportional correction)': 'ACoS convergence (proportional correction)',
+  '🏆 Scale budget on ROAS winners': 'Scale budget on ROAS winners',
+  '🔍 Exact match discovery engine': 'Exact match discovery engine',
+}
+
 const ITALIAN_NAME_MAP: Record<string, string> = {
   'Pausa pubblicità per stock invecchiato': 'Pause ads for aged stock',
   'Riduci bid su ACOS spike': 'Reduce bids on ACOS spike',
@@ -402,7 +436,7 @@ export async function seedAdvertisingTemplates(): Promise<SeedAdvertisingTemplat
       select: { id: true },
     })
     if (!existing) {
-      const oldName = Object.entries(ITALIAN_NAME_MAP).find(([, en]) => en === tmpl.name)?.[0]
+      const oldName = Object.entries({ ...ITALIAN_NAME_MAP, ...EMOJI_NAME_MAP }).find(([, en]) => en === tmpl.name)?.[0]
       if (oldName) {
         existing = await prisma.automationRule.findFirst({
           where: { name: oldName, domain: 'advertising' },

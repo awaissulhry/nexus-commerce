@@ -99,7 +99,9 @@ async function scopeAndRun(trigger: string, contexts: MktContext[]): Promise<{ e
       select: { id: true },
     })
     if (rules.length === 0) continue
-    const results = await evaluateAllRulesForTrigger({ domain: 'marketing', trigger, context: ctx })
+    // ACR.7 — pass the scoped survivors. Without ruleIds the evaluator re-queries every
+    // enabled rule for the trigger and the filter above is only a skip-check.
+    const results = await evaluateAllRulesForTrigger({ domain: 'marketing', trigger, context: ctx, ruleIds: rules.map((r) => r.id) })
     evaluations += results.length
     matches += results.filter((r) => r.matched).length
   }

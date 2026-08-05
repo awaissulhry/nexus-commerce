@@ -1,0 +1,72 @@
+/**
+ * ACR.7 — Automation Dock styles. Light-only; self-contained (no cross-page class borrowing).
+ * The category colour arrives as --cat per rule row, set from the server's hex so every
+ * surface renders the identical swatch.
+ */
+.adock {
+  width: 316px; flex-shrink: 0; align-self: flex-start;
+  position: sticky; top: 14px; max-height: calc(100vh - 28px);
+  display: flex; flex-direction: column;
+  border: 1px solid #dfe5ec; border-radius: 10px; background: #fff; padding: 13px 0 6px;
+}
+.adock-head { display: flex; align-items: baseline; gap: 8px; padding: 0 14px; }
+.adock-head h2 { font-size: 12.5px; font-weight: 700; color: #34404f; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
+.adock-count { font-size: 11px; color: #8d97a6; }
+.adock-hint { font-size: 11px; color: #8d97a6; margin: 5px 0 9px; padding: 0 14px; line-height: 1.45; }
+
+.adock-cats { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 14px 9px; border-bottom: 1px solid #f0f3f6; }
+.adock-cat {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10.5px; font-weight: 600; color: #5a6779;
+  background: #f7f8fa; border: 1px solid #e3e7ed; border-radius: 5px; padding: 3px 8px; cursor: pointer;
+}
+.adock-cat i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.adock-cat.on { background: #eef3fd; border-color: #c8d8f5; color: #2a5399; }
+
+.adock-err { font-size: 11.5px; color: #9c2f2a; padding: 10px 14px; }
+.adock-loading { font-size: 12px; color: #8d97a6; padding: 12px 14px; }
+
+.adock-list { list-style: none; margin: 0; padding: 4px 6px; overflow-y: auto; flex: 1; }
+.adock-rule {
+  display: flex; align-items: flex-start; gap: 2px;
+  border-radius: 7px; padding: 7px 6px 7px 2px; cursor: grab;
+  border: 1px solid transparent;
+  border-left: 3px solid var(--cat, #dde3ea);
+  margin-bottom: 2px;
+}
+.adock-rule:hover { background: #f8fafc; border-color: #e8edf3; border-left-color: var(--cat, #dde3ea); }
+.adock-rule:active { cursor: grabbing; }
+.adock-grip { color: #c3ccd7; padding-top: 2px; flex-shrink: 0; }
+.adock-main { min-width: 0; flex: 1; }
+.adock-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.adock-swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--cat, #dde3ea); flex-shrink: 0; }
+.adock-name { font-size: 12px; font-weight: 550; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.adock-edit { margin-left: auto; color: #97a1af; flex-shrink: 0; display: inline-flex; }
+.adock-edit:hover { color: #1f6fde; }
+.adock-sub { font-size: 10.5px; color: #97a1af; margin: 2px 0 0; font-variant-numeric: tabular-nums; }
+
+.adock-scope {
+  display: inline-flex; align-items: center; gap: 5px; margin-top: 4px;
+  font-size: 10.5px; font-weight: 600; color: #2a5399;
+  background: #eef3fd; border: 1px solid #c8d8f5; border-radius: 4px; padding: 2px 4px 2px 7px;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.adock-scope-x { display: inline-flex; border: 0; background: none; color: #6b87c0; cursor: pointer; padding: 1px; border-radius: 3px; }
+.adock-scope-x:hover { background: #dbe7fb; color: #2a5399; }
+
+.adock-dial { display: inline-flex; margin-top: 5px; border: 1px solid #e0e5ec; border-radius: 5px; overflow: hidden; }
+.adock-notch {
+  font-size: 10px; font-weight: 700; color: #7a869a; background: #fff;
+  border: 0; border-right: 1px solid #edf0f4; width: 24px; padding: 3px 0; cursor: pointer;
+}
+.adock-notch:last-child { border-right: 0; }
+.adock-notch:hover:not(:disabled):not(.on) { background: #f4f6f9; }
+.adock-notch:disabled { color: #c3ccd7; cursor: not-allowed; }
+.adock-notch.on { color: #fff; }
+.adock-notch.on.off { background: #7a869a; }
+.adock-notch.on.observe { background: #4d5b6e; }
+.adock-notch.on.propose { background: #2a5399; }
+.adock-notch.on.auto { background: #14724d; }
+
+/* Drop feedback — applied by ruleDropProps to ANY registered target on any page. */
+.rule-drop-hover { outline: 2px dashed #1f6fde !important; outline-offset: -2px; background: #f2f7fe !important; }

@@ -116,3 +116,8 @@
   .fc-vitals, .fc-autorow { flex-wrap: wrap; }
   .fc-vitals > div, .fc-autorow > div { border-right: 0; border-bottom: 1px solid #f0f3f6; flex: 1 1 45%; }
 }
+
+/* ── ACR.7 — dock beside the cockpit ─────────────────────────────────────── */
+.fc--with-dock { display: flex; gap: 18px; align-items: flex-start; }
+.fc-maincol { min-width: 0; flex: 1; }
+@media (max-width: 1100px) { .fc--with-dock { flex-direction: column; } .fc--with-dock .adock { position: static; width: 100%; max-height: 420px; } }

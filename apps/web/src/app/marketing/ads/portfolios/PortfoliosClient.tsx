@@ -17,6 +17,7 @@ import { Input } from '@/design-system/primitives/Input'
 import { Modal } from '@/design-system/components/Modal'
 import { ToastProvider, useToast } from '@/design-system/components/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
+import { AutomationDock, ruleDropProps, setRuleScope } from '../_shared/AutomationDock'
 import { searchOptions } from '@/lib/option-search'
 import { eur, pct, intl } from '../_canvas/format'
 import '@/design-system/styles/tokens.css'
@@ -173,7 +174,8 @@ function PortfoliosInner() {
   const totals = rows.reduce((a, r) => ({ campaigns: a.campaigns + r.campaignCount, spend: a.spend + r.spendCents }), { campaigns: 0, spend: 0 })
 
   return (
-    <div className="pf">
+    <div className="pf pf--with-dock">
+      <div className="pf-maincol">
       <AdsPageHeader
         title="Portfolios"
         subtitle="Group campaigns into portfolios and see membership + spend at a glance."
@@ -230,7 +232,15 @@ function PortfoliosInner() {
                 <tr><td colSpan={9} className="pf-norows">No portfolio matches “{q}”.</td></tr>
               )}
               {visible.map((r) => (
-                <tr key={r.portfolioId}>
+                <tr
+                  key={r.portfolioId}
+                  {...ruleDropProps((rule) => {
+                    void setRuleScope(rule.id, { scopePortfolioId: r.portfolioId }).then((ok) =>
+                      toast(ok
+                        ? `“${rule.name}” now fires only inside ${r.name}.`
+                        : 'Bind failed — the scope change was rejected.', ok ? 'success' : 'danger'))
+                  })}
+                >
                   <td>
                     <span className="pf-name">
                       {/* ACR.6 — the name opens the Family Cockpit: campaigns, coverage,
@@ -347,6 +357,9 @@ function PortfoliosInner() {
           </div>
         </div>
       </Modal>
+      </div>
+      {/* ACR.7 — drag a rule onto a portfolio row to bind it to that family. */}
+      <AutomationDock />
     </div>
   )
 }

@@ -30,6 +30,7 @@ import { RulesSection } from './RulesSection'
 import { GuardrailsTab } from './GuardrailsTab'
 import { ActivityTab } from './ActivityTab'
 import { TodayTab } from './TodayTab'
+import { AutomationDock } from '../../_shared/AutomationDock'
 import { ForesightTab } from './ForesightTab'
 import './control-room.css'
 
@@ -109,7 +110,8 @@ export function ControlRoomClient() {
   const warnings = (engines ?? []).filter((e) => e.warning).length
 
   return (
-    <div className="acr">
+    <div className="acr acr--with-dock">
+      <div className="acr-maincol">
       <header className="acr-head">
         <div>
           <h1>Control Room</h1>
@@ -261,6 +263,11 @@ export function ControlRoomClient() {
           whether the account lets it.
         </p>
       )}
+      </div>
+
+      {/* ACR.7 — the always-on dock in the space that was empty. Same component as the
+          Portfolios page and the Family Cockpit; drops land there, edits land here too. */}
+      <AutomationDock onChanged={() => void load()} />
     </div>
   )
 }

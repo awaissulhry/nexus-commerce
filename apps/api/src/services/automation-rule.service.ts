@@ -740,9 +740,20 @@ export async function evaluateAllRulesForTrigger(args: {
   trigger: string
   context: unknown
   forceDryRun?: boolean
+  /**
+   * ACR.7 — evaluate ONLY these rules. Before this, callers pre-filtered rules by scope and
+   * then called here — which re-queried EVERY enabled rule for the trigger, so the filter was
+   * a skip-optimisation and scope was partially decorative. Callers that filter must pass the
+   * survivors; omitting the field keeps the old evaluate-everything behaviour for callers
+   * that genuinely want it.
+   */
+  ruleIds?: string[]
 }): Promise<EvaluateRuleResult[]> {
   const rules = await prisma.automationRule.findMany({
-    where: { domain: args.domain, trigger: args.trigger, enabled: true },
+    where: {
+      domain: args.domain, trigger: args.trigger, enabled: true,
+      ...(args.ruleIds ? { id: { in: args.ruleIds } } : {}),
+    },
     select: { id: true },
   })
   const results: EvaluateRuleResult[] = []

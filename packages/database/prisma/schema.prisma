@@ -12664,6 +12664,12 @@ model AutomationRule {
   // marketplace ≠ scopeMarketplace. Lets operators run "DE-only" rules
   // without conditions DSL boilerplate.
   scopeMarketplace        String?
+  /// ACR.7 — drag-to-scope. A rule dropped on a portfolio or campaign is bound to it: the
+  /// evaluator only lets it fire on contexts inside that scope. null = account-wide (today's
+  /// behaviour, unchanged). scopePortfolioId holds the EXTERNAL portfolio id, matching
+  /// Campaign.portfolioId; scopeCampaignId holds the local Campaign.id.
+  scopePortfolioId        String?
+  scopeCampaignId         String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

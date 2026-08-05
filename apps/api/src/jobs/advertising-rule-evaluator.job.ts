@@ -35,6 +35,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { evaluateAllRulesForTrigger } from '../services/automation-rule.service.js'
+import { contextIdentity, ruleMatchesScope } from '../services/automation-rule-scope.js'
 import { microsToCents } from '../services/ads-core/metrics-math.js'
 import cron from 'node-cron'
 import { ruleWindowBounds } from '@nexus/shared/data-vintage'
@@ -397,25 +398,60 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
   // looks healthy either way. Counting capped/failed is what makes that visible.
   let capped = 0
   let failed = 0
-  for (const ctx of contexts) {
-    // scopeMarketplace filter is enforced when querying the rule list:
-    // we pre-fetch rules and skip contexts whose marketplace doesn't
-    // match the rule's scopeMarketplace setting.
-    const rules = await prisma.automationRule.findMany({
-      where: {
-        domain: 'advertising',
-        trigger,
-        enabled: true,
-        OR: [{ scopeMarketplace: null }, { scopeMarketplace: ctx.marketplace }],
-      },
-      select: { id: true },
+
+  /**
+   * ACR.7 — scope is ENFORCED here now, not merely hinted.
+   *
+   * The old shape queried a scoped rule list per context and used it only as a skip-check;
+   * the evaluation call then ran EVERY enabled rule for the trigger, so a DE-scoped rule
+   * still fired on IT contexts whenever any rule passed the check. With drag-to-scope
+   * (portfolio/campaign binding) that hole would have made every drop a lie, so the filtered
+   * survivors are now passed INTO the evaluator via ruleIds.
+   *
+   * Rules are fetched once per trigger; identity maps are built once from the contexts; the
+   * per-context filter is pure (`ruleMatchesScope`).
+   */
+  const rules = await prisma.automationRule.findMany({
+    where: { domain: 'advertising', trigger, enabled: true },
+    select: { id: true, scopeMarketplace: true, scopePortfolioId: true, scopeCampaignId: true },
+  })
+  if (rules.length === 0) return { evaluations, matches, capped, failed }
+
+  // Identity maps, only if any rule actually scopes below marketplace level.
+  const needsCampaignIdentity = rules.some((r) => r.scopePortfolioId != null || r.scopeCampaignId != null)
+  const extToLocal = new Map<string, string>()
+  const localToPortfolio = new Map<string, string | null>()
+  if (needsCampaignIdentity) {
+    const exts = new Set<string>()
+    const locals = new Set<string>()
+    for (const ctx of contexts) {
+      const c = ctx as unknown as { campaign?: { id?: string }; searchTerm?: { externalCampaignId?: string } }
+      if (c.campaign?.id) locals.add(c.campaign.id)
+      if (c.searchTerm?.externalCampaignId) exts.add(c.searchTerm.externalCampaignId)
+    }
+    const camps = await prisma.campaign.findMany({
+      where: { OR: [
+        ...(locals.size ? [{ id: { in: [...locals] } }] : []),
+        ...(exts.size ? [{ externalCampaignId: { in: [...exts] } }] : []),
+      ] },
+      select: { id: true, externalCampaignId: true, portfolioId: true },
     })
-    if (rules.length === 0) continue
+    for (const c of camps) {
+      if (c.externalCampaignId) extToLocal.set(c.externalCampaignId, c.id)
+      localToPortfolio.set(c.id, c.portfolioId)
+    }
+  }
+
+  for (const ctx of contexts) {
+    const identity = contextIdentity(ctx, extToLocal, localToPortfolio)
+    const applicable = rules.filter((r) => ruleMatchesScope(r, identity))
+    if (applicable.length === 0) continue
     const results = await evaluateAllRulesForTrigger({
       domain: 'advertising',
       trigger,
       context: ctx,
       forceDryRun,
+      ruleIds: applicable.map((r) => r.id),
     })
     evaluations += results.length
     matches += results.filter((r) => r.matched).length

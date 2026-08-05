@@ -108,10 +108,13 @@ export async function runReviewRuleEvaluatorOnce(): Promise<{
       select: { id: true },
     })
     if (rules.length === 0) continue
+    // ACR.7 — pass the scoped survivors. Without ruleIds the evaluator re-queries every
+    // enabled rule for the trigger and the filter above is only a skip-check.
     const results = await evaluateAllRulesForTrigger({
       domain: 'reviews',
       trigger: 'REVIEW_SPIKE_DETECTED',
       context: ctx,
+      ruleIds: rules.map((r) => r.id),
     })
     totalEvaluations += results.length
     totalMatches += results.filter((r) => r.matched).length

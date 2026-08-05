@@ -6426,6 +6426,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           id: true, name: true, trigger: true, enabled: true, dryRun: true, autonomyLevel: true,
           actions: true, maxExecutionsPerDay: true, maxValueCentsEur: true,
           maxDailyAdSpendCentsEur: true, scopeMarketplace: true,
+          scopePortfolioId: true, scopeCampaignId: true,
           evaluationCount: true, matchCount: true, executionCount: true,
           lastEvaluatedAt: true, lastMatchedAt: true, lastExecutedAt: true, createdAt: true,
         },
@@ -6467,6 +6468,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { resolveAutonomy } = await import('../services/advertising/ads-autonomy.js')
     const { graduationCeiling } = await import('../services/advertising/ads-graduation.js')
+    const { ruleCategory, RULE_CATEGORY_META } = await import('../services/advertising/rule-category.js')
+
+    // ACR.7 — resolve scope ids to names once, so every consumer shows "portfolio: Xavia GALE IT"
+    // rather than an opaque id.
+    const scopedPortfolioIds = [...new Set(rules.map((r) => r.scopePortfolioId).filter((x): x is string => !!x))]
+    const scopedCampaignIds = [...new Set(rules.map((r) => r.scopeCampaignId).filter((x): x is string => !!x))]
+    const [scopedPortfolios, scopedCampaigns] = await Promise.all([
+      scopedPortfolioIds.length
+        ? prisma.amazonAdsPortfolio.findMany({ where: { externalPortfolioId: { in: scopedPortfolioIds } }, select: { externalPortfolioId: true, name: true } })
+        : Promise.resolve([]),
+      scopedCampaignIds.length
+        ? prisma.campaign.findMany({ where: { id: { in: scopedCampaignIds } }, select: { id: true, name: true } })
+        : Promise.resolve([]),
+    ])
+    const portfolioName = new Map(scopedPortfolios.map((p) => [p.externalPortfolioId, p.name]))
+    const campaignName = new Map(scopedCampaigns.map((c) => [c.id, c.name]))
 
     const items = rules.map((r) => {
       const actionTypes = (Array.isArray(r.actions) ? r.actions : [])
@@ -6483,6 +6500,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         ceilingReason: ceiling.reason,
         blockedBy: ceiling.blockedBy,
         actionTypes: actionTypes.filter((t) => !['notify', 'alert_operator', 'log_only'].includes(t)),
+        // ACR.7 — colour carries the grouping now that emojis are gone from names.
+        category: ruleCategory(actionTypes),
+        categoryColor: RULE_CATEGORY_META[ruleCategory(actionTypes)].color,
+        categoryLabel: RULE_CATEGORY_META[ruleCategory(actionTypes)].label,
+        scope: r.scopeCampaignId
+          ? { kind: 'campaign' as const, id: r.scopeCampaignId, name: campaignName.get(r.scopeCampaignId) ?? r.scopeCampaignId }
+          : r.scopePortfolioId
+            ? { kind: 'portfolio' as const, id: r.scopePortfolioId, name: portfolioName.get(r.scopePortfolioId) ?? r.scopePortfolioId }
+            : { kind: 'account' as const, id: null, name: null },
         caps: {
           perDay: r.maxExecutionsPerDay,
           perExecutionCents: r.maxValueCentsEur,
@@ -6502,6 +6528,37 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       }
     })
     return { items, protectedTerms: protectionCount }
+  })
+
+  /**
+   * ACR.7 — bind or unbind a rule's scope (the drag-and-drop write path).
+   *
+   * scopePortfolioId = external portfolio id (matches Campaign.portfolioId); scopeCampaignId =
+   * local Campaign.id. Explicit null clears. Setting one clears the other — "this campaign
+   * only" and "this portfolio only" are alternative answers to the same question, and holding
+   * both would make the narrower one silently win while the UI showed the wider one.
+   */
+  fastify.patch('/advertising/autonomy/rules/:id/scope', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = request.body as { scopePortfolioId?: string | null; scopeCampaignId?: string | null }
+    const rule = await prisma.automationRule.findUnique({ where: { id }, select: { id: true, name: true, domain: true } })
+    if (!rule || rule.domain !== 'advertising') { reply.code(404); return { ok: false, error: 'not_found' } }
+
+    let data: { scopePortfolioId: string | null; scopeCampaignId: string | null }
+    if (body.scopeCampaignId != null) {
+      const c = await prisma.campaign.findUnique({ where: { id: body.scopeCampaignId }, select: { id: true, name: true } })
+      if (!c) { reply.code(400); return { ok: false, error: 'campaign not found' } }
+      data = { scopeCampaignId: c.id, scopePortfolioId: null }
+    } else if (body.scopePortfolioId != null) {
+      const pf = await prisma.amazonAdsPortfolio.findFirst({ where: { externalPortfolioId: body.scopePortfolioId }, select: { name: true } })
+      if (!pf) { reply.code(400); return { ok: false, error: 'portfolio not found' } }
+      data = { scopePortfolioId: body.scopePortfolioId, scopeCampaignId: null }
+    } else {
+      data = { scopePortfolioId: null, scopeCampaignId: null }
+    }
+    await prisma.automationRule.update({ where: { id }, data })
+    logger.warn('[ACR7-RULE-SCOPE]', { ruleId: id, name: rule.name, ...data, actor: actorFromHeaders(request.headers as Record<string, unknown>) })
+    return { ok: true, ruleId: id, ...data }
   })
 
   fastify.patch('/advertising/autonomy/rules/:id', async (request, reply) => {

@@ -26,6 +26,7 @@ import {
   AlertTriangle, ArrowLeft, ArrowRight, Check, Crown, Info, Pause, Play, RefreshCw, X,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { AutomationDock, ruleDropProps, setRuleScope } from '../../_shared/AutomationDock'
 import './family-cockpit.css'
 
 /* ── contract (mirrors ads-family-cockpit.service.ts) ─────────────────────── */
@@ -80,6 +81,7 @@ export function FamilyCockpitClient() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [budgetEdit, setBudgetEdit] = useState<Record<string, string>>({})
+  const [dropMsg, setDropMsg] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -125,6 +127,12 @@ export function FamilyCockpitClient() {
     } finally { setBusy(null) }
   }
 
+  const bindRule = async (rule: { id: string; name: string }, scope: { scopePortfolioId?: string; scopeCampaignId?: string }, label: string) => {
+    const ok = await setRuleScope(rule.id, scope)
+    setDropMsg(ok ? `“${rule.name}” now fires only inside ${label}.` : 'Bind failed — the scope change was rejected.')
+    setTimeout(() => setDropMsg(null), 5000)
+  }
+
   if (loading && !ck) return <div className="fc-empty">Loading…</div>
   if (err) return <div className="fc-banner err" role="alert"><AlertTriangle size={15} /> {err}</div>
   if (!ck) return <div className="fc-empty">Portfolio not found.</div>
@@ -133,9 +141,10 @@ export function FamilyCockpitClient() {
   const covRows = cov?.rows ?? []
 
   return (
-    <div className="fc">
+    <div className="fc fc--with-dock">
+      <div className="fc-maincol">
       <header className="fc-head">
-        <div className="fc-head-main">
+        <div className="fc-head-main" {...ruleDropProps((rule) => void bindRule(rule, { scopePortfolioId: ck.portfolio.externalPortfolioId }, `portfolio ${ck.portfolio.name}`))}>
           <Link href="/marketing/ads/portfolios" className="fc-back"><ArrowLeft size={14} /> Portfolios</Link>
           <h1>{ck.portfolio.name}</h1>
           <span className={`fc-state ${(ck.portfolio.state ?? '').toLowerCase()}`}>{ck.portfolio.state ?? '—'}</span>
@@ -156,6 +165,8 @@ export function FamilyCockpitClient() {
         <div><span className="k">Page-one share</span><span className="v">{cov?.measured ? pct(cov.totals.share) : '—'}</span></div>
         <div><span className="k">Portfolio cap</span><span className="v">{ck.portfolio.budgetAmountCents == null ? 'No cap' : eur(ck.portfolio.budgetAmountCents)}</span></div>
       </div>
+
+      {dropMsg && <div className="fc-banner ok"><Check size={15} /> {dropMsg}</div>}
 
       <nav className="fc-tabs" role="tablist">
         {TABS.map((t) => (
@@ -188,7 +199,11 @@ export function FamilyCockpitClient() {
               </tr></thead>
               <tbody>
                 {ck.campaigns.map((c) => (
-                  <tr key={c.id} className={c.status !== 'ENABLED' ? 'off' : ''}>
+                  <tr
+                    key={c.id}
+                    className={c.status !== 'ENABLED' ? 'off' : ''}
+                    {...ruleDropProps((rule) => void bindRule(rule, { scopeCampaignId: c.id }, c.name))}
+                  >
                     <td className="l" title={c.name}>{c.name}</td>
                     <td>
                       <button
@@ -399,6 +414,10 @@ export function FamilyCockpitClient() {
           </p>
         </>
       )}
+      </div>
+      {/* ACR.7 — drop a rule on the header to bind it to this portfolio, or on a campaign row
+          to bind it to that campaign alone. */}
+      <AutomationDock onChanged={() => void load()} />
     </div>
   )
 }
