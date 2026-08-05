@@ -33,6 +33,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
+import { gunzipSync } from 'node:zlib'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -291,6 +292,27 @@ export class AmazonAdsQuotaError extends Error {
   }
 }
 
+/**
+ * Amazon's v3/v4 APIs READ through POST — `/sp/campaigns/list`, `/sb/v4/campaigns/list`
+ * and eight more. Classifying by HTTP verb alone therefore counted every one of them as
+ * a WRITE, which inverts the very asymmetry the two ledgers exist to express: the write
+ * ledger fails CLOSED because an unmetered write can breach the regional quota and mutate
+ * the live account. A `/list` call cannot mutate anything, so on a store outage it should
+ * fail OPEN like every other read.
+ *
+ * Found during the ACR Stage 5 SB/SD audit: a degraded Redis blocked the SB read
+ * (`POST /sb/v4/campaigns/list`) while the GET-based SD read beside it sailed through —
+ * so the audit reported SB unverifiable for a reason that had nothing to do with SB.
+ *
+ * `POST /reporting/reports` is deliberately NOT included: it creates a report job, so it
+ * stays fail-closed with the writes.
+ */
+export function isMutatingCall(method: string, path: string): boolean {
+  if (method === 'GET') return false
+  const pathname = path.split('?')[0]
+  return !(method === 'POST' && pathname.endsWith('/list'))
+}
+
 /** One unit per OUTBOUND REQUEST, including each retry — Amazon counts them all. */
 async function reserveAmazon(region: string, isWrite: boolean): Promise<void> {
   if (quotaBypassed()) return
@@ -400,7 +422,7 @@ export async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
       method: opts.method,
       headers,
       body: opts.body != null ? JSON.stringify(opts.body) : undefined,
-    }, { region: opts.region, isWrite: opts.method !== 'GET' })
+    }, { region: opts.region, isWrite: isMutatingCall(opts.method, opts.path) })
     if (!res.ok) {
       const text = await res.text()
       // ACR.0.6 — carry the status and body ON the error, not only inside the
@@ -1236,19 +1258,29 @@ export interface CreateCampaignInput {
    * didn't pick one" means.
    */
   portfolioId?: string
+  /**
+   * ACR Stage 5 — return the exact payload without calling Amazon.
+   *
+   * Checked BEFORE the sandbox short-circuit, so a dry run answers the same way in every
+   * mode. Without that ordering the SP dry run silently fell through to the sandbox branch
+   * and reported "no active ads connection", which is both wrong and reassuring — the worst
+   * combination for a preview whose entire job is showing the operator what will be sent.
+   */
+  dryRun?: boolean
 }
-export async function createCampaign(ctx: ClientContext, input: CreateCampaignInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
-  if (adsMode() === 'sandbox') {
-    const externalId = `sb-camp-${randomUUID().slice(0, 8)}`
-    logger.info('[ADS-SANDBOX] createCampaign', { profileId: ctx.profileId, input, externalId })
-    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
-  }
+export async function createCampaign(ctx: ClientContext, input: CreateCampaignInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown }> {
   const v3: Record<string, unknown> = {
     name: input.name, targetingType: input.targetingType, state: (input.state ?? 'enabled').toUpperCase(),
     budget: { budget: input.dailyBudget, budgetType: 'DAILY' },
     dynamicBidding: { strategy: { legacyForSales: 'LEGACY_FOR_SALES', autoForSales: 'AUTO_FOR_SALES', manual: 'MANUAL' }[input.biddingStrategy ?? 'legacyForSales'] },
     ...(input.startDate ? { startDate: input.startDate } : {}),
     ...(input.portfolioId ? { portfolioId: input.portfolioId } : {}),
+  }
+  if (input.dryRun) return { ok: true, mode: 'dry-run', externalId: null, rawResponse: { wouldSend: { method: 'POST', path: '/sp/campaigns', body: { campaigns: [v3] } } } }
+  if (adsMode() === 'sandbox') {
+    const externalId = `sb-camp-${randomUUID().slice(0, 8)}`
+    logger.info('[ADS-SANDBOX] createCampaign', { profileId: ctx.profileId, input, externalId })
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
   }
   const response = await liveCall<{ campaigns?: { success?: Array<{ campaignId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/campaigns', body: { campaigns: [v3] }, contentType: 'application/vnd.spCampaign.v3+json', acceptHeader: 'application/vnd.spCampaign.v3+json' })
   return { ok: true, mode: 'live', externalId: response?.campaigns?.success?.[0]?.campaignId ?? null, rawResponse: response }
@@ -1264,6 +1296,348 @@ export async function createAdGroup(ctx: ClientContext, input: CreateAdGroupInpu
   const v3 = { campaignId: input.externalCampaignId, name: input.name, defaultBid: input.defaultBid, state: (input.state ?? 'enabled').toUpperCase() }
   const response = await liveCall<{ adGroups?: { success?: Array<{ adGroupId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/adGroups', body: { adGroups: [v3] }, contentType: 'application/vnd.spAdGroup.v3+json', acceptHeader: 'application/vnd.spAdGroup.v3+json' })
   return { ok: true, mode: 'live', externalId: response?.adGroups?.success?.[0]?.adGroupId ?? null, rawResponse: response }
+}
+
+// ── ACR Stage 5 — SD and SB campaign creates ─────────────────────────────
+//
+// `createCampaign` above is Sponsored Products and ONLY Sponsored Products: it posts to
+// `/sp/campaigns` with the `spCampaign.v3` mime and sends `targetingType` + `dynamicBidding`,
+// neither of which SD accepts. `createCampaignLocal` has taken `type: 'SP' | 'SB' | 'SD'`
+// since AX.4 and mapped it to the right local `adProduct` — while sending every one of them
+// to the SP endpoint. Nobody noticed because no UI ever offered SB or SD.
+//
+// The three families disagree on nearly every convention, so these were written against the
+// raw JSON of this account's own 15 SD + 4 SB campaigns (`scripts/_acr5-sbsd-shapes.mts`)
+// rather than from documentation. The differences that actually bite:
+//
+//   field        SP (v3)              SD (legacy)            SB (v4)
+//   ─────────────────────────────────────────────────────────────────────────
+//   body         { campaigns: [...] } bare ARRAY             { campaigns: [...] }
+//   campaignId   string               NUMBER                 string
+//   startDate    YYYY-MM-DD           **YYYYMMDD**           YYYY-MM-DD
+//   state        UPPERCASE            lowercase              UPPERCASE
+//   budgetType   DAILY                "daily"                "DAILY"
+//   extras       targetingType,       tactic, costType,      brandEntityId, goal,
+//                dynamicBidding       deliveryProfile        kpi, bidding
+//
+// Every one of these creates a live entity that can spend money, so they all support
+// `dryRun`, which returns the exact payload WITHOUT calling Amazon.
+
+export type CreateDryRun = { ok: true; mode: 'dry-run'; externalId: null; rawResponse: { wouldSend: { method: string; path: string; body: unknown } } }
+
+const sdDate = (d: Date): string =>
+  `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
+const isoDate = (d: Date): string => d.toISOString().slice(0, 10)
+
+/** SD tactic: T00020 = contextual product/category targeting, T00030 = audiences (views/interests). */
+export type SdTactic = 'T00020' | 'T00030'
+
+export interface CreateSdCampaignInput {
+  name: string
+  dailyBudget: number
+  /** Defaults to PAUSED — an SD campaign that starts enabled starts spending. */
+  state?: 'enabled' | 'paused'
+  tactic?: SdTactic
+  costType?: 'cpc' | 'vcpm'
+  startDate?: Date
+  portfolioId?: string
+  dryRun?: boolean
+}
+export async function createSdCampaign(ctx: ClientContext, input: CreateSdCampaignInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown }> {
+  const body = [{
+    name: input.name,
+    budgetType: 'daily',
+    budget: input.dailyBudget,
+    costType: input.costType ?? 'cpc',
+    startDate: sdDate(input.startDate ?? new Date()),
+    state: input.state ?? 'paused',
+    tactic: input.tactic ?? 'T00020',
+    ...(input.portfolioId ? { portfolioId: Number(input.portfolioId) } : {}),
+  }]
+  if (input.dryRun) return { ok: true, mode: 'dry-run', externalId: null, rawResponse: { wouldSend: { method: 'POST', path: '/sd/campaigns', body } } }
+  if (adsMode() === 'sandbox') {
+    const externalId = `sb-sdcamp-${randomUUID().slice(0, 8)}`
+    logger.info('[ADS-SANDBOX] createSdCampaign', { input, externalId })
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+  }
+  // SD answers with a bare array of per-entity results; `code` is 'SUCCESS' on the happy path.
+  const response = await liveCall<Array<{ code?: string; campaignId?: number | string; details?: string }>>({
+    ...ctx, method: 'POST', path: '/sd/campaigns', body,
+    contentType: 'application/json', acceptHeader: 'application/json',
+  })
+  const first = response?.[0]
+  const id = first?.campaignId == null ? null : String(first.campaignId)
+  if (!id) logger.warn('[ACR.5] createSdCampaign returned no campaignId', { response })
+  return { ok: !!id, mode: 'live', externalId: id, rawResponse: response }
+}
+
+export interface CreateSdAdGroupInput {
+  externalCampaignId: string
+  name: string
+  defaultBid: number
+  state?: 'enabled' | 'paused'
+  tactic?: SdTactic
+  /** Amazon rejects an SD ad group whose tactic disagrees with its campaign's. */
+  bidOptimization?: 'clicks' | 'conversions' | 'reach'
+  creativeType?: 'IMAGE' | 'VIDEO'
+  dryRun?: boolean
+}
+export async function createSdAdGroup(ctx: ClientContext, input: CreateSdAdGroupInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown }> {
+  const body = [{
+    campaignId: Number(input.externalCampaignId),
+    name: input.name,
+    defaultBid: input.defaultBid,
+    state: input.state ?? 'paused',
+    tactic: input.tactic ?? 'T00020',
+    bidOptimization: input.bidOptimization ?? 'conversions',
+    creativeType: input.creativeType ?? 'IMAGE',
+  }]
+  if (input.dryRun) return { ok: true, mode: 'dry-run', externalId: null, rawResponse: { wouldSend: { method: 'POST', path: '/sd/adGroups', body } } }
+  if (adsMode() === 'sandbox') {
+    const externalId = `sb-sdadg-${randomUUID().slice(0, 8)}`
+    logger.info('[ADS-SANDBOX] createSdAdGroup', { input, externalId })
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+  }
+  const response = await liveCall<Array<{ code?: string; adGroupId?: number | string; details?: string }>>({
+    ...ctx, method: 'POST', path: '/sd/adGroups', body,
+    contentType: 'application/json', acceptHeader: 'application/json',
+  })
+  const first = response?.[0]
+  const id = first?.adGroupId == null ? null : String(first.adGroupId)
+  if (!id) logger.warn('[ACR.5] createSdAdGroup returned no adGroupId', { response })
+  return { ok: !!id, mode: 'live', externalId: id, rawResponse: response }
+}
+
+/**
+ * SB keywords — the LEGACY v3 API at `/sb/keywords`, not `/sb/v4/*`.
+ *
+ * Establishing this took a wrong turn worth recording. `/sb/v4/keywords/list` answers 403 with an
+ * AWS-gateway error, and so does `/sb/v4/negativeKeywords/list`, which led to a premature
+ * conclusion that the whole SB keyword mime family was unreachable. It was not: `GET /sb/keywords`
+ * had answered **406 "No match for accept header"**, and 406 means the PATH EXISTS and only
+ * content negotiation failed. Walking Accept headers against it found
+ * `application/vnd.sbkeyword.v3+json`, which returns this account's real keywords.
+ *
+ * **406 is a lead, 404 is a dead end.** Do not read them as the same failure.
+ *
+ * Conventions are the SD legacy ones, not SB v4's: bare array, NUMERIC ids, lowercase
+ * `matchType`/`state`, bid as a bare number.
+ */
+export interface SbKeywordDTO {
+  keywordId?: number | string
+  adGroupId?: number | string
+  campaignId?: number | string
+  keywordText?: string
+  matchType?: string
+  state?: string
+  bid?: number
+}
+const SB_KEYWORD_MIME = 'application/vnd.sbkeyword.v3+json'
+
+export async function listSbKeywords(ctx: ClientContext, opts: { externalCampaignIds?: string[] }): Promise<SbKeywordDTO[]> {
+  if (adsMode() === 'sandbox') return []
+  // The legacy endpoint takes no campaign filter in the body; filter what it returns.
+  const all = await liveCall<SbKeywordDTO[]>({
+    ...ctx, method: 'GET', path: '/sb/keywords', acceptHeader: SB_KEYWORD_MIME,
+  })
+  const want = new Set(opts.externalCampaignIds ?? [])
+  return want.size ? (all ?? []).filter((k) => want.has(String(k.campaignId))) : (all ?? [])
+}
+
+export interface CreateSbKeywordInput {
+  externalCampaignId: string
+  externalAdGroupId: string
+  keywordText: string
+  matchType: 'EXACT' | 'PHRASE' | 'BROAD'
+  bid: number
+  state?: 'enabled' | 'paused'
+  dryRun?: boolean
+}
+export async function createSbKeyword(ctx: ClientContext, input: CreateSbKeywordInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown }> {
+  const body = [{
+    campaignId: Number(input.externalCampaignId),
+    adGroupId: Number(input.externalAdGroupId),
+    keywordText: input.keywordText,
+    matchType: input.matchType.toLowerCase(), // legacy API is lowercase, unlike SP v3
+    state: input.state ?? 'enabled',
+    bid: input.bid,
+  }]
+  if (input.dryRun) return { ok: true, mode: 'dry-run', externalId: null, rawResponse: { wouldSend: { method: 'POST', path: '/sb/keywords', body } } }
+  if (adsMode() === 'sandbox') {
+    const externalId = `sb-sbkw-${randomUUID().slice(0, 8)}`
+    logger.info('[ADS-SANDBOX] createSbKeyword', { input, externalId })
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+  }
+  const response = await liveCall<Array<{ code?: string; keywordId?: number | string; details?: string }>>({
+    ...ctx, method: 'POST', path: '/sb/keywords', body,
+    contentType: SB_KEYWORD_MIME, acceptHeader: SB_KEYWORD_MIME,
+  })
+  const first = response?.[0]
+  const id = first?.keywordId == null ? null : String(first.keywordId)
+  if (!id) logger.warn('[ACR.5] createSbKeyword returned no keywordId', { response })
+  return { ok: !!id, mode: 'live', externalId: id, rawResponse: response }
+}
+
+/**
+ * SB ad groups — `POST /sb/v4/adGroups/list`. Read-only.
+ *
+ * Added so `verifyLaunch` can actually check SB ad groups. Before this, SB coverage was
+ * CAMPAIGN-only, so every SB ad group and ad came back `uncovered` — verification was weakest
+ * at exactly the entities Stage 5 started creating.
+ *
+ * Returns no `defaultBid`, because the resource has none. `verifyEntity` skips any field Amazon
+ * does not report, so the local ad group's bid is correctly not held against it.
+ */
+export interface SbAdGroupDTO { adGroupId?: string; campaignId?: string; name?: string; state?: string }
+export async function listSbAdGroups(ctx: ClientContext, opts: { externalCampaignIds?: string[] }): Promise<SbAdGroupDTO[]> {
+  if (adsMode() === 'sandbox') return []
+  const ids = opts.externalCampaignIds ?? []
+  if (!ids.length) return []
+  const out: SbAdGroupDTO[] = []
+  let nextToken: string | undefined
+  let pages = 0
+  do {
+    const res = await liveCall<{ adGroups?: SbAdGroupDTO[]; nextToken?: string }>({
+      profileId: ctx.profileId, region: ctx.region, method: 'POST', path: '/sb/v4/adGroups/list',
+      body: { maxResults: 100, campaignIdFilter: { include: ids }, ...(nextToken ? { nextToken } : {}) },
+      contentType: 'application/vnd.sbadgroupresource.v4+json',
+      acceptHeader: 'application/vnd.sbadgroupresource.v4+json',
+    })
+    for (const g of res.adGroups ?? []) out.push(g)
+    nextToken = res.nextToken
+  } while (nextToken && ++pages < 20)
+  return out
+}
+
+/**
+ * SB ads (creatives) — `POST /sb/v4/ads/list`. Read-only.
+ *
+ * Exists so a new SB ad can be built from this account's OWN brand assets rather than from an
+ * asset-upload flow that does not exist yet: an existing creative carries the brand logo's
+ * asset-library id, the registered brand name and the store landing page, all of which are
+ * required and none of which are derivable from our database.
+ */
+export interface SbAdDTO {
+  adId?: string
+  adGroupId?: string
+  campaignId?: string | number
+  name?: string
+  state?: string
+  creative?: {
+    brandName?: string
+    headline?: string
+    brandLogoAssetID?: string
+    creativeStatus?: string
+    type?: string
+    asins?: string[]
+  }
+  landingPage?: { pageType?: string; url?: string }
+}
+export async function listSbAds(ctx: ClientContext, opts: { externalCampaignIds?: string[] }): Promise<SbAdDTO[]> {
+  if (adsMode() === 'sandbox') return []
+  const ids = opts.externalCampaignIds ?? []
+  if (!ids.length) return []
+  const out: SbAdDTO[] = []
+  let nextToken: string | undefined
+  let pages = 0
+  do {
+    const res = await liveCall<{ ads?: SbAdDTO[]; nextToken?: string }>({
+      profileId: ctx.profileId, region: ctx.region, method: 'POST', path: '/sb/v4/ads/list',
+      body: { maxResults: 100, campaignIdFilter: { include: ids }, ...(nextToken ? { nextToken } : {}) },
+      contentType: 'application/vnd.sbadresource.v4+json',
+      acceptHeader: 'application/vnd.sbadresource.v4+json',
+    })
+    for (const a of res.ads ?? []) out.push(a)
+    nextToken = res.nextToken
+  } while (nextToken && ++pages < 20)
+  return out
+}
+
+/**
+ * SB ad groups — `POST /sb/v4/adGroups`, v4 mime, `{ adGroups: [...] }`.
+ *
+ * The fourth place `/sp/*` was hardcoded. `createAdGroupLocal` special-cased SD and let SB fall
+ * through to `/sp/adGroups`, which attaches an ad group to nothing and answers 200.
+ *
+ * **SB ad groups carry NO defaultBid** — verified against this account's 5 live SB ad groups,
+ * which return only `{adGroupId, campaignId, name, state}`. SB bids at the target level, so
+ * sending a bid here is not merely redundant, it is a field the resource does not have.
+ * Ids are STRINGS (SD's are numbers) and state is UPPERCASE (SD's is lowercase).
+ */
+export interface CreateSbAdGroupInput {
+  externalCampaignId: string
+  name: string
+  state?: 'enabled' | 'paused'
+  dryRun?: boolean
+}
+export async function createSbAdGroup(ctx: ClientContext, input: CreateSbAdGroupInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown }> {
+  const body = {
+    adGroups: [{
+      name: input.name,
+      campaignId: input.externalCampaignId,
+      state: (input.state ?? 'paused').toUpperCase(),
+    }],
+  }
+  if (input.dryRun) return { ok: true, mode: 'dry-run', externalId: null, rawResponse: { wouldSend: { method: 'POST', path: '/sb/v4/adGroups', body } } }
+  if (adsMode() === 'sandbox') {
+    const externalId = `sb-sbadg-${randomUUID().slice(0, 8)}`
+    logger.info('[ADS-SANDBOX] createSbAdGroup', { input, externalId })
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+  }
+  const response = await liveCall<{ adGroups?: { success?: Array<{ adGroupId: string }>; error?: unknown[] } }>({
+    ...ctx, method: 'POST', path: '/sb/v4/adGroups', body,
+    contentType: 'application/vnd.sbadgroupresource.v4+json',
+    acceptHeader: 'application/vnd.sbadgroupresource.v4+json',
+  })
+  const id = response?.adGroups?.success?.[0]?.adGroupId ?? null
+  if (!id) logger.warn('[ACR.5] createSbAdGroup returned no adGroupId', { response })
+  return { ok: !!id, mode: 'live', externalId: id, rawResponse: response }
+}
+
+export interface CreateSbCampaignInput {
+  name: string
+  dailyBudget: number
+  /** Brand Registry binding. Read off an existing SB campaign; SB cannot be created without it. */
+  brandEntityId: string
+  state?: 'enabled' | 'paused'
+  goal?: 'PAGE_VISIT' | 'BRAND_IMPRESSION_SHARE'
+  kpi?: 'CLICKS' | 'IMPRESSIONS'
+  startDate?: Date
+  portfolioId?: string
+  bidOptimization?: boolean
+  dryRun?: boolean
+}
+export async function createSbCampaign(ctx: ClientContext, input: CreateSbCampaignInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown }> {
+  const body = {
+    campaigns: [{
+      name: input.name,
+      budgetType: 'DAILY',
+      budget: input.dailyBudget,
+      costType: 'CPC',
+      startDate: isoDate(input.startDate ?? new Date()),
+      state: (input.state ?? 'paused').toUpperCase(),
+      brandEntityId: input.brandEntityId,
+      goal: input.goal ?? 'PAGE_VISIT',
+      kpi: input.kpi ?? 'CLICKS',
+      isMultiAdGroupsEnabled: true,
+      bidding: { bidOptimization: input.bidOptimization ?? false },
+      ...(input.portfolioId ? { portfolioId: input.portfolioId } : {}),
+    }],
+  }
+  if (input.dryRun) return { ok: true, mode: 'dry-run', externalId: null, rawResponse: { wouldSend: { method: 'POST', path: '/sb/v4/campaigns', body } } }
+  if (adsMode() === 'sandbox') {
+    const externalId = `sb-sbcamp-${randomUUID().slice(0, 8)}`
+    logger.info('[ADS-SANDBOX] createSbCampaign', { input, externalId })
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+  }
+  const response = await liveCall<{ campaigns?: { success?: Array<{ campaignId: string }>; error?: unknown[] } }>({
+    ...ctx, method: 'POST', path: '/sb/v4/campaigns', body,
+    contentType: 'application/vnd.sbcampaignresource.v4+json',
+    acceptHeader: 'application/vnd.sbcampaignresource.v4+json',
+  })
+  const id = response?.campaigns?.success?.[0]?.campaignId ?? null
+  if (!id) logger.warn('[ACR.5] createSbCampaign returned no campaignId', { response })
+  return { ok: !!id, mode: 'live', externalId: id, rawResponse: response }
 }
 
 export interface CreateKeywordInput { externalCampaignId: string; externalAdGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE' | 'BROAD'; bid: number; state?: 'enabled' | 'paused' }
@@ -1288,6 +1662,47 @@ export async function createProductAd(ctx: ClientContext, input: CreateProductAd
   const v3: Record<string, unknown> = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, state: (input.state ?? 'enabled').toUpperCase(), ...(input.sku ? { sku: input.sku } : {}), ...(input.asin ? { asin: input.asin } : {}) }
   const response = await liveCall<{ productAds?: { success?: Array<{ adId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/productAds', body: { productAds: [v3] }, contentType: 'application/vnd.spProductAd.v3+json', acceptHeader: 'application/vnd.spProductAd.v3+json' })
   return { ok: true, mode: 'live', externalId: response?.productAds?.success?.[0]?.adId ?? null, rawResponse: response }
+}
+
+/**
+ * ACR Stage 5 — SD product ads. `createProductAd` above is `/sp/productAds` and SP-only, so
+ * routing an SD ad through it would attach the ad to nothing — the same silent failure the
+ * campaign create had. Shape read off this account's 230 existing SD product ads: numeric ids,
+ * lowercase state, and `sku`/`asin` side by side.
+ *
+ * SD accepts either identifier (unlike SP, which genuinely needs the seller SKU — see
+ * `resolveSellerSku`), so prefer the SKU when we hold one and fall back to the ASIN.
+ */
+export interface CreateSdProductAdInput {
+  externalCampaignId: string
+  externalAdGroupId: string
+  sku?: string
+  asin?: string
+  state?: 'enabled' | 'paused'
+  dryRun?: boolean
+}
+export async function createSdProductAd(ctx: ClientContext, input: CreateSdProductAdInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown }> {
+  const body = [{
+    campaignId: Number(input.externalCampaignId),
+    adGroupId: Number(input.externalAdGroupId),
+    ...(input.sku ? { sku: input.sku } : {}),
+    ...(input.asin ? { asin: input.asin } : {}),
+    state: input.state ?? 'paused',
+  }]
+  if (input.dryRun) return { ok: true, mode: 'dry-run', externalId: null, rawResponse: { wouldSend: { method: 'POST', path: '/sd/productAds', body } } }
+  if (adsMode() === 'sandbox') {
+    const externalId = `sb-sdad-${randomUUID().slice(0, 8)}`
+    logger.info('[ADS-SANDBOX] createSdProductAd', { input, externalId })
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+  }
+  const response = await liveCall<Array<{ code?: string; adId?: number | string; details?: string }>>({
+    ...ctx, method: 'POST', path: '/sd/productAds', body,
+    contentType: 'application/json', acceptHeader: 'application/json',
+  })
+  const first = response?.[0]
+  const id = first?.adId == null ? null : String(first.adId)
+  if (!id) logger.warn('[ACR.5] createSdProductAd returned no adId', { response })
+  return { ok: !!id, mode: 'live', externalId: id, rawResponse: response }
 }
 
 // ── Product / category / auto targeting (AX2.1) — v3 SP /sp/targets POST.
@@ -1500,6 +1915,14 @@ export async function fetchReport(
     await new Promise((r) => setTimeout(r, 10_000))
     const status = await liveCall<{
       status: string
+      /**
+       * 🔴 Amazon returns the presigned download URL as `url`, NOT `location`.
+       * Verified live 2026-08-05 on a COMPLETED report: keys are
+       * {configuration, createdAt, endDate, failureReason, fileSize, generatedAt, name,
+       *  reportId, startDate, status, updatedAt, url, urlExpiresAt} — no `location` at all.
+       * Both are accepted below so this cannot break if Amazon ever sends the other.
+       */
+      url?: string
       location?: string
       fileSize?: number
     }>({
@@ -1511,15 +1934,50 @@ export async function fetchReport(
       // below are both logged, which is what makes a stuck report visible.
       skipCallLog: true,
     })
-    if (status.status === 'COMPLETED' && status.location) {
+    // ── 🔴 ACR.0.2-bis, 2026-08-05 ─────────────────────────────────────────────────────────
+    // This condition read `status.status === 'COMPLETED' && status.location`. Amazon sends the
+    // URL as `url`, so `status.location` was ALWAYS undefined and a finished report fell
+    // through to the "pending" branch and polled until the ceiling.
+    //
+    // That is the real cause of twelve consecutive nights of tos-is-ingest `errors=9`, and it
+    // means the earlier fix — raising the ceiling 10 → 45 minutes — could not have worked: the
+    // measured report took **26 seconds** to generate (createdAt 19:52:11 → generatedAt
+    // 19:52:37, fileSize 9,944). A longer ceiling only fails more slowly.
+    //
+    // Another two-vocabularies defect, the same class as EXACT/_EXACT and isNegative.
+    const downloadUrl = status.url ?? status.location
+    if (status.status === 'COMPLETED' && downloadUrl) {
       logger.info('[ADS-LIVE] report ready, downloading', { reportId, fileSize: status.fileSize })
-      const dlRes = await fetch(status.location) // presigned URL — no auth header
+      const dlRes = await fetch(downloadUrl) // presigned URL — no auth header
       if (!dlRes.ok) throw new Error(`[ADS-LIVE] report download failed ${dlRes.status}`)
-      const json = await dlRes.json()
-      return json as ReportRow[]
+
+      // ── 🔴 ACR.0.2-bis, second layer ────────────────────────────────────────────────────
+      // The report is requested as `format: 'GZIP_JSON'` and S3 serves those bytes RAW — no
+      // Content-Encoding header — so fetch does not transparently inflate them and `.json()`
+      // chokes on the gzip magic number:
+      //     Unexpected token '\u001f', "\u001f\u008b\b\u0000…" is not valid JSON
+      //
+      // This defect sat directly behind the wrong-URL-key one and could never fire while that
+      // was live, because the download branch was unreachable. Fixing the key exposed it on
+      // the very first successful download.
+      //
+      // Sniff the magic bytes rather than trusting the requested format: it costs two byte
+      // comparisons and keeps working if a report type ever comes back uncompressed.
+      const buf = Buffer.from(await dlRes.arrayBuffer())
+      const isGzip = buf.length > 1 && buf[0] === 0x1f && buf[1] === 0x8b
+      const text = (isGzip ? gunzipSync(buf) : buf).toString('utf8')
+      logger.info('[ADS-LIVE] report decoded', { reportId, gzip: isGzip, bytes: buf.length, chars: text.length })
+      return JSON.parse(text) as ReportRow[]
     }
     if (status.status === 'FAILURE') {
       throw new Error(`[ADS-LIVE] report ${reportId} failed on Amazon side`)
+    }
+    // A COMPLETED report we cannot download is a CONTRACT change, not a slow report. Logging it
+    // as "pending" is exactly how the previous defect hid for months.
+    if (status.status === 'COMPLETED') {
+      throw new Error(
+        `[ADS-LIVE] report ${reportId} is COMPLETED but carries no download URL — ` +
+        `keys: ${Object.keys(status).join(', ')}. Amazon's response contract changed.`)
     }
     logger.debug('[ADS-LIVE] report pending', { reportId, attempt, status: status.status })
   }
