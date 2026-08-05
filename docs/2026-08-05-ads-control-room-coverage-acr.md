@@ -1008,11 +1008,26 @@ complete (they count as SUCCESS/PARTIAL), so every run-based health read shows i
 every action inside it fails. Failed actions are now counted, excluded from the "recorded" total,
 and the worst offender is named on its own line.
 
-⏳ **OPEN, operator/engine call — not taken here:** the rule itself is still broken. `bid_up` against
-`target=ad_group` is unsupported by the action handler, so this rule has done nothing but burn
-executions for at least 30 days. Fixing it means changing rule behaviour (or the handler's
-ad-group support), which is an engine decision rather than a console one. `7045c208b` makes it
-visible; it does not make it work.
+✅ **RESOLVED — and it was never one rule.** `bid_down` has handled both `ad_target` and `ad_group`
+since it was written; `bid_up` handled only `ad_target`. They are mirror-image actions authored
+together, so the missing branch is an oversight, not a decision — and its effect on prod was a
+**one-way ratchet: automation could lower ad-group bids but never raise them.** "Reduce bids on
+ACOS spike" (bid_down · ad_group · enabled · live) works today; "New-to-brand optimizer" (bid_up ·
+ad_group · enabled · live) failed 2,032 times on this exact error.
+
+The new branch mirrors bid_down's structure with bid_up's own spend estimate and daily-cap check,
+because raising a bid costs money and lowering one does not (`AdGroup.spendCents` gives the estimate
+the same shape as the ad_target branch).
+
+**Shipped behind a dry-run, by operator decision 2026-08-05.** Repairing the handler alone would
+have taken a 30-day-dead rule straight to writing live bids in one deploy — +10% per fire against
+282 enabled ad groups, condition `campaign.acos ≤ 35%`, its own caps of 10 executions/day and
+€200/day. A rule with **zero successful executions has zero evidence**, which is the exact bar this
+programme's graduation doctrine sets, so `New-to-brand optimizer` (`cmpujofi00018rv016th0ykq9`) was
+set `dryRun=true` BEFORE the fix shipped. It now proposes; the impact strip shows what it would have
+done. Reverting is one field.
+
+⏳ Still open: reviewing a week of its proposals, then deciding whether it graduates to live.
 
 **4. The strip hid its own failure.** It returned `null` on a failed fetch, reasoning that a zeroed
 banner would read as "the fleet did nothing". True of a zero; false of a 500 — and it is why the bug
