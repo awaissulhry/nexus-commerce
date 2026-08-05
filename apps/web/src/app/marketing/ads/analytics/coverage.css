@@ -1,0 +1,80 @@
+/**
+ * ACR.2.2 — Coverage scoreboard styles.
+ *
+ * Light only, per the console-wide decision (see ads.css). Reuses the Control Room's banner,
+ * section-head and refresh classes rather than restating them — the two pages are read in the
+ * same session and a second visual language for the same components would read as two products.
+ */
+
+.cov { padding: 0 0 48px; }
+.cov-empty { font-size: 13px; color: #7b8798; padding: 28px 24px; }
+
+.cov-top {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 24px;
+  border: 1px solid #dfe5ec; border-radius: 9px; background: #fff;
+  padding: 16px 18px; margin: 4px 0 14px;
+}
+.cov-hero-k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: #8d97a6; font-weight: 700; }
+.cov-hero-v {
+  font-size: 30px; font-weight: 650; color: #1c2530; line-height: 1.15; margin-top: 3px;
+  display: flex; align-items: baseline; gap: 10px; font-variant-numeric: tabular-nums;
+}
+.cov-hero-sub { font-size: 12.5px; font-weight: 500; color: #7b8798; letter-spacing: 0; }
+.cov-hero-note { font-size: 12px; color: #7b8798; margin: 5px 0 0; max-width: 68ch; line-height: 1.5; }
+
+.cov-controls { display: flex; align-items: flex-end; gap: 10px; flex-shrink: 0; }
+.cov-field { display: flex; flex-direction: column; gap: 5px; }
+.cov-field span { font-size: 11.5px; font-weight: 600; color: #46536a; text-transform: uppercase; letter-spacing: 0.03em; }
+.cov-field select {
+  font-size: 12.5px; color: #1c2530; background: #fff;
+  border: 1px solid #d7dee7; border-radius: 6px; padding: 6px 9px; min-width: 190px;
+}
+
+/* ── headroom ────────────────────────────────────────────────────────────── */
+.cov-head-list { list-style: none; margin: 0; padding: 0; border: 1px solid #dfe5ec; border-radius: 9px; background: #fff; overflow: hidden; }
+.cov-head-list li {
+  display: grid; grid-template-columns: minmax(0, 1fr) 110px 78px 108px;
+  align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid #f0f3f6; font-size: 12.5px;
+}
+.cov-head-list li:last-child { border-bottom: 0; }
+.cov-head-term { color: #1c2530; font-weight: 550; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cov-head-market, .cov-head-share { text-align: right; font-variant-numeric: tabular-nums; color: #46536a; }
+.cov-head-kw { text-align: right; font-size: 11.5px; color: #7b8798; }
+/* A big market with no keyword at all is the most actionable row on the page. */
+.cov-head-kw.none { color: #8a6320; font-weight: 650; }
+
+/* ── the table ───────────────────────────────────────────────────────────── */
+.cov-tablewrap { border: 1px solid #dfe5ec; border-radius: 9px; background: #fff; overflow-x: auto; }
+.cov-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.cov-table th {
+  text-align: right; padding: 9px 12px; font-size: 10.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em; color: #8d97a6;
+  border-bottom: 1px solid #e3e7ec; white-space: nowrap; background: #fbfcfd;
+}
+.cov-table th.l, .cov-table td.l { text-align: left; }
+.cov-table td { padding: 7px 12px; text-align: right; border-bottom: 1px solid #f4f6f9; color: #34404f; font-variant-numeric: tabular-nums; }
+.cov-table tbody tr:last-child td { border-bottom: 0; }
+.cov-table tbody tr:hover td { background: #f9fbfd; }
+.cov-table td.l { color: #1c2530; font-weight: 500; }
+
+/* Share is the point of the page, so it gets the width and the only chart ink. */
+.cov-table th.share, .cov-table td.share { width: 200px; }
+.cov-table td.share { display: flex; align-items: center; gap: 9px; justify-content: flex-end; }
+.cov-bar { flex: 1; height: 6px; border-radius: 3px; background: #eef1f5; overflow: hidden; min-width: 60px; }
+.cov-bar-fill { display: block; height: 100%; background: #1f6fde; border-radius: 3px; }
+.cov-bar-v { min-width: 52px; text-align: right; font-weight: 600; color: #1c2530; }
+
+/* Two or more of ours on one page — the thing that turned out NOT to be the constraint. */
+.cov-table td.multi { color: #14724d; font-weight: 650; }
+/* No keyword at all on a real market. */
+.cov-table td.none { color: #8a6320; font-weight: 600; }
+
+.cov-search { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; border: 1px solid #d7dee7; border-radius: 6px; padding: 4px 9px; background: #fff; }
+.cov-search input { border: 0; outline: 0; font-size: 12.5px; color: #1c2530; width: 160px; background: transparent; }
+.cov-search svg { color: #8d97a6; flex-shrink: 0; }
+
+@media (max-width: 900px) {
+  .cov-top { flex-direction: column; gap: 14px; }
+  .cov-head-list li { grid-template-columns: minmax(0, 1fr) 88px 66px; }
+  .cov-head-kw { display: none; }
+}

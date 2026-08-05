@@ -6380,6 +6380,25 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
    * requests in the same minute cannot legitimately differ, and the rank forecast walks every
    * enabled schedule through 24 hours.
    */
+  /**
+   * ACR.2.2 — the coverage scoreboard: how much of page one we own, per keyword.
+   *
+   * Cached briefly: SQP is weekly data, so two requests a minute apart cannot differ, and the
+   * per-term target subquery is the expensive part.
+   */
+  fastify.get('/advertising/coverage/scoreboard', async (request, reply) => {
+    const q = request.query as { marketplace?: string; week?: string; limit?: string }
+    const { getCoverageScoreboard, coverageMarketplaces } = await import('../services/advertising/ads-coverage.service.js')
+    const markets = await coverageMarketplaces()
+    const board = await getCoverageScoreboard({
+      marketplace: q.marketplace && markets.includes(q.marketplace) ? q.marketplace : markets[0] ?? 'IT',
+      week: q.week,
+      limit: q.limit ? Number(q.limit) : undefined,
+    })
+    reply.header('Cache-Control', 'private, max-age=120')
+    return { ...board, marketplaces: markets }
+  })
+
   fastify.get('/advertising/control-room/foresight', async (_request, reply) => {
     const { getForesight } = await import('../services/advertising/ads-foresight.service.js')
     reply.header('Cache-Control', 'private, max-age=60')
