@@ -708,6 +708,19 @@ for the new week too — the two-family control needs both on the *same* SERP, a
 six weeks all predate AIREON. Note 2026-07-26 covers only four of AIREON's live days; the first
 clean full week is 2026-08-02, publishable once Amazon releases it. *(`_acr24-aireon-age.mts`.)*
 
+**When it can run — measured, not guessed (2026-08-05).** Week 2026-07-26 is **not yet
+published**: requested today it ends `FATAL — "A client error occurred. Please double check that
+your parameters are valid"`, Amazon's answer for a week it has not released. The request wrote
+nothing (`rows=0 upserted=0`). That confirms ACR.2.1's `lookback >= 2` rule **by measurement**,
+where it had been inferred from a single failure and then encoded as a hard floor in
+`_acr24-sqp-widen.mts` — which made the assumption untestable. The guard is now the script's
+DEFAULT rather than a floor, so "is this week published yet" stays a question Amazon answers in
+one request instead of a constant nobody can check.
+
+**So the two-family control has a date, not a blocker: ~2026-08-09**, when 07-26 becomes
+`lookback = 2` (five of AIREON's live days). The first clean full week, 2026-08-02, follows from
+roughly 08-16. Whichever is chosen, **both** families must be requested.
+
 **What unblocks it:** `_acr24-sqp-widen.mts` resolves ASINs from the **catalogue** by family instead of from stored rows, jackets first. With AIREON measured alongside GALE the within-term control exists and the experiment decides. **It can only run on Railway** — the local SP-API refresh token is revoked (`invalid grant parameter : refresh_token`), so 13 requested reports returned 13 failures and wrote nothing. Cost when run: ~6 minutes of Amazon report generation per ten ASINs, one report per ASIN, upserting in place on `(marketplace, period, startDate, searchQuery, asin)`.
 
 ### ACR.2.4c — the widen's execution record, its WRONG first reading, and what survives
