@@ -7,7 +7,7 @@
  * and Rules (H10's wand-with-stars = WandSparkles, not in 0.263 → Wand2, near-identical).
  */
 import {
-  LayoutGrid, Gauge, BadgeDollarSign, FileSpreadsheet, Atom, Sparkles, ListChecks, Lightbulb, HeartPulse, BarChart3, Table, Briefcase, Wand2, Users, PieChart, History, HelpCircle, Settings, ShoppingBag, ShieldCheck,
+  LayoutGrid, Gauge, BadgeDollarSign, FileSpreadsheet, Atom, ListChecks, Lightbulb, HeartPulse, BarChart3, Table, Briefcase, Wand2, Users, PieChart, History, HelpCircle, Settings, ShoppingBag, ShieldCheck,
   type LucideIcon } from 'lucide-react'
 
 export const ADS_BASE = '/marketing/ads'
@@ -43,7 +43,6 @@ export const ADS_NAV: NavItem[] = [
   { label: 'Dashboard', route: 'dashboard', Icon: Gauge },
   { label: 'Budget Manager', route: 'budget-manager', Icon: BadgeDollarSign },
   { label: 'AI Advertising', route: 'ai-advertising', Icon: Atom },
-  { label: 'AI Control', route: 'autopilot', Icon: Sparkles },
   { label: 'Suggestions', route: 'suggestions', Icon: ListChecks },
   { label: 'Recommendations', route: 'recommendations', Icon: Lightbulb },
   { label: 'Alerts & Health', route: 'health', Icon: HeartPulse },
@@ -70,9 +69,15 @@ export const ADS_NAV: NavItem[] = [
   // the anomaly breaker — most of which are not rules at all. Filing it as a rule type would
   // repeat the category error that made the old autonomy board feel smaller than the machine.
   //
-  // "AI Control" (route: autopilot) stays for now. It is retired once this surface has been
-  // used in anger — replacing a working page before its replacement is proven is the wrong
-  // order, and keeping both lets them be compared.
+  // ACR.1.6 — "AI Control" (route: autopilot) is RETIRED from the rail. Its autonomy board is
+  // now this room's Rules section — same endpoint, same dial, same graduation ceilings, beside
+  // the engines the board never listed — and keeping two surfaces that edit the same rules is
+  // how they drift. The condition set when the Control Room shipped ("used in anger, UI pass
+  // done") is met: it has been read on prod and three layout defects found there are fixed.
+  //
+  // Mission Control was NOT superseded; it is a view of the account's shape. It keeps
+  // /marketing/ads/autopilot and is reached from the Control Room's Today tab, because it is a
+  // map rather than a control surface. Net rail count is down one, never up.
   { label: 'Rules & Automation', route: 'rules-automation', Icon: Wand2, children: [{ label: 'Control Room', route: 'rules-automation/control-room' }] },
   { label: 'AMC', route: 'amc', Icon: Users, children: [{ label: 'AMC Insights', route: 'amc' }, { label: 'Audience Insights', route: 'amc/audiences' }] },
   { label: 'Reporting', route: 'reporting', Icon: PieChart, children: [{ label: 'Brand Metrics', route: 'reporting/brand-metrics' }] },

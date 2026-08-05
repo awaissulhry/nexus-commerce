@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, AlertOctagon, Info, ArrowRight, CheckCircle2, RefreshCw } from 'lucide-react'
+import { AlertTriangle, AlertOctagon, Info, ArrowRight, CheckCircle2, RefreshCw, Gauge } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 type Severity = 'critical' | 'warning' | 'info'
@@ -116,9 +116,20 @@ export function TodayTab() {
             {totals.info > 0 && <span className="acr-pill info">{totals.info} worth knowing</span>}
             {open === 0 && <span className="acr-pill ok"><CheckCircle2 size={12} /> Nothing needs you</span>}
           </div>
-          <button type="button" className="acr-refresh" onClick={() => void load()} disabled={loading}>
-            <RefreshCw size={13} /> {loading ? 'Checking…' : 'Re-check'}
-          </button>
+          <div className="acr-today-actions">
+            {/*
+              ACR.1.6 — Mission Control lost its rail entry with the rest of "AI Control", but the
+              canvas itself was never superseded: it is the only view of the account's SHAPE.
+              It lives here because it is a map, not a control surface, and the rail is kept short
+              on purpose. Nothing else links to it, so without this the canvas is unreachable.
+            */}
+            <Link href="/marketing/ads/autopilot" className="acr-refresh">
+              <Gauge size={13} /> Open the map
+            </Link>
+            <button type="button" className="acr-refresh" onClick={() => void load()} disabled={loading}>
+              <RefreshCw size={13} /> {loading ? 'Checking…' : 'Re-check'}
+            </button>
+          </div>
         </div>
       </div>
 

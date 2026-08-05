@@ -36,6 +36,11 @@ interface Rule {
   caps: { perDay: number | null; perExecutionCents: number | null; perDayCents: number | null }
   week: { acted: number; proposed: number; failed: number }
   lastExecutedAt: string | null
+  /* Carried over from the autonomy board this section replaces: how long the rule has existed
+     and how often it has ever matched. A rule acting on its own after 3 matches in 90 days is a
+     different proposition from one acting after 300, and the week counts cannot show that. */
+  lifetime?: { matches?: number } | null
+  ageDays?: number | null
 }
 
 const ago = (iso: string | null) => {
@@ -90,13 +95,18 @@ export function RulesSection() {
 
   const acting = rules.filter((r) => r.level === 'AUTO').length
   const asking = rules.filter((r) => r.level === 'PROPOSE').length
+  const off = rules.filter((r) => r.level === 'OFF').length
+  /* Ordered by how much authority the rule holds. The board this replaces grouped into four
+     labelled sections; sorting gives the same scan — "what is acting on its own" reads off the
+     top — without a second layout inside a section that already sits under Engines. */
+  const ordered = [...rules].sort((a, b) => RANK[b.level] - RANK[a.level] || a.name.localeCompare(b.name))
 
   return (
     <section className="acr-rules">
       <div className="acr-sec-head">
         <h2>Rules</h2>
         <span className="acr-sec-count">
-          {rules.length} total · {acting} acting · {asking} asking first
+          {rules.length} total · {acting} acting · {asking} asking first{off > 0 ? ` · ${off} off` : ''}
         </span>
       </div>
 
@@ -112,7 +122,7 @@ export function RulesSection() {
       )}
 
       <ul className="acr-list">
-        {rules.map((r) => (
+        {ordered.map((r) => (
           <li key={r.id} className="acr-row rule">
             <div className="acr-row-main">
               <div className="acr-row-name">
@@ -122,7 +132,14 @@ export function RulesSection() {
               <p className="acr-what">
                 {r.actionTypes.length ? r.actionTypes.join(' · ') : 'alert only'}
               </p>
-              <p className="acr-why">
+              <p
+                className="acr-why"
+                title={
+                  r.lifetime?.matches != null && r.ageDays != null
+                    ? `${r.lifetime.matches} lifetime matches over ${r.ageDays} days`
+                    : undefined
+                }
+              >
                 {r.week.acted} acted · {r.week.proposed} proposed
                 {r.week.failed > 0 ? ` · ${r.week.failed} failed` : ''} this week — {ago(r.lastExecutedAt)}
                 {r.caps.perDay != null ? ` · max ${r.caps.perDay}/day` : ''}
