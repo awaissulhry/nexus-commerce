@@ -11,8 +11,11 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { isAiKillSwitchOn } from '../services/ai/providers/index.js'
+import { isAutonomyLevel, AUTONOMY_LEVELS } from '../services/advertising/ads-autonomy.js'
+import { decideApproval } from '../services/agents/approval-gate.service.js'
 import { executeCharter } from '../services/agent-fleet/agent-executor.js'
 import {
+  bustCharterCache,
   FLEET_CHARTERS,
   listCharters,
   seedCharters,
@@ -124,6 +127,121 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/agent/fleet/charters/seed', async () => {
     return seedCharters()
   })
+
+  // NAF.D — the operator's charter policy control (dial #4, cap #5).
+  // The cap is enforced HERE, server-side: a request above the code
+  // charter's autonomyCap is refused, not clamped — the operator should
+  // know the ceiling exists, not silently get less than they asked.
+  fastify.patch<{
+    Params: { key: string }
+    Body: { enabled?: boolean; autonomyLevel?: string }
+  }>('/agent/fleet/charters/:key', async (request, reply) => {
+    const { key } = request.params
+    const def = FLEET_CHARTERS[key]
+    if (!def) return reply.code(404).send({ error: `unknown charter: ${key}` })
+    const data: Record<string, unknown> = {}
+    if (request.body?.enabled !== undefined) data.enabled = !!request.body.enabled
+    if (request.body?.autonomyLevel !== undefined) {
+      const level = request.body.autonomyLevel
+      if (!isAutonomyLevel(level)) {
+        return reply.code(400).send({ error: `invalid autonomyLevel "${level}"` })
+      }
+      const capIdx = AUTONOMY_LEVELS.indexOf(def.autonomyCap)
+      if (AUTONOMY_LEVELS.indexOf(level) > capIdx) {
+        return reply.code(400).send({
+          error: `autonomyLevel ${level} exceeds this charter's cap (${def.autonomyCap})`,
+        })
+      }
+      data.autonomyLevel = level
+    }
+    if (Object.keys(data).length === 0) {
+      return reply.code(400).send({ error: 'nothing to update' })
+    }
+    const updated = await prisma.agentCharter.updateMany({
+      where: { key, version: def.version },
+      data,
+    })
+    if (updated.count === 0) {
+      return reply.code(404).send({ error: `charter ${key} v${def.version} not seeded — POST /agent/fleet/charters/seed first` })
+    }
+    bustCharterCache()
+    return { ok: true, charters: await listCharters() }
+  })
+
+  // NAF.D — the fleet approval inbox (control #15).
+  const FLEET_TOOLS = ['create-negative-keyword', 'graduate-keyword', 'set-target-bid']
+
+  fastify.get<{ Querystring: { status?: string } }>(
+    '/agent/fleet/approvals',
+    async (request) => {
+      const status = request.query.status ?? 'pending'
+      const approvals = await prisma.agentApproval.findMany({
+        where: { toolName: { in: FLEET_TOOLS }, ...(status ? { status } : {}) },
+        orderBy: { requestedAt: 'desc' },
+        take: 100,
+      })
+      const runs = await prisma.agentRun.findMany({
+        where: { id: { in: approvals.map((a) => a.agentRunId) } },
+        select: { id: true, agentKey: true, orchestrationId: true },
+      })
+      const runById = new Map(runs.map((r) => [r.id, r]))
+      return {
+        approvals: approvals.map((a) => ({
+          ...a,
+          charterKey: runById.get(a.agentRunId)?.agentKey ?? null,
+          orchestrationId: runById.get(a.agentRunId)?.orchestrationId ?? null,
+        })),
+      }
+    },
+  )
+
+  fastify.post<{
+    Params: { id: string }
+    Body: { decision: 'approve' | 'reject'; reason?: string }
+  }>('/agent/fleet/approvals/:id/decide', async (request, reply) => {
+    const decision = request.body?.decision
+    const reason = (request.body?.reason ?? '').trim()
+    if (decision !== 'approve' && decision !== 'reject') {
+      return reply.code(400).send({ error: 'decision must be approve or reject' })
+    }
+    // A rejection without a reason is a wasted datapoint — the reject
+    // reason is the highest-value exemplar input (spec Part 10).
+    if (decision === 'reject' && !reason) {
+      return reply.code(400).send({ error: 'a one-line reason is required to reject' })
+    }
+    const out = await decideApproval(request.params.id, decision, 'operator', reason || undefined)
+    if (!out.ok) return reply.code(409).send(out)
+    return out
+  })
+
+  fastify.post<{ Body: { charterKey?: string; reason?: string } }>(
+    '/agent/fleet/approvals/reject-all',
+    async (request, reply) => {
+      const charterKey = (request.body?.charterKey ?? '').trim()
+      const reason = (request.body?.reason ?? '').trim()
+      if (!charterKey || !reason) {
+        return reply.code(400).send({ error: 'charterKey and reason are required' })
+      }
+      const runs = await prisma.agentRun.findMany({
+        where: { agentKey: charterKey },
+        select: { id: true },
+      })
+      const pending = await prisma.agentApproval.findMany({
+        where: {
+          status: 'pending',
+          toolName: { in: FLEET_TOOLS },
+          agentRunId: { in: runs.map((r) => r.id) },
+        },
+        select: { id: true },
+      })
+      let rejected = 0
+      for (const p of pending) {
+        const out = await decideApproval(p.id, 'reject', 'operator', reason)
+        if (out.ok) rejected++
+      }
+      return { ok: true, rejected, of: pending.length }
+    },
+  )
 
   fastify.post<{ Params: { key: string } }>(
     '/agent/fleet/run/:key',
