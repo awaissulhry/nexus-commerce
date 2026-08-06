@@ -27,6 +27,11 @@ import {
 } from 'recharts'
 import { getBackendUrl } from '@/lib/backend-url'
 import { DecisionCard } from './DecisionCard'
+import {
+  EntityGraphCanvas,
+  RELATION_META,
+  type EntityGraphData,
+} from './EntityGraphCanvas'
 import { FleetMapCanvas, type CanvasFinding, type NodeRunInfo } from './FleetMapCanvas'
 import { Term } from './glossary'
 import { FirstVisitIntro, HowItWorks } from './HowItWorks'
@@ -157,6 +162,9 @@ export function FleetTab() {
   const [loading, setLoading] = useState(true)
   const [updatedAt, setUpdatedAt] = useState<number | null>(null)
   const [expandedWorker, setExpandedWorker] = useState<string | null>(null)
+  const [mapView, setMapView] = useState<'workers' | 'entities'>('workers')
+  const [entityGraph, setEntityGraph] = useState<EntityGraphData | null>(null)
+  const [entityLoading, setEntityLoading] = useState(false)
   const [openPlan, setOpenPlan] = useState<string | null>(null)
   const [schedule, setSchedule] = useState<ScheduleJob[]>([])
   const [scorecards, setScorecards] = useState<ScorecardRow[]>([])
@@ -213,6 +221,30 @@ export function FleetTab() {
     const t = setInterval(() => void load({ silent: true }), 60_000)
     return () => clearInterval(t)
   }, [load])
+
+  // FX.10 — the entity graph: overview, or one entity's neighbourhood.
+  const loadEntityGraph = useCallback(
+    async (focus?: { type: string; id: string }) => {
+      setEntityLoading(true)
+      try {
+        const qs = focus ? `?type=${encodeURIComponent(focus.type)}&id=${encodeURIComponent(focus.id)}&depth=2` : ''
+        const r = await fetch(`${backend}/api/agent/fleet/entity-graph${qs}`, {
+          cache: 'no-store',
+        })
+        if (r.ok) setEntityGraph((await r.json()) as EntityGraphData)
+        else setErr(`entity graph: ${r.status}`)
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e))
+      } finally {
+        setEntityLoading(false)
+      }
+    },
+    [backend],
+  )
+
+  useEffect(() => {
+    if (mapView === 'entities' && !entityGraph && !entityLoading) void loadEntityGraph()
+  }, [mapView, entityGraph, entityLoading, loadEntityGraph])
 
   const decide = useCallback(
     async (id: string, decision: 'approve' | 'reject', reason?: string) => {
@@ -422,9 +454,27 @@ export function FleetTab() {
       <section className="acr-card">
         <header className="acr-fl-head">
           <h3>
-            <Bot size={15} /> Fleet map
+            <Bot size={15} /> {mapView === 'workers' ? 'Fleet map' : 'Entity graph'}
           </h3>
           <div className="acr-fl-headright">
+            <div className="acr-eg-toggle" role="tablist" aria-label="Map view">
+              <button
+                role="tab"
+                aria-selected={mapView === 'workers'}
+                className={mapView === 'workers' ? 'on' : ''}
+                onClick={() => setMapView('workers')}
+              >
+                Workers
+              </button>
+              <button
+                role="tab"
+                aria-selected={mapView === 'entities'}
+                className={mapView === 'entities' ? 'on' : ''}
+                onClick={() => setMapView('entities')}
+              >
+                Entity graph
+              </button>
+            </div>
             {fleetState?.halted ? (
               <Term k="running">
                 <span className="acr-fl-pill acr-fl-pill-halt">
@@ -446,13 +496,60 @@ export function FleetTab() {
             </button>
           </div>
         </header>
-        <p className="acr-fl-schedule">
-          Next <Term k="sweep">sweep</Term> {nextOf('fleet-sweep')} · next{' '}
-          <Term k="council">council</Term> {nextOf('fleet-council')} · spent {usd(costToday)} of
-          the <Term k="ceiling">${fleetState?.dailyCeilingUSD?.toFixed(2) ?? '—'} daily ceiling</Term>{' '}
-          · click a worker to see its full profile
-        </p>
-        {graph ? (
+        {mapView === 'workers' ? (
+          <p className="acr-fl-schedule">
+            Next <Term k="sweep">sweep</Term> {nextOf('fleet-sweep')} · next{' '}
+            <Term k="council">council</Term> {nextOf('fleet-council')} · spent {usd(costToday)} of
+            the <Term k="ceiling">${fleetState?.dailyCeilingUSD?.toFixed(2) ?? '—'} daily ceiling</Term>{' '}
+            · click a worker to see its full profile
+          </p>
+        ) : (
+          <>
+            <p className="acr-fl-schedule">
+              {entityGraph?.focus ? (
+                <>
+                  Showing everything within two hops of this entity.{' '}
+                  <button className="acr-eg-link" onClick={() => void loadEntityGraph()}>
+                    ← back to the whole picture
+                  </button>
+                </>
+              ) : (
+                <>
+                  Your campaigns and the relationships the fleet derived between them — click any
+                  card to explore its neighbourhood, including the products behind it.
+                </>
+              )}
+              {entityGraph?.truncated ? ' · view capped, showing the strongest links first' : ''}
+            </p>
+            <div className="acr-eg-legend">
+              {Object.entries(entityGraph?.relationCounts ?? {}).map(([rel, n]) => (
+                <span key={rel} className="acr-eg-legenditem" title={RELATION_META[rel]?.meaning}>
+                  <span
+                    className="acr-eg-swatch"
+                    style={{ background: RELATION_META[rel]?.color ?? '#c3ccd8' }}
+                    aria-hidden
+                  />
+                  {RELATION_META[rel]?.label ?? rel} · {n}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+        {mapView === 'entities' ? (
+          entityLoading && !entityGraph ? (
+            <div className="acr-fl-canvas acr-fl-skeleton" />
+          ) : entityGraph && entityGraph.nodes.length > 0 ? (
+            <EntityGraphCanvas
+              data={entityGraph}
+              onFocus={(type, id) => void loadEntityGraph({ type, id })}
+            />
+          ) : (
+            <p className="acr-fl-empty">
+              No relationships derived yet. The graph rebuilds every night with the{' '}
+              <Term k="sweep">sweep</Term>.
+            </p>
+          )
+        ) : graph ? (
           <FleetMapCanvas
             nodes={graph.nodes}
             edges={graph.edges}

@@ -28,6 +28,10 @@ import {
   haltFleet,
   resumeFleet,
 } from '../services/agent-fleet/fleet-state.service.js'
+import {
+  getEntityGraphOverview,
+  getEntityNeighborhood,
+} from '../services/agent-fleet/entity-graph.service.js'
 import { collectRefs, resolveFleetLabels } from '../services/agent-fleet/fleet-labels.service.js'
 import { getFleetSchedule } from '../services/agent-fleet/fleet-schedule.service.js'
 import { getRunTrace } from '../services/agent-fleet/fleet-trace.service.js'
@@ -171,6 +175,30 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
   // FX.1 — when does the fleet run next, and how did the last runs go.
   fastify.get('/agent/fleet/schedule', async () => {
     return getFleetSchedule()
+  })
+
+  // FX.10 — the entity graph (Phase H), explorable. The bare route is the
+  // campaign↔campaign overview; ?type=&id= focuses one entity and walks
+  // its neighbourhood through the frontier CTE.
+  fastify.get<{
+    Querystring: {
+      type?: string
+      id?: string
+      depth?: string
+      relations?: string
+      limit?: string
+    }
+  }>('/agent/fleet/entity-graph', async (request) => {
+    const { type, id, depth, relations, limit } = request.query
+    const take = Math.min(Number(limit) || 120, 400)
+    if (type && id) {
+      return getEntityNeighborhood(type, id, {
+        depth: Math.min(Math.max(Number(depth) || 2, 1), 3),
+        relations: relations ? relations.split(',').filter(Boolean) : undefined,
+        limit: take,
+      })
+    }
+    return getEntityGraphOverview(take)
   })
 
   // NAF.B — the 14-sweep acceptance evidence: per-sweep validation/cost
