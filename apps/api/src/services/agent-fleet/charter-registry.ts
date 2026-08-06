@@ -18,10 +18,12 @@ import {
   type AutonomyLevel,
 } from '../advertising/ads-autonomy.js'
 import type { CharterDefinition, EffectiveCharter } from './charter-types.js'
+import { amazonAdsDirectorCharter } from './charters/amazon-ads-director.charter.js'
 import { amazonBidTunerCharter } from './charters/amazon-bid-tuner.charter.js'
 import { amazonKeywordHarvesterCharter } from './charters/amazon-keyword-harvester.charter.js'
 import { amazonNegativeMinerCharter } from './charters/amazon-negative-miner.charter.js'
 import { fleetSelftestCharter } from './charters/fleet-selftest.charter.js'
+import { planCriticCharter } from './charters/plan-critic.charter.js'
 
 /** Code truth — a charter absent here does not exist, whatever the DB says. */
 export const FLEET_CHARTERS: Readonly<Record<string, CharterDefinition>> =
@@ -30,6 +32,8 @@ export const FLEET_CHARTERS: Readonly<Record<string, CharterDefinition>> =
     [amazonNegativeMinerCharter.key]: amazonNegativeMinerCharter,
     [amazonKeywordHarvesterCharter.key]: amazonKeywordHarvesterCharter,
     [amazonBidTunerCharter.key]: amazonBidTunerCharter,
+    [amazonAdsDirectorCharter.key]: amazonAdsDirectorCharter,
+    [planCriticCharter.key]: planCriticCharter,
   })
 
 interface DbCharterPolicy {

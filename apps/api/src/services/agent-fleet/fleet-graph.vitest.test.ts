@@ -5,11 +5,13 @@ import { describe, expect, it } from 'vitest'
 import { FLEET_GRAPH, topoLevels, type FleetGraph } from './fleet-graph.js'
 
 describe('FLEET_GRAPH', () => {
-  it('is edge-free with every node an analyst — one flat level until Phase C', () => {
-    expect(FLEET_GRAPH.nodes.map((n) => n.key)).toContain('fleet-selftest')
-    expect(FLEET_GRAPH.nodes.every((n) => n.tier === 'analyst')).toBe(true)
-    expect(FLEET_GRAPH.edges).toEqual([])
-    expect(topoLevels(FLEET_GRAPH)).toHaveLength(1)
+  it('levels as analysts → director → critic (Phase C)', () => {
+    const levels = topoLevels(FLEET_GRAPH)
+    expect(levels).toHaveLength(3)
+    expect(levels[0]).toContain('fleet-selftest')
+    expect(levels[0]).toContain('amazon-negative-miner')
+    expect(levels[1]).toEqual(['amazon-ads-director'])
+    expect(levels[2]).toEqual(['plan-critic'])
   })
 })
 

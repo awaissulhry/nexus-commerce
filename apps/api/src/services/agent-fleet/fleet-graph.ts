@@ -23,16 +23,23 @@ export interface FleetGraph {
   edges: FleetEdge[]
 }
 
-/** Phase B: four analysts, one flat level, no edges — directors arrive in
- *  Phase C and bring the first `finding` edges with them. */
+/** Phase C: analysts feed the director, the director feeds the critic.
+ *  Three topo levels; `fleet-selftest` stays edge-free in level 1. */
 export const FLEET_GRAPH: FleetGraph = {
   nodes: [
     { key: 'fleet-selftest', tier: 'analyst' },
     { key: 'amazon-negative-miner', tier: 'analyst' },
     { key: 'amazon-keyword-harvester', tier: 'analyst' },
     { key: 'amazon-bid-tuner', tier: 'analyst' },
+    { key: 'amazon-ads-director', tier: 'director' },
+    { key: 'plan-critic', tier: 'critic' },
   ],
-  edges: [],
+  edges: [
+    { from: 'amazon-negative-miner', to: 'amazon-ads-director', artifact: 'finding' },
+    { from: 'amazon-keyword-harvester', to: 'amazon-ads-director', artifact: 'finding' },
+    { from: 'amazon-bid-tuner', to: 'amazon-ads-director', artifact: 'finding' },
+    { from: 'amazon-ads-director', to: 'plan-critic', artifact: 'plan' },
+  ],
 }
 
 /**

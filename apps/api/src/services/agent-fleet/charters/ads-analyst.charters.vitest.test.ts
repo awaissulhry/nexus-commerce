@@ -79,13 +79,11 @@ describe('the three analyst charters', () => {
 })
 
 describe('fleet graph', () => {
-  it('is one flat level of four analysts, no edges', () => {
-    const keys = FLEET_GRAPH.nodes.map((n) => n.key).sort()
-    expect(keys).toEqual(
-      ['amazon-bid-tuner', 'amazon-keyword-harvester', 'amazon-negative-miner', 'fleet-selftest'].sort(),
+  it('carries the three analysts in level 1 feeding the director', () => {
+    const levels = topoLevels(FLEET_GRAPH)
+    expect(levels[0]).toEqual(
+      expect.arrayContaining(['amazon-bid-tuner', 'amazon-keyword-harvester', 'amazon-negative-miner']),
     )
-    expect(FLEET_GRAPH.edges).toEqual([])
-    expect(topoLevels(FLEET_GRAPH)).toHaveLength(1)
-    expect(topoLevels(FLEET_GRAPH)[0]).toHaveLength(4)
+    expect(levels).toHaveLength(3)
   })
 })

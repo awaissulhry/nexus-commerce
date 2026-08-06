@@ -176,7 +176,7 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
     'ad-rank-defend', 'ad-dayparting', 'ad-budget-enforce', 'budget-pool-rebalance',
     'ads-auto-bid', 'ads-auto-harvest', 'ads-anomaly-guard', 'top-of-search-defense',
     'tos-is-ingest', 'sqp-ingest', 'ads-structural-reconcile', 'drain-ads-sync',
-    'ads-coverage-engine', 'fleet-sweep',
+    'ads-coverage-engine', 'fleet-sweep', 'fleet-council',
   ]
 
   const [state, facts, enabledSchedules, enabledPlans, budgetPlans, pools, allowlisted, totalCampaigns, coverageSets, enabledAnalysts] = await Promise.all([

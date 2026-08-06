@@ -16,6 +16,8 @@ import { bidProposalsBuilder } from './observations/bid-proposals.observation.js
 import { cronHealthBuilder } from './observations/cron-health.observation.js'
 import { harvestCandidatesBuilder } from './observations/harvest-candidates.observation.js'
 import { negativeCandidatesBuilder } from './observations/negative-candidates.observation.js'
+import { openFindingsBuilder } from './observations/open-findings.observation.js'
+import { pendingPlanBuilder } from './observations/pending-plan.observation.js'
 
 export interface ObservationScope {
   entityType?: string
@@ -44,6 +46,8 @@ const BUILDERS: Readonly<Record<string, ObservationBuilder>> = Object.freeze({
   [negativeCandidatesBuilder.key]: negativeCandidatesBuilder,
   [harvestCandidatesBuilder.key]: harvestCandidatesBuilder,
   [bidProposalsBuilder.key]: bidProposalsBuilder,
+  [openFindingsBuilder.key]: openFindingsBuilder,
+  [pendingPlanBuilder.key]: pendingPlanBuilder,
 })
 
 export function listObservationKeys(): string[] {

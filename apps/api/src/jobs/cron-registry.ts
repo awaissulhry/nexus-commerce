@@ -299,6 +299,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   }),
   // NAF.B — the nightly analyst sweep (read-only fleet; findings only).
   'fleet-sweep': () => import('./fleet-sweep.job.js').then((m) => m.runFleetSweepOnce()),
+  // NAF.C — the weekly council (director + critic; queues approvals, no writes).
+  'fleet-council': () => import('./fleet-sweep.job.js').then((m) => m.runFleetCouncilJobOnce()),
   'ads-auto-harvest': () => import('../services/advertising/ads-auto-harvest.service.js').then(async (m) => {
     const r = await m.runAutoHarvestOnce()
     return r.skipped

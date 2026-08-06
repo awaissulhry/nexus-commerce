@@ -1401,8 +1401,9 @@ async function start() {
     // deliberately independent of the ads write-engine flag (the fleet is
     // read-only and must be startable/stoppable on its own).
     markCronStep('fleet:import fleet-sweep.job');
-    const { startFleetSweepCron } = await import('./jobs/fleet-sweep.job.js');
+    const { startFleetSweepCron, startFleetCouncilCron } = await import('./jobs/fleet-sweep.job.js');
     startFleetSweepCron();
+    startFleetCouncilCron();
 
     if (adsCronOn) {
       // Apex diagnostic + resilience: each step marks progress (visible via the

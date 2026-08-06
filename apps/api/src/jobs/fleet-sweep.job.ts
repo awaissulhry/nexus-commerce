@@ -14,6 +14,7 @@
  */
 import cron from 'node-cron'
 import prisma from '../db.js'
+import { runFleetCouncilOnce } from '../services/agent-fleet/fleet-council.service.js'
 import { runFleet } from '../services/agent-fleet/orchestrator.js'
 import { gradeFindings } from '../services/agent-fleet/shadow-grade.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'
@@ -65,4 +66,48 @@ export function startFleetSweepCron(): void {
     void runFleetSweepCron()
   })
   logger.info(`[fleet-sweep] nightly analyst sweep scheduled (${schedule})`)
+}
+
+/* ── NAF.C — the weekly council (analysts → director → critic → queue) ── */
+
+let councilRunning = false
+
+export async function runFleetCouncilJobOnce(): Promise<string> {
+  if (councilRunning) return 'skipped=overlap'
+  councilRunning = true
+  try {
+    const r = await runFleetCouncilOnce()
+    return (
+      `fleet(started=${r.fleet.started} ok=${r.fleet.succeeded} failed=${r.fleet.failed} skipped=${r.fleet.skipped}) ` +
+      `plan=${r.planId ?? 'none'} verdict=${r.finalVerdict ?? 'n/a'} queued=${r.queued} blocked=${r.blocked} expired=${r.expired}` +
+      (r.haltedReason ? ` halted=${r.haltedReason}` : '')
+    )
+  } finally {
+    councilRunning = false
+  }
+}
+
+export async function runFleetCouncilCron(): Promise<void> {
+  await recordCronRun('fleet-council', async () => runFleetCouncilJobOnce()).catch(
+    (err) => logger.error('[fleet-council] cron failed', { error: String(err) }),
+  )
+}
+
+let councilTask: ReturnType<typeof cron.schedule> | null = null
+
+export function startFleetCouncilCron(): void {
+  if (process.env.NEXUS_ENABLE_FLEET_SWEEP_CRON !== '1') {
+    logger.info('[fleet-council] cron disabled (NEXUS_ENABLE_FLEET_SWEEP_CRON != 1)')
+    return
+  }
+  if (councilTask) return
+  const schedule = process.env.NEXUS_FLEET_COUNCIL_SCHEDULE ?? '15 5 * * 1'
+  if (!cron.validate(schedule)) {
+    logger.error(`[fleet-council] invalid schedule "${schedule}" — cron not started`)
+    return
+  }
+  councilTask = cron.schedule(schedule, () => {
+    void runFleetCouncilCron()
+  })
+  logger.info(`[fleet-council] weekly council scheduled (${schedule})`)
 }
