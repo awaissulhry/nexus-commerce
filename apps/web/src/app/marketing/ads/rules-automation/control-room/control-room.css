@@ -904,3 +904,80 @@ a.acr-refresh { text-decoration: none; }
 /* brief */
 .acr-fl-sweeps { margin: 0; padding: 0; list-style: none; font-size: 12.5px; color: #34404f; }
 .acr-fl-sweeps li { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-variant-numeric: tabular-nums; }
+
+/* ── FX.2 — the plan told as a story ─────────────────────────────────── */
+.acr-fl-story { padding: 4px 2px 12px 22px; display: flex; flex-direction: column; gap: 12px; }
+
+/* stepper: four stages, the current one loud */
+.acr-fl-stepper { display: flex; gap: 0; flex-wrap: wrap; padding: 6px 0 2px; }
+.acr-fl-stage { display: flex; align-items: center; gap: 7px; padding-right: 18px; position: relative; }
+.acr-fl-stagedot { width: 9px; height: 9px; border-radius: 50%; background: #c3ccd8; flex: none; }
+.acr-fl-stage.st-done .acr-fl-stagedot { background: #1a9d6a; }
+.acr-fl-stage.st-attention .acr-fl-stagedot { background: #e0b34e; box-shadow: 0 0 0 3px rgba(224, 179, 78, 0.2); }
+.acr-fl-stage.st-stopped .acr-fl-stagedot { background: #d4453f; box-shadow: 0 0 0 3px rgba(212, 69, 63, 0.15); }
+.acr-fl-stagetitle { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #5a6675; }
+.acr-fl-stagedetail { font-size: 12px; color: #34404f; }
+.acr-fl-stagearrow { width: 14px; height: 1px; background: #c3ccd8; margin-left: 12px; }
+
+/* the critic's headline */
+.acr-fl-criticbox {
+  display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px;
+  border-radius: 7px; font-size: 12.5px; line-height: 1.55;
+  color: #9c2f2a; background: #fdf2f2; border: 1px solid #e6bcba;
+}
+.acr-fl-criticbox svg { flex: none; margin-top: 2px; }
+
+.acr-fl-blast { margin: 0; font-size: 12.5px; color: #5a6675; }
+.acr-fl-blast.bad { color: #8a6320; }
+
+/* action cards */
+.acr-fl-actions { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.acr-fl-action {
+  display: flex; flex-direction: column; gap: 3px; padding: 8px 11px;
+  border: 1px solid #eef1f5; border-left-width: 3px; border-radius: 7px; background: #fff;
+}
+.acr-fl-action.v-queued { border-left-color: #e0b34e; }
+.acr-fl-action.v-blocked { border-left-color: #d4453f; }
+.acr-fl-action.v-cleared { border-left-color: #1a9d6a; }
+.acr-fl-action.v-held { border-left-color: #c3ccd8; }
+.acr-fl-actiontext { font-size: 13px; color: #232c37; }
+.acr-fl-actionwhy { font-size: 11.5px; color: #7b8798; }
+.acr-fl-actionreason { font-size: 11.5px; color: #9c2f2a; }
+.acr-fl-vchip {
+  display: inline-flex; align-items: center; gap: 4px; align-self: flex-start;
+  font-size: 10.5px; font-weight: 650; padding: 1px 7px; border-radius: 999px;
+}
+.acr-fl-vchip.v-queued { background: #fff8ec; color: #8a6320; }
+.acr-fl-vchip.v-blocked { background: #fdf2f2; color: #9c2f2a; }
+.acr-fl-vchip.v-cleared { background: #f1faf5; color: #14724d; }
+.acr-fl-vchip.v-held { background: #f1f4f8; color: #5a6675; }
+
+.acr-fl-dropped summary { cursor: pointer; font-size: 12px; color: #7b8798; }
+.acr-fl-dropped ul { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: #5a6675; }
+
+/* checks checklist */
+.acr-fl-checkstoggle {
+  display: flex; align-items: center; gap: 6px; border: 0; background: none;
+  padding: 0; cursor: pointer; font-size: 12.5px; font-weight: 650; color: #34404f;
+}
+.acr-fl-checkstoggle:hover { color: #1f6fde; }
+.acr-fl-checks ul { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.acr-fl-checks li { display: flex; align-items: baseline; gap: 7px; font-size: 12.5px; }
+.acr-fl-checks li svg { flex: none; transform: translateY(1px); }
+.acr-fl-checks li.ck-pass svg { color: #1a9d6a; }
+.acr-fl-checks li.ck-fail svg { color: #d4453f; }
+.acr-fl-checks li.ck-na svg { color: #b3bcc9; }
+.acr-fl-checkq { color: #232c37; font-weight: 600; flex: none; }
+.acr-fl-checknote { color: #7b8798; font-size: 11.5px; }
+
+.acr-fl-narrative p { margin: 8px 0 0; font-size: 12.5px; color: #5a6675; line-height: 1.6; }
+
+.acr-fl-rawtoggle {
+  align-self: flex-start; border: 0; background: none; padding: 0; cursor: pointer;
+  font-size: 11px; color: #b3bcc9; text-decoration: underline dotted;
+}
+.acr-fl-rawtoggle:hover { color: #7b8798; }
+.acr-fl-raw {
+  margin: 0; padding: 10px; border-radius: 7px; background: #f7f9fb;
+  border: 1px solid #eef1f5; font-size: 10.5px; overflow-x: auto; max-height: 380px;
+}

@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { FleetMapCanvas } from './FleetMapCanvas'
+import { PlanStory, type PlanLabels, type StoryPlan } from './PlanStory'
 
 /* ── types mirroring the fleet API ─────────────────────────────────── */
 
@@ -86,19 +87,7 @@ interface FindingRow {
   status: string
   createdAt: string
 }
-interface PlanRow {
-  id: string
-  charterKey: string
-  headline: string
-  narrative: string
-  status: string
-  criticVerdict: string | null
-  criticNotes: { summary?: string; blockedItems?: string[] } | null
-  items: Array<{ findingId: string; rank: number; tool: string }>
-  droppedItems: Array<{ findingId: string; reason: string }>
-  approvalIds: string[]
-  createdAt: string
-}
+type PlanRow = StoryPlan & { charterKey: string }
 interface ApprovalRow {
   id: string
   toolName: string
@@ -146,6 +135,7 @@ export function FleetTab() {
   const [runs, setRuns] = useState<RunRow[]>([])
   const [findings, setFindings] = useState<FindingRow[]>([])
   const [plans, setPlans] = useState<PlanRow[]>([])
+  const [planLabels, setPlanLabels] = useState<PlanLabels>({ campaigns: {}, targets: {} })
   const [approvals, setApprovals] = useState<ApprovalRow[]>([])
   const [sweeps, setSweeps] = useState<SweepRow[]>([])
   const [err, setErr] = useState<string | null>(null)
@@ -178,7 +168,11 @@ export function FleetTab() {
       if (s.ok) setFleetState((await s.json()) as FleetState)
       if (r.ok) setRuns(((await r.json()) as { runs: RunRow[] }).runs)
       if (f.ok) setFindings(((await f.json()) as { findings: FindingRow[] }).findings)
-      if (p.ok) setPlans(((await p.json()) as { plans: PlanRow[] }).plans)
+      if (p.ok) {
+        const pj = (await p.json()) as { plans: PlanRow[]; labels?: PlanLabels }
+        setPlans(pj.plans)
+        setPlanLabels(pj.labels ?? { campaigns: {}, targets: {} })
+      }
       if (a.ok) setApprovals(((await a.json()) as { approvals: ApprovalRow[] }).approvals)
       if (sw.ok) setSweeps(((await sw.json()) as { sweeps: SweepRow[] }).sweeps)
       setErr(null)
@@ -471,43 +465,17 @@ export function FleetTab() {
                 {openPlan === p.id ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 <strong>{p.headline}</strong>
                 <span className={`acr-fl-pill verdict-${p.criticVerdict ?? 'none'}`}>
-                  {p.criticVerdict ?? 'uncritiqued'}
+                  {p.criticVerdict === 'block'
+                    ? 'blocked'
+                    : p.criticVerdict === 'pass'
+                      ? 'passed'
+                      : (p.criticVerdict ?? 'awaiting review')}
                 </span>
-                <span className="acr-fl-pill">{p.status}</span>
                 <span className="acr-fl-sub">
-                  {p.items.length} items · {p.droppedItems.length} dropped · {ago(p.createdAt)}
+                  {p.items.length} action{p.items.length === 1 ? '' : 's'} · {ago(p.createdAt)}
                 </span>
               </button>
-              {openPlan === p.id ? (
-                <div className="acr-fl-planbody">
-                  <p>{p.narrative}</p>
-                  {p.criticNotes?.summary ? (
-                    <p className="acr-fl-critic">Critic: {p.criticNotes.summary}</p>
-                  ) : null}
-                  <ul>
-                    {p.items.map((it) => (
-                      <li key={it.findingId}>
-                        #{it.rank} {it.tool} — finding {it.findingId}
-                        {p.criticNotes?.blockedItems?.includes(it.findingId) ? (
-                          <span className="acr-fl-pill verdict-block">blocked</span>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                  {p.droppedItems.length > 0 ? (
-                    <details>
-                      <summary>{p.droppedItems.length} dropped, with reasons</summary>
-                      <ul>
-                        {p.droppedItems.map((d) => (
-                          <li key={d.findingId}>
-                            {d.findingId}: {d.reason}
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  ) : null}
-                </div>
-              ) : null}
+              {openPlan === p.id ? <PlanStory plan={p} labels={planLabels} /> : null}
             </div>
           ))
         )}
