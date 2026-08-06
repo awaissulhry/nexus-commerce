@@ -23,6 +23,7 @@ import {
   haltFleet,
   resumeFleet,
 } from '../services/agent-fleet/fleet-state.service.js'
+import { getSweepReport } from '../services/agent-fleet/sweep-report.service.js'
 
 const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/agent/fleet/charters', async () => {
@@ -96,6 +97,16 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/agent/fleet/state', async () => {
     return getFleetState()
   })
+
+  // NAF.B — the 14-sweep acceptance evidence: per-sweep validation/cost
+  // stats, dedupeKey stability, agent-vs-engine agreement.
+  fastify.get<{ Querystring: { limit?: string } }>(
+    '/agent/fleet/sweeps',
+    async (request) => {
+      const limit = Math.min(Number(request.query.limit) || 30, 60)
+      return getSweepReport(limit)
+    },
+  )
 
   fastify.post<{ Body: { reason?: string } }>(
     '/agent/fleet/state/halt',
