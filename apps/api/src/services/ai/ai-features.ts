@@ -96,6 +96,34 @@ export const AI_FEATURES: AiFeature[] = [
     description: 'AI ranking of candidate product types in the List Wizard (Gemini).',
     lockedProvider: 'gemini',
   },
+  // NAF (docs/AGENT_FLEET.md) — one key per fleet tier so a whole tier's
+  // model can be retuned in one row. Unregistered keys are invisible in
+  // Settings→Models and isWritableFeatureKey() refuses their overrides.
+  {
+    key: 'agent-fleet-analyst',
+    label: 'Agent Fleet — Analyst tier',
+    description: 'Narrow evidence-reading agents that emit findings (cheap, high volume).',
+  },
+  {
+    key: 'agent-fleet-director',
+    label: 'Agent Fleet — Director tier',
+    description: 'Domain directors that deconflict findings into ranked plans.',
+  },
+  {
+    key: 'agent-fleet-critic',
+    label: 'Agent Fleet — Critic',
+    description: 'Adversarial reviewer of plans before the approval gate.',
+  },
+  {
+    key: 'agent-fleet-strategist',
+    label: 'Agent Fleet — Chief Strategist',
+    description: 'Weekly cross-domain strategy and change-budget allocation.',
+  },
+  {
+    key: 'agent-fleet-auditor',
+    label: 'Agent Fleet — Auditor',
+    description: 'Nightly outcome attribution and agent scorecards.',
+  },
 ]
 
 const BY_KEY = new Map(AI_FEATURES.map((f) => [f.key, f]))
