@@ -1,6 +1,6 @@
 # NAF.B — Three Analysts in OBSERVE — Implementation Plan
 
-> **STATUS: AWAITING USER APPROVAL — do not implement until approved.**
+> **STATUS: APPROVED 2026-08-06 with defaults (Q1 two-step enablement, Q2 defects stay reported, Q3 digest waits for Phase D) — implementation in progress, Phase B only.**
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`) syntax.
 > **Spec:** `docs/AGENT_FLEET.md` Parts 0–3 (invariants) + Part 6 roster (first three Tier-1 analysts) + Part 12 § PHASE B.
 > **Predecessors:** `docs/2026-08-06-naf-a-foundation.md` (Phase A closed on both provider paths) and `docs/2026-08-06-naf-a2-local-provider.md` (A2 — its two findings BIND this phase: the dedupeKey grammar gate and "schema validity ≠ recall").
