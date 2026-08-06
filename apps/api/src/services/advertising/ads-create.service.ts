@@ -1066,8 +1066,11 @@ export async function createNegativeKeywordCampaignLocal(input: { externalCampai
   const camp = await prisma.campaign.findFirst({ where: { externalCampaignId: input.externalCampaignId }, select: { id: true, adGroups: { select: { id: true }, take: 1 } } })
   if (!camp || camp.adGroups.length === 0) return null // no ad group to attach the campaign-level negative to
   const expressionType = `NEGATIVE_${input.matchType}`
+  // Both spellings: sync-stored negatives carry plain 'EXACT'/'PHRASE'
+  // with isNegative=true; only mirror rows carry NEGATIVE_* (pre-F fix,
+  // same defect as negativeExistsLocally).
   const existing = await prisma.adTarget.findFirst({
-    where: { adGroup: { campaignId: camp.id }, isNegative: true, negativeLevel: 'CAMPAIGN', expressionType, expressionValue: input.keywordText },
+    where: { adGroup: { campaignId: camp.id }, isNegative: true, negativeLevel: 'CAMPAIGN', expressionType: { in: [expressionType, input.matchType] }, expressionValue: input.keywordText },
     select: { id: true },
   })
   if (existing) return { id: existing.id, created: false }

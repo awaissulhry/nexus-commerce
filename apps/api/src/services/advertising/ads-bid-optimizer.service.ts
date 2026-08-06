@@ -14,7 +14,7 @@
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { bulkUpdateAdTargetBids } from './ads-mutation.service.js'
+import { bulkUpdateAdTargetBids, type AdsActor } from './ads-mutation.service.js'
 import { ACTION_HANDLERS, type ActionResult } from '../automation-rule.service.js'
 import { computeAdGroupTargetAcos, type AcosMode } from './ads-target-acos.service.js'
 import { fitBetaPrior, shrunkConversionRate, dataConfidence } from './ads-bayesian-bidding.service.js'
@@ -230,11 +230,19 @@ export async function previewBidOptimization(
 
 export async function applyBidOptimization(args: { changes: Array<{ targetId: string; proposedBidCents: number }>; actor?: string; dryRun?: boolean }): Promise<{ applied: number; dryRun: boolean }> {
   if (args.dryRun) return { applied: 0, dryRun: true }
-  const updates = args.changes.map((c) => ({ id: c.targetId, newBidCents: c.proposedBidCents }))
-  if (updates.length === 0) return { applied: 0, dryRun: false }
-  await bulkUpdateAdTargetBids({ updates, actor: args.actor ?? 'bid-optimizer', reason: 'AX.8 target-ACOS optimization' } as never)
-  logger.info('[AX.8] bid optimization applied', { count: updates.length })
-  return { applied: updates.length, dryRun: false }
+  // Pre-F fix (NAF V9): this used to pass `{updates}` (with {id,
+  // newBidCents} rows) into a function whose contract is `{entries:
+  // [{adTargetId, bidCents}]}`, silenced by `as never` — so every
+  // non-dry-run apply crashed on `entries.length` before writing. The
+  // engine's Off dial is why nobody hit it.
+  const entries = args.changes.map((c) => ({ adTargetId: c.targetId, bidCents: c.proposedBidCents }))
+  if (entries.length === 0) return { applied: 0, dryRun: false }
+  const actor: AdsActor = args.actor?.startsWith('user:')
+    ? (args.actor as AdsActor)
+    : `automation:${args.actor ?? 'bid-optimizer'}`
+  const out = await bulkUpdateAdTargetBids({ entries, actor, reason: 'AX.8 target-ACOS optimization' })
+  logger.info('[AX.8] bid optimization applied', { count: out.applied, skipped: out.skipped, failed: out.failed })
+  return { applied: out.applied, dryRun: false }
 }
 
 // ── Automation handler: bid_to_target_acos ────────────────────────────────

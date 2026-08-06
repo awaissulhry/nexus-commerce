@@ -66,7 +66,7 @@ const SP_CAMPAIGN_NEGATIVE_KW_MIME = 'application/vnd.spCampaignNegativeKeyword.
 
 // ── Idempotency probe ────────────────────────────────────────────────
 
-async function existsLocally(args: {
+export async function negativeExistsLocally(args: {
   externalCampaignId: string
   externalAdGroupId?: string
   keywordText: string
@@ -80,9 +80,12 @@ async function existsLocally(args: {
   })
   if (!campaign) return false
 
-  // Match type stored on AdTarget.expressionType is uppercase like
-  // 'NEGATIVE_EXACT' or 'NEGATIVE_PHRASE' (Amazon's v3 vocab) — keep
-  // case consistent.
+  // TWO spellings exist on AdTarget.expressionType: locally-minted mirror
+  // rows carry Amazon's v3 vocab ('NEGATIVE_EXACT'/'NEGATIVE_PHRASE'),
+  // but the v1 sync stores negatives as plain 'EXACT'/'PHRASE' with
+  // isNegative=true — 1,068 such rows on prod. Probing only one spelling
+  // missed every synced negative and re-POSTed it to Amazon (pre-F fix).
+  const spellings = [args.matchType, args.matchType.replace(/^NEGATIVE_/, '')]
   if (args.scope === 'AD_GROUP') {
     if (!args.externalAdGroupId) return false
     const adGroup = await prisma.adGroup.findFirst({
@@ -96,7 +99,7 @@ async function existsLocally(args: {
         isNegative: true,
         negativeLevel: 'AD_GROUP',
         expressionValue: args.keywordText,
-        expressionType: args.matchType,
+        expressionType: { in: spellings },
       },
       select: { id: true },
     })
@@ -112,7 +115,7 @@ async function existsLocally(args: {
       isNegative: true,
       negativeLevel: 'CAMPAIGN',
       expressionValue: args.keywordText,
-      expressionType: args.matchType,
+      expressionType: { in: spellings },
     },
     select: { id: true },
   })
@@ -139,7 +142,7 @@ export async function createNegative(
   const region: AdsRegion = args.region ?? 'EU'
 
   // 1. Idempotency check
-  if (await existsLocally(args)) {
+  if (await negativeExistsLocally(args)) {
     logger.info('[ads-negative-kw] already exists locally — skipping create', {
       profileId: args.profileId,
       keywordText: args.keywordText,
