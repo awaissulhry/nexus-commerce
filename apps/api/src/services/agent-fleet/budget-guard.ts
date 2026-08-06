@@ -18,8 +18,12 @@
  */
 import prisma from '../../db.js'
 
+// The success member carries explicit `undefined` fields because apps/api
+// compiles with strict:false — truthiness narrowing of a discriminated
+// union does NOT apply there, so callers read `.reason`/`.detail` without
+// a narrow. (The vitest files are excluded from tsc and can't catch this.)
 export type BudgetVerdict =
-  | { ok: true }
+  | { ok: true; reason?: undefined; detail?: undefined }
   | {
       ok: false
       reason: 'tokens' | 'tool_calls' | 'charter_day' | 'fleet_day'
