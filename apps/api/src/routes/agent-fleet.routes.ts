@@ -14,6 +14,7 @@ import { isAiKillSwitchOn } from '../services/ai/providers/index.js'
 import { isAutonomyLevel, AUTONOMY_LEVELS } from '../services/advertising/ads-autonomy.js'
 import { decideApproval } from '../services/agents/approval-gate.service.js'
 import { executeCharter } from '../services/agent-fleet/agent-executor.js'
+import { mintExemplarFromDecision } from '../services/agent-fleet/exemplar.service.js'
 import {
   bustCharterCache,
   FLEET_CHARTERS,
@@ -233,6 +234,11 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const out = await decideApproval(request.params.id, decision, 'operator', reason || undefined)
     if (!out.ok) return reply.code(409).send(out)
+    // NAF.E — every decision becomes a precedent. A minting failure must
+    // not fail the decision that already committed.
+    await mintExemplarFromDecision(request.params.id, decision, reason || undefined).catch(
+      (err) => fastify.log.error({ err }, 'exemplar minting failed'),
+    )
     return out
   })
 
@@ -259,7 +265,12 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
       let rejected = 0
       for (const p of pending) {
         const out = await decideApproval(p.id, 'reject', 'operator', reason)
-        if (out.ok) rejected++
+        if (out.ok) {
+          rejected++
+          await mintExemplarFromDecision(p.id, 'reject', reason).catch((err) =>
+            fastify.log.error({ err }, 'exemplar minting failed'),
+          )
+        }
       }
       return { ok: true, rejected, of: pending.length }
     },

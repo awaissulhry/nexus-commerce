@@ -34,6 +34,7 @@ import { checkCharterDayBudget, checkFleetDayBudget, checkRunBudget } from './bu
 import { resolveCharter } from './charter-registry.js'
 import type { EffectiveCharter } from './charter-types.js'
 import { getFleetState } from './fleet-state.service.js'
+import { renderExemplarBlock, retrieveExemplars } from './exemplar.service.js'
 import { getObservation, type ObservationResult } from './observation-builder.js'
 import { recordStep } from './tracing.js'
 
@@ -106,6 +107,7 @@ const CONTRACT_HINTS: Record<OutputSchemaKey, string> = {
 function buildPrompt(
   charter: EffectiveCharter,
   observations: ObservationResult[],
+  exemplarBlock = '',
 ): string {
   const parts: string[] = [charter.systemPrompt, '', '## Evidence']
   for (const o of observations) {
@@ -117,6 +119,7 @@ function buildPrompt(
       '',
     )
   }
+  if (exemplarBlock) parts.push(exemplarBlock, '')
   parts.push('## Output contract', CONTRACT_HINTS[charter.outputSchemaKey])
   return parts.join('\n')
 }
@@ -340,8 +343,23 @@ export async function executeCharter(
       Math.max(1024, Math.floor(charter.maxTokensPerRun / 4)),
     )
 
+    // 2b — operator precedent (NAF.E): the last five decided exemplars
+    // for THIS charter, rendered into the prompt. Analysts have none
+    // (approvals attribute to the queueing run — the director); an empty
+    // store adds nothing, and the step is only traced when it changed
+    // the prompt.
+    const exemplars = await retrieveExemplars(charter.key).catch(() => [])
+    const exemplarBlock = renderExemplarBlock(exemplars)
+    if (exemplarBlock) {
+      await step({
+        type: 'observation',
+        name: 'exemplars',
+        output: { count: exemplars.length },
+      })
+    }
+
     // 3 — generate → validate, retrying once with the error appended.
-    const basePrompt = buildPrompt(charter, observations)
+    const basePrompt = buildPrompt(charter, observations, exemplarBlock)
     let prompt = basePrompt
     let validated: Validated = { ok: false, error: 'not attempted' }
     for (let attempt = 1; attempt <= 2; attempt++) {
