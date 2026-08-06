@@ -783,8 +783,8 @@ a.acr-refresh { text-decoration: none; }
 .acr-pt-mount { margin-top: 26px; }
 
 /* ── NAF.D — the Fleet tab (acr-fl-*). Same light-only palette as the rest of
-   the room; the fleet map is tier columns, not a graph library — six nodes
-   don't earn pan/zoom chrome (revisit at Phase H's entity graph). */
+   the room; the fleet map is xyflow (D-D2), laid out deterministically —
+   tier → column, index → row. */
 .acr-fleet { display: flex; flex-direction: column; gap: 14px; }
 .acr-fl-loading { font-size: 13px; color: #7b8798; }
 .acr-fl-head {
@@ -811,19 +811,16 @@ a.acr-refresh { text-decoration: none; }
 .acr-fl-pill.verdict-block, .acr-fl-pill.verdict-revise { background: #fdf2f2; border-color: #e6bcba; color: #9c2f2a; }
 .acr-fl-pill.verdict-none { background: #fff8ec; border-color: #ecd9ae; color: #8a6320; }
 
-/* fleet map: tier columns left→right */
-.acr-fl-map { display: flex; gap: 26px; align-items: flex-start; overflow-x: auto; padding: 4px 2px; }
-.acr-fl-tier { display: flex; flex-direction: column; gap: 8px; min-width: 190px; }
-.acr-fl-tierlabel {
-  display: flex; align-items: center; justify-content: space-between;
-  font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
-  text-transform: uppercase; color: #8d97a6; margin-bottom: 2px;
-}
-.acr-fl-arrow { color: #c3ccd8; font-size: 13px; }
+/* fleet map: xyflow canvas, nodes styled as room cards */
+.acr-fl-canvas { height: 380px; border: 1px solid #eef1f5; border-radius: 8px; overflow: hidden; }
+.acr-fl-canvas .react-flow__attribution { font-size: 9px; }
+.acr-fl-h { opacity: 0; width: 4px; height: 4px; min-width: 0; min-height: 0; border: 0; }
+.acr-fl-edge text { font-size: 10px; fill: #8d97a6; }
 .acr-fl-node {
   display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
   padding: 9px 11px; border: 1px solid #dfe5ec; border-radius: 8px;
   background: #fff; cursor: pointer; text-align: left; font: inherit;
+  width: 200px;
   transition: border-color 120ms, box-shadow 120ms;
 }
 .acr-fl-node:hover { border-color: #b9c4d2; }

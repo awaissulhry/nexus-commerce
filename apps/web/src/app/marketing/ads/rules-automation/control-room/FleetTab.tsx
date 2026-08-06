@@ -4,11 +4,7 @@
  * NAF.D — the Agent Fleet tab: the six Part-8.2 panels adapted to the
  * Control Room's own conventions (light-only, acr-* classes, plain fetch;
  * this page deliberately avoids the DS DataGrid — see GuardrailGrid).
- *
- * The fleet map renders the DAG as tier columns with SVG edge lines
- * rather than @xyflow/react: six nodes and four edges are legible without
- * pan/zoom chrome, and the interactive graph library earns its place when
- * Phase H's entity graph (thousands of nodes) lands. Recorded deviation.
+ * The fleet map is xyflow per decision D-D2, in FleetMapCanvas.
  *
  * Money/verdict honesty rules carried from Today: no € where there isn't
  * one, empty states say "nothing" credibly, and the brief panel says
@@ -27,6 +23,7 @@ import {
   X,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { FleetMapCanvas } from './FleetMapCanvas'
 
 /* ── types mirroring the fleet API ─────────────────────────────────── */
 
@@ -48,6 +45,7 @@ interface GraphNode {
   tier: string
   enabled: boolean
   autonomyLevel: string
+  degraded: boolean
 }
 interface GraphEdge {
   from: string
@@ -311,16 +309,8 @@ export function FleetTab() {
       .reduce((s, r) => s + Number(r.costUSD), 0)
   }, [runs])
 
-  const tiers: Array<{ label: string; keys: string[] }> = useMemo(() => {
-    const nodes = graph?.nodes ?? []
-    return [
-      { label: 'Analysts', keys: nodes.filter((n) => n.tier === 'analyst').map((n) => n.key) },
-      { label: 'Director', keys: nodes.filter((n) => n.tier === 'director').map((n) => n.key) },
-      { label: 'Critic', keys: nodes.filter((n) => n.tier === 'critic').map((n) => n.key) },
-    ].filter((t) => t.keys.length > 0)
-  }, [graph])
-
   const charterByKey = useMemo(() => new Map(charters.map((c) => [c.key, c])), [charters])
+  const nameByKey = useMemo(() => new Map(charters.map((c) => [c.key, c.name])), [charters])
   const drawerCharter = drawer ? charterByKey.get(drawer) : null
   const drawerRuns = useMemo(
     () => runs.filter((r) => r.agentKey === drawer).slice(0, 5),
@@ -366,33 +356,18 @@ export function FleetTab() {
             </button>
           </div>
         </header>
-        <div className="acr-fl-map">
-          {tiers.map((tier, i) => (
-            <div key={tier.label} className="acr-fl-tier">
-              <div className="acr-fl-tierlabel">
-                {tier.label}
-                {i < tiers.length - 1 ? <span className="acr-fl-arrow">→</span> : null}
-              </div>
-              {tier.keys.map((key) => {
-                const c = charterByKey.get(key)
-                const open = openFindingsByCharter.get(key) ?? 0
-                return (
-                  <button
-                    key={key}
-                    className={`acr-fl-node lv-${(c?.autonomyLevel ?? 'OFF').toLowerCase()} ${drawer === key ? 'on' : ''}`}
-                    onClick={() => setDrawer(drawer === key ? null : key)}
-                  >
-                    <span className="acr-fl-nodename">{c?.name ?? key}</span>
-                    <span className="acr-fl-nodemeta">
-                      {c?.autonomyLevel ?? 'OFF'}
-                      {open > 0 ? <em>{open} open</em> : null}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          ))}
-        </div>
+        {graph ? (
+          <FleetMapCanvas
+            nodes={graph.nodes}
+            edges={graph.edges}
+            nameByKey={nameByKey}
+            openByKey={openFindingsByCharter}
+            selected={drawer}
+            onSelect={(key) => setDrawer(drawer === key ? null : key)}
+          />
+        ) : (
+          <p className="acr-fl-empty">The graph endpoint returned nothing.</p>
+        )}
       </section>
 
       {/* 2 — agent drawer */}
