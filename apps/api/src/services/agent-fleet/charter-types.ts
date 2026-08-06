@@ -38,6 +38,14 @@ export interface CharterDefinition {
   autonomyCap: AutonomyLevel
   /** Cron expr; undefined = orchestrated only. */
   cadence?: string
+  /** NAF.B — regex source every finding's dedupeKey must match. Enforced
+   *  by the executor's validation stage (retry-once path). Absent = not
+   *  enforced (Phase A charters unchanged). Grammar: `<kind>:<entityId>`. */
+  dedupeKeyPattern?: string
+  /** NAF.B — max age of any gathered observation's dataVintage, in hours.
+   *  Enforced BEFORE the model call (a denied run costs $0). Absent = not
+   *  enforced. */
+  maxEvidenceAgeHours?: number
   maxFindingsPerRun: number
   maxToolCallsPerRun: number
   maxTokensPerRun: number

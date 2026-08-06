@@ -110,11 +110,13 @@ type Validated =
   | { ok: true; data: unknown; error?: undefined }
   | { ok: false; error: string; data?: undefined }
 
-/** Parse + schema-validate + evidence-integrity check. Never coerces. */
+/** Parse + schema-validate + evidence-integrity + key-grammar check.
+ *  Never coerces. */
 function validateReply(
   text: string,
   schemaKey: OutputSchemaKey,
   knownEvidenceIds: ReadonlySet<string>,
+  dedupeKeyPattern?: string,
 ): Validated {
   let json: unknown
   try {
@@ -140,6 +142,25 @@ function validateReply(
           error:
             `finding for ${f.entityId} cites evidence id(s) not in this run's observations: ${unknown.join(', ')}. ` +
             `Valid ids: ${[...knownEvidenceIds].join(', ')}`,
+        }
+      }
+    }
+    // NAF.B — the pinned dedupeKey grammar. A key the charter's regex
+    // rejects is a validation failure like any other: retried once with
+    // the pattern named, then the run fails and nothing is stored. This
+    // is what makes the AgentFinding unique a semantic dedupe rather
+    // than a hope (A2 measured 4 key families from one unpinned model).
+    if (dedupeKeyPattern) {
+      const re = new RegExp(dedupeKeyPattern)
+      const bad = (parsed.data as AnalystOutputT).findings.find(
+        (f) => !re.test(f.dedupeKey),
+      )
+      if (bad) {
+        return {
+          ok: false,
+          error:
+            `finding for ${bad.entityId} has dedupeKey "${bad.dedupeKey}" which does not match the required pattern ${dedupeKeyPattern}. ` +
+            `Use exactly <kind>:<entityId> (e.g. "${bad.kind}:${bad.entityId}").`,
         }
       }
     }
@@ -249,6 +270,39 @@ export async function executeCharter(
     }
     const evidenceIds = new Set(observations.map((o) => o.id))
 
+    // 1b — evidence staleness (NAF.B, charter-opt-in). Checked BEFORE the
+    // provider so stale evidence costs $0 and fails loudly — analysing
+    // yesterday's data as if it were fresh is the wrong kind of success.
+    if (charter.maxEvidenceAgeHours != null) {
+      const maxMs = charter.maxEvidenceAgeHours * 3600_000
+      const stale = observations.find(
+        (o) => Date.now() - o.dataVintage.getTime() > maxMs,
+      )
+      if (stale) {
+        const detail =
+          `${stale.key} vintage ${stale.dataVintage.toISOString()} exceeds ` +
+          `the charter tolerance of ${charter.maxEvidenceAgeHours}h`
+        await step({
+          type: 'gate',
+          name: 'evidence-staleness',
+          ok: false,
+          errorMessage: detail,
+        })
+        const reason = `stale_evidence: ${detail}`
+        await prisma.agentRun.update({
+          where: { id: run.id },
+          data: {
+            status: 'done',
+            ok: false,
+            haltedReason: reason,
+            latencyMs: Date.now() - started,
+            endedAt: new Date(),
+          },
+        })
+        return { runId: run.id, ok: false, haltedReason: reason }
+      }
+    }
+
     // 2 — model routing (AI-2; provider-agnostic, L9).
     let feature = charter.modelFeature
     let provider = await getProviderForFeature(feature)
@@ -300,7 +354,12 @@ export async function executeCharter(
         latencyMs: modelMs,
       })
 
-      validated = validateReply(result.text, charter.outputSchemaKey, evidenceIds)
+      validated = validateReply(
+        result.text,
+        charter.outputSchemaKey,
+        evidenceIds,
+        charter.dedupeKeyPattern,
+      )
       await step({
         type: 'validation',
         name: charter.outputSchemaKey,
