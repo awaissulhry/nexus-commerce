@@ -16,6 +16,7 @@ import cron from 'node-cron'
 import prisma from '../db.js'
 import { runFleetCouncilOnce } from '../services/agent-fleet/fleet-council.service.js'
 import { runFleet } from '../services/agent-fleet/orchestrator.js'
+import { computeScorecards } from '../services/agent-fleet/scorecard.service.js'
 import { gradeFindings } from '../services/agent-fleet/shadow-grade.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { logger } from '../utils/logger.js'
@@ -33,9 +34,17 @@ export async function runFleetSweepOnce(): Promise<string> {
     })
     const grade = await gradeFindings(runs.map((r) => r.id))
     const costUSD = runs.reduce((sum, r) => sum + Number(r.costUSD), 0)
+    // NAF.E — nightly scorecards ride the sweep: deterministic, $0, and
+    // computed even for dark charters (an empty window is evidence too).
+    // A scorecard failure must never fail the sweep it rides on.
+    const scorecards = await computeScorecards().catch((err) => {
+      logger.error('[fleet-sweep] scorecard computation failed', { error: String(err) })
+      return { upserted: 0 }
+    })
     return (
       `started=${fleet.started} ok=${fleet.succeeded} failed=${fleet.failed} ` +
-      `skipped=${fleet.skipped} graded=${grade.graded} cost=$${costUSD.toFixed(4)}` +
+      `skipped=${fleet.skipped} graded=${grade.graded} scorecards=${scorecards.upserted} ` +
+      `cost=$${costUSD.toFixed(4)}` +
       (fleet.haltedReason ? ` halted=${fleet.haltedReason}` : '')
     )
   } finally {
