@@ -17,6 +17,7 @@ import { useMemo } from 'react'
 import {
   Background,
   BackgroundVariant,
+  Controls,
   Handle,
   Position,
   ReactFlow,
@@ -90,15 +91,18 @@ interface EntityNodeData {
   kind: string
   degree: number
   isFocus: boolean
+  compact: boolean
   [key: string]: unknown
 }
 
 function EntityNodeCard({ data }: NodeProps) {
   const d = data as unknown as EntityNodeData
   return (
-    <div className={`acr-eg-node k-${d.kind} ${d.isFocus ? 'focus' : ''}`}>
+    <div
+      className={`acr-eg-node k-${d.kind} ${d.isFocus ? 'focus' : ''} ${d.compact ? 'compact' : ''}`}
+    >
       <Handle type="target" position={Position.Top} className="acr-fl-h" />
-      <span className="acr-eg-kind">{d.kind}</span>
+      {d.compact ? null : <span className="acr-eg-kind">{d.kind}</span>}
       <span className="acr-eg-label" title={d.label}>
         {d.label}
       </span>
@@ -117,10 +121,12 @@ const nodeTypes = { entity: EntityNodeCard }
 const RING = [0, 300, 560]
 const key = (type: string, id: string) => `${type}|${id}`
 
-const NODE_W = 176
-const NODE_H = 74
-const CLUSTER_GAP = 96
-const ROW_MAX_W = 1900
+/** Overview cards are compact so the whole picture stays READABLE when
+ *  fitView scales it; the focused view uses the roomier card. */
+const NODE_W = 146
+const NODE_H = 56
+const CLUSTER_GAP = 74
+const ROW_MAX_W = 1450
 
 /**
  * Overview layout: the graph splits into connected components — families
@@ -178,9 +184,9 @@ function layoutClusters(
     const n = group.length
     // a pair sits side by side; anything bigger takes a ring whose radius
     // grows with the crowd so cards never collide
-    const radius = n <= 2 ? 0 : Math.max(150, (n * (NODE_W + 34)) / (2 * Math.PI))
-    const boxW = n <= 2 ? NODE_W * n + (n - 1) * 60 : radius * 2 + NODE_W
-    const boxH = n <= 2 ? NODE_H : radius * 1.5 + NODE_H
+    const radius = n <= 2 ? 0 : Math.max(120, (n * (NODE_W + 26)) / (2 * Math.PI))
+    const boxW = n <= 2 ? NODE_W * n + (n - 1) * 48 : radius * 2 + NODE_W
+    const boxH = n <= 2 ? NODE_H : radius * 1.45 + NODE_H
 
     if (cursorX > 0 && cursorX + boxW > ROW_MAX_W) {
       cursorX = 0
@@ -292,6 +298,7 @@ export function EntityGraphCanvas({
           kind: n.type,
           degree: n.degree,
           isFocus: k === focusKey,
+          compact: !focusKey,
         } satisfies EntityNodeData,
         draggable: false,
         connectable: false,
@@ -336,6 +343,8 @@ export function EntityGraphCanvas({
         }}
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} color="#d7dee7" />
+        {/* the whole picture never fits at full size — let the operator zoom */}
+        <Controls showInteractive={false} />
       </ReactFlow>
     </div>
   )
