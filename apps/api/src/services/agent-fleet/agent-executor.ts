@@ -67,7 +67,7 @@ const CONTRACT_HINTS: Record<OutputSchemaKey, string> = {
     '  "confidence": number 0..1,',
     '  "observation": object with the structured numbers you saw,',
     '  "evidenceRefs": [the observation id(s) EXACTLY as shown in the Evidence headers above — at least one],',
-    '  "dataVintage": the "data as of" ISO timestamp from the evidence you used,',
+    '  "dataVintage": the "data as of" timestamp copied EXACTLY as printed in the Evidence header (Z-suffixed ISO like 2026-08-06T00:00:00.000Z — never reformat it, never use an offset form),',
     '  "rationale": string 20..1200 chars,',
     '  "dedupeKey": stable string for this exact issue on this entity (≥3 chars),',
     '  "expiresInHours": integer 1..720',
