@@ -359,7 +359,7 @@ function PortfoliosInner() {
       </Modal>
       </div>
       {/* ACR.7 — drag a rule onto a portfolio row to bind it to that family. */}
-      <AutomationDock />
+      <AutomationDock surface="portfolios" />
     </div>
   )
 }

@@ -693,7 +693,7 @@ export function FamilyCockpitClient() {
       </div>
       {/* ACR.7 — drop a rule on the header to bind it to this portfolio, or on a campaign row
           to bind it to that campaign alone. */}
-      <AutomationDock onChanged={() => void load()} />
+      <AutomationDock surface="cockpit" onChanged={() => void load()} />
     </div>
   )
 }

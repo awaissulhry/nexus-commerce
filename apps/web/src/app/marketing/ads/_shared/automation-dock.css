@@ -12,6 +12,30 @@
 .adock-head { display: flex; align-items: baseline; gap: 8px; padding: 0 14px; }
 .adock-head h2 { font-size: 12.5px; font-weight: 700; color: #34404f; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
 .adock-count { font-size: 11px; color: #8d97a6; }
+.adock-collapse {
+  margin-left: auto; display: inline-flex; align-self: center;
+  color: #97a1af; background: none; border: 0; border-radius: 5px; padding: 3px; cursor: pointer;
+}
+.adock-collapse:hover { background: #f4f6f9; color: #2a5399; }
+
+/* Collapsed: a slim edge rail. The flex sibling (the page) takes the reclaimed width. */
+.adock--rail { width: 34px; padding: 0; overflow: hidden; }
+.adock-rail-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  width: 100%; padding: 10px 0 12px; background: #fff; border: 0; cursor: pointer; color: #5a6779;
+}
+.adock-rail-btn:hover { background: #f8fafc; color: #2a5399; }
+.adock-rail-label {
+  writing-mode: vertical-rl; font-size: 10.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.adock-rail-count { font-size: 10px; font-weight: 600; color: #8d97a6; font-variant-numeric: tabular-nums; }
+@media (max-width: 1100px) {
+  .adock--rail { width: 100%; }
+  .adock-rail-btn { flex-direction: row; justify-content: flex-start; padding: 8px 12px; }
+  .adock-rail-label { writing-mode: horizontal-tb; }
+  .adock-rail-count { margin-left: auto; }
+}
 .adock-hint { font-size: 11px; color: #8d97a6; margin: 5px 0 9px; padding: 0 14px; line-height: 1.45; }
 
 .adock-cats { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 14px 9px; border-bottom: 1px solid #f0f3f6; }

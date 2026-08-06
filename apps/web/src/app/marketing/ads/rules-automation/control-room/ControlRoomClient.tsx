@@ -280,7 +280,7 @@ export function ControlRoomClient() {
 
       {/* ACR.7 — the always-on dock in the space that was empty. Same component as the
           Portfolios page and the Family Cockpit; drops land there, edits land here too. */}
-      <AutomationDock onChanged={() => void load()} />
+      <AutomationDock surface="control-room" onChanged={() => void load()} />
 
       {/* ACR.1.2b — the engine's own record. Reloads the rows after a manual run so the
           "Last run" fact behind the drawer cannot disagree with what the drawer just did. */}

@@ -25,7 +25,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { GripVertical, Pencil, X } from 'lucide-react'
+import { ChevronsLeft, ChevronsRight, GripVertical, Pencil, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import './automation-dock.css'
 
@@ -80,11 +80,36 @@ export async function setRuleScope(
 const LEVELS = ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO'] as const
 const RANK: Record<string, number> = { OFF: 0, OBSERVE: 1, PROPOSE: 2, AUTO: 3 }
 
-export function AutomationDock({ title = 'Automations', onChanged }: { title?: string; onChanged?: () => void }) {
+export function AutomationDock({ title = 'Automations', onChanged, surface = 'control-room' }: {
+  title?: string
+  onChanged?: () => void
+  /**
+   * Where the dock is mounted. Operator direction 2026-08-06: outside the Control Room the
+   * always-on panel "makes things more complicated" — so on portfolios/cockpit it starts as a
+   * slim edge rail and only slides out on demand. The choice is remembered per surface.
+   */
+  surface?: 'control-room' | 'portfolios' | 'cockpit'
+}) {
   const [rules, setRules] = useState<DockRule[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [filter, setFilter] = useState<string>('all')
+
+  // Default open only where automation IS the page. localStorage is read in an effect (not the
+  // initializer) so the server render and the first client render agree.
+  const storageKey = `nexus-adock:${surface}`
+  const [open, setOpen] = useState<boolean>(surface === 'control-room')
+  useEffect(() => {
+    const saved = window.localStorage.getItem(storageKey)
+    if (saved === 'open') setOpen(true)
+    else if (saved === 'collapsed') setOpen(false)
+  }, [storageKey])
+  const toggleOpen = () => {
+    setOpen((o) => {
+      window.localStorage.setItem(storageKey, o ? 'collapsed' : 'open')
+      return !o
+    })
+  }
 
   const load = useCallback(async () => {
     try {
@@ -119,11 +144,28 @@ export function AutomationDock({ title = 'Automations', onChanged }: { title?: s
     .filter((r) => filter === 'all' || r.category === filter)
     .sort((a, b) => (CAT_ORDER.indexOf(a.category) - CAT_ORDER.indexOf(b.category)) || a.name.localeCompare(b.name))
 
+  if (!open) {
+    return (
+      <aside className="adock adock--rail" aria-label="Automation rules (collapsed)">
+        <button type="button" className="adock-rail-btn" onClick={toggleOpen}
+          title="Open the Automations panel — drag rules from it onto portfolios and campaigns">
+          <ChevronsLeft size={13} aria-hidden />
+          <span className="adock-rail-label">{title}</span>
+          <span className="adock-rail-count">{rules?.length ?? '…'}</span>
+        </button>
+      </aside>
+    )
+  }
+
   return (
     <aside className="adock" aria-label="Automation rules">
       <div className="adock-head">
         <h2>{title}</h2>
         <span className="adock-count">{rules?.length ?? '…'}</span>
+        <button type="button" className="adock-collapse" onClick={toggleOpen}
+          title="Collapse to the edge — everything stays bound and running">
+          <ChevronsRight size={13} aria-hidden />
+        </button>
       </div>
       <p className="adock-hint">Drag a rule onto a portfolio or campaign to bind it there. Colours group by what a rule does.</p>
 
