@@ -23,9 +23,15 @@ export interface FleetGraph {
   edges: FleetEdge[]
 }
 
-/** Phase A: one analyst, no edges. Phases B+ grow this literal. */
+/** Phase B: four analysts, one flat level, no edges — directors arrive in
+ *  Phase C and bring the first `finding` edges with them. */
 export const FLEET_GRAPH: FleetGraph = {
-  nodes: [{ key: 'fleet-selftest', tier: 'analyst' }],
+  nodes: [
+    { key: 'fleet-selftest', tier: 'analyst' },
+    { key: 'amazon-negative-miner', tier: 'analyst' },
+    { key: 'amazon-keyword-harvester', tier: 'analyst' },
+    { key: 'amazon-bid-tuner', tier: 'analyst' },
+  ],
   edges: [],
 }
 

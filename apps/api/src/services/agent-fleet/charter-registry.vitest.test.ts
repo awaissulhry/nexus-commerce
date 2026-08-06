@@ -18,6 +18,7 @@ vi.mock('../../db.js', () => ({
 import prisma from '../../db.js'
 import {
   bustCharterCache,
+  FLEET_CHARTERS,
   listCharters,
   resolveCharter,
   seedCharters,
@@ -126,12 +127,15 @@ describe('seedCharters', () => {
   it('creates a row per code charter when absent', async () => {
     findUnique.mockResolvedValue(null)
     create.mockResolvedValue(dbRow())
+    const registrySize = Object.keys(FLEET_CHARTERS).length
     const r = await seedCharters()
-    expect(r.created).toBe(1)
-    expect(create).toHaveBeenCalledTimes(1)
-    const data = create.mock.calls[0]![0]!.data as Record<string, unknown>
-    expect(data.key).toBe('fleet-selftest')
-    expect(data.enabled).toBe(false) // seeds dark, always
+    expect(r.created).toBe(registrySize)
+    expect(create).toHaveBeenCalledTimes(registrySize)
+    for (const call of create.mock.calls) {
+      const data = call[0]!.data as Record<string, unknown>
+      expect(FLEET_CHARTERS[data.key as string]).toBeDefined()
+      expect(data.enabled).toBe(false) // seeds dark, always
+    }
   })
 
   it('never clobbers an existing row — second seed creates 0', async () => {
