@@ -101,6 +101,28 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
     return getFleetState()
   })
 
+  // NAF.D — the run's step trace, reading BOTH shapes (the recorded D12
+  // obligation): AgentStep rows for fleet runs, the legacy steps Json for
+  // ACP copilot runs.
+  fastify.get<{ Params: { id: string } }>(
+    '/agent/fleet/runs/:id/steps',
+    async (request, reply) => {
+      const run = await prisma.agentRun.findUnique({
+        where: { id: request.params.id },
+        select: { id: true, mode: true, steps: true },
+      })
+      if (!run) return reply.code(404).send({ error: 'run not found' })
+      if (run.mode != null) {
+        const steps = await prisma.agentStep.findMany({
+          where: { agentRunId: run.id },
+          orderBy: { seq: 'asc' },
+        })
+        return { shape: 'agent-step', steps }
+      }
+      return { shape: 'legacy-json', steps: run.steps ?? [] }
+    },
+  )
+
   // NAF.B — the 14-sweep acceptance evidence: per-sweep validation/cost
   // stats, dedupeKey stability, agent-vs-engine agreement.
   fastify.get<{ Querystring: { limit?: string } }>(

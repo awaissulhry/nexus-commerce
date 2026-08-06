@@ -32,6 +32,7 @@ import { ActivityTab } from './ActivityTab'
 import { TodayTab } from './TodayTab'
 import { AutomationDock } from '../../_shared/AutomationDock'
 import { ForesightTab } from './ForesightTab'
+import { FleetTab } from './FleetTab'
 import { LeverDrawer } from './LeverDrawer'
 import './control-room.css'
 
@@ -67,12 +68,13 @@ const ago = (iso: string | null) => {
 export function ControlRoomClient() {
   const params = useSearchParams()
   const raw = params.get('tab')
-  const tab: 'today' | 'foresight' | 'levers' | 'guardrails' | 'activity' =
+  const tab: 'today' | 'foresight' | 'levers' | 'guardrails' | 'activity' | 'fleet' =
     raw === 'guardrails' ? 'guardrails'
       : raw === 'activity' ? 'activity'
         : raw === 'levers' ? 'levers'
           : raw === 'foresight' ? 'foresight'
-            : 'today'
+            : raw === 'fleet' ? 'fleet'
+              : 'today'
   const [engines, setEngines] = useState<Engine[] | null>(null)
   const [global, setGlobal] = useState<Global | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -185,7 +187,7 @@ export function ControlRoomClient() {
       {/* Deep-linkable, like every other tab bar in this console: a tab you cannot bookmark
           or send to someone is a tab that only exists while you are looking at it. */}
       <nav className="acr-tabs" role="tablist" aria-label="Control Room views">
-        {(['today', 'foresight', 'levers', 'guardrails', 'activity'] as const).map((t) => (
+        {(['today', 'foresight', 'levers', 'guardrails', 'activity', 'fleet'] as const).map((t) => (
           <Link
             key={t}
             href={`/marketing/ads/rules-automation/control-room?tab=${t}`}
@@ -194,12 +196,12 @@ export function ControlRoomClient() {
             className={`acr-tab ${tab === t ? 'on' : ''}`}
             scroll={false}
           >
-            {t === 'today' ? 'Today' : t === 'foresight' ? 'Foresight' : t === 'levers' ? 'Levers' : t === 'guardrails' ? 'Guardrails' : 'Activity'}
+            {t === 'today' ? 'Today' : t === 'foresight' ? 'Foresight' : t === 'levers' ? 'Levers' : t === 'guardrails' ? 'Guardrails' : t === 'activity' ? 'Activity' : 'Fleet'}
           </Link>
         ))}
       </nav>
 
-      {tab === 'today' ? <TodayTab /> : tab === 'foresight' ? <ForesightTab /> : tab === 'guardrails' ? <GuardrailsTab /> : tab === 'activity' ? <ActivityTab /> : <>
+      {tab === 'today' ? <TodayTab /> : tab === 'foresight' ? <ForesightTab /> : tab === 'guardrails' ? <GuardrailsTab /> : tab === 'activity' ? <ActivityTab /> : tab === 'fleet' ? <FleetTab /> : <>
       <div className="acr-sec-head">
         <h2>Engines</h2>
         <span className="acr-sec-count">

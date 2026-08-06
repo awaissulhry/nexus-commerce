@@ -781,3 +781,133 @@ a.acr-refresh { text-decoration: none; }
    rules-automation.css; this just gives it the same rhythm as the sections above
    it, without a second heading competing with the one it already has. */
 .acr-pt-mount { margin-top: 26px; }
+
+/* ── NAF.D — the Fleet tab (acr-fl-*). Same light-only palette as the rest of
+   the room; the fleet map is tier columns, not a graph library — six nodes
+   don't earn pan/zoom chrome (revisit at Phase H's entity graph). */
+.acr-fleet { display: flex; flex-direction: column; gap: 14px; }
+.acr-fl-loading { font-size: 13px; color: #7b8798; }
+.acr-fl-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-bottom: 10px;
+}
+.acr-fl-head h3 {
+  display: flex; align-items: center; gap: 7px; margin: 0;
+  font-size: 13.5px; font-weight: 650; color: #232c37;
+}
+.acr-fl-headright { display: flex; align-items: center; gap: 8px; }
+.acr-fl-sub { font-size: 11.5px; color: #7b8798; }
+.acr-fl-empty { font-size: 12.5px; color: #7b8798; margin: 6px 0 0; }
+
+.acr-fl-pill {
+  display: inline-flex; align-items: center; padding: 2px 8px;
+  border-radius: 999px; font-size: 10.5px; font-weight: 650;
+  letter-spacing: 0.02em; background: #f1f4f8; color: #5a6675;
+  border: 1px solid #dfe5ec; white-space: nowrap;
+}
+.acr-fl-pill-ok { background: #f1faf5; border-color: #c3e5d3; color: #14724d; }
+.acr-fl-pill-halt { background: #fdf2f2; border-color: #e6bcba; color: #9c2f2a; }
+.acr-fl-pill.verdict-pass { background: #f1faf5; border-color: #c3e5d3; color: #14724d; }
+.acr-fl-pill.verdict-block, .acr-fl-pill.verdict-revise { background: #fdf2f2; border-color: #e6bcba; color: #9c2f2a; }
+.acr-fl-pill.verdict-none { background: #fff8ec; border-color: #ecd9ae; color: #8a6320; }
+
+/* fleet map: tier columns left→right */
+.acr-fl-map { display: flex; gap: 26px; align-items: flex-start; overflow-x: auto; padding: 4px 2px; }
+.acr-fl-tier { display: flex; flex-direction: column; gap: 8px; min-width: 190px; }
+.acr-fl-tierlabel {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: #8d97a6; margin-bottom: 2px;
+}
+.acr-fl-arrow { color: #c3ccd8; font-size: 13px; }
+.acr-fl-node {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  padding: 9px 11px; border: 1px solid #dfe5ec; border-radius: 8px;
+  background: #fff; cursor: pointer; text-align: left; font: inherit;
+  transition: border-color 120ms, box-shadow 120ms;
+}
+.acr-fl-node:hover { border-color: #b9c4d2; }
+.acr-fl-node.on { border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31, 111, 222, 0.12); }
+.acr-fl-nodename { font-size: 12.5px; font-weight: 600; color: #232c37; }
+.acr-fl-nodemeta { display: flex; align-items: center; gap: 7px; font-size: 10.5px; color: #7b8798; }
+.acr-fl-nodemeta em { font-style: normal; color: #8a6320; font-weight: 650; }
+/* the dial state tints the node's left edge, same grammar as the engine rows */
+.acr-fl-node { border-left-width: 3px; }
+.acr-fl-node.lv-off { border-left-color: #c3ccd8; }
+.acr-fl-node.lv-observe { border-left-color: #7fb0ea; }
+.acr-fl-node.lv-propose { border-left-color: #e0b34e; }
+.acr-fl-node.lv-auto { border-left-color: #1a9d6a; }
+
+/* agent drawer */
+.acr-fl-desc { font-size: 12.5px; color: #5a6675; margin: 0 0 10px; line-height: 1.5; }
+.acr-fl-dialrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.acr-fl-lbl { font-size: 11.5px; font-weight: 650; color: #5a6675; }
+.acr-dial { display: inline-flex; gap: 4px; }
+.acr-dial .acr-btn.on { background: #1f6fde; color: #fff; border-color: #1f6fde; }
+.acr-fl-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #34404f; cursor: pointer; }
+.acr-fl-facts { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: #7b8798; margin-bottom: 10px; }
+.acr-fl-degraded { color: #9c2f2a; font-weight: 650; }
+.acr-fl-runs { display: flex; flex-direction: column; gap: 4px; }
+.acr-fl-run { border-top: 1px solid #eef1f5; padding-top: 4px; }
+.acr-fl-runhead {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  padding: 4px 2px; border: 0; background: none; cursor: pointer;
+  font-size: 12px; color: #34404f; text-align: left;
+}
+.acr-fl-runhead:hover { color: #1f6fde; }
+.acr-fl-steps { margin: 2px 0 6px 26px; padding: 0; font-size: 11.5px; color: #5a6675; list-style: none; }
+.acr-fl-steps li { padding: 2px 0; font-variant-numeric: tabular-nums; }
+.acr-fl-steps li.bad { color: #9c2f2a; }
+.acr-dot.ok { background: #1a9d6a; box-shadow: 0 0 0 3px rgba(26, 157, 106, 0.15); }
+.acr-dot.bad { background: #d4453f; box-shadow: 0 0 0 3px rgba(212, 69, 63, 0.15); }
+
+/* decision timeline */
+.acr-fl-plan { border-top: 1px solid #eef1f5; }
+.acr-fl-plan:first-of-type { border-top: 0; }
+.acr-fl-planhead {
+  display: flex; align-items: center; gap: 8px; width: 100%; flex-wrap: wrap;
+  padding: 8px 2px; border: 0; background: none; cursor: pointer;
+  font-size: 12.5px; color: #232c37; text-align: left;
+}
+.acr-fl-planhead:hover strong { color: #1f6fde; }
+.acr-fl-planbody { padding: 0 2px 10px 22px; font-size: 12.5px; color: #5a6675; line-height: 1.55; }
+.acr-fl-planbody ul { margin: 6px 0; padding-left: 18px; }
+.acr-fl-planbody li { padding: 1px 0; }
+.acr-fl-critic { color: #8a6320; }
+.acr-fl-planbody details summary { cursor: pointer; font-size: 11.5px; color: #7b8798; }
+
+/* approval inbox */
+.acr-fl-inboxgroup { border-top: 1px solid #eef1f5; padding: 8px 0; }
+.acr-fl-inboxgroup:first-of-type { border-top: 0; }
+.acr-fl-inboxhead {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; font-size: 12.5px; color: #232c37; margin-bottom: 6px;
+}
+.acr-fl-approval {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 6px 0 6px 10px; border-left: 2px solid #eef1f5;
+}
+.acr-fl-apbody { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: #34404f; min-width: 0; }
+.acr-fl-apactions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.acr-fl-rejectrow { display: inline-flex; align-items: center; gap: 6px; }
+.acr-fl-rejectrow input {
+  font-size: 12px; padding: 4px 8px; border: 1px solid #dfe5ec;
+  border-radius: 6px; width: 220px; color: #232c37;
+}
+.acr-fl-rejectrow input:focus { outline: none; border-color: #1f6fde; }
+
+/* cost ledger */
+.acr-fl-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 8px; }
+.acr-fl-table th {
+  text-align: left; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: #8d97a6; padding: 4px 10px 6px 0;
+  border-bottom: 1px solid #dfe5ec;
+}
+.acr-fl-table td {
+  padding: 6px 10px 6px 0; border-bottom: 1px solid #eef1f5;
+  color: #34404f; font-variant-numeric: tabular-nums;
+}
+
+/* brief */
+.acr-fl-sweeps { margin: 0; padding: 0; list-style: none; font-size: 12.5px; color: #34404f; }
+.acr-fl-sweeps li { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-variant-numeric: tabular-nums; }
