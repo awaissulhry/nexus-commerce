@@ -28,6 +28,9 @@ import {
   haltFleet,
   resumeFleet,
 } from '../services/agent-fleet/fleet-state.service.js'
+import { collectRefs, resolveFleetLabels } from '../services/agent-fleet/fleet-labels.service.js'
+import { getFleetSchedule } from '../services/agent-fleet/fleet-schedule.service.js'
+import { getRunTrace } from '../services/agent-fleet/fleet-trace.service.js'
 import { getSweepReport } from '../services/agent-fleet/sweep-report.service.js'
 
 const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
@@ -70,16 +73,24 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
       orderBy: { createdAt: 'desc' },
       take,
     })
-    return { findings }
+    // FX.1 — names, not IDs: one label map for the whole page load.
+    const labels = await resolveFleetLabels(collectRefs({ findings }))
+    return { findings, labels }
   })
 
   fastify.get('/agent/fleet/plans', async () => {
-    // Real query, empty table until Phase C — honest, not a stub.
     const plans = await prisma.agentPlan.findMany({
       orderBy: { createdAt: 'desc' },
       take: 100,
     })
-    return { plans }
+    // FX.1 — one label map covering every item and dropped item across the
+    // returned plans, resolved server-side.
+    const allItems = plans.flatMap((p) => [
+      ...((p.items as Array<{ args?: unknown }> | null) ?? []),
+      ...((p.droppedItems as Array<{ args?: unknown }> | null) ?? []),
+    ])
+    const labels = await resolveFleetLabels(collectRefs({ items: allItems }))
+    return { plans, labels }
   })
 
   fastify.get('/agent/fleet/graph', async () => {
@@ -124,6 +135,43 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
       return { shape: 'legacy-json', steps: run.steps ?? [] }
     },
   )
+
+  // FX.1 — the run told as a story: labelled steps, evidence previews,
+  // the validated output, the findings written, tokens and cost per step.
+  fastify.get<{ Params: { id: string } }>(
+    '/agent/fleet/runs/:id/trace',
+    async (request, reply) => {
+      const trace = await getRunTrace(request.params.id)
+      if (!trace) return reply.code(404).send({ error: 'run not found' })
+      return trace
+    },
+  )
+
+  // FX.1 — E1's nightly scorecards, queryable per charter.
+  fastify.get<{ Querystring: { charterKey?: string; limit?: string } }>(
+    '/agent/fleet/scorecards',
+    async (request) => {
+      const take = Math.min(Number(request.query.limit) || 60, 200)
+      const scorecards = await prisma.agentScorecard.findMany({
+        where: request.query.charterKey ? { charterKey: request.query.charterKey } : {},
+        orderBy: { periodEnd: 'desc' },
+        take,
+      })
+      return {
+        scorecards: scorecards.map((s) => ({
+          ...s,
+          windowDays: Math.round(
+            (s.periodEnd.getTime() - s.periodStart.getTime()) / (24 * 3600_000),
+          ),
+        })),
+      }
+    },
+  )
+
+  // FX.1 — when does the fleet run next, and how did the last runs go.
+  fastify.get('/agent/fleet/schedule', async () => {
+    return getFleetSchedule()
+  })
 
   // NAF.B — the 14-sweep acceptance evidence: per-sweep validation/cost
   // stats, dedupeKey stability, agent-vs-engine agreement.
@@ -219,12 +267,17 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
         select: { id: true, agentKey: true, orchestrationId: true },
       })
       const runById = new Map(runs.map((r) => [r.id, r]))
+      // FX.1 — resolve the entities each approval touches.
+      const labels = await resolveFleetLabels(
+        collectRefs({ items: approvals.map((a) => ({ args: a.args })) }),
+      )
       return {
         approvals: approvals.map((a) => ({
           ...a,
           charterKey: runById.get(a.agentRunId)?.agentKey ?? null,
           orchestrationId: runById.get(a.agentRunId)?.orchestrationId ?? null,
         })),
+        labels,
       }
     },
   )
