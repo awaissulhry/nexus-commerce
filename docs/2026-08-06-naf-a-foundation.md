@@ -315,3 +315,24 @@ export function runFleet(mode: 'sweep'|'council', opts?: { concurrency?: number 
 - **Placeholder scan:** the only intentionally-empty surface is `GET /agent/fleet/plans` (real query, empty table until Phase C) — honest, not a stub. `toolNames`/`maxToolCallsPerRun` are carried but unused until a later phase adds tool use; the budget guard still enforces the cap so the field is live, not dead.
 - **Type consistency:** `AutonomyLevel` imported from `ads-autonomy.js` everywhere (never redeclared); `OutputSchemaKey` narrows `outputSchemaKey` at compile time; Prisma `Decimal` coerced via `Number(...)` at the service boundary (tool-policy idiom); all shared imports via `@nexus/shared/agent-fleet` (no `.js` on package specifiers, `.js` on all relative ones).
 - **Risk:** (1) `apps/api` non-strict tsc — mitigated by tests on every null-bearing path and hand-read migration SQL. (2) Concurrent sessions on main — migration folder letter picked at implementation; commits use `--only`; pre-push builds the working tree, so batch-push happens on a coordinated tree. (3) Anthropic `jsonMode` is a prompt hint — executor strips fences and retries once with the Zod error; the twice-invalid path is a **failed run with zero blackboard writes**, which is the specified behaviour, and Phase B's "14 sweeps, zero validation failures" gate will measure how often it happens. (4) The 60s charter-policy cache means a halt-toggle takes effect immediately (fleet-state is read per-run, uncached) but an autonomy edit can lag ≤60s — same tradeoff tool-policy already accepted.
+
+---
+
+## Phase A verification — 2026-08-06 (local; live selftest pending push)
+
+Implemented task-by-task with per-task local commits (`5492a220a` schema → `947fcd8d1` contracts → `7f74b9b76` registry → `54b6c6bb5` observations → `7255f2276` budget guard → `d70c6e195` state+tracing → `f8c17b0bc` executor → `0e002898b` graph+orchestrator → `2986b749c` routes+features). NOT pushed — batch push on operator command (Q4).
+
+| Acceptance item (brief Phase A) | Status | Evidence |
+|---|---|---|
+| `tsc --noEmit` clean | ✅ | apps/api and packages/shared both clean; pre-push `tsc` build also green |
+| vitest green | ✅ | 58 fleet tests (8 files) + 20 contract tests, all passing |
+| `check:drift` clean | ✅ | table + column drift: 384 models, 0 drift |
+| Budget abort fires mid-run in a test | ✅ | `budget-guard.vitest.test.ts` › "ACCEPTANCE: aborts mid-run when cumulative tokens cross the cap" (aborts at step 3 of 10) |
+| Zero behaviour change; `enabled=false` everywhere | ✅ | no cron registered; charters seed dark; routes read-only + halt/seed/run-now; only existing files touched: `schema.prisma` (append), `index.ts` (2 lines), `ai-features.ts` (5 keys appended), shared package wiring |
+| RBAC coverage | ✅ | 2,307 routes · 0 unmapped — fleet routes covered by the existing `/api/agent/` mapping (D4) |
+| `.githooks/pre-push` | ✅ | full run green: drift ×2, i18n (5,594 refs), links, token guard, DS ratchet, apps/web build, apps/api build, RBAC, 82 security tests |
+| `fleet-selftest` end-to-end from a real observation | ⏳ | **pending deploy** — on push, migration applies via `migrate-direct.mjs`; then `POST /api/agent/fleet/charters/seed` + `POST /api/agent/fleet/run/fleet-selftest` on prod Railway (Q2), acceptance matrix updated with run ids |
+
+**Found during gates, NOT a NAF failure:** `npm run tokens:check` is RED on main and has been since 2026-06-29 — commit `99746dbe8` (rail P1) hand-added 28 `--h10-rail-*` variables directly into the generated `tokens.css` without porting them to `tokens/css-vars.ts`; regenerating would DELETE the live rail palette. `.githooks/pre-push` does not run tokens:check, which is why every push since has been green. Fix belongs to the design-system workstream: port the rail vars into `css-vars.ts`, then regen. Phase A makes no web changes.
+
+**Implementation deviations, all recorded in code comments:** `ObservationResult` gained `id` (findings must cite real `AgentObservation` row ids — the plan's interface omitted the one field `evidenceRefs` needs); `fleet-selftest.maxToolCallsPerRun = 2` (>0 so the generic used≥cap continue-check doesn't trip a tool-less charter); fleet unions use optional-`undefined` members instead of discriminant narrowing (strict:false disables the narrow in source files, and vitest files are tsc-excluded — the plan's risk (1) made concrete); evidence-integrity (refs ⊆ shown observation ids) enforced as part of validation, so a hallucinated evidence id is a retried-then-failed run, not a stored finding.
