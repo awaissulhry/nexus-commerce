@@ -13,6 +13,21 @@
  *   NEXUS_LOCAL_AI_MODEL      the id from GET {base}/models
  *   NEXUS_LOCAL_AI_API_KEY    optional; LM Studio ignores it, vLLM may not
  *   NEXUS_LOCAL_AI_TIMEOUT_MS optional; default 300s
+ *   NEXUS_LOCAL_AI_REASONING_EFFORT  optional; passed through verbatim as
+ *     `reasoning_effort` when set, omitted entirely when not
+ *
+ * Why reasoning_effort exists here at all: a hybrid-thinking model (Qwen3,
+ * gpt-oss, DeepSeek-R1 …) spends its OUTPUT budget on reasoning before it
+ * writes a character of JSON. Measured on Ollama 0.32.5 + qwen3:14b, a
+ * 200-token cap was consumed entirely by reasoning and returned
+ * `content: ""` — which JSON.parse rejects, and which would then be scored
+ * as a schema-validation failure when it is really a budget artefact.
+ * `reasoning_effort: 'none'` turns thinking off at the server and the reply
+ * is clean JSON in 6 tokens. This is a runtime knob, not a prompt hack and
+ * not a schema concession: the contract the model must satisfy is unchanged.
+ * Note that Ollama already routes reasoning to a separate `reasoning` field
+ * rather than into `content`, so the classic `<think>` leak never reaches
+ * the parser — the budget, not the formatting, is the real hazard.
  * Unset base URL ⇒ isConfigured() false ⇒ getProvider() skips this provider
  * entirely, which is production's permanent state.
  *
@@ -92,6 +107,12 @@ export class LocalProvider implements LLMProvider {
         max_tokens: options.maxOutputTokens ?? 4096,
         ...(options.jsonMode
           ? { response_format: { type: 'json_object' } }
+          : {}),
+        ...(process.env.NEXUS_LOCAL_AI_REASONING_EFFORT?.trim()
+          ? {
+              reasoning_effort:
+                process.env.NEXUS_LOCAL_AI_REASONING_EFFORT.trim(),
+            }
           : {}),
       }),
       signal: AbortSignal.timeout(timeoutMs()),

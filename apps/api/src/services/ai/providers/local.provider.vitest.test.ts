@@ -33,6 +33,7 @@ const ENV_KEYS = [
   'NEXUS_LOCAL_AI_MODEL',
   'NEXUS_LOCAL_AI_API_KEY',
   'NEXUS_LOCAL_AI_TIMEOUT_MS',
+  'NEXUS_LOCAL_AI_REASONING_EFFORT',
 ] as const
 const saved: Record<string, string | undefined> = {}
 
@@ -152,6 +153,32 @@ describe('LocalProvider — jsonMode (D6: json_object only, never json_schema)',
   it('omits response_format entirely when jsonMode is off', async () => {
     await new LocalProvider().generate({ prompt: 'x' })
     expect(bodyOf()).not.toHaveProperty('response_format')
+  })
+})
+
+describe('LocalProvider — reasoning_effort pass-through', () => {
+  beforeEach(() => {
+    process.env.NEXUS_LOCAL_AI_BASE_URL = BASE
+  })
+
+  it('omits reasoning_effort entirely when the env var is unset', async () => {
+    await new LocalProvider().generate({ prompt: 'x' })
+    expect(bodyOf()).not.toHaveProperty('reasoning_effort')
+  })
+
+  it('passes the configured value through verbatim', async () => {
+    process.env.NEXUS_LOCAL_AI_REASONING_EFFORT = 'none'
+    await new LocalProvider().generate({ prompt: 'x' })
+    expect(bodyOf().reasoning_effort).toBe('none')
+  })
+
+  it('trims whitespace and treats an empty value as unset', async () => {
+    process.env.NEXUS_LOCAL_AI_REASONING_EFFORT = '  high  '
+    await new LocalProvider().generate({ prompt: 'x' })
+    expect(bodyOf().reasoning_effort).toBe('high')
+    process.env.NEXUS_LOCAL_AI_REASONING_EFFORT = '   '
+    await new LocalProvider().generate({ prompt: 'x' })
+    expect(bodyOf(1)).not.toHaveProperty('reasoning_effort')
   })
 })
 
