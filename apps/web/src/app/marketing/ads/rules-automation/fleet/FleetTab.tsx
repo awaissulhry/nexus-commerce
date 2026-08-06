@@ -227,7 +227,9 @@ export function FleetTab() {
     async (focus?: { type: string; id: string }) => {
       setEntityLoading(true)
       try {
-        const qs = focus ? `?type=${encodeURIComponent(focus.type)}&id=${encodeURIComponent(focus.id)}&depth=2` : ''
+        // depth 1: the focused view draws direct relationships in lanes;
+        // going deeper is a click away, and a two-hop dump is a smear.
+        const qs = focus ? `?type=${encodeURIComponent(focus.type)}&id=${encodeURIComponent(focus.id)}&depth=1&limit=300` : ''
         const r = await fetch(`${backend}/api/agent/fleet/entity-graph${qs}`, {
           cache: 'no-store',
         })
@@ -508,7 +510,7 @@ export function FleetTab() {
             <p className="acr-fl-schedule">
               {entityGraph?.focus ? (
                 <>
-                  Showing everything within two hops of this entity.{' '}
+                  Its direct relationships, grouped — click any card to explore that one next.{' '}
                   <button className="acr-eg-link" onClick={() => void loadEntityGraph()}>
                     ← back to the whole picture
                   </button>

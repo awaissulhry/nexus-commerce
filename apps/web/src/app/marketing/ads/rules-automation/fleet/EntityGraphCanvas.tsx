@@ -6,9 +6,12 @@
  * both deterministic — no physics, no layout library:
  *
  *  - overview: every campaign that competes with or cannibalizes another,
- *    laid out on a ring, sized by how entangled it is.
- *  - focused: the chosen entity at the centre, its neighbours on rings by
- *    hop distance (BFS from the focus over the returned edges).
+ *    split into connected FAMILIES and drawn as separate constellations
+ *    (one ring for all of them was a hairball).
+ *  - focused: the chosen entity on the left, its direct relationships in
+ *    LANES by relation — a campaign can advertise a hundred products, and
+ *    a ring of a hundred cards is a smear. Each lane says how many exist
+ *    and admits how many it is showing.
  *
  * Light skin, same family as the fleet map.
  */
@@ -116,9 +119,22 @@ function EntityNodeCard({ data }: NodeProps) {
   )
 }
 
-const nodeTypes = { entity: EntityNodeCard }
+function LaneHeader({ data }: NodeProps) {
+  const d = data as unknown as { title: string; count: number; color: string }
+  return (
+    <div className="acr-eg-lane">
+      <span className="acr-eg-laneswatch" style={{ background: d.color }} aria-hidden />
+      {d.title} · {d.count}
+    </div>
+  )
+}
+function MoreCard({ data }: NodeProps) {
+  const d = data as unknown as { count: number }
+  return <div className="acr-eg-more">+{d.count} more not shown</div>
+}
 
-const RING = [0, 300, 560]
+const nodeTypes = { entity: EntityNodeCard, lane: LaneHeader, more: MoreCard }
+
 const key = (type: string, id: string) => `${type}|${id}`
 
 /** Overview cards are compact so the whole picture stays READABLE when
@@ -229,96 +245,145 @@ export function EntityGraphCanvas({
 }) {
   const { flowNodes, flowEdges } = useMemo(() => {
     const focusKey = data.focus ? key(data.focus.type, data.focus.id) : null
+    const byKey = new Map(data.nodes.map((n) => [key(n.type, n.id), n]))
 
-    // hop distance from the focus, over the edges we were given
-    const depth = new Map<string, number>()
-    if (focusKey) {
-      const adj = new Map<string, string[]>()
-      for (const e of data.edges) {
-        const a = key(e.fromType, e.from)
-        const b = key(e.toType, e.to)
-        adj.set(a, [...(adj.get(a) ?? []), b])
-        adj.set(b, [...(adj.get(b) ?? []), a])
-      }
-      depth.set(focusKey, 0)
-      let frontier = [focusKey]
-      for (let d = 1; d < RING.length && frontier.length; d++) {
-        const next: string[] = []
-        for (const n of frontier) {
-          for (const m of adj.get(n) ?? []) {
-            if (!depth.has(m)) {
-              depth.set(m, d)
-              next.push(m)
-            }
-          }
-        }
-        frontier = next
-      }
-    }
-
-    let positions: Map<string, { x: number; y: number }>
+    /* ── OVERVIEW: clustered families ───────────────────────────────── */
     if (!focusKey) {
-      // no focus: cluster the families
-      positions = layoutClusters(data.nodes, data.edges)
-    } else {
-      // focused: the entity at the centre, neighbours on rings by hop
-      positions = new Map()
-      const byRing = new Map<number, EntityNode[]>()
-      for (const n of data.nodes) {
-        const d = depth.get(key(n.type, n.id)) ?? RING.length - 1
-        byRing.set(d, [...(byRing.get(d) ?? []), n])
-      }
-      for (const [ring, members] of byRing) {
-        const radius = RING[Math.min(ring, RING.length - 1)] ?? RING[RING.length - 1]!
-        if (radius === 0) {
-          positions.set(key(members[0]!.type, members[0]!.id), { x: 0, y: 0 })
-          continue
+      const positions = layoutClusters(data.nodes, data.edges)
+      const outNodes: Node[] = data.nodes.map((n) => {
+        const k = key(n.type, n.id)
+        return {
+          id: k,
+          type: 'entity',
+          position: positions.get(k) ?? { x: 0, y: 0 },
+          data: {
+            label: n.label,
+            sublabel: n.sublabel,
+            kind: n.type,
+            degree: n.degree,
+            isFocus: false,
+            compact: true,
+          } satisfies EntityNodeData,
+          draggable: false,
+          connectable: false,
         }
-        // widen the ring when it is crowded so cards never overlap
-        const r = Math.max(radius, (members.length * (NODE_W + 26)) / (2 * Math.PI))
-        members.forEach((n, i) => {
-          const angle = (i / members.length) * Math.PI * 2 - Math.PI / 2
-          positions.set(key(n.type, n.id), {
-            x: Math.round(Math.cos(angle) * r),
-            y: Math.round(Math.sin(angle) * r * 0.78),
-          })
-        })
-      }
-    }
-
-    const outNodes: Node[] = data.nodes.map((n) => {
-      const k = key(n.type, n.id)
-      return {
-        id: k,
-        type: 'entity',
-        position: positions.get(k) ?? { x: 0, y: 0 },
-        data: {
-          label: n.label,
-          sublabel: n.sublabel,
-          kind: n.type,
-          degree: n.degree,
-          isFocus: k === focusKey,
-          compact: !focusKey,
-        } satisfies EntityNodeData,
-        draggable: false,
-        connectable: false,
-      }
-    })
-
-    const outEdges: Edge[] = data.edges.map((e, i) => {
-      const meta = RELATION_META[e.relation]
-      return {
+      })
+      const outEdges: Edge[] = data.edges.map((e, i) => ({
         id: `${e.relation}-${e.from}-${e.to}-${i}`,
         source: key(e.fromType, e.from),
         target: key(e.toType, e.to),
         animated: e.relation === 'CANNIBALIZES',
         style: {
-          stroke: meta?.color ?? '#c3ccd8',
-          strokeWidth: e.relation === 'TARGETS' ? 1 : 1.6,
-          opacity: e.relation === 'TARGETS' ? 0.45 : 0.8,
+          stroke: RELATION_META[e.relation]?.color ?? '#c3ccd8',
+          strokeWidth: 1.6,
+          opacity: 0.8,
         },
+      }))
+      return { flowNodes: outNodes, flowEdges: outEdges }
+    }
+
+    /* ── FOCUSED: one hop, grouped into lanes by relationship ────────
+       A campaign can advertise a hundred products; a ring of a hundred
+       cards is a smear. Lanes keep it readable and honest — each lane
+       says how many there are and how many are shown. */
+    const lanes = new Map<string, { node: EntityNode; direction: 'out' | 'in' }[]>()
+    for (const e of data.edges) {
+      const a = key(e.fromType, e.from)
+      const b = key(e.toType, e.to)
+      if (a !== focusKey && b !== focusKey) continue // depth-2 edges: not drawn here
+      const otherKey = a === focusKey ? b : a
+      const other = byKey.get(otherKey)
+      if (!other) continue
+      const list = lanes.get(e.relation) ?? []
+      if (!list.some((x) => key(x.node.type, x.node.id) === otherKey)) {
+        list.push({ node: other, direction: a === focusKey ? 'out' : 'in' })
       }
-    })
+      lanes.set(e.relation, list)
+    }
+
+    const LANE_ORDER = ['CANNIBALIZES', 'COMPETES_WITH', 'SHARES_INVENTORY', 'TARGETS', 'VARIANT_OF']
+    const ordered = [...lanes.entries()].sort(
+      (a, b) => LANE_ORDER.indexOf(a[0]) - LANE_ORDER.indexOf(b[0]),
+    )
+    const PER_LANE = 8
+    const LANE_X = 330
+    const CARD_Y = 92
+
+    const outNodes: Node[] = []
+    const outEdges: Edge[] = []
+
+    const focusNode = byKey.get(focusKey)
+    if (focusNode) {
+      const tallest = Math.max(
+        ...ordered.map(([, list]) => Math.min(list.length, PER_LANE)),
+        1,
+      )
+      outNodes.push({
+        id: focusKey,
+        type: 'entity',
+        position: { x: 0, y: (tallest * CARD_Y) / 2 },
+        data: {
+          label: focusNode.label,
+          sublabel: focusNode.sublabel,
+          kind: focusNode.type,
+          degree: focusNode.degree,
+          isFocus: true,
+          compact: false,
+        } satisfies EntityNodeData,
+        draggable: false,
+        connectable: false,
+      })
+
+      ordered.forEach(([relation, list], laneIdx) => {
+        const meta = RELATION_META[relation]
+        const x = LANE_X * (laneIdx + 1)
+        outNodes.push({
+          id: `lane|${relation}`,
+          type: 'lane',
+          position: { x, y: -60 },
+          data: { title: meta?.label ?? relation, count: list.length, color: meta?.color ?? '#c3ccd8' },
+          draggable: false,
+          connectable: false,
+          selectable: false,
+        })
+        list.slice(0, PER_LANE).forEach((item, i) => {
+          const k = key(item.node.type, item.node.id)
+          outNodes.push({
+            id: k,
+            type: 'entity',
+            position: { x, y: i * CARD_Y },
+            data: {
+              label: item.node.label,
+              sublabel: item.node.sublabel,
+              kind: item.node.type,
+              degree: item.node.degree,
+              isFocus: false,
+              compact: false,
+            } satisfies EntityNodeData,
+            draggable: false,
+            connectable: false,
+          })
+          outEdges.push({
+            id: `${relation}-${k}-${i}`,
+            source: item.direction === 'out' ? focusKey : k,
+            target: item.direction === 'out' ? k : focusKey,
+            animated: relation === 'CANNIBALIZES',
+            style: { stroke: meta?.color ?? '#c3ccd8', strokeWidth: 1.4, opacity: 0.75 },
+          })
+        })
+        if (list.length > PER_LANE) {
+          outNodes.push({
+            id: `more|${relation}`,
+            type: 'more',
+            position: { x, y: PER_LANE * CARD_Y },
+            data: { count: list.length - PER_LANE },
+            draggable: false,
+            connectable: false,
+            selectable: false,
+          })
+        }
+      })
+    }
 
     return { flowNodes: outNodes, flowEdges: outEdges }
   }, [data])
@@ -338,6 +403,7 @@ export function EntityGraphCanvas({
         preventScrolling={false}
         minZoom={0.2}
         onNodeClick={(_e, node) => {
+          if (node.type !== 'entity') return // lane headers and "+N more" are chrome
           const [type, ...rest] = node.id.split('|')
           onFocus(type!, rest.join('|'))
         }}
