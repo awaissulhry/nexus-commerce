@@ -22,6 +22,7 @@ import { amazonAdsDirectorCharter } from './charters/amazon-ads-director.charter
 import { amazonBidTunerCharter } from './charters/amazon-bid-tuner.charter.js'
 import { amazonKeywordHarvesterCharter } from './charters/amazon-keyword-harvester.charter.js'
 import { amazonNegativeMinerCharter } from './charters/amazon-negative-miner.charter.js'
+import { fleetAuditorCharter } from './charters/fleet-auditor.charter.js'
 import { fleetSelftestCharter } from './charters/fleet-selftest.charter.js'
 import { planCriticCharter } from './charters/plan-critic.charter.js'
 
@@ -34,6 +35,7 @@ export const FLEET_CHARTERS: Readonly<Record<string, CharterDefinition>> =
     [amazonBidTunerCharter.key]: amazonBidTunerCharter,
     [amazonAdsDirectorCharter.key]: amazonAdsDirectorCharter,
     [planCriticCharter.key]: planCriticCharter,
+    [fleetAuditorCharter.key]: fleetAuditorCharter,
   })
 
 interface DbCharterPolicy {

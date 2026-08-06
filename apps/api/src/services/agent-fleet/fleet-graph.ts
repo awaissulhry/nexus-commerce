@@ -10,6 +10,9 @@ import type { CharterTier } from './charter-types.js'
 export interface FleetNode {
   key: string
   tier: CharterTier
+  /** Drawn on the map but NOT run by the orchestrator's level-walk —
+   *  the auditor reports on the sweep, so it runs after it, not in it. */
+  standalone?: true
 }
 
 export interface FleetEdge {
@@ -33,6 +36,7 @@ export const FLEET_GRAPH: FleetGraph = {
     { key: 'amazon-bid-tuner', tier: 'analyst' },
     { key: 'amazon-ads-director', tier: 'director' },
     { key: 'plan-critic', tier: 'critic' },
+    { key: 'fleet-auditor', tier: 'auditor', standalone: true },
   ],
   edges: [
     { from: 'amazon-negative-miner', to: 'amazon-ads-director', artifact: 'finding' },
@@ -49,7 +53,9 @@ export const FLEET_GRAPH: FleetGraph = {
  * build error, never a silent partial run.
  */
 export function topoLevels(g: FleetGraph): string[][] {
-  const keys = new Set(g.nodes.map((n) => n.key))
+  // Standalone nodes are map-only: the sweep job invokes them explicitly
+  // (the auditor runs AFTER scorecards), so the level-walk skips them.
+  const keys = new Set(g.nodes.filter((n) => !n.standalone).map((n) => n.key))
   for (const e of g.edges) {
     if (!keys.has(e.from)) throw new Error(`fleet graph: unknown edge endpoint '${e.from}'`)
     if (!keys.has(e.to)) throw new Error(`fleet graph: unknown edge endpoint '${e.to}'`)

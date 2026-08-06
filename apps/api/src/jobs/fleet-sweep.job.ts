@@ -14,8 +14,10 @@
  */
 import cron from 'node-cron'
 import prisma from '../db.js'
+import { executeCharter } from '../services/agent-fleet/agent-executor.js'
 import { runFleetCouncilOnce } from '../services/agent-fleet/fleet-council.service.js'
 import { runFleet } from '../services/agent-fleet/orchestrator.js'
+import { evaluateDemotions } from '../services/agent-fleet/promotion.service.js'
 import { computeScorecards } from '../services/agent-fleet/scorecard.service.js'
 import { gradeFindings } from '../services/agent-fleet/shadow-grade.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'
@@ -41,9 +43,29 @@ export async function runFleetSweepOnce(): Promise<string> {
       logger.error('[fleet-sweep] scorecard computation failed', { error: String(err) })
       return { upserted: 0 }
     })
+    // NAF.E — Part 7's automatic demotions, evaluated on fresh scorecard
+    // inputs. Dark fleet ⇒ nothing above OFF ⇒ no-op.
+    const demotions = await evaluateDemotions().catch((err) => {
+      logger.error('[fleet-sweep] demotion evaluation failed', { error: String(err) })
+      return []
+    })
+    for (const d of demotions) {
+      logger.warn('[fleet-sweep] DEMOTED', { ...d })
+    }
+    // NAF.E — the auditor runs AFTER scorecards so its brief reads
+    // tonight's numbers. Standalone in the graph; honours enabled/OFF
+    // like every scheduled run (born dark ⇒ skipped).
+    const audit = await executeCharter('fleet-auditor', {
+      trigger: 'schedule',
+      mode: 'sweep',
+    }).catch((err) => {
+      logger.error('[fleet-sweep] auditor failed', { error: String(err) })
+      return { runId: null, ok: false as const }
+    })
     return (
       `started=${fleet.started} ok=${fleet.succeeded} failed=${fleet.failed} ` +
       `skipped=${fleet.skipped} graded=${grade.graded} scorecards=${scorecards.upserted} ` +
+      `demoted=${demotions.length} audit=${audit.runId ? (audit.ok ? 'ok' : 'failed') : 'skipped'} ` +
       `cost=$${costUSD.toFixed(4)}` +
       (fleet.haltedReason ? ` halted=${fleet.haltedReason}` : '')
     )

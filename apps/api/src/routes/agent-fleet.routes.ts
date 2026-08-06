@@ -15,6 +15,7 @@ import { isAutonomyLevel, AUTONOMY_LEVELS } from '../services/advertising/ads-au
 import { decideApproval } from '../services/agents/approval-gate.service.js'
 import { executeCharter } from '../services/agent-fleet/agent-executor.js'
 import { mintExemplarFromDecision } from '../services/agent-fleet/exemplar.service.js'
+import { isAutoPromotionAllowed } from '../services/agent-fleet/promotion.service.js'
 import {
   bustCharterCache,
   FLEET_CHARTERS,
@@ -173,6 +174,16 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
       if (AUTONOMY_LEVELS.indexOf(level) > capIdx) {
         return reply.code(400).send({
           error: `autonomyLevel ${level} exceeds this charter's cap (${def.autonomyCap})`,
+        })
+      }
+      // NAF.E — the promotion gate is server-side (spec acceptance): AUTO
+      // requires an eligible latest scorecard. The PATCH itself is the
+      // operator sign-off; eligibility is the earned half.
+      if (level === 'AUTO' && !(await isAutoPromotionAllowed(key))) {
+        return reply.code(403).send({
+          error:
+            `${key} has not earned AUTO — the latest scorecard is not promotion-eligible ` +
+            `(Part 7: 30 days + acceptance ≥70% + calibration ≤0.15 + zero rollbacks)`,
         })
       }
       data.autonomyLevel = level

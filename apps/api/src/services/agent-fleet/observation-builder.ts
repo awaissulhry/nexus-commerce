@@ -14,6 +14,7 @@
 import prisma from '../../db.js'
 import { bidProposalsBuilder } from './observations/bid-proposals.observation.js'
 import { cronHealthBuilder } from './observations/cron-health.observation.js'
+import { fleetHealthBuilder } from './observations/fleet-health.observation.js'
 import { harvestCandidatesBuilder } from './observations/harvest-candidates.observation.js'
 import { negativeCandidatesBuilder } from './observations/negative-candidates.observation.js'
 import { openFindingsBuilder } from './observations/open-findings.observation.js'
@@ -48,6 +49,7 @@ const BUILDERS: Readonly<Record<string, ObservationBuilder>> = Object.freeze({
   [bidProposalsBuilder.key]: bidProposalsBuilder,
   [openFindingsBuilder.key]: openFindingsBuilder,
   [pendingPlanBuilder.key]: pendingPlanBuilder,
+  [fleetHealthBuilder.key]: fleetHealthBuilder,
 })
 
 export function listObservationKeys(): string[] {
