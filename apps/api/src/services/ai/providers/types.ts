@@ -21,7 +21,14 @@
  * directly and skip this layer.
  */
 
-export type ProviderName = 'gemini' | 'anthropic'
+/**
+ * NAF.A2 added 'local' — an OpenAI-compatible server on the operator's own
+ * machine (LM Studio / Ollama / vLLM / llama.cpp). It is a full member, not
+ * a special case: it prices at zero through rate-cards.ts and it sits LAST
+ * in the provider registry so `getProvider()`'s "first configured" fallback
+ * still resolves to a cloud vendor on a machine where one is configured.
+ */
+export type ProviderName = 'gemini' | 'anthropic' | 'local'
 
 export interface ProviderUsage {
   inputTokens: number

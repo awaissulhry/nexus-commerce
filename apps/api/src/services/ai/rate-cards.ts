@@ -30,6 +30,8 @@
  * catalog can mark its cost "estimated" instead of mis-charging.
  */
 
+import type { ProviderName } from './providers/types.js'
+
 export interface RateCard {
   /** USD per 1M input tokens. */
   inputPer1M: number
@@ -93,9 +95,13 @@ export const ANTHROPIC_DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
  * marks its cost estimated rather than mis-charging.
  */
 export function rateInfoFor(
-  provider: 'gemini' | 'anthropic',
+  provider: ProviderName,
   model: string,
 ): RateLookup {
+  // NAF.A2 — a local OpenAI-compatible server costs nothing to call. Zero is
+  // EXACT here, not a placeholder, so `known: true`: a local run must never
+  // be flagged `costEstimated` in the catalog or the cost ledger.
+  if (provider === 'local') return { inputPer1M: 0, outputPer1M: 0, known: true }
   const cards = provider === 'gemini' ? GEMINI_RATES : ANTHROPIC_RATES
   if (cards[model]) return { ...cards[model], known: true }
   const bare = model.replace(/-\d{8}$/, '')
@@ -115,7 +121,7 @@ export function rateInfoFor(
  * provider cost logging). Delegates to rateInfoFor and drops the flag.
  */
 export function rateCardFor(
-  provider: 'gemini' | 'anthropic',
+  provider: ProviderName,
   model: string,
 ): RateCard {
   const { inputPer1M, outputPer1M } = rateInfoFor(provider, model)
@@ -129,7 +135,7 @@ export function rateCardFor(
  * count) by AiBudgetService.
  */
 export function priceFor(
-  provider: 'gemini' | 'anthropic',
+  provider: ProviderName,
   model: string,
   inputTokens: number,
   outputTokens: number,

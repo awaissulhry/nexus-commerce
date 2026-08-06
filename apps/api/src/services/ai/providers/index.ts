@@ -21,18 +21,31 @@
 
 import { AnthropicProvider } from './anthropic.provider.js'
 import { GeminiProvider } from './gemini.provider.js'
+import { LocalProvider } from './local.provider.js'
 import type { LLMProvider, ProviderName } from './types.js'
 
 const gemini = new GeminiProvider()
 const anthropic = new AnthropicProvider()
+const local = new LocalProvider()
 
+/**
+ * NAF.A2 — `local` is appended LAST and that position is load-bearing:
+ * `getProvider()`'s step-3 fallback returns the first *configured* provider
+ * in this object's iteration order. On a machine where a cloud key and a
+ * local server are both present, last position is what guarantees existing
+ * features keep resolving exactly as they did before the local provider
+ * existed. Routing TO local is explicit (a `?provider=`, an
+ * AiFeatureModelPref row, or the NEXUS_LOCAL_AI_FEATURES allowlist in
+ * model-resolver.service.ts) — never incidental.
+ */
 const REGISTRY: Record<ProviderName, LLMProvider> = {
   gemini,
   anthropic,
+  local,
 }
 
 export function isValidProviderName(s: string): s is ProviderName {
-  return s === 'gemini' || s === 'anthropic'
+  return s === 'gemini' || s === 'anthropic' || s === 'local'
 }
 
 /**
