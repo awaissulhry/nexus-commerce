@@ -1,12 +1,12 @@
 'use client'
 
 /**
- * FX.9 — the map as an engine room (operator direction 2026-08-07):
- * a dark canvas inside the light page, glowing worker cards, animated
- * flow edges, and findings drill-down ON the canvas — expand a worker
- * and its latest findings dock beneath it as chips wired to their
- * source. Click a card body to open the worker's profile; the ⊕ toggle
- * expands findings without leaving the map.
+ * FX.9 — the map as a graph experience: a LIGHT canvas (operator
+ * direction 2026-08-07, revised from the first dark cut), premium
+ * worker cards, animated flow edges, and findings drill-down ON the
+ * canvas — expand a worker and its latest findings dock beneath it as
+ * chips wired to their source. Click a card body to open the worker's
+ * profile; the ⊕ toggle expands findings without leaving the map.
  */
 
 import { useMemo } from 'react'
@@ -210,13 +210,13 @@ export function FleetMapCanvas({
         source: e.from,
         target: e.to,
         animated: true,
-        style: { stroke: isPlan ? '#c084fc' : '#38bdf8', strokeWidth: 1.5, opacity: 0.7 },
+        style: { stroke: isPlan ? '#8b5cf6' : '#1f6fde', strokeWidth: 1.5, opacity: 0.75 },
         label:
           count != null && count > 0
             ? `${count} ${e.artifact}${count === 1 ? '' : 's'}`
             : e.artifact,
-        labelStyle: { fill: '#cbd5e1', fontSize: 10, fontWeight: 600 },
-        labelBgStyle: { fill: '#0e1520', fillOpacity: 0.9 },
+        labelStyle: { fill: '#5a6675', fontSize: 10, fontWeight: 600 },
+        labelBgStyle: { fill: '#ffffff', fillOpacity: 0.95 },
         labelBgPadding: [5, 3] as [number, number],
         labelBgBorderRadius: 4,
       }
@@ -250,7 +250,7 @@ export function FleetMapCanvas({
           sourceHandle: 'drill',
           target: id,
           animated: true,
-          style: { stroke: '#475569', strokeWidth: 1, opacity: 0.6 },
+          style: { stroke: '#b3bcc9', strokeWidth: 1, opacity: 0.8 },
         })
       })
     }
@@ -259,7 +259,7 @@ export function FleetMapCanvas({
   }, [nodes, edges, nameByKey, openByKey, runInfoByKey, edgeCounts, findingsByKey, expanded, onToggleExpand])
 
   return (
-    <div className="acr-fl-canvas dark">
+    <div className="acr-fl-canvas">
       <ReactFlow
         key={expanded ?? 'none'} /* remount on drill-down so fitView reframes */
         nodes={flowNodes}
@@ -276,7 +276,7 @@ export function FleetMapCanvas({
           if (node.type === 'worker') onSelect(node.id)
         }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} color="#1d2b3d" />
+        <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} color="#d7dee7" />
       </ReactFlow>
     </div>
   )
