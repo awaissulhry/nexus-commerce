@@ -95,6 +95,9 @@ interface EntityNodeData {
   degree: number
   isFocus: boolean
   compact: boolean
+  /** carried so a click resolves the entity regardless of the node id */
+  entityType?: string
+  entityId?: string
   [key: string]: unknown
 }
 
@@ -347,9 +350,12 @@ export function EntityGraphCanvas({
           selectable: false,
         })
         list.slice(0, PER_LANE).forEach((item, i) => {
-          const k = key(item.node.type, item.node.id)
+          // Lane-scoped id: the same campaign can legitimately appear in
+          // two lanes (it both cannibalizes and competes), and duplicate
+          // node ids silently drop one of them.
+          const nodeId = `${relation}::${key(item.node.type, item.node.id)}`
           outNodes.push({
-            id: k,
+            id: nodeId,
             type: 'entity',
             position: { x, y: i * CARD_Y },
             data: {
@@ -359,14 +365,16 @@ export function EntityGraphCanvas({
               degree: item.node.degree,
               isFocus: false,
               compact: false,
+              entityType: item.node.type,
+              entityId: item.node.id,
             } satisfies EntityNodeData,
             draggable: false,
             connectable: false,
           })
           outEdges.push({
-            id: `${relation}-${k}-${i}`,
-            source: item.direction === 'out' ? focusKey : k,
-            target: item.direction === 'out' ? k : focusKey,
+            id: `${relation}-${nodeId}-${i}`,
+            source: item.direction === 'out' ? focusKey : nodeId,
+            target: item.direction === 'out' ? nodeId : focusKey,
             animated: relation === 'CANNIBALIZES',
             style: { stroke: meta?.color ?? '#c3ccd8', strokeWidth: 1.4, opacity: 0.75 },
           })
@@ -404,6 +412,11 @@ export function EntityGraphCanvas({
         minZoom={0.2}
         onNodeClick={(_e, node) => {
           if (node.type !== 'entity') return // lane headers and "+N more" are chrome
+          const d = node.data as unknown as EntityNodeData
+          if (d.entityType && d.entityId) {
+            onFocus(d.entityType, d.entityId)
+            return
+          }
           const [type, ...rest] = node.id.split('|')
           onFocus(type!, rest.join('|'))
         }}
