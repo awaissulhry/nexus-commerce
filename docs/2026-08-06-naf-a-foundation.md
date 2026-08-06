@@ -362,6 +362,17 @@ Migration `20260806a_nafa_agent_fleet` applied on boot via `migrate-direct.mjs` 
 | Blackboard integrity | ✅ zero `AgentFinding` rows — a failed run enters nothing |
 | `GET /api/agent/fleet/runs?charterKey=fleet-selftest` | ✅ 200, the run visible with `mode='ask'`, `charterVersion=1` |
 | `AiUsageLog` | correctly empty — `logUsage` fires only on a returned generation |
-| Validated `Finding` from a real observation | ✅ **CLOSED 2026-08-06 on a LOCAL model** — see `docs/2026-08-06-naf-a2-local-provider.md`. 10/10 runs `status=done`, findings validated and persisted from the real `cron-health` observation, 0% schema-validation retry rate. ⚠️ **The Anthropic path is still unproven end to end** — it has never got past the provider call on an unfunded account. Phase A acceptance is closed on the local provider; the cloud path remains open. |
+| Validated `Finding` from a real observation | ✅ **CLOSED on BOTH paths** — local model 2026-08-06 (see `docs/2026-08-06-naf-a2-local-provider.md`, 10/10 runs, 0% retry rate) **and the hosted Anthropic path 2026-08-06 ~10:45 UTC** (below), after the operator funded the correct Anthropic account. |
 
-**To close the last acceptance item (operator):** top up Anthropic credits (Plans & Billing — operator action, not automatable), then re-run `POST /api/agent/fleet/run/fleet-selftest` and re-check `AgentFinding` + `AiUsageLog` (`apps/api/scripts/_nafa-verify.mts` prints the full evidence chain, incl. evidenceRefs→observation resolution). No deploy needed.
+### Hosted-path closure — 2026-08-06 ~10:45 UTC (Anthropic, Haiku 4.5)
+
+Operator directive: lowest cost. Prod carried a `__global__` model pref of `claude-sonnet-4-6` ($3/$15 per MTok) which the analyst would have inherited, so `agent-fleet-analyst` was pinned per-feature to **`claude-haiku-4-5`** ($1/$5 — the cheapest current Claude model) via `PUT /api/ai/feature-prefs/agent-fleet-analyst`; the global pref is untouched. Two runs before funding landed correctly failed at the provider (billing 400, $0, zero blackboard writes).
+
+| Evidence | Value |
+|---|---|
+| Run | `cmshe3rqa0w58mv01myja95e3` — `status=done`, `ok=true`, `mode='ask'`, `charterVersion=1`, 13.7 s |
+| Model / cost | `claude-haiku-4-5` via Anthropic — 4,377 in + 1,930 out = **$0.014027**, mirrored to `AiUsageLog` (visible in /settings/ai) |
+| Findings | **6** persisted from the real `cron-health` observation: `sqp-ingest` critical, `ebay-financial-sync` critical, `ads-keyword-bid-resync` high, `amazon-sqs-poll` high, `advertising-rule-evaluator` medium, `ads-v1-export-ingest` medium — every `evidenceRefs` resolves to `cmsh1ewwc000wmv01pv22buy5` (recomputed in place 10:45:31Z, TTL 30 min) |
+| Steps | seq 1 `observation:cron-health` → seq 2 `model:claude-haiku-4-5` → seq 3 `validation:analyst-output` — all ok, **zero validation retries** (first-pass schema-valid) |
+| Honest output | `{scanned: 40, droppedFindings: 0, notes: …"61 healthy jobs omitted… 12 truncated"}` — the screening counts surfaced, not silent |
+| A2 finding reconfirmed | Haiku minted yet another dedupeKey family (`cron_failing_sqp-ingest_1_1`) — the Phase B dedupeKey-grammar gate is model-independent; no retrofit of this charter per operator ruling |
