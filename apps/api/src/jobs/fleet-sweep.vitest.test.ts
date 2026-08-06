@@ -8,6 +8,7 @@ vi.mock('../db.js', () => ({
 }))
 vi.mock('../services/agent-fleet/orchestrator.js', () => ({
   runFleet: vi.fn(),
+  reclaimStuckRuns: vi.fn(async () => 0),
 }))
 vi.mock('../services/agent-fleet/shadow-grade.service.js', () => ({
   gradeFindings: vi.fn(),
@@ -81,6 +82,9 @@ describe('runFleetSweepOnce', () => {
     const first = runFleetSweepOnce()
     const second = await runFleetSweepOnce()
     expect(second).toBe('skipped=overlap')
+    // the first invocation awaits the stuck-run reclaim before runFleet —
+    // wait until it has actually armed the release
+    await vi.waitFor(() => expect(fleet).toHaveBeenCalled())
     release()
     await first
     expect(fleet).toHaveBeenCalledTimes(1)

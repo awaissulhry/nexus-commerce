@@ -13,6 +13,7 @@
  * tests and later phases.
  */
 import { randomUUID } from 'node:crypto'
+import prisma from '../../db.js'
 import { isAiKillSwitchOn } from '../ai/providers/index.js'
 import { executeCharter } from './agent-executor.js'
 import { checkFleetDayBudget } from './budget-guard.js'
@@ -107,4 +108,26 @@ export async function runFleet(
   }
 
   return { orchestrationId, started, succeeded, failed, skipped, haltedReason }
+}
+
+/**
+ * Pre-F hardening — a builder hang or process death mid-run leaves an
+ * AgentRun stuck 'running' with no executor timeout to close it. The
+ * sweep and council call this first: fleet runs (mode NOT NULL — the
+ * ACP copilot's runs are not ours to touch) stuck past the cutoff are
+ * closed done/not-ok with the reason on the row. Reclaimed, never
+ * deleted — a stuck run is evidence.
+ */
+export async function reclaimStuckRuns(maxAgeHours = 2): Promise<number> {
+  const cutoff = new Date(Date.now() - maxAgeHours * 3600_000)
+  const r = await prisma.agentRun.updateMany({
+    where: { status: 'running', mode: { not: null }, createdAt: { lt: cutoff } },
+    data: {
+      status: 'done',
+      ok: false,
+      haltedReason: `orphaned: stuck running >${maxAgeHours}h, reclaimed`,
+      endedAt: new Date(),
+    },
+  })
+  return r.count
 }

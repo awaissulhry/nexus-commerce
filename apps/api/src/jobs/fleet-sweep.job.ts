@@ -16,7 +16,7 @@ import cron from 'node-cron'
 import prisma from '../db.js'
 import { executeCharter } from '../services/agent-fleet/agent-executor.js'
 import { runFleetCouncilOnce } from '../services/agent-fleet/fleet-council.service.js'
-import { runFleet } from '../services/agent-fleet/orchestrator.js'
+import { reclaimStuckRuns, runFleet } from '../services/agent-fleet/orchestrator.js'
 import { evaluateDemotions } from '../services/agent-fleet/promotion.service.js'
 import { computeScorecards } from '../services/agent-fleet/scorecard.service.js'
 import { gradeFindings } from '../services/agent-fleet/shadow-grade.service.js'
@@ -29,6 +29,9 @@ export async function runFleetSweepOnce(): Promise<string> {
   if (running) return 'skipped=overlap'
   running = true
   try {
+    // Pre-F hardening: close fleet runs orphaned by a hang or process
+    // death before starting new ones (there is no executor timeout).
+    const reclaimed = await reclaimStuckRuns().catch(() => 0)
     const fleet = await runFleet('sweep')
     const runs = await prisma.agentRun.findMany({
       where: { orchestrationId: fleet.orchestrationId },
@@ -74,7 +77,7 @@ export async function runFleetSweepOnce(): Promise<string> {
     })
     return (
       `started=${fleet.started} ok=${fleet.succeeded} failed=${fleet.failed} ` +
-      `skipped=${fleet.skipped} graded=${grade.graded} scorecards=${scorecards.upserted} ` +
+      `skipped=${fleet.skipped} reclaimed=${reclaimed} graded=${grade.graded} scorecards=${scorecards.upserted} ` +
       `graph[${graphSummary}] ` +
       `demoted=${demotions.length} audit=${audit.runId ? (audit.ok ? 'ok' : 'failed') : 'skipped'} ` +
       `cost=$${costUSD.toFixed(4)}` +
@@ -118,6 +121,7 @@ export async function runFleetCouncilJobOnce(): Promise<string> {
   if (councilRunning) return 'skipped=overlap'
   councilRunning = true
   try {
+    await reclaimStuckRuns().catch(() => 0)
     const r = await runFleetCouncilOnce()
     return (
       `fleet(started=${r.fleet.started} ok=${r.fleet.succeeded} failed=${r.fleet.failed} skipped=${r.fleet.skipped}) ` +
