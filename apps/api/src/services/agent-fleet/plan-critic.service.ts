@@ -17,6 +17,7 @@
 import type { PlanItemT } from '@nexus/shared/agent-fleet'
 import prisma from '../../db.js'
 import { getTool } from '../agents/tool-registry.js'
+import { computeGraphAdvisories } from './graph-critic-checks.js'
 import { foldPlanBlast } from './plan-blast.js'
 import type { BlastInput, BlastVerdict } from '../ads-core/blast-radius-guard.js'
 
@@ -158,6 +159,13 @@ export async function runPreChecks(plan: {
       })
     }
   }
+
+  // 6 — NAF.H structural checks: what the entity graph knows that literal
+  // term matching cannot see (cannibalization without term overlap, spend
+  // against an empty pool). Advisory — the graph derives nightly and may
+  // lag a day; an unreadable/empty graph contributes nothing.
+  const graphAdvisories = await computeGraphAdvisories(plan.items).catch(() => [])
+  advisories.push(...graphAdvisories)
 
   return { forcedBlocks, advisories, itemPreviews, blast }
 }

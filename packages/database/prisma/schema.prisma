@@ -15649,6 +15649,32 @@ model AgentScorecard {
   @@index([charterKey, periodEnd])
 }
 
+/// NAF.H — typed commerce entity graph (spec Part 4 / Phase H). Postgres,
+/// not a graph database (the Phase H acceptance: zero new database
+/// systems). Derived edges are rebuilt idempotently by the nightly
+/// derivation job: present edges upsert with validTo=NULL, vanished edges
+/// soft-close with validTo=now — history is kept, never rewritten.
+model GraphEdge {
+  id         String    @id @default(cuid())
+  fromType   String
+  fromId     String
+  toType     String
+  toId       String
+  relation   String // TARGETS | HARVESTED_FROM | NEGATED_IN | COMPETES_WITH
+  // | CANNIBALIZES | SHARES_INVENTORY | VARIANT_OF
+  // | PROMOTED_BY | RANKS_FOR | SUPPRESSED_BY
+  weight     Decimal?  @db.Decimal(10, 4)
+  properties Json?
+  source     String // derived | observed | operator
+  validFrom  DateTime  @default(now())
+  validTo    DateTime?
+
+  @@unique([fromType, fromId, toType, toId, relation], map: "GraphEdge_unique")
+  @@index([fromType, fromId, relation])
+  @@index([toType, toId, relation])
+  @@index([relation, validTo])
+}
+
 /// NAF.A — single-row fleet runtime state (plan D7): the circuit-breaker
 /// halt + the fleet-wide daily spend ceiling. Created by upsert-on-read
 /// (ads-automation-state idiom); an UNREADABLE row is reported degraded

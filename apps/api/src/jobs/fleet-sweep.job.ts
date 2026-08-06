@@ -43,6 +43,16 @@ export async function runFleetSweepOnce(): Promise<string> {
       logger.error('[fleet-sweep] scorecard computation failed', { error: String(err) })
       return { upserted: 0 }
     })
+    // NAF.H — nightly entity-graph derivation: deterministic, read-only
+    // over the substrate, reconciled idempotently. Runs even while the
+    // fleet is dark — the graph serves the critic whenever it wakes.
+    const graph = await import('../services/agent-fleet/graph-derivation.service.js')
+      .then((m) => m.deriveAllEdges())
+      .catch((err) => {
+        logger.error('[fleet-sweep] graph derivation failed', { error: String(err) })
+        return []
+      })
+    const graphSummary = graph.map((g) => `${g.relation}:${g.upserted}/${g.closed}`).join(' ')
     // NAF.E — Part 7's automatic demotions, evaluated on fresh scorecard
     // inputs. Dark fleet ⇒ nothing above OFF ⇒ no-op.
     const demotions = await evaluateDemotions().catch((err) => {
@@ -65,6 +75,7 @@ export async function runFleetSweepOnce(): Promise<string> {
     return (
       `started=${fleet.started} ok=${fleet.succeeded} failed=${fleet.failed} ` +
       `skipped=${fleet.skipped} graded=${grade.graded} scorecards=${scorecards.upserted} ` +
+      `graph[${graphSummary}] ` +
       `demoted=${demotions.length} audit=${audit.runId ? (audit.ok ? 'ok' : 'failed') : 'skipped'} ` +
       `cost=$${costUSD.toFixed(4)}` +
       (fleet.haltedReason ? ` halted=${fleet.haltedReason}` : '')
