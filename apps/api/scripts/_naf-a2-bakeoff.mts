@@ -213,9 +213,11 @@ const afterFirst = records.slice(1)
 console.log(`distinct observation ids     : ${ids.length} → ${ids.join(', ')}`)
 console.log(`distinct dataVintage values  : ${vintages.length}`)
 console.log(
-  afterFirst.length > 0 && afterFirst.every((r) => r.obsCached === true)
-    ? '✓ (b) every run after the first hit the cache (cached=true)'
-    : '✗ (b) at least one later run recomputed',
+  afterFirst.length === 0
+    ? '— (b) single run: there is no "later run" to test reuse against. Run ≥2.'
+    : afterFirst.every((r) => r.obsCached === true)
+      ? '✓ (b) every run after the first hit the cache (cached=true)'
+      : '✗ (b) at least one later run recomputed',
 )
 console.log(
   ids.length === 1 && vintages.length === 1
@@ -251,21 +253,51 @@ console.table(
     created: f.createdAt.toISOString(),
   })),
 )
-// Two distinct results, never collapsed into one tick (operator ruling Q4):
-const grewAfterFirst =
-  findingCountAfter.length > 1 &&
-  findingCountAfter[findingCountAfter.length - 1]! > findingCountAfter[0]!
+// Two distinct results, never collapsed into one tick (operator ruling Q4).
+//
+// Row growth is NOT a constraint test — it is a KEY test. A growing table
+// with zero duplicate tuples means the index worked perfectly and the model
+// invented a new key. Conflating them mislabels a healthy constraint as
+// broken, which an earlier version of this harness did.
+
+// (c1) CONSTRAINT: no (entityType, entityId, dedupeKey) tuple may appear
+// twice, and a repeat run emitting the SAME key must update, not insert.
+const tuples = new Map<string, number>()
+for (const f of findings) {
+  const k = `${f.entityType}|${f.entityId}|${f.dedupeKey}`
+  tuples.set(k, (tuples.get(k) ?? 0) + 1)
+}
+const violations = [...tuples.values()].filter((c) => c > 1).length
+const noGrowthRuns = findingCountAfter.filter(
+  (c, idx) => idx > 0 && c === findingCountAfter[idx - 1],
+).length
 console.log(
-  !grewAfterFirst
-    ? '✓ (c1) CONSTRAINT: repeat runs created no additional rows'
-    : `✗ (c1) CONSTRAINT: row count grew ${findingCountAfter[0]} → ${findingCountAfter[findingCountAfter.length - 1]}`,
+  violations === 0
+    ? `✓ (c1) CONSTRAINT: ${findings.length} rows, ${tuples.size} distinct key tuples, 0 violations` +
+        `\n       ${noGrowthRuns}/${Math.max(0, findingCountAfter.length - 1)} repeat runs inserted NOTHING (upsert updated in place)`
+    : `✗ (c1) CONSTRAINT: ${violations} duplicated key tuple(s) — the unique index did not hold`,
 )
-const perRunFindings = records.map((r) => r.findingCount)
+
+// (c2) KEY STABILITY: does one entity accumulate more than one dedupeKey?
+const byEntity = new Map<string, Set<string>>()
+for (const f of findings) {
+  if (!byEntity.has(f.entityId)) byEntity.set(f.entityId, new Set())
+  byEntity.get(f.entityId)!.add(f.dedupeKey)
+}
+const drifted = [...byEntity.entries()].filter(([, s]) => s.size > 1)
 console.log(
-  `  (c2) KEY STABILITY: findings emitted per run = [${perRunFindings.join(', ')}]; ` +
-    `${findings.length} distinct (entityId, dedupeKey) pair(s) persisted in total.` +
-    `\n       Stable keys ⇒ per-run counts repeat and the row count is flat.` +
-    `\n       Drifting keys ⇒ the row count climbs even though the constraint held.`,
+  drifted.length === 0
+    ? `✓ (c2) KEY STABILITY: all ${byEntity.size} entities carry exactly one dedupeKey`
+    : `✗ (c2) KEY STABILITY: ${drifted.length}/${byEntity.size} entities carry MORE THAN ONE dedupeKey —` +
+        `\n       the same real issue is stored as multiple open findings. The constraint is fine;` +
+        `\n       the charter does not pin a key format. Examples:`,
+)
+for (const [entity, keys] of drifted.slice(0, 3)) {
+  console.log(`       ${entity}: ${[...keys].join(' | ')}`)
+}
+console.log(
+  `  (c2) findings emitted per run = [${records.map((r) => r.findingCount).join(', ')}]` +
+    ' — variance here is COVERAGE drift, a separate property from key drift.',
 )
 
 /* ── 6 — (e) retry rate ────────────────────────────────────────────────── */

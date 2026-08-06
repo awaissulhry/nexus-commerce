@@ -246,17 +246,68 @@ Prints:
 
 ---
 
-## Acceptance matrix (to be filled by Task 7)
+## Acceptance matrix — VERIFIED 2026-08-06
+
+**Setup of record:** Ollama 0.32.5 (headless `ollama serve`, 127.0.0.1:11434) · base model `qwen3:14b` (Q4_K_M, 9.3 GB) · derived model **`qwen3-14b-nexus`** = `FROM qwen3:14b` + `PARAMETER num_ctx 12288` · **thinking genuinely OFF** via `reasoning_effort: 'none'` (verified: `message.reasoning` empty, see below) · model pinned resident, 100% GPU, 11 GB · `response_format: json_object` · temperature 0.2 (executor constant) · `max_tokens` 5000 · MacBook Pro M5 Pro, 24 GB.
 
 | # | Item | Status | Evidence |
 |---|---|---|---|
-| a | Finding validated and persisted; run `status=done` | ⏳ | run id, findingCount, `AgentFinding` id(s) |
-| b | `AgentObservation` **reused** on a second run within TTL, confirmed **by id** | ⏳ | observation id identical across runs 1–2, `cached:true`; negative control mints a new id after forced expiry |
-| c | `AgentFinding_dedupe` holds — an immediate repeat run creates no duplicate | ⏳ | row count before/after; distinct `(entityId, dedupeKey)` set; **key-stability reported separately from constraint-integrity** (Q4) |
-| d | `AgentStep` rows carry `costUSD 0` and the local model id | ⏳ | step dump; `AgentRun.provider='local'`; matching `AiUsageLog` rows |
-| e | Schema-validation retry rate over ~10 runs | ⏳ | retry table + top Zod issues — **Phase J bake-off datapoint #1** |
-| — | No behaviour change with the local provider unconfigured | ⏳ | `providers/index.vitest.test.ts` registry-order test; 58 existing fleet tests unchanged |
-| — | Gates: `tsc --noEmit`, vitest, `check:drift` | ⏳ | Task 4 output |
+| a | Finding validated and persisted; run `status=done` | ✅ | 10/10 runs `status=done, ok=true, provider=local`. Runs `r9u6k1pt … fe3jjwls`. Findings are real and useful: `cron_stale` on `ebay-financial-sync`, `sqp-ingest`, five `ads-report-create*`, `sales-report-ingest`, `rfm-scoring`, `amazon-financial-sync`; `cron_failing` on `ads-v1-export-ingest`, `advertising-rule-evaluator`, `alert-evaluator`, `ads-keyword-bid-resync`. |
+| b | `AgentObservation` reused within TTL, not recomputed | ✅ | All 10 runs: **one** row `cmsh1ewwc000wmv01pv22buy5`, `cached: true`, **one** `dataVintage` `2026-08-06T08:50:45.914Z`. Ten reads, one computation. **Negative control:** forcing `expiresAt` into the past produced `cached: false` and advanced `computedAt` `08:50:46 → 09:03:55` on the **same id**. |
+| c1 | `AgentFinding_dedupe` **constraint** holds | ✅ | **41 rows, 41 distinct `(entityType, entityId, dedupeKey)` tuples, 0 violations.** Runs 3–5 and 7–10 each emitted 5 findings and inserted **zero** rows — the upsert updated in place. The index did exactly its job. |
+| c2 | dedupe **key stability** | ❌ **FAILS — charter defect, not a code defect** | **13 of 16 entities carry more than one `dedupeKey`.** Four format families emerged across runs of an unchanged charter: `cron:<job>_<kind>` (10 rows), `cron_<job>_<kind>` (16), `<job>-<kind>` (5), `cron:<job>:<kind>` (10). `cron:ebay-financial-sync` alone is stored under **four** keys. See "The (c2) finding" below. |
+| d | `AgentStep` rows carry `costUSD 0` and the local model id | ✅ | Every run and every step `costUSD = 0`; `AgentRun.provider = 'local'`, `model = 'qwen3-14b-nexus'`; the `type:'model'` step carries the same id. |
+| e | Schema-validation retry rate over ~10 runs | ✅ **0.0%** | **10/10 first-attempt pass. 0 retries, 0 hard failures, 0 validation errors of any kind** — including the executor's evidence-integrity check (every finding cited the real observation id it was shown). |
+| — | No behaviour change with the local provider unconfigured | ✅ | `providers/index.vitest.test.ts` registry-order regression; 58 existing fleet tests unchanged; `tsc` clean with the two variable-typed `priceFor` call sites untouched. |
+| — | Gates | ✅ | `tsc --noEmit` exit 0 (apps/api) · 55 AI + 58 fleet tests + 20 shared tests green · `check:drift` clean, 384 tables. |
+
+### Phase J datapoint #1
+
+| Field | Value |
+|---|---|
+| Provider / model | `local` / `qwen3-14b-nexus` (qwen3:14b Q4_K_M, num_ctx 12288) |
+| Thinking | **off** — `reasoning_effort: 'none'` |
+| JSON fidelity | `response_format: json_object` — grammar-constrained *validity*, unconstrained *shape*. Comparable to Gemini's `responseMimeType`; **not** comparable to Anthropic's prompt-only hint. **No `json_schema` constrained decoding** (D6). |
+| Schema | `analyst-output` + evidence-integrity check, unmodified |
+| N | 10 |
+| **Schema-validation retry rate** | **0.0%** (0/10) |
+| **Hard-failure rate** | **0.0%** (0/10) |
+| Latency | min 49.8 s · **median 56.6 s** · max 171.1 s |
+| Tokens | prompt 3 644 · completion 1 474–3 325 |
+| Throughput | ~25 tok/s decode |
+| Cost | $0.00 |
+| Coverage | findings per run `[5,5,5,5,5,10,5,5,5,5]` — see below |
+
+**Read this before quoting the 0%.** It says a 14B local model can hold a non-trivial nested Zod contract — six required fields per finding, enums, a bounded confidence float, and a cross-check that cited evidence ids exist — ten times out of ten with no retry. It does **not** say the model is *right*. Schema compliance and analytical quality are different axes, and (c2) plus the coverage variance below are where the second axis shows up.
+
+### The (c2) finding — the most consequential result of this session
+
+The dedupe constraint is sound. The **charter** is not: it asks for "a stable string for this exact issue on this entity" and pins no format, so the model reinvented one per run. On unchanged evidence and an unchanged charter, `cron:ebay-financial-sync` accumulated:
+
+```
+cron:ebay-financial-sync_stale
+cron_ebay-financial-sync_stale
+ebay-financial-sync-stale
+cron:ebay-financial-sync:stale
+```
+
+Four open findings for one problem. **`AgentFinding_dedupe` is only as strong as the model's key discipline** — a unique index cannot dedupe what the model chooses to name differently. Downstream this is not cosmetic: a Phase C director reading open findings would see one stale cron four times and could rank, budget for, and act on it four times over.
+
+Per the operator ruling (Q4) this is **not** retrofitted into the shipped Phase A charter. It becomes a **Phase B charter-template requirement**: every analyst charter must pin an exact, deterministic `dedupeKey` grammar (e.g. `<kind>:<entityId>`), and the Phase B "14 sweeps, zero schema failures" gate should be joined by a **key-stability gate** — one entity, one key, across sweeps.
+
+**Coverage drift, a second and separate instability:** identical cached evidence produced 5 findings on nine runs and 10 on one (the 171 s outlier). The model is consistent in *form* and inconsistent in *scope*. Phase B's shadow-grading job should measure recall against the deterministic engine, not just schema validity — otherwise an analyst that silently reports half the problems still scores perfectly.
+
+### Latency is the real cost of local
+
+Median **56.6 s** per analyst run versus roughly a second for Haiku. Cost went to zero; wall-clock went up ~50×. A 25-analyst nightly sweep is ~24 minutes of local compute — fine for a batch, unusable for `incident` or `ask` mode. Local's constraint is not quality (0% retry) or money ($0), it is **latency and serialisation**. That is the number that should drive the Phase J per-tier decision.
+
+### What this does NOT close
+
+The Anthropic path remains unproven end to end. `fleet-selftest` has now completed on a local model; it has **never** completed on Anthropic, which still dies at the provider call on an unfunded account. Phase A's acceptance is closed **on the local provider**, and the cloud path stays open — stated here rather than quietly ticked.
+
+### Discarded false finding (recorded so it cannot re-enter the record)
+
+Two earlier 10-run batches failed with `fetch failed` after run 1. I diagnosed memory pressure — 8.8 GB swap, a 9.3 GB model, 24 GB of RAM — and was about to record "local inference is operationally fragile on this hardware" as a Phase J finding. **It was wrong.** macOS does not shrink swap after a spike, so that figure described something already over; free memory was 77% throughout. The operator had quit the Ollama app. There is **no local-fragility datapoint** from this session, and the sizing change made in response (16384 → 12288 context) is retained only because it is correctly sized to the measured 3 644 + 5 000 worst case — not because it fixed anything.
 
 **Datapoint #1 header (for Phase J comparability):** provider `local`, model `<id>`, quant `<q>`, host LM Studio on M5 Pro 24 GB, `jsonMode` fidelity = **`json_object`** (grammar-constrained *validity*, unconstrained *shape*), temperature 0.2, `maxOutputTokens` 5 000, schema `analyst-output` + the executor's evidence-integrity check, N = 10, retry policy = 1. Not directly comparable to an Anthropic figure, which gets a prompt-only JSON hint (a weaker guarantee); comparable to Gemini's `responseMimeType`.
 
