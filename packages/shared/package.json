@@ -25,15 +25,24 @@
     "./data-vintage": {
       "types": "./dist/data-vintage.d.ts",
       "default": "./dist/data-vintage.js"
+    },
+    "./agent-fleet": {
+      "types": "./dist/agent-fleet.d.ts",
+      "default": "./dist/agent-fleet.js"
     }
   },
   "scripts": {
     "dev": "tsc --watch",
     "build": "tsc",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.5"
   }
 }
