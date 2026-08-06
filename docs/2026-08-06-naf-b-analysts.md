@@ -149,3 +149,29 @@
 - **Invariants:** L1 (engines compute, analysts judge — builders pass conclusions), L2/L3 (no write path, no spawning — the sweep is the only starter), L4 (validation extended, never weakened), L5 (born OFF, OBSERVE by operator act), L6 (steps/cost per run unchanged), L8 (shadow-grading is deterministic code), L9 (routing through model-resolver; local stays a flip).
 - **Honesty items:** account-global evidence labelled as such (D5); trimmed lists counted (D4); `basis` carried verbatim (V6); two found defects reported not buried (D11).
 - **Risk:** (1) `previewHarvest` uncapped lists on a big search-term table — builders trim immediately after the call; if the groupBy itself becomes heavy, the observation TTL (6h) bounds frequency. (2) Prompt-size drift as candidate lists grow — caps are constants with the counts in the payload, and `maxTokensPerRun` still hard-bounds. (3) Concurrent sessions — migration letter picked at implementation; commits `--only`. (4) The 26h staleness window assumes the report ingest keeps landing nightly; a broken ingest fails the sweep loudly (gate step) rather than analysing stale data — which is the correct failure.
+
+---
+
+## Supervised-run verification — 2026-08-06 (prod, builds a294ac75f → 63890940e)
+
+Deployed dark (migration `20260806b` applied clean); charters seeded OFF; one manual run per charter (`ignoreEnabled`). The first pass caught **three real defects** — which is what supervised runs are for — each fixed, redeployed, and re-verified same-day:
+
+| Caught | Fix |
+|---|---|
+| `bid-proposals` builder hung ~4 min inside `computeFleetTargetAcos` (sequential per-product queries, up to 1000 × 2 round-trips) | Builder does its own top-10 groupBy + exactly 10 bounded per-product engine calls (`cdfa2fb3e`) |
+| `negative-candidates` shipped 400 raw existing negatives → 15k-token prompt → after one validation failure the **token breaker correctly denied the retry** at 20,142/20,000 | Relevance-filtered to terms sharing a token with shown candidates, cap 100 (`cdfa2fb3e`) |
+| Two model formatting failures: `notes` > 600 chars (miner) and `dataVintage` reformatted into an offset form the strict schema rejects twice (tuner — run failed with zero blackboard writes, as specified) | Contract hints name the HARD LIMIT and demand verbatim Z-suffixed timestamp copy (`cdfa2fb3e`, `63890940e`) |
+
+**Final supervised runs (all `done`, `ok`, Haiku 4.5):**
+
+| Charter | Run | Findings | Keys | Grades | Cost | Latency |
+|---|---|---|---|---|---|---|
+| `amazon-keyword-harvester` | `cmshhcfwk00agt7018xc76538` | 5 (4 term + 1 ASIN graduations) | 5/5 grammar-EXACT | 5/5 AGREES | $0.0114 | 16.4s |
+| `amazon-negative-miner` | `cmshk7c0q000opc01b38rczgz` | 7 (5 waste_term incl. French-language terms on IT campaigns + 2 ngram themes) | 7/7 EXACT | 7/7 AGREES | $0.0264 | 18.2s |
+| `amazon-bid-tuner` | `cmshk7c03000npc01946b3ul7` | 5 (4 above-target, 1 below) | 5/5 EXACT | 5/5 AGREES (direction-checked) | $0.0366 — first attempt failed validation, **retry recovered** | 37.0s |
+
+Shadow grading: 17/17 graded, 0 skipped. Staleness gate live (evidence vintage 2026-08-06T00:00Z, well inside 26h). Failure hygiene proven twice on the way (failed runs wrote zero findings). **Caveat recorded:** the final miner/tuner runs reused 6h-TTL observations built by the PRE-fix builders, so the slimmed prompts (input ~15.3k → expected ~5k) first show after TTL expiry — the first real sweep will confirm; the runs passed regardless because the hint fixes removed the retries.
+
+**Cost:** $0.152 total across all five supervised runs (including both failures); a clean 3-analyst sweep projects ~$0.07 — comfortably inside the €0.50/sweep bound.
+
+**Enablement (operator, per Q1):** set `NEXUS_ENABLE_FLEET_SWEEP_CRON=1` on Railway → watch 1–2 dark sweeps in `GET /api/agent/fleet/sweeps` / the `fleet-analysts` lever → enable the three charters to OBSERVE → the 14-sweep clock starts.
