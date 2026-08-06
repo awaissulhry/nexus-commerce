@@ -83,6 +83,8 @@
 .pf-name-link:hover { text-decoration: underline; }
 
 /* ── ACR.7 — dock beside the list ────────────────────────────────────────── */
-.pf--with-dock { display: flex; gap: 20px; align-items: flex-start; max-width: none; }
+/* row must be explicit: the .pf base is a column, and without this the dock has been
+   stacking BELOW the table on this one page (the other dock pages have block bases). */
+.pf--with-dock { display: flex; flex-direction: row; gap: 20px; align-items: flex-start; max-width: none; }
 .pf-maincol { min-width: 0; flex: 1; }
 @media (max-width: 1100px) { .pf--with-dock { flex-direction: column; } .pf--with-dock .adock { position: static; width: 100%; max-height: 420px; } }
