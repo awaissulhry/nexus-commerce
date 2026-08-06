@@ -1,6 +1,6 @@
 # NAF.C/D/E(+H) — Director+Critic, Control Room, Promotion Machinery, Entity Graph — Pull-Forward Plan
 
-> **STATUS: AWAITING USER APPROVAL — do not implement until approved.**
+> **STATUS: APPROVED 2026-08-06 with defaults (Q1 vendor relaxation recorded, Q2 weekly council, Q3 H in-cycle with cut line, Q4 B window untouched) — implementation in progress.**
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`) syntax.
 > **Spec:** `docs/AGENT_FLEET.md` Parts 0–3 + Part 7 (control surface) + Part 8.2 (Control Room panels) + Part 12 §§ C, D, E, H. Operator directive 2026-08-06: *"Continue with what we can build right now… Phase E to J, we'll try to do as much as we can"* — this plan is the buildable subset, staged, with the non-buildable remainder explicitly deferred with reasons.
 > **Predecessors:** Phases A/B shipped and verified; the B 14-sweep window runs in parallel and is NOT blocked by this work (analysts stay dark until the operator enables them — unchanged).
