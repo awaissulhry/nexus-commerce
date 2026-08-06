@@ -32,25 +32,60 @@ export interface FleetMapEdgeInput {
   artifact: string
 }
 
+export interface NodeRunInfo {
+  at: string
+  ok: boolean
+  findings: number
+  running: boolean
+}
+
 interface FleetNodeData {
   name: string
   level: string
   open: number
   degraded: boolean
   selected: boolean
+  isSelftest: boolean
+  runInfo: NodeRunInfo | null
   [key: string]: unknown
+}
+
+const agoShort = (iso: string) => {
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000)
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  return h < 48 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`
 }
 
 function FleetNode({ data }: NodeProps) {
   const d = data as unknown as FleetNodeData
   return (
-    <div className={`acr-fl-node lv-${d.level.toLowerCase()} ${d.selected ? 'on' : ''}`}>
+    <div
+      className={`acr-fl-node lv-${d.level.toLowerCase()} ${d.selected ? 'on' : ''} ${d.runInfo?.running ? 'is-running' : ''}`}
+    >
       <Handle type="target" position={Position.Left} className="acr-fl-h" />
       <span className="acr-fl-nodename">{d.name}</span>
       <span className="acr-fl-nodemeta">
         {d.level}
-        {d.open > 0 ? <em>{d.open} open</em> : null}
+        {d.open > 0 ? (
+          <em className={d.isSelftest ? 'muted' : ''}>
+            {d.open} {d.isSelftest ? 'health notes' : 'open'}
+          </em>
+        ) : null}
         {d.degraded ? <em className="acr-fl-degraded">degraded</em> : null}
+      </span>
+      <span className="acr-fl-noderun">
+        {d.runInfo?.running ? (
+          <em className="running">working now…</em>
+        ) : d.runInfo ? (
+          <>
+            <span className={`acr-fl-runstate ${d.runInfo.ok ? 'ok' : 'bad'}`} aria-hidden />
+            ran {agoShort(d.runInfo.at)}
+            {d.runInfo.findings > 0 ? ` · ${d.runInfo.findings} findings` : ''}
+          </>
+        ) : (
+          'never run'
+        )}
       </span>
       <Handle type="source" position={Position.Right} className="acr-fl-h" />
     </div>
@@ -61,13 +96,15 @@ const nodeTypes = { fleet: FleetNode }
 
 const TIER_ORDER = ['analyst', 'director', 'critic']
 const COL_W = 300
-const ROW_H = 84
+const ROW_H = 96
 
 export function FleetMapCanvas({
   nodes,
   edges,
   nameByKey,
   openByKey,
+  runInfoByKey,
+  edgeCounts,
   selected,
   onSelect,
 }: {
@@ -75,6 +112,8 @@ export function FleetMapCanvas({
   edges: FleetMapEdgeInput[]
   nameByKey: Map<string, string>
   openByKey: Map<string, number>
+  runInfoByKey?: Map<string, NodeRunInfo>
+  edgeCounts?: Map<string, number>
   selected: string | null
   onSelect: (key: string) => void
 }) {
@@ -97,6 +136,8 @@ export function FleetMapCanvas({
             open: openByKey.get(n.key) ?? 0,
             degraded: n.degraded ?? false,
             selected: selected === n.key,
+            isSelftest: n.key === 'fleet-selftest',
+            runInfo: runInfoByKey?.get(n.key) ?? null,
           } satisfies FleetNodeData,
           draggable: false,
           connectable: false,
@@ -104,18 +145,21 @@ export function FleetMapCanvas({
       })
     }
     return out
-  }, [nodes, nameByKey, openByKey, selected])
+  }, [nodes, nameByKey, openByKey, selected, runInfoByKey])
 
   const flowEdges = useMemo<Edge[]>(
     () =>
-      edges.map((e) => ({
-        id: `${e.from}->${e.to}`,
-        source: e.from,
-        target: e.to,
-        label: e.artifact,
-        className: 'acr-fl-edge',
-      })),
-    [edges],
+      edges.map((e) => {
+        const count = edgeCounts?.get(`${e.from}->${e.to}`)
+        return {
+          id: `${e.from}->${e.to}`,
+          source: e.from,
+          target: e.to,
+          label: count != null && count > 0 ? `${count} ${e.artifact}${count === 1 ? '' : 's'}` : e.artifact,
+          className: 'acr-fl-edge',
+        }
+      }),
+    [edges, edgeCounts],
   )
 
   return (

@@ -128,6 +128,7 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
   const [showEvidence, setShowEvidence] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -160,6 +161,29 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
   useEffect(() => {
     void load()
   }, [load])
+
+  const patchCharter = useCallback(
+    async (body: { enabled?: boolean; autonomyLevel?: string }) => {
+      setBusy(true)
+      try {
+        const r = await fetch(`${backend}/api/agent/fleet/charters/${workerKey}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (!r.ok) {
+          const d = (await r.json().catch(() => null)) as { error?: string } | null
+          setErr(d?.error ?? `update failed: ${r.status}`)
+        } else {
+          setErr(null)
+        }
+        await load()
+      } finally {
+        setBusy(false)
+      }
+    },
+    [backend, workerKey, load],
+  )
 
   const loadTrace = useCallback(
     async (runId: string) => {
@@ -251,8 +275,46 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
           This is {TIER_WORDS[charter.tier] ?? charter.tier}. Right now it is{' '}
           {LEVEL_WORDS[charter.autonomyLevel] ?? charter.autonomyLevel}. The most it can ever be
           given is <strong>{charter.autonomyCap}</strong> — that ceiling is written in code, and
-          the dial on the fleet page cannot exceed it.
+          the dial below cannot exceed it.
         </p>
+        <div className="acr-fl-dialrow">
+          <span className="acr-fl-lbl">Autonomy</span>
+          <div className="acr-dial">
+            {(['OFF', 'OBSERVE', 'PROPOSE', 'AUTO'] as const).map((lv) => {
+              const order = ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO']
+              const overCap = order.indexOf(lv) > order.indexOf(charter.autonomyCap)
+              return (
+                <button
+                  key={lv}
+                  className={`acr-btn ${charter.autonomyLevel === lv ? 'on' : ''}`}
+                  disabled={busy || overCap}
+                  title={
+                    overCap
+                      ? `Above this worker's cap (${charter.autonomyCap}) — the ceiling is written in code`
+                      : LEVEL_WORDS[lv]
+                  }
+                  onClick={() => void patchCharter({ autonomyLevel: lv })}
+                >
+                  {lv}
+                </button>
+              )
+            })}
+          </div>
+          <label className="acr-fl-toggle">
+            <input
+              type="checkbox"
+              checked={charter.enabled}
+              disabled={busy}
+              onChange={(e) => void patchCharter({ enabled: e.target.checked })}
+            />
+            enabled
+          </label>
+        </div>
+        {charter.degraded ? (
+          <p className="acr-fl-degraded">
+            Its stored settings could not be read — it fails safe to OFF until that is fixed.
+          </p>
+        ) : null}
       </section>
 
       {/* my pipeline */}

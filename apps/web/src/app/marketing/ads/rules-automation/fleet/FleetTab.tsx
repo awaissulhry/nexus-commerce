@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Bot,
   Check,
@@ -24,8 +25,8 @@ import {
   X,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { FleetMapCanvas } from './FleetMapCanvas'
-import { GLOSSARY, Term } from './glossary'
+import { FleetMapCanvas, type NodeRunInfo } from './FleetMapCanvas'
+import { Term } from './glossary'
 import { FirstVisitIntro, HowItWorks } from './HowItWorks'
 import { PlanStory, type PlanLabels, type StoryPlan } from './PlanStory'
 
@@ -108,17 +109,15 @@ interface SweepRow {
   costUSD: number
   clean: boolean
 }
-interface StepRow {
-  seq: number
-  type: string
-  name: string
-  ok: boolean
-  latencyMs: number | null
-  costUSD?: string
-  errorMessage?: string | null
+interface ScheduleJob {
+  key: string
+  label: string
+  schedule: string
+  enabled: boolean
+  nextFireAt: string | null
+  lastRun: { startedAt: string; status: string; outputSummary: string | null } | null
 }
 
-const LEVELS = ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO'] as const
 const usd = (n: number) => `$${n.toFixed(4)}`
 const ago = (iso: string) => {
   const h = Math.floor((Date.now() - new Date(iso).getTime()) / 3_600_000)
@@ -131,6 +130,7 @@ const ago = (iso: string) => {
 
 export function FleetTab() {
   const backend = getBackendUrl()
+  const router = useRouter()
   const [charters, setCharters] = useState<CharterRow[]>([])
   const [graph, setGraph] = useState<{ nodes: GraphNode[]; edges: GraphEdge[] } | null>(null)
   const [fleetState, setFleetState] = useState<FleetState | null>(null)
@@ -142,9 +142,8 @@ export function FleetTab() {
   const [sweeps, setSweeps] = useState<SweepRow[]>([])
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [drawer, setDrawer] = useState<string | null>(null)
   const [openPlan, setOpenPlan] = useState<string | null>(null)
-  const [stepsByRun, setStepsByRun] = useState<Record<string, StepRow[]>>({})
+  const [schedule, setSchedule] = useState<ScheduleJob[]>([])
   const [rejectFor, setRejectFor] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [rejectAllFor, setRejectAllFor] = useState<string | null>(null)
@@ -154,7 +153,7 @@ export function FleetTab() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [c, g, s, r, f, p, a, sw] = await Promise.all([
+      const [c, g, s, r, f, p, a, sw, sch] = await Promise.all([
         fetch(`${backend}/api/agent/fleet/charters`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/graph`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/state`, { cache: 'no-store' }),
@@ -163,6 +162,7 @@ export function FleetTab() {
         fetch(`${backend}/api/agent/fleet/plans`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/approvals?status=pending`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/sweeps?limit=8`, { cache: 'no-store' }),
+        fetch(`${backend}/api/agent/fleet/schedule`, { cache: 'no-store' }),
       ])
       if (!c.ok) throw new Error(`charters: ${c.status}`)
       setCharters(((await c.json()) as { charters: CharterRow[] }).charters)
@@ -177,6 +177,7 @@ export function FleetTab() {
       }
       if (a.ok) setApprovals(((await a.json()) as { approvals: ApprovalRow[] }).approvals)
       if (sw.ok) setSweeps(((await sw.json()) as { sweeps: SweepRow[] }).sweeps)
+      if (sch.ok) setSchedule(((await sch.json()) as { jobs: ScheduleJob[] }).jobs)
       setErr(null)
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
@@ -188,29 +189,6 @@ export function FleetTab() {
   useEffect(() => {
     void load()
   }, [load])
-
-  const patchCharter = useCallback(
-    async (key: string, body: { enabled?: boolean; autonomyLevel?: string }) => {
-      setBusy(true)
-      try {
-        const r = await fetch(`${backend}/api/agent/fleet/charters/${key}`, {
-          method: 'PATCH',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(body),
-        })
-        if (!r.ok) {
-          const d = (await r.json().catch(() => null)) as { error?: string } | null
-          setErr(d?.error ?? `charter update: ${r.status}`)
-        } else {
-          setErr(null)
-        }
-        await load()
-      } finally {
-        setBusy(false)
-      }
-    },
-    [backend, load],
-  )
 
   const decide = useCallback(
     async (id: string, decision: 'approve' | 'reject', reason?: string) => {
@@ -258,27 +236,6 @@ export function FleetTab() {
     [backend, load],
   )
 
-  const toggleSteps = useCallback(
-    async (runId: string) => {
-      if (stepsByRun[runId]) {
-        setStepsByRun((prev) => {
-          const next = { ...prev }
-          delete next[runId]
-          return next
-        })
-        return
-      }
-      const r = await fetch(`${backend}/api/agent/fleet/runs/${runId}/steps`, {
-        cache: 'no-store',
-      })
-      if (r.ok) {
-        const d = (await r.json()) as { steps: StepRow[] }
-        setStepsByRun((prev) => ({ ...prev, [runId]: d.steps }))
-      }
-    },
-    [backend, stepsByRun],
-  )
-
   /* derived */
   const openFindingsByCharter = useMemo(() => {
     const m = new Map<string, number>()
@@ -306,13 +263,52 @@ export function FleetTab() {
       .reduce((s, r) => s + Number(r.costUSD), 0)
   }, [runs])
 
-  const charterByKey = useMemo(() => new Map(charters.map((c) => [c.key, c])), [charters])
   const nameByKey = useMemo(() => new Map(charters.map((c) => [c.key, c.name])), [charters])
-  const drawerCharter = drawer ? charterByKey.get(drawer) : null
-  const drawerRuns = useMemo(
-    () => runs.filter((r) => r.agentKey === drawer).slice(0, 5),
-    [runs, drawer],
-  )
+
+  // FX.5 — per-node "last run" info + running pulse, from the loaded runs.
+  const runInfoByKey = useMemo(() => {
+    const m = new Map<string, NodeRunInfo>()
+    for (const r of runs) {
+      const existing = m.get(r.agentKey)
+      const running = r.status === 'running'
+      if (!existing) {
+        m.set(r.agentKey, {
+          at: r.createdAt,
+          ok: r.ok,
+          findings: r.findingCount,
+          running,
+        })
+      } else if (running) {
+        existing.running = true
+      }
+    }
+    return m
+  }, [runs])
+
+  // FX.5 — artifact counts on the edges: findings per source worker,
+  // plans on the director→critic edge.
+  const edgeCounts = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const e of graph?.edges ?? []) {
+      if (e.artifact === 'finding') {
+        m.set(`${e.from}->${e.to}`, openFindingsByCharter.get(e.from) ?? 0)
+      } else if (e.artifact === 'plan') {
+        m.set(`${e.from}->${e.to}`, plans.length)
+      }
+    }
+    return m
+  }, [graph, openFindingsByCharter, plans])
+
+  const nextOf = (key: string): string => {
+    const j = schedule.find((x) => x.key === key)
+    if (!j) return ''
+    if (!j.enabled) return 'switched off'
+    if (!j.nextFireAt) return 'not scheduled'
+    const mins = Math.max(0, Math.round((new Date(j.nextFireAt).getTime() - Date.now()) / 60_000))
+    const h = Math.floor(mins / 60)
+    const d = Math.floor(h / 24)
+    return d >= 1 ? `in ${d}d ${h % 24}h` : h >= 1 ? `in ${h}h ${mins % 60}m` : `in ${mins}m`
+  }
   const pendingByCharter = useMemo(() => {
     const m = new Map<string, ApprovalRow[]>()
     for (const a of approvals) {
@@ -359,106 +355,28 @@ export function FleetTab() {
             </button>
           </div>
         </header>
+        <p className="acr-fl-schedule">
+          Next <Term k="sweep">sweep</Term> {nextOf('fleet-sweep')} · next{' '}
+          <Term k="council">council</Term> {nextOf('fleet-council')} · spent {usd(costToday)} of
+          the <Term k="ceiling">${fleetState?.dailyCeilingUSD?.toFixed(2) ?? '—'} daily ceiling</Term>{' '}
+          · click a worker to see its full profile
+        </p>
         {graph ? (
           <FleetMapCanvas
             nodes={graph.nodes}
             edges={graph.edges}
             nameByKey={nameByKey}
             openByKey={openFindingsByCharter}
-            selected={drawer}
-            onSelect={(key) => setDrawer(drawer === key ? null : key)}
+            runInfoByKey={runInfoByKey}
+            edgeCounts={edgeCounts}
+            selected={null}
+            onSelect={(key) => router.push(`/marketing/ads/rules-automation/fleet/worker/${key}`)}
           />
         ) : (
           <p className="acr-fl-empty">The graph endpoint returned nothing.</p>
         )}
       </section>
 
-      {/* 2 — agent drawer */}
-      {drawerCharter ? (
-        <section className="acr-card acr-fl-drawer">
-          <header className="acr-fl-head">
-            <h3>{drawerCharter.name}</h3>
-            <button className="acr-btn" onClick={() => setDrawer(null)}>
-              <X size={13} /> Close
-            </button>
-          </header>
-          <p className="acr-fl-desc">{drawerCharter.description}</p>
-          <div className="acr-fl-dialrow">
-            <span className="acr-fl-lbl">
-              <Term k="trust-ladder">Autonomy</Term>{' '}
-              <Term k="cap">(cap {drawerCharter.autonomyCap})</Term>
-            </span>
-            <div className="acr-dial">
-              {LEVELS.map((lv) => {
-                const overCap =
-                  LEVELS.indexOf(lv) > LEVELS.indexOf(drawerCharter.autonomyCap as (typeof LEVELS)[number])
-                return (
-                  <button
-                    key={lv}
-                    className={`acr-btn ${drawerCharter.autonomyLevel === lv ? 'on' : ''}`}
-                    disabled={busy || overCap}
-                    title={
-                      overCap
-                        ? `Above this worker's cap (${drawerCharter.autonomyCap}) — the ceiling is written in code`
-                        : GLOSSARY[lv.toLowerCase()]?.body
-                    }
-                    onClick={() => void patchCharter(drawerCharter.key, { autonomyLevel: lv })}
-                  >
-                    {lv}
-                  </button>
-                )
-              })}
-            </div>
-            <label className="acr-fl-toggle">
-              <input
-                type="checkbox"
-                checked={drawerCharter.enabled}
-                disabled={busy}
-                onChange={(e) =>
-                  void patchCharter(drawerCharter.key, { enabled: e.target.checked })
-                }
-              />
-              enabled
-            </label>
-          </div>
-          <div className="acr-fl-facts">
-            <span>budget {usd(drawerCharter.dailyBudgetUSD)}/day</span>
-            <span>{drawerCharter.maxTokensPerRun.toLocaleString()} tokens/run</span>
-            <span>cost 7d {usd(cost7dByCharter.get(drawerCharter.key) ?? 0)}</span>
-            {drawerCharter.degraded ? <span className="acr-fl-degraded">policy unreadable — fail-safe OFF</span> : null}
-          </div>
-          <div className="acr-fl-runs">
-            {drawerRuns.length === 0 ? (
-              <p className="acr-fl-empty">No runs yet.</p>
-            ) : (
-              drawerRuns.map((r) => (
-                <div key={r.id} className="acr-fl-run">
-                  <button className="acr-fl-runhead" onClick={() => void toggleSteps(r.id)}>
-                    {stepsByRun[r.id] ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                    <span className={`acr-dot ${r.ok ? 'ok' : 'bad'}`} />
-                    {r.status}
-                    {r.findingCount > 0 ? ` · ${r.findingCount} findings` : ''} · {usd(Number(r.costUSD))} ·{' '}
-                    {ago(r.createdAt)}
-                    {r.haltedReason ? ` · ${r.haltedReason}` : ''}
-                    {r.errorMessage ? ` · ${r.errorMessage.slice(0, 80)}` : ''}
-                  </button>
-                  {stepsByRun[r.id] ? (
-                    <ol className="acr-fl-steps">
-                      {stepsByRun[r.id]!.map((s) => (
-                        <li key={s.seq} className={s.ok ? '' : 'bad'}>
-                          {s.seq}. {s.type}:{s.name}
-                          {s.latencyMs != null ? ` (${s.latencyMs}ms)` : ''}
-                          {s.errorMessage ? ` — ${s.errorMessage.slice(0, 100)}` : ''}
-                        </li>
-                      ))}
-                    </ol>
-                  ) : null}
-                </div>
-              ))
-            )}
-          </div>
-        </section>
-      ) : null}
 
       {/* 3 — decision timeline */}
       <section className="acr-card">
