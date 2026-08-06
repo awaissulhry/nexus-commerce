@@ -776,3 +776,8 @@ a.acr-refresh { text-decoration: none; }
 .acr-gg-cpc { display: inline-flex; align-items: baseline; gap: 3px; }
 .acr-gg-cpc .x { font-size: 11px; color: #8d97a6; }
 .acr-gg-num.narrow { width: 52px; }
+
+/* ACR.1.3f — spacing only. The protected-terms panel brings its own chrome from
+   rules-automation.css; this just gives it the same rhythm as the sections above
+   it, without a second heading competing with the one it already has. */
+.acr-pt-mount { margin-top: 26px; }

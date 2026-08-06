@@ -186,10 +186,16 @@ export function GuardrailsTab() {
         in the deployed CSSOM before mounting rather than assumed, since borrowed classes
         that turn out not to cascade are what shipped the Coverage page unstyled.
       */}
-      <div className="acr-sec-head"><h2>Protected terms</h2>
-        <span className="acr-sec-count">Refused at the same gate as the bounds above — no automation may negate these</span>
+      {/*
+        No `acr-sec-head` above it, unlike every other section on this tab: the panel titles
+        and explains itself, so adding one rendered "PROTECTED TERMS" immediately above the
+        panel's own "Protected terms" — two headings, one subject. Reusing a component means
+        letting it own its presentation; the alternative is a second place to keep in sync,
+        which is the whole reason this is a second MOUNT and not a second copy.
+      */}
+      <div className="acr-pt-mount">
+        <ProtectedTermsPanel />
       </div>
-      <ProtectedTermsPanel />
     </div>
   )
 }
