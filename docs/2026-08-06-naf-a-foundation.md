@@ -342,3 +342,22 @@ Implemented task-by-task with per-task local commits (`5492a220a` schema → `94
 - **Phase C prerequisite — `apps/api` strict mode:** `strict:false` disables discriminated-union narrowing in source files (bitten in Phase A — `BudgetVerdict` needed optional-`undefined` members). The Critic's check union (`CriticOutput.checks[].result` driving block/revise flow) needs real narrowing. **Add "flip apps/api to strict (or at minimum strictNullChecks)" to the Phase C plan's open-questions list.**
 - **Phase D obligation (existing, restated):** fleet lever registration in `getEngineLevers()` with `haltBehaviour: 'honours'` (D11), and the run timeline must read BOTH step shapes — `AgentStep` rows for fleet runs, `AgentRun.steps` Json for ACP copilot runs (D12).
 - **Design-system workstream (not NAF):** TECH_DEBT #62 — port the 28 `--h10-rail-*` vars into `css-vars.ts` and add `tokens:check` to `.githooks/pre-push` **in the same commit**.
+
+## Live verification — 2026-08-06 ~04:50 UTC (prod Railway, deploy 4ceae897 / build 59e4af4e)
+
+Migration `20260806a_nafa_agent_fleet` applied on boot via `migrate-direct.mjs` (non-pooler; "All migrations have been successfully applied", 369 total). All calls below made through the operator's authenticated browser session against `nexusapi-production-b7bb.up.railway.app`.
+
+| Item | Result |
+|---|---|
+| `POST /api/agent/fleet/charters/seed` | 200 `{created: 1}` — charter seeded **dark** (`enabled=false`, `autonomyLevel=OFF`) |
+| `GET /api/agent/fleet/state` | 200 — singleton created on read: unhalted, `dailyCeilingUSD: 2` (D7 amendment live), `degraded: false` |
+| `POST /api/agent/fleet/run/fleet-selftest` | run `cmsh1ewlm000vmv01zanpxgbq` — create-first ✓, gates ✓, observation ✓, then **failed at the model call: Anthropic 400 "credit balance too low"** |
+| `AgentObservation` (real evidence) | ✅ `cmsh1ewwc000wmv01pv22buy5` — `cron-health` computed and persisted on prod, TTL 30 min |
+| `AgentStep` trace | ✅ seq 1 `observation:cron-health`, ok, 387 ms, output carries the observation id |
+| Failure hygiene | ✅ run `status=failed`, errorMessage carries the provider error verbatim, `endedAt`/`latencyMs` set, `costUSD 0`, `findingCount 0` |
+| Blackboard integrity | ✅ zero `AgentFinding` rows — a failed run enters nothing |
+| `GET /api/agent/fleet/runs?charterKey=fleet-selftest` | ✅ 200, the run visible with `mode='ask'`, `charterVersion=1` |
+| `AiUsageLog` | correctly empty — `logUsage` fires only on a returned generation |
+| Validated `Finding` from a real observation | ⛔ **BLOCKED — Anthropic account has no credits** (and Gemini is exhausted per standing memory, so no fallback). Not a code path: everything before and after the provider call is proven above. |
+
+**To close the last acceptance item (operator):** top up Anthropic credits (Plans & Billing — operator action, not automatable), then re-run `POST /api/agent/fleet/run/fleet-selftest` and re-check `AgentFinding` + `AiUsageLog` (`apps/api/scripts/_nafa-verify.mts` prints the full evidence chain, incl. evidenceRefs→observation resolution). No deploy needed.
