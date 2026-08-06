@@ -15662,3 +15662,20 @@ model AgentFleetState {
   dailyCeilingUSD Decimal   @default(2.00) @db.Decimal(12, 6)
   updatedAt       DateTime  @updatedAt
 }
+
+/// NAF.B — shadow grade: what the deterministic engine proposed for the
+/// entity a finding names, snapshotted at grade time by deterministic code
+/// (observation rows expire and AdsRuleSuggestion destroys history, so the
+/// comparison must be captured when it is made). One row per finding,
+/// re-grades update in place. Never written by a model.
+model AgentShadowGrade {
+  id                 String   @id @default(cuid())
+  findingId          String   @unique
+  engineKey          String // negative-candidates | harvest-candidates | bid-proposals
+  engineProposal     Json // the matching engine rows (empty array = engine proposed nothing)
+  agrees             Boolean
+  disagreementReason String?
+  gradedAt           DateTime @default(now())
+
+  @@index([engineKey, agrees])
+}
