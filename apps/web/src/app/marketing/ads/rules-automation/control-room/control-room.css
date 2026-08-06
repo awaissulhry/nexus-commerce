@@ -981,3 +981,29 @@ a.acr-refresh { text-decoration: none; }
   margin: 0; padding: 10px; border-radius: 7px; background: #f7f9fb;
   border: 1px solid #eef1f5; font-size: 10.5px; overflow-x: auto; max-height: 380px;
 }
+
+/* ── FX.3 — worker profile pages ─────────────────────────────────────── */
+.acr-flw-back { display: inline-flex; align-items: center; margin-right: 6px; color: #7b8798; }
+.acr-flw-back:hover { color: #1f6fde; }
+.acr-flw-plain { margin: 6px 0 0; font-size: 13px; color: #34404f; line-height: 1.6; }
+.acr-flw-pipeline { margin: 4px 0; padding: 0 0 0 4px; list-style: none; display: flex; flex-direction: column; gap: 0; }
+.acr-flw-pipeline li { display: flex; align-items: baseline; gap: 10px; padding: 5px 0 5px 18px; position: relative; }
+.acr-flw-pipeline li::before {
+  content: ''; position: absolute; left: 4px; top: 12px; width: 7px; height: 7px;
+  border-radius: 50%; background: #1a9d6a;
+}
+.acr-flw-pipeline li.bad::before { background: #d4453f; }
+.acr-flw-pipeline li:not(:last-child)::after {
+  content: ''; position: absolute; left: 7px; top: 21px; bottom: -7px; width: 1px; background: #dfe5ec;
+}
+.acr-flw-pipestep { font-size: 13px; color: #232c37; font-weight: 550; }
+.acr-flw-pipemeta { font-size: 11px; color: #8d97a6; font-variant-numeric: tabular-nums; }
+.acr-flw-evidence { padding: 4px 0; }
+.acr-flw-finding { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; border-top: 1px solid #eef1f5; flex-wrap: wrap; }
+.acr-flw-finding:first-of-type { border-top: 0; }
+.acr-flw-findingtext { font-size: 12.5px; color: #232c37; }
+.acr-fl-pill.sev-critical { background: #fdf2f2; border-color: #e6bcba; color: #9c2f2a; }
+.acr-fl-pill.sev-high { background: #fff3ef; border-color: #ecc7b8; color: #99422a; }
+.acr-fl-pill.sev-medium { background: #fff8ec; border-color: #ecd9ae; color: #8a6320; }
+.acr-fl-pill.sev-low, .acr-fl-pill.sev-info { background: #f1f4f8; border-color: #dfe5ec; color: #5a6675; }
+.acr-flw-limits { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; color: #34404f; line-height: 1.7; }

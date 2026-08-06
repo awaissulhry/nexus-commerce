@@ -1,0 +1,458 @@
+'use client'
+
+/**
+ * FX.3 — one worker, fully explained: who I am, my pipeline (real steps
+ * from real runs), what I read, what I produce, my limits, my report
+ * card, my charter, my run history — every run replayable as a story via
+ * the FX.1 trace endpoint. Plain sentences first, raw data last.
+ */
+
+import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
+import { ArrowLeft, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
+import { getBackendUrl } from '@/lib/backend-url'
+import type { PlanLabels } from '../../PlanStory'
+
+interface Charter {
+  key: string
+  name: string
+  tier: string
+  version: number
+  description?: string
+  systemPrompt: string
+  observationKeys: string[]
+  toolNames: string[]
+  modelFeature: string
+  enabled: boolean
+  autonomyLevel: string
+  autonomyCap: string
+  dailyBudgetUSD: number
+  maxTokensPerRun: number
+  maxFindingsPerRun: number
+  dedupeKeyPattern?: string
+  maxEvidenceAgeHours?: number
+  degraded: boolean
+}
+interface RunRow {
+  id: string
+  status: string
+  ok: boolean
+  trigger: string
+  findingCount: number
+  costUSD: string
+  latencyMs: number | null
+  haltedReason: string | null
+  errorMessage: string | null
+  createdAt: string
+}
+interface TraceStep {
+  seq: number
+  type: string
+  label: string
+  ok: boolean
+  latencyMs: number | null
+  costUSD: number
+  inputTokens: number
+  outputTokens: number
+  errorMessage: string | null
+}
+interface Trace {
+  shape: string
+  run: { model: string | null; costUSD: number; findingCount: number }
+  steps: TraceStep[]
+  evidence: Array<{ key: string; dataVintage: string | null; preview: string; truncated: boolean }>
+  findings: Array<{ id: string; kind: string; entityId: string; severity: string; rationale: string }>
+}
+interface FindingRow {
+  id: string
+  kind: string
+  entityId: string
+  severity: string
+  status: string
+  rationale: string
+  createdAt: string
+}
+interface Scorecard {
+  charterKey: string
+  windowDays: number
+  periodEnd: string
+  findings: number
+  promoted: number
+  approved: number
+  rejected: number
+  shadowAgreement: string | null
+  grade: string | null
+  promotionEligible: boolean
+  costUSD: string
+}
+
+const usd = (n: number | string) => `$${Number(n).toFixed(4)}`
+const ago = (iso: string) => {
+  const h = Math.floor((Date.now() - new Date(iso).getTime()) / 3_600_000)
+  if (h < 1) return 'just now'
+  if (h < 48) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
+}
+
+const TIER_WORDS: Record<string, string> = {
+  analyst: 'a worker — it reads evidence and reports findings; it cannot change anything',
+  director: 'the planner — it turns findings into a ranked plan; it cannot execute',
+  critic: 'the reviewer — its job is to find reasons to say no',
+  auditor: 'the reporter — it writes the nightly brief; it changes nothing',
+}
+const LEVEL_WORDS: Record<string, string> = {
+  OFF: 'switched off — it does not run',
+  OBSERVE: 'watch-only — it runs and reports, and cannot change anything',
+  PROPOSE: 'proposing — its suggestions queue for your approval, nothing more',
+  AUTO: 'acting on its own, inside every safety gate',
+}
+
+const GRADE_WORDS: Record<string, string> = {
+  A: 'excellent — its findings almost always match the engines',
+  B: 'good — solid agreement with the engines',
+  C: 'unproven or mixed — needs more evidence',
+  D: 'poor — it disagrees with the engines more than it agrees',
+  F: 'failing — it broke its output contract too often',
+}
+
+export function WorkerClient({ workerKey }: { workerKey: string }) {
+  const backend = getBackendUrl()
+  const [charter, setCharter] = useState<Charter | null>(null)
+  const [runs, setRuns] = useState<RunRow[]>([])
+  const [findings, setFindings] = useState<FindingRow[]>([])
+  const [labels, setLabels] = useState<PlanLabels>({ campaigns: {}, targets: {} })
+  const [scorecards, setScorecards] = useState<Scorecard[]>([])
+  const [traces, setTraces] = useState<Record<string, Trace>>({})
+  const [openRun, setOpenRun] = useState<string | null>(null)
+  const [showCharter, setShowCharter] = useState(false)
+  const [showEvidence, setShowEvidence] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [c, r, f, s] = await Promise.all([
+        fetch(`${backend}/api/agent/fleet/charters`, { cache: 'no-store' }),
+        fetch(`${backend}/api/agent/fleet/runs?charterKey=${workerKey}&limit=20`, { cache: 'no-store' }),
+        fetch(`${backend}/api/agent/fleet/findings?charterKey=${workerKey}&limit=30`, { cache: 'no-store' }),
+        fetch(`${backend}/api/agent/fleet/scorecards?charterKey=${workerKey}&limit=8`, { cache: 'no-store' }),
+      ])
+      if (c.ok) {
+        const all = ((await c.json()) as { charters: Charter[] }).charters
+        setCharter(all.find((x) => x.key === workerKey) ?? null)
+      }
+      if (r.ok) setRuns(((await r.json()) as { runs: RunRow[] }).runs)
+      if (f.ok) {
+        const fj = (await f.json()) as { findings: FindingRow[]; labels?: PlanLabels }
+        setFindings(fj.findings)
+        setLabels(fj.labels ?? { campaigns: {}, targets: {} })
+      }
+      if (s.ok) setScorecards(((await s.json()) as { scorecards: Scorecard[] }).scorecards)
+      setErr(null)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [backend, workerKey])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const loadTrace = useCallback(
+    async (runId: string) => {
+      if (openRun === runId) {
+        setOpenRun(null)
+        return
+      }
+      setOpenRun(runId)
+      if (!traces[runId]) {
+        const r = await fetch(`${backend}/api/agent/fleet/runs/${runId}/trace`, { cache: 'no-store' })
+        if (r.ok) {
+          const t = (await r.json()) as Trace
+          setTraces((prev) => ({ ...prev, [runId]: t }))
+        }
+      }
+    },
+    [backend, openRun, traces],
+  )
+
+  const lastRun = runs[0]
+  const lastTrace = lastRun ? traces[lastRun.id] : undefined
+  // fetch the newest run's trace once, for the pipeline section
+  useEffect(() => {
+    if (lastRun && !traces[lastRun.id]) {
+      void fetch(`${backend}/api/agent/fleet/runs/${lastRun.id}/trace`, { cache: 'no-store' }).then(
+        async (r) => {
+          if (r.ok) {
+            const t = (await r.json()) as Trace
+            setTraces((prev) => ({ ...prev, [lastRun.id]: t }))
+          }
+        },
+      )
+    }
+  }, [backend, lastRun, traces])
+
+  const entityLabel = (entityId: string): string => {
+    const head = entityId.split(':')[0] ?? ''
+    const c = labels.campaigns[head] ?? labels.campaigns[entityId]
+    if (c) {
+      const rest = entityId.slice(head.length + 1)
+      return rest ? `“${rest}” in ${c.name}` : c.name
+    }
+    const t = labels.targets[entityId]
+    if (t) return `“${t.text}” in ${t.campaignName}`
+    return entityId
+  }
+
+  if (loading && !charter) {
+    return <div className="acr-card acr-fl-loading">Loading this worker…</div>
+  }
+  if (!charter) {
+    return (
+      <div className="acr-card">
+        <p className="acr-fl-empty">No worker named “{workerKey}”.</p>
+        <Link className="acr-btn" href="/marketing/ads/rules-automation/fleet">
+          <ArrowLeft size={13} /> Back to the fleet
+        </Link>
+      </div>
+    )
+  }
+
+  const card14 = scorecards.find((s) => s.windowDays === 14)
+
+  return (
+    <div className="acr-fleet">
+      {err ? <div className="acr-banner err">{err}</div> : null}
+
+      {/* who I am */}
+      <section className="acr-card">
+        <header className="acr-fl-head">
+          <h3>
+            <Link href="/marketing/ads/rules-automation/fleet" className="acr-flw-back">
+              <ArrowLeft size={14} />
+            </Link>
+            {charter.name}
+          </h3>
+          <div className="acr-fl-headright">
+            <span className="acr-fl-pill">{charter.tier}</span>
+            <span className={`acr-fl-pill ${charter.autonomyLevel === 'OFF' ? '' : 'acr-fl-pill-ok'}`}>
+              {charter.autonomyLevel}
+            </span>
+            <button className="acr-btn" onClick={() => void load()}>
+              <RefreshCw size={13} /> Refresh
+            </button>
+          </div>
+        </header>
+        <p className="acr-fl-desc">{charter.description}</p>
+        <p className="acr-flw-plain">
+          This is {TIER_WORDS[charter.tier] ?? charter.tier}. Right now it is{' '}
+          {LEVEL_WORDS[charter.autonomyLevel] ?? charter.autonomyLevel}. The most it can ever be
+          given is <strong>{charter.autonomyCap}</strong> — that ceiling is written in code, and
+          the dial on the fleet page cannot exceed it.
+        </p>
+      </section>
+
+      {/* my pipeline */}
+      <section className="acr-card">
+        <header className="acr-fl-head">
+          <h3>Its pipeline — what a run looks like</h3>
+          {lastRun ? <span className="acr-fl-sub">from its latest run, {ago(lastRun.createdAt)}</span> : null}
+        </header>
+        {lastTrace && lastTrace.steps.length > 0 ? (
+          <ol className="acr-flw-pipeline">
+            {lastTrace.steps.map((s) => (
+              <li key={s.seq} className={s.ok ? '' : 'bad'}>
+                <span className="acr-flw-pipestep">{s.label}</span>
+                <span className="acr-flw-pipemeta">
+                  {s.latencyMs != null ? `${(s.latencyMs / 1000).toFixed(1)}s` : ''}
+                  {s.costUSD > 0 ? ` · ${usd(s.costUSD)}` : ''}
+                  {s.errorMessage ? ` · ${s.errorMessage.slice(0, 90)}` : ''}
+                </span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <ol className="acr-flw-pipeline">
+            {charter.observationKeys.map((k) => (
+              <li key={k}>
+                <span className="acr-flw-pipestep">Read the evidence: {k.replace(/-/g, ' ')}</span>
+              </li>
+            ))}
+            <li><span className="acr-flw-pipestep">Think it through (the model call)</span></li>
+            <li><span className="acr-flw-pipestep">Check its own work against the contract</span></li>
+            <li><span className="acr-flw-pipestep">Write findings to the shared board</span></li>
+          </ol>
+        )}
+        <p className="acr-fl-sub">
+          Every run follows this shape: evidence first (computed by code, never by the model),
+          one model call, a strict format check — a run that fails the check writes nothing.
+        </p>
+      </section>
+
+      {/* what I read */}
+      <section className="acr-card">
+        <header className="acr-fl-head"><h3>What it reads</h3></header>
+        {lastTrace && lastTrace.evidence.length > 0 ? (
+          lastTrace.evidence.map((e) => (
+            <div key={e.key} className="acr-flw-evidence">
+              <button
+                className="acr-fl-checkstoggle"
+                onClick={() => setShowEvidence(showEvidence === e.key ? null : e.key)}
+              >
+                {showEvidence === e.key ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                {e.key.replace(/-/g, ' ')}
+                {e.dataVintage ? (
+                  <span className="acr-fl-sub">data as of {new Date(e.dataVintage).toLocaleString()}</span>
+                ) : null}
+              </button>
+              {showEvidence === e.key ? (
+                <pre className="acr-fl-raw">
+                  {e.preview}
+                  {e.truncated ? '\n… (preview truncated)' : ''}
+                </pre>
+              ) : null}
+            </div>
+          ))
+        ) : (
+          <p className="acr-fl-empty">
+            Its evidence feeds: {charter.observationKeys.map((k) => k.replace(/-/g, ' ')).join(', ') || 'none'}.
+            The actual data appears here after its first run.
+          </p>
+        )}
+      </section>
+
+      {/* what I produce */}
+      <section className="acr-card">
+        <header className="acr-fl-head">
+          <h3>What it has found lately</h3>
+          <span className="acr-fl-sub">{findings.length === 0 ? 'nothing yet' : `${findings.length} recent`}</span>
+        </header>
+        {findings.slice(0, 12).map((f) => (
+          <div key={f.id} className="acr-flw-finding">
+            <span className={`acr-fl-pill sev-${f.severity}`}>{f.severity}</span>
+            <span className="acr-flw-findingtext">
+              <strong>{f.kind.replace(/_/g, ' ')}</strong> · {entityLabel(f.entityId)}
+            </span>
+            <span className="acr-fl-sub">{f.rationale.slice(0, 160)}</span>
+          </div>
+        ))}
+      </section>
+
+      {/* my limits */}
+      <section className="acr-card">
+        <header className="acr-fl-head"><h3>Its limits — enforced by code, not promises</h3></header>
+        <ul className="acr-flw-limits">
+          <li>Spends at most <strong>{usd(charter.dailyBudgetUSD)}</strong> a day — past that, its runs are refused before the model is called.</li>
+          <li>At most <strong>{charter.maxTokensPerRun.toLocaleString()}</strong> tokens per run — a runaway run is cut off mid-flight.</li>
+          <li>Reports at most <strong>{charter.maxFindingsPerRun}</strong> findings per run.</li>
+          {charter.maxEvidenceAgeHours ? (
+            <li>Refuses to work from evidence older than <strong>{charter.maxEvidenceAgeHours}h</strong> — stale data fails loudly, at zero cost.</li>
+          ) : null}
+          {charter.dedupeKeyPattern ? (
+            <li>Every finding carries a stable identity key, so the same issue never counts twice.</li>
+          ) : null}
+          <li>It has <strong>no write access to Amazon</strong> — nothing any worker produces reaches Amazon without passing the approval gate.</li>
+        </ul>
+      </section>
+
+      {/* my report card */}
+      <section className="acr-card">
+        <header className="acr-fl-head"><h3>Its report card</h3></header>
+        {scorecards.length === 0 ? (
+          <p className="acr-fl-empty">
+            Report cards are computed every night. This worker has none yet — they appear after
+            its first night on the books.
+          </p>
+        ) : (
+          <>
+            {card14?.grade ? (
+              <p className="acr-flw-plain">
+                Current grade <strong>{card14.grade}</strong> — {GRADE_WORDS[card14.grade] ?? ''}.
+                {card14.promotionEligible
+                  ? ' It has earned the next rung of trust.'
+                  : ' It has not yet earned a promotion.'}
+              </p>
+            ) : null}
+            <table className="acr-fl-table">
+              <thead>
+                <tr>
+                  <th>Window</th><th>Found</th><th>Into plans</th><th>Approved</th><th>Rejected</th><th>Agrees with engines</th><th>Grade</th><th>Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scorecards.slice(0, 6).map((s) => (
+                  <tr key={`${s.windowDays}-${s.periodEnd}`}>
+                    <td>{s.windowDays}d to {new Date(s.periodEnd).toISOString().slice(0, 10)}</td>
+                    <td>{s.findings}</td>
+                    <td>{s.promoted}</td>
+                    <td>{s.approved}</td>
+                    <td>{s.rejected}</td>
+                    <td>{s.shadowAgreement == null ? 'unknown' : `${Math.round(Number(s.shadowAgreement) * 100)}%`}</td>
+                    <td>{s.grade ?? '—'}</td>
+                    <td>{usd(s.costUSD)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+      </section>
+
+      {/* my charter */}
+      <section className="acr-card">
+        <header className="acr-fl-head">
+          <h3>Its charter — the job description it actually runs on</h3>
+          <span className="acr-fl-sub">version {charter.version}</span>
+        </header>
+        <p className="acr-fl-sub">
+          This is the literal instruction the worker receives, word for word. Changing its
+          behaviour means changing this text — reviewed, versioned, revertible.
+        </p>
+        <button className="acr-fl-rawtoggle" onClick={() => setShowCharter(!showCharter)}>
+          {showCharter ? 'hide' : 'show'} the charter
+        </button>
+        {showCharter ? <pre className="acr-fl-raw">{charter.systemPrompt}</pre> : null}
+      </section>
+
+      {/* run history */}
+      <section className="acr-card">
+        <header className="acr-fl-head">
+          <h3>Run history</h3>
+          <span className="acr-fl-sub">{runs.length === 0 ? 'no runs yet' : `${runs.length} recent`}</span>
+        </header>
+        {runs.map((r) => (
+          <div key={r.id} className="acr-fl-run">
+            <button className="acr-fl-runhead" onClick={() => void loadTrace(r.id)}>
+              {openRun === r.id ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              <span className={`acr-dot ${r.ok ? 'ok' : 'bad'}`} />
+              {ago(r.createdAt)} · {r.trigger} · {r.findingCount} finding{r.findingCount === 1 ? '' : 's'} · {usd(r.costUSD)}
+              {r.haltedReason ? ` · stopped: ${r.haltedReason}` : ''}
+            </button>
+            {openRun === r.id ? (
+              traces[r.id] ? (
+                <ol className="acr-flw-pipeline">
+                  {traces[r.id]!.steps.map((s) => (
+                    <li key={s.seq} className={s.ok ? '' : 'bad'}>
+                      <span className="acr-flw-pipestep">{s.label}</span>
+                      <span className="acr-flw-pipemeta">
+                        {s.latencyMs != null ? `${(s.latencyMs / 1000).toFixed(1)}s` : ''}
+                        {s.inputTokens > 0 ? ` · ${s.inputTokens.toLocaleString()} in / ${s.outputTokens.toLocaleString()} out` : ''}
+                        {s.costUSD > 0 ? ` · ${usd(s.costUSD)}` : ''}
+                        {s.errorMessage ? ` · ${s.errorMessage.slice(0, 90)}` : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="acr-fl-empty">Loading the trace…</p>
+              )
+            ) : null}
+          </div>
+        ))}
+      </section>
+    </div>
+  )
+}
