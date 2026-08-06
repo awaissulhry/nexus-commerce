@@ -34,10 +34,8 @@
   --h10-grey-900: #1c2530;
   --h10-rail-surface: #f1f3f5;
   --h10-rail-line: #e3e7ec;
-  /* Rail-specific colours (dedicated so the app-wide rail can follow theme
-     without shifting general --h10-text-* used elsewhere). Light values; the
-     .dark block overrides them, and .h10-shell pins them light for the
-     deliberately-light standalone shells (ads cockpit + /products/next). */
+
+  /* ── Rail palette (theme-following; .h10-shell pins light) ── */
   --h10-rail-text: #4a5462;
   --h10-rail-text-2: #5b6573;
   --h10-rail-text-strong: #1c2530;
@@ -204,8 +202,8 @@
   --h10-border-subtle: #26323f;
   --h10-border-strong: #46505f;
   --h10-rail-border: #26323f;
-  /* Dark rail palette (consumed only when the rail is NOT under .h10-shell —
-     i.e. the app-wide rail; standalone shells pin these light). */
+
+  /* ── Dark rail palette (app-wide rail only; shells pin light) ── */
   --h10-rail-text: #aab6c2;
   --h10-rail-text-2: #97a3b1;
   --h10-rail-text-strong: #e7ebf1;

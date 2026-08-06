@@ -69,6 +69,17 @@ node scripts/ds-conformance-guard.mjs --check || {
   exit 1
 }
 
+# TECH_DEBT #62 (2026-08-06) — tokens.css is generated from
+# tokens/css-vars.ts; a hand-edit to the output silently dies on the next
+# regen (the rail vars lived that way for five weeks). Fail the push when
+# the two drift. Added in the SAME commit that ported the rail vars into
+# css-vars.ts — this check is only safe once the generator owns them.
+echo "→ Checking tokens.css is in sync with css-vars.ts..."
+npm run tokens:check --silent || {
+  echo "❌ tokens.css drift — edit tokens/css-vars.ts and run 'npm run tokens:gen'; never hand-edit tokens.css"
+  exit 1
+}
+
 echo "→ Building apps/web..."
 # Build into a dir unique to THIS push. Concurrent pushes previously shared `.next` and
 # deleted each other's output mid-build; the failure looked like a code error (ENOENT on a

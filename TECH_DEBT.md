@@ -1459,10 +1459,8 @@ Leaving the TODO comments in place so `grep "TODO" apps/api` still
 surfaces them — the goal of this entry is to inventory + assert they're
 known + deferred, not to remove them.
 
-## 62. 🟡 tokens:check red on main since 2026-06-29 — rail vars live only in the generated file
+## 62. ✅ tokens:check red on main since 2026-06-29 — rail vars live only in the generated file
 
-**Symptom:** `npm run tokens:check` fails ("tokens.css is stale vs tokens/css-vars.ts"). It has been red since commit `99746dbe8` (rail P1, 2026-06-29), which hand-added 28 `--h10-rail-*` variables (light + dark rail palettes) directly into the **generated** `apps/web/src/design-system/styles/tokens.css` without porting them to the source of truth `tokens/css-vars.ts`. Running `tokens:gen` therefore **deletes the live rail palette** — never "fix" the check by regenerating.
+**RESOLVED 2026-08-06 (NAF Stage D, D3).** The rail palette (11 light + 11 dark `--h10-rail-*` vars — the "28" in the original report double-counted the six already generated from `palette.railBg`/`railBorder` and the structural pair) is ported into `tokens/css-vars.ts` as hex literals per the ImageUpload precedent, `tokens.css` regenerated (rail var values verified byte-identical pre/post), and `npm run tokens:check` added to `.githooks/pre-push` in the same commit, per the operator directive that the gate and the fix must land together.
 
-**Surfaced at:** NAF.A phase gates, 2026-08-06. Nothing enforces the check — `.githooks/pre-push` does not run it, which is why every push since June passed.
-
-**Proper fix (operator directive 2026-08-06):** port the 28 rail vars into `tokens/css-vars.ts`, regenerate, **and add `npm run tokens:check` to `.githooks/pre-push` in the same commit** — the gate and the fix must land together or the gap reopens. Belongs to the design-system/rail workstream, not NAF.
+**Original symptom:** `npm run tokens:check` failed ("tokens.css is stale vs tokens/css-vars.ts") since commit `99746dbe8` (rail P1, 2026-06-29), which hand-added the rail palettes directly into the **generated** `apps/web/src/design-system/styles/tokens.css` without porting them to the source of truth — so `tokens:gen` deleted the live rail palette, and nothing enforced the check.

@@ -46,6 +46,24 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--h10-rail-surface', value: palette.railBg },
   { name: '--h10-rail-line', value: palette.railBorder },
 
+  // Rail-specific colours, dedicated so the app-wide rail can follow theme
+  // without shifting the general --h10-text-* roles used elsewhere. Light
+  // values; the dark block overrides them, and .h10-shell pins them light for
+  // the deliberately-light standalone shells (ads cockpit + /products/next).
+  // Hand-lived in tokens.css from 2026-06-29 (99746dbe8) until TECH_DEBT #62
+  // ported them here — hex literals like the ImageUpload washes below.
+  { section: 'Rail palette (theme-following; .h10-shell pins light)', name: '--h10-rail-text', value: '#4a5462' },
+  { name: '--h10-rail-text-2', value: '#5b6573' },
+  { name: '--h10-rail-text-strong', value: '#1c2530' },
+  { name: '--h10-rail-icon', value: '#8a93a1' },
+  { name: '--h10-rail-chev', value: '#98a2b3' },
+  { name: '--h10-rail-item-hover', value: '#e6eaf0' },
+  { name: '--h10-rail-item-hover-2', value: '#f1f4f8' },
+  { name: '--h10-rail-chip-bg', value: '#e8ebf0' },
+  { name: '--h10-rail-chip-active-bg', value: '#dce8fb' },
+  { name: '--h10-rail-chip-active-fg', value: '#1f6fde' },
+  { name: '--h10-rail-ft', value: '#aeb6c2' },
+
   { name: '--h10-green-soft', value: palette.green.soft },
   { name: '--h10-green-500', value: palette.green[500] },
   { name: '--h10-green-600', value: palette.green[600] },
@@ -211,4 +229,18 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--h10-border-subtle', value: '#26323f' },
   { name: '--h10-border-strong', value: '#46505f' },
   { name: '--h10-rail-border', value: '#26323f' },
+
+  // Dark rail palette (consumed only when the rail is NOT under .h10-shell —
+  // i.e. the app-wide rail; standalone shells pin these light).
+  { section: 'Dark rail palette (app-wide rail only; shells pin light)', name: '--h10-rail-text', value: '#aab6c2' },
+  { name: '--h10-rail-text-2', value: '#97a3b1' },
+  { name: '--h10-rail-text-strong', value: '#e7ebf1' },
+  { name: '--h10-rail-icon', value: '#8a94a6' },
+  { name: '--h10-rail-chev', value: '#6f7b8b' },
+  { name: '--h10-rail-item-hover', value: '#223247' },
+  { name: '--h10-rail-item-hover-2', value: '#1d2a3c' },
+  { name: '--h10-rail-chip-bg', value: '#243345' },
+  { name: '--h10-rail-chip-active-bg', value: '#1d3a5f' },
+  { name: '--h10-rail-chip-active-fg', value: '#cfe1fb' },
+  { name: '--h10-rail-ft', value: '#6f7b8b' },
 ]
