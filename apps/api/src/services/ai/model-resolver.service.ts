@@ -85,6 +85,39 @@ export async function resolveModelForFeature(
 }
 
 /**
+ * NAF.A2 — laptop-side routing of named feature keys to the local provider.
+ *
+ * `NEXUS_LOCAL_AI_FEATURES` is a comma-separated list of AI feature keys
+ * ('*' = all) that may be served by the local OpenAI-compatible provider. It
+ * is consulted ONLY when that provider is actually configured, so a typo'd
+ * or stale entry can never black-hole a feature — it just falls through to
+ * the normal resolution order.
+ *
+ * Why env rather than an AiFeatureModelPref row, given the pref table exists
+ * for exactly this (control #20): a locally-run API reads the PRODUCTION
+ * database. Writing a pref row would pin production's own tier to a provider
+ * production cannot reach, and it would outlive the session. An env var on
+ * one machine cannot. Pinning local via a pref row is still fully supported
+ * — `isValidProviderName` accepts it — it is simply not how a local
+ * verification run should be wired.
+ *
+ * Read per call, never cached: it is a switch the operator flips between
+ * runs, and the read is a string compare.
+ */
+export function localFeatureRouting(feature: string): boolean {
+  const raw = process.env.NEXUS_LOCAL_AI_FEATURES?.trim()
+  if (!raw) return false
+  const local = getProvider('local')
+  if (!local || local.name !== 'local') return false
+  const wanted = feature.trim().toLowerCase()
+  return raw
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+    .some((entry) => entry === '*' || entry === wanted)
+}
+
+/**
  * Provider-pinning resolver — which provider a feature should run on,
  * honouring the operator's selection so the global default (or a
  * per-feature pick) can flip the whole app to a vendor ("everything on
@@ -108,6 +141,13 @@ export async function getProviderForFeature(
   if (req && isValidProviderName(req)) {
     const p = getProvider(req)
     if (p && p.name === req) return p
+  }
+  // 1b. NAF.A2 — the local allowlist. Above the DB prefs because it is the
+  // operator's machine-local override; dead when the env var is unset, which
+  // is production's state.
+  if (localFeatureRouting(feature)) {
+    const localProvider = getProvider('local')
+    if (localProvider) return localProvider
   }
   const prefs = await loadPrefs().catch(() => new Map<string, PrefRow>())
   const pin = (row?: PrefRow): LLMProvider | null => {
