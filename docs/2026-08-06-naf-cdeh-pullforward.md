@@ -84,3 +84,13 @@ C: drops explained (executor validates `dropped[].reason` ≥10 chars — alread
 D: decision reconstructable ≤3 clicks (timeline → expand) · reject-all works (D1) · tokens:check green (D3) · cost ledger reconciles (D2 test).
 E: nightly scorecards (E1) · calibration displayed (D2 brief/drawer) · AUTO refusal server-side (E3) · demotion fires in seeded test (E3).
 H: p95 <50ms (H2 measured) · critic catches seeded self-competition the pairwise checks miss (H2 test) · zero new databases (Postgres CTEs).
+
+---
+
+## Execution record (2026-08-06, same session)
+
+- **Stage C SHIPPED** — 17a65c8b6 (tools), af607a868 (executor plans), 401150ede (director/critic/council). Gate: supervised council on prod — director $0.194/168s produced a 15-item plan with 2 honestly-reasoned drops; critic (haiku-4-5, C-D5 pin applied via AiFeatureModelPref) returned **block** on three checks (no_double_counting: 9 items already negated/existing; blast_radius_ok: 2 declared conflicts vs unattended limit 0; no_self_competition); zero outbound AD_* rows in the window; charters restored OFF.
+  **Open question for the operator:** the director's own declared-and-RESOLVED `conflicts` feed the blast guard's conflicts metric (limit 0 unattended), so any honestly-declared conflict blocks the whole plan. Decide whether resolved conflicts should count before the first live council.
+- **Stage D SHIPPED** — f47bdcc76 (routes), 9231031b8 (FleetTab, six panels), a17d40a66 (fleet map onto xyflow per D-D2), ec718622c (TECH_DEBT #62: rail vars ported + tokens:check gates the push). Gate: full pre-push green incl. tokens:check; UI self-verified on live prod against real data (map, cap-enforced dial, AgentStep trace, timeline with the blocked plan expanded, inbox, ledger reconciling the council cost, brief).
+- **Stage E SHIPPED (dark)** — daf62eff3 (E1 scorecards, 14d/30d windows, execution-dependent fields null until F), 866b8ee7d (E2 exemplars: minted on every decide, retrieved into prompts), 201ff5fb6 (E3 demotion machine + server-side AUTO refusal + fleet-auditor charter riding the sweep post-scorecards).
+- **Stage H SHIPPED** — 43672bbb0. Migration applied to prod; first derivation ran: TARGETS=3285, SHARES_INVENTORY=2530, COMPETES_WITH=68, CANNIBALIZES=28, VARIANT_OF=0 (ProductVariation empty on this catalogue — derivation kept, dormant-honest). Traversal acceptance **PASS**: frontier CTE p50=16.7ms / p95=21.9ms / max=46.9ms server-side over 100 runs on prod volume (the first edge-recursive shape measured p95=759ms and was rewritten). Critic structural advisories live behind the same nightly derivation. **Cut per H-D1:** the fleet-map entity-graph overlay.
