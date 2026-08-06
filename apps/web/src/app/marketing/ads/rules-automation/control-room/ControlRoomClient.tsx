@@ -30,9 +30,7 @@ import { RulesSection } from './RulesSection'
 import { GuardrailsTab } from './GuardrailsTab'
 import { ActivityTab } from './ActivityTab'
 import { TodayTab } from './TodayTab'
-import { AutomationDock } from '../../_shared/AutomationDock'
 import { ForesightTab } from './ForesightTab'
-import { FleetTab } from './FleetTab'
 import { LeverDrawer } from './LeverDrawer'
 import './control-room.css'
 
@@ -68,13 +66,12 @@ const ago = (iso: string | null) => {
 export function ControlRoomClient() {
   const params = useSearchParams()
   const raw = params.get('tab')
-  const tab: 'today' | 'foresight' | 'levers' | 'guardrails' | 'activity' | 'fleet' =
+  const tab: 'today' | 'foresight' | 'levers' | 'guardrails' | 'activity' =
     raw === 'guardrails' ? 'guardrails'
       : raw === 'activity' ? 'activity'
         : raw === 'levers' ? 'levers'
           : raw === 'foresight' ? 'foresight'
-            : raw === 'fleet' ? 'fleet'
-              : 'today'
+            : 'today'
   const [engines, setEngines] = useState<Engine[] | null>(null)
   const [global, setGlobal] = useState<Global | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -116,8 +113,10 @@ export function ControlRoomClient() {
   const warnings = (engines ?? []).filter((e) => e.warning).length
 
   return (
-    <div className="acr acr--with-dock">
-      <div className="acr-maincol">
+    // The dock is gone (operator call 2026-08-06): it duplicated the rules
+    // list beside a page whose Levers tab already governs every rule, and
+    // the room reads better at full width.
+    <div className="acr">
       <header className="acr-head">
         <div>
           <h1>Control Room</h1>
@@ -187,7 +186,7 @@ export function ControlRoomClient() {
       {/* Deep-linkable, like every other tab bar in this console: a tab you cannot bookmark
           or send to someone is a tab that only exists while you are looking at it. */}
       <nav className="acr-tabs" role="tablist" aria-label="Control Room views">
-        {(['today', 'foresight', 'levers', 'guardrails', 'activity', 'fleet'] as const).map((t) => (
+        {(['today', 'foresight', 'levers', 'guardrails', 'activity'] as const).map((t) => (
           <Link
             key={t}
             href={`/marketing/ads/rules-automation/control-room?tab=${t}`}
@@ -196,12 +195,12 @@ export function ControlRoomClient() {
             className={`acr-tab ${tab === t ? 'on' : ''}`}
             scroll={false}
           >
-            {t === 'today' ? 'Today' : t === 'foresight' ? 'Foresight' : t === 'levers' ? 'Levers' : t === 'guardrails' ? 'Guardrails' : t === 'activity' ? 'Activity' : 'Fleet'}
+            {t === 'today' ? 'Today' : t === 'foresight' ? 'Foresight' : t === 'levers' ? 'Levers' : t === 'guardrails' ? 'Guardrails' : 'Activity'}
           </Link>
         ))}
       </nav>
 
-      {tab === 'today' ? <TodayTab /> : tab === 'foresight' ? <ForesightTab /> : tab === 'guardrails' ? <GuardrailsTab /> : tab === 'activity' ? <ActivityTab /> : tab === 'fleet' ? <FleetTab /> : <>
+      {tab === 'today' ? <TodayTab /> : tab === 'foresight' ? <ForesightTab /> : tab === 'guardrails' ? <GuardrailsTab /> : tab === 'activity' ? <ActivityTab /> : <>
       <div className="acr-sec-head">
         <h2>Engines</h2>
         <span className="acr-sec-count">
@@ -278,12 +277,6 @@ export function ControlRoomClient() {
           whether the account lets it.
         </p>
       )}
-      </div>
-
-      {/* ACR.7 — the always-on dock in the space that was empty. Same component as the
-          Portfolios page and the Family Cockpit; drops land there, edits land here too. */}
-      <AutomationDock surface="control-room" onChanged={() => void load()} />
-
       {/* ACR.1.2b — the engine's own record. Reloads the rows after a manual run so the
           "Last run" fact behind the drawer cannot disagree with what the drawer just did. */}
       {open && (

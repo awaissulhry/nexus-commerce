@@ -78,7 +78,10 @@ export const ADS_NAV: NavItem[] = [
   // Mission Control was NOT superseded; it is a view of the account's shape. It keeps
   // /marketing/ads/autopilot and is reached from the Control Room's Today tab, because it is a
   // map rather than a control surface. Net rail count is down one, never up.
-  { label: 'Rules & Automation', route: 'rules-automation', Icon: Wand2, children: [{ label: 'Control Room', route: 'rules-automation/control-room' }] },
+  // NAF.D2c — the Agent Fleet sits first under the chevron (operator call
+  // 2026-08-06): its own page, not a Control Room tab — the fleet governs
+  // agents, the room governs engines and rules.
+  { label: 'Rules & Automation', route: 'rules-automation', Icon: Wand2, children: [{ label: 'Agent Fleet', route: 'rules-automation/fleet' }, { label: 'Control Room', route: 'rules-automation/control-room' }] },
   { label: 'AMC', route: 'amc', Icon: Users, children: [{ label: 'AMC Insights', route: 'amc' }, { label: 'Audience Insights', route: 'amc/audiences' }] },
   { label: 'Reporting', route: 'reporting', Icon: PieChart, children: [{ label: 'Brand Metrics', route: 'reporting/brand-metrics' }] },
   // The Amazon Change Log is reached from the header of the pages that produce changes, not from

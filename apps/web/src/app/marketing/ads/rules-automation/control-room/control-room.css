@@ -10,7 +10,10 @@
  * the schedule and rules surfaces it sits with.
  */
 
-.acr { padding: 20px 24px 48px; max-width: 1400px; }
+/* Full width — the dock that used to claim the right side is gone
+   (operator call 2026-08-06), and a capped column would strand the same
+   dead space the dock existed to fill. */
+.acr { padding: 20px 24px 48px; }
 
 .acr-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .acr-head h1 { font-size: 20px; font-weight: 650; color: #1c2530; margin: 0 0 4px; letter-spacing: -0.01em; }
@@ -375,13 +378,6 @@ a.acr-refresh { text-decoration: none; }
   .acr-fs-hour { grid-template-columns: 52px 30px minmax(0, 1fr) auto; }
   .acr-fs-bar, .acr-fs-ticks { display: none; }
 }
-
-/* ── ACR.7 — the dock claims the empty right side ────────────────────────── */
-/* Full width when the dock is present — a capped row strands dead space to the dock's right
-   on wide screens (operator screenshot, 2026-08-05). The main column keeps its own measure. */
-.acr--with-dock { display: flex; gap: 20px; align-items: flex-start; max-width: none; }
-.acr-maincol { min-width: 0; flex: 1; }
-@media (max-width: 1100px) { .acr--with-dock { flex-direction: column; } .acr--with-dock .adock { position: static; width: 100%; max-height: 420px; } }
 
 /* ── ACR.4.1 · graduation evidence ───────────────────────────────────────── */
 /* Light-only and self-contained, like the rest of this stylesheet. Colours reuse the dial's
