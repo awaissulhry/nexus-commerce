@@ -2,7 +2,8 @@
 
 > **STATUS: AWAITING USER APPROVAL — do not implement until approved.**
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`) syntax.
-> **Spec:** `docs/NEXUS-AGENT-FLEET-MASTER-BRIEF.md` Parts 0–5 + Part 12 § PHASE A. Prior reading done: `docs/AGENT_CONTROL_PLANE.md`, `docs/2026-08-03-ads-autonomy-domination-adx.md`, `docs/2026-08-05-ads-control-room-coverage-acr.md`.
+> **Spec:** `docs/AGENT_FLEET.md` (canonical; identical content also committed as `docs/NEXUS-AGENT-FLEET-MASTER-BRIEF.md`) Parts 0–5 + Part 12 § PHASE A. Prior reading done: `docs/AGENT_CONTROL_PLANE.md`, `docs/2026-08-03-ads-autonomy-domination-adx.md`, `docs/2026-08-05-ads-control-room-coverage-acr.md`.
+> **Re-verified 2026-08-06 (second session):** all four predecessor docs re-read; every load-bearing repo claim below re-checked against the working tree (shared-package layout D1, zod versions D2, `/api/agent/` RBAC mapping D4, `AgentRun.agentKey` semantics D5, vitest suffix rule, tool-policy/automation-state idioms, `AI_FEATURES` write-gating D9, CronRun shape D10, `getEngineLevers` D11). One correction: the deploy migration runner is `packages/database/scripts/migrate-direct.mjs`, invoked by `railway.toml` `startCommand` (not repo-root `scripts/`).
 
 **Goal:** The dark foundation of the Nexus Agent Fleet: nine additive Prisma models, shared Zod contracts, a charter registry (code-truth ⊕ DB-policy), an observation builder with TTL caching, a schema-validating agent executor, a DAG orchestrator with budget/halt short-circuits, and read-only routes — proven end-to-end by one trivial `fleet-selftest` charter producing a validated `AgentFinding` from a real observation. Zero behaviour change anywhere; everything ships `enabled=false`.
 
@@ -93,7 +94,7 @@ These resolve conflicts between the brief and verified repo reality. Each is the
 - [ ] **Step 4: generate + typecheck** — `npx prisma generate`; `cd apps/api && npx tsc --noEmit` (proves no existing code breaks).
 - [ ] **Step 5: commit** — `git commit --only packages/database/prisma/schema.prisma packages/database/prisma/migrations/20260806*_nafa_agent_fleet -m "feat(naf): NAF.A schema — 9 fleet models + AgentRun fleet columns, ships empty"`.
 
-> **Implementer note:** deploy applies via `scripts/migrate-direct.mjs` on next Railway start (strips `-pooler` itself). Do not run `prisma migrate dev` — the repo's folders are hand-authored and dev-migrate would try to reconcile 369 of them.
+> **Implementer note:** deploy applies via `packages/database/scripts/migrate-direct.mjs` on next Railway start (`railway.toml` startCommand; strips `-pooler` itself). Do not run `prisma migrate dev` — the repo's folders are hand-authored and dev-migrate would try to reconcile 369 of them.
 
 ---
 
