@@ -256,3 +256,27 @@ FX.2, FX.5, FX.6 medium. The series is 8 commits minimum, each shippable.
    statements — that touches `ads-propose.tools.ts` (API). Confirm that's in
    scope (it's where the sentence should live, not duplicated client-side).
 4. **Approve the phase set and order**, or reorder/cut.
+
+---
+
+## Execution record (2026-08-07, same session — all eight phases SHIPPED)
+
+FX.1 fc67c6060 (labels/trace/scorecards/schedule APIs, 20 new tests) ·
+FX.2 c520ab612 (PlanStory: stepper, action cards, explained checks) ·
+FX.3 f6d640782 (worker profile pages) · FX.4 1834569cf (glossary + Term
+tooltips + How-it-works + intro) · FX.5 18d0f8af4 (live map, schedule
+strip, drawer retired into worker pages) · FX.6 4ccb1fc2f (decision
+cards; the tool previews were already plain-language server-side, so no
+API change was needed there — recorded deviation) · FX.7 b544585c7
+(spend chart vs ceiling, grades in the worker table, auditor brief as
+headline; no demotion panel — no demotion table exists to feed one) ·
+FX.8 da01998ce (skeletons, 60s quiet refresh with freshness stamp,
+retry, overflow guards).
+
+Gate: 4,102 api tests green, both builds, full pre-push; deployed and
+verified live in the browser. The beginner read-through on the real
+blocked plan passes: stepper → "why the critic said no" → plain-English
+action cards with real campaign names ("Stop showing ads for any search
+containing 'homologué' in FR_Exact_8_Keywords (FR)"), each blocked item
+carrying its reason. Deferred from FX.6: explicit keyboard shortcuts
+(tab-order works; shortcut keys can ride a later polish pass).
