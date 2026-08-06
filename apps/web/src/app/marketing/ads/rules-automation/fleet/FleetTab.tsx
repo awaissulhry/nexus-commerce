@@ -16,6 +16,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Bot, ChevronDown, ChevronRight, RefreshCw, ShieldAlert } from 'lucide-react'
+import {
+  Bar,
+  BarChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { getBackendUrl } from '@/lib/backend-url'
 import { DecisionCard } from './DecisionCard'
 import { FleetMapCanvas, type NodeRunInfo } from './FleetMapCanvas'
@@ -110,6 +119,17 @@ interface ScheduleJob {
   nextFireAt: string | null
   lastRun: { startedAt: string; status: string; outputSummary: string | null } | null
 }
+interface ScorecardRow {
+  charterKey: string
+  windowDays: number
+  periodEnd: string
+  findings: number
+  approved: number
+  rejected: number
+  shadowAgreement: string | null
+  grade: string | null
+  promotionEligible: boolean
+}
 
 const usd = (n: number) => `$${n.toFixed(4)}`
 const ago = (iso: string) => {
@@ -137,6 +157,7 @@ export function FleetTab() {
   const [loading, setLoading] = useState(true)
   const [openPlan, setOpenPlan] = useState<string | null>(null)
   const [schedule, setSchedule] = useState<ScheduleJob[]>([])
+  const [scorecards, setScorecards] = useState<ScorecardRow[]>([])
   const [rejectAllFor, setRejectAllFor] = useState<string | null>(null)
   const [rejectAllReason, setRejectAllReason] = useState('')
   const [busy, setBusy] = useState(false)
@@ -144,7 +165,7 @@ export function FleetTab() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [c, g, s, r, f, p, a, sw, sch] = await Promise.all([
+      const [c, g, s, r, f, p, a, sw, sch, sc] = await Promise.all([
         fetch(`${backend}/api/agent/fleet/charters`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/graph`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/state`, { cache: 'no-store' }),
@@ -154,6 +175,7 @@ export function FleetTab() {
         fetch(`${backend}/api/agent/fleet/approvals?status=pending`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/sweeps?limit=8`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/schedule`, { cache: 'no-store' }),
+        fetch(`${backend}/api/agent/fleet/scorecards?limit=40`, { cache: 'no-store' }),
       ])
       if (!c.ok) throw new Error(`charters: ${c.status}`)
       setCharters(((await c.json()) as { charters: CharterRow[] }).charters)
@@ -169,6 +191,7 @@ export function FleetTab() {
       if (a.ok) setApprovals(((await a.json()) as { approvals: ApprovalRow[] }).approvals)
       if (sw.ok) setSweeps(((await sw.json()) as { sweeps: SweepRow[] }).sweeps)
       if (sch.ok) setSchedule(((await sch.json()) as { jobs: ScheduleJob[] }).jobs)
+      if (sc.ok) setScorecards(((await sc.json()) as { scorecards: ScorecardRow[] }).scorecards)
       setErr(null)
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
@@ -288,6 +311,35 @@ export function FleetTab() {
     return m
   }, [graph, openFindingsByCharter, plans])
 
+  // FX.7 — daily spend bars from the loaded runs, honest about coverage.
+  const dailyCost = useMemo(() => {
+    const byDay = new Map<string, number>()
+    for (const r of runs) {
+      const day = new Date(r.createdAt).toISOString().slice(5, 10)
+      byDay.set(day, (byDay.get(day) ?? 0) + Number(r.costUSD))
+    }
+    return [...byDay.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([day, cost]) => ({ day, cost: Math.round(cost * 10_000) / 10_000 }))
+  }, [runs])
+
+  const lastSweepCost = sweeps[0]?.costUSD ?? null
+
+  const latest14ByCharter = useMemo(() => {
+    const m = new Map<string, ScorecardRow>()
+    for (const s of scorecards) {
+      if (s.windowDays !== 14) continue
+      if (!m.has(s.charterKey)) m.set(s.charterKey, s)
+    }
+    return m
+  }, [scorecards])
+
+  // FX.7 — the auditor's nightly brief, when it exists, is the headline.
+  const auditorBrief = useMemo(
+    () => findings.find((f) => f.charterKey === 'fleet-auditor' && f.kind === 'fleet_brief'),
+    [findings],
+  )
+
   const nextOf = (key: string): string => {
     const j = schedule.find((x) => x.key === key)
     if (!j) return ''
@@ -320,6 +372,19 @@ export function FleetTab() {
       ) : null}
 
       <FirstVisitIntro />
+
+      {/* FX.7 — the auditor's brief is the headline when it exists */}
+      {auditorBrief ? (
+        <section className="acr-card acr-fl-brief-hero">
+          <header className="acr-fl-head">
+            <h3>This morning&apos;s brief</h3>
+            <span className="acr-fl-sub">
+              written by the <Term k="auditor">auditor</Term> · {ago(auditorBrief.createdAt)}
+            </span>
+          </header>
+          <p className="acr-fl-brieftext">{auditorBrief.rationale}</p>
+        </section>
+      ) : null}
 
       {/* 1 — fleet map */}
       <section className="acr-card">
@@ -478,35 +543,69 @@ export function FleetTab() {
         ) : null}
       </section>
 
-      {/* 5 — cost ledger */}
+      {/* 5 — money & report cards (FX.7) */}
       <section className="acr-card">
         <header className="acr-fl-head">
-          <h3>Cost ledger</h3>
+          <h3>What it costs</h3>
           <span className="acr-fl-sub">
-            today {usd(costToday)} of ${fleetState?.dailyCeilingUSD?.toFixed(2) ?? '—'} ceiling
+            today {usd(costToday)} of the{' '}
+            <Term k="ceiling">${fleetState?.dailyCeilingUSD?.toFixed(2) ?? '—'} daily ceiling</Term>
+            {lastSweepCost != null ? ` · a full night's sweep ≈ ${Math.round(lastSweepCost * 100)}¢` : ''}
           </span>
         </header>
+        {dailyCost.length > 1 ? (
+          <div className="acr-fl-chart">
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart data={dailyCost} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                <XAxis dataKey="day" tick={{ fontSize: 10, fill: '#8d97a6' }} tickLine={false} axisLine={{ stroke: '#dfe5ec' }} />
+                <YAxis tick={{ fontSize: 10, fill: '#8d97a6' }} tickLine={false} axisLine={false} width={44} tickFormatter={(v: number) => `$${v.toFixed(2)}`} />
+                <RechartsTooltip formatter={(v) => [`$${Number(v ?? 0).toFixed(4)}`, 'spend']} labelStyle={{ fontSize: 12 }} contentStyle={{ fontSize: 12, borderRadius: 7, border: '1px solid #dfe5ec' }} />
+                {fleetState ? (
+                  <ReferenceLine y={Number(fleetState.dailyCeilingUSD)} stroke="#d4453f" strokeDasharray="4 3" label={{ value: 'ceiling', fontSize: 10, fill: '#9c2f2a', position: 'insideTopRight' }} />
+                ) : null}
+                <Bar dataKey="cost" fill="#7fb0ea" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : null}
         <table className="acr-fl-table">
           <thead>
             <tr>
-              <th>Charter</th>
+              <th>Worker</th>
               <th>7d cost</th>
-              <th>Runs shown</th>
+              <th><Term k="grade">Grade</Term></th>
+              <th><Term k="shadow-agreement">Agrees with engines</Term></th>
+              <th>Trust</th>
             </tr>
           </thead>
           <tbody>
-            {charters.map((c) => (
-              <tr key={c.key}>
-                <td>{c.name}</td>
-                <td>{usd(cost7dByCharter.get(c.key) ?? 0)}</td>
-                <td>{runs.filter((r) => r.agentKey === c.key).length}</td>
-              </tr>
-            ))}
+            {charters.map((c) => {
+              const card = latest14ByCharter.get(c.key)
+              return (
+                <tr key={c.key}>
+                  <td>{c.name}</td>
+                  <td>{usd(cost7dByCharter.get(c.key) ?? 0)}</td>
+                  <td>{card?.grade ?? '—'}</td>
+                  <td>
+                    {card?.shadowAgreement == null
+                      ? 'unknown'
+                      : `${Math.round(Number(card.shadowAgreement) * 100)}%`}
+                  </td>
+                  <td>
+                    {card?.promotionEligible
+                      ? 'earned the next rung'
+                      : c.autonomyLevel === 'OFF'
+                        ? 'switched off'
+                        : 'earning it'}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
         <p className="acr-fl-sub">
-          Sums are over the {runs.length} most recent runs loaded — the full ledger lives on
-          AgentStep and reconciles in the sweep report.
+          Report cards recompute every night; costs here cover the {runs.length} most recent runs
+          and reconcile against the sweep report. A grade of “—” means no nights on the books yet.
         </p>
       </section>
 

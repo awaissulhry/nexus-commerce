@@ -1065,3 +1065,8 @@ a.acr-refresh { text-decoration: none; }
 }
 .acr-fl-dcard-plan:hover { text-decoration: underline; }
 .acr-fl-dcard-teach { margin: 0; font-size: 11.5px; color: #8d97a6; }
+
+/* ── FX.7 — money & report cards ─────────────────────────────────────── */
+.acr-fl-chart { margin: 2px 0 12px; }
+.acr-fl-brief-hero { border-left: 3px solid #1f6fde; }
+.acr-fl-brieftext { margin: 0; font-size: 13.5px; color: #232c37; line-height: 1.65; }
