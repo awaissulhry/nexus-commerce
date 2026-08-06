@@ -12,6 +12,7 @@ vi.mock('../../../db.js', () => ({
     adTarget: { findMany: vi.fn() },
     amazonAdsSearchTerm: { aggregate: vi.fn() },
     amazonAdsDailyPerformance: { aggregate: vi.fn() },
+    productProfitDaily: { groupBy: vi.fn() },
   },
 }))
 vi.mock('../../advertising/ads-harvest.service.js', () => ({
@@ -24,14 +25,14 @@ vi.mock('../../advertising/ads-bid-optimizer.service.js', () => ({
   previewBidOptimization: vi.fn(),
 }))
 vi.mock('../../advertising/ads-target-acos.service.js', () => ({
-  computeFleetTargetAcos: vi.fn(),
+  computeProductTargetAcos: vi.fn(),
 }))
 
 import prisma from '../../../db.js'
 import { previewBidOptimization } from '../../advertising/ads-bid-optimizer.service.js'
 import { previewHarvest } from '../../advertising/ads-harvest.service.js'
 import { analyzeNgrams } from '../../advertising/ads-ngram.service.js'
-import { computeFleetTargetAcos } from '../../advertising/ads-target-acos.service.js'
+import { computeProductTargetAcos } from '../../advertising/ads-target-acos.service.js'
 import { bidProposalsBuilder } from './bid-proposals.observation.js'
 import { harvestCandidatesBuilder } from './harvest-candidates.observation.js'
 import { negativeCandidatesBuilder } from './negative-candidates.observation.js'
@@ -40,7 +41,7 @@ const db = vi.mocked(prisma, true)
 const harvest = vi.mocked(previewHarvest)
 const ngrams = vi.mocked(analyzeNgrams)
 const bids = vi.mocked(previewBidOptimization)
-const fleetAcos = vi.mocked(computeFleetTargetAcos)
+const productAcos = vi.mocked(computeProductTargetAcos)
 
 const YESTERDAY = new Date(Date.now() - 20 * 3600_000)
 
@@ -114,23 +115,24 @@ beforeEach(() => {
       targetBasis: 'bayesian' as const,
     })),
   } as never)
-  fleetAcos.mockResolvedValue([
-    {
-      productId: 'p1',
-      marketplace: 'IT',
-      windowDays: 30,
-      dataPoints: 10,
-      basis: 'fallback',
-      breakevenAcos: null,
-      targetAcos: 0.3,
-      marginPct: null,
-      tacos: null,
-      tacop: null,
-      grossRevenueCents: 100000,
-      adSpendCents: 5000,
-      trueProfitCents: null,
-    },
+  db.productProfitDaily.groupBy.mockResolvedValue([
+    { productId: 'p1', _sum: { grossRevenueCents: 100000 } },
   ] as never)
+  productAcos.mockResolvedValue({
+    productId: 'p1',
+    marketplace: 'IT',
+    windowDays: 30,
+    dataPoints: 10,
+    basis: 'fallback',
+    breakevenAcos: null,
+    targetAcos: 0.3,
+    marginPct: null,
+    tacos: null,
+    tacop: null,
+    grossRevenueCents: 100000,
+    adSpendCents: 5000,
+    trueProfitCents: null,
+  } as never)
 })
 
 describe('negative-candidates', () => {
@@ -187,5 +189,7 @@ describe('bid-proposals', () => {
     expect(p.counts.proposalsTotal).toBe(60)
     // basis carried verbatim, counted
     expect(p.targetAcosSummary.byBasis.fallback).toBe(1)
+    // bounded: exactly one engine call per top-revenue product (10 max)
+    expect(productAcos).toHaveBeenCalledTimes(1)
   })
 })

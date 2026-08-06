@@ -59,7 +59,7 @@ export interface ExecuteResult {
 const CONTRACT_HINTS: Record<OutputSchemaKey, string> = {
   'analyst-output': [
     'Reply with ONLY a JSON object — no prose, no markdown fences — of shape:',
-    '{ "findings": [ ... ], "scanned": <int entities examined>, "notes": <optional string ≤600> }',
+    '{ "findings": [ ... ], "scanned": <int entities examined>, "notes": <optional string, HARD LIMIT 600 characters — exceeding it fails validation> }',
     'Each finding: {',
     '  "entityType": one of CAMPAIGN|AD_GROUP|AD_TARGET|SEARCH_TERM|PRODUCT|ASIN|PORTFOLIO|ACCOUNT|COMPONENT|ROUTE,',
     '  "entityId": string, "entityName": optional string,',
