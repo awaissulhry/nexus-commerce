@@ -155,6 +155,7 @@ export function FleetTab() {
   const [sweeps, setSweeps] = useState<SweepRow[]>([])
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null)
   const [openPlan, setOpenPlan] = useState<string | null>(null)
   const [schedule, setSchedule] = useState<ScheduleJob[]>([])
   const [scorecards, setScorecards] = useState<ScorecardRow[]>([])
@@ -162,8 +163,8 @@ export function FleetTab() {
   const [rejectAllReason, setRejectAllReason] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (opts: { silent?: boolean } = {}) => {
+    if (!opts.silent) setLoading(true)
     try {
       const [c, g, s, r, f, p, a, sw, sch, sc] = await Promise.all([
         fetch(`${backend}/api/agent/fleet/charters`, { cache: 'no-store' }),
@@ -192,6 +193,7 @@ export function FleetTab() {
       if (sw.ok) setSweeps(((await sw.json()) as { sweeps: SweepRow[] }).sweeps)
       if (sch.ok) setSchedule(((await sch.json()) as { jobs: ScheduleJob[] }).jobs)
       if (sc.ok) setScorecards(((await sc.json()) as { scorecards: ScorecardRow[] }).scorecards)
+      setUpdatedAt(Date.now())
       setErr(null)
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
@@ -202,6 +204,13 @@ export function FleetTab() {
 
   useEffect(() => {
     void load()
+  }, [load])
+
+  // FX.8 — quiet refresh every 60s: the page stays honest without the
+  // operator touching anything, and a run in flight shows up pulsing.
+  useEffect(() => {
+    const t = setInterval(() => void load({ silent: true }), 60_000)
+    return () => clearInterval(t)
   }, [load])
 
   const decide = useCallback(
@@ -360,7 +369,13 @@ export function FleetTab() {
   }, [approvals])
 
   if (loading && charters.length === 0) {
-    return <div className="acr-card acr-fl-loading">Loading the fleet…</div>
+    return (
+      <div className="acr-fleet" aria-busy="true" aria-label="Loading the fleet">
+        <div className="acr-card acr-fl-skeleton" style={{ height: 360 }} />
+        <div className="acr-card acr-fl-skeleton" style={{ height: 120 }} />
+        <div className="acr-card acr-fl-skeleton" style={{ height: 120 }} />
+      </div>
+    )
   }
 
   return (
@@ -368,6 +383,9 @@ export function FleetTab() {
       {err ? (
         <div className="acr-banner err" role="alert">
           <ShieldAlert size={15} /> {err}
+          <button className="acr-btn" onClick={() => void load()}>
+            Try again
+          </button>
         </div>
       ) : null}
 
@@ -404,6 +422,11 @@ export function FleetTab() {
                 <span className="acr-fl-pill acr-fl-pill-ok">running</span>
               </Term>
             )}
+            {updatedAt ? (
+              <span className="acr-fl-sub">
+                updated {Math.max(0, Math.round((Date.now() - updatedAt) / 1000))}s ago
+              </span>
+            ) : null}
             <button className="acr-btn" onClick={() => void load()} disabled={busy}>
               <RefreshCw size={13} /> Refresh
             </button>

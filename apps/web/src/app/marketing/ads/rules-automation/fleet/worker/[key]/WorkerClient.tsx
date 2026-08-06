@@ -232,7 +232,13 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
   }
 
   if (loading && !charter) {
-    return <div className="acr-card acr-fl-loading">Loading this worker…</div>
+    return (
+      <div className="acr-fleet" aria-busy="true" aria-label="Loading this worker">
+        <div className="acr-card acr-fl-skeleton" style={{ height: 160 }} />
+        <div className="acr-card acr-fl-skeleton" style={{ height: 220 }} />
+        <div className="acr-card acr-fl-skeleton" style={{ height: 140 }} />
+      </div>
+    )
   }
   if (!charter) {
     return (
@@ -249,7 +255,14 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
 
   return (
     <div className="acr-fleet">
-      {err ? <div className="acr-banner err">{err}</div> : null}
+      {err ? (
+        <div className="acr-banner err" role="alert">
+          {err}
+          <button className="acr-btn" onClick={() => void load()}>
+            Try again
+          </button>
+        </div>
+      ) : null}
 
       {/* who I am */}
       <section className="acr-card">

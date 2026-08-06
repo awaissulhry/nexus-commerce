@@ -1070,3 +1070,19 @@ a.acr-refresh { text-decoration: none; }
 .acr-fl-chart { margin: 2px 0 12px; }
 .acr-fl-brief-hero { border-left: 3px solid #1f6fde; }
 .acr-fl-brieftext { margin: 0; font-size: 13.5px; color: #232c37; line-height: 1.65; }
+
+/* ── FX.8 — polish: skeletons, overflow guards ───────────────────────── */
+.acr-fl-skeleton {
+  background: linear-gradient(100deg, #f2f5f8 40%, #fafbfc 50%, #f2f5f8 60%);
+  background-size: 200% 100%;
+  animation: acr-fl-shimmer 1.4s ease-in-out infinite;
+  border-color: #eef1f5;
+}
+@keyframes acr-fl-shimmer { to { background-position: -200% 0; } }
+.acr-fl-table { display: block; overflow-x: auto; }
+@media (max-width: 900px) {
+  .acr-fl-stepper { flex-direction: column; gap: 6px; }
+  .acr-fl-stagearrow { display: none; }
+  .acr-fl-dcard .acr-fl-apactions { flex-wrap: wrap; }
+  .acr-fl-facts { flex-direction: column; gap: 4px; }
+}
