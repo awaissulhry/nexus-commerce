@@ -18,8 +18,11 @@ import { Prisma } from '@nexus/database'
 import {
   OUTPUT_SCHEMAS,
   type AnalystOutputT,
+  type CriticOutputT,
+  type DirectorOutputT,
   type OutputSchemaKey,
 } from '@nexus/shared/agent-fleet'
+import { foldPlanBlast } from './plan-blast.js'
 import prisma from '../../db.js'
 import {
   getProviderForFeature,
@@ -52,6 +55,8 @@ export interface ExecuteResult {
   haltedReason?: string
   skipped?: 'disabled'
   error?: string
+  /** NAF.C — the AgentPlan a director created / a critic annotated. */
+  planId?: string | null
 }
 
 /** Prompt-side description of each output contract. Keyed exhaustively so
@@ -74,10 +79,28 @@ const CONTRACT_HINTS: Record<OutputSchemaKey, string> = {
     '}',
     'An empty findings array is valid when the evidence shows nothing actionable.',
   ].join('\n'),
-  'director-output':
-    'Reply with ONLY JSON matching the DirectorOutput contract (headline, narrative, items, dropped, conflicts, changeBudgetUsed).',
-  'critic-output':
-    'Reply with ONLY JSON matching the CriticOutput contract (verdict, checks, blockedItems, summary).',
+  'director-output': [
+    'Reply with ONLY a JSON object — no prose, no fences — of shape:',
+    '{ "headline": string ≤140, "narrative": string 50..3000,',
+    '  "items": [ up to 60 of {',
+    '    "findingId": the AgentFinding id from the evidence,',
+    '    "rank": int ≥1 (1 = do first),',
+    '    "tool": one of "create-negative-keyword" | "graduate-keyword" | "set-target-bid",',
+    '    "args": the tool args EXACTLY as specified in the evidence tool contracts,',
+    '    "expectedEffect": { "metric", "direction", "magnitudePct" 0..500, "horizonDays" 1..90, "basis" ≥8 chars citing the deterministic source, "counterfactual"? },',
+    '    "dependsOn": [findingIds] (default []), "reversible": boolean } ],',
+    '  "dropped": [ { "findingId", "reason": string ≥10 chars — a REAL reason } ] — every open finding you did NOT include MUST appear here,',
+    '  "conflicts": [ { "findingIds": [≥2], "kind": same_entity|opposing_direction|budget_contention|self_competition|protected_scope, "resolution": ≥10 chars } ],',
+    '  "changeBudgetUsed": { "entities": int, "valueCents": int } }',
+  ].join('\n'),
+  'critic-output': [
+    'Reply with ONLY a JSON object — no prose, no fences — of shape:',
+    '{ "verdict": "pass" | "revise" | "block",',
+    '  "checks": [ { "check": one of the twelve named checks from your instructions,',
+    '    "result": "pass" | "fail" | "n/a", "note"?: string, "offendingItems": [findingIds] (default []) } ],',
+    '  "blockedItems": [findingIds] (default []), "summary": string ≤1500 }',
+    'Every one of the twelve checks MUST appear exactly once in checks.',
+  ].join('\n'),
 }
 
 function buildPrompt(
@@ -477,6 +500,59 @@ export async function executeCharter(
       }
     }
 
+    // 4b — NAF.C: director and critic artifacts. The director's judgment
+    // becomes an AgentPlan (status draft — the critic and the council
+    // decide what happens next); the critic annotates the plan its
+    // evidence names. Neither touches findings.
+    let planId: string | null = null
+    if (charter.outputSchemaKey === 'director-output') {
+      const out = validated.data as DirectorOutputT
+      const blast = foldPlanBlast(out.items, {
+        conflictsCount: out.conflicts.length,
+      })
+      const plan = await prisma.agentPlan.create({
+        data: {
+          runId: run.id,
+          charterKey: key,
+          domain: charter.domain,
+          marketplace: null,
+          horizon: 'week',
+          headline: out.headline,
+          narrative: out.narrative,
+          items: out.items as unknown as Prisma.InputJsonValue,
+          droppedItems: out.dropped as unknown as Prisma.InputJsonValue,
+          conflicts: out.conflicts as unknown as Prisma.InputJsonValue,
+          changeBudget: out.changeBudgetUsed as unknown as Prisma.InputJsonValue,
+          blastRadius: blast as unknown as Prisma.InputJsonValue,
+          status: 'draft',
+        },
+      })
+      planId = plan.id
+    }
+    if (charter.outputSchemaKey === 'critic-output') {
+      const out = validated.data as CriticOutputT
+      const cited = observations[0]?.payload as { planId?: string } | undefined
+      const targetPlanId = cited?.planId
+      if (!targetPlanId) {
+        throw new Error(
+          'critic evidence carries no planId — nothing to annotate',
+        )
+      }
+      await prisma.agentPlan.update({
+        where: { id: targetPlanId },
+        data: {
+          criticVerdict: out.verdict,
+          criticNotes: {
+            checks: out.checks,
+            blockedItems: out.blockedItems,
+            summary: out.summary,
+          } as unknown as Prisma.InputJsonValue,
+          status: 'critiqued',
+        },
+      })
+      planId = targetPlanId
+    }
+
     await prisma.agentRun.update({
       where: { id: run.id },
       data: {
@@ -487,6 +563,7 @@ export async function executeCharter(
           droppedFindings: dropped,
           scanned,
           notes,
+          planId,
         } as Prisma.InputJsonValue,
         findingCount,
         inputTokens: totalIn,
@@ -498,7 +575,7 @@ export async function executeCharter(
         endedAt: new Date(),
       },
     })
-    return { runId: run.id, ok: true, findingCount, costUSD: totalCost }
+    return { runId: run.id, ok: true, findingCount, costUSD: totalCost, planId }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     await prisma.agentRun
