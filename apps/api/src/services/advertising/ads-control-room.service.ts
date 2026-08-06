@@ -176,10 +176,10 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
     'ad-rank-defend', 'ad-dayparting', 'ad-budget-enforce', 'budget-pool-rebalance',
     'ads-auto-bid', 'ads-auto-harvest', 'ads-anomaly-guard', 'top-of-search-defense',
     'tos-is-ingest', 'sqp-ingest', 'ads-structural-reconcile', 'drain-ads-sync',
-    'ads-coverage-engine',
+    'ads-coverage-engine', 'fleet-sweep',
   ]
 
-  const [state, facts, enabledSchedules, enabledPlans, budgetPlans, pools, allowlisted, totalCampaigns, coverageSets] = await Promise.all([
+  const [state, facts, enabledSchedules, enabledPlans, budgetPlans, pools, allowlisted, totalCampaigns, coverageSets, enabledAnalysts] = await Promise.all([
     getAutomationState(),
     cronFacts(CRONS),
     prisma.adSchedule.count({ where: { enabled: true } }),
@@ -195,7 +195,8 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
     prisma.campaign.count({ where: { liveBidWritesEnabled: true } }),
     prisma.campaign.count(),
     prisma.keywordCoverageSet.count({ where: { enabled: true } }).catch(() => 0),
-  ])
+  ,
+    prisma.agentCharter.count({ where: { enabled: true, tier: 'analyst', key: { not: 'fleet-selftest' } } })])
 
   const adsCron = envEnabled('NEXUS_ENABLE_AMAZON_ADS_CRON')
   const envKill = process.env.NEXUS_ADS_AUTOMATION_KILL === '1'
@@ -327,6 +328,21 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
       'ads-structural-reconcile', 'every 6 h',
       masterOff ? 'OFF' : 'OBSERVE',
       masterOff?.why ?? 'Read-only — records drift, never repairs bids',
+      null, 'exempt'),
+
+    // NAF.B — the analyst fleet's nightly sweep. Read-only (findings only,
+    // no write path); honours ITS OWN halt (AgentFleetState + the AI kill
+    // switch), not the ads write halt — hence 'exempt' here, per the
+    // structural-reconcile precedent.
+    mk('fleet-analysts', 'Analyst fleet (LLM)', 'Nightly LLM analysts read engine evidence and write findings — no writes to Amazon',
+      'fleet-sweep', 'nightly 04:45 UTC',
+      process.env.NEXUS_ENABLE_FLEET_SWEEP_CRON !== '1' ? 'OFF'
+        : enabledAnalysts > 0 ? 'OBSERVE' : 'OFF',
+      process.env.NEXUS_ENABLE_FLEET_SWEEP_CRON !== '1'
+        ? 'NEXUS_ENABLE_FLEET_SWEEP_CRON is not set'
+        : enabledAnalysts > 0
+          ? `${enabledAnalysts} analyst charter(s) enabled — findings only, honours the fleet halt`
+          : 'Sweep scheduled but every analyst charter is OFF (dark)',
       null, 'exempt'),
   ]
 

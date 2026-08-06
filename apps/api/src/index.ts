@@ -1397,6 +1397,13 @@ async function start() {
       enabled: adsCronOn,
       rawValue: JSON.stringify(process.env.NEXUS_ENABLE_AMAZON_ADS_CRON ?? null),
     })
+    // NAF.B — nightly analyst sweep. Self-gated on NEXUS_ENABLE_FLEET_SWEEP_CRON,
+    // deliberately independent of the ads write-engine flag (the fleet is
+    // read-only and must be startable/stoppable on its own).
+    markCronStep('fleet:import fleet-sweep.job');
+    const { startFleetSweepCron } = await import('./jobs/fleet-sweep.job.js');
+    startFleetSweepCron();
+
     if (adsCronOn) {
       // Apex diagnostic + resilience: each step marks progress (visible via the
       // cron-status probe) so a hanging `await import` is locatable, and the

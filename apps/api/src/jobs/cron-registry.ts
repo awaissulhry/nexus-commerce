@@ -297,6 +297,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
     const r = await m.runAutoBidOnce()
     return r.skipped ? `skipped=${r.skipped}` : `proposed=${r.proposed} applied=${r.applied} dryRun=${r.dryRun}`
   }),
+  // NAF.B — the nightly analyst sweep (read-only fleet; findings only).
+  'fleet-sweep': () => import('./fleet-sweep.job.js').then((m) => m.runFleetSweepOnce()),
   'ads-auto-harvest': () => import('../services/advertising/ads-auto-harvest.service.js').then(async (m) => {
     const r = await m.runAutoHarvestOnce()
     return r.skipped
