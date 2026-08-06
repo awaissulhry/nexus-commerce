@@ -27,7 +27,7 @@ import {
 } from 'recharts'
 import { getBackendUrl } from '@/lib/backend-url'
 import { DecisionCard } from './DecisionCard'
-import { FleetMapCanvas, type NodeRunInfo } from './FleetMapCanvas'
+import { FleetMapCanvas, type CanvasFinding, type NodeRunInfo } from './FleetMapCanvas'
 import { Term } from './glossary'
 import { FirstVisitIntro, HowItWorks } from './HowItWorks'
 import { PlanStory, type PlanLabels, type StoryPlan } from './PlanStory'
@@ -156,6 +156,7 @@ export function FleetTab() {
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [updatedAt, setUpdatedAt] = useState<number | null>(null)
+  const [expandedWorker, setExpandedWorker] = useState<string | null>(null)
   const [openPlan, setOpenPlan] = useState<string | null>(null)
   const [schedule, setSchedule] = useState<ScheduleJob[]>([])
   const [scorecards, setScorecards] = useState<ScorecardRow[]>([])
@@ -349,6 +350,19 @@ export function FleetTab() {
     [findings],
   )
 
+  // FX.9 — the drill-down chips: each worker's open findings, for the map.
+  const findingsByKey = useMemo(() => {
+    const m = new Map<string, CanvasFinding[]>()
+    for (const f of findings) {
+      if (f.status !== 'open' || f.charterKey === 'fleet-selftest') continue
+      m.set(f.charterKey, [
+        ...(m.get(f.charterKey) ?? []),
+        { id: f.id, kind: f.kind, entityId: f.entityId, severity: f.severity },
+      ])
+    }
+    return m
+  }, [findings])
+
   const nextOf = (key: string): string => {
     const j = schedule.find((x) => x.key === key)
     if (!j) return ''
@@ -446,7 +460,9 @@ export function FleetTab() {
             openByKey={openFindingsByCharter}
             runInfoByKey={runInfoByKey}
             edgeCounts={edgeCounts}
-            selected={null}
+            findingsByKey={findingsByKey}
+            expanded={expandedWorker}
+            onToggleExpand={(key) => setExpandedWorker(expandedWorker === key ? null : key)}
             onSelect={(key) => router.push(`/marketing/ads/rules-automation/fleet/worker/${key}`)}
           />
         ) : (
