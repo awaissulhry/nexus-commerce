@@ -1047,3 +1047,21 @@ a.acr-refresh { text-decoration: none; }
   0%, 100% { box-shadow: 0 0 0 0 rgb(31 111 222 / 0.25); }
   50% { box-shadow: 0 0 0 6px rgb(31 111 222 / 0.05); }
 }
+
+/* ── FX.6 — decision cards ───────────────────────────────────────────── */
+.acr-fl-dcard {
+  display: flex; flex-direction: column; gap: 9px; padding: 12px 14px; margin: 8px 0;
+  border: 1px solid #e3e9f0; border-left: 3px solid #e0b34e; border-radius: 8px; background: #fff;
+}
+.acr-fl-dcard-head { font-size: 13px; color: #34404f; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.acr-fl-dcard-what { margin: 0; font-size: 13.5px; color: #232c37; font-weight: 550; line-height: 1.5; }
+.acr-fl-dcard-facts { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.acr-fl-dcard-facts dt { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #8d97a6; }
+.acr-fl-dcard-facts dd { margin: 1px 0 0; font-size: 12.5px; color: #5a6675; line-height: 1.5; }
+.acr-fl-dcard-plan {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
+  border: 0; background: none; padding: 0; cursor: pointer;
+  font-size: 12px; color: #1f6fde;
+}
+.acr-fl-dcard-plan:hover { text-decoration: underline; }
+.acr-fl-dcard-teach { margin: 0; font-size: 11.5px; color: #8d97a6; }

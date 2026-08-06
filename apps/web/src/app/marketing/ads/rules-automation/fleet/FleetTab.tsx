@@ -15,16 +15,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  Bot,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  RefreshCw,
-  ShieldAlert,
-  X,
-} from 'lucide-react'
+import { Bot, ChevronDown, ChevronRight, RefreshCw, ShieldAlert } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { DecisionCard } from './DecisionCard'
 import { FleetMapCanvas, type NodeRunInfo } from './FleetMapCanvas'
 import { Term } from './glossary'
 import { FirstVisitIntro, HowItWorks } from './HowItWorks'
@@ -144,8 +137,6 @@ export function FleetTab() {
   const [loading, setLoading] = useState(true)
   const [openPlan, setOpenPlan] = useState<string | null>(null)
   const [schedule, setSchedule] = useState<ScheduleJob[]>([])
-  const [rejectFor, setRejectFor] = useState<string | null>(null)
-  const [rejectReason, setRejectReason] = useState('')
   const [rejectAllFor, setRejectAllFor] = useState<string | null>(null)
   const [rejectAllReason, setRejectAllReason] = useState('')
   const [busy, setBusy] = useState(false)
@@ -203,8 +194,6 @@ export function FleetTab() {
           const d = (await r.json().catch(() => null)) as { error?: string } | null
           setErr(d?.error ?? `decide: ${r.status}`)
         }
-        setRejectFor(null)
-        setRejectReason('')
         await load()
       } finally {
         setBusy(false)
@@ -393,7 +382,7 @@ export function FleetTab() {
           </p>
         ) : (
           plans.slice(0, 5).map((p) => (
-            <div key={p.id} className="acr-fl-plan">
+            <div key={p.id} id={`plan-${p.id}`} className="acr-fl-plan">
               <button
                 className="acr-fl-planhead"
                 onClick={() => setOpenPlan(openPlan === p.id ? null : p.id)}
@@ -462,43 +451,21 @@ export function FleetTab() {
               )}
             </div>
             {rows.map((a) => (
-              <div key={a.id} className="acr-fl-approval">
-                <div className="acr-fl-apbody">
-                  <span className="acr-fl-pill">{a.toolName}</span>
-                  <span>{a.preview?.effect ?? JSON.stringify(a.args).slice(0, 140)}</span>
-                  <span className="acr-fl-sub">{ago(a.requestedAt)}</span>
-                </div>
-                <div className="acr-fl-apactions">
-                  <button
-                    className="acr-btn"
-                    disabled={busy}
-                    onClick={() => void decide(a.id, 'approve')}
-                  >
-                    <Check size={13} /> Approve
-                  </button>
-                  {rejectFor === a.id ? (
-                    <span className="acr-fl-rejectrow">
-                      <input
-                        autoFocus
-                        placeholder="one-line reason (required)"
-                        value={rejectReason}
-                        onChange={(e) => setRejectReason(e.target.value)}
-                      />
-                      <button
-                        className="acr-btn"
-                        disabled={busy || !rejectReason.trim()}
-                        onClick={() => void decide(a.id, 'reject', rejectReason.trim())}
-                      >
-                        Confirm reject
-                      </button>
-                    </span>
-                  ) : (
-                    <button className="acr-btn" disabled={busy} onClick={() => setRejectFor(a.id)}>
-                      <X size={13} /> Reject
-                    </button>
-                  )}
-                </div>
-              </div>
+              <DecisionCard
+                key={a.id}
+                approval={a}
+                workerName={nameByKey.get(a.charterKey ?? '') ?? a.charterKey ?? 'A worker'}
+                plans={plans}
+                labels={planLabels}
+                busy={busy}
+                onDecide={(id, decision, reason) => void decide(id, decision, reason)}
+                onOpenPlan={(planId) => {
+                  setOpenPlan(planId)
+                  document
+                    .getElementById(`plan-${planId}`)
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }}
+              />
             ))}
           </div>
         ))}
