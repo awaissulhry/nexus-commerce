@@ -25,6 +25,8 @@ import {
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { FleetMapCanvas } from './FleetMapCanvas'
+import { GLOSSARY, Term } from './glossary'
+import { FirstVisitIntro, HowItWorks } from './HowItWorks'
 import { PlanStory, type PlanLabels, type StoryPlan } from './PlanStory'
 
 /* ── types mirroring the fleet API ─────────────────────────────────── */
@@ -332,6 +334,8 @@ export function FleetTab() {
         </div>
       ) : null}
 
+      <FirstVisitIntro />
+
       {/* 1 — fleet map */}
       <section className="acr-card">
         <header className="acr-fl-head">
@@ -340,11 +344,15 @@ export function FleetTab() {
           </h3>
           <div className="acr-fl-headright">
             {fleetState?.halted ? (
-              <span className="acr-fl-pill acr-fl-pill-halt">
-                HALTED{fleetState.haltReason ? ` — ${fleetState.haltReason}` : ''}
-              </span>
+              <Term k="running">
+                <span className="acr-fl-pill acr-fl-pill-halt">
+                  HALTED{fleetState.haltReason ? ` — ${fleetState.haltReason}` : ''}
+                </span>
+              </Term>
             ) : (
-              <span className="acr-fl-pill acr-fl-pill-ok">running</span>
+              <Term k="running">
+                <span className="acr-fl-pill acr-fl-pill-ok">running</span>
+              </Term>
             )}
             <button className="acr-btn" onClick={() => void load()} disabled={busy}>
               <RefreshCw size={13} /> Refresh
@@ -376,7 +384,10 @@ export function FleetTab() {
           </header>
           <p className="acr-fl-desc">{drawerCharter.description}</p>
           <div className="acr-fl-dialrow">
-            <span className="acr-fl-lbl">Autonomy (cap {drawerCharter.autonomyCap})</span>
+            <span className="acr-fl-lbl">
+              <Term k="trust-ladder">Autonomy</Term>{' '}
+              <Term k="cap">(cap {drawerCharter.autonomyCap})</Term>
+            </span>
             <div className="acr-dial">
               {LEVELS.map((lv) => {
                 const overCap =
@@ -386,7 +397,11 @@ export function FleetTab() {
                     key={lv}
                     className={`acr-btn ${drawerCharter.autonomyLevel === lv ? 'on' : ''}`}
                     disabled={busy || overCap}
-                    title={overCap ? `above this charter's cap (${drawerCharter.autonomyCap})` : undefined}
+                    title={
+                      overCap
+                        ? `Above this worker's cap (${drawerCharter.autonomyCap}) — the ceiling is written in code`
+                        : GLOSSARY[lv.toLowerCase()]?.body
+                    }
                     onClick={() => void patchCharter(drawerCharter.key, { autonomyLevel: lv })}
                   >
                     {lv}
@@ -453,7 +468,10 @@ export function FleetTab() {
         </header>
         {plans.length === 0 ? (
           <p className="acr-fl-empty">
-            No plans yet — the council runs weekly once the director is enabled.
+            No plans yet. Plans appear when the <Term k="council">council</Term> runs — every
+            Monday at 05:15 UTC, once the <Term k="director">director</Term> is enabled. Each one
+            will show up here as a story: what the workers found, what the director chose, and
+            what the <Term k="critic">critic</Term> ruled.
           </p>
         ) : (
           plans.slice(0, 5).map((p) => (
@@ -567,7 +585,11 @@ export function FleetTab() {
           </div>
         ))}
         {approvals.length === 0 ? (
-          <p className="acr-fl-empty">Approved and rejected items feed the exemplar store (Stage E).</p>
+          <p className="acr-fl-empty">
+            Nothing is waiting for you. <Term k="approval">Approvals</Term> appear here when a
+            plan passes the <Term k="critic">critic</Term> — and every yes or no you give
+            becomes <Term k="exemplar">precedent</Term> the workers read on their next run.
+          </p>
         ) : null}
       </section>
 
@@ -609,7 +631,10 @@ export function FleetTab() {
           <h3>Brief</h3>
         </header>
         {sweeps.length === 0 ? (
-          <p className="acr-fl-empty">No sweeps recorded yet.</p>
+          <p className="acr-fl-empty">
+            No <Term k="sweep">sweeps</Term> recorded yet. The nightly sweep runs at 04:45 UTC —
+            rows appear here after the first night with enabled workers.
+          </p>
         ) : (
           <ul className="acr-fl-sweeps">
             {sweeps.map((s) => (
@@ -622,10 +647,13 @@ export function FleetTab() {
           </ul>
         )}
         <p className="acr-fl-empty">
-          The auditor's daily narrative arrives in Stage E — until then this panel reports sweeps,
-          not stories.
+          The <Term k="auditor">auditor</Term>&apos;s nightly narrative appears here once it is
+          enabled — until then this panel reports sweeps, not stories.
         </p>
       </section>
+
+      {/* 7 — how it all works (FX.4) */}
+      <HowItWorks />
     </div>
   )
 }
