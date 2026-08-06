@@ -12,7 +12,10 @@
  * the freshest-first read tolerates.
  */
 import prisma from '../../db.js'
+import { bidProposalsBuilder } from './observations/bid-proposals.observation.js'
 import { cronHealthBuilder } from './observations/cron-health.observation.js'
+import { harvestCandidatesBuilder } from './observations/harvest-candidates.observation.js'
+import { negativeCandidatesBuilder } from './observations/negative-candidates.observation.js'
 
 export interface ObservationScope {
   entityType?: string
@@ -38,6 +41,9 @@ export interface ObservationBuilder {
 
 const BUILDERS: Readonly<Record<string, ObservationBuilder>> = Object.freeze({
   [cronHealthBuilder.key]: cronHealthBuilder,
+  [negativeCandidatesBuilder.key]: negativeCandidatesBuilder,
+  [harvestCandidatesBuilder.key]: harvestCandidatesBuilder,
+  [bidProposalsBuilder.key]: bidProposalsBuilder,
 })
 
 export function listObservationKeys(): string[] {
