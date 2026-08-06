@@ -9,6 +9,7 @@ import { READ_TOOLS } from './tools/read.tools.js'
 import { ANALYTICS_TOOLS } from './tools/analytics.tools.js'
 import { DRAFT_TOOLS } from './tools/draft.tools.js'
 import { MUTATE_TOOLS } from './tools/mutate.tools.js'
+import { ADS_PROPOSE_TOOLS } from './tools/ads-propose.tools.js'
 
 export type {
   RiskTier,
@@ -22,6 +23,8 @@ const ALL: AgentTool[] = [
   ...ANALYTICS_TOOLS,
   ...DRAFT_TOOLS,
   ...MUTATE_TOOLS,
+  // NAF.C — preview-only ads propose tools (no execute until Phase F).
+  ...ADS_PROPOSE_TOOLS,
 ]
 const REGISTRY = new Map<string, AgentTool>(ALL.map((t) => [t.name, t]))
 
