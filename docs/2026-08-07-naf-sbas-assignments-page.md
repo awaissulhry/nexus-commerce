@@ -684,6 +684,13 @@ Workers page.** That is the `scopeCampaignIds` defect at higher blast radius.
 is `fleet-council.service.ts:164`, reachable only from the `fleet-council` cron.
 **`executeCharter` never calls it, at any autonomy level, for any worker.**
 
+**The Approvals stream reached the same wall from the opposite end, independently**
+(locks §2, `SB.AQ`): all three fleet propose-tools are **preview-only**, so
+`runOrQueueTool` returns `mode:'preview'`, the council counts them `blocked++`,
+and *"no fleet approval can be created at all — a plan that PASSES the critic
+still queues nothing."* Two independent proofs, one from the caller end and one
+from the tool end, of the same fact.
+
 So *"Awaiting your approval"* is not merely untested — it is a provable zero. The
 tile, the derived state and the detail panel **ship deleted, not empty**, replaced
 by one honest sentence: *"Assignments cannot produce approvals yet. Only the
