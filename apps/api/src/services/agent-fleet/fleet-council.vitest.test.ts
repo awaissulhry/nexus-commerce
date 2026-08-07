@@ -132,12 +132,18 @@ describe('runFleetCouncilOnce', () => {
     expect(r.blocked).toBe(1)
   })
 
-  it('expires stale pending fleet approvals with a 7-day cutoff', async () => {
+  // NAF.AP.5 — expiry moved out of the council to runApprovalMaintenance,
+  // which owns the single `expiresAt` clock. The council still reports what
+  // was swept; it no longer keeps a private cutoff of its own.
+  it('delegates expiry to the one clock and still reports it', async () => {
     const r = await runFleetCouncilOnce()
     expect(r.expired).toBe(2)
     const where = db.agentApproval.updateMany.mock.calls[0]![0]!.where as Record<string, never>
-    expect((where.requestedAt as { lt: Date }).lt).toBeInstanceOf(Date)
     expect(where.status).toBe('pending')
+    expect((where.expiresAt as { lt: Date }).lt).toBeInstanceOf(Date)
+    // The retired second clock must not come back.
+    expect(where.requestedAt).toBeUndefined()
+    expect(where.toolName).toBeUndefined()
   })
 
   it('no director plan → honest no-op', async () => {

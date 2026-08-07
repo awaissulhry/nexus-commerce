@@ -346,9 +346,62 @@ screenshot possible. The decided history is real data.
 **Gates:** DS ratchet clean · RBAC 0 unmapped · `tsc --noEmit` clean on both
 apps.
 
-**Not built yet:** AP.4 (bulk + 20s undo), AP.5 (expiry on one clock), AP.6
-(staleness), AP.7 (precedent delivered), AP.8 (Article 14 gate + teaching
-gate).
+**Not built yet in this pass:** AP.4–AP.8.
+
+---
+
+## 6c · Execution record — AP.4–AP.5 built 2026-08-07
+
+**AP.4 — the brake.** Approving no longer executes on click. It records the
+decision at once (attributable, durable) and parks the action for **20
+seconds**; nothing reaches Amazon inside the window. The undo is rendered
+**inline on the parked row**, not as a toast — a toast is gone the moment you
+reload, and a parked row stays in the Waiting view where the operator is
+looking. When the countdown ends the browser asks the server to run it; if
+the tab is closed first, the maintenance sweep picks it up within ~30s. The
+window is enforced **server-side**, so a client that calls early is refused.
+
+Bulk arrived with it: checkboxes, a contextual toolbar, and a blast-radius
+sentence built server-side from the rows themselves, so the confirmation
+cannot drift from the action — *"This approves 1 action: 1 × set target bid.
+You have 20 seconds to take it back."*
+
+**AP.5 — one clock.** `expiresAt` is now the expiry. The council's private
+sweep (keyed on `requestedAt`, a different constant, fleet tools only, run
+twice in its life) is **retired**, and `runApprovalMaintenance` owns expiry
+for every tool on a 30-second schedule. That cron is deliberately **not**
+gated on `NEXUS_ENABLE_FLEET_SWEEP_CRON`: those flags keep *agents* dark,
+while this is what makes an operator's own approve actually happen. Turning
+the fleet off must not strand a decision a human already took.
+
+| File | What |
+|---|---|
+| `schema.prisma` + `20260807b_naf_ap_approval_undo` | one nullable column (`executeAfter`) + two indexes; additive |
+| `approval-inbox.service.ts` | schedule / undo / commit, `runApprovalMaintenance`, `previewBulk`, `bulkDecide` |
+| `approval-undo.vitest.test.ts` | **new** — 21 tests |
+| `jobs/approval-maintenance.job.ts` | **new** — the always-on 30s sweep |
+| `fleet-council.service.ts` | second clock removed, delegates to the shared one |
+| `ApprovalInbox.tsx` / `fleet-sections.css` | parked row + countdown + undo, selection, bulk toolbar |
+
+**Verified end to end against real code and a real row.** A pending approval
+was seeded with a deliberately non-existent `targetId`, so even an accidental
+execution could not change anything on Amazon. Result: approve → **parked,
+execution gate never called**; early commit → **refused** ("still inside the
+undo window"); undo → back to `pending` with the decision cleared. In the
+browser: the blast-radius sentence, the parked row counting down
+("Running in 18 seconds. Nothing has reached Amazon yet."), and Undo
+restoring the card. **The seeded row and its 4 audit rows were then deleted
+— the database is byte-for-byte back to 18 approvals and 0 audit rows.**
+
+Tests: 21 new; **263 passing across 33 files**. Three existing tests were
+updated because the behaviour they asserted changed on purpose — the
+council's 7-day `requestedAt` cutoff, and `waiting` now including parked
+rows. The council test now asserts the *old clock cannot come back*.
+
+**Gates:** schema + column drift clean · DS ratchet clean · `tsc` clean.
+
+**Not built yet:** AP.6 (staleness), AP.7 (precedent delivered), AP.8
+(Article 14 gate + teaching gate).
 
 ---
 

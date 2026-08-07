@@ -301,6 +301,9 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'fleet-sweep': () => import('./fleet-sweep.job.js').then((m) => m.runFleetSweepOnce()),
   // NAF.C — the weekly council (director + critic; queues approvals, no writes).
   'fleet-council': () => import('./fleet-sweep.job.js').then((m) => m.runFleetCouncilJobOnce()),
+  // NAF.AP.4/AP.5 — expire what has run out, run what the undo window released.
+  'approval-maintenance': () =>
+    import('./approval-maintenance.job.js').then((m) => m.runApprovalMaintenanceOnce()),
   'ads-auto-harvest': () => import('../services/advertising/ads-auto-harvest.service.js').then(async (m) => {
     const r = await m.runAutoHarvestOnce()
     return r.skipped

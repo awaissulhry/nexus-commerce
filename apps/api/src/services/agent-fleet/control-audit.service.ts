@@ -28,6 +28,7 @@ export type ControlAction =
   // record named who did it.
   | 'approve_action'
   | 'reject_action'
+  | 'undo_approval'
 
 export async function recordControlChange(input: {
   charterKey: string

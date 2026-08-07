@@ -9,7 +9,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../db.js', () => ({
   default: {
-    agentApproval: { findMany: vi.fn(), findUnique: vi.fn(), count: vi.fn() },
+    agentApproval: {
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      count: vi.fn(),
+      updateMany: vi.fn(),
+    },
     agentRun: { findMany: vi.fn() },
   },
 }))
@@ -54,6 +59,7 @@ beforeEach(() => {
     },
   ] as never)
   db.agentApproval.count.mockResolvedValue(0 as never)
+  db.agentApproval.updateMany.mockResolvedValue({ count: 1 } as never)
 })
 
 describe('resolveActor — AP.1', () => {
@@ -101,8 +107,9 @@ describe('decideFleetApproval — AP.1', () => {
     )
   })
 
+  // AP.4 changed what an approve DOES (it parks for the undo window), not
+  // what it records: the decision is still attributed the moment it is taken.
   it('records approvals under their own action', async () => {
-    gate.mockResolvedValue({ ok: true, status: 'executed' })
     await decideFleetApproval({ id: 'a1', decision: 'approve', actor })
     expect(audit).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'approve_action', actor: 'Awais' }),
@@ -111,10 +118,18 @@ describe('decideFleetApproval — AP.1', () => {
 
   it('does not audit or mint when the decision itself failed', async () => {
     gate.mockResolvedValue({ ok: false, error: 'already rejected' })
-    const out = await decideFleetApproval({ id: 'a1', decision: 'approve', actor })
+    const out = await decideFleetApproval({ id: 'a1', decision: 'reject', reason: 'x', actor })
     expect(out.ok).toBe(false)
     expect(audit).not.toHaveBeenCalled()
     expect(mint).not.toHaveBeenCalled()
+  })
+
+  it('an approve that cannot be parked audits nothing', async () => {
+    db.agentApproval.updateMany.mockResolvedValue({ count: 0 } as never)
+    db.agentApproval.findUnique.mockResolvedValue({ status: 'expired' } as never)
+    const out = await decideFleetApproval({ id: 'a1', decision: 'approve', actor })
+    expect(out.ok).toBe(false)
+    expect(audit).not.toHaveBeenCalled()
   })
 
   it('still succeeds when the side records fail — the decision already committed', async () => {
@@ -153,11 +168,16 @@ describe('rejectAllForCharter — AP.1', () => {
 })
 
 describe('listInbox — AP.2', () => {
-  it('waiting shows pending fleet tools only', async () => {
+  // AP.4 — a parked approve stays in `waiting` so its Undo is still
+  // reachable after a reload; it is not "decided" until it has actually run.
+  it('waiting shows fleet tools that are pending or parked', async () => {
     await listInbox('waiting')
     expect(db.agentApproval.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { status: 'pending', toolName: { in: expect.any(Array) } },
+        where: {
+          status: { in: ['pending', 'scheduled'] },
+          toolName: { in: expect.any(Array) },
+        },
         orderBy: { requestedAt: 'asc' },
       }),
     )

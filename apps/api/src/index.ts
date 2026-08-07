@@ -1537,6 +1537,16 @@ async function start() {
       startCronOrphanSweeperCron();
     }
 
+    // NAF.AP.4/AP.5 — approval queue maintenance. Always-on, deliberately:
+    // the fleet flags keep AGENTS dark, but this is what makes an operator's
+    // own approve actually run once its undo window closes, and what stops a
+    // stale request from staying actionable. Turning the fleet off must not
+    // strand a decision a human already took.
+    {
+      const { startApprovalMaintenanceCron } = await import('./jobs/approval-maintenance.job.js');
+      startApprovalMaintenanceCron();
+    }
+
     // MB.1 — Brand Brain embedding ingester. Gated by NEXUS_ENABLE_BRAND_BRAIN=1.
     if (process.env.NEXUS_ENABLE_BRAND_BRAIN === '1') {
       const { startEmbeddingIngesterCron } = await import('./jobs/embedding-ingester.job.js');

@@ -14,11 +14,15 @@ import { isAiKillSwitchOn } from '../services/ai/providers/index.js'
 import { isAutonomyLevel, AUTONOMY_LEVELS } from '../services/advertising/ads-autonomy.js'
 import { executeCharter } from '../services/agent-fleet/agent-executor.js'
 import {
+  bulkDecide,
+  commitScheduledApproval,
   decideFleetApproval,
   inboxCounts,
   listInbox,
+  previewBulk,
   rejectAllForCharter,
   resolveActor,
+  undoScheduledApproval,
   type InboxView,
 } from '../services/agent-fleet/approval-inbox.service.js'
 import { isAutoPromotionAllowed } from '../services/agent-fleet/promotion.service.js'
@@ -428,6 +432,65 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
     if (!out.ok) return reply.code(409).send(out)
     return out
   })
+
+  // NAF.AP.4 — take back an approve that has not run yet.
+  fastify.post<{ Params: { id: string } }>(
+    '/agent/fleet/approvals/:id/undo',
+    async (request, reply) => {
+      const out = await undoScheduledApproval({
+        id: request.params.id,
+        actor: resolveActor(request.authUser),
+      })
+      if (!out.ok) return reply.code(409).send(out)
+      return out
+    },
+  )
+
+  // NAF.AP.4 — run it now rather than waiting for the sweep. The window is
+  // still enforced server-side, so an early call is refused, not trusted.
+  fastify.post<{ Params: { id: string } }>(
+    '/agent/fleet/approvals/:id/commit',
+    async (request, reply) => {
+      const out = await commitScheduledApproval(request.params.id)
+      if (!out.ok) return reply.code(409).send(out)
+      return out
+    },
+  )
+
+  // NAF.AP.4 — what a bulk decision would do, before it does it.
+  fastify.post<{ Body: { ids?: string[]; decision?: 'approve' | 'reject' } }>(
+    '/agent/fleet/approvals/bulk-preview',
+    async (request, reply) => {
+      const ids = request.body?.ids ?? []
+      const decision = request.body?.decision
+      if (decision !== 'approve' && decision !== 'reject') {
+        return reply.code(400).send({ error: 'decision must be approve or reject' })
+      }
+      return previewBulk(ids, decision)
+    },
+  )
+
+  fastify.post<{ Body: { ids?: string[]; decision?: 'approve' | 'reject'; reason?: string } }>(
+    '/agent/fleet/approvals/bulk-decide',
+    async (request, reply) => {
+      const ids = request.body?.ids ?? []
+      const decision = request.body?.decision
+      const reason = (request.body?.reason ?? '').trim()
+      if (decision !== 'approve' && decision !== 'reject') {
+        return reply.code(400).send({ error: 'decision must be approve or reject' })
+      }
+      if (ids.length === 0) return reply.code(400).send({ error: 'nothing selected' })
+      if (decision === 'reject' && !reason) {
+        return reply.code(400).send({ error: 'a one-line reason is required to reject' })
+      }
+      return bulkDecide({
+        ids,
+        decision,
+        reason: reason || undefined,
+        actor: resolveActor(request.authUser),
+      })
+    },
+  )
 
   fastify.post<{ Body: { charterKey?: string; reason?: string } }>(
     '/agent/fleet/approvals/reject-all',

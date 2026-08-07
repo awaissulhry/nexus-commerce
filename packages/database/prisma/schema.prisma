@@ -11424,14 +11424,22 @@ model AgentApproval {
   riskTier    String
   args        Json // the proposed action
   preview     Json? // dry-run diff / preview of effect
-  status      String    @default("pending") // pending | approved | rejected | expired | executed
+  status      String    @default("pending") // pending | scheduled | approved | rejected | expired | executed
   requestedAt DateTime  @default(now())
   decidedBy   String?
   decidedAt   DateTime?
   reason      String?
   expiresAt   DateTime?
+  /// NAF.AP.4 — an approved action waits here before it runs, so an approve
+  /// can be taken back. Set with status='scheduled'; null otherwise. Nothing
+  /// reaches Amazon before this instant.
+  executeAfter DateTime?
 
   @@index([status, requestedAt])
+  /// NAF.AP.4/AP.5 — the maintenance sweep's two queries: commit what is due,
+  /// expire what has run out.
+  @@index([status, executeAfter])
+  @@index([status, expiresAt])
 }
 
 // Per-agent / per-entity memory for continuity + learning.

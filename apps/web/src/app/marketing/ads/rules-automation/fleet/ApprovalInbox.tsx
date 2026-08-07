@@ -16,8 +16,8 @@
  * card with every fact on show.
  */
 
-import { useState } from 'react'
-import { AlertTriangle, Check, Clock, Undo2, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { AlertTriangle, Check, Clock, Timer, Undo2, X } from 'lucide-react'
 import { DecisionCard, TOOL_CARDS, toolCardFor } from './DecisionCard'
 import { Term } from './glossary'
 import type { StoryPlan } from './PlanStory'
@@ -37,6 +37,8 @@ export interface ApprovalRow {
   decidedBy: string | null
   reason: string | null
   expiresAt: string | null
+  /** AP.4 — set while an approved action is waiting out its undo window. */
+  executeAfter: string | null
   isFleet: boolean
 }
 
@@ -148,6 +150,71 @@ function DecidedRow({ row, workerName }: { row: ApprovalRow; workerName: string 
   )
 }
 
+/* ── AP.4: a parked action, with its undo ──────────────────────────────── */
+
+/**
+ * An approved action waiting out its window. Rendered inline rather than as a
+ * toast on purpose: a toast is gone the moment you reload, and this row IS
+ * the undo. When the countdown reaches zero the browser asks the server to
+ * run it; if this tab is closed first, the maintenance sweep picks it up.
+ */
+function ScheduledRow({
+  row,
+  workerName,
+  busy,
+  onUndo,
+  onCommit,
+}: {
+  row: ApprovalRow
+  workerName: string
+  busy: boolean
+  onUndo: (id: string) => void
+  onCommit: (id: string) => void
+}) {
+  const card = toolCardFor(row.toolName)
+  const until = row.executeAfter ? new Date(row.executeAfter).getTime() : 0
+  const [left, setLeft] = useState(() => Math.max(0, Math.ceil((until - Date.now()) / 1000)))
+  // A ref, not state: the commit must fire exactly once, and asking for it
+  // is not a render concern.
+  const fired = useRef(false)
+
+  useEffect(() => {
+    if (!until) return
+    const t = setInterval(() => {
+      const secs = Math.max(0, Math.ceil((until - Date.now()) / 1000))
+      setLeft(secs)
+      if (secs === 0 && !fired.current) {
+        fired.current = true
+        onCommit(row.id)
+      }
+    }, 500)
+    return () => clearInterval(t)
+  }, [until, row.id, onCommit])
+
+  return (
+    <div className="ap-scheduled">
+      <span className="ap-schedicon" aria-hidden>
+        <Timer size={13} />
+      </span>
+      <span className="ap-schedbody">
+        <span className="ap-schedwhat">
+          Approved — {workerName} will {card.shortAsk}
+        </span>
+        <span className="ap-schedmeta">
+          {left > 0
+            ? `Running in ${left} second${left === 1 ? '' : 's'}. Nothing has reached Amazon yet.`
+            : 'Running now…'}
+        </span>
+      </span>
+      {left > 0 ? (
+        <button className="acr-btn" disabled={busy} onClick={() => onUndo(row.id)}>
+          <Undo2 size={13} /> Undo
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 /* ── the panel ─────────────────────────────────────────────────────────── */
 
 export function ApprovalInbox({
@@ -162,6 +229,10 @@ export function ApprovalInbox({
   onDecide,
   onRejectAll,
   onOpenPlan,
+  onUndo,
+  onCommit,
+  onBulkPreview,
+  onBulkDecide,
 }: {
   view: InboxView
   counts: InboxCounts
@@ -174,9 +245,39 @@ export function ApprovalInbox({
   onDecide: (id: string, decision: 'approve' | 'reject', reason?: string) => void
   onRejectAll: (charterKey: string, reason: string) => void
   onOpenPlan: (planId: string) => void
+  onUndo: (id: string) => void
+  onCommit: (id: string) => void
+  onBulkPreview: (ids: string[], decision: 'approve' | 'reject') => Promise<string>
+  onBulkDecide: (ids: string[], decision: 'approve' | 'reject', reason?: string) => void
 }) {
   const [rejectAllFor, setRejectAllFor] = useState<string | null>(null)
   const [rejectAllReason, setRejectAllReason] = useState('')
+  // AP.4 — bulk selection. Nothing fires until its blast radius has been
+  // stated back to the operator.
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [pendingBulk, setPendingBulk] = useState<{
+    decision: 'approve' | 'reject'
+    sentence: string
+  } | null>(null)
+  const [bulkReason, setBulkReason] = useState('')
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  const clearSelection = () => {
+    setSelected(new Set())
+    setPendingBulk(null)
+    setBulkReason('')
+  }
+  const askBulk = async (decision: 'approve' | 'reject') => {
+    const sentence = await onBulkPreview([...selected], decision)
+    setPendingBulk({ decision, sentence })
+    setBulkReason('')
+  }
 
   // Names, not keys — the group header used to print the raw charter key,
   // and literally the word "unknown" when a run could not be resolved.
@@ -214,12 +315,67 @@ export function ApprovalInbox({
           )}
         </p>
       ) : view === 'waiting' ? (
-        [...grouped.entries()].map(([charterKey, rows]) => (
+        <>
+          {/* AP.4 — the contextual toolbar. It never fires anything until the
+              blast radius has been read back. */}
+          {selected.size > 0 ? (
+            <div className="ap-bulkbar" role="region" aria-label="Bulk actions">
+              {pendingBulk ? (
+                <>
+                  <span className="ap-bulksentence">
+                    <AlertTriangle size={13} aria-hidden /> {pendingBulk.sentence}
+                  </span>
+                  {pendingBulk.decision === 'reject' ? (
+                    <input
+                      autoFocus
+                      placeholder="one-line reason (required)"
+                      value={bulkReason}
+                      onChange={(e) => setBulkReason(e.target.value)}
+                    />
+                  ) : null}
+                  <button
+                    className="acr-btn go"
+                    disabled={
+                      busy || (pendingBulk.decision === 'reject' && !bulkReason.trim())
+                    }
+                    onClick={() => {
+                      onBulkDecide(
+                        [...selected],
+                        pendingBulk.decision,
+                        bulkReason.trim() || undefined,
+                      )
+                      clearSelection()
+                    }}
+                  >
+                    Yes, do it
+                  </button>
+                  <button className="acr-btn" disabled={busy} onClick={() => setPendingBulk(null)}>
+                    Back
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="ap-bulkcount">{selected.size} selected</span>
+                  <button className="acr-btn go" disabled={busy} onClick={() => void askBulk('approve')}>
+                    <Check size={13} /> Approve selected
+                  </button>
+                  <button className="acr-btn" disabled={busy} onClick={() => void askBulk('reject')}>
+                    <X size={13} /> Reject selected
+                  </button>
+                  <button className="acr-btn" onClick={clearSelection}>
+                    Clear
+                  </button>
+                </>
+              )}
+            </div>
+          ) : null}
+          {[...grouped.entries()].map(([charterKey, rows]) => (
           <div key={charterKey} className="acr-fl-inboxgroup">
             <div className="acr-fl-inboxhead">
               <strong>{nameOf(charterKey || null)}</strong>
               <span className="acr-fl-sub">
-                {rows.length} waiting
+                {rows.filter((r) => r.status === 'pending').length} waiting
+                {rows.some((r) => r.status === 'scheduled') ? ' · some already approved' : ''}
                 {rows.some((r) => r.riskTier === 'high') ? ' · includes high risk' : ''}
               </span>
               {rejectAllFor === charterKey ? (
@@ -258,19 +414,40 @@ export function ApprovalInbox({
                 </button>
               )}
             </div>
-            {rows.map((a) => (
-              <DecisionCard
-                key={a.id}
-                approval={a}
-                workerName={nameOf(a.charterKey)}
-                plans={plans}
-                busy={busy}
-                onDecide={onDecide}
-                onOpenPlan={onOpenPlan}
-              />
-            ))}
+            {rows.map((a) =>
+              a.status === 'scheduled' ? (
+                <ScheduledRow
+                  key={a.id}
+                  row={a}
+                  workerName={nameOf(a.charterKey)}
+                  busy={busy}
+                  onUndo={onUndo}
+                  onCommit={onCommit}
+                />
+              ) : (
+                <div key={a.id} className="ap-selectrow">
+                  <label className="ap-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(a.id)}
+                      onChange={() => toggle(a.id)}
+                      aria-label={`Select this request from ${nameOf(a.charterKey)}`}
+                    />
+                  </label>
+                  <DecisionCard
+                    approval={a}
+                    workerName={nameOf(a.charterKey)}
+                    plans={plans}
+                    busy={busy}
+                    onDecide={onDecide}
+                    onOpenPlan={onOpenPlan}
+                  />
+                </div>
+              ),
+            )}
           </div>
-        ))
+          ))}
+        </>
       ) : (
         <ul className="ap-decidedlist">
           {approvals.map((a) => (

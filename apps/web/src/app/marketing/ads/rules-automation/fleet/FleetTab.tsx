@@ -272,6 +272,62 @@ export function FleetTab() {
     }
   }, [backend, timeline, timelineMore])
 
+  // NAF.AP.4 — the brake. `post` keeps these four handlers to one shape.
+  const post = useCallback(
+    async (path: string, body?: unknown) => {
+      setBusy(true)
+      try {
+        const r = await fetch(`${backend}/api/agent/fleet/${path}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: body === undefined ? undefined : JSON.stringify(body),
+        })
+        const d = (await r.json().catch(() => null)) as
+          | { error?: string; sentence?: string }
+          | null
+        if (!r.ok) setErr(d?.error ?? `${path}: ${r.status}`)
+        return d
+      } finally {
+        setBusy(false)
+      }
+    },
+    [backend],
+  )
+
+  const undoApproval = useCallback(
+    async (id: string) => {
+      await post(`approvals/${id}/undo`)
+      await load()
+    },
+    [post, load],
+  )
+
+  // The window closed while this tab was open, so commit it now rather than
+  // waiting up to 30s for the maintenance sweep to notice.
+  const commitApproval = useCallback(
+    async (id: string) => {
+      await post(`approvals/${id}/commit`)
+      await load()
+    },
+    [post, load],
+  )
+
+  const bulkPreview = useCallback(
+    async (ids: string[], decision: 'approve' | 'reject') => {
+      const d = await post('approvals/bulk-preview', { ids, decision })
+      return d?.sentence ?? `This affects ${ids.length} actions.`
+    },
+    [post],
+  )
+
+  const bulkDecide = useCallback(
+    async (ids: string[], decision: 'approve' | 'reject', reason?: string) => {
+      await post('approvals/bulk-decide', { ids, decision, reason })
+      await load()
+    },
+    [post, load],
+  )
+
   const decide = useCallback(
     async (id: string, decision: 'approve' | 'reject', reason?: string) => {
       setBusy(true)
@@ -621,6 +677,10 @@ export function FleetTab() {
           }}
           onDecide={(id, decision, reason) => void decide(id, decision, reason)}
           onRejectAll={(charterKey, reason) => void rejectAll(charterKey, reason)}
+          onUndo={(id) => void undoApproval(id)}
+          onCommit={(id) => void commitApproval(id)}
+          onBulkPreview={bulkPreview}
+          onBulkDecide={(ids, decision, reason) => void bulkDecide(ids, decision, reason)}
           onOpenPlan={(planId) => {
             setOpenPlan(planId)
             document

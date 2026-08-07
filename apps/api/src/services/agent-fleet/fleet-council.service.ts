@@ -6,12 +6,16 @@
  * override a passing critic (the model may add blocks, never remove);
  * passing items queue as AgentApproval rows via the EXISTING gate
  * (runOrQueueTool with the DIRECTOR's run id, so the decision timeline
- * stays coherent); stale fleet approvals expire here because nothing else
- * in the codebase ever expires them (V3).
+ * stays coherent).
+ *
+ * Expiry used to live here and only here. NAF.AP.5 moved it to
+ * `runApprovalMaintenance`, which owns the single `expiresAt` clock on its
+ * own schedule and covers every tool — do not reintroduce a second one.
  */
 import type { PlanItemT } from '@nexus/shared/agent-fleet'
 import { Prisma } from '@nexus/database'
 import prisma from '../../db.js'
+import { runApprovalMaintenance } from './approval-inbox.service.js'
 import { runOrQueueTool } from '../agents/approval-gate.service.js'
 import { runFleet } from './orchestrator.js'
 import { runPreChecks } from './plan-critic.service.js'
@@ -21,7 +25,6 @@ const FLEET_TOOL_NAMES = [
   'graduate-keyword',
   'set-target-bid',
 ]
-const APPROVAL_TTL_DAYS = 7
 
 export interface CouncilResult {
   orchestrationId: string
@@ -35,15 +38,15 @@ export interface CouncilResult {
 }
 
 export async function runFleetCouncilOnce(): Promise<CouncilResult> {
-  // 1 — expire stale fleet approvals (V3: nothing else ever does).
-  const expired = await prisma.agentApproval.updateMany({
-    where: {
-      status: 'pending',
-      toolName: { in: FLEET_TOOL_NAMES },
-      requestedAt: { lt: new Date(Date.now() - APPROVAL_TTL_DAYS * 24 * 3600_000) },
-    },
-    data: { status: 'expired' },
-  })
+  // 1 — NAF.AP.5: expiry is no longer the council's job. It used to run
+  // HERE and only here, keyed on `requestedAt` against a private constant,
+  // restricted to fleet tools — while every approval also carried an
+  // `expiresAt` that nothing read. Two clocks, and the live one was dead.
+  // `runApprovalMaintenance` now owns it on its own schedule, for every
+  // tool. Called once here too so a council still reports what it swept;
+  // do NOT reintroduce a second clock in this file.
+  const maintenance = await runApprovalMaintenance()
+  const expired = { count: maintenance.expired }
 
   // 2 — the DAG. Dark charters no-op inside; a failed agent never stops
   // its siblings; the critic runs only after the director's level.
