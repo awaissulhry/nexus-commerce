@@ -144,6 +144,18 @@ export const GLOSSARY: Record<string, { title: string; body: string }> = {
     title: 'Trigger',
     body: 'What starts a routine — a clock (a schedule) or you (a manual run). If the trigger is off, the routine never runs, and its row says so instead of leaving you to guess.',
   },
+  gate: {
+    title: 'Gate',
+    body: 'Per step of a workflow: ask first (every proposal waits for you), may act (the tool’s own policy decides), or inherit today’s behaviour. A gate can only tighten — always-ask tools keep asking whatever the gate says.',
+  },
+  draft: {
+    title: 'Draft',
+    body: 'A recorded revision that is not active. Drafts are inert: saving one changes nothing anywhere. Activate it from Versions when you mean it.',
+  },
+  publish: {
+    title: 'Publish',
+    body: 'The one consequential act in editing: it records your draft as the active revision, behind a confirmation that shows exactly what changed. Until then, editing touches nothing.',
+  },
 }
 
 export function Term({ k, children }: { k: keyof typeof GLOSSARY & string; children: ReactNode }) {

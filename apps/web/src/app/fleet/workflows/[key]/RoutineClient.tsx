@@ -17,9 +17,12 @@ import { BUILTIN_ROUTINES } from '../routines'
 import { RoutineCanvas, type StepLive } from '../RoutineCanvas'
 import { HowWorkflowsWork } from '../HowWorkflowsWork'
 import { RunsSection } from '../RunsSection'
+import { DiffList, RoutineEditor } from '../RoutineEditor'
 import {
   CHIP_CLASS,
   agoTs,
+  computeDiff,
+  definitionToStory,
   fmtDuration,
   groupRuns,
   prettyCron,
@@ -29,11 +32,13 @@ import {
   type FleetState,
   type RunRow,
   type ScheduleJob,
+  type WfDefinition,
 } from '../lib'
 
 interface RevisionRow {
   id: string
   revision: number
+  definition: WfDefinition
   note: string
   author: string | null
   createdAt: string
@@ -44,6 +49,8 @@ interface VersionsResp {
   key: string
   kind: string
   source: 'code' | 'revision' | 'none'
+  effective: WfDefinition | null
+  code: WfDefinition | null
   revisions: RevisionRow[]
 }
 
@@ -98,11 +105,55 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
   }, [backend, routine.mode])
 
   const { asOf, refresh } = useVisibilityPoll(load)
+  const [editing, setEditing] = useState(false)
+  const [pendingAct, setPendingAct] = useState<RevisionRow | null>(null)
+  const [actBusy, setActBusy] = useState(false)
+  const [actErr, setActErr] = useState<string | null>(null)
 
   const status = useMemo(
     () => routineStatus(routine, state, jobs, charters),
     [routine, state, jobs, charters],
   )
+
+  /* WF.3a — honesty first: when a revision is active, the canvas shows ITS
+     wiring, never the hand-authored story of the code path. */
+  const displayStory = useMemo(() => {
+    if (vers?.source === 'revision' && vers.effective) {
+      return definitionToStory(vers.effective, charters)
+    }
+    return routine.story
+  }, [vers, charters, routine])
+  const showingRevision = vers?.source === 'revision' && vers.effective != null
+
+  const activate = async (rev: RevisionRow) => {
+    setActBusy(true)
+    setActErr(null)
+    try {
+      const r = await fetch(
+        `${backend}/api/agent/fleet/workflows/${routine.key}/revisions/${rev.id}/activate`,
+        { method: 'POST' },
+      )
+      if (!r.ok) {
+        const body = (await r.json().catch(() => ({}))) as { error?: string }
+        throw new Error(body.error ?? `activation failed (${r.status})`)
+      }
+      setPendingAct(null)
+      refresh()
+    } catch (e) {
+      setActErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setActBusy(false)
+    }
+  }
+
+  /* Reverting is the safe direction — back to code — so per the fleet's
+     asymmetric-confirmation convention it applies at once. */
+  const revert = async () => {
+    await fetch(`${backend}/api/agent/fleet/workflows/${routine.key}/revert-to-builtin`, {
+      method: 'POST',
+    }).catch(() => null)
+    refresh()
+  }
   const groups = useMemo(() => groupRuns(runs, routine.mode), [runs, routine.mode])
   const job = routine.scheduleKey
     ? (jobs.find((j) => j.key === routine.scheduleKey) ?? null)
@@ -159,6 +210,11 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
           </span>
         ) : null}
         <span className="spacer" />
+        {loaded && vers?.kind === 'builtin' && !editing ? (
+          <button className="acr-btn" onClick={() => setEditing(true)}>
+            Edit the wiring
+          </button>
+        ) : null}
         <button className="acr-btn" onClick={refresh}>
           <RefreshCw size={13} /> Refresh
         </button>
@@ -248,25 +304,43 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
         </div>
       ) : null}
 
-      <section className="acr-card">
-        <header className="wf-cardhead">
-          <h3>The pipeline</h3>
-          <span className="wf-legend">
-            blue = findings · violet = plan · grey = deterministic code · the last stop is{' '}
-            <Term k="approval">your approval</Term>
-          </span>
-        </header>
-        {loaded ? (
-          <RoutineCanvas story={routine.story} liveByCharter={liveByCharter} />
-        ) : (
-          <div className="acr-pg-empty">
-            <strong>{err ? 'Nothing to show yet.' : 'Reading the fleet…'}</strong>
-            {err
-              ? 'The pipeline needs the schedule, run history, worker settings and fleet status.'
-              : 'The schedule, the run history, worker settings and the fleet status.'}
-          </div>
-        )}
-      </section>
+      {editing && vers?.effective ? (
+        <RoutineEditor
+          routineKey={routine.key}
+          charters={charters}
+          baseline={vers.effective}
+          backend={backend}
+          onDone={(changed) => {
+            setEditing(false)
+            if (changed) refresh()
+          }}
+        />
+      ) : (
+        <section className="acr-card">
+          <header className="wf-cardhead">
+            <h3>The pipeline</h3>
+            <span className="wf-legend">
+              {showingRevision ? (
+                <>showing the ACTIVE REVISION&rsquo;s wiring — code steps and{' '}
+                  <Term k="approval">your approval</Term> still wrap it</>
+              ) : (
+                <>blue = findings · violet = plan · grey = deterministic code · the last stop is{' '}
+                  <Term k="approval">your approval</Term></>
+              )}
+            </span>
+          </header>
+          {loaded ? (
+            <RoutineCanvas story={displayStory} liveByCharter={liveByCharter} />
+          ) : (
+            <div className="acr-pg-empty">
+              <strong>{err ? 'Nothing to show yet.' : 'Reading the fleet…'}</strong>
+              {err
+                ? 'The pipeline needs the schedule, run history, worker settings and fleet status.'
+                : 'The schedule, the run history, worker settings and the fleet status.'}
+            </div>
+          )}
+        </section>
+      )}
 
       {loaded ? (
         <RunsSection
@@ -303,11 +377,24 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
                     {r.author ?? 'unattributed'} · {agoTs(new Date(r.createdAt).getTime())}
                   </span>
                   {r.activatedAt && !r.supersededAt ? (
-                    <span className="acr-pg-statechip running">active</span>
+                    <>
+                      <span className="acr-pg-statechip running">active</span>
+                      <button className="acr-btn" onClick={() => void revert()}>
+                        Revert to built-in
+                      </button>
+                    </>
                   ) : r.supersededAt ? (
                     <span className="acr-pg-statechip wf-chip-off">superseded</span>
                   ) : (
-                    <span className="acr-pg-statechip wf-chip-ready">draft</span>
+                    <>
+                      <span className="acr-pg-statechip wf-chip-ready">draft</span>
+                      <button
+                        className="acr-btn"
+                        onClick={() => { setActErr(null); setPendingAct(r) }}
+                      >
+                        Activate…
+                      </button>
+                    </>
                   )}
                 </div>
               ))}
@@ -333,6 +420,38 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
       </section>
 
       <HowWorkflowsWork />
+
+      {pendingAct && vers ? (
+        <div className="acr-pg-confirmwrap" role="dialog" aria-modal="true">
+          <div className="acr-pg-confirm">
+            <h4>Activate rev {pendingAct.revision}?</h4>
+            <DiffList
+              diff={computeDiff(
+                (vers.effective ?? vers.code)!,
+                pendingAct.definition,
+              )}
+            />
+            <p>
+              This makes rev {pendingAct.revision} the recorded wiring. Until stored execution
+              ships, runs keep following the built-in — the record changes, tonight&rsquo;s
+              behaviour does not. Revert stays one click.
+            </p>
+            {actErr ? <p className="acr-pg-warn">{actErr}</p> : null}
+            <div className="acr-pg-confirmbtns">
+              <button className="acr-btn" onClick={() => setPendingAct(null)} disabled={actBusy}>
+                Cancel
+              </button>
+              <button
+                className="acr-btn primary"
+                disabled={actBusy}
+                onClick={() => void activate(pendingAct)}
+              >
+                {actBusy ? 'Working…' : 'Activate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

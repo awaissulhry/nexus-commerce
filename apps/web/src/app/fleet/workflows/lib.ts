@@ -9,7 +9,7 @@
  */
 
 import { ago as agoIso } from '../_shared/run-health'
-import type { BuiltinRoutine } from './routines'
+import type { BuiltinRoutine, RoutineStory } from './routines'
 import { CRITIC_KEY, DIRECTOR_KEY } from './routines'
 
 export const DAY = 24 * 3600 * 1000
@@ -168,6 +168,150 @@ export function groupRuns(runs: RunRow[], mode: BuiltinRoutine['mode']): RunGrou
     })
   }
   return groups.sort((a, b) => b.startedAt - a.startedAt)
+}
+
+/* ── the stored definition, mirrored from the API contract v1 ──────────── */
+
+export interface WfStep {
+  charterKey: string
+  gate: 'ask' | 'act' | 'inherit'
+}
+export interface WfEdge {
+  from: string
+  to: string
+  artifact: 'finding' | 'plan' | 'strategy'
+}
+export type WfTrigger = { type: 'schedule'; cron: string } | { type: 'manual' }
+export interface WfDefinition {
+  v: 1
+  trigger: WfTrigger
+  steps: WfStep[]
+  edges: WfEdge[]
+}
+
+/** Kahn's by levels — the client mirror of the server's `topoLevels` law.
+ *  Validated definitions cannot be cyclic; a mid-edit draft CAN, so leftover
+ *  nodes are parked in a final column and `cyclic` says so. */
+export function topoCols(
+  steps: WfStep[],
+  edges: WfEdge[],
+): { cols: Map<string, number>; cyclic: boolean } {
+  const keys = new Set(steps.map((s) => s.charterKey))
+  const indeg = new Map<string, number>()
+  for (const k of keys) indeg.set(k, 0)
+  for (const e of edges) {
+    if (keys.has(e.to) && keys.has(e.from)) indeg.set(e.to, (indeg.get(e.to) ?? 0) + 1)
+  }
+  const cols = new Map<string, number>()
+  let frontier = [...keys].filter((k) => (indeg.get(k) ?? 0) === 0)
+  let level = 0
+  while (frontier.length) {
+    const next: string[] = []
+    for (const k of frontier) cols.set(k, level)
+    for (const e of edges) {
+      if (cols.get(e.from) === level && keys.has(e.to) && !cols.has(e.to)) {
+        const d = (indeg.get(e.to) ?? 1) - 1
+        indeg.set(e.to, d)
+        if (d === 0) next.push(e.to)
+      }
+    }
+    frontier = next
+    level++
+  }
+  let cyclic = false
+  for (const k of keys) {
+    if (!cols.has(k)) {
+      cols.set(k, level)
+      cyclic = true
+    }
+  }
+  return { cols, cyclic }
+}
+
+const TIER_SUB: Record<string, string> = {
+  analyst: 'Reads evidence, reports findings',
+  director: 'Compiles one ranked plan',
+  critic: 'Rules on the plan',
+  auditor: 'Writes your brief',
+  strategist: 'Sets the period strategy',
+}
+
+/** A stored definition rendered in the canvas's story shape, with live
+ *  charter names. Pure; the caller supplies its own surrounding sentence. */
+export function definitionToStory(def: WfDefinition, charters: CharterRow[]): RoutineStory {
+  const byKey = new Map(charters.map((c) => [c.key, c]))
+  const { cols } = topoCols(def.steps, def.edges)
+  return {
+    sentence: '',
+    steps: def.steps.map((s) => {
+      const c = byKey.get(s.charterKey)
+      return {
+        id: s.charterKey,
+        kind: 'worker' as const,
+        charterKey: s.charterKey,
+        label: c?.name ?? s.charterKey,
+        sub:
+          s.gate === 'ask'
+            ? 'Asks you first — every proposal waits'
+            : s.gate === 'act'
+              ? 'May act — the tool’s own policy decides'
+              : (TIER_SUB[c?.tier ?? ''] ?? 'Worker'),
+        col: cols.get(s.charterKey) ?? 0,
+      }
+    }),
+    edges: def.edges.map((e) => ({
+      from: e.from,
+      to: e.to,
+      label: e.artifact === 'finding' ? 'findings' : e.artifact,
+    })),
+  }
+}
+
+/** Artifact a step of this tier hands on — derived, shown, never asked. */
+export function tierArtifact(tier: string | undefined): WfEdge['artifact'] | null {
+  if (tier === 'analyst') return 'finding'
+  if (tier === 'director') return 'plan'
+  if (tier === 'strategist') return 'strategy'
+  return null // critic and auditor are terminal: code reads their output
+}
+
+export interface WfDiff {
+  stepsAdded: string[]
+  stepsRemoved: string[]
+  gatesChanged: Array<{ charterKey: string; from: string; to: string }>
+  edgesAdded: string[]
+  edgesRemoved: string[]
+  triggerChanged: boolean
+}
+
+/** Categorized structural diff (the Make grouping): what a publish changes. */
+export function computeDiff(a: WfDefinition, b: WfDefinition): WfDiff {
+  const aSteps = new Map(a.steps.map((s) => [s.charterKey, s]))
+  const bSteps = new Map(b.steps.map((s) => [s.charterKey, s]))
+  const edgeKey = (e: WfEdge) => `${e.from} → ${e.to} (${e.artifact}s)`
+  const aEdges = new Set(a.edges.map(edgeKey))
+  const bEdges = new Set(b.edges.map(edgeKey))
+  return {
+    stepsAdded: [...bSteps.keys()].filter((k) => !aSteps.has(k)),
+    stepsRemoved: [...aSteps.keys()].filter((k) => !bSteps.has(k)),
+    gatesChanged: [...bSteps.values()]
+      .filter((s) => aSteps.has(s.charterKey) && aSteps.get(s.charterKey)!.gate !== s.gate)
+      .map((s) => ({ charterKey: s.charterKey, from: aSteps.get(s.charterKey)!.gate, to: s.gate })),
+    edgesAdded: [...bEdges].filter((e) => !aEdges.has(e)),
+    edgesRemoved: [...aEdges].filter((e) => !bEdges.has(e)),
+    triggerChanged: JSON.stringify(a.trigger) !== JSON.stringify(b.trigger),
+  }
+}
+
+export function diffIsEmpty(d: WfDiff): boolean {
+  return (
+    d.stepsAdded.length === 0 &&
+    d.stepsRemoved.length === 0 &&
+    d.gatesChanged.length === 0 &&
+    d.edgesAdded.length === 0 &&
+    d.edgesRemoved.length === 0 &&
+    !d.triggerChanged
+  )
 }
 
 /** The one honest status. Precedence: halt → clock → dials. */

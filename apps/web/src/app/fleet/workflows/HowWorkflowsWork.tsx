@@ -61,11 +61,19 @@ export function HowWorkflowsWork() {
             author — can reach Amazon any other way.
           </p>
           <p>
-            <strong>What comes next.</strong> Versions (every change readable as a diff, every
-            run stamped with the version that ran, rollback that cannot fail), editing the wiring
-            between workers, and a test run that shows what a routine <em>would</em> do while
-            writing nothing. Editing will never change what runs until you publish — drafts and
-            the live routine are separate things.
+            <strong>Editing and versions.</strong> "Edit the wiring" on a routine&rsquo;s page
+            opens a <Term k="draft">draft</Term>: add or remove workers, choose each step&rsquo;s{' '}
+            <Term k="gate">gate</Term>, and connect who hands what to whom. Drafts are inert —{' '}
+            <Term k="publish">publishing</Term> is the one act that records a change, behind a
+            confirmation that shows the exact diff. Every revision is immutable, every activation
+            supersedes its predecessor, and revert-to-built-in is one click that cannot fail.
+            Until stored execution ships, even a published revision is recorded, not live — the
+            fleet says so wherever it applies, rather than letting you believe otherwise.
+          </p>
+          <p>
+            <strong>What comes next.</strong> Stored execution (runs follow your published wiring
+            and stamp the revision that served them), trigger editing, and a test run that shows
+            what a routine <em>would</em> do while writing nothing.
           </p>
         </div>
       ) : null}

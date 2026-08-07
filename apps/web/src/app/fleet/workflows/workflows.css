@@ -278,6 +278,113 @@
   max-width: 86ch;
 }
 
+/* ── WF.3b: the editor ───────────────────────────────────────────────── */
+.wf-editactions { display: flex; gap: 8px; align-items: center; }
+.wf-editactions .primary,
+.acr-pg-confirmbtns .primary { background: #3f6fb5; border-color: #3f6fb5; color: #fff; }
+.wf-editactions .primary:disabled { opacity: 0.55; }
+
+.wf-editgrid {
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr) minmax(0, 1.4fr);
+  gap: 16px;
+  align-items: start;
+  margin-top: 12px;
+}
+@media (max-width: 1080px) { .wf-editgrid { grid-template-columns: 1fr; } }
+
+.wf-steps { display: flex; flex-direction: column; gap: 10px; }
+
+.wf-stepcard {
+  border: 1px solid #e6ebf1;
+  border-radius: 10px;
+  background: #fff;
+  padding: 11px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wf-stephead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.wf-stephead .nm { font-weight: 650; color: #26313f; font-size: 12.5px; }
+.wf-stepremove {
+  background: none;
+  border: 0;
+  padding: 3px;
+  cursor: pointer;
+  color: #98a2b0;
+  display: inline-flex;
+}
+.wf-stepremove:hover { color: #a3312c; }
+
+.wf-gatelabel {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #8d97a6;
+  margin-bottom: 4px;
+}
+.wf-gate .acr-pg-ladder { max-width: 280px; }
+
+.wf-handsto { display: flex; flex-direction: column; gap: 3px; }
+.wf-handopt {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: #34404f;
+  cursor: pointer;
+}
+
+.wf-addstep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7a8d;
+}
+.wf-addstep select {
+  height: 30px;
+  font-size: 12.5px;
+  color: #34404f;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 7px;
+  padding: 0 8px;
+  min-width: 220px;
+}
+
+.wf-problems {
+  border: 1px solid #f3e3c2;
+  background: #fdf4e3;
+  border-radius: 9px;
+  padding: 10px 12px;
+}
+.wf-problems p { margin: 0; font-size: 12.5px; line-height: 1.55; color: #91640f; }
+.wf-problems p + p { margin-top: 6px; }
+
+.wf-noteinput {
+  width: 100%;
+  font: inherit;
+  font-size: 12.5px;
+  color: #34404f;
+  border: 1px solid #dfe5ec;
+  border-radius: 7px;
+  padding: 8px 10px;
+  resize: vertical;
+  margin-top: 6px;
+}
+
+.wf-difflist { margin: 0 0 8px; padding: 0; list-style: none; }
+.wf-difflist li {
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 2px 0;
+}
+.wf-difflist li.add { color: #14764f; }
+.wf-difflist li.rem { color: #a3312c; }
+.wf-difflist li.chg { color: #91640f; }
+
 /* the teaching card's body */
 .wf-howwrap { margin-top: 16px; }
 .wf-how {
