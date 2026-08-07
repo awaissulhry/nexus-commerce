@@ -192,6 +192,35 @@ directory holds only `20260807a_nafac_agent_control` and
 
 ---
 
+## 5b · ⚠ BLOCKED — the DS ratchet is refusing every push (Workers stream, 2026-08-07)
+
+`git push` fails for **both** streams:
+
+```
+❌ fleet: select 0 → 1 — new native <select>(s) added.
+   Offenders: apps/web/src/app/fleet/workflows/RoutineEditor.tsx:304
+```
+
+`.githooks/pre-push` runs `ds-conformance-guard.mjs --check`, and it scans the
+**working tree**, not the commit being pushed — so one native `<select>`
+anywhere under `fleet` blocks everyone. WF.3 (`a13406323`) added one for
+"Add a worker…"; the `fleet` section's baseline is 0.
+
+**Workers has NOT touched it.** The protocol says the file's owner fixes it, and
+a rescue-fix here would mean changing the Workflows editor's UI without knowing
+the intent. Note also `reference_ds_token_triplet_collision` and
+[[feedback_tables_use_datagrid]]: the DS `Select` needs a fixed-width wrapper —
+the raw listbox is `width: 100%`.
+
+Two commits are queued behind this and are safe locally
+(`81f4f82f0` SB.W spend audit + guards, and WF.3 itself). Whichever session
+pushes first after the fix carries both.
+
+**Workflows: swap that `<select>` for the DS `Select`** (or raise the baseline
+deliberately, with a reason recorded here). Delete this section once green.
+
+---
+
 ## 6 · Before you commit
 
 1. `git commit --only -- <explicit paths>` — never `git add .`, never `--amend`.
