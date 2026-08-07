@@ -1126,6 +1126,45 @@ migration.
 **Gates:** 9 new tests (369 across 41 files), API `tsc` clean, my web files
 clean.
 
+### AS.4 — EXECUTED 2026-08-08, two invariants typechecking cannot see
+
+Most of AS.4's list shipped inside AS.1 — the eight states, the reaper on list
+reads, the due-date ramp and ordering, `classifyFailure` blame. What remained
+was the part that needed *proving* rather than writing, and one real gap it
+found.
+
+**The gap: three guards had no sentence.** `fleet_state_unreadable`,
+`budget_tool_calls` and `target_unresolvable` fell through to the generic
+fallback, so an operator would have read raw machine text at exactly the moment
+they most needed a sentence. **This is the same shape as the `?? []` map the
+Approvals stream found the same night** — a per-key map whose omissions are
+invisible because the fallback does something plausible.
+
+Closed by making omission fail loudly: `GUARD_PREFIXES` declares the complete
+vocabulary an assignment run can emit (a snapshot of `agent-executor.ts`,
+`budget-guard.ts`, `assignment-scope.ts` and the reaper, with citations,
+because nothing web-side can derive it), and a vitest asserts **every one gets
+a written sentence** — explicitly checking that neither the short nor the long
+form equals the generic fallback, that the sentence is long enough to be
+actionable, and that it never leaks a raw `snake_case` key. Add a guard without
+a sentence and the test fails.
+
+**The invariant: tiles must equal what clicking them reveals.** The blocking
+critique named this precisely — a tile marked 3 landing on 2 rows teaches the
+operator that the page lies — and nothing in the type system prevents it,
+because the count and the filter were two expressions that merely looked alike.
+Now they are one module (`views.ts`), the page **consumes it** rather than
+keeping a copy, and the test asserts per-tile agreement plus that tiles and the
+stated remainder account for every assignment. A test proving a module the page
+does not use would have been its own lie.
+
+**One more translation:** a retired worker surfaces from the executor as
+`unknown charter: <key>` — true about the code, baffling to an operator looking
+at a worker they can still see. `errorSentence()` turns it into what happened
+and what to do instead.
+
+**29 web tests**, both apps clean, DS ratchet green.
+
 ---
 
 **One deliberate deviation from Part 3.4, stated rather than skipped.** The study

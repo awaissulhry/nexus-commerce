@@ -27,11 +27,14 @@ import { ago } from '../_shared/run-health'
 import {
   ASSIGNMENT_STATES,
   TILE_ORDER,
-  isOpenState,
   outcomeLine,
   stateDef,
   type AssignmentState,
 } from './states'
+// AS.4 — the counts and the filter come from ONE module, proven to agree by
+// assignments.vitest. A page that recomputed either would make the test a
+// statement about code nobody runs.
+import { closedCount, tileCounts, visibleRows } from './views'
 import { CreateAssignment } from './CreateAssignment'
 import { HowAssignmentsWork } from './HowAssignmentsWork'
 
@@ -115,27 +118,12 @@ export function AssignmentsClient() {
     }, [load]),
   )
 
-  const counts = useMemo(() => {
-    const c: Record<string, number> = {}
-    for (const r of rows ?? []) c[r.state] = (c[r.state] ?? 0) + 1
-    return c
-  }, [rows])
-
-  const closedCount = (counts.closed ?? 0) + (counts.cancelled ?? 0)
-
-  const visible = useMemo(() => {
-    let list = rows ?? []
-    if (!showClosed) list = list.filter((r) => isOpenState(r.state))
-    if (filter) list = list.filter((r) => r.state === filter)
-    // Overdue first, then newest. A deadline that slipped should be the first
-    // thing an eye lands on — it classifies and raises, it never blocks.
-    return [...list].sort((a, b) => {
-      const ao = overdueRank(a)
-      const bo = overdueRank(b)
-      if (ao !== bo) return ao - bo
-      return b.createdAt.localeCompare(a.createdAt)
-    })
-  }, [rows, filter, showClosed])
+  const counts = useMemo(() => tileCounts(rows ?? []), [rows])
+  const closed = useMemo(() => closedCount(rows ?? []), [rows])
+  const visible = useMemo(
+    () => visibleRows(rows ?? [], { filter, showClosed }),
+    [rows, filter, showClosed],
+  )
 
   if (error && !rows) {
     return (
@@ -183,7 +171,7 @@ export function AssignmentsClient() {
         })}
       </div>
 
-      {closedCount > 0 && (
+      {closed > 0 && (
         <p className="as-remainder">
           Showing open assignments — {counts.closed ?? 0} closed,{' '}
           {counts.cancelled ?? 0} cancelled.{' '}
@@ -213,7 +201,7 @@ export function AssignmentsClient() {
       ) : visible.length === 0 ? (
         <EmptyState
           hasAny={(rows?.length ?? 0) > 0}
-          filtered={!!filter || (!showClosed && closedCount > 0)}
+          filtered={!!filter || (!showClosed && closed > 0)}
           onClear={() => {
             setFilter(null)
             setShowClosed(true)
@@ -323,11 +311,6 @@ function TargetChip({ a }: { a: AssignmentRow }) {
       {label}
     </span>
   )
-}
-
-function overdueRank(a: AssignmentRow): number {
-  if (!a.dueAt || !isOpenState(a.state)) return 2
-  return new Date(a.dueAt).getTime() < Date.now() ? 0 : 1
 }
 
 function DueBadge({ dueAt }: { dueAt: string | null }) {

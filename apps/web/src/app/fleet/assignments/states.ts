@@ -144,14 +144,46 @@ export function outcomeLine(a: {
   return `${a.findingCount} finding${a.findingCount === 1 ? '' : 's'}`
 }
 
+/**
+ * The complete set of guard prefixes an assignment run can actually produce.
+ *
+ * A SNAPSHOT of the API, with citations, because nothing on this side can
+ * derive it: `agent-executor.ts` (`kill_switch`, `fleet_halted`,
+ * `fleet_state_unreadable`, `charter_day`, `fleet_day`, `stale_evidence`,
+ * `budget_*`, and the `target_*` family from `assignment-scope.ts`) plus
+ * `orphaned:` from `reclaimStuckRuns` in `orchestrator.ts`.
+ *
+ * It exists so the vitest beside this file can prove every one of them gets a
+ * WRITTEN sentence rather than raw machine text. The failure this prevents is
+ * the one the Approvals stream hit the same night in
+ * `MATERIAL_PREVIEW_FIELDS`: a per-key map whose omissions are invisible,
+ * because the fallback quietly does something plausible. Add a guard to the
+ * executor, add it here, or the test fails.
+ */
+export const GUARD_PREFIXES = [
+  'kill_switch',
+  'fleet_halted',
+  'fleet_state_unreadable',
+  'charter_day',
+  'fleet_day',
+  'stale_evidence',
+  'budget_tokens',
+  'budget_tool_calls',
+  'target_gone',
+  'target_outside_worker_scope',
+  'target_unsupported',
+  'target_unresolvable',
+  'orphaned',
+] as const
+
 /** Guard reasons are machine strings; this is the operator-facing half. */
 export function shortReason(halted?: string | null): string | null {
   if (!halted) return null
   const h = halted.toLowerCase()
-  if (h.startsWith('orphaned:')) return 'stopped reporting'
+  if (h.startsWith('orphaned')) return 'stopped reporting'
   if (h.includes('kill_switch')) return 'the AI kill switch is on'
+  if (h.includes('fleet_state_unreadable')) return 'fleet settings unreadable'
   if (h.includes('fleet_halted')) return 'the fleet is halted'
-  if (h.includes('fleet_state_unreadable')) return 'fleet state unreadable'
   if (h.startsWith('target_gone')) return 'its campaign is gone'
   if (h.startsWith('target_outside_worker_scope')) return 'target outside this worker'
   if (h.startsWith('target_unsupported')) return 'this worker cannot be narrowed'
@@ -159,6 +191,7 @@ export function shortReason(halted?: string | null): string | null {
   if (h.includes('charter_day') || h.includes('charter budget')) return "this worker's day budget"
   if (h.includes('fleet_day') || h.includes('fleet budget')) return "the fleet's day budget"
   if (h.includes('budget_tokens')) return 'it hit its token ceiling'
+  if (h.includes('budget_tool_calls')) return 'it hit its tool-call ceiling'
   if (h.includes('stale')) return 'the evidence was too old'
   return halted.split(':')[0].replace(/_/g, ' ')
 }
@@ -187,5 +220,24 @@ export function reasonSentence(halted?: string | null): string | null {
     return 'It hit its token ceiling mid-run and was stopped — the limit working, not a fault. Raise the ceiling, or accept a shorter answer.'
   if (h.includes('stale'))
     return 'The evidence it reads is older than this worker tolerates, so it stopped BEFORE calling the model — this one cost nothing. Fix the ingest and run it again.'
+  if (h.includes('fleet_state_unreadable'))
+    return "The fleet's own settings could not be read, so it stopped rather than running on a configuration nobody can see. This is the fail-safe working; try again, and check Controls if it persists."
+  if (h.includes('budget_tool_calls'))
+    return 'It made as many tool calls as it is allowed in one run and was stopped — the limit working, not a fault.'
+  if (h.startsWith('target_unresolvable'))
+    return 'The target could not be read at all, so it stopped rather than guessing. Re-pick what it should look at.'
   return halted
+}
+
+/**
+ * `resolveCharter` returns null for a RETIRED worker, which surfaces from the
+ * executor as `unknown charter: <key>` — a true sentence about the code and a
+ * baffling one for an operator who can see the worker in their own list.
+ * Translated here rather than left to leak.
+ */
+export function errorSentence(errorMessage?: string | null): string | null {
+  if (!errorMessage) return null
+  if (/^unknown charter/i.test(errorMessage))
+    return 'This worker has been retired, and a retired worker cannot be started. Make a new assignment against a worker that is still on the roster.'
+  return errorMessage
 }

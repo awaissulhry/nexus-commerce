@@ -21,7 +21,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { useVisibilityPoll } from '../../_shared/use-visibility-poll'
 import { ago, classifyFailure } from '../../_shared/run-health'
-import { reasonSentence, stateDef, type AssignmentState } from '../states'
+import { errorSentence, reasonSentence, stateDef, type AssignmentState } from '../states'
 
 interface RunRow {
   id: string
@@ -437,7 +437,9 @@ function failureSentence(r: RunRow): string {
     haltedReason: r.haltedReason,
     errorMessage: r.errorMessage,
   } as never)
-  return f?.sentence ?? r.errorMessage ?? 'it broke'
+  // AS.4 — a retired worker surfaces as `unknown charter: <key>`, which is
+  // true about the code and baffling to an operator who can see the worker.
+  return f?.sentence ?? errorSentence(r.errorMessage) ?? 'it broke'
 }
 
 function duration(r: RunRow): string {
