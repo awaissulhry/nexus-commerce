@@ -280,3 +280,27 @@ action cards with real campaign names ("Stop showing ads for any search
 containing 'homologué' in FR_Exact_8_Keywords (FR)"), each blocked item
 carrying its reason. Deferred from FX.6: explicit keyboard shortcuts
 (tab-order works; shortcut keys can ride a later polish pass).
+
+## FX.9 / FX.10 — visual rebuild + the entity graph (2026-08-07)
+
+- **FX.9 / FX.9b** — the map was rebuilt (first dark, then LIGHT on the
+  operator's revision): premium cards, animated flow edges, findings
+  drill-down on the canvas, and an elevation pass on the light page
+  scoped to `.acr-fleet` so the Control Room is untouched. The fleet
+  surface is light; do not re-propose dark.
+- **FX.10** — Phase H's 5,900 derived edges became explorable.
+  `GET /agent/fleet/entity-graph` serves two shapes: the campaign↔campaign
+  OVERVIEW (96 edges / 37 campaigns) and a focused NEIGHBOURHOOD via the
+  frontier CTE. Nodes are named server-side; unresolved ids show as
+  themselves; capped views say so.
+- Three layout defects were caught on prod and fixed before hand-off,
+  each recorded as its own commit: **10b** one ring of 37 nodes was a
+  hairball → connected-component clusters (the families ARE the
+  insight); **10c** fitView shrank labels past reading → compact
+  overview cards + zoom controls; **10d** a focused campaign put 98
+  products on a ring → relation LANES, one hop, eight per lane with an
+  honest "+N more not shown"; **10e** a campaign appearing in two lanes
+  shared a node id and blanked the cannibalizes lane → lane-scoped ids.
+- Verified live: focusing `IT-AIREON-SP-Category-Exact` shows
+  cannibalizes · 7, competes with · 7, shares stock · 3 (its DE
+  siblings), advertises · 24 with real product names and stock.
