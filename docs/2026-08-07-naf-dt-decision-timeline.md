@@ -336,11 +336,23 @@ teaching gate).
 
 ## 7 · Open items carried out of this proposal
 
-- **`fetch failed` × 21** — 47% of all fleet runs never reached Anthropic.
-  Cause unknown. Surfaced by DT.2, to be diagnosed on its own.
+- **~~`fetch failed` × 21 — 47% of runs never reached Anthropic~~ — SOLVED
+  2026-08-07 by the SB session, and it was never Anthropic.** All 21 belong
+  to `fleet-selftest` inside one six-minute window on 2026-08-06; 17 failed
+  in under a second (connection refused, not a timeout), zero tokens burned,
+  and the same worker ran fine on the local model minutes either side. It was
+  the **local Ollama endpoint restarting during NAF.A2 development** —
+  self-inflicted, historical, over. The neighbouring Anthropic 400s were
+  `credit balance too low`, also historical. **Do not quote "56% of runs
+  fail" as a live number** — that figure is in this document's §1 table as a
+  point-in-time reading of all history, and the honest current rate is 2 real
+  failures in the last 12 runs.
 - **No sweep has ever run.** The fleet map advertises "next sweep in …" for
   a job with zero runs to its name. Belongs to section 4 (The Brief).
 - **`decidedBy` is null on all 18 decisions.** Nothing records who approved
   or rejected. Belongs to section 2 (Approval Inbox).
-- **`fleet-auditor` charter does not exist**, though three places in the UI
-  assume it does. Belongs to section 4 (The Brief).
+- **~~`fleet-auditor` charter does not exist~~ — CORRECTED 2026-08-07.** It
+  has no `AgentCharter` row, but `listCharters` returns it from code, so it
+  IS a real worker — OFF, never run. The §1 table above records the
+  point-in-time finding; the Brief panel's text was corrected on prod once
+  the registry began surfacing code charters. Section 4 owns the panel.
