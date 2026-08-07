@@ -1028,7 +1028,626 @@ charter; the locks doc governs any shared-file work it needs.
 
 ---
 
+## PART 9 — NAF.WF-S1R · Section 1 restudied: the routine list as a *design*
+
+A separate operator engagement, opened 2026-08-08. WF.1–WF.6d settled the
+**model** — stored revisions, editor, test lane, custom routines, clocks, off
+switch, all shipped and prod-verified. What was never studied is the **UI**.
+The operator's judgement: the current list is odd and imperfect. This part
+audits it without defending it, researches how the industry presents a list of
+routines, and proposes the rebuild. Section 1 only: the list page. The detail
+page, editor, runs, versions and test lane are later sections; anything this
+design implies for them is recorded in §9.9 as a follow-up, not built.
+
+### 9.1 · PHASE 0 — the audit, measured on prod
+
+Method: `https://nexus-commerce-three.vercel.app/fleet/workflows`, Chrome,
+viewport **1728 × 962 CSS px**, 2026-08-08. Every number below is a
+`getBoundingClientRect()` / `getComputedStyle()` reading taken in the page, not
+an impression. Content column: `x=90 → 1704`, width **1614**, gutters 24 / 24 —
+**symmetric, and the one thing that measures correctly.**
+
+#### D1 · The chrome above the list is bigger than the list
+
+| Band | y | height | % of viewport |
+|---|---|---|---|
+| Header (h1 + shell sub) | 20 → 73.5 | 53.5 | 5.6% |
+| Second intro paragraph | 91.5 → 151.9 | 60.4 | 6.3% |
+| Stat strip | 179.9 → 266.8 | 86.8 | 9.0% |
+| Toolbar | 294.8 → 329.5 | 34.8 | 3.6% |
+| **Everything before the first routine** | **0 → 355.5** | **355.5** | **36.9%** |
+| The four routines | 355.5 → 693.5 | 337.9 | 35.1% |
+| Teaching card | 723.5 → 808.2 | 84.8 | 8.8% |
+| **Unused viewport below the content** | 808.2 → 962 | **153.8** | **16.0%** |
+
+`document.documentElement.scrollHeight === 962 === innerHeight` — the page does
+not scroll, so that 153.8 px is not "below the fold", it is empty. The subject
+of the page occupies 35.1% of the screen while its own furniture occupies 36.9%.
+
+#### D2 · Two intros say the same thing, and the second one is 39.6% wide
+
+The shell renders `sub` = "The fleet's named routines — who gathers, who
+compiles, who decides, and where you sit." Directly under it `.acr-pg-intro`
+opens "A **workflow** is a named routine — which workers run, in what order…".
+Both define the noun. The second is 60.4 px tall and renders at **639.7 px in a
+1614 px column (39.6%)**, so 974 px of the line box is blank on all three of its
+lines. It also carries the only two glossary `<Term>` links on the page, so it
+cannot simply be deleted.
+
+#### D3 · Column widths are allocated by accident, not by importance
+
+`table-layout: auto` sizes columns by their widest unbreakable content:
+
+| Column | width | % of table | longest cell (chars) | shortest cell |
+|---|---|---|---|---|
+| Routine | 360.9 | 22.4% | 274 | 85 |
+| Status | 243.6 | 15.1% | 68 | 34 |
+| When it runs | 213.8 | 13.2% | 53 | 33 |
+| **Last run** | **398.3** | **24.7%** | 79 | **9** ("never run") |
+| Recent | 111.5 | 6.9% | 17 | **1** ("—") |
+| What it may touch | 285.8 | 17.7% | 85 | 40 |
+
+The **widest column on the page is "Last run"**, wider than the identity column,
+because one row's incidental sentence — *"clock last fired 17h ago and launched
+nothing — every worker was off"* — is in `.wf-sub`, which is the only prose
+class on the page **with no `max-width`**. One sentence in one row therefore
+sets the width of that column for all four rows, permanently.
+
+Inside the cells the opposite happens — the prose classes are capped, so the
+capped text never fills the column it was given:
+
+| Cell | column width | rendered text width | dead width |
+|---|---|---|---|
+| `.wf-purpose` (40ch) | 360.9 | 290.2 | **70.7** |
+| `.wf-statecell .why` (30ch) | 243.6 | 212.9 | **30.7** |
+| `.wf-touch` (34ch) | 285.8 | 237.0 | **48.8** |
+
+**≈150 px of dead width inside cells, while "Last run" holds 398.3 px for
+9 characters.**
+
+#### D4 · Nothing lines up vertically — a 19.8 px ragged edge per row
+
+`vertical-align: middle` centres each cell's content block independently, so the
+first line of each column starts at a different height. Offsets of the content
+box from the row top:
+
+| Row | Routine | Status | When | Last run | Recent | Touch | **spread** |
+|---|---|---|---|---|---|---|---|
+| Nightly sweep | 9.5 | 14.5 | 20.0 | 20.0 | 29.3 | 28.3 | **19.8** |
+| Weekly council | 12.8 | 9.5 | 23.3 | 23.3 | 27.3 | 22.3 | **17.8** |
+| Morning negatives | 12.8 | 9.5 | 23.3 | 32.5 | 32.5 | 22.3 | **23.0** |
+
+In a 74.3 px row, six columns start at six different heights. There is no
+horizontal line for the eye to track — this is the largest single contributor to
+"the layout feels odd", and it is structural, not stylistic.
+
+Row heights are also a function of incidental wrapping: 74.3 / 80.8 / 74.3 /
+80.8 at full width (6.5 px spread), degrading to **80.8 / 97.5 / 91.5 / 114.2 at
+a 1000 px table (33.4 px spread, 41%)**. No horizontal overflow at any width
+tested (1614 → 1000), so this is rhythm, not breakage.
+
+#### D5 · Seven of twelve text roles fail WCAG AA — and every one of them is an honesty sentence
+
+Contrast measured in-page against the resolved background:
+
+| Role | size | colour | contrast | AA (4.5:1) | what it carries |
+|---|---|---|---|---|---|
+| `.wf-purpose` | 11.5px | `#8d97a6` | **2.73** | ✗ | what the routine does |
+| `.wf-sub` | 11px | `#8d97a6` | **2.73** | ✗ | next fire, cost, findings, tick-vs-run |
+| `.wf-statecell .why` | 11.5px | `#6b7a8d` | **4.05** | ✗ | **the reason for the status** |
+| `.wf-asof` | 11.5px | `#8d97a6` | **2.73** | ✗ | the freshness stamp |
+| `.acr-pg-stat .k` | 10.5px/700 | `#8d97a6` | 2.95 | ✗ | stat labels ⁽ˢʰᵃʳᵉᵈ⁾ |
+| `.acr-pg-stat .sub` | 11.5px | `#8d97a6` | 2.95 | ✗ | stat qualifiers ⁽ˢʰᵃʳᵉᵈ⁾ |
+| `.acr-pg-tbl th` | 10.5px/700 | `#8d97a6` | 2.73 | ✗ | column headers ⁽ˢʰᵃʳᵉᵈ⁾ |
+| `.wf-touch` | 12px | `#5a6675` | 5.40 | ✓ | reach |
+| `.wf-when` | 12.5px | `#34404f` | 9.74 | ✓ | trigger sentence |
+| `.acr-pg-intro` | 13px | `#5a6675` | 5.40 | ✓ | intro |
+
+This is the finding that matters most. Six phases of work went into making this
+page tell the truth — *the clock ticks but every worker is off*, *clock fired and
+launched nothing*, *no published wiring yet* — and the design renders **every one
+of those sentences in the least legible type on the screen**, below the
+accessibility floor, while the one-word status chip that carries the least
+information is the loudest thing in its cell. It directly contradicts the
+operator's standing rule, *visibility over minimalism*.
+
+Three of the seven live in the **frozen shared `fleet-pages.css`**, so all ten
+fleet pages inherit them (§9.9 records the note for siblings; this section
+overrides page-locally rather than claiming the shared file).
+
+#### D6 · Nine type sizes and five weights — 14 combinations in one client subtree
+
+Rendered sizes in `.acr-fleet`: **19, 13.5, 13, 12.5, 12, 11.5, 11, 10.5, 10** —
+nine sizes inside a 9 px band, six of them inside a 3.5 px band, with half-pixel
+steps (11 vs 11.5 vs 12 vs 12.5) that cannot read as hierarchy at any viewing
+distance. Weights **400 / 550 / 600 / 650 / 700**; `12.5px` alone appears at
+*five* different weights. 14 distinct size/weight pairs render one list of four
+things. Separately, the biggest number on the page (stat value, **19px**/700) is
+1 px smaller than the page title (**20px**/650), so the strip competes with the
+`h1` for first read.
+
+#### D7 · 82% of the row is dead to the pointer
+
+The only interactive target in a row is the name link: **290.2 px of a 1614 px
+row = 18.0%**. `tr` has no click handler, `cursor: auto`, and the hover state is
+a 2%-luminance background tint (`#f7f9fc`) with no chevron, no affordance, no
+change of cursor. A first-time operator has no signal that a routine has a page.
+
+#### D8 · The create action has no button
+
+Both toolbar controls are bare `.acr-btn`, whose base is
+`background: transparent; border: 1px solid transparent` — no fill, no outline,
+12.5px/550. So **"New workflow…" and "Refresh" are visually identical**, and
+neither reads as a button. The fleet already has a primary variant —
+`.acr-btn.go`, filled `#1a9d6a` — and the sibling Workers page uses it for
+"Create a worker". This page diverges from the fleet's own convention on the one
+control that creates something.
+
+The toolbar is also 65% void: `as of…` at x=90 (w=290), then a **1056.6 px
+empty spacer**, then the two controls at the far right.
+
+#### D9 · Four identical avatars, carrying zero information
+
+Every row renders the same 28×28 `lucide-workflow` glyph in the same grey tile.
+It costs 38 px of the identity column (icon + gap) per row and distinguishes
+nothing. Meanwhile the fact that *would* be worth a glyph — scheduled vs
+run-by-hand — is buried in prose in a column 600 px to the right.
+
+#### D10 · The strip spends 8.8% of the viewport on four numbers
+
+`repeat(auto-fit, minmax(150px, 1fr))` with four children spreads them to
+**396 px each** — 34,373 px² per card to render "4", "in 6h 26m", "44",
+"$0.3787". Four bordered cards, 137,492 px² total.
+
+#### D11 · Small, specific untruths and omissions
+
+- **"43 runs on record" beside 8 dots.** The dot strip caps at 8; the count says
+  43. The cap is stated only in an `aria-label`. S3 already solved this on the
+  detail page with a visible "latest 12 of 43" line; the list did not adopt it.
+- **`rev N` appears on one row of four.** Built-ins running the code default
+  have `activeRevision: null`, so three rows show no version at all — the S1
+  spec asked for a version chip on every row ("v3 · Built-in").
+- **"Recent" is "—" in 2 of 4 rows**, in a 111.5 px column. Never-run is rendered
+  as an absence rather than as a state.
+- **An 8 px dot is the entire run-history vocabulary.** Outcome only; duration,
+  scale and recency are not encoded at all.
+
+---
+
+### 9.2 · PHASE 1 — how the industry presents a *list of routines*
+
+Part 1 of this document researched twenty products for the **model**. This pass
+is narrower and different: only the **list page**, and only the question *what
+does one row show, and how does it say it*.
+
+**Sourcing honesty.** Vendor documentation is thin here — most products document
+the editor and the run view and never describe their list page, because a list
+page is assumed obvious. Where a fact below is documented, it is cited in
+Sources. Where it is product knowledge that the docs do not state, it is marked
+*(unverified)* and no design decision rests on it alone.
+
+| Product | What a row shows | Status vocabulary | Last / next run | History at a glance | Row actions | Create |
+|---|---|---|---|---|---|---|
+| **Airflow 3** (DAGs) | DAG ID, schedule (cron / timetable / asset-triggered), next run, latest run + date, tags | run states colour-coded; run *type* as icons — play = manual, back-arrow = backfill, asset icon = asset-triggered | **both, on the row** | **vertical bars: colour = outcome, height = duration** | pause/unpause, trigger, favourite ★, delete | — |
+| **Trigger.dev** (schedules) | type (**declarative = code-managed** vs **imperative = dashboard-created**), cron, external id, **next run**, **last run**, enabled/disabled | enabled / disabled | both | — | enable/disable, edit, delete — **imperative only; declarative rows are read-only by design** | — |
+| **UiPath Orchestrator** (processes) | process, then a **count vector**: running / pending / suspended / resumed / successful / stopped / faulted, + avg duration, + avg pending time | colour blocks with *persistence*: green if it ever succeeded, red if all fail, blue running, orange waiting, **grey = never executed** | aggregate, not per-run | count vector + timeline widgets | click block → process view; hover → detail | — |
+| **Make** (scenarios) | #, name, **used packages (app icons)**, status | Active / Inactive / Deleted | on the History tab, not the list | — | folders + nested subfolders | — |
+| **Power Automate** (my flows) | name, modified, type, status, owner | Turn on / Turn off | **detail page only** — "28 day run history" | — | **⋮ menu**: turn off/on, edit, delete, details | New flow → pick type, or Copilot from a sentence |
+| **n8n** (overview) | name, active toggle, tags; default sort = last updated | Active / Inactive | last updated (not last *run*) | — | ⋮ | + |
+| **Zapier** (Zaps) | name, app icons, status toggle, folder; ★ favourites pin to the left nav | On / Off | last edited | — | ⋮, folders, favourites | + |
+| **Temporal** (schedules) | schedule id; frequency, start/end, **recent *and upcoming* runs** on the detail | — *(list columns undocumented)* | detail | — | — *(undocumented)* | — |
+| **Dagster** | Automation view merges schedules + sensors, grouped by code location, filterable by name/status/type/tag | running / stopped; **tick ≠ run** — a tick that requested nothing is a first-class recorded outcome | ticks + runs | tick history | start/stop | — |
+| **Prefect / Windmill / Dify / Vellum** | *(list UI not documented; excluded from the conclusions rather than guessed at)* | | | | | |
+
+**The six things this teaches, ranked by what they change for us:**
+
+1. **Airflow — the density reference — ships a *card* view as the default and
+   keeps the table as the escape hatch "for environments with many DAGs".** The
+   product with the strongest claim to information density has decided that at
+   human N a card carries more than a row. Our N is 4, heading to 10–20. This is
+   the single most load-bearing research finding.
+2. **Airflow's bars encode two dimensions in the ink we currently spend on one.**
+   Colour = outcome, **height = duration**. Our 8 px dot spends the same pixels
+   and says only "ok". We already compute `durationMs` per group in `lib.ts` and
+   throw it away on this page.
+3. **Trigger.dev puts "this one is code-managed and you cannot edit it here" on
+   the row, as a *capability* statement, not a decoration.** That is exactly our
+   built-in vs custom split. Today `BUILT-IN` is a grey chip that reads as a
+   category label; it should read as *what you can and cannot do to this*.
+4. **UiPath makes "never executed" a colour, not an absence.** Grey is a state.
+   Our `—` is a shrug. And UiPath's persistence rule (green survives if it ever
+   succeeded, red only if *all* fail) is the same instinct as our
+   running-is-not-failed rule, expressed in the palette.
+5. **Most products keep run history *off* the list** (Zapier, Make, n8n, Power
+   Automate) and treat the list as a switchboard: identity + on/off + go. Only
+   Airflow and UiPath put history on the row — and both are operator-monitoring
+   tools, which is what we are. So carrying history is a defensible choice, but
+   it must be *earned*: it has to say more than a dot.
+6. **Every one of them has a visually distinct primary create control, and every
+   one of them has an explicit row-action affordance** (⋮ menu or hover buttons).
+   We have neither (D7, D8).
+
+**Where we should deliberately diverge, with the reason:**
+
+- **No ⋮ row menu.** Every researched product has one; we should not, because
+  there is no honest list-level action. A built-in cannot be toggled here — its
+  on/off is the fleet clock plus the workers' dials, which live on two other
+  pages. Run-now for a custom already exists behind a confirm that states the
+  real-run contract and a cost estimate (WF.6b), and the custom off switch is
+  WF.6d — both on the detail page, both correct there. Rendering a menu whose
+  items are mostly disabled would break the series' own rule, written verbatim in
+  `observations/scope-filter.ts:6-7`: *"a control that is not enforced must not
+  be rendered."* (§9.6 records the one candidate exception for the operator.)
+- **No sort, no filter, no search, no folders, no favourites, no tags.** All of
+  it is furniture at N=4. §9.10 names the number at which each becomes real.
+
+---
+
+### 9.3 · What this page actually is — and therefore what shape it takes
+
+Three candidate identities, and only one survives contact with our data:
+
+- **A switchboard** (Zapier / n8n / Make): rows exist to be toggled. **Fails** —
+  nothing on this list can be toggled from this list.
+- **A monitoring dashboard** (UiPath): rows are count vectors. **Fails** —
+  `/fleet/activity` owns cross-fleet monitoring by settled decision 5, and at 44
+  runs in 7 days a count vector is mostly zeroes.
+- **A teaching-and-triage surface**: four named routines, each of which must
+  explain *what it is*, state *one honest status with its reason*, and answer
+  *when did it last run / when does it run next*, well enough that a beginner who
+  has never seen the fleet can act. **This is what six phases of honesty work
+  built**, and it is what the operator's bar demands.
+
+A teaching surface's primary content is **prose** — the reason, the purpose, the
+reach. Four of the six current columns are sentences. Prose in a table cell is
+what produced D3, D4 and the 41% row-height variance: a table is a device for
+comparing *values down a column*, and nobody compares "Findings only — it never
+touches Amazon." against "Anything that survives the critic queues for your
+approval." The comparison a table promises is one this data cannot deliver.
+
+**Therefore: a list of routine cards, not a table.** One card per routine, full
+content width, stacked — and inside each card a *fixed lane grid*, so the lanes
+align across cards by construction (killing D4 structurally rather than
+patching it) while each lane is free to hold prose.
+
+### 9.4 · DataGrid vs. cards — the explicit decision the operator asked for
+
+The standing rule is **tables use the shared DataGrid** (`feedback_tables_use_datagrid`),
+and the DS light pin landed on `.fleet-surface` at SB.W's W.1, so DS components
+render correctly on fleet pages. The convergence has been owed by this stream
+since the WF.1 study. Deciding it, on the record:
+
+**The claim: this list is not a table, so the table component does not apply.**
+Four arguments, all checked in code rather than asserted:
+
+1. **`DataGrid` cannot model this list's primary interaction.** Its full prop
+   surface is `columns · rows · rowKey · selectable · selected ·
+   onSelectedChange · rowSelectable · rowSelectableHint · selectAllHint ·
+   selectRowHint · showTotals · emptyState · initialSort · maxHeight ·
+   className` (`design-system/components/DataGrid.tsx:22-45`). There is **no
+   `onRowClick`, no row href, no row-expand, no row-detail slot** — the only
+   `onClick` in the whole 230-line file is the sort button. Under DataGrid the
+   navigation target stays the 18%-of-row text link that is defect D7. Closing
+   D7 would mean extending a component shared by ~50 pages, which needs a claim
+   and lands everywhere.
+2. **The DataGrid substrate is hostile to prose, and the proof is on prod.**
+   `.h10-ds-grid` is `table-layout: auto` with `white-space: nowrap` on every
+   cell. The Workers page had to defeat that page-locally — `table-layout:
+   fixed`, `overflow: hidden`, and a per-class `white-space: normal` allow-list
+   for its four prose cells (`workers.css:151-178`, with a 12-line comment
+   explaining the trap) — **and its autonomy ladder is still clipped in the live
+   screenshot**. Adopting DataGrid here means adopting a default that must be
+   overridden for four of six fields, to end up somewhere a card grid reaches
+   directly.
+3. **Everything DataGrid buys is inapplicable at this N.** Sorting four rows is
+   a control nobody uses that costs a caret and a hit target on every header.
+   There is no numeric column to total. There is no bulk action on a routine —
+   you cannot switch a built-in off at all, and the custom off switch is
+   per-routine and lives on its own page. Selection, select-all, totals, column
+   visibility: zero of them apply.
+4. **The rule's own purpose is served better by not using it.** The rule exists
+   so tabular data everywhere behaves identically. Rendering non-tabular data
+   through a table component to satisfy the letter of the rule produces the
+   ragged, mis-weighted, unreadable surface measured in §9.1 — which is what the
+   rule was written to prevent.
+
+**The falsifier, written down so this stays re-openable.** The moment the list
+needs to be *sorted, filtered or bulk-acted* — in practice around **25 routines**
+— it becomes a table and converges onto DataGrid. §9.10 makes that an explicit
+trigger with a number, not a vibe. Until then the fleet's DS conformance is kept
+where it is real: DS components for every control (Menu, Select, Button — the
+manifest rejects raw form elements), all four DS stylesheets in the Workers-page
+import order, no raw `<select>`, and the DS ratchet green including comments.
+
+### 9.5 · THE PROPOSAL
+
+#### 9.5.1 · Page skeleton
+
+```
+h1 Workflows                                          ← shell, unchanged
+sub  The fleet's named routines — who gathers, …      ← shell, unchanged
+one-line intro carrying the two <Term> links          ← D2: one line, ≤92ch
+─────────────────────────────────────────────────────────────────────────
+fact bar  ·  next scheduled run · runs 7d · spent 7d  ← D10: one card, 4 facts
+─────────────────────────────────────────────────────────────────────────
+4 routines · 3 built-in · 1 custom        [+ New routine] [Refresh] as of …
+─────────────────────────────────────────────────────────────────────────
+┌ routine card ────────────────────────────────────────────────────────┐
+└──────────────────────────────────────────────────────────────────────┘   ×4
+─────────────────────────────────────────────────────────────────────────
+How workflows work                                             [Read it]
+```
+
+- **The second intro (D2)** keeps its `<Term>` links, drops to one sentence, and
+  widens to `max-width: 92ch` so it stops being a 39.6%-wide block.
+- **The strip becomes one fact bar (D10)**: a single card, `display:flex`, four
+  facts each `flex: 1 1 0` separated by 1 px `#edf1f5` dividers, padding
+  `12px 20px`, ≈64 px tall (was 86.8). The "Routines" tile is deleted — its count
+  moves to the list header where it is a caption for what is directly below it.
+  Value type drops **19px → 17px** so the page title wins the first read (D6).
+- **The toolbar becomes the list header (D8)**: the 1056.6 px void is filled with
+  the count sentence on the left; `+ New routine` becomes `.acr-btn.go` (filled,
+  the fleet's own primary, matching Workers' "Create a worker"); `Refresh` stays
+  ghost; the `as of …` stamp trails Refresh exactly as Workers places it.
+
+#### 9.5.2 · The routine card
+
+```
+┌────────────────────────────────────────────────────────────────────────────────┐
+│ ⏱  Nightly sweep   BUILT-IN   rev —                                          → │
+│                                                                                │
+│  Every switched-on worker reads    ┌ Idle ┐              ▁ ▃ ▂ █ ▁ ▂ ▃ ▁       │
+│  fresh evidence and reports        The clock ticks, but   no runs yet          │
+│  findings; report cards            every worker is off.   clock last fired     │
+│  recompute afterwards.                                    17h ago and launched │
+│                                    Touches findings only  nothing              │
+│  selftest→miner→harvester→tuner    — it never reaches     ─────────────────    │
+│  →grading→cards→auditor            Amazon.                Nightly 04:45 UTC    │
+│                                                           next in 6h 26m       │
+└────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Geometry.** Card: full content width (1614 at 1728 vw), `#fff`, `1px solid
+#e0e6ee`, radius 12, padding `16px 18px`, **14 px between cards**. Body grid:
+
+```
+grid-template-columns: minmax(340px, 1.5fr) minmax(240px, 1fr) 216px;
+column-gap: 28px;
+```
+
+At 1614: fixed 216 + 2×28 gap + 36 padding = 308, leaving 1306 → **784 / 522 /
+216**. At a 1200 content width: 892 → 535 / 357 / 216, both flexible lanes above
+their minimums. Below **1080** the third lane wraps under the first two; below
+**760** all lanes stack. The **216 px lane is fixed on purpose**: it holds the
+bars and the numerals, and a fixed lane cannot be resized by a sibling card's
+content — which is what makes the rhythm column align down the whole list and
+what structurally prevents D3 from recurring.
+
+**Lane 1 — what it is.** Name **15px/650**; kind badge; version chip. Purpose
+sentence **12.5px/400 `#5a6675` (5.40:1)**, `max-width: 52ch`. Then the **step
+chain**: the routine's steps as small pills (11px/600, `#eef2f7`, 4px radius)
+joined by `→`, wrapping freely. A worker whose charter is OFF renders its pill
+muted with an "off" dot — so *"the clock ticks, but every worker is off"* is
+**shown as well as said**, and the sentence and the picture cannot disagree.
+This is the element the current list lacks entirely and the one that teaches a
+beginner what a routine *is* without a click.
+
+**Lane 2 — where it stands.** The status chip, then the reason at
+**12.5px `#5a6675`** — promoted from 11.5px at 2.73–4.05:1 (D5). Below it, the
+reach sentence prefixed "Touches", same size and colour. The two prose facts
+share a lane; nothing numeric enters it.
+
+**Lane 3 — its rhythm.** Top: the **run bars** (§9.5.4). Middle: the last-run
+line — `26h ago · ok` with the outcome word at 12.5px/650 in its outcome colour,
+then `$0.2126 · 0 findings · 2 workers` at 11px tabular. Bottom, under a hairline
+rule: the trigger sentence and next fire. Numerals are `font-variant-numeric:
+tabular-nums` and right-aligned within the lane so they form a column down the
+list.
+
+**Alignment (D4 closed structurally).** Every lane is a grid child with
+`align-self: start`; the three lanes begin at the same `y` in every card, and the
+same lane begins at the same `x` in every card. The measured 19.8 px ragged edge
+becomes **0 px by construction**, not by tuning.
+
+**The card is the link (D7 closed).** The whole card is a `next/link`, cursor
+pointer, hover raises the border to `#c8d3e2` plus a 1 px shadow lift, and a `→`
+sits at the right of the header line. Target goes from **18% → 100%** of the
+card. There are no interactive children inside the card, so a plain wrapping
+`Link` is safe and stays safe as long as §9.6 holds.
+
+**The avatar earns its pixels (D9).** The 30 px tile's glyph becomes the
+**trigger type** — a clock for a scheduled routine, a hand/play for a
+run-by-hand one — tinted by the status kind. Four identical glyphs become a
+scannable "two on a clock, two by hand", which is Trigger.dev's clock-marks-
+scheduled convention.
+
+#### 9.5.3 · Status treatment
+
+The chip stays exactly the five kinds `lib.ts` already computes (`on · ready ·
+idle · off · halted`) with their existing labels and `why` strings — **no status
+logic changes anywhere in this section**. What changes is the weighting: the
+chip is the *index*, the reason is the *content*, so the reason gets the legible
+type and the chip gets quieter (11px/700, unchanged palette, 24 px pill).
+
+The kind badge is rewritten from a category label into a capability statement,
+following Trigger.dev's declarative/imperative split:
+
+- **`BUILT-IN`** → tooltip: *"Ships with the fleet. Its wiring comes from code;
+  publish a revision to change it, and revert-to-built-in can never fail."*
+- **`CUSTOM`** → tooltip: *"You created this one. It runs only what you
+  published, and it can be switched off from its own page."*
+
+Version chip on **every** card (D11): `rev N` for a published revision, and for a
+built-in on the code default an explicit `built-in wiring` chip rather than
+nothing — three of four cards currently say nothing at all about their version.
+
+#### 9.5.4 · Run history — Airflow's bars, adapted honestly
+
+Replaces the 8 px dots. Up to **12 bars**, 6 px wide, 3 px gap, in a 24 px band:
+
+- **colour = outcome**, reusing the existing palette exactly — `#2f9e6e` ok,
+  `#d4574e` failed, `#e0a63f` stopped early, `#4a7ab8` running now;
+- **height = duration**, normalised within that routine (min 5 px so a fast run
+  is never invisible), from `RunGroup.durationMs`, which `lib.ts` already
+  computes and this page currently discards;
+- **a group still running has no duration** → it renders full-height in the
+  running colour with a caption, never as a failure (the shipped in-flight rule);
+- **never run** renders **12 empty grey slots** plus the words `never run` —
+  UiPath's "grey is a state, not an absence" (D11);
+- **truncation is stated on screen**, adopting S3's shipped sentence: `latest 12
+  of 43`, not an `aria-label` only (D11);
+- each bar keeps its existing `title` (timestamp + outcome sentence).
+
+#### 9.5.5 · Type scale and colour, as a system
+
+Nine sizes × five weights → **five sizes, three weights**:
+
+| Role | size / weight | colour | contrast |
+|---|---|---|---|
+| page title | 20 / 650 | `#26313f` | shell |
+| routine name | 15 / 650 | `#26313f` | 12.6:1 |
+| body prose — purpose, reason, reach | 12.5 / 400 | `#5a6675` | **5.40:1** |
+| emphasis inside body — outcome words | 12.5 / 650 | outcome colour | ≥ 4.5:1 |
+| metadata — cost, counts, next fire, chips, pills, `as of` | 11 / 600 | *(pinned at build, ≥ 4.5:1)* | ≥ 4.5:1 |
+
+**The rule, not the hex:** no text role on this page renders below **4.5:1**, and
+the build verifies it with the same in-page contrast probe used for §9.1 — the
+post-build measurements go in the execution record. The three failing roles that
+live in the frozen `fleet-pages.css` (`stat .k`, `stat .sub`, `tbl th`) are
+overridden **page-locally under a new `.wf-page` root class**, never by editing
+the shared file.
+
+> **Build trap to honour:** `.acr-fleet` is used by the Workers page too, and a
+> page-local stylesheet can persist across a client-side route change. Every new
+> rule in `workflows.css` is scoped to `.wf-page` — a class this page adds to its
+> own client root — so nothing can leak onto a sibling's surface.
+
+#### 9.5.6 · Spacing, verified numerically
+
+One 4 px base unit, no odd values: card padding `16/18`, lane gap 28, card gap
+14, section gap 20, fact-bar padding `12/20`. Vertical rhythm above the list
+becomes header **53.5** → intro **~24** → fact bar **~64** → list header **~32**
+→ cards; every gap a multiple of 4, symmetric left/right by the 24 px page
+gutter that already measures correctly.
+
+**Dead space (D1).** Four cards at ≈150 px + 3×14 gap ≈ **642 px** of list,
+against 337.9 today. With the intro and strip reductions, projected content
+bottom ≈ **985 px** at 1728×962 — the page fills the viewport and begins to
+scroll naturally at four routines, which is the correct behaviour, not stretched
+padding. §9.10 turns this into a pass/fail measurement rather than a hope.
+
+### 9.6 · What is deliberately absent, and why
+
+| Absent | Why | When it arrives |
+|---|---|---|
+| ⋮ row menu | No honest list-level action exists (§9.2). A control that is not enforced must not be rendered. | If S1.e is approved |
+| Sort / filter / search | Furniture at N=4 | ≥ 12 routines (search), ≥ 25 (sort + filter → DataGrid) |
+| Folders, tags, favourites | Organisation without a quantity to organise | ≥ 25 routines |
+| Bulk selection | There is no bulk action on a routine | If one is ever built |
+| Run-now on the card | Exists on the detail page behind a confirm stating the real-run contract and a cost estimate (WF.6b) | S1.e — operator's call, see below |
+| Enable/disable on the card | A built-in has no switch here at all; the custom switch is WF.6d on its own page | Not planned |
+
+**The one open question for the operator (S1.e).** Every product researched puts
+at least one verb on the row. The only candidate here is **Run now for a
+published custom routine**. In favour: it is the single action a routine list
+should plausibly offer, and it is already implemented. Against: it would be the
+second place that flow exists, its confirm dialog is where the cost estimate and
+the OFF-workers warning live, and duplicating it risks the two drifting. **My
+recommendation is no** — keep the list read-only and let the card be the door.
+Recorded as a phase so it is your decision, not my omission.
+
+### 9.7 · The shipped honesty rules — preserved, and where each one lands
+
+Nothing in this section changes status logic, run grouping, poll behaviour or any
+API contract except the one named in S1.c. Explicitly:
+
+| Rule (shipped WF.1–WF.6d) | Preserved how |
+|---|---|
+| One honest status per routine **with its reason** | `routineStatus` / `customStatus` untouched; the reason is *promoted* to legible type (D5) |
+| Tick vs run — "clock fired, launched nothing" | Same string, same precedence, now at 12.5px/5.40:1 in lane 3 instead of 11px/2.73:1 |
+| No status claims from unread or failed feeds | Load-failure path, `!loaded` state and the "reading the fleet…" copy unchanged; the fact bar still refuses to claim a clock before the feeds are read |
+| A running orchestration is never counted as failed | `groupRuns` untouched; bars render `running` full-height in the running colour |
+| Preview runs never shown | `groupRuns`'s `mode !== 'preview'` filter untouched |
+| Degraded-charter fail-safe banner | Unchanged, above the list |
+| 10 s visibility-gated poll + "as of" stamp | `useVisibilityPoll` untouched; the stamp moves next to Refresh and becomes legible |
+| Self-test findings split, never hidden | Fact bar keeps the split sentence verbatim |
+| Beginner comprehensibility / tooltips | Extended: kind badges gain capability tooltips, chain pills gain per-step tooltips, glossary `<Term>` coverage re-audited in S1.d |
+
+### 9.8 · Build phases — each independently shippable
+
+| Phase | What | Touches | Risk |
+|---|---|---|---|
+| **S1.a** | **The substrate.** Table → routine cards with the fixed lane grid; whole-card link; trigger-type avatar; type scale collapsed to 5×3; every text role to ≥ 4.5:1 under `.wf-page`; fact bar replaces the 4-tile strip; toolbar becomes the list header with `.acr-btn.go` create; intro to one line. **No data, status, poll or API change — every honesty string moves verbatim.** | `WorkflowsClient.tsx`, `workflows.css` | Low — presentation only |
+| **S1.b** | **The rhythm lane.** Airflow bars (colour = outcome, height = duration from the existing `RunGroup.durationMs`); never-run as grey slots; on-screen `latest 12 of 43`; version chip on every card. | `WorkflowsClient.tsx`, `workflows.css` | Low — data already fetched |
+| **S1.c** | **The step chain.** Chain pills on every card with live worker on/off tint. **Needs the one named contract change:** `GET /api/agent/fleet/workflows` returns a compact ordered `chain` (step key + label) per row so a custom's wiring is visible without N extra fetches. Additive, response-only, in this stream's own `agent-fleet-workflows.routes.ts`; built-ins derive from `routines.ts` and need nothing new. | that route + `WorkflowsClient.tsx` | Low — additive field, no behaviour change |
+| **S1.d** | **The teaching pass.** Glossary `<Term>` entries for any noun the cards mint (locks-doc protocol: re-read `glossary.tsx` immediately before append, claim it, one term per commit); capability tooltips on the kind badges; first-run and no-custom states; a tooltip-coverage audit against the beginner bar. | `WorkflowsClient.tsx`, `glossary.tsx` *(claimed)* | Low |
+| **S1.e** | *(operator's call — recommended **no**)* Run-now on a published custom's card. | `WorkflowsClient.tsx` | Medium — duplicates a confirmed spend path |
+
+Each phase ends: `tsc -p` web **and** api from the repo root with absolute paths
+→ `npx vitest run src/services/agent-fleet` → `git commit --only` → push
+(bounded retry; siblings race) → wait out Vercel → **verify on prod with
+screenshots and a geometry probe** → update this record, the locks-doc row and
+memory.
+
+### 9.9 · Recorded, not built — follow-ups this design implies elsewhere
+
+1. **The detail page (`/fleet/workflows/[key]`) inherits the same D5 contrast
+   failures** — `.wf-sub`, `.wf-purpose` and the S3 runs table all use the same
+   classes. Fixing them page-locally in S1.a fixes both surfaces at once *only*
+   if the override is scoped to `.wf-page`; if the detail page does not carry
+   that root class it keeps the failing colours. **Decide at S1.a: either apply
+   `.wf-page` to both roots, or accept a one-section gap and close it in the S2
+   restudy.** Flagged so it cannot be discovered later as a defect.
+2. **Three failing text roles are in the frozen shared `fleet-pages.css`**
+   (`.acr-pg-stat .k` 2.95, `.acr-pg-stat .sub` 2.95, `.acr-pg-tbl th` 2.73).
+   All ten fleet pages inherit them. This section overrides page-locally and does
+   **not** claim the shared file; the finding goes to the locks doc so whichever
+   stream wants to fix it centrally can, with the measurements already done.
+3. **The Workers roster's autonomy ladder is clipped on prod** — visible in the
+   1728 px screenshot as `A…`. Sibling-owned; noted in the locks doc, no action
+   taken here.
+4. **The card's lane grid is a candidate `_shared/` primitive** if Assignments or
+   Activity want the same "prose lanes that align across cards" shape. Not
+   extracted on one consumer — the AS.1 precedent (`outcomeOf` deliberately not
+   extracted until a second consumer exists) is the right rule.
+5. **`RoutineStory` already holds the chain for built-ins**; if the S2 restudy
+   moves the story into the stored definition for built-ins too, S1.c's `chain`
+   field becomes the single source for both surfaces.
+
+### 9.10 · Acceptance — measured on prod, not eyeballed
+
+Each phase is *done* only when these read true in a browser probe on the
+deployed page at **1728 × 962**, with the numbers pasted into the execution
+record:
+
+1. **Alignment.** For every card, the three lanes' content boxes start at the
+   same `y` (spread **≤ 2 px**, vs 19.8 today), and lane *k* starts at the same
+   `x` in every card (spread **0 px**).
+2. **Contrast.** Every text role in `.wf-page` measures **≥ 4.5:1**. Zero
+   exceptions, reported as a table.
+3. **Type.** At most **5** distinct `font-size` values and **3** weights render
+   inside `.wf-page` (vs 9 × 5 today).
+4. **Dead space.** Rendered content bottom ≥ **92% of viewport height (≥ 885 px)**
+   *or* the document scrolls. No horizontal overflow at any width from 1614 down
+   to 1000.
+5. **Target size.** The navigation target per routine is **≥ 95% of the card's
+   area** (vs 18.0% of the row today).
+6. **Symmetry.** Page gutters equal left and right (24/24, already true) and
+   every card's internal padding equal on both sides, verified from the rects.
+7. **Row rhythm.** Card-height spread across the four routines **≤ 12 px** at
+   1614 and **≤ 24 px** at 1000 (vs 6.5 and 33.4 today).
+8. **Honesty regression.** Every string in the §9.7 table still renders, verbatim,
+   in the same conditions — checked against the live page, not the source.
+
+**Re-open triggers, so this decision does not calcify:** ≥ **12** routines →
+add search; ≥ **25** routines → the list becomes a table and converges onto
+`DataGrid`, and §9.4's argument is void.
+
+---
+
 ## Sources
+
+**Part 9 (WF-S1R, list-page research, 2026-08-08)** — Airflow 3 [UI overview](https://airflow.apache.org/docs/apache-airflow/stable/ui.html) · Astronomer [intro to the Airflow UI](https://www.astronomer.io/docs/learn/airflow-ui) (card view default, bars = duration × status, run-type icons, ⌘K, list view for many DAGs) · Trigger.dev [scheduled tasks](https://trigger.dev/docs/tasks/scheduled) (declarative vs imperative rows, next/last run, dashboard-editable only for imperative) · UiPath Orchestrator [monitoring processes](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/monitoring-processes) (count-vector columns, colour persistence, grey = never executed) · Make [scenario list & history](https://help.make.com/scenario-history) · Power Automate [create & manage a cloud flow](https://learn.microsoft.com/en-us/power-automate/get-started-logic-flow) (⋮ menu, 28-day history on the detail) · Temporal [Web UI](https://docs.temporal.io/web-ui) · n8n [workflow tags](https://docs.n8n.io/workflows/tags/) · Zapier [product updates, Feb 2026](https://zapier.com/blog/february-2026-product-updates/) (favourites across asset listings)
 
 - n8n [save & publish](https://docs.n8n.io/build/understand-workflows/save-and-publish-workflows.md) · [executions](https://docs.n8n.io/build/understand-workflows/understand-executions/view-executions-for-a-single-workflow.md) · [debug in editor](https://docs.n8n.io/build/understand-workflows/understand-executions/debug-executions.md) · [history](https://docs.n8n.io/build/manage-workflows/view-change-history.md) · [HITL tools](https://docs.n8n.io/advanced-ai/human-in-the-loop-tools/)
 - Zapier [drafts & versions](https://help.zapier.com/hc/en-us/articles/9693520498445) · [Human in the Loop](https://help.zapier.com/hc/en-us/articles/38838619533069) · [run statuses](https://help.zapier.com/hc/en-us/articles/20505304170637) · Make [execution view](https://experienceleague.adobe.com/en/docs/workfront-fusion/using/manage-scenarios/view-a-specific-scenario-execution) · [version diff](https://experienceleague.adobe.com/en/docs/workfront-fusion/using/manage-scenarios/restore-a-scenario-version)
