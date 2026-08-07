@@ -40,6 +40,7 @@ export interface RunRow {
   endedAt: string | null
   /** WF.4a — the stored workflow revision this run served; null = code path. */
   workflowRevisionId?: string | null
+  workflowKey?: string | null
 }
 export interface CharterRow {
   key: string
@@ -136,10 +137,19 @@ export function prettyCron(expr: string): string {
 
 /* ── assembly ──────────────────────────────────────────────────────────── */
 
-export function groupRuns(runs: RunRow[], mode: BuiltinRoutine['mode']): RunGroup[] {
+/** Select a routine's runs by MODE (built-ins) or by WORKFLOW KEY (customs —
+ *  WF.6a, riding the WF.4a stamps). The key branch must exclude preview
+ *  rows, or test runs would pollute a custom's history. */
+export type RunSelector = BuiltinRoutine['mode'] | { workflowKey: string }
+
+export function groupRuns(runs: RunRow[], sel: RunSelector): RunGroup[] {
+  const matches = (r: RunRow) =>
+    typeof sel === 'string'
+      ? r.mode === sel
+      : r.workflowKey === sel.workflowKey && r.mode !== 'preview'
   const byId = new Map<string, RunRow[]>()
   for (const r of runs) {
-    if (r.mode !== mode) continue
+    if (!matches(r)) continue
     const k = r.orchestrationId ?? r.id
     const list = byId.get(k)
     if (list) list.push(r)
@@ -316,6 +326,36 @@ export function diffIsEmpty(d: WfDiff): boolean {
     d.edgesRemoved.length === 0 &&
     !d.triggerChanged
   )
+}
+
+/** WF.6a — the one honest status for a CUSTOM workflow. Precedence: halt →
+ *  switched off → no wiring → recorded-but-not-runnable (Run-now is 6b). */
+export function customStatus(
+  state: FleetState | null,
+  meta: { enabled: boolean; source: 'code' | 'revision' | 'none' },
+): RoutineStatus {
+  if (state?.halted) {
+    return {
+      kind: 'halted',
+      label: 'Halted',
+      why: state.haltReason ? `Stopped: ${state.haltReason}` : 'Stopped by the operator.',
+    }
+  }
+  if (!meta.enabled) {
+    return { kind: 'off', label: 'Off', why: 'Switched off by the operator.' }
+  }
+  if (meta.source !== 'revision') {
+    return {
+      kind: 'off',
+      label: 'Off',
+      why: 'No published wiring yet — compose and publish from the editor.',
+    }
+  }
+  return {
+    kind: 'idle',
+    label: 'Recorded',
+    why: 'Published and on the record — running it arrives next.',
+  }
 }
 
 /** The one honest status. Precedence: halt → clock → dials. */

@@ -373,6 +373,8 @@
 .wf-testrow:last-of-type { border-bottom: 0; }
 .wf-testrow .nm { font-weight: 650; color: #26313f; min-width: 170px; }
 
+.wf-nameinput { width: 100%; font-family: inherit; margin-bottom: 6px; }
+
 .wf-croninput {
   width: 180px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

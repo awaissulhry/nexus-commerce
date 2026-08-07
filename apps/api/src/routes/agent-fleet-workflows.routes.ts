@@ -10,7 +10,9 @@
  * revert actor come from request.authUser, the same path approvals use.
  */
 import type { FastifyPluginAsync } from 'fastify'
+import prisma from '../db.js'
 import { resyncFleetSchedules } from '../jobs/fleet-sweep.job.js'
+import { slugifyWorkflowName } from '../services/agent-fleet/workflow-defs.js'
 import { isAiKillSwitchOn } from '../services/ai/providers/index.js'
 import {
   activeTestFor,
@@ -41,19 +43,52 @@ const agentFleetWorkflowRoutes: FastifyPluginAsync = async (fastify) => {
     return seedWorkflows()
   })
 
+  // WF.6a — create a custom workflow. Born with no active revision, which
+  // means honestly DISABLED: its floor is "nothing", never a code fallback.
+  fastify.post<{ Body: { name?: string; description?: string } }>(
+    '/agent/fleet/workflows',
+    async (request, reply) => {
+      const name = request.body?.name?.trim()
+      if (!name) return reply.code(400).send({ error: 'a workflow needs a name' })
+      const key = slugifyWorkflowName(name)
+      if (!key) return reply.code(400).send({ error: 'that name leaves nothing usable for a key — use letters or digits' })
+      if (builtinByKey(key)) {
+        return reply.code(409).send({ error: `"${key}" is a built-in routine — pick another name` })
+      }
+      const existing = await prisma.agentWorkflow.findUnique({ where: { key } })
+      if (existing) {
+        return reply.code(409).send({ error: `a workflow named "${key}" already exists` })
+      }
+      const author = request.authUser?.email ?? request.authUser?.id ?? null
+      const row = await prisma.agentWorkflow.create({
+        data: {
+          key,
+          name,
+          description: request.body?.description?.trim() || null,
+          kind: 'custom',
+          createdBy: author,
+        },
+      })
+      return { workflow: row, note: 'created with no published wiring — compose and publish from its page' }
+    },
+  )
+
   fastify.get<{ Params: { key: string } }>(
     '/agent/fleet/workflows/:key/revisions',
     async (request, reply) => {
       const { key } = request.params
-      const effective = await getEffectiveDefinition(key)
       const builtin = builtinByKey(key)
-      if (!builtin && effective.source === 'none') {
-        const revisions = await listWorkflowRevisions(key)
-        if (revisions.length === 0) return reply.code(404).send({ error: 'workflow not found' })
-      }
+      const row = await prisma.agentWorkflow.findUnique({ where: { key } })
+      // WF.6a — a custom exists the moment its row does, revisions or not;
+      // a freshly created workflow must not 404 its own page.
+      if (!builtin && !row) return reply.code(404).send({ error: 'workflow not found' })
+      const effective = await getEffectiveDefinition(key)
       return {
         key,
         kind: builtin ? 'builtin' : 'custom',
+        name: row?.name ?? builtin?.name ?? key,
+        description: row?.description ?? builtin?.description ?? null,
+        enabled: row?.enabled ?? true,
         source: effective.source,
         effective: effective.definition,
         code: builtin ? builtin.definition() : null,
@@ -68,10 +103,10 @@ const agentFleetWorkflowRoutes: FastifyPluginAsync = async (fastify) => {
   }>('/agent/fleet/workflows/:key/revisions', async (request, reply) => {
     const { key } = request.params
     const { definition, note } = request.body ?? {}
-    if (!builtinByKey(key)) {
-      // Custom workflows arrive with the editor; today only built-ins may
-      // gain revisions. Refuse rather than silently create an orphan.
-      return reply.code(404).send({ error: 'unknown workflow — only built-ins can take revisions today' })
+    // WF.6a — any workflow that exists may take revisions: built-ins and
+    // customs alike. An orphan key still refuses.
+    if (!builtinByKey(key) && !(await prisma.agentWorkflow.findUnique({ where: { key } }))) {
+      return reply.code(404).send({ error: 'unknown workflow' })
     }
     if (!note || !note.trim()) {
       return reply.code(400).send({ error: 'a revision needs a note — the change log IS the audit' })
@@ -122,7 +157,8 @@ const agentFleetWorkflowRoutes: FastifyPluginAsync = async (fastify) => {
     Body: { definition?: unknown }
   }>('/agent/fleet/workflows/:key/test', async (request, reply) => {
     const { key } = request.params
-    if (!builtinByKey(key)) {
+    // WF.6a — the test lane is key-generic, like the editor it serves.
+    if (!builtinByKey(key) && !(await prisma.agentWorkflow.findUnique({ where: { key } }))) {
       return reply.code(404).send({ error: 'unknown workflow' })
     }
     if (isAiKillSwitchOn()) {

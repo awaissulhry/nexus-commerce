@@ -17,55 +17,95 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Workflow, RefreshCw, ShieldAlert, AlertTriangle } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Workflow, RefreshCw, ShieldAlert, AlertTriangle, Plus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
 import { isDiagnostic } from '../_shared/run-health'
-import { BUILTIN_ROUTINES } from './routines'
+import { BUILTIN_ROUTINES, type BuiltinRoutine } from './routines'
 import { HowWorkflowsWork } from './HowWorkflowsWork'
 import {
   CHIP_CLASS,
   DAY,
   agoTs,
+  customStatus,
   groupRuns,
   prettyCron,
   routineStatus,
   until,
   type CharterRow,
   type FleetState,
+  type RoutineStatus,
+  type RunGroup,
   type RunRow,
   type ScheduleJob,
 } from './lib'
 
+/** GET /agent/fleet/workflows — the stored registry rows. */
+interface ApiWorkflowRow {
+  key: string
+  name: string
+  description: string | null
+  kind: 'builtin' | 'custom'
+  enabled: boolean
+  source: 'code' | 'revision' | 'none'
+  activeRevision: { id: string; revision: number; note: string } | null
+  revisionCount: number
+}
+
+/** One assembled list row: API truth joined to presentation. */
+interface ListRow {
+  key: string
+  name: string
+  purpose: string
+  touch: string
+  kind: 'builtin' | 'custom'
+  builtin: BuiltinRoutine | null
+  status: RoutineStatus
+  groups: RunGroup[]
+  job: ScheduleJob | null
+  activeRevisionNo: number | null
+}
+
 export function WorkflowsClient() {
   const backend = getBackendUrl()
+  const router = useRouter()
   const [jobs, setJobs] = useState<ScheduleJob[]>([])
   const [runs, setRuns] = useState<RunRow[]>([])
   const [charters, setCharters] = useState<CharterRow[]>([])
   const [state, setState] = useState<FleetState | null>(null)
+  const [apiRows, setApiRows] = useState<ApiWorkflowRow[]>([])
   const [loaded, setLoaded] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newDesc, setNewDesc] = useState('')
+  const [createBusy, setCreateBusy] = useState(false)
+  const [createErr, setCreateErr] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
-      const [sch, run, cha, st] = await Promise.all([
+      const [sch, run, cha, st, wf] = await Promise.all([
         fetch(`${backend}/api/agent/fleet/schedule`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/runs?limit=100`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/charters`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/state`, { cache: 'no-store' }),
+        fetch(`${backend}/api/agent/fleet/workflows`, { cache: 'no-store' }),
       ])
       const bad = [
         !sch.ok && 'the schedule',
         !run.ok && 'the run history',
         !cha.ok && 'worker settings',
         !st.ok && 'the fleet status',
+        !wf.ok && 'the workflow registry',
       ].filter(Boolean)
       if (bad.length) throw new Error(`Could not read ${bad.join(', ')}.`)
       setJobs(((await sch.json()) as { jobs: ScheduleJob[] }).jobs)
       setRuns(((await run.json()) as { runs: RunRow[] }).runs)
       setCharters(((await cha.json()) as { charters: CharterRow[] }).charters)
       setState((await st.json()) as FleetState)
+      setApiRows(((await wf.json()) as { workflows: ApiWorkflowRow[] }).workflows)
       setErr(null)
       setLoaded(true)
     } catch (e) {
@@ -76,16 +116,59 @@ export function WorkflowsClient() {
 
   const { asOf, refresh } = useVisibilityPoll(load)
 
-  const rows = useMemo(
-    () =>
-      BUILTIN_ROUTINES.map((routine) => ({
-        routine,
-        status: routineStatus(routine, state, jobs, charters),
-        groups: groupRuns(runs, routine.mode),
-        job: routine.scheduleKey ? (jobs.find((j) => j.key === routine.scheduleKey) ?? null) : null,
-      })),
-    [state, jobs, charters, runs],
-  )
+  /* WF.6a — API-first: the registry drives the rows; built-ins join their
+     hand-authored presentation, customs render from the stored record. */
+  const rows: ListRow[] = useMemo(() => {
+    const source: ApiWorkflowRow[] = apiRows.length
+      ? apiRows
+      : BUILTIN_ROUTINES.map((b) => ({
+          key: b.key,
+          name: b.name,
+          description: b.purpose,
+          kind: 'builtin' as const,
+          enabled: true,
+          source: 'code' as const,
+          activeRevision: null,
+          revisionCount: 0,
+        }))
+    return source.map((row) => {
+      const builtin = BUILTIN_ROUTINES.find((b) => b.key === row.key) ?? null
+      return {
+        key: row.key,
+        name: row.name,
+        purpose: builtin?.purpose ?? row.description ?? 'A custom routine.',
+        touch: builtin?.touch ?? 'Findings and plans on the board; queueing stays the council’s.',
+        kind: builtin ? ('builtin' as const) : ('custom' as const),
+        builtin,
+        status: builtin
+          ? routineStatus(builtin, state, jobs, charters)
+          : customStatus(state, { enabled: row.enabled, source: row.source }),
+        groups: groupRuns(runs, builtin ? builtin.mode : { workflowKey: row.key }),
+        job: builtin?.scheduleKey
+          ? (jobs.find((j) => j.key === builtin.scheduleKey) ?? null)
+          : null,
+        activeRevisionNo: row.activeRevision?.revision ?? null,
+      }
+    })
+  }, [apiRows, state, jobs, charters, runs])
+
+  const createWorkflow = async () => {
+    setCreateBusy(true)
+    setCreateErr(null)
+    try {
+      const r = await fetch(`${backend}/api/agent/fleet/workflows`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: newName, description: newDesc }),
+      })
+      const body = (await r.json()) as { workflow?: { key: string }; error?: string }
+      if (!r.ok || !body.workflow) throw new Error(body.error ?? `create failed (${r.status})`)
+      router.push(`/fleet/workflows/${body.workflow.key}`)
+    } catch (e) {
+      setCreateErr(e instanceof Error ? e.message : String(e))
+      setCreateBusy(false)
+    }
+  }
 
   const totals = useMemo(() => {
     const since = Date.now() - 7 * DAY
@@ -132,8 +215,12 @@ export function WorkflowsClient() {
       <div className="acr-pg-strip">
         <div className="acr-pg-stat">
           <span className="k">Routines</span>
-          <span className="v">{BUILTIN_ROUTINES.length}</span>
-          <span className="sub">built-in · custom ones arrive with the editor</span>
+          <span className="v">{loaded ? rows.length : BUILTIN_ROUTINES.length}</span>
+          <span className="sub">
+            {loaded
+              ? `${rows.filter((r) => r.kind === 'builtin').length} built-in · ${rows.filter((r) => r.kind === 'custom').length} custom`
+              : 'built-in'}
+          </span>
         </div>
         <div className="acr-pg-stat">
           <span className="k">Next scheduled run</span>
@@ -180,6 +267,13 @@ export function WorkflowsClient() {
           </span>
         ) : null}
         <span className="spacer" />
+        <button
+          className="acr-btn"
+          onClick={() => { setNewName(''); setNewDesc(''); setCreateErr(null); setCreating(true) }}
+          disabled={!loaded}
+        >
+          <Plus size={13} /> New workflow…
+        </button>
         <button className="acr-btn" onClick={refresh}>
           <RefreshCw size={13} /> Refresh
         </button>
@@ -214,23 +308,26 @@ export function WorkflowsClient() {
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ routine, status, groups, job }) => {
+              {rows.map(({ key, name, purpose, touch, kind, builtin, status, groups, job, activeRevisionNo }) => {
                 const last = groups[0] ?? null
                 const dots = groups.slice(0, 8).reverse()
                 return (
-                  <tr key={routine.key}>
+                  <tr key={key}>
                     <td>
                       <div className="acr-pg-who">
                         <span className="acr-pg-avatar" aria-hidden><Workflow size={15} /></span>
                         <span>
-                          <Link className="nm" href={`/fleet/workflows/${routine.key}`}>
-                            {routine.termKey
-                              ? <Term k={routine.termKey}>{routine.name}</Term>
-                              : routine.name}
+                          <Link className="nm" href={`/fleet/workflows/${key}`}>
+                            {builtin?.termKey
+                              ? <Term k={builtin.termKey}>{name}</Term>
+                              : name}
                             {' '}
-                            <span className="wf-builtin">Built-in</span>
+                            <span className="wf-builtin">{kind === 'builtin' ? 'Built-in' : 'Custom'}</span>
+                            {activeRevisionNo != null ? (
+                              <>{' '}<span className="wf-vbadge">rev {activeRevisionNo}</span></>
+                            ) : null}
                           </Link>
-                          <span className="wf-purpose">{routine.purpose}</span>
+                          <span className="wf-purpose">{purpose}</span>
                         </span>
                       </div>
                     </td>
@@ -244,14 +341,20 @@ export function WorkflowsClient() {
                     </td>
                     <td>
                       <span className="wf-when">
-                        {job ? prettyCron(job.schedule) : 'When you start it'}
+                        {job
+                          ? prettyCron(job.schedule)
+                          : kind === 'builtin'
+                            ? 'When you start it'
+                            : '—'}
                       </span>
                       <span className="wf-sub">
                         {job
                           ? job.enabled
                             ? (until(job.nextFireAt) ? `next ${until(job.nextFireAt)}` : 'next time unknown')
                             : 'not scheduled — the clock is off'
-                          : 'from a worker’s page, or the console'}
+                          : kind === 'builtin'
+                            ? 'from a worker’s page, or the console'
+                            : 'running arrives next'}
                       </span>
                     </td>
                     <td>
@@ -305,7 +408,7 @@ export function WorkflowsClient() {
                         <span className="acr-pg-muted">—</span>
                       )}
                     </td>
-                    <td><span className="wf-touch">{routine.touch}</span></td>
+                    <td><span className="wf-touch">{touch}</span></td>
                   </tr>
                 )
               })}
@@ -317,6 +420,45 @@ export function WorkflowsClient() {
       <div className="wf-howwrap">
         <HowWorkflowsWork />
       </div>
+
+      {creating ? (
+        <div className="acr-pg-confirmwrap" role="dialog" aria-modal="true">
+          <div className="acr-pg-confirm">
+            <h4>New custom workflow</h4>
+            <p>
+              A custom routine starts as a name and nothing else — honestly disabled until you
+              compose its wiring in the editor and publish a first revision. It can wire any
+              worker the fleet can resolve; queueing actions stays the council&rsquo;s job.
+            </p>
+            <input
+              className="wf-croninput wf-nameinput"
+              placeholder="Name — e.g. Morning negatives pass"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+            />
+            <textarea
+              className="wf-noteinput"
+              placeholder="What is this routine for? (optional, shown on its page)"
+              value={newDesc}
+              onChange={(e) => setNewDesc(e.target.value)}
+              rows={2}
+            />
+            {createErr ? <p className="acr-pg-warn">{createErr}</p> : null}
+            <div className="acr-pg-confirmbtns">
+              <button className="acr-btn" onClick={() => setCreating(false)} disabled={createBusy}>
+                Cancel
+              </button>
+              <button
+                className="acr-btn primary"
+                disabled={createBusy || !newName.trim()}
+                onClick={() => void createWorkflow()}
+              >
+                {createBusy ? 'Creating…' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

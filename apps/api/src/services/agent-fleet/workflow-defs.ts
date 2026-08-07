@@ -105,6 +105,18 @@ export function builtinByKey(key: string): BuiltinWorkflow | null {
   return BUILTIN_WORKFLOWS.find((b) => b.key === key) ?? null
 }
 
+/** WF.6a — a workflow key from an operator-typed name: lowercase kebab,
+ *  48 chars, no leading/trailing dashes. Pure; collision checks are the
+ *  route's job. */
+export function slugifyWorkflowName(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48)
+}
+
 /** The workflow each orchestrated mode executes. */
 export const MODE_WORKFLOW_KEY: Record<'sweep' | 'council', string> = {
   sweep: 'fleet-sweep',
