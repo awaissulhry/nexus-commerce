@@ -562,6 +562,81 @@ closures). The sibling's W.6 note proved true here too:
 `document.visibilityState` is `hidden` in an automated tab, so polls pause in
 automation — mount loads still fire, which is what the verification used.
 
+### WF.3 / S5 — the editor (study, 2026-08-07)
+
+**What the editor is:** the first surface where the operator *authors*
+composition — strictly Layer 2. It edits a routine's **wiring** (which
+workers, what each hands to which), and its **gates**. It edits nothing in
+Layer 1: no prompts (Charter Studio owns those), no tools, no write paths,
+no new workers. D1 stands: structured panels beside an always-live canvas;
+connections made by pickers; no free-drag wiring.
+
+**What it stands on (all live as of WF.2):** `POST /:key/revisions` with
+server-side `validateDefinition` (sentence errors, async `resolveCharter`,
+`topoLevels` acyclicity) · `POST …/activate` with its honest caveat ·
+`POST …/revert-to-builtin` · `GET …/revisions` returning `effective`,
+`source`, `code` and the revision list · the immutable-revision grammar.
+The server is the validation truth; the editor's checklist is a convenience
+mirror, never the authority.
+
+**Four scoping decisions, with reasons:**
+
+1. **The trigger is read-only in WF.3.** The schedule truth today is the env
+   cron read by `getFleetSchedule` and the registered node-cron jobs — a
+   published revision changing the cron would render "When it runs" as a lie
+   the fleet does not honor. Trigger editing unlocks in WF.4, where stored
+   execution starts honoring the stored definition. The trigger panel says
+   exactly this.
+2. **Built-ins only.** The create/duplicate flow for custom workflows stays
+   in WF.6 — the server already refuses revisions for unknown keys, and a
+   "create" button with no instance story (Workers' W.8) would promise more
+   than the fleet can run. Editing the three built-ins' wiring is the honest
+   full scope of WF.3.
+3. **A draft is an unactivated revision — client state until saved.** No new
+   storage: "Save as draft" creates an unactivated revision (note mandatory);
+   "Publish…" creates *and* activates in one flow behind a confirmation that
+   shows the categorized diff (Steps / Connections / Gates — Make's grouping)
+   and enumerates consequences in plain sentences (the n8n pattern), plus the
+   recorded-not-live caveat until WF.4. Edit state also mirrors to
+   localStorage so a lost tab loses nothing. Known and accepted: immutability
+   means unactivated drafts accumulate rather than delete; the Versions list
+   labels them honestly.
+4. **The editor edits the definition graph only** — charter steps and their
+   edges. The story's code furniture (grading, report cards, the board, the
+   approval gate) is context, not data: rendered as read-only ghosts in read
+   mode, absent in edit mode. Edge artifacts are derived from the source
+   worker's tier (analyst→finding, director→plan, strategist→strategy),
+   shown rather than asked.
+
+**The honesty prerequisite found by this study (WF.3a, build first):** the
+detail page's read mode renders the hand-authored *story*. The moment a
+revision can alter wiring, that becomes a lie — an active revision's wiring
+must be what the canvas shows. So before any edit UI: a
+`definitionToStory()` adapter (definition + live charter names → the canvas
+shape), read mode rendering the **effective** definition whenever
+`source='revision'`, and the story presentation reserved for the pure-code
+state. This also gives the editor its canvas for free — the edit-mode canvas
+is the same adapter over the draft.
+
+**The edit idiom, per panel:** each step is a card — worker name, what it
+reads (from its charter, read-only), its **gate** as three plain choices
+(*inherit — today's behaviour · ask first — every proposal from this step
+waits for you · may act — the tool's own policy decides*, tighten-only with
+the floor named when it binds), and its **hands-to** picker ("hands findings
+to: ☑ Director") which IS the edge editor. Add step = picker over resolvable,
+not-already-present charters. Remove step = removes its edges, says so.
+Drafts are inert, so edits apply instantly with no confirms; **Publish is the
+one consequential act** and carries the whole ceremony (diff + consequences +
+caveat). A Dify-style problems list (client mirror of the server rules)
+blocks Publish with sentences; the server re-checks regardless.
+
+**WF.3 build order, each shippable:** **a** — adapter + effective-definition
+read mode (honesty first). **b** — edit mode: step cards, add/remove,
+gates, hands-to pickers, checklist, Save-as-draft / Publish, Versions rows
+gain Activate-with-diff and a real Revert-to-built-in. **c** — teaching:
+glossary `+draft` `+publish` `+gate` (locks protocol), edit-mode empty
+states, and the How-drawer paragraph updated from future to present tense.
+
 ---
 
 ## Sources
