@@ -5,10 +5,11 @@
  * canvas (operator decision D1 — no free-drag wiring). Each step is a card;
  * its "hands … to" picker IS the edge editor; gates are three plain choices.
  * Drafts are inert, so edits apply with no ceremony — Publish is the one
- * consequential act and carries all of it: the categorized diff, the plain
- * consequences, and the recorded-not-live caveat until stored execution
- * ships (WF.4). The server re-validates everything on save; the checklist
- * here is a courtesy mirror, never the authority.
+ * consequential act and carries all of it: the categorized diff and the
+ * plain consequences. Since WF.4 shipped stored execution, publishing is
+ * LIVE: the active revision is the wiring that runs. The server
+ * re-validates everything on save; the checklist here is a courtesy
+ * mirror, never the authority.
  *
  * The trigger unlocked with WF.4c: the clock re-arms from the stored
  * definition the moment a revision activates or reverts, so what this panel
@@ -326,8 +327,8 @@ export function RoutineEditor({
 
       <div className="acr-banner warn" role="status">
         <AlertTriangle size={15} />
-        Nothing changes until you publish — and until stored execution ships, even a published
-        revision is recorded, not live: runs keep following the built-in definition.
+        Nothing changes until you publish. The moment you do, this wiring is live: the
+        clock re-arms if the trigger changed, and every run stamps the revision that ran it.
       </div>
 
       {restored ? (
@@ -564,9 +565,9 @@ export function RoutineEditor({
             <DiffList diff={diff} />
             {dialog === 'publish' ? (
               <p>
-                Publishing records this as the active revision. Until stored execution ships,
-                runs keep following the built-in — this changes the record, not tonight&rsquo;s
-                behaviour. Revert-to-built-in stays one click and cannot fail.
+                Publishing makes this the active revision — the wiring that actually runs,
+                starting now. A trigger change re-arms the clock the moment you publish.
+                Every revision stays in Versions, so going back is always one click.
               </p>
             ) : (
               <p>A draft is recorded and inert. You can activate it later from Versions.</p>

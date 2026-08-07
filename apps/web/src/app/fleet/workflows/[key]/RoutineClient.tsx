@@ -509,12 +509,11 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
           <div className="wf-versions">
             {vers && vers.revisions.length > 0 ? (
               <>
-                {vers.source === 'revision' ? (
-                  <div className="acr-banner warn" role="status">
-                    <AlertTriangle size={15} />
-                    A revision is active and recorded — but runs keep following the built-in
-                    definition until stored execution ships. Nothing behaves differently yet.
-                  </div>
+                {vers.source === 'revision' && builtin ? (
+                  <p className="wf-vnote">
+                    This routine runs its active revision — the built-in default is set
+                    aside until you revert (one click below; it cannot fail).
+                  </p>
                 ) : null}
                 {vers.revisions.map((r) => (
                   <div className="wf-vrow" key={r.id}>

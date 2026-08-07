@@ -134,9 +134,7 @@ const agentFleetWorkflowRoutes: FastifyPluginAsync = async (fastify) => {
       void resyncFleetSchedules().catch(() => {})
       return {
         revision,
-        // Honesty over ceremony: stored execution is WF.4. Saying this here
-        // keeps the UI from having to guess.
-        caveat: 'recorded and active — runs keep following the built-in definition until stored execution ships',
+        caveat: 'active — this is the wiring that runs from now on; every run stamps the revision that served it',
       }
     },
   )

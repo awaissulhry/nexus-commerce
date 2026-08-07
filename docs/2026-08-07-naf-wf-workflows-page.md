@@ -934,6 +934,41 @@ system pointed the operator at the exact lever. 303 fleet tests green;
 `runFleet` and `runStoredWorkflow` now share one `executeWalk`. Remaining
 in 6: **6c clocks for customs** — a natural first unit for a new session.
 
+**6c EXECUTED 2026-08-07 (`419e6351d` tip; deploy `aa304adc`), the full
+arm/disarm round trip verified on prod.** A custom workflow's clock is now
+real: `resyncFleetSchedules()` arms every ENABLED custom whose effective
+trigger is a schedule (a `customTasks` map, stop-all-then-re-arm, failure
+isolated so a bad custom cron can never take the built-ins down), fires
+through `recordCronRun('workflow:'+key)` so the run is a first-class
+CronRun row, and the schedule feed reports the same rows — one truth from
+definition to feed to node-cron. Watched live on *Morning negatives pass*:
+published rev 2 (`30 5 * * 1`, mandatory note) → the page flipped to **On**
+("Its clock is armed — and you can still run it by hand"), NEXT RUN
+**in 2d 8h · Mondays at 05:30 UTC** → the deployed process logged
+`[fleet-workflow] morning-negatives-pass scheduled (30 5 * * 1)` at
+21:13:12Z, seconds after the publish click — the activate route's resync,
+no restart → published rev 3 (Manual) → the page returned to **Ready**
+("Runs the moment you start it"), NEXT RUN "when you start it". The disarm
+is deliberately silent in logs (resync stops all and re-arms only what
+qualifies; no error line and no new `scheduled` line IS the evidence, plus
+the feed). Versions carries the whole trip: rev 1 first wiring → rev 2 arm
+→ rev 3 disarm (active), every note attributed. Boot-time arming shares the
+same resync function; the route path was the leg exercised live. 313 fleet
+tests green (siblings added ten). **WF.6 is complete — the Workflows page's
+build-out (S1–S6 + teaching layer, WF.1–WF.6) is DONE**; what remains lives
+in new sessions (WF.7 dynamics, deferred contracts below).
+
+**Post-verification copy sweep (same day):** the WF.3-era caveat — "until
+stored execution ships, a published revision is recorded, not live" —
+survived in four places after WF.4 made it false: the editor banner, the
+publish dialog (which also promised "revert-to-built-in" on CUSTOM
+routines), the Versions warn banner, and the activate route's `caveat`
+string (returned, never displayed). All four now tell the WF.4 truth:
+publishing IS live, the clock re-arms on publish, every run stamps its
+revision; the Versions note only appears on built-ins whose default is set
+aside. Lesson recorded: when a phase flips a system-wide fact, grep the
+old fact's phrasing across the page the same day it flips.
+
 ### WF.7 — dynamic capabilities (RESEARCH MANDATE, opened 2026-08-07 — new session)
 
 **Operator direction, verbatim intent:** the workflow system lacks *dynamic*
