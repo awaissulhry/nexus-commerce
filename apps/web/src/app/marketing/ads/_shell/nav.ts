@@ -12,11 +12,30 @@ import {
 
 export const ADS_BASE = '/marketing/ads'
 
+export interface NavChild {
+  label: string
+  route: string
+}
+
+/**
+ * NAF.SB — a named, collapsible cluster of children (third-level nav).
+ * Used only by the Agent Fleet, whose ten pages need grouping to stay
+ * scannable. Groups are NOT pages: the row toggles, it does not navigate.
+ */
+export interface NavGroup {
+  group: string
+  /** One line under the group name, so the grouping teaches rather than just sorts. */
+  hint: string
+  items: NavChild[]
+}
+
 export interface NavItem {
   label: string
   route: string
   Icon: LucideIcon
-  children?: { label: string; route: string }[]
+  children?: NavChild[]
+  /** Mutually exclusive with `children` — grouped, collapsible children. */
+  groups?: NavGroup[]
   /** When set, the item is an external link (new tab) with a trailing external-link glyph. */
   external?: string
 }
@@ -93,11 +112,52 @@ export const ADS_NAV: NavItem[] = [
   // is prefix-based, so leaving the page inside the rules subtree would light BOTH rows.
   // The components still sit under rules-automation/fleet/ until the parallel session
   // editing them lands; see the note in fleet/page.tsx.
-  // NAF.SB.3+ — the section grows into the ten-page map in
-  // docs/2026-08-07-naf-sb-fleet-pages.md (Operate · Build · Govern).
-  // Children are added as each page lands, never before: a chevron entry
-  // pointing at a route that does not exist yet is a 404 with a label.
-  { label: 'Agent Fleet', route: 'fleet', Icon: Bot, children: [{ label: 'Workers', route: 'fleet/workers' }, { label: 'Controls', route: 'fleet/controls' }] },
+  // NAF.SB.3 — the ten-page map from docs/2026-08-07-naf-sb-fleet-pages.md,
+  // in three collapsible groups (operator decision 2026-08-07).
+  //
+  // The groups default OPEN. Ten children is at the top of what stays
+  // scannable, and grouping is what makes it work — but Approvals is a daily,
+  // blocking queue that will carry a count badge, and a badge behind two
+  // collapsed levels is a badge nobody sees. Collapse is there for the groups
+  // an operator does not use, not as the resting state.
+  //
+  // The groups answer three different questions, which is why they are groups
+  // and not one list: what IS happening, what SHOULD happen, what MAY happen.
+  {
+    label: 'Agent Fleet',
+    route: 'fleet',
+    Icon: Bot,
+    groups: [
+      {
+        group: 'Operate',
+        hint: 'what is happening',
+        items: [
+          { label: 'Overview', route: 'fleet' },
+          { label: 'Approvals', route: 'fleet/approvals' },
+          { label: 'Activity', route: 'fleet/activity' },
+          { label: 'Fleet map', route: 'fleet/map' },
+        ],
+      },
+      {
+        group: 'Build',
+        hint: 'what should happen',
+        items: [
+          { label: 'Workers', route: 'fleet/workers' },
+          { label: 'Workflows', route: 'fleet/workflows' },
+          { label: 'Assignments', route: 'fleet/assignments' },
+          { label: 'Files & data', route: 'fleet/files' },
+        ],
+      },
+      {
+        group: 'Govern',
+        hint: 'what may happen',
+        items: [
+          { label: 'Cost & value', route: 'fleet/cost' },
+          { label: 'Controls', route: 'fleet/controls' },
+        ],
+      },
+    ],
+  },
   { label: 'Rules & Automation', route: 'rules-automation', Icon: Wand2, children: [{ label: 'Control Room', route: 'rules-automation/control-room' }] },
   { label: 'AMC', route: 'amc', Icon: Users, children: [{ label: 'AMC Insights', route: 'amc' }, { label: 'Audience Insights', route: 'amc/audiences' }] },
   { label: 'Reporting', route: 'reporting', Icon: PieChart, children: [{ label: 'Brand Metrics', route: 'reporting/brand-metrics' }] },

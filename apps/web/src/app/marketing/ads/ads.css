@@ -3218,3 +3218,22 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
    half of that never existed. Advice now reads as advice. Found by sweeping for
    the `.h10-pill.bad` shape rather than by noticing it. */
 .h10-spw-cs-pwarn.caution { color: #46536a; background: #f4f7fb; border-color: #d7e2f0; }
+
+/* NAF.SB — a group row inside .h10-sub toggles rather than navigates, because
+   Operate / Build / Govern are clusters, not destinations. Reuses .subname's
+   metrics so the row keeps the same height as a channel row. */
+.h10-subparent .subname-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--h10-rail-text-2);
+  text-align: left;
+  cursor: pointer;
+}
+.h10-subparent .subname-toggle:hover { color: var(--h10-rail-text-strong); }

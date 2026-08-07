@@ -61,11 +61,28 @@ export function AdsSidebar() {
   //
   // Seed each group open iff the active route is inside it, so deep-linking to a sub-page
   // lands with the group expanded.
+  // NAF.SB — grouped children (the Agent Fleet's ten pages) add a third level,
+  // rendered with the .h10-subgroup / .h10-subsub classes the commerce rail
+  // (_shared/AppRail.tsx) already uses for channel → markets. Same markup, so
+  // the two rails cannot drift and no new rail CSS is needed. One deviation:
+  // a group row TOGGLES and does not navigate, because Operate/Build/Govern
+  // are not pages — so its label is a toggle, not a link.
+  //
+  // Groups seed OPEN. Collapse exists for the group you do not use; it is not
+  // the resting state, or the Approvals badge would sit behind two closed
+  // levels.
   const [open, setOpen] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {}
-    for (const it of nav)
+    for (const it of nav) {
       if (it.children?.length)
         init[it.route] = isActive(it.route) || it.children.some((c) => isActive(c.route))
+      if (it.groups?.length) {
+        init[it.route] =
+          isActive(it.route) ||
+          it.groups.some((g) => g.items.some((c) => isActive(c.route)))
+        for (const g of it.groups) init[`${it.route}:${g.group}`] = true
+      }
+    }
     return init
   })
   const toggle = (route: string) => setOpen((o) => ({ ...o, [route]: !o[route] }))
@@ -95,11 +112,14 @@ export function AdsSidebar() {
       <nav className="h10-nav">
         {nav.map((it) => {
           const href = `${ADS_BASE}/${it.route}`
-          const hasChildren = !!it.children?.length
+          const hasGroups = !!it.groups?.length
+          const hasChildren = !!it.children?.length || hasGroups
           // A parent is "section-active" (subtle chip) when you're on one of its children,
           // and "exact-active" (full fill) only on its own page — so the collapsed rail still
           // shows which section you're in without claiming you're on the parent page.
-          const childRouteActive = hasChildren && it.children!.some((c) => isActive(c.route))
+          const groupItems = it.groups?.flatMap((g) => g.items) ?? []
+          const childRouteActive = hasChildren
+            && (it.children ?? groupItems).some((c) => isActive(c.route) && c.route !== it.route)
           const exactActive = !it.external && isActive(it.route) && !childRouteActive
           const isOpen = hasChildren && !!open[it.route]
           const bodyInner = (
@@ -134,9 +154,54 @@ export function AdsSidebar() {
               )}
               {hasChildren && isOpen && (
                 <div className="h10-sub">
-                  {it.children!.map((c) => {
+                  {it.children?.map((c) => {
                     const chref = `${ADS_BASE}/${c.route}`
                     return <Link key={c.route} href={chref} className={`h10-subitem ${pathname === chref ? 'on' : ''}`}>{c.label}</Link>
+                  })}
+                  {it.groups?.map((g) => {
+                    const gkey = `${it.route}:${g.group}`
+                    const gOpen = !!open[gkey]
+                    const gActive = g.items.some((c) => pathname === `${ADS_BASE}/${c.route}`)
+                    return (
+                      <div key={gkey} className="h10-subgroup">
+                        <div className={`h10-subitem h10-subparent ${gActive ? 'on' : ''}`}>
+                          <button
+                            type="button"
+                            className="subname subname-toggle"
+                            aria-expanded={gOpen}
+                            title={`${g.group} — ${g.hint}`}
+                            onClick={() => toggle(gkey)}
+                          >
+                            {g.group}
+                          </button>
+                          <button
+                            type="button"
+                            className="subchev-btn"
+                            aria-expanded={gOpen}
+                            aria-label={gOpen ? `Collapse ${g.group}` : `Expand ${g.group}`}
+                            onClick={() => toggle(gkey)}
+                          >
+                            <ChevronDown className={`subchev ${gOpen ? 'open' : ''}`} size={14} aria-hidden />
+                          </button>
+                        </div>
+                        {gOpen && (
+                          <div className="h10-subsub">
+                            {g.items.map((c) => {
+                              const chref = `${ADS_BASE}/${c.route}`
+                              return (
+                                <Link
+                                  key={c.route}
+                                  href={chref}
+                                  className={`h10-subsubitem ${pathname === chref ? 'on' : ''}`}
+                                >
+                                  <span className="mname">{c.label}</span>
+                                </Link>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
                   })}
                 </div>
               )}
