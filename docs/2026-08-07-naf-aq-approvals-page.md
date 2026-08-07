@@ -1295,9 +1295,26 @@ target. The mechanism under test is the fail-closed path, and it held.
 **Cleaned up**: 1 approval and 1 run deleted, 0 audit rows created (the row was
 never decided), `AgentApproval` back to exactly **18**.
 
-**AQ.4 is NOT prod-verified.** It is pushed and correct by typecheck and
-review, but Vercel's queue was several sessions deep and the deploy had not
-landed when the seed was cleaned. Rather than hold a prod row against an
-unknown wait, it comes down and AQ.4's one-click reject and consequence-labelled
-button get verified on the next card — the seed script is committed, so that is
-a thirty-second exercise, not a rebuild.
+**AQ.4 prod-verified too, on a second seed.** The first cleanup happened before
+the deploy landed, so rather than hold a prod row against an unknown wait the
+row came down and went back up thirty seconds later — which is the point of
+committing the script. Detecting that the deploy HAD landed needed a
+discriminator the empty DOM could not give: fetching the deployed route chunk
+and grepping it for a string unique to AQ.4 (`"Why not? One click"`). The
+bundle is public, so this works unauthenticated where the rendered page does
+not.
+
+| | |
+|---|---|
+| Primary button | **`Apply — bid €0.31 → €0.84`** — the consequence, not the verb |
+| Reject | one click, four codes shaped to this tool, ending in *"The suggestion itself is wrong"* |
+| Note | optional on **both** verbs, required by neither |
+| Symmetry | approve = 1 click, reject = 1 click. The asymmetry is gone |
+
+And the re-check, on the corrected fixture, hit the branch it was meant to:
+*"The facts have moved — target seed-target-does-not-exist not found (or is a
+negative)"* — the tool's own dry-run refusing, surfaced in operator language and
+classified stale.
+
+**Cleaned up again**: `AgentApproval` back to exactly **18**, 0 audit rows,
+0 runs left behind.

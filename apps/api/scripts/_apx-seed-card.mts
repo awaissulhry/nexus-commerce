@@ -60,7 +60,10 @@ const ap = await prisma.agentApproval.create({
     agentRunId: run.id,
     toolName: 'set-target-bid',
     riskTier: 'high',
-    args: { targetId: 'seed-target-does-not-exist', bidCents: 84 },
+    // `proposedBidCents`, not `bidCents` — the first fixture got this wrong
+    // and the re-check refused on argument shape rather than on the missing
+    // target, which tested the wrong branch.
+    args: { targetId: 'seed-target-does-not-exist', proposedBidCents: 84 },
     preview: {
       action: 'set-target-bid',
       target: {
