@@ -82,6 +82,26 @@ export interface ObservationBuilder {
    * declaration cannot be checked structurally.
    */
   narrowKinds?: readonly NarrowKind[]
+  /**
+   * NAF.SB.AS.3 — what this evidence IS, in the operator's words. Lives with
+   * the builder for the same reason `narrow()` does: the page must never hold
+   * its own copy of what a feed contains, or the two drift and the pre-flight
+   * describes evidence the worker no longer reads.
+   */
+  label?: string
+  /**
+   * NAF.SB.AS.3 — plain sentences describing what a NARROWER scope does to
+   * this evidence: what survives, what is withheld, what stays account-wide.
+   * Returned by the pre-flight WITHOUT running anything.
+   */
+  describeNarrowing?(kind: NarrowKind): string[]
+  /**
+   * NAF.SB.AS.3 — how many things this payload actually holds, so the
+   * pre-flight can say "it will look at 4 things" without the page learning
+   * every payload's shape. One line per builder, explicit rather than
+   * guessed from array fields.
+   */
+  itemCount?(payload: unknown): number
   build(scope: ObservationScope): Promise<{ payload: unknown; dataVintage: Date }>
   /**
    * NAF.SB.AS — narrow an already-computed payload for one assignment.
@@ -138,6 +158,27 @@ for (const b of Object.values(BUILDERS)) {
       `observation "${b.key}" declares CAMPAIGN narrowing without a narrow() — ` +
         'it would read the whole account while claiming to be scoped',
     )
+  }
+}
+
+/** NAF.SB.AS.3 — the operator's word for a feed. Falls back to the key so a
+ *  new builder is legible before anyone writes it a label. */
+export function observationLabel(key: string): string {
+  return BUILDERS[key]?.label ?? key
+}
+
+/** NAF.SB.AS.3 — what narrowing does to this feed, WITHOUT running it. */
+export function observationNarrowNotes(key: string, kind: NarrowKind): string[] {
+  return BUILDERS[key]?.describeNarrowing?.(kind) ?? []
+}
+
+/** NAF.SB.AS.3 — how many things a built payload holds. Unknown shape → 0,
+ *  which reads as "nothing to show" rather than inventing a number. */
+export function observationItemCount(key: string, payload: unknown): number {
+  try {
+    return BUILDERS[key]?.itemCount?.(payload) ?? 0
+  } catch {
+    return 0
   }
 }
 

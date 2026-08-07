@@ -26,6 +26,15 @@ export const harvestCandidatesBuilder: ObservationBuilder = {
   // CAMPAIGN via narrow() below; MARKETPLACE via filterToMarketplace in
   // build(scope). Both are exercised by assignment-narrowkinds.vitest.
   narrowKinds: ['CAMPAIGN', 'MARKETPLACE'] as const,
+  label: 'search terms worth keeping',
+  describeNarrowing(kind) {
+    const where = kind === 'CAMPAIGN' ? 'this campaign' : 'this marketplace'
+    return [`Search terms that actually converted, for ${where} only.`]
+  },
+  itemCount(payload) {
+    const p = payload as HarvestCandidatesPayload
+    return p.graduations.length + p.productGraduations.length
+  },
   async build(scope) {
     const marketplace = scope.marketplace
     const [preview, agg] = await Promise.all([

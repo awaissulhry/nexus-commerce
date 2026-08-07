@@ -338,6 +338,20 @@ export async function executeCharter(
                 ids: opts.assignmentTarget.ids,
                 labels: opts.assignmentTarget.labels ?? [],
               },
+              /**
+               * NAF.SB.AS.3 — what this run was ACTUALLY allowed to see, as
+               * resolved at THIS moment. Recorded per run rather than per
+               * assignment on purpose: a portfolio gains and loses campaigns,
+               * and a charter's own scope can be narrowed between attempts, so
+               * "what it was allowed to look at" is a fact about the attempt.
+               * Recomputing it later from a charter that has since changed
+               * would answer a different question.
+               */
+              resolvedScope: {
+                marketplace: assignmentMarketplace ?? null,
+                campaignExternalIds: assignmentNarrow?.campaignExternalIds ?? null,
+                campaignLabels: assignmentNarrow?.campaignLabels ?? null,
+              },
             }
           : {}),
       } as Prisma.InputJsonValue,

@@ -43,6 +43,16 @@ export const bidProposalsBuilder: ObservationBuilder = {
    * Declaring it would be exactly the `scopeCampaignIds` defect again.
    */
   narrowKinds: ['CAMPAIGN'] as const,
+  label: 'bids that look wrong',
+  describeNarrowing() {
+    return [
+      'Bid changes the optimiser suggests, for this campaign only.',
+      'The profit summary beside them stays ACCOUNT-WIDE and is labelled so: a product sells through many campaigns, so it has no campaign of its own. It is background for the bids, not a total for this campaign.',
+    ]
+  },
+  itemCount(payload) {
+    return (payload as BidProposalsPayload).proposals.length
+  },
   async build() {
     const since = new Date()
     since.setUTCDate(since.getUTCDate() - WINDOW_DAYS)

@@ -1077,6 +1077,55 @@ carries none of this page's rules across the boundary, which is why the grid
 links rather than importing the assignment object — the objection AS-S6 raised
 against a campaigns-grid entry point does not apply to a link.
 
+### AS.3 — EXECUTED 2026-08-08, the pre-flight, split by honest cost
+
+**The study was wrong here and the critique was right.** AS-S4's backend note
+claimed *"nothing new is computed for display"* — false. `droppedOutOfScope`,
+`unresolvedCampaign` and `ngramsWithheldUnderScope` are produced **inside
+`build()`**, which runs a sixty-day scan of search terms. There is no way to
+ask a builder what it *would* narrow without running it. So the panel splits
+by what things actually cost:
+
+- **Static half** — `GET /agent/fleet/assignment-preflight`. No scans, no
+  model, no writes. Which evidence this worker reads, whether each feed
+  honours the chosen kind, what is held back or stays account-wide, and the
+  **resolved** ceilings (this worker's daily budget inside the fleet's). Safe
+  on every keystroke; a vitest asserts it **never builds an observation**.
+- **Measured half** — `POST /agent/fleet/assignment-preflight-measure`, behind
+  a button that says what it costs first: *"Reads the last 60 days of your
+  search terms and may take a few seconds. It calls no AI and writes
+  nothing."* It builds real evidence **through the shared cache**, so a second
+  look is free for six hours and every other reader benefits. It calls no
+  model and creates no run row — `preview: true` on `executeCharter` does
+  both, and this is deliberately not that.
+
+**It refuses exactly where a run would refuse**, so the operator never gets a
+cheerful preview of something that then stops.
+
+**Knowledge stays with the builder**, same discipline as `narrow()`: `label`
+(what the feed is, in the operator's words), `describeNarrowing(kind)` (plain
+sentences about what a narrower scope does to it — returned **without running
+anything**), and `itemCount(payload)` (one line per builder, so the panel can
+say "4 things to look at" without the page learning every payload's shape).
+The page holds no copy of what a feed contains, so the two cannot drift.
+
+**The beginner rule held.** The default state is one sentence. `droppedOutOfScope`
+and friends are never printed as named counters, and the phrase "3 of 4
+evidence sections" appears nowhere — the *why a narrowed run finds less*
+explanation sits behind a closed **"What will it read?"** disclosure.
+
+**AS.3c — the record, moved from the assignment to the run.** The study said to
+write the panel onto the assignment after a run. It goes on the **run's**
+`input.resolvedScope` instead, and the reason is a correction: a portfolio
+gains and loses campaigns, and a charter's own scope can be narrowed between
+attempts, so *what it was allowed to look at* is a fact about **the attempt**.
+Recording it per assignment would answer a different question, and recomputing
+it later from a changed charter would answer a third. It also needs no
+migration.
+
+**Gates:** 9 new tests (369 across 41 files), API `tsc` clean, my web files
+clean.
+
 ---
 
 **One deliberate deviation from Part 3.4, stated rather than skipped.** The study

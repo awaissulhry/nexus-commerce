@@ -332,24 +332,98 @@ export function CreateAssignment({
  * themes are account-wide and withheld — sits behind a disclosure, because a
  * beginner reads "3 of 4 evidence sections" as breakage.
  */
+interface StaticPreflight {
+  ok: boolean
+  refusal?: string
+  headline: string
+  feeds: { key: string; label: string; honoured: boolean; notes: string[] }[]
+  ceilingUSD: number
+  fleetCeilingUSD: number
+  fleetHalted: boolean
+}
+interface MeasuredPreflight {
+  ok: boolean
+  error?: string
+  totalItems: number
+  feeds: { key: string; label: string; items: number; caveats: string[]; cached: boolean }[]
+}
+
+/**
+ * NAF.SB.AS.3 — what it will actually look at.
+ *
+ * The default state answers ONE question in ONE sentence. Everything else —
+ * why a narrowed run finds less, what is held back, what stays account-wide —
+ * lives behind a closed disclosure, because a beginner reads "3 of 4 evidence
+ * sections" as breakage rather than as design.
+ *
+ * The static half costs nothing and updates as the target changes. The
+ * measured half is a button that says what it costs before it runs: it reads
+ * real evidence (no model, nothing written), which is real database work.
+ */
 function Preflight({
   worker,
   kind,
   picked,
 }: {
   worker: AssignableWorker
-  kind: string | null
+  kind: TargetKind | null
   picked: { id: string; label: string }[]
 }) {
-  if (!kind) {
-    return (
-      <div className="as-preflight" style={{ marginTop: 12 }}>
-        It will look at <strong>your whole account</strong>, the way it does on a
-        normal run.
-      </div>
-    )
-  }
-  if (picked.length === 0) {
+  const [pre, setPre] = useState<StaticPreflight | null>(null)
+  const [measured, setMeasured] = useState<MeasuredPreflight | null>(null)
+  const [measuring, setMeasuring] = useState(false)
+
+  const targetReady = !kind || picked.length > 0
+
+  useEffect(() => {
+    setMeasured(null)
+    if (!targetReady) return
+    const q = new URLSearchParams({ charterKey: worker.key })
+    if (kind && picked.length) {
+      q.set('targetKind', kind)
+      q.set('targetIds', picked.map((p) => p.id).join(','))
+      q.set('targetLabels', picked.map((p) => p.label).join(','))
+    }
+    let live = true
+    void (async () => {
+      const res = await fetch(
+        `${getBackendUrl()}/api/agent/fleet/assignment-preflight?${q.toString()}`,
+        { cache: 'no-store', credentials: 'include' },
+      )
+      if (!res.ok || !live) return
+      setPre((await res.json()) as StaticPreflight)
+    })().catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [worker.key, kind, picked, targetReady])
+
+  const measure = useCallback(async () => {
+    setMeasuring(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/agent/fleet/assignment-preflight-measure`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            charterKey: worker.key,
+            targetKind: kind,
+            targetIds: picked.map((p) => p.id),
+            targetLabels: picked.map((p) => p.label),
+          }),
+        },
+      )
+      setMeasured((await res.json()) as MeasuredPreflight)
+    } catch (e) {
+      setMeasured({ ok: false, error: String(e), totalItems: 0, feeds: [] })
+    } finally {
+      setMeasuring(false)
+    }
+  }, [worker.key, kind, picked])
+
+  if (!targetReady) {
     return (
       <div className="as-preflight" style={{ marginTop: 12 }}>
         Pick {kind === 'CAMPAIGN' ? 'a campaign' : kind === 'PORTFOLIO' ? 'a portfolio' : 'a marketplace'} and this
@@ -357,29 +431,96 @@ function Preflight({
       </div>
     )
   }
+  if (!pre) {
+    return (
+      <div className="as-preflight" style={{ marginTop: 12 }}>
+        Checking what it will be allowed to look at…
+      </div>
+    )
+  }
+
   return (
     <div className="as-preflight" style={{ marginTop: 12 }}>
-      It will look at <strong>{picked.map((p) => p.label).join(', ')}</strong> only
-      — nothing else in your account.
-      {(kind === 'CAMPAIGN' || kind === 'PORTFOLIO') && (
+      {pre.ok ? <strong>{pre.headline}</strong> : <span className="as-danger">{pre.refusal}</span>}
+
+      {pre.fleetHalted && (
+        <p style={{ marginTop: 6 }}>
+          The fleet is halted right now, so this would stop before spending anything.
+        </p>
+      )}
+
+      {pre.ok && (
         <details style={{ marginTop: 7 }}>
-          <summary style={{ cursor: 'pointer' }}>Why can&apos;t it see everything?</summary>
-          <p style={{ marginTop: 6, lineHeight: 1.6 }}>
-            That is the point of an assignment — it narrows the worker. It will
-            find less than a run over your whole account, and that is the
-            expected result, not a fault.
+          <summary style={{ cursor: 'pointer' }}>What will it read?</summary>
+          <ul style={{ margin: '6px 0 0', paddingLeft: 18, lineHeight: 1.65 }}>
+            {pre.feeds.map((f) => (
+              <li key={f.key}>
+                <strong>{f.label}</strong>
+                {f.notes.length > 0 && <> — {f.notes.join(' ')}</>}
+              </li>
+            ))}
+          </ul>
+          {kind && (
+            <p style={{ marginTop: 7, lineHeight: 1.6 }}>
+              A narrowed run finds <strong>less</strong> than one over your whole
+              account. That is the point of pointing it at something, not a
+              fault.
+            </p>
+          )}
+          <p style={{ marginTop: 7, lineHeight: 1.6 }}>
+            It cannot spend more than{' '}
+            <strong>${pre.ceilingUSD.toFixed(2)}</strong> today across every run
+            of this worker, inside a fleet ceiling of $
+            {pre.fleetCeilingUSD.toFixed(2)}.
           </p>
-          <p style={{ marginTop: 6, lineHeight: 1.6 }}>
-            One kind of evidence is left out entirely: waste <em>themes</em> are
-            totals across your whole account with no campaign of their own, so
-            showing them here would blame this campaign for other campaigns&apos;
-            spend. They are held back rather than shown misleadingly.
-          </p>
+
+          {!measured && (
+            <button
+              type="button"
+              className="acr-pg-sortbtn"
+              style={{ marginTop: 8 }}
+              onClick={measure}
+              disabled={measuring}
+            >
+              {measuring ? 'Reading…' : 'Show me how much there is'}
+            </button>
+          )}
+          {!measured && (
+            <p className="as-hint">
+              Reads the last 60 days of your search terms and may take a few
+              seconds. It calls no AI and writes nothing.
+            </p>
+          )}
+
+          {measured && !measured.ok && <p className="as-danger">{measured.error}</p>}
+          {measured?.ok && (
+            <div style={{ marginTop: 8 }}>
+              <p>
+                <strong>
+                  {measured.totalItems} thing{measured.totalItems === 1 ? '' : 's'} to look at
+                </strong>{' '}
+                right now.
+              </p>
+              <ul style={{ margin: '4px 0 0', paddingLeft: 18, lineHeight: 1.65 }}>
+                {measured.feeds.map((f) => (
+                  <li key={f.key}>
+                    {f.label}: {f.items}
+                  </li>
+                ))}
+              </ul>
+              {measured.feeds.some((f) => f.caveats.length > 0) && (
+                <p style={{ marginTop: 6, lineHeight: 1.6 }}>
+                  {measured.feeds.flatMap((f) => f.caveats).slice(0, 2).join(' ')}
+                </p>
+              )}
+            </div>
+          )}
         </details>
       )}
     </div>
   )
 }
+
 
 /** Campaign picker — searchable, ENABLED by default (60% of the estate is
  *  paused, so an unfiltered list offers mostly dormant scope). */

@@ -26,6 +26,11 @@ import {
   setAssignmentState,
   startAssignment,
 } from '../services/agent-fleet/assignment.service.js'
+import {
+  measurePreflight,
+  staticPreflight,
+} from '../services/agent-fleet/assignment-preflight.service.js'
+import type { AssignmentTarget } from '../services/agent-fleet/assignment-scope.js'
 
 interface CreateBody {
   charterKey?: string
@@ -66,6 +71,43 @@ const agentFleetAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.get('/agent/fleet/assignment-portfolios', async () => {
     return { portfolios: await listAssignablePortfolios() }
+  })
+
+  /**
+   * NAF.SB.AS.3 — the pre-flight, in two halves that are honest about cost.
+   *
+   * GET (static): no scans, no model, no writes. Safe on every keystroke.
+   * POST (measured): builds real evidence through the SHARED cache — no model
+   * and no run row, but it does real database work, which is why it is a
+   * deliberate button rather than something that happens while you type.
+   *
+   * Paths avoid `assignments/...` on purpose: that prefix would match
+   * `/assignments/:id` and be read as an assignment whose id is "preflight".
+   */
+  fastify.get<{
+    Querystring: { charterKey?: string; targetKind?: string; targetIds?: string; targetLabels?: string }
+  }>('/agent/fleet/assignment-preflight', async (req, reply) => {
+    const q = req.query
+    if (!q.charterKey) return reply.code(400).send({ error: 'charterKey is required' })
+    const out = await staticPreflight(q.charterKey, parseTarget(q))
+    if (!out) return reply.code(404).send({ error: 'unknown worker' })
+    return out
+  })
+
+  fastify.post<{
+    Body: { charterKey?: string; targetKind?: string; targetIds?: string[]; targetLabels?: string[] }
+  }>('/agent/fleet/assignment-preflight-measure', async (req, reply) => {
+    const b = req.body ?? {}
+    if (!b.charterKey) return reply.code(400).send({ error: 'charterKey is required' })
+    const target =
+      b.targetKind && b.targetIds?.length
+        ? ({
+            kind: b.targetKind as AssignmentTarget['kind'],
+            ids: b.targetIds,
+            labels: b.targetLabels ?? [],
+          } satisfies AssignmentTarget)
+        : null
+    return await measurePreflight(b.charterKey, target)
   })
 
   /**
@@ -190,3 +232,19 @@ const agentFleetAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
 }
 
 export default agentFleetAssignmentRoutes
+
+/** Query-string form of a target, shared by the static pre-flight route. */
+function parseTarget(q: {
+  targetKind?: string
+  targetIds?: string
+  targetLabels?: string
+}): AssignmentTarget | null {
+  if (!q.targetKind || !q.targetIds) return null
+  const ids = q.targetIds.split(',').map((s) => s.trim()).filter(Boolean)
+  if (ids.length === 0) return null
+  return {
+    kind: q.targetKind as AssignmentTarget['kind'],
+    ids,
+    labels: (q.targetLabels ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+  }
+}

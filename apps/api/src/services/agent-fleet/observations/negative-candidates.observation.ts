@@ -52,6 +52,18 @@ export const negativeCandidatesBuilder: ObservationBuilder = {
   // CAMPAIGN via narrow() below; MARKETPLACE via filterToMarketplace in
   // build(scope). Both are exercised by assignment-narrowkinds.vitest.
   narrowKinds: ['CAMPAIGN', 'MARKETPLACE'] as const,
+  label: 'wasteful search terms',
+  describeNarrowing(kind) {
+    const where = kind === 'CAMPAIGN' ? 'this campaign' : 'this marketplace'
+    return [
+      `Search terms that spent with nothing to show for it, for ${where} only.`,
+      'Waste THEMES are held back entirely: they are totals across your whole account with no campaign of their own, so showing them here would blame this one for other campaigns\u2019 spend.',
+    ]
+  },
+  itemCount(payload) {
+    const p = payload as NegativeCandidatesPayload
+    return p.negatives.length + p.productNegatives.length + p.ngramWasteful.length
+  },
   async build(scope) {
     const marketplace = scope.marketplace
     const [preview, grams, existing, vintage] = await Promise.all([
