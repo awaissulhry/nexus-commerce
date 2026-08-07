@@ -396,6 +396,17 @@ export function WorkersClient() {
                 {f.klass === 'limit' ? 'stopped by a limit' : 'did not finish'}
               </div>
             ) : null}
+            {/* The week's record, not just the latest attempt. The old roster
+                showed a bare "1 failed" here; replacing it with the last run's
+                outcome alone would have quietly dropped the fact that a worker
+                whose most recent run was fine failed three times before it.
+                Phrased as a ratio because "1 failed" out of one run and out of
+                forty are not the same worker. */}
+            {r.failures7d > 0 && !f ? (
+              <div className="sbw-note" title="Runs in the last 7 days that did not finish. Open Activity for what happened in each.">
+                {r.failures7d} of {r.runs7d} failed this week
+              </div>
+            ) : null}
           </>
         )
       },
