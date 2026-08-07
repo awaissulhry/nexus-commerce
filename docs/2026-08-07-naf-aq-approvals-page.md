@@ -1254,3 +1254,50 @@ because **both queues are empty**: a keyboard model over a list with no rows
 cannot be verified by anyone, and shipping an unverifiable interaction is how
 you get a control that has never once been exercised. It moves to AQ.5, where
 filters and the queue-shape strip give it something to move around.
+
+### Prod verification of the card (2026-08-07)
+
+Four phases had shipped a decision card that had **never rendered a real
+proposal** — every claim about it was typecheck-deep. Fixed with the method and
+the cleanup discipline the AP.4/AP.6/AP.8 records established: seed one
+provably inert approval, verify, delete.
+
+**Why the seed was safe, on three independent counts:** `set-target-bid` has no
+`execute()`, so `decideApproval` cannot run anything for it under any
+circumstances; the `targetId` deliberately did not exist; and `checkStaleness`
+would refuse on the missing target before anything else happened. The preview
+was hand-written rather than taken from a real campaign, so nothing in the
+exercise touched a real entity.
+
+What rendered, all correct:
+
+| | |
+|---|---|
+| Entity | *"On “casco integrale modulare” (EXACT) in AIREON-IT-Generic"* — **the first time in this feature's life a card has named what it acts on** |
+| Delta | `bid €0.31 → €0.84`, old value struck through |
+| Reversibility | `can be put back` — the new single-source wording |
+| Expiry | `24h left`, plus the exact instant under *if you do nothing* |
+| Honest ceiling | *"Approving this records your decision and teaches the fleet, but changes nothing on Amazon"* |
+
+**The re-tiering proved itself on screen.** The card is `high risk` and carries
+**no read-and-understood tick** — because it cannot execute. Under the old rule
+(`riskTier === 'high'`) it would have demanded the ritual for an action that is
+physically incapable of doing anything, which is exactly the blanket friction
+AP.8 says it exists to prevent.
+
+**The recheck worked end to end**: it ran the tool's real dry-run, got a
+refusal, and classified it stale in the stale style. The message it surfaced —
+*"targetId and numeric proposedBidCents are required"* — was the seed's fault,
+not the feature's: the fixture passed `bidCents` where the tool wants
+`proposedBidCents`, so it refused on argument shape rather than the missing
+target. The mechanism under test is the fail-closed path, and it held.
+
+**Cleaned up**: 1 approval and 1 run deleted, 0 audit rows created (the row was
+never decided), `AgentApproval` back to exactly **18**.
+
+**AQ.4 is NOT prod-verified.** It is pushed and correct by typecheck and
+review, but Vercel's queue was several sessions deep and the deploy had not
+landed when the seed was cleaned. Rather than hold a prod row against an
+unknown wait, it comes down and AQ.4's one-click reject and consequence-labelled
+button get verified on the next card — the seed script is committed, so that is
+a thirty-second exercise, not a rebuild.
