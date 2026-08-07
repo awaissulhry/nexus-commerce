@@ -448,6 +448,36 @@ with *Customize view*; so do we.
 A cross-page query surface. If someone wants "every run by this worker last
 Tuesday that cost more than $0.01", that is Activity, and this page links there.
 
+
+### 3.7 What building it changed
+
+- **The URL is written with the History API, not `useSearchParams`.** The page is
+  `force-dynamic` and this is a UI convenience rather than navigation;
+  `replaceState` neither re-renders the tree nor leaves history entries the back
+  button has to walk through, and it sidesteps the Suspense boundary
+  `useSearchParams` would otherwise want.
+- **Column choice persists as an ORDERED list, re-sorted into canonical order on
+  every toggle.** Storing click order would let a column re-appear in a different
+  place each session. The restore path intersects with the known set, so a column
+  renamed in code cannot resurrect from an old preference, and the two fixed
+  columns are forced back on regardless of what was stored.
+- **Twelve columns overflow the container, and that is fine** — the grid wrapper
+  is `overflow-x: auto`, so wide content scrolls inside its own box and the page
+  body never scrolls sideways. Verified: wrapper `scrollWidth 1788 > clientWidth
+  1612`, and `body.scrollWidth === body.clientWidth`.
+- **"Any job" replaced "All" on the tier facet.** With a named-view row directly
+  above it, two chips both reading "All" meant two different things a foot apart.
+
+### 3.8 A verification trap, for whoever checks this next
+
+In Next dev, a streamed chunk can sit in the DOM as `<div id="S:0" hidden>` — a
+**complete second copy of the page**, `display:none`, never relocated. A bare
+`document.querySelectorAll('.sbw-view')` therefore returns six view chips, not
+three, and any count taken that way is wrong.
+
+**Scope every verification query to `document.querySelector('main')`.** The W.2
+tile-invariant check was accidentally right only because its row filter excluded
+the empty-state row the phantom tree was rendering.
 ---
 
 ## Open items carried forward
