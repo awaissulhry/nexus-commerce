@@ -923,6 +923,34 @@ rev 1 chip. The editor, versions and test lane served a custom with zero
 changes, as designed. Remaining: **6b Run-now** (the step that makes it
 breathe) and **6c clocks**.
 
+### WF.7 — dynamic capabilities (RESEARCH MANDATE, opened 2026-08-07 — new session)
+
+**Operator direction, verbatim intent:** the workflow system lacks *dynamic*
+capabilities; research thoroughly how the industry does them and how to
+integrate them here the best way possible — best-in-industry is the bar.
+
+**What "dynamic" means against our deliberately-static contract v1**
+(steps + edges + one trigger, no data flow): the axis the Part-1 research
+already mapped but v1 scoped out — **conditionals/branching** (Dify's
+buttons-as-branches, Power Automate's Condition cards), **per-item fan-out**
+(Vellum's Map node, n8n's item streams), **waits and timers** (Windmill
+suspend, BPMN timer boundaries in plain words), **event triggers**
+(Prefect automations incl. absence-of-event), **error/retry policies as
+authored branches** (Make's incomplete executions, Pipedream retry-from-
+failed-step), **sub-workflows** (Make subscenarios with typed inputs),
+**expressions/data mapping** (the thing every beginner study warns about —
+sentences, never `{{ }}`), and **evidence chaining between steps** (the
+ephemeral-overlay build WF.5 deferred — the prerequisite for simulated
+hand-offs AND for true artifact-passing dynamics under law L7).
+
+**Boundaries any design must keep:** L2/L3/L7 intact; tighten-only gates;
+the blackboard, never a mailbox; sentences over expressions; every dynamic
+construct diffable in Versions and walkable by the parity-tested executor.
+
+**Process (operator direction 2026-08-07): section-specific UI studies and
+builds now start in NEW sessions.** This mandate is the first such session's
+charter; the locks doc governs any shared-file work it needs.
+
 ---
 
 ## Sources
