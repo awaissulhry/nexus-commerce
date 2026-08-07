@@ -30,6 +30,7 @@ export interface RunRow {
   ok: boolean
   status: string
   mode: string | null
+  trigger: string // manual | event | schedule
   costUSD: string | number // Decimal serializes as a string — Number() it
   findingCount: number
   orchestrationId: string | null
@@ -55,11 +56,16 @@ export interface FleetState {
 export interface RunGroup {
   id: string
   startedAt: number
+  /** Every FINISHED run ok, none halted. False while nothing has finished. */
   ok: boolean
   halted: boolean
+  /** A run in this orchestration is still in flight. */
+  running: boolean
   costUSD: number
   findings: number
   runs: number
+  /** The group's member runs, newest first — the expansion renders these. */
+  rows: RunRow[]
   /** Wall-clock span across the group's finished runs; null if none ended. */
   durationMs: number | null
 }
@@ -141,14 +147,23 @@ export function groupRuns(runs: RunRow[], mode: BuiltinRoutine['mode']): RunGrou
     const ends = list
       .map((r) => (r.endedAt ? new Date(r.endedAt).getTime() : null))
       .filter((t): t is number => t != null)
+    // The SB.W trap (locks doc §3): a run is created ok:false and flips true
+    // only when it finishes — so outcome derives from FINISHED runs only, or
+    // an orchestration in flight reads as a failure.
+    const finished = list.filter((r) => r.status !== 'running')
+    const halted = finished.some((r) => r.haltedReason != null)
     groups.push({
       id,
       startedAt: started,
-      halted: list.some((r) => r.haltedReason != null),
-      ok: list.every((r) => r.ok) && !list.some((r) => r.haltedReason != null),
+      halted,
+      running: finished.length < list.length,
+      ok: finished.length > 0 && finished.every((r) => r.ok) && !halted,
       costUSD: list.reduce((s, r) => s + Number(r.costUSD || 0), 0),
       findings: list.reduce((s, r) => s + r.findingCount, 0),
       runs: list.length,
+      rows: [...list].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ),
       durationMs: ends.length ? Math.max(...ends) - started : null,
     })
   }

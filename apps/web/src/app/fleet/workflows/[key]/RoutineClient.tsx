@@ -16,6 +16,7 @@ import { useVisibilityPoll } from '../../_shared/use-visibility-poll'
 import { BUILTIN_ROUTINES } from '../routines'
 import { RoutineCanvas, type StepLive } from '../RoutineCanvas'
 import { HowWorkflowsWork } from '../HowWorkflowsWork'
+import { RunsSection } from '../RunsSection'
 import {
   CHIP_CLASS,
   agoTs,
@@ -162,11 +163,13 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
             {!loaded
               ? '—'
               : health.last
-                ? health.last.halted
-                  ? 'stopped early at one of its limits'
-                  : health.last.ok
-                    ? `ok · $${health.last.costUSD.toFixed(4)} · ${health.last.findings} finding${health.last.findings === 1 ? '' : 's'}`
-                    : 'failed — open Recent runs below'
+                ? health.last.running
+                  ? 'running now…'
+                  : health.last.halted
+                    ? 'stopped early at one of its limits'
+                    : health.last.ok
+                      ? `ok · $${health.last.costUSD.toFixed(4)} · ${health.last.findings} finding${health.last.findings === 1 ? '' : 's'}`
+                      : 'failed — see Runs below'
                 : job?.lastRun
                   ? `clock fired ${agoTs(new Date(job.lastRun.startedAt).getTime())}, launched nothing`
                   : 'never run'}
@@ -237,6 +240,16 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
           </div>
         )}
       </section>
+
+      {loaded ? (
+        <RunsSection
+          groups={groups}
+          nameByKey={
+            new Map(charters.map((c) => [c.key, c.name ?? c.key] as [string, string]))
+          }
+          fetchCapReached={runs.length >= 100}
+        />
+      ) : null}
 
       <HowWorkflowsWork />
     </div>

@@ -258,7 +258,9 @@ export function WorkflowsClient() {
                       {last ? (
                         <>
                           {agoTs(last.startedAt)}{' · '}
-                          {last.halted ? (
+                          {last.running ? (
+                            <span className="wf-run">running now…</span>
+                          ) : last.halted ? (
                             <span className="wf-halt">stopped early</span>
                           ) : last.ok ? (
                             <span className="acr-pg-ok">ok</span>
@@ -292,8 +294,8 @@ export function WorkflowsClient() {
                             {dots.map((g) => (
                               <span
                                 key={g.id}
-                                className={`wf-dot ${g.halted ? 'halt' : g.ok ? 'ok' : 'fail'}`}
-                                title={`${new Date(g.startedAt).toLocaleString()} — ${g.halted ? 'stopped early' : g.ok ? 'ok' : 'failed'}`}
+                                className={`wf-dot ${g.running ? 'run' : g.halted ? 'halt' : g.ok ? 'ok' : 'fail'}`}
+                                title={`${new Date(g.startedAt).toLocaleString()} — ${g.running ? 'running now' : g.halted ? 'stopped early' : g.ok ? 'ok' : 'failed'}`}
                               />
                             ))}
                           </span>

@@ -494,6 +494,36 @@ workflow, which resolves it structurally).
   Overview drawer's interaction pattern, content specific to workflows
   (routine vs map, trigger, gate, what a version will be).
 
+### WF.1 / S3 — runs on the routine's page (study, 2026-08-07)
+
+**Purpose:** "what happened when this routine ran", one row per orchestration,
+linked both ways with the definition.
+
+**Reuse verdict:** the step-trace UI lives *inside* `WorkerClient.tsx`
+(fetching `/runs/:id/trace` into local state) — not a standalone component,
+and the file belongs to another stream. So S3 does **not** rebuild or extract
+a trace viewer: a group expands into its per-worker runs, each carrying a
+plain-sentence outcome from `run-health.classifyFailure` (the shared taxonomy)
+and a link to that worker's page, where the full step story already renders.
+The full trace drawer remains the Activity page's to own; when it exists as a
+shared component, this section re-points at it.
+
+**A latent bug fixed here, found via SB.W's W.2 note:** an `AgentRun` is
+created `ok:false` and flips true only on finish — so `groupRuns` was counting
+an in-flight orchestration as *failed*. Groups now derive their outcome from
+**finished runs only** and carry `running`; the list's dots and last-run cells
+gain an honest "running now…" state. (`classifyFailure` already guards the
+same trap per-run.)
+
+**Shape:** a "Runs" card on the detail page between the pipeline and the
+teaching card. Latest 12 orchestrations (honest "latest 12 of N" line when
+capped by the 100-run fetch): when · started by (the clock / by hand) ·
+outcome in words ("finished clean" / "2 of 4 workers failed" / "stopped at a
+limit" / "running now…") · workers · findings · cost · duration · expand.
+Expanded: one row per worker-run — name, outcome sentence, findings, cost,
+duration, link to the worker's page. No version column until versions exist
+(WF.2): an always-empty column teaches nothing.
+
 ---
 
 ## Sources
