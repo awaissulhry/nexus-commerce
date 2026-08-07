@@ -923,6 +923,17 @@ rev 1 chip. The editor, versions and test lane served a custom with zero
 changes, as designed. Remaining: **6b Run-now** (the step that makes it
 breathe) and **6c clocks**.
 
+**6b EXECUTED 2026-08-07 (`1aecbaaf1`), Run-now verified live.** The custom
+routine ran for real on prod: the confirm stated the real-run contract with
+the two analysts' history estimate ($0.0414 if every worker runs) → the
+stored walk resolved rev 1 and executed → both OFF workers skipped inside
+the executor → the banner told the dark truth verbatim: *"Every worker in
+this routine is OFF, so nothing ran (2 skipped). The dials on the Workers
+page decide what actually executes."* Zero cost, zero writes, and the
+system pointed the operator at the exact lever. 303 fleet tests green;
+`runFleet` and `runStoredWorkflow` now share one `executeWalk`. Remaining
+in 6: **6c clocks for customs** — a natural first unit for a new session.
+
 ### WF.7 — dynamic capabilities (RESEARCH MANDATE, opened 2026-08-07 — new session)
 
 **Operator direction, verbatim intent:** the workflow system lacks *dynamic*
