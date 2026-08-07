@@ -353,7 +353,7 @@ export async function commitScheduledApproval(
  * operator was shown as the STARTING point does: "move this bid from €0.42
  * to €0.25" is a different decision if the bid is €0.60 by the time it runs.
  */
-const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
+export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   /* The fleet's three propose-tools. All preview-only: they cannot execute,
      so a stale one costs nothing. */
   'set-target-bid': ['currentBidCents'],
@@ -418,7 +418,36 @@ export async function checkStaleness(approvalId: string): Promise<StalenessVerdi
   if (!ap) return { stale: true, why: 'the request no longer exists' }
 
   const tool = getTool(ap.toolName)
-  if (!tool?.handler) return { stale: false, why: null } // nothing to re-check against
+  const canExecute = typeof tool?.execute === 'function'
+
+  /**
+   * NAF.AQ.2 — fail CLOSED for anything that can reach the outside world.
+   *
+   * The map above previously defaulted to SILENCE: a tool with no entry got
+   * `?? []`, compared nothing, and passed without complaint. That is how the
+   * four executable tools went unguarded for months — not because anyone
+   * decided they were safe, but because nobody noticed they were missing.
+   * A guard whose omission is invisible is not a guard.
+   *
+   * So: an action that can execute and has no declared material fields is
+   * treated as stale. The cost of being wrong in this direction is a refusal
+   * the operator can read and someone can fix; the cost in the other
+   * direction is an unguarded write.
+   */
+  if (canExecute && !MATERIAL_PREVIEW_FIELDS[ap.toolName]) {
+    return {
+      stale: true,
+      why: `it could not be re-checked — nobody has declared which facts matter for "${ap.toolName.replace(/-/g, ' ')}", and an action that can change something is never run unchecked`,
+    }
+  }
+
+  if (!tool?.handler) {
+    // No dry-run to compare against. Harmless for a preview-only tool;
+    // disqualifying for one that can act.
+    return canExecute
+      ? { stale: true, why: 'it could not be re-checked — this action has no dry-run to compare against' }
+      : { stale: false, why: null }
+  }
 
   let fresh: Awaited<ReturnType<NonNullable<typeof tool.handler>>>
   try {
