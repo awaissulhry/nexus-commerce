@@ -637,6 +637,24 @@ gain Activate-with-diff and a real Revert-to-built-in. **c** — teaching:
 glossary `+draft` `+publish` `+gate` (locks protocol), edit-mode empty
 states, and the How-drawer paragraph updated from future to present tense.
 
+**EXECUTED 2026-08-07 (`a13406323` + `88efd6c27`), round-trip verified on
+prod.** The full cycle ran live on the Weekly council: Edit the wiring →
+step cards rendered the code truth exactly (three analysts hand findings to
+the director — checked; the director "HANDS PLAN TO" — artifact derived from
+tier; the self-test hands to no one) → Bid tuner's gate to *Ask first*, the
+draft canvas updating live → Publish… showed `gate: amazon-bid-tuner —
+inherit → ask`, refused until the note was written → published with **author
+attribution from the session** (`awaissulhry@gmail.com`) → read mode
+switched to "showing the ACTIVE REVISION's wiring" with the amber
+recorded-not-live banner → **Revert to built-in** restored the code story
+one click later, rev 1 left `superseded` in the permanent history. The
+machinery's first real revision exists, and every honesty seam held.
+One gate proved itself mid-flight: the first push was **rejected by the
+fleet DS-conformance manifest** (SB.W's substrate) for a raw `<select>` —
+fixed with the DS `Menu` and the four DS stylesheets imported in the
+Workers page's order (`88efd6c27`). A ratchet that catches its sibling
+stream within the hour is a ratchet working.
+
 ---
 
 ## Sources
