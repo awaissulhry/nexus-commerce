@@ -2,13 +2,16 @@
  * NAF.WF.2 — the workflow registry: code truth ⊕ DB rows, the same shape the
  * charter registry taught the fleet (session-locks doc §4, REVIEWED).
  *
- * The three built-in routines are DERIVED from the code that actually runs
- * them — `FLEET_GRAPH` and the cron envs — so this module cannot drift from
- * the truth: if the graph gains a node, the built-in definition gains a step
- * on the next read. A built-in's stored row adds presence and an enabled
- * toggle; its DEFINITION comes from an active revision when one exists, else
- * from code — revert-to-built-in can never fail. A custom workflow with no
- * active revision is simply disabled: its floor is "nothing", never a code
+ * The pure layer — contract types, the derived built-ins, defToGraph —
+ * lives in ./workflow-defs.ts (importable without a database; WF.4a) and is
+ * re-exported here so callers keep one import path. This file owns what
+ * needs the DB: seed, list, the effective definition, enablement, and
+ * save-time validation.
+ *
+ * A built-in's stored row adds presence and an enabled toggle; its
+ * DEFINITION comes from an active revision when one exists, else from code —
+ * revert-to-built-in can never fail. A custom workflow with no active
+ * revision is simply disabled: its floor is "nothing", never a code
  * fallback it does not have.
  *
  * Steps reference charter keys resolved via `resolveCharter` — never
@@ -17,104 +20,29 @@
  */
 
 import prisma from '../../db.js'
-import { FLEET_GRAPH, topoLevels, type FleetGraph } from './fleet-graph.js'
+import { topoLevels, type FleetGraph } from './fleet-graph.js'
 import { resolveCharter } from './charter-registry.js'
 import { nextCronFire } from './fleet-schedule.service.js'
 import { getActiveWorkflowRevision } from './workflow-revisions.service.js'
+import {
+  BUILTIN_WORKFLOWS,
+  builtinByKey,
+  type WorkflowDefinitionV1,
+} from './workflow-defs.js'
 
-/* ── definition contract v1 ────────────────────────────────────────────── */
-
-export interface WorkflowStepV1 {
-  charterKey: string
-  /** ask = force the approval path · act = tool policy decides · inherit =
-   *  today's behaviour. Tighten-only: enforcement (WF.4) can never let a
-   *  gate loosen below tool-policy floors. */
-  gate: 'ask' | 'act' | 'inherit'
-}
-export interface WorkflowEdgeV1 {
-  from: string
-  to: string
-  artifact: 'finding' | 'plan' | 'strategy'
-}
-export type WorkflowTriggerV1 = { type: 'schedule'; cron: string } | { type: 'manual' }
-export interface WorkflowDefinitionV1 {
-  v: 1
-  trigger: WorkflowTriggerV1
-  steps: WorkflowStepV1[]
-  edges: WorkflowEdgeV1[]
-}
-
-/* ── the built-ins, derived from code truth ────────────────────────────── */
-
-interface BuiltinWorkflow {
-  key: string
-  name: string
-  description: string
-  definition: () => WorkflowDefinitionV1
-}
-
-const walkSteps = (): WorkflowStepV1[] =>
-  FLEET_GRAPH.nodes
-    .filter((n) => !n.standalone)
-    .map((n) => ({ charterKey: n.key, gate: 'inherit' as const }))
-
-const graphEdges = (): WorkflowEdgeV1[] =>
-  FLEET_GRAPH.edges.map((e) => ({ from: e.from, to: e.to, artifact: e.artifact }))
-
-export const BUILTIN_WORKFLOWS: readonly BuiltinWorkflow[] = Object.freeze([
-  {
-    key: 'fleet-sweep',
-    name: 'Nightly sweep',
-    description:
-      'Every switched-on worker reads fresh evidence and reports findings; report cards recompute afterwards.',
-    definition: (): WorkflowDefinitionV1 => ({
-      v: 1,
-      trigger: {
-        type: 'schedule',
-        cron: process.env.NEXUS_FLEET_SWEEP_SCHEDULE ?? '45 4 * * *',
-      },
-      steps: [
-        ...walkSteps(),
-        // The auditor is standalone in FLEET_GRAPH and runs explicitly after
-        // scorecards (fleet-sweep.job.ts) — it IS a step of this routine.
-        { charterKey: 'fleet-auditor', gate: 'inherit' },
-      ],
-      edges: graphEdges(),
-    }),
-  },
-  {
-    key: 'fleet-council',
-    name: 'Weekly council',
-    description:
-      'Workers report, the director compiles one ranked plan, and the critic rules on it.',
-    definition: (): WorkflowDefinitionV1 => ({
-      v: 1,
-      trigger: {
-        type: 'schedule',
-        cron: process.env.NEXUS_FLEET_COUNCIL_SCHEDULE ?? '15 5 * * 1',
-      },
-      steps: walkSteps(),
-      edges: graphEdges(),
-    }),
-  },
-  {
-    key: 'on-demand-check',
-    name: 'On-demand check',
-    description: 'One worker, run by hand, with the result readable as a story.',
-    definition: (): WorkflowDefinitionV1 => ({
-      v: 1,
-      trigger: { type: 'manual' },
-      // The worker is chosen at run time — an empty step list is this
-      // routine's honest shape, and validation permits it for manual only.
-      steps: [],
-      edges: [],
-    }),
-  },
-])
-
-export function builtinByKey(key: string): BuiltinWorkflow | null {
-  return BUILTIN_WORKFLOWS.find((b) => b.key === key) ?? null
-}
+export {
+  BUILTIN_WORKFLOWS,
+  MODE_WORKFLOW_KEY,
+  builtinByKey,
+  defToGraph,
+} from './workflow-defs.js'
+export type {
+  BuiltinWorkflow,
+  WorkflowDefinitionV1,
+  WorkflowEdgeV1,
+  WorkflowStepV1,
+  WorkflowTriggerV1,
+} from './workflow-defs.js'
 
 /* ── seed & list ───────────────────────────────────────────────────────── */
 
@@ -197,17 +125,40 @@ export async function listWorkflows(): Promise<WorkflowListRow[]> {
   return out
 }
 
-/** Active revision's definition, else the code default (built-ins only). */
-export async function getEffectiveDefinition(
-  key: string,
-): Promise<{ source: 'code' | 'revision' | 'none'; definition: WorkflowDefinitionV1 | null }> {
+/** Active revision's definition (with its id, for run stamping — WF.4a),
+ *  else the code default (built-ins only). */
+export async function getEffectiveDefinition(key: string): Promise<{
+  source: 'code' | 'revision' | 'none'
+  definition: WorkflowDefinitionV1 | null
+  revisionId: string | null
+}> {
   const active = await getActiveWorkflowRevision(key)
   if (active) {
-    return { source: 'revision', definition: active.definition as unknown as WorkflowDefinitionV1 }
+    return {
+      source: 'revision',
+      definition: active.definition as unknown as WorkflowDefinitionV1,
+      revisionId: active.id,
+    }
   }
   const b = builtinByKey(key)
-  if (b) return { source: 'code', definition: b.definition() }
-  return { source: 'none', definition: null }
+  if (b) return { source: 'code', definition: b.definition(), revisionId: null }
+  return { source: 'none', definition: null, revisionId: null }
+}
+
+/** The operator's off switch on a workflow row. Missing row = enabled (the
+ *  built-ins' presence never depends on seeding); unreadable DB = enabled,
+ *  because the fleet's real floors are the charter dark-ship and the halt —
+ *  a soft toggle must not become a third, phantom kill switch. */
+export async function isWorkflowEnabled(key: string): Promise<boolean> {
+  try {
+    const row = await prisma.agentWorkflow.findUnique({
+      where: { key },
+      select: { enabled: true },
+    })
+    return row?.enabled ?? true
+  } catch {
+    return true
+  }
 }
 
 /* ── validation: Layer 2 checked against Layer 1 on save ───────────────── */

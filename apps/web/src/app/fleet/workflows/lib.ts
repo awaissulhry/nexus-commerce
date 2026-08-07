@@ -38,6 +38,8 @@ export interface RunRow {
   errorMessage?: string | null
   createdAt: string
   endedAt: string | null
+  /** WF.4a — the stored workflow revision this run served; null = code path. */
+  workflowRevisionId?: string | null
 }
 export interface CharterRow {
   key: string

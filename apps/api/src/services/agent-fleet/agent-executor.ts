@@ -56,6 +56,10 @@ export interface ExecuteOptions {
   promptOverride?: string
   /** AC.8 — attribute this run to the revision that produced it. */
   charterRevisionId?: string | null
+  /** WF.4a — the stored workflow (and its revision, when one is active)
+   *  that this run serves. Null/absent = a code-path or manual run. */
+  workflowKey?: string
+  workflowRevisionId?: string
 }
 
 export interface ExecuteResult {
@@ -254,6 +258,8 @@ export async function executeCharter(
           charterVersion: charter.version,
           mode: opts.mode,
           orchestrationId: opts.orchestrationId ?? null,
+          workflowKey: opts.workflowKey ?? null,
+          workflowRevisionId: opts.workflowRevisionId ?? null,
           trigger: opts.trigger,
           status: 'done',
           ok: false,
@@ -275,6 +281,8 @@ export async function executeCharter(
       charterRevisionId: opts.charterRevisionId ?? charter.activeRevisionId ?? null,
       mode: opts.preview ? 'preview' : opts.mode,
       orchestrationId: opts.orchestrationId ?? null,
+      workflowKey: opts.workflowKey ?? null,
+      workflowRevisionId: opts.workflowRevisionId ?? null,
       trigger: opts.trigger,
       status: 'running',
       userId: opts.userId ?? null,

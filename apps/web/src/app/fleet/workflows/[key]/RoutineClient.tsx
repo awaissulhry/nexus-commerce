@@ -349,6 +349,9 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
             new Map(charters.map((c) => [c.key, c.name ?? c.key] as [string, string]))
           }
           fetchCapReached={runs.length >= 100}
+          revisionNoById={
+            new Map((vers?.revisions ?? []).map((r) => [r.id, r.revision] as [string, number]))
+          }
         />
       ) : null}
 

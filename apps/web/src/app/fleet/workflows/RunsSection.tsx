@@ -60,12 +60,16 @@ export function RunsSection({
   groups,
   nameByKey,
   fetchCapReached,
+  revisionNoById,
 }: {
   groups: RunGroup[]
   /** Charter key → display name, for the expanded per-worker rows. */
   nameByKey: Map<string, string>
   /** True when the runs feed returned its 100-row cap — coverage is partial. */
   fetchCapReached: boolean
+  /** Revision id → revision number, so a stamped run can say which wiring
+   *  served it (WF.4a). Unstamped runs are code-path runs and say nothing. */
+  revisionNoById?: Map<string, number>
 }) {
   const [open, setOpen] = useState<string | null>(null)
   const visible = groups.slice(0, SHOW)
@@ -124,7 +128,14 @@ export function RunsSection({
                         </button>
                       </td>
                       <td title={new Date(g.startedAt).toLocaleString()}>{agoTs(g.startedAt)}</td>
-                      <td>{g.rows[0]?.trigger === 'schedule' ? 'the clock' : 'by hand'}</td>
+                      <td>
+                        {g.rows[0]?.trigger === 'schedule' ? 'the clock' : 'by hand'}
+                        {(() => {
+                          const revId = g.rows[0]?.workflowRevisionId
+                          const n = revId ? revisionNoById?.get(revId) : undefined
+                          return n != null ? <span className="wf-sub">wiring rev {n}</span> : null
+                        })()}
+                      </td>
                       <td>
                         <span className={CHIP_WORD[o.chip]}>{o.text}</span>
                       </td>
