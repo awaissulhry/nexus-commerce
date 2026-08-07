@@ -267,3 +267,34 @@ Counted 2026-08-07: `apps/api` agent-fleet suite = 297 passed, 1 failed.
 4. Pushes can exceed 10 minutes (full `next build` + API `tsc` + security
    tests, contending for the shared `.next`). Retry rather than `--no-verify`;
    confirm with `git ls-remote origin refs/heads/main`.
+
+### 6b · ⚠ Two ways I broke this on 2026-08-07 (SB.ACT). Read before deviating from rule 1.
+
+**Rule 1 is not style advice — the index is SHARED.** I needed to commit only
+*my* two glossary terms while two siblings had their own uncommitted entries in
+the same file, so I staged a hand-built version with `git add` and then ran a
+plain `git commit -F msg`. `--only` re-reads the working tree, which would have
+taken their terms too, so dropping it looked correct.
+
+It was not. **A plain `git commit` commits the whole INDEX**, and in this tree
+the index is not mine — the Assignments session had 14 files staged. They went
+into my commit, under my message. If you must stage a partial file, stage it,
+then commit with **explicit paths anyway** (`git commit -F msg -- <your paths>`
+still honours a staged partial for a path you name), or accept `--only` and
+coordinate the file.
+
+**Then the fix made it worse.** `git reset --soft HEAD~1` to undo it — except
+that between my commit and my reset, the Assignments session had **committed
+again**, so `HEAD~1` was *their* commit, and I removed it. Nothing was lost
+(`git reflog` had it; `git reset <their-sha>` put it straight back, verified by
+counting their files at `HEAD`), but the lesson is sharp:
+
+> **On a shared tree, `HEAD~1` is not "my last commit". Read `git reflog` and
+> reset to an explicit SHA, never to a relative ref.**
+
+Residue, recorded rather than rewritten: commit `aaca58093` ("ACT.2") contains
+14 files belonging to `39381df2b` ("SB.AS AS.1"), so AS.1's own diff is smaller
+than its message describes. Content and history are correct and complete —
+only the attribution is wrong. **Not rebased on purpose:** rewriting shared
+history while a sibling is actively committing risks far more than a wrong
+byline. Assignments stream: apologies, and nothing of yours needs redoing.
