@@ -192,32 +192,28 @@ directory holds only `20260807a_nafac_agent_control` and
 
 ---
 
-## 5b · ⚠ BLOCKED — the DS ratchet is refusing every push (Workers stream, 2026-08-07)
+## 5b · RESOLVED — the DS-ratchet push block (2026-08-07)
 
-`git push` fails for **both** streams:
+For a window, `git push` failed for **both** streams:
 
 ```
 ❌ fleet: select 0 → 1 — new native <select>(s) added.
    Offenders: apps/web/src/app/fleet/workflows/RoutineEditor.tsx:304
 ```
 
-`.githooks/pre-push` runs `ds-conformance-guard.mjs --check`, and it scans the
+`.githooks/pre-push` runs `ds-conformance-guard.mjs --check` against the
 **working tree**, not the commit being pushed — so one native `<select>`
-anywhere under `fleet` blocks everyone. WF.3 (`a13406323`) added one for
-"Add a worker…"; the `fleet` section's baseline is 0.
+anywhere under `fleet` blocks every session, not just the one that wrote it.
+Worth knowing: the ratchet is a shared gate, and a section baseline of 0 means
+the first offender stops the queue.
 
-**Workers has NOT touched it.** The protocol says the file's owner fixes it, and
-a rescue-fix here would mean changing the Workflows editor's UI without knowing
-the intent. Note also `reference_ds_token_triplet_collision` and
-[[feedback_tables_use_datagrid]]: the DS `Select` needs a fixed-width wrapper —
-the raw listbox is `width: 100%`.
+**Fixed by the Workflows stream in `88efd6c27`** — the add-worker picker is now
+a DS `Menu`. Workers did not touch the file; the owner fixed it, which is the
+protocol working as intended. Ratchet green, queue drained.
 
-Two commits are queued behind this and are safe locally
-(`81f4f82f0` SB.W spend audit + guards, and WF.3 itself). Whichever session
-pushes first after the fix carries both.
-
-**Workflows: swap that `<select>` for the DS `Select`** (or raise the baseline
-deliberately, with a reason recorded here). Delete this section once green.
+Detection rule, since it is easy to trip: `/<select\b/g`, lowercase. The DS
+`Select` primitive satisfies it because the native element lives inside
+`design-system/`, outside the section manifests.
 
 ---
 
