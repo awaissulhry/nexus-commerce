@@ -14,7 +14,8 @@
 import prisma from '../../db.js'
 import { executeCharter } from './agent-executor.js'
 import { resolveCharter } from './charter-registry.js'
-import { canNarrowToCampaign } from './observation-builder.js'
+import { narrowKindsFor } from './observation-builder.js'
+import { narrowKindFor, type TargetKind } from './assignment-scope.js'
 import { reclaimStuckRuns } from './orchestrator.js'
 import { recordControlChange } from './control-audit.service.js'
 
@@ -71,7 +72,7 @@ export interface AssignableWorker {
   tier: string
   description: string | null
   /** Target kinds this worker's evidence can honestly honour. */
-  targetKinds: ('CAMPAIGN' | 'MARKETPLACE')[]
+  targetKinds: TargetKind[]
   /** Set when the worker cannot be assigned at all, with the operator-facing
    *  reason. The picker prints it rather than greying a row silently. */
   refusal?: string
@@ -118,8 +119,14 @@ export async function listAssignableWorkers(): Promise<AssignableWorker[]> {
       continue
     }
 
-    const narrowable = c.observationKeys.every((k) => canNarrowToCampaign(k))
-    if (!narrowable) {
+    // Derived per kind, never a hardcoded list: a worker gains a target kind
+    // the day its evidence can honour it. EVERY observation it reads must
+    // support the kind — one unnarrowable feed and the run would read part of
+    // the account while claiming to be scoped.
+    const kinds: TargetKind[] = (['CAMPAIGN', 'MARKETPLACE', 'PORTFOLIO'] as const).filter(
+      (k) => c.observationKeys.every((key) => narrowKindsFor(key).includes(narrowKindFor(k))),
+    )
+    if (kinds.length === 0) {
       out.push({
         ...base,
         targetKinds: [],
@@ -129,14 +136,14 @@ export async function listAssignableWorkers(): Promise<AssignableWorker[]> {
       continue
     }
 
-    out.push({ ...base, targetKinds: ['CAMPAIGN', 'MARKETPLACE'] })
+    out.push({ ...base, targetKinds: kinds })
   }
   return out
 }
 
 export interface CreateInput {
   charterKey: string
-  targetKind?: 'CAMPAIGN' | 'MARKETPLACE' | null
+  targetKind?: TargetKind | null
   targetIds?: string[]
   targetLabels?: string[]
   wantBack?: string | null
@@ -261,7 +268,7 @@ export async function startAssignment(
     assignmentId: id,
     assignmentTarget: a.targetKind
       ? {
-          kind: a.targetKind as 'CAMPAIGN' | 'MARKETPLACE',
+          kind: a.targetKind as TargetKind,
           ids: a.targetIds,
           labels: a.targetLabels,
         }
@@ -496,4 +503,50 @@ export async function getAssignment(id: string) {
     ),
     hasUnknownCost: rollups.some((r) => r.haltedReason?.startsWith('orphaned:')),
   }
+}
+
+/**
+ * NAF.SB.AS.2 — portfolios an assignment can actually be pointed at.
+ *
+ * Derived from the campaigns that reference them, so a portfolio only appears
+ * if it has campaigns to narrow to. `Campaign.portfolioId` holds the EXTERNAL
+ * Amazon portfolio id, which is the same value `AmazonAdsPortfolio.portfolioId`
+ * carries — that join is what supplies the human name.
+ */
+export async function listAssignablePortfolios(): Promise<
+  { portfolioId: string; name: string; campaignCount: number; marketplaces: string[] }[]
+> {
+  const campaigns = await prisma.campaign.findMany({
+    where: { portfolioId: { not: null }, externalCampaignId: { not: null } },
+    select: { portfolioId: true, marketplace: true },
+  })
+  if (campaigns.length === 0) return []
+
+  const byPortfolio = new Map<string, { count: number; markets: Set<string> }>()
+  for (const c of campaigns) {
+    if (!c.portfolioId) continue
+    const e = byPortfolio.get(c.portfolioId) ?? { count: 0, markets: new Set<string>() }
+    e.count++
+    e.markets.add(c.marketplace)
+    byPortfolio.set(c.portfolioId, e)
+  }
+
+  // The join field is externalPortfolioId — that is the Amazon-side id
+  // Campaign.portfolioId holds. AmazonAdsPortfolio has no `portfolioId`.
+  const named = await prisma.amazonAdsPortfolio.findMany({
+    where: { externalPortfolioId: { in: [...byPortfolio.keys()] } },
+    select: { externalPortfolioId: true, name: true },
+  })
+  const nameById = new Map(named.map((p) => [p.externalPortfolioId, p.name]))
+
+  return [...byPortfolio.entries()]
+    .map(([portfolioId, e]) => ({
+      portfolioId,
+      // An unnamed portfolio is shown by id rather than hidden — it is real
+      // and assignable; only its label is missing.
+      name: nameById.get(portfolioId) ?? `Portfolio ${portfolioId}`,
+      campaignCount: e.count,
+      marketplaces: [...e.markets].sort(),
+    }))
+    .sort((a, b) => b.campaignCount - a.campaignCount)
 }

@@ -40,7 +40,7 @@ import {
   type ObservationNarrow,
   type ObservationResult,
 } from './observation-builder.js'
-import { resolveAssignmentScope } from './assignment-scope.js'
+import { resolveAssignmentScope, type AssignmentTarget } from './assignment-scope.js'
 import { singleMarketplace } from './observations/scope-filter.js'
 import { pickRevisionForRun } from './charter-revisions.service.js'
 import { recordStep } from './tracing.js'
@@ -75,12 +75,7 @@ export interface ExecuteOptions {
    * re-checks scope — not `buildPrompt`, not `runOrQueueTool` — so a
    * constraint that does not bind here does not bind at all.
    */
-  assignmentTarget?: {
-    kind: 'CAMPAIGN' | 'MARKETPLACE'
-    /** Amazon EXTERNAL campaign ids, or marketplace codes. */
-    ids: string[]
-    labels?: string[]
-  }
+  assignmentTarget?: AssignmentTarget
 }
 
 export interface ExecuteResult {

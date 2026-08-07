@@ -99,11 +99,34 @@ describe('resolveAssignmentScope — campaign targets', () => {
 
   it('REFUSES a worker whose evidence cannot be narrowed, rather than scoping half of it', async () => {
     const r = await resolveAssignmentScope(
-      charter({ observationKeys: ['negative-candidates', 'bid-proposals'] }),
+      charter({ observationKeys: ['negative-candidates', 'cron-health'] }),
       { kind: 'CAMPAIGN', ids: ['111'] },
     )
     expect(r.error).toMatch(/target_unsupported/)
-    expect(r.error).toContain('bid-proposals')
+    expect(r.error).toContain('cron-health')
+  })
+
+  // AS.2 deliberately CHANGED this: the bid tuner's evidence gained a
+  // narrow(), so a campaign target is now honoured where it used to be
+  // refused. Asserted rather than assumed, because it is the whole point of
+  // the phase — and paired with the marketplace case below, which did NOT
+  // change and must stay refused.
+  it('ALLOWS the bid tuner a campaign target now that its evidence can narrow', async () => {
+    const r = await resolveAssignmentScope(
+      charter({ observationKeys: ['bid-proposals'] }),
+      { kind: 'CAMPAIGN', ids: ['111'] },
+    )
+    expect(r.error).toBeUndefined()
+    expect(r.narrow?.campaignExternalIds).toEqual(['111'])
+  })
+
+  it('still REFUSES the bid tuner a marketplace target — its build() takes no scope', async () => {
+    const r = await resolveAssignmentScope(
+      charter({ observationKeys: ['bid-proposals'] }),
+      { kind: 'MARKETPLACE', ids: ['IT'] },
+    )
+    expect(r.error).toMatch(/target_unsupported/)
+    expect(r.marketplace).toBeUndefined()
   })
 
   it('INTERSECTS with the worker scope — never widens past it', async () => {
@@ -123,6 +146,40 @@ describe('resolveAssignmentScope — campaign targets', () => {
     )
     expect(r.error).toMatch(/target_outside_worker_scope/)
     expect(r.narrow).toBeUndefined()
+  })
+})
+
+describe('resolveAssignmentScope — portfolio targets (AS.2)', () => {
+  it('resolves a portfolio to its member campaigns and binds as a campaign scope', async () => {
+    // findMany is called twice: once for members, once to verify they exist.
+    const r = await resolveAssignmentScope(charter(), { kind: 'PORTFOLIO', ids: ['pf-1'] })
+    expect(r.error).toBeUndefined()
+    expect(r.narrow?.campaignExternalIds?.sort()).toEqual(['111', '222'])
+  })
+
+  it('REFUSES an empty or vanished portfolio rather than running the whole account', async () => {
+    campaignRows = []
+    const r = await resolveAssignmentScope(charter(), { kind: 'PORTFOLIO', ids: ['pf-empty'] })
+    expect(r.error).toMatch(/target_gone/)
+    expect(r.narrow).toBeUndefined()
+  })
+
+  it('still intersects with the worker scope — a portfolio cannot widen a worker', async () => {
+    const r = await resolveAssignmentScope(
+      charter({ scopeMarketplaces: ['IT'] }),
+      { kind: 'PORTFOLIO', ids: ['pf-1'] },
+    )
+    expect(r.error).toBeUndefined()
+    expect(r.narrow?.campaignExternalIds).toEqual(['111']) // 222 is DE
+  })
+
+  it('is refused for a worker whose evidence cannot narrow by campaign', async () => {
+    const r = await resolveAssignmentScope(
+      charter({ observationKeys: ['cron-health'] }),
+      { kind: 'PORTFOLIO', ids: ['pf-1'] },
+    )
+    expect(r.error).toMatch(/target_unsupported/)
+    expect(r.error).toContain('portfolio')
   })
 })
 

@@ -22,12 +22,25 @@
  */
 import prisma from '../../db.js'
 import type { EffectiveCharter } from './charter-types.js'
-import type { ObservationNarrow } from './observation-builder.js'
-import { canNarrowToCampaign } from './observation-builder.js'
+import type { NarrowKind, ObservationNarrow } from './observation-builder.js'
+import { canNarrowBy } from './observation-builder.js'
+
+export type TargetKind = 'CAMPAIGN' | 'MARKETPLACE' | 'PORTFOLIO'
+
+/**
+ * NAF.SB.AS.2 — a PORTFOLIO target is enforced AS a campaign scope: the
+ * portfolio is resolved to its member campaigns at run time and the campaign
+ * filter does the binding. So a worker can be pointed at a portfolio exactly
+ * when it can be pointed at a campaign, and there is no second enforcement
+ * path to keep honest.
+ */
+export function narrowKindFor(kind: TargetKind): NarrowKind {
+  return kind === 'MARKETPLACE' ? 'MARKETPLACE' : 'CAMPAIGN'
+}
 
 export interface AssignmentTarget {
-  kind: 'CAMPAIGN' | 'MARKETPLACE'
-  /** Amazon EXTERNAL campaign ids, or marketplace codes. */
+  kind: TargetKind
+  /** EXTERNAL campaign ids · marketplace codes · EXTERNAL portfolio ids. */
   ids: string[]
   labels?: string[]
 }
@@ -51,6 +64,16 @@ export async function resolveAssignmentScope(
 ): Promise<ResolvedScope> {
   const charterMarkets = charter.scopeMarketplaces ?? []
 
+  // Every observation this worker reads must support the kind, or the run
+  // would read some evidence account-wide while claiming to be scoped.
+  const need = narrowKindFor(target.kind)
+  const unnarrowable = charter.observationKeys.filter((k) => !canNarrowBy(k, need))
+  if (unnarrowable.length) {
+    return {
+      error: `target_unsupported: this worker reads ${unnarrowable.join(', ')}, which cannot be narrowed to a ${target.kind.toLowerCase()}`,
+    }
+  }
+
   if (target.kind === 'MARKETPLACE') {
     const asked = [...new Set(target.ids)]
     if (asked.length !== 1) {
@@ -64,21 +87,32 @@ export async function resolveAssignmentScope(
     return { marketplace: asked[0] }
   }
 
-  // CAMPAIGN.
-  const ids = [...new Set(target.ids)].filter(Boolean)
+  let ids = [...new Set(target.ids)].filter(Boolean)
   if (ids.length === 0) {
     // Never fall through to account-wide. An empty target is a bug upstream,
     // and running everything is the worst possible interpretation of it.
-    return { error: 'target_unresolvable: the assignment names no campaign' }
+    return { error: `target_unresolvable: the assignment names no ${target.kind.toLowerCase()}` }
   }
 
-  // Every observation this worker reads must be narrowable, or the run would
-  // read some evidence account-wide while claiming to be scoped.
-  const unnarrowable = charter.observationKeys.filter((k) => !canNarrowToCampaign(k))
-  if (unnarrowable.length) {
-    return {
-      error: `target_unsupported: this worker reads ${unnarrowable.join(', ')}, which cannot be narrowed to a campaign`,
+  // PORTFOLIO resolves to its member campaigns and is then enforced exactly
+  // as a campaign scope — one binding path, not two.
+  if (target.kind === 'PORTFOLIO') {
+    const members = await prisma.campaign.findMany({
+      where: { portfolioId: { in: ids } },
+      select: { externalCampaignId: true },
+    })
+    const memberIds = members
+      .map((c) => c.externalCampaignId)
+      .filter((v): v is string => !!v)
+    if (memberIds.length === 0) {
+      // A portfolio that is empty (or gone) narrows to nothing. Refusing is
+      // the only safe reading: running the whole account because a portfolio
+      // emptied would be the exact fail-open this design exists to prevent.
+      return {
+        error: `target_gone: ${ids.length === 1 ? 'that portfolio has' : 'those portfolios have'} no campaigns, so there is nothing to look at`,
+      }
     }
+    ids = memberIds
   }
 
   // The campaigns must still exist — a campaign archived or deleted between

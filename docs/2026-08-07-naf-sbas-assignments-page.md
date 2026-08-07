@@ -1011,6 +1011,74 @@ a native date input, four inline `fontSize`s and one inline hex — fixed with t
 DS `DateField` and page-local classes before pushing, since that ratchet is a
 shared gate that blocks every session).
 
+### AS.2 — EXECUTED 2026-08-08, the third worker and two more target kinds
+
+**Shipped.** The bid tuner becomes assignable · **PORTFOLIO** target kind ·
+the **"Assign" row action on the ads campaigns grid**, which is the entry point
+the operator's ask actually implies.
+
+**The bid tuner's trap, and why it is not the obvious fix.**
+`previewBidOptimization` accepts a `campaignId` and would narrow the query
+itself — but it takes the **internal `Campaign.id`** while every fleet-facing
+id is the Amazon external one, *and* using it would key the observation cache
+per campaign, so twenty-five assignments would run the account-wide engine
+twenty-five times. Instead `narrow()` went **async** and does the dialect join
+once: `AdTarget → AdGroup → Campaign.externalCampaignId`. One shared scan plus
+one indexed join, and `evidenceRefs` still point at a row every assignment can
+cite.
+
+`targetAcosSummary` is **kept and relabelled account-wide** rather than
+withheld: unlike the miner's n-grams it is *background* rather than a candidate
+list, so removing it would delete the numbers that justify the bids without
+removing a single proposal. Withholding and relabelling are different honest
+answers to different kinds of unscopeable evidence.
+
+**PORTFOLIO is enforced AS a campaign scope** — resolved to its member
+campaigns at run time, then bound by the same filter. One binding path, not
+two, so there is no second enforcement to keep honest. An empty or vanished
+portfolio **refuses** (`target_gone`) rather than falling through.
+
+**`narrowKinds` — the declaration that cannot become the next `scopeCampaignIds`.**
+A per-observation declaration of which kinds it can honour, and the picker
+derives from it. Split deliberately by what can be proven:
+- **CAMPAIGN cannot lie** — `observation-builder.ts` **throws at import** if a
+  builder declares it without a `narrow()`. A mistake is a boot failure.
+- **MARKETPLACE binds inside `build(scope)`** and cannot be checked
+  structurally, so it is checked **behaviourally**: a declaring builder must
+  produce different evidence when given one, **and a non-declaring builder must
+  ignore one** — so the omission is proven honest rather than assumed.
+- **The default is refusal.** An undeclared feed returns `[]` → no targets →
+  refused with a printed reason. (The Approvals stream hit the mirror-image bug
+  the same night: a per-tool map defaulting to `?? []`, which compared nothing
+  and complained about nothing. Same shape, opposite failure direction.)
+
+The bid tuner declares **CAMPAIGN only** — its `build()` takes no scope
+argument, so a marketplace target would bind nothing, and declaring it would be
+the exact defect this page exists to fix.
+
+**Proven on production data** (`_sbas2-narrow-probe.mts`, read-only — 15/15):
+25 account-wide bid proposals spanning 12 campaigns, narrowed to exactly the
+**11** belonging to `GALE | IT | Exact | Category`; 10 real portfolios, and
+`Xavia GALE IT` resolving to exactly its 11 campaigns; an unknown portfolio
+refused; the bid tuner accepting a campaign and still refusing a marketplace.
+Suite **360 passed / 40 files**, both apps `tsc` clean, DS ratchet and
+link-target guards green.
+
+**One test deliberately changed rather than preserved.** AS.1 asserted that a
+worker reading `bid-proposals` is *refused* a campaign target. AS.2 makes that
+false on purpose, so the assertion now names `cron-health` instead — and two
+new cases pin the change from both sides: the bid tuner **is** allowed a
+campaign, and **is still refused** a marketplace.
+
+**The deep link imports nothing.** `CampaignsGrid.tsx` gained one optional
+field (the external id the API already returned) and one `<a>` to
+`/fleet/assignments?new=1&targetKind=CAMPAIGN&targetId=…&targetLabel=…`. A URL
+carries none of this page's rules across the boundary, which is why the grid
+links rather than importing the assignment object — the objection AS-S6 raised
+against a campaigns-grid entry point does not apply to a link.
+
+---
+
 **One deliberate deviation from Part 3.4, stated rather than skipped.** The study
 said to extract `outcomeOf()` into `_shared/run-health.ts` so Assignments,
 Workflows and Activity phrase a run identically. I did **not** — the outcome

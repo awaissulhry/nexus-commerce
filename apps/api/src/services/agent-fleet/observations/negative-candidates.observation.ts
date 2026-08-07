@@ -49,6 +49,9 @@ async function searchTermVintage(): Promise<Date> {
 export const negativeCandidatesBuilder: ObservationBuilder = {
   key: 'negative-candidates',
   ttlMinutes: 360,
+  // CAMPAIGN via narrow() below; MARKETPLACE via filterToMarketplace in
+  // build(scope). Both are exercised by assignment-narrowkinds.vitest.
+  narrowKinds: ['CAMPAIGN', 'MARKETPLACE'] as const,
   async build(scope) {
     const marketplace = scope.marketplace
     const [preview, grams, existing, vintage] = await Promise.all([

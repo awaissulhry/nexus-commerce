@@ -17,7 +17,7 @@
  *     The server folds the rollup into the list payload instead.
  */
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Plus, RefreshCw, Target, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -66,6 +66,32 @@ export function AssignmentsClient() {
   const [filter, setFilter] = useState<AssignmentState | null>(null)
   const [showClosed, setShowClosed] = useState(false)
   const [creating, setCreating] = useState(false)
+  /**
+   * NAF.SB.AS.2 — the deep link from the object the operator was standing on.
+   * `/fleet/assignments?new=1&targetKind=CAMPAIGN&targetId=…&targetLabel=…`
+   * opens the drawer with the target already chosen, so an operator looking at
+   * a campaign never has to come here and re-find it among 220.
+   *
+   * A URL carries none of this page's rules across the boundary — which is why
+   * the campaigns grid links rather than importing anything of ours.
+   */
+  const [prefill, setPrefill] = useState<
+    { kind: 'CAMPAIGN' | 'MARKETPLACE' | 'PORTFOLIO'; id: string; label: string } | null
+  >(null)
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    if (q.get('new') !== '1') return
+    const kind = q.get('targetKind')
+    const id = q.get('targetId')
+    if (kind === 'CAMPAIGN' || kind === 'MARKETPLACE' || kind === 'PORTFOLIO') {
+      if (id) setPrefill({ kind, id, label: q.get('targetLabel') || id })
+    }
+    setCreating(true)
+    // Consume the params so a refresh does not reopen the drawer, and so the
+    // URL the operator might copy is the plain page.
+    window.history.replaceState({}, '', window.location.pathname)
+  }, [])
 
   const load = useCallback(async () => {
     const res = await fetch(`${getBackendUrl()}/api/agent/fleet/assignments`, {
@@ -217,9 +243,14 @@ export function AssignmentsClient() {
 
       {creating && (
         <CreateAssignment
-          onClose={() => setCreating(false)}
+          prefill={prefill}
+          onClose={() => {
+            setCreating(false)
+            setPrefill(null)
+          }}
           onCreated={() => {
             setCreating(false)
+            setPrefill(null)
             refresh()
           }}
         />

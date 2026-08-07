@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Settings2, Download, Wand2, Plus, X, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, Lightbulb, ExternalLink, ListChecks, Pencil, Shuffle } from 'lucide-react'
+import { Settings2, Download, Wand2, Plus, X, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, Lightbulb, ExternalLink, ListChecks, Pencil, Shuffle, Bot } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { describeWindow } from '@nexus/shared/data-vintage'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -22,6 +22,11 @@ import { ExportScopeModal } from '../bulk/ExportScopeModal'
 
 interface Camp {
   id: string; name: string; marketplace: string | null; status: string
+  // NAF.SB.AS.2 — the Amazon EXTERNAL id. Already returned by
+  // /advertising/campaigns; declared here so the Assign link can carry the
+  // id the fleet actually speaks (plan args, findings and assignment targets
+  // are all external ids; Campaign.id is internal and means nothing to them).
+  externalCampaignId?: string | null
   adProduct?: string | null; type?: string | null
   biddingStrategy?: string | null; dailyBudget?: string | number | null
   spend?: number | string; sales?: number | string; acos?: number | string | null; roas?: number | string | null
@@ -1638,6 +1643,7 @@ export function CampaignsGrid() {
                       <span className="t" title={c.name}>{c.name}</span>
                       {c.marketplace && <span className="mk">{c.marketplace}</span>}
                       <a className="h10-open" href={`/marketing/ads/campaigns/${c.id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Open</a>
+                      {c.externalCampaignId && <a className="h10-open" href={`/fleet/assignments?new=1&targetKind=CAMPAIGN&targetId=${encodeURIComponent(c.externalCampaignId)}&targetLabel=${encodeURIComponent(c.name)}`} title={`Point a worker at ${c.name} — opens Assignments with this campaign already chosen`} onClick={(e) => e.stopPropagation()}><Bot size={11} /> Assign</a>}
                     </div>
                   </td>
                   {physical.map((pc) => <td key={pc.key} data-col={pc.key} className={`${pc.metric ? 'num' : 'ed'} ${drag?.item === physToItem(pc.key) ? 'dragging' : ''}`}>{pc.metric ? renderCol(c, pc.key) : settingsCell(c, pc.key)}</td>)}

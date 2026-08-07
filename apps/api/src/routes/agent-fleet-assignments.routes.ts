@@ -21,6 +21,7 @@ import {
   deleteAssignment,
   getAssignment,
   listAssignableWorkers,
+  listAssignablePortfolios,
   listAssignments,
   setAssignmentState,
   startAssignment,
@@ -28,7 +29,7 @@ import {
 
 interface CreateBody {
   charterKey?: string
-  targetKind?: 'CAMPAIGN' | 'MARKETPLACE' | null
+  targetKind?: 'CAMPAIGN' | 'MARKETPLACE' | 'PORTFOLIO' | null
   targetIds?: string[]
   targetLabels?: string[]
   wantBack?: string | null
@@ -48,6 +49,24 @@ const agentFleetAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
       return { assignments: await listAssignments({ charterKey: req.query.charterKey }) }
     },
   )
+
+  /**
+   * NAF.SB.AS.2 — portfolios that can actually be assigned.
+   *
+   * Derived from `Campaign.portfolioId` rather than proxying
+   * `/advertising/portfolios`, for two reasons: that route calls Amazon live
+   * on every request, and it lists portfolios that may hold no campaigns —
+   * which the picker would offer and `resolveAssignmentScope` would then
+   * refuse with `target_gone`. Offering only what resolves is the same
+   * discipline as the worker picker.
+   *
+   * The path is `assignment-portfolios`, NOT `assignments/portfolios`: the
+   * latter would match `/assignments/:id` and be read as an assignment whose
+   * id is the word "portfolios".
+   */
+  fastify.get('/agent/fleet/assignment-portfolios', async () => {
+    return { portfolios: await listAssignablePortfolios() }
+  })
 
   /**
    * NAF.SB.AS — the label endpoint the Approvals stream consumes so its cards

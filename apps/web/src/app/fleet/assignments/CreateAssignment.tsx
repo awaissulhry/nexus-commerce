@@ -33,8 +33,24 @@ interface AssignableWorker {
   name: string
   tier: string
   description: string | null
-  targetKinds: ('CAMPAIGN' | 'MARKETPLACE')[]
+  targetKinds: TargetKind[]
   refusal?: string
+}
+
+type TargetKind = 'CAMPAIGN' | 'MARKETPLACE' | 'PORTFOLIO'
+
+/** Plain words, in the order an operator would reach for them. */
+const KIND_LABEL: Record<TargetKind, string> = {
+  CAMPAIGN: 'One campaign',
+  PORTFOLIO: 'One portfolio',
+  MARKETPLACE: 'One marketplace',
+}
+
+interface PortfolioOption {
+  portfolioId: string
+  name: string
+  campaignCount: number
+  marketplaces: string[]
 }
 
 interface CampaignOption {
@@ -50,14 +66,22 @@ const MARKETPLACES = ['IT', 'DE', 'FR', 'ES']
 export function CreateAssignment({
   onClose,
   onCreated,
+  prefill,
 }: {
   onClose: () => void
   onCreated: () => void
+  /** NAF.SB.AS.2 — a deep link from the object the operator was standing on
+   *  (the campaigns grid) arrives here with the target already chosen. A URL
+   *  carries no rules across the page boundary, which is why this is a link
+   *  rather than the campaigns grid importing anything of ours. */
+  prefill?: { kind: TargetKind; id: string; label: string } | null
 }) {
   const [workers, setWorkers] = useState<AssignableWorker[] | null>(null)
   const [workerKey, setWorkerKey] = useState<string | null>(null)
-  const [kind, setKind] = useState<'CAMPAIGN' | 'MARKETPLACE' | null>(null)
-  const [picked, setPicked] = useState<{ id: string; label: string }[]>([])
+  const [kind, setKind] = useState<TargetKind | null>(prefill?.kind ?? null)
+  const [picked, setPicked] = useState<{ id: string; label: string }[]>(
+    prefill ? [{ id: prefill.id, label: prefill.label }] : [],
+  )
   const [wantBack, setWantBack] = useState('')
   const [wantBackTouched, setWantBackTouched] = useState(false)
   const [dueAt, setDueAt] = useState('')
@@ -161,8 +185,14 @@ export function CreateAssignment({
                 aria-pressed={workerKey === w.key}
                 onClick={() => {
                   setWorkerKey(w.key)
-                  setKind(null)
-                  setPicked([])
+                  // Keep a target the operator already chose (a deep link, or
+                  // a worker swap) when the new worker can honour that kind.
+                  // Clearing it silently would make them re-find a campaign
+                  // among 220 for no reason they could see.
+                  if (!kind || !w.targetKinds.includes(kind)) {
+                    setKind(null)
+                    setPicked([])
+                  }
                 }}
               >
                 <span className="nm">{w.name}</span>
@@ -189,28 +219,20 @@ export function CreateAssignment({
         <div className="as-step">
           <span className="as-steplabel">2 · What should it look at?</span>
           <div className="as-kinds">
-            <button
-              type="button"
-              className="as-kind"
-              aria-pressed={kind === 'CAMPAIGN'}
-              onClick={() => {
-                setKind('CAMPAIGN')
-                setPicked([])
-              }}
-            >
-              One campaign
-            </button>
-            <button
-              type="button"
-              className="as-kind"
-              aria-pressed={kind === 'MARKETPLACE'}
-              onClick={() => {
-                setKind('MARKETPLACE')
-                setPicked([])
-              }}
-            >
-              One marketplace
-            </button>
+            {worker.targetKinds.map((k) => (
+              <button
+                key={k}
+                type="button"
+                className="as-kind"
+                aria-pressed={kind === k}
+                onClick={() => {
+                  setKind(k)
+                  setPicked([])
+                }}
+              >
+                {KIND_LABEL[k]}
+              </button>
+            ))}
             <button
               type="button"
               className="as-kind"
@@ -224,9 +246,20 @@ export function CreateAssignment({
             </button>
           </div>
 
-          {kind === 'CAMPAIGN' && (
-            <CampaignPicker picked={picked} onChange={setPicked} />
+          {/* Only the kinds this worker's evidence can actually enforce are
+              offered. Anything absent is absent WITH a reason, never greyed
+              in silence — a control that cannot bind must not be rendered. */}
+          {worker.targetKinds.length < 3 && (
+            <p className="as-hint">
+              {worker.name} can be pointed at{' '}
+              {worker.targetKinds.map((k) => KIND_LABEL[k].replace('One ', 'a ')).join(' or ')}.
+              {!worker.targetKinds.includes('MARKETPLACE') &&
+                ' A whole marketplace is not offered here because the evidence it reads has nowhere to put one — it would narrow nothing.'}
+            </p>
           )}
+
+          {kind === 'CAMPAIGN' && <CampaignPicker picked={picked} onChange={setPicked} />}
+          {kind === 'PORTFOLIO' && <PortfolioPicker picked={picked} onChange={setPicked} />}
           {kind === 'MARKETPLACE' && (
             <div className="as-kinds" style={{ marginTop: 10 }}>
               {MARKETPLACES.map((m) => (
@@ -319,8 +352,8 @@ function Preflight({
   if (picked.length === 0) {
     return (
       <div className="as-preflight" style={{ marginTop: 12 }}>
-        Pick {kind === 'CAMPAIGN' ? 'a campaign' : 'a marketplace'} and this will
-        say exactly what {worker.name} will be allowed to look at.
+        Pick {kind === 'CAMPAIGN' ? 'a campaign' : kind === 'PORTFOLIO' ? 'a portfolio' : 'a marketplace'} and this
+        will say exactly what {worker.name} will be allowed to look at.
       </div>
     )
   }
@@ -328,7 +361,7 @@ function Preflight({
     <div className="as-preflight" style={{ marginTop: 12 }}>
       It will look at <strong>{picked.map((p) => p.label).join(', ')}</strong> only
       — nothing else in your account.
-      {kind === 'CAMPAIGN' && (
+      {(kind === 'CAMPAIGN' || kind === 'PORTFOLIO') && (
         <details style={{ marginTop: 7 }}>
           <summary style={{ cursor: 'pointer' }}>Why can&apos;t it see everything?</summary>
           <p style={{ marginTop: 6, lineHeight: 1.6 }}>
@@ -447,6 +480,70 @@ function CampaignPicker({
           </button>
         ))}
       </div>
+    </div>
+  )
+}
+
+/**
+ * NAF.SB.AS.2 — the portfolio picker.
+ *
+ * Twelve rows, so this is a plain list rather than a search surface. It shows
+ * the campaign count and the marketplaces each portfolio spans, because a
+ * portfolio is only meaningful as "these N campaigns" — and the server only
+ * returns portfolios that HAVE campaigns, so nothing offered here can be
+ * refused later for being empty.
+ */
+function PortfolioPicker({
+  picked,
+  onChange,
+}: {
+  picked: { id: string; label: string }[]
+  onChange: (v: { id: string; label: string }[]) => void
+}) {
+  const [all, setAll] = useState<PortfolioOption[] | null>(null)
+
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch(`${getBackendUrl()}/api/agent/fleet/assignment-portfolios`, {
+        cache: 'no-store',
+        credentials: 'include',
+      })
+      if (!res.ok) return setAll([])
+      const j = (await res.json()) as { portfolios?: PortfolioOption[] }
+      setAll(j.portfolios ?? [])
+    })().catch(() => setAll([]))
+  }, [])
+
+  if (all === null) return <p className="as-hint">Loading portfolios…</p>
+  if (all.length === 0) {
+    return (
+      <p className="as-hint">
+        No portfolio has any campaigns in it, so there is nothing to point a
+        worker at. Pick a campaign instead.
+      </p>
+    )
+  }
+
+  return (
+    <div style={{ marginTop: 10, maxHeight: 230, overflowY: 'auto' }}>
+      {all.map((p) => {
+        const on = picked.some((x) => x.id === p.portfolioId)
+        return (
+          <button
+            key={p.portfolioId}
+            type="button"
+            className="as-workerbtn"
+            aria-pressed={on}
+            onClick={() => onChange(on ? [] : [{ id: p.portfolioId, label: p.name }])}
+          >
+            <span className="nm as-optlabel">{p.name}</span>
+            <span className="ds">
+              {p.campaignCount} campaign{p.campaignCount === 1 ? '' : 's'} ·{' '}
+              {p.marketplaces.join(', ')}
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }

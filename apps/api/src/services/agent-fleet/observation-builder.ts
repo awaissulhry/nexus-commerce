@@ -65,29 +65,52 @@ export interface ObservationResult {
   cached: boolean
 }
 
+/** NAF.SB.AS — the assignment target kinds evidence can be narrowed by. */
+export type NarrowKind = 'CAMPAIGN' | 'MARKETPLACE'
+
 export interface ObservationBuilder {
   key: string
   ttlMinutes: number
+  /**
+   * NAF.SB.AS.2 — which target kinds this evidence can ACTUALLY honour.
+   * Absent or empty = this worker cannot be narrowed at all, and the
+   * Assignments picker says so in words rather than greying a row.
+   *
+   * `CAMPAIGN` cannot lie: the assertion below throws at import time if a
+   * builder declares it without a `narrow()`. `MARKETPLACE` is backed by a
+   * behavioural vitest, because it binds inside `build(scope)` where a
+   * declaration cannot be checked structurally.
+   */
+  narrowKinds?: readonly NarrowKind[]
   build(scope: ObservationScope): Promise<{ payload: unknown; dataVintage: Date }>
   /**
-   * NAF.SB.AS — narrow an already-computed payload, in memory, for one
-   * assignment. Lives beside `build` so knowledge of the payload's shape
-   * never leaks into the executor.
+   * NAF.SB.AS — narrow an already-computed payload for one assignment.
+   * Lives beside `build` so knowledge of the payload's shape never leaks
+   * into the executor.
    *
-   * A builder WITHOUT this cannot be narrowed, and that is a fact the
-   * Assignments page reads directly: a worker whose evidence has no
-   * `narrow` is not offered a target. The house rule — a control that is
-   * not enforced must not be rendered — is enforced by this being optional
-   * rather than by anyone remembering it.
+   * May be async: the bid tuner's proposals carry a targetId but no campaign,
+   * so narrowing them needs one join. That is still far cheaper than keying
+   * the cache per campaign and re-running the account-wide engine N times.
    */
-  narrow?(payload: unknown, narrow: ObservationNarrow): unknown
+  narrow?(
+    payload: unknown,
+    narrow: ObservationNarrow,
+  ): unknown | Promise<unknown>
 }
 
-/** Which observation keys can honestly be narrowed to a campaign. The
- *  Assignments create route refuses any (worker, target) pair whose
- *  evidence is not fully covered here. */
-export function canNarrowToCampaign(key: string): boolean {
-  return typeof BUILDERS[key]?.narrow === 'function'
+/**
+ * Which target kinds an observation can honestly be narrowed by. The
+ * Assignments create route refuses any (worker, target) pair not fully
+ * covered here — every observation the worker reads must support the kind,
+ * or the run would read some evidence account-wide while claiming to be
+ * scoped.
+ */
+export function narrowKindsFor(key: string): readonly NarrowKind[] {
+  return BUILDERS[key]?.narrowKinds ?? []
+}
+
+export function canNarrowBy(key: string, kind: NarrowKind): boolean {
+  return narrowKindsFor(key).includes(kind)
 }
 
 const BUILDERS: Readonly<Record<string, ObservationBuilder>> = Object.freeze({
@@ -99,6 +122,24 @@ const BUILDERS: Readonly<Record<string, ObservationBuilder>> = Object.freeze({
   [pendingPlanBuilder.key]: pendingPlanBuilder,
   [fleetHealthBuilder.key]: fleetHealthBuilder,
 })
+
+/**
+ * NAF.SB.AS.2 — a declaration that cannot lie about CAMPAIGN.
+ *
+ * Declaring a kind you cannot honour is precisely the defect this series
+ * keeps finding (`scopeCampaignIds` was stored, accepted and rendered while
+ * binding nothing). So for the half that CAN be checked structurally, it is
+ * checked — at import time, so a mistake is a boot failure rather than a
+ * worker silently reading the whole account under a scoped assignment.
+ */
+for (const b of Object.values(BUILDERS)) {
+  if (b.narrowKinds?.includes('CAMPAIGN') && typeof b.narrow !== 'function') {
+    throw new Error(
+      `observation "${b.key}" declares CAMPAIGN narrowing without a narrow() — ` +
+        'it would read the whole account while claiming to be scoped',
+    )
+  }
+}
 
 export function listObservationKeys(): string[] {
   return Object.keys(BUILDERS)
@@ -136,7 +177,7 @@ export async function getObservation(
     return {
       id: existing.id,
       key,
-      payload: applyNarrow(builder, existing.payload, narrow),
+      payload: await applyNarrow(builder, existing.payload, narrow),
       dataVintage: existing.dataVintage,
       computedAt: existing.computedAt,
       cached: true,
@@ -159,18 +200,18 @@ export async function getObservation(
     key,
     // The row stored above is the ACCOUNT-wide payload — shared, and cited
     // by evidenceRefs. What the caller reads is the narrowed view of it.
-    payload: applyNarrow(builder, payload, narrow),
+    payload: await applyNarrow(builder, payload, narrow),
     dataVintage,
     computedAt: row.computedAt,
     cached: false,
   }
 }
 
-function applyNarrow(
+async function applyNarrow(
   builder: ObservationBuilder,
   payload: unknown,
   narrow: ObservationNarrow | undefined,
-): unknown {
+): Promise<unknown> {
   if (!hasNarrowing(narrow) || !builder.narrow) return payload
-  return builder.narrow(payload, narrow!)
+  return await builder.narrow(payload, narrow!)
 }

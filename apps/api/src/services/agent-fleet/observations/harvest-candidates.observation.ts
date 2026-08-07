@@ -23,6 +23,9 @@ const PRODUCT_GRADUATIONS_CAP = 10
 export const harvestCandidatesBuilder: ObservationBuilder = {
   key: 'harvest-candidates',
   ttlMinutes: 360,
+  // CAMPAIGN via narrow() below; MARKETPLACE via filterToMarketplace in
+  // build(scope). Both are exercised by assignment-narrowkinds.vitest.
+  narrowKinds: ['CAMPAIGN', 'MARKETPLACE'] as const,
   async build(scope) {
     const marketplace = scope.marketplace
     const [preview, agg] = await Promise.all([
