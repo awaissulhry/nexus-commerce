@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Plus, X } from 'lucide-react'
+import { Menu } from '@/design-system/components/Menu'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { RoutineCanvas } from './RoutineCanvas'
 import type { StepLive } from './RoutineCanvas'
@@ -300,17 +301,14 @@ export function RoutineEditor({
 
           {addable.length > 0 ? (
             <div className="wf-addstep">
-              <Plus size={13} />
-              <select
-                aria-label="Add a worker to this routine"
-                value=""
-                onChange={(e) => { if (e.target.value) addStep(e.target.value) }}
-              >
-                <option value="">Add a worker…</option>
-                {addable.map((c) => (
-                  <option key={c.key} value={c.key}>{c.name ?? c.key} · {c.tier}</option>
-                ))}
-              </select>
+              <Menu
+                label={<><Plus size={13} /> Add a worker…</>}
+                items={addable.map((c) => ({
+                  id: c.key,
+                  label: `${c.name ?? c.key} · ${c.tier}`,
+                  onSelect: () => addStep(c.key),
+                }))}
+              />
             </div>
           ) : null}
 

@@ -9,6 +9,10 @@
  */
 import { FleetPageShell } from '../_shell/FleetPageShell'
 import { WorkflowsClient } from './WorkflowsClient'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
+import '@/design-system/styles/patterns.css'
 import '@/app/marketing/ads/rules-automation/control-room/control-room.css'
 import '../fleet-pages.css'
 import './workflows.css'
