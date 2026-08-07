@@ -4,9 +4,10 @@
  * Required Actions), and it is the only fleet page that earns a permanent
  * count badge in the rail.
  *
- * Study: docs/2026-08-07-naf-aq-approvals-page.md. AQ.1 is the page existing at
- * all — the standing promise, the gate state that says why the queue is empty,
- * and the shipped AP.1–AP.8 inbox rendered here rather than copied.
+ * Study: docs/2026-08-07-naf-aq-approvals-page.md. AQ.1 was the page existing at
+ * all; AQ.2 added the requests from outside the fleet — the only ones that can
+ * actually change something — and AQ.3 replaced the borrowed inbox with the
+ * card and lists this page owns, so there is exactly ONE card design on it.
  *
  * Styling, and the order matters (copied from the Workers page, which settled
  * it): the four DS stylesheets first, because a DS component without its sheet

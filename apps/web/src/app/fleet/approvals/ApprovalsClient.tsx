@@ -18,10 +18,15 @@
  * — and none of them is visible anywhere in the product. S2 is the section
  * that says so, and it is deliberately the first thing under the promise.
  *
- * The QUEUE ITSELF is the shipped `<ApprovalInbox>` (AP.1–AP.8), imported
- * unmodified. That is the point: one decision surface, not two. AQ.3/AQ.4
- * rebuild the card in this directory and this import goes away; until then the
- * page is the panel plus the truth, which is strictly better than either.
+ * AQ.3 retired the borrowed `<ApprovalInbox>`: the card and the lists now live
+ * in this directory (`ApprovalCard`, `ApprovalLists`), so the page has exactly
+ * one card design and the outside queue and the fleet queue cannot drift apart.
+ * The AP.1–AP.8 BEHAVIOURS are reproduced deliberately rather than reinvented —
+ * three views, grouping by worker name, the server-written blast-radius
+ * sentence, reject-all, the parked row with its inline undo. The Overview still
+ * renders the original from its own directory; the two retire together when it
+ * moves. Only the tool VOCABULARY is still imported, because copying it would
+ * create two dictionaries that drift — the defect AP.3 was written to fix.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -38,16 +43,18 @@ import {
   Undo2,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
+import { ApprovalCard, type FleetLabels } from './ApprovalCard'
 import {
-  ApprovalInbox,
+  PrecedentPanel,
+  RecordList,
+  ViewTabs,
+  WaitingList,
   type ApprovalRow,
   type InboxCounts,
   type InboxView,
   type PrecedentRow,
-} from '@/app/marketing/ads/rules-automation/fleet/ApprovalInbox'
-import { DecisionCard } from '@/app/marketing/ads/rules-automation/fleet/DecisionCard'
-import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
-import type { StoryPlan } from '@/app/marketing/ads/rules-automation/fleet/PlanStory'
+} from './ApprovalLists'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
 
 /* ── the gate-state contract (agent-fleet-approvals.routes.ts) ─────────── */
@@ -425,18 +432,22 @@ function OutsideParked({
 
 function OutsideQueue({
   rows,
+  labels,
   busy,
   expiryHours,
   onDecide,
   onUndo,
   onCommit,
+  onRecheck,
 }: {
   rows: OutsideRow[]
+  labels: FleetLabels
   busy: boolean
   expiryHours: number
   onDecide: (id: string, decision: 'approve' | 'reject', reason?: string) => void
   onUndo: (id: string) => void
   onCommit: (id: string) => void
+  onRecheck: (id: string) => Promise<{ stale: boolean; why: string | null }>
 }) {
   const [open, setOpen] = useState(true)
 
@@ -502,12 +513,13 @@ function OutsideQueue({
                     <>The agent that asked for this cannot be identified.</>
                   )}
                 </p>
-                <DecisionCard
+                <ApprovalCard
                   approval={{
                     id: a.id,
                     toolName: a.toolName,
                     charterKey: null,
                     riskTier: a.riskTier,
+                    status: a.status,
                     args: a.args,
                     preview: a.preview,
                     requestedAt: a.requestedAt,
@@ -515,11 +527,12 @@ function OutsideQueue({
                     reason: a.reason,
                     trackRecord: null,
                   }}
+                  labels={labels}
                   workerName={a.originKey ? humanTool(a.originKey) : 'An agent we cannot identify'}
-                  plans={[]}
                   busy={busy}
+                  canExecute={a.canExecute}
                   onDecide={onDecide}
-                  onOpenPlan={() => {}}
+                  onRecheck={onRecheck}
                 />
               </div>
             ),
@@ -539,7 +552,7 @@ export function ApprovalsClient() {
   const [approvals, setApprovals] = useState<ApprovalRow[]>([])
   const [counts, setCounts] = useState<InboxCounts>({ waiting: 0, decided: 0, expired: 0 })
   const [precedents, setPrecedents] = useState<PrecedentRow[]>([])
-  const [plans, setPlans] = useState<StoryPlan[]>([])
+  const [labels, setLabels] = useState<FleetLabels>({ campaigns: {}, targets: {} })
   const [charters, setCharters] = useState<CharterRow[]>([])
   const [gate, setGate] = useState<GateState | null>(null)
   const [outside, setOutside] = useState<OutsideRow[]>([])
@@ -548,20 +561,25 @@ export function ApprovalsClient() {
   const [err, setErr] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const [a, pr, p, c, g, o] = await Promise.all([
+    const [a, pr, c, g, o] = await Promise.all([
       fetch(`${backend}/api/agent/fleet/approvals?view=${view}`, { cache: 'no-store' }),
       fetch(`${backend}/api/agent/fleet/precedents?limit=25`, { cache: 'no-store' }),
-      fetch(`${backend}/api/agent/fleet/plans`, { cache: 'no-store' }),
       fetch(`${backend}/api/agent/fleet/charters`, { cache: 'no-store' }),
       fetch(`${backend}/api/agent/fleet/approvals/gate-state`, { cache: 'no-store' }),
       fetch(`${backend}/api/agent/fleet/approvals/outside`, { cache: 'no-store' }),
     ])
     if (!a.ok) throw new Error(`approvals: ${a.status}`)
-    const aj = (await a.json()) as { approvals: ApprovalRow[]; counts: InboxCounts }
+    const aj = (await a.json()) as {
+      approvals: ApprovalRow[]
+      counts: InboxCounts
+      labels?: FleetLabels
+    }
     setApprovals(aj.approvals)
     setCounts(aj.counts)
+    // AQ.3 — the API has always resolved these and every client threw them
+    // away, which is why no card ever said WHICH campaign.
+    setLabels(aj.labels ?? { campaigns: {}, targets: {} })
     if (pr.ok) setPrecedents(((await pr.json()) as { precedents: PrecedentRow[] }).precedents)
-    if (p.ok) setPlans(((await p.json()) as { plans: StoryPlan[] }).plans)
     if (c.ok) setCharters(((await c.json()) as { charters: CharterRow[] }).charters)
     // The gate state is the page's reason to exist, but it must never be able
     // to take the queue down with it.
@@ -623,9 +641,31 @@ export function ApprovalsClient() {
     [post, after],
   )
 
-  const nameByKey = useMemo(
-    () => new Map(charters.map((c) => [c.key, c.name])),
-    [charters],
+  /** AQ.3 — ask the server whether this approval still describes reality. */
+  const recheck = useCallback(
+    async (id: string) => {
+      const r = await fetch(`${backend}/api/agent/fleet/approvals/${id}/recheck`, {
+        method: 'POST',
+      })
+      if (!r.ok) return { stale: true, why: `the check could not run (${r.status})` }
+      return (await r.json()) as { stale: boolean; why: string | null }
+    },
+    [backend],
+  )
+
+  /** Which tools can actually do something — straight from the gate state. */
+  const canExecute = useCallback(
+    (toolName: string) => gate?.tools.find((t) => t.name === toolName)?.canExecute ?? false,
+    [gate],
+  )
+
+  const nameByKey = useMemo(() => new Map(charters.map((c) => [c.key, c.name])), [charters])
+
+  // Names, never raw keys — and an honest fallback rather than "unknown".
+  const nameOf = useCallback(
+    (key: string | null) =>
+      key ? (nameByKey.get(key) ?? key.replace(/[_-]+/g, ' ')) : 'An agent we cannot identify',
+    [nameByKey],
   )
 
   return (
@@ -665,36 +705,55 @@ export function ApprovalsClient() {
           </span>
         </div>
 
-        {/* AQ.1 renders the SHIPPED inbox rather than a second copy of it.
-            One decision surface is the whole point; AQ.3/AQ.4 replace the
-            card in this directory and this import goes away. */}
-        <ApprovalInbox
-          view={view}
-          counts={counts}
-          approvals={approvals}
-          precedents={precedents}
-          plans={plans}
-          nameByKey={nameByKey}
-          busy={busy}
-          loading={loading}
-          onViewChange={setView}
-          onDecide={(id, d, reason) => void decide(id, d, reason)}
-          onRejectAll={(charterKey, reason) => {
-            void post('approvals/reject-all', { charterKey, reason }).then(after)
-          }}
-          onOpenPlan={() => {
-            /* AQ.3 links to Activity; the plan story is not this page's to retell. */
-          }}
-          onUndo={(id) => void post(`approvals/${id}/undo`).then(after)}
-          onCommit={(id) => void post(`approvals/${id}/commit`).then(after)}
-          onBulkPreview={async (ids, d) => {
-            const r = await post('approvals/bulk-preview', { ids, decision: d })
-            return r?.sentence ?? `This affects ${ids.length} actions.`
-          }}
-          onBulkDecide={(ids, d, reason) => {
-            void post('approvals/bulk-decide', { ids, decision: d, reason }).then(after)
-          }}
-        />
+        <ViewTabs view={view} counts={counts} onChange={setView} />
+
+        {loading ? (
+          <div aria-busy="true" aria-label="Loading approvals">
+            {[70, 70].map((h, i) => (
+              <div key={i} className="dt-skeleton" style={{ height: h, marginBottom: 6 }} />
+            ))}
+          </div>
+        ) : approvals.length === 0 ? (
+          <p className="acr-fl-empty">
+            {view === 'waiting' ? (
+              <>
+                Nothing is waiting for you. <Term k="approval">Approvals</Term> appear here when a
+                plan passes the <Term k="critic">critic</Term> — and every yes or no you give
+                becomes <Term k="exemplar">precedent</Term> the workers read on their next run.
+              </>
+            ) : view === 'decided' ? (
+              <>No decision has been taken yet.</>
+            ) : (
+              <>Nothing has expired. A request that goes unanswered too long ends up here.</>
+            )}
+          </p>
+        ) : view === 'waiting' ? (
+          <WaitingList
+            rows={approvals}
+            labels={labels}
+            nameOf={nameOf}
+            busy={busy}
+            canExecute={canExecute}
+            onDecide={(id, d, reason) => void decide(id, d, reason)}
+            onRejectAll={(charterKey, reason) => {
+              void post('approvals/reject-all', { charterKey, reason }).then(after)
+            }}
+            onUndo={(id) => void post(`approvals/${id}/undo`).then(after)}
+            onCommit={(id) => void post(`approvals/${id}/commit`).then(after)}
+            onBulkPreview={async (ids, d) => {
+              const r = await post('approvals/bulk-preview', { ids, decision: d })
+              return r?.sentence ?? `This affects ${ids.length} actions.`
+            }}
+            onBulkDecide={(ids, d, reason) => {
+              void post('approvals/bulk-decide', { ids, decision: d, reason }).then(after)
+            }}
+            onRecheck={recheck}
+          />
+        ) : (
+          <RecordList rows={approvals} nameOf={nameOf} />
+        )}
+
+        <PrecedentPanel precedents={precedents} nameOf={nameOf} />
 
         {view === 'waiting' && !loading && approvals.length === 0 && gate ? (
           <p className="aq-emptywhy">
@@ -708,11 +767,13 @@ export function ApprovalsClient() {
 
       <OutsideQueue
         rows={outside}
+        labels={labels}
         busy={busy}
         expiryHours={gate?.expiry.hours ?? 24}
         onDecide={(id, d, reason) => void decide(id, d, reason)}
         onUndo={(id) => void post(`approvals/${id}/undo`).then(after)}
         onCommit={(id) => void post(`approvals/${id}/commit`).then(after)}
+        onRecheck={recheck}
       />
     </>
   )

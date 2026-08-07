@@ -1141,3 +1141,63 @@ study's reasoning holds and got stronger on contact: different producer, thinner
 payload (no worker join, no track record, no resolved entity names), opposite
 consequence. Putting two qualities of attribution under one count is how a queue
 starts lying to the person who trusts it.
+
+### AQ.3 — the decision card, and the page stops borrowing (2026-08-07)
+
+The card is where a wrong decision actually gets made, so this is the phase
+that mattered most. Four things it adds, each one a gap the study named:
+
+1. **Names, not ids.** `/agent/fleet/approvals` has always returned a `labels`
+   map resolving campaign and target ids to names, and **every client
+   destructured it away** — so in the whole history of this feature no card has
+   ever said *which* campaign. It does now: *"On “casco integrale” (EXACT) in
+   AIREON-IT-Generic · IT"*.
+2. **Before → after.** `€0.31 → €0.84` instead of `bid €0.84`. Every preview
+   already carried the starting value; nothing rendered it. Struck-through
+   from, highlighted to, and a `new` marker where there is no before.
+3. **Reversibility as one class, stated once** — *can be put back* /
+   *only compensated for* / *cannot be undone*. It used to be asserted in two
+   places (a chip and a sentence) that could drift apart. One source now, and
+   the middle class exists because "reversible" alone is how an operator comes
+   to believe a spend can be un-spent.
+4. **The expiry clock**, stored on every row since AP.5 and rendered nowhere,
+   plus **"check this is still true"** — an on-demand run of the same
+   `checkStaleness` the commit path uses, behind `POST /approvals/:id/recheck`.
+   The study rejected running it on every render for cost; on demand it is the
+   honest version of Terraform's drift preamble, using the data we actually
+   have rather than a drift feed we do not.
+
+**Depth is re-tiered.** It was `riskTier === 'high' || !undoable`, and *every*
+fleet tool is `riskTier: 'high'` — so 100% of cards were heavy and the
+read-and-understood tick was blanket friction, exactly the click-through AP.8
+says it is avoiding. Now it keys on **reversibility × can-it-execute**: the ack
+gate only appears where a yes can actually do something irreversible.
+
+**And the honest ceiling on the card itself:** where a tool cannot execute, the
+card says so — *"approving this records your decision and teaches the fleet,
+but changes nothing on Amazon"*. The page says it once at the top in S2; the
+card says it again at the point of decision, because that is where it matters.
+
+**The page stopped borrowing.** AQ.1 rendered the shipped `<ApprovalInbox>`
+deliberately — one decision surface beat two. AQ.3 could not keep that and also
+improve the card, because the inbox renders the old card internally; using the
+new card in one section and the old one in another would have been the exact
+duplication this stream has spent the engagement arguing against. So the lists
+moved here too (`ApprovalLists.tsx`), with the AP.1–AP.8 behaviours reproduced
+faithfully: three views with counts, grouping by worker name, selection with
+the server-written blast-radius sentence, reject-all, the parked row with its
+inline undo, and the impersonal outcome words.
+
+Two small corrections came free with the rewrite: **reject-all now counts only
+what the server will actually touch** (the shipped button counts every row in
+the group, so it could promise "reject all 5" and reject 3), and the deliberate
+duplicate countdown row from AQ.2 is gone — one `ParkedRow`, used by both
+queues.
+
+Still imported rather than copied: the tool **vocabulary** (`toolCardFor`) and
+the glossary. Copying either would create two dictionaries that drift, which is
+the defect AP.3 was written to fix. They move when the Overview stops rendering
+the old card, and not before.
+
+**Verified.** `tsc` clean on both apps for every file this stream owns; DS
+ratchet clean; agent-fleet suite **369 passing across 41 files**.

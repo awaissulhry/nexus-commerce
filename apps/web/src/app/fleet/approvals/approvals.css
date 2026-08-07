@@ -371,3 +371,284 @@
   color: #1c2530;
   font-weight: 650;
 }
+
+/* ── S6 · the decision card (AQ.3) ──────────────────────────────────────── */
+
+/*
+ * Depth is driven by CONSEQUENCE, not by risk tier alone — every fleet tool is
+ * riskTier 'high', so a tier-only rule made every card heavy and the
+ * read-and-understood tick blanket friction, which is the click-through it
+ * exists to prevent.
+ *
+ * The recommendation is never the largest or first thing on the card: the
+ * automation-bias literature is specific that positioning advice less
+ * prominently and presenting information rather than a recommendation is what
+ * actually reduces over-reliance. So the entity and the delta come first.
+ */
+
+.aq-card {
+  padding: 12px 13px;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  background: #fff;
+  font-size: 13px;
+  color: #1c2530;
+}
+.aq-card + .aq-card {
+  margin-top: 10px;
+}
+.aq-card.heavy {
+  border-color: #e6d6b8;
+  background: #fffdf9;
+}
+.aq-card.r-high {
+  border-left: 3px solid #c53030;
+}
+
+.aq-cardhead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  line-height: 1.45;
+}
+.aq-cardhead strong {
+  font-weight: 650;
+}
+.aq-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+.aq-age {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: #6b7688;
+  white-space: nowrap;
+}
+
+.aq-risk,
+.aq-rev,
+.aq-clock {
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.aq-risk {
+  border: 1px solid #e2e8f0;
+  background: #f4f6f9;
+  color: #3a4658;
+}
+.aq-risk.r-high {
+  border-color: #f0c9c9;
+  background: #fdf5f5;
+  color: #9b2c2c;
+}
+/* Reversibility is a WORD first; the colour only reinforces it. */
+.aq-rev.v-restore {
+  border: 1px solid #bbe5c8;
+  background: #eefaf1;
+  color: #276749;
+}
+.aq-rev.v-compensate {
+  border: 1px solid #e6d6b8;
+  background: #fffaeb;
+  color: #92400e;
+}
+.aq-rev.v-never {
+  border: 1px solid #f0c9c9;
+  background: #fdf5f5;
+  color: #9b2c2c;
+}
+.aq-clock {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  background: #f4f6f9;
+  color: #6b7688;
+}
+.aq-clock.urgent {
+  border-color: #f0c9c9;
+  background: #fdf5f5;
+  color: #9b2c2c;
+}
+
+/* what it touches, by name */
+.aq-entity {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: #3a4658;
+}
+.aq-entity strong {
+  color: #1c2530;
+}
+
+/* before → after */
+.aq-deltas {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid #e8edf3;
+  border-radius: 6px;
+  background: #fbfcfd;
+  list-style: none;
+  font-size: 12.5px;
+}
+.aq-deltas li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  padding: 2px 0;
+}
+.aq-dfield {
+  min-width: 120px;
+  color: #6b7688;
+  font-size: 11.5px;
+}
+.aq-dfrom {
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: #f4f6f9;
+  color: #6b7688;
+  text-decoration: line-through;
+  font-variant-numeric: tabular-nums;
+}
+.aq-dto {
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: #eef4ff;
+  color: #1e429f;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.aq-dnew {
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: #f4f6f9;
+  color: #6b7688;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.aq-effect {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #3a4658;
+}
+
+.aq-noexec,
+.aq-record,
+.aq-cameback {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.aq-noexec {
+  border: 1px solid #e2e8f0;
+  background: #f4f6f9;
+  color: #3a4658;
+}
+.aq-record {
+  border: 1px solid #e8edf3;
+  background: #fbfcfd;
+  color: #3a4658;
+}
+.aq-record.doubted {
+  border-color: #e6d6b8;
+  background: #fffaeb;
+}
+.aq-cameback {
+  border: 1px solid #e6d6b8;
+  background: #fffaeb;
+  color: #3a4658;
+}
+.aq-noexec svg,
+.aq-record svg,
+.aq-cameback svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.aq-facts {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+}
+.aq-facts > div {
+  padding: 6px 0;
+  border-top: 1px solid #eef1f5;
+}
+.aq-facts dt {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #6b7688;
+}
+.aq-facts dd {
+  margin: 3px 0 0;
+  line-height: 1.5;
+  color: #3a4658;
+}
+.aq-evidence {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.aq-evidence li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+.aq-evidence strong {
+  color: #1c2530;
+  font-variant-numeric: tabular-nums;
+}
+
+.aq-recheck {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0 0;
+  font-size: 12px;
+}
+.aq-rc-ok {
+  color: #276749;
+}
+.aq-rc-stale {
+  color: #9b2c2c;
+}
+
+.aq-ack {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border: 1px solid #e6d6b8;
+  border-radius: 6px;
+  background: #fffaeb;
+  font-size: 12.5px;
+  color: #1c2530;
+  cursor: pointer;
+}
+
+.aq-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0 0;
+}

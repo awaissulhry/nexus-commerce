@@ -32,7 +32,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { listCharters } from '../services/agent-fleet/charter-registry.js'
 import { getFleetSchedule } from '../services/agent-fleet/fleet-schedule.service.js'
-import { FLEET_TOOLS } from '../services/agent-fleet/approval-inbox.service.js'
+import { checkStaleness, FLEET_TOOLS } from '../services/agent-fleet/approval-inbox.service.js'
 import { EXPIRY_HOURS } from '../services/agents/approval-gate.service.js'
 import { getTool } from '../services/agents/tool-registry.js'
 import { resolveToolPolicy } from '../services/agents/tool-policy.service.js'
@@ -223,6 +223,31 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
    * attribution, the 20-second park, the audit row and the AP.6 staleness
    * re-check — never the legacy path, which records no name and skips all four.
    */
+  /**
+   * AQ.3 — "check this is still true", on demand.
+   *
+   * `checkStaleness` already runs automatically at commit, which is the safety
+   * property. But an operator reading a card has no way to ask *now* whether
+   * the facts still hold, and the study rejected running it on every list
+   * render for cost: it re-runs each tool's database-backed dry-run.
+   *
+   * So: on demand, one approval at a time. Read-only — the handlers it calls
+   * are all reads (verified in `mutate.tools.ts` and `ads-propose.tools.ts`),
+   * and nothing here writes to the approval. Answering "has anything moved?"
+   * must never itself move anything.
+   */
+  fastify.post<{ Params: { id: string } }>(
+    '/agent/fleet/approvals/:id/recheck',
+    async (request) => {
+      const verdict = await checkStaleness(request.params.id)
+      return {
+        stale: verdict.stale,
+        why: verdict.why,
+        checkedAt: new Date().toISOString(),
+      }
+    },
+  )
+
   fastify.get('/agent/fleet/approvals/outside', async () => {
     const rows = await prisma.agentApproval.findMany({
       where: {
