@@ -449,6 +449,50 @@ describe('ACT.4 — a run in flight is not a failure', () => {
   })
 })
 
+describe('ACT.4b — a test run says so', () => {
+  const PREVIEW = {
+    id: 'run5',
+    agentKey: 'amazon-bid-tuner',
+    mode: 'preview', // WF.5's test lane: real evidence, real model, nothing written
+    trigger: 'manual',
+    ok: true,
+    status: 'done',
+    findingCount: 0,
+    costUSD: '0.01',
+    latencyMs: 5000,
+    errorMessage: null,
+    haltedReason: null,
+    orchestrationId: null,
+    createdAt: new Date('2026-08-06T07:00:00Z'),
+    workflowKey: null,
+  }
+
+  beforeEach(() => {
+    const all = [...RUNS, PREVIEW]
+    db.agentRun.findMany.mockImplementation((args: never) => {
+      const a = args as unknown as { take?: number }
+      return Promise.resolve(
+        (a?.take
+          ? all
+          : all.map((r) => ({ id: r.id, orchestrationId: r.orchestrationId, agentKey: r.agentKey }))) as never,
+      )
+    })
+  })
+
+  it('names the test lane instead of falling through to the trigger', async () => {
+    const { events } = await getFleetTimeline()
+    // It used to read "a person, by hand" — identical to a real hand-driven run.
+    expect(events.find((e) => e.id === 'run.run5')!.source).toBe('a test run')
+  })
+
+  it('carries the mode, so a badge never has to read the prose', async () => {
+    const { events } = await getFleetTimeline()
+    expect(events.find((e) => e.id === 'run.run5')!.mode).toBe('preview')
+    expect(events.find((e) => e.id === 'run.run1')!.mode).toBe('sweep')
+    for (const e of events.filter((x) => !x.kind.startsWith('run.'))) expect(e.mode).toBeNull()
+  })
+})
+
 describe('ACT.1 — diagnostic workers are excluded, never concealed', () => {
   const SELFTEST_RUN = {
     id: 'run3',

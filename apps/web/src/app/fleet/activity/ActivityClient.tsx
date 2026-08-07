@@ -98,6 +98,8 @@ export interface FleetEvent {
   /** ACT.4 — raw, so the ONE canonical classifier decides what "failed" means. */
   errorMessage: string | null
   haltedReason: string | null
+  /** ACT.4b — badge a test run from this, never from the prose. */
+  mode: string | null
   href: string | null
   rollupKey: string
 }
@@ -248,7 +250,11 @@ function Badges({ event }: { event: FleetEvent }) {
           self-test
         </span>
       ) : null}
-      {event.source.includes('test') ? <span className="sba-badge test">test run</span> : null}
+      {event.mode === 'preview' ? (
+        <span className="sba-badge test" title="A test run from the Workflows page. It read real evidence and used a real model, but nothing it decided was written.">
+          test run
+        </span>
+      ) : null}
       {event.workflowKey ? <span className="sba-badge flow">{event.workflowKey}</span> : null}
     </>
   )

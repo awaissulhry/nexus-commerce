@@ -139,6 +139,13 @@ export interface FleetEvent {
    */
   errorMessage: string | null
   haltedReason: string | null
+  /**
+   * ACT.4b — the run's mode. The UI badges a test run from THIS, never by
+   * sniffing the source sentence for the word "test": prose is for reading,
+   * and a badge keyed on wording breaks the day someone improves a phrase.
+   * It was already broken — no phrase said "test" at all.
+   */
+  mode: string | null
   /** Where clicking it should go, when there is somewhere to go. */
   href: string | null
   /**
@@ -226,6 +233,11 @@ function sourcePhrase(mode: string | null, trigger: string): string {
   // Every phrase here reads after the word "from", so they are all nouns.
   if (mode === 'ask') return 'a request someone made by hand'
   if (mode === 'custom') return 'a custom routine' // WF.6b
+  // ACT.4b — WF.5's test lane. Without this a preview run fell through to its
+  // TRIGGER and read "from a person, by hand", identical to a real one. Seven
+  // of the fleet's fourteen business runs are test runs, so half the page was
+  // presenting a rehearsal as work that had happened.
+  if (mode === 'preview') return 'a test run'
   if (trigger === 'schedule') return 'a schedule'
   if (trigger === 'manual') return 'a person, by hand'
   return humanize(trigger)
@@ -449,6 +461,7 @@ async function runEvents(
       runId: r.id,
       errorMessage: r.errorMessage,
       haltedReason: r.haltedReason,
+      mode: r.mode,
       href: `/fleet/workers/${r.agentKey}`,
       rollupKey: `run:${r.agentKey}:${sig}`,
     }
@@ -511,6 +524,7 @@ async function findingEvents(
       runId: r.runId,
       errorMessage: null,
       haltedReason: null,
+      mode: null,
       href: `/fleet/workers/${r.charterKey}`,
       rollupKey: `finding:${r.charterKey}:${r.kind}`,
     }
@@ -575,6 +589,7 @@ async function planEvents(
       runId: r.runId,
       errorMessage: null,
       haltedReason: null,
+      mode: null,
       href,
       rollupKey: `plan:${r.charterKey}`,
     })
@@ -621,8 +636,9 @@ async function planEvents(
         durationMs: null,
         findingCount: null,
         runId: r.runId,
-        errorMessage: null,
+      errorMessage: null,
       haltedReason: null,
+      mode: null,
       href,
         rollupKey: `critic:${r.criticVerdict}`,
       })
@@ -702,8 +718,9 @@ async function approvalEvents(
         durationMs: null,
         findingCount: null,
         runId: r.agentRunId,
-        errorMessage: null,
+      errorMessage: null,
       haltedReason: null,
+      mode: null,
       href: null,
         rollupKey: `approval-req:${key}:${r.toolName}`,
       })
@@ -741,8 +758,9 @@ async function approvalEvents(
         durationMs: null,
         findingCount: null,
         runId: r.agentRunId,
-        errorMessage: null,
+      errorMessage: null,
       haltedReason: null,
+      mode: null,
       href: null,
         rollupKey: `approval-dec:${r.status}:${r.toolName}`,
       })
@@ -790,6 +808,7 @@ async function haltEvents(f: FleetTimelineFilters, cursor: Cursor | null): Promi
       runId: null,
       errorMessage: null,
       haltedReason: null,
+      mode: null,
       href: null,
       rollupKey: 'halt',
     },
