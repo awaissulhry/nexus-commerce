@@ -228,11 +228,37 @@
      box in both axes and is xyflow's own recipe for a full-bleed canvas. */
   position: relative;
 }
-/* The React Flow root is sized in MapCanvas.tsx via the `style` prop, NOT from
-   here. xyflow writes `width/height/position` inline onto that element, and
-   inline beats any stylesheet rule without `!important` — a rule here shipped,
-   matched, and was silently overridden, leaving the root at 1164 × 0. The
-   comment on that prop has the full reasoning. Do not re-add it here. */
+/*
+ * ⚠ The three `!important`s here are load-bearing, and they cost three deploys
+ * to arrive at. Do not "clean them up".
+ *
+ * THE BUG: the React Flow root rendered at 1164 × 0. All 8 nodes and 4 edges
+ * were in the DOM and every test passed; the graph was simply clipped to
+ * nothing. `height: 100%` is what fails — the wrapper is a flex item sized by
+ * `flex: 1 1 auto`, which this engine treats as an INDEFINITE height for
+ * percentage resolution, so 100% computes to 0.
+ *
+ * WHY NOTHING ELSE WORKS, each ruled out by measurement rather than reasoning:
+ *   · A plain stylesheet rule — xyflow writes `width/height/position` INLINE
+ *     onto its own root, and inline beats a normal author declaration.
+ *     Enumerating every matching rule returned exactly one (mine, saying
+ *     `position: absolute`) while the computed value stayed `relative`.
+ *   · The `style` prop on <ReactFlow> — xyflow MERGES its sizing over whatever
+ *     you pass. Shipped and measured: `inset: 0px` survived, `position` and
+ *     `height` were replaced with its own.
+ *   · A definite height on the wrapper — that means `calc(100dvh - …)`, which
+ *     is exactly the brittle arithmetic this page avoids: a mobile top bar or
+ *     a live banner pushes a hard height off the bottom of the viewport.
+ *
+ * `!important` in an author sheet beats a normal inline declaration, which is
+ * the one lever left. Scoped to this page's canvas so it cannot reach the
+ * other five xyflow canvases in the app.
+ */
+.sbm-canvas .react-flow {
+  position: absolute !important;
+  inset: 0 !important;
+  height: auto !important;
+}
 .sbm-skeleton {
   background: linear-gradient(90deg, #f4f6f9 25%, #eef1f5 37%, #f4f6f9 63%);
   background-size: 400% 100%;
