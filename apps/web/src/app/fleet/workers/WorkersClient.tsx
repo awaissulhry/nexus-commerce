@@ -39,7 +39,7 @@
  * surface while a parallel session owns agent-fleet.routes.ts.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Ban, Bot, Check, Columns, Pause as PauseIcon, RefreshCw, ShieldAlert, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -67,6 +67,7 @@ import {
   type AffectedWorker,
   type Level,
 } from '../_shared/autonomy'
+import { useVisibilityPoll } from '../_shared/use-visibility-poll'
 
 /** Design contract rule 3: jargon without a glossary entry fails review. These
  *  maps are the narrowing — a tier or dial we have no definition for renders as
@@ -237,8 +238,11 @@ export function WorkersClient() {
    *  preference implies a settings surface this page does not have. */
   const [cols, setCols] = useState<string[]>(DEFAULT_COLS)
   const [colsOpen, setColsOpen] = useState(false)
-  /** When the data on screen was actually read. W.6 makes this update itself. */
-  const [readAt, setReadAt] = useState<Date | null>(null)
+  /** W.6 — what moved since the operator last looked. The table refreshes
+   *  itself every 10s; a row changing state silently is how someone ends up
+   *  acting on a screen that stopped being true a minute ago. */
+  const [changes, setChanges] = useState<string[]>([])
+  const seenStatus = useRef<Map<string, string> | null>(null)
   /* W.4 — acting on the roster. */
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set())
@@ -309,16 +313,38 @@ export function WorkersClient() {
       if (f.ok) setFindings(((await f.json()) as { findings: FindingRow[] }).findings)
       if (s.ok) setScorecards(((await s.json()) as { scorecards: ScorecardRow[] }).scorecards)
       if (st.ok) setState((await st.json()) as FleetStateRow)
-      setReadAt(new Date())
       setErr(null)
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
+      // The poll hook's contract: `load` owns its error state and THROWS, so
+      // the "as of" stamp stays at the last SUCCESSFUL read rather than
+      // advancing on a failed attempt.
+      throw e
     } finally {
       setLoading(false)
     }
   }, [backend])
 
-  useEffect(() => { void load() }, [load])
+  /**
+   * W.6 — the shared visibility-gated poll (locks doc §5, extracted by the
+   * Workflows stream). Refetch every 10s while the tab is visible, pause when
+   * it is hidden, catch up on return.
+   *
+   * The guard matters as much as the poll. A refresh that lands while a
+   * confirmation is open would change the "from" levels the operator is being
+   * asked about, and one landing mid-write would race the write it is about to
+   * contradict. Throwing is how this hook is told "we did not read" — it keeps
+   * the previous stamp, which is the honest answer.
+   */
+  const pollable = useCallback(async () => {
+    if (pendingRaise || pendingPause || busyKeys.size > 0) {
+      throw new Error('skipped: a change is open')
+    }
+    await load()
+  }, [load, pendingRaise, pendingPause, busyKeys])
+
+  const { asOf, refresh } = useVisibilityPoll(pollable)
+
 
   /* assemble one row per worker from the four feeds */
   const rows: WorkerRow[] = useMemo(() => {
@@ -352,6 +378,25 @@ export function WorkersClient() {
    *  breakdown counts business workers only, to match the number above it —
    *  a "5 workers" headline over a breakdown summing to 7 is the kind of small
    *  inconsistency that costs a page its credibility. */
+/* Name what moved, rather than letting rows re-sort under the cursor
+     unannounced. Compared on the STATUS WORD, not the whole row: a cost
+     ticking up by a hundredth of a cent is not news. */
+  useEffect(() => {
+    if (rows.length === 0) return
+    const now = new Map(rows.map((r) => [r.charter.key, r.status.label]))
+    const before = seenStatus.current
+    seenStatus.current = now
+    if (!before) return // first load is not a change
+    const moved: string[] = []
+    for (const [key, label] of now) {
+      const was = before.get(key)
+      if (was === undefined) moved.push(`${key} joined the roster`)
+      else if (was !== label) moved.push(`${rows.find((r) => r.charter.key === key)?.charter.name ?? key} is now ${label}`)
+    }
+    for (const key of before.keys()) if (!now.has(key)) moved.push(`${key} left the roster`)
+    if (moved.length) setChanges(moved)
+  }, [rows])
+
   const tierCounts = useMemo(() => {
     const m = new Map<string, number>()
     for (const r of rows) m.set(r.charter.tier, (m.get(r.charter.tier) ?? 0) + 1)
@@ -887,11 +932,22 @@ export function WorkersClient() {
       {err ? (
         <div className="acr-banner err" role="alert">
           <ShieldAlert size={15} /> {err}
-          <button className="acr-btn" onClick={() => { setErr(null); void load() }}>Dismiss</button>
+          <button className="acr-btn" onClick={() => { setErr(null); refresh() }}>Try again</button>
         </div>
       ) : null}
       {note ? (
         <div className="acr-banner ok" role="status"><Check size={15} /> {note}</div>
+      ) : null}
+      {changes.length > 0 ? (
+        <div className="acr-banner info" role="status">
+          <RefreshCw size={15} />
+          <span>
+            <b>{changes.length} worker{changes.length === 1 ? '' : 's'} changed since you looked</b>
+            {' — '}{changes.slice(0, 3).join(' · ')}
+            {changes.length > 3 ? ` · and ${changes.length - 3} more` : ''}.
+          </span>
+          <button className="acr-btn" onClick={() => setChanges([])}>Dismiss</button>
+        </div>
       ) : null}
 
       {pendingRaise ? (
@@ -1141,13 +1197,13 @@ export function WorkersClient() {
           ) : null}
         </div>
 
-        <button className="acr-btn" onClick={() => void load()} disabled={loading}>
+        {/* Refresh stays, deliberately. Polling that removes the manual control
+            leaves an operator with no way to force the question. */}
+        <button className="acr-btn" onClick={refresh} disabled={loading}>
           <RefreshCw size={13} /> {loading ? 'Refreshing…' : 'Refresh'}
         </button>
-        {/* Freshness, always visible: a tab left open overnight should not look
-            like a tab opened a second ago. W.6 makes this tick by itself. */}
-        <span className="sbw-asof" title={readAt ? readAt.toLocaleString() : undefined}>
-          {readAt ? `as of ${readAt.toLocaleTimeString()}` : 'not read yet'}
+        <span className="sbw-asof" title={asOf ? asOf.toLocaleString() : undefined}>
+          {asOf ? `as of ${asOf.toLocaleTimeString()}` : 'not read yet'}
         </span>
       </div>
 

@@ -14,8 +14,8 @@ what it must not become.
 | **1** | S4 · The roster table, and the Status column | W.1 | specified |
 | **2** | S2 · The roster health strip | W.2 | specified |
 | **3** | S3 · Find, filter, views | W.3 | specified |
-| 4 | S5 · The shared dial + bulk actions | W.4–W.5 | pending |
-| 5 | S8 · Live updating | W.6 | pending |
+| 4 | S5 · The shared dial + bulk actions | W.4 | **built** — `_shared/autonomy.tsx`; W.5 absorbed into it. Bulk run-now and bulk scope deliberately deferred (see the W.4 commit) |
+| 5 | S8 · Live updating | W.6 | **built** — notes below |
 | 6 | Worker detail — the missing sections | W.7 | pending |
 | 7 | S6 · Create a worker | W.8 | pending, blocked on the instance model |
 | 8 | S7 · Retirement | W.9 | pending |
@@ -491,3 +491,41 @@ the empty-state row the phantom tree was rendering.
 | 5 | Pin the DS tokens on `.fleet-surface`, the `productsNextLight` way | Study 0, precedes W.1 |
 | 6 | Verify no DS button under `.fleet-surface` computes `border-top-width: 0px` | W.1 browser check on prod |
 | 7 | `.h10-shell` pins the semantic tokens as triplets and breaks DS borders across the ads console — not ours to fix, but do not copy it | noted; owner's call per `reference_ds_token_triplet_collision` |
+
+
+---
+
+## STUDY 5 — S8 · Live updating *(build step W.6)*
+
+Adopts the shared `useVisibilityPoll` the Workflows stream extracted (locks doc
+§5): a ~10s refetch while the tab is visible, paused when hidden, caught up on
+return, with `asOf` reflecting the last **successful** read rather than the last
+attempt.
+
+Two things this page adds on top, both of which turned out to matter:
+
+**A poll must never land under an open decision.** A refresh arriving while the
+autonomy confirmation is open would change the "from" levels the operator is
+being asked to agree to, and one landing mid-write races the write it is about
+to contradict. So `load` is wrapped in a guard that throws while a dialog is
+open or a mutation is in flight — throwing is precisely how this hook is told
+"we did not read", and it keeps the previous stamp, which is the honest answer.
+
+*Verified:* zero fetches across 12s with a confirm open, the stamp frozen, and
+polling resuming the moment it closed.
+
+**Rows may not change silently.** After each read the page diffs the **status
+word** per worker — not the whole row, because a cost ticking up by a hundredth
+of a cent is not news — and announces what moved: *"1 worker changed since you
+looked — Keyword harvester is now Needs attention."* Dismissible, and the first
+load is never a change.
+
+### 5.1 A verification note
+
+`document.visibilityState` is `hidden` in an automated browser tab, so the hook
+correctly does not poll there — and overriding the property fools the hook's
+guard but **not Chrome's background-tab timer throttling**, which stretches a
+10s interval to roughly a minute. A poll that appears not to fire in automation
+is very probably throttling rather than a defect. Force a read through the
+Refresh button to test behaviour, and treat interval timing as unverifiable
+outside a foreground tab.

@@ -440,3 +440,15 @@ button.acr-pg-stat {
   padding: 0; margin: -1px; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
+
+/* ── W.6 · what moved while you were reading ──────────────────────────────
+   control-room.css defines err/warn/ok banners but no neutral informational
+   one, and this is not a warning — it is the page telling you it refreshed
+   itself and what changed. Page-local rather than added to the shared sheet,
+   per the CSS convention in the locks doc. */
+.acr-banner.info {
+  background: #f3f7fd;
+  border: 1px solid #cfe0f4;
+  color: #2f6096;
+}
+.acr-banner.info b { font-weight: 650; }
