@@ -92,6 +92,10 @@ describe('runFleetCouncilOnce', () => {
       ITEM.args,
       { userId: null },
       'run_dir',
+      // WF.4b — the gate parameter rides every queue call. An unrevised walk
+      // carries no stepGates, so every item resolves `inherit` and forceAsk
+      // is false: 4b adds no policy until the operator publishes one.
+      { forceAsk: false },
     )
     const upd = db.agentPlan.update.mock.calls.at(-1)![0]! as { data: Record<string, unknown> }
     expect(upd.data.status).toBe('queued')
