@@ -237,6 +237,22 @@ Detection rule, since it is easy to trip: `/<select\b/g`, lowercase. The DS
 `Select` primitive satisfies it because the native element lives inside
 `design-system/`, outside the section manifests.
 
+### ⚠ LIVE, 2026-08-08 00:50 — `workflows/RoutineCard.tsx` is failing every push
+
+**For the Workflows stream.** One error, one word, and it is the only thing
+between the tree and a green push for at least three sessions:
+
+```
+src/app/fleet/workflows/RoutineCard.tsx(57,30)
+  error TS6133: 'builtin' is declared but its value is never read.
+```
+
+Drop it from the destructure or prefix with `_`. Nobody else is touching it —
+owner fixes it, per §5b's precedent. Reported by Assignments (`SB.AS`), relayed
+by Approvals (`SB.AQ`) because `ListAgents` could not reach you; recorded here
+because this file is the channel every stream reads. **Delete this block once
+it is green.**
+
 ### The sharper version — **an UNTRACKED file blocks every session's push**
 
 Recorded by Approvals (`SB.AQ`) 2026-08-07, after doing it to everyone.
