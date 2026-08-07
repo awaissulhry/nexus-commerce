@@ -906,6 +906,23 @@ web (a custom is composable, publishable, visible; inert until run). **6b**
 history. **6c** — clocks for customs. The editor, versions, test lane and
 teaching layer need zero changes — they were built key-generic on purpose.
 
+**6a EXECUTED 2026-08-07 (`dc971a9c6`), full loop verified on prod.** The
+fleet's first custom workflow exists: *Morning negatives pass*
+(`morning-negatives-pass`, slugged by the API from the dialog's name).
+Watched live end to end: create dialog with the honest contract → the new
+page opened with every truthful empty state (Off — "no published wiring
+yet"; "Nothing composed yet"; Versions: "until you publish, it is honestly
+nothing"; Next run: "its own clock arrives later") → the editor opened from
+the EMPTY baseline (manual trigger, no steps) → two workers added through
+the DS Menu (the picker correctly shrinking as steps land) → Publish showed
+`+ step: amazon-negative-miner · + step: amazon-keyword-harvester` → rev 1
+recorded → the page flipped to **Recorded** with the adapter rendering
+exactly the composed wiring under the ACTIVE-REVISION legend → the list
+reads **4 routines · 3 built-in · 1 custom** with the CUSTOM badge and
+rev 1 chip. The editor, versions and test lane served a custom with zero
+changes, as designed. Remaining: **6b Run-now** (the step that makes it
+breathe) and **6c clocks**.
+
 ---
 
 ## Sources
