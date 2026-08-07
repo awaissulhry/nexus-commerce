@@ -353,6 +353,26 @@
 .wf-problems p { margin: 0; font-size: 12.5px; line-height: 1.55; color: #91640f; }
 .wf-problems p + p { margin-top: 6px; }
 
+/* WF.5 — the test-run results panel */
+.wf-testpanel {
+  margin-top: 14px;
+  border: 1px solid #e6ebf1;
+  border-radius: 10px;
+  background: #fbfcfe;
+  padding: 12px 14px;
+}
+.wf-testrow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 6px 0;
+  border-bottom: 1px solid #eef1f5;
+  font-size: 12.5px;
+}
+.wf-testrow:last-of-type { border-bottom: 0; }
+.wf-testrow .nm { font-weight: 650; color: #26313f; min-width: 170px; }
+
 .wf-croninput {
   width: 180px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

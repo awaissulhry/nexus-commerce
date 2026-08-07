@@ -130,6 +130,52 @@ export function stepGatesOf(
   return out
 }
 
+/* ── WF.5 — test-run status assembly (pure, so it is provable) ─────────── */
+
+export interface TestRunRowLike {
+  agentKey: string
+  status: string
+  ok: boolean
+  findingCount: number
+  /** number | string over JSON; Prisma's Decimal also lands here — anything
+   *  Number() can read. */
+  costUSD: string | number | { toString(): string }
+  errorMessage?: string | null
+  haltedReason?: string | null
+}
+export interface TestStepStatus {
+  charterKey: string
+  status: 'pending' | 'running' | 'done' | 'failed' | 'stopped'
+  findingCount: number
+  costUSD: number
+  errorMessage: string | null
+  haltedReason: string | null
+}
+
+/** One row per planned step, in walk order, whatever the DB has so far.
+ *  `stopped` is a limit doing its job (haltedReason), never a failure. */
+export function assembleTestStatus(
+  steps: string[],
+  rows: TestRunRowLike[],
+): TestStepStatus[] {
+  return steps.map((charterKey) => {
+    const row = rows.find((r) => r.agentKey === charterKey)
+    if (!row) {
+      return { charterKey, status: 'pending' as const, findingCount: 0, costUSD: 0, errorMessage: null, haltedReason: null }
+    }
+    const base = {
+      charterKey,
+      findingCount: row.findingCount,
+      costUSD: Number(row.costUSD || 0),
+      errorMessage: row.errorMessage ?? null,
+      haltedReason: row.haltedReason ?? null,
+    }
+    if (row.status === 'running') return { ...base, status: 'running' as const }
+    if (row.haltedReason) return { ...base, status: 'stopped' as const }
+    return { ...base, status: row.ok ? ('done' as const) : ('failed' as const) }
+  })
+}
+
 /** WF.4b (study decision D-WF4.1): a plan item is gated by its ORIGIN step —
  *  the analyst whose finding it enacts — falling back to the director's
  *  gate, then `inherit`. Pure, so the fallback chain is provable without a

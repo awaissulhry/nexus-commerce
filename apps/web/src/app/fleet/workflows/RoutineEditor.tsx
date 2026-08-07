@@ -16,9 +16,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Plus, X } from 'lucide-react'
+import { AlertTriangle, FlaskConical, Plus, X } from 'lucide-react'
 import { Menu } from '@/design-system/components/Menu'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
+import { classifyFailure } from '../_shared/run-health'
 import { RoutineCanvas } from './RoutineCanvas'
 import type { StepLive } from './RoutineCanvas'
 import {
@@ -59,6 +60,35 @@ function draftKey(routineKey: string): string {
   return `naf-wf-draft-${routineKey}`
 }
 
+interface TestStepRow {
+  charterKey: string
+  status: 'pending' | 'running' | 'done' | 'failed' | 'stopped'
+  findingCount: number
+  costUSD: number
+  errorMessage: string | null
+  haltedReason: string | null
+}
+interface TestStatus {
+  testId: string
+  walking: boolean
+  steps: TestStepRow[]
+  totals: { costUSD: number; findings: number }
+}
+
+/** The taxonomy sentence for a failed/stopped test step — run-health's
+ *  voice, never re-derived. */
+function testStepSentence(s: TestStepRow): string | null {
+  if (s.status !== 'failed' && s.status !== 'stopped') return null
+  const f = classifyFailure({
+    status: 'done',
+    ok: false,
+    errorMessage: s.errorMessage,
+    haltedReason: s.haltedReason,
+    createdAt: '',
+  })
+  return f?.sentence ?? null
+}
+
 export function RoutineEditor({
   routineKey,
   charters,
@@ -76,10 +106,13 @@ export function RoutineEditor({
 }) {
   const [draft, setDraft] = useState<WfDefinition>(baseline)
   const [restored, setRestored] = useState(false)
-  const [dialog, setDialog] = useState<'none' | 'save' | 'publish'>('none')
+  const [dialog, setDialog] = useState<'none' | 'save' | 'publish' | 'test'>('none')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [serverErr, setServerErr] = useState<string | null>(null)
+  const [testEstimate, setTestEstimate] = useState<number | null>(null)
+  const [test, setTest] = useState<{ id: string } | null>(null)
+  const [testStatus, setTestStatus] = useState<TestStatus | null>(null)
 
   // A lost tab loses nothing: the draft mirrors to localStorage.
   useEffect(() => {
@@ -166,6 +199,64 @@ export function RoutineEditor({
     onDone(false)
   }
 
+  /* WF.5 — poll a live test every 3s until every step is terminal. */
+  useEffect(() => {
+    if (!test) return
+    let stop = false
+    const tick = async () => {
+      try {
+        const r = await fetch(
+          `${backend}/api/agent/fleet/workflows/${routineKey}/test/${test.id}`,
+          { cache: 'no-store' },
+        )
+        if (!r.ok) return
+        const s = (await r.json()) as TestStatus
+        if (!stop) setTestStatus(s)
+        if (!s.walking && s.steps.every((x) => x.status !== 'pending' && x.status !== 'running')) {
+          stop = true
+        }
+      } catch { /* next tick retries */ }
+    }
+    void tick()
+    const id = setInterval(() => { if (!stop) void tick() }, 3000)
+    return () => { stop = true; clearInterval(id) }
+  }, [test, backend, routineKey])
+
+  const openTestDialog = async () => {
+    setServerErr(null)
+    setTestEstimate(null)
+    setDialog('test')
+    try {
+      const keys = draft.steps.map((s) => s.charterKey).join(',')
+      const r = await fetch(
+        `${backend}/api/agent/fleet/workflows/${routineKey}/test-estimate?steps=${encodeURIComponent(keys)}`,
+        { cache: 'no-store' },
+      )
+      if (r.ok) setTestEstimate(((await r.json()) as { estimatedCostUSD: number }).estimatedCostUSD)
+    } catch { /* the dialog says "estimating…" honestly */ }
+  }
+
+  const startTest = async () => {
+    setBusy(true)
+    setServerErr(null)
+    try {
+      const r = await fetch(`${backend}/api/agent/fleet/workflows/${routineKey}/test`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ definition: draft }),
+      })
+      const body = (await r.json()) as { testId?: string; error?: string }
+      if (!r.ok || !body.testId) throw new Error(body.error ?? `test failed to start (${r.status})`)
+      setTestStatus(null)
+      setTest({ id: body.testId })
+      setDialog('none')
+    } catch (e) {
+      setServerErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const submit = useCallback(
     async (activate: boolean) => {
       setBusy(true)
@@ -208,6 +299,14 @@ export function RoutineEditor({
         <h3>Editing — a draft</h3>
         <div className="wf-editactions">
           <button className="acr-btn" onClick={discard} disabled={busy}>Discard</button>
+          <button
+            className="acr-btn"
+            disabled={busy || problems.length > 0 || draft.steps.length === 0 || testStatus?.walking === true}
+            onClick={() => void openTestDialog()}
+            title="Run every step of this draft in preview: real evidence, real model, nothing written"
+          >
+            <FlaskConical size={13} /> Test this draft…
+          </button>
           <button
             className="acr-btn"
             disabled={busy || problems.length > 0 || diffIsEmpty(diff)}
@@ -392,7 +491,73 @@ export function RoutineEditor({
         </div>
       </div>
 
-      {dialog !== 'none' ? (
+      {test && testStatus ? (
+        <div className="wf-testpanel">
+          <header className="wf-cardhead">
+            <h3><FlaskConical size={15} /> Test run</h3>
+            <span className="wf-legend">
+              {testStatus.walking ? 'testing…' : 'finished'} · $
+              {testStatus.totals.costUSD.toFixed(4)} spent ·{' '}
+              {testStatus.totals.findings} would-be finding
+              {testStatus.totals.findings === 1 ? '' : 's'}
+            </span>
+          </header>
+          {testStatus.steps.map((s) => {
+            const sentence = testStepSentence(s)
+            return (
+              <div className="wf-testrow" key={s.charterKey}>
+                <span className="nm">{byKey.get(s.charterKey)?.name ?? s.charterKey}</span>
+                {s.status === 'pending' ? (
+                  <span className="acr-pg-muted">waiting its turn…</span>
+                ) : s.status === 'running' ? (
+                  <span className="wf-run">working now…</span>
+                ) : s.status === 'done' ? (
+                  <span className="acr-pg-ok">
+                    would have reported {s.findingCount} finding{s.findingCount === 1 ? '' : 's'}
+                  </span>
+                ) : (
+                  <span className={s.status === 'stopped' ? 'wf-halt' : 'acr-pg-warn'}>
+                    {sentence ?? (s.status === 'stopped' ? 'stopped at a limit' : 'failed')}
+                  </span>
+                )}
+                {s.costUSD > 0 ? <span className="wf-sub">${s.costUSD.toFixed(4)}</span> : null}
+              </div>
+            )
+          })}
+          <p className="wf-vnote">
+            Nothing above was written to the board, and no proposal was queued — the model spend
+            is the only real thing a test does.
+          </p>
+        </div>
+      ) : null}
+
+      {dialog === 'test' ? (
+        <div className="acr-pg-confirmwrap" role="dialog" aria-modal="true">
+          <div className="acr-pg-confirm">
+            <h4>Test this draft?</h4>
+            <p>
+              Every step runs in preview against today&rsquo;s board: real evidence, real model,{' '}
+              <strong>nothing written</strong>. Hand-offs are not simulated yet — each worker is
+              tested on its own. Estimated cost:{' '}
+              <strong>
+                {testEstimate != null ? `$${testEstimate.toFixed(4)}` : 'estimating…'}
+              </strong>{' '}
+              — model spend is real.
+            </p>
+            {serverErr ? <p className="acr-pg-warn">{serverErr}</p> : null}
+            <div className="acr-pg-confirmbtns">
+              <button className="acr-btn" onClick={() => setDialog('none')} disabled={busy}>
+                Cancel
+              </button>
+              <button className="acr-btn primary" disabled={busy} onClick={() => void startTest()}>
+                {busy ? 'Starting…' : 'Run the test'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {dialog === 'save' || dialog === 'publish' ? (
         <div className="acr-pg-confirmwrap" role="dialog" aria-modal="true">
           <div className="acr-pg-confirm">
             <h4>{dialog === 'publish' ? 'Publish this wiring?' : 'Save as a draft revision?'}</h4>

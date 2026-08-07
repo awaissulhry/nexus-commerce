@@ -256,7 +256,9 @@ export async function executeCharter(
         data: {
           agentKey: key,
           charterVersion: charter.version,
-          mode: opts.mode,
+          // WF.5 — a gate-tripped PREVIEW run stays in preview mode, or a
+          // budget-stopped test step would leak into the real runs table.
+          mode: opts.preview ? 'preview' : opts.mode,
           orchestrationId: opts.orchestrationId ?? null,
           workflowKey: opts.workflowKey ?? null,
           workflowRevisionId: opts.workflowRevisionId ?? null,

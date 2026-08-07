@@ -11,6 +11,13 @@
  */
 import type { FastifyPluginAsync } from 'fastify'
 import { resyncFleetSchedules } from '../jobs/fleet-sweep.job.js'
+import { isAiKillSwitchOn } from '../services/ai/providers/index.js'
+import {
+  activeTestFor,
+  estimateTestCost,
+  getWorkflowTestStatus,
+  startWorkflowTest,
+} from '../services/agent-fleet/workflow-test.service.js'
 import {
   builtinByKey,
   getEffectiveDefinition,
@@ -95,6 +102,52 @@ const agentFleetWorkflowRoutes: FastifyPluginAsync = async (fastify) => {
         // keeps the UI from having to guess.
         caveat: 'recorded and active — runs keep following the built-in definition until stored execution ships',
       }
+    },
+  )
+
+  // WF.5 — the confirm dialog's up-front cost estimate (means of recent
+  // run costs per step; $0.05 for a worker with no history).
+  fastify.get<{ Params: { key: string }; Querystring: { steps?: string } }>(
+    '/agent/fleet/workflows/:key/test-estimate',
+    async (request) => {
+      const steps = (request.query.steps ?? '').split(',').filter(Boolean)
+      return { estimatedCostUSD: await estimateTestCost(steps) }
+    },
+  )
+
+  // WF.5 — test a DRAFT: real evidence, real model, nothing written. The
+  // walk is async and serial; poll the status route below.
+  fastify.post<{
+    Params: { key: string }
+    Body: { definition?: unknown }
+  }>('/agent/fleet/workflows/:key/test', async (request, reply) => {
+    const { key } = request.params
+    if (!builtinByKey(key)) {
+      return reply.code(404).send({ error: 'unknown workflow' })
+    }
+    if (isAiKillSwitchOn()) {
+      return reply.code(503).send({ error: 'AI is temporarily disabled (kill switch).' })
+    }
+    const running = activeTestFor(key)
+    if (running) {
+      return reply.code(409).send({ error: 'a test is already running for this workflow', testId: running })
+    }
+    const def = request.body?.definition
+    const verdict = await validateDefinition(def)
+    if (!verdict.ok) return reply.code(400).send({ error: verdict.error })
+    const parsed = def as { steps?: unknown[] }
+    if (!Array.isArray(parsed.steps) || parsed.steps.length === 0) {
+      return reply.code(400).send({ error: 'nothing to walk — this draft has no steps' })
+    }
+    return startWorkflowTest(key, def as never)
+  })
+
+  fastify.get<{ Params: { key: string; testId: string } }>(
+    '/agent/fleet/workflows/:key/test/:testId',
+    async (request, reply) => {
+      const status = await getWorkflowTestStatus(request.params.testId)
+      if (!status) return reply.code(404).send({ error: 'test not found' })
+      return status
     },
   )
 

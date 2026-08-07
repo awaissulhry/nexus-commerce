@@ -9,6 +9,7 @@ import { FLEET_GRAPH, topoLevels } from './fleet-graph.js'
 import {
   BUILTIN_WORKFLOWS,
   MODE_WORKFLOW_KEY,
+  assembleTestStatus,
   builtinByKey,
   defToGraph,
   resolveItemGate,
@@ -77,6 +78,52 @@ describe('resolveItemGate (WF.4b, decision D-WF4.1)', () => {
     for (const key of Object.keys(g)) {
       expect(resolveItemGate(g, key, 'amazon-ads-director')).toBe('inherit')
     }
+  })
+})
+
+describe('assembleTestStatus (WF.5)', () => {
+  const row = (over: Partial<Parameters<typeof assembleTestStatus>[1][number]>) => ({
+    agentKey: 'a',
+    status: 'done',
+    ok: true,
+    findingCount: 0,
+    costUSD: 0,
+    ...over,
+  })
+
+  it('a step with no row yet is pending', () => {
+    const [s] = assembleTestStatus(['a'], [])
+    expect(s!.status).toBe('pending')
+  })
+
+  it('an in-flight row is running — never failed (the SB.W trap)', () => {
+    const [s] = assembleTestStatus(['a'], [row({ status: 'running', ok: false })])
+    expect(s!.status).toBe('running')
+  })
+
+  it('a halted row is stopped, not failed — a limit doing its job', () => {
+    const [s] = assembleTestStatus(['a'], [row({ ok: false, haltedReason: 'budget_tokens: …' })])
+    expect(s!.status).toBe('stopped')
+  })
+
+  it('done and failed follow ok; costUSD survives string serialization', () => {
+    const out = assembleTestStatus(
+      ['a', 'b'],
+      [
+        row({ agentKey: 'a', findingCount: 5, costUSD: '0.0140' }),
+        row({ agentKey: 'b', ok: false, errorMessage: 'schema validation failed' }),
+      ],
+    )
+    expect(out[0]!.status).toBe('done')
+    expect(out[0]!.costUSD).toBeCloseTo(0.014)
+    expect(out[1]!.status).toBe('failed')
+  })
+
+  it('rows keep the walk order of the step list, not arrival order', () => {
+    const out = assembleTestStatus(['first', 'second'], [row({ agentKey: 'second' })])
+    expect(out.map((s) => s.charterKey)).toEqual(['first', 'second'])
+    expect(out[0]!.status).toBe('pending')
+    expect(out[1]!.status).toBe('done')
   })
 })
 
