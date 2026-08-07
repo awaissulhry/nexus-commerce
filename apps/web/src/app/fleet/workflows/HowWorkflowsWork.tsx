@@ -37,14 +37,15 @@ export function HowWorkflowsWork() {
             every switched-on worker read fresh evidence and report findings. The weekly{' '}
             <Term k="council">council</Term> runs the whole pipeline — workers, director, critic —
             and anything that survives waits for your approval. The on-demand check runs one
-            worker by hand. These are the routines that exist in code today; more modes are
-            planned, and they will appear here only when they are real.
+            worker by hand. Those are the built-ins; routines you author yourself appear beside
+            them the moment you create one, and nothing shows here before it is real.
           </p>
           <p>
             <strong>What the status words mean.</strong> <em>On</em> — the next scheduled run will
             do real work. <em>Idle</em> — the clock ticks, but a worker the routine needs is
-            switched off, so it will run and do nothing. <em>Off</em> — the fleet clock itself is
-            off. <em>Ready</em> — waits for you to start it. <em>Halted</em> — the fleet stop
+            switched off, so it will run and do nothing. <em>Off</em> — the fleet clock is off,
+            the routine has no published wiring yet, or you switched the routine off.{' '}
+            <em>Ready</em> — waits for you to start it. <em>Halted</em> — the fleet stop
             switch is on, and nothing runs, scheduled or manual. A status always carries its
             reason on the next line.
           </p>
@@ -57,8 +58,8 @@ export function HowWorkflowsWork() {
           <p>
             <strong>Where you sit.</strong> Every path through every routine ends at the same
             place: findings on the shared board, and proposed actions waiting for{' '}
-            <Term k="approval">your approval</Term>. No routine — built-in or, later, one you
-            author — can reach Amazon any other way.
+            <Term k="approval">your approval</Term>. No routine — built-in or one you author —
+            can reach Amazon any other way.
           </p>
           <p>
             <strong>Editing and versions.</strong> "Edit the wiring" on a routine&rsquo;s page
@@ -67,13 +68,15 @@ export function HowWorkflowsWork() {
             <Term k="publish">publishing</Term> is the one act that records a change, behind a
             confirmation that shows the exact diff. Every revision is immutable, every activation
             supersedes its predecessor, and revert-to-built-in is one click that cannot fail.
-            Until stored execution ships, even a published revision is recorded, not live — the
-            fleet says so wherever it applies, rather than letting you believe otherwise.
+            Publishing is live: the wiring you publish is what runs, a changed clock re-arms the
+            same moment, and every run stamps the revision that served it.
           </p>
           <p>
-            <strong>What comes next.</strong> Stored execution (runs follow your published wiring
-            and stamp the revision that served them), trigger editing, and a test run that shows
-            what a routine <em>would</em> do while writing nothing.
+            <strong>Trying things safely.</strong> &ldquo;Test this draft&rdquo; runs a draft
+            against real evidence with real models but writes nothing — you see what every step
+            would have found and what it cost, with zero trace in Runs. A custom routine runs by
+            hand (&ldquo;Run now&rdquo;) or on its own clock the moment you publish a schedule —
+            and its off switch stops both until you turn it back on.
           </p>
         </div>
       ) : null}

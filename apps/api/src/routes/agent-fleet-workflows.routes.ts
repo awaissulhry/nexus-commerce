@@ -214,6 +214,33 @@ const agentFleetWorkflowRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // WF.6d — the operator's off switch on a CUSTOM routine. Turning it off
+  // disarms its clock the same moment (resync arms only enabled customs) and
+  // makes runStoredWorkflow refuse with workflow_disabled; the wiring and its
+  // revisions are untouched. Built-ins ride the fleet clock and the workers'
+  // dials instead — refusing them here keeps this from becoming a second,
+  // phantom kill switch.
+  fastify.post<{ Params: { key: string }; Body: { enabled?: boolean } }>(
+    '/agent/fleet/workflows/:key/enabled',
+    async (request, reply) => {
+      const { key } = request.params
+      const enabled = request.body?.enabled
+      if (typeof enabled !== 'boolean') {
+        return reply.code(400).send({ error: 'body.enabled must be true or false' })
+      }
+      if (builtinByKey(key)) {
+        return reply.code(400).send({ error: 'a built-in rides the fleet clock and its workers’ dials — this switch is for custom routines' })
+      }
+      const row = await prisma.agentWorkflow.findUnique({ where: { key } })
+      if (!row) return reply.code(404).send({ error: 'unknown workflow' })
+      if (row.enabled !== enabled) {
+        await prisma.agentWorkflow.update({ where: { key }, data: { enabled } })
+        void resyncFleetSchedules().catch(() => {})
+      }
+      return { key, enabled }
+    },
+  )
+
   fastify.post<{ Params: { key: string } }>(
     '/agent/fleet/workflows/:key/revert-to-builtin',
     async (request, reply) => {

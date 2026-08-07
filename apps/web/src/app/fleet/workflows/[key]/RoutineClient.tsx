@@ -127,11 +127,43 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
   const [runBusy, setRunBusy] = useState(false)
   const [runErr, setRunErr] = useState<string | null>(null)
   const [runNotice, setRunNotice] = useState<string | null>(null)
+  const [toggleDialog, setToggleDialog] = useState<'off' | 'on' | null>(null)
+  const [toggleBusy, setToggleBusy] = useState(false)
+  const [toggleErr, setToggleErr] = useState<string | null>(null)
 
   /* WF.6b — Run-now for a published custom. A REAL run: findings write to
      the board; OFF workers still skip; the fleet gates bind. */
   const canRunNow =
     !builtin && vers?.kind === 'custom' && vers.source === 'revision' && vers.enabled
+
+  /* WF.6d — the operator's off switch, custom routines only: built-ins ride
+     the fleet clock and the workers' dials. */
+  const canToggle = !builtin && vers?.kind === 'custom'
+
+  const setEnabled = async (enabled: boolean) => {
+    setToggleBusy(true)
+    setToggleErr(null)
+    try {
+      const r = await fetch(`${backend}/api/agent/fleet/workflows/${routineKey}/enabled`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      })
+      const body = (await r.json()) as { enabled?: boolean; error?: string }
+      if (!r.ok) throw new Error(body.error ?? `switch failed (${r.status})`)
+      setToggleDialog(null)
+      setRunNotice(
+        enabled
+          ? 'This routine is on again — its clock re-arms if the wiring is scheduled, and Run now is back.'
+          : 'This routine is off — its clock is disarmed and Run now is refused until you turn it back on.',
+      )
+      refresh()
+    } catch (e) {
+      setToggleErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setToggleBusy(false)
+    }
+  }
 
   const openRunDialog = async () => {
     setRunErr(null)
@@ -339,6 +371,22 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
               Edit the wiring
             </button>
           ) : null}
+          {loaded && canToggle && vers && !editing ? (
+            <button
+              className="acr-btn"
+              title={
+                vers.enabled
+                  ? 'Disarm its clock and refuse Run now until you turn it back on'
+                  : 'Re-arm its clock (if scheduled) and allow Run now again'
+              }
+              onClick={() => {
+                setToggleErr(null)
+                setToggleDialog(vers.enabled ? 'off' : 'on')
+              }}
+            >
+              {vers.enabled ? 'Turn off…' : 'Turn on…'}
+            </button>
+          ) : null}
           <button className="acr-btn" onClick={refresh}>
             <RefreshCw size={13} /> Refresh
           </button>
@@ -419,7 +467,9 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
                     : 'not scheduled'
                   : builtin || canRunNow
                     ? 'when you start it'
-                    : '—'}
+                    : canToggle && vers && !vers.enabled
+                      ? 'switched off'
+                      : '—'}
             </span>
             <span className="sub">
               {!loaded
@@ -430,7 +480,9 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
                     ? 'from a worker’s page, or the console'
                     : canRunNow
                       ? 'Run now, above — or publish a schedule'
-                      : 'publish a first revision to run it'}
+                      : canToggle && vers && !vers.enabled
+                        ? 'turn it back on to run it'
+                        : 'publish a first revision to run it'}
             </span>
           </div>
         </div>
@@ -603,6 +655,45 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
           </div>
         ) : null}
 
+        {toggleDialog ? (
+          <div className="acr-pg-confirmwrap" role="dialog" aria-modal="true">
+            <div className="acr-pg-confirm">
+              <h4>{toggleDialog === 'off' ? 'Turn this routine off?' : 'Turn this routine on?'}</h4>
+              <p>
+                {toggleDialog === 'off' ? (
+                  <>
+                    Its clock disarms this moment, Run now is refused, and nothing launches until
+                    you turn it back on. The wiring and every version stay exactly as they are.
+                  </>
+                ) : (
+                  <>
+                    If its published wiring is on a clock, the clock re-arms this moment. Workers
+                    that are OFF still skip — the dials on the Workers page decide what actually
+                    executes, and nothing can spend while they are off.
+                  </>
+                )}
+              </p>
+              {toggleErr ? <p className="acr-pg-warn">{toggleErr}</p> : null}
+              <div className="acr-pg-confirmbtns">
+                <button
+                  className="acr-btn"
+                  onClick={() => setToggleDialog(null)}
+                  disabled={toggleBusy}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="acr-btn primary"
+                  disabled={toggleBusy}
+                  onClick={() => void setEnabled(toggleDialog === 'on')}
+                >
+                  {toggleBusy ? 'Working…' : toggleDialog === 'off' ? 'Turn it off' : 'Turn it on'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {pendingAct && vers ? (
           <div className="acr-pg-confirmwrap" role="dialog" aria-modal="true">
             <div className="acr-pg-confirm">
@@ -614,9 +705,9 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
                 )}
               />
               <p>
-                This makes rev {pendingAct.revision} the recorded wiring. Until stored execution
-                ships, runs keep following the built-in — the record changes, tonight&rsquo;s
-                behaviour does not.{builtin ? ' Revert stays one click.' : ''}
+                This makes rev {pendingAct.revision} the active wiring — what actually runs,
+                starting now. If its trigger is a clock, the clock re-arms this moment.
+                {builtin ? ' Revert stays one click.' : ''}
               </p>
               {actErr ? <p className="acr-pg-warn">{actErr}</p> : null}
               <div className="acr-pg-confirmbtns">

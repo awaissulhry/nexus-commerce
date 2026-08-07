@@ -969,6 +969,26 @@ revision; the Versions note only appears on built-ins whose default is set
 aside. Lesson recorded: when a phase flips a system-wide fact, grep the
 old fact's phrasing across the page the same day it flips.
 
+**6d EXECUTED 2026-08-07 — the custom off switch, closing the last deferred
+nicety in this stream's files.** `POST /agent/fleet/workflows/:key/enabled`
+(customs only — a built-in rides the fleet clock and the workers' dials, and
+refusing it keeps this from becoming a second, phantom kill switch; body must
+be a boolean; idempotent, resync only on change). The backend truth was
+already whole — `isWorkflowEnabled` refuses in `runStoredWorkflow`
+(`workflow_disabled`), resync arms only enabled customs, `customStatus`
+already said "Off — switched off by the operator" — so the unit is the
+route, the Turn off…/Turn on… control (confirm in BOTH directions, each
+stating exactly what changes and that OFF workers still cannot spend), the
+result banner, and the NEXT RUN cell's honest "switched off / turn it back
+on to run it" (it used to claim "publish a first revision" at a
+published-but-disabled custom). The same pass caught the copy-sweep's tail:
+grepping the SHORT fragment ("stored execution") found THREE more stale
+sites the first sweep missed because JSX wraps phrases mid-line — the
+Activate dialog and two paragraphs of the teaching card, whose "What comes
+next" list was entirely shipped features; it now teaches the test lane,
+Run-now, custom clocks and the off switch instead. Seven stale sites total,
+zero remaining. 336 fleet tests green.
+
 ### WF.7 — dynamic capabilities (RESEARCH MANDATE, opened 2026-08-07 — new session)
 
 **Operator direction, verbatim intent:** the workflow system lacks *dynamic*
