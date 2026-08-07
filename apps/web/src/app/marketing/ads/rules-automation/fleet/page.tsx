@@ -7,6 +7,9 @@
  */
 import { FleetTab } from './FleetTab'
 import '../control-room/control-room.css'
+// NAF.DT — the rebuilt sections live in their own stylesheet, so the
+// parallel NAF.AC session keeps control-room.css to itself.
+import './fleet-sections.css'
 
 export const dynamic = 'force-dynamic'
 

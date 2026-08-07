@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bot, ChevronDown, ChevronRight, RefreshCw, ShieldAlert } from 'lucide-react'
+import { Bot, RefreshCw, ShieldAlert } from 'lucide-react'
 import {
   Bar,
   BarChart,
@@ -35,7 +35,8 @@ import {
 import { FleetMapCanvas, type CanvasFinding, type NodeRunInfo } from './FleetMapCanvas'
 import { Term } from './glossary'
 import { FirstVisitIntro, HowItWorks } from './HowItWorks'
-import { PlanStory, type PlanLabels, type StoryPlan } from './PlanStory'
+import { type PlanLabels, type StoryPlan } from './PlanStory'
+import { TimelineStream, type FleetTimelinePage } from './TimelineStream'
 
 /* ── types mirroring the fleet API ─────────────────────────────────── */
 
@@ -137,12 +138,6 @@ interface ScorecardRow {
 }
 
 const usd = (n: number) => `$${n.toFixed(4)}`
-const ago = (iso: string) => {
-  const h = Math.floor((Date.now() - new Date(iso).getTime()) / 3_600_000)
-  if (h < 1) return 'just now'
-  if (h < 48) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
-}
 
 /* ── the tab ───────────────────────────────────────────────────────── */
 
@@ -171,11 +166,15 @@ export function FleetTab() {
   const [rejectAllFor, setRejectAllFor] = useState<string | null>(null)
   const [rejectAllReason, setRejectAllReason] = useState('')
   const [busy, setBusy] = useState(false)
+  // NAF.DT — the decision timeline's own feed, paged independently of the
+  // rest of the page so "show older" never re-fetches the whole fleet.
+  const [timeline, setTimeline] = useState<FleetTimelinePage | null>(null)
+  const [timelineMore, setTimelineMore] = useState(false)
 
   const load = useCallback(async (opts: { silent?: boolean } = {}) => {
     if (!opts.silent) setLoading(true)
     try {
-      const [c, g, s, r, f, p, a, sw, sch, sc] = await Promise.all([
+      const [c, g, s, r, f, p, a, sw, sch, sc, tl] = await Promise.all([
         fetch(`${backend}/api/agent/fleet/charters`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/graph`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/state`, { cache: 'no-store' }),
@@ -186,6 +185,7 @@ export function FleetTab() {
         fetch(`${backend}/api/agent/fleet/sweeps?limit=8`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/schedule`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/scorecards?limit=40`, { cache: 'no-store' }),
+        fetch(`${backend}/api/agent/fleet/timeline?limit=40`, { cache: 'no-store' }),
       ])
       if (!c.ok) throw new Error(`charters: ${c.status}`)
       setCharters(((await c.json()) as { charters: CharterRow[] }).charters)
@@ -202,6 +202,7 @@ export function FleetTab() {
       if (sw.ok) setSweeps(((await sw.json()) as { sweeps: SweepRow[] }).sweeps)
       if (sch.ok) setSchedule(((await sch.json()) as { jobs: ScheduleJob[] }).jobs)
       if (sc.ok) setScorecards(((await sc.json()) as { scorecards: ScorecardRow[] }).scorecards)
+      if (tl.ok) setTimeline((await tl.json()) as FleetTimelinePage)
       setUpdatedAt(Date.now())
       setErr(null)
     } catch (e) {
@@ -247,6 +248,26 @@ export function FleetTab() {
   useEffect(() => {
     if (mapView === 'entities' && !entityGraph && !entityLoading) void loadEntityGraph()
   }, [mapView, entityGraph, entityLoading, loadEntityGraph])
+
+  // NAF.DT.2 — "show older" appends the next page. The totals come from the
+  // freshest response, so the count stays right as history grows.
+  const loadMoreTimeline = useCallback(async () => {
+    if (!timeline?.nextCursor || timelineMore) return
+    setTimelineMore(true)
+    try {
+      const r = await fetch(
+        `${backend}/api/agent/fleet/timeline?limit=40&cursor=${encodeURIComponent(timeline.nextCursor)}`,
+        { cache: 'no-store' },
+      )
+      if (!r.ok) throw new Error(`timeline: ${r.status}`)
+      const next = (await r.json()) as FleetTimelinePage
+      setTimeline({ ...next, events: [...timeline.events, ...next.events] })
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setTimelineMore(false)
+    }
+  }, [backend, timeline, timelineMore])
 
   const decide = useCallback(
     async (id: string, decision: 'approve' | 'reject', reason?: string) => {
@@ -378,11 +399,11 @@ export function FleetTab() {
     return m
   }, [scorecards])
 
-  // FX.7 — the auditor's nightly brief, when it exists, is the headline.
-  const auditorBrief = useMemo(
-    () => findings.find((f) => f.charterKey === 'fleet-auditor' && f.kind === 'fleet_brief'),
-    [findings],
-  )
+  // NAF.DT — report-card columns render only when a report card exists.
+  // Scorecards recompute nightly; until the first one lands, Grade / agreement
+  // / trust are three columns of "—", and a column with no data is not a
+  // column. They come back on their own the moment there is something in them.
+  const haveScorecards = latest14ByCharter.size > 0
 
   // FX.9 — the drill-down chips: each worker's open findings, for the map.
   const findingsByKey = useMemo(() => {
@@ -438,19 +459,6 @@ export function FleetTab() {
       ) : null}
 
       <FirstVisitIntro />
-
-      {/* FX.7 — the auditor's brief is the headline when it exists */}
-      {auditorBrief ? (
-        <section className="acr-card acr-fl-brief-hero">
-          <header className="acr-fl-head">
-            <h3>This morning&apos;s brief</h3>
-            <span className="acr-fl-sub">
-              written by the <Term k="auditor">auditor</Term> · {ago(auditorBrief.createdAt)}
-            </span>
-          </header>
-          <p className="acr-fl-brieftext">{auditorBrief.rationale}</p>
-        </section>
-      ) : null}
 
       {/* 1 — fleet map */}
       <section className="acr-card">
@@ -570,43 +578,30 @@ export function FleetTab() {
       </section>
 
 
-      {/* 3 — decision timeline */}
+      {/* 3 — decision timeline (NAF.DT.1–DT.3): every event the fleet has
+          produced, newest first, grouped by day and by episode. It used to
+          list plans, and only one plan has ever existed. */}
       <section className="acr-card">
         <header className="acr-fl-head">
           <h3>Decision timeline</h3>
-          <span className="acr-fl-sub">finding → plan → critic → approval</span>
+          <span className="acr-fl-sub">
+            everything the fleet has done — newest first
+          </span>
         </header>
-        {plans.length === 0 ? (
-          <p className="acr-fl-empty">
-            No plans yet. Plans appear when the <Term k="council">council</Term> runs — every
-            Monday at 05:15 UTC, once the <Term k="director">director</Term> is enabled. Each one
-            will show up here as a story: what the workers found, what the director chose, and
-            what the <Term k="critic">critic</Term> ruled.
-          </p>
-        ) : (
-          plans.slice(0, 5).map((p) => (
-            <div key={p.id} id={`plan-${p.id}`} className="acr-fl-plan">
-              <button
-                className="acr-fl-planhead"
-                onClick={() => setOpenPlan(openPlan === p.id ? null : p.id)}
-              >
-                {openPlan === p.id ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                <strong>{p.headline}</strong>
-                <span className={`acr-fl-pill verdict-${p.criticVerdict ?? 'none'}`}>
-                  {p.criticVerdict === 'block'
-                    ? 'blocked'
-                    : p.criticVerdict === 'pass'
-                      ? 'passed'
-                      : (p.criticVerdict ?? 'awaiting review')}
-                </span>
-                <span className="acr-fl-sub">
-                  {p.items.length} action{p.items.length === 1 ? '' : 's'} · {ago(p.createdAt)}
-                </span>
-              </button>
-              {openPlan === p.id ? <PlanStory plan={p} labels={planLabels} /> : null}
-            </div>
-          ))
-        )}
+        <p className="acr-fl-schedule">
+          Each line says who did it, what happened, and what set it off. A group of
+          related events — one run and everything it produced, or a whole{' '}
+          <Term k="council">council</Term> — collapses into a single card you can open.
+        </p>
+        <TimelineStream
+          page={timeline}
+          plans={plans}
+          labels={planLabels}
+          loading={loading}
+          loadingMore={timelineMore}
+          onLoadMore={() => void loadMoreTimeline()}
+          focusPlanId={openPlan}
+        />
       </section>
 
       {/* 4 — approval inbox */}
@@ -711,9 +706,13 @@ export function FleetTab() {
             <tr>
               <th>Worker</th>
               <th>7d cost</th>
-              <th><Term k="grade">Grade</Term></th>
-              <th><Term k="shadow-agreement">Agrees with engines</Term></th>
-              <th>Trust</th>
+              {haveScorecards ? (
+                <>
+                  <th><Term k="grade">Grade</Term></th>
+                  <th><Term k="shadow-agreement">Agrees with engines</Term></th>
+                  <th>Trust</th>
+                </>
+              ) : null}
             </tr>
           </thead>
           <tbody>
@@ -723,27 +722,34 @@ export function FleetTab() {
                 <tr key={c.key}>
                   <td>{c.name}</td>
                   <td>{usd(cost7dByCharter.get(c.key) ?? 0)}</td>
-                  <td>{card?.grade ?? '—'}</td>
-                  <td>
-                    {card?.shadowAgreement == null
-                      ? 'unknown'
-                      : `${Math.round(Number(card.shadowAgreement) * 100)}%`}
-                  </td>
-                  <td>
-                    {card?.promotionEligible
-                      ? 'earned the next rung'
-                      : c.autonomyLevel === 'OFF'
-                        ? 'switched off'
-                        : 'earning it'}
-                  </td>
+                  {haveScorecards ? (
+                    <>
+                      <td>{card?.grade ?? '—'}</td>
+                      <td>
+                        {card?.shadowAgreement == null
+                          ? 'unknown'
+                          : `${Math.round(Number(card.shadowAgreement) * 100)}%`}
+                      </td>
+                      <td>
+                        {card?.promotionEligible
+                          ? 'earned the next rung'
+                          : c.autonomyLevel === 'OFF'
+                            ? 'switched off'
+                            : 'earning it'}
+                      </td>
+                    </>
+                  ) : null}
                 </tr>
               )
             })}
           </tbody>
         </table>
         <p className="acr-fl-sub">
-          Report cards recompute every night; costs here cover the {runs.length} most recent runs
-          and reconcile against the sweep report. A grade of “—” means no nights on the books yet.
+          Costs here cover the {runs.length} most recent runs and reconcile against the sweep
+          report.{' '}
+          {haveScorecards
+            ? 'Report cards recompute every night.'
+            : 'No report card exists yet, so grades and trust are not shown — they appear here after the first night a worker runs.'}
         </p>
       </section>
 
@@ -769,8 +775,9 @@ export function FleetTab() {
           </ul>
         )}
         <p className="acr-fl-empty">
-          The <Term k="auditor">auditor</Term>&apos;s nightly narrative appears here once it is
-          enabled — until then this panel reports sweeps, not stories.
+          There is no <Term k="auditor">auditor</Term> worker yet — the charter has not been
+          built, so no nightly narrative can be written. Until one exists this panel reports
+          sweeps, not stories.
         </p>
       </section>
 

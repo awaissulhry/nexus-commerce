@@ -1,0 +1,289 @@
+/**
+ * NAF.DT.1 — the event spine: one event per source table, with the right
+ * actor, a sentence a beginner can read, honest outcomes, deterministic
+ * paging, and totals that never hide a cap.
+ */
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('../../db.js', () => ({
+  default: {
+    agentCharter: { findMany: vi.fn() },
+    agentRun: { findMany: vi.fn() },
+    agentFinding: { findMany: vi.fn() },
+    agentPlan: { findMany: vi.fn() },
+    agentApproval: { findMany: vi.fn() },
+    agentFleetState: { findUnique: vi.fn() },
+  },
+}))
+
+import prisma from '../../db.js'
+import { getFleetTimeline } from './fleet-timeline.service.js'
+
+const db = vi.mocked(prisma, true)
+
+const RUNS = [
+  {
+    id: 'run1',
+    agentKey: 'amazon-negative-miner',
+    mode: 'sweep',
+    trigger: 'schedule',
+    ok: true,
+    status: 'done',
+    findingCount: 5,
+    costUSD: '0.0264',
+    latencyMs: 16000,
+    errorMessage: null,
+    haltedReason: null,
+    orchestrationId: 'orch1',
+    createdAt: new Date('2026-08-06T04:50:00Z'),
+  },
+  {
+    id: 'run2',
+    agentKey: 'amazon-bid-tuner',
+    mode: 'ask',
+    trigger: 'manual',
+    ok: false,
+    status: 'failed',
+    findingCount: 0,
+    costUSD: '0',
+    latencyMs: 900,
+    errorMessage: 'fetch failed',
+    haltedReason: null,
+    orchestrationId: null,
+    createdAt: new Date('2026-08-06T05:00:00Z'),
+  },
+]
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  db.agentCharter.findMany.mockResolvedValue([
+    { key: 'amazon-negative-miner', name: 'Negative miner' },
+    { key: 'amazon-bid-tuner', name: 'Bid tuner' },
+    { key: 'amazon-ads-director', name: 'Ads director' },
+    { key: 'plan-critic', name: 'Plan critic' },
+  ] as never)
+  db.agentRun.findMany.mockImplementation((args: never) => {
+    // episodeIndex() selects without a `take`; the event query uses one.
+    const a = args as unknown as { take?: number }
+    return Promise.resolve(
+      (a?.take ? RUNS : RUNS.map((r) => ({ id: r.id, orchestrationId: r.orchestrationId, agentKey: r.agentKey }))) as never,
+    )
+  })
+  db.agentFinding.findMany.mockResolvedValue([
+    {
+      id: 'f1',
+      runId: 'run1',
+      charterKey: 'amazon-negative-miner',
+      kind: 'waste_term',
+      severity: 'high',
+      entityType: 'SEARCH_TERM',
+      entityId: 'st1',
+      entityName: 'giacca moto uomo',
+      rationale: 'Spent €40 with no orders in 30 days.',
+      status: 'open',
+      createdAt: new Date('2026-08-06T04:52:00Z'),
+    },
+  ] as never)
+  db.agentPlan.findMany.mockResolvedValue([
+    {
+      id: 'p1',
+      runId: 'run1',
+      charterKey: 'amazon-ads-director',
+      headline: '15 actions: stop €280+ waste',
+      items: new Array(15).fill({}),
+      droppedItems: [{}, {}],
+      criticVerdict: 'block',
+      criticNotes: { summary: 'Two actions contradict a change made yesterday.' },
+      status: 'critiqued',
+      approvalIds: [],
+      createdAt: new Date('2026-08-06T19:56:00Z'),
+      decidedAt: new Date('2026-08-06T19:58:00Z'),
+    },
+  ] as never)
+  db.agentApproval.findMany.mockResolvedValue([
+    {
+      id: 'a1',
+      agentRunId: 'run1',
+      toolName: 'create-negative-keyword',
+      riskTier: 'medium',
+      status: 'rejected',
+      reason: 'too broad',
+      requestedAt: new Date('2026-08-06T06:00:00Z'),
+      decidedBy: null,
+      decidedAt: new Date('2026-08-06T06:05:00Z'),
+    },
+  ] as never)
+  db.agentFleetState.findUnique.mockResolvedValue({
+    halted: false,
+    haltedAt: null,
+    haltReason: null,
+    haltedBy: null,
+  } as never)
+})
+
+describe('getFleetTimeline — one event per source', () => {
+  it('turns a successful run into a sentence naming the worker and the count', async () => {
+    const { events } = await getFleetTimeline()
+    const e = events.find((x) => x.id === 'run.run1')!
+    expect(e.kind).toBe('run.ok')
+    expect(e.actor).toBe('Negative miner')
+    expect(e.actorKey).toBe('amazon-negative-miner')
+    expect(e.title).toBe('Negative miner ran and found 5 things')
+    expect(e.source).toBe('the nightly sweep')
+    expect(e.outcome).toBe('ok')
+    expect(e.costUSD).toBeCloseTo(0.0264)
+  })
+
+  it('explains a failure in words and keeps the verbatim error', async () => {
+    const { events } = await getFleetTimeline()
+    const e = events.find((x) => x.id === 'run.run2')!
+    expect(e.kind).toBe('run.failed')
+    expect(e.outcome).toBe('bad')
+    expect(e.title).toBe('Bid tuner tried to run, and failed')
+    expect(e.detail).toContain('could not reach the model provider')
+    expect(e.detail).toContain('fetch failed')
+  })
+
+  it('names the entity a finding is about instead of its id', async () => {
+    const { events } = await getFleetTimeline()
+    const e = events.find((x) => x.id === 'finding.f1')!
+    expect(e.title).toBe('Negative miner found a search term wasting money — giacca moto uomo')
+    expect(e.entity).toEqual({ type: 'SEARCH_TERM', id: 'st1', name: 'giacca moto uomo' })
+    expect(e.outcome).toBe('attention')
+  })
+
+  it("splits a plan into the drafting and the critic's separate ruling", async () => {
+    const { events } = await getFleetTimeline()
+    const drafted = events.find((x) => x.id === 'plan.p1')!
+    const ruled = events.find((x) => x.id === 'critic.p1')!
+    expect(drafted.title).toBe('Ads director drew up a plan of 15 actions')
+    expect(drafted.detail).toContain('set aside 2 more')
+    expect(ruled.title).toBe('The critic blocked that plan')
+    expect(ruled.actorKey).toBe('plan-critic')
+    expect(ruled.outcome).toBe('bad')
+    // The critic's moment is its own timestamp, not the plan's.
+    expect(ruled.at).toBe('2026-08-06T19:58:00.000Z')
+  })
+
+  it('splits an approval into the worker asking and the human answering', async () => {
+    const { events } = await getFleetTimeline()
+    const asked = events.find((x) => x.id === 'approval.a1')!
+    const decided = events.find((x) => x.id === 'decision.a1')!
+    expect(asked.actorKind).toBe('worker')
+    expect(asked.title).toBe('Negative miner asked permission to stop ads showing for a search term')
+    expect(asked.riskTier).toBe('medium')
+    expect(decided.actorKind).toBe('human')
+    expect(decided.title).toBe('Someone said no to the request to stop ads showing for a search term')
+    expect(decided.detail).toBe('Reason given: too broad')
+  })
+
+  it('admits when nobody recorded who decided, rather than inventing one', async () => {
+    const { events } = await getFleetTimeline()
+    expect(events.find((x) => x.id === 'decision.a1')!.actor).toBe('Someone (not recorded)')
+  })
+
+  it('groups a run and everything it produced into one episode', async () => {
+    const { events } = await getFleetTimeline()
+    const ids = ['run.run1', 'finding.f1', 'plan.p1', 'critic.p1', 'approval.a1']
+    for (const id of ids) expect(events.find((x) => x.id === id)!.episodeId).toBe('orch1')
+  })
+})
+
+describe('getFleetTimeline — ordering, paging and honesty', () => {
+  it('returns newest first', async () => {
+    const { events } = await getFleetTimeline()
+    const times = events.map((e) => e.at)
+    expect([...times].sort().reverse()).toEqual(times)
+  })
+
+  it('reports the true total even when a page is smaller', async () => {
+    const { events, total, nextCursor } = await getFleetTimeline({}, { limit: 2 })
+    expect(events).toHaveLength(2)
+    expect(total).toBe(7) // 2 runs + 1 finding + 1 plan + 1 critic + 1 ask + 1 decision
+    expect(nextCursor).not.toBeNull()
+  })
+
+  it('never repeats an event across pages', async () => {
+    const first = await getFleetTimeline({}, { limit: 3 })
+    const second = await getFleetTimeline({}, { limit: 3, cursor: first.nextCursor! })
+    const overlap = first.events
+      .map((e) => e.id)
+      .filter((id) => second.events.some((e) => e.id === id))
+    expect(overlap).toEqual([])
+  })
+
+  it('counts every kind so the filter chips can show real numbers', async () => {
+    const { countsByKind } = await getFleetTimeline()
+    expect(countsByKind).toMatchObject({
+      'run.ok': 1,
+      'run.failed': 1,
+      'finding.raised': 1,
+      'plan.drafted': 1,
+      'plan.critiqued': 1,
+      'approval.requested': 1,
+      'approval.decided': 1,
+    })
+  })
+})
+
+describe('getFleetTimeline — filters', () => {
+  it('filters to one worker, and drops the human decision with it', async () => {
+    const { events } = await getFleetTimeline({ actor: 'amazon-negative-miner' })
+    expect(events.every((e) => e.actorKey === 'amazon-negative-miner')).toBe(true)
+    expect(events.some((e) => e.kind === 'approval.decided')).toBe(false)
+  })
+
+  it("filters to what people did, keeping only humans' decisions", async () => {
+    const { events } = await getFleetTimeline({ actor: 'human' })
+    expect(events).toHaveLength(1)
+    expect(events[0]!.kind).toBe('approval.decided')
+  })
+
+  it('filters by kind', async () => {
+    const { events } = await getFleetTimeline({ kinds: ['run.failed'] })
+    expect(events.map((e) => e.id)).toEqual(['run.run2'])
+  })
+
+  it('searches the sentence, not the raw row', async () => {
+    const { events } = await getFleetTimeline({ q: 'giacca' })
+    expect(events.map((e) => e.id)).toEqual(['finding.f1'])
+  })
+})
+
+describe('getFleetTimeline — the halt', () => {
+  it('says nothing when the fleet is running', async () => {
+    const { events } = await getFleetTimeline()
+    expect(events.some((e) => e.kind === 'fleet.halted')).toBe(false)
+  })
+
+  it('contributes exactly one event when the fleet is halted', async () => {
+    db.agentFleetState.findUnique.mockResolvedValue({
+      halted: true,
+      haltedAt: new Date('2026-08-06T07:00:00Z'),
+      haltReason: 'daily ceiling reached',
+      haltedBy: 'auto:budget-guard',
+    } as never)
+    const { events } = await getFleetTimeline()
+    const halt = events.filter((e) => e.kind === 'fleet.halted')
+    expect(halt).toHaveLength(1)
+    expect(halt[0]!.title).toBe('The whole fleet was halted')
+    expect(halt[0]!.detail).toBe('daily ceiling reached')
+    expect(halt[0]!.source).toBe('a guard')
+  })
+})
+
+describe('rollup keys', () => {
+  it('gives identical failures one signature so repeats can collapse', async () => {
+    const { events } = await getFleetTimeline()
+    expect(events.find((e) => e.id === 'run.run2')!.rollupKey).toBe(
+      'run:amazon-bid-tuner:unreachable',
+    )
+  })
+
+  it('separates a success from a failure by the same worker', async () => {
+    const { events } = await getFleetTimeline()
+    const ok = events.find((e) => e.id === 'run.run1')!.rollupKey
+    const bad = events.find((e) => e.id === 'run.run2')!.rollupKey
+    expect(ok).not.toBe(bad)
+  })
+})
