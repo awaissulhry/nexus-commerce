@@ -251,6 +251,29 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
         />
       ) : null}
 
+      {/* S4 interim — the stored model waits on the locks-doc §4 review, so
+          this card tells the truth about today: one version, defined in code.
+          It becomes the revision list the moment AgentWorkflowRevision lands. */}
+      <section className="acr-card">
+        <header className="wf-cardhead">
+          <h3>Versions</h3>
+        </header>
+        <div className="wf-versions">
+          <div className="wf-vrow">
+            <span className="wf-vbadge">v1</span>
+            <span className="wf-vname">Built-in — defined in code</span>
+            <span className="acr-pg-statechip running">active</span>
+          </div>
+          <p className="wf-vnote">
+            Every future change to this routine will be an immutable revision: a mandatory note
+            saying why, a readable diff of steps, connections, gates and trigger, and a one-click
+            return to this built-in that cannot fail. Every run will stamp the revision that
+            served it. Editing arrives with the editor — and editing never changes what runs
+            until you publish.
+          </p>
+        </div>
+      </section>
+
       <HowWorkflowsWork />
     </div>
   )

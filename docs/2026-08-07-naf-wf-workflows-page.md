@@ -524,6 +524,24 @@ Expanded: one row per worker-run — name, outcome sentence, findings, cost,
 duration, link to the worker's page. No version column until versions exist
 (WF.2): an always-empty column teaches nothing.
 
+### WF.2 / S4 — versions (study + interim, 2026-08-07)
+
+**The protocol gate, honored:** the stored model is the locks doc's §4
+coupling — "neither session designs this alone; whoever reaches it first
+writes the proposal and the other reviews before any code." The full proposal
+(Half A worker instances · Half B `AgentWorkflow`/`AgentWorkflowRevision`,
+meeting only at `resolveCharter`; migration `20260807c_naf_wf_workflows`) now
+sits in `docs/2026-08-07-naf-sb-session-locks.md` §4, **awaiting Workers
+review**. No migration runs until that section says REVIEWED.
+
+**Shipped meanwhile (schema-free):** a Versions card on the detail page
+stating today's truth — one version, `v1 · Built-in — defined in code ·
+active` — and the contract every future revision will honor (mandatory note,
+categorized diff, revert that cannot fail, runs stamp their revision, publish
+is the only thing that changes production). The card becomes the revision
+list the moment the model lands; its promise text is the acceptance criteria
+for full S4.
+
 ---
 
 ## Sources

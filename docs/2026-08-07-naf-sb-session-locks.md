@@ -77,6 +77,59 @@ are in `docs/2026-08-07-naf-sbw-workers-page.md` Part 6.
 Not needed before Workers step **W.8** or the Workflows stored-graph work, so
 there is time to do it properly.
 
+### PROPOSAL (Workflows stream, 2026-08-07) — awaiting Workers review
+
+The Workflows stream has reached its stored-model phase first. Two halves, one
+contract; the design goal is that **neither half ever names the other's
+internals** — they meet only at `resolveCharter`.
+
+**Half A — worker instances (Workers, W.8; sketched here only so Half B cannot
+contradict it).** An instance is a new `AgentCharter` row with a fresh `key`
+and a new nullable `templateKey` column naming the code charter it
+instantiates. `resolveCharter(key)`: when `FLEET_CHARTERS[key]` is absent but
+the row's `templateKey` resolves in code, return the code definition of the
+template ⊕ the row's narrowing (scope, budget, cadence, prompt overlay).
+`outputSchemaKey` / `toolNames` (narrow-only) / `observationKeys` /
+`autonomyCap` / `tier` inherit uneditably — laws L2/L3 hold by construction.
+Workers may redesign the internals of this half freely; the only thing Half B
+relies on is *`resolveCharter` is the single resolver and instances resolve
+through it*.
+
+**Half B — stored workflows (Workflows, WF.2).** Two models, appended at end
+of schema in a `// ─── NAF.SB.8 ───` block; migration `20260807c_naf_wf_workflows`
+(letter checked free):
+
+- `AgentWorkflow` — `key` unique · `name` · `description` · `kind`
+  (`builtin | custom`) · `enabled` · timestamps · `createdBy`.
+- `AgentWorkflowRevision` — `workflowKey` · `revision` (monotonic) ·
+  `definition Json` · `note` (mandatory) · `author` · `createdAt` ·
+  `activatedAt` · `supersededAt` · `@@unique([workflowKey, revision])` —
+  byte-for-byte the `AgentCharterRevision` contract.
+- `AgentRun` gains nullable `workflowKey` + `workflowRevisionId` (additive).
+- `definition` Json, contract v1:
+  `{ trigger: {type:'schedule',cron} | {type:'manual'},
+     steps: [{ charterKey, gate: 'ask'|'act'|'inherit' }],
+     edges: [{ from, to, artifact: 'finding'|'plan'|'strategy' }] }`
+- **Law (mirrors charters):** code default ⊕ active revision. A built-in with
+  no/unreadable active revision runs the CODE path — revert-to-built-in can
+  never fail. A custom workflow's floor is *disabled*, never a code fallback.
+- **Validation on save/publish (Layer 2 vs Layer 1):** every `charterKey`
+  must resolve **via `resolveCharter`** — never `FLEET_CHARTERS` directly —
+  so instances become wireable into workflows the day Half A lands, with zero
+  change on this side. Edges must be acyclic (the `topoLevels` throw), the
+  artifact type accepted by the target's tier, gates tighten-only against
+  tool-policy floors (`alwaysAsk` unbreachable).
+- **The §4 worry about `FLEET_GRAPH` resolves structurally:** stored
+  execution walks the STORED graph, so an instance needs no `FLEET_GRAPH`
+  edges to participate in a stored workflow. `FLEET_GRAPH` remains the code
+  truth for the built-ins' fallback path only.
+
+**Review asks for the Workers stream:** (1) does Half A as sketched match your
+W.8 intent — especially `templateKey` on `AgentCharter` rather than a separate
+instance table? (2) any objection to `resolveCharter` as the single meeting
+point? (3) any claim on migration letter `20260807c`? Nothing in Half B runs
+until this section says REVIEWED.
+
 ---
 
 ## 5 · Open shared decisions
@@ -85,7 +138,7 @@ there is time to do it properly.
 |---|---|---|---|
 | 1 | **Real-time mechanism** | Workers W.6, Workflows canvas | **SETTLED 2026-08-07 — visibility-gated polling.** One shared hook: refetch ~10s while `document.visibilityState === 'visible'`, pause when hidden, an "as of" stamp, and a *changed since you looked* cue rather than a silent re-sort under the cursor. No SSE, no new infrastructure. **This is the answer for all ten pages** — the Workflows canvas adopts the same hook. Workers extracts it at W.6; whoever needs it sooner may extract it earlier and record that here. **Extracted early by the Workflows stream 2026-08-07** — `apps/web/src/app/fleet/_shared/use-visibility-poll.ts` (10s, visibility-gated, pauses hidden, catches up on return, "as of" = last successful read). Workers re-points at it in W.6. |
 | 2 | **The autonomy dial component** | Workers W.4, Controls | **SETTLED 2026-08-07 — one shared component**, two presentation modes: Controls *explain* (card, prose, ladder), Workers *operate* (inline row + bulk). One confirm, one audit write. **Workers extracts it at W.4 and re-points Controls at it**, so `ControlsClient.tsx` will be touched by the Workers session — claimed in advance here. |
-| 3 | **Instance / stored-graph model** (§4) | Workers W.8, Workflows | **open** — not needed before W.8. Whoever reaches it first writes the proposal here. |
+| 3 | **Instance / stored-graph model** (§4) | Workers W.8, Workflows | **PROPOSED 2026-08-07 by the Workflows stream — §4, awaiting Workers review.** Workflows holds its migration until the §4 proposal says REVIEWED; the schema-free Versions card ships meanwhile. |
 | 4 | **Page-local CSS convention** — `workers.css` / `workflows.css` beside the page, `fleet-pages.css` frozen to shared primitives. | both | **proposed here** — adopt unless objected. |
 
 ---
