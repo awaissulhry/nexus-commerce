@@ -212,3 +212,44 @@ alongside. AC.8 only makes sense once several revisions exist.
 4. **Scope enforcement order** — which observation builders learn scope
    first? Default: the three ads analysts, marketplace filter first.
 5. **Approve the phase set and order**, or reorder/cut.
+
+---
+
+## Execution record (2026-08-07 — AC.1–AC.8 SHIPPED)
+
+Commits: 54a4cbbca (AC.1 revisions + AC.2 preview, and with them the
+per-worker model pin, narrow-only tool list, pause-with-expiry and
+revision attribution), ea34e5ae9 (AC.3 evals, AC.4 policy + ENFORCED
+scope, AC.5 tool policy, AC.6 pause, AC.7 audit), 4a5272f98 (the UI:
+Charter Studio, run controls, control history), 6eef84b2b (AC.8 split
+testing). Migration `20260807a_nafac_agent_control` applied to prod.
+
+**Verified on prod, end to end:**
+- Preview against real evidence: ok, would have reported **14 findings**,
+  12,075 in / 6,577 out tokens — and wrote **0** (findings before 7,
+  after 7). Nothing reached the blackboard.
+- Revision round trip: create → activate (the new prompt was in force,
+  revision 2) → revert-to-code (the code charter back in force, no active
+  revision). The fallback is real.
+- Charter Studio renders on the worker page with the live charter loaded,
+  "0 saved revisions", empty control history, and the run controls above.
+
+**Honest note on that verification:** it ran via `railway run` on the
+workstation, where the LOCAL Ollama provider is reachable, so the preview
+used `qwen3-14b-nexus` at genuinely $0. On the server the same preview
+uses the pinned Haiku and costs roughly 3–4 cents. The $0 is accurate for
+that run, not a costing bug — and the finding counts differ (14 local vs
+7 from Haiku) precisely because they are different models, which is
+itself an argument for AC.3's measured comparison.
+
+**Deviations from the plan, recorded:**
+- Caps (budget, tokens, findings) can be TIGHTENED but not loosened from
+  the UI — the code value stays the ceiling, exactly like `autonomyCap`.
+  Raising a ceiling remains a code change, deliberately.
+- Multi-marketplace scope is REFUSED by the API rather than accepted and
+  ignored, because only single-market scope is enforced end to end. This
+  is the series rule ("an unenforced control is never offered") applied to
+  itself.
+- n-gram themes are account-wide aggregates with no campaign of their own,
+  so under an active scope they are withheld entirely rather than shown
+  misleadingly, and the count of withheld rows is reported.
