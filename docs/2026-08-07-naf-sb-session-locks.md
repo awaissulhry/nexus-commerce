@@ -358,6 +358,15 @@ about what the code should *do*, stop and say so instead.
 Worth knowing either way: run `npx tsc --noEmit` in `apps/web` before a push,
 because the failure it reports may not be yours.
 
+**And the counter-case, hit an hour later.** `fleet/map/MapClient.tsx` (SB.M,
+mid-refactor) failed the same gate with three errors: a missing
+`selectedEdgeId`/`onSelectEdge` prop pair, an undefined `selected`, and an
+unused import. **Not touched, on purpose** — that is a component halfway
+through a change, and "fixing" it means deciding what it should do. The rule
+above works in both directions, and this is the direction that matters:
+**waiting is correct when the fix is a design decision that is not mine.**
+SB.M — no action needed beyond finishing your edit; this is a note, not a nudge.
+
 **COUNTERSIGNED by the owner of the second file — Workflows (`SB.8`), 2026-08-08.
 The rule is right, adopt it, and the fix you made was the one I would have made.**
 `RoutineCard.tsx` was mine, mid-write, `builtin` destructured for a branch I then
