@@ -51,6 +51,8 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { DataGrid, type Column } from '@/design-system/components'
 import { GridToolbar } from '@/design-system/patterns'
+import { PlanStory, type PlanLabels, type StoryPlan } from '@/app/marketing/ads/rules-automation/fleet/PlanStory'
+import { RunDetail } from '../_shared/RunDetail'
 import { ago, DIAGNOSTIC_HINT } from '../_shared/run-health'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
 
@@ -89,6 +91,8 @@ export interface FleetEvent {
   /** ACT.3 — runs only; null on every other kind. */
   durationMs: number | null
   findingCount: number | null
+  /** ACT.5 — the run behind this event; opens the "what it did" drawer. */
+  runId: string | null
   href: string | null
   rollupKey: string
 }
@@ -244,7 +248,25 @@ function Badges({ event }: { event: FleetEvent }) {
   )
 }
 
-function EventRow({ event }: { event: FleetEvent }) {
+/**
+ * ACT.5 — a row's title opens the drawer when there is a run behind it, and
+ * stays a link otherwise. `<button>` rather than `<a>` on purpose: it opens a
+ * panel on this page, and dressing that as a link breaks middle-click, "open
+ * in new tab", and every expectation an anchor sets.
+ */
+function RowTitle({ event, onOpen }: { event: FleetEvent; onOpen: (e: FleetEvent) => void }) {
+  const openable = event.runId != null || event.kind.startsWith('plan.') || event.kind === 'plan.critiqued'
+  if (openable) {
+    return (
+      <button type="button" className="sba-open" onClick={() => onOpen(event)}>
+        {event.title}
+      </button>
+    )
+  }
+  return event.href ? <Link href={event.href}>{event.title}</Link> : <>{event.title}</>
+}
+
+function EventRow({ event, onOpen }: { event: FleetEvent; onOpen: (e: FleetEvent) => void }) {
   const word = STATE_WORD[event.outcome]
   const vintageDiffers =
     event.dataVintage != null && dayKey(event.dataVintage) !== dayKey(event.at)
@@ -253,7 +275,7 @@ function EventRow({ event }: { event: FleetEvent }) {
       <Marker kind={event.kind} outcome={event.outcome} />
       <div className="sba-body">
         <span className="sba-title">
-          {event.href ? <Link href={event.href}>{event.title}</Link> : event.title}
+          <RowTitle event={event} onOpen={onOpen} />
           <Badges event={event} />
         </span>
         <span className="sba-meta">
@@ -302,11 +324,11 @@ function EventRow({ event }: { event: FleetEvent }) {
   )
 }
 
-function RollupRow({ group }: { group: Rollup }) {
+function RollupRow({ group, onOpen }: { group: Rollup; onOpen: (e: FleetEvent) => void }) {
   const [open, setOpen] = useState(false)
   const first = group.events[0]!
   const n = group.events.length
-  if (n === 1) return <EventRow event={first} />
+  if (n === 1) return <EventRow event={first} onOpen={onOpen} />
   return (
     <>
       <li className="sba-row">
@@ -345,7 +367,7 @@ function RollupRow({ group }: { group: Rollup }) {
           {hhmm(first.at)}
         </time>
       </li>
-      {open ? group.events.map((e) => <EventRow key={e.id} event={e} />) : null}
+      {open ? group.events.map((e) => <EventRow key={e.id} event={e} onOpen={onOpen} />) : null}
     </>
   )
 }
@@ -432,6 +454,66 @@ function toCsv(events: FleetEvent[]): string {
   return [head, ...body].join('\r\n')
 }
 
+/**
+ * ACT.5 — the plan's story in the same drawer as a run's trace.
+ *
+ * `PlanStory` is a shipped component in another stream's directory and it is
+ * good: stages, the critic's twelve checks, blast radius, the dropped items.
+ * It is IMPORTED, never copied — the whole reason the Overview's stream came
+ * down was that one thing must not be rendered by two files.
+ *
+ * Until ACT.7 a plan row linked to `/fleet#plan-<id>`, an anchor only
+ * `TimelineStream` drew. Retiring that component for the teaser left the link
+ * pointing at nothing, so this is the repair as much as the feature.
+ */
+function PlanDrawer({
+  plan,
+  labels,
+  onClose,
+}: {
+  plan: StoryPlan | null
+  labels: PlanLabels
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div
+      className="sba-drawerwrap"
+      role="dialog"
+      aria-modal="true"
+      aria-label="The plan"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div className="sba-drawer">
+        <header className="sba-drawerhead">
+          <h3>The plan</h3>
+          <button className="acr-btn" onClick={onClose} aria-label="Close">
+            <X size={14} />
+          </button>
+        </header>
+        <div className="sba-drawerbody">
+          {plan ? (
+            <PlanStory plan={plan} labels={labels} />
+          ) : (
+            <p className="acr-pg-muted">
+              That plan is no longer on record — it may have been cleared since this event.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ── the page ──────────────────────────────────────────────────────────── */
 
 const PAGE = 50
@@ -466,6 +548,14 @@ export function ActivityClient() {
   const [loading, setLoading] = useState(true)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [exporting, setExporting] = useState(false)
+  /**
+   * ACT.5 — what the drawer is showing. A run id opens the trace; a plan id
+   * opens the director's story. One drawer, two contents, because "why did
+   * this happen" is the same question either way.
+   */
+  const [detail, setDetail] = useState<{ runId: string } | { planId: string } | null>(null)
+  const [plans, setPlans] = useState<StoryPlan[]>([])
+  const [planLabels, setPlanLabels] = useState<PlanLabels>({ campaigns: {}, targets: {} })
 
   /* ── the filters (ACT.3) ─────────────────────────────────────────────── */
 
@@ -567,7 +657,45 @@ export function ActivityClient() {
     }
   }, [backend, qs])
 
-  const { asOf, refresh } = useVisibilityPoll(load)
+  /* The plan feed is small (one plan exists) and static enough not to poll —
+     it is fetched once so a plan row has something to open. */
+  useEffect(() => {
+    let live = true
+    fetch(`${backend}/api/agent/fleet/plans`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { plans?: StoryPlan[]; labels?: PlanLabels } | null) => {
+        if (!live || !d) return
+        setPlans(d.plans ?? [])
+        if (d.labels) setPlanLabels(d.labels)
+      })
+      .catch(() => {
+        /* a plan row simply will not open; the list is unaffected */
+      })
+    return () => {
+      live = false
+    }
+  }, [backend])
+
+  /**
+   * A plan event's id is `plan.<id>` and a critic verdict's is
+   * `critic.<planId>` — both name the same plan, which is why the critic's
+   * ruling opens the plan it ruled on rather than a trace of the critic's run.
+   * That is the question the reader is actually asking.
+   */
+  const openDetail = useCallback((e: FleetEvent) => {
+    if (e.id.startsWith('plan.')) return setDetail({ planId: e.id.slice('plan.'.length) })
+    if (e.id.startsWith('critic.')) return setDetail({ planId: e.id.slice('critic.'.length) })
+    if (e.runId) return setDetail({ runId: e.runId })
+  }, [])
+
+  /* Nothing shifts under someone reading a run. Throwing is how the hook is
+     told "we did not read", so the `as of` stamp stays honest too. */
+  const pollable = useCallback(async () => {
+    if (detail) throw new Error('skipped: a run is open')
+    await load()
+  }, [load, detail])
+
+  const { asOf, refresh } = useVisibilityPoll(pollable)
 
   /** Adopt the waiting page. The only way rows ever change under the reader. */
   const showIncoming = useCallback(() => {
@@ -789,9 +917,14 @@ export function ActivityClient() {
         sortable: true,
         sortValue: (e) => new Date(e.at).getTime(),
         render: (e) => (
-          <span title={new Date(e.at).toLocaleString()} className="sba-nowrap">
+          <button
+            type="button"
+            className="sba-open sba-nowrap"
+            title={new Date(e.at).toLocaleString()}
+            onClick={() => openDetail(e)}
+          >
             {ago(e.at)}
-          </span>
+          </button>
         ),
       },
       {
@@ -856,7 +989,7 @@ export function ActivityClient() {
           ),
       },
     ],
-    [],
+    [openDetail],
   )
 
   /* ── the scope line ──────────────────────────────────────────────────── */
@@ -1131,7 +1264,7 @@ export function ActivityClient() {
               </h3>
               <ul className="sba-rows">
                 {d.rollups.map((g, i) => (
-                  <RollupRow key={`${g.key}-${i}`} group={g} />
+                  <RollupRow key={`${g.key}-${i}`} group={g} onOpen={openDetail} />
                 ))}
               </ul>
             </div>
@@ -1156,6 +1289,17 @@ export function ActivityClient() {
           </div>
         </section>
       )}
+
+      {detail && 'runId' in detail ? (
+        <RunDetail runId={detail.runId} backend={backend} onClose={() => setDetail(null)} />
+      ) : null}
+      {detail && 'planId' in detail ? (
+        <PlanDrawer
+          plan={plans.find((p) => p.id === detail.planId) ?? null}
+          labels={planLabels}
+          onClose={() => setDetail(null)}
+        />
+      ) : null}
 
       {/* S6 — say out loud what is missing, so a gap reads as a boundary
           rather than a bug. Every sentence here is checked against the data. */}

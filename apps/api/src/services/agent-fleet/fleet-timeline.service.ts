@@ -110,6 +110,13 @@ export interface FleetEvent {
    */
   durationMs: number | null
   findingCount: number | null
+  /**
+   * ACT.5 — the run this event belongs to, so a row can open the trace that
+   * produced it. Every source except the halt has one: a finding, a plan, a
+   * critic verdict and an approval all hang off a run. It is what makes the
+   * "why did it decide that" drawer reachable from 119 rows instead of 53.
+   */
+  runId: string | null
   /** Where clicking it should go, when there is somewhere to go. */
   href: string | null
   /**
@@ -414,6 +421,7 @@ async function runEvents(
       diagnostic: isDiagnostic(names, r.agentKey),
       durationMs: r.latencyMs,
       findingCount: r.findingCount,
+      runId: r.id,
       href: `/fleet/workers/${r.agentKey}`,
       rollupKey: `run:${r.agentKey}:${sig}`,
     }
@@ -473,6 +481,7 @@ async function findingEvents(
       diagnostic: isDiagnostic(names, r.charterKey),
       durationMs: null,
       findingCount: null,
+      runId: r.runId,
       href: `/fleet/workers/${r.charterKey}`,
       rollupKey: `finding:${r.charterKey}:${r.kind}`,
     }
@@ -510,7 +519,10 @@ async function planEvents(
     const episode = episodeOf.get(r.runId) ?? `run:${r.runId}`
     // The plan's story is rendered on the Overview today; ACT.5 moves the
     // detail into Activity's own drawer and this anchor moves with it.
-    const href = `/fleet#plan-${r.id}`
+    // ACT.5 — the plan's story is rendered by Activity's drawer now. Until
+    // ACT.7 this was `/fleet#plan-<id>`, an anchor only TimelineStream drew;
+    // the teaser retired that component, so the link had gone dead.
+    const href = `/fleet/activity#e-plan.${r.id}`
     out.push({
       id: `plan.${r.id}`,
       at: r.createdAt.toISOString(),
@@ -531,6 +543,7 @@ async function planEvents(
       diagnostic: isDiagnostic(names, r.charterKey),
       durationMs: null,
       findingCount: null,
+      runId: r.runId,
       href,
       rollupKey: `plan:${r.charterKey}`,
     })
@@ -576,6 +589,7 @@ async function planEvents(
         diagnostic: isDiagnostic(names, 'plan-critic'),
         durationMs: null,
         findingCount: null,
+        runId: r.runId,
         href,
         rollupKey: `critic:${r.criticVerdict}`,
       })
@@ -654,6 +668,7 @@ async function approvalEvents(
         diagnostic: isDiagnostic(names, key),
         durationMs: null,
         findingCount: null,
+        runId: r.agentRunId,
         href: null,
         rollupKey: `approval-req:${key}:${r.toolName}`,
       })
@@ -690,6 +705,7 @@ async function approvalEvents(
         diagnostic: false,
         durationMs: null,
         findingCount: null,
+        runId: r.agentRunId,
         href: null,
         rollupKey: `approval-dec:${r.status}:${r.toolName}`,
       })
@@ -733,6 +749,8 @@ async function haltEvents(f: FleetTimelineFilters, cursor: Cursor | null): Promi
       diagnostic: false,
       durationMs: null,
       findingCount: null,
+      // The halt is the fleet's own act; no run produced it.
+      runId: null,
       href: null,
       rollupKey: 'halt',
     },
