@@ -293,3 +293,27 @@
 }
 .as-how h4 { margin: 16px 0 6px; font-size: 13px; }
 .as-how h4:first-child { margin-top: 0; }
+
+/* ── Empty states fill the page rather than leaving half the viewport blank
+      (standing rule: a page consumes its viewport). The shared
+      `.acr-pg-empty` is centred text; these add the vertical presence and
+      auto-centre the constrained paragraph, which `max-width` alone does not
+      do inside a text-align:center box. */
+.as-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  /* Measured on prod, not guessed: the box sits ~285px down, so a fixed
+     420px still left 257px blank. This fills to the fold with a small
+     breathing margin and never overflows into a scrollbar on an empty page. */
+  min-height: max(320px, calc(100vh - 21rem));
+}
+.as-emptyicon { color: #b6c0cd; }
+.as-emptybody {
+  max-width: 54ch;
+  margin: 0 auto;
+  color: #8d97a6;
+  line-height: 1.65;
+}

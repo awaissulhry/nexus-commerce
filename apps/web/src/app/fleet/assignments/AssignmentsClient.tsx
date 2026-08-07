@@ -164,8 +164,8 @@ export function AssignmentsClient() {
               title={def.tip}
               onClick={() => setFilter(on ? null : k)}
             >
-              <span className="n">{n}</span>
-              <span className="l">{def.label}</span>
+              <span className="k">{def.label}</span>
+              <span className="v">{n}</span>
             </button>
           )
         })}
@@ -345,8 +345,8 @@ function EmptyState({
   // filtered-to-nothing view teaches the operator something false.
   if (filtered && hasAny) {
     return (
-      <div className="acr-pg-empty">
-        <p>Nothing matches that filter.</p>
+      <div className="acr-pg-empty as-empty">
+        <strong>Nothing matches that filter.</strong>
         <button className="acr-pg-sortbtn" onClick={onClear}>
           Show everything
         </button>
@@ -354,10 +354,10 @@ function EmptyState({
     )
   }
   return (
-    <div className="acr-pg-empty">
-      <Target size={20} />
-      <p>No assignments yet.</p>
-      <p className="acr-pg-muted" style={{ maxWidth: '54ch', lineHeight: 1.6 }}>
+    <div className="acr-pg-empty as-empty">
+      <Target size={22} className="as-emptyicon" />
+      <strong>No assignments yet.</strong>
+      <p className="as-emptybody">
         An assignment is one worker pointed at one thing — a campaign, or a
         marketplace — with a note about what you want back. Make one and it will
         sit here until you start it. Nothing starts on its own: every worker in
