@@ -1104,9 +1104,84 @@ the explanation · a failed run shows 5 steps and the verbatim schema error ·
 evidence expands to its preview · Escape closes · and the 10s poll is **held for
 two full cycles** while the drawer is open. Suite 369 across 41 files.
 
-**Still open: ACT.4** (the failure tiles, S2) and **ACT.6** (S7 explainer + the
-DT.8 teaching gate). ACT.7 landed early, out of order, because the teaser was
-approved separately.
+### ACT.4 + ACT.6 — the band, and the teaching gate. **The page is complete.**
+
+**ACT.4** is Part 6 made real. The band answers *is anything wrong now*, not
+*what has ever gone wrong*: it obeys the page's filters, excludes the self-test
+by default, and today reads **two tiles** — one contract break (red) and one
+token limit (amber, blame `nobody`). Tick *include the self-test* and it becomes
+**four tiles totalling 26**. While the self-test is hidden the band **says** its
+bad afternoon happened, with a link — *excluded, never concealed*, and no quiet
+exception when there happens to be one real failure to show.
+
+Counted through **`run-health.classifyFailure`** — the same function the roster
+and the worker page call. This page refuses to be the third opinion (Part 7
+defect 1), so the spine now hands over the **raw** `errorMessage` /
+`haltedReason` and the canonical classifier decides. Never grouped on the error
+string: the three credit errors carry distinct `request_id`s, so a group-by on
+the message shows four causes where there are two.
+
+**It has its own fetch.** Tallying the loaded rows would have been a silent cap
+— with the self-test included only 50 of 119 events are on screen, so the band
+would have under-reported by more than half while looking authoritative.
+
+#### The fourth sighting of a bug this repo keeps re-fixing
+
+`!r.ok || r.status === 'failed'` counts a **running** run as failed. An
+`AgentRun` is created `ok: false` and only flips true when it *finishes*.
+`classifyFailure` has guarded this since W.1, and the locks doc records it
+shipped and re-fixed three times in other files — this was the fourth, in the
+spine itself, latent only because nothing was in flight while the page was
+built.
+
+Runs in flight are now their own kind, **`run.running`** ("X is running now",
+neutral, no failure text), with a test rather than my vigilance. And `tsc` then
+proved the *client-side* guard unreachable — which is exactly the argument for
+moving a check down a layer instead of copying it.
+
+**ACT.6 — the teaching gate.** "How this page works": five paragraphs,
+collapsed, last in the reading order because only after seeing rows does a
+beginner want the words.
+
+| DT.8 requirement | Result |
+|---|---|
+| Every control keyboard-reachable | **47 controls, 0 unreachable** |
+| Every control named | **0 unnamed** (the one bare input is a checkbox named by its wrapping `<label>`) |
+| State never signalled by colour alone | every marker carries screen-reader text; every tile carries a sentence |
+| Toggle state exposed | `aria-pressed` on all chips and grain buttons |
+| Readable at 200% zoom | **zero** horizontal overflow, nothing escaping its box |
+| Every term defined once | `<Term>` throughout; `run` and `selftest` minted for this page |
+
+Two defects found while verifying: every tile printed its count **twice**
+("21 21 runs could not reach…"), and the self-test note was gated on there being
+no severe failure — quietly suspending *excluded, never concealed* whenever one
+real failure existed.
+
+Suite **372 across 41 files**.
+
+---
+
+## PART 17 — Where the page stands
+
+All seven phases are built: **ACT.1** the honest spine · **ACT.2** the list ·
+**ACT.3** grain switch, filters, search, URL state, export · **ACT.4** the band ·
+**ACT.5** the drawer · **ACT.6** the explainer and teaching gate · **ACT.7** the
+Overview teaser.
+
+**Deferred with named triggers, unchanged:** S8 the control-audit lane (build it
+the first time an operator moves a dial — `AgentControlAudit` exists and holds
+zero rows, and it cannot be backfilled) · S9 compare two runs (when one worker
+has ≥10 runs across ≥2 charter revisions) · DT.7 annotation (needs storage that
+does not exist) · the P2 backend items in Part 9.
+
+**The through-line, and the reason this page took the shape it did.** Sixteen
+defects were found on this page. **Not one was a type error.** They were a
+paging button that did nothing, a filter that could not be used, a count printed
+twice, a badge on top of its neighbour, a sentence reading "0 runs", a scroll
+that never moved, a link to a deleted anchor, and a page contradicting itself
+one click apart. Every one needed a browser and real data to see. On a page
+whose entire job is to tell the truth about what happened, **the browser pass is
+not polish — it is the only gate that can see the failures that matter.**
 
 One consequence to note: `TimelineStream.tsx` is now rendered by **nothing** —
 Activity has its own list, and the Overview has a teaser. It is left in place
