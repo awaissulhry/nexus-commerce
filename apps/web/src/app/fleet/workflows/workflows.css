@@ -83,3 +83,147 @@
   color: #8d97a6;
   font-variant-numeric: tabular-nums;
 }
+
+/* ── S2: routine detail ──────────────────────────────────────────────── */
+
+.wf-backrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.wf-backrow .spacer { flex: 1 1 auto; }
+.wf-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #3f6fb5;
+  text-decoration: none;
+}
+.wf-back:hover { text-decoration: underline; }
+
+/* the routine as one sentence, with its one honest status beside it */
+.wf-sentence {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid #e6ebf1;
+  border-radius: 10px;
+  padding: 13px 15px;
+  margin-bottom: 14px;
+}
+.wf-sentence p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #34404f;
+  max-width: 86ch;
+}
+.wf-sentence .acr-pg-statechip { margin-top: 2px; flex: none; }
+
+/* card header shared by the pipeline card and the how-it-works card */
+.wf-cardhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 2px 2px 10px;
+}
+.wf-cardhead h3 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #26313f;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.wf-legend { font-size: 11.5px; color: #8d97a6; }
+
+/* the story canvas */
+.wf-canvas {
+  height: 320px;
+  border: 1px solid #e6ebf1;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+.wf-h { opacity: 0; width: 6px; height: 6px; }
+
+.wf-node {
+  width: 208px;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-left: 3px solid #c3ccd8;
+  border-radius: 9px;
+  padding: 9px 11px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 4px 10px rgba(16, 24, 40, 0.05);
+  font-size: 12px;
+  color: #34404f;
+}
+.wf-node.k-code {
+  background: #f7f9fc;
+  border-left-color: #b3bcc9;
+  border-style: solid;
+}
+.wf-node.k-gate {
+  border-left-color: #8b5cf6;
+  background: #fbfaff;
+}
+.wf-node.is-running {
+  border-color: #9db4d0;
+  box-shadow: 0 0 0 3px rgba(74, 122, 184, 0.16);
+}
+.wf-node-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.wf-node-label { font-weight: 650; color: #26313f; font-size: 12.5px; }
+.wf-node-sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #6b7a8d;
+}
+.wf-node-live {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #2f6096;
+}
+.wf-node-deg {
+  display: block;
+  margin-top: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #a3312c;
+}
+
+/* the teaching card's body */
+.wf-howwrap { margin-top: 16px; }
+.wf-how {
+  padding: 2px 2px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wf-how p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: #34404f;
+  max-width: 88ch;
+}
+.wf-how strong { color: #26313f; }
+
+@media (max-width: 900px) {
+  .wf-sentence { flex-direction: column; }
+}

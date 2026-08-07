@@ -9,210 +9,34 @@
  * when it runs, as a sentence · how the last run went and what it cost · the
  * recent record · what it may touch.
  *
- * Effective status is computed in ONE place (routineStatus) from fleet halt ⊕
- * cron gate ⊕ worker dials — never three toggles the operator must AND
- * together in their head. Unlike the Workers roster, where runs/findings/
- * cards are enrichments, every feed here is load-bearing for status truth —
- * a partial read would show a half-true status, so any failed feed fails the
- * load loudly instead.
- *
- * A routine run is an orchestrationId GROUP of AgentRun rows (sweep,
- * council); an `ask` run stands alone. Reads only endpoints that already
- * exist — WF.1 adds no API surface.
+ * Derivations live in ./lib (shared with the detail page) and failure
+ * semantics in ../_shared/run-health — this file only renders. Unlike the
+ * Workers roster, every feed here is load-bearing for status truth, so a
+ * failed feed fails the load loudly instead of showing a half-true status.
  */
 
 import { useCallback, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { Workflow, RefreshCw, ShieldAlert, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
+import { isDiagnostic } from '../_shared/run-health'
+import { BUILTIN_ROUTINES } from './routines'
+import { HowWorkflowsWork } from './HowWorkflowsWork'
 import {
-  BUILTIN_ROUTINES,
-  DIRECTOR_KEY,
-  CRITIC_KEY,
-  type BuiltinRoutine,
-} from './routines'
-
-/* ── shapes, mirrored from the fleet API ───────────────────────────────── */
-
-interface ScheduleJob {
-  key: string
-  label: string
-  schedule: string
-  enabled: boolean
-  nextFireAt: string | null
-  lastRun: { startedAt: string; status: string; outputSummary: string | null } | null
-}
-interface RunRow {
-  id: string
-  agentKey: string
-  ok: boolean
-  status: string
-  mode: string | null
-  costUSD: string | number // Decimal serializes as a string — Number() it
-  findingCount: number
-  orchestrationId: string | null
-  haltedReason: string | null
-  createdAt: string
-}
-interface CharterRow {
-  key: string
-  tier: string
-  enabled: boolean
-  autonomyLevel: string
-  degraded: boolean
-}
-interface FleetState {
-  halted?: boolean
-  haltReason?: string | null
-}
-
-/** One orchestration of a routine: its runs collapsed to a single record. */
-interface RunGroup {
-  id: string
-  startedAt: number
-  ok: boolean
-  halted: boolean
-  costUSD: number
-  findings: number
-  runs: number
-}
-
-type StatusKind = 'on' | 'ready' | 'idle' | 'off' | 'halted'
-interface RoutineStatus {
-  kind: StatusKind
-  label: string
-  why: string
-}
-
-/* ── plain-sentence time helpers ───────────────────────────────────────── */
-
-const DAY = 24 * 3600 * 1000
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-
-function ago(ts: number | null): string {
-  if (!ts) return 'never'
-  const ms = Date.now() - ts
-  if (ms < 60_000) return 'just now'
-  const m = Math.floor(ms / 60_000)
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 48) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
-}
-
-function until(iso: string | null): string | null {
-  if (!iso) return null
-  const ms = new Date(iso).getTime() - Date.now()
-  if (ms <= 0) return 'due now'
-  const m = Math.round(ms / 60_000)
-  if (m < 60) return `in ${m}m`
-  const h = Math.floor(m / 60)
-  if (h < 48) return m % 60 ? `in ${h}h ${m % 60}m` : `in ${h}h`
-  const d = Math.floor(h / 24)
-  return h % 24 ? `in ${d}d ${h % 24}h` : `in ${d}d`
-}
-
-/** The two fleet crons in plain words; anything unrecognized stays as cron. */
-function prettyCron(expr: string): string {
-  const f = expr.trim().split(/\s+/)
-  if (f.length !== 5) return expr
-  const [min, hr, dom, mon, dow] = f
-  const m = Number(min)
-  const h = Number(hr)
-  if (!Number.isInteger(m) || !Number.isInteger(h)) return `${expr} (UTC)`
-  const hhmm = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} UTC`
-  if (dom === '*' && mon === '*' && dow === '*') return `Nightly at ${hhmm}`
-  if (dom === '*' && mon === '*' && /^[0-6]$/.test(dow ?? '')) {
-    return `${DAYS[Number(dow)]}s at ${hhmm}`
-  }
-  return `${expr} (UTC)`
-}
-
-/* ── assembly ──────────────────────────────────────────────────────────── */
-
-function groupRuns(runs: RunRow[], mode: BuiltinRoutine['mode']): RunGroup[] {
-  const byId = new Map<string, RunRow[]>()
-  for (const r of runs) {
-    if (r.mode !== mode) continue
-    const k = r.orchestrationId ?? r.id
-    const list = byId.get(k)
-    if (list) list.push(r)
-    else byId.set(k, [r])
-  }
-  const groups: RunGroup[] = []
-  for (const [id, list] of byId) {
-    groups.push({
-      id,
-      startedAt: Math.min(...list.map((r) => new Date(r.createdAt).getTime())),
-      halted: list.some((r) => r.haltedReason != null),
-      ok: list.every((r) => r.ok) && !list.some((r) => r.haltedReason != null),
-      costUSD: list.reduce((s, r) => s + Number(r.costUSD || 0), 0),
-      findings: list.reduce((s, r) => s + r.findingCount, 0),
-      runs: list.length,
-    })
-  }
-  return groups.sort((a, b) => b.startedAt - a.startedAt)
-}
-
-/** The one honest status. Precedence: halt → clock → dials. */
-function routineStatus(
-  r: BuiltinRoutine,
-  state: FleetState | null,
-  jobs: ScheduleJob[],
-  charters: CharterRow[],
-): RoutineStatus {
-  if (state?.halted) {
-    return {
-      kind: 'halted',
-      label: 'Halted',
-      // A halt blocks manual runs too — executeCharter gates them.
-      why: state.haltReason ? `Stopped: ${state.haltReason}` : 'Stopped by the operator.',
-    }
-  }
-  if (!r.scheduleKey) {
-    return { kind: 'ready', label: 'Ready', why: 'Runs the moment you start it.' }
-  }
-  const job = jobs.find((j) => j.key === r.scheduleKey)
-  if (!job || !job.enabled) {
-    return { kind: 'off', label: 'Off', why: 'The fleet clock is off — nothing runs on schedule.' }
-  }
-  const on = (c: CharterRow) => c.enabled && c.autonomyLevel !== 'OFF'
-  const analystsOn = charters.filter((c) => c.tier === 'analyst' && on(c)).length
-  if (r.mode === 'sweep') {
-    if (analystsOn === 0) {
-      return { kind: 'idle', label: 'Idle', why: 'The clock ticks, but every worker is off.' }
-    }
-    return {
-      kind: 'on',
-      label: 'On',
-      why: `${analystsOn} worker${analystsOn === 1 ? '' : 's'} will report.`,
-    }
-  }
-  const directorOn = charters.some((c) => c.key === DIRECTOR_KEY && on(c))
-  const criticOn = charters.some((c) => c.key === CRITIC_KEY && on(c))
-  if (!directorOn || !criticOn) {
-    return { kind: 'idle', label: 'Idle', why: 'Needs the director and the critic switched on.' }
-  }
-  if (analystsOn === 0) {
-    return { kind: 'idle', label: 'Idle', why: 'Director and critic are on, but no workers report.' }
-  }
-  return {
-    kind: 'on',
-    label: 'On',
-    why: `${analystsOn} report → director plans → critic rules.`,
-  }
-}
-
-const CHIP_CLASS: Record<StatusKind, string> = {
-  on: 'running',
-  halted: 'halted',
-  idle: 'wf-chip-idle',
-  off: 'wf-chip-off',
-  ready: 'wf-chip-ready',
-}
-
-/* ── the page ──────────────────────────────────────────────────────────── */
+  CHIP_CLASS,
+  DAY,
+  agoTs,
+  groupRuns,
+  prettyCron,
+  routineStatus,
+  until,
+  type CharterRow,
+  type FleetState,
+  type RunRow,
+  type ScheduleJob,
+} from './lib'
 
 export function WorkflowsClient() {
   const backend = getBackendUrl()
@@ -265,17 +89,27 @@ export function WorkflowsClient() {
 
   const totals = useMemo(() => {
     const since = Date.now() - 7 * DAY
-    const recent = rows.flatMap((r) => r.groups).filter((g) => g.startedAt >= since)
+    const recentGroups = rows.flatMap((r) => r.groups).filter((g) => g.startedAt >= since)
+    // SB.W decision 3: the self-test's notes never masquerade as headline
+    // findings — split, footnote, never hide.
+    let accountFindings = 0
+    let diagnosticFindings = 0
+    for (const r of runs) {
+      if (new Date(r.createdAt).getTime() < since) continue
+      if (isDiagnostic({ key: r.agentKey })) diagnosticFindings += r.findingCount
+      else accountFindings += r.findingCount
+    }
     const nextJob = jobs
       .filter((j) => j.enabled && j.nextFireAt)
       .sort((a, b) => new Date(a.nextFireAt!).getTime() - new Date(b.nextFireAt!).getTime())[0]
     return {
-      runs7d: recent.length,
-      findings7d: recent.reduce((s, g) => s + g.findings, 0),
-      cost7d: recent.reduce((s, g) => s + g.costUSD, 0),
+      runs7d: recentGroups.length,
+      cost7d: recentGroups.reduce((s, g) => s + g.costUSD, 0),
+      accountFindings,
+      diagnosticFindings,
       next: nextJob ?? null,
     }
-  }, [rows, jobs])
+  }, [rows, runs, jobs])
 
   const degraded = charters.filter((c) => c.degraded).length
 
@@ -303,27 +137,38 @@ export function WorkflowsClient() {
         </div>
         <div className="acr-pg-stat">
           <span className="k">Next scheduled run</span>
-          <span className="v">{totals.next ? (until(totals.next.nextFireAt) ?? '—') : '—'}</span>
+          <span className="v">
+            {loaded && totals.next ? (until(totals.next.nextFireAt) ?? '—') : '—'}
+          </span>
           <span className="sub">
-            {state?.halted
-              ? 'nothing runs while the fleet is halted'
-              : totals.next
-                ? totals.next.label
-                : 'the fleet clock is off'}
+            {/* No claim about the clock until the feeds were actually read. */}
+            {!loaded
+              ? err
+                ? 'could not read the fleet'
+                : 'reading the fleet…'
+              : state?.halted
+                ? 'nothing runs while the fleet is halted'
+                : totals.next
+                  ? totals.next.label
+                  : 'the fleet clock is off'}
           </span>
         </div>
         <div className="acr-pg-stat">
           <span className="k">Runs, last 7 days</span>
-          <span className="v">{totals.runs7d}</span>
+          <span className="v">{loaded ? totals.runs7d : '—'}</span>
           <span className="sub">
-            {totals.findings7d > 0
-              ? `${totals.findings7d} findings reported`
-              : 'no findings reported'}
+            {!loaded
+              ? '—'
+              : totals.accountFindings + totals.diagnosticFindings === 0
+                ? 'no findings reported'
+                : totals.diagnosticFindings > 0
+                  ? `${totals.accountFindings} findings about your account · ${totals.diagnosticFindings} self-test notes`
+                  : `${totals.accountFindings} findings reported`}
           </span>
         </div>
         <div className="acr-pg-stat">
           <span className="k">Spent, last 7 days</span>
-          <span className="v">${totals.cost7d.toFixed(4)}</span>
+          <span className="v">{loaded ? `$${totals.cost7d.toFixed(4)}` : '—'}</span>
           <span className="sub">model spend across every routine</span>
         </div>
       </div>
@@ -378,13 +223,13 @@ export function WorkflowsClient() {
                       <div className="acr-pg-who">
                         <span className="acr-pg-avatar" aria-hidden><Workflow size={15} /></span>
                         <span>
-                          <span className="nm">
+                          <Link className="nm" href={`/fleet/workflows/${routine.key}`}>
                             {routine.termKey
                               ? <Term k={routine.termKey}>{routine.name}</Term>
                               : routine.name}
                             {' '}
                             <span className="wf-builtin">Built-in</span>
-                          </span>
+                          </Link>
                           <span className="wf-purpose">{routine.purpose}</span>
                         </span>
                       </div>
@@ -412,7 +257,7 @@ export function WorkflowsClient() {
                     <td>
                       {last ? (
                         <>
-                          {ago(last.startedAt)}{' · '}
+                          {agoTs(last.startedAt)}{' · '}
                           {last.halted ? (
                             <span className="wf-halt">stopped early</span>
                           ) : last.ok ? (
@@ -432,7 +277,7 @@ export function WorkflowsClient() {
                         <>
                           <span className="acr-pg-muted">no runs yet</span>
                           <span className="wf-sub">
-                            clock last fired {ago(new Date(job.lastRun.startedAt).getTime())} and
+                            clock last fired {agoTs(new Date(job.lastRun.startedAt).getTime())} and
                             launched nothing — every worker was off
                           </span>
                         </>
@@ -466,6 +311,10 @@ export function WorkflowsClient() {
           </table>
         </div>
       )}
+
+      <div className="wf-howwrap">
+        <HowWorkflowsWork />
+      </div>
     </div>
   )
 }

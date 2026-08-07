@@ -444,6 +444,56 @@ three fixed rows need no grid machinery, and adopting DataGrid before the token
 pinning lands would render broken. When SB.W's substrate lands, the workflows
 list converges onto it.
 
+### WF.1 / S2 — the routine's story (study, 2026-08-07)
+
+**Purpose:** open "Weekly council" and understand, in one screen, who does what
+in what order and where you sit. Route: `/fleet/workflows/[key]`; S1's rows
+become links the moment it exists.
+
+**The honest pipeline truth, from code — with one wrinkle.** `runFleet(mode)`
+walks the SAME `topoLevels(FLEET_GRAPH)` for both sweep and council; the modes
+differ in what surrounds the walk. So:
+
+- **Nightly sweep** = reclaim stuck runs → the level walk (all non-standalone
+  workers — which *includes the director and critic if they are on*, see
+  wrinkle) → findings shadow-graded → report cards → entity graph re-derived →
+  demotion check → the auditor's brief (standalone, run explicitly after
+  scorecards, `fleet-sweep.job.ts:71`).
+- **Weekly council** = approval maintenance (the single expiry clock) → the
+  level walk → the director's plan read back → the critic's verdict → code
+  pre-checks whose forced blocks override a passing critic → survivors queue
+  as approvals with the 20-second undo window.
+- **On-demand check** = one worker, `executeCharter` with `ignoreEnabled`,
+  gates still applied; result readable via the existing trace route.
+
+**Wrinkle, stated rather than papered over:** because the sweep's walk covers
+the whole graph, an *enabled* director would also run nightly and mint plans no
+council processes. Today it is OFF so the story is unaffected; the S2 story
+graph shows the director/critic inside the council story only, and the study
+flags this as a question for WF.4 (stored execution should scope the walk per
+workflow, which resolves it structurally).
+
+**Design:**
+
+- **Story graph per routine, declared web-side** (extends `routines.ts`):
+  worker steps (by charter key, joined live with `/agent/fleet/graph` for
+  autonomy tint + degraded), deterministic **code steps** (grading, report
+  cards, entity graph — visually neutral: they are math, not judgment), and
+  the **approval gate step** rendered as where-you-sit. Edges carry artifact
+  labels (findings, plan, approvals).
+- **Canvas:** xyflow read-only, `FleetMapCanvas` conventions (hand-computed
+  layout, `draggable:false`), plus the same routine as **one plain sentence**
+  beneath — the beginner shape from Part 1D riding under the graph.
+- **You-are-here:** any `status==='running'` run of this routine's mode marks
+  its worker's node live (10s poll makes it near-live); a `Waiting` state on
+  approvals links into `/fleet/approvals`.
+- **Health strip:** last run · success over the recorded groups · average
+  duration (`endedAt−createdAt`) · average cost — from S1's `groupRuns`,
+  extracted to a page-local `lib.ts` both surfaces import.
+- **"How this works" drawer** ships here — page-local component following the
+  Overview drawer's interaction pattern, content specific to workflows
+  (routine vs map, trigger, gate, what a version will be).
+
 ---
 
 ## Sources
