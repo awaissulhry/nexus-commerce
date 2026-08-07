@@ -774,6 +774,69 @@ Milestone note: the sibling's W.8 landed the §4 Half A (instances,
 workflows through `resolveCharter` with zero change on this side, exactly
 as the contract intended. WF.4 is COMPLETE; WF.5 (test-run lane) remains.
 
+### WF.5 — the test-run lane (study, 2026-08-07)
+
+**What WF.5 is:** the answer to "what would this draft do?" before publish —
+real evidence, real model, **nothing written**. The AC preview precedent
+carries almost all of it: `executeCharter(key, { preview: true })` reads the
+board, calls the model, validates, and closes the run with
+`output: { preview: true, data }` and `findingCount` **persisted on the run
+row** (verified, executor `:529-548`) while writing zero findings. WF.5 is
+that, walked over a draft definition.
+
+**Verified truths and the decisions they force:**
+
+1. **Hand-offs are not simulated in v1 — and the UI says so.** Law L7 makes
+   steps communicate through *persisted* artifacts; preview persists nothing,
+   so a previewed director reads the board as it is, not what the previewed
+   analysts just produced. Chaining would need an ephemeral evidence overlay
+   injected into the executor's observation gathering — real surgery,
+   deferred to the WF.6 list (with replay-a-past-run, which wants the same
+   machinery). v1 is honest per-step preview: *"each worker tested against
+   today's board — hand-offs are not simulated yet."* Dagster's preview-tick
+   holds the same line.
+2. **The walk is async, serial, and polled.** The council's director alone
+   took 168s supervised; six steps can pass five minutes — no synchronous
+   HTTP. `POST /workflows/:key/test { definition }` validates (the same
+   `validateDefinition`), refuses on the kill switch, fires a serial walk
+   (concurrency 1 — cost legibility over speed), and returns
+   `{ testId, steps, estimatedCostUSD }` where `testId` is a
+   `test_…` orchestrationId. `GET /workflows/:key/test/:testId` assembles
+   per-step status from the run rows (`orchestrationId` + `mode='preview'`):
+   pending · running · done (N would-be findings, cost) · failed (the
+   run-health sentence) · stopped (haltedReason). The client polls ~3s while
+   a test is live.
+3. **Budgets still bind a test — by construction.** The executor's kill
+   switch / halt / budget gates run before preview; a test cannot pierce the
+   daily ceiling, and a budget-stopped step is an honest result row. **One
+   wart found and fixed with this phase:** the executor's gate-trip row
+   ignores the preview flag (`mode: opts.mode`, `:255`), so a tripped test
+   step would land in the real runs table under `ask`. One line —
+   `mode: opts.preview ? 'preview' : opts.mode` — keeps every test artifact
+   in preview mode, which is also what keeps the Runs section clean (the
+   client groups by `mode === routine.mode`, so preview rows are invisible
+   there by construction).
+4. **Cost is stated before, not discovered after.** The estimate is the mean
+   cost of each step's recent runs (fallback $0.05/step), summed and shown in
+   the confirm dialog: *"≈ $0.14 — model spend is real; nothing is
+   written."* The results panel shows the actual per-step and total cost
+   beside it.
+5. **The editor owns the button.** "Test this draft…" lives beside Publish,
+   disabled while the checklist has problems; the ACTIVE wiring is tested by
+   the real clock, so read mode gets no test button. The manual routine
+   (empty steps) has nothing to walk and hides it.
+6. **Accepted and noted:** preview rows consume the shared 100-row runs
+   fetch cap (the runs route is sibling-owned; a `mode != preview` server
+   filter is a one-line ask recorded for later, not a blocker).
+
+**Build order:** **5a** — API: the serial walk + status route + the one-line
+gate-trip fix + the estimate; a pure `assembleTestStatus(rows, steps)`
+reducer with vitest. **5b** — UI: confirm dialog with the estimate and the
+writes-nothing sentence, live per-step progress, results with would-be
+findings and costs, and the teaching footer ("these findings were NOT
+written"). Claims: `agent-executor.ts` one line re-claimed for 5a;
+everything else in already-owned files.
+
 ---
 
 ## Sources
