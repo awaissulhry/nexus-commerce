@@ -64,6 +64,18 @@ interface DbCharterPolicy {
     systemPrompt: string
     policy: RevisionPolicy | null
   }
+  /** SB.W.8 — this row's own key. For a code charter it equals the template's;
+   *  for an instance it is the operator's new key, and it is what the resolved
+   *  charter must carry so runs, findings and audit rows attribute correctly. */
+  key: string
+  /** SB.W.8 — set when this row is an INSTANCE of a code charter. */
+  templateKey?: string | null
+  /** SB.W.8 — retired instances are kept as history and MUST NOT run. */
+  retired?: boolean
+  promptOverlay?: string | null
+  /** The instance's own identity, which the template must not overwrite. */
+  name?: string
+  description?: string | null
 }
 
 const cache = new TtlCache<Map<string, DbCharterPolicy>>({
@@ -77,20 +89,30 @@ async function loadDbPolicies(): Promise<Map<string, DbCharterPolicy> | null> {
   if (hit) return hit
   try {
     const [rows, revisions] = await Promise.all([
-      prisma.agentCharter.findMany({
-        where: { key: { in: Object.keys(FLEET_CHARTERS) } },
-      }),
+      // SB.W.8 — no longer filtered to code keys. An INSTANCE has a key of its
+      // own that FLEET_CHARTERS has never heard of; filtering here is what
+      // would make it invisible. Rows are still validated below: a row whose
+      // templateKey names nothing in code is skipped, so a stale or hand-made
+      // row cannot conjure a worker.
+      prisma.agentCharter.findMany(),
       // AC.1 — the active revision per charter, read on the same hot path
       // so the merge costs one extra query per cache miss, not per run.
       getActiveRevisions(),
     ])
     const map = new Map<string, DbCharterPolicy>()
     for (const r of rows) {
-      // Match the code charter's version exactly — a row for another
-      // version is another charter's policy, not this one's.
-      if (FLEET_CHARTERS[r.key]?.version !== r.version) continue
+      if (r.templateKey) {
+        // An instance: it must name a template that exists in code, and it
+        // inherits that template's version. Anything else is skipped.
+        if (!FLEET_CHARTERS[r.templateKey]) continue
+      } else if (FLEET_CHARTERS[r.key]?.version !== r.version) {
+        // A code charter: match the version exactly — a row for another
+        // version is another charter's policy, not this one's.
+        continue
+      }
       const rev = revisions.get(r.key)
       map.set(r.key, {
+        key: r.key,
         version: r.version,
         enabled: r.enabled,
         autonomyLevel: r.autonomyLevel,
@@ -107,6 +129,11 @@ async function loadDbPolicies(): Promise<Map<string, DbCharterPolicy> | null> {
         modelNameOverride: r.modelNameOverride,
         pausedUntil: r.pausedUntil,
         pausedReason: r.pausedReason,
+        templateKey: r.templateKey,
+        retired: r.supersededBy === 'retired',
+        promptOverlay: r.promptOverlay,
+        name: r.name,
+        description: r.description,
         revision: rev
           ? {
               id: rev.id,
@@ -170,11 +197,34 @@ function toEffective(
   // so resuming restores exactly what the operator had set.
   const paused = db.pausedUntil != null && new Date(db.pausedUntil).getTime() > Date.now()
   const rp = db.revision?.policy ?? null
+
+  /* SB.W.8 — an INSTANCE takes its identity from the row and everything that
+     confers capability from the template. The base prompt is always the
+     template's; the overlay is APPENDED, never substituted, so an instance can
+     narrow or specialise what a worker attends to and can never redefine what
+     it is allowed to do. */
+  const isInstance = !!db.templateKey
+  const basePrompt = db.revision?.systemPrompt ?? def.systemPrompt
+  const systemPrompt = isInstance && db.promptOverlay?.trim()
+    ? `${basePrompt}\n\n--- Additional instructions for this worker ---\n${db.promptOverlay.trim()}`
+    : basePrompt
+
   return {
     ...def,
+    // Identity is the instance's own; capability is never.
+    ...(isInstance
+      ? {
+          key: db.key,
+          name: db.name ?? def.name,
+          description: db.description ?? def.description,
+          templateKey: db.templateKey ?? undefined,
+          promptOverlay: db.promptOverlay ?? undefined,
+          retired: db.retired ?? false,
+        }
+      : {}),
     // AC.1 — code default ⊕ active revision. An absent revision means the
     // code prompt runs; that is the fallback, and it cannot fail.
-    systemPrompt: db.revision?.systemPrompt ?? def.systemPrompt,
+    systemPrompt,
     activeRevisionId: db.revision?.id,
     activeRevisionNumber: db.revision?.revision,
     enabled: db.enabled && !paused,
@@ -218,20 +268,54 @@ function toEffective(
   }
 }
 
+/**
+ * SB.W.8 — the single resolver, and the meeting point the Workflows stream's
+ * stored graph validates against (session-locks §4). A key is either a code
+ * charter or an instance naming one; anything else does not exist.
+ */
 export async function resolveCharter(
   key: string,
 ): Promise<EffectiveCharter | null> {
+  const policies = await loadDbPolicies()
+  const row = policies?.get(key)
+
+  // An instance resolves through its template's definition — unless it has
+  // been retired, in which case it does not resolve at all. Retirement is a
+  // state rather than a delete (its runs and findings are history), so this is
+  // the line that makes "retired" mean "cannot run" rather than "hidden".
+  if (row?.templateKey) {
+    if (row.retired) return null
+    const def = FLEET_CHARTERS[row.templateKey]
+    if (!def) return null
+    return toEffective(def, row, false)
+  }
+
   const def = FLEET_CHARTERS[key]
   if (!def) return null
-  const policies = await loadDbPolicies()
-  return toEffective(def, policies?.get(key), policies === null)
+  return toEffective(def, row, policies === null)
 }
 
+/**
+ * Code charters ⊕ instances. `resolveCharter` alone is NOT sufficient — this
+ * is what the Workers roster, the Controls page and /agent/fleet/graph read,
+ * and an instance missing from here would execute correctly while being
+ * invisible everywhere. Recorded in the locks doc review for exactly that
+ * reason.
+ */
 export async function listCharters(): Promise<EffectiveCharter[]> {
   const policies = await loadDbPolicies()
-  return Object.values(FLEET_CHARTERS).map((def) =>
+  const code = Object.values(FLEET_CHARTERS).map((def) =>
     toEffective(def, policies?.get(def.key), policies === null),
   )
+  if (!policies) return code
+  const instances: EffectiveCharter[] = []
+  for (const row of policies.values()) {
+    if (!row.templateKey) continue
+    const def = FLEET_CHARTERS[row.templateKey]
+    if (!def) continue
+    instances.push(toEffective(def, row, false))
+  }
+  return [...code, ...instances]
 }
 
 /** Create-if-absent on (key, version) — never clobbers operator edits. */

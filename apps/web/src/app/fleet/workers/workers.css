@@ -452,3 +452,76 @@ button.acr-pg-stat {
   color: #2f6096;
 }
 .acr-banner.info b { font-weight: 650; }
+
+/* ── W.8 · create a worker ────────────────────────────────────────────────
+   A drawer beside the list, not a route. Agentforce moved Testing Center into
+   the Studio because a separate surface got ignored; creating a worker belongs
+   next to the workers. */
+.sbw-drawerwrap {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(20, 28, 38, 0.34);
+  display: flex; justify-content: flex-end;
+}
+.sbw-drawer {
+  width: min(560px, 100%);
+  height: 100%;
+  background: #fff;
+  border-left: 1px solid #dfe5ec;
+  box-shadow: -18px 0 44px rgba(20, 28, 38, 0.18);
+  display: flex; flex-direction: column;
+}
+.sbw-drawerhead,
+.sbw-drawerfoot {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #eef1f5;
+}
+.sbw-drawerhead h3 { margin: 0; font-size: 15px; color: #26313f; flex: 1 1 auto; }
+.sbw-drawerfoot { border-bottom: 0; border-top: 1px solid #eef1f5; justify-content: flex-end; }
+.sbw-drawerbody { flex: 1 1 auto; overflow-y: auto; padding: 16px 18px; }
+.sbw-drawerbody .sbw-field span { font-weight: 500; }
+.sbw-drawerbody textarea {
+  width: 100%; padding: 8px 10px; font: inherit; font-size: 12.5px;
+  color: #34404f; background: #fff; border: 1px solid #dfe5ec; border-radius: 7px;
+  resize: vertical;
+}
+.sbw-drawerbody textarea:focus {
+  outline: none; border-color: #9db4d0; box-shadow: 0 0 0 3px rgba(74, 122, 184, 0.14);
+}
+
+/* the templates you may start from */
+.sbw-tmpls { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.sbw-tmpl {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 9px 11px; text-align: left; cursor: pointer;
+  background: #fff; border: 1px solid #e6ebf1; border-radius: 9px;
+  font: inherit; color: #34404f;
+}
+.sbw-tmpl:hover { border-color: #c3d3e6; background: #fbfdff; }
+.sbw-tmpl.on { border-color: #4a7ab8; box-shadow: inset 0 0 0 1px #4a7ab8; background: #f6f9fd; }
+.sbw-tmpl .txt { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.sbw-tmpl .txt b { font-size: 12.5px; font-weight: 600; }
+
+/* the review, generated from the template rather than written by hand */
+.sbw-review {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  margin: 14px 0 10px; padding: 12px;
+  background: #f7f9fc; border: 1px solid #e6ebf1; border-radius: 9px;
+}
+@media (max-width: 620px) { .sbw-review { grid-template-columns: 1fr; } }
+.sbw-review h4 {
+  margin: 0 0 6px; font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: #8d97a6;
+}
+.sbw-review ul { margin: 0; padding-left: 16px; }
+.sbw-review li { font-size: 11.5px; line-height: 1.55; color: #46525f; }
+
+/* An inline reason, at the field that caused it. The server refuses this too —
+   this is so the operator sees it before the round trip, not instead of it. */
+.sbw-fielderr {
+  display: block;
+  margin-top: 4px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #a3312c;
+}

@@ -41,7 +41,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Ban, Bot, Check, Columns, Pause as PauseIcon, RefreshCw, ShieldAlert, X } from 'lucide-react'
+import { AlertTriangle, Ban, Bot, Check, Columns, Pause as PauseIcon, Plus, RefreshCw, ShieldAlert, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { GLOSSARY, Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { DataGrid, type Column } from '@/design-system/components'
@@ -68,6 +68,7 @@ import {
   type Level,
 } from '../_shared/autonomy'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
+import { CreateWorker } from './CreateWorker'
 
 /** Design contract rule 3: jargon without a glossary entry fails review. These
  *  maps are the narrowing — a tier or dial we have no definition for renders as
@@ -249,6 +250,7 @@ export function WorkersClient() {
   const [pendingRaise, setPendingRaise] = useState<{ to: Level; workers: AffectedWorker[] } | null>(null)
   const [pendingPause, setPendingPause] = useState<AffectedWorker[] | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
 
   /* Restore the view and the search from the URL, and the columns from this
      browser. Done with the History API rather than useSearchParams: the page is
@@ -953,6 +955,13 @@ export function WorkersClient() {
         </div>
       ) : null}
 
+      {creating ? (
+        <CreateWorker
+          onClose={() => setCreating(false)}
+          onCreated={() => { setNote('Created, and switched off. Turn it on when you are ready.'); refresh() }}
+        />
+      ) : null}
+
       {pendingRaise ? (
         <ConfirmAutonomy
           to={pendingRaise.to}
@@ -1200,6 +1209,9 @@ export function WorkersClient() {
           ) : null}
         </div>
 
+        <button className="acr-btn go" onClick={() => setCreating(true)}>
+          <Plus size={13} /> Create a worker
+        </button>
         {/* Refresh stays, deliberately. Polling that removes the manual control
             leaves an operator with no way to force the question. */}
         <button className="acr-btn" onClick={refresh} disabled={loading}>

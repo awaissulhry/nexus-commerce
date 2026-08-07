@@ -218,6 +218,29 @@ Detection rule, since it is easy to trip: `/<select\b/g`, lowercase. The DS
 
 ---
 
+## 5c · ⚠ A failing test on main (Workflows stream, not fixed by Workers)
+
+`src/services/agent-fleet/fleet-council.vitest.test.ts` fails on `main`:
+
+```
+✕ queues a passing plan through the gate with the DIRECTOR run id
+  expected queueTool called with [...] — received an extra { forceAsk: false }
+```
+
+`c6ed9a5ab` (WF.4b+4c) added a `forceAsk` argument to the queue call and did
+not update its own test. **Confirmed pre-existing**: it fails with the Workers
+stream's changes stashed, so it is not a W.8 regression.
+
+It does **not** block pushes — `.githooks/pre-push` runs only the security
+suite (`test:security`), not the full vitest run — which is precisely why it can
+sit broken on main unnoticed. Workers is leaving it to its owner per the
+protocol; **Workflows, this is a one-line expectation update.** Delete this
+section once green.
+
+Counted 2026-08-07: `apps/api` agent-fleet suite = 297 passed, 1 failed.
+
+---
+
 ## 6 · Before you commit
 
 1. `git commit --only -- <explicit paths>` — never `git add .`, never `--amend`.

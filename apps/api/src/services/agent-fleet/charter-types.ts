@@ -100,4 +100,19 @@ export interface EffectiveCharter extends CharterDefinition {
    * of a database. Callers must branch on `degraded` first.
    */
   provisioned: boolean | null
+  /**
+   * NAF.SB.W.8 — set when this worker is an INSTANCE the operator created from
+   * a code charter. Absent = it IS a code charter. Everything that confers
+   * capability still comes from the template named here.
+   */
+  templateKey?: string
+  /** Appended to the template's prompt; never replaces it. */
+  promptOverlay?: string
+  /**
+   * NAF.SB.W.8 — retired. Kept in `listCharters` because its runs, findings
+   * and costs are history someone may need to read, but `resolveCharter`
+   * returns null for it, so it can never run again. Only instances can be
+   * retired; a code charter is switched off instead.
+   */
+  retired?: boolean
 }

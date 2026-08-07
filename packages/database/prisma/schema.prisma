@@ -3059,42 +3059,42 @@ model AmazonAdsProfile {
 /// status) has a home. The engine reads THIS, never raw SQP, so "what is automation trying to
 /// do" is always answerable from one table.
 model KeywordCoverageSet {
-  id                  String   @id @default(cuid())
+  id                 String                @id @default(cuid())
   /// External portfolio id — matches Campaign.portfolioId and the cockpit URLs.
-  portfolioId         String
-  marketplace         String
-  name                String
-  enabled             Boolean  @default(false)
+  portfolioId        String
+  marketplace        String
+  name               String
+  enabled            Boolean               @default(false)
   /// Family-level guardrails the engine must respect (pilot: hard caps, per plan §4.4).
-  dailySpendCapCents  Int?
-  acosCapPct          Decimal? @db.Decimal(6, 2)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  createdBy           String?
-  terms               KeywordCoverageTerm[]
+  dailySpendCapCents Int?
+  acosCapPct         Decimal?              @db.Decimal(6, 2)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  createdBy          String?
+  terms              KeywordCoverageTerm[]
 
   @@unique([portfolioId, marketplace, name])
   @@index([portfolioId])
 }
 
 model KeywordCoverageTerm {
-  id            String   @id @default(cuid())
-  setId         String
-  set           KeywordCoverageSet @relation(fields: [setId], references: [id], onDelete: Cascade)
-  term          String
+  id             String             @id @default(cuid())
+  setId          String
+  set            KeywordCoverageSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+  term           String
   /// The ASIN assigned to LEAD this term (highest bid / ToS defense); others support.
-  leadAsin      String?
+  leadAsin       String?
   /// ACTIVE | PAUSED | RETIRED — retirement is recorded, not deleted, so reclaim has history.
-  status        String   @default("ACTIVE")
+  status         String             @default("ACTIVE")
   /// Per-term ceiling; null inherits the set's guardrails.
-  maxCpcCents   Int?
-  targetSharePct Decimal? @db.Decimal(6, 2)
+  maxCpcCents    Int?
+  targetSharePct Decimal?           @db.Decimal(6, 2)
   /// ACR.3 — control group: the engine NEVER touches a control term. Without a held-out
   /// set, week-over-week share moves cannot be attributed to the engine vs the market.
-  isControl     Boolean  @default(false)
-  notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  isControl      Boolean            @default(false)
+  notes          String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
   @@unique([setId, term])
   @@index([setId, status])
@@ -11378,23 +11378,23 @@ model AgentRun {
   // agentKey doubles as the charter key for fleet runs (plan D5);
   // `mode` NOT NULL is what marks a run as a fleet run. All nullable
   // or defaulted — the table has live rows.
-  charterVersion  Int?
+  charterVersion     Int?
   /// NAF.AC.8 — which charter revision produced this run, so scorecards can
   /// compare an A/B split. Null = the code charter ran.
-  charterRevisionId String?
-  mode            String? // tick | sweep | council | summit | incident | ask
-  parentRunId     String?
-  orchestrationId String?
-  findingCount    Int     @default(0)
-  haltedReason    String?
+  charterRevisionId  String?
+  mode               String? // tick | sweep | council | summit | incident | ask
+  parentRunId        String?
+  orchestrationId    String?
+  findingCount       Int     @default(0)
+  haltedReason       String?
   /// NAF.WF.2 — the stored workflow + revision that served this run.
   /// Null = a code-path run (built-in definition, or pre-workflow history).
   workflowKey        String?
   workflowRevisionId String?
 
-  createdAt    DateTime         @default(now())
-  endedAt      DateTime?
-  approvals    AgentApproval[]
+  createdAt DateTime        @default(now())
+  endedAt   DateTime?
+  approvals AgentApproval[]
 
   @@index([agentKey, createdAt])
   @@index([status, createdAt])
@@ -11421,19 +11421,19 @@ model AgentTool {
 // A high-stakes action awaiting human approval — the governed-autonomy
 // gate. Carries a dry-run preview of the action's effect.
 model AgentApproval {
-  id          String    @id @default(cuid())
-  agentRunId  String
-  agentRun    AgentRun  @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
-  toolName    String
-  riskTier    String
-  args        Json // the proposed action
-  preview     Json? // dry-run diff / preview of effect
-  status      String    @default("pending") // pending | scheduled | approved | rejected | expired | executed
-  requestedAt DateTime  @default(now())
-  decidedBy   String?
-  decidedAt   DateTime?
-  reason      String?
-  expiresAt   DateTime?
+  id           String    @id @default(cuid())
+  agentRunId   String
+  agentRun     AgentRun  @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+  toolName     String
+  riskTier     String
+  args         Json // the proposed action
+  preview      Json? // dry-run diff / preview of effect
+  status       String    @default("pending") // pending | scheduled | approved | rejected | expired | executed
+  requestedAt  DateTime  @default(now())
+  decidedBy    String?
+  decidedAt    DateTime?
+  reason       String?
+  expiresAt    DateTime?
   /// NAF.AP.4 — an approved action waits here before it runs, so an approve
   /// can be taken back. Set with status='scheduled'; null otherwise. Nothing
   /// reaches Amazon before this instant.
@@ -15158,28 +15158,26 @@ model AmazonFamilyWorkbook {
 // invent their own way of remembering a query.
 /**
  * RPT.15 — a read-only, expiring link to one report result.
- *
  * The token is NEVER stored. Only its SHA-256 hash is, so a database disclosure
  * does not hand over working links — the same reason password hashes exist. The
  * raw token is returned exactly once, at creation.
- *
  * `query` is FROZEN at creation and is the only query the public endpoint will
  * ever run. The endpoint accepts no filter, no grouping and no column input from
  * the caller: otherwise a single leaked link would become an unauthenticated
  * query interface over the entire reporting engine.
  */
 model ReportShareLink {
-  id          String    @id @default(cuid())
-  tokenHash   String    @unique
-  reportId    String
-  query       Json
-  label       String?
-  createdBy   String    @default("default-user")
-  expiresAt   DateTime
-  revokedAt   DateTime?
-  viewCount   Int       @default(0)
+  id           String    @id @default(cuid())
+  tokenHash    String    @unique
+  reportId     String
+  query        Json
+  label        String?
+  createdBy    String    @default("default-user")
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  viewCount    Int       @default(0)
   lastViewedAt DateTime?
-  createdAt   DateTime  @default(now())
+  createdAt    DateTime  @default(now())
 
   @@index([createdBy, createdAt])
   @@index([expiresAt])
@@ -15437,13 +15435,13 @@ model CustomMetric {
 /// for WHETHER/HOW (enabled, autonomy, scope, budget overrides) — the
 /// tool-policy split, with the floor inverted: unreadable DB ⇒ OFF.
 model AgentCharter {
-  id              String  @id @default(cuid())
-  key             String // stable kebab-case, e.g. "amazon-negative-miner"
-  version         Int     @default(1)
-  tier            String // analyst | director | strategist | critic | auditor
-  domain          String // amazon-ads | ebay-ads | catalog | pricing | inventory | ops | design
-  name            String
-  description     String?
+  id          String  @id @default(cuid())
+  key         String // stable kebab-case, e.g. "amazon-negative-miner"
+  version     Int     @default(1)
+  tier        String // analyst | director | strategist | critic | auditor
+  domain      String // amazon-ads | ebay-ads | catalog | pricing | inventory | ops | design
+  name        String
+  description String?
 
   systemPrompt    String   @db.Text
   outputSchemaKey String // registry key for the Zod schema in @nexus/shared/agent-fleet
@@ -15480,16 +15478,36 @@ model AgentCharter {
 
   /// NAF.AC.6 — a temporary stop with an expiry, so pausing a worker is
   /// never a forgotten off switch. Null = not paused.
-  pausedUntil       DateTime?
-  pausedReason      String?
+  pausedUntil  DateTime?
+  pausedReason String?
 
   /// NAF.AC.8 — split testing: when set AND abEnabled, alternate runs use
   /// this candidate revision instead of the active one.
   abEnabled           Boolean @default(false)
   candidateRevisionId String?
 
+  /// NAF.SB.W.8 — an INSTANCE of a code charter. Null = this row IS a code
+  /// charter (every row before this change). Set = the operator created it as
+  /// a narrower copy of the named template: same tools, same output schema,
+  /// same observations, same autonomy ceiling — only scope, budget, cadence
+  /// and a prompt overlay differ.
+  ///
+  /// This is the whole of "create a worker". Laws L2 (agents get zero new
+  /// write paths) and L3 (no agent may spawn an agent) survive by
+  /// construction, because an instance cannot name a capability its template
+  /// does not already hold.
+  ///
+  /// `systemPrompt` / `outputSchemaKey` / `modelFeature` are NOT NULL, so an
+  /// instance row must carry *something* in them. They are INERT: the
+  /// resolver reads those from the code template and never from the row —
+  /// asserted by a test that writes garbage into them.
+  templateKey   String?
+  /// Appended to the template's prompt, never replacing it.
+  promptOverlay String? @db.Text
+
   @@unique([key, version])
   @@index([tier, domain, enabled])
+  @@index([templateKey])
 }
 
 /// NAF.AC.1 — a charter revision: the prompt (and the policy that rode with
