@@ -1,7 +1,13 @@
 # NAF.SB — What pages the Agent Fleet needs
 
-**Status: AWAITING APPROVAL.** Research + proposed information architecture. No
-code beyond SB.1 (`0f1efc256`, the rail section) has been written against this.
+**Status: APPROVED and in build** (operator decisions in Part 7, 2026-08-07).
+
+| | |
+|---|---|
+| **Home** | `/fleet`, on the app-wide rail — moved out of `/marketing/ads` in SB.7 (`764cd801d`) |
+| **Built** | Workers (`4e3ec6576`) · Controls (`b41f636f3`) |
+| **Scaffolded** | the other eight routes exist and render `PlannedPage` (`1843d4b06`) |
+| **Next** | build the pages one at a time; placement is settled, so each is a self-contained piece of work |
 
 Operator asks that drive this, in their words:
 
@@ -121,8 +127,8 @@ before it runs.
 
 ## PART 2 — Verdict on the six sections we have today
 
-The current page (`/marketing/ads/fleet`) is one scroll with six sections. Here is
-what happens to each.
+The current page — now `/fleet`, formerly `/marketing/ads/fleet` — is one scroll
+with six sections. Here is what happens to each.
 
 | # | Section today | Verdict | Where it goes |
 |---|---|---|---|
@@ -143,12 +149,15 @@ read whenever someone is confused, which is the moment that matters.
 
 ## PART 3 — The proposed page map
 
-Ten pages in three groups. The grouping is the point: a beginner should be able
+Ten pages in three groups, at **`/fleet`** on the **app-wide rail** — not inside
+`/marketing/ads` (operator call 2026-08-07: the fleet is not a marketing surface,
+and Part 6's roster already reaches catalog, pricing, inventory and platform-ops).
+The ads rail keeps one cross-link. The grouping is the point: a beginner should be able
 to tell, from the rail alone, which pages *watch*, which pages *build*, and which
 pages *restrain*.
 
 ```
-Agent Fleet                                          /marketing/ads/fleet
+Agent Fleet                                                        /fleet
 │
 ├── OPERATE  ─ what is happening
 │   ├─ Overview        the brief, today's numbers, what needs you    /fleet
