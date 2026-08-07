@@ -10,6 +10,7 @@
  * revert actor come from request.authUser, the same path approvals use.
  */
 import type { FastifyPluginAsync } from 'fastify'
+import { resyncFleetSchedules } from '../jobs/fleet-sweep.job.js'
 import {
   builtinByKey,
   getEffectiveDefinition,
@@ -86,6 +87,8 @@ const agentFleetWorkflowRoutes: FastifyPluginAsync = async (fastify) => {
       const { key, revisionId } = request.params
       const revision = await activateWorkflowRevision(key, revisionId)
       if (!revision) return reply.code(404).send({ error: 'revision not found for this workflow' })
+      // WF.4c — a published trigger change re-arms the clock immediately.
+      void resyncFleetSchedules().catch(() => {})
       return {
         revision,
         // Honesty over ceremony: stored execution is WF.4. Saying this here
@@ -102,7 +105,10 @@ const agentFleetWorkflowRoutes: FastifyPluginAsync = async (fastify) => {
       if (!builtinByKey(key)) {
         return reply.code(400).send({ error: 'only a built-in has a code definition to revert to' })
       }
-      return revertWorkflowToBuiltin(key)
+      const result = await revertWorkflowToBuiltin(key)
+      // WF.4c — reverting restores the code clock the same moment.
+      void resyncFleetSchedules().catch(() => {})
+      return result
     },
   )
 }

@@ -19,7 +19,7 @@ import { executeCharter } from './agent-executor.js'
 import { checkFleetDayBudget } from './budget-guard.js'
 import { FLEET_GRAPH, topoLevels } from './fleet-graph.js'
 import { getFleetState } from './fleet-state.service.js'
-import { MODE_WORKFLOW_KEY, defToGraph } from './workflow-defs.js'
+import { MODE_WORKFLOW_KEY, defToGraph, stepGatesOf } from './workflow-defs.js'
 import { getEffectiveDefinition, isWorkflowEnabled } from './workflow-registry.service.js'
 
 export interface FleetRunResult {
@@ -29,6 +29,11 @@ export interface FleetRunResult {
   failed: number
   skipped: number
   haltedReason?: string
+  /** WF.4b — the resolved stored definition's per-step gates; absent when
+   *  the code path walked (and then every gate is effectively `inherit`). */
+  stepGates?: Record<string, 'ask' | 'act' | 'inherit'>
+  workflowKey?: string
+  workflowRevisionId?: string
 }
 
 const DEFAULT_CONCURRENCY = 3
@@ -69,6 +74,7 @@ export async function runFleet(
   let graph = FLEET_GRAPH
   let stampKey: string | null = null
   let stampRevisionId: string | null = null
+  let stepGates: Record<string, 'ask' | 'act' | 'inherit'> | undefined
   try {
     if (!(await isWorkflowEnabled(workflowKey))) {
       return {
@@ -85,6 +91,7 @@ export async function runFleet(
       graph = defToGraph(eff.definition)
       stampKey = workflowKey
       stampRevisionId = eff.revisionId
+      stepGates = stepGatesOf(eff.definition)
     }
   } catch {
     /* stored layer unreadable ⇒ FLEET_GRAPH walks, stamps stay null */
@@ -141,7 +148,17 @@ export async function runFleet(
     await pool(thunks, concurrency)
   }
 
-  return { orchestrationId, started, succeeded, failed, skipped, haltedReason }
+  return {
+    orchestrationId,
+    started,
+    succeeded,
+    failed,
+    skipped,
+    haltedReason,
+    stepGates,
+    workflowKey: stampKey ?? undefined,
+    workflowRevisionId: stampRevisionId ?? undefined,
+  }
 }
 
 /**

@@ -40,6 +40,12 @@ export async function runOrQueueTool(
   args: Record<string, unknown>,
   ctx: ToolContext,
   agentRunId: string,
+  opts: {
+    /** NAF.WF.4b — a workflow step's `ask` gate. Tighten-only by
+     *  construction: true forces the approval branch; false/absent changes
+     *  nothing. Loosening below policy is structurally impossible here. */
+    forceAsk?: boolean
+  } = {},
 ): Promise<GateOutcome> {
   const policy = await resolveToolPolicy(name)
   const tool = getTool(name)
@@ -48,8 +54,10 @@ export async function runOrQueueTool(
   if (!policy.enabled)
     return { ok: false, mode: 'error', error: `tool ${name} is disabled` }
 
+  const requiresApproval = policy.requiresApproval || opts.forceAsk === true
+
   // Read/draft + no-approval tools run immediately.
-  if (!policy.requiresApproval) {
+  if (!requiresApproval) {
     const res = await tool.handler(args, ctx)
     return {
       ok: res.ok,

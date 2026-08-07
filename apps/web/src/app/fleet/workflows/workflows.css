@@ -353,6 +353,16 @@
 .wf-problems p { margin: 0; font-size: 12.5px; line-height: 1.55; color: #91640f; }
 .wf-problems p + p { margin-top: 6px; }
 
+.wf-croninput {
+  width: 180px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  color: #34404f;
+  border: 1px solid #dfe5ec;
+  border-radius: 7px;
+  padding: 6px 9px;
+}
+
 .wf-noteinput {
   width: 100%;
   font: inherit;

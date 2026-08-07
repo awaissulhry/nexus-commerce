@@ -10,8 +10,9 @@
  * ships (WF.4). The server re-validates everything on save; the checklist
  * here is a courtesy mirror, never the authority.
  *
- * The trigger is deliberately absent: the fleet honors the env cron until
- * WF.4, and an editable schedule the fleet ignores would be a lie.
+ * The trigger unlocked with WF.4c: the clock re-arms from the stored
+ * definition the moment a revision activates or reverts, so what this panel
+ * publishes is what actually fires — no restart, no drift.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -24,6 +25,7 @@ import {
   computeDiff,
   definitionToStory,
   diffIsEmpty,
+  prettyCron,
   tierArtifact,
   topoCols,
   type CharterRow,
@@ -237,6 +239,67 @@ export function RoutineEditor({
 
       <div className="wf-editgrid">
         <div className="wf-steps">
+          <div className="wf-stepcard">
+            <div className="wf-stephead">
+              <span>
+                <span className="nm"><Term k="trigger">Trigger</Term></span>
+                <span className="acr-pg-muted"> · when this routine runs</span>
+              </span>
+            </div>
+            <div className="wf-gate">
+              <div className="acr-pg-ladder">
+                <button
+                  type="button"
+                  className={`acr-pg-rung ${draft.trigger.type === 'schedule' ? 'on' : ''}`}
+                  onClick={() =>
+                    setDraft((d) => ({
+                      ...d,
+                      trigger: {
+                        type: 'schedule',
+                        cron:
+                          baseline.trigger.type === 'schedule'
+                            ? baseline.trigger.cron
+                            : '45 4 * * *',
+                      },
+                    }))
+                  }
+                >
+                  On a clock
+                </button>
+                <button
+                  type="button"
+                  className={`acr-pg-rung ${draft.trigger.type === 'manual' ? 'on' : ''}`}
+                  onClick={() => setDraft((d) => ({ ...d, trigger: { type: 'manual' } }))}
+                >
+                  Manual
+                </button>
+              </div>
+            </div>
+            {draft.trigger.type === 'schedule' ? (
+              <>
+                <label className="wf-gatelabel" htmlFor="wf-cron-input">Schedule (cron, UTC)</label>
+                <input
+                  id="wf-cron-input"
+                  className="wf-croninput"
+                  value={draft.trigger.cron}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      trigger: { type: 'schedule', cron: e.target.value },
+                    }))
+                  }
+                />
+                <span className="wf-sub">
+                  {prettyCron(draft.trigger.cron)} · the clock re-arms the moment you publish
+                </span>
+              </>
+            ) : (
+              <span className="wf-sub">
+                Runs only when started by hand — publishing this disarms the clock.
+              </span>
+            )}
+          </div>
+
           {draft.steps.map((s) => {
             const c = byKey.get(s.charterKey)
             const artifact = tierArtifact(c?.tier)

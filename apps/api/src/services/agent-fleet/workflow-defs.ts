@@ -120,3 +120,25 @@ export function defToGraph(def: WorkflowDefinitionV1): FleetGraph {
     edges: def.edges.map((e) => ({ from: e.from, to: e.to, artifact: e.artifact })),
   }
 }
+
+/** The definition's per-step gates, as a lookup. */
+export function stepGatesOf(
+  def: WorkflowDefinitionV1,
+): Record<string, WorkflowStepV1['gate']> {
+  const out: Record<string, WorkflowStepV1['gate']> = {}
+  for (const s of def.steps) out[s.charterKey] = s.gate
+  return out
+}
+
+/** WF.4b (study decision D-WF4.1): a plan item is gated by its ORIGIN step —
+ *  the analyst whose finding it enacts — falling back to the director's
+ *  gate, then `inherit`. Pure, so the fallback chain is provable without a
+ *  database. */
+export function resolveItemGate(
+  gates: Record<string, WorkflowStepV1['gate']>,
+  originCharterKey: string | null,
+  directorKey: string,
+): WorkflowStepV1['gate'] {
+  if (originCharterKey && gates[originCharterKey]) return gates[originCharterKey]
+  return gates[directorKey] ?? 'inherit'
+}

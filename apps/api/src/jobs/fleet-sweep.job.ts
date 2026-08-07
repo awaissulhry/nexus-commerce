@@ -96,21 +96,77 @@ export async function runFleetSweepCron(): Promise<void> {
 
 let task: ReturnType<typeof cron.schedule> | null = null
 
+/** WF.4c — the cron a job should actually fire on: the stored trigger when
+ *  one is active (null = stored `manual`, do not arm), else the env/code
+ *  default. An unreadable stored layer means the env cron stands — the same
+ *  fail-to-code law the walk itself follows. */
+async function resolveJobCron(
+  key: 'fleet-sweep' | 'fleet-council',
+  envDefault: string,
+): Promise<string | null> {
+  try {
+    const { getEffectiveDefinition } = await import(
+      '../services/agent-fleet/workflow-registry.service.js'
+    )
+    const trig = (await getEffectiveDefinition(key)).definition?.trigger
+    if (trig?.type === 'manual') return null
+    if (trig?.type === 'schedule' && typeof trig.cron === 'string' && cron.validate(trig.cron)) {
+      return trig.cron
+    }
+  } catch {
+    /* stored layer unreadable ⇒ env cron */
+  }
+  return cron.validate(envDefault) ? envDefault : null
+}
+
+/** WF.4c — (re)arm both fleet clocks from the effective definitions. Called
+ *  at boot and by the workflow routes after activate / revert, so a
+ *  published trigger change takes effect the moment it is published — no
+ *  restart, no drift between the page and the firing. No-op while the
+ *  master env gate is off. */
+export async function resyncFleetSchedules(): Promise<void> {
+  if (process.env.NEXUS_ENABLE_FLEET_SWEEP_CRON !== '1') return
+
+  const sweepCron = await resolveJobCron(
+    'fleet-sweep',
+    process.env.NEXUS_FLEET_SWEEP_SCHEDULE ?? '45 4 * * *',
+  )
+  task?.stop()
+  task = null
+  if (sweepCron) {
+    task = cron.schedule(sweepCron, () => {
+      void runFleetSweepCron()
+    })
+    logger.info(`[fleet-sweep] nightly analyst sweep scheduled (${sweepCron})`)
+  } else {
+    logger.info('[fleet-sweep] stored trigger is manual — clock not armed')
+  }
+
+  const councilCron = await resolveJobCron(
+    'fleet-council',
+    process.env.NEXUS_FLEET_COUNCIL_SCHEDULE ?? '15 5 * * 1',
+  )
+  councilTask?.stop()
+  councilTask = null
+  if (councilCron) {
+    councilTask = cron.schedule(councilCron, () => {
+      void runFleetCouncilCron()
+    })
+    logger.info(`[fleet-council] weekly council scheduled (${councilCron})`)
+  } else {
+    logger.info('[fleet-council] stored trigger is manual — clock not armed')
+  }
+}
+
 export function startFleetSweepCron(): void {
   if (process.env.NEXUS_ENABLE_FLEET_SWEEP_CRON !== '1') {
     logger.info('[fleet-sweep] cron disabled (NEXUS_ENABLE_FLEET_SWEEP_CRON != 1)')
     return
   }
-  if (task) return
-  const schedule = process.env.NEXUS_FLEET_SWEEP_SCHEDULE ?? '45 4 * * *'
-  if (!cron.validate(schedule)) {
-    logger.error(`[fleet-sweep] invalid schedule "${schedule}" — cron not started`)
-    return
-  }
-  task = cron.schedule(schedule, () => {
-    void runFleetSweepCron()
-  })
-  logger.info(`[fleet-sweep] nightly analyst sweep scheduled (${schedule})`)
+  // WF.4c — one resync arms BOTH clocks from the effective definitions.
+  void resyncFleetSchedules().catch((err) =>
+    logger.error('[fleet-sweep] schedule resync failed', { error: String(err) }),
+  )
 }
 
 /* ── NAF.C — the weekly council (analysts → director → critic → queue) ── */
@@ -142,18 +198,6 @@ export async function runFleetCouncilCron(): Promise<void> {
 let councilTask: ReturnType<typeof cron.schedule> | null = null
 
 export function startFleetCouncilCron(): void {
-  if (process.env.NEXUS_ENABLE_FLEET_SWEEP_CRON !== '1') {
-    logger.info('[fleet-council] cron disabled (NEXUS_ENABLE_FLEET_SWEEP_CRON != 1)')
-    return
-  }
-  if (councilTask) return
-  const schedule = process.env.NEXUS_FLEET_COUNCIL_SCHEDULE ?? '15 5 * * 1'
-  if (!cron.validate(schedule)) {
-    logger.error(`[fleet-council] invalid schedule "${schedule}" — cron not started`)
-    return
-  }
-  councilTask = cron.schedule(schedule, () => {
-    void runFleetCouncilCron()
-  })
-  logger.info(`[fleet-council] weekly council scheduled (${schedule})`)
+  // WF.4c — kept for boot-call compatibility (index.ts calls both starters);
+  // startFleetSweepCron's resync arms the council clock too.
 }

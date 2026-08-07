@@ -118,6 +118,8 @@ const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 
 
 /** The two fleet crons in plain words; anything unrecognized stays as cron. */
 export function prettyCron(expr: string): string {
+  // WF.4c — the schedule feed reports a stored manual trigger as 'manual'.
+  if (expr === 'manual') return 'When you start it'
   const f = expr.trim().split(/\s+/)
   if (f.length !== 5) return expr
   const [min, hr, dom, mon, dow] = f

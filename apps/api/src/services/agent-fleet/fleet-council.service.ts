@@ -19,6 +19,7 @@ import { runApprovalMaintenance } from './approval-inbox.service.js'
 import { runOrQueueTool } from '../agents/approval-gate.service.js'
 import { runFleet } from './orchestrator.js'
 import { runPreChecks } from './plan-critic.service.js'
+import { resolveItemGate } from './workflow-defs.js'
 
 const FLEET_TOOL_NAMES = [
   'create-negative-keyword',
@@ -125,6 +126,27 @@ export async function runFleetCouncilOnce(): Promise<CouncilResult> {
   }
 
   // 5 — queue the survivors of a passing plan.
+  //
+  // WF.4b — per-step gates from the stored definition this walk executed
+  // (study decision D-WF4.1): an item is gated by its ORIGIN analyst's step
+  // — the worker whose finding it enacts — falling back to the director's.
+  // `ask` forces the approval branch at the gate; tighten-only, so tool
+  // floors and `alwaysAsk` are untouched.
+  const gates = fleet.stepGates ?? {}
+  const originByFinding = new Map<string, string>()
+  if (Object.keys(gates).length > 0 && finalVerdict === 'pass' && !planWideForce) {
+    const findingIds = items
+      .map((i) => i.findingId)
+      .filter((id): id is string => typeof id === 'string')
+    if (findingIds.length > 0) {
+      const findings = await prisma.agentFinding.findMany({
+        where: { id: { in: findingIds } },
+        select: { id: true, charterKey: true },
+      })
+      for (const f of findings) originByFinding.set(f.id, f.charterKey)
+    }
+  }
+
   let queued = 0
   let blocked = 0
   if (finalVerdict === 'pass' && !planWideForce) {
@@ -134,11 +156,17 @@ export async function runFleetCouncilOnce(): Promise<CouncilResult> {
         blocked++
         continue
       }
+      const gate = resolveItemGate(
+        gates,
+        originByFinding.get(item.findingId) ?? null,
+        'amazon-ads-director',
+      )
       const outcome = await runOrQueueTool(
         item.tool,
         item.args as Record<string, unknown>,
         { userId: null },
         directorRun!.id,
+        { forceAsk: gate === 'ask' },
       )
       if (outcome.mode === 'queued' && outcome.approvalId) {
         approvalIds.push(outcome.approvalId)

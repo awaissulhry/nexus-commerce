@@ -22,7 +22,7 @@
 import prisma from '../../db.js'
 import { topoLevels, type FleetGraph } from './fleet-graph.js'
 import { resolveCharter } from './charter-registry.js'
-import { nextCronFire } from './fleet-schedule.service.js'
+import { nextCronFire } from './cron-eval.js'
 import { getActiveWorkflowRevision } from './workflow-revisions.service.js'
 import {
   BUILTIN_WORKFLOWS,

@@ -6,7 +6,14 @@
  */
 import { describe, expect, it } from 'vitest'
 import { FLEET_GRAPH, topoLevels } from './fleet-graph.js'
-import { BUILTIN_WORKFLOWS, MODE_WORKFLOW_KEY, builtinByKey, defToGraph } from './workflow-defs.js'
+import {
+  BUILTIN_WORKFLOWS,
+  MODE_WORKFLOW_KEY,
+  builtinByKey,
+  defToGraph,
+  resolveItemGate,
+  stepGatesOf,
+} from './workflow-defs.js'
 
 const codeWalk = () => topoLevels(FLEET_GRAPH)
 const nonStandaloneKeys = () =>
@@ -43,6 +50,33 @@ describe('derived built-in definitions (WF.4a)', () => {
     const def = builtinByKey('on-demand-check')!.definition()
     expect(def.steps).toEqual([])
     expect(def.trigger.type).toBe('manual')
+  })
+})
+
+describe('resolveItemGate (WF.4b, decision D-WF4.1)', () => {
+  const gates = { miner: 'ask', director: 'act' } as Record<
+    string,
+    'ask' | 'act' | 'inherit'
+  >
+
+  it('the origin step’s gate wins', () => {
+    expect(resolveItemGate(gates, 'miner', 'director')).toBe('ask')
+  })
+
+  it('an unknown origin falls back to the director', () => {
+    expect(resolveItemGate(gates, 'stranger', 'director')).toBe('act')
+    expect(resolveItemGate(gates, null, 'director')).toBe('act')
+  })
+
+  it('neither present ⇒ inherit — 4b adds no policy on its own', () => {
+    expect(resolveItemGate({}, 'anyone', 'director')).toBe('inherit')
+  })
+
+  it('parity: every derived built-in origin resolves to inherit', () => {
+    const g = stepGatesOf(builtinByKey('fleet-council')!.definition())
+    for (const key of Object.keys(g)) {
+      expect(resolveItemGate(g, key, 'amazon-ads-director')).toBe('inherit')
+    }
   })
 })
 
