@@ -386,6 +386,66 @@ focused section study appended to this doc, DT-style, and ends verified on prod.
 
 ---
 
+## PART 8 — Section studies and execution record
+
+### WF.1 / S1 — the routine list (study, 2026-08-07)
+
+**What one row must answer** (commitments 1, 4, 5): what this routine is · one
+honest status · when it runs, as a sentence · how the last run went and what it
+cost · the recent record · what it may touch. No click required for any of it.
+
+**Verified data truths this section stands on:**
+
+- `GET /agent/fleet/runs` returns **full `AgentRun` rows** (the route has no
+  `select`), so `costUSD` (Decimal → **string** over JSON, `Number()` it),
+  `findingCount`, `orchestrationId`, `haltedReason`, `trigger` are all already
+  available. Filterable by `mode`, capped at 100 — at 47 lifetime fleet runs
+  that is full coverage today; the per-routine aggregate endpoint stays owed
+  (same caveat the Workers roster records).
+- `GET /agent/fleet/schedule` returns the two cron jobs with `enabled` (the
+  `NEXUS_ENABLE_FLEET_SWEEP_CRON` env gate), `nextFireAt` (**null when the gate
+  is off** — the UI must say "not scheduled", never "next: —"), and `lastRun`
+  from `CronRun`.
+- **A routine run is an `orchestrationId` group** of `AgentRun` rows (sweep,
+  council); an `ask` run stands alone (`orchestrationId` null → group of one).
+  Group outcome: any `haltedReason` → halted; else any `!ok` → failed; else ok.
+  Cost = sum, findings = sum, startedAt = earliest.
+- **Effective status, one per routine, computed in one place** (the
+  anti-Prefect commitment). Precedence: fleet halted (from `/state`, with the
+  stored reason — a halt blocks manual runs too, `executeCharter` gates them) →
+  cron gate off ("the fleet clock is off") → sweep: zero analysts on ("the
+  clock ticks but every worker is off" = Idle) / council: director or critic
+  off (Idle — a council without both produces nothing) → On, with the worker
+  count. On-demand check is Ready unless halted (`ignoreEnabled` bypasses the
+  dial, not the gates).
+- Trigger sentences are derived from the cron the API reports (env override
+  respected), not hardcoded: `45 4 * * *` → "Nightly at 04:45 UTC · next in
+  6h", `15 5 * * 1` → "Mondays at 05:15 UTC".
+
+**Decisions:** table over cards — three rows today is honest, not thin, and the
+shape scales when custom workflows exist. Rows are **not links yet** — the
+detail page arrives in S2, and a dead link is worse than none. Glossary mints
+two entries (`workflow`, `trigger`) under the locks-doc protocol (re-read
+immediately before edit, never redefine). The "How this works" drawer ships
+with S2 (the detail page is its natural home); S1 teaches through the intro
+line, the Terms, and status sentences that carry their reasons.
+
+**Cross-session alignment** (`docs/2026-08-07-naf-sb-session-locks.md`, read
+mid-build): page styles live in a page-local `workflows.css` — `fleet-pages.css`
+is frozen to shared primitives (locks decision 4, adopted). Real-time is the
+**settled shared decision #1**: visibility-gated polling, ~10s while the tab is
+visible, an "as of" stamp, no silent re-sort — the shared hook is extracted
+*early* by this stream (the locks doc allows it) at
+`apps/web/src/app/fleet/_shared/use-visibility-poll.ts`, and Workers re-points
+at it in W.6. One open convergence recorded rather than hidden: SB.W's Study 0
+chose the DS DataGrid substrate for the Workers roster (after pinning DS tokens
+on `.fleet-surface`); S1 ships on the fleet's current `acr-pg-tbl` convention —
+three fixed rows need no grid machinery, and adopting DataGrid before the token
+pinning lands would render broken. When SB.W's substrate lands, the workflows
+list converges onto it.
+
+---
+
 ## Sources
 
 - n8n [save & publish](https://docs.n8n.io/build/understand-workflows/save-and-publish-workflows.md) · [executions](https://docs.n8n.io/build/understand-workflows/understand-executions/view-executions-for-a-single-workflow.md) · [debug in editor](https://docs.n8n.io/build/understand-workflows/understand-executions/debug-executions.md) · [history](https://docs.n8n.io/build/manage-workflows/view-change-history.md) · [HITL tools](https://docs.n8n.io/advanced-ai/human-in-the-loop-tools/)

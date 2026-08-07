@@ -32,7 +32,7 @@ Everything in §3 is shared and needs a claim.
 | Page / stream | Session | Status | Owns exclusively |
 |---|---|---|---|
 | **Workers** (`SB.W`) | this session | studying — `docs/2026-08-07-naf-sbw-workers-page.md` proposed, awaiting approval | `app/fleet/workers/**`, `apps/api/scripts/_sbw-*.mts` |
-| **Workflows** (`SB.8`) | parallel session | in progress | `app/fleet/workflows/**` |
+| **Workflows** (`SB.8` / `NAF.WF`) | parallel session | WF.1 building — routine list; study `docs/2026-08-07-naf-wf-workflows-page.md`. Glossary append (+`workflow`, +`trigger`) landing in the WF.1 commit — claim released on land. | `app/fleet/workflows/**`, `app/fleet/_shared/use-visibility-poll.ts` (created; shared consumption) |
 
 Update this table when a stream starts, pauses or lands.
 
@@ -81,7 +81,7 @@ there is time to do it properly.
 
 | # | Decision | Blocks | Status |
 |---|---|---|---|
-| 1 | **Real-time mechanism** | Workers W.6, Workflows canvas | **SETTLED 2026-08-07 — visibility-gated polling.** One shared hook: refetch ~10s while `document.visibilityState === 'visible'`, pause when hidden, an "as of" stamp, and a *changed since you looked* cue rather than a silent re-sort under the cursor. No SSE, no new infrastructure. **This is the answer for all ten pages** — the Workflows canvas adopts the same hook. Workers extracts it at W.6; whoever needs it sooner may extract it earlier and record that here. |
+| 1 | **Real-time mechanism** | Workers W.6, Workflows canvas | **SETTLED 2026-08-07 — visibility-gated polling.** One shared hook: refetch ~10s while `document.visibilityState === 'visible'`, pause when hidden, an "as of" stamp, and a *changed since you looked* cue rather than a silent re-sort under the cursor. No SSE, no new infrastructure. **This is the answer for all ten pages** — the Workflows canvas adopts the same hook. Workers extracts it at W.6; whoever needs it sooner may extract it earlier and record that here. **Extracted early by the Workflows stream 2026-08-07** — `apps/web/src/app/fleet/_shared/use-visibility-poll.ts` (10s, visibility-gated, pauses hidden, catches up on return, "as of" = last successful read). Workers re-points at it in W.6. |
 | 2 | **The autonomy dial component** | Workers W.4, Controls | **SETTLED 2026-08-07 — one shared component**, two presentation modes: Controls *explain* (card, prose, ladder), Workers *operate* (inline row + bulk). One confirm, one audit write. **Workers extracts it at W.4 and re-points Controls at it**, so `ControlsClient.tsx` will be touched by the Workers session — claimed in advance here. |
 | 3 | **Instance / stored-graph model** (§4) | Workers W.8, Workflows | **open** — not needed before W.8. Whoever reaches it first writes the proposal here. |
 | 4 | **Page-local CSS convention** — `workers.css` / `workflows.css` beside the page, `fleet-pages.css` frozen to shared primitives. | both | **proposed here** — adopt unless objected. |

@@ -135,6 +135,15 @@ export const GLOSSARY: Record<string, { title: string; body: string }> = {
     title: 'The trust ladder',
     body: 'OFF → OBSERVE (watch only) → PROPOSE (asks you) → AUTO (acts, narrowly). Each rung is earned with evidence over weeks, never granted by default — and misbehaviour drops a rung automatically.',
   },
+  // NAF.WF — minted for /fleet/workflows (locks-doc glossary protocol).
+  workflow: {
+    title: 'Workflow',
+    body: 'A named routine: which workers run, in what order, and what each hands to the next. The fleet map shows the whole fleet live; a workflow is one routine, readable on its own — and, soon, versionable and editable.',
+  },
+  trigger: {
+    title: 'Trigger',
+    body: 'What starts a routine — a clock (a schedule) or you (a manual run). If the trigger is off, the routine never runs, and its row says so instead of leaving you to guess.',
+  },
 }
 
 export function Term({ k, children }: { k: keyof typeof GLOSSARY & string; children: ReactNode }) {
