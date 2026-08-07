@@ -31,7 +31,7 @@ Everything in §3 is shared and needs a claim.
 
 | Page / stream | Session | Status | Owns exclusively |
 |---|---|---|---|
-| **Workers** (`SB.W`) | this session | **W.1 + W.2 LANDED, prod-verified** (`e8d209357`, `fdd384bc2`, `fbda95e00`, `f9d6ca853`) — status column + failure taxonomy + DS DataGrid substrate; strip tiles filter the table, halt banner. Next: W.3 (named views, facets, Customize columns, "as of"). Studies in `docs/2026-08-07-naf-sbw-workers-page.md` + `-section-studies.md` | `app/fleet/workers/**`, `app/fleet/_shared/run-health.ts`, `apps/api/scripts/_sbw-*.mts` |
+| **Workers** (`SB.W`) | this session | **W.1–W.4 LANDED** (W.1–W.2 prod-verified). W.4 extracted the shared dial to `_shared/autonomy.tsx` and **re-pointed `ControlsClient.tsx` at it — that claim is now released**, Controls is 35 lines shorter and behaviourally unchanged. Roster now has an inline dial, row selection and bulk switch-off / pause / set-level. Next: W.5–W.6. | `app/fleet/workers/**`, `app/fleet/_shared/run-health.ts`, `app/fleet/_shared/autonomy.tsx`, `apps/api/scripts/_sbw*.mts` |
 | **Workflows** (`SB.8` / `NAF.WF`) | parallel session | **S1 + S2 LANDED, prod-verified** (`99e46bb74`, `76b3486f0`) — routine list + per-routine story pages at `/fleet/workflows[/key]`. Glossary +`workflow` +`trigger` landed (claim released). Uses `run-health.ts` for failure semantics and splits self-test findings out of headlines per decision 3. Next: S3 (runs section on the detail page). | `app/fleet/workflows/**`, `app/fleet/_shared/use-visibility-poll.ts` (created; shared consumption) |
 
 Update this table when a stream starts, pauses or lands.
@@ -130,6 +130,55 @@ instance table? (2) any objection to `resolveCharter` as the single meeting
 point? (3) any claim on migration letter `20260807c`? Nothing in Half B runs
 until this section says REVIEWED.
 
+### REVIEWED — Workers stream, 2026-08-07. **Half B is clear to build.**
+
+Answers, then four things checked against the code rather than agreed to.
+
+**(1) Yes — `templateKey` on `AgentCharter`, not a separate table.** It matches
+`docs/2026-08-07-naf-sbw-workers-page.md` Part 6, and the decisive argument is
+one the sketch does not state: **every downstream table is keyed by a charter-key
+string** — `AgentRun.agentKey`, `AgentFinding.charterKey`,
+`AgentScorecard.charterKey`, `AgentControlAudit.charterKey`,
+`AgentCharterRevision.charterKey`. An instance with its own key joins all five
+with no schema change. A separate instance table would force every one of those
+joins to learn that a worker can be two different kinds of thing, and the fleet
+would carry that split forever.
+
+**(2) `resolveCharter` as the meeting point: agreed — but it is necessary, not
+sufficient.** `listCharters()` iterates `Object.values(FLEET_CHARTERS)`
+*directly*, and it is what the Workers roster, the Controls page and
+`/agent/fleet/graph` all read. An instance that resolves only through
+`resolveCharter` would **execute correctly and be invisible in every list**.
+Enumeration is Workers' half to fix, and W.8 will; it is written here so nobody
+assumes one implies the other.
+
+**(3) No claim on `20260807c` — take it.** Verified free: the migrations
+directory holds only `20260807a_nafac_agent_control` and
+`20260807b_naf_ap_approval_undo`. Workers takes `20260807d` at W.8.
+
+**Checked, not assumed — three additions to the contract:**
+
+- **The inert-column hazard is real but contained.** `AgentCharter.systemPrompt`,
+  `outputSchemaKey` and `modelFeature` are NOT NULL, so an instance row must
+  write *something*, and a copy of the template's values would silently fork the
+  day the code charter changes. Verified that this is safe today:
+  `loadDbPolicies()` selects only policy fields and never those three —
+  `toEffective` takes them from the code `def`. So the copy is genuinely inert.
+  W.8 will ship a vitest that writes **garbage** into those columns on an
+  instance row and asserts `resolveCharter` still returns the template's values,
+  so the rule is enforced rather than documented.
+- **`key` alone is not unique** — `AgentCharter` is `@@unique([key, version])`.
+  Instance creation must reject a key colliding with any existing key at any
+  version, code charters included; otherwise `resolveCharter` has two candidates
+  and `FLEET_CHARTERS` wins silently. Workers owns that check.
+- **An instance will not join the built-in sweep, and the operator must be told.**
+  Stored execution walking the stored graph does resolve the `FLEET_GRAPH` worry
+  for *workflows* — agreed — but the built-in sweep still walks `FLEET_GRAPH`, so
+  a newly created worker runs **only** when a stored workflow or an assignment
+  calls it. "I made a worker and nothing happened" is the obvious first
+  complaint, so the create flow will say it in the review step. No action needed
+  on Half B.
+
 ---
 
 ## 5 · Open shared decisions
@@ -137,7 +186,7 @@ until this section says REVIEWED.
 | # | Decision | Blocks | Status |
 |---|---|---|---|
 | 1 | **Real-time mechanism** | Workers W.6, Workflows canvas | **SETTLED 2026-08-07 — visibility-gated polling.** One shared hook: refetch ~10s while `document.visibilityState === 'visible'`, pause when hidden, an "as of" stamp, and a *changed since you looked* cue rather than a silent re-sort under the cursor. No SSE, no new infrastructure. **This is the answer for all ten pages** — the Workflows canvas adopts the same hook. Workers extracts it at W.6; whoever needs it sooner may extract it earlier and record that here. **Extracted early by the Workflows stream 2026-08-07** — `apps/web/src/app/fleet/_shared/use-visibility-poll.ts` (10s, visibility-gated, pauses hidden, catches up on return, "as of" = last successful read). Workers re-points at it in W.6. |
-| 2 | **The autonomy dial component** | Workers W.4, Controls | **SETTLED 2026-08-07 — one shared component**, two presentation modes: Controls *explain* (card, prose, ladder), Workers *operate* (inline row + bulk). One confirm, one audit write. **Workers extracts it at W.4 and re-points Controls at it**, so `ControlsClient.tsx` will be touched by the Workers session — claimed in advance here. |
+| 2 | **The autonomy dial component** | Workers W.4, Controls | **DONE 2026-08-07.** `app/fleet/_shared/autonomy.tsx` — ladder, effect copy, confirm, and the PATCH/pause mutations. Controls renders it in *explain* mode (card + `<Term>` tooltips), Workers in *operate* mode (inline + bulk). **The safety rule lives there now**: reductions apply on click, anything that lets a worker do more confirms and names every worker it would change. Reuse it rather than writing a dial; the `ControlsClient.tsx` claim is released. |
 | 3 | **Instance / stored-graph model** (§4) | Workers W.8, Workflows | **PROPOSED 2026-08-07 by the Workflows stream — §4, awaiting Workers review.** Workflows holds its migration until the §4 proposal says REVIEWED; the schema-free Versions card ships meanwhile. |
 | 4 | **Page-local CSS convention** — `workers.css` / `workflows.css` beside the page, `fleet-pages.css` frozen to shared primitives. | both | **proposed here** — adopt unless objected. |
 
