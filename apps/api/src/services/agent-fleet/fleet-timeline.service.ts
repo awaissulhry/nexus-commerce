@@ -14,12 +14,35 @@
  * for run traces.
  *
  * Deliberately NOT here: the deterministic ads engines (operator call
- * 2026-08-07 — fleet only), and `AgentControlAudit`, whose table is being
- * created by the parallel NAF.AC session and is not yet applied to the
- * database. `controlAuditEvents()` below is the seam where it plugs in.
+ * 2026-08-07 — fleet only), and `AgentControlAudit`, whose table now EXISTS
+ * and is applied but holds zero rows. `controlAuditEvents()` below is the seam
+ * where it plugs in; NAF.SB.ACT S8 owns wiring it up once an operator has
+ * actually moved a dial, because it cannot be backfilled.
+ *
+ * NAF.SB.ACT.1 — four corrections and one addition, all driven by what the
+ * production data actually contains (docs/2026-08-07-naf-sbact-activity-page.md
+ * Part 1):
+ *
+ *  1. Approvals are scoped to FLEET runs. All 18 `AgentApproval` rows hang off
+ *     the pre-fleet ACP runtime and none has a `decidedBy` — 36 of 155 events
+ *     were dated fifty days before the fleet's first run and attributed to
+ *     nobody. A stream titled "everything the fleet has done" must not claim
+ *     them.
+ *  2. Links point at `/fleet/...`, not the pre-move ads-console URLs.
+ *  3. Runs carry `workflowKey`, so a row can say which routine ran it.
+ *  4. Findings carry `dataVintage`. Findings are UPSERTED on
+ *     (charterKey, entityType, entityId, dedupeKey) and there is no
+ *     `updatedAt`, so `createdAt` is the FIRST sighting while the content is
+ *     the LATEST. A chronological feed that hides that is quietly wrong.
+ *  5. Every event says whether its author is a DIAGNOSTIC worker, and the
+ *     filter can drop them server-side. `fleet-selftest` owns 39 of 53 runs
+ *     and 47 of 64 findings; counted in, every number on every page is mostly
+ *     about the fleet testing itself. Default is INCLUDE, so no existing
+ *     caller changes behaviour — Activity opts out explicitly.
  */
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
+import { FLEET_CHARTERS } from './charter-registry.js'
 
 /* ── the shape ─────────────────────────────────────────────────────────── */
 
@@ -58,6 +81,23 @@ export interface FleetEvent {
   entity: { type: string; id: string; name: string | null } | null
   /** Groups an event into its episode (a sweep, a council, a single run). */
   episodeId: string | null
+  /**
+   * ACT.1 — the stored routine that ran this, when one did. Null means the
+   * code path (the built-in sweep, or a hand-driven `ask`).
+   */
+  workflowKey: string | null
+  /**
+   * ACT.1 — when the evidence behind a finding was gathered. Findings are
+   * upserted, so `at` is the first sighting and this is how fresh the content
+   * actually is. Null for everything that is not a finding.
+   */
+  dataVintage: string | null
+  /**
+   * ACT.1 — true when the author is a diagnostic worker (it checks that the
+   * fleet itself works, not the operator's account). Excluded from totals,
+   * never concealed: the UI badges these rather than hiding them.
+   */
+  diagnostic: boolean
   /** Where clicking it should go, when there is somewhere to go. */
   href: string | null
   /**
@@ -76,6 +116,13 @@ export interface FleetTimelineFilters {
   outcomes?: FleetEventOutcome[]
   /** Free text over the sentence and its detail. */
   q?: string
+  /**
+   * ACT.1 — set false to drop diagnostic workers' events. Enforced centrally
+   * in `matchesFilters`, so `total`, `countsByKind` and `actors` all agree
+   * with the rows the caller receives. **Defaults to true**: the Overview's
+   * existing stream must not change behaviour under it.
+   */
+  includeDiagnostic?: boolean
 }
 
 export interface FleetTimelinePage {
@@ -190,17 +237,50 @@ function errorSignature(message: string | null, halted: string | null): string {
 interface WorkerInfo {
   name: string
   tier: string
+  /**
+   * ACT.1 — a diagnostic worker checks that the fleet itself works, so its
+   * findings are not about the operator's account. The flag is CODE truth
+   * (`CharterDefinition.diagnostic`), never a database column, so it is
+   * resolved from `FLEET_CHARTERS` rather than read from the row.
+   */
+  diagnostic: boolean
 }
 
 async function workerNames(): Promise<Map<string, WorkerInfo>> {
   const rows = await prisma.agentCharter.findMany({
-    select: { key: true, name: true, tier: true },
+    select: { key: true, name: true, tier: true, templateKey: true },
   })
-  return new Map(rows.map((r) => [r.key, { name: r.name, tier: r.tier }]))
+  const map = new Map<string, WorkerInfo>(
+    rows.map((r) => [
+      r.key,
+      {
+        name: r.name,
+        tier: r.tier,
+        // A W.8 instance is a narrower copy of a code charter, so it inherits
+        // the template's diagnostic flag. Its own key is absent from
+        // FLEET_CHARTERS, which is exactly why templateKey is selected.
+        diagnostic:
+          FLEET_CHARTERS[r.key]?.diagnostic === true ||
+          (r.templateKey != null && FLEET_CHARTERS[r.templateKey]?.diagnostic === true),
+      },
+    ]),
+  )
+  // A code charter with no database row still exists and can still have run —
+  // `fleet-auditor` was exactly that for a while. Never let a missing row
+  // silently make a diagnostic worker look like a business one.
+  for (const [key, def] of Object.entries(FLEET_CHARTERS)) {
+    if (map.has(key)) continue
+    map.set(key, { name: def.name, tier: def.tier, diagnostic: def.diagnostic === true })
+  }
+  return map
 }
 
 const nameOf = (names: Map<string, WorkerInfo>, key: string) =>
   names.get(key)?.name ?? humanize(key)
+
+/** Unknown keys are treated as business workers — never silently excluded. */
+const isDiagnostic = (names: Map<string, WorkerInfo>, key: string | null): boolean =>
+  key != null && names.get(key)?.diagnostic === true
 
 /**
  * What a run of this kind of worker actually *is*. A critic reviews, it does
@@ -265,7 +345,7 @@ async function runEvents(
     select: {
       id: true, agentKey: true, mode: true, trigger: true, ok: true, status: true,
       findingCount: true, costUSD: true, latencyMs: true, errorMessage: true,
-      haltedReason: true, orchestrationId: true, createdAt: true,
+      haltedReason: true, orchestrationId: true, createdAt: true, workflowKey: true,
     },
     orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
     take: overFetch(limit),
@@ -292,7 +372,13 @@ async function runEvents(
       costUSD: Number(r.costUSD),
       entity: null,
       episodeId: r.orchestrationId ?? `run:${r.id}`,
-      href: `/marketing/ads/rules-automation/fleet/worker/${r.agentKey}`,
+      // `?? null` is not belt-and-braces: an `undefined` here serializes as a
+      // MISSING KEY rather than a null, so a client doing `'workflowKey' in e`
+      // would silently disagree with one doing `e.workflowKey === null`.
+      workflowKey: r.workflowKey ?? null,
+      dataVintage: null,
+      diagnostic: isDiagnostic(names, r.agentKey),
+      href: `/fleet/workers/${r.agentKey}`,
       rollupKey: `run:${r.agentKey}:${sig}`,
     }
   })
@@ -315,7 +401,7 @@ async function findingEvents(
     select: {
       id: true, runId: true, charterKey: true, kind: true, severity: true,
       entityType: true, entityId: true, entityName: true, rationale: true,
-      status: true, createdAt: true,
+      status: true, createdAt: true, dataVintage: true,
     },
     orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
     take: overFetch(limit),
@@ -343,7 +429,12 @@ async function findingEvents(
       costUSD: null,
       entity: { type: r.entityType, id: r.entityId, name: r.entityName },
       episodeId: episodeOf.get(r.runId) ?? `run:${r.runId}`,
-      href: `/marketing/ads/rules-automation/fleet/worker/${r.charterKey}`,
+      workflowKey: null,
+      // The row is upserted, so `at` is the first sighting; this is how fresh
+      // the content behind it actually is.
+      dataVintage: r.dataVintage ? r.dataVintage.toISOString() : null,
+      diagnostic: isDiagnostic(names, r.charterKey),
+      href: `/fleet/workers/${r.charterKey}`,
       rollupKey: `finding:${r.charterKey}:${r.kind}`,
     }
   })
@@ -377,7 +468,9 @@ async function planEvents(
     const n = Array.isArray(r.items) ? r.items.length : 0
     const dropped = Array.isArray(r.droppedItems) ? r.droppedItems.length : 0
     const episode = episodeOf.get(r.runId) ?? `run:${r.runId}`
-    const href = `/marketing/ads/rules-automation/fleet#plan-${r.id}`
+    // The plan's story is rendered on the Overview today; ACT.5 moves the
+    // detail into Activity's own drawer and this anchor moves with it.
+    const href = `/fleet#plan-${r.id}`
     out.push({
       id: `plan.${r.id}`,
       at: r.createdAt.toISOString(),
@@ -393,6 +486,9 @@ async function planEvents(
       costUSD: null,
       entity: null,
       episodeId: episode,
+      workflowKey: null,
+      dataVintage: null,
+      diagnostic: isDiagnostic(names, r.charterKey),
       href,
       rollupKey: `plan:${r.charterKey}`,
     })
@@ -433,6 +529,9 @@ async function planEvents(
         costUSD: null,
         entity: null,
         episodeId: episode,
+        workflowKey: null,
+        dataVintage: null,
+        diagnostic: isDiagnostic(names, 'plan-critic'),
         href,
         rollupKey: `critic:${r.criticVerdict}`,
       })
@@ -462,24 +561,30 @@ async function approvalEvents(
     take: overFetch(limit) * 2,
   })
 
-  // Most of the approval history predates the fleet: those rows hang off
-  // ordinary agent runs, which the fleet-run index does not carry. Look the
-  // missing ones up by id rather than naming them "a worker" — an unnamed
-  // actor is exactly the audit-trail anti-pattern.
-  const unknown = [...new Set(rows.map((r) => r.agentRunId).filter((id) => !workerOfRun.has(id)))]
-  const extra = new Map<string, string>()
-  if (unknown.length > 0) {
-    const older = await prisma.agentRun.findMany({
-      where: { id: { in: unknown } },
-      select: { id: true, agentKey: true },
-    })
-    for (const r of older) extra.set(r.id, r.agentKey)
-  }
-
   const out: FleetEvent[] = []
   for (const r of rows) {
-    const key = workerOfRun.get(r.agentRunId) ?? extra.get(r.agentRunId) ?? null
-    const who = key ? nameOf(names, key) : 'An agent'
+    // ACT.1 — THE approval scoping rule.
+    //
+    // `workerOfRun` is built from fleet runs only (`mode: { not: null }`), so
+    // a miss here means the approval belongs to the PRE-FLEET ACP runtime —
+    // agent keys like `manual-action` and `listing-quality-keeper`, which are
+    // not fleet workers and have no charter. Verified 2026-08-07: ALL 18
+    // approval rows in production are such rows, dated 2026-06-17, fifty days
+    // before the fleet's first run, every one with `decidedBy` null.
+    //
+    // The old code looked them up by id so it could at least name them. That
+    // was the right instinct against the unnamed-actor anti-pattern, and the
+    // wrong fix: it put 36 events — 23% of the whole stream — under a heading
+    // that says "everything the FLEET has done", attributed to "Someone (not
+    // recorded)". A reader would conclude the fleet took 18 decisions with no
+    // accountability trail. It never took any.
+    //
+    // They are not deleted from the product: the Approvals page lists them
+    // under Decided, labelled, and Activity's footnote points there. Skipping
+    // them here is what makes both pages true at once.
+    const key = workerOfRun.get(r.agentRunId)
+    if (!key) continue
+    const who = nameOf(names, key)
     const act = TOOL_PHRASE[r.toolName] ?? humanize(r.toolName)
     const episode = episodeOf.get(r.agentRunId) ?? `run:${r.agentRunId}`
 
@@ -499,8 +604,11 @@ async function approvalEvents(
         costUSD: null,
         entity: null,
         episodeId: episode,
+        workflowKey: null,
+        dataVintage: null,
+        diagnostic: isDiagnostic(names, key),
         href: null,
-        rollupKey: `approval-req:${key ?? '?'}:${r.toolName}`,
+        rollupKey: `approval-req:${key}:${r.toolName}`,
       })
     }
 
@@ -528,6 +636,11 @@ async function approvalEvents(
         costUSD: null,
         entity: null,
         episodeId: episode,
+        workflowKey: null,
+        dataVintage: null,
+        // A human decision is never diagnostic, whatever the worker was: the
+        // actor is the person, and a person is not a self-test.
+        diagnostic: false,
         href: null,
         rollupKey: `approval-dec:${r.status}:${r.toolName}`,
       })
@@ -566,6 +679,9 @@ async function haltEvents(f: FleetTimelineFilters, cursor: Cursor | null): Promi
       costUSD: null,
       entity: null,
       episodeId: null,
+      workflowKey: null,
+      dataVintage: null,
+      diagnostic: false,
       href: null,
       rollupKey: 'halt',
     },
@@ -584,6 +700,12 @@ async function controlAuditEvents(): Promise<FleetEvent[]> {
 /* ── assembly ──────────────────────────────────────────────────────────── */
 
 function matchesFilters(e: FleetEvent, f: FleetTimelineFilters): boolean {
+  // ACT.1 — enforced HERE and nowhere else, for the same reason the actor
+  // filter is: `total`, `countsByKind` and `actors` are all computed by
+  // running every event through this function, so a caller can never receive
+  // rows the headline counts disagree with. Undefined means include, so the
+  // Overview's existing stream is untouched.
+  if (f.includeDiagnostic === false && e.diagnostic) return false
   // The actor filter is enforced HERE, not only in each source's where
   // clause, so it means one thing everywhere: "who performed this act".
   // A plan row belongs to the director, but the critic's ruling on it is the

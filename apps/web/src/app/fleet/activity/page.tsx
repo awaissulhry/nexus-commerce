@@ -39,7 +39,7 @@ export default function Page() {
             existing runs endpoint, read honestly.
           </>
         }
-        livesToday={{ href: '/marketing/ads/fleet', label: 'the fleet Overview' }}
+        livesToday={{ href: '/fleet', label: 'the fleet Overview' }}
       />
     </FleetPageShell>
   )

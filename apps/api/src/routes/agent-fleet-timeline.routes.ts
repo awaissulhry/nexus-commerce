@@ -47,6 +47,20 @@ function parseDate(raw: string | undefined): Date | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d
 }
 
+/**
+ * ACT.1 — `?includeSelfTest=0` drops diagnostic workers' events server-side.
+ *
+ * Absent means INCLUDE, so the Overview's existing stream is unchanged; the
+ * Activity page opts out explicitly. Only an explicit false-ish value excludes
+ * — an unparseable value must not silently hide 73% of the fleet's history.
+ */
+function parseIncludeSelfTest(raw: string | undefined): boolean | undefined {
+  if (raw === undefined) return undefined
+  const v = raw.trim().toLowerCase()
+  if (v === '0' || v === 'false' || v === 'no') return false
+  return true
+}
+
 /** `?range=7d` — the shorthand the UI's range chips use. */
 function parseRange(raw: string | undefined): Date | undefined {
   if (!raw || raw === 'all') return undefined
@@ -67,6 +81,7 @@ const agentFleetTimelineRoutes: FastifyPluginAsync = async (fastify) => {
       q?: string
       limit?: string
       cursor?: string
+      includeSelfTest?: string
     }
   }>('/agent/fleet/timeline', async (request) => {
     const q = request.query
@@ -77,6 +92,7 @@ const agentFleetTimelineRoutes: FastifyPluginAsync = async (fastify) => {
       kinds: csv(q.kind, KINDS),
       outcomes: csv(q.outcome, OUTCOMES),
       q: q.q?.trim() || undefined,
+      includeDiagnostic: parseIncludeSelfTest(q.includeSelfTest),
     }
     return getFleetTimeline(filters, {
       limit: Number(q.limit) || 50,

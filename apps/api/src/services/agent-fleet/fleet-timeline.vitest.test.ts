@@ -287,3 +287,163 @@ describe('rollup keys', () => {
     expect(ok).not.toBe(bad)
   })
 })
+
+/* ── NAF.SB.ACT.1 ──────────────────────────────────────────────────────── */
+
+describe('ACT.1 — approvals belong to the fleet, or they do not appear', () => {
+  it('drops an approval whose run is not a fleet run', async () => {
+    // The real shape of every one of the 18 rows in production: attached to a
+    // pre-fleet ACP run, so `mode` is null and the fleet-run index misses it.
+    db.agentApproval.findMany.mockResolvedValue([
+      {
+        id: 'old1',
+        agentRunId: 'acp-run-from-june',
+        toolName: 'apply-content',
+        riskTier: 'medium',
+        status: 'executed',
+        reason: 'acp3b-verify',
+        requestedAt: new Date('2026-06-17T05:24:15Z'),
+        decidedBy: null,
+        decidedAt: new Date('2026-06-17T05:30:00Z'),
+      },
+    ] as never)
+    const { events, total } = await getFleetTimeline()
+    expect(events.some((e) => e.id.startsWith('approval.'))).toBe(false)
+    expect(events.some((e) => e.id.startsWith('decision.'))).toBe(false)
+    // And the headline number agrees with the rows — the whole point of
+    // enforcing this in one place.
+    expect(total).toBe(events.length)
+  })
+
+  it('never labels an actor "An agent" or invents one', async () => {
+    db.agentApproval.findMany.mockResolvedValue([
+      {
+        id: 'old1',
+        agentRunId: 'acp-run-from-june',
+        toolName: 'apply-content',
+        riskTier: 'high',
+        status: 'rejected',
+        reason: null,
+        requestedAt: new Date('2026-06-17T05:24:15Z'),
+        decidedBy: null,
+        decidedAt: new Date('2026-06-17T05:30:00Z'),
+      },
+    ] as never)
+    const { events } = await getFleetTimeline()
+    expect(events.map((e) => e.actor)).not.toContain('An agent')
+  })
+
+  it('keeps an approval that really does belong to a fleet run', async () => {
+    const { events } = await getFleetTimeline()
+    expect(events.some((e) => e.id === 'approval.a1')).toBe(true)
+    expect(events.some((e) => e.id === 'decision.a1')).toBe(true)
+  })
+})
+
+describe('ACT.1 — diagnostic workers are excluded, never concealed', () => {
+  const SELFTEST_RUN = {
+    id: 'run3',
+    agentKey: 'fleet-selftest',
+    mode: 'ask',
+    trigger: 'manual',
+    ok: false,
+    status: 'failed',
+    findingCount: 0,
+    costUSD: '0',
+    latencyMs: 400,
+    errorMessage: 'fetch failed',
+    haltedReason: null,
+    orchestrationId: null,
+    createdAt: new Date('2026-08-06T08:44:00Z'),
+    workflowKey: null,
+  }
+
+  beforeEach(() => {
+    const all = [...RUNS, SELFTEST_RUN]
+    db.agentRun.findMany.mockImplementation((args: never) => {
+      const a = args as unknown as { take?: number }
+      return Promise.resolve(
+        (a?.take
+          ? all
+          : all.map((r) => ({ id: r.id, orchestrationId: r.orchestrationId, agentKey: r.agentKey }))) as never,
+      )
+    })
+  })
+
+  it('marks the self-test diagnostic and the business workers not', async () => {
+    const { events } = await getFleetTimeline()
+    expect(events.find((e) => e.id === 'run.run3')!.diagnostic).toBe(true)
+    expect(events.find((e) => e.id === 'run.run1')!.diagnostic).toBe(false)
+  })
+
+  it('includes them by default, so no existing caller changes behaviour', async () => {
+    const { events } = await getFleetTimeline()
+    expect(events.some((e) => e.id === 'run.run3')).toBe(true)
+  })
+
+  it('drops them when asked, and the totals agree with the rows', async () => {
+    const withThem = await getFleetTimeline()
+    const without = await getFleetTimeline({ includeDiagnostic: false })
+    expect(without.events.some((e) => e.id === 'run.run3')).toBe(false)
+    expect(without.total).toBe(withThem.total - 1)
+    // The invariant that has broken twice in this subtree: a headline count
+    // above a table must be the SAME derivation, not a parallel one.
+    expect(without.total).toBe(without.events.length)
+    expect(Object.values(without.countsByKind).reduce((a, b) => a + b, 0)).toBe(without.total)
+  })
+
+  it('drops them from the actor list too, so a filter cannot offer an empty result', async () => {
+    const { actors } = await getFleetTimeline({ includeDiagnostic: false })
+    expect(actors.map((a) => a.key)).not.toContain('fleet-selftest')
+  })
+})
+
+describe('ACT.1 — the fields a row needs to explain itself', () => {
+  it('carries the routine that ran it, when one did', async () => {
+    db.agentRun.findMany.mockImplementation((args: never) => {
+      const a = args as unknown as { take?: number }
+      const rows = [{ ...RUNS[0]!, workflowKey: 'fleet-sweep' }, RUNS[1]!]
+      return Promise.resolve(
+        (a?.take
+          ? rows
+          : rows.map((r) => ({ id: r.id, orchestrationId: r.orchestrationId, agentKey: r.agentKey }))) as never,
+      )
+    })
+    const { events } = await getFleetTimeline()
+    expect(events.find((e) => e.id === 'run.run1')!.workflowKey).toBe('fleet-sweep')
+    expect(events.find((e) => e.id === 'run.run2')!.workflowKey).toBeNull()
+  })
+
+  it('says how fresh a finding really is, because findings are upserted', async () => {
+    db.agentFinding.findMany.mockResolvedValue([
+      {
+        id: 'f1',
+        runId: 'run1',
+        charterKey: 'amazon-negative-miner',
+        kind: 'waste_term',
+        severity: 'high',
+        entityType: 'SEARCH_TERM',
+        entityId: 'st1',
+        entityName: 'giacca moto uomo',
+        rationale: 'Spent €40 with no orders in 30 days.',
+        status: 'open',
+        createdAt: new Date('2026-08-06T04:52:00Z'),
+        dataVintage: new Date('2026-08-07T03:00:00Z'),
+      },
+    ] as never)
+    const { events } = await getFleetTimeline()
+    const f = events.find((e) => e.id === 'finding.f1')!
+    // First sighting on the 6th; the evidence behind it is from the 7th.
+    expect(f.at.slice(0, 10)).toBe('2026-08-06')
+    expect(f.dataVintage!.slice(0, 10)).toBe('2026-08-07')
+  })
+
+  it('links into the fleet, not the old ads-console route', async () => {
+    const { events } = await getFleetTimeline()
+    const hrefs = events.map((e) => e.href).filter((h): h is string => h != null)
+    expect(hrefs.length).toBeGreaterThan(0)
+    expect(hrefs.every((h) => h.startsWith('/fleet'))).toBe(true)
+    expect(hrefs.some((h) => h.includes('rules-automation'))).toBe(false)
+    expect(events.find((e) => e.id === 'run.run1')!.href).toBe('/fleet/workers/amazon-negative-miner')
+  })
+})

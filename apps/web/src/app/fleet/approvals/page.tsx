@@ -43,7 +43,7 @@ export default function Page() {
             re-run it through the write gate rather than trusting the client’s version.
           </>
         }
-        livesToday={{ href: '/marketing/ads/fleet', label: 'the fleet Overview' }}
+        livesToday={{ href: '/fleet', label: 'the fleet Overview' }}
       />
     </FleetPageShell>
   )
