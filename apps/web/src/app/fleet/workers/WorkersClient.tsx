@@ -21,7 +21,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Bot, RefreshCw, ShieldAlert, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { GLOSSARY, Term } from '../../rules-automation/fleet/glossary'
+import { GLOSSARY, Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 
 /** Design contract rule 3: jargon without a glossary entry fails review. These
  *  maps are the narrowing — a tier or dial we have no definition for renders as
@@ -349,7 +349,7 @@ export function WorkersClient() {
                       <div className="acr-pg-who">
                         <span className="acr-pg-avatar" aria-hidden><Bot size={15} /></span>
                         <span>
-                          <Link className="nm" href={`/marketing/ads/rules-automation/fleet/worker/${c.key}`}>
+                          <Link className="nm" href={`/fleet/workers/${c.key}`}>
                             {c.name}
                           </Link>
                           <span className="ky">{c.key}</span>

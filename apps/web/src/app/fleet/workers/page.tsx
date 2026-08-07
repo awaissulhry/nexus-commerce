@@ -9,7 +9,7 @@
  * fleet-sections.css keep those files to themselves.
  */
 import { WorkersClient } from './WorkersClient'
-import '../../rules-automation/control-room/control-room.css'
+import '@/app/marketing/ads/rules-automation/control-room/control-room.css'
 import '../fleet-pages.css'
 
 export const dynamic = 'force-dynamic'

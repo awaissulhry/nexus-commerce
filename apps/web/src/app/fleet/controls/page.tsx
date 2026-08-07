@@ -4,7 +4,7 @@
  * Part 7's own order — bluntest first.
  */
 import { ControlsClient } from './ControlsClient'
-import '../../rules-automation/control-room/control-room.css'
+import '@/app/marketing/ads/rules-automation/control-room/control-room.css'
 import '../fleet-pages.css'
 
 export const dynamic = 'force-dynamic'

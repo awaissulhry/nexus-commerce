@@ -10,7 +10,7 @@
  */
 import { FleetPageShell } from '../_shell/FleetPageShell'
 import { PlannedPage } from '../_shell/PlannedPage'
-import '../../rules-automation/control-room/control-room.css'
+import '@/app/marketing/ads/rules-automation/control-room/control-room.css'
 import '../fleet-pages.css'
 
 export const dynamic = 'force-dynamic'

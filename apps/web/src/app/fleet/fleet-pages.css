@@ -9,6 +9,24 @@
 
    Light-only, like the rest of the fleet surfaces. */
 
+/* ── the light surface ───────────────────────────────────────────────────
+   The fleet left /marketing/ads and with it the ads console's deliberately
+   light shell. Every acr-* value is a hard-coded light one, so this subtree
+   pins its own surface instead of inheriting the app theme. The negative
+   margin cancels AppShell's wrapper gutter (p-3 / md:p-6) so the fleet owns
+   its own edges and the background reaches them; `main` starts at y=0 with
+   no top bar, so 100dvh is exactly one viewport. */
+.fleet-surface {
+  margin: -12px;
+  min-height: 100dvh;
+  background: #f4f6f9;
+  color: #1c2530;
+  color-scheme: light;
+}
+@media (min-width: 768px) {
+  .fleet-surface { margin: -24px; }
+}
+
 /* ── page scaffold ───────────────────────────────────────────────────── */
 .acr-pg-intro {
   font-size: 13px;

@@ -32,6 +32,7 @@ import {
   Shuffle,
   Settings,
   Trash2,
+  Bot,
 } from 'lucide-react'
 import type { RailNavItem, RailMarketItem } from './AppRail'
 
@@ -225,6 +226,56 @@ export function buildAppNav(counts: SidebarCounts, conn: Connections): RailNavIt
     { label: 'Calendar', href: '/marketing/calendar', Icon: CalendarDays },
     { label: 'Content', href: '/marketing/content', Icon: ImageIcon },
     { label: 'Reviews', href: '/marketing/reviews', Icon: Star },
+
+    // ── Agents ───────────────────────────────────────────────────
+    // NAF.SB.7 — the Agent Fleet sits on the APP rail, not inside the ads
+    // console (operator call 2026-08-07). It governs LLM agents over the
+    // deterministic engines, and the roster in docs/AGENT_FLEET.md Part 6
+    // already reaches catalog, pricing, inventory and platform-ops analysts —
+    // only the first cohort happens to be ads. Filing it under Advertising
+    // would have made a cross-domain governance layer look like a marketing
+    // feature. The ads rail keeps one cross-link, never the ten children.
+    //
+    // The three sub-rows are GROUPS, not pages: Operate is what is happening,
+    // Build is what should happen, Govern is what may happen. AppRail's
+    // second level must be navigable, so each group carries its own first
+    // page as its href — clicking "Build" lands on Workers, which is where
+    // that group starts anyway.
+    {
+      label: 'Agent Fleet',
+      href: '/fleet',
+      Icon: Bot,
+      children: [
+        {
+          label: 'Operate',
+          href: '/fleet',
+          children: [
+            { label: 'Overview', href: '/fleet' },
+            { label: 'Approvals', href: '/fleet/approvals' },
+            { label: 'Activity', href: '/fleet/activity' },
+            { label: 'Fleet map', href: '/fleet/map' },
+          ],
+        },
+        {
+          label: 'Build',
+          href: '/fleet/workers',
+          children: [
+            { label: 'Workers', href: '/fleet/workers' },
+            { label: 'Workflows', href: '/fleet/workflows' },
+            { label: 'Assignments', href: '/fleet/assignments' },
+            { label: 'Files & data', href: '/fleet/files' },
+          ],
+        },
+        {
+          label: 'Govern',
+          href: '/fleet/cost',
+          children: [
+            { label: 'Cost & value', href: '/fleet/cost' },
+            { label: 'Controls', href: '/fleet/controls' },
+          ],
+        },
+      ],
+    },
 
     // ── Monitoring ───────────────────────────────────────────────
     {

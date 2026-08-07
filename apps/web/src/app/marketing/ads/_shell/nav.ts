@@ -17,25 +17,16 @@ export interface NavChild {
   route: string
 }
 
-/**
- * NAF.SB — a named, collapsible cluster of children (third-level nav).
- * Used only by the Agent Fleet, whose ten pages need grouping to stay
- * scannable. Groups are NOT pages: the row toggles, it does not navigate.
- */
-export interface NavGroup {
-  group: string
-  /** One line under the group name, so the grouping teaches rather than just sorts. */
-  hint: string
-  items: NavChild[]
-}
-
 export interface NavItem {
   label: string
   route: string
   Icon: LucideIcon
   children?: NavChild[]
-  /** Mutually exclusive with `children` — grouped, collapsible children. */
-  groups?: NavGroup[]
+  /** NAF.SB.7 — an absolute in-app path, for a row that leaves this console
+   *  entirely (the Agent Fleet lives at /fleet, on the app-wide rail). When
+   *  set, `route` is used only as a React key and for active-state, never to
+   *  build the URL. */
+  href?: string
   /** When set, the item is an external link (new tab) with a trailing external-link glyph. */
   external?: string
 }
@@ -97,67 +88,17 @@ export const ADS_NAV: NavItem[] = [
   // Mission Control was NOT superseded; it is a view of the account's shape. It keeps
   // /marketing/ads/autopilot and is reached from the Control Room's Today tab, because it is a
   // map rather than a control surface. Net rail count is down one, never up.
-  // NAF.SB.1 — the Agent Fleet is a rail section of its own (operator call 2026-08-07),
-  // promoted out of the Rules & Automation chevron where NAF.D2c had parked it. Same
-  // reasoning that took it out of the Control Room's tab bar, applied one level up: the
-  // fleet governs LLM agents, Rules & Automation governs deterministic engines and rules,
-  // and filing agents under rules is the category error that keeps making the machine look
-  // smaller than it is. It also has several pages ahead of it, which a chevron child of
-  // someone else's section cannot host.
+  // NAF.SB.7 — the Agent Fleet LEFT this console (operator call 2026-08-07). It is
+  // not a marketing surface: the roster in docs/AGENT_FLEET.md Part 6 already reaches
+  // catalog, pricing, inventory and platform-ops analysts, and only its first cohort
+  // happens to be ads. It now lives at /fleet on the app-wide rail, with its ten pages
+  // grouped Operate · Build · Govern there (app/_shared/app-nav.ts).
   //
-  // Sits directly above Rules & Automation so the two read as neighbours: the thinking
-  // layer, then the layer it is reasoning about.
-  //
-  // Route is /marketing/ads/fleet, not .../rules-automation/fleet — the rail's isActive()
-  // is prefix-based, so leaving the page inside the rules subtree would light BOTH rows.
-  // The components still sit under rules-automation/fleet/ until the parallel session
-  // editing them lands; see the note in fleet/page.tsx.
-  // NAF.SB.3 — the ten-page map from docs/2026-08-07-naf-sb-fleet-pages.md,
-  // in three collapsible groups (operator decision 2026-08-07).
-  //
-  // The groups default OPEN. Ten children is at the top of what stays
-  // scannable, and grouping is what makes it work — but Approvals is a daily,
-  // blocking queue that will carry a count badge, and a badge behind two
-  // collapsed levels is a badge nobody sees. Collapse is there for the groups
-  // an operator does not use, not as the resting state.
-  //
-  // The groups answer three different questions, which is why they are groups
-  // and not one list: what IS happening, what SHOULD happen, what MAY happen.
-  {
-    label: 'Agent Fleet',
-    route: 'fleet',
-    Icon: Bot,
-    groups: [
-      {
-        group: 'Operate',
-        hint: 'what is happening',
-        items: [
-          { label: 'Overview', route: 'fleet' },
-          { label: 'Approvals', route: 'fleet/approvals' },
-          { label: 'Activity', route: 'fleet/activity' },
-          { label: 'Fleet map', route: 'fleet/map' },
-        ],
-      },
-      {
-        group: 'Build',
-        hint: 'what should happen',
-        items: [
-          { label: 'Workers', route: 'fleet/workers' },
-          { label: 'Workflows', route: 'fleet/workflows' },
-          { label: 'Assignments', route: 'fleet/assignments' },
-          { label: 'Files & data', route: 'fleet/files' },
-        ],
-      },
-      {
-        group: 'Govern',
-        hint: 'what may happen',
-        items: [
-          { label: 'Cost & value', route: 'fleet/cost' },
-          { label: 'Controls', route: 'fleet/controls' },
-        ],
-      },
-    ],
-  },
+  // ONE cross-link stays, because ads operators are the people using it today.
+  // Following it leaves this console and the chrome changes — which is honest, you
+  // have gone somewhere else. Never the ten children: two navigation trees over the
+  // same pages would drift.
+  { label: 'Agent Fleet', route: 'fleet', href: '/fleet', Icon: Bot },
   { label: 'Rules & Automation', route: 'rules-automation', Icon: Wand2, children: [{ label: 'Control Room', route: 'rules-automation/control-room' }] },
   { label: 'AMC', route: 'amc', Icon: Users, children: [{ label: 'AMC Insights', route: 'amc' }, { label: 'Audience Insights', route: 'amc/audiences' }] },
   { label: 'Reporting', route: 'reporting', Icon: PieChart, children: [{ label: 'Brand Metrics', route: 'reporting/brand-metrics' }] },

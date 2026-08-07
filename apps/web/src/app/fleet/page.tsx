@@ -6,7 +6,7 @@
  * child cannot carry.
  *
  * INTERIM SHAPE — this file is a route, not a home. The components still live
- * at ../rules-automation/fleet/ because a parallel session is editing them
+ * at marketing/ads/rules-automation/fleet/ because a parallel session is editing them
  * right now; moving the directory under them would destroy their work. This
  * page therefore renders them from where they sit, and /marketing/ads/fleet is
  * the canonical URL from today. The cleanup pass (NAF.SB.2, once that session
@@ -18,9 +18,9 @@
  * The route move is CSS-safe: no class used by the fleet components is defined
  * only in rules-automation.css, the stylesheet the old subtree layout loaded.
  */
-import { FleetTab } from '../rules-automation/fleet/FleetTab'
-import '../rules-automation/control-room/control-room.css'
-import '../rules-automation/fleet/fleet-sections.css'
+import { FleetTab } from '@/app/marketing/ads/rules-automation/fleet/FleetTab'
+import '@/app/marketing/ads/rules-automation/control-room/control-room.css'
+import '@/app/marketing/ads/rules-automation/fleet/fleet-sections.css'
 
 export const dynamic = 'force-dynamic'
 

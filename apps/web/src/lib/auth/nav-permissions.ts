@@ -12,6 +12,12 @@ const NAV_PERMS: Array<[string, string]> = [
   // stays: they are still ads surfaces, and dropping it would fall through to the '/marketing'
   // prefix below and gate them on pages.marketing instead. Longest prefix wins, so this must
   // precede '/marketing/ads' — otherwise '/marketing/advertising' matches neither exactly.
+  // NAF.SB.7 — the Agent Fleet moved out of /marketing/ads to /fleet. Unmapped
+  // hrefs fall through to null (always shown), so without this row the whole
+  // section would be ungated. `pages.advertising` is the honest permission
+  // TODAY — every charter is an ads analyst — and will be wrong the moment
+  // catalog or pricing agents exist. Split it then, not before.
+  ['/fleet', 'pages.advertising'],
   ['/marketing/advertising', 'pages.advertising'],
   ['/marketing/ads', 'pages.advertising'],
   ['/marketing/reviews', 'pages.reviews'],

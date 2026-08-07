@@ -24,7 +24,7 @@ import {
   AlertTriangle, Ban, Bot, Check, Play, RefreshCw, ShieldAlert, ShieldCheck,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { GLOSSARY, Term } from '../../rules-automation/fleet/glossary'
+import { GLOSSARY, Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 
 type TermKey = keyof typeof GLOSSARY & string
 const LEVEL_TERM: Record<string, TermKey> = {
@@ -304,7 +304,7 @@ export function ControlsClient() {
                   <div className="acr-pg-dialcard" key={c.key}>
                     <div className="acr-pg-dialhead">
                       <span>
-                        <Link className="nm" href={`/marketing/ads/rules-automation/fleet/worker/${c.key}`}>
+                        <Link className="nm" href={`/fleet/workers/${c.key}`}>
                           {c.name}
                         </Link>
                         <span className="acr-pg-muted"> · {c.tier}</span>
