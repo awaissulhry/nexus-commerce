@@ -7,7 +7,7 @@
  * and Rules (H10's wand-with-stars = WandSparkles, not in 0.263 → Wand2, near-identical).
  */
 import {
-  LayoutGrid, Gauge, BadgeDollarSign, FileSpreadsheet, Atom, ListChecks, Lightbulb, HeartPulse, BarChart3, Table, Briefcase, Wand2, Users, PieChart, History, HelpCircle, Settings, ShoppingBag, ShieldCheck,
+  LayoutGrid, Gauge, BadgeDollarSign, FileSpreadsheet, Atom, ListChecks, Lightbulb, HeartPulse, BarChart3, Table, Briefcase, Wand2, Users, PieChart, History, HelpCircle, Settings, ShoppingBag, ShieldCheck, Bot,
   type LucideIcon } from 'lucide-react'
 
 export const ADS_BASE = '/marketing/ads'
@@ -78,10 +78,23 @@ export const ADS_NAV: NavItem[] = [
   // Mission Control was NOT superseded; it is a view of the account's shape. It keeps
   // /marketing/ads/autopilot and is reached from the Control Room's Today tab, because it is a
   // map rather than a control surface. Net rail count is down one, never up.
-  // NAF.D2c — the Agent Fleet sits first under the chevron (operator call
-  // 2026-08-06): its own page, not a Control Room tab — the fleet governs
-  // agents, the room governs engines and rules.
-  { label: 'Rules & Automation', route: 'rules-automation', Icon: Wand2, children: [{ label: 'Agent Fleet', route: 'rules-automation/fleet' }, { label: 'Control Room', route: 'rules-automation/control-room' }] },
+  // NAF.SB.1 — the Agent Fleet is a rail section of its own (operator call 2026-08-07),
+  // promoted out of the Rules & Automation chevron where NAF.D2c had parked it. Same
+  // reasoning that took it out of the Control Room's tab bar, applied one level up: the
+  // fleet governs LLM agents, Rules & Automation governs deterministic engines and rules,
+  // and filing agents under rules is the category error that keeps making the machine look
+  // smaller than it is. It also has several pages ahead of it, which a chevron child of
+  // someone else's section cannot host.
+  //
+  // Sits directly above Rules & Automation so the two read as neighbours: the thinking
+  // layer, then the layer it is reasoning about.
+  //
+  // Route is /marketing/ads/fleet, not .../rules-automation/fleet — the rail's isActive()
+  // is prefix-based, so leaving the page inside the rules subtree would light BOTH rows.
+  // The components still sit under rules-automation/fleet/ until the parallel session
+  // editing them lands; see the note in fleet/page.tsx.
+  { label: 'Agent Fleet', route: 'fleet', Icon: Bot },
+  { label: 'Rules & Automation', route: 'rules-automation', Icon: Wand2, children: [{ label: 'Control Room', route: 'rules-automation/control-room' }] },
   { label: 'AMC', route: 'amc', Icon: Users, children: [{ label: 'AMC Insights', route: 'amc' }, { label: 'Audience Insights', route: 'amc/audiences' }] },
   { label: 'Reporting', route: 'reporting', Icon: PieChart, children: [{ label: 'Brand Metrics', route: 'reporting/brand-metrics' }] },
   // The Amazon Change Log is reached from the header of the pages that produce changes, not from
