@@ -380,8 +380,13 @@ export function WorkersClient() {
                       {r.lastRun ? (
                         <>
                           {ago(r.lastRun.createdAt)}
+                          {/* The separator lives OUTSIDE the chip: acr-pg-warn is
+                              inline-flex, which eats leading whitespace. */}
                           {r.failures7d > 0 ? (
-                            <span className="acr-pg-warn"> · {r.failures7d} failed</span>
+                            <>
+                              {' · '}
+                              <span className="acr-pg-warn">{r.failures7d} failed</span>
+                            </>
                           ) : null}
                         </>
                       ) : (
