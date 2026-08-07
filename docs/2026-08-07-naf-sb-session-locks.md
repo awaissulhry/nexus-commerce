@@ -52,6 +52,7 @@ Update this table when a stream starts, pauses or lands.
 | `apps/web/src/app/_shared/app-nav.ts` | Nav tree; a bad rewrite duplicated a whole block once already. | Should be complete for all ten pages. If it is not, claim it, and never drive edits with `str.index()`. |
 | `apps/api/src/services/agent-fleet/charter-registry.ts` | Resolver for every worker. | Claim. Coupled to §4. |
 | `apps/api/src/services/agent-fleet/fleet-graph.ts` | The static DAG. | Claim. Coupled to §4. |
+| `orchestrator.ts` · `agent-executor.ts` · `apps/api/src/jobs/fleet-sweep.job.ts` · `fleet-council.service.ts` · `fleet-schedule.service.ts` (agent-fleet core execution) | The machinery every mode shares — a bad edit breaks sweep AND council. | **CLAIMED by Workflows 2026-08-07 for WF.4** (stored execution: walk source parameterized, two stamp fields threaded, effective-cron). Study in `docs/2026-08-07-naf-wf-workflows-page.md`. Released on land. |
 | `docs/2026-08-07-naf-sb-fleet-pages.md` | The parent map both streams cite. | Append to your own page's section only. |
 
 ---

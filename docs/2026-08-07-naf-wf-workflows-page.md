@@ -655,6 +655,86 @@ fixed with the DS `Menu` and the four DS stylesheets imported in the
 Workers page's order (`88efd6c27`). A ratchet that catches its sibling
 stream within the hour is a ratchet working.
 
+### WF.4 — stored execution (study, 2026-08-07)
+
+**What WF.4 is:** the moment Layer 2 becomes real. The orchestrator walks the
+stored definition instead of the frozen code graph; every run stamps the
+workflow and revision that served it; per-step gates bind at the approval
+gate; the clock honors the stored cron. All of it ships dark-safe: every
+charter is OFF, and a parity test proves an unrevised built-in walks
+byte-identically to today.
+
+**Verified truths this study stands on (read in code, 2026-08-07):**
+
+1. **`runFleet` generalizes surgically.** Verified shape
+   (`orchestrator.ts:55-110`): orchestrationId → `topoLevels(FLEET_GRAPH)` →
+   per-node re-checked gates (kill switch → halt → budget) → `executeCharter`
+   → per-agent failure isolation. The only structural change WF.4a makes is
+   *where the levels come from* — a stored definition's steps/edges instead
+   of the constant — plus two stamp fields threaded through.
+2. **A council "survivor" cannot reach the inbox today — structurally.**
+   Verified at `approval-gate.service.ts:67-69`: a tool without `execute()`
+   returns `mode:'preview'` and creates **no** `AgentApproval`; the council
+   counts only `mode==='queued'`, so every item of a passing plan lands
+   `blocked` and the plan stays `critiqued`. The fleet's three tools are
+   deliberately preview-only (Phase C). "Survivors wait for your approval"
+   is design intent that becomes mechanics only when tools gain `execute`
+   (Phase F). **Consequence:** WF.4b's gate enforcement is proven by tests,
+   never by watching an inbox that structurally cannot fill — recorded so
+   nobody burns an afternoon "verifying" it the wrong way.
+3. **The auditor ordering trap (found by this study).** The WF.2-derived
+   sweep definition includes `fleet-auditor` as a step; a stored walk would
+   run it at level 0 (it has no incoming edges) — but the job deliberately
+   runs it AFTER scorecards. Fix in WF.4a: **the auditor leaves the derived
+   definition** — it is job furniture like grading, and the S2 story keeps
+   showing it as presentation. Editor consequence, stated honestly: the
+   sweep's auditor is not gateable or removable, because its ordering is
+   code.
+4. **The S2 wrinkle becomes operator-fixable, not silently fixed.** The
+   derived sweep definition mirrors today's walk (all non-standalone nodes,
+   director and critic included), so parity holds for unrevised built-ins.
+   Once WF.4a lands, an operator can publish a sweep revision *without*
+   director/critic — the scoped walk honors it, and the nightly-plans
+   wrinkle dies by an edit, with a diff, on the record.
+5. **Schedule honoring needs re-registration, not wishes.** node-cron tasks
+   are registered at boot from env; a stored cron read at fire time cannot
+   change *when* the task fires. The API process hosts the crons, so the
+   activate/revert routes can call a rescheduler directly. WF.4c: boot reads
+   the effective cron (env as fallback), activation and revert re-register,
+   `fleet-schedule.service` reports the effective cron's next fire, and the
+   editor's trigger panel unlocks.
+
+**Design decisions:**
+
+- **D-WF4.1 — which gate governs a plan item?** Items carry `findingId`;
+  findings carry `charterKey` — the origin analyst is traceable. An item is
+  gated by **its origin step's gate** (the analyst whose finding it enacts),
+  falling back to the director step's gate, then `inherit`. This is what an
+  operator means by "the bid tuner asks first": bid-tuner-derived actions
+  ask. Enforcement: `runOrQueueTool` gains an optional `forceAsk` —
+  **tighten-only by construction** (it can force the approval branch, never
+  skip it), so the `alwaysAsk` floor and L2 survive untouched.
+- **D-WF4.2 — the workflow row's `enabled` becomes real.** A disabled
+  workflow's job fires, writes a CronRun with "disabled by the operator" and
+  runs nothing. (UI toggle follows on the list page — the column exists.)
+- **D-WF4.3 — stamping.** `executeCharter` opts gain
+  `workflowKey`/`workflowRevisionId`, written at run creation. Manual `ask`
+  runs stay null (they are not a workflow's doing). The S3 runs table then
+  gains its version chip — the column the study deferred until it could be
+  non-empty.
+
+**Sub-phases, each shippable and dark-safe:** **4a** — `runWorkflow(def)` +
+jobs resolve `getEffectiveDefinition` at fire time + stamping + `enabled` +
+auditor derivation fix + **parity vitest** (unrevised defs walk ≡ today's
+`topoLevels(FLEET_GRAPH)` minus standalone). **4b** — `forceAsk` + origin-
+gate resolution + tighten-only tests. **4c** — cron re-registration +
+effective next-fire + trigger panel unlock.
+
+**Claims:** WF.4 touches `orchestrator.ts`, `agent-executor.ts` (two-field
+passthrough), `fleet-sweep.job.ts`, `fleet-council.service.ts`,
+`fleet-schedule.service.ts` — none currently in the locks doc's shared
+table; claim rows added before build.
+
 ---
 
 ## Sources
