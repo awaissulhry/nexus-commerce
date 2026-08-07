@@ -145,6 +145,38 @@ export async function getEffectiveDefinition(key: string): Promise<{
   return { source: 'none', definition: null, revisionId: null }
 }
 
+/** Locks-doc §5 decision 6 — the Fleet map's read contract: every ENABLED
+ *  workflow's effective definition with its source, in one read. Read-only
+ *  and owned HERE so the map (and anyone else) never re-derives what
+ *  "effective" means. A custom with no active revision contributes nothing —
+ *  it runs nothing. NOTE for consumers: job furniture (the auditor's
+ *  post-scorecards run, grading, report cards) is deliberately NOT in these
+ *  definitions — its ordering is code; draw it as presentation or state the
+ *  omission. */
+export interface EffectiveWiringRow {
+  workflowKey: string
+  kind: 'builtin' | 'custom'
+  source: 'code' | 'revision'
+  definition: WorkflowDefinitionV1
+}
+
+export async function getEffectiveWiring(): Promise<EffectiveWiringRow[]> {
+  const rows = await listWorkflows()
+  const out: EffectiveWiringRow[] = []
+  for (const row of rows) {
+    if (!row.enabled) continue
+    const eff = await getEffectiveDefinition(row.key)
+    if (!eff.definition) continue
+    out.push({
+      workflowKey: row.key,
+      kind: row.kind,
+      source: eff.source as 'code' | 'revision',
+      definition: eff.definition,
+    })
+  }
+  return out
+}
+
 /** The operator's off switch on a workflow row. Missing row = enabled (the
  *  built-ins' presence never depends on seeding); unreadable DB = enabled,
  *  because the fleet's real floors are the charter dark-ship and the halt —
