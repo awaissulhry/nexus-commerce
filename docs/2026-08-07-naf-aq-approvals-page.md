@@ -1201,3 +1201,56 @@ the old card, and not before.
 
 **Verified.** `tsc` clean on both apps for every file this stream owns; DS
 ratchet clean; agent-fleet suite **369 passing across 41 files**.
+
+### AQ.4 — the asymmetry we shipped by accident (2026-08-07)
+
+The smallest change in the series and, by the research, one of the most
+consequential.
+
+**Reject demanded a typed sentence; approve was one click.** Three actions and
+an essay to disagree, one click to agree. That is the documented mechanism by
+which decision support quietly becomes a decision engine: if disagreeing costs
+effort and agreeing costs none, a tired operator agrees. AP.8 built real
+anti-rubber-stamp machinery — the track record, the evidence gate — and left
+the strongest lever pointing the wrong way, because the reject reason was
+valuable and nobody noticed that *requiring* it was the problem.
+
+Both verbs are one click now:
+
+- **Reject** opens a short row of **coded reasons**, one click each, shaped to
+  the action. Chosen over a dropdown deliberately — a select is two
+  interactions and hides its options until asked, which is exactly the friction
+  being removed from the safe path.
+- **Approve** stays one click, and the note is optional on both.
+
+**The direction of the fix matters and is easy to get backwards.** The rule is
+*make rejecting no harder than approving* — **not** *make approving harder*.
+Friction is added only where a yes is irreversible (the read-and-understood
+tick), never to the safe path.
+
+**Coded, and per action type.** Coded override reasons matched reviewers' own
+free-text reasoning in only 46% of 15,636 alerts, and free text alone is
+unanalysable — one study found 209 spellings of "will monitor as recommended".
+A randomised crossover trial found a customised per-context list beat a generic
+one at p < 0.001. So each tool has its own four, and **every list carries "the
+suggestion itself is wrong"** — the option generic lists suppress and free text
+reveals, and the highest-value signal for tuning a worker, because it says the
+*reasoning* was bad rather than the timing.
+
+Stored as one string (`code — note`), so no migration and the record stays
+readable. It is the reason that becomes precedent, and a coded label plus a
+note reads better as precedent than either alone.
+
+**The button states the consequence, not the verb.** *"Apply — bid €0.31 →
+€0.84"* rather than "Approve". For a first-time operator that is the difference
+between a decision and a guess, and it makes a screenshot self-documenting. It
+falls back to the tool vocabulary when there is no delta worth naming.
+
+**Deferred, deliberately: the keyboard map.** The study specifies j/k
+navigation and digits `1`/`2`/`3` for the dispositions — digits precisely
+because a beginner browsing with j/k presses letters exploratively and would
+eventually fire one by accident. It is the right design and it is not built,
+because **both queues are empty**: a keyboard model over a list with no rows
+cannot be verified by anyone, and shipping an unverifiable interaction is how
+you get a control that has never once been exercised. It moves to AQ.5, where
+filters and the queue-shape strip give it something to move around.

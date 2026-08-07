@@ -100,6 +100,77 @@ function reversibilityOf(toolName: string): Reversibility {
   return 'never'
 }
 
+/* ── AQ.4 · coded reasons, per action type ─────────────────────────────── */
+
+/**
+ * Why coded rather than free text, and why per-tool rather than one dropdown.
+ *
+ * The CPOE/CDS research is unusually specific here: coded override reasons
+ * matched the reviewer's actual free-text reasoning in only 46% of 15,636
+ * alerts, and free text alone is unanalysable — one study found 209 distinct
+ * spellings of "will monitor as recommended". A randomised crossover trial
+ * found a CUSTOMISED per-context list produced significantly more appropriate
+ * reasons than a generic one (p < 0.001).
+ *
+ * So: a short list shaped to the action, plus an optional note. And every list
+ * carries **"the suggestion itself is wrong"** — the option generic lists
+ * suppress and free text reveals, and the highest-value signal for tuning a
+ * worker, because it says the reasoning was bad rather than the timing.
+ */
+const DEFAULT_REJECT_CODES = [
+  'Not worth doing',
+  'Wrong number, right idea',
+  'I will handle this myself',
+  'The suggestion itself is wrong',
+]
+
+const REJECT_CODES: Record<string, string[]> = {
+  'set-target-bid': [
+    'Wrong number, right idea',
+    'Leave this bid alone',
+    'Not worth the spend',
+    'The suggestion itself is wrong',
+  ],
+  'create-negative-keyword': [
+    'This term still converts',
+    'Too broad — it would block good traffic',
+    'I want to watch it longer',
+    'The suggestion itself is wrong',
+  ],
+  'graduate-keyword': [
+    'Not enough evidence yet',
+    'Wrong bid for it',
+    'Belongs in a different campaign',
+    'The suggestion itself is wrong',
+  ],
+  'set-price': [
+    'Margin does not work',
+    'Wrong price',
+    'Not now — bad timing',
+    'The suggestion itself is wrong',
+  ],
+  'apply-content': [
+    'Copy is wrong',
+    'Not ready to change this listing',
+    'I will edit it myself',
+    'The suggestion itself is wrong',
+  ],
+  'publish-listing': [
+    'Listing is not ready',
+    'Wrong channel',
+    'Not now — bad timing',
+    'The suggestion itself is wrong',
+  ],
+  'send-customer-message': [
+    'Do not contact this customer',
+    'Wrong message',
+    'I will reply myself',
+    'The suggestion itself is wrong',
+  ],
+}
+
+const rejectCodesFor = (toolName: string) => REJECT_CODES[toolName] ?? DEFAULT_REJECT_CODES
+
 /* ── what it touches, and what it changes ──────────────────────────────── */
 
 interface Delta {
@@ -284,13 +355,27 @@ export function ApprovalCard({
   const heavy = rev !== 'restore' || approval.riskTier === 'high'
   const [showDetail, setShowDetail] = useState(heavy)
   const [rejecting, setRejecting] = useState(false)
-  const [reason, setReason] = useState('')
+  const [note, setNote] = useState('')
   const [acked, setAcked] = useState(false)
   const [recheck, setRecheck] = useState<{ stale: boolean; why: string | null } | null>(null)
   const [rechecking, setRechecking] = useState(false)
 
   const needsAck = heavy && canExecute
   const approveBlocked = needsAck && !acked
+
+  /**
+   * The button states the CONSEQUENCE, not the verb. "Approve" tells a
+   * first-time operator nothing; "Apply — bid €0.31 → €0.84" is a decision
+   * they can make from the button alone, and it makes a screenshot
+   * self-documenting. Falls back to the tool vocabulary when there is no
+   * delta worth naming.
+   */
+  const primaryDelta = d.deltas[0]
+  const approveLabel = primaryDelta
+    ? primaryDelta.from
+      ? `Apply — ${primaryDelta.field} ${primaryDelta.from} → ${primaryDelta.to}`
+      : `Apply — ${primaryDelta.field}: ${primaryDelta.to}`
+    : vocab.approveLabel
 
   return (
     <div className={`aq-card r-${approval.riskTier}${heavy ? ' heavy' : ''}`}>
@@ -469,40 +554,71 @@ export function ApprovalCard({
         </label>
       ) : null}
 
+      {/*
+        AQ.4 — symmetric friction.
+
+        Reject used to demand a typed sentence while approve was one click.
+        That asymmetry is the documented mechanism by which decision support
+        becomes a decision engine: if disagreeing costs an essay and agreeing
+        costs a click, a tired operator agrees. Both verbs are one click now,
+        and the note is optional on either.
+
+        Note the direction of the fix. The instruction is "make rejecting no
+        harder than approving" — NOT "make approving harder". Friction is added
+        only where a yes is irreversible (the tick above), never to the safe
+        path.
+      */}
       <div className="aq-actions">
         <button
           className="acr-btn go"
           disabled={busy || approveBlocked}
           title={approveBlocked ? 'Tick the box above first.' : undefined}
-          onClick={() => onDecide(approval.id, 'approve')}
+          onClick={() => onDecide(approval.id, 'approve', note.trim() || undefined)}
         >
-          <Check size={13} /> {vocab.approveLabel}
+          <Check size={13} /> {approveLabel}
         </button>
-        {rejecting ? (
-          <span className="acr-fl-rejectrow">
-            <input
-              autoFocus
-              placeholder="one-line reason — this teaches the fleet"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-            <button
-              className="acr-btn"
-              disabled={busy || !reason.trim()}
-              onClick={() => onDecide(approval.id, 'reject', reason.trim())}
-            >
-              Confirm rejection
-            </button>
-            <button className="acr-btn" disabled={busy} onClick={() => setRejecting(false)}>
-              Cancel
-            </button>
-          </span>
-        ) : (
+        {!rejecting ? (
           <button className="acr-btn" disabled={busy} onClick={() => setRejecting(true)}>
-            <X size={13} /> Reject, with a reason
+            <X size={13} /> Reject
+          </button>
+        ) : (
+          <button className="acr-btn" disabled={busy} onClick={() => setRejecting(false)}>
+            Cancel
           </button>
         )}
       </div>
+
+      {rejecting ? (
+        <div className="aq-reject">
+          <p className="aq-rejectq">Why not? One click — this is what teaches the fleet.</p>
+          <div className="aq-codes">
+            {rejectCodesFor(approval.toolName).map((code) => (
+              <button
+                key={code}
+                className="aq-code"
+                disabled={busy}
+                onClick={() =>
+                  onDecide(
+                    approval.id,
+                    'reject',
+                    note.trim() ? `${code} — ${note.trim()}` : code,
+                  )
+                }
+              >
+                {code}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* One optional note, shared by both verbs — never required by either. */}
+      <input
+        className="aq-note"
+        placeholder="Add a note (optional) — it is recorded either way"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+      />
     </div>
   )
 }

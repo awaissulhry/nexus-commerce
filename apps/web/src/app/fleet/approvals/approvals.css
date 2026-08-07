@@ -652,3 +652,67 @@
   align-items: center;
   margin: 10px 0 0;
 }
+
+/* ── AQ.4 · symmetric friction ──────────────────────────────────────────── */
+
+/*
+ * Reject is now one click, like approve. The codes are buttons, not a select:
+ * a dropdown is two interactions and hides the options until you ask, which is
+ * the friction this phase exists to remove from the safe path.
+ *
+ * They are laid out AFTER the action row rather than inside it so the reject
+ * path reads as an answer to a question ("why not?") rather than as a second
+ * row of equally-weighted verbs.
+ */
+
+.aq-reject {
+  margin: 8px 0 0;
+  padding: 9px 10px;
+  border: 1px solid #e8edf3;
+  border-radius: 6px;
+  background: #fbfcfd;
+}
+.aq-rejectq {
+  margin: 0 0 7px;
+  font-size: 12px;
+  color: #6b7688;
+}
+.aq-codes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.aq-code {
+  padding: 4px 9px;
+  border: 1px solid #d7dee8;
+  border-radius: 999px;
+  background: #fff;
+  color: #3a4658;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.aq-code:hover:not(:disabled) {
+  border-color: #9aa7b8;
+  background: #f4f6f9;
+  color: #1c2530;
+}
+.aq-code:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.aq-note {
+  width: 100%;
+  margin: 8px 0 0;
+  padding: 6px 9px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  font-size: 12.5px;
+  color: #1c2530;
+}
+.aq-note::placeholder {
+  color: #9aa7b8;
+}
