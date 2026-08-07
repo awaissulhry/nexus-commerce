@@ -72,4 +72,18 @@ export interface EffectiveCharter extends CharterDefinition {
   /** True when the DB policy could not be read — the values alongside are
    *  the fail-safe posture, not an operator's choice. */
   degraded: boolean
+  /**
+   * NAF.SB.W.1 — does an `AgentCharter` row actually exist for this key?
+   *
+   * A charter with no row resolves to `enabled: false, autonomyLevel: 'OFF',
+   * degraded: false` — identical, field for field, to one an operator
+   * deliberately switched off. Without this flag no client can tell "I turned
+   * this off" from "this was never seeded", and `fleet-auditor` has been in
+   * exactly that state since it was written.
+   *
+   * `null` means *unknown*, not *no*: when `degraded` is true the policy read
+   * failed outright, so absence of a row cannot be distinguished from absence
+   * of a database. Callers must branch on `degraded` first.
+   */
+  provisioned: boolean | null
 }

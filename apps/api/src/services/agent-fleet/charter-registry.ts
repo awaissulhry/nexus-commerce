@@ -160,6 +160,10 @@ function toEffective(
       pausedUntil: null,
       pausedReason: null,
       degraded,
+      // SB.W.1 — a degraded read cannot tell "no row" from "no database", so
+      // it reports unknown rather than guessing false. Undegraded and rowless
+      // is the honest, checkable "never seeded".
+      provisioned: degraded ? null : false,
     }
   }
   // AC.6 — a live pause resolves as not-enabled without touching the dial,
@@ -210,6 +214,7 @@ function toEffective(
         ? undefined
         : clampDown(def.maxProposedValueCents, db.maxProposedValueCents),
     degraded: false,
+    provisioned: true,
   }
 }
 

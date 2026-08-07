@@ -151,7 +151,22 @@ export function DataGrid<T>({
               const sorted = sort?.key === c.key
               const cls = [alignClass(c.align), stickyCls(c), sorted ? 'sorted' : ''].filter(Boolean).join(' ')
               return (
-                <th key={c.key} className={cls} style={stickyStyle(c)}>
+                <th
+                  key={c.key}
+                  className={cls}
+                  style={stickyStyle(c)}
+                  // A sortable header must announce its state; without this a
+                  // screen reader hears a button and never learns the table is
+                  // ordered by it. Only emitted for sortable columns, so plain
+                  // headers are unaffected.
+                  aria-sort={
+                    c.sortable
+                      ? sorted
+                        ? sort!.dir === 'asc' ? 'ascending' : 'descending'
+                        : 'none'
+                      : undefined
+                  }
+                >
                   {c.sortable ? (
                     <button type="button" className="sortbtn" onClick={() => toggleSort(c.key)}>
                       {c.label}

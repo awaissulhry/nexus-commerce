@@ -22,6 +22,67 @@
   background: #f4f6f9;
   color: #1c2530;
   color-scheme: light;
+
+  /* ── SB.W.1 — the DS light pin ────────────────────────────────────────
+     Everything above pins the acr-* surface, which hard-codes its own hex and
+     needed nothing more. A DESIGN-SYSTEM component reads semantic tokens, and
+     tokens.css carries a `.dark` block that redefines them — so the first DS
+     component to render on a fleet page in dark mode drew dark cards on this
+     light background. Latent until the Workers roster became a DataGrid.
+
+     Custom properties inherit, so re-declaring them here beats an ancestor
+     `.dark` for this whole subtree. Pin ALL of them or none: a subset leaves a
+     half-dark palette — light cards with light text — which is worse than
+     either extreme and much harder to notice in review.
+
+     ⚠ TWO shipped pins exist and they are NOT interchangeable. `.h10-shell`
+     (ads.css) writes Tailwind triplets (`--border-default: 203 213 225`);
+     primitives.css consumes these WHOLE (`border: 1px solid var(--border-default)`),
+     so under the triplet convention the shorthand is invalid, the declaration
+     is dropped, and Tailwind preflight's `border: 0px solid` wins — which is
+     why DS buttons have no border across the ads console. This copies
+     `.productsNextLight` instead: semantic aliases expressed through the
+     `--h10-*` primitive ramp, which the `.dark` block never touches, so there
+     is one source of truth for the hex. See
+     `reference_ds_token_triplet_collision` and Study 0 of
+     docs/2026-08-07-naf-sbw-section-studies.md.
+
+     Corollary, and it is a rule for this subtree: inside `.fleet-surface`
+     semantic tokens are WHOLE COLOURS. Do not use Tailwind colour utilities
+     that read them as triplets (text-primary, surface-card, border-default…)
+     anywhere under it. Nothing here does today; keep it that way. */
+
+  /* surfaces */
+  --surface-canvas: var(--h10-grey-50);
+  --surface-card: var(--h10-white);
+  --surface-raised: var(--h10-grey-25);
+  --surface-sunken: var(--h10-grey-100);
+
+  /* text */
+  --text-primary: var(--h10-grey-900);
+  --text-secondary: var(--h10-grey-600);
+  --text-tertiary: var(--h10-grey-500);
+  --text-disabled: var(--h10-grey-400);
+  --text-inverse: var(--h10-white);
+
+  /* borders */
+  --border-subtle: var(--h10-grey-150);
+  --border-default: var(--h10-grey-200);
+  --border-strong: var(--h10-grey-300);
+
+  /* the DS's own h10-* semantic aliases (tokens.css `.dark` overrides these) */
+  --h10-text: var(--h10-grey-900);
+  --h10-text-2: var(--h10-grey-600);
+  --h10-text-3: var(--h10-grey-500);
+  --h10-text-disabled: var(--h10-grey-400);
+  --h10-text-inverse: var(--h10-white);
+  --h10-bg: var(--h10-grey-50);
+  --h10-surface: var(--h10-white);
+  --h10-surface-raised: var(--h10-grey-25);
+  --h10-surface-sunken: var(--h10-grey-100);
+  --h10-border: var(--h10-grey-200);
+  --h10-border-subtle: var(--h10-grey-150);
+  --h10-border-strong: var(--h10-grey-300);
 }
 @media (min-width: 768px) {
   .fleet-surface { margin: -24px; }

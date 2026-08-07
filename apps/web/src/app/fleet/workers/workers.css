@@ -1,0 +1,191 @@
+/* NAF.SB.W — styles that belong to the Workers registry and nowhere else.
+   Per the session-lock convention, fleet-pages.css stays frozen to shared
+   primitives and each page keeps its own rules here. */
+
+/* ── the status cell ──────────────────────────────────────────────────────
+   Six words, each with a mandatory reason line under it. The reason is real
+   text in the cell, not a title attribute: a tooltip that hides the reason a
+   worker is broken is a tooltip hiding the point. Colour reinforces the word
+   and never carries the meaning alone. */
+
+.sbw-status { display: flex; flex-direction: column; gap: 3px; min-width: 220px; }
+
+.sbw-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.sbw-badge .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.sbw-badge.neutral { background: #f0f2f5; color: #6b7684; border-color: #e2e6ec; }
+.sbw-badge.good    { background: #e8f6ef; color: #14764f; border-color: #cbe9dc; }
+.sbw-badge.warn    { background: #fdf4e3; color: #91640f; border-color: #f3e3c2; }
+.sbw-badge.bad     { background: #fdeceb; color: #a3312c; border-color: #f5d4d1; }
+.sbw-badge.busy    { background: #eaf2fb; color: #2f6096; border-color: #d3e2f4; }
+
+/* "Not set up" is an outline, not a fill: it is an absence, and it should not
+   look like a state the operator chose. */
+.sbw-badge.outline { background: transparent; border-style: dashed; border-color: #c3cad4; color: #6b7684; }
+
+.sbw-badge.busy .dot { animation: sbw-pulse 1.4s ease-in-out infinite; }
+@keyframes sbw-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sbw-badge.busy .dot { animation: none; }
+}
+
+.sbw-reason {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #6b7684;
+  max-width: 46ch;
+}
+.sbw-reason.bad  { color: #97403b; }
+.sbw-reason.warn { color: #85601b; }
+
+/* ── the diagnostic badge ─────────────────────────────────────────────────
+   fleet-selftest holds 47 of 64 open findings and 38 of 47 runs. It stays in
+   the table and is left out of the headline numbers, so the row has to say so
+   where the operator is already looking — at the name. */
+.sbw-diag {
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid #dbe1ea;
+  border-radius: 4px;
+  background: #f2f5f9;
+  color: #6b7684;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: help;
+}
+
+/* ── identity cell ───────────────────────────────────────────────────────── */
+.sbw-who { display: flex; align-items: center; gap: 9px; min-width: 210px; }
+.sbw-avatar {
+  width: 26px; height: 26px; flex: none;
+  display: grid; place-items: center;
+  border-radius: 7px;
+  background: #eef2f7;
+  color: #6b7d95;
+}
+.sbw-who .nm {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #24303e;
+  text-decoration: none;
+}
+.sbw-who .nm:hover { color: #3f6fb5; text-decoration: underline; }
+.sbw-who .ky {
+  display: block;
+  font-size: 10.5px;
+  color: #98a2b0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* ── scope cell ───────────────────────────────────────────────────────────
+   "Everything" is the honest word for an empty scope array, and it is tinted
+   only when the worker can actually act — an unscoped worker that is switched
+   off is a fact, not a risk. */
+.sbw-scope { font-size: 12px; color: #46525f; }
+.sbw-scope.wide { color: #8a6412; }
+.sbw-scope .mk {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 1px 5px;
+  border: 1px solid #dfe5ec;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 10.5px;
+  color: #46525f;
+}
+
+/* ── small shared bits ────────────────────────────────────────────────────── */
+.sbw-dim { color: #98a2b0; }
+.sbw-note { font-size: 11px; color: #8b95a3; }
+
+/* ── teaching empty state ─────────────────────────────────────────────────
+   FX.4's rule: what will appear here, when, and what has to be true first.
+   Never a bare dash and never "No rows." */
+.sbw-empty { padding: 26px 8px; text-align: center; }
+.sbw-empty strong {
+  display: block;
+  font-size: 13px;
+  color: #34404f;
+  margin-bottom: 5px;
+}
+.sbw-empty span {
+  display: block;
+  font-size: 12px;
+  color: #77818f;
+  max-width: 52ch;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+.sbw-empty .acr-btn { margin-top: 12px; }
+
+.sbw-gridcard { margin-top: 12px; }
+
+/* ── the table-layout trap ────────────────────────────────────────────────
+   `.h10-ds-grid` is `table-layout: auto` with `white-space: nowrap` on every
+   cell, so a column's declared `width` is only a hint and long content wins:
+   the status reason lines expanded their column and overran the three columns
+   to their right. Caught in the browser; tsc is blind to it.
+
+   The proven fix (Sync Control products grid, 2026-07-21): pin the table to
+   `fixed` so every column honours its exact width, clip horizontally, and let
+   the cells that carry sentences wrap on purpose. A plain global class, not a
+   CSS-module one — a hashed class has resolved to `undefined` at render here
+   before. Verify with `getComputedStyle(table).tableLayout === 'fixed'`. */
+.sbw-gridcard .h10-ds-grid { table-layout: fixed; width: 100%; }
+.sbw-gridcard .h10-ds-grid th,
+.sbw-gridcard .h10-ds-grid td {
+  overflow: hidden;
+  vertical-align: top;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+/* The cells that carry prose opt back INTO wrapping. Everything else stays
+   nowrap, which is what keeps the numeric columns aligned. */
+.sbw-gridcard .h10-ds-grid td .sbw-status,
+.sbw-gridcard .h10-ds-grid td .sbw-reason,
+.sbw-gridcard .h10-ds-grid td .sbw-note,
+.sbw-gridcard .h10-ds-grid td .sbw-scope {
+  white-space: normal;
+}
+
+/* Names truncate rather than push: the key underneath is the unambiguous
+   identifier, and it is monospaced precisely so it can be read at a glance.
+   Scoped to the text block, NOT `> span` — the avatar is a span too, and a
+   `flex: 1 1 auto` on it out-specifies its own `flex: none` and stretches it
+   into a grey slab. Caught in the browser. */
+.sbw-who .txt { min-width: 0; flex: 1 1 auto; }
+.sbw-who .nm,
+.sbw-who .ky {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

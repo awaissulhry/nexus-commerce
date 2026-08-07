@@ -1,20 +1,42 @@
 'use client'
 
 /**
- * NAF.SB.4 — the worker registry.
+ * NAF.SB.W — the worker registry.
  *
- * Every agent control plane researched for docs/2026-08-07-naf-sb-fleet-pages.md
- * (Microsoft Agent 365, ServiceNow AI Control Tower, LangSmith, CrewAI AMP) is
- * built around one row per agent — owner, permissions, lifecycle state — and
- * everything else hangs off that row. We had worker DETAIL pages and no roster,
- * which is fine at six workers and impossible at the twenty-five the roster in
- * docs/AGENT_FLEET.md Part 6 plans for.
+ * Every agent control plane researched for docs/2026-08-07-naf-sbw-workers-page.md
+ * (Microsoft Agent 365, LangGraph assistants, UiPath Orchestrator, Temporal worker
+ * deployments, ServiceNow AI Control Tower, Agentforce, CrewAI AMP) is built
+ * around one row per agent, and everything else hangs off that row. The fleet map
+ * answers "how do they connect"; this answers "what do I have, is it healthy, and
+ * which one needs me" — comparable down a column, which is the one thing a graph
+ * cannot do at twenty-five workers.
  *
- * The fleet map answers "how do they connect". This answers "what do I have,
- * and which one needs me" — sortable, filterable, comparable down a column.
+ * W.1 is the honest-status pass. What changed and why:
  *
- * Reads only endpoints that already exist, so this page adds no API surface
- * while a parallel session owns agent-fleet.routes.ts.
+ * · A STATUS column, which did not exist. Six workers all reading "OFF" is true
+ *   and useless; six words with a mandatory reason line under each is the same
+ *   data made answerable. The derivation lives in _shared/run-health.ts so the
+ *   roster, Activity and the worker's own page cannot disagree about whether
+ *   something is broken.
+ *
+ * · Failure classes are never flattened. Of 26 not-ok runs in production, 21
+ *   could not reach the provider, 3 were refused for credit, 1 broke its output
+ *   contract and 1 was stopped by its token limit — and that last one is a limit
+ *   working exactly as designed. "1 failed" for all four teaches an operator to
+ *   distrust a working safety limit.
+ *
+ * · "Not set up" is now visible. fleet-auditor has no charter row and resolved
+ *   identically to a worker deliberately switched off. The API's new
+ *   `provisioned` flag is what makes the two distinguishable at all.
+ *
+ * · The table is the shared DS DataGrid, per the operator's standing rule. The
+ *   in-repo objection to it (GuardrailGrid: "the DS stylesheets carry .dark
+ *   rules") does not survive inspection — tokens.css has one .dark block that
+ *   swaps custom properties and the other three sheets have none, so the light
+ *   pin now on .fleet-surface is sufficient. Study 0 has the measurement.
+ *
+ * Reads only endpoints that already exist, so this page still adds no API
+ * surface while a parallel session owns agent-fleet.routes.ts.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -22,6 +44,17 @@ import Link from 'next/link'
 import { Bot, RefreshCw, ShieldAlert, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { GLOSSARY, Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
+import { DataGrid, type Column } from '@/design-system/components'
+import { GridToolbar } from '@/design-system/patterns'
+import {
+  ago,
+  classifyFailure,
+  deriveStatus,
+  DIAGNOSTIC_HINT,
+  isDiagnostic,
+  type RunLike,
+  type WorkerStatus,
+} from '../_shared/run-health'
 
 /** Design contract rule 3: jargon without a glossary entry fails review. These
  *  maps are the narrowing — a tier or dial we have no definition for renders as
@@ -51,19 +84,20 @@ interface CharterRow {
   dailyBudgetUSD: number
   maxTokensPerRun: number
   degraded: boolean
+  /** SB.W.1 — false = no settings row exists. Optional so the page degrades
+   *  gracefully to "Off" if it is deployed ahead of the API. */
+  provisioned?: boolean | null
   scopeMarketplaces?: string[]
+  scopeCampaignIds?: string[]
   pausedUntil?: string | null
+  pausedReason?: string | null
 }
-interface RunRow {
+interface RunRow extends RunLike {
   id: string
   agentKey: string
-  status: string
-  ok: boolean
   mode: string | null
   costUSD: string | number
   findingCount: number
-  createdAt: string
-  errorMessage?: string | null
 }
 interface FindingRow {
   id: string
@@ -81,6 +115,8 @@ interface ScorecardRow {
 /** One assembled roster row — everything the table shows about a worker. */
 interface WorkerRow {
   charter: CharterRow
+  status: WorkerStatus
+  diagnostic: boolean
   lastRun: RunRow | null
   runs7d: number
   failures7d: number
@@ -90,24 +126,15 @@ interface WorkerRow {
   promotionEligible: boolean
 }
 
-type SortKey = 'name' | 'tier' | 'autonomy' | 'lastRun' | 'findings' | 'cost' | 'grade'
-
 const TIER_ORDER: Record<string, number> = {
   analyst: 0, director: 1, critic: 2, strategist: 3, auditor: 4,
 }
 const LEVEL_ORDER: Record<string, number> = { OFF: 0, OBSERVE: 1, PROPOSE: 2, AUTO: 3 }
-const DAY = 24 * 3600 * 1000
-
-function ago(iso: string | undefined | null): string {
-  if (!iso) return 'never'
-  const ms = Date.now() - new Date(iso).getTime()
-  if (ms < 60_000) return 'just now'
-  const m = Math.floor(ms / 60_000)
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 48) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
+/** Sort order for the status column: what needs you, first. */
+const STATUS_ORDER: Record<string, number> = {
+  attention: 0, 'not-set-up': 1, paused: 2, running: 3, working: 4, off: 5,
 }
+const DAY = 24 * 3600 * 1000
 
 /* ── the page ──────────────────────────────────────────────────────────── */
 
@@ -121,9 +148,6 @@ export function WorkersClient() {
   const [err, setErr] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [tierFilter, setTierFilter] = useState<string | null>(null)
-  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({
-    key: 'tier', dir: 'asc',
-  })
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -162,11 +186,14 @@ export function WorkersClient() {
     return charters.map((charter) => {
       const mine = runs.filter((r) => r.agentKey === charter.key)
       const recent = mine.filter((r) => new Date(r.createdAt).getTime() >= since)
+      const lastRun = mine[0] ?? null
       // Scorecards arrive newest-first; the first match is the current window.
       const card = scorecards.find((s) => s.charterKey === charter.key)
       return {
         charter,
-        lastRun: mine[0] ?? null,
+        status: deriveStatus(charter, lastRun),
+        diagnostic: isDiagnostic(charter),
+        lastRun,
         runs7d: recent.length,
         failures7d: recent.filter((r) => !r.ok).length,
         cost7d: recent.reduce((sum, r) => sum + Number(r.costUSD || 0), 0),
@@ -177,6 +204,10 @@ export function WorkersClient() {
     })
   }, [charters, runs, findings, scorecards])
 
+  /** Chip counts filter the WHOLE table, so they count every row. The strip's
+   *  breakdown counts business workers only, to match the number above it —
+   *  a "5 workers" headline over a breakdown summing to 7 is the kind of small
+   *  inconsistency that costs a page its credibility. */
   const tierCounts = useMemo(() => {
     const m = new Map<string, number>()
     for (const r of rows) m.set(r.charter.tier, (m.get(r.charter.tier) ?? 0) + 1)
@@ -185,55 +216,254 @@ export function WorkersClient() {
 
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase()
-    const filtered = rows.filter((r) => {
+    return rows.filter((r) => {
       if (tierFilter && r.charter.tier !== tierFilter) return false
       if (!needle) return true
       return (
         r.charter.name.toLowerCase().includes(needle) ||
         r.charter.key.toLowerCase().includes(needle) ||
+        r.charter.domain.toLowerCase().includes(needle) ||
         (r.charter.description ?? '').toLowerCase().includes(needle)
       )
     })
-    const dir = sort.dir === 'asc' ? 1 : -1
-    return [...filtered].sort((a, b) => {
-      switch (sort.key) {
-        case 'name': return dir * a.charter.name.localeCompare(b.charter.name)
-        case 'autonomy':
-          return dir * ((LEVEL_ORDER[a.charter.autonomyLevel] ?? 0) - (LEVEL_ORDER[b.charter.autonomyLevel] ?? 0))
-        case 'lastRun':
-          return dir * ((a.lastRun ? new Date(a.lastRun.createdAt).getTime() : 0) -
-            (b.lastRun ? new Date(b.lastRun.createdAt).getTime() : 0))
-        case 'findings': return dir * (a.openFindings - b.openFindings)
-        case 'cost': return dir * (a.cost7d - b.cost7d)
-        case 'grade': return dir * ((a.grade ?? 'ZZ').localeCompare(b.grade ?? 'ZZ'))
-        case 'tier':
-        default: {
-          const t = (TIER_ORDER[a.charter.tier] ?? 9) - (TIER_ORDER[b.charter.tier] ?? 9)
-          return dir * (t !== 0 ? t : a.charter.name.localeCompare(b.charter.name))
-        }
-      }
-    })
-  }, [rows, q, tierFilter, sort])
+  }, [rows, q, tierFilter])
+
+  /* Headline numbers are BUSINESS workers only — fleet-selftest holds 47 of 64
+     open findings and 38 of 47 runs, so counting it in makes every figure on
+     this page mostly about a self-test. Its contribution is footnoted below the
+     strip rather than hidden: excluded, never concealed. (Operator decision
+     2026-08-07.) */
+  const business = useMemo(() => rows.filter((r) => !r.diagnostic), [rows])
+  const diagnostics = useMemo(() => rows.filter((r) => r.diagnostic), [rows])
+
+  const businessTiers = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const r of business) m.set(r.charter.tier, (m.get(r.charter.tier) ?? 0) + 1)
+    return [...m.entries()].sort((a, b) => (TIER_ORDER[a[0]] ?? 9) - (TIER_ORDER[b[0]] ?? 9))
+  }, [business])
 
   const totals = useMemo(() => ({
-    workers: rows.length,
-    running: rows.filter((r) => r.charter.enabled && r.charter.autonomyLevel !== 'OFF').length,
-    openFindings: rows.reduce((s, r) => s + r.openFindings, 0),
-    cost7d: rows.reduce((s, r) => s + r.cost7d, 0),
+    workers: business.length,
+    // A paused worker is not "switched on", whatever its dial says. The API
+    // already resolves a live pause to enabled:false; this agrees with it
+    // rather than trusting one of the two fields.
+    running: business.filter((r) => r.status.word !== 'paused'
+      && r.charter.enabled && r.charter.autonomyLevel !== 'OFF').length,
+    attention: business.filter((r) => r.status.needsAttention).length,
+    openFindings: business.reduce((s, r) => s + r.openFindings, 0),
+    cost7d: business.reduce((s, r) => s + r.cost7d, 0),
     degraded: rows.filter((r) => r.charter.degraded).length,
-  }), [rows])
+    unprovisioned: rows.filter((r) => r.charter.provisioned === false).length,
+  }), [business, rows])
 
-  const th = (key: SortKey, label: React.ReactNode, numeric = false) => (
-    <th className={numeric ? 'num' : undefined} aria-sort={sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
-      <button
-        type="button"
-        className="acr-pg-sortbtn"
-        onClick={() => setSort((s) => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }))}
-      >
-        {label}
-        {sort.key === key ? <span className="caret" aria-hidden>{sort.dir === 'asc' ? '▲' : '▼'}</span> : null}
-      </button>
-    </th>
+  const diagTotals = useMemo(() => ({
+    findings: diagnostics.reduce((s, r) => s + r.openFindings, 0),
+    cost7d: diagnostics.reduce((s, r) => s + r.cost7d, 0),
+  }), [diagnostics])
+
+  /* ── columns ─────────────────────────────────────────────────────────── */
+
+  const columns: Array<Column<WorkerRow>> = useMemo(() => [
+    {
+      key: 'worker',
+      label: <Term k="worker">Worker</Term>,
+      sortable: true,
+      sortValue: (r) => r.charter.name.toLowerCase(),
+      width: 240,
+      render: (r) => (
+        <div className="sbw-who">
+          <span className="sbw-avatar" aria-hidden><Bot size={14} /></span>
+          <span className="txt">
+            <Link className="nm" href={`/fleet/workers/${r.charter.key}`}>
+              {r.charter.name}
+            </Link>
+            {r.diagnostic ? (
+              <span className="sbw-diag" title={DIAGNOSTIC_HINT}>diagnostic</span>
+            ) : null}
+            <span className="ky">{r.charter.key}</span>
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      width: 330,
+      label: 'Status',
+      sortable: true,
+      sortValue: (r) => STATUS_ORDER[r.status.word] ?? 9,
+      render: (r) => (
+        <div className="sbw-status">
+          <span
+            className={`sbw-badge ${r.status.tone}${r.status.word === 'not-set-up' ? ' outline' : ''}`}
+          >
+            <span className="dot" aria-hidden />
+            {r.status.label}
+          </span>
+          <span
+            className={`sbw-reason${r.status.tone === 'bad' ? ' bad' : r.status.tone === 'warn' ? ' warn' : ''}`}
+          >
+            {r.status.reason}
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: 'job',
+      width: 112,
+      label: 'Job',
+      sortable: true,
+      sortValue: (r) => `${TIER_ORDER[r.charter.tier] ?? 9}${r.charter.name}`,
+      render: (r) => (
+        <>
+          {TIER_TERM[r.charter.tier]
+            ? <Term k={TIER_TERM[r.charter.tier]!}>{r.charter.tier}</Term>
+            : r.charter.tier}
+          {r.charter.domain ? <div className="sbw-note">{r.charter.domain}</div> : null}
+        </>
+      ),
+    },
+    {
+      key: 'autonomy',
+      width: 132,
+      label: 'What it may do',
+      sortable: true,
+      sortValue: (r) => LEVEL_ORDER[r.charter.autonomyLevel] ?? 0,
+      render: (r) => (
+        <>
+          <span className={`acr-pg-lvl ${r.charter.autonomyLevel.toLowerCase()}`}>
+            {LEVEL_TERM[r.charter.autonomyLevel]
+              ? <Term k={LEVEL_TERM[r.charter.autonomyLevel]!}>{r.charter.autonomyLevel}</Term>
+              : r.charter.autonomyLevel}
+          </span>
+          {r.charter.autonomyCap !== r.charter.autonomyLevel ? (
+            <div className="sbw-note">
+              <Term k="cap">ceiling</Term> {r.charter.autonomyCap}
+            </div>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      key: 'scope',
+      width: 136,
+      label: 'Scope',
+      sortable: true,
+      // Scoped workers first: an explicit scope is the safer state, and sorting
+      // brings the unbounded ones to the other end where they can be seen.
+      sortValue: (r) => (r.charter.scopeMarketplaces?.length ? 0 : 1),
+      render: (r) => {
+        const mk = r.charter.scopeMarketplaces ?? []
+        const camps = r.charter.scopeCampaignIds?.length ?? 0
+        const live = r.charter.enabled && r.charter.autonomyLevel !== 'OFF'
+        if (mk.length === 0 && camps === 0) {
+          return (
+            <span
+              className={`sbw-scope${live ? ' wide' : ''}`}
+              title={
+                live
+                  ? 'No limit set — this worker may look at every marketplace and every campaign.'
+                  : 'No limit set. It is switched off, so nothing is looking at anything yet.'
+              }
+            >
+              Everything
+            </span>
+          )
+        }
+        return (
+          <span className="sbw-scope">
+            {mk.map((m) => <span key={m} className="mk">{m}</span>)}
+            {camps > 0 ? <span className="sbw-note">{camps} campaign{camps === 1 ? '' : 's'}</span> : null}
+          </span>
+        )
+      },
+    },
+    {
+      key: 'lastRun',
+      width: 112,
+      label: 'Last run',
+      sortable: true,
+      sortValue: (r) => (r.lastRun ? new Date(r.lastRun.createdAt).getTime() : 0),
+      render: (r) => {
+        if (!r.lastRun) return <span className="sbw-dim">never run</span>
+        const f = classifyFailure(r.lastRun)
+        return (
+          <>
+            {ago(r.lastRun.createdAt)}
+            {f ? (
+              <div className={`sbw-note ${f.severe ? 'sbw-reason bad' : 'sbw-reason warn'}`}>
+                {f.klass === 'limit' ? 'stopped by a limit' : 'did not finish'}
+              </div>
+            ) : null}
+          </>
+        )
+      },
+    },
+    {
+      key: 'findings',
+      width: 96,
+      label: <Term k="finding">Open findings</Term>,
+      align: 'right',
+      sortable: true,
+      sortValue: (r) => r.openFindings,
+      render: (r) => (r.openFindings > 0 ? r.openFindings : <span className="sbw-dim">—</span>),
+    },
+    {
+      key: 'cost',
+      width: 96,
+      label: 'Cost 7d',
+      align: 'right',
+      sortable: true,
+      sortValue: (r) => r.cost7d,
+      render: (r) => (r.cost7d > 0
+        ? `$${r.cost7d.toFixed(4)}`
+        : <span className="sbw-dim">$0</span>),
+    },
+    {
+      key: 'grade',
+      width: 124,
+      label: <Term k="grade">Report card</Term>,
+      sortable: true,
+      sortValue: (r) => r.grade ?? 'ZZ',
+      render: (r) => (
+        r.grade ? (
+          <>
+            <span className={`acr-pg-grade g-${r.grade}`}>{r.grade}</span>
+            {r.promotionEligible ? <div className="sbw-note">may be promoted</div> : null}
+          </>
+        ) : (
+          <span className="sbw-dim" title="Report cards are computed nightly. This one appears after its first night on the books.">
+            not graded yet
+          </span>
+        )
+      ),
+    },
+  ], [])
+
+  /* ── teaching empty state ────────────────────────────────────────────── */
+
+  const emptyState = loading ? (
+    <div className="sbw-empty">
+      <strong>Loading the roster…</strong>
+      <span>Reading charters, runs, findings and report cards.</span>
+    </div>
+  ) : charters.length === 0 ? (
+    <div className="sbw-empty">
+      <strong>No workers are set up yet.</strong>
+      <span>
+        Seven workers exist in code. Each needs a settings row before it can be switched on —
+        seeding the roster creates them, all switched off, changing nothing about what runs.
+      </span>
+    </div>
+  ) : (
+    <div className="sbw-empty">
+      <strong>No worker matches that.</strong>
+      <span>
+        {[q.trim() ? `the search “${q.trim()}”` : null, tierFilter ? `the ${tierFilter} filter` : null]
+          .filter(Boolean)
+          .join(' and ')}
+        {' '}is hiding all {rows.length} of them. Clear it to see the whole fleet.
+      </span>
+    </div>
   )
 
   return (
@@ -255,13 +485,20 @@ export function WorkersClient() {
         <div className="acr-pg-stat">
           <span className="k">Workers</span>
           <span className="v">{totals.workers}</span>
-          <span className="sub">{tierCounts.map(([t, n]) => `${n} ${t}`).join(' · ') || '—'}</span>
+          <span className="sub">{businessTiers.map(([t, n]) => `${n} ${t}`).join(' · ') || '—'}</span>
         </div>
         <div className="acr-pg-stat">
           <span className="k">Switched on</span>
           <span className="v">{totals.running}</span>
           <span className="sub">
             {totals.running === 0 ? 'the whole fleet is off' : `of ${totals.workers}`}
+          </span>
+        </div>
+        <div className="acr-pg-stat">
+          <span className="k">Needs attention</span>
+          <span className="v">{totals.attention}</span>
+          <span className="sub">
+            {totals.attention === 0 ? 'nothing is asking for you' : 'see the status column'}
           </span>
         </div>
         <div className="acr-pg-stat">
@@ -276,11 +513,39 @@ export function WorkersClient() {
         </div>
       </div>
 
+      {/* Excluded, never concealed. */}
+      {diagnostics.length > 0 ? (
+        <p className="sbw-note" style={{ margin: '-4px 0 12px' }}>
+          Not counting {diagnostics.length === 1 ? 'one diagnostic worker' : `${diagnostics.length} diagnostic workers`}
+          {' '}({diagnostics.map((d) => d.charter.key).join(', ')}), which check the fleet itself rather
+          than your account: {diagTotals.findings} more finding{diagTotals.findings === 1 ? '' : 's'}
+          {diagTotals.cost7d > 0 ? `, $${diagTotals.cost7d.toFixed(4)}` : ''}.
+        </p>
+      ) : null}
+
+      {totals.degraded > 0 ? (
+        <div className="acr-banner warn" role="status">
+          <AlertTriangle size={15} />
+          {totals.degraded} worker{totals.degraded === 1 ? '' : 's'} could not have their settings
+          read from the database. The values below are the fail-safe posture, not your choices.
+        </div>
+      ) : null}
+
+      {totals.unprovisioned > 0 ? (
+        <div className="acr-banner warn" role="status">
+          <AlertTriangle size={15} />
+          {totals.unprovisioned} worker{totals.unprovisioned === 1 ? ' exists' : 's exist'} in code
+          with no settings row, so {totals.unprovisioned === 1 ? 'it has' : 'they have'} never been
+          set up and cannot be switched on. Seeding creates the missing rows switched off, which
+          changes nothing about what runs.
+        </div>
+      ) : null}
+
       <div className="acr-pg-toolbar">
         <input
           className="acr-pg-search"
           type="search"
-          aria-label="Search workers by name, key or description"
+          aria-label="Search workers by name, key, domain or description"
           placeholder="Search workers…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -310,110 +575,20 @@ export function WorkersClient() {
         </button>
       </div>
 
-      {totals.degraded > 0 ? (
-        <div className="acr-banner warn" role="status">
-          <AlertTriangle size={15} />
-          {totals.degraded} worker{totals.degraded === 1 ? '' : 's'} could not have their settings
-          read from the database. The values below are the fail-safe posture, not your choices.
-        </div>
-      ) : null}
-
-      {visible.length === 0 ? (
-        <div className="acr-pg-empty">
-          <strong>{loading ? 'Loading the roster…' : 'No worker matches that.'}</strong>
-          {loading
-            ? 'Reading charters, runs, findings and report cards.'
-            : 'Clear the search or the tier filter to see the whole fleet.'}
-        </div>
-      ) : (
-        <div className="acr-pg-tablewrap">
-          <table className="acr-pg-tbl">
-            <thead>
-              <tr>
-                {th('name', 'Worker')}
-                {th('tier', 'Job')}
-                {th('autonomy', 'What it may do')}
-                {th('lastRun', 'Last run')}
-                {th('findings', 'Open findings', true)}
-                {th('cost', 'Cost 7d', true)}
-                {th('grade', 'Report card')}
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((r) => {
-                const c = r.charter
-                const lvl = c.autonomyLevel.toLowerCase()
-                return (
-                  <tr key={c.key}>
-                    <td>
-                      <div className="acr-pg-who">
-                        <span className="acr-pg-avatar" aria-hidden><Bot size={15} /></span>
-                        <span>
-                          <Link className="nm" href={`/fleet/workers/${c.key}`}>
-                            {c.name}
-                          </Link>
-                          <span className="ky">{c.key}</span>
-                        </span>
-                      </div>
-                    </td>
-                    <td>
-                      {TIER_TERM[c.tier]
-                        ? <Term k={TIER_TERM[c.tier]!}>{c.tier}</Term>
-                        : c.tier}
-                      {c.domain ? <span className="acr-pg-muted"> · {c.domain}</span> : null}
-                    </td>
-                    <td>
-                      <span className="acr-pg-dial">
-                        <span className={`acr-pg-lvl ${lvl}`}>
-                          {LEVEL_TERM[c.autonomyLevel]
-                            ? <Term k={LEVEL_TERM[c.autonomyLevel]!}>{c.autonomyLevel}</Term>
-                            : c.autonomyLevel}
-                        </span>
-                        {c.autonomyCap !== c.autonomyLevel ? (
-                          <span className="acr-pg-capnote">
-                            <Term k="cap">ceiling</Term> {c.autonomyCap}
-                          </span>
-                        ) : null}
-                      </span>
-                    </td>
-                    <td>
-                      {r.lastRun ? (
-                        <>
-                          {ago(r.lastRun.createdAt)}
-                          {/* The separator lives OUTSIDE the chip: acr-pg-warn is
-                              inline-flex, which eats leading whitespace. */}
-                          {r.failures7d > 0 ? (
-                            <>
-                              {' · '}
-                              <span className="acr-pg-warn">{r.failures7d} failed</span>
-                            </>
-                          ) : null}
-                        </>
-                      ) : (
-                        <span className="acr-pg-muted">never run</span>
-                      )}
-                    </td>
-                    <td className="num">
-                      {r.openFindings > 0 ? r.openFindings : <span className="acr-pg-muted">—</span>}
-                    </td>
-                    <td className="num">
-                      {r.cost7d > 0 ? `$${r.cost7d.toFixed(4)}` : <span className="acr-pg-muted">$0</span>}
-                    </td>
-                    <td>
-                      <span className={`acr-pg-grade g-${r.grade ?? 'none'}`} title={r.grade ? `Grade ${r.grade}` : 'Not graded yet'}>
-                        {r.grade ?? '–'}
-                      </span>
-                      {r.promotionEligible ? (
-                        <span className="acr-pg-muted"> · may be promoted</span>
-                      ) : null}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className="h10-ds-gridcard sbw-gridcard">
+        <GridToolbar
+          count={
+            <>Showing <b>{visible.length}</b> of <b>{rows.length}</b> worker{rows.length === 1 ? '' : 's'}</>
+          }
+        />
+        <DataGrid<WorkerRow>
+          columns={columns}
+          rows={visible}
+          rowKey={(r) => r.charter.key}
+          initialSort={{ key: 'status', dir: 'asc' }}
+          emptyState={emptyState}
+        />
+      </div>
     </div>
   )
 }
