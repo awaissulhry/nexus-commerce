@@ -989,6 +989,15 @@ next" list was entirely shipped features; it now teaches the test lane,
 Run-now, custom clocks and the off switch instead. Seven stale sites total,
 zero remaining. 336 fleet tests green.
 
+**6d PROD-VERIFIED 2026-08-08 (deploy `e70147f6`, `bb8afd919`), full round
+trip watched live on *Morning negatives pass*:** Turn off… → confirm stated
+the contract verbatim → **Off** ("Switched off by the operator"), the
+banner named both consequences, Run now… left the action row, NEXT RUN
+read "switched off · turn it back on to run it". Turn on… → confirm stated
+the ceiling ("nothing can spend while [the dials] are off") → **Ready**,
+Run now… back, "when you start it". The routine rests exactly where the
+engagement leaves it: Ready, Manual, enabled, three revisions, no runs.
+
 ### WF.7 — dynamic capabilities (RESEARCH MANDATE, opened 2026-08-07 — new session)
 
 **Operator direction, verbatim intent:** the workflow system lacks *dynamic*
