@@ -19,7 +19,13 @@ import { getTool } from './tool-registry.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
 import type { ToolContext } from './tool-types.js'
 
-const EXPIRY_HOURS = 24
+/**
+ * How long an unanswered approval lives. NAF.AQ.0 exports it: the fleet
+ * glossary told the operator "approvals expire after 7 days" while this said
+ * 24 hours, so a UI retyping the number is how the two drifted apart. Any
+ * surface stating the clock must read it from here.
+ */
+export const EXPIRY_HOURS = 24
 
 export interface GateOutcome {
   ok: boolean

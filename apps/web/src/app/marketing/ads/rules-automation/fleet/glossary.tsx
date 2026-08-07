@@ -63,6 +63,14 @@ export const GLOSSARY: Record<string, { title: string; body: string }> = {
     // an operator how long they have.
     body: 'One proposed action waiting for your yes or no. Nothing reaches Amazon without passing this gate. An approval expires 24 hours after it is asked, so stale intent never accumulates — and expiry always means refused, never approved-by-default.',
   },
+  // NAF.AQ.1 — added for the Approvals page's gate-state section. The single
+  // most load-bearing fact on that page: the fleet's three actions describe
+  // what they would do and stop there, so an approval on one cannot be
+  // created and could not reach Amazon if it were.
+  'preview-only': {
+    title: 'Preview only',
+    body: 'An action that can describe what it would do but cannot actually do it — the part that writes to Amazon has not been built yet. All three of the fleet’s own actions are preview-only today, so approving one records your decision and teaches the fleet, and changes nothing on Amazon.',
+  },
   'blast-radius': {
     title: 'Blast radius',
     body: 'How big a change the plan would make: campaigns touched, bid changes, budget moved, conflicts. Unattended changes must stay inside tight limits — a breach blocks the plan.',

@@ -1,6 +1,7 @@
 # NAF.AQ — The Approvals page (`/fleet/approvals`): what it is for, and what is on it
 
-**Status: STUDY — awaiting operator approval. No code written.**
+**Status: APPROVED by the operator 2026-08-07 — AQ.0 and AQ.1 BUILT.**
+Execution record in Part 11; the phases still open are AQ.2–AQ.10.
 
 Page 2 of ten (`docs/2026-08-07-naf-sb-fleet-pages.md` Part 3, Operate group).
 Stream `SB.AQ`, claimed in `docs/2026-08-07-naf-sb-session-locks.md` §2.
@@ -775,7 +776,25 @@ surface. It is AQ.10, after the queue has been used.
 
 ---
 
-## PART 6 — Operator decisions requested
+## PART 6 — Operator decisions — **SETTLED 2026-08-07 ("go ahead")**
+
+The operator approved the study as written, which settles all seven at the
+recommendation. Recorded here in the form they will be built to:
+
+1. **This page owns every approval**, with the fleet / non-fleet split visible.
+2. **The page says out loud that a yes writes nothing today.** Built in AQ.1.
+3. **Edit-then-approve supersedes**, never mutates.
+4. **Coded reasons on both sides.** Reject stops being harder than approve.
+5. **The badge counts only what blocks you**, and reads zero when the fleet is
+   off.
+6. **Snooze exists**, waking on new evidence as well as on a clock.
+7. **The glossary's "7 days" is fixed in AQ.0.**
+
+The original questions and their reasoning are kept below, because the
+reasoning is what a later reader needs — a settled decision with no argument
+attached is the thing nobody can revisit safely.
+
+### The questions as asked
 
 **Q1 · Does this page own every approval, or only the fleet's?**
 *Recommendation: every approval, with the fleet / non-fleet split visible
@@ -966,3 +985,65 @@ Code and data cited inline. Research sources by lens:
 **Compliance & oversight** — [EU AI Act Art. 14](https://artificialintelligenceact.eu/article/14/) · [EDPS ADM human-intervention checklist, 18 May 2026](https://www.edps.europa.eu/) · ISO/IEC 42001 A.6/A.9 · [NIST AI RMF](https://www.nist.gov/itl/ai-risk-management-framework) · Goddard, Roudsari & Wyatt, *Automation bias*, JAMIA 2012 · Buçinca, Malaya & Gajos, *To Trust or to Think*, CSCW 2021 · Anderson et al., *polymorphic warnings*, CHI 2015/2017 · Ben Green, *The flaws of policies requiring human oversight*, CLSR 2022 · [DORA change approval research](https://dora.dev/capabilities/streamlining-change-approval/) · *What You Approve Is What Executes*, arXiv 2606.02668
 
 **Triage craft** — [Superhuman shortcuts](https://blog.superhuman.com/) · [Linear Triage](https://linear.app/docs/triage) · [Gerrit attention set](https://gerrit-review.googlesource.com/Documentation/user-attention-set.html) · [GitHub reviews & suggested changes](https://docs.github.com/en/pull-requests) · [Stripe Radar reviews](https://docs.stripe.com/radar/reviews) · [Ramp policy agent](https://ramp.com/) · [GitLab Pajamas destructive actions](https://design.gitlab.com/patterns/destructive-actions) · [WCAG 1.4.1](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html) · [NN/g bulk actions](https://www.nngroup.com/articles/bulk-actions/)
+
+---
+
+## PART 11 — Execution record
+
+### AQ.0 — tell the truth (2026-08-07)
+
+Two one-line honesty fixes, no page involved.
+
+| File | What |
+|---|---|
+| `services/agents/approval-gate.service.ts` | `EXPIRY_HOURS` is now **exported**, with the note saying why: the glossary retyped the number and the two drifted. Any surface stating the clock reads it from here |
+| `.../fleet/glossary.tsx` | the `approval` entry said *"expire after 7 days"*; the gate has always used **24 hours**. Now correct, and it also states that expiry means refused rather than approved-by-default — the fact the old sentence left out |
+
+### AQ.1 — the page exists (2026-08-07)
+
+| File | What |
+|---|---|
+| `routes/agent-fleet-approvals.routes.ts` | **new** — `GET /agent/fleet/approvals/gate-state`. Its own file per the locks protocol; one line registers it in `index.ts` |
+| `app/fleet/approvals/page.tsx` | `PlannedPage` replaced by the real page. Stylesheet order copied from Workers, plus `fleet-sections.css` because the inbox it renders is built from `ap-*` |
+| `app/fleet/approvals/ApprovalsClient.tsx` | **new** — the standing promise, the "How approvals work" drawer, **AQ-S2 the gate state**, and the queue |
+| `app/fleet/approvals/approvals.css` | **new** — the `aq-` family |
+| `.../fleet/glossary.tsx` | one new term, `preview-only` |
+
+**The load-bearing decision: the queue itself is the shipped `<ApprovalInbox>`,
+imported unmodified.** Not copied, not forked. One decision surface is the rule
+this page gave the Map, Activity and Assignments streams, and it would be
+absurd to break it inside its own directory. AQ.3/AQ.4 rebuild the card here
+and the import goes away; until then the page is *the panel plus the truth*,
+which is strictly better than either and duplicates nothing.
+
+**What S2 actually says**, derived live rather than typed into copy: how many
+workers are at PROPOSE and how many could ever be (the cap is a code ceiling);
+how many of the fleet's actions can execute, computed as `typeof tool.execute
+=== 'function'` off the live registry so it cannot become a stale list; that
+**only the weekly council** reaches the queueing path, said explicitly because
+naming the sweep here would have been this page's own stale constant; what
+happens if nobody answers, in hours read from `EXPIRY_HOURS`; and — when there
+are any — the requests waiting *outside* the three fleet tools, which no view
+shows and which the sweep will delete.
+
+The blockers are computed server-side and rendered verbatim, so the sentence
+the operator reads cannot drift from the condition that produced it. When the
+pipe is open the whole section collapses to one green line.
+
+**Verified.** `tsc --noEmit` clean on both apps (0 errors in `apps/web`; the
+only API errors in the tree belonged to a sibling session's in-flight file).
+DS-conformance ratchet clean. Prod database probed read-only for every number
+in Part 1 — `_apx-probe.mts` and `_apx-autonomous.mts` are committed.
+
+**Not verified locally, and honestly so:** the endpoint's own response. Any
+script importing `tool-registry` pulls `mutate.tools.ts` → the outbound queue →
+BullMQ → Redis at module load, and Redis is unreachable from a laptop —
+`upstash.io` in the local `.env` is dead and `railway run` injects
+`redis.railway.internal`, which only resolves inside Railway's private network.
+So a local probe of `gate-state` cannot run in any environment available here.
+The *facts* it reports are each verified independently (the three tools have no
+`execute`, `approval-gate.service.ts:71-74` refuses to queue without one, six
+of seven charters cap at OBSERVE); the assembled response is verified on prod
+after deploy, which is the standing rule anyway.
+
+**Not built in this pass:** AQ.2 through AQ.10.

@@ -1,0 +1,263 @@
+/*
+ * NAF.AQ — the Approvals page's own rules.
+ *
+ * Prefix `aq-`, never `ap-`: `ap-*` belongs to fleet-sections.css (the AP.1–AP.8
+ * inbox), and this page loads BOTH stylesheets, so a shared prefix would be a
+ * silent collision on someone else's component.
+ *
+ * Colour is never the only carrier of meaning here (WCAG 1.4.1): every state
+ * that matters also carries a glyph and a word. The one thing on this page a
+ * beginner must not misread is "this queue is empty because it is blocked",
+ * so that block is the only element allowed to be visually loud.
+ */
+
+/* ── S1 · the standing promise ──────────────────────────────────────────── */
+
+.aq-promise {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid #cfe3d4;
+  border-left: 3px solid #2f855a;
+  border-radius: 6px;
+  background: #f3faf5;
+  color: #1c2530;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.aq-promise svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: #2f855a;
+}
+.aq-promise strong {
+  font-weight: 650;
+}
+
+/* ── S1 · how this works ────────────────────────────────────────────────── */
+
+.aq-how {
+  margin: 0 0 14px;
+}
+.aq-howbody {
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fbfcfd;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #3a4658;
+}
+.aq-howbody p {
+  margin: 0 0 8px;
+}
+.aq-howbody p:last-child {
+  margin-bottom: 0;
+}
+.aq-howbody strong {
+  color: #1c2530;
+  font-weight: 650;
+}
+.aq-howbody a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+/* ── S2 · the gate state ────────────────────────────────────────────────── */
+
+/* Open pipe: one quiet line. Blocked pipe: the section below. Exactly one of
+   the two is ever large — the queue-shape strip takes over when items exist. */
+.aq-gate-ok {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  color: #2f855a;
+}
+
+.aq-gate {
+  margin: 0 0 14px;
+  border: 1px solid #e6d6b8;
+  border-radius: 8px;
+  background: #fffdf6;
+  overflow: hidden;
+}
+.aq-gate-head {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 11px 13px;
+  border: 0;
+  background: transparent;
+  color: #1c2530;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: left;
+  cursor: pointer;
+}
+.aq-gate-head:hover {
+  background: #fffaeb;
+}
+.aq-gate-head svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: #a16207;
+}
+.aq-gate-head strong {
+  font-weight: 650;
+}
+.aq-gate-body {
+  padding: 0 13px 13px;
+}
+
+.aq-blockers {
+  margin: 0 0 12px;
+  padding: 0 0 0 18px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #3a4658;
+}
+.aq-blockers li {
+  margin: 0 0 5px;
+}
+
+.aq-gate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+.aq-gate-grid > div {
+  padding: 10px 11px;
+  border: 1px solid #eee6d4;
+  border-radius: 6px;
+  background: #fff;
+}
+.aq-gate-grid h4 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #6b7688;
+}
+.aq-gate-num {
+  margin: 0 0 4px;
+  font-size: 19px;
+  font-weight: 640;
+  color: #1c2530;
+  font-variant-numeric: tabular-nums;
+}
+.aq-gate-sub {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #3a4658;
+}
+.aq-gate-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.aq-toollist {
+  margin: 7px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.aq-toollist li {
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+  margin: 0 0 3px;
+  color: #3a4658;
+}
+/* Word first, colour second — readable in greyscale and to a screen reader. */
+.aq-can,
+.aq-cannot {
+  flex: 0 0 auto;
+  min-width: 78px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-align: center;
+}
+.aq-can {
+  border: 1px solid #bbe5c8;
+  background: #eefaf1;
+  color: #276749;
+}
+.aq-cannot {
+  border: 1px solid #e2e8f0;
+  background: #f4f6f9;
+  color: #6b7688;
+}
+
+.aq-outside {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 12px 0 0;
+  padding: 10px 11px;
+  border: 1px solid #f0c9c9;
+  border-left: 3px solid #c53030;
+  border-radius: 6px;
+  background: #fdf5f5;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #3a4658;
+}
+.aq-outside svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: #c53030;
+}
+.aq-outside a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+/* ── the queue card ─────────────────────────────────────────────────────── */
+
+.aq-queue {
+  margin: 0;
+}
+.aq-asof {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.aq-emptywhy {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #6b7688;
+}
+.aq-emptywhy svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.aq-err {
+  border-left: 3px solid #c53030;
+  padding-left: 10px;
+}
+
+@media (max-width: 640px) {
+  .aq-gate-grid {
+    grid-template-columns: 1fr;
+  }
+}
