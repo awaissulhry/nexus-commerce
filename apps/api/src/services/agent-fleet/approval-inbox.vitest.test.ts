@@ -212,7 +212,10 @@ describe('listInbox — AP.2', () => {
 
   it('oldest-first while waiting — the thing kept waiting longest is first', async () => {
     await listInbox('waiting')
-    expect(db.agentApproval.findMany.mock.calls[0]![0]!.orderBy).toEqual({ requestedAt: 'asc' })
+    // AP.8 added a track-record query ahead of this one, so find the inbox
+    // call by its shape rather than by position.
+    const inboxCall = db.agentApproval.findMany.mock.calls.find((c) => 'orderBy' in (c[0] ?? {}))
+    expect(inboxCall![0]!.orderBy).toEqual({ requestedAt: 'asc' })
   })
 
   it('caps the page rather than letting a caller ask for everything', async () => {

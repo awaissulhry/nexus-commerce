@@ -20,6 +20,7 @@ import {
   inboxCounts,
   listInbox,
   previewBulk,
+  recentPrecedents,
   rejectAllForCharter,
   resolveActor,
   undoScheduledApproval,
@@ -432,6 +433,15 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
     if (!out.ok) return reply.code(409).send(out)
     return out
   })
+
+  // NAF.AP.7 — the precedent the operator's decisions actually created. The
+  // decision card has always promised this; now it can be checked.
+  fastify.get<{ Querystring: { limit?: string } }>(
+    '/agent/fleet/precedents',
+    async (request) => {
+      return { precedents: await recentPrecedents(Number(request.query.limit) || 20) }
+    },
+  )
 
   // NAF.AP.4 — take back an approve that has not run yet.
   fastify.post<{ Params: { id: string } }>(

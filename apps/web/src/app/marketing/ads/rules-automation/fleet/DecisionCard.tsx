@@ -24,7 +24,16 @@
  */
 
 import { useState } from 'react'
-import { Check, ChevronDown, ChevronRight, FileText, ShieldAlert, X } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  FileText,
+  History,
+  RotateCcw,
+  ShieldAlert,
+  X,
+} from 'lucide-react'
 import { Term } from './glossary'
 import type { StoryPlan } from './PlanStory'
 
@@ -37,6 +46,10 @@ interface Approval {
   preview: Record<string, unknown> | null
   requestedAt: string
   expiresAt: string | null
+  /** AP.6 — why a previously-approved action came back unrun. */
+  reason?: string | null
+  /** AP.8 — how this worker's proposals of this kind have fared with you. */
+  trackRecord?: { approved: number; rejected: number; total: number } | null
 }
 
 export interface ToolCard {
@@ -201,8 +214,23 @@ export function DecisionCard({
   const heavy =
     approval.riskTier === 'high' || card.undoable === 'no' || card.undoable === 'unknown'
   const [showDetail, setShowDetail] = useState(heavy)
+
   const [rejecting, setRejecting] = useState(false)
   const [reason, setReason] = useState('')
+  // AP.8 — the Article 14 gate. For a high-risk or irreversible action,
+  // approving takes a deliberate act, not a reflex. Everything is still
+  // SHOWN (AP.3's promise); what changes is that the button waits for a
+  // person to say they have read it. Applied here only — blanket friction
+  // is what trains the click-through it exists to prevent.
+  // The gate applies exactly where the card is already heavy. An
+  // unrecorded consequence is described to the operator as "treat it as
+  // something that cannot be undone" — gating it too is the only way the
+  // words and the behaviour agree. In practice this is high risk and
+  // irreversible actions only; every fleet tool is mapped, so it does not
+  // become the blanket friction that breeds click-through.
+  const needsAck = heavy
+  const [acknowledged, setAcknowledged] = useState(false)
+  const approveBlocked = needsAck && !acknowledged
 
   // Evidence chain: the plan that queued this approval, and its matching item.
   const plan = plans.find((p) => p.approvalIds?.includes(approval.id))
@@ -216,7 +244,9 @@ export function DecisionCard({
       <div className="acr-fl-dcard-head">
         <strong>{workerName}</strong> {card.wants}
         <span className="ap-chips">
-          <span className={`dt-risk r-${approval.riskTier}`}>{approval.riskTier} risk</span>
+          <Term k="risk-tier">
+            <span className={`dt-risk r-${approval.riskTier}`}>{approval.riskTier} risk</span>
+          </Term>
           <span className={`ap-undo u-${card.undoable}`}>{UNDO_WORD[card.undoable]}</span>
         </span>
         <span className="acr-fl-sub">{ago(approval.requestedAt)}</span>
@@ -225,6 +255,38 @@ export function DecisionCard({
       <p className="acr-fl-dcard-what">
         {summary ?? 'This action did not describe itself — read the details below before deciding.'}
       </p>
+
+      {/* AP.8 — automation bias is the named failure mode. A worker whose
+          last suggestions of this exact kind you rejected deserves a slower
+          read, so its record sits next to the ask rather than buried. */}
+      {approval.trackRecord && approval.trackRecord.total > 0 ? (
+        <p
+          className={`ap-record${
+            approval.trackRecord.rejected > approval.trackRecord.approved ? ' doubted' : ''
+          }`}
+        >
+          <History size={12} aria-hidden />
+          You have answered {approval.trackRecord.total} of these from this worker before —{' '}
+          {approval.trackRecord.approved} approved, {approval.trackRecord.rejected} rejected.
+          {approval.trackRecord.rejected > approval.trackRecord.approved
+            ? ' You have said no more often than yes.'
+            : ''}
+        </p>
+      ) : null}
+
+      {/* AP.6 — this was approved once and refused at run time because the
+          facts had moved. Handing it back silently would be the worst of
+          both worlds, so the card says what happened. */}
+      {approval.reason?.startsWith('not run —') ? (
+        <p className="ap-cameback">
+          <RotateCcw size={12} aria-hidden />
+          <span>
+            <strong>You approved this before, and it did not run.</strong>{' '}
+            {approval.reason.replace(/^not run — /, '')} — it is back here so you can decide
+            again with the facts as they are now.
+          </span>
+        </p>
+      ) : null}
 
       {heavy ? (
         <p className="ap-heavy-note">
@@ -287,10 +349,29 @@ export function DecisionCard({
         </button>
       ) : null}
 
+      {needsAck ? (
+        <label className="ap-ack">
+          <input
+            type="checkbox"
+            checked={acknowledged}
+            onChange={(e) => setAcknowledged(e.target.checked)}
+          />
+          <span>
+            I have read what this does
+            {card.undoable === 'no' ? ' — and that it cannot be undone' : ''}.
+          </span>
+        </label>
+      ) : null}
+
       <div className="acr-fl-apactions">
         <button
           className="acr-btn go"
-          disabled={busy}
+          disabled={busy || approveBlocked}
+          title={
+            approveBlocked
+              ? 'Tick the box above first — this one is high risk or cannot be undone.'
+              : undefined
+          }
           onClick={() => onDecide(approval.id, 'approve')}
         >
           <Check size={13} /> {card.approveLabel}
@@ -323,7 +404,8 @@ export function DecisionCard({
       <p className="acr-fl-dcard-teach">
         Your decision — and especially a reject reason — becomes{' '}
         <Term k="exemplar">precedent</Term> the workers read on their next run. It is recorded
-        against your name.
+        against your name, and approving gives you an{' '}
+        <Term k="undo-window">undo window</Term> before anything happens.
       </p>
     </div>
   )

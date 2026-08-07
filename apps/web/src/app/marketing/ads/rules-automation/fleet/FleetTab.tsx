@@ -31,6 +31,7 @@ import {
   type ApprovalRow,
   type InboxCounts,
   type InboxView,
+  type PrecedentRow,
 } from './ApprovalInbox'
 import {
   EntityGraphCanvas,
@@ -152,6 +153,9 @@ export function FleetTab() {
   const [inboxView, setInboxView] = useState<InboxView>('waiting')
   const [inboxCounts, setInboxCounts] = useState<InboxCounts>({ waiting: 0, decided: 0, expired: 0 })
   const [inboxLoading, setInboxLoading] = useState(false)
+  // NAF.AP.7 — the precedent those decisions created, so the card's promise
+  // can be checked rather than taken on trust.
+  const [precedents, setPrecedents] = useState<PrecedentRow[]>([])
   const [sweeps, setSweeps] = useState<SweepRow[]>([])
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -172,7 +176,7 @@ export function FleetTab() {
   const load = useCallback(async (opts: { silent?: boolean } = {}) => {
     if (!opts.silent) setLoading(true)
     try {
-      const [c, g, s, r, f, p, a, sw, sch, sc, tl] = await Promise.all([
+      const [c, g, s, r, f, p, a, sw, sch, sc, tl, pr] = await Promise.all([
         fetch(`${backend}/api/agent/fleet/charters`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/graph`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/state`, { cache: 'no-store' }),
@@ -184,6 +188,7 @@ export function FleetTab() {
         fetch(`${backend}/api/agent/fleet/schedule`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/scorecards?limit=40`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/timeline?limit=40`, { cache: 'no-store' }),
+        fetch(`${backend}/api/agent/fleet/precedents?limit=25`, { cache: 'no-store' }),
       ])
       if (!c.ok) throw new Error(`charters: ${c.status}`)
       setCharters(((await c.json()) as { charters: CharterRow[] }).charters)
@@ -205,6 +210,7 @@ export function FleetTab() {
       if (sch.ok) setSchedule(((await sch.json()) as { jobs: ScheduleJob[] }).jobs)
       if (sc.ok) setScorecards(((await sc.json()) as { scorecards: ScorecardRow[] }).scorecards)
       if (tl.ok) setTimeline((await tl.json()) as FleetTimelinePage)
+      if (pr.ok) setPrecedents(((await pr.json()) as { precedents: PrecedentRow[] }).precedents)
       setUpdatedAt(Date.now())
       setInboxLoading(false)
       setErr(null)
@@ -667,6 +673,7 @@ export function FleetTab() {
           view={inboxView}
           counts={inboxCounts}
           approvals={approvals}
+          precedents={precedents}
           plans={plans}
           nameByKey={nameByKey}
           busy={busy}

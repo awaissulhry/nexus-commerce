@@ -119,6 +119,18 @@ export const GLOSSARY: Record<string, { title: string; body: string }> = {
     title: 'Fleet status',
     body: 'Whether the fleet is allowed to start runs. A halt — yours, or the automatic circuit breaker’s — stops every worker; the deterministic ad engines are unaffected.',
   },
+  'risk-tier': {
+    title: 'Risk tier',
+    body: 'How much a single action can cost you if it is wrong — low, medium or high. It is set in code per tool, not by the worker, and it decides how much of the card is shown: a reversible bid nudge is compact, a high-risk action opens in full and needs you to confirm you have read it.',
+  },
+  'undo-window': {
+    title: 'The undo window',
+    body: 'Approving does not fire immediately. The action waits 20 seconds, during which nothing has reached Amazon and one click takes it back. If you close the tab, it still runs — the decision is saved the moment you make it, only the execution waits.',
+  },
+  staleness: {
+    title: 'Stale approval',
+    body: 'An approval describes the world as it was when you read it. If the facts move before it runs — the bid you were moving from has changed, the term is already negated, a pin was added — it is refused rather than executed, and handed back to you with what changed.',
+  },
   'trust-ladder': {
     title: 'The trust ladder',
     body: 'OFF → OBSERVE (watch only) → PROPOSE (asks you) → AUTO (acts, narrowly). Each rung is earned with evidence over weeks, never granted by default — and misbehaviour drops a rung automatically.',

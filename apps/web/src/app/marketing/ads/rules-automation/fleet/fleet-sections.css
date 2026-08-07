@@ -294,6 +294,67 @@
 .ap-schedwhat { font-size: 12.5px; font-weight: 600; color: #14724d; overflow-wrap: anywhere; }
 .ap-schedmeta { font-size: 11.5px; color: #4d7a63; font-variant-numeric: tabular-nums; }
 
+/* ── AP.8: the track record, and the Article 14 gate ───────────────── */
+
+.ap-record {
+  display: flex; align-items: flex-start; gap: 6px;
+  margin: 6px 0 2px; padding: 6px 9px;
+  background: #f7f9fc; border-left: 2px solid #dfe5ec; border-radius: 0 5px 5px 0;
+  font-size: 11.5px; color: #5a6675; line-height: 1.5;
+}
+.ap-record svg { flex-shrink: 0; margin-top: 2px; }
+/* When you have said no more often than yes, the record earns more weight —
+   never colour alone: the sentence itself says so too. */
+.ap-record.doubted {
+  background: #fff8ec; border-left-color: #ecd9ae; color: #7a5c1e;
+}
+
+.ap-ack {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 10px 0 2px; padding: 9px 11px;
+  background: #fffdf9; border: 1px solid #ecd9ae; border-radius: 7px;
+  font-size: 12px; color: #6b5522; line-height: 1.5; cursor: pointer;
+}
+.ap-ack input { width: 15px; height: 15px; margin-top: 1px; cursor: pointer; accent-color: #8a6320; }
+.ap-ack:hover { background: #fffaf1; }
+
+/* ── AP.6: an action handed back because the facts moved ───────────── */
+
+.ap-cameback {
+  display: flex; align-items: flex-start; gap: 7px;
+  margin: 6px 0 2px; padding: 8px 10px;
+  background: #fff8ec; border: 1px solid #ecd9ae; border-radius: 7px;
+  font-size: 11.5px; color: #7a5c1e; line-height: 1.55;
+}
+.ap-cameback svg { flex-shrink: 0; margin-top: 2px; }
+.ap-cameback strong { font-weight: 650; }
+
+/* ── AP.7: the precedent a decision created ────────────────────────── */
+
+.ap-precedents { margin-top: 12px; padding-top: 10px; border-top: 1px solid #f0f3f7; }
+.ap-precedents .acr-fl-checkstoggle { display: inline-flex; align-items: center; gap: 6px; }
+
+.ap-precedentlist {
+  list-style: none; margin: 8px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.ap-precedentlist li {
+  display: grid; grid-template-columns: auto 1fr; gap: 9px; align-items: start;
+  padding: 7px 8px; background: #fbfcfe; border: 1px solid #eef2f7; border-radius: 6px;
+}
+.ap-plabel {
+  display: inline-flex; align-items: center; padding: 1px 7px;
+  border-radius: 999px; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.03em;
+  border: 1px solid #dfe5ec; background: #f1f4f8; color: #5a6675; white-space: nowrap;
+}
+.ap-plabel.l-accepted { background: #f1faf5; border-color: #c3e5d3; color: #14724d; }
+.ap-plabel.l-rejected { background: #fdf2f2; border-color: #e6bcba; color: #9c2f2a; }
+.ap-ptext {
+  min-width: 0; font-size: 12px; color: #46525f; line-height: 1.5;
+  display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere;
+}
+
 /* ── decided / expired history ─────────────────────────────────────── */
 
 .ap-decidedlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }

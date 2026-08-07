@@ -29,6 +29,10 @@ export type ControlAction =
   | 'approve_action'
   | 'reject_action'
   | 'undo_approval'
+  // NAF.AP.6 — an approved action refused at run time because the facts it
+  // described had moved. Recorded because a silent non-execution is worse
+  // than a failure nobody can explain.
+  | 'stale_refused'
 
 export async function recordControlChange(input: {
   charterKey: string

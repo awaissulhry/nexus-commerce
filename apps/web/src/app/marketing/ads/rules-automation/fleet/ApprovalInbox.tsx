@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Check, Clock, Timer, Undo2, X } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, ChevronRight, Clock, GraduationCap, Timer, Undo2, X } from 'lucide-react'
 import { DecisionCard, TOOL_CARDS, toolCardFor } from './DecisionCard'
 import { Term } from './glossary'
 import type { StoryPlan } from './PlanStory'
@@ -40,6 +40,17 @@ export interface ApprovalRow {
   /** AP.4 — set while an approved action is waiting out its undo window. */
   executeAfter: string | null
   isFleet: boolean
+  /** AP.8 — how this worker's proposals of this kind have fared with you. */
+  trackRecord?: { approved: number; rejected: number; total: number } | null
+}
+
+/** AP.7 — one thing a past decision taught the fleet. */
+export interface PrecedentRow {
+  charterKey: string
+  label: string
+  note: string | null
+  toolName: string | null
+  createdAt: string
 }
 
 export interface InboxCounts {
@@ -134,7 +145,9 @@ function DecidedRow({ row, workerName }: { row: ApprovalRow; workerName: string 
           <span className="dt-sep">·</span>
           {ago(when)}
           <span className="dt-sep">·</span>
-          <span className={`dt-risk r-${row.riskTier}`}>{row.riskTier} risk</span>
+          <Term k="risk-tier">
+            <span className={`dt-risk r-${row.riskTier}`}>{row.riskTier} risk</span>
+          </Term>
           {!row.isFleet ? (
             <>
               <span className="dt-sep">·</span>
@@ -201,9 +214,14 @@ function ScheduledRow({
           Approved — {workerName} will {card.shortAsk}
         </span>
         <span className="ap-schedmeta">
-          {left > 0
-            ? `Running in ${left} second${left === 1 ? '' : 's'}. Nothing has reached Amazon yet.`
-            : 'Running now…'}
+          {left > 0 ? (
+            <>
+              Running in {left} second{left === 1 ? '' : 's'} — the{' '}
+              <Term k="undo-window">undo window</Term>. Nothing has reached Amazon yet.
+            </>
+          ) : (
+            'Running now…'
+          )}
         </span>
       </span>
       {left > 0 ? (
@@ -215,12 +233,63 @@ function ScheduledRow({
   )
 }
 
+/* ── AP.7: what the decisions actually taught ──────────────────────────── */
+
+/**
+ * The decision card promises that every yes or no "becomes precedent the
+ * workers read on their next run". That promise was unverifiable — and
+ * `AgentExemplar` had zero rows, so it had never once been true. This makes
+ * it checkable: the precedents that exist, in the operator's own words.
+ */
+function PrecedentPanel({
+  precedents,
+  nameOf,
+}: {
+  precedents: PrecedentRow[]
+  nameOf: (k: string | null) => string
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="ap-precedents">
+      <button className="acr-fl-checkstoggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        <GraduationCap size={13} aria-hidden />
+        {precedents.length === 0
+          ? 'Your decisions have not taught the fleet anything yet'
+          : `What your decisions have taught the fleet (${precedents.length})`}
+      </button>
+      {open ? (
+        precedents.length === 0 ? (
+          <p className="acr-fl-empty">
+            No <Term k="exemplar">precedent</Term> exists yet, because no fleet approval has
+            been decided. The first yes or no you give here becomes the first one.
+          </p>
+        ) : (
+          <ul className="ap-precedentlist">
+            {precedents.map((p, i) => (
+              <li key={i}>
+                <span className={`ap-plabel l-${p.label}`}>{p.label}</span>
+                <span className="ap-ptext">
+                  <strong>{nameOf(p.charterKey)}</strong>
+                  {p.toolName ? ` · ${p.toolName.replace(/-/g, ' ')}` : ''}
+                  {p.note ? <span className="ap-reason">“{p.note}”</span> : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : null}
+    </div>
+  )
+}
+
 /* ── the panel ─────────────────────────────────────────────────────────── */
 
 export function ApprovalInbox({
   view,
   counts,
   approvals,
+  precedents,
   plans,
   nameByKey,
   busy,
@@ -237,6 +306,7 @@ export function ApprovalInbox({
   view: InboxView
   counts: InboxCounts
   approvals: ApprovalRow[]
+  precedents: PrecedentRow[]
   plans: StoryPlan[]
   nameByKey: Map<string, string>
   busy: boolean
@@ -455,6 +525,8 @@ export function ApprovalInbox({
           ))}
         </ul>
       )}
+
+      <PrecedentPanel precedents={precedents} nameOf={nameOf} />
 
       {view === 'decided' && counts.decided > 0 ? (
         <p className="acr-fl-sub ap-foot">

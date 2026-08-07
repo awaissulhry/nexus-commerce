@@ -27,6 +27,7 @@
  */
 import prisma from '../../db.js'
 import { decideApproval } from '../agents/approval-gate.service.js'
+import { getTool } from '../agents/tool-registry.js'
 import { recordControlChange } from './control-audit.service.js'
 import { mintExemplarFromDecision } from './exemplar.service.js'
 import { logger } from '../../utils/logger.js'
@@ -94,6 +95,7 @@ export async function inboxCounts(): Promise<InboxCounts> {
 }
 
 export async function listInbox(view: InboxView, limit = 100) {
+  const records = view === 'waiting' ? await trackRecords() : {}
   const approvals = await prisma.agentApproval.findMany({
     where: whereFor(view),
     orderBy: view === 'waiting' ? { requestedAt: 'asc' } : { decidedAt: 'desc' },
@@ -114,6 +116,12 @@ export async function listInbox(view: InboxView, limit = 100) {
      * hiding them — see the header note.
      */
     isFleet: FLEET_TOOLS.includes(a.toolName),
+    /**
+     * AP.8 — how this worker's proposals of this kind have fared with you
+     * before. Null when there is no history, which is itself worth saying.
+     */
+    trackRecord:
+      records[`${runById.get(a.agentRunId)?.agentKey ?? 'unknown'}::${a.toolName}`] ?? null,
   }))
 }
 
@@ -285,6 +293,33 @@ export async function commitScheduledApproval(
     return { ok: false, error: 'still inside the undo window' }
   }
 
+  // AP.6 — the world may have moved while this sat parked. Re-validate
+  // BEFORE releasing it: an approval describes a state of the world, and if
+  // that state changed the approval no longer describes anything real.
+  const staleness = await checkStaleness(id)
+  if (staleness.stale) {
+    // Back to pending, with the reason on the row. Expiring it would throw
+    // the operator's decision away; this hands it back with fresh facts.
+    await prisma.agentApproval.updateMany({
+      where: { id, status: 'scheduled' },
+      data: {
+        status: 'pending',
+        decidedBy: null,
+        decidedAt: null,
+        executeAfter: null,
+        reason: `not run — ${staleness.why}`,
+      },
+    })
+    await recordControlChange({
+      charterKey: await charterKeyOf(id),
+      action: 'stale_refused',
+      to: { approvalId: id },
+      note: staleness.why,
+      actor: ap.decidedBy ?? 'unattributed',
+    }).catch(() => undefined)
+    return { ok: false, error: `not run — ${staleness.why}` }
+  }
+
   // Hand back to the gate, which owns execution. It expects `pending`, so
   // release the park atomically — if that loses a race, someone else has it.
   const release = await prisma.agentApproval.updateMany({
@@ -307,6 +342,151 @@ export async function commitScheduledApproval(
     actor: actorLabel,
   }).catch((err) => logger.error('[naf-ap] control audit failed', { id, error: String(err) }))
 
+  return out
+}
+
+/* ── AP.6: an approval that no longer applies must not run ─────────────── */
+
+/**
+ * The fields whose change invalidates an approval. Not every difference
+ * matters — a metrics window ticking over is noise — but the value the
+ * operator was shown as the STARTING point does: "move this bid from €0.42
+ * to €0.25" is a different decision if the bid is €0.60 by the time it runs.
+ */
+const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
+  'set-target-bid': ['currentBidCents'],
+  'create-negative-keyword': ['matchType', 'scope', 'alreadyNegated'],
+  'graduate-keyword': ['suggestedBidCents'],
+}
+
+export interface StalenessVerdict {
+  stale: boolean
+  /** Plain sentence naming what moved. Null when nothing did. */
+  why: string | null
+}
+
+const money = (c: unknown) => (typeof c === 'number' ? `€${(c / 100).toFixed(2)}` : String(c))
+
+/**
+ * Re-validate an approval against the world as it is NOW.
+ *
+ * It re-runs the tool's OWN dry-run handler — the same code that produced
+ * the preview the operator read — so this check can never drift from what
+ * they were shown. If the handler now refuses (the term is already negated,
+ * a pin was added, the target vanished), that refusal is the answer.
+ */
+export async function checkStaleness(approvalId: string): Promise<StalenessVerdict> {
+  const ap = await prisma.agentApproval.findUnique({
+    where: { id: approvalId },
+    select: { toolName: true, args: true, preview: true },
+  })
+  if (!ap) return { stale: true, why: 'the request no longer exists' }
+
+  const tool = getTool(ap.toolName)
+  if (!tool?.handler) return { stale: false, why: null } // nothing to re-check against
+
+  let fresh: Awaited<ReturnType<NonNullable<typeof tool.handler>>>
+  try {
+    fresh = await tool.handler((ap.args ?? {}) as Record<string, unknown>, { userId: null })
+  } catch (err) {
+    // A re-check that cannot run is not permission to proceed.
+    return { stale: true, why: `it could not be re-checked: ${String(err)}` }
+  }
+  if (!fresh.ok) {
+    return { stale: true, why: fresh.error ?? 'it is no longer a valid action' }
+  }
+
+  const before = (ap.preview ?? {}) as Record<string, unknown>
+  const after = (fresh.preview ?? {}) as Record<string, unknown>
+  const moved: string[] = []
+  for (const key of MATERIAL_PREVIEW_FIELDS[ap.toolName] ?? []) {
+    if (!(key in before)) continue
+    if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+      moved.push(
+        key.toLowerCase().includes('cents')
+          ? `${key} changed from ${money(before[key])} to ${money(after[key])}`
+          : `${key} changed from ${JSON.stringify(before[key])} to ${JSON.stringify(after[key])}`,
+      )
+    }
+  }
+  if (moved.length > 0) {
+    return {
+      stale: true,
+      why: `the facts moved since you approved it — ${moved.join('; ')}`,
+    }
+  }
+  return { stale: false, why: null }
+}
+
+/* ── AP.7: the precedent a decision actually created ───────────────────── */
+
+export interface PrecedentRow {
+  charterKey: string
+  label: string
+  note: string | null
+  toolName: string | null
+  createdAt: string
+}
+
+/**
+ * The card promises that a decision "becomes precedent the workers read on
+ * their next run". That promise was unverifiable — this makes it visible.
+ * Recency-first, matching how the charter prompt actually retrieves them.
+ */
+export async function recentPrecedents(limit = 20): Promise<PrecedentRow[]> {
+  const rows = await prisma.agentExemplar.findMany({
+    where: { active: true },
+    orderBy: { createdAt: 'desc' },
+    take: Math.min(limit, 100),
+    select: {
+      charterKey: true,
+      label: true,
+      operatorNote: true,
+      situation: true,
+      createdAt: true,
+    },
+  })
+  return rows.map((r) => ({
+    charterKey: r.charterKey,
+    label: r.label,
+    note: r.operatorNote,
+    toolName: (r.situation as { toolName?: string } | null)?.toolName ?? null,
+    createdAt: r.createdAt.toISOString(),
+  }))
+}
+
+/* ── AP.8: the track record, against automation bias ───────────────────── */
+
+export interface TrackRecord {
+  approved: number
+  rejected: number
+  total: number
+}
+
+/**
+ * How this worker's proposals of this kind have fared with you before.
+ * Article 14 names automation bias — over-relying on the machine's output —
+ * as the thing an oversight interface must counter. A worker whose last six
+ * suggestions of this exact kind you rejected deserves a slower read.
+ */
+export async function trackRecords(): Promise<Record<string, TrackRecord>> {
+  const rows = await prisma.agentApproval.findMany({
+    where: { status: { in: ['approved', 'executed', 'rejected'] } },
+    select: { toolName: true, status: true, agentRunId: true },
+  })
+  const runs = await prisma.agentRun.findMany({
+    where: { id: { in: [...new Set(rows.map((r) => r.agentRunId))] } },
+    select: { id: true, agentKey: true },
+  })
+  const keyOf = new Map(runs.map((r) => [r.id, r.agentKey]))
+  const out: Record<string, TrackRecord> = {}
+  for (const r of rows) {
+    const k = `${keyOf.get(r.agentRunId) ?? 'unknown'}::${r.toolName}`
+    const rec = (out[k] ??= { approved: 0, rejected: 0, total: 0 })
+    if (r.status === 'rejected') rec.rejected++
+    else rec.approved++
+    rec.total++
+  }
   return out
 }
 

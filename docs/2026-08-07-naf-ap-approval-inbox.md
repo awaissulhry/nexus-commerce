@@ -400,8 +400,56 @@ rows. The council test now asserts the *old clock cannot come back*.
 
 **Gates:** schema + column drift clean · DS ratchet clean · `tsc` clean.
 
-**Not built yet:** AP.6 (staleness), AP.7 (precedent delivered), AP.8
-(Article 14 gate + teaching gate).
+---
+
+## 6d · Execution record — AP.6–AP.8 built 2026-08-07 (series complete)
+
+**AP.6 — staleness.** An approval describes a state of the world; if that
+state moves, it no longer describes anything real. At commit time the
+approval is re-validated by **re-running the tool's own dry-run handler** —
+the same code that produced the preview the operator read — so the check can
+never drift from what they were shown. If the handler now refuses (term
+already negated, a pin added, target gone) that refusal *is* the answer;
+otherwise a per-tool list of **material** preview fields is compared, so a
+metrics window ticking over is ignored but "the bid you were moving from" is
+not. A refusal **hands the decision back** to `pending` with the reason
+attached and the old decision cleared — nobody is credited with a decision
+that never ran — and the card explains why it returned. A re-check that
+cannot run counts as stale, never as permission.
+
+**AP.7 — precedent, delivered.** The card has always promised that decisions
+"become precedent the workers read on their next run", and `AgentExemplar`
+had zero rows, so it had never once been true. A `/precedents` endpoint and
+a panel now show what exists, in the operator's own words — and when nothing
+exists it says so plainly rather than implying otherwise.
+
+**AP.8 — against the rubber stamp.** Each waiting card carries the worker's
+**track record for that exact action** ("you have answered 5 of these
+before — 1 approved, 4 rejected. You have said no more often than yes"),
+which is the automation-bias countermeasure Article 14 names. Approving a
+heavy card now takes a deliberate tick: *"I have read what this does — and
+that it cannot be undone."* The gate lands exactly where the card is already
+heavy. That is slightly wider than "high-risk only", and deliberately so:
+the fallback copy tells the operator to treat an unrecorded consequence as
+irreversible, so gating it is the only way the words and the behaviour
+agree. Every fleet tool is mapped, so this is not blanket friction.
+
+Teaching gate: three new glossary entries (`risk-tier`, `undo-window`,
+`staleness`) wired to the terms that introduce them.
+
+**Verified end to end against real code.** A pending approval pointing at a
+non-existent target — a genuinely stale approval — was approved, parked, and
+committed after the window: **refused** with *"not run — target … not found
+(or is a negative)"*, and handed back to `pending` with `decidedBy` cleared
+and the reason on the row. In the browser: the precedent panel, the track
+record, and the gate (approve **disabled** before the tick, enabled after,
+low-risk still one click). **Seeded row and its audit rows deleted — the
+database is back to 18 approvals, 0 audit rows, 0 exemplars.**
+
+Tests: 14 new; **277 passing across 34 files**. Gates: DS ratchet clean ·
+RBAC 0 unmapped · `tsc` clean.
+
+**AP series complete.** Remaining known gaps are recorded below.
 
 ---
 
