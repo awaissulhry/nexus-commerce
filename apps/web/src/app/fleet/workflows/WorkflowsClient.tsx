@@ -425,6 +425,17 @@ export function WorkflowsClient() {
                             {last.runs > 1 ? ` · ${last.runs} workers` : ''}
                           </span>
                         </>
+                      ) : job?.lastRun ? (
+                        /* Dagster's tick-vs-run lesson: the clock firing and
+                           launching nothing IS the answer to "why didn't it
+                           run?" — say it, don't show a bare "never". */
+                        <>
+                          <span className="acr-pg-muted">no runs yet</span>
+                          <span className="wf-sub">
+                            clock last fired {ago(new Date(job.lastRun.startedAt).getTime())} and
+                            launched nothing — every worker was off
+                          </span>
+                        </>
                       ) : (
                         <span className="acr-pg-muted">never run</span>
                       )}
