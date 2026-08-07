@@ -454,7 +454,11 @@ export function ApprovalsClient() {
             {view === 'waiting'
               ? 'Waiting for you'
               : view === 'decided'
-                ? 'What you already decided'
+                ? /* NOT "what you already decided" — every row in there today says
+                     "nobody recorded" and is labelled pre-fleet, so the heading would
+                     credit the operator with 18 decisions they never took. That is the
+                     exact trust hazard the study names for day one. */
+                  'The decision record'
                 : 'Ran out of time'}
           </h3>
           <span className="acr-fl-sub aq-asof">
