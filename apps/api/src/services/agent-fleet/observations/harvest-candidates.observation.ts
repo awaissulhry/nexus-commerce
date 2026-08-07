@@ -5,8 +5,17 @@
  */
 import prisma from '../../../db.js'
 import { previewHarvest } from '../../advertising/ads-harvest.service.js'
-import type { ObservationBuilder } from '../observation-builder.js'
-import { filterToMarketplace } from './scope-filter.js'
+import type { ObservationBuilder, ObservationNarrow } from '../observation-builder.js'
+import { filterToCampaigns, filterToMarketplace } from './scope-filter.js'
+
+interface HarvestCandidatesPayload {
+  scope: string
+  counts: Record<string, number>
+  caveats: string[]
+  graduations: { externalCampaignId?: string }[]
+  productGraduations: { externalCampaignId?: string }[]
+  [k: string]: unknown
+}
 
 const GRADUATIONS_CAP = 25
 const PRODUCT_GRADUATIONS_CAP = 10
@@ -47,6 +56,41 @@ export const harvestCandidatesBuilder: ObservationBuilder = {
         productGraduations: scopedProdGrad.kept.slice(0, PRODUCT_GRADUATIONS_CAP),
       },
       dataVintage: new Date(maxDate.getTime() + 24 * 3600_000),
+    }
+  },
+
+  /** NAF.SB.AS — see negative-candidates.observation.ts for the full
+   *  rationale. Pure in-memory: graduation candidates already carry
+   *  `externalCampaignId`. */
+  narrow(payload, narrow: ObservationNarrow) {
+    const p = payload as HarvestCandidatesPayload
+    const ids = narrow.campaignExternalIds
+    const grad = filterToCampaigns(p.graduations, ids)
+    const prodGrad = filterToCampaigns(p.productGraduations, ids)
+    const label =
+      narrow.campaignLabels && narrow.campaignLabels.length
+        ? narrow.campaignLabels.join(', ')
+        : `${ids?.length ?? 0} campaign(s)`
+
+    return {
+      ...p,
+      scope: `campaigns:${ids?.length ?? 0}`,
+      graduations: grad.kept,
+      productGraduations: prodGrad.kept,
+      counts: {
+        ...p.counts,
+        graduationsTotal: grad.kept.length,
+        graduationsTrimmed: 0,
+        productGraduationsTotal: prodGrad.kept.length,
+        droppedOutOfScope:
+          (p.counts.droppedOutOfScope ?? 0) + grad.droppedOutOfScope + prodGrad.droppedOutOfScope,
+        unresolvedCampaign:
+          (p.counts.unresolvedCampaign ?? 0) + grad.unresolved + prodGrad.unresolved,
+      },
+      caveats: [
+        `This run is narrowed to ${label}. ${grad.droppedOutOfScope + prodGrad.droppedOutOfScope} candidate(s) from other campaigns were dropped. Finding fewer things than an account-wide run is the expected result, not a fault.`,
+        ...p.caveats.slice(1),
+      ],
     }
   },
 }

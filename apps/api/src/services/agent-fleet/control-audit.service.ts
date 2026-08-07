@@ -33,6 +33,12 @@ export type ControlAction =
   // described had moved. Recorded because a silent non-execution is worse
   // than a failure nobody can explain.
   | 'stale_refused'
+  // NAF.SB.AS — the two human endings of an assignment. Starting one reuses
+  // `run_now` above rather than minting a synonym: it is the same event —
+  // a person deliberately spending money on a worker — and two words for it
+  // would split the trail Controls reads.
+  | 'assignment_closed'
+  | 'assignment_cancelled'
 
 export async function recordControlChange(input: {
   charterKey: string

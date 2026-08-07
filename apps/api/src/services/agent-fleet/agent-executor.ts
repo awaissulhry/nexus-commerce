@@ -35,7 +35,12 @@ import { resolveCharter } from './charter-registry.js'
 import type { EffectiveCharter } from './charter-types.js'
 import { getFleetState } from './fleet-state.service.js'
 import { renderExemplarBlock, retrieveExemplars } from './exemplar.service.js'
-import { getObservation, type ObservationResult } from './observation-builder.js'
+import {
+  getObservation,
+  type ObservationNarrow,
+  type ObservationResult,
+} from './observation-builder.js'
+import { resolveAssignmentScope } from './assignment-scope.js'
 import { singleMarketplace } from './observations/scope-filter.js'
 import { pickRevisionForRun } from './charter-revisions.service.js'
 import { recordStep } from './tracing.js'
@@ -60,6 +65,22 @@ export interface ExecuteOptions {
    *  that this run serves. Null/absent = a code-path or manual run. */
   workflowKey?: string
   workflowRevisionId?: string
+  /** NAF.SB.AS — the assignment that caused this run. */
+  assignmentId?: string
+  /**
+   * NAF.SB.AS — the assignment's target, narrowing this run's evidence.
+   *
+   * Enforced at exactly one place: the `getObservation` call below, which is
+   * the ONLY non-test call site in the codebase. Nothing downstream
+   * re-checks scope — not `buildPrompt`, not `runOrQueueTool` — so a
+   * constraint that does not bind here does not bind at all.
+   */
+  assignmentTarget?: {
+    kind: 'CAMPAIGN' | 'MARKETPLACE'
+    /** Amazon EXTERNAL campaign ids, or marketplace codes. */
+    ids: string[]
+    labels?: string[]
+  }
 }
 
 export interface ExecuteResult {
@@ -250,6 +271,21 @@ export async function executeCharter(
     const fleetDay = await checkFleetDayBudget(fleetCeilingUSD)
     if (!fleetDay.ok) haltedReason = `${fleetDay.reason}: ${fleetDay.detail}`
   }
+  // NAF.SB.AS — the assignment's target, resolved against the worker's own
+  // scope. Inside the gate ladder deliberately: a target that no longer
+  // resolves halts BEFORE the provider, so a stale scope costs $0. The
+  // intersection law and the never-fall-through-to-account-wide rule both
+  // live in assignment-scope.ts.
+  let assignmentNarrow: ObservationNarrow | undefined
+  let assignmentMarketplace: string | undefined
+  if (!haltedReason && opts.assignmentTarget) {
+    const resolved = await resolveAssignmentScope(charter, opts.assignmentTarget)
+    if (resolved.error) haltedReason = resolved.error
+    else {
+      assignmentNarrow = resolved.narrow
+      assignmentMarketplace = resolved.marketplace
+    }
+  }
   if (haltedReason) {
     const run = await prisma.agentRun
       .create({
@@ -285,6 +321,13 @@ export async function executeCharter(
       orchestrationId: opts.orchestrationId ?? null,
       workflowKey: opts.workflowKey ?? null,
       workflowRevisionId: opts.workflowRevisionId ?? null,
+      assignmentId: opts.assignmentId ?? null,
+      // NAF.SB.AS — entityType/entityId have existed and been indexed since
+      // the fleet shipped, and nothing has ever written them. Stamping the
+      // target here makes "which runs ever touched campaign X" answerable
+      // from an index that already exists, for free.
+      entityType: opts.assignmentTarget?.kind ?? null,
+      entityId: opts.assignmentTarget?.ids?.[0] ?? null,
       trigger: opts.trigger,
       status: 'running',
       userId: opts.userId ?? null,
@@ -292,6 +335,16 @@ export async function executeCharter(
         charterKey: key,
         charterVersion: charter.version,
         observationKeys: charter.observationKeys,
+        ...(opts.assignmentId ? { assignmentId: opts.assignmentId } : {}),
+        ...(opts.assignmentTarget
+          ? {
+              target: {
+                kind: opts.assignmentTarget.kind,
+                ids: opts.assignmentTarget.ids,
+                labels: opts.assignmentTarget.labels ?? [],
+              },
+            }
+          : {}),
       } as Prisma.InputJsonValue,
     },
   })
@@ -309,9 +362,18 @@ export async function executeCharter(
     for (const obsKey of charter.observationKeys) {
       const t0 = Date.now()
       // AC.4 — the charter's marketplace scope reaches the evidence layer.
-      const obs = await getObservation(obsKey, {
-        marketplace: singleMarketplace(charter.scopeMarketplaces),
-      })
+      // SB.AS — and so does the assignment's target. This is the ONLY place
+      // in the pipeline where scope binds: buildPrompt has no slot for it and
+      // runOrQueueTool never sees a charter, so a constraint that is not
+      // applied here is not applied at all.
+      const obs = await getObservation(
+        obsKey,
+        {
+          marketplace:
+            assignmentMarketplace ?? singleMarketplace(charter.scopeMarketplaces),
+        },
+        assignmentNarrow,
+      )
       observations.push(obs)
       await step({
         type: 'observation',

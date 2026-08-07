@@ -17,8 +17,19 @@
 import prisma from '../../../db.js'
 import { previewHarvest } from '../../advertising/ads-harvest.service.js'
 import { analyzeNgrams } from '../../advertising/ads-ngram.service.js'
-import type { ObservationBuilder } from '../observation-builder.js'
-import { filterToMarketplace } from './scope-filter.js'
+import type { ObservationBuilder, ObservationNarrow } from '../observation-builder.js'
+import { filterToCampaigns, filterToMarketplace } from './scope-filter.js'
+
+/** The slice of this builder's payload that campaign narrowing rewrites. */
+interface NegativeCandidatesPayload {
+  scope: string
+  counts: Record<string, number>
+  caveats: string[]
+  negatives: { externalCampaignId?: string; query: string }[]
+  productNegatives: { externalCampaignId?: string; query: string }[]
+  ngramWasteful: unknown[]
+  [k: string]: unknown
+}
 
 const NEGATIVES_CAP = 25
 const PRODUCT_NEGATIVES_CAP = 10
@@ -111,6 +122,57 @@ export const negativeCandidatesBuilder: ObservationBuilder = {
         existingNegativeTerms,
       },
       dataVintage: vintage,
+    }
+  },
+
+  /**
+   * NAF.SB.AS — narrow the account-wide payload to named campaigns, in
+   * memory. Pure: no database read, because candidates already carry
+   * `externalCampaignId`.
+   *
+   * n-grams are withheld entirely, exactly as they already are under a
+   * marketplace scope — they are cross-campaign aggregates with no campaign
+   * of their own, so showing them under a one-campaign assignment would
+   * attribute other campaigns' waste to this one. Withheld and COUNTED, per
+   * the no-silent-caps rule.
+   *
+   * `existingNegativeTerms` is deliberately left as computed. It is the
+   * "never propose these again" list, so a superset is safe — narrowing it
+   * could only let the analyst re-propose a term that is already negated.
+   */
+  narrow(payload, narrow: ObservationNarrow) {
+    const p = payload as NegativeCandidatesPayload
+    const ids = narrow.campaignExternalIds
+    const neg = filterToCampaigns(p.negatives, ids)
+    const prod = filterToCampaigns(p.productNegatives, ids)
+    const withheldNgrams = p.ngramWasteful.length
+    const label =
+      narrow.campaignLabels && narrow.campaignLabels.length
+        ? narrow.campaignLabels.join(', ')
+        : `${ids?.length ?? 0} campaign(s)`
+
+    return {
+      ...p,
+      scope: `campaigns:${ids?.length ?? 0}`,
+      negatives: neg.kept,
+      productNegatives: prod.kept,
+      ngramWasteful: [],
+      counts: {
+        ...p.counts,
+        negativesTotal: neg.kept.length,
+        negativesTrimmed: 0,
+        productNegativesTotal: prod.kept.length,
+        droppedOutOfScope:
+          (p.counts.droppedOutOfScope ?? 0) + neg.droppedOutOfScope + prod.droppedOutOfScope,
+        unresolvedCampaign:
+          (p.counts.unresolvedCampaign ?? 0) + neg.unresolved + prod.unresolved,
+        ngramsWithheldUnderScope: withheldNgrams,
+      },
+      caveats: [
+        `This run is narrowed to ${label}. Every candidate below belongs to it; ${neg.droppedOutOfScope + prod.droppedOutOfScope} candidate(s) from other campaigns were dropped.`,
+        'N-gram waste themes are account-wide totals with no campaign of their own, so they are withheld under a campaign scope rather than shown misleadingly. Finding fewer things than an account-wide run is the expected result, not a fault.',
+        ...p.caveats.slice(1),
+      ],
     }
   },
 }

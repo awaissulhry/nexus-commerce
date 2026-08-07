@@ -11391,6 +11391,12 @@ model AgentRun {
   /// Null = a code-path run (built-in definition, or pre-workflow history).
   workflowKey        String?
   workflowRevisionId String?
+  /// NAF.SB.AS — the assignment that caused this run. Null = not from an
+  /// assignment. Same shape and rationale as workflowKey above: every
+  /// downstream reader (Approvals' provenance, Cost's attribution, Activity's
+  /// back-link) resolves through the RUN, so no other model has to learn what
+  /// an assignment is.
+  assignmentId       String?
 
   createdAt DateTime        @default(now())
   endedAt   DateTime?
@@ -11401,6 +11407,7 @@ model AgentRun {
   @@index([entityType, entityId])
   @@index([createdAt])
   @@index([orchestrationId])
+  @@index([assignmentId])
 }
 
 // Per-tool operator policy. The code registry holds the schema+handler;
@@ -15854,4 +15861,62 @@ model AgentWorkflowRevision {
 
   @@unique([workflowKey, revision])
   @@index([workflowKey, activatedAt])
+}
+
+// ─── NAF.SB.AS ───────────────────────────────────────────────────────────
+/// NAF.SB.AS — one worker, one target, one job. The operator's ask #1:
+/// "if we have a campaign, I want to assign that worker… and take action on
+/// that single campaign."
+///
+/// The `Agent` prefix is mandatory and not stylistic: `WorkflowAssignment`
+/// already exists in this schema as an unrelated PIM reviewer-tracking
+/// model. Two "assignment" nouns in one schema is how a join goes wrong.
+///
+/// An assignment is a CONTAINER; each Start mints one AgentRun stamped with
+/// `assignmentId`. It is deliberately NOT a workflow — the sorting test is
+/// "how many workers does it name?": one is an assignment, two-or-more (or
+/// any clock) is a workflow. So there is no `cron` here, and no `gate`
+/// (every charter caps at OBSERVE or PROPOSE today, so a gate would bind
+/// nothing — and this series' house rule is that a control which is not
+/// enforced must not be rendered).
+model AgentAssignment {
+  id         String @id @default(cuid())
+  /// Resolved through resolveCharter — code charters AND W.8 instances.
+  charterKey String
+  /// Derived from worker + target at create, operator-overridable, and
+  /// guaranteed non-empty: the Approvals page renders it verbatim as
+  /// provenance ("From your assignment: …"), so it is a contract, not a
+  /// label.
+  title      String
+
+  /// The target — the reason this page exists. Null targetKind = the whole
+  /// account (only offered for workers with no narrowing seam).
+  targetKind   String? // CAMPAIGN | MARKETPLACE
+  /// Amazon EXTERNAL ids for CAMPAIGN (the fleet's lingua franca — plan item
+  /// args, finding entityIds and harvest candidates all speak external);
+  /// marketplace codes for MARKETPLACE.
+  targetIds    String[] @default([])
+  /// Frozen display names, captured at create. Names drift; ids do not. The
+  /// list renders these so a renamed campaign never silently relabels history.
+  targetLabels String[] @default([])
+
+  /// "What does finished look like" — optional, prefilled from the charter's
+  /// one-liner. Required free text would make the typed target decorative.
+  wantBack String? @db.Text
+  /// Classifies and colours the row, and raises it in the default order. It
+  /// never blocks a start and never starts anything.
+  dueAt    DateTime?
+
+  /// not_started | running | finished | stopped | failed | abandoned | closed | cancelled
+  /// Derived from the runs for machine states; stored so the human states
+  /// (closed/cancelled) and the never-run state have somewhere to live.
+  state     String    @default("not_started")
+  closeNote String?   @db.Text
+  createdBy String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  closedAt  DateTime?
+
+  @@index([state, createdAt])
+  @@index([charterKey, createdAt])
 }

@@ -57,7 +57,11 @@ export const GLOSSARY: Record<string, { title: string; body: string }> = {
   },
   approval: {
     title: 'Approval',
-    body: 'One proposed action waiting for your yes or no. Nothing reaches Amazon without passing this gate. Approvals expire after 7 days so stale intent never accumulates.',
+    // NAF.AQ.0 — this said "7 days"; the gate has always used 24 hours
+    // (approval-gate.service.ts EXPIRY_HOURS, now exported so no surface has
+    // to retype it). The number was wrong by 7x on the one screen that tells
+    // an operator how long they have.
+    body: 'One proposed action waiting for your yes or no. Nothing reaches Amazon without passing this gate. An approval expires 24 hours after it is asked, so stale intent never accumulates — and expiry always means refused, never approved-by-default.',
   },
   'blast-radius': {
     title: 'Blast radius',
@@ -162,11 +166,22 @@ export const GLOSSARY: Record<string, { title: string; body: string }> = {
   // thing they would misread as a problem with their account.
   selftest: {
     title: 'Self-test',
-    body: 'A worker whose only job is to check that the fleet itself is working. Its findings are about our own scheduled jobs, never about your Amazon account \u2014 so it is left out of the counts and shown with a badge. Hidden by default; tick the box to see it.',
+    body: 'A worker whose only job is to check that the fleet itself is working. Its findings are about our own scheduled jobs, never about your Amazon account — so it is left out of the counts and shown with a badge. Hidden by default; tick the box to see it.',
   },
   run: {
     title: 'Run',
-    body: 'One worker doing its job once: it reads prepared evidence, thinks, and writes down what it found. A run costs money and takes seconds to minutes. Everything else on this page \u2014 findings, plans, approvals \u2014 was produced by some run.',
+    body: 'One worker doing its job once: it reads prepared evidence, thinks, and writes down what it found. A run costs money and takes seconds to minutes. Everything else on this page — findings, plans, approvals — was produced by some run.',
+  },
+  // NAF.SB.AS — exactly two terms minted for the Assignments page. "What you
+  // want back" is deliberately NOT a term: it is a plain phrase and giving it
+  // a name would make one text box look like three different things.
+  assignment: {
+    title: 'Assignment',
+    body: 'One worker, pointed at one thing, with a note about what you want back. It sits and waits until you start it — nothing starts on its own. Each time you start it, it makes one run; the assignment keeps every attempt. One worker means an assignment; two or more, or anything on a clock, means a routine on Workflows.',
+  },
+  target: {
+    title: 'Target',
+    body: 'The one thing an assignment points at — a campaign, a marketplace, or your whole account. It narrows the evidence the worker reads before the worker ever sees it, so it genuinely binds rather than being a hint the worker could ignore. A target can only narrow a worker, never widen it past the limits set on its own page.',
   },
 }
 

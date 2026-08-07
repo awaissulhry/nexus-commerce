@@ -56,3 +56,43 @@ export async function filterToMarketplace<T extends { externalCampaignId?: strin
 export function singleMarketplace(scope: string[] | undefined): string | undefined {
   return scope && scope.length === 1 ? scope[0] : undefined
 }
+
+/**
+ * NAF.SB.AS — campaign scope, enforced. The assignment half of the same
+ * house rule: `AgentCharter.scopeCampaignIds` has been stored, accepted at
+ * worker-create and RENDERED as "N named campaigns" since W.8 while binding
+ * nothing. This is the enforcement that stops it being a lie.
+ *
+ * Cheaper than the marketplace filter above, not harder: candidate rows
+ * already carry `externalCampaignId` (ads-harvest.service.ts:61), so this
+ * needs no database read at all and is synchronous.
+ *
+ * FAIL CLOSED. An empty `externalCampaignIds` array means "narrowed to
+ * nothing", and returns nothing — it must NEVER fall through to
+ * account-wide. A scope that resolves to zero campaigns and then shows the
+ * whole account is the worst bug this feature can have: the row would say
+ * one campaign while the worker read all 220. `undefined` (no campaign
+ * scope at all) is the only value that means "everything".
+ */
+export function filterToCampaigns<T extends { externalCampaignId?: string }>(
+  rows: T[],
+  externalCampaignIds: string[] | undefined,
+): ScopeFilterResult<T> {
+  if (externalCampaignIds === undefined) {
+    return { kept: rows, droppedOutOfScope: 0, unresolved: 0 }
+  }
+  const allow = new Set(externalCampaignIds)
+  const kept: T[] = []
+  let droppedOutOfScope = 0
+  let unresolved = 0
+  for (const row of rows) {
+    if (!row.externalCampaignId) {
+      // Cannot prove it belongs — dropped and counted, never silently kept.
+      unresolved++
+      continue
+    }
+    if (allow.has(row.externalCampaignId)) kept.push(row)
+    else droppedOutOfScope++
+  }
+  return { kept, droppedOutOfScope, unresolved }
+}

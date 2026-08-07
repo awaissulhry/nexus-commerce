@@ -680,9 +680,22 @@ Workers page.** That is the `scopeCampaignIds` defect at higher blast radius.
 
 ### 6.4 An assignment cannot produce an approval in v1 — structurally
 
-`runOrQueueTool` is the only creator of an `AgentApproval`. Its only fleet caller
-is `fleet-council.service.ts:164`, reachable only from the `fleet-council` cron.
-**`executeCharter` never calls it, at any autonomy level, for any worker.**
+`runOrQueueTool` is the only creator of an `AgentApproval`, and it has **five**
+callers in `apps/api/src` — `fleet-council.service.ts:164` (the only *fleet*
+one), the two legacy ACP paths (`tool-loop.service.ts:197`,
+`approval-gate.service.ts:117`), and **two scheduled autonomous agents**
+(`agents/autonomous/pricing-watchdog.ts:155`,
+`agents/autonomous/listing-quality-keeper.ts:201`) whose tools *do* have
+executors and which produced the 18 historical rows.
+
+The load-bearing fact is unchanged and is about the caller that is **absent**:
+**`executeCharter` never calls `runOrQueueTool`, at any autonomy level, for any
+worker.** So a sweep run, an `ask` run and an assignment run are all structurally
+incapable of queueing an approval. *(An earlier draft of this section said the
+council was the only caller at all — that was a grep scoped to two directories.
+Corrected from the Approvals stream's full sweep; the conclusion it supports did
+not move, but the two autonomous callers matter to them and are recorded here so
+this document does not under-report the surface.)*
 
 **The Approvals stream reached the same wall from the opposite end, independently**
 (locks §2, `SB.AQ`): all three fleet propose-tools are **preview-only**, so
@@ -935,6 +948,78 @@ Each step independently shippable and visibly better.
 
 Teaching layer, tooltips and `<Term>` coverage are **not a step** — they are a
 condition of done on each one.
+
+### AS.1 — EXECUTED 2026-08-07, enforcement proven on production data
+
+**Operator decision, taken before build:** the v1 roster is restricted to the
+targetable workers (Part 7 decision 1, approved). One consequence worth stating
+plainly rather than letting it look like silent narrowing: **AS.1 ships two of
+the three.** `BidProposal` carries `targetId` but **no** `externalCampaignId`, so
+the bid tuner cannot be post-filtered like the other two — it needs the engine's
+own `campaignId` argument, which takes the **internal `Campaign.id`** while every
+fleet-facing id is the Amazon external one. That is a second, different
+enforcement mechanism with its own id-dialect trap, so it lands at AS.2. The
+picker shows exactly the workers whose campaign scope is *enforced today*;
+showing the third before its enforcement exists would repeat the very defect this
+page was built to fix.
+
+**Shipped.** `AgentAssignment` + `AgentRun.assignmentId` (migration `20260807e`,
+applied clean to prod) · `filterToCampaigns` in `scope-filter.ts` (pure,
+in-memory — candidates already carry `externalCampaignId`, so unlike the
+marketplace path it needs no DB read) · a `narrow()` hook on the observation
+builder contract · `assignment-scope.ts` holding the intersection law ·
+`assignment.service.ts` + `agent-fleet-assignments.routes.ts` · the list, state
+strip, create drawer, detail page, and the How-this-works drawer.
+
+**The cache decision held.** `narrow()` runs **after** the cache read and is
+deliberately not part of the cache key, so twenty-five campaign-scoped
+assignments share **one** account-wide `previewHarvest` scan instead of
+triggering twenty-five. It also keeps `evidenceRefs` pointing at one row every
+assignment can legitimately cite, which the executor's evidence-id validation
+requires.
+
+**Proven on production data** (`_sbas-narrow-probe.mts`, read-only — 12/12):
+
+- Real narrowing: **4 of 9** live negative candidates kept for
+  `GALE | IT | Exact | Category`; every kept row belongs to that campaign;
+  `kept + dropped + unresolved` reconciles exactly.
+- **Fail-closed, all three ways:** an empty scope yields nothing (never
+  everything), `undefined` is the only value that means everything, an unknown
+  campaign yields nothing.
+- **`target_gone`** — a campaign that no longer resolves stops the run and
+  returns no narrow, so a stale target can never fall through to all 220
+  campaigns.
+- **`target_outside_worker_scope`** — a DE-limited worker refuses an IT campaign.
+  The intersection law holds in the widening direction, which is the dangerous
+  one.
+- **`target_unsupported`** — a worker whose evidence cannot narrow is refused
+  outright rather than scoped for half its evidence.
+
+**A real bug the tests caught before prod did.** The first `resolveAssignmentScope`
+filtered the found campaigns by the charter's marketplace but never intersected
+back with the ids actually named — so an IT-limited worker pointed at a DE
+campaign would have run on a **different campaign the operator never named**,
+while the row still displayed their choice. Worse than widening. Fixed by
+re-asserting the ask in code rather than trusting the `WHERE` clause to be the
+only thing bounding it; the vitest that caught it is `assignment-scope.vitest.test.ts`.
+
+**Gates:** 23 new tests green (14 scope + 9 state), full agent-fleet suite
+**327 passed / 37 files** (the `forceAsk` council test the locks doc recorded as
+red is now green — fixed by its owner), `tsc` clean in both apps, RBAC coverage
+**0 unmapped**, DS-conformance ratchet clean (three violations of my own —
+a native date input, four inline `fontSize`s and one inline hex — fixed with the
+DS `DateField` and page-local classes before pushing, since that ratchet is a
+shared gate that blocks every session).
+
+**One deliberate deviation from Part 3.4, stated rather than skipped.** The study
+said to extract `outcomeOf()` into `_shared/run-health.ts` so Assignments,
+Workflows and Activity phrase a run identically. I did **not** — the outcome
+vocabulary here is assignment-specific (it carries "nothing to do" and the
+target-specific stop reasons like *its campaign is gone*), and the shared
+extraction only pays off when a second consumer actually wants those words. It
+lives page-local in `states.ts` as `outcomeLine`. **Owed, not forgotten:** if
+Activity or Workflows want it, the function is pure and moves in one commit.
+Recorded in locks §3 so neither stream has to discover it.
 
 ---
 
