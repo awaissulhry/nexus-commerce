@@ -131,6 +131,7 @@ function sourcePhrase(mode: string | null, trigger: string): string {
   if (mode === 'summit') return 'a summit'
   // Every phrase here reads after the word "from", so they are all nouns.
   if (mode === 'ask') return 'a request someone made by hand'
+  if (mode === 'custom') return 'a custom routine' // WF.6b
   if (trigger === 'schedule') return 'a schedule'
   if (trigger === 'manual') return 'a person, by hand'
   return humanize(trigger)

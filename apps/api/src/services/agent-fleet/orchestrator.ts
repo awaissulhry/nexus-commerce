@@ -20,6 +20,7 @@ import { checkFleetDayBudget } from './budget-guard.js'
 import { FLEET_GRAPH, topoLevels } from './fleet-graph.js'
 import { getFleetState } from './fleet-state.service.js'
 import { MODE_WORKFLOW_KEY, defToGraph, stepGatesOf } from './workflow-defs.js'
+// (runStoredWorkflow also reads getEffectiveDefinition/isWorkflowEnabled below)
 import { getEffectiveDefinition, isWorkflowEnabled } from './workflow-registry.service.js'
 
 export interface FleetRunResult {
@@ -57,6 +58,134 @@ async function pool<T>(
   )
   await Promise.all(workers)
   return results
+}
+
+/** WF.6b — the walk itself, shared by every stored-execution entry point:
+ *  level by level, per-node re-checked gates, per-agent failure isolation. */
+async function executeWalk(args: {
+  levels: string[][]
+  mode: 'sweep' | 'council' | 'custom'
+  trigger: 'schedule' | 'manual'
+  orchestrationId: string
+  concurrency: number
+  workflowKey?: string
+  workflowRevisionId?: string
+}): Promise<Omit<FleetRunResult, 'stepGates' | 'workflowKey' | 'workflowRevisionId'>> {
+  const { levels, mode, trigger, orchestrationId, concurrency } = args
+  let started = 0
+  let succeeded = 0
+  let failed = 0
+  let skipped = 0
+  let haltedReason: string | undefined
+
+  for (const level of levels) {
+    const thunks = level.map((key) => async () => {
+      // Short-circuit: once anything trips, the rest of the fleet is
+      // skipped — checked per agent so a mid-level trip stops the tail.
+      if (!haltedReason) {
+        if (isAiKillSwitchOn()) haltedReason = 'kill_switch'
+      }
+      if (!haltedReason) {
+        const fleet = await getFleetState()
+        if (fleet.halted) {
+          haltedReason = fleet.degraded
+            ? 'fleet_state_unreadable'
+            : `fleet_halted${fleet.haltReason ? `: ${fleet.haltReason}` : ''}`
+        } else {
+          const budget = await checkFleetDayBudget(fleet.dailyCeilingUSD)
+          if (!budget.ok) haltedReason = `${budget.reason}: ${budget.detail}`
+        }
+      }
+      if (haltedReason) {
+        skipped++
+        return
+      }
+
+      started++
+      try {
+        const r = await executeCharter(key, {
+          trigger,
+          mode,
+          orchestrationId,
+          workflowKey: args.workflowKey,
+          workflowRevisionId: args.workflowRevisionId,
+        })
+        if (r.skipped) skipped++
+        else if (r.ok) succeeded++
+        else failed++
+      } catch {
+        // An agent failure is that agent's failure — never the fleet's.
+        failed++
+      }
+    })
+    await pool(thunks, concurrency)
+  }
+
+  return { orchestrationId, started, succeeded, failed, skipped, haltedReason }
+}
+
+/** WF.6b — run a stored workflow (customs' Run-now). Refuses honestly when
+ *  there is nothing to run; OFF workers still skip inside the executor —
+ *  the dials and the fleet gates decide what actually executes. One run
+ *  per workflow at a time. */
+const liveStoredRuns = new Set<string>()
+
+export async function runStoredWorkflow(
+  workflowKey: string,
+  opts: { trigger?: 'schedule' | 'manual'; concurrency?: number } = {},
+): Promise<FleetRunResult> {
+  const orchestrationId = `wfrun_${randomUUID()}`
+  if (liveStoredRuns.has(workflowKey)) {
+    return {
+      orchestrationId,
+      started: 0,
+      succeeded: 0,
+      failed: 0,
+      skipped: 0,
+      haltedReason: 'already_running: one run per workflow at a time',
+    }
+  }
+  if (!(await isWorkflowEnabled(workflowKey))) {
+    return {
+      orchestrationId,
+      started: 0,
+      succeeded: 0,
+      failed: 0,
+      skipped: 0,
+      haltedReason: `workflow_disabled: ${workflowKey} was switched off by the operator`,
+    }
+  }
+  const eff = await getEffectiveDefinition(workflowKey)
+  if (!eff.definition || eff.definition.steps.length === 0) {
+    return {
+      orchestrationId,
+      started: 0,
+      succeeded: 0,
+      failed: 0,
+      skipped: 0,
+      haltedReason: 'no_wiring: nothing published to run',
+    }
+  }
+  liveStoredRuns.add(workflowKey)
+  try {
+    const result = await executeWalk({
+      levels: topoLevels(defToGraph(eff.definition)),
+      mode: 'custom',
+      trigger: opts.trigger ?? 'manual',
+      orchestrationId,
+      concurrency: opts.concurrency ?? DEFAULT_CONCURRENCY,
+      workflowKey,
+      workflowRevisionId: eff.revisionId ?? undefined,
+    })
+    return {
+      ...result,
+      stepGates: stepGatesOf(eff.definition),
+      workflowKey,
+      workflowRevisionId: eff.revisionId ?? undefined,
+    }
+  } finally {
+    liveStoredRuns.delete(workflowKey)
+  }
 }
 
 export async function runFleet(
@@ -97,64 +226,20 @@ export async function runFleet(
     /* stored layer unreadable ⇒ FLEET_GRAPH walks, stamps stay null */
   }
 
-  const levels = topoLevels(graph)
-
-  let started = 0
-  let succeeded = 0
-  let failed = 0
-  let skipped = 0
-  let haltedReason: string | undefined
-
-  for (const level of levels) {
-    const thunks = level.map((key) => async () => {
-      // Short-circuit: once anything trips, the rest of the fleet is
-      // skipped — checked per agent so a mid-level trip stops the tail.
-      if (!haltedReason) {
-        if (isAiKillSwitchOn()) haltedReason = 'kill_switch'
-      }
-      if (!haltedReason) {
-        const fleet = await getFleetState()
-        if (fleet.halted) {
-          haltedReason = fleet.degraded
-            ? 'fleet_state_unreadable'
-            : `fleet_halted${fleet.haltReason ? `: ${fleet.haltReason}` : ''}`
-        } else {
-          const budget = await checkFleetDayBudget(fleet.dailyCeilingUSD)
-          if (!budget.ok) haltedReason = `${budget.reason}: ${budget.detail}`
-        }
-      }
-      if (haltedReason) {
-        skipped++
-        return
-      }
-
-      started++
-      try {
-        const r = await executeCharter(key, {
-          trigger: 'schedule',
-          mode,
-          orchestrationId,
-          workflowKey: stampKey ?? undefined,
-          workflowRevisionId: stampRevisionId ?? undefined,
-        })
-        if (r.skipped) skipped++
-        else if (r.ok) succeeded++
-        else failed++
-      } catch {
-        // An agent failure is that agent's failure — never the fleet's.
-        failed++
-      }
-    })
-    await pool(thunks, concurrency)
-  }
+  // WF.6b — the walk is shared machinery now; runFleet is its mode-keyed
+  // caller and runStoredWorkflow (customs' Run-now) its other.
+  const walk = await executeWalk({
+    levels: topoLevels(graph),
+    mode,
+    trigger: 'schedule',
+    orchestrationId,
+    concurrency,
+    workflowKey: stampKey ?? undefined,
+    workflowRevisionId: stampRevisionId ?? undefined,
+  })
 
   return {
-    orchestrationId,
-    started,
-    succeeded,
-    failed,
-    skipped,
-    haltedReason,
+    ...walk,
     stepGates,
     workflowKey: stampKey ?? undefined,
     workflowRevisionId: stampRevisionId ?? undefined,

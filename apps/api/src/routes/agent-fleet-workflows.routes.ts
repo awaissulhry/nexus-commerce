@@ -12,6 +12,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { resyncFleetSchedules } from '../jobs/fleet-sweep.job.js'
+import { runStoredWorkflow } from '../services/agent-fleet/orchestrator.js'
 import { slugifyWorkflowName } from '../services/agent-fleet/workflow-defs.js'
 import { isAiKillSwitchOn } from '../services/ai/providers/index.js'
 import {
@@ -184,6 +185,34 @@ const agentFleetWorkflowRoutes: FastifyPluginAsync = async (fastify) => {
       const status = await getWorkflowTestStatus(request.params.testId)
       if (!status) return reply.code(404).send({ error: 'test not found' })
       return status
+    },
+  )
+
+  // WF.6b — Run-now for CUSTOM workflows: a REAL run of the published
+  // wiring. OFF workers still skip inside the executor; the fleet gates
+  // bind. Built-ins are refused — their clocks and jobs own them. Responds
+  // within ~8s: full counts when the walk finished, else "watch Runs".
+  fastify.post<{ Params: { key: string } }>(
+    '/agent/fleet/workflows/:key/run',
+    async (request, reply) => {
+      const { key } = request.params
+      if (builtinByKey(key)) {
+        return reply.code(400).send({ error: 'built-ins run on their own clocks and jobs — Run-now is for custom routines' })
+      }
+      const row = await prisma.agentWorkflow.findUnique({ where: { key } })
+      if (!row) return reply.code(404).send({ error: 'unknown workflow' })
+      if (isAiKillSwitchOn()) {
+        return reply.code(503).send({ error: 'AI is temporarily disabled (kill switch).' })
+      }
+      const walk = runStoredWorkflow(key, { trigger: 'manual' })
+      const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000))
+      const result = await Promise.race([walk, timeout])
+      // Never orphan the promise — its settlement is already handled.
+      void walk.catch(() => {})
+      if (result === null) {
+        return { pending: true, note: 'running — watch the Runs section on this page' }
+      }
+      return result
     },
   )
 

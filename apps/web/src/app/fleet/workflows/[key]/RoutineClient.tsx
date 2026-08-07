@@ -122,6 +122,70 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
   const [pendingAct, setPendingAct] = useState<RevisionRow | null>(null)
   const [actBusy, setActBusy] = useState(false)
   const [actErr, setActErr] = useState<string | null>(null)
+  const [runDialog, setRunDialog] = useState(false)
+  const [runEstimate, setRunEstimate] = useState<number | null>(null)
+  const [runBusy, setRunBusy] = useState(false)
+  const [runErr, setRunErr] = useState<string | null>(null)
+  const [runNotice, setRunNotice] = useState<string | null>(null)
+
+  /* WF.6b — Run-now for a published custom. A REAL run: findings write to
+     the board; OFF workers still skip; the fleet gates bind. */
+  const canRunNow =
+    !builtin && vers?.kind === 'custom' && vers.source === 'revision' && vers.enabled
+
+  const openRunDialog = async () => {
+    setRunErr(null)
+    setRunEstimate(null)
+    setRunDialog(true)
+    try {
+      const keys = (vers?.effective?.steps ?? []).map((s) => s.charterKey).join(',')
+      const r = await fetch(
+        `${backend}/api/agent/fleet/workflows/${routineKey}/test-estimate?steps=${encodeURIComponent(keys)}`,
+        { cache: 'no-store' },
+      )
+      if (r.ok) setRunEstimate(((await r.json()) as { estimatedCostUSD: number }).estimatedCostUSD)
+    } catch { /* the dialog says "estimating…" honestly */ }
+  }
+
+  const runNow = async () => {
+    setRunBusy(true)
+    setRunErr(null)
+    try {
+      const r = await fetch(`${backend}/api/agent/fleet/workflows/${routineKey}/run`, {
+        method: 'POST',
+      })
+      const body = (await r.json()) as {
+        pending?: boolean
+        note?: string
+        started?: number
+        succeeded?: number
+        failed?: number
+        skipped?: number
+        haltedReason?: string
+        error?: string
+      }
+      if (!r.ok) throw new Error(body.error ?? `run failed (${r.status})`)
+      setRunDialog(false)
+      if (body.pending) {
+        setRunNotice(body.note ?? 'Running — watch the Runs section.')
+      } else if (body.haltedReason) {
+        setRunNotice(`Stopped: ${body.haltedReason}`)
+      } else if ((body.succeeded ?? 0) === 0 && (body.skipped ?? 0) > 0) {
+        setRunNotice(
+          `Every worker in this routine is OFF, so nothing ran (${body.skipped} skipped). The dials on the Workers page decide what actually executes.`,
+        )
+      } else {
+        setRunNotice(
+          `Run finished: ${body.succeeded ?? 0} worked · ${body.skipped ?? 0} skipped${(body.failed ?? 0) > 0 ? ` · ${body.failed} failed` : ''}. Details below in Runs.`,
+        )
+      }
+      refresh()
+    } catch (e) {
+      setRunErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setRunBusy(false)
+    }
+  }
 
   const title = builtin?.name ?? vers?.name ?? routineKey
   const sub = builtin?.purpose ?? vers?.description ?? 'A custom routine.'
@@ -262,6 +326,11 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
             </span>
           ) : null}
           <span className="spacer" />
+          {loaded && canRunNow && !editing ? (
+            <button className="acr-btn primary" onClick={() => void openRunDialog()}>
+              Run now…
+            </button>
+          ) : null}
           {loaded && vers && !editing ? (
             <button className="acr-btn" onClick={() => setEditing(true)}>
               Edit the wiring
@@ -271,6 +340,13 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
             <RefreshCw size={13} /> Refresh
           </button>
         </div>
+
+        {runNotice ? (
+          <div className="acr-banner warn" role="status">
+            <AlertTriangle size={15} /> {runNotice}
+            <button className="acr-btn" onClick={() => setRunNotice(null)}>Dismiss</button>
+          </div>
+        ) : null}
 
         <div className="wf-sentence">
           {loaded ? (
@@ -495,6 +571,33 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
         </section>
 
         <HowWorkflowsWork />
+
+        {runDialog ? (
+          <div className="acr-pg-confirmwrap" role="dialog" aria-modal="true">
+            <div className="acr-pg-confirm">
+              <h4>Run this routine now?</h4>
+              <p>
+                This is a <strong>real run</strong>: findings write to the shared board, and
+                anything proposed still waits for <Term k="approval">your approval</Term>.
+                Workers that are OFF skip — the dials decide what actually executes. Estimated
+                cost if every worker runs:{' '}
+                <strong>
+                  {runEstimate != null ? `$${runEstimate.toFixed(4)}` : 'estimating…'}
+                </strong>
+                .
+              </p>
+              {runErr ? <p className="acr-pg-warn">{runErr}</p> : null}
+              <div className="acr-pg-confirmbtns">
+                <button className="acr-btn" onClick={() => setRunDialog(false)} disabled={runBusy}>
+                  Cancel
+                </button>
+                <button className="acr-btn primary" disabled={runBusy} onClick={() => void runNow()}>
+                  {runBusy ? 'Starting…' : 'Run it'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {pendingAct && vers ? (
           <div className="acr-pg-confirmwrap" role="dialog" aria-modal="true">

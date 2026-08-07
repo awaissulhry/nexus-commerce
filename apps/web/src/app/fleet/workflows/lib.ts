@@ -351,10 +351,12 @@ export function customStatus(
       why: 'No published wiring yet — compose and publish from the editor.',
     }
   }
+  // WF.6b — a published custom is runnable by hand. OFF workers still skip
+  // inside the executor; the dials decide what actually executes.
   return {
-    kind: 'idle',
-    label: 'Recorded',
-    why: 'Published and on the record — running it arrives next.',
+    kind: 'ready',
+    label: 'Ready',
+    why: 'Runs the moment you start it — workers that are OFF still skip.',
   }
 }
 

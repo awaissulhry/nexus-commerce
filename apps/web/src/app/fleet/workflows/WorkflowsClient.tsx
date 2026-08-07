@@ -343,7 +343,7 @@ export function WorkflowsClient() {
                       <span className="wf-when">
                         {job
                           ? prettyCron(job.schedule)
-                          : kind === 'builtin'
+                          : kind === 'builtin' || status.kind === 'ready'
                             ? 'When you start it'
                             : '—'}
                       </span>
@@ -354,7 +354,9 @@ export function WorkflowsClient() {
                             : 'not scheduled — the clock is off'
                           : kind === 'builtin'
                             ? 'from a worker’s page, or the console'
-                            : 'running arrives next'}
+                            : status.kind === 'ready'
+                              ? 'Run now, from its page'
+                              : 'publish a first revision to run it'}
                       </span>
                     </td>
                     <td>

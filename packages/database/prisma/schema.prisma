@@ -11382,7 +11382,7 @@ model AgentRun {
   /// NAF.AC.8 — which charter revision produced this run, so scorecards can
   /// compare an A/B split. Null = the code charter ran.
   charterRevisionId  String?
-  mode               String? // tick | sweep | council | summit | incident | ask
+  mode               String? // tick | sweep | council | summit | incident | ask | custom (WF.6b) | preview (AC.2)
   parentRunId        String?
   orchestrationId    String?
   findingCount       Int     @default(0)

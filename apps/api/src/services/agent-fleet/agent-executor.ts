@@ -42,7 +42,7 @@ import { recordStep } from './tracing.js'
 
 export interface ExecuteOptions {
   trigger: 'manual' | 'schedule'
-  mode: 'tick' | 'sweep' | 'council' | 'summit' | 'incident' | 'ask'
+  mode: 'tick' | 'sweep' | 'council' | 'summit' | 'incident' | 'ask' | 'custom'
   orchestrationId?: string
   userId?: string | null
   /** Manual run-now only — mirrors the existing autonomous agents' Run-now,
