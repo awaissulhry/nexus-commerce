@@ -189,3 +189,57 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── W.2 · the strip tiles are filters ────────────────────────────────────
+   Microsoft's Agent Registry leads with Total agents / Agents without owners /
+   Unmanaged agents — two of three headline cards are governance GAPS, not
+   census. Ours followed suit, and every tile that names a slice of the roster
+   is a button that shows exactly that slice. A number an operator cannot act
+   on is a poster. */
+
+button.acr-pg-stat {
+  /* the DS/acr card is a div by default; as a button it needs the reset */
+  font: inherit;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+.sbw-tile:hover { border-color: #c3d3e6; background: #fcfdff; }
+.sbw-tile:focus-visible {
+  outline: none;
+  border-color: #9db4d0;
+  box-shadow: 0 0 0 3px rgba(74, 122, 184, 0.16);
+}
+.sbw-tile.on {
+  border-color: #4a7ab8;
+  box-shadow: inset 0 0 0 1px #4a7ab8;
+  background: #f6f9fd;
+}
+.sbw-tile.on .k { color: #3f6fb5; }
+
+/* Tone is a hint on the VALUE, never the only signal — the sub-line always
+   says what the number is made of. */
+.sbw-tile.warn .v { color: #a3312c; }
+.sbw-tile.good .v { color: #14764f; }
+
+@media (prefers-reduced-motion: reduce) {
+  button.acr-pg-stat { transition: none; }
+}
+
+/* the "you are looking at a slice" chip, and how to leave it */
+.sbw-viewchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid #b9cde6;
+  border-radius: 999px;
+  background: #eef4fc;
+  color: #2f6096;
+  font-size: 12px;
+  cursor: pointer;
+}
+.sbw-viewchip b { font-weight: 650; }
+.sbw-viewchip:hover { background: #e3edfa; border-color: #9db4d0; }

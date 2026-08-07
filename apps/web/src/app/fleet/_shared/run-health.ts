@@ -157,6 +157,13 @@ export interface WorkerStatus {
   reason: string
   /** Counts toward the health strip's "Needs attention" tile. */
   needsAttention: boolean
+  /**
+   * Two or three words naming WHY, for aggregation. The strip's tile says
+   * "3 · 1 never set up · 2 failing" by tallying these, so the summary and the
+   * rows underneath it are the same derivation counted twice rather than two
+   * derivations that can disagree. Only meaningful when `needsAttention`.
+   */
+  tag: string
 }
 
 /**
@@ -186,6 +193,7 @@ export function deriveStatus(
       reason:
         'Its settings could not be read from the database. What you see here is the fail-safe posture, not your choices.',
       needsAttention: true,
+      tag: 'settings unreadable',
     }
   }
 
@@ -197,6 +205,7 @@ export function deriveStatus(
       reason:
         'This worker exists in code but has never had a settings row created. Until it does, it cannot be switched on.',
       needsAttention: true,
+      tag: 'never set up',
     }
   }
 
@@ -213,6 +222,7 @@ export function deriveStatus(
         ? `Paused until ${until} — “${charter.pausedReason}”.`
         : `Paused until ${until}. A pause always has an end date, so it is never a forgotten off switch.`,
       needsAttention: true,
+      tag: 'paused',
     }
   }
 
@@ -223,6 +233,7 @@ export function deriveStatus(
       tone: 'busy',
       reason: lastRun ? `Started ${ago(lastRun.createdAt)}.` : 'A run is in flight.',
       needsAttention: false,
+      tag: 'running',
     }
   }
 
@@ -238,6 +249,7 @@ export function deriveStatus(
       tone: 'neutral',
       reason: `Switched off — it does not run, and it costs nothing.${tail}`,
       needsAttention: false,
+      tag: 'off',
     }
   }
 
@@ -248,6 +260,13 @@ export function deriveStatus(
       tone: failure.severe ? 'bad' : 'warn',
       reason: failure.sentence,
       needsAttention: true,
+      // The tag names the CAUSE, so the strip can say "2 cannot reach the AI"
+      // rather than "2 failing" — the operator's next step differs by class.
+      tag: failure.klass === 'provider-unreachable' ? 'cannot reach the AI'
+        : failure.klass === 'provider-refused' ? 'out of AI credit'
+        : failure.klass === 'contract' ? 'breaking its contract'
+        : failure.klass === 'limit' ? 'stopped by a limit'
+        : 'failing',
     }
   }
 
@@ -259,6 +278,7 @@ export function deriveStatus(
       reason:
         'It is switched on but has never run. Either its schedule has not come round yet, or nothing is starting it.',
       needsAttention: true,
+      tag: 'never run',
     }
   }
 
@@ -274,6 +294,7 @@ export function deriveStatus(
     tone: 'good',
     reason: `${bits.join(' · ')}.`,
     needsAttention: false,
+    tag: 'working',
   }
 }
 

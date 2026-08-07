@@ -41,7 +41,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Bot, RefreshCw, ShieldAlert, AlertTriangle } from 'lucide-react'
+import { Ban, Bot, RefreshCw, ShieldAlert, AlertTriangle, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { GLOSSARY, Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { DataGrid, type Column } from '@/design-system/components'
@@ -106,6 +106,14 @@ interface FindingRow {
   charterKey: string
   status: string
 }
+interface FleetStateRow {
+  halted: boolean
+  haltReason: string | null
+  haltedBy: string | null
+  haltedAt: string | null
+  dailyCeilingUSD: number
+  degraded: boolean
+}
 interface ScorecardRow {
   charterKey: string
   grade: string | null
@@ -138,6 +146,20 @@ const STATUS_ORDER: Record<string, number> = {
 }
 const DAY = 24 * 3600 * 1000
 
+/**
+ * W.2 — the slices the strip can put the operator into. `all`, `live` and
+ * `attention` become the three named views in W.3; `eligible` is reachable
+ * only from its tile, because "which workers have earned a promotion" is a
+ * question you ask by noticing the number, not by browsing for it.
+ */
+type View = 'all' | 'live' | 'attention' | 'eligible'
+
+const VIEW_LABEL: Record<Exclude<View, 'all'>, string> = {
+  live: 'Switched on',
+  attention: 'Needs attention',
+  eligible: 'Earned a promotion',
+}
+
 /* ── the page ──────────────────────────────────────────────────────────── */
 
 export function WorkersClient() {
@@ -146,10 +168,15 @@ export function WorkersClient() {
   const [runs, setRuns] = useState<RunRow[]>([])
   const [findings, setFindings] = useState<FindingRow[]>([])
   const [scorecards, setScorecards] = useState<ScorecardRow[]>([])
+  const [state, setState] = useState<FleetStateRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [tierFilter, setTierFilter] = useState<string | null>(null)
+  /** W.2 — which slice of the roster is showing. Set by the strip tiles now,
+   *  and by the named view chips in W.3; one piece of state so the two cannot
+   *  end up disagreeing about what is on screen. */
+  const [view, setView] = useState<View>('all')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -161,17 +188,22 @@ export function WorkersClient() {
       // off the end. The fix is a per-charter aggregate endpoint, which belongs
       // in the API the parallel session currently owns — until then this is
       // exact, and this comment is here so it is noticed before it is not.
-      const [c, r, f, s] = await Promise.all([
+      const [c, r, f, s, st] = await Promise.all([
         fetch(`${backend}/api/agent/fleet/charters`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/runs?limit=100`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/findings?status=open&limit=200`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/scorecards?limit=200`, { cache: 'no-store' }),
+        // W.2 — the fleet halt and the daily ceiling. A roster that reports
+        // healthy workers while the orchestrator is halted is telling half the
+        // truth: nothing runs, whatever any dial says.
+        fetch(`${backend}/api/agent/fleet/state`, { cache: 'no-store' }),
       ])
       if (!c.ok) throw new Error(`charters: ${c.status}`)
       setCharters(((await c.json()) as { charters: CharterRow[] }).charters)
       if (r.ok) setRuns(((await r.json()) as { runs: RunRow[] }).runs)
       if (f.ok) setFindings(((await f.json()) as { findings: FindingRow[] }).findings)
       if (s.ok) setScorecards(((await s.json()) as { scorecards: ScorecardRow[] }).scorecards)
+      if (st.ok) setState((await st.json()) as FleetStateRow)
       setErr(null)
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
@@ -197,7 +229,11 @@ export function WorkersClient() {
         diagnostic: isDiagnostic(charter),
         lastRun,
         runs7d: recent.length,
-        failures7d: recent.filter((r) => !r.ok).length,
+        // `!ok` alone counts the run that is still in flight: a run is created
+        // ok:false and only flips true when it finishes, so a worker mid-run
+        // reported "1 of 1 failed this week" while it was running perfectly
+        // well. Same root cause as the Last-run label, caught in the same way.
+        failures7d: recent.filter((r) => !r.ok && r.status !== 'running').length,
         cost7d: recent.reduce((sum, r) => sum + Number(r.costUSD || 0), 0),
         openFindings: findings.filter((f) => f.charterKey === charter.key).length,
         grade: card?.grade ?? null,
@@ -216,9 +252,24 @@ export function WorkersClient() {
     return [...m.entries()].sort((a, b) => (TIER_ORDER[a[0]] ?? 9) - (TIER_ORDER[b[0]] ?? 9))
   }, [rows])
 
+  /** One predicate per view, used by BOTH the tile counts and the table, so a
+   *  tile reading 3 above a table showing 4 cannot happen. */
+  const matchesView = useCallback((r: WorkerRow, v: View): boolean => {
+    switch (v) {
+      case 'live':
+        return r.status.word !== 'paused'
+          && r.charter.enabled && r.charter.autonomyLevel !== 'OFF'
+      case 'attention': return r.status.needsAttention
+      case 'eligible': return r.promotionEligible
+      case 'all':
+      default: return true
+    }
+  }, [])
+
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase()
     return rows.filter((r) => {
+      if (!matchesView(r, view)) return false
       if (tierFilter && r.charter.tier !== tierFilter) return false
       if (!needle) return true
       return (
@@ -228,7 +279,7 @@ export function WorkersClient() {
         (r.charter.description ?? '').toLowerCase().includes(needle)
       )
     })
-  }, [rows, q, tierFilter])
+  }, [rows, q, tierFilter, view, matchesView])
 
   /* Headline numbers are BUSINESS workers only — fleet-selftest holds 47 of 64
      open findings and 38 of 47 runs, so counting it in makes every figure on
@@ -238,30 +289,108 @@ export function WorkersClient() {
   const business = useMemo(() => rows.filter((r) => !r.diagnostic), [rows])
   const diagnostics = useMemo(() => rows.filter((r) => r.diagnostic), [rows])
 
-  const businessTiers = useMemo(() => {
+  const allTiers = useMemo(() => {
     const m = new Map<string, number>()
-    for (const r of business) m.set(r.charter.tier, (m.get(r.charter.tier) ?? 0) + 1)
+    for (const r of rows) m.set(r.charter.tier, (m.get(r.charter.tier) ?? 0) + 1)
     return [...m.entries()].sort((a, b) => (TIER_ORDER[a[0]] ?? 9) - (TIER_ORDER[b[0]] ?? 9))
-  }, [business])
+  }, [rows])
 
+  /**
+   * Which population a number counts, and it is not the same answer for all of
+   * them. Verifying W.2 in the browser made the distinction unavoidable: a tile
+   * that says 3 and shows 4 rows when clicked is exactly the inconsistency this
+   * page is supposed to be incapable of.
+   *
+   * The rule that came out of it, and it holds for every tile:
+   *
+   *   A tile that FILTERS counts workers over the WHOLE roster, and its number
+   *   is the number of rows you get when you click it. A tile that does not
+   *   filter may report a business-only figure.
+   *
+   * So health tiles (switched on, needs attention, earned a promotion) count
+   * everything — an alarm that suppresses the diagnostic worker is a bad alarm,
+   * and a broken self-test means the fleet's own health check is broken. The
+   * VOLUME figures — findings and spend — stay business-only, because that is
+   * where a self-test with 47 findings distorts rather than informs. The
+   * footnote under the strip says which is which.
+   */
   const totals = useMemo(() => ({
-    workers: business.length,
+    // Filtering tiles — whole roster, equal to the rows the tile reveals.
+    workers: rows.length,
     // A paused worker is not "switched on", whatever its dial says. The API
     // already resolves a live pause to enabled:false; this agrees with it
     // rather than trusting one of the two fields.
-    running: business.filter((r) => r.status.word !== 'paused'
-      && r.charter.enabled && r.charter.autonomyLevel !== 'OFF').length,
-    attention: business.filter((r) => r.status.needsAttention).length,
+    running: rows.filter((r) => matchesView(r, 'live')).length,
+    attention: rows.filter((r) => r.status.needsAttention).length,
+    eligible: rows.filter((r) => r.promotionEligible).length,
+    // Volume figures — business workers only.
     openFindings: business.reduce((s, r) => s + r.openFindings, 0),
     cost7d: business.reduce((s, r) => s + r.cost7d, 0),
     degraded: rows.filter((r) => r.charter.degraded).length,
     unprovisioned: rows.filter((r) => r.charter.provisioned === false).length,
-  }), [business, rows])
+  }), [business, rows, matchesView])
 
   const diagTotals = useMemo(() => ({
     findings: diagnostics.reduce((s, r) => s + r.openFindings, 0),
     cost7d: diagnostics.reduce((s, r) => s + r.cost7d, 0),
   }), [diagnostics])
+
+  /** Today's spend, kept separate from the 7-day figure on purpose. The fleet
+   *  ceiling is a DAILY one ($2.00 today), so showing a week's spend against it
+   *  would invite the operator to read 18% of budget used when the real answer
+   *  is a different number entirely. Both are shown, each against the period it
+   *  belongs to. */
+  const spentToday = useMemo(() => {
+    const midnight = new Date(); midnight.setHours(0, 0, 0, 0)
+    const since = midnight.getTime()
+    // Business workers only, matching cost7d. Summing every run here while the
+    // 7-day figure excluded the diagnostic produced "$0.0103 today" under
+    // "$0.0094 this week" — a number that cannot be true, and the kind of thing
+    // that costs a page all its credibility at a glance.
+    const mine = new Set(business.map((r) => r.charter.key))
+    return runs
+      .filter((r) => mine.has(r.agentKey) && new Date(r.createdAt).getTime() >= since)
+      .reduce((sum, r) => sum + Number(r.costUSD || 0), 0)
+  }, [runs, business])
+
+  /** "1 never set up · 2 cannot reach the AI" — the tile explains itself by
+   *  tallying the same `tag` the rows carry. */
+  const attentionTags = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const r of rows) {
+      if (r.status.needsAttention) m.set(r.status.tag, (m.get(r.status.tag) ?? 0) + 1)
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1])
+  }, [rows])
+
+  /** A tile is a button that filters. Clicking the active one clears it, so the
+   *  strip is never a trap you can only leave via the toolbar. */
+  const Tile = ({ v, k, value, sub, tone }: {
+    v: View | null
+    k: string
+    value: React.ReactNode
+    sub: React.ReactNode
+    tone?: 'warn' | 'good'
+  }) => {
+    const active = v != null && view === v
+    const Wrapper = v == null ? 'div' : 'button'
+    return (
+      <Wrapper
+        className={`acr-pg-stat${v != null ? ' sbw-tile' : ''}${active ? ' on' : ''}${tone ? ` ${tone}` : ''}`}
+        {...(v != null
+          ? {
+              type: 'button' as const,
+              'aria-pressed': active,
+              onClick: () => setView(active ? 'all' : v),
+            }
+          : {})}
+      >
+        <span className="k">{k}</span>
+        <span className="v">{value}</span>
+        <span className="sub">{sub}</span>
+      </Wrapper>
+    )
+  }
 
   /* ── columns ─────────────────────────────────────────────────────────── */
 
@@ -471,11 +600,26 @@ export function WorkersClient() {
     <div className="sbw-empty">
       <strong>No worker matches that.</strong>
       <span>
-        {[q.trim() ? `the search “${q.trim()}”` : null, tierFilter ? `the ${tierFilter} filter` : null]
-          .filter(Boolean)
-          .join(' and ')}
-        {' '}is hiding all {rows.length} of them. Clear it to see the whole fleet.
+        {(() => {
+          const parts = [
+            view !== 'all' ? `the “${VIEW_LABEL[view]}” view` : null,
+            q.trim() ? `the search “${q.trim()}”` : null,
+            tierFilter ? `the ${tierFilter} filter` : null,
+          ].filter(Boolean) as string[]
+          const list = parts.length > 1
+            ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+            : parts[0] ?? 'the current filter'
+          return `${list} ${parts.length > 1 ? 'are' : 'is'} hiding all ${rows.length} of them.`
+        })()}
       </span>
+      {view !== 'all' || q || tierFilter ? (
+        <button
+          className="acr-btn"
+          onClick={() => { setView('all'); setQ(''); setTierFilter(null) }}
+        >
+          Show every worker
+        </button>
+      ) : null}
     </div>
   )
 
@@ -494,45 +638,90 @@ export function WorkersClient() {
         analyst with one narrow job — none of them can change anything on Amazon by itself.
       </p>
 
+      {state?.halted ? (
+        <div className="acr-banner err" role="alert">
+          <Ban size={15} />
+          <span>
+            <b>The fleet is halted.</b> No worker will start, whatever its dial says
+            {state.haltReason ? <> — “{state.haltReason}”</> : null}
+            {state.haltedBy ? <>, by {state.haltedBy}</> : null}.
+          </span>
+          <Link className="acr-btn" href="/fleet/controls">Open Controls</Link>
+        </div>
+      ) : null}
+
+      {/* W.2 — five of the six tiles filter the table below. Microsoft's Agent
+          Registry leads with Total agents / Agents WITHOUT OWNERS / UNMANAGED
+          agents: two of its three headline cards are governance gaps rather
+          than census, and that is the correction here. A number an operator
+          cannot act on is a poster. */}
       <div className="acr-pg-strip">
-        <div className="acr-pg-stat">
-          <span className="k">Workers</span>
-          <span className="v">{totals.workers}</span>
-          <span className="sub">{businessTiers.map(([t, n]) => `${n} ${t}`).join(' · ') || '—'}</span>
-        </div>
-        <div className="acr-pg-stat">
-          <span className="k">Switched on</span>
-          <span className="v">{totals.running}</span>
-          <span className="sub">
-            {totals.running === 0 ? 'the whole fleet is off' : `of ${totals.workers}`}
-          </span>
-        </div>
-        <div className="acr-pg-stat">
-          <span className="k">Needs attention</span>
-          <span className="v">{totals.attention}</span>
-          <span className="sub">
-            {totals.attention === 0 ? 'nothing is asking for you' : 'see the status column'}
-          </span>
-        </div>
+        <Tile
+          v="all"
+          k="Workers"
+          value={totals.workers}
+          sub={allTiers.map(([t, n]) => `${n} ${t}`).join(' · ') || '—'}
+        />
+        <Tile
+          v="live"
+          k="Switched on"
+          value={totals.running}
+          sub={totals.running === 0 ? 'the whole fleet is off' : `of ${totals.workers}`}
+        />
+        <Tile
+          v="attention"
+          k="Needs attention"
+          tone={totals.attention > 0 ? 'warn' : undefined}
+          value={totals.attention}
+          sub={
+            totals.attention === 0
+              ? 'nothing is asking for you'
+              : attentionTags.map(([t, n]) => `${n} ${t}`).join(' · ')
+          }
+        />
+        <Tile
+          v="eligible"
+          k="Earned a promotion"
+          tone={totals.eligible > 0 ? 'good' : undefined}
+          value={totals.eligible}
+          sub={
+            totals.eligible === 0
+              ? 'none yet — trust is earned over 14 days'
+              : `${totals.eligible === 1 ? 'has' : 'have'} earned it and not been given it`
+          }
+        />
+        {/* Not a filter: this counts FINDINGS, not workers, so clicking it
+            could not show "17 rows". It reports the business-worker total; the
+            footnote below carries the diagnostic worker's separately. */}
         <div className="acr-pg-stat">
           <span className="k">Open findings</span>
           <span className="v">{totals.openFindings}</span>
           <span className="sub">waiting to be used or to expire</span>
         </div>
+        {/* Not a filter: spend is a question about money, and the page that
+            answers it is Cost & value. This tile points there. */}
         <div className="acr-pg-stat">
           <span className="k">Spent, last 7 days</span>
           <span className="v">${totals.cost7d.toFixed(4)}</span>
-          <span className="sub">across every worker</span>
+          <span className="sub">
+            ${spentToday.toFixed(4)} today
+            {state?.dailyCeilingUSD != null
+              ? <> · ceiling ${Number(state.dailyCeilingUSD).toFixed(2)}/day</>
+              : null}
+          </span>
         </div>
       </div>
 
       {/* Excluded, never concealed. */}
       {diagnostics.length > 0 ? (
         <p className="sbw-note" style={{ margin: '-4px 0 12px' }}>
-          Not counting {diagnostics.length === 1 ? 'one diagnostic worker' : `${diagnostics.length} diagnostic workers`}
+          <b>Open findings</b> and <b>spend</b> leave out{' '}
+          {diagnostics.length === 1 ? 'one diagnostic worker' : `${diagnostics.length} diagnostic workers`}
           {' '}({diagnostics.map((d) => d.charter.key).join(', ')}), which check the fleet itself rather
           than your account: {diagTotals.findings} more finding{diagTotals.findings === 1 ? '' : 's'}
-          {diagTotals.cost7d > 0 ? `, $${diagTotals.cost7d.toFixed(4)}` : ''}.
+          {diagTotals.cost7d > 0 ? `, $${diagTotals.cost7d.toFixed(4)}` : ''}. The counts that filter
+          the table — workers, switched on, needs attention — include{' '}
+          {diagnostics.length === 1 ? 'it' : 'them'}, so every tile matches the rows it shows.
         </p>
       ) : null}
 
@@ -582,6 +771,17 @@ export function WorkersClient() {
             </button>
           ))}
         </div>
+        {view !== 'all' ? (
+          <button
+            type="button"
+            className="sbw-viewchip"
+            onClick={() => setView('all')}
+            title="Show every worker again"
+          >
+            Showing <b>{VIEW_LABEL[view]}</b>
+            <X size={12} aria-hidden />
+          </button>
+        ) : null}
         <span className="spacer" />
         <button className="acr-btn" onClick={() => void load()} disabled={loading}>
           <RefreshCw size={13} /> {loading ? 'Refreshing…' : 'Refresh'}
@@ -591,7 +791,10 @@ export function WorkersClient() {
       <div className="h10-ds-gridcard sbw-gridcard">
         <GridToolbar
           count={
-            <>Showing <b>{visible.length}</b> of <b>{rows.length}</b> worker{rows.length === 1 ? '' : 's'}</>
+            <>
+              Showing <b>{visible.length}</b> of <b>{rows.length}</b> worker{rows.length === 1 ? '' : 's'}
+              {view !== 'all' ? <> · {VIEW_LABEL[view].toLowerCase()}</> : null}
+            </>
           }
         />
         <DataGrid<WorkerRow>

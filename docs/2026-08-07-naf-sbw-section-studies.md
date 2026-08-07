@@ -316,11 +316,43 @@ Agent 365's registry leads with *Total agents*, **Agents without owners**,
 
 | Tile | Value | Sub-line | Click → |
 |---|---|---|---|
-| **Workers** | count | tier breakdown: "4 analysts · 1 director · 1 critic · 1 auditor" | clears filters |
-| **Switched on** | live count | 0 → **"the whole fleet is off"**; else "of 7" | filter: live |
-| **Needs attention** ⚠ | count | the classes present: "1 never set up · 1 stopped by a limit" | filter: needs attention |
-| **Earned a promotion** | `promotionEligible` count | 0 → "none yet — they earn it over 14 days"; else "and has not been given it" | filter: eligible |
-| **Spent, 7 days** | `$0.0000` | "of the $X daily ceiling" | → `/fleet/cost` |
+| **Workers** | count | tier breakdown: "4 analyst · 1 director · 1 critic · 1 auditor" | view: all |
+| **Switched on** | live count | 0 → **"the whole fleet is off"**; else "of 7" | view: live |
+| **Needs attention** ⚠ | count | the causes present: "1 never set up · 1 breaking its contract · 1 cannot reach the AI · 1 paused" | view: attention |
+| **Earned a promotion** | `promotionEligible` count | 0 → "none yet — trust is earned over 14 days" | view: eligible |
+| **Open findings** | Σ open findings | "waiting to be used or to expire" | **not a filter** |
+| **Spent, 7 days** | Σ cost | "$X today · ceiling $Y/day" | **not a filter** |
+
+Six tiles, not the five first drafted here. Two changes came out of building it:
+
+**Spend cannot be shown against the ceiling as a proportion.** The ceiling is a
+**daily** $2.00 and the tile reports a **week**. "18% of the budget used" would
+be arithmetic over two different periods. Both numbers appear instead, each
+against the period it belongs to. (The first build got this wrong in the other
+direction too — today's spend summed a different population from the week's, and
+rendered "$0.0103 today" underneath "$0.0094 this week".)
+
+**Open findings counts findings, not workers**, so clicking it could never
+reveal "17 rows". It stops being a filter rather than being dropped — losing a
+real number to preserve a rule about buttons is the wrong trade, and *visibility
+over minimalism* is a standing operator preference.
+
+### 2.2b Which population each tile counts
+
+Verification forced this to be stated, because the first build had a tile
+reading 3 above a table showing 4 — precisely the inconsistency this page claims
+to be incapable of. The rule:
+
+> **A tile that FILTERS counts workers over the whole roster, and its number is
+> exactly the number of rows you get when you click it. A tile that does not
+> filter may report a business-only figure.**
+
+So the *health* tiles — switched on, needs attention, earned a promotion — count
+everything, diagnostic workers included. An alarm that suppresses the self-test
+is a bad alarm: a broken self-test means the fleet's own health check is broken.
+The *volume* figures — findings and spend — stay business-only, because that is
+where a self-test holding 47 of 64 findings distorts rather than informs. The
+footnote under the strip names which is which, in those words.
 
 **Needs attention** is the union of: not provisioned · degraded · paused · last
 run not ok · enabled but never run. Its definition and the Status column's are
