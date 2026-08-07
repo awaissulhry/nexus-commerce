@@ -1053,9 +1053,60 @@ viewport (`main.scrollTop` 0 → 1008) · after scrolling away, **two full 10s p
 cycles leave the scroll position exactly where the reader put it** — the jump
 fires once. Suite 360 passing across 40 files.
 
-**Still open: ACT.4** (the failure tiles, S2), **ACT.5** (the run drawer over
-the live `/runs/:id/trace`, S5), **ACT.6** (S7 explainer + the DT.8 teaching
-gate).
+### ACT.5 — the drawer (S5, DT.4). The payoff.
+
+Click a row, the run opens: **why it ran** · **step by step** with per-step
+time, cost and tokens (the expensive one named in words) · **what it read**,
+expandable to the 4,000-character evidence preview · **what it found** ·
+**what it cost** · the identifiers to quote at someone. No new backend —
+`GET /agent/fleet/runs/:id/trace` has been live since FX.1.
+
+Built as `app/fleet/_shared/RunDetail.tsx` so the worker page can render the
+same drawer rather than growing a second one.
+
+**It also repairs a link ACT.7 broke.** Plan rows pointed at
+`/fleet#plan-<id>` — an anchor only `TimelineStream` ever drew. Retiring that
+component for the teaser left the link pointing at nothing. Plans now open the
+shipped `PlanStory` in the same drawer, **imported, never copied**. A critic
+verdict opens *the plan it ruled on*, not a trace of the critic's own run —
+that is the question the reader is actually asking.
+
+**Spine:** `runId` on every event, so findings, plans, critic verdicts and
+approvals all open the run behind them. The drawer is reachable from **119 rows
+rather than 53**.
+
+#### The data fact that earned a whole section
+
+`AgentFinding` is upserted on `(charterKey, entityType, entityId, dedupeKey)`,
+so a row stays attached to the run that **first** saw the thing. Measured on
+production (`_sba-finding-runid.mts`):
+
+| | |
+|---|---|
+| Findings whose `runId` names a fleet run | **64 of 64** |
+| Distinct runs owning any finding | **10** |
+| Runs reporting `findingCount > 0` that own **zero** finding rows | **15 of 25** |
+
+So for 60% of the runs that report findings, the trace returns none. Hiding
+"What it found" there would leave a row reading *"ran and found 11 things"*
+above a drawer that never mentions them — **the page contradicting itself one
+click apart.** It now says so instead: *"It reported 11 things, and each had
+been seen before — a finding is written down once and kept up to date, so it
+stays listed under the run that first spotted it."*
+
+This is the same upsert trap as Part 7 defect 5, met from the other end. It is
+worth stating as a rule: **a count stored on a parent row and the child rows
+themselves are two different questions, and an upsert makes them disagree.**
+
+Verified in a browser against production: a run owning findings renders all 7
+with severities and full rationales · a run whose findings were upserted shows
+the explanation · a failed run shows 5 steps and the verbatim schema error ·
+evidence expands to its preview · Escape closes · and the 10s poll is **held for
+two full cycles** while the drawer is open. Suite 369 across 41 files.
+
+**Still open: ACT.4** (the failure tiles, S2) and **ACT.6** (S7 explainer + the
+DT.8 teaching gate). ACT.7 landed early, out of order, because the teaser was
+approved separately.
 
 One consequence to note: `TimelineStream.tsx` is now rendered by **nothing** —
 Activity has its own list, and the Overview has a teaser. It is left in place
