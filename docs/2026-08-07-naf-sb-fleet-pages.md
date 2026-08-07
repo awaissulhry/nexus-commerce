@@ -412,6 +412,7 @@ Each phase is independently shippable and visibly better.
 
 | Phase | What | Why here |
 |---|---|---|
+| **SB.0** | Light the fleet: diagnose the 47% `fetch failed`, one charter to OBSERVE, one real sweep | Operator decision 2026-08-07. Every page below is designed against what this produces |
 | **SB.2** | Physical route move; components leave `rules-automation/` | Already scoped; blocked only on the parallel session |
 | **SB.3** | Split the existing page: Overview · Approvals · Activity · Fleet map | Pure re-housing of shipped, data-backed sections. Immediate clarity, no new backend |
 | **SB.4** | Workers registry + create-from-template | The registry is the spine everything else references |
@@ -427,17 +428,21 @@ states) is **not a phase** — it is a condition of done on every page, per FX.4
 
 ---
 
-## PART 7 — Decisions I need from you
+## PART 7 — Operator decisions (settled 2026-08-07)
 
-1. **Ten pages in three groups, or fewer?** I can fold Cost into Overview and
-   Files into Assignments for a leaner seven.
-2. **Naming:** Workers / Workflows / Assignments / Activity / Controls — or
-   Agents / Routines / Tasks / History / Governance?
-3. **Layer 2 scope:** is "create a worker = new instance of an existing charter
-   type" enough authorship, or do you want a prompt-level author surface too
-   (which means an eval gate before it can leave OBSERVE)?
-4. **Do we light the fleet before or after SB.3?** My recommendation: run one real
-   sweep first. Pages built against empty tables lie to us about what they need.
+1. **Ten pages in three groups — APPROVED.** Operate / Build / Govern as drawn in
+   Part 3. Ten is the ceiling; an eleventh page means something merges first.
+2. **Light the fleet before building — APPROVED.** One charter on, one real sweep,
+   and the 47% `fetch failed` rate diagnosed, *before* SB.3 splits the page. Pages
+   built over empty tables lie to us about what they need. This becomes **SB.0**
+   and moves to the front of the order in Part 6.
+3. **"Create a worker" = a new instance of an existing charter type — APPROVED.**
+   New name, scope, budget, cadence and prompt overlay on top of a code-owned
+   charter type. No hand-written charters, so no eval gate is required to leave
+   OBSERVE. Full prompt authoring is deferred until report cards and charter A/B
+   (AC.8) have real data behind them — revisit then, not before.
+4. **Naming** — Workers / Workflows / Assignments / Activity / Controls stands
+   unless contradicted in build.
 
 ---
 
