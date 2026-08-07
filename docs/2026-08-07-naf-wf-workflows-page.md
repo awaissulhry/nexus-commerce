@@ -860,6 +860,52 @@ S6 test run · S7 teaching throughout — plus stored execution, origin-step
 gates and the self-re-arming clock beneath them. What remains is the WF.6
 deferred list, each item waiting on its named prerequisite.**
 
+### WF.6a — custom workflows (study, 2026-08-07)
+
+**What a custom workflow honestly is, now that instances exist:** a named,
+operator-composed routine over any workers `resolveCharter` can resolve —
+code charters and W.8 instances alike — with its own trigger and its own
+run history, producing findings and plans on the shared board. **What it is
+not:** a second path to Amazon. The queue step (plan → critic → pre-checks
+→ approvals) remains the built-in council's code; a custom workflow that
+includes the director produces a *plan* on the board, and the UI says whose
+job queueing is. Laws L2/L3 hold exactly as before.
+
+**Verified gaps between here and there:**
+
+1. **The revisions route refuses custom keys** (deliberate WF.3 scoping) —
+   unlock: a `POST /agent/fleet/workflows` create route (name → slug key,
+   kind `custom`, born with no active revision = disabled, "floor is
+   nothing"), and the revisions route accepting any existing workflow row.
+   `validateDefinition` already handles everything else, instances included.
+2. **No walk for arbitrary keys.** WF.4a folded the stored walk into
+   `runFleet(mode)`. Extract `runStoredWorkflow(key, trigger)` — same
+   levels, same per-node re-checked gates, same stamps — with `runFleet`
+   becoming its mode-keyed caller. A custom run needs an honest
+   `AgentRun.mode`: **add `'custom'` to the union** (executor type, schema
+   comment, and the timeline's `sourcePhrase` label — a one-line touch on
+   the DT-owned timeline service, noted in the locks doc).
+3. **The web pages are static-first.** `BUILTIN_ROUTINES` is the list's and
+   detail's registry; custom keys 404. Refactor to API-first: the list
+   merges `GET /workflows` rows (customs included, with their honest
+   `source`/`enabled` states); the detail page accepts any known key —
+   builtins keep their hand-authored story, customs render
+   `definitionToStory` always. **Run history for customs falls out of WF.4a
+   stamping**: filter runs by `workflowKey === key` instead of mode — two
+   customs never blur together.
+4. **Run-now and clocks.** Manual: `POST /workflows/:key/run` walks the
+   effective definition for real (writes findings — the fleet's gates and
+   the charters' own OFF dials still decide what actually executes), behind
+   a confirm reusing WF.5's cost estimate. Scheduled: `resyncFleetSchedules`
+   extends to enabled customs with schedule triggers — same re-arm on
+   activate/revert, same one clock of truth.
+
+**Phases, each shippable:** **6a** — create + unlock revisions + API-first
+web (a custom is composable, publishable, visible; inert until run). **6b**
+— `runStoredWorkflow` + `'custom'` mode + Run-now + per-workflow run
+history. **6c** — clocks for customs. The editor, versions, test lane and
+teaching layer need zero changes — they were built key-generic on purpose.
+
 ---
 
 ## Sources
