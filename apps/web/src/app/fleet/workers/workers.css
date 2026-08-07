@@ -525,3 +525,8 @@ button.acr-pg-stat {
   line-height: 1.45;
   color: #a3312c;
 }
+
+/* Retired: kept for its history, cannot run. Grey rather than red — it is a
+   state the operator chose, not a fault. */
+.sbw-diag.retired { border-color: #dbe1ea; background: #eef1f5; color: #78828f; }
+.sbw-who .sbw-note { display: block; }

@@ -41,7 +41,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Ban, Bot, Check, Columns, Pause as PauseIcon, Plus, RefreshCw, ShieldAlert, X } from 'lucide-react'
+import { AlertTriangle, Archive, Ban, Bot, Check, Columns, Pause as PauseIcon, Plus, RefreshCw, ShieldAlert, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { GLOSSARY, Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { DataGrid, type Column } from '@/design-system/components'
@@ -104,6 +104,10 @@ interface CharterRow {
   provisioned?: boolean | null
   /** SB.W.1 — the charter says so itself; see isDiagnostic(). */
   diagnostic?: boolean
+  /** SB.W.8 — set when the operator created this worker from a template. */
+  templateKey?: string
+  /** SB.W.8 — kept for its history; cannot run. */
+  retired?: boolean
   scopeMarketplaces?: string[]
   scopeCampaignIds?: string[]
   pausedUntil?: string | null
@@ -174,12 +178,13 @@ const DAY = 24 * 3600 * 1000
  * only from its tile, because "which workers have earned a promotion" is a
  * question you ask by noticing the number, not by browsing for it.
  */
-type View = 'all' | 'live' | 'attention' | 'eligible'
+type View = 'all' | 'live' | 'attention' | 'eligible' | 'retired'
 
 const VIEW_LABEL: Record<Exclude<View, 'all'>, string> = {
   live: 'Switched on',
   attention: 'Needs attention',
   eligible: 'Earned a promotion',
+  retired: 'Retired',
 }
 
 /**
@@ -249,6 +254,7 @@ export function WorkersClient() {
   const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set())
   const [pendingRaise, setPendingRaise] = useState<{ to: Level; workers: AffectedWorker[] } | null>(null)
   const [pendingPause, setPendingPause] = useState<AffectedWorker[] | null>(null)
+  const [pendingRetire, setPendingRetire] = useState<AffectedWorker[] | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
 
@@ -401,13 +407,22 @@ export function WorkersClient() {
 
   const tierCounts = useMemo(() => {
     const m = new Map<string, number>()
-    for (const r of rows) m.set(r.charter.tier, (m.get(r.charter.tier) ?? 0) + 1)
+    for (const r of rows) {
+      if (r.charter.retired) continue
+      m.set(r.charter.tier, (m.get(r.charter.tier) ?? 0) + 1)
+    }
     return [...m.entries()].sort((a, b) => (TIER_ORDER[a[0]] ?? 9) - (TIER_ORDER[b[0]] ?? 9))
   }, [rows])
 
   /** One predicate per view, used by BOTH the tile counts and the table, so a
    *  tile reading 3 above a table showing 4 cannot happen. */
   const matchesView = useCallback((r: WorkerRow, v: View): boolean => {
+    /* SB.W.9 — a retired worker is kept for its history and appears in exactly
+       one view. Leaving it in "All" would make the roster grow forever with
+       workers that cannot run; hiding it entirely would lose the history that
+       is the whole reason retirement is a state and not a delete. */
+    if (r.charter.retired) return v === 'retired'
+    if (v === 'retired') return false
     switch (v) {
       case 'live':
         return r.status.word !== 'paused'
@@ -444,7 +459,10 @@ export function WorkersClient() {
 
   const allTiers = useMemo(() => {
     const m = new Map<string, number>()
-    for (const r of rows) m.set(r.charter.tier, (m.get(r.charter.tier) ?? 0) + 1)
+    for (const r of rows) {
+      if (r.charter.retired) continue
+      m.set(r.charter.tier, (m.get(r.charter.tier) ?? 0) + 1)
+    }
     return [...m.entries()].sort((a, b) => (TIER_ORDER[a[0]] ?? 9) - (TIER_ORDER[b[0]] ?? 9))
   }, [rows])
 
@@ -469,7 +487,9 @@ export function WorkersClient() {
    */
   const totals = useMemo(() => ({
     // Filtering tiles — whole roster, equal to the rows the tile reveals.
-    workers: rows.length,
+    // Retired workers are not part of "the roster": they cannot run, and the
+    // Retired view is where they live.
+    workers: rows.filter((r) => matchesView(r, 'all')).length,
     // A paused worker is not "switched on", whatever its dial says. The API
     // already resolves a live pause to enabled:false; this agrees with it
     // rather than trusting one of the two fields.
@@ -592,6 +612,8 @@ export function WorkersClient() {
       setBusyKeys(new Set())
       setPendingRaise(null)
       setPendingPause(null)
+      setPendingRetire(null)
+      setSelected(new Set())
     }
   }, [load, report])
 
@@ -636,7 +658,15 @@ export function WorkersClient() {
             {r.diagnostic ? (
               <span className="sbw-diag" title={DIAGNOSTIC_HINT}>diagnostic</span>
             ) : null}
+            {r.charter.retired ? (
+              <span className="sbw-diag retired" title="Retired. It cannot run; its runs, findings and costs are kept.">retired</span>
+            ) : null}
             <span className="ky">{r.charter.key}</span>
+            {r.charter.templateKey ? (
+              <span className="sbw-note" title={`You created this from the built-in ${r.charter.templateKey}. It can do nothing that one cannot.`}>
+                from {r.charter.templateKey}
+              </span>
+            ) : null}
           </span>
         </div>
       ),
@@ -976,6 +1006,60 @@ export function WorkersClient() {
         />
       ) : null}
 
+      {pendingRetire ? (
+        <div className="acr-pg-confirmwrap" role="dialog" aria-modal="true" aria-label="Retire"
+             onClick={(e) => { if (e.target === e.currentTarget) setPendingRetire(null) }}>
+          <div className="acr-pg-confirm">
+            <h4>
+              Retire {pendingRetire.length === 1 ? pendingRetire[0]!.name : `these ${pendingRetire.length} workers`}?
+            </h4>
+            <p>
+              {pendingRetire.length === 1 ? 'It' : 'They'} will be switched off and will stop
+              appearing in the roster. {pendingRetire.length === 1 ? 'It' : 'They'} cannot run again.
+            </p>
+            <p>
+              <b>Nothing is deleted.</b> Every run, finding and euro spent stays on record, and
+              {pendingRetire.length === 1 ? ' it' : ' they'} can still be found under the{' '}
+              <b>Retired</b> view.
+            </p>
+            <ul className="sbw-affected">
+              {pendingRetire.map((w) => <li key={w.key}><b>{w.name}</b><span>{w.key}</span></li>)}
+            </ul>
+            <div className="acr-pg-confirmbtns">
+              <button className="acr-btn" onClick={() => setPendingRetire(null)} disabled={busyKeys.size > 0}>
+                Cancel
+              </button>
+              <button
+                className="acr-btn stop"
+                disabled={busyKeys.size > 0}
+                onClick={() => void runAction(
+                  pendingRetire.map((w) => w.key),
+                  'Retired',
+                  async () => {
+                    const ok: string[] = []
+                    const failed: Array<{ key: string; error: string }> = []
+                    for (const w of pendingRetire) {
+                      try {
+                        const res = await fetch(`${backend}/api/agent/fleet/workers/${w.key}`, { method: 'DELETE' })
+                        if (!res.ok) {
+                          const b = (await res.json().catch(() => ({}))) as { error?: string }
+                          failed.push({ key: w.key, error: b.error || `${res.status}` })
+                        } else ok.push(w.key)
+                      } catch (e) {
+                        failed.push({ key: w.key, error: e instanceof Error ? e.message : String(e) })
+                      }
+                    }
+                    return { ok, failed }
+                  },
+                )}
+              >
+                Retire {pendingRetire.length === 1 ? 'it' : `all ${pendingRetire.length}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {pendingPause ? (
         <PauseDialog
           workers={pendingPause}
@@ -1106,7 +1190,10 @@ export function WorkersClient() {
           can be linked. */}
       <div className="sbw-views" role="group" aria-label="Which workers to show">
         {NAMED_VIEWS.map(({ v, label, hint }) => {
-          const n = v === 'all' ? rows.length : rows.filter((r) => matchesView(r, v)).length
+          // Count through matchesView even for 'all' — retired workers are
+          // excluded from it, and `rows.length` would reinstate exactly the
+          // tile-says-3-table-shows-2 defect W.2 exists to prevent.
+          const n = rows.filter((r) => matchesView(r, v)).length
           return (
             <button
               key={v}
@@ -1120,6 +1207,17 @@ export function WorkersClient() {
             </button>
           )
         })}
+        {rows.some((r) => r.charter.retired) ? (
+          <button
+            type="button"
+            className={`sbw-view ${view === 'retired' ? 'on' : ''}`}
+            aria-pressed={view === 'retired'}
+            title="Workers you retired. Kept for their history; they cannot run."
+            onClick={() => setView(view === 'retired' ? 'all' : 'retired')}
+          >
+            Retired <span className="n">{rows.filter((r) => r.charter.retired).length}</span>
+          </button>
+        ) : null}
         {view === 'eligible' ? (
           <button type="button" className="sbw-view on" aria-pressed onClick={() => setView('all')}>
             {VIEW_LABEL.eligible} <X size={11} aria-hidden />
@@ -1142,7 +1240,7 @@ export function WorkersClient() {
             className={`acr-pg-chip ${tierFilter === null ? 'on' : ''}`}
             onClick={() => setTierFilter(null)}
           >
-            Any job <span className="n">{rows.length}</span>
+            Any job <span className="n">{rows.filter((r) => !r.charter.retired).length}</span>
           </button>
           {tierCounts.map(([tier, n]) => (
             <button
@@ -1279,6 +1377,24 @@ export function WorkersClient() {
                   </button>
                 )
               })}
+              {/* Retire is offered only when EVERY selected worker is one you
+                  created. A built-in has no row to retire and is switched off
+                  instead, so a mixed selection gets no button rather than a
+                  button that half-works. */}
+              {selectedRows.length > 0 && selectedRows.every((r) => r.charter.templateKey && !r.charter.retired) ? (
+                <>
+                  <span className="sbw-bulksep" aria-hidden />
+                  <button
+                    className="acr-btn stop"
+                    disabled={busyKeys.size > 0}
+                    onClick={() => setPendingRetire(selectedRows.map((r) => ({
+                      key: r.charter.key, name: r.charter.name, from: r.charter.autonomyLevel,
+                    })))}
+                  >
+                    <Archive size={13} /> Retire…
+                  </button>
+                </>
+              ) : null}
               <button className="acr-btn" onClick={() => setSelected(new Set())}>
                 <X size={12} /> Clear
               </button>

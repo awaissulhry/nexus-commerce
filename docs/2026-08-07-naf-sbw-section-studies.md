@@ -17,8 +17,8 @@ what it must not become.
 | 4 | S5 · The shared dial + bulk actions | W.4 | **built** — `_shared/autonomy.tsx`; W.5 absorbed into it. Bulk run-now and bulk scope deliberately deferred (see the W.4 commit) |
 | 5 | S8 · Live updating | W.6 | **built** — notes below |
 | 6 | Worker detail — the missing sections | W.7 | **built** — notes below |
-| 7 | S6 · Create a worker | W.8 | pending, blocked on the instance model |
-| 8 | S7 · Retirement | W.9 | pending |
+| 7 | S6 · Create a worker | W.8 | **built** — instance model, migration `20260807d`, 10 tests |
+| 8 | S7 · Retirement | W.9 | **built** — a state, never a delete |
 
 ---
 
@@ -583,3 +583,47 @@ the AI provider" — so reusing it over a tally produced *"2 of its 4 runs — i
 last run could not reach…"*. `Failure` now carries a separate `label` in the
 aggregate voice. Any surface counting failures should use `label`; any surface
 describing one run should use `sentence`.
+
+
+---
+
+## STUDY 7 — Create and retire *(build steps W.8 and W.9)*
+
+The design is Part 6 of the page study and §4 of the session-locks register,
+reviewed with the Workflows stream before either half was built. What building
+it added:
+
+### 7.1 Retirement had to mean "cannot run", not "hidden"
+
+Caught while wiring the endpoint, not after. `DELETE` set a marker and the
+registry did not read it — so a "retired" worker would have kept resolving and
+kept running. `resolveCharter` now refuses a retired instance; `listCharters`
+still returns it, flagged, because its runs, findings and costs are history the
+audit trail depends on. Retirement is a state; nothing in the fleet is deleted.
+
+### 7.2 The counting invariant bit again, in a new place
+
+W.2 established it: *a tile that filters counts the whole roster, and its number
+equals the rows you get when you click it.* Adding a Retired view broke it
+immediately — "All 3" over two visible rows, because `rows.length` counted the
+retired worker the view excluded.
+
+Every count now goes through `matchesView`, including `all`. **The lesson is
+that the invariant needs a test, not vigilance** — it has now been broken once
+per feature that touched the row set. Worth a vitest over the predicate the next
+time this file is opened.
+
+### 7.3 The review panel is generated, and must not over-promise
+
+"What it will never be able to do", written by hand, is marketing; read off the
+template's own tool list and evidence feeds, it is a fact. The same principle
+caught a live dishonesty: typing a budget above the template's ceiling made the
+panel promise *"spend at most $5.00 a day"* for a worker the API then refused to
+create. It now clamps to what can actually be granted and says why inline.
+
+### 7.4 What retirement deliberately does not do
+
+No un-retire in the UI. Bringing a worker back is rare, and the safe version of
+it is creating a new instance from the same template — which is one drawer away
+and leaves the old one's history intact. If that turns out to be wrong, the
+column is already there.
