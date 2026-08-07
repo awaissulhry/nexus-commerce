@@ -70,6 +70,23 @@ seven charters cap at OBSERVE**. Only `amazon-ads-director` has
 `autonomyCap='PROPOSE'`. At maximum dial, one worker of seven could ever ask
 for anything — and its tools cannot be queued.
 
+**And a third, found by the Assignments stream and verified here.** Grep every
+caller of `runOrQueueTool` in `apps/api/src`:
+
+| Caller | |
+|---|---|
+| `fleet-council.service.ts:164` | **the only fleet caller** |
+| `tool-loop.service.ts:197` | legacy ACP copilot loop |
+| `approval-gate.service.ts:117` | `requestApproval()` — the manual button |
+| `autonomous/pricing-watchdog.ts:155` | non-fleet autonomous agent |
+| `autonomous/listing-quality-keeper.ts:201` | non-fleet autonomous agent |
+
+**`executeCharter` never calls it — at any autonomy level, for any worker.** So
+a sweep run, an `ask` run and an assignment run are all structurally incapable
+of queuing an approval; only the **weekly council cron** can. Three independent
+walls: the tool has no executor, the dial cannot reach PROPOSE, and the caller
+does not exist. Any one of them alone would empty the queue.
+
 > **The page's queue is structurally unreachable. Building triage UI over it
 > without saying so would be building a waiting room with no door.**
 
@@ -81,11 +98,23 @@ can execute.
 
 ### 1.2 The inversion: the requests that *can* act are the ones nobody can see
 
-`requestApproval()` (`approval-gate.service.ts:100-116`) — the copilot's
-"Request approval" path — can mint an approval for `set-price`,
-`publish-listing`, `send-customer-message` or `apply-content` **today**. Those
-four have executors. They are the only rows on this page that can reach the
+Four callers can mint an approval for `set-price`, `publish-listing`,
+`send-customer-message` or `apply-content` — the copilot tool loop,
+`requestApproval()`'s manual button, and **two scheduled autonomous agents**,
+`pricing-watchdog` (07:00 UTC daily) and `listing-quality-keeper`. Those four
+tools have executors. They are the only rows on this page that can reach the
 outside world.
+
+**How close is that to live? One row.** Verified read-only against prod
+(`_apx-autonomous.mts`): both crons are *registered* — `startPricingWatchdogCron`
+schedules unless `NEXUS_ENABLE_PRICING_WATCHDOG === '0'`, so the default is
+**on** — and each morning the job asks `isAgentScheduleEnabled(key)`, which
+reads `AgentDefinition.enabled` and returns **false when the row is missing**.
+Today: `AgentDefinition` holds exactly **one** row, `pricing-watchdog`
+`enabled=false` (set 2026-06-17); `listing-quality-keeper` has **no row at
+all**. `CronRun` shows **0 runs ever** for both. So the hole is **latent, not
+leaking** — and the distance from latent to leaking is a single toggle in the
+Control Center, not a deploy.
 
 They are also filtered out of Waiting. And the sweep does *not* share the
 filter:
@@ -451,7 +480,10 @@ One plain sentence for each:
    `execute()`, and an approve on one would record your decision, teach the
    fleet, and write nothing to Amazon. *This is the most load-bearing fact on
    the page and it is currently stated nowhere in the product.*
-4. **When could something appear?** Next sweep, next council.
+4. **When could something appear?** **The weekly council, and nothing else** —
+   not the sweep, not an `ask`, not an assignment, because `executeCharter`
+   never calls the queueing path. Naming the sweep here would be the fourth
+   stale constant.
 5. **What happens if you do nothing?** A request expires **24 hours** after it
    is made; expiry means refused-and-recorded and **never** auto-approved; the
    sweep runs every 30 seconds whether the fleet is on or off.
@@ -807,6 +839,15 @@ exchanges. Recorded here and mirrored into locks §5 when both studies land.
   class, not a run of bad luck: **a read surface drawing a constant no
   executor honours.** Worth a standing check on any new fleet surface.
 - Deep link `/fleet/approvals?assignment=<id>`; the queue lands filtered.
+- ⚠ **The provenance card line is NOT built at AQ.3.** The Assignments stream
+  corrected itself after its own code recon: an assignment run cannot produce
+  an approval at all, because `executeCharter` never reaches the queueing path
+  (§1.1's third wall). The contract is right and stays — `AgentRun.assignmentId`
+  still earns its place, and the join will be waiting the day a path exists —
+  but a card line built now would have nothing to render and the only symptom
+  would be that it never appears. They deleted three of their own surfaces on
+  the same reasoning: **ship it deleted, not empty.** That principle applies to
+  this page too, and it is why the oversight check is AQ.10 and not AQ.1.
 - **`blocked` → `returned`.** "Blocked" is already **the critic's verdict on a
   plan**, and the fleet's only plan to date is blocked, so the operator meets
   that word in the other sense first. A naming collision caught before either
