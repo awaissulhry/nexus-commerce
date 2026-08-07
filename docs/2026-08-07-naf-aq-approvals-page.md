@@ -1047,3 +1047,40 @@ of seven charters cap at OBSERVE); the assembled response is verified on prod
 after deploy, which is the standing rule anyway.
 
 **Not built in this pass:** AQ.2 through AQ.10.
+
+### Prod verification (2026-08-07, in the browser)
+
+`/fleet/approvals` on Vercel, against the live API. Every number on the
+gate-state section is real and matches the read-only probes in Part 1:
+
+| Tile | Rendered | Source |
+|---|---|---|
+| Who could ask | **0 of 7** — *"1 of 7 could ever be; the rest are capped lower in code"* | 7 charters all OFF; only `amazon-ads-director` caps at PROPOSE |
+| Whether their actions can run | **0 of 3**, each with a `preview only` chip | `typeof tool.execute === 'function'` on the live registry |
+| When one could appear | **in 2 days** — *"the weekly council, and nothing else"* | the council cron; the sweep is named as unable |
+| If you never answer | **24h**, *"expiry means refused — never approved because nobody looked"* | `EXPIRY_HOURS`, read not retyped |
+
+Geometry measured rather than eyeballed (`feedback_no_dead_space_layouts`
+requires numbers, not element presence): `documentElement.scrollWidth === innerWidth`
+so **no horizontal overflow**; `.acr` is 1662px of an available 1662px, i.e.
+**100% width**; the four tiles are 388px each. The unused vertical space is an
+honestly empty queue, not a shrink-wrapped layout.
+
+The Decided view renders all 18 real rows correctly: worker names not keys,
+`nobody recorded` attribution, risk chips, the `pre-fleet` label, and each
+reason verbatim.
+
+**One defect, found on prod and not in review — mine.** The Decided tab
+rendered under the heading *"What you already decided"*, above eighteen rows
+that each say `nobody recorded` and carry a `pre-fleet` chip. Those were script
+runs in June. **The operator has never decided anything**, so the heading
+credited them with eighteen decisions — two lines above the inbox's own footer
+saying the opposite. This is verbatim the day-one trust hazard Part 1.3 names,
+shipped in copy written by the same session that named it, which is worth
+recording rather than quietly fixing. Now **"The decision record"**, true
+whoever decided (`f4d0d525c`).
+
+The lesson generalises past this page: **the honest-attribution work was done
+at row level and the heading was never re-read against it.** Any summary line
+above a list of records inherits the list's weakest claim, and needs checking
+against the emptiest and most embarrassing case, not the imagined full one.

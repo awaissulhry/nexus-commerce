@@ -259,6 +259,19 @@ file a sibling is actively writing is exactly what the protocol forbids.
 mitigation. A half-written component saved "just to come back to it" is a
 shared-gate outage with your name on it and no commit to point at.
 
+**And the mirror image, hit twenty minutes later: the failure may not be yours,
+and may be gone before you look.** My push failed on the API build; by the time
+I ran `tsc` myself it was **0 errors** — a sibling had been mid-edit when my
+hook ran and had since finished. So:
+
+> Before diagnosing a pre-push build failure, **re-run the failing build**.
+> If it is clean, the tree simply moved under you: push again.
+
+The corollary is that a green pre-push proves nothing about *your* commit — it
+proves the tree compiled at that instant. That is the same property that lets a
+non-compiling commit through (§ the trap above); it just fails in the friendly
+direction this time.
+
 Corollary, same evening, same cause: **`getBackendUrl()` takes no arguments**,
 and two sessions wrote `getBackendUrl('')` within ninety minutes of each other
 because a memory note said so. The note is fixed
