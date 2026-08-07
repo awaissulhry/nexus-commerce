@@ -487,7 +487,7 @@ the empty-state row the phantom tree was rendering.
 | 1 | `provisioned` field on the charter payload | W.1, `charter-registry.ts` (claimed) |
 | 2 | Seed `fleet-auditor` | one existing POST, any time |
 | 3 | Move the failure classifier into shared code so roster / Activity / detail agree | W.1, then reused |
-| 4 | `AgentControlAudit` is empty after real dial use — diagnose | before W.4 writes more attributable changes |
+| 4 | ~~`AgentControlAudit` is empty — diagnose~~ | **CLOSED at W.4: not a defect.** The writer works (probe inserts and reads back), every control route calls it, and the table is empty because no control has ever been changed through the API — the revisions came from a verification script calling the service layer directly, and the 18 approvals predate AP.1 by two months and belong to the copilot tool flow. Residue worth keeping: auditing lives in the route layer, so a script that changes a control leaves no trace. |
 | 5 | Pin the DS tokens on `.fleet-surface`, the `productsNextLight` way | Study 0, precedes W.1 |
 | 6 | Verify no DS button under `.fleet-surface` computes `border-top-width: 0px` | W.1 browser check on prod |
 | 7 | `.h10-shell` pins the semantic tokens as triplets and breaks DS borders across the ads console — not ours to fix, but do not copy it | noted; owner's call per `reference_ds_token_triplet_collision` |

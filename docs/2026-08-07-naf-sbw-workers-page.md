@@ -113,9 +113,20 @@ network class); every other worker has run between 1 and 4 times.
 - **14 scorecards** exist, so the grade column has data.
 - **2 charter revisions** exist, so at least one worker is running an *edited*
   instruction rather than the code one. **Nothing on the roster says so.**
-- **0 rows in `AgentControlAudit`.** The "who changed what" trail that Part 7 of
-  the master brief and the EU AI Act posture depend on is empty — the audit
-  write is not firing on the paths that have actually been used.
+- **0 rows in `AgentControlAudit`** — and, diagnosed at W.4, this is **correct,
+  not a defect.** An earlier draft of this document called it "the audit write
+  not firing on the paths that have actually been used". It was wrong. A write
+  probe inserts and reads back fine; every route that changes a control does
+  call `recordControlChange`. The table is empty because **no control has ever
+  been changed through the API**: the two charter revisions were authored by
+  `_ac-preview-prod.mts`, a verification script calling
+  `createRevision`/`activateRevision` in the service layer directly, and the 18
+  approvals are dated 2026-06-17 — nearly two months before AP.1 added approval
+  auditing, and they belong to the older copilot tool-approval flow
+  (`apply-content`, `set-price`, `send-customer-message`), not to the fleet.
+  The one real residue: **auditing lives in the route layer, so a script that
+  changes a control on prod is invisible to the trail.** Worth knowing before
+  anyone writes one.
 - 43 of 47 runs were `mode: ask`; triggers are `manual` and `schedule`.
 - Newest fleet run: **2026-08-07T01:51Z** (`amazon-negative-miner`). The fleet is
   dark but not inert.
@@ -603,12 +614,14 @@ them:
    run, and is indistinguishable from a deliberately-off worker. `POST
    /agent/fleet/charters/seed` is create-if-absent and would fix it. Cheap, and
    it makes the *Needs attention* tile provably correct on day one.
-2. **`AgentControlAudit` is empty** despite two authored charter revisions and
-   real dial usage. The detail page's "what has been changed, and by whom"
-   section is currently a promise the data does not keep. Needs a diagnosis
-   before Controls or Workers writes any more attributable changes.
+2. ~~`AgentControlAudit` is empty despite two authored charter revisions and real
+   dial usage.~~ **Withdrawn — diagnosed at W.4 and there is no defect.** See
+   §1.3: the writer works, every control route calls it, and the trail is empty
+   because nothing has yet changed a control through a control surface. The
+   narrow finding that survives is that **service-layer calls bypass the audit**,
+   so a script changing a control on prod would leave no trace.
 
-Neither blocks this page. Both should be fixed before the fleet is lit.
+Only the first blocks anything, and it blocks nothing on this page.
 
 ---
 
