@@ -296,6 +296,25 @@ export function MapCanvas({
         nodes={flowNodes}
         edges={flowEdges}
         nodeTypes={nodeTypes}
+        /**
+         * This has to be inline, and the reason is worth recording because it
+         * cost two deploys. xyflow writes its own sizing onto its root element
+         * as an INLINE style — `width:100%; height:100%; position:relative` —
+         * and an inline declaration beats any stylesheet rule that does not
+         * carry `!important`. So a `.sbm-canvas .react-flow { … }` rule in
+         * map.css was present in the shipped CSS, matched the element, and was
+         * still overridden; the root measured 1164 × 0 with all 8 nodes and 4
+         * edges sitting in the DOM, clipped to nothing.
+         *
+         * `height: 100%` is what fails: the wrapper is a flex item sized by
+         * `flex: 1 1 auto`, which this engine treats as an indefinite height
+         * for percentage resolution, so 100% computes to 0. Absolute
+         * positioning with `inset: 0` gives a box in both axes that does not
+         * depend on a percentage at all.
+         *
+         * No hex and no fontSize here, so the DS ratchet is untouched.
+         */
+        style={{ position: 'absolute', inset: 0, height: 'auto' }}
         fitView
         /* maxZoom 1 leaves a seven-node fleet occupying about half a 1300px
            canvas, with the rest dead space. 1.35 fills the box without

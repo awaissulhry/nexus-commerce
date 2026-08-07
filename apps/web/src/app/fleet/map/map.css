@@ -228,17 +228,11 @@
      box in both axes and is xyflow's own recipe for a full-bleed canvas. */
   position: relative;
 }
-.sbm-canvas .react-flow {
-  position: absolute;
-  inset: 0;
-  /* `height: auto` is load-bearing, not tidying. xyflow's own rule sets
-     `height: 100%`, and a percentage against a flex-sized parent is
-     indefinite — it resolved to 0 even with `inset: 0` applied. Verified in
-     the browser: with these three declarations the root measures 401px and
-     the graph draws; without `height: auto` it measures 0 and the nodes are
-     in the DOM but clipped to nothing. */
-  height: auto;
-}
+/* The React Flow root is sized in MapCanvas.tsx via the `style` prop, NOT from
+   here. xyflow writes `width/height/position` inline onto that element, and
+   inline beats any stylesheet rule without `!important` — a rule here shipped,
+   matched, and was silently overridden, leaving the root at 1164 × 0. The
+   comment on that prop has the full reasoning. Do not re-add it here. */
 .sbm-skeleton {
   background: linear-gradient(90deg, #f4f6f9 25%, #eef1f5 37%, #f4f6f9 63%);
   background-size: 400% 100%;
