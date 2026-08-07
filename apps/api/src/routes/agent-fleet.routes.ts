@@ -35,6 +35,7 @@ import {
 import { evaluateRevision, latestEvalFor } from '../services/agent-fleet/charter-eval.service.js'
 import {
   activateRevision,
+  compareAbArms,
   createRevision,
   diffPrompts,
   getActiveRevision,
@@ -644,6 +645,37 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
       await recordControlChange({ charterKey: key, action: 'resume' })
       return { ok: true }
     },
+  )
+
+  // AC.8 — start or stop a split test, and read how the arms compare.
+  fastify.post<{
+    Params: { key: string }
+    Body: { candidateRevisionId?: string | null; enabled?: boolean }
+  }>('/agent/fleet/charters/:key/ab', async (request, reply) => {
+    const { key } = request.params
+    if (!FLEET_CHARTERS[key]) return reply.code(404).send({ error: `unknown charter: ${key}` })
+    const enabled = request.body?.enabled !== false
+    const candidateRevisionId = request.body?.candidateRevisionId ?? null
+    if (enabled && !candidateRevisionId) {
+      return reply.code(400).send({ error: 'a split needs a candidate revision' })
+    }
+    await prisma.agentCharter.updateMany({
+      where: { key },
+      data: { abEnabled: enabled, candidateRevisionId: enabled ? candidateRevisionId : null },
+    })
+    bustCharterCache()
+    await recordControlChange({
+      charterKey: key,
+      action: 'policy',
+      to: { abEnabled: enabled, candidateRevisionId },
+      note: enabled ? 'split test started' : 'split test stopped',
+    })
+    return { ok: true }
+  })
+
+  fastify.get<{ Params: { key: string } }>(
+    '/agent/fleet/charters/:key/ab',
+    async (request) => compareAbArms(request.params.key),
   )
 
   // AC.7 — the control history for one worker.

@@ -37,6 +37,7 @@ import { getFleetState } from './fleet-state.service.js'
 import { renderExemplarBlock, retrieveExemplars } from './exemplar.service.js'
 import { getObservation, type ObservationResult } from './observation-builder.js'
 import { singleMarketplace } from './observations/scope-filter.js'
+import { pickRevisionForRun } from './charter-revisions.service.js'
 import { recordStep } from './tracing.js'
 
 export interface ExecuteOptions {
@@ -387,8 +388,21 @@ export async function executeCharter(
     // 3 — generate → validate, retrying once with the error appended.
     // AC.2 — a preview may swap the prompt so a DRAFT charter can be judged
     // against the same evidence without being activated.
+    // AC.8 — otherwise a live split may route this run to the candidate arm.
+    let promptSource = opts.promptOverride
+    if (!promptSource && !opts.preview) {
+      const pick = await pickRevisionForRun(key).catch(() => null)
+      if (pick?.arm === 'candidate' && pick.systemPrompt) {
+        promptSource = pick.systemPrompt
+        await prisma.agentRun.update({
+          where: { id: run.id },
+          data: { charterRevisionId: pick.revisionId },
+        })
+        await step({ type: 'gate', name: 'ab-split', output: { arm: 'candidate' } })
+      }
+    }
     const basePrompt = buildPrompt(
-      opts.promptOverride ? { ...charter, systemPrompt: opts.promptOverride } : charter,
+      promptSource ? { ...charter, systemPrompt: promptSource } : charter,
       observations,
       exemplarBlock,
     )

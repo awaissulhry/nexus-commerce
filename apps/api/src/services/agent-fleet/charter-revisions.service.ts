@@ -170,3 +170,103 @@ export function diffPrompts(before: string, after: string): DiffLine[] {
   while (j < b.length) out.push({ kind: 'added', text: b[j++]! })
   return out
 }
+
+/* ── AC.8 — A/B: two revisions live, alternating by run ──────────────── */
+
+export interface AbState {
+  enabled: boolean
+  candidateRevisionId: string | null
+}
+
+/**
+ * Which prompt this run should use. Alternating on the charter's OWN run
+ * count keeps the split even without a random source (Date.now/Math.random
+ * are avoided so a replay is deterministic) — and a missing candidate
+ * silently means "no split", never a broken run.
+ */
+export async function pickRevisionForRun(
+  charterKey: string,
+): Promise<{ revisionId: string | null; systemPrompt: string | null; arm: 'active' | 'candidate' }> {
+  const charter = await prisma.agentCharter.findFirst({
+    where: { key: charterKey },
+    select: { abEnabled: true, candidateRevisionId: true },
+  })
+  const active = await getActiveRevision(charterKey)
+  if (!charter?.abEnabled || !charter.candidateRevisionId) {
+    return {
+      revisionId: active?.id ?? null,
+      systemPrompt: active?.systemPrompt ?? null,
+      arm: 'active',
+    }
+  }
+  const runs = await prisma.agentRun.count({ where: { agentKey: charterKey, mode: { not: 'preview' } } })
+  if (runs % 2 === 0) {
+    return {
+      revisionId: active?.id ?? null,
+      systemPrompt: active?.systemPrompt ?? null,
+      arm: 'active',
+    }
+  }
+  const candidate = await prisma.agentCharterRevision.findUnique({
+    where: { id: charter.candidateRevisionId },
+  })
+  if (!candidate || candidate.charterKey !== charterKey) {
+    return {
+      revisionId: active?.id ?? null,
+      systemPrompt: active?.systemPrompt ?? null,
+      arm: 'active',
+    }
+  }
+  return { revisionId: candidate.id, systemPrompt: candidate.systemPrompt, arm: 'candidate' }
+}
+
+/** Compare the two arms on runs that actually happened. */
+export async function compareAbArms(charterKey: string): Promise<{
+  arms: Array<{
+    label: string
+    revisionId: string | null
+    runs: number
+    okRate: number | null
+    findingsPerRun: number | null
+    costPerRun: number | null
+  }>
+  callable: boolean
+  note: string
+}> {
+  const charter = await prisma.agentCharter.findFirst({
+    where: { key: charterKey },
+    select: { abEnabled: true, candidateRevisionId: true },
+  })
+  const active = await getActiveRevision(charterKey)
+  const ids = [active?.id ?? null, charter?.candidateRevisionId ?? null]
+  const arms = []
+  for (const [i, id] of ids.entries()) {
+    const runs = await prisma.agentRun.findMany({
+      where: { agentKey: charterKey, charterRevisionId: id, mode: { not: 'preview' } },
+      select: { ok: true, findingCount: true, costUSD: true },
+      take: 200,
+    })
+    arms.push({
+      label: i === 0 ? 'live charter' : 'candidate',
+      revisionId: id,
+      runs: runs.length,
+      okRate: runs.length ? runs.filter((r) => r.ok).length / runs.length : null,
+      findingsPerRun: runs.length
+        ? runs.reduce((s, r) => s + r.findingCount, 0) / runs.length
+        : null,
+      costPerRun: runs.length
+        ? runs.reduce((s, r) => s + Number(r.costUSD ?? 0), 0) / runs.length
+        : null,
+    })
+  }
+  // Honesty: a handful of runs cannot tell you anything, and the UI must
+  // say so rather than render a winner from noise.
+  const callable = arms.every((a) => a.runs >= 5)
+  return {
+    arms,
+    callable,
+    note: callable
+      ? 'Both arms have enough runs to compare.'
+      : 'Not enough runs yet to call a winner — each arm needs at least 5.',
+  }
+}
