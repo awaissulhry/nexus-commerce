@@ -735,6 +735,23 @@ passthrough), `fleet-sweep.job.ts`, `fleet-council.service.ts`,
 `fleet-schedule.service.ts` — none currently in the locks doc's shared
 table; claim rows added before build.
 
+**WF.4a EXECUTED 2026-08-07 (`6fb2962a8`), proven inert on prod.** The pure
+definition layer extracted to `workflow-defs.ts` (no database imports) so
+the parity vitest exists: **7 tests green** — unrevised built-ins walk
+byte-identically to `topoLevels(FLEET_GRAPH)`, the auditor asserted absent
+from the stored sweep, derivation adds no policy (every gate born
+`inherit`). `runFleet` resolves the stored definition at fire time
+(revision → code → unreadable-falls-to-`FLEET_GRAPH`), honors the row's
+`enabled`, and stamps `workflowKey`/`workflowRevisionId` on every run
+including gate-trip rows; the Runs UI shows "wiring rev N" on stamped
+orchestrations. **Prod probe** (`_wf-probe-walk.mts` via `railway run`):
+`effective sweep: source=code steps=6 revisionId=null` → `started=6
+skipped=6 halted=no` → `AgentRun rows created: 0`. The stored walk ran
+against production data, the dark ship held, nothing spent. Jobs and the
+council service needed zero edits — `runFleet`'s signature is unchanged, so
+4a's blast surface was exactly three fleet files. Remaining: 4b gates, 4c
+schedule.
+
 ---
 
 ## Sources
