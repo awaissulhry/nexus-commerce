@@ -66,5 +66,37 @@ export async function getFleetSchedule(now: Date = new Date()): Promise<{
       lastRun,
     })
   }
+
+  // WF.6c — enabled CUSTOM workflows with a stored schedule trigger join
+  // the same feed (key `workflow:<key>`), so their pages read next-fire and
+  // tick-vs-run from the one clock of truth the scheduler itself arms.
+  // Customs missing from the feed beats the feed failing.
+  try {
+    const rows = await prisma.agentWorkflow.findMany({
+      where: { kind: 'custom', enabled: true },
+      select: { key: true, name: true },
+    })
+    for (const row of rows) {
+      const trig = (await getEffectiveDefinition(row.key)).definition?.trigger
+      if (trig?.type !== 'schedule' || typeof trig.cron !== 'string') continue
+      const jobName = `workflow:${row.key}`
+      const lastRun = await prisma.cronRun.findFirst({
+        where: { jobName },
+        orderBy: { startedAt: 'desc' },
+        select: { startedAt: true, status: true, outputSummary: true },
+      })
+      jobs.push({
+        key: jobName,
+        label: row.name,
+        schedule: trig.cron,
+        enabled,
+        nextFireAt: enabled ? nextCronFire(trig.cron, now) : null,
+        lastRun,
+      })
+    }
+  } catch {
+    /* the built-in rows above still stand */
+  }
+
   return { jobs }
 }

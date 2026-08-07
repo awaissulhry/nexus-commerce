@@ -133,6 +133,10 @@ export function WorkflowsClient() {
         }))
     return source.map((row) => {
       const builtin = BUILTIN_ROUTINES.find((b) => b.key === row.key) ?? null
+      const job = builtin?.scheduleKey
+        ? (jobs.find((j) => j.key === builtin.scheduleKey) ?? null)
+        : // WF.6c — an enabled scheduled custom rides the same feed.
+          (jobs.find((j) => j.key === `workflow:${row.key}`) ?? null)
       return {
         key: row.key,
         name: row.name,
@@ -142,11 +146,9 @@ export function WorkflowsClient() {
         builtin,
         status: builtin
           ? routineStatus(builtin, state, jobs, charters)
-          : customStatus(state, { enabled: row.enabled, source: row.source }),
+          : customStatus(state, { enabled: row.enabled, source: row.source }, job),
         groups: groupRuns(runs, builtin ? builtin.mode : { workflowKey: row.key }),
-        job: builtin?.scheduleKey
-          ? (jobs.find((j) => j.key === builtin.scheduleKey) ?? null)
-          : null,
+        job,
         activeRevisionNo: row.activeRevision?.revision ?? null,
       }
     })

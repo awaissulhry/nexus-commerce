@@ -328,11 +328,12 @@ export function diffIsEmpty(d: WfDiff): boolean {
   )
 }
 
-/** WF.6a — the one honest status for a CUSTOM workflow. Precedence: halt →
- *  switched off → no wiring → recorded-but-not-runnable (Run-now is 6b). */
+/** WF.6a/6c — the one honest status for a CUSTOM workflow. Precedence:
+ *  halt → switched off → no wiring → armed clock → ready-by-hand. */
 export function customStatus(
   state: FleetState | null,
   meta: { enabled: boolean; source: 'code' | 'revision' | 'none' },
+  job?: ScheduleJob | null,
 ): RoutineStatus {
   if (state?.halted) {
     return {
@@ -349,6 +350,14 @@ export function customStatus(
       kind: 'off',
       label: 'Off',
       why: 'No published wiring yet — compose and publish from the editor.',
+    }
+  }
+  // WF.6c — a stored schedule trigger arms a real clock for this custom.
+  if (job && job.enabled) {
+    return {
+      kind: 'on',
+      label: 'On',
+      why: 'Its clock is armed — and you can still run it by hand.',
     }
   }
   // WF.6b — a published custom is runnable by hand. OFF workers still skip

@@ -190,21 +190,24 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
   const title = builtin?.name ?? vers?.name ?? routineKey
   const sub = builtin?.purpose ?? vers?.description ?? 'A custom routine.'
 
+  const job = builtin?.scheduleKey
+    ? (jobs.find((j) => j.key === builtin.scheduleKey) ?? null)
+    : // WF.6c — an enabled scheduled custom rides the same feed.
+      (jobs.find((j) => j.key === `workflow:${routineKey}`) ?? null)
+
   const status = useMemo(() => {
     if (builtin) return routineStatus(builtin, state, jobs, charters)
-    return customStatus(state, {
-      enabled: vers?.enabled ?? true,
-      source: vers?.source ?? 'none',
-    })
-  }, [builtin, state, jobs, charters, vers])
+    return customStatus(
+      state,
+      { enabled: vers?.enabled ?? true, source: vers?.source ?? 'none' },
+      job,
+    )
+  }, [builtin, state, jobs, charters, vers, job])
 
   const groups = useMemo(
     () => groupRuns(runs, builtin ? builtin.mode : { workflowKey: routineKey }),
     [runs, builtin, routineKey],
   )
-  const job = builtin?.scheduleKey
-    ? (jobs.find((j) => j.key === builtin.scheduleKey) ?? null)
-    : null
 
   /* WF.3a/6a — honesty first: an active revision's wiring is what renders;
      the hand-authored story is the pure-code built-in state only. */
@@ -410,22 +413,24 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
             <span className="v">
               {!loaded
                 ? '—'
-                : builtin
-                  ? job
-                    ? job.enabled
-                      ? (until(job.nextFireAt) ?? '—')
-                      : 'not scheduled'
-                    : 'when you start it'
-                  : '—'}
+                : job
+                  ? job.enabled
+                    ? (until(job.nextFireAt) ?? '—')
+                    : 'not scheduled'
+                  : builtin || canRunNow
+                    ? 'when you start it'
+                    : '—'}
             </span>
             <span className="sub">
               {!loaded
                 ? '—'
-                : builtin
-                  ? job
-                    ? prettyCron(job.schedule)
-                    : 'from a worker’s page, or the console'
-                  : 'its own clock arrives later'}
+                : job
+                  ? prettyCron(job.schedule)
+                  : builtin
+                    ? 'from a worker’s page, or the console'
+                    : canRunNow
+                      ? 'Run now, above — or publish a schedule'
+                      : 'publish a first revision to run it'}
             </span>
           </div>
         </div>

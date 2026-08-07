@@ -16,7 +16,7 @@ import cron from 'node-cron'
 import prisma from '../db.js'
 import { executeCharter } from '../services/agent-fleet/agent-executor.js'
 import { runFleetCouncilOnce } from '../services/agent-fleet/fleet-council.service.js'
-import { reclaimStuckRuns, runFleet } from '../services/agent-fleet/orchestrator.js'
+import { reclaimStuckRuns, runFleet, runStoredWorkflow } from '../services/agent-fleet/orchestrator.js'
 import { evaluateDemotions } from '../services/agent-fleet/promotion.service.js'
 import { computeScorecards } from '../services/agent-fleet/scorecard.service.js'
 import { gradeFindings } from '../services/agent-fleet/shadow-grade.service.js'
@@ -119,11 +119,28 @@ async function resolveJobCron(
   return cron.validate(envDefault) ? envDefault : null
 }
 
-/** WF.4c — (re)arm both fleet clocks from the effective definitions. Called
- *  at boot and by the workflow routes after activate / revert, so a
- *  published trigger change takes effect the moment it is published — no
- *  restart, no drift between the page and the firing. No-op while the
- *  master env gate is off. */
+/* ── WF.6c — custom workflows' clocks ─────────────────────────────────── */
+
+const customTasks = new Map<string, ReturnType<typeof cron.schedule>>()
+
+async function runCustomWorkflowCron(key: string): Promise<void> {
+  await recordCronRun(`workflow:${key}`, async () => {
+    const r = await runStoredWorkflow(key, { trigger: 'schedule' })
+    return (
+      `started=${r.started} ok=${r.succeeded} failed=${r.failed} skipped=${r.skipped}` +
+      (r.haltedReason ? ` halted=${r.haltedReason}` : '')
+    )
+  }).catch((err) =>
+    logger.error(`[fleet-workflow] ${key} cron failed`, { error: String(err) }),
+  )
+}
+
+/** WF.4c/6c — (re)arm every fleet clock from the effective definitions:
+ *  the two built-ins AND one clock per enabled custom with a stored
+ *  schedule trigger. Called at boot and by the workflow routes after
+ *  activate / revert, so a published trigger change takes effect the
+ *  moment it is published — no restart, no drift between the page and the
+ *  firing. No-op while the master env gate is off. */
 export async function resyncFleetSchedules(): Promise<void> {
   if (process.env.NEXUS_ENABLE_FLEET_SWEEP_CRON !== '1') return
 
@@ -155,6 +172,36 @@ export async function resyncFleetSchedules(): Promise<void> {
     logger.info(`[fleet-council] weekly council scheduled (${councilCron})`)
   } else {
     logger.info('[fleet-council] stored trigger is manual — clock not armed')
+  }
+
+  // WF.6c — one clock per enabled custom with a stored schedule trigger.
+  // Fully re-derived each resync: stop everything, arm what the record
+  // says. A failure here must never take the built-in clocks down with it.
+  for (const t of customTasks.values()) t.stop()
+  customTasks.clear()
+  try {
+    const rows = await prisma.agentWorkflow.findMany({
+      where: { kind: 'custom', enabled: true },
+      select: { key: true },
+    })
+    const { getEffectiveDefinition } = await import(
+      '../services/agent-fleet/workflow-registry.service.js'
+    )
+    for (const row of rows) {
+      const trig = (await getEffectiveDefinition(row.key)).definition?.trigger
+      if (trig?.type !== 'schedule' || typeof trig.cron !== 'string' || !cron.validate(trig.cron)) {
+        continue
+      }
+      customTasks.set(
+        row.key,
+        cron.schedule(trig.cron, () => {
+          void runCustomWorkflowCron(row.key)
+        }),
+      )
+      logger.info(`[fleet-workflow] ${row.key} scheduled (${trig.cron})`)
+    }
+  } catch (err) {
+    logger.error('[fleet-workflow] custom clock resync failed', { error: String(err) })
   }
 }
 
