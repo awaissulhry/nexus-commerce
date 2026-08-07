@@ -69,6 +69,11 @@ import {
 } from '../_shared/autonomy'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
 import { CreateWorker } from './CreateWorker'
+// SB.W.9 — the view predicate lives in its own module ONLY so it can be tested.
+// The invariant it protects (a filtering chip's number == the rows it reveals)
+// has been broken twice by features touching the row set; views.vitest.test.ts
+// makes a third time a failing test rather than a screenshot someone squints at.
+import { countIn, matchesView, type View } from './views'
 
 /** Design contract rule 3: jargon without a glossary entry fails review. These
  *  maps are the narrowing — a tier or dial we have no definition for renders as
@@ -171,14 +176,6 @@ const STATUS_ORDER: Record<string, number> = {
   attention: 0, 'not-set-up': 1, paused: 2, running: 3, working: 4, off: 5,
 }
 const DAY = 24 * 3600 * 1000
-
-/**
- * W.2 — the slices the strip can put the operator into. `all`, `live` and
- * `attention` become the three named views in W.3; `eligible` is reachable
- * only from its tile, because "which workers have earned a promotion" is a
- * question you ask by noticing the number, not by browsing for it.
- */
-type View = 'all' | 'live' | 'attention' | 'eligible' | 'retired'
 
 const VIEW_LABEL: Record<Exclude<View, 'all'>, string> = {
   live: 'Switched on',
@@ -414,26 +411,6 @@ export function WorkersClient() {
     return [...m.entries()].sort((a, b) => (TIER_ORDER[a[0]] ?? 9) - (TIER_ORDER[b[0]] ?? 9))
   }, [rows])
 
-  /** One predicate per view, used by BOTH the tile counts and the table, so a
-   *  tile reading 3 above a table showing 4 cannot happen. */
-  const matchesView = useCallback((r: WorkerRow, v: View): boolean => {
-    /* SB.W.9 — a retired worker is kept for its history and appears in exactly
-       one view. Leaving it in "All" would make the roster grow forever with
-       workers that cannot run; hiding it entirely would lose the history that
-       is the whole reason retirement is a state and not a delete. */
-    if (r.charter.retired) return v === 'retired'
-    if (v === 'retired') return false
-    switch (v) {
-      case 'live':
-        return r.status.word !== 'paused'
-          && r.charter.enabled && r.charter.autonomyLevel !== 'OFF'
-      case 'attention': return r.status.needsAttention
-      case 'eligible': return r.promotionEligible
-      case 'all':
-      default: return true
-    }
-  }, [])
-
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase()
     return rows.filter((r) => {
@@ -447,7 +424,7 @@ export function WorkersClient() {
         (r.charter.description ?? '').toLowerCase().includes(needle)
       )
     })
-  }, [rows, q, tierFilter, view, matchesView])
+  }, [rows, q, tierFilter, view])
 
   /* Headline numbers are BUSINESS workers only — fleet-selftest holds 47 of 64
      open findings and 38 of 47 runs, so counting it in makes every figure on
@@ -489,11 +466,11 @@ export function WorkersClient() {
     // Filtering tiles — whole roster, equal to the rows the tile reveals.
     // Retired workers are not part of "the roster": they cannot run, and the
     // Retired view is where they live.
-    workers: rows.filter((r) => matchesView(r, 'all')).length,
+    workers: countIn(rows, 'all'),
     // A paused worker is not "switched on", whatever its dial says. The API
     // already resolves a live pause to enabled:false; this agrees with it
     // rather than trusting one of the two fields.
-    running: rows.filter((r) => matchesView(r, 'live')).length,
+    running: countIn(rows, 'live'),
     attention: rows.filter((r) => r.status.needsAttention).length,
     eligible: rows.filter((r) => r.promotionEligible).length,
     // Volume figures — business workers only.
@@ -501,7 +478,7 @@ export function WorkersClient() {
     cost7d: business.reduce((s, r) => s + r.cost7d, 0),
     degraded: rows.filter((r) => r.charter.degraded).length,
     unprovisioned: rows.filter((r) => r.charter.provisioned === false).length,
-  }), [business, rows, matchesView])
+  }), [business, rows])
 
   const diagTotals = useMemo(() => ({
     findings: diagnostics.reduce((s, r) => s + r.openFindings, 0),
@@ -1193,7 +1170,7 @@ export function WorkersClient() {
           // Count through matchesView even for 'all' — retired workers are
           // excluded from it, and `rows.length` would reinstate exactly the
           // tile-says-3-table-shows-2 defect W.2 exists to prevent.
-          const n = rows.filter((r) => matchesView(r, v)).length
+          const n = countIn(rows, v)
           return (
             <button
               key={v}

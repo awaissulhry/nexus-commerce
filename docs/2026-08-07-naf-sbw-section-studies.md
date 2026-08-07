@@ -609,9 +609,18 @@ immediately — "All 3" over two visible rows, because `rows.length` counted the
 retired worker the view excluded.
 
 Every count now goes through `matchesView`, including `all`. **The lesson is
-that the invariant needs a test, not vigilance** — it has now been broken once
-per feature that touched the row set. Worth a vitest over the predicate the next
-time this file is opened.
+that the invariant needs a test, not vigilance** — it had been broken once per
+feature that touched the row set.
+
+**Done rather than noted.** The predicate is extracted to
+`app/fleet/workers/views.ts` purely so it can be tested, and
+`views.vitest.test.ts` asserts the invariant directly: for *every* view,
+`countIn(rows, v)` equals the rows `matchesView` admits; every worker appears in
+exactly one of `{all, retired}`; and `rows.length` is explicitly asserted to be
+the **wrong** answer for `all` once anything is retired — the precise shape of
+the defect, so a third occurrence is a red test rather than a screenshot someone
+squints at. The client imports the same function it tests; there is no second
+copy to drift.
 
 ### 7.3 The review panel is generated, and must not over-promise
 
