@@ -81,10 +81,10 @@ there is time to do it properly.
 
 | # | Decision | Blocks | Status |
 |---|---|---|---|
-| 1 | **Real-time mechanism** — poll while visible, or SSE? One answer for all ten pages, one implementation, or "live" means ten different things. | Workers W.6, Workflows canvas | **open** |
-| 2 | **The autonomy dial component** — Controls and Workers must share one dial + one confirm + one audit write. Whoever extracts it first owns the API; the other adopts it. | Workers W.4 | **open — Workers proposes to extract** |
-| 3 | **Instance / stored-graph model** (§4) | Workers W.8, Workflows | **open** |
-| 4 | **Page-local CSS convention** — `workers.css` / `workflows.css` beside the page, `fleet-pages.css` frozen. | both | **proposed here** |
+| 1 | **Real-time mechanism** | Workers W.6, Workflows canvas | **SETTLED 2026-08-07 — visibility-gated polling.** One shared hook: refetch ~10s while `document.visibilityState === 'visible'`, pause when hidden, an "as of" stamp, and a *changed since you looked* cue rather than a silent re-sort under the cursor. No SSE, no new infrastructure. **This is the answer for all ten pages** — the Workflows canvas adopts the same hook. Workers extracts it at W.6; whoever needs it sooner may extract it earlier and record that here. |
+| 2 | **The autonomy dial component** | Workers W.4, Controls | **SETTLED 2026-08-07 — one shared component**, two presentation modes: Controls *explain* (card, prose, ladder), Workers *operate* (inline row + bulk). One confirm, one audit write. **Workers extracts it at W.4 and re-points Controls at it**, so `ControlsClient.tsx` will be touched by the Workers session — claimed in advance here. |
+| 3 | **Instance / stored-graph model** (§4) | Workers W.8, Workflows | **open** — not needed before W.8. Whoever reaches it first writes the proposal here. |
+| 4 | **Page-local CSS convention** — `workers.css` / `workflows.css` beside the page, `fleet-pages.css` frozen to shared primitives. | both | **proposed here** — adopt unless objected. |
 
 ---
 

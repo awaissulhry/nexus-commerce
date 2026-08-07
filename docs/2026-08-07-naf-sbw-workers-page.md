@@ -631,23 +631,33 @@ condition of done on each one.
 
 ---
 
-## PART 9 — Decisions the operator needs to make
+## PART 9 — Operator decisions (settled 2026-08-07)
 
-1. **Can the autonomy dial be changed from the roster, or is Controls the only
-   place?** *Recommendation: from the roster too, via the shared component.* A
-   registry you cannot act from is a report, and every archetype studied acts
-   from the list. The safety rule (reduce = instant, increase = confirm) and the
-   audit write are identical either way because it is one component.
-2. **Build "create a worker" now, or after the fleet is lit?**
-   *Recommendation: after.* Creating instances of workers that have never
-   successfully run means authoring against a hypothesis. It is also the only
-   step needing a schema change and a cross-session agreement.
-3. **How should `fleet-selftest` be treated?** *Recommendation: badge it as a
-   diagnostic worker and exclude it from headline aggregates.* It holds 47 of 64
-   open findings and 38 of 47 runs; left in, every number on this page is mostly
-   about a self-test.
-4. **Real-time mechanism** — poll or stream, and who builds it. Needs to be one
-   answer for all ten pages.
+All four as recommended.
+
+1. **The autonomy dial is operable from the roster — APPROVED.** One shared
+   component: the dial, its per-rung effect copy and its confirmation dialog are
+   extracted once. Controls renders it in *explain* mode (a card per worker, full
+   prose, the ladder as a teaching object); Workers renders it inline in a row
+   and over a bulk selection. One confirm, one audit write, so the two surfaces
+   cannot drift. The safety rule is unchanged and inherited: **reducing risk
+   applies immediately, increasing it confirms and says what it will cost.**
+2. **"Create a worker" is step W.8, after the registry ships — APPROVED.** W.1
+   through W.7 need no new API surface and can ship over existing endpoints while
+   the parallel session owns `agent-fleet.routes.ts`. Instantiating workers that
+   have never successfully run would be authoring against a hypothesis.
+3. **`fleet-selftest` is badged and excluded from headline numbers — APPROVED.**
+   It stays in the table, visibly marked as a diagnostic worker. The health
+   strip's counts — findings, runs, spend — are **business workers only**, with
+   the self-test's contribution shown as a footnote rather than hidden. Nothing
+   is concealed; nothing is averaged into a lie.
+4. **Real-time is visibility-gated polling — APPROVED.** One shared hook:
+   refetch roughly every 10s while the document is visible, pause when hidden, an
+   "as of" stamp, and a *changed since you looked* cue rather than a silent
+   re-sort under the cursor. No new infrastructure, works identically through
+   Vercel and Railway. **This is the answer for all ten pages** — recorded in
+   `docs/2026-08-07-naf-sb-session-locks.md` §5 so the Workflows session adopts
+   the same one.
 
 ---
 
