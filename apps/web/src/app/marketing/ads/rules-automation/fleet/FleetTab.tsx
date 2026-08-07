@@ -796,9 +796,10 @@ export function FleetTab() {
           </ul>
         )}
         <p className="acr-fl-empty">
-          There is no <Term k="auditor">auditor</Term> worker yet — the charter has not been
-          built, so no nightly narrative can be written. Until one exists this panel reports
-          sweeps, not stories.
+          The <Term k="auditor">auditor</Term> exists but is switched{' '}
+          <Term k="off">off</Term>, like every other worker, and has never run — so there is no
+          nightly narrative to show. Turn it on and this panel starts reporting stories instead
+          of sweeps.
         </p>
       </section>
 
