@@ -1,19 +1,26 @@
 /**
- * NAF.SB — Assignments. The operator's first ask: "if we have a campaign, I
- * want to assign that worker… and take action on that single campaign."
+ * NAF.SB.AS / AS.1 — Assignments. The operator's ask #1: "if we have a
+ * campaign, I want to assign that worker… and take action on that single
+ * campaign."
  *
- * The model comes from UiPath Orchestrator, the one archetype the master brief
- * never considered: work is DATA, not code. You put an item in a queue, a
- * trigger starts a job when items arrive, and the item carries a state through
- * its life. "Assign that worker to this campaign" is literally a queue item.
+ * The target is the reason this page exists, and until AS.1 the fleet could
+ * not honour one: scope bound at exactly one place (the observation call in
+ * agent-executor.ts) and only for marketplace, while `scopeCampaignIds` was
+ * stored, accepted and rendered as "N named campaigns" bound to nothing.
+ * This page ships the enforcement rather than a fifth surface that displays
+ * an unenforced control.
  *
- * This also gives the `ask` run mode a home. 43 of the 45 runs this fleet has
- * ever done were `ask`, driven from scripts, with no interface at all.
+ * Study: docs/2026-08-07-naf-sbas-assignments-page.md
  */
 import { FleetPageShell } from '../_shell/FleetPageShell'
-import { PlannedPage } from '../_shell/PlannedPage'
+import { AssignmentsClient } from './AssignmentsClient'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
+import '@/design-system/styles/patterns.css'
 import '@/app/marketing/ads/rules-automation/control-room/control-room.css'
 import '../fleet-pages.css'
+import './assignments.css'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,30 +30,7 @@ export default function Page() {
       title="Assignments"
       sub="Give one worker one job on one thing, and watch it through."
     >
-      <PlannedPage
-        purpose={
-          <>
-            Point a named worker at a named thing. Pick the worker, pick the campaign or product
-            or keyword set, say what you want back and by when, and say whether it may act or must
-            propose. Then watch it move through its states until it is done.
-          </>
-        }
-        contents={[
-          'Create: worker → target (campaign, portfolio, ad group, product, keyword set, marketplace) → what you want back → deadline → may it act, or must it ask.',
-          'A life you can see: New → Running → Produced N findings → Awaiting your approval → Done. Plain words over the queue-item states the industry uses.',
-          'Attach a file to an assignment, so a worker can be pointed at your list rather than the whole account.',
-          'Bulk-create from a selection or an uploaded sheet — one assignment per row.',
-          'Make it recurring, and it becomes a trigger rather than a one-off.',
-          'Every assignment links to the run it produced and the approvals that came out of it.',
-        ]}
-        needs={
-          <>
-            A new <code>AgentAssignment</code> table with queue semantics, and the routes to
-            create and advance one. The executor and the scope system it would drive already
-            exist — this is mostly a new noun, not new machinery.
-          </>
-        }
-      />
+      <AssignmentsClient />
     </FleetPageShell>
   )
 }

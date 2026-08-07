@@ -1,0 +1,410 @@
+/* NAF.SB.ACT — page-local styles for /fleet/activity.
+   Locks-doc decision 4: fleet-pages.css is frozen to shared primitives;
+   everything this page needs beyond them lives here, sba-* prefixed, in the
+   same light acr-* palette the rest of the fleet uses.
+
+   Deliberately NOT importing the dt-* rules from rules-automation's
+   fleet-sections.css: that stylesheet belongs to the Overview and to another
+   session. Activity owns its own look so neither page can restyle the other
+   by accident. */
+
+.sba {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── the scope line ───────────────────────────────────────────────────── */
+
+.sba-scope {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.sba-scopetext {
+  margin: 0;
+  font-size: 13px;
+  color: #34404f;
+  line-height: 1.5;
+}
+.sba-scopetools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.sba-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #4a5867;
+  cursor: pointer;
+  user-select: none;
+}
+.sba-toggle input {
+  margin: 0;
+  cursor: pointer;
+}
+.sba-asof {
+  font-size: 11.5px;
+  color: #98a2b0;
+  font-variant-numeric: tabular-nums;
+}
+.sba-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #4a5867;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 6px;
+  padding: 4px 9px;
+  cursor: pointer;
+}
+.sba-refresh:hover {
+  background: #f6f8fa;
+  color: #1c2530;
+}
+
+.sba-banner {
+  margin: 0;
+}
+.sba-banner a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* ── the "new events" pull, never a push ──────────────────────────────── */
+
+.sba-new {
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1d4ed8;
+  background: #eff4ff;
+  border: 1px solid #c5d6fb;
+  border-radius: 6px;
+  padding: 6px 11px;
+  cursor: pointer;
+}
+.sba-new:hover {
+  background: #e2ecff;
+}
+
+/* ── the list ─────────────────────────────────────────────────────────── */
+
+.sba-list {
+  padding: 0;
+  overflow: hidden;
+}
+
+.sba-dayhead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  padding: 9px 16px;
+  /* Opaque on purpose: a translucent day header let card titles bleed through
+     it while scrolling — a defect already fixed once on the Overview. */
+  background: #f6f8fa;
+  border-top: 1px solid #e7ecf2;
+  border-bottom: 1px solid #e7ecf2;
+  font-size: 12px;
+  font-weight: 600;
+  color: #34404f;
+}
+.sba-day:first-child .sba-dayhead {
+  border-top: none;
+}
+.sba-daycount {
+  font-weight: 500;
+  font-size: 11.5px;
+  color: #98a2b0;
+  font-variant-numeric: tabular-nums;
+}
+
+.sba-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sba-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 16px;
+  border-bottom: 1px solid #f0f3f7;
+}
+.sba-row:last-child {
+  border-bottom: none;
+}
+.sba-row:hover {
+  background: #fcfdfe;
+}
+
+.sba-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  margin-top: 1px;
+  background: #eef1f5;
+  color: #6b7a8d;
+}
+.sba-marker.o-ok {
+  background: #e8f6ef;
+  color: #14764f;
+}
+.sba-marker.o-attention {
+  background: #fff4e2;
+  color: #8a6320;
+}
+.sba-marker.o-bad {
+  background: #fdeceb;
+  color: #9c2f2a;
+}
+
+.sba-body {
+  min-width: 0;
+}
+.sba-title {
+  display: block;
+  font-size: 13px;
+  color: #1c2530;
+  line-height: 1.45;
+}
+.sba-title a {
+  color: inherit;
+  text-decoration: none;
+}
+.sba-title a:hover {
+  text-decoration: underline;
+}
+
+.sba-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: #8d97a6;
+}
+.sba-sep {
+  color: #c6cdd6;
+}
+.sba-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 5px;
+  height: 15px;
+  border-radius: 7px;
+  background: #eef1f5;
+  color: #4a5867;
+  font-weight: 600;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.sba-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 600;
+}
+.sba-state.o-attention {
+  color: #8a6320;
+}
+.sba-state.o-bad {
+  color: #9c2f2a;
+}
+.sba-risk {
+  font-weight: 600;
+}
+.sba-risk.r-high {
+  color: #9c2f2a;
+}
+.sba-risk.r-medium {
+  color: #8a6320;
+}
+.sba-risk.r-low {
+  color: #4a5867;
+}
+.sba-vintage {
+  color: #8d97a6;
+  font-style: italic;
+}
+
+.sba-detail {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #6b7a8d;
+  line-height: 1.5;
+  max-width: 90ch;
+  /* A verbatim provider error is one long unbroken token; without this it
+     widens the row and pushes the timestamp off the card. */
+  overflow-wrap: anywhere;
+}
+.sba-detail.bad {
+  color: #9c2f2a;
+}
+
+.sba-time {
+  font-size: 11.5px;
+  color: #98a2b0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.sba-rollupbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: #3b6fd4;
+  cursor: pointer;
+}
+.sba-rollupbtn:hover {
+  text-decoration: underline;
+}
+
+.sba-inlinebtn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: #3b6fd4;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* ── badges ───────────────────────────────────────────────────────────── */
+
+.sba-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+.sba-badge.diag {
+  background: #eef1f5;
+  color: #6b7a8d;
+  cursor: help;
+}
+.sba-badge.test {
+  background: #f3eefc;
+  color: #6b4fa8;
+}
+.sba-badge.flow {
+  background: #eaf3fb;
+  color: #2c5f8f;
+}
+
+/* ── foot ─────────────────────────────────────────────────────────────── */
+
+.sba-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 16px;
+  border-top: 1px solid #e7ecf2;
+  background: #fcfdfe;
+  font-size: 12px;
+}
+.sba-more {
+  font-size: 12px;
+  font-weight: 600;
+  color: #34404f;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 6px;
+  padding: 5px 11px;
+  cursor: pointer;
+}
+.sba-more:hover:not(:disabled) {
+  background: #f6f8fa;
+}
+.sba-more:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ── what this page doesn't show ──────────────────────────────────────── */
+
+.sba-notshown {
+  padding: 2px 2px 0;
+}
+.sba-notshown h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7a8d;
+}
+.sba-notshown ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.sba-notshown li {
+  font-size: 11.5px;
+  color: #8d97a6;
+  line-height: 1.55;
+  max-width: 92ch;
+}
+.sba-notshown a {
+  color: #3b6fd4;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.sba-notshown a:hover {
+  text-decoration: underline;
+}
+
+/* Screen-reader-only text: every icon carries a word for anyone who cannot
+   see the shape, so state is never signalled by colour alone. */
+.sba-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 720px) {
+  .sba-row {
+    grid-template-columns: 20px minmax(0, 1fr);
+  }
+  .sba-time {
+    grid-column: 2;
+    margin-top: 0;
+  }
+}

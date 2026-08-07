@@ -1,13 +1,36 @@
 /**
- * NAF.SB — Activity. Every orchestrator studied for the page map keeps the
- * graph and the runs on separate pages: the graph is the definition, a run is
- * an instance, and conflating them is a known novice mistake. Two tabs here
- * because business decisions and technical executions are different questions.
+ * NAF.SB.ACT — Activity: the fleet's record.
+ *
+ * Every orchestrator studied for the page map keeps the graph and the runs on
+ * separate pages — the graph is the definition, a run is an instance, and
+ * conflating them is a known novice mistake. This is the runs side, and it is
+ * the only UNSCOPED one: `/fleet/workflows/[key]` shows one routine's runs,
+ * `/fleet/workers/[key]` shows one worker's, `/fleet` shows the last few of
+ * everything. Activity shows all of it, whatever produced it.
+ *
+ * The two audience-named tabs this page was originally scoped with (Decisions
+ * / Runs) were dropped by operator decision 2026-08-07: runs are a strict
+ * SUBSET of the stream — 53 of 119 events — and naming halves by audience
+ * makes a beginner classify their own question before they have seen a row.
+ * One list with a grain switch instead, which is where Braintrust, LangSmith
+ * and Copilot Studio all independently landed.
+ *
+ * ACT.2 ships the list in the "Everything" grain. The grain switch, the filter
+ * chips and the run drawer are ACT.3–ACT.5; the study is
+ * docs/2026-08-07-naf-sbact-activity-page.md.
+ *
+ * Styling, and the order matters (see workers/page.tsx for the full note):
+ * control-room.css carries the acr-* family, fleet-pages.css carries
+ * `.fleet-surface` and the shared acr-pg-* primitives, activity.css is this
+ * page's own. The four DS stylesheets are deliberately NOT imported yet —
+ * nothing here renders a DS component. They become mandatory at ACT.3, when
+ * the Runs grain brings in DataGrid.
  */
 import { FleetPageShell } from '../_shell/FleetPageShell'
-import { PlannedPage } from '../_shell/PlannedPage'
+import { ActivityClient } from './ActivityClient'
 import '@/app/marketing/ads/rules-automation/control-room/control-room.css'
 import '../fleet-pages.css'
+import './activity.css'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,30 +40,7 @@ export default function Page() {
       title="Activity"
       sub="Everything the fleet has done, newest first — and every run that tried."
     >
-      <PlannedPage
-        purpose={
-          <>
-            What has this thing been doing, and why. Two tabs: <b>Decisions</b> is the business
-            story — who found what, who chose it, what the critic ruled. <b>Runs</b> is the
-            technical one — what actually executed, how long it took, what it cost, and what
-            broke.
-          </>
-        }
-        contents={[
-          'Decisions: the event stream over five tables, grouped by day and by episode, with filters by worker, kind, outcome and date.',
-          'Runs: one row per run with mode, duration, tokens, cost — and the failure reason, which has no home anywhere today.',
-          'Either one opens the full step trace: what it read, what it thought, what it wrote, what it cost.',
-          'Export, and a permalink per event, so a decision can be quoted somewhere else.',
-        ]}
-        needs={
-          <>
-            DT.1–DT.3 already built the stream. DT.4 (the trace view) and DT.5 (filters and
-            export) are scoped and open. The Runs tab needs no new API at all — it is the
-            existing runs endpoint, read honestly.
-          </>
-        }
-        livesToday={{ href: '/fleet', label: 'the fleet Overview' }}
-      />
+      <ActivityClient />
     </FleetPageShell>
   )
 }

@@ -1,0 +1,499 @@
+/**
+ * NAF.SB.AS — assignments: one worker, one target, one job.
+ *
+ * The container is this row; each Start mints one `AgentRun` stamped with
+ * `assignmentId`. Machine states are DERIVED from those runs rather than
+ * mutated onto the assignment, so every attempt keeps its own error, cost,
+ * duration and evidence vintage — a counter on the container would lose
+ * every previous failure reason.
+ *
+ * Auditing is written HERE, in the service, not in the route layer. The
+ * known hole this avoids is recorded in the Workers study: audit that lives
+ * in routes means a script changing state on prod leaves no trace.
+ */
+import prisma from '../../db.js'
+import { executeCharter } from './agent-executor.js'
+import { resolveCharter } from './charter-registry.js'
+import { canNarrowToCampaign } from './observation-builder.js'
+import { reclaimStuckRuns } from './orchestrator.js'
+import { recordControlChange } from './control-audit.service.js'
+
+export type AssignmentState =
+  | 'not_started'
+  | 'running'
+  | 'finished'
+  | 'stopped'
+  | 'failed'
+  | 'abandoned'
+  | 'closed'
+  | 'cancelled'
+
+/** Terminal-but-reversible. Nothing in the fleet is ever truly deleted once
+ *  it has run — these two are human endings, and Reopen undoes both. */
+const HUMAN_STATES = new Set<AssignmentState>(['closed', 'cancelled'])
+
+export interface RunRollup {
+  id: string
+  status: string
+  ok: boolean
+  findingCount: number
+  costUSD: number
+  haltedReason: string | null
+  errorMessage: string | null
+  createdAt: Date
+  endedAt: Date | null
+}
+
+/**
+ * The machine states, derived from the runs. Human states win, because the
+ * operator's "I am done with this" outranks the machine's opinion.
+ *
+ * `abandoned` is matched BEFORE `stopped`: reclaimStuckRuns writes a
+ * haltedReason like every other guard, but it means something different —
+ * nobody stopped this on purpose, it stopped reporting, and because the
+ * reclaimer's updateMany never writes costUSD we cannot say what it spent.
+ */
+export function deriveState(stored: string, runs: RunRollup[]): AssignmentState {
+  if (HUMAN_STATES.has(stored as AssignmentState)) return stored as AssignmentState
+  if (runs.some((r) => r.status === 'running')) return 'running'
+  const finished = runs.filter((r) => r.status !== 'running')
+  if (finished.length === 0) return 'not_started'
+  const latest = finished[0] // callers order desc by createdAt
+  if (latest.haltedReason?.startsWith('orphaned:')) return 'abandoned'
+  if (latest.haltedReason) return 'stopped'
+  if (!latest.ok) return 'failed'
+  return 'finished'
+}
+
+export interface AssignableWorker {
+  key: string
+  name: string
+  tier: string
+  description: string | null
+  /** Target kinds this worker's evidence can honestly honour. */
+  targetKinds: ('CAMPAIGN' | 'MARKETPLACE')[]
+  /** Set when the worker cannot be assigned at all, with the operator-facing
+   *  reason. The picker prints it rather than greying a row silently. */
+  refusal?: string
+}
+
+/**
+ * Which workers may be assigned, and to what — DERIVED, never a hardcoded
+ * list, so a worker becomes assignable the day its evidence gains a narrow()
+ * rather than the day someone remembers to edit an array.
+ *
+ * The three v1 refusals are stated individually because their reasons are
+ * genuinely different and an operator deserves to know which wall they hit
+ * (docs/2026-08-07-naf-sbas-assignments-page.md §6.5).
+ */
+export async function listAssignableWorkers(): Promise<AssignableWorker[]> {
+  const { listCharters } = await import('./charter-registry.js')
+  const charters = await listCharters()
+  const out: AssignableWorker[] = []
+
+  for (const c of charters) {
+    const base = {
+      key: c.key,
+      name: c.name,
+      tier: c.tier,
+      description: c.description ?? null,
+    }
+
+    if (c.outputSchemaKey === 'director-output') {
+      out.push({
+        ...base,
+        targetKinds: [],
+        refusal:
+          'This worker writes a plan, and only the weekly council can pick a plan up. A plan made outside a council is never checked, never queued and never approved — so an assignment here would cost money and produce something you could not act on.',
+      })
+      continue
+    }
+    if (c.outputSchemaKey === 'critic-output') {
+      out.push({
+        ...base,
+        targetKinds: [],
+        refusal:
+          'This worker checks a plan it did not write. With no plan in its evidence it stops before it can report anything — and it stops after the model call, so it would cost money and tell you nothing.',
+      })
+      continue
+    }
+
+    const narrowable = c.observationKeys.every((k) => canNarrowToCampaign(k))
+    if (!narrowable) {
+      out.push({
+        ...base,
+        targetKinds: [],
+        refusal:
+          'This worker reads your whole account every time. Its evidence has nowhere to put a target, so an assignment could not narrow it — and a target that narrows nothing is worse than no target. Run it from Workers.',
+      })
+      continue
+    }
+
+    out.push({ ...base, targetKinds: ['CAMPAIGN', 'MARKETPLACE'] })
+  }
+  return out
+}
+
+export interface CreateInput {
+  charterKey: string
+  targetKind?: 'CAMPAIGN' | 'MARKETPLACE' | null
+  targetIds?: string[]
+  targetLabels?: string[]
+  wantBack?: string | null
+  dueAt?: string | null
+  title?: string
+  createdBy?: string | null
+}
+
+export interface CreateResult {
+  ok: boolean
+  id?: string
+  error?: string
+}
+
+/**
+ * Create — and REFUSE, with the reason in the body, any (worker, target)
+ * pair the evidence layer cannot honour. Mirrors the two-marketplace refusal
+ * at agent-fleet-workers.routes.ts:128-135, and for the same reason: this
+ * series' rule is that a control which is not enforced must not be rendered,
+ * so a target we cannot bind is refused rather than stored and ignored.
+ */
+export async function createAssignment(input: CreateInput): Promise<CreateResult> {
+  const charter = await resolveCharter(input.charterKey)
+  if (!charter) return { ok: false, error: `unknown worker: ${input.charterKey}` }
+
+  const assignable = await listAssignableWorkers()
+  const row = assignable.find((a) => a.key === input.charterKey)
+  if (!row) return { ok: false, error: `unknown worker: ${input.charterKey}` }
+  if (row.refusal) return { ok: false, error: row.refusal }
+
+  const kind = input.targetKind ?? null
+  const ids = (input.targetIds ?? []).filter(Boolean)
+  if (kind && !row.targetKinds.includes(kind)) {
+    return { ok: false, error: `${row.name} cannot be pointed at a ${kind.toLowerCase()}.` }
+  }
+  if (kind && ids.length === 0) {
+    return { ok: false, error: 'Pick at least one target, or leave the target empty.' }
+  }
+  if (kind === 'MARKETPLACE' && ids.length !== 1) {
+    return {
+      ok: false,
+      error:
+        'A marketplace assignment names exactly one marketplace — the evidence layer honours one at a time.',
+    }
+  }
+  if (!kind && ids.length) {
+    return { ok: false, error: 'A target was named without a target kind.' }
+  }
+
+  const labels = input.targetLabels?.length ? input.targetLabels : ids
+  const title =
+    input.title?.trim() ||
+    defaultTitle(charter.name, kind, labels)
+
+  const created = await prisma.agentAssignment.create({
+    data: {
+      charterKey: input.charterKey,
+      title,
+      targetKind: kind,
+      targetIds: ids,
+      targetLabels: labels,
+      wantBack: input.wantBack?.trim() || null,
+      dueAt: input.dueAt ? new Date(input.dueAt) : null,
+      createdBy: input.createdBy ?? null,
+    },
+  })
+  return { ok: true, id: created.id }
+}
+
+/** Worker + target, in that order — the sentence an operator would say. The
+ *  Approvals page renders this verbatim as provenance, so it is never empty. */
+export function defaultTitle(
+  workerName: string,
+  kind: string | null,
+  labels: string[],
+): string {
+  if (!kind || labels.length === 0) return `${workerName} — whole account`
+  if (labels.length === 1) return `${workerName} on ${labels[0]}`
+  return `${workerName} on ${labels.length} ${kind === 'CAMPAIGN' ? 'campaigns' : 'marketplaces'}`
+}
+
+export interface StartResult {
+  ok: boolean
+  runId?: string | null
+  alreadyRunning?: boolean
+  error?: string
+  haltedReason?: string
+}
+
+/**
+ * Start — IDEMPOTENT. Starting an assignment that already has an open run
+ * returns that run instead of creating a second one (Temporal's
+ * WorkflowIdConflictPolicy: UseExisting). This is the one control on the page
+ * that spends money, and without this a double-click is two charges on a
+ * fleet the operator deliberately switched off.
+ */
+export async function startAssignment(
+  id: string,
+  userId?: string | null,
+): Promise<StartResult> {
+  const a = await prisma.agentAssignment.findUnique({ where: { id } })
+  if (!a) return { ok: false, error: 'assignment not found' }
+  if (a.state === 'cancelled') {
+    return { ok: false, error: 'This assignment was cancelled. Reopen it before starting it.' }
+  }
+
+  const open = await prisma.agentRun.findFirst({
+    where: { assignmentId: id, status: 'running' },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  })
+  if (open) return { ok: true, runId: open.id, alreadyRunning: true }
+
+  const result = await executeCharter(a.charterKey, {
+    trigger: 'manual',
+    mode: 'ask',
+    // The same clause POST /agent/fleet/run/:key already uses. It bypasses
+    // ONLY the OFF/pause gate; kill switch, fleet halt, both day budgets,
+    // evidence staleness and the run token budget all still bind.
+    ignoreEnabled: true,
+    userId: userId ?? null,
+    assignmentId: id,
+    assignmentTarget: a.targetKind
+      ? {
+          kind: a.targetKind as 'CAMPAIGN' | 'MARKETPLACE',
+          ids: a.targetIds,
+          labels: a.targetLabels,
+        }
+      : undefined,
+  })
+
+  await prisma.agentAssignment.update({
+    where: { id },
+    data: { state: 'not_started', closedAt: null },
+  })
+  await recordControlChange({
+    action: 'run_now',
+    charterKey: a.charterKey,
+    actor: userId ?? null,
+    note: `assignment ${id}: ${a.title}`,
+  }).catch(() => undefined)
+
+  return {
+    ok: result.ok,
+    runId: result.runId,
+    haltedReason: result.haltedReason,
+    error: result.error,
+  }
+}
+
+export async function setAssignmentState(
+  id: string,
+  state: 'closed' | 'cancelled' | 'not_started',
+  opts: { note?: string | null; userId?: string | null } = {},
+): Promise<{ ok: boolean; error?: string }> {
+  const a = await prisma.agentAssignment.findUnique({ where: { id } })
+  if (!a) return { ok: false, error: 'assignment not found' }
+
+  if (state === 'cancelled') {
+    const everRan = await prisma.agentRun.count({ where: { assignmentId: id } })
+    if (everRan > 0) {
+      return {
+        ok: false,
+        error:
+          'This has already run, so it cannot be cancelled — close it instead. Its runs are the record.',
+      }
+    }
+  }
+
+  await prisma.agentAssignment.update({
+    where: { id },
+    data: {
+      state,
+      closeNote: state === 'closed' ? (opts.note?.trim() || null) : null,
+      closedAt: state === 'not_started' ? null : new Date(),
+    },
+  })
+  await recordControlChange({
+    action: state === 'cancelled' ? 'assignment_cancelled' : 'assignment_closed',
+    charterKey: a.charterKey,
+    actor: opts.userId ?? null,
+    note: `assignment ${id} → ${state}`,
+  }).catch(() => undefined)
+  return { ok: true }
+}
+
+/**
+ * Delete — only before anything has run. Once a run exists the runs ARE the
+ * record and Close is the correct ending; deleting would orphan run rows that
+ * still carry cost. This exists because bulk-create's whole safety argument
+ * is that creating is reversible.
+ */
+export async function deleteAssignment(
+  id: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const runs = await prisma.agentRun.count({ where: { assignmentId: id } })
+  if (runs > 0) {
+    return {
+      ok: false,
+      error: 'This has already run. Close it instead — its runs are part of the record.',
+    }
+  }
+  await prisma.agentAssignment.delete({ where: { id } })
+  return { ok: true }
+}
+
+function toRollup(r: {
+  id: string
+  status: string
+  ok: boolean
+  findingCount: number
+  costUSD: unknown
+  haltedReason: string | null
+  errorMessage: string | null
+  createdAt: Date
+  endedAt: Date | null
+}): RunRollup {
+  return {
+    id: r.id,
+    status: r.status,
+    ok: r.ok,
+    findingCount: r.findingCount,
+    // Decimal → string over JSON; Number() it once, here, so no caller has to.
+    costUSD: Number(r.costUSD ?? 0),
+    haltedReason: r.haltedReason,
+    errorMessage: r.errorMessage,
+    createdAt: r.createdAt,
+    endedAt: r.endedAt,
+  }
+}
+
+const RUN_SELECT = {
+  id: true,
+  status: true,
+  ok: true,
+  findingCount: true,
+  costUSD: true,
+  haltedReason: true,
+  errorMessage: true,
+  createdAt: true,
+  endedAt: true,
+} as const
+
+/**
+ * The list, with each assignment's run rollup folded in.
+ *
+ * Deliberately NOT a client-side join against `/agent/fleet/runs?limit=100`:
+ * that feed is capped server-side and is global, so an assignment older than
+ * the newest 100 fleet runs would render "never run" when it had.
+ *
+ * Calls the reaper first. reclaimStuckRuns fires only from the sweep and
+ * council crons, which on a dark fleet may never run at all — so without this
+ * an assignment could sit in `running` forever. It is an idempotent
+ * updateMany over an indexed predicate.
+ */
+export async function listAssignments(filter: { charterKey?: string } = {}) {
+  await reclaimStuckRuns().catch(() => 0)
+
+  const rows = await prisma.agentAssignment.findMany({
+    where: filter.charterKey ? { charterKey: filter.charterKey } : undefined,
+    orderBy: { createdAt: 'desc' },
+    take: 200,
+  })
+  if (rows.length === 0) return []
+
+  const runs = await prisma.agentRun.findMany({
+    where: { assignmentId: { in: rows.map((r) => r.id) } },
+    orderBy: { createdAt: 'desc' },
+    select: { ...RUN_SELECT, assignmentId: true },
+  })
+  const byAssignment = new Map<string, RunRollup[]>()
+  for (const r of runs) {
+    if (!r.assignmentId) continue
+    const list = byAssignment.get(r.assignmentId) ?? []
+    list.push(toRollup(r))
+    byAssignment.set(r.assignmentId, list)
+  }
+
+  return rows.map((a) => {
+    const rs = byAssignment.get(a.id) ?? []
+    const last = rs[0] ?? null
+    return {
+      ...a,
+      state: deriveState(a.state, rs),
+      storedState: a.state,
+      runCount: rs.length,
+      lastRun: last,
+      costUSD: rs.reduce(
+        // An abandoned run's cost is unknown, not zero — the reclaimer never
+        // writes costUSD. Excluded from the sum and footnoted rather than
+        // quietly added as a 0 that makes the total look precise.
+        (sum, r) => sum + (r.haltedReason?.startsWith('orphaned:') ? 0 : r.costUSD),
+        0,
+      ),
+      hasUnknownCost: rs.some((r) => r.haltedReason?.startsWith('orphaned:')),
+      findingCount: rs.reduce((s, r) => s + r.findingCount, 0),
+    }
+  })
+}
+
+export async function getAssignment(id: string) {
+  await reclaimStuckRuns().catch(() => 0)
+  const a = await prisma.agentAssignment.findUnique({ where: { id } })
+  if (!a) return null
+
+  const runs = await prisma.agentRun.findMany({
+    where: { assignmentId: id },
+    orderBy: { createdAt: 'desc' },
+    select: RUN_SELECT,
+  })
+  const rollups = runs.map(toRollup)
+
+  // Findings this assignment's runs produced. Honest caveat, surfaced to the
+  // UI rather than hidden: AgentFinding.runId is REWRITTEN on every
+  // re-detection, so a finding first seen here re-attributes to whichever run
+  // saw it most recently. AS.5 fixes that with a join table; until then the
+  // page says so rather than implying the list is complete.
+  const findings = runs.length
+    ? await prisma.agentFinding.findMany({
+        where: { runId: { in: runs.map((r) => r.id) } },
+        orderBy: { createdAt: 'desc' },
+        take: 12,
+        select: {
+          id: true,
+          severity: true,
+          kind: true,
+          entityType: true,
+          entityId: true,
+          entityName: true,
+          rationale: true,
+          createdAt: true,
+        },
+      })
+    : []
+
+  const charter = await resolveCharter(a.charterKey)
+
+  return {
+    ...a,
+    state: deriveState(a.state, rollups),
+    storedState: a.state,
+    worker: charter
+      ? {
+          key: charter.key,
+          name: charter.name,
+          tier: charter.tier,
+          autonomyLevel: charter.autonomyLevel,
+          autonomyCap: charter.autonomyCap,
+          dailyBudgetUSD: charter.dailyBudgetUSD,
+        }
+      : null,
+    runs: rollups,
+    findings,
+    costUSD: rollups.reduce(
+      (s, r) => s + (r.haltedReason?.startsWith('orphaned:') ? 0 : r.costUSD),
+      0,
+    ),
+    hasUnknownCost: rollups.some((r) => r.haltedReason?.startsWith('orphaned:')),
+  }
+}

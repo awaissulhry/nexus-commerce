@@ -156,6 +156,18 @@ export const GLOSSARY: Record<string, { title: string; body: string }> = {
     title: 'Publish',
     body: 'The one consequential act in editing: it records your draft as the active revision, behind a confirmation that shows exactly what changed. Until then, editing touches nothing.',
   },
+  // NAF.SB.ACT — minted for /fleet/activity (locks-doc glossary protocol).
+  // The self-test owns 39 of the fleet's 53 runs and 47 of its 64 findings, so
+  // it is the first thing a beginner meets on the Activity page and the first
+  // thing they would misread as a problem with their account.
+  selftest: {
+    title: 'Self-test',
+    body: 'A worker whose only job is to check that the fleet itself is working. Its findings are about our own scheduled jobs, never about your Amazon account \u2014 so it is left out of the counts and shown with a badge. Hidden by default; tick the box to see it.',
+  },
+  run: {
+    title: 'Run',
+    body: 'One worker doing its job once: it reads prepared evidence, thinks, and writes down what it found. A run costs money and takes seconds to minutes. Everything else on this page \u2014 findings, plans, approvals \u2014 was produced by some run.',
+  },
 }
 
 export function Term({ k, children }: { k: keyof typeof GLOSSARY & string; children: ReactNode }) {

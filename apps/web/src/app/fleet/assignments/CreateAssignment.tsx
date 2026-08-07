@@ -1,0 +1,452 @@
+'use client'
+
+/**
+ * NAF.SB.AS / AS.1 — create one assignment.
+ *
+ * Four decisions, in the order an operator would say them out loud: which
+ * worker · what it points at · what you want back · by when. Only the first
+ * two are required, and the second is only offered where it can actually be
+ * enforced.
+ *
+ * Three things this deliberately does NOT do:
+ *
+ *  - It does not require a free-text brief. The research is explicit that a
+ *    required essay makes the typed target decorative; the field is optional
+ *    and prefilled from the worker's own description.
+ *  - It offers no prompt box. `promptOverride` REPLACES a charter's whole
+ *    system prompt rather than appending to it, so a free-text instruction
+ *    here would silently destroy the worker's charter for that run.
+ *  - It offers no "may it act" toggle. Every worker caps at OBSERVE or
+ *    PROPOSE today, so the control would bind nothing — and this series'
+ *    rule is that a control which is not enforced must not be rendered.
+ */
+
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Target, Loader2 } from 'lucide-react'
+import { Drawer } from '@/design-system/components/Drawer'
+import { DateField } from '@/design-system/components/DateField'
+import { getBackendUrl } from '@/lib/backend-url'
+import { searchOptions } from '@/lib/option-search'
+
+interface AssignableWorker {
+  key: string
+  name: string
+  tier: string
+  description: string | null
+  targetKinds: ('CAMPAIGN' | 'MARKETPLACE')[]
+  refusal?: string
+}
+
+interface CampaignOption {
+  id: string
+  externalCampaignId: string | null
+  name: string
+  marketplace: string
+  status: string
+}
+
+const MARKETPLACES = ['IT', 'DE', 'FR', 'ES']
+
+export function CreateAssignment({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void
+  onCreated: () => void
+}) {
+  const [workers, setWorkers] = useState<AssignableWorker[] | null>(null)
+  const [workerKey, setWorkerKey] = useState<string | null>(null)
+  const [kind, setKind] = useState<'CAMPAIGN' | 'MARKETPLACE' | null>(null)
+  const [picked, setPicked] = useState<{ id: string; label: string }[]>([])
+  const [wantBack, setWantBack] = useState('')
+  const [wantBackTouched, setWantBackTouched] = useState(false)
+  const [dueAt, setDueAt] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch(`${getBackendUrl()}/api/agent/fleet/assignable-workers`, {
+        cache: 'no-store',
+        credentials: 'include',
+      })
+      const j = (await res.json()) as { workers: AssignableWorker[] }
+      setWorkers(j.workers)
+    })().catch((e) => setError(String(e)))
+  }, [])
+
+  const worker = workers?.find((w) => w.key === workerKey) ?? null
+  const assignable = (workers ?? []).filter((w) => !w.refusal)
+  const refused = (workers ?? []).filter((w) => w.refusal)
+
+  // Prefill the brief from the worker's own description — editable and
+  // clearable. A blank required box is where a first-timer stalls.
+  useEffect(() => {
+    if (worker && !wantBackTouched) setWantBack(worker.description ?? '')
+  }, [worker, wantBackTouched])
+
+  const canSubmit = !!workerKey && (!kind || picked.length > 0) && !saving
+
+  const submit = useCallback(async () => {
+    if (!workerKey) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/agent/fleet/assignments`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          charterKey: workerKey,
+          targetKind: kind,
+          targetIds: picked.map((p) => p.id),
+          targetLabels: picked.map((p) => p.label),
+          wantBack: wantBack.trim() || null,
+          dueAt: dueAt || null,
+        }),
+      })
+      const j = (await res.json()) as { id?: string; error?: string }
+      if (!res.ok) {
+        setError(j.error ?? `create failed (${res.status})`)
+        return
+      }
+      onCreated()
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setSaving(false)
+    }
+  }, [workerKey, kind, picked, wantBack, dueAt, onCreated])
+
+  return (
+    <Drawer
+      open
+      onClose={onClose}
+      title="New assignment"
+      subtitle="One worker, one thing to look at."
+      width={560}
+      footer={
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="acr-pg-sortbtn" onClick={onClose} disabled={saving}>
+            Cancel
+          </button>
+          <button
+            className="acr-pg-sortbtn"
+            onClick={submit}
+            disabled={!canSubmit}
+            title={
+              canSubmit
+                ? 'Creates it. It will not run until you start it.'
+                : 'Pick a worker, and a target if you chose one.'
+            }
+          >
+            {saving ? <Loader2 size={14} className="spin" /> : <Target size={14} />}
+            Create it
+          </button>
+        </div>
+      }
+    >
+      {/* 1 — the worker */}
+      <div className="as-step">
+        <span className="as-steplabel">1 · Which worker?</span>
+        {workers === null ? (
+          <p className="as-hint">Loading…</p>
+        ) : (
+          <>
+            {assignable.map((w) => (
+              <button
+                key={w.key}
+                type="button"
+                className="as-workerbtn"
+                aria-pressed={workerKey === w.key}
+                onClick={() => {
+                  setWorkerKey(w.key)
+                  setKind(null)
+                  setPicked([])
+                }}
+              >
+                <span className="nm">{w.name}</span>
+                <span className="ds">{w.description}</span>
+              </button>
+            ))}
+            {assignable.length === 0 && (
+              <p className="as-hint">No worker can be assigned right now.</p>
+            )}
+            {refused.length > 0 && (
+              <p className="as-hint" style={{ marginTop: 10 }}>
+                {refused.length} other worker{refused.length === 1 ? '' : 's'} cannot be
+                assigned — most read your whole account every time, so a target
+                would narrow nothing.{' '}
+                <a href="/fleet/workers">Run those from Workers →</a>
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* 2 — the target */}
+      {worker && (
+        <div className="as-step">
+          <span className="as-steplabel">2 · What should it look at?</span>
+          <div className="as-kinds">
+            <button
+              type="button"
+              className="as-kind"
+              aria-pressed={kind === 'CAMPAIGN'}
+              onClick={() => {
+                setKind('CAMPAIGN')
+                setPicked([])
+              }}
+            >
+              One campaign
+            </button>
+            <button
+              type="button"
+              className="as-kind"
+              aria-pressed={kind === 'MARKETPLACE'}
+              onClick={() => {
+                setKind('MARKETPLACE')
+                setPicked([])
+              }}
+            >
+              One marketplace
+            </button>
+            <button
+              type="button"
+              className="as-kind"
+              aria-pressed={kind === null}
+              onClick={() => {
+                setKind(null)
+                setPicked([])
+              }}
+            >
+              The whole account
+            </button>
+          </div>
+
+          {kind === 'CAMPAIGN' && (
+            <CampaignPicker picked={picked} onChange={setPicked} />
+          )}
+          {kind === 'MARKETPLACE' && (
+            <div className="as-kinds" style={{ marginTop: 10 }}>
+              {MARKETPLACES.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  className="as-kind"
+                  aria-pressed={picked[0]?.id === m}
+                  onClick={() => setPicked([{ id: m, label: m }])}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <Preflight worker={worker} kind={kind} picked={picked} />
+        </div>
+      )}
+
+      {/* 3 — the brief */}
+      {worker && (
+        <div className="as-step">
+          <label htmlFor="as-want">3 · What do you want back? (optional)</label>
+          <textarea
+            id="as-want"
+            className="acr-pg-search"
+            style={{ width: '100%', minHeight: 66, resize: 'vertical', padding: 9 }}
+            value={wantBack}
+            placeholder="What does finished look like?"
+            onChange={(e) => {
+              setWantBackTouched(true)
+              setWantBack(e.target.value)
+            }}
+          />
+          <p className="as-hint">
+            Prefilled from what this worker does. It is a note for you — it does
+            not change the worker&apos;s instructions.
+          </p>
+        </div>
+      )}
+
+      {/* 4 — the deadline */}
+      {worker && (
+        <div className="as-step">
+          <span className="as-steplabel">4 · By when? (optional)</span>
+          <DateField
+            value={dueAt}
+            onChange={setDueAt}
+            clearable
+            ariaLabel="Due date"
+            placeholder="No deadline"
+          />
+          <p className="as-hint">
+            A deadline colours the row and moves it up the list so you notice it
+            slipped. It never starts anything and never stops anything.
+          </p>
+        </div>
+      )}
+
+      {error && <div className="as-err">{error}</div>}
+    </Drawer>
+  )
+}
+
+/**
+ * The pre-flight sentence: what this will actually look at.
+ *
+ * One sentence by default. The reason a narrowed run finds LESS — n-gram
+ * themes are account-wide and withheld — sits behind a disclosure, because a
+ * beginner reads "3 of 4 evidence sections" as breakage.
+ */
+function Preflight({
+  worker,
+  kind,
+  picked,
+}: {
+  worker: AssignableWorker
+  kind: string | null
+  picked: { id: string; label: string }[]
+}) {
+  if (!kind) {
+    return (
+      <div className="as-preflight" style={{ marginTop: 12 }}>
+        It will look at <strong>your whole account</strong>, the way it does on a
+        normal run.
+      </div>
+    )
+  }
+  if (picked.length === 0) {
+    return (
+      <div className="as-preflight" style={{ marginTop: 12 }}>
+        Pick {kind === 'CAMPAIGN' ? 'a campaign' : 'a marketplace'} and this will
+        say exactly what {worker.name} will be allowed to look at.
+      </div>
+    )
+  }
+  return (
+    <div className="as-preflight" style={{ marginTop: 12 }}>
+      It will look at <strong>{picked.map((p) => p.label).join(', ')}</strong> only
+      — nothing else in your account.
+      {kind === 'CAMPAIGN' && (
+        <details style={{ marginTop: 7 }}>
+          <summary style={{ cursor: 'pointer' }}>Why can&apos;t it see everything?</summary>
+          <p style={{ marginTop: 6, lineHeight: 1.6 }}>
+            That is the point of an assignment — it narrows the worker. It will
+            find less than a run over your whole account, and that is the
+            expected result, not a fault.
+          </p>
+          <p style={{ marginTop: 6, lineHeight: 1.6 }}>
+            One kind of evidence is left out entirely: waste <em>themes</em> are
+            totals across your whole account with no campaign of their own, so
+            showing them here would blame this campaign for other campaigns&apos;
+            spend. They are held back rather than shown misleadingly.
+          </p>
+        </details>
+      )}
+    </div>
+  )
+}
+
+/** Campaign picker — searchable, ENABLED by default (60% of the estate is
+ *  paused, so an unfiltered list offers mostly dormant scope). */
+function CampaignPicker({
+  picked,
+  onChange,
+}: {
+  picked: { id: string; label: string }[]
+  onChange: (v: { id: string; label: string }[]) => void
+}) {
+  const [all, setAll] = useState<CampaignOption[] | null>(null)
+  const [q, setQ] = useState('')
+  const [enabledOnly, setEnabledOnly] = useState(true)
+
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, {
+        cache: 'no-store',
+        credentials: 'include',
+      })
+      if (!res.ok) return setAll([])
+      // The endpoint's envelope is { items, count } — not a bare array and not
+      // { campaigns }. Checked against advertising.routes.ts rather than guessed.
+      const j = (await res.json()) as { items?: CampaignOption[] }
+      setAll(j.items ?? [])
+    })().catch(() => setAll([]))
+  }, [])
+
+  const options = useMemo(() => {
+    let list = (all ?? []).filter((c) => !!c.externalCampaignId)
+    if (enabledOnly) list = list.filter((c) => c.status === 'ENABLED')
+    const mapped = list.map((c) => ({
+      value: c.externalCampaignId as string,
+      label: `${c.name} · ${c.marketplace}`,
+    }))
+    // searchOptions ranks the way ads names need — plain substring matching
+    // returns nothing for "gale broad" against "GALE | IT | Broad | Brand".
+    return (q.trim() ? searchOptions(q, mapped, (o) => o.label) : mapped).slice(0, 40)
+  }, [all, q, enabledOnly])
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <input
+        className="acr-pg-search"
+        placeholder="Search campaigns…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        style={{ width: '100%' }}
+      />
+      <label className="as-hint" style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
+        <input
+          type="checkbox"
+          checked={enabledOnly}
+          onChange={(e) => setEnabledOnly(e.target.checked)}
+        />
+        Only campaigns that are running (most of the account is paused)
+      </label>
+
+      {picked.length > 0 && (
+        <div className="as-picked">
+          {picked.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className="as-target"
+              title="Remove"
+              onClick={() => onChange(picked.filter((x) => x.id !== p.id))}
+            >
+              <Target size={11} />
+              {p.label} ✕
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ maxHeight: 210, overflowY: 'auto', marginTop: 8 }}>
+        {all === null && <p className="as-hint">Loading campaigns…</p>}
+        {all !== null && options.length === 0 && (
+          <p className="as-hint">No campaign matches that.</p>
+        )}
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            className="as-workerbtn"
+            aria-pressed={picked.some((p) => p.id === o.value)}
+            onClick={() =>
+              onChange(
+                picked.some((p) => p.id === o.value)
+                  ? picked.filter((p) => p.id !== o.value)
+                  : [...picked, { id: o.value, label: o.label }],
+              )
+            }
+          >
+            <span className="nm as-optlabel">
+              {o.label}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,295 @@
+/* NAF.SB.AS — page-local styles for /fleet/assignments.
+   Locks-doc decision 4: fleet-pages.css is frozen to shared primitives;
+   everything beyond them lives here, as-* prefixed, same light acr-* palette
+   the other fleet pages use. */
+
+/* ── the state chip. Tone comes from states.ts, never from the call site,
+      so a chip and its strip tile can never disagree. ─────────────────── */
+.as-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.as-chip.neutral { color: #52627a; background: #eef2f7; border-color: #e2e6ec; }
+.as-chip.busy    { color: #1d4ed8; background: #eaf0ff; border-color: #d3e0ff; }
+.as-chip.good    { color: #146c43; background: #e8f6ee; border-color: #cfe9da; }
+.as-chip.warn    { color: #92400e; background: #fdf3e3; border-color: #f5e2c0; }
+.as-chip.bad     { color: #a11d2b; background: #fdecee; border-color: #f6d4d9; }
+
+.as-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.as-chip.busy .as-dot { animation: as-pulse 1.4s ease-in-out infinite; }
+@keyframes as-pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.25 } }
+
+/* ── the row ──────────────────────────────────────────────────────────── */
+.as-title {
+  font-weight: 600;
+  color: #1f2a37;
+  display: block;
+  line-height: 1.4;
+}
+.as-title a { color: inherit; text-decoration: none; }
+.as-title a:hover { text-decoration: underline; }
+
+.as-want {
+  display: block;
+  font-size: 11.5px;
+  color: #8d97a6;
+  line-height: 1.5;
+  max-width: 44ch;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.as-target {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: #35507a;
+  background: #eef3fb;
+  border: 1px solid #dae4f2;
+  border-radius: 6px;
+  padding: 2px 8px;
+  max-width: 30ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.as-target.gone { color: #a11d2b; background: #fdecee; border-color: #f6d4d9; }
+.as-target.account { color: #6b7a8d; background: #f4f6f9; border-color: #e6eaf0; }
+
+.as-outcome { font-size: 12px; color: #52627a; }
+.as-outcome.muted { color: #97a1b0; }
+
+/* ── the due badge. Grey → amber → red, and it never blocks anything. ─── */
+.as-due {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 5px;
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.as-due.later { color: #6b7a8d; background: #f4f6f9; border-color: #e6eaf0; }
+.as-due.soon  { color: #92400e; background: #fdf3e3; border-color: #f5e2c0; }
+.as-due.over  { color: #a11d2b; background: #fdecee; border-color: #f6d4d9; }
+
+/* ── strip tiles are buttons; every tile filters the list below it ───── */
+.as-tile {
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.as-tile:hover { border-color: #c6d2e2; }
+.as-tile[aria-pressed='true'] {
+  border-color: #2f6feb;
+  background: #f5f9ff;
+  box-shadow: inset 0 0 0 1px #2f6feb;
+}
+
+.as-remainder {
+  font-size: 11.5px;
+  color: #8d97a6;
+  margin-top: 8px;
+}
+.as-remainder button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: #2f6feb;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* ── create drawer ────────────────────────────────────────────────────── */
+.as-step { margin-bottom: 18px; }
+.as-step > label,
+.as-steplabel {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #35414f;
+  margin-bottom: 6px;
+  letter-spacing: 0.01em;
+}
+.as-hint {
+  font-size: 11.5px;
+  color: #8d97a6;
+  line-height: 1.55;
+  margin-top: 6px;
+}
+.as-refusal {
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: #7a5a22;
+  background: #fdf8ee;
+  border: 1px solid #f0e2c4;
+  border-radius: 8px;
+  padding: 9px 11px;
+  margin-top: 8px;
+}
+.as-workerbtn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid #e2e6ec;
+  border-radius: 9px;
+  background: #fff;
+  padding: 10px 12px;
+  cursor: pointer;
+  margin-bottom: 7px;
+  transition: border-color 0.12s ease;
+}
+.as-workerbtn:hover:not(:disabled) { border-color: #b9c7dc; }
+.as-workerbtn[aria-pressed='true'] {
+  border-color: #2f6feb;
+  box-shadow: inset 0 0 0 1px #2f6feb;
+  background: #f7faff;
+}
+.as-workerbtn:disabled { cursor: not-allowed; background: #fafbfc; }
+.as-workerbtn .nm { font-weight: 600; color: #1f2a37; font-size: 13px; }
+.as-workerbtn .ds { font-size: 11.5px; color: #8d97a6; line-height: 1.5; margin-top: 3px; }
+
+.as-kinds { display: flex; gap: 8px; flex-wrap: wrap; }
+.as-kind {
+  border: 1px solid #e2e6ec;
+  background: #fff;
+  border-radius: 8px;
+  padding: 7px 13px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #35414f;
+  cursor: pointer;
+}
+.as-kind[aria-pressed='true'] {
+  border-color: #2f6feb;
+  color: #1d4ed8;
+  background: #f5f9ff;
+  box-shadow: inset 0 0 0 1px #2f6feb;
+}
+
+.as-picked {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.as-preflight {
+  border: 1px solid #dbe6f5;
+  background: #f6faff;
+  border-radius: 9px;
+  padding: 11px 13px;
+  font-size: 12px;
+  color: #35507a;
+  line-height: 1.6;
+}
+.as-preflight strong { color: #1f3a63; }
+
+.as-err {
+  font-size: 12px;
+  color: #a11d2b;
+  background: #fdecee;
+  border: 1px solid #f6d4d9;
+  border-radius: 8px;
+  padding: 9px 11px;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+
+/* ── detail page ──────────────────────────────────────────────────────── */
+.as-brief {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px 22px;
+}
+.as-brief .k {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #97a1b0;
+  display: block;
+  margin-bottom: 3px;
+}
+.as-brief .v { font-size: 13px; color: #1f2a37; line-height: 1.5; }
+
+.as-why {
+  font-size: 12.5px;
+  color: #52627a;
+  line-height: 1.6;
+  max-width: 72ch;
+  margin-top: 6px;
+}
+
+.as-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+.as-finding {
+  border-top: 1px solid #eef1f5;
+  padding: 11px 0;
+}
+.as-finding:first-child { border-top: none; }
+.as-finding .hd { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.as-finding .rat {
+  font-size: 12px;
+  color: #52627a;
+  line-height: 1.6;
+  margin-top: 5px;
+  max-width: 82ch;
+}
+
+.as-sev {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.as-sev.critical, .as-sev.high { color: #a11d2b; background: #fdecee; }
+.as-sev.medium { color: #92400e; background: #fdf3e3; }
+.as-sev.low, .as-sev.info { color: #52627a; background: #eef2f7; }
+
+.as-caveat {
+  font-size: 11.5px;
+  color: #8d97a6;
+  line-height: 1.6;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #e6eaf0;
+  max-width: 78ch;
+}
+
+@media (max-width: 900px) {
+  .as-want, .as-target { max-width: 24ch; }
+}
+
+/* ── DS-ratchet clean: no inline fontSize, no inline hex, no native date
+      input. These three classes exist so the components stay declarative. */
+.as-optlabel { font-size: 12.5px; }
+.as-fname { font-size: 13px; }
+.as-fkind { font-size: 11.5px; }
+
+.as-how {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #35414f;
+}
+.as-how h4 { margin: 16px 0 6px; font-size: 13px; }
+.as-how h4:first-child { margin-top: 0; }
