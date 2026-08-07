@@ -1,0 +1,407 @@
+/*
+ * NAF.SB.M.1b — the Fleet map's own stylesheet.
+ *
+ * Page-local by the convention in the session-locks doc: `fleet-pages.css` is
+ * frozen to shared primitives, so a page's own rules live beside the page.
+ *
+ * Every colour on the canvas is defined HERE rather than inline, and that is a
+ * hard constraint rather than a preference: the DS ratchet matches
+ * `style={{ … #hex }}` in TSX, the `fleet` section has no baseline row so the
+ * guard's zero fallback applies, and it scans the WORKING TREE — one inline hex
+ * under app/fleet blocks every concurrent session's push.
+ *
+ * Every react-flow override is scoped under `.sbm-canvas`. An unscoped
+ * `.react-flow__…` rule would restyle every canvas in the app; there is one in
+ * the tree already (autopilot-canvas.css) and it is a trap, not a model.
+ */
+
+/* ── the page: one viewport, canvas takes what is left ─────────────────── */
+
+.sbm-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: 20px 24px 20px;
+  gap: 12px;
+}
+
+.sbm-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex: none;
+}
+.sbm-head h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: #1c2530;
+}
+.sbm-sub {
+  margin: 4px 0 0;
+  max-width: 78ch;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #667485;
+}
+.sbm-sub a {
+  color: #2b6cb0;
+  text-decoration: none;
+}
+.sbm-sub a:hover {
+  text-decoration: underline;
+}
+.sbm-head-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+.sbm-asof {
+  font-size: 11px;
+  color: #8a95a3;
+  font-variant-numeric: tabular-nums;
+}
+
+/* the window switch — a radiogroup, not a native select (the ratchet bans one
+   and the other is one control instead of a menu you have to open) */
+.sbm-seg {
+  display: inline-flex;
+  border: 1px solid #d7dee7;
+  border-radius: 7px;
+  overflow: hidden;
+  background: #fff;
+}
+.sbm-seg button {
+  border: 0;
+  background: transparent;
+  padding: 5px 10px;
+  font-size: 11.5px;
+  color: #5a6675;
+  cursor: pointer;
+}
+.sbm-seg button + button {
+  border-left: 1px solid #e6ebf1;
+}
+.sbm-seg button.on {
+  background: #eef4fb;
+  color: #1f4f8b;
+  font-weight: 600;
+}
+.sbm-seg button:focus-visible {
+  outline: 2px solid #2b6cb0;
+  outline-offset: -2px;
+}
+
+/* ── M1 · the census strip ─────────────────────────────────────────────── */
+
+.sbm-census {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex: none;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e6ebf1;
+  border-radius: 9px;
+}
+.sbm-census-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sbm-chiprow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sbm-chiprow-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9aa5b3;
+  margin-right: 2px;
+}
+.sbm-chiprow.rank-fact {
+  padding-top: 6px;
+  border-top: 1px dashed #eaeef3;
+}
+
+.sbm-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 1px solid #dde4ec;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 11.5px;
+  color: #4a5666;
+  cursor: pointer;
+}
+.sbm-chip .n {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #1c2530;
+}
+.sbm-chip:hover {
+  border-color: #b9c6d6;
+}
+.sbm-chip.on {
+  background: #eef4fb;
+  border-color: #a8c4e4;
+  color: #1f4f8b;
+}
+.sbm-chip.subject {
+  border-color: #cfd8e3;
+  background: #f7f9fc;
+  font-weight: 600;
+}
+.sbm-chip:focus-visible {
+  outline: 2px solid #2b6cb0;
+  outline-offset: 1px;
+}
+
+.sbm-spend {
+  font-size: 11.5px;
+  color: #667485;
+  white-space: nowrap;
+}
+.sbm-filterline,
+.sbm-footnote,
+.sbm-selline {
+  margin: 0;
+  font-size: 11.5px;
+  color: #667485;
+  flex: none;
+}
+.sbm-footnote.warn {
+  color: #8a6d3b;
+}
+.sbm-linkbtn {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: #2b6cb0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.sbm-banner-link {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #2b6cb0;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+/* ── M2 · the canvas ───────────────────────────────────────────────────── */
+
+.sbm-canvas {
+  flex: 1 1 auto;
+  min-height: 0; /* NOT calc(100vh - x): a mobile bar or a live banner would
+                    push a hard height off the bottom of the viewport */
+  border: 1px solid #e6ebf1;
+  border-radius: 9px;
+  background: #fbfcfe;
+  overflow: hidden;
+}
+.sbm-skeleton {
+  background: linear-gradient(90deg, #f4f6f9 25%, #eef1f5 37%, #f4f6f9 63%);
+  background-size: 400% 100%;
+  animation: sbm-shimmer 1.4s ease infinite;
+}
+@keyframes sbm-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+.sbm-canvas .react-flow__controls {
+  box-shadow: 0 1px 3px rgba(28, 37, 48, 0.12);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.sbm-canvas .react-flow__edge-text {
+  font-size: 10px;
+  fill: #5a6675;
+}
+.sbm-canvas .react-flow__edge-textbg {
+  fill: #ffffff;
+}
+
+/* nodes */
+.sbm-node {
+  width: 252px;
+  padding: 9px 11px;
+  background: #fff;
+  border: 1px solid #dde4ec;
+  border-left: 3px solid #c3ccd8; /* the ring: status, redundantly with the word */
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(28, 37, 48, 0.06);
+  cursor: pointer;
+}
+.sbm-node.is-dimmed {
+  opacity: 0.28;
+}
+.sbm-node.is-selected {
+  border-color: #2b6cb0;
+  box-shadow: 0 0 0 2px rgba(43, 108, 176, 0.22);
+}
+/* Never-run is a dashed neutral outline and is NOT dimmed. Absence of data is
+   not an error, and dimming it hides the coverage gap that is usually the
+   actual finding. */
+.sbm-node.is-neverrun {
+  border-style: dashed;
+  background: #fdfefe;
+}
+
+.sbm-node-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sbm-node-name {
+  font-size: 12.5px;
+  font-weight: 620;
+  color: #1c2530;
+}
+.sbm-tag-diag {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #7d879a;
+  background: #f1f4f8;
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+.sbm-node-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.sbm-node-word {
+  font-size: 11px;
+  font-weight: 600;
+  color: #4a5666;
+}
+.sbm-node-tier {
+  margin-left: auto;
+  font-size: 10px;
+  color: #9aa5b3;
+}
+.sbm-node-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+}
+.sbm-fact {
+  font-size: 10.5px;
+  color: #667485;
+  font-variant-numeric: tabular-nums;
+}
+.sbm-fact.muted {
+  color: #9aa5b3;
+  font-style: italic;
+}
+
+/* The glyph is the second channel. Shape differs per status, so the map still
+   reads in greyscale and for a colour-blind operator — colour alone is a
+   WCAG 1.4.1 Level A failure, not a nicety. */
+.sbm-glyph {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  display: inline-block;
+  background: #c3ccd8;
+}
+.sbm-glyph.g-off { border-radius: 2px; background: #b9c2ce; }              /* square, grey */
+.sbm-glyph.g-working { border-radius: 50%; background: #2f855a; }          /* circle, green */
+.sbm-glyph.g-running { border-radius: 50%; background: #2b6cb0; }          /* circle, blue */
+.sbm-glyph.g-paused { border-radius: 1px; background: #b7791f; }           /* bar, amber */
+.sbm-glyph.g-attention {
+  background: #c53030;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%); /* triangle, red */
+}
+.sbm-glyph.g-not-set-up {
+  background: transparent;
+  border: 1.5px dashed #9aa5b3; /* hollow, neutral */
+  border-radius: 50%;
+}
+
+/* the ring, by tone — always alongside the glyph and the word */
+.sbm-node.tone-neutral { border-left-color: #b9c2ce; }
+.sbm-node.tone-good { border-left-color: #2f855a; }
+.sbm-node.tone-busy { border-left-color: #2b6cb0; }
+.sbm-node.tone-warn { border-left-color: #b7791f; }
+.sbm-node.tone-bad { border-left-color: #c53030; }
+
+.sbm-handle {
+  width: 5px;
+  height: 5px;
+  background: #c3ccd8;
+  border: 0;
+}
+
+/* lanes — the label that keeps job furniture honest */
+.sbm-lane {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 640px;
+  padding: 6px 0 0;
+  border-top: 1px dashed #d7dee7;
+}
+.sbm-lane-title {
+  font-size: 11px;
+  font-weight: 650;
+  color: #5a6675;
+}
+.sbm-lane-note {
+  font-size: 10.5px;
+  color: #8a95a3;
+}
+
+/* edges: an edge that has never carried anything is dashed and says so. The
+   stroke reads LIFETIME, so a 24-hour window cannot un-solid a working edge. */
+.sbm-canvas .react-flow__edge.sbm-edge .react-flow__edge-path {
+  stroke: #b9c6d6;
+  stroke-width: 1.4;
+}
+.sbm-canvas .react-flow__edge.has-crossed .react-flow__edge-path {
+  stroke: #7f9dc0;
+}
+.sbm-canvas .react-flow__edge.never-crossed .react-flow__edge-path {
+  stroke-dasharray: 4 4;
+  stroke: #cbd5e0;
+}
+
+.sbm-foot {
+  flex: none;
+  font-size: 11px;
+  color: #8a95a3;
+  padding-bottom: 4px;
+}
+
+/* ── motion ────────────────────────────────────────────────────────────── */
+/* `a11y.css` is imported by no fleet page, so the reduced-motion escape has to
+   be declared here or this page ships without one. */
+@media (prefers-reduced-motion: reduce) {
+  .sbm-skeleton {
+    animation: none;
+  }
+  .sbm-canvas .react-flow__edge-path,
+  .sbm-node {
+    transition: none !important;
+  }
+}

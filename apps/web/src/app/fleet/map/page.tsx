@@ -1,5 +1,5 @@
 /**
- * NAF.SB — Fleet map. The operator asked for "an extensive version of the
+ * NAF.SB.M — Fleet map. The operator asked for "an extensive version of the
  * current one": full viewport rather than a panel, and an instrument rather
  * than a picture.
  *
@@ -7,44 +7,32 @@
  * fleet as it is right now; WORKFLOWS are named routines you author. Airflow's
  * cluster view versus one DAG. If the two ever drift toward each other they
  * should merge, not both ship.
+ *
+ * This page does NOT use FleetPageShell. The shell is title + sub inside a
+ * scrolling `.acr` column, which is right for the other nine pages and wrong
+ * for a full-viewport instrument: the canvas has to be a flex child with
+ * `min-height: 0` so it takes whatever is left, and the window switch and the
+ * as-of stamp belong on the header row beside the title. Rather than grow the
+ * shared shell an actions slot that lands on ten pages at once, this one page
+ * wears its own header — the same call `/fleet/workers` already made.
+ *
+ * Stylesheet order is the house convention (Workers and Workflows carry the
+ * same block): the four DS sheets first, because a DS component without its
+ * stylesheet renders unstyled; then the Control Room sheet, which owns the
+ * `.acr-*` family this page borrows for its banners and buttons; then the
+ * shared fleet primitives; then this page's own rules last, so they win.
  */
-import { FleetPageShell } from '../_shell/FleetPageShell'
-import { PlannedPage } from '../_shell/PlannedPage'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
+import '@/design-system/styles/patterns.css'
 import '@/app/marketing/ads/rules-automation/control-room/control-room.css'
 import '../fleet-pages.css'
+import './map.css'
+import { MapClient } from './MapClient'
 
 export const dynamic = 'force-dynamic'
 
 export default function Page() {
-  return (
-    <FleetPageShell
-      title="Fleet map"
-      sub="How the whole fleet fits together, live, on one canvas."
-    >
-      <PlannedPage
-        purpose={
-          <>
-            The picture of who reads what, who hands work to whom, and what is running right now.
-            This page is the fleet <i>as it is</i>; Workflows is where you change what it should
-            be.
-          </>
-        }
-        contents={[
-          'Full viewport with a collapsible inspector rail, instead of a panel on a scrolling page.',
-          'Three overlays over the same graph — autonomy (who may act), health (who is failing), cost (who is expensive).',
-          'Live pulses while a run is in flight, and edge labels carrying how many findings or plans actually crossed.',
-          'Filter by tier, marketplace or status; click a node for the worker, click an edge for the artifacts that crossed it.',
-          'The entity graph — already built — as a second mode of the same canvas.',
-        ]}
-        needs={
-          <>
-            The graph endpoint exists and is already rendered on the Overview. The overlays need
-            per-node aggregates the API does not compute yet: failure rate, spend and open
-            findings rolled up per worker rather than joined in the browser.
-          </>
-        }
-        livesToday={{ href: '/fleet', label: 'the fleet Overview' }}
-      />
-    </FleetPageShell>
-  )
+  return <MapClient />
 }
