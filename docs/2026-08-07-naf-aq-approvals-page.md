@@ -1084,3 +1084,60 @@ The lesson generalises past this page: **the honest-attribution work was done
 at row level and the heading was never re-read against it.** Any summary line
 above a list of records inherits the list's weakest claim, and needs checking
 against the emptiest and most embarrassing case, not the imagined full one.
+
+### AQ.2 — the non-fleet queue, and the guard that was pointing the wrong way (2026-08-07)
+
+Operator settled Q1 as *this page owns every approval, with the split visible*.
+Building it turned up a defect underneath the feature that had to be fixed
+first, or the feature would have shipped a lie.
+
+**`MATERIAL_PREVIEW_FIELDS` covered only the tools that cannot execute.**
+The AP.6 staleness guard re-runs a tool's own dry-run at commit and compares a
+per-tool list of *material* preview fields. That list held entries for
+`set-target-bid`, `create-negative-keyword` and `graduate-keyword` — the three
+preview-only tools, where a stale approval costs nothing — and **nothing at all
+for `set-price`, `apply-content`, `publish-listing` and `send-customer-message`,
+the four that can actually reach the outside world.** With an empty list the
+only staleness signal is the handler refusing outright, so field-level drift —
+precisely what the guard exists for — went unchecked on exactly the rows with
+consequences.
+
+This is the same inversion AP.3 found in `TOOL_CARDS`, one layer down and with
+teeth: the fleet's own tools got the attention, the tools with history got
+none. Filled in, with each choice reasoned in the code:
+
+| Tool | Material now | Why |
+|---|---|---|
+| `set-price` | `changes` | `changes['base price'].from` is the **live** price. "Move this from €49 to €39" is a different decision at €35 |
+| `apply-content` | `changes` | same shape — if someone edited the listing in between, the approved diff describes content that no longer exists |
+| `publish-listing` | `currentlyPublished`, `publishMode` | **the important one**: if the channel flipped live between approval and run, a gated queue-up silently becomes a real publish |
+| `send-customer-message` | `suppressed`, `emailOnFile`, `note` | if the customer opted out after the yes, it must not send. `note` is prose and included deliberately — it is the field that encodes live-vs-dry-run |
+
+Verified first that re-running these handlers is safe: all four are read-only
+in `mutate.tools.ts` (`findUnique` / `findFirst` and a suppression lookup). A
+re-check with a side effect would be worse than no re-check.
+
+**The feature itself.** `GET /agent/fleet/approvals/outside` lists
+pending/scheduled approvals whose tool is not one of the fleet's three, with
+the origin named verbatim (`manual-action`, `listing-quality-keeper`) and never
+a fabricated worker. The section renders below the fleet queue, visually
+distinct because these are the only rows that can act, and collapses to a
+single honest line when empty — which is its normal state.
+
+Decisions go through the **same** fleet decide route, so they get attribution,
+the 20-second park, the audit row and the staleness re-check. Verified the path
+does not filter by tool: `decideFleetApproval` → `scheduleApproval`
+(`updateMany where {id, status:'pending'}`) and `decideApproval` — neither
+mentions `FLEET_TOOLS`.
+
+**One deliberate duplication, with an end date.** The parked-row countdown is a
+second, smaller implementation of the shipped `ScheduledRow`, because that one
+is not exported and this stream committed not to edit the file it lives in
+while the Overview still renders it. AQ.3 moves the card into this directory
+and the two become one. Recorded so it is a decision rather than an accident.
+
+**Kept a separate section rather than widening `whereFor('waiting')`** — the
+study's reasoning holds and got stronger on contact: different producer, thinner
+payload (no worker join, no track record, no resolved entity names), opposite
+consequence. Putting two qualities of attribution under one count is how a queue
+starts lying to the person who trusts it.

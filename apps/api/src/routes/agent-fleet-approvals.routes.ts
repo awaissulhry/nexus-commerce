@@ -202,6 +202,75 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
       },
     }
   })
+
+  /**
+   * AQ-S5 — the requests waiting from OUTSIDE the fleet.
+   *
+   * These are the only rows on the page that can reach the outside world.
+   * `whereFor('waiting')` filters the queue to the three fleet tools while
+   * `runApprovalMaintenance` filters by no tool at all, so a `set-price` /
+   * `publish-listing` / `send-customer-message` / `apply-content` request is
+   * created, appears in NO view, and is expired unseen after 24 hours. Not a
+   * visibility gap — a silent terminal failure.
+   *
+   * Kept a separate endpoint (and a separate section) rather than widened into
+   * the fleet queue on purpose: different producer, thinner payload — no
+   * worker join, no track record, no resolved entity names — and the opposite
+   * consequence. Putting two qualities of attribution under one count is how a
+   * queue starts lying to the person who trusts it.
+   *
+   * Decisions on these go through the SAME fleet decide route, so they get
+   * attribution, the 20-second park, the audit row and the AP.6 staleness
+   * re-check — never the legacy path, which records no name and skips all four.
+   */
+  fastify.get('/agent/fleet/approvals/outside', async () => {
+    const rows = await prisma.agentApproval.findMany({
+      where: {
+        status: { in: ['pending', 'scheduled'] },
+        toolName: { notIn: FLEET_TOOLS },
+      },
+      orderBy: { requestedAt: 'asc' },
+      take: 100,
+    })
+
+    // Origin, said honestly. These hang off pre-fleet runs (`manual-action`,
+    // `listing-quality-keeper`), so there is no worker to name — and inventing
+    // one would be the exact anti-pattern FX.1 exists to prevent.
+    const runs = await prisma.agentRun.findMany({
+      where: { id: { in: rows.map((r) => r.agentRunId) } },
+      select: { id: true, agentKey: true, mode: true },
+    })
+    const runById = new Map(runs.map((r) => [r.id, r]))
+
+    return {
+      approvals: rows.map((a) => {
+        const run = runById.get(a.agentRunId)
+        const tool = getTool(a.toolName)
+        return {
+          id: a.id,
+          toolName: a.toolName,
+          riskTier: a.riskTier,
+          status: a.status,
+          args: a.args,
+          preview: a.preview,
+          requestedAt: a.requestedAt,
+          expiresAt: a.expiresAt,
+          executeAfter: a.executeAfter,
+          reason: a.reason,
+          decidedBy: a.decidedBy,
+          /** Where it came from, verbatim. Never a fabricated worker name. */
+          originKey: run?.agentKey ?? null,
+          /** True for all of these — it is why they matter. */
+          canExecute: typeof tool?.execute === 'function',
+          /** No `charterKey`, so no per-worker history exists for these. */
+          trackRecord: null,
+        }
+      }),
+      count: rows.length,
+      /** The list is capped; say so rather than silently truncating. */
+      cap: 100,
+    }
+  })
 }
 
 export default agentFleetApprovalRoutes

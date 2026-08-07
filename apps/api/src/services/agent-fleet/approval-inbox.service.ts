@@ -354,9 +354,44 @@ export async function commitScheduledApproval(
  * to €0.25" is a different decision if the bid is €0.60 by the time it runs.
  */
 const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
+  /* The fleet's three propose-tools. All preview-only: they cannot execute,
+     so a stale one costs nothing. */
   'set-target-bid': ['currentBidCents'],
   'create-negative-keyword': ['matchType', 'scope', 'alreadyNegated'],
   'graduate-keyword': ['suggestedBidCents'],
+
+  /* NAF.AQ.2 — the four tools that CAN execute, and which had no material
+     fields at all. The protection was inverted exactly as `TOOL_CARDS` was
+     before AP.3: the three tools that can never reach Amazon were guarded,
+     and the four that can were not. An empty list means the only staleness
+     signal is the handler refusing outright, so field-level drift — the very
+     thing this check exists for — went unnoticed on the rows with real
+     consequences.
+
+     Each handler is read-only (verified in mutate.tools.ts), so re-running it
+     is safe; what follows is what it is worth comparing. */
+
+  // `changes['base price'].from` is the LIVE price read at preview time.
+  // "Move this from €49 to €39" is a different decision at €35.
+  'set-price': ['changes'],
+
+  // Same shape: `changes.{title,bulletPoints,description}.from` is the live
+  // content. If someone edited the listing in between, the diff the operator
+  // approved describes content that no longer exists.
+  'apply-content': ['changes'],
+
+  // `currentlyPublished` — publishing something already published is a
+  // different act. `publishMode` is the important one: if the channel flipped
+  // to live between the approval and the run, the operator approved a gated
+  // queue-up and would get a real publish.
+  'publish-listing': ['currentlyPublished', 'publishMode'],
+
+  // `suppressed` is the one that matters most anywhere in this map: if the
+  // customer opted out after the operator said yes, the message must not go.
+  // `note` is prose, and included deliberately — it is the field that encodes
+  // whether outbound email is live or dry-run, and that flip turns a recorded
+  // no-op into an irreversible real send.
+  'send-customer-message': ['suppressed', 'emailOnFile', 'note'],
 }
 
 export interface StalenessVerdict {

@@ -261,3 +261,113 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── S5 · waiting from outside the fleet (AQ.2) ─────────────────────────── */
+
+/*
+ * These are the only rows on the page that can actually change something on
+ * Amazon, so they are the one block allowed to look different from the fleet
+ * queue above. The signal is carried by a word, a glyph and a border — never
+ * by colour alone (WCAG 1.4.1).
+ */
+
+.aq-outnone {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #6b7688;
+}
+.aq-outnone svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.aq-outside-card {
+  margin: 14px 0 0;
+  border-color: #f0c9c9;
+  border-left: 3px solid #c53030;
+}
+.aq-outhead {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 2px 0 0;
+  border: 0;
+  background: transparent;
+  color: #1c2530;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: left;
+  cursor: pointer;
+}
+.aq-outhead svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+.aq-outhead svg:nth-of-type(2) {
+  color: #c53030;
+}
+.aq-outhead strong {
+  font-weight: 650;
+}
+
+.aq-outbody {
+  margin-top: 10px;
+}
+.aq-outwhy {
+  margin: 0 0 12px;
+  padding: 10px 11px;
+  border: 1px solid #f0dcdc;
+  border-radius: 6px;
+  background: #fdf7f7;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #3a4658;
+}
+.aq-outwhy strong {
+  color: #1c2530;
+}
+
+.aq-outrow {
+  margin: 0 0 12px;
+}
+.aq-outorigin {
+  margin: 0 0 5px;
+  font-size: 11.5px;
+  color: #6b7688;
+}
+.aq-outorigin code {
+  padding: 1px 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 3px;
+  background: #f4f6f9;
+  font-size: 11px;
+}
+
+.aq-outparked {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #bbe5c8;
+  border-radius: 6px;
+  background: #f3faf5;
+}
+.aq-outparkedbody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12.5px;
+  color: #3a4658;
+}
+.aq-outparkedbody strong {
+  color: #1c2530;
+  font-weight: 650;
+}

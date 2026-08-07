@@ -24,7 +24,7 @@
  * page is the panel plus the truth, which is strictly better than either.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   AlertTriangle,
@@ -35,6 +35,7 @@ import {
   Clock,
   Info,
   ShieldCheck,
+  Undo2,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import {
@@ -44,6 +45,7 @@ import {
   type InboxView,
   type PrecedentRow,
 } from '@/app/marketing/ads/rules-automation/fleet/ApprovalInbox'
+import { DecisionCard } from '@/app/marketing/ads/rules-automation/fleet/DecisionCard'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import type { StoryPlan } from '@/app/marketing/ads/rules-automation/fleet/PlanStory'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
@@ -341,6 +343,193 @@ function GateStateSection({ gate }: { gate: GateState | null }) {
   )
 }
 
+/* ── S5 · waiting from outside the fleet ───────────────────────────────── */
+
+interface OutsideRow {
+  id: string
+  toolName: string
+  riskTier: string
+  status: string
+  args: Record<string, unknown>
+  preview: Record<string, unknown> | null
+  requestedAt: string
+  expiresAt: string | null
+  executeAfter: string | null
+  reason: string | null
+  decidedBy: string | null
+  originKey: string | null
+  canExecute: boolean
+  trackRecord: null
+}
+
+/**
+ * A parked row for the outside queue.
+ *
+ * Deliberately a second, smaller implementation of the shipped `ScheduledRow`:
+ * that one is not exported, and this stream committed not to edit the file it
+ * lives in while the Overview still renders it. AQ.3 moves the card into this
+ * directory and the two become one — recorded here so the duplication is a
+ * decision with an end date rather than an accident.
+ */
+function OutsideParked({
+  row,
+  busy,
+  onUndo,
+  onCommit,
+}: {
+  row: OutsideRow
+  busy: boolean
+  onUndo: (id: string) => void
+  onCommit: (id: string) => void
+}) {
+  const until = row.executeAfter ? new Date(row.executeAfter).getTime() : 0
+  const [left, setLeft] = useState(() => Math.max(0, Math.ceil((until - Date.now()) / 1000)))
+  const fired = useRef(false)
+
+  useEffect(() => {
+    if (!until) return
+    const t = setInterval(() => {
+      const secs = Math.max(0, Math.ceil((until - Date.now()) / 1000))
+      setLeft(secs)
+      if (secs === 0 && !fired.current) {
+        fired.current = true
+        onCommit(row.id)
+      }
+    }, 500)
+    return () => clearInterval(t)
+  }, [until, row.id, onCommit])
+
+  return (
+    <div className="aq-outparked">
+      <span className="aq-outparkedbody">
+        <strong>Approved — {humanTool(row.toolName)}</strong>
+        <span>
+          {left > 0 ? (
+            <>
+              Running in {left} second{left === 1 ? '' : 's'} — the{' '}
+              <Term k="undo-window">undo window</Term>. Nothing has happened yet.
+            </>
+          ) : (
+            'Running now…'
+          )}
+        </span>
+      </span>
+      {left > 0 ? (
+        <button className="acr-btn" disabled={busy} onClick={() => onUndo(row.id)}>
+          <Undo2 size={13} /> Undo
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+function OutsideQueue({
+  rows,
+  busy,
+  expiryHours,
+  onDecide,
+  onUndo,
+  onCommit,
+}: {
+  rows: OutsideRow[]
+  busy: boolean
+  expiryHours: number
+  onDecide: (id: string, decision: 'approve' | 'reject', reason?: string) => void
+  onUndo: (id: string) => void
+  onCommit: (id: string) => void
+}) {
+  const [open, setOpen] = useState(true)
+
+  // Empty is the normal state and should cost one line, not a card.
+  if (rows.length === 0) {
+    return (
+      <p className="aq-outnone">
+        <ShieldCheck size={12} aria-hidden />
+        Nothing is waiting from outside the fleet either. Requests from the older agent system
+        would appear here — they are the only ones that can change something on Amazon today.
+      </p>
+    )
+  }
+
+  return (
+    <section className="acr-card aq-outside-card" aria-labelledby="aq-out-h">
+      <button
+        className="aq-outhead"
+        id="aq-out-h"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        <AlertTriangle size={14} aria-hidden />
+        <span>
+          <strong>
+            {rows.length} request{rows.length === 1 ? '' : 's'} from outside the fleet
+          </strong>{' '}
+          — and unlike everything above, {rows.length === 1 ? 'it can' : 'these can'} actually
+          change something.
+        </span>
+      </button>
+
+      {open ? (
+        <div className="aq-outbody">
+          <p className="aq-outwhy">
+            These come from the older agent system, not from a fleet worker. They were reaching{' '}
+            <strong>no screen at all</strong> until now — the queue above only shows the fleet&apos;s
+            own three actions, while the clock that expires requests covers every action. So one of
+            these could be created, seen by nobody, and thrown away after {expiryHours} hours.
+            Deciding one here records your name, gives you the same twenty-second{' '}
+            <Term k="undo-window">undo window</Term>, and re-checks the facts before it runs.
+          </p>
+
+          {rows.map((a) =>
+            a.status === 'scheduled' ? (
+              <OutsideParked
+                key={a.id}
+                row={a}
+                busy={busy}
+                onUndo={onUndo}
+                onCommit={onCommit}
+              />
+            ) : (
+              <div key={a.id} className="aq-outrow">
+                <p className="aq-outorigin">
+                  {a.originKey ? (
+                    <>
+                      Asked by <code>{a.originKey}</code> — an agent from before the fleet, so
+                      there is no worker page and no track record for it.
+                    </>
+                  ) : (
+                    <>The agent that asked for this cannot be identified.</>
+                  )}
+                </p>
+                <DecisionCard
+                  approval={{
+                    id: a.id,
+                    toolName: a.toolName,
+                    charterKey: null,
+                    riskTier: a.riskTier,
+                    args: a.args,
+                    preview: a.preview,
+                    requestedAt: a.requestedAt,
+                    expiresAt: a.expiresAt,
+                    reason: a.reason,
+                    trackRecord: null,
+                  }}
+                  workerName={a.originKey ? humanTool(a.originKey) : 'An agent we cannot identify'}
+                  plans={[]}
+                  busy={busy}
+                  onDecide={onDecide}
+                  onOpenPlan={() => {}}
+                />
+              </div>
+            ),
+          )}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
 /* ── the page ──────────────────────────────────────────────────────────── */
 
 export function ApprovalsClient() {
@@ -353,17 +542,19 @@ export function ApprovalsClient() {
   const [plans, setPlans] = useState<StoryPlan[]>([])
   const [charters, setCharters] = useState<CharterRow[]>([])
   const [gate, setGate] = useState<GateState | null>(null)
+  const [outside, setOutside] = useState<OutsideRow[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const [a, pr, p, c, g] = await Promise.all([
+    const [a, pr, p, c, g, o] = await Promise.all([
       fetch(`${backend}/api/agent/fleet/approvals?view=${view}`, { cache: 'no-store' }),
       fetch(`${backend}/api/agent/fleet/precedents?limit=25`, { cache: 'no-store' }),
       fetch(`${backend}/api/agent/fleet/plans`, { cache: 'no-store' }),
       fetch(`${backend}/api/agent/fleet/charters`, { cache: 'no-store' }),
       fetch(`${backend}/api/agent/fleet/approvals/gate-state`, { cache: 'no-store' }),
+      fetch(`${backend}/api/agent/fleet/approvals/outside`, { cache: 'no-store' }),
     ])
     if (!a.ok) throw new Error(`approvals: ${a.status}`)
     const aj = (await a.json()) as { approvals: ApprovalRow[]; counts: InboxCounts }
@@ -375,6 +566,8 @@ export function ApprovalsClient() {
     // The gate state is the page's reason to exist, but it must never be able
     // to take the queue down with it.
     if (g.ok) setGate((await g.json()) as GateState)
+    // AQ.2 — the only rows on this page that can reach Amazon.
+    if (o.ok) setOutside(((await o.json()) as { approvals: OutsideRow[] }).approvals)
     setErr(null)
     setLoading(false)
   }, [backend, view])
@@ -512,6 +705,15 @@ export function ApprovalsClient() {
           </p>
         ) : null}
       </section>
+
+      <OutsideQueue
+        rows={outside}
+        busy={busy}
+        expiryHours={gate?.expiry.hours ?? 24}
+        onDecide={(id, d, reason) => void decide(id, d, reason)}
+        onUndo={(id) => void post(`approvals/${id}/undo`).then(after)}
+        onCommit={(id) => void post(`approvals/${id}/commit`).then(after)}
+      />
     </>
   )
 }
