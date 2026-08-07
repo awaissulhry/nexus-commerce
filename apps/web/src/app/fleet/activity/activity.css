@@ -70,6 +70,185 @@
   color: #1c2530;
 }
 
+/* ── ACT.3 · the controls ─────────────────────────────────────────────── */
+
+.sba-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px 11px;
+  background: #f8fafc;
+  border: 1px solid #e7ecf2;
+  border-radius: 8px;
+}
+
+.sba-grain {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.sba-grainlabel {
+  font-size: 11.5px;
+  color: #8d97a6;
+  margin-right: 2px;
+}
+.sba-grainbtn {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a5867;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.sba-grainbtn:first-of-type {
+  border-radius: 6px 0 0 6px;
+}
+.sba-grainbtn:last-of-type {
+  border-radius: 0 6px 6px 0;
+  border-left: none;
+}
+.sba-grainbtn:hover {
+  background: #f2f5f9;
+}
+.sba-grainbtn.on {
+  background: #1c2530;
+  border-color: #1c2530;
+  color: #fff;
+}
+
+.sba-chipset {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+/* `.acr-pg-chip` is the shared primitive; `.on` is the selected state this
+   page adds. Kept as a modifier so fleet-pages.css stays frozen. */
+.acr-pg-chip.on {
+  background: #1c2530;
+  border-color: #1c2530;
+  color: #fff;
+}
+.sba-chipn {
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+  margin-left: 3px;
+}
+
+.sba-toolright {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.sba-searchwrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 6px;
+  padding: 3px 8px;
+  color: #98a2b0;
+}
+.sba-search {
+  border: none;
+  outline: none;
+  font-size: 12px;
+  color: #34404f;
+  width: 170px;
+  background: transparent;
+}
+
+.sba-clear,
+.sba-export {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a5867;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 6px;
+  padding: 4px 9px;
+  cursor: pointer;
+}
+.sba-clear:hover,
+.sba-export:hover:not(:disabled) {
+  background: #f2f5f9;
+  color: #1c2530;
+}
+.sba-export:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* ── ACT.3 · the runs grid ────────────────────────────────────────────── */
+
+.sba-gridcard {
+  overflow: hidden;
+}
+/*
+  `table-layout: fixed` is not cosmetic here. "What happened" carries a whole
+  explained failure sentence; on `auto` that one cell widens its column and
+  pushes Cost off the card. A PLAIN global class, never a CSS-module one —
+  a hashed class has resolved to `undefined` at render in this repo before.
+*/
+.sba-gridcard .h10-ds-grid {
+  table-layout: fixed;
+  width: 100%;
+}
+/*
+  Explicit widths for all seven columns. Under `table-layout: fixed` an unsized
+  column gets an equal share of what is left, which gave Worker ~10% — narrow
+  enough that the `fleet-sweep` badge (nowrap, by design) overflowed the cell
+  and printed ON TOP of the next column's text. Sizing every column is the fix;
+  sizing one and hoping is what caused it.
+*/
+.sba-gridcard .h10-ds-grid th:nth-child(1),
+.sba-gridcard .h10-ds-grid td:nth-child(1) { width: 8%; }
+.sba-gridcard .h10-ds-grid th:nth-child(2),
+.sba-gridcard .h10-ds-grid td:nth-child(2) { width: 18%; }
+.sba-gridcard .h10-ds-grid th:nth-child(3),
+.sba-gridcard .h10-ds-grid td:nth-child(3) { width: 34%; }
+.sba-gridcard .h10-ds-grid th:nth-child(4),
+.sba-gridcard .h10-ds-grid td:nth-child(4) { width: 16%; }
+.sba-gridcard .h10-ds-grid th:nth-child(5),
+.sba-gridcard .h10-ds-grid td:nth-child(5) { width: 9%; }
+.sba-gridcard .h10-ds-grid th:nth-child(6),
+.sba-gridcard .h10-ds-grid td:nth-child(6) { width: 7%; }
+.sba-gridcard .h10-ds-grid th:nth-child(7),
+.sba-gridcard .h10-ds-grid td:nth-child(7) { width: 8%; }
+/* A worker with a badge wraps to a second line rather than escaping its cell. */
+.sba-gridcard .h10-ds-grid td:nth-child(2) {
+  white-space: normal;
+}
+.sba-cellprose {
+  display: block;
+  white-space: normal;
+  line-height: 1.45;
+}
+.sba-cellwhy {
+  display: block;
+  font-size: 11.5px;
+  color: #6b7a8d;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+.sba-nowrap {
+  white-space: nowrap;
+}
+.sba-foot.bare {
+  border: none;
+  background: transparent;
+  padding: 8px 2px 0;
+}
+
 .sba-banner {
   margin: 0;
 }
@@ -407,4 +586,9 @@
     grid-column: 2;
     margin-top: 0;
   }
+}
+
+.sba-gridcount {
+  font-size: 11.5px;
+  color: #6b7a8d;
 }

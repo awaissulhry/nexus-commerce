@@ -228,15 +228,63 @@ describe('getFleetTimeline — ordering, paging and honesty', () => {
 
 describe('getFleetTimeline — filters', () => {
   it('filters to one worker, and drops the human decision with it', async () => {
-    const { events } = await getFleetTimeline({ actor: 'amazon-negative-miner' })
+    const { events } = await getFleetTimeline({ actors: ['amazon-negative-miner'] })
     expect(events.every((e) => e.actorKey === 'amazon-negative-miner')).toBe(true)
     expect(events.some((e) => e.kind === 'approval.decided')).toBe(false)
   })
 
   it("filters to what people did, keeping only humans' decisions", async () => {
-    const { events } = await getFleetTimeline({ actor: 'human' })
+    const { events } = await getFleetTimeline({ actors: ['human'] })
     expect(events).toHaveLength(1)
     expect(events[0]!.kind).toBe('approval.decided')
+  })
+
+  /* ACT.3 — the actor filter is a LIST. These are the cases the single-value
+     version could not express, and the ones most likely to be got wrong. */
+
+  it('filters to SEVERAL workers at once', async () => {
+    const { events, total } = await getFleetTimeline({
+      actors: ['amazon-negative-miner', 'amazon-bid-tuner'],
+    })
+    const keys = new Set(events.map((e) => e.actorKey))
+    expect(keys).toEqual(new Set(['amazon-negative-miner', 'amazon-bid-tuner']))
+    // The counts are derived from the same predicate, so they must agree.
+    expect(total).toBe(events.length)
+  })
+
+  it('mixes a worker with a person, and keeps both kinds of event', async () => {
+    const { events } = await getFleetTimeline({ actors: ['amazon-negative-miner', 'human'] })
+    expect(events.some((e) => e.actorKind === 'worker')).toBe(true)
+    expect(events.some((e) => e.kind === 'approval.decided')).toBe(true)
+    // …and still excludes everyone not named.
+    expect(events.some((e) => e.actorKey === 'amazon-ads-director')).toBe(false)
+  })
+
+  it('returns nothing for an actor that does not exist, rather than everything', async () => {
+    // The route does NOT validate actor keys against an allow-list — they are
+    // data, and a W.8 instance can appear at any time. So an unknown key must
+    // fail closed. Falling back to "no filter" would answer a question nobody
+    // asked, which is how `kind`'s csv helper behaves and why this one differs.
+    const { events, total } = await getFleetTimeline({ actors: ['no-such-worker'] })
+    expect(events).toHaveLength(0)
+    expect(total).toBe(0)
+  })
+
+  it('treats an empty list as no filter at all', async () => {
+    const all = await getFleetTimeline()
+    const empty = await getFleetTimeline({ actors: [] })
+    expect(empty.total).toBe(all.total)
+  })
+
+  it('carries duration and finding count on runs, and on nothing else', async () => {
+    const { events } = await getFleetTimeline()
+    const run = events.find((e) => e.id === 'run.run1')!
+    expect(run.durationMs).toBe(16000)
+    expect(run.findingCount).toBe(5)
+    for (const e of events.filter((x) => !x.kind.startsWith('run.'))) {
+      expect(e.durationMs).toBeNull()
+      expect(e.findingCount).toBeNull()
+    }
   })
 
   it('filters by kind', async () => {

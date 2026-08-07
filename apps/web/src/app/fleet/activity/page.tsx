@@ -20,14 +20,18 @@
  * docs/2026-08-07-naf-sbact-activity-page.md.
  *
  * Styling, and the order matters (see workers/page.tsx for the full note):
- * control-room.css carries the acr-* family, fleet-pages.css carries
- * `.fleet-surface` and the shared acr-pg-* primitives, activity.css is this
- * page's own. The four DS stylesheets are deliberately NOT imported yet —
- * nothing here renders a DS component. They become mandatory at ACT.3, when
- * the Runs grain brings in DataGrid.
+ * the four DS stylesheets first — ACT.3's "Runs only" grain renders a DS
+ * `DataGrid`, and a DS component without its stylesheet renders unstyled (the
+ * Sync Control dropdown bug) — then control-room.css for the acr-* family,
+ * then fleet-pages.css for `.fleet-surface` and the shared acr-pg-* primitives,
+ * then this page's own.
  */
 import { FleetPageShell } from '../_shell/FleetPageShell'
 import { ActivityClient } from './ActivityClient'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
+import '@/design-system/styles/patterns.css'
 import '@/app/marketing/ads/rules-automation/control-room/control-room.css'
 import '../fleet-pages.css'
 import './activity.css'

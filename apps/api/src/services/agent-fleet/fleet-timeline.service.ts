@@ -98,6 +98,18 @@ export interface FleetEvent {
    * never concealed: the UI badges these rather than hiding them.
    */
   diagnostic: boolean
+  /**
+   * ACT.3 — how long the run took, and how much it found. Null on everything
+   * that is not a run.
+   *
+   * These exist so the "Runs only" grain is the SAME feed rendered as a table,
+   * not a second fetch against `/agent/fleet/runs` — which caps at 100 rows,
+   * has no cursor and takes three filters. One list, one filter state, one
+   * paging path was the whole argument for dropping the two-tab shape; a
+   * second feed behind a tab would have quietly reinstated it.
+   */
+  durationMs: number | null
+  findingCount: number | null
   /** Where clicking it should go, when there is somewhere to go. */
   href: string | null
   /**
@@ -110,8 +122,14 @@ export interface FleetEvent {
 export interface FleetTimelineFilters {
   from?: Date
   to?: Date
-  /** A charter key, or the literal 'human' / 'system'. */
-  actor?: string
+  /**
+   * ACT.3 — charter keys, and/or the literals 'human' / 'system'. A LIST,
+   * because the filter chips are multi-select: `kind` and `outcome` were
+   * always csv and `actor` was not, so "show me the bid tuner and the
+   * harvester" was the one question the filter bar could not ask.
+   * Empty or absent means every actor.
+   */
+  actors?: string[]
   kinds?: FleetEventKind[]
   outcomes?: FleetEventOutcome[]
   /** Free text over the sentence and its detail. */
@@ -319,6 +337,21 @@ function parseCursor(raw: string | undefined): Cursor | null {
 
 const makeCursor = (e: FleetEvent) => `${e.at}|${e.id}`
 
+/**
+ * ACT.3 — the actor filter, resolved once for every source.
+ *
+ * `null` means "no actor filter". Otherwise `keys` are charter keys to match
+ * and `wantsNonWorker` says whether 'human' or 'system' was also picked. A
+ * source that only ever produces worker events can skip its query entirely
+ * when `keys` is empty — which is what made the old single-actor version fast,
+ * and is worth keeping now that it is a list.
+ */
+function actorFilter(f: FleetTimelineFilters): { keys: string[]; wantsNonWorker: boolean } | null {
+  if (!f.actors || f.actors.length === 0) return null
+  const keys = f.actors.filter((a) => a !== 'human' && a !== 'system')
+  return { keys, wantsNonWorker: f.actors.some((a) => a === 'human' || a === 'system') }
+}
+
 /** `at <= cursor` bound, applied to whichever column carries the time. */
 function timeBound(f: FleetTimelineFilters, cursor: Cursor | null) {
   const lte = cursor ? (f.to && f.to < cursor.at ? f.to : cursor.at) : f.to
@@ -333,13 +366,14 @@ async function runEvents(
   names: Map<string, WorkerInfo>,
 ): Promise<FleetEvent[]> {
   const createdAt = timeBound(f, cursor)
+  const af = actorFilter(f)
+  // A filter naming only human/system can never match a worker's run.
+  if (af && af.keys.length === 0) return []
   const where: Prisma.AgentRunWhereInput = {
     mode: { not: null },
     ...(createdAt ? { createdAt } : {}),
-    ...(f.actor && f.actor !== 'human' && f.actor !== 'system' ? { agentKey: f.actor } : {}),
+    ...(af ? { agentKey: { in: af.keys } } : {}),
   }
-  // A worker filter can never match human/system events; skip the query.
-  if (f.actor === 'human' || f.actor === 'system') return []
   const rows = await prisma.agentRun.findMany({
     where,
     select: {
@@ -378,6 +412,8 @@ async function runEvents(
       workflowKey: r.workflowKey ?? null,
       dataVintage: null,
       diagnostic: isDiagnostic(names, r.agentKey),
+      durationMs: r.latencyMs,
+      findingCount: r.findingCount,
       href: `/fleet/workers/${r.agentKey}`,
       rollupKey: `run:${r.agentKey}:${sig}`,
     }
@@ -391,12 +427,13 @@ async function findingEvents(
   names: Map<string, WorkerInfo>,
   episodeOf: Map<string, string>,
 ): Promise<FleetEvent[]> {
-  if (f.actor === 'human' || f.actor === 'system') return []
+  const af = actorFilter(f)
+  if (af && af.keys.length === 0) return []
   const createdAt = timeBound(f, cursor)
   const rows = await prisma.agentFinding.findMany({
     where: {
       ...(createdAt ? { createdAt } : {}),
-      ...(f.actor ? { charterKey: f.actor } : {}),
+      ...(af ? { charterKey: { in: af.keys } } : {}),
     },
     select: {
       id: true, runId: true, charterKey: true, kind: true, severity: true,
@@ -434,6 +471,8 @@ async function findingEvents(
       // the content behind it actually is.
       dataVintage: r.dataVintage ? r.dataVintage.toISOString() : null,
       diagnostic: isDiagnostic(names, r.charterKey),
+      durationMs: null,
+      findingCount: null,
       href: `/fleet/workers/${r.charterKey}`,
       rollupKey: `finding:${r.charterKey}:${r.kind}`,
     }
@@ -447,12 +486,13 @@ async function planEvents(
   names: Map<string, WorkerInfo>,
   episodeOf: Map<string, string>,
 ): Promise<FleetEvent[]> {
-  if (f.actor === 'human' || f.actor === 'system') return []
+  const af = actorFilter(f)
+  if (af && af.keys.length === 0) return []
   const createdAt = timeBound(f, cursor)
   const rows = await prisma.agentPlan.findMany({
     where: {
       ...(createdAt ? { createdAt } : {}),
-      ...(f.actor ? { charterKey: f.actor } : {}),
+      ...(af ? { charterKey: { in: af.keys } } : {}),
     },
     select: {
       id: true, runId: true, charterKey: true, headline: true, items: true,
@@ -489,6 +529,8 @@ async function planEvents(
       workflowKey: null,
       dataVintage: null,
       diagnostic: isDiagnostic(names, r.charterKey),
+      durationMs: null,
+      findingCount: null,
       href,
       rollupKey: `plan:${r.charterKey}`,
     })
@@ -532,6 +574,8 @@ async function planEvents(
         workflowKey: null,
         dataVintage: null,
         diagnostic: isDiagnostic(names, 'plan-critic'),
+        durationMs: null,
+        findingCount: null,
         href,
         rollupKey: `critic:${r.criticVerdict}`,
       })
@@ -588,7 +632,8 @@ async function approvalEvents(
     const act = TOOL_PHRASE[r.toolName] ?? humanize(r.toolName)
     const episode = episodeOf.get(r.agentRunId) ?? `run:${r.agentRunId}`
 
-    if (!f.actor || f.actor === key) {
+    const af = actorFilter(f)
+    if (!af || af.keys.includes(key)) {
       out.push({
         id: `approval.${r.id}`,
         at: r.requestedAt.toISOString(),
@@ -607,12 +652,14 @@ async function approvalEvents(
         workflowKey: null,
         dataVintage: null,
         diagnostic: isDiagnostic(names, key),
+        durationMs: null,
+        findingCount: null,
         href: null,
         rollupKey: `approval-req:${key}:${r.toolName}`,
       })
     }
 
-    if (r.decidedAt && (!f.actor || f.actor === 'human')) {
+    if (r.decidedAt && (!af || f.actors!.includes('human'))) {
       const decided =
         r.status === 'rejected'
           ? 'said no to'
@@ -641,6 +688,8 @@ async function approvalEvents(
         // A human decision is never diagnostic, whatever the worker was: the
         // actor is the person, and a person is not a self-test.
         diagnostic: false,
+        durationMs: null,
+        findingCount: null,
         href: null,
         rollupKey: `approval-dec:${r.status}:${r.toolName}`,
       })
@@ -654,7 +703,7 @@ async function approvalEvents(
  * contribute exactly one event: the halt that is in force right now.
  */
 async function haltEvents(f: FleetTimelineFilters, cursor: Cursor | null): Promise<FleetEvent[]> {
-  if (f.actor && f.actor !== 'system') return []
+  if (f.actors?.length && !f.actors.includes('system')) return []
   const s = await prisma.agentFleetState.findUnique({
     where: { id: 'singleton' },
     select: { halted: true, haltedAt: true, haltReason: true, haltedBy: true },
@@ -682,6 +731,8 @@ async function haltEvents(f: FleetTimelineFilters, cursor: Cursor | null): Promi
       workflowKey: null,
       dataVintage: null,
       diagnostic: false,
+      durationMs: null,
+      findingCount: null,
       href: null,
       rollupKey: 'halt',
     },
@@ -710,10 +761,11 @@ function matchesFilters(e: FleetEvent, f: FleetTimelineFilters): boolean {
   // clause, so it means one thing everywhere: "who performed this act".
   // A plan row belongs to the director, but the critic's ruling on it is the
   // critic's act — filtering to the director must not return it.
-  if (f.actor) {
-    if (f.actor === 'human' || f.actor === 'system') {
-      if (e.actorKind !== f.actor) return false
-    } else if (e.actorKey !== f.actor) return false
+  if (f.actors?.length) {
+    const hit = f.actors.some((a) =>
+      a === 'human' || a === 'system' ? e.actorKind === a : e.actorKey === a,
+    )
+    if (!hit) return false
   }
   if (f.kinds?.length && !f.kinds.includes(e.kind)) return false
   if (f.outcomes?.length && !f.outcomes.includes(e.outcome)) return false

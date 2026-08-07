@@ -23,7 +23,8 @@ async function handle(url: URL): Promise<unknown> {
     return getFleetTimeline(
       {
         q: q.get('q') ?? undefined,
-        actor: q.get('actor') ?? undefined,
+        actors: q.get('actor')?.split(',').map((v) => v.trim()).filter(Boolean),
+        kinds: (q.get('kind')?.split(',').filter(Boolean) as never) ?? undefined,
         includeDiagnostic,
       },
       { limit: Number(q.get('limit')) || 50, cursor: q.get('cursor') ?? undefined },

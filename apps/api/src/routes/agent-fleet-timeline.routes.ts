@@ -88,7 +88,14 @@ const agentFleetTimelineRoutes: FastifyPluginAsync = async (fastify) => {
     const filters: FleetTimelineFilters = {
       from: parseDate(q.from) ?? parseRange(q.range),
       to: parseDate(q.to),
-      actor: q.actor?.trim() || undefined,
+      // ACT.3 — `?actor=a,b` is now a list, matching `kind` and `outcome`.
+      // Unlike those two it is NOT validated against an allow-list: actor keys
+      // are data (a W.8 instance can be created at any time), so an unknown key
+      // must return nothing rather than be silently dropped into "no filter".
+      actors: q.actor
+        ?.split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
       kinds: csv(q.kind, KINDS),
       outcomes: csv(q.outcome, OUTCOMES),
       q: q.q?.trim() || undefined,
