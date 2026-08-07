@@ -12,9 +12,15 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { isAiKillSwitchOn } from '../services/ai/providers/index.js'
 import { isAutonomyLevel, AUTONOMY_LEVELS } from '../services/advertising/ads-autonomy.js'
-import { decideApproval } from '../services/agents/approval-gate.service.js'
 import { executeCharter } from '../services/agent-fleet/agent-executor.js'
-import { mintExemplarFromDecision } from '../services/agent-fleet/exemplar.service.js'
+import {
+  decideFleetApproval,
+  inboxCounts,
+  listInbox,
+  rejectAllForCharter,
+  resolveActor,
+  type InboxView,
+} from '../services/agent-fleet/approval-inbox.service.js'
 import { isAutoPromotionAllowed } from '../services/agent-fleet/promotion.service.js'
 import {
   bustCharterCache,
@@ -372,34 +378,29 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // NAF.D — the fleet approval inbox (control #15).
-  const FLEET_TOOLS = ['create-negative-keyword', 'graduate-keyword', 'set-target-bid']
-
-  fastify.get<{ Querystring: { status?: string } }>(
+  // NAF.AP.2 — three views instead of pending-only, and counts for the tabs.
+  // `status=` is still honoured so an older client keeps working.
+  fastify.get<{ Querystring: { view?: string; status?: string; limit?: string } }>(
     '/agent/fleet/approvals',
     async (request) => {
-      const status = request.query.status ?? 'pending'
-      const approvals = await prisma.agentApproval.findMany({
-        where: { toolName: { in: FLEET_TOOLS }, ...(status ? { status } : {}) },
-        orderBy: { requestedAt: 'desc' },
-        take: 100,
-      })
-      const runs = await prisma.agentRun.findMany({
-        where: { id: { in: approvals.map((a) => a.agentRunId) } },
-        select: { id: true, agentKey: true, orchestrationId: true },
-      })
-      const runById = new Map(runs.map((r) => [r.id, r]))
+      const q = request.query
+      const view: InboxView =
+        q.view === 'decided' || q.view === 'expired' || q.view === 'waiting'
+          ? q.view
+          : q.status === 'expired'
+            ? 'expired'
+            : q.status && q.status !== 'pending'
+              ? 'decided'
+              : 'waiting'
+      const [approvals, counts] = await Promise.all([
+        listInbox(view, Number(q.limit) || 100),
+        inboxCounts(),
+      ])
       // FX.1 — resolve the entities each approval touches.
       const labels = await resolveFleetLabels(
         collectRefs({ items: approvals.map((a) => ({ args: a.args })) }),
       )
-      return {
-        approvals: approvals.map((a) => ({
-          ...a,
-          charterKey: runById.get(a.agentRunId)?.agentKey ?? null,
-          orchestrationId: runById.get(a.agentRunId)?.orchestrationId ?? null,
-        })),
-        labels,
-      }
+      return { approvals, counts, view, labels }
     },
   )
 
@@ -417,13 +418,14 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
     if (decision === 'reject' && !reason) {
       return reply.code(400).send({ error: 'a one-line reason is required to reject' })
     }
-    const out = await decideApproval(request.params.id, decision, 'operator', reason || undefined)
+    // NAF.AP.1 — the signed-in user, not the literal string 'operator'.
+    const out = await decideFleetApproval({
+      id: request.params.id,
+      decision,
+      reason: reason || undefined,
+      actor: resolveActor(request.authUser),
+    })
     if (!out.ok) return reply.code(409).send(out)
-    // NAF.E — every decision becomes a precedent. A minting failure must
-    // not fail the decision that already committed.
-    await mintExemplarFromDecision(request.params.id, decision, reason || undefined).catch(
-      (err) => fastify.log.error({ err }, 'exemplar minting failed'),
-    )
     return out
   })
 
@@ -435,29 +437,11 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
       if (!charterKey || !reason) {
         return reply.code(400).send({ error: 'charterKey and reason are required' })
       }
-      const runs = await prisma.agentRun.findMany({
-        where: { agentKey: charterKey },
-        select: { id: true },
+      return rejectAllForCharter({
+        charterKey,
+        reason,
+        actor: resolveActor(request.authUser),
       })
-      const pending = await prisma.agentApproval.findMany({
-        where: {
-          status: 'pending',
-          toolName: { in: FLEET_TOOLS },
-          agentRunId: { in: runs.map((r) => r.id) },
-        },
-        select: { id: true },
-      })
-      let rejected = 0
-      for (const p of pending) {
-        const out = await decideApproval(p.id, 'reject', 'operator', reason)
-        if (out.ok) {
-          rejected++
-          await mintExemplarFromDecision(p.id, 'reject', reason).catch((err) =>
-            fastify.log.error({ err }, 'exemplar minting failed'),
-          )
-        }
-      }
-      return { ok: true, rejected, of: pending.length }
     },
   )
 

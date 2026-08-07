@@ -26,7 +26,12 @@ import {
   YAxis,
 } from 'recharts'
 import { getBackendUrl } from '@/lib/backend-url'
-import { DecisionCard } from './DecisionCard'
+import {
+  ApprovalInbox,
+  type ApprovalRow,
+  type InboxCounts,
+  type InboxView,
+} from './ApprovalInbox'
 import {
   EntityGraphCanvas,
   RELATION_META,
@@ -99,15 +104,6 @@ interface FindingRow {
   createdAt: string
 }
 type PlanRow = StoryPlan & { charterKey: string }
-interface ApprovalRow {
-  id: string
-  toolName: string
-  charterKey: string | null
-  status: string
-  args: Record<string, unknown>
-  preview: { effect?: string } | null
-  requestedAt: string
-}
 interface SweepRow {
   orchestrationId: string
   startedAt: string
@@ -152,6 +148,10 @@ export function FleetTab() {
   const [plans, setPlans] = useState<PlanRow[]>([])
   const [planLabels, setPlanLabels] = useState<PlanLabels>({ campaigns: {}, targets: {} })
   const [approvals, setApprovals] = useState<ApprovalRow[]>([])
+  // NAF.AP.2 — waiting / decided / expired, with counts for the tabs.
+  const [inboxView, setInboxView] = useState<InboxView>('waiting')
+  const [inboxCounts, setInboxCounts] = useState<InboxCounts>({ waiting: 0, decided: 0, expired: 0 })
+  const [inboxLoading, setInboxLoading] = useState(false)
   const [sweeps, setSweeps] = useState<SweepRow[]>([])
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -163,8 +163,6 @@ export function FleetTab() {
   const [openPlan, setOpenPlan] = useState<string | null>(null)
   const [schedule, setSchedule] = useState<ScheduleJob[]>([])
   const [scorecards, setScorecards] = useState<ScorecardRow[]>([])
-  const [rejectAllFor, setRejectAllFor] = useState<string | null>(null)
-  const [rejectAllReason, setRejectAllReason] = useState('')
   const [busy, setBusy] = useState(false)
   // NAF.DT — the decision timeline's own feed, paged independently of the
   // rest of the page so "show older" never re-fetches the whole fleet.
@@ -181,7 +179,7 @@ export function FleetTab() {
         fetch(`${backend}/api/agent/fleet/runs?limit=60`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/findings?limit=60`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/plans`, { cache: 'no-store' }),
-        fetch(`${backend}/api/agent/fleet/approvals?status=pending`, { cache: 'no-store' }),
+        fetch(`${backend}/api/agent/fleet/approvals?view=${inboxView}`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/sweeps?limit=8`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/schedule`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/scorecards?limit=40`, { cache: 'no-store' }),
@@ -198,19 +196,24 @@ export function FleetTab() {
         setPlans(pj.plans)
         setPlanLabels(pj.labels ?? { campaigns: {}, targets: {} })
       }
-      if (a.ok) setApprovals(((await a.json()) as { approvals: ApprovalRow[] }).approvals)
+      if (a.ok) {
+        const aj = (await a.json()) as { approvals: ApprovalRow[]; counts: InboxCounts }
+        setApprovals(aj.approvals)
+        setInboxCounts(aj.counts)
+      }
       if (sw.ok) setSweeps(((await sw.json()) as { sweeps: SweepRow[] }).sweeps)
       if (sch.ok) setSchedule(((await sch.json()) as { jobs: ScheduleJob[] }).jobs)
       if (sc.ok) setScorecards(((await sc.json()) as { scorecards: ScorecardRow[] }).scorecards)
       if (tl.ok) setTimeline((await tl.json()) as FleetTimelinePage)
       setUpdatedAt(Date.now())
+      setInboxLoading(false)
       setErr(null)
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
     } finally {
       setLoading(false)
     }
-  }, [backend])
+  }, [backend, inboxView])
 
   useEffect(() => {
     void load()
@@ -303,8 +306,6 @@ export function FleetTab() {
           const d = (await r.json().catch(() => null)) as { error?: string } | null
           setErr(d?.error ?? `reject-all: ${r.status}`)
         }
-        setRejectAllFor(null)
-        setRejectAllReason('')
         await load()
       } finally {
         setBusy(false)
@@ -428,14 +429,6 @@ export function FleetTab() {
     const d = Math.floor(h / 24)
     return d >= 1 ? `in ${d}d ${h % 24}h` : h >= 1 ? `in ${h}h ${mins % 60}m` : `in ${mins}m`
   }
-  const pendingByCharter = useMemo(() => {
-    const m = new Map<string, ApprovalRow[]>()
-    for (const a of approvals) {
-      const k = a.charterKey ?? 'unknown'
-      m.set(k, [...(m.get(k) ?? []), a])
-    }
-    return m
-  }, [approvals])
 
   if (loading && charters.length === 0) {
     return (
@@ -609,71 +602,32 @@ export function FleetTab() {
         <header className="acr-fl-head">
           <h3>Approval inbox</h3>
           <span className="acr-fl-sub">
-            {approvals.length === 0 ? 'nothing waiting' : `${approvals.length} pending`}
+            {inboxCounts.waiting === 0
+              ? 'nothing waiting for you'
+              : `${inboxCounts.waiting} waiting for you`}
           </span>
         </header>
-        {[...pendingByCharter.entries()].map(([charterKey, rows]) => (
-          <div key={charterKey} className="acr-fl-inboxgroup">
-            <div className="acr-fl-inboxhead">
-              <strong>{charterKey}</strong>
-              {rejectAllFor === charterKey ? (
-                <span className="acr-fl-rejectrow">
-                  <input
-                    autoFocus
-                    placeholder="one-line reason (required)"
-                    value={rejectAllReason}
-                    onChange={(e) => setRejectAllReason(e.target.value)}
-                  />
-                  <button
-                    className="acr-btn"
-                    disabled={busy || !rejectAllReason.trim()}
-                    onClick={() => void rejectAll(charterKey, rejectAllReason.trim())}
-                  >
-                    Confirm reject all ({rows.length})
-                  </button>
-                  <button className="acr-btn" disabled={busy} onClick={() => setRejectAllFor(null)}>
-                    Cancel
-                  </button>
-                </span>
-              ) : (
-                <button
-                  className="acr-btn"
-                  disabled={busy}
-                  onClick={() => {
-                    setRejectAllFor(charterKey)
-                    setRejectAllReason('')
-                  }}
-                >
-                  Reject all ({rows.length})
-                </button>
-              )}
-            </div>
-            {rows.map((a) => (
-              <DecisionCard
-                key={a.id}
-                approval={a}
-                workerName={nameByKey.get(a.charterKey ?? '') ?? a.charterKey ?? 'A worker'}
-                plans={plans}
-                labels={planLabels}
-                busy={busy}
-                onDecide={(id, decision, reason) => void decide(id, decision, reason)}
-                onOpenPlan={(planId) => {
-                  setOpenPlan(planId)
-                  document
-                    .getElementById(`plan-${planId}`)
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                }}
-              />
-            ))}
-          </div>
-        ))}
-        {approvals.length === 0 ? (
-          <p className="acr-fl-empty">
-            Nothing is waiting for you. <Term k="approval">Approvals</Term> appear here when a
-            plan passes the <Term k="critic">critic</Term> — and every yes or no you give
-            becomes <Term k="exemplar">precedent</Term> the workers read on their next run.
-          </p>
-        ) : null}
+        <ApprovalInbox
+          view={inboxView}
+          counts={inboxCounts}
+          approvals={approvals}
+          plans={plans}
+          nameByKey={nameByKey}
+          busy={busy}
+          loading={inboxLoading}
+          onViewChange={(v) => {
+            setInboxView(v)
+            setInboxLoading(true)
+          }}
+          onDecide={(id, decision, reason) => void decide(id, decision, reason)}
+          onRejectAll={(charterKey, reason) => void rejectAll(charterKey, reason)}
+          onOpenPlan={(planId) => {
+            setOpenPlan(planId)
+            document
+              .getElementById(`plan-${planId}`)
+              ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }}
+        />
       </section>
 
       {/* 5 — money & report cards (FX.7) */}

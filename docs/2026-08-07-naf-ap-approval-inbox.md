@@ -296,6 +296,62 @@ approval, and re-verified the first time a worker actually asks.
    summary belongs. Named here so it is not lost; not built in AP.
 5. **Phase set:** awaiting go.
 
+---
+
+## 6b · Execution record — AP.1–AP.3 built 2026-08-07
+
+| File | What |
+|---|---|
+| `apps/api/src/services/agent-fleet/approval-inbox.service.ts` | **new** — actor resolution, the three views with counts, and decide/reject-all with audit |
+| `apps/api/src/services/agent-fleet/approval-inbox.vitest.test.ts` | **new** — 18 tests |
+| `apps/api/src/services/agent-fleet/control-audit.service.ts` | +2 actions (`approve_action`, `reject_action`) |
+| `apps/api/src/routes/agent-fleet.routes.ts` | routes made thin; `view=` + counts; the real user replaces `'operator'` |
+| `apps/web/.../fleet/ApprovalInbox.tsx` | **new** — tabs, grouping by worker name, the decided history |
+| `apps/web/.../fleet/DecisionCard.tsx` | rebuilt: 7 tools, risk-shaped depth, no raw JSON |
+| `apps/web/.../fleet/fleet-sections.css` | the `ap-*` family |
+| `apps/web/.../fleet/FleetTab.tsx` | panel swapped for `<ApprovalInbox>` |
+
+**What changed for an operator.** The panel used to be one sentence —
+"Nothing is waiting for you" — and nothing else. It now has three views;
+**Decided shows all 18 approvals that have been invisible since June**, each
+with its outcome, age, risk tier, a pre-fleet label, and the reason that was
+given. Waiting groups by **worker name** instead of raw charter key. Cards
+are shaped by consequence: a low-risk reversible bid change is compact with
+its detail one click away, while high-risk, irreversible, or
+unknown-consequence actions open fully with a line saying why.
+
+**Verified.** 18 new unit tests; full agent-fleet suite **241 passing across
+32 files**. In a browser against the real database: tabs read *Waiting 4 ·
+Decided 18 · Expired 0*, group headers read "Bid tuner" / "Negative miner",
+the four card shapes render correctly (low→compact, medium-unknown→heavy,
+high→heavy, irreversible→heavy with "cannot be undone"), no raw JSON
+anywhere, tabs carry `role="tablist"` + `aria-selected`, and there is no
+horizontal overflow at 200% zoom.
+
+Because the fleet is dark the waiting view is genuinely empty, so the four
+card shapes were rendered from **synthetic rows invented inside the
+read-only stub** — nothing was written to the database to make this
+screenshot possible. The decided history is real data.
+
+**Two defects found and fixed during the build:**
+1. `decideFleetApproval` awaited `recordControlChange` without a `.catch()`.
+   That module swallows its own errors by contract, but the decision has
+   already committed — a side record must never be able to fail it. Caught
+   by a test that mocked the audit to reject.
+2. The history chip read **"You said no"** on rows whose `decidedBy` is null,
+   claiming a decider the record does not have. Outcomes are now impersonal
+   ("Rejected", "Approved — and it ran"); who decided is the meta line's job,
+   where it can honestly say "nobody recorded".
+
+**Gates:** DS ratchet clean · RBAC 0 unmapped · `tsc --noEmit` clean on both
+apps.
+
+**Not built yet:** AP.4 (bulk + 20s undo), AP.5 (expiry on one clock), AP.6
+(staleness), AP.7 (precedent delivered), AP.8 (Article 14 gate + teaching
+gate).
+
+---
+
 ## 7 · Open items carried out of this proposal
 
 - **`preview.effect` mismatch** — legacy previews are `{note, action,

@@ -199,6 +199,106 @@
   .dt-skeleton { animation: none; }
 }
 
+/* ══ NAF.AP — the approval inbox (ap-*) ═══════════════════════════════ */
+
+.ap-tabs {
+  display: flex; gap: 4px; margin: 0 0 12px;
+  border-bottom: 1px solid #e8edf3; padding-bottom: 0;
+}
+.ap-tabs button {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border: 0; background: none; cursor: pointer;
+  font-size: 12.5px; font-weight: 550; color: #6b7787;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.ap-tabs button:hover { color: #232c37; }
+.ap-tabs button.on { color: #1d4f8b; border-bottom-color: #2f6fb5; font-weight: 650; }
+.ap-tabs button:focus-visible { outline: 2px solid #7fb0ea; outline-offset: -2px; border-radius: 5px 5px 0 0; }
+.ap-tabcount {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 19px; height: 17px; padding: 0 5px; border-radius: 999px;
+  background: #eef2f7; border: 1px solid #dde4ec;
+  font-size: 10px; font-weight: 700; color: #46525f;
+  font-variant-numeric: tabular-nums;
+}
+.ap-tabs button.on .ap-tabcount { background: #e7f0fa; border-color: #c4dbf3; color: #1d4f8b; }
+
+/* ── the card, shaped by consequence ───────────────────────────────── */
+
+.ap-card { border-left: 3px solid #dfe5ec; }
+.ap-card.r-medium { border-left-color: #ecd9ae; }
+.ap-card.r-high { border-left-color: #e6bcba; }
+/* Heavy cards sit on a faintly warmer ground so a page of them reads as
+   different work from a page of routine ones — never colour alone: they
+   also carry the ShieldAlert line and open expanded. */
+.ap-card.heavy { background: #fffdf9; }
+
+.ap-chips { display: inline-flex; align-items: center; gap: 5px; margin-left: 6px; }
+.ap-undo {
+  display: inline-flex; align-items: center; padding: 1px 6px;
+  border-radius: 4px; font-size: 10px; font-weight: 650;
+  border: 1px solid #dfe5ec; background: #fff; color: #5a6675;
+  white-space: nowrap;
+}
+.ap-undo.u-yes { border-color: #c3e5d3; background: #f4fbf7; color: #14724d; }
+.ap-undo.u-partial { border-color: #ecd9ae; background: #fffaf1; color: #8a6320; }
+.ap-undo.u-no,
+.ap-undo.u-unknown { border-color: #e6bcba; background: #fdf5f4; color: #9c2f2a; }
+
+.ap-heavy-note {
+  display: flex; align-items: flex-start; gap: 6px;
+  margin: 6px 0 2px; padding: 7px 9px;
+  background: #fdf5f4; border: 1px solid #f0d7d5; border-radius: 6px;
+  font-size: 11.5px; color: #7d3f3b; line-height: 1.5;
+}
+.ap-heavy-note svg { flex-shrink: 0; margin-top: 1px; }
+
+/* ── decided / expired history ─────────────────────────────────────── */
+
+.ap-decidedlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+
+.ap-decided {
+  display: grid; grid-template-columns: minmax(120px, auto) 1fr;
+  gap: 10px; align-items: start;
+  padding: 9px 6px; border-bottom: 1px solid #f0f3f7;
+}
+.ap-decided:last-child { border-bottom: 0; }
+.ap-decided:hover { background: #f8fafc; }
+
+.ap-outcome {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 650; white-space: nowrap;
+  border: 1px solid #dfe5ec; background: #f1f4f8; color: #5a6675;
+}
+.ap-outcome.o-ok { background: #f1faf5; border-color: #c3e5d3; color: #14724d; }
+.ap-outcome.o-bad { background: #fdf2f2; border-color: #e6bcba; color: #9c2f2a; }
+
+.ap-decidedbody { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ap-decidedwhat { font-size: 12.5px; color: #232c37; line-height: 1.45; overflow-wrap: anywhere; }
+.ap-decidedmeta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 7px;
+  font-size: 11px; color: #8d97a6;
+}
+.ap-reason {
+  font-size: 11.5px; color: #616d7c; font-style: italic;
+  margin-top: 2px; padding-left: 8px; border-left: 2px solid #e2e8f0;
+  overflow-wrap: anywhere;
+}
+.ap-prefleet {
+  display: inline-flex; align-items: center; padding: 1px 6px;
+  border-radius: 4px; font-size: 10px; font-weight: 650;
+  border: 1px dashed #ccd4de; background: #fafbfd; color: #77828f;
+  white-space: nowrap;
+}
+
+.ap-foot {
+  display: flex; align-items: flex-start; gap: 5px;
+  margin-top: 10px; padding-top: 8px; border-top: 1px solid #f0f3f7;
+  line-height: 1.5;
+}
+.ap-foot svg { flex-shrink: 0; margin-top: 2px; }
+
 .dt-legend {
   display: flex; flex-wrap: wrap; gap: 6px 14px;
   padding: 8px 0 4px; margin: 0 0 2px;

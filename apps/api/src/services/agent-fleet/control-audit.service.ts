@@ -23,6 +23,11 @@ export type ControlAction =
   | 'scope'
   | 'run_now'
   | 'cancel_run'
+  // NAF.AP.1 — approval decisions are control changes too: they are the
+  // moment a human authorises an agent to touch Amazon, and until now no
+  // record named who did it.
+  | 'approve_action'
+  | 'reject_action'
 
 export async function recordControlChange(input: {
   charterKey: string
