@@ -132,6 +132,24 @@ const nextConfig = {
 
       // Never an ads surface — Google/Meta catalogue exports (ACR.6/R11).
       { source: '/marketing/advertising/feeds', destination: '/marketing/content/feeds', permanent: true },
+
+      // ── NAF.SB.7 — the Agent Fleet left the ads console for /fleet ─────────
+      //
+      // It was never a marketing surface: the roster in docs/AGENT_FLEET.md
+      // Part 6 already reaches catalog, pricing, inventory and platform-ops
+      // analysts, and only the first cohort happens to be ads.
+      //
+      // These replace an optional catch-all page that called permanentRedirect().
+      // That page DID redirect a browser, but only client-side: the ads layout
+      // renders before the page, so the response has already begun streaming and
+      // headers are gone by the time the redirect throws — 200 with the target in
+      // the RSC payload, on dev AND on prod. Verified with curl against Vercel,
+      // not assumed. Config redirects run before routing, so these are real 308s.
+      //
+      // NOT caught, deliberately: /marketing/ads/rules-automation/fleet/… , where
+      // the components and the worker page still live. Different path, untouched.
+      { source: '/marketing/ads/fleet', destination: '/fleet', permanent: true },
+      { source: '/marketing/ads/fleet/:path*', destination: '/fleet/:path*', permanent: true },
     ];
   },
 };
