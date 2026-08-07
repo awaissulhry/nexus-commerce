@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../db.js', () => ({
   default: {
+    agentCharterRevision: { findMany: vi.fn(async () => []) },
     agentCharter: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn() },
     agentRun: { create: vi.fn(), update: vi.fn(), aggregate: vi.fn() },
     agentObservation: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },

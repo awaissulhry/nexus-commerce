@@ -11379,6 +11379,9 @@ model AgentRun {
   // `mode` NOT NULL is what marks a run as a fleet run. All nullable
   // or defaulted — the table has live rows.
   charterVersion  Int?
+  /// NAF.AC.8 — which charter revision produced this run, so scorecards can
+  /// compare an A/B split. Null = the code charter ran.
+  charterRevisionId String?
   mode            String? // tick | sweep | council | summit | incident | ask
   parentRunId     String?
   orchestrationId String?
@@ -15458,8 +15461,82 @@ model AgentCharter {
   createdBy    String?
   supersededBy String?
 
+  /// NAF.AC.4 — per-worker model choice. Overrides the tier-level
+  /// AiFeatureModelPref when set; null = inherit the tier.
+  modelProviderOverride String?
+  modelNameOverride     String?
+
+  /// NAF.AC.6 — a temporary stop with an expiry, so pausing a worker is
+  /// never a forgotten off switch. Null = not paused.
+  pausedUntil       DateTime?
+  pausedReason      String?
+
+  /// NAF.AC.8 — split testing: when set AND abEnabled, alternate runs use
+  /// this candidate revision instead of the active one.
+  abEnabled           Boolean @default(false)
+  candidateRevisionId String?
+
   @@unique([key, version])
   @@index([tier, domain, enabled])
+}
+
+/// NAF.AC.1 — a charter revision: the prompt (and the policy that rode with
+/// it) as an immutable, versioned artifact. The CODE charter remains the
+/// floor and the fallback — an absent or unreadable active revision means
+/// the code charter runs, exactly like the Phase-A fail-safe.
+model AgentCharterRevision {
+  id           String    @id @default(cuid())
+  charterKey   String
+  revision     Int // monotonic per charter, 1-based
+  systemPrompt String    @db.Text
+  /// Snapshot of the editable policy at save time (budgets, caps, model pin).
+  policy       Json?
+  /// Mandatory one-line reason — the change log IS the audit.
+  note         String
+  author       String?
+  createdAt    DateTime  @default(now())
+  activatedAt  DateTime?
+  supersededAt DateTime?
+
+  @@unique([charterKey, revision])
+  @@index([charterKey, activatedAt])
+}
+
+/// NAF.AC.3 — the evidence behind a promotion: a draft revision scored
+/// against the running charter on the SAME evidence, before it can go live.
+model AgentEvalRun {
+  id         String   @id @default(cuid())
+  charterKey String
+  revisionId String?
+  /// scores for the charter that is currently running
+  baseline   Json
+  /// scores for the draft revision under test
+  candidate  Json
+  /// better | worse | inconclusive
+  verdict    String
+  measures   Json
+  cases      Int      @default(0)
+  costUSD    Decimal  @default(0) @db.Decimal(12, 6)
+  createdAt  DateTime @default(now())
+
+  @@index([charterKey, createdAt])
+  @@index([revisionId])
+}
+
+/// NAF.AC.7 — every control change, attributable. Dial moves, revision
+/// activations, policy edits, eval overrides, pauses. The EU AI Act posture
+/// the spec commits to is only real if this table is complete.
+model AgentControlAudit {
+  id         String   @id @default(cuid())
+  charterKey String
+  action     String // dial | enable | activate_revision | revert_to_code | policy | pause | resume | eval_override | tools | scope
+  fromValue  Json?
+  toValue    Json?
+  note       String?
+  actor      String?
+  createdAt  DateTime @default(now())
+
+  @@index([charterKey, createdAt])
 }
 
 /// NAF.A — precomputed deterministic evidence. NOT model output. TTL-cached

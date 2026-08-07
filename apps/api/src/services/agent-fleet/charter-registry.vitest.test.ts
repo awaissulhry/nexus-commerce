@@ -12,6 +12,8 @@ vi.mock('../../db.js', () => ({
       findUnique: vi.fn(),
       create: vi.fn(),
     },
+    // AC.1 — resolution now merges the active revision on the same path.
+    agentCharterRevision: { findMany: vi.fn(async () => []) },
   },
 }))
 

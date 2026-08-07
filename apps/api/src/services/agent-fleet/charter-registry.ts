@@ -18,6 +18,7 @@ import {
   type AutonomyLevel,
 } from '../advertising/ads-autonomy.js'
 import type { CharterDefinition, EffectiveCharter } from './charter-types.js'
+import { getActiveRevisions, type RevisionPolicy } from './charter-revisions.service.js'
 import { amazonAdsDirectorCharter } from './charters/amazon-ads-director.charter.js'
 import { amazonBidTunerCharter } from './charters/amazon-bid-tuner.charter.js'
 import { amazonKeywordHarvesterCharter } from './charters/amazon-keyword-harvester.charter.js'
@@ -50,6 +51,19 @@ interface DbCharterPolicy {
   maxTokensPerRun: number
   dailyBudgetUSD: unknown
   maxProposedValueCents: number | null
+  toolNames: string[]
+  // NAF.AC additions
+  modelProviderOverride: string | null
+  modelNameOverride: string | null
+  pausedUntil: Date | null
+  pausedReason: string | null
+  /** AC.1 — the active revision, already merged by loadDbPolicies. */
+  revision?: {
+    id: string
+    revision: number
+    systemPrompt: string
+    policy: RevisionPolicy | null
+  }
 }
 
 const cache = new TtlCache<Map<string, DbCharterPolicy>>({
@@ -62,14 +76,20 @@ async function loadDbPolicies(): Promise<Map<string, DbCharterPolicy> | null> {
   const hit = cache.get('all')
   if (hit) return hit
   try {
-    const rows = await prisma.agentCharter.findMany({
-      where: { key: { in: Object.keys(FLEET_CHARTERS) } },
-    })
+    const [rows, revisions] = await Promise.all([
+      prisma.agentCharter.findMany({
+        where: { key: { in: Object.keys(FLEET_CHARTERS) } },
+      }),
+      // AC.1 — the active revision per charter, read on the same hot path
+      // so the merge costs one extra query per cache miss, not per run.
+      getActiveRevisions(),
+    ])
     const map = new Map<string, DbCharterPolicy>()
     for (const r of rows) {
       // Match the code charter's version exactly — a row for another
       // version is another charter's policy, not this one's.
       if (FLEET_CHARTERS[r.key]?.version !== r.version) continue
+      const rev = revisions.get(r.key)
       map.set(r.key, {
         version: r.version,
         enabled: r.enabled,
@@ -82,6 +102,19 @@ async function loadDbPolicies(): Promise<Map<string, DbCharterPolicy> | null> {
         maxTokensPerRun: r.maxTokensPerRun,
         dailyBudgetUSD: r.dailyBudgetUSD,
         maxProposedValueCents: r.maxProposedValueCents,
+        toolNames: r.toolNames,
+        modelProviderOverride: r.modelProviderOverride,
+        modelNameOverride: r.modelNameOverride,
+        pausedUntil: r.pausedUntil,
+        pausedReason: r.pausedReason,
+        revision: rev
+          ? {
+              id: rev.id,
+              revision: rev.revision,
+              systemPrompt: rev.systemPrompt,
+              policy: rev.policy,
+            }
+          : undefined,
       })
     }
     cache.set('all', map)
@@ -124,20 +157,54 @@ function toEffective(
       scopeMarketplaces: [],
       scopePortfolioIds: [],
       scopeCampaignIds: [],
+      pausedUntil: null,
+      pausedReason: null,
       degraded,
     }
   }
+  // AC.6 — a live pause resolves as not-enabled without touching the dial,
+  // so resuming restores exactly what the operator had set.
+  const paused = db.pausedUntil != null && new Date(db.pausedUntil).getTime() > Date.now()
+  const rp = db.revision?.policy ?? null
   return {
     ...def,
-    enabled: db.enabled,
+    // AC.1 — code default ⊕ active revision. An absent revision means the
+    // code prompt runs; that is the fallback, and it cannot fail.
+    systemPrompt: db.revision?.systemPrompt ?? def.systemPrompt,
+    activeRevisionId: db.revision?.id,
+    activeRevisionNumber: db.revision?.revision,
+    enabled: db.enabled && !paused,
+    pausedUntil: db.pausedUntil ?? null,
+    pausedReason: db.pausedReason ?? null,
     autonomyLevel: clampAutonomy(db.autonomyLevel, def.autonomyCap),
     scopeMarketplaces: db.scopeMarketplaces,
     scopePortfolioIds: db.scopePortfolioIds,
     scopeCampaignIds: db.scopeCampaignIds,
-    maxFindingsPerRun: clampDown(def.maxFindingsPerRun, db.maxFindingsPerRun),
+    // AC.5 — the DB may narrow the tool list, never widen it beyond code.
+    toolNames: db.toolNames?.length
+      ? def.toolNames.filter((t) => db.toolNames.includes(t))
+      : def.toolNames,
+    // Caps: the DB (and a revision's policy) may TIGHTEN, never loosen —
+    // the code value stays the ceiling, like autonomyCap.
+    maxFindingsPerRun: clampDown(
+      clampDown(def.maxFindingsPerRun, db.maxFindingsPerRun),
+      rp?.maxFindingsPerRun,
+    ),
     maxToolCallsPerRun: clampDown(def.maxToolCallsPerRun, db.maxToolCallsPerRun),
-    maxTokensPerRun: clampDown(def.maxTokensPerRun, db.maxTokensPerRun),
-    dailyBudgetUSD: clampDown(def.dailyBudgetUSD, Number(db.dailyBudgetUSD)),
+    maxTokensPerRun: clampDown(
+      clampDown(def.maxTokensPerRun, db.maxTokensPerRun),
+      rp?.maxTokensPerRun,
+    ),
+    maxEvidenceAgeHours: clampDown(
+      def.maxEvidenceAgeHours ?? Number.POSITIVE_INFINITY,
+      rp?.maxEvidenceAgeHours,
+    ),
+    dailyBudgetUSD: clampDown(
+      clampDown(def.dailyBudgetUSD, Number(db.dailyBudgetUSD)),
+      rp?.dailyBudgetUSD,
+    ),
+    modelProvider: db.modelProviderOverride ?? undefined,
+    modelName: db.modelNameOverride ?? undefined,
     maxProposedValueCents:
       def.maxProposedValueCents == null
         ? undefined

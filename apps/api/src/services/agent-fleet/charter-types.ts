@@ -54,6 +54,15 @@ export interface CharterDefinition {
 }
 
 export interface EffectiveCharter extends CharterDefinition {
+  /** AC.1 — set when an operator revision is in force; absent = code charter. */
+  activeRevisionId?: string
+  activeRevisionNumber?: number
+  /** AC.4 — per-worker model pin; absent = inherit the tier preference. */
+  modelProvider?: string
+  modelName?: string
+  /** AC.6 — a temporary stop with an expiry. */
+  pausedUntil?: Date | null
+  pausedReason?: string | null
   enabled: boolean
   /** min(DB level, autonomyCap); DB row absent or unreadable ⇒ 'OFF'. */
   autonomyLevel: AutonomyLevel

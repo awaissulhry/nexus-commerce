@@ -28,7 +28,7 @@ import {
   getProviderForFeature,
   resolveModelForFeature,
 } from '../ai/model-resolver.service.js'
-import { isAiKillSwitchOn } from '../ai/providers/index.js'
+import { getProvider, isAiKillSwitchOn } from '../ai/providers/index.js'
 import { logUsage } from '../ai/usage-logger.service.js'
 import { checkCharterDayBudget, checkFleetDayBudget, checkRunBudget } from './budget-guard.js'
 import { resolveCharter } from './charter-registry.js'
@@ -46,6 +46,14 @@ export interface ExecuteOptions {
   /** Manual run-now only — mirrors the existing autonomous agents' Run-now,
    *  which deliberately ignores `enabled`. */
   ignoreEnabled?: boolean
+  /** AC.2 — gather real evidence, call the model, validate the output, and
+   *  write NOTHING to the blackboard. The run row still exists (cost is
+   *  real and must be counted) and is marked mode='preview'. */
+  preview?: boolean
+  /** AC.2 — try a draft charter without activating it. */
+  promptOverride?: string
+  /** AC.8 — attribute this run to the revision that produced it. */
+  charterRevisionId?: string | null
 }
 
 export interface ExecuteResult {
@@ -58,6 +66,12 @@ export interface ExecuteResult {
   error?: string
   /** NAF.C — the AgentPlan a director created / a critic annotated. */
   planId?: string | null
+  /** AC.2 — in preview, the findings the run WOULD have written. */
+  previewFindings?: unknown[]
+  /** AC.2 — the validation failure, verbatim, when the draft broke contract. */
+  validationError?: string
+  inputTokens?: number
+  outputTokens?: number
 }
 
 /** Prompt-side description of each output contract. Keyed exhaustively so
@@ -203,7 +217,7 @@ export async function executeCharter(
   if (!charter) return { runId: null, ok: false, error: `unknown charter: ${key}` }
 
   const effectivelyOff = !charter.enabled || charter.autonomyLevel === 'OFF'
-  if (effectivelyOff && !opts.ignoreEnabled) {
+  if (effectivelyOff && !opts.ignoreEnabled && !opts.preview) {
     // The dark ship: a disabled charter is a silent no-op, not a run row.
     return { runId: null, ok: true, skipped: 'disabled' }
   }
@@ -256,7 +270,8 @@ export async function executeCharter(
     data: {
       agentKey: key,
       charterVersion: charter.version,
-      mode: opts.mode,
+      charterRevisionId: opts.charterRevisionId ?? charter.activeRevisionId ?? null,
+      mode: opts.preview ? 'preview' : opts.mode,
       orchestrationId: opts.orchestrationId ?? null,
       trigger: opts.trigger,
       status: 'running',
@@ -336,8 +351,15 @@ export async function executeCharter(
       feature = charter.fallbackFeature
       provider = await getProviderForFeature(feature)
     }
+    // AC.4 — a per-worker pin beats the tier preference. An unknown
+    // provider name falls back to the tier's provider rather than failing
+    // the run: a bad pin must not take a worker offline silently.
+    if (charter.modelProvider) {
+      const pinned = getProvider(charter.modelProvider)
+      if (pinned) provider = pinned
+    }
     if (!provider) throw new Error('No AI provider configured.')
-    const model = await resolveModelForFeature(feature, provider)
+    const model = charter.modelName ?? (await resolveModelForFeature(feature, provider))
     const maxOutputTokens = Math.min(
       8192,
       Math.max(1024, Math.floor(charter.maxTokensPerRun / 4)),
@@ -359,7 +381,13 @@ export async function executeCharter(
     }
 
     // 3 — generate → validate, retrying once with the error appended.
-    const basePrompt = buildPrompt(charter, observations, exemplarBlock)
+    // AC.2 — a preview may swap the prompt so a DRAFT charter can be judged
+    // against the same evidence without being activated.
+    const basePrompt = buildPrompt(
+      opts.promptOverride ? { ...charter, systemPrompt: opts.promptOverride } : charter,
+      observations,
+      exemplarBlock,
+    )
     let prompt = basePrompt
     let validated: Validated = { ok: false, error: 'not attempted' }
     for (let attempt = 1; attempt <= 2; attempt++) {
@@ -448,8 +476,52 @@ export async function executeCharter(
       }
     }
     if (!validated.ok) {
+      if (opts.preview) {
+        // A preview exists to SHOW the failure, not to raise it.
+        await prisma.agentRun.update({
+          where: { id: run.id },
+          data: {
+            status: 'done', ok: false, costUSD: totalCost,
+            inputTokens: totalIn, outputTokens: totalOut,
+            errorMessage: validated.error, model, provider: provider.name,
+            latencyMs: Date.now() - started, endedAt: new Date(),
+          },
+        })
+        return {
+          runId: run.id, ok: false, costUSD: totalCost,
+          validationError: validated.error,
+          previewFindings: [],
+          inputTokens: totalIn, outputTokens: totalOut,
+        }
+      }
       // Twice invalid: the run fails and NOTHING enters the blackboard.
       throw new Error(`output failed schema validation twice: ${validated.error}`)
+    }
+
+    // AC.2 — the preview stops here: evidence read, model called, output
+    // validated, and the blackboard untouched.
+    if (opts.preview) {
+      const previewOut =
+        charter.outputSchemaKey === 'analyst-output'
+          ? ((validated.data as AnalystOutputT).findings as unknown[])
+          : [validated.data]
+      await prisma.agentRun.update({
+        where: { id: run.id },
+        data: {
+          status: 'done', ok: true, costUSD: totalCost,
+          inputTokens: totalIn, outputTokens: totalOut,
+          findingCount: previewOut.length,
+          output: { preview: true, data: validated.data } as Prisma.InputJsonValue,
+          model, provider: provider.name,
+          latencyMs: Date.now() - started, endedAt: new Date(),
+        },
+      })
+      return {
+        runId: run.id, ok: true, costUSD: totalCost,
+        previewFindings: previewOut,
+        findingCount: previewOut.length,
+        inputTokens: totalIn, outputTokens: totalOut,
+      }
     }
 
     // 4 — persist findings (analyst charters; later tiers persist their
