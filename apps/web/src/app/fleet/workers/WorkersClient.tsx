@@ -41,7 +41,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Ban, Bot, RefreshCw, ShieldAlert, AlertTriangle, X } from 'lucide-react'
+import { Ban, Bot, Columns, RefreshCw, ShieldAlert, AlertTriangle, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { GLOSSARY, Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { DataGrid, type Column } from '@/design-system/components'
@@ -93,6 +93,13 @@ interface CharterRow {
   scopeCampaignIds?: string[]
   pausedUntil?: string | null
   pausedReason?: string | null
+  /* W.3 — optional columns, off by default. */
+  version?: number
+  modelFeature?: string
+  modelProvider?: string
+  modelName?: string
+  activeRevisionNumber?: number
+  cadence?: string | null
 }
 interface RunRow extends RunLike {
   id: string
@@ -160,6 +167,42 @@ const VIEW_LABEL: Record<Exclude<View, 'all'>, string> = {
   eligible: 'Earned a promotion',
 }
 
+/**
+ * W.3 — the three views that get a named chip. `eligible` is deliberately not
+ * among them: it is reachable from its tile, and a chip row is a place for
+ * questions you ask every morning, not every question that can be asked.
+ */
+const NAMED_VIEWS: Array<{ v: View; label: string; hint: string }> = [
+  { v: 'all', label: 'All', hint: 'Every worker the fleet has' },
+  { v: 'live', label: 'Live', hint: 'Switched on and not paused — what is actually running' },
+  { v: 'attention', label: 'Needs attention', hint: 'Never set up, unreadable, paused, failing, or on and never run' },
+]
+
+/**
+ * The honest column list is longer than one screen, so the nine defaults are
+ * on and the rest are opt-in — Agent 365's *Customize view*, in one popover.
+ * Worker and Status cannot be turned off: a registry row without an identity or
+ * a health state is not a registry row.
+ */
+const COLUMNS: Array<{ key: string; label: string; fixed?: true; on: boolean }> = [
+  { key: 'worker', label: 'Worker', fixed: true, on: true },
+  { key: 'status', label: 'Status', fixed: true, on: true },
+  { key: 'job', label: 'Job', on: true },
+  { key: 'autonomy', label: 'What it may do', on: true },
+  { key: 'scope', label: 'Scope', on: true },
+  { key: 'lastRun', label: 'Last run', on: true },
+  { key: 'findings', label: 'Open findings', on: true },
+  { key: 'cost', label: 'Cost 7d', on: true },
+  { key: 'grade', label: 'Report card', on: true },
+  { key: 'charter', label: 'Charter', on: false },
+  { key: 'model', label: 'Model', on: false },
+  { key: 'runsWhen', label: 'Runs when', on: false },
+  { key: 'budget', label: 'Budget / day', on: false },
+  { key: 'tokens', label: 'Tokens / run', on: false },
+]
+const COLS_KEY = 'nexus.fleet.workers.columns.v1'
+const DEFAULT_COLS = COLUMNS.filter((c) => c.on).map((c) => c.key)
+
 /* ── the page ──────────────────────────────────────────────────────────── */
 
 export function WorkersClient() {
@@ -177,6 +220,49 @@ export function WorkersClient() {
    *  and by the named view chips in W.3; one piece of state so the two cannot
    *  end up disagreeing about what is on screen. */
   const [view, setView] = useState<View>('all')
+  /** Which columns are on. Per browser, not per account: a per-account
+   *  preference implies a settings surface this page does not have. */
+  const [cols, setCols] = useState<string[]>(DEFAULT_COLS)
+  const [colsOpen, setColsOpen] = useState(false)
+  /** When the data on screen was actually read. W.6 makes this update itself. */
+  const [readAt, setReadAt] = useState<Date | null>(null)
+
+  /* Restore the view and the search from the URL, and the columns from this
+     browser. Done with the History API rather than useSearchParams: the page is
+     force-dynamic, this is a UI convenience rather than navigation, and
+     replaceState neither re-renders the tree nor adds history entries the back
+     button has to walk through. */
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    const v = p.get('view')
+    if (v === 'live' || v === 'attention' || v === 'eligible') setView(v)
+    const query = p.get('q')
+    if (query) setQ(query)
+    const tier = p.get('tier')
+    if (tier) setTierFilter(tier)
+    try {
+      const saved = localStorage.getItem(COLS_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved) as string[]
+        // Intersect with the known set so a renamed column cannot resurrect,
+        // and force the two that may never be hidden back on.
+        const known = new Set(COLUMNS.map((c) => c.key))
+        const next = parsed.filter((k) => known.has(k))
+        for (const c of COLUMNS) if (c.fixed && !next.includes(c.key)) next.unshift(c.key)
+        if (next.length) setCols(next)
+      }
+    } catch { /* a corrupt preference is not worth a broken page */ }
+  }, [])
+
+  /* Keep the URL in step, so a filtered roster can be linked and bookmarked. */
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    view === 'all' ? p.delete('view') : p.set('view', view)
+    q.trim() ? p.set('q', q.trim()) : p.delete('q')
+    tierFilter ? p.set('tier', tierFilter) : p.delete('tier')
+    const qs = p.toString()
+    window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname)
+  }, [view, q, tierFilter])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -204,6 +290,7 @@ export function WorkersClient() {
       if (f.ok) setFindings(((await f.json()) as { findings: FindingRow[] }).findings)
       if (s.ok) setScorecards(((await s.json()) as { scorecards: ScorecardRow[] }).scorecards)
       if (st.ok) setState((await st.json()) as FleetStateRow)
+      setReadAt(new Date())
       setErr(null)
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
@@ -579,7 +666,85 @@ export function WorkersClient() {
         )
       ),
     },
+
+    /* ── W.3 · opt-in columns ─────────────────────────────────────────────
+       Off by default because nine is what fits; on when the question they
+       answer is the one being asked. */
+    {
+      key: 'charter',
+      width: 130,
+      label: <Term k="charter">Charter</Term>,
+      sortable: true,
+      sortValue: (r) => (r.charter.activeRevisionNumber ?? 0),
+      render: (r) => (
+        r.charter.activeRevisionNumber ? (
+          <>
+            <span className="sbw-editedchip" title="An operator-authored revision is in force. The code charter is still the fallback.">edited</span>
+            <div className="sbw-note">revision {r.charter.activeRevisionNumber}</div>
+          </>
+        ) : (
+          <span className="sbw-dim" title="Running the charter exactly as written in code.">
+            code v{r.charter.version ?? 1}
+          </span>
+        )
+      ),
+    },
+    {
+      key: 'model',
+      width: 150,
+      label: 'Model',
+      sortable: true,
+      sortValue: (r) => r.charter.modelName ?? r.charter.modelFeature ?? '',
+      render: (r) => (
+        r.charter.modelName ? (
+          <>
+            {r.charter.modelName}
+            <div className="sbw-note">pinned for this worker</div>
+          </>
+        ) : (
+          <span className="sbw-dim" title="Inherits the model chosen for its tier.">
+            {r.charter.modelFeature ?? '—'}
+          </span>
+        )
+      ),
+    },
+    {
+      key: 'runsWhen',
+      width: 130,
+      label: 'Runs when',
+      sortable: true,
+      sortValue: (r) => r.charter.cadence ?? 'zzz',
+      render: (r) => (
+        r.charter.cadence
+          ? <code className="sbw-cadence">{r.charter.cadence}</code>
+          : <span className="sbw-dim" title="It has no schedule of its own — it runs when a sweep or an operator starts it.">only when asked</span>
+      ),
+    },
+    {
+      key: 'budget',
+      width: 110,
+      label: 'Budget / day',
+      align: 'right',
+      sortable: true,
+      sortValue: (r) => Number(r.charter.dailyBudgetUSD ?? 0),
+      render: (r) => `$${Number(r.charter.dailyBudgetUSD ?? 0).toFixed(2)}`,
+    },
+    {
+      key: 'tokens',
+      width: 110,
+      label: 'Tokens / run',
+      align: 'right',
+      sortable: true,
+      sortValue: (r) => r.charter.maxTokensPerRun ?? 0,
+      render: (r) => (r.charter.maxTokensPerRun ?? 0).toLocaleString(),
+    },
   ], [])
+
+  /** Render in the operator's chosen order, and only what they chose. */
+  const shownColumns = useMemo(
+    () => cols.map((k) => columns.find((c) => c.key === k)).filter(Boolean) as Array<Column<WorkerRow>>,
+    [cols, columns],
+  )
 
   /* ── teaching empty state ────────────────────────────────────────────── */
 
@@ -743,6 +908,33 @@ export function WorkersClient() {
         </div>
       ) : null}
 
+      {/* W.3 — three named views, because three answers to three real morning
+          questions cost a beginner nothing, where a saved-view builder costs
+          them a concept. Each writes itself into the URL, so a filtered roster
+          can be linked. */}
+      <div className="sbw-views" role="group" aria-label="Which workers to show">
+        {NAMED_VIEWS.map(({ v, label, hint }) => {
+          const n = v === 'all' ? rows.length : rows.filter((r) => matchesView(r, v)).length
+          return (
+            <button
+              key={v}
+              type="button"
+              className={`sbw-view ${view === v ? 'on' : ''}`}
+              aria-pressed={view === v}
+              title={hint}
+              onClick={() => setView(v)}
+            >
+              {label} <span className="n">{n}</span>
+            </button>
+          )
+        })}
+        {view === 'eligible' ? (
+          <button type="button" className="sbw-view on" aria-pressed onClick={() => setView('all')}>
+            {VIEW_LABEL.eligible} <X size={11} aria-hidden />
+          </button>
+        ) : null}
+      </div>
+
       <div className="acr-pg-toolbar">
         <input
           className="acr-pg-search"
@@ -758,7 +950,7 @@ export function WorkersClient() {
             className={`acr-pg-chip ${tierFilter === null ? 'on' : ''}`}
             onClick={() => setTierFilter(null)}
           >
-            All <span className="n">{rows.length}</span>
+            Any job <span className="n">{rows.length}</span>
           </button>
           {tierCounts.map(([tier, n]) => (
             <button
@@ -771,21 +963,68 @@ export function WorkersClient() {
             </button>
           ))}
         </div>
-        {view !== 'all' ? (
-          <button
-            type="button"
-            className="sbw-viewchip"
-            onClick={() => setView('all')}
-            title="Show every worker again"
-          >
-            Showing <b>{VIEW_LABEL[view]}</b>
-            <X size={12} aria-hidden />
-          </button>
-        ) : null}
         <span className="spacer" />
+
+        {/* Customize columns — Agent 365's own answer to a column list longer
+            than one screen. */}
+        <div className="sbw-colswrap">
+          <button
+            className="acr-btn"
+            aria-expanded={colsOpen}
+            aria-haspopup="true"
+            onClick={() => setColsOpen((o) => !o)}
+          >
+            <Columns size={13} /> Columns <span className="sbw-note">{cols.length}</span>
+          </button>
+          {colsOpen ? (
+            <>
+              <div className="sbw-colsscrim" onClick={() => setColsOpen(false)} aria-hidden />
+              <div className="sbw-colspop" role="dialog" aria-label="Choose which columns to show">
+                <p className="sbw-colshead">Show these columns</p>
+                {COLUMNS.map((c) => {
+                  const on = cols.includes(c.key)
+                  return (
+                    <label key={c.key} className={`sbw-colsrow ${c.fixed ? 'fixed' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        disabled={c.fixed}
+                        onChange={() => {
+                          const next = on
+                            ? cols.filter((k) => k !== c.key)
+                            // keep the canonical order rather than click order
+                            : COLUMNS.filter((x) => x.key === c.key || cols.includes(x.key)).map((x) => x.key)
+                          setCols(next)
+                          try { localStorage.setItem(COLS_KEY, JSON.stringify(next)) } catch { /* private mode */ }
+                        }}
+                      />
+                      {c.label}
+                      {c.fixed ? <span className="sbw-note">always on</span> : null}
+                    </label>
+                  )
+                })}
+                <button
+                  className="acr-btn"
+                  onClick={() => {
+                    setCols(DEFAULT_COLS)
+                    try { localStorage.setItem(COLS_KEY, JSON.stringify(DEFAULT_COLS)) } catch { /* private mode */ }
+                  }}
+                >
+                  Reset to the default nine
+                </button>
+              </div>
+            </>
+          ) : null}
+        </div>
+
         <button className="acr-btn" onClick={() => void load()} disabled={loading}>
           <RefreshCw size={13} /> {loading ? 'Refreshing…' : 'Refresh'}
         </button>
+        {/* Freshness, always visible: a tab left open overnight should not look
+            like a tab opened a second ago. W.6 makes this tick by itself. */}
+        <span className="sbw-asof" title={readAt ? readAt.toLocaleString() : undefined}>
+          {readAt ? `as of ${readAt.toLocaleTimeString()}` : 'not read yet'}
+        </span>
       </div>
 
       <div className="h10-ds-gridcard sbw-gridcard">
@@ -798,7 +1037,7 @@ export function WorkersClient() {
           }
         />
         <DataGrid<WorkerRow>
-          columns={columns}
+          columns={shownColumns}
           rows={visible}
           rowKey={(r) => r.charter.key}
           initialSort={{ key: 'status', dir: 'asc' }}
