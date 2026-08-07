@@ -837,6 +837,29 @@ findings and costs, and the teaching footer ("these findings were NOT
 written"). Claims: `agent-executor.ts` one line re-claimed for 5a;
 everything else in already-owned files.
 
+**EXECUTED 2026-08-07 (`39dfd091a`), full live test on prod.** The sweep
+draft tested end to end on the deployed stack: confirm dialog with the
+history-derived estimate (**$0.3083**) and the writes-nothing contract →
+serial walk watched live (bid tuner → harvester → miner → self-test →
+director → critic, each flipping *waiting → working now… → would have
+reported N findings*) → **finished · $0.2773 actually spent · 26 would-be
+findings** — estimate within 10%. The director's plan artifact cost
+$0.1924 of it; each analyst cents. The Runs section stayed at "No runs
+yet." throughout — preview rows are invisible to real history by
+construction, gate-trip fix included. Zero writes to the board, zero
+proposals queued; the model spend was the only real thing the test did,
+exactly as the footer promises. 28 fleet tests green. One automation note
+for the record: clicking React buttons by accessibility ref fails when the
+10s poll re-renders under it (detached node) — coordinate clicks are the
+reliable path, the visible-tab poll pause documented by SB.W's W.6 note
+applies here too.
+
+**With WF.5 closed, every buildable section of the Part-4 map is live and
+prod-verified: S1 list · S2 story · S3 runs · S4 versions · S5 editor ·
+S6 test run · S7 teaching throughout — plus stored execution, origin-step
+gates and the self-re-arming clock beneath them. What remains is the WF.6
+deferred list, each item waiting on its named prerequisite.**
+
 ---
 
 ## Sources
