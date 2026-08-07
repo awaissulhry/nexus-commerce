@@ -41,7 +41,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Ban, Bot, Columns, RefreshCw, ShieldAlert, AlertTriangle, X } from 'lucide-react'
+import { AlertTriangle, Ban, Bot, Check, Columns, Pause as PauseIcon, RefreshCw, ShieldAlert, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { GLOSSARY, Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { DataGrid, type Column } from '@/design-system/components'
@@ -55,6 +55,18 @@ import {
   type RunLike,
   type WorkerStatus,
 } from '../_shared/run-health'
+import {
+  applyAutonomy,
+  applyPause,
+  AutonomyDial,
+  ConfirmAutonomy,
+  isRaise,
+  LEVELS,
+  PauseDialog,
+  RANK,
+  type AffectedWorker,
+  type Level,
+} from '../_shared/autonomy'
 
 /** Design contract rule 3: jargon without a glossary entry fails review. These
  *  maps are the narrowing — a tier or dial we have no definition for renders as
@@ -66,9 +78,10 @@ type TermKey = keyof typeof GLOSSARY & string
 const TIER_TERM: Record<string, TermKey> = {
   analyst: 'worker', director: 'director', critic: 'critic', auditor: 'auditor',
 }
-const LEVEL_TERM: Record<string, TermKey> = {
-  OFF: 'off', OBSERVE: 'observe', PROPOSE: 'propose', AUTO: 'auto',
-}
+/* The autonomy rungs no longer render here — the shared AutonomyDial owns them,
+   and Controls keeps the glossary tooltips on its own copy where there is room
+   for them. A rung in a table cell is 46px wide; a tooltip on it would be a
+   tooltip nobody finds. */
 
 /* ── shapes, mirrored from the fleet API ───────────────────────────────── */
 
@@ -226,6 +239,12 @@ export function WorkersClient() {
   const [colsOpen, setColsOpen] = useState(false)
   /** When the data on screen was actually read. W.6 makes this update itself. */
   const [readAt, setReadAt] = useState<Date | null>(null)
+  /* W.4 — acting on the roster. */
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set())
+  const [pendingRaise, setPendingRaise] = useState<{ to: Level; workers: AffectedWorker[] } | null>(null)
+  const [pendingPause, setPendingPause] = useState<AffectedWorker[] | null>(null)
+  const [note, setNote] = useState<string | null>(null)
 
   /* Restore the view and the search from the URL, and the columns from this
      browser. Done with the History API rather than useSearchParams: the page is
@@ -479,6 +498,75 @@ export function WorkersClient() {
     )
   }
 
+  /* ── acting on workers ───────────────────────────────────────────────── */
+
+  /**
+   * A worker with no settings row cannot be changed — the PATCH 404s, because
+   * there is nothing to update. Rather than let the operator select it and
+   * collect a failure, the checkbox is disabled and says why.
+   */
+  const canAct = useCallback((r: WorkerRow) => r.charter.provisioned !== false, [])
+
+  const selectedRows = useMemo(
+    () => rows.filter((r) => selected.has(r.charter.key) && canAct(r)),
+    [rows, selected, canAct],
+  )
+
+  const report = useCallback((
+    verb: string,
+    res: { ok: string[]; failed: Array<{ key: string; error: string }> },
+  ) => {
+    if (res.failed.length === 0) {
+      setNote(`${verb} ${res.ok.length} worker${res.ok.length === 1 ? '' : 's'}.`)
+      setErr(null)
+      return
+    }
+    // Partial success is reported as partial success. One request per worker
+    // means the server can refuse one and accept another, and rounding that to
+    // "done" or "failed" would be a lie either way.
+    setNote(res.ok.length ? `${verb} ${res.ok.length} of ${res.ok.length + res.failed.length}.` : null)
+    setErr(
+      `${res.failed.length} refused — ` +
+      res.failed.map((f) => `${f.key}: ${f.error}`).join(' · '),
+    )
+  }, [])
+
+  const runAction = useCallback(async (
+    keys: string[],
+    verb: string,
+    fn: () => Promise<{ ok: string[]; failed: Array<{ key: string; error: string }> }>,
+  ) => {
+    setBusyKeys(new Set(keys))
+    setNote(null)
+    try {
+      report(verb, await fn())
+      await load()
+    } finally {
+      setBusyKeys(new Set())
+      setPendingRaise(null)
+      setPendingPause(null)
+    }
+  }, [load, report])
+
+  /** The safety rule, applied at the one place both a row click and a bulk
+   *  action pass through: down is immediate, up asks first. */
+  const requestLevel = useCallback((targets: WorkerRow[], to: Level) => {
+    const changing = targets.filter((r) => r.charter.autonomyLevel !== to)
+    if (changing.length === 0) return
+    const raising = changing.filter((r) => isRaise(r.charter.autonomyLevel, to))
+    if (raising.length === 0) {
+      void runAction(changing.map((r) => r.charter.key), 'Switched down', () =>
+        applyAutonomy(backend, changing.map((r) => r.charter.key), to))
+      return
+    }
+    setPendingRaise({
+      to,
+      workers: changing.map((r) => ({
+        key: r.charter.key, name: r.charter.name, from: r.charter.autonomyLevel,
+      })),
+    })
+  }, [backend, runAction])
+
   /* ── columns ─────────────────────────────────────────────────────────── */
 
   const columns: Array<Column<WorkerRow>> = useMemo(() => [
@@ -542,17 +630,23 @@ export function WorkersClient() {
     },
     {
       key: 'autonomy',
-      width: 132,
+      width: 178,
       label: 'What it may do',
       sortable: true,
       sortValue: (r) => LEVEL_ORDER[r.charter.autonomyLevel] ?? 0,
       render: (r) => (
         <>
-          <span className={`acr-pg-lvl ${r.charter.autonomyLevel.toLowerCase()}`}>
-            {LEVEL_TERM[r.charter.autonomyLevel]
-              ? <Term k={LEVEL_TERM[r.charter.autonomyLevel]!}>{r.charter.autonomyLevel}</Term>
-              : r.charter.autonomyLevel}
-          </span>
+          {/* W.4 — the same dial Controls renders, in `operate` mode. Changing
+              it here and changing it there run the identical confirm, mutation
+              and audit write. */}
+          <AutonomyDial
+            level={r.charter.autonomyLevel}
+            cap={r.charter.autonomyCap}
+            busy={busyKeys.has(r.charter.key)}
+            disabled={!canAct(r)}
+            label={`Autonomy for ${r.charter.name}`}
+            onPick={(lvl) => requestLevel([r], lvl)}
+          />
           {r.charter.autonomyCap !== r.charter.autonomyLevel ? (
             <div className="sbw-note">
               <Term k="cap">ceiling</Term> {r.charter.autonomyCap}
@@ -738,7 +832,7 @@ export function WorkersClient() {
       sortValue: (r) => r.charter.maxTokensPerRun ?? 0,
       render: (r) => (r.charter.maxTokensPerRun ?? 0).toLocaleString(),
     },
-  ], [])
+  ], [busyKeys, canAct, requestLevel])
 
   /** Render in the operator's chosen order, and only what they chose. */
   const shownColumns = useMemo(
@@ -793,8 +887,38 @@ export function WorkersClient() {
       {err ? (
         <div className="acr-banner err" role="alert">
           <ShieldAlert size={15} /> {err}
-          <button className="acr-btn" onClick={() => void load()}>Try again</button>
+          <button className="acr-btn" onClick={() => { setErr(null); void load() }}>Dismiss</button>
         </div>
+      ) : null}
+      {note ? (
+        <div className="acr-banner ok" role="status"><Check size={15} /> {note}</div>
+      ) : null}
+
+      {pendingRaise ? (
+        <ConfirmAutonomy
+          to={pendingRaise.to}
+          workers={pendingRaise.workers}
+          busy={busyKeys.size > 0}
+          onCancel={() => setPendingRaise(null)}
+          onConfirm={() => void runAction(
+            pendingRaise.workers.map((w) => w.key),
+            'Changed',
+            () => applyAutonomy(backend, pendingRaise.workers.map((w) => w.key), pendingRaise.to),
+          )}
+        />
+      ) : null}
+
+      {pendingPause ? (
+        <PauseDialog
+          workers={pendingPause}
+          busy={busyKeys.size > 0}
+          onCancel={() => setPendingPause(null)}
+          onConfirm={(days, reason) => void runAction(
+            pendingPause.map((w) => w.key),
+            'Paused',
+            () => applyPause(backend, pendingPause.map((w) => w.key), days, reason),
+          )}
+        />
       ) : null}
 
       <p className="acr-pg-intro">
@@ -1030,18 +1154,79 @@ export function WorkersClient() {
       <div className="h10-ds-gridcard sbw-gridcard">
         <GridToolbar
           count={
-            <>
-              Showing <b>{visible.length}</b> of <b>{rows.length}</b> worker{rows.length === 1 ? '' : 's'}
-              {view !== 'all' ? <> · {VIEW_LABEL[view].toLowerCase()}</> : null}
-            </>
+            selectedRows.length > 0 ? (
+              <>Selected <b>{selectedRows.length}</b> worker{selectedRows.length === 1 ? '' : 's'}</>
+            ) : (
+              <>
+                Showing <b>{visible.length}</b> of <b>{rows.length}</b> worker{rows.length === 1 ? '' : 's'}
+                {view !== 'all' ? <> · {VIEW_LABEL[view].toLowerCase()}</> : null}
+              </>
+            )
           }
-        />
+        >
+          {/* W.4 — the registry's reason to exist at scale: do one thing to
+              twelve workers without twelve page visits. Switching off and
+              pausing REDUCE risk, so they apply at once; anything that lets a
+              worker do more goes through the shared confirm, which names every
+              worker it would change. */}
+          {selectedRows.length > 0 ? (
+            <span className="sbw-bulk">
+              <button
+                className="acr-btn stop"
+                disabled={busyKeys.size > 0}
+                onClick={() => requestLevel(selectedRows, 'OFF')}
+              >
+                <Ban size={13} /> Switch off
+              </button>
+              <button
+                className="acr-btn"
+                disabled={busyKeys.size > 0}
+                onClick={() => setPendingPause(selectedRows.map((r) => ({
+                  key: r.charter.key, name: r.charter.name, from: r.charter.autonomyLevel,
+                })))}
+              >
+                <PauseIcon size={13} /> Pause…
+              </button>
+              <span className="sbw-bulksep" aria-hidden />
+              <span className="sbw-note">Set all to</span>
+              {LEVELS.filter((l) => l !== 'OFF').map((l) => {
+                // A rung is offered only if EVERY selected worker's code cap
+                // allows it. Offering a button that will 403 for three of six
+                // is how bulk earns its reputation.
+                const blocked = selectedRows.some((r) => (RANK[l] ?? 0) > (RANK[r.charter.autonomyCap] ?? 0))
+                return (
+                  <button
+                    key={l}
+                    className="acr-btn"
+                    disabled={blocked || busyKeys.size > 0}
+                    title={blocked
+                      ? `At least one selected worker has a ceiling below ${l}`
+                      : `Ask to move every selected worker to ${l}`}
+                    onClick={() => requestLevel(selectedRows, l)}
+                  >
+                    {l}
+                  </button>
+                )
+              })}
+              <button className="acr-btn" onClick={() => setSelected(new Set())}>
+                <X size={12} /> Clear
+              </button>
+            </span>
+          ) : null}
+        </GridToolbar>
         <DataGrid<WorkerRow>
           columns={shownColumns}
           rows={visible}
           rowKey={(r) => r.charter.key}
           initialSort={{ key: 'status', dir: 'asc' }}
           emptyState={emptyState}
+          selectable
+          selected={selected}
+          onSelectedChange={setSelected}
+          rowSelectable={canAct}
+          rowSelectableHint="This worker has no settings row yet, so nothing can be changed on it. Seed the roster first."
+          selectAllHint="Select every worker currently shown"
+          selectRowHint="Select this worker for a bulk action"
         />
       </div>
     </div>

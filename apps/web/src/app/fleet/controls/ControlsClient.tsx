@@ -25,24 +25,26 @@ import {
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { GLOSSARY, Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
+import {
+  applyAutonomy,
+  AutonomyDial,
+  ConfirmAutonomy,
+  isRaise,
+  LEVEL_EFFECT,
+  type AffectedWorker,
+  type Level,
+} from '../_shared/autonomy'
 
 type TermKey = keyof typeof GLOSSARY & string
 const LEVEL_TERM: Record<string, TermKey> = {
   OFF: 'off', OBSERVE: 'observe', PROPOSE: 'propose', AUTO: 'auto',
 }
-const LEVELS = ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO'] as const
-type Level = (typeof LEVELS)[number]
-const RANK: Record<string, number> = { OFF: 0, OBSERVE: 1, PROPOSE: 2, AUTO: 3 }
 
-/** What each rung actually means for the operator's money and their Amazon
- *  account. Deliberately blunt: these are the sentences a beginner needs
- *  BEFORE they click, not after. */
-const LEVEL_EFFECT: Record<Level, string> = {
-  OFF: 'The worker does not run. It costs nothing.',
-  OBSERVE: 'The worker runs and writes findings. It spends money on AI, and it cannot change anything on Amazon.',
-  PROPOSE: 'The worker runs and its suggestions queue for your approval. It spends money on AI. Nothing reaches Amazon until you approve it.',
-  AUTO: 'The worker acts on its own inside every safety gate. It spends money on AI and it changes your Amazon account without asking first.',
-}
+/* SB.W.4 — the ladder, its effect copy, its confirmation and its mutation all
+   moved to _shared/autonomy.tsx, so the Workers roster can offer the same dial
+   without a second opinion about what PROPOSE means. This page renders it in
+   `explain` mode: a card per worker, full prose, the ladder as a teaching
+   object. Nothing about the behaviour changed. */
 
 interface CharterRow {
   key: string
@@ -74,11 +76,8 @@ interface ScorecardRow {
 }
 
 /** A pending change the operator has asked for but not yet confirmed. */
-interface Pending {
-  key: string
-  name: string
+interface Pending extends AffectedWorker {
   level: Level
-  enabled: boolean
 }
 
 export function ControlsClient() {
@@ -121,32 +120,21 @@ export function ControlsClient() {
   const applyLevel = useCallback(async (key: string, level: Level) => {
     setBusy(key)
     setNote(null)
-    try {
-      const res = await fetch(`${backend}/api/agent/fleet/charters/${key}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ autonomyLevel: level, enabled: level !== 'OFF' }),
-      })
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string }
-        throw new Error(body.error || `${res.status}`)
-      }
-      setNote(`${key} is now ${level}.`)
-      await load()
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(null)
-      setPending(null)
-    }
+    const { ok, failed } = await applyAutonomy(backend, [key], level)
+    if (failed.length) setErr(failed[0]!.error)
+    if (ok.length) setNote(`${key} is now ${level}.`)
+    await load()
+    setBusy(null)
+    setPending(null)
   }, [backend, load])
 
   const request = useCallback((c: CharterRow, level: Level) => {
-    const current = (c.autonomyLevel as Level) ?? 'OFF'
+    const current = c.autonomyLevel ?? 'OFF'
     if (level === current) return
-    // Reducing risk applies at once; increasing it asks first.
-    if (RANK[level]! < RANK[current]!) return void applyLevel(c.key, level)
-    setPending({ key: c.key, name: c.name, level, enabled: level !== 'OFF' })
+    // Reducing risk applies at once; increasing it asks first. The rule lives
+    // in _shared/autonomy so this page and the roster cannot disagree about it.
+    if (!isRaise(current, level)) return void applyLevel(c.key, level)
+    setPending({ key: c.key, name: c.name, level, from: current })
   }, [applyLevel])
 
   const halt = useCallback(async () => {
@@ -298,7 +286,6 @@ export function ControlsClient() {
             <div className="acr-pg-dials">
               {charters.map((c) => {
                 const current = (c.autonomyLevel as Level) ?? 'OFF'
-                const capRank = RANK[c.autonomyCap] ?? 0
                 const card = gradeOf(c.key)
                 return (
                   <div className="acr-pg-dialcard" key={c.key}>
@@ -314,25 +301,15 @@ export function ControlsClient() {
                       </span>
                     </div>
 
-                    <div className="acr-pg-ladder" role="group" aria-label={`Autonomy for ${c.name}`}>
-                      {LEVELS.map((lvl) => {
-                        const above = (RANK[lvl] ?? 0) > capRank
-                        const on = current === lvl
-                        return (
-                          <button
-                            key={lvl}
-                            type="button"
-                            className={`acr-pg-rung ${on ? 'on' : ''} ${above ? 'blocked' : ''}`}
-                            disabled={above || busy === c.key}
-                            aria-pressed={on}
-                            title={above ? `${lvl} is above this worker's ceiling of ${c.autonomyCap}` : LEVEL_EFFECT[lvl]}
-                            onClick={() => request(c, lvl)}
-                          >
-                            {LEVEL_TERM[lvl] ? <Term k={LEVEL_TERM[lvl]!}>{lvl}</Term> : lvl}
-                          </button>
-                        )
-                      })}
-                    </div>
+                    <AutonomyDial
+                      level={current}
+                      cap={c.autonomyCap}
+                      busy={busy === c.key}
+                      label={`Autonomy for ${c.name}`}
+                      onPick={(lvl) => request(c, lvl)}
+                      renderRung={(lvl) =>
+                        LEVEL_TERM[lvl] ? <Term k={LEVEL_TERM[lvl]!}>{lvl}</Term> : lvl}
+                    />
 
                     <p className="acr-pg-dialeffect">{LEVEL_EFFECT[current] ?? ''}</p>
 
@@ -373,25 +350,13 @@ export function ControlsClient() {
 
       {/* confirmation — only ever for changes that let a worker do MORE */}
       {pending ? (
-        <div className="acr-pg-confirmwrap" role="dialog" aria-modal="true" aria-label="Confirm this change">
-          <div className="acr-pg-confirm">
-            <h4>Let {pending.name} move to {pending.level}?</h4>
-            <p>{LEVEL_EFFECT[pending.level]}</p>
-            <p className="acr-pg-muted">
-              You can move it back to OFF at any time, and that takes effect immediately.
-            </p>
-            <div className="acr-pg-confirmbtns">
-              <button className="acr-btn" onClick={() => setPending(null)}>Cancel</button>
-              <button
-                className="acr-btn go"
-                disabled={busy === pending.key}
-                onClick={() => void applyLevel(pending.key, pending.level)}
-              >
-                Yes — set {pending.name} to {pending.level}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmAutonomy
+          to={pending.level}
+          workers={[pending]}
+          busy={busy === pending.key}
+          onCancel={() => setPending(null)}
+          onConfirm={() => void applyLevel(pending.key, pending.level)}
+        />
       ) : null}
     </div>
   )
