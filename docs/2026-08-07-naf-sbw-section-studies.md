@@ -16,7 +16,7 @@ what it must not become.
 | **3** | S3 · Find, filter, views | W.3 | specified |
 | 4 | S5 · The shared dial + bulk actions | W.4 | **built** — `_shared/autonomy.tsx`; W.5 absorbed into it. Bulk run-now and bulk scope deliberately deferred (see the W.4 commit) |
 | 5 | S8 · Live updating | W.6 | **built** — notes below |
-| 6 | Worker detail — the missing sections | W.7 | pending |
+| 6 | Worker detail — the missing sections | W.7 | **built** — notes below |
 | 7 | S6 · Create a worker | W.8 | pending, blocked on the instance model |
 | 8 | S7 · Retirement | W.9 | pending |
 
@@ -529,3 +529,57 @@ guard but **not Chrome's background-tab timer throttling**, which stretches a
 is very probably throttling rather than a defect. Force a read through the
 Refresh button to test behaviour, and treat interval timing as unverifiable
 outside a foreground tab.
+
+
+---
+
+## STUDY 6 — Worker detail: the missing sections *(build step W.7)*
+
+Part 4.2 of the page study listed six gaps. Four are now closed, and the two
+that are not are blocked on pages that do not exist yet.
+
+**Closed.**
+
+- **"How it is doing"** — the *same* `deriveStatus` the roster uses, so a worker
+  cannot read "Needs attention" on one page and look fine on the other. The
+  roster has room for a word; this page has room for the sentence.
+- **A failure tally, not just the last run.** "Its last run failed" is a moment;
+  *"2 of its 4 recorded runs could not reach the AI provider — a connection
+  problem, not this worker"* is a diagnosis.
+- **Scope, model and today's spend against the daily cap** — the three facts
+  that decide whether a worker is safe to switch on, previously visible only on
+  Controls or nowhere.
+- **"Where it sits in the fleet"** — who feeds it, who it feeds, from the code
+  graph, with links. Deliberately *not* a second interactive canvas; `/fleet/map`
+  owns that. It also says plainly that this is the built-in sweep's shape and a
+  stored routine can wire it differently.
+
+**Still open, and honestly blocked:** *its assignments* (no Assignments page)
+and *duplicate / retire* (W.9, and it wants the instance model first).
+
+### 6.1 The `window.prompt` calls are gone
+
+Both replaced by the shared `PauseDialog`. A native prompt cannot be styled,
+validated, tooltipped or translated, returns `null` on Escape so every caller
+guards it by hand, and — the reason it mattered here — it cannot state what the
+control is about to do. Verified: 3 days + a reason produces exactly one POST
+with `until` three days out.
+
+### 6.2 One fragility fixed, found twice
+
+A trace response that is merely **incomplete** took the whole worker page down
+through the error boundary — first via `CharterStudio`'s `data.runningPrompt`,
+then via `lastTrace.steps.length`. Both times the page went white rather than
+one panel degrading.
+
+Every read of a fetched trace's arrays is now guarded and the fields are typed
+optional. **A missing pipeline is a worse page; a missing page is a broken
+product.** Worth applying the same eye to Activity when it renders traces.
+
+### 6.3 A copy trap worth naming
+
+`Failure.sentence` is written about *one* run — "Its last run could not reach
+the AI provider" — so reusing it over a tally produced *"2 of its 4 runs — its
+last run could not reach…"*. `Failure` now carries a separate `label` in the
+aggregate voice. Any surface counting failures should use `label`; any surface
+describing one run should use `sentence`.

@@ -62,8 +62,14 @@ export type Blame = 'infrastructure' | 'billing' | 'worker' | 'nobody' | 'unknow
 export interface Failure {
   klass: FailureClass
   blame: Blame
-  /** One sentence, written for someone who has never seen the fleet. */
+  /** One sentence about THIS run, for the status line. */
   sentence: string
+  /**
+   * A short phrase for counting across runs — "3 of its 4 runs `<label>`".
+   * The sentence cannot be reused there: it is written about the last run and
+   * says so, which reads as nonsense over a tally.
+   */
+  label: string
   /** `limit` is amber; everything else that is genuinely wrong is red. */
   severe: boolean
 }
@@ -82,6 +88,7 @@ export function classifyFailure(run: RunLike): Failure | null {
       klass: 'limit',
       blame: 'nobody',
       sentence: `It hit one of its own limits and stopped part-way — ${humanHalt(run.haltedReason)}. That limit worked. Raise it, or accept the shorter answer.`,
+      label: 'stopped part-way at one of its own limits',
       severe: false,
     }
   }
@@ -93,6 +100,7 @@ export function classifyFailure(run: RunLike): Failure | null {
       klass: 'provider-unreachable',
       blame: 'infrastructure',
       sentence: 'Its last run could not reach the AI provider at all. That is a connection problem, not this worker.',
+      label: 'could not reach the AI provider — a connection problem, not this worker',
       severe: true,
     }
   }
@@ -101,6 +109,7 @@ export function classifyFailure(run: RunLike): Failure | null {
       klass: 'provider-refused',
       blame: 'billing',
       sentence: 'The AI provider refused the request — the account is out of credit.',
+      label: 'were refused by the provider for lack of credit',
       severe: true,
     }
   }
@@ -109,6 +118,7 @@ export function classifyFailure(run: RunLike): Failure | null {
       klass: 'contract',
       blame: 'worker',
       sentence: 'Its answer did not match the format it promised, so nothing was written. This one is the worker itself — read its charter.',
+      label: 'produced an answer that did not match the format it promised',
       severe: true,
     }
   }
@@ -116,6 +126,7 @@ export function classifyFailure(run: RunLike): Failure | null {
     klass: 'unknown',
     blame: 'unknown',
     sentence: e ? `It failed: ${truncate(e, 120)}` : 'It failed, and recorded no reason.',
+    label: e ? `failed: ${truncate(e, 70)}` : 'failed without recording a reason',
     severe: true,
   }
 }

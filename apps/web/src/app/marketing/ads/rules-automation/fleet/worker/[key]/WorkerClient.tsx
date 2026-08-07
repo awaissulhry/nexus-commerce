@@ -13,18 +13,27 @@ import { ArrowLeft, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { PlanLabels } from '../../PlanStory'
 import { CharterStudio } from './CharterStudio'
-import { ConfirmSpend } from '@/app/fleet/_shared/autonomy'
+import { ConfirmSpend, PauseDialog, applyPause } from '@/app/fleet/_shared/autonomy'
+import { classifyFailure, deriveStatus, type WorkerStatus } from '@/app/fleet/_shared/run-health'
 
 interface Charter {
   key: string
   name: string
   tier: string
+  domain: string
   version: number
+  /** SB.W.1 — false = no settings row exists. */
+  provisioned?: boolean | null
+  scopeMarketplaces?: string[]
+  scopeCampaignIds?: string[]
   description?: string
   systemPrompt: string
   observationKeys: string[]
   toolNames: string[]
   modelFeature: string
+  /** AC.4 — a per-worker model pin; absent = inherit the tier's choice. */
+  modelName?: string
+  modelProvider?: string
   enabled: boolean
   autonomyLevel: string
   autonomyCap: string
@@ -63,12 +72,17 @@ interface TraceStep {
   outputTokens: number
   errorMessage: string | null
 }
+/** SB.W.7 — every array here is optional in practice, not in the contract. A
+ *  trace response that is merely INCOMPLETE has twice taken the whole worker
+ *  page down through the error boundary rather than degrading one panel, so
+ *  every read of these is guarded. A missing pipeline is a worse page; a
+ *  missing page is a broken product. */
 interface Trace {
   shape: string
   run: { model: string | null; costUSD: number; findingCount: number }
-  steps: TraceStep[]
-  evidence: Array<{ key: string; dataVintage: string | null; preview: string; truncated: boolean }>
-  findings: Array<{ id: string; kind: string; entityId: string; severity: string; rationale: string }>
+  steps?: TraceStep[]
+  evidence?: Array<{ key: string; dataVintage: string | null; preview: string; truncated: boolean }>
+  findings?: Array<{ id: string; kind: string; entityId: string; severity: string; rationale: string }>
 }
 interface FindingRow {
   id: string
@@ -147,16 +161,26 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
    *  immediately, with nothing said about cost. With the fleet deliberately
    *  dark it is the likeliest way to spend by accident, so it asks first. */
   const [confirmRun, setConfirmRun] = useState(false)
+  /** SB.W.7 — a real pause dialog. The two window.prompt() calls this replaces
+   *  could not be styled, validated, tooltipped or translated, and a prompt
+   *  that returns null on Escape had to be guarded by hand each time. */
+  const [confirmPause, setConfirmPause] = useState(false)
+  /** Its place in the fleet: who feeds it, and who it feeds. */
+  const [graph, setGraph] = useState<{
+    nodes: Array<{ key: string; tier: string }>
+    edges: Array<{ from: string; to: string; artifact: string }>
+  } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [c, r, f, s, au] = await Promise.all([
+      const [c, r, f, s, au, g] = await Promise.all([
         fetch(`${backend}/api/agent/fleet/charters`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/runs?charterKey=${workerKey}&limit=20`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/findings?charterKey=${workerKey}&limit=30`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/scorecards?charterKey=${workerKey}&limit=8`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/charters/${workerKey}/audit`, { cache: 'no-store' }),
+        fetch(`${backend}/api/agent/fleet/graph`, { cache: 'no-store' }),
       ])
       if (c.ok) {
         const all = ((await c.json()) as { charters: Charter[] }).charters
@@ -170,6 +194,7 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
       }
       if (s.ok) setScorecards(((await s.json()) as { scorecards: Scorecard[] }).scorecards)
       if (au.ok) setAudit(((await au.json()) as { audit: typeof audit }).audit)
+      if (g.ok) setGraph((await g.json()) as NonNullable<typeof graph>)
       setErr(null)
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
@@ -273,6 +298,62 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
 
   const card14 = scorecards.find((s) => s.windowDays === 14)
 
+  /* SB.W.7 — the SAME derivation the roster uses, so a worker cannot read
+     "Needs attention" on one page and look fine on the other. The roster gives
+     the word; this page has room for the whole sentence. */
+  const status: WorkerStatus = deriveStatus(
+    {
+      key: charter.key,
+      domain: charter.domain ?? '',
+      enabled: charter.enabled,
+      autonomyLevel: charter.autonomyLevel,
+      degraded: charter.degraded,
+      provisioned: charter.provisioned,
+      pausedUntil: charter.pausedUntil,
+      pausedReason: charter.pausedReason,
+    },
+    lastRun
+      ? {
+          status: lastRun.status,
+          ok: lastRun.ok,
+          errorMessage: lastRun.errorMessage,
+          haltedReason: lastRun.haltedReason,
+          createdAt: lastRun.createdAt,
+          findingCount: lastRun.findingCount,
+          costUSD: lastRun.costUSD,
+        }
+      : null,
+  )
+
+  /* How often each failure class has bitten this worker, across the runs we
+     hold. "Its last run failed" is a moment; "21 of its runs could not reach
+     the provider" is a diagnosis. */
+  const failureTally = (() => {
+    const m = new Map<string, { n: number; label: string; severe: boolean }>()
+    for (const r of runs) {
+      const f = classifyFailure({
+        status: r.status, ok: r.ok, errorMessage: r.errorMessage,
+        haltedReason: r.haltedReason, createdAt: r.createdAt,
+      })
+      if (!f) continue
+      const cur = m.get(f.klass)
+      m.set(f.klass, { n: (cur?.n ?? 0) + 1, label: f.label, severe: f.severe })
+    }
+    return [...m.values()].sort((a, b) => b.n - a.n)
+  })()
+
+  /* Its place in the fleet: who hands it work, and who it hands work to. */
+  const feeders = (graph?.edges ?? []).filter((e) => e.to === workerKey)
+  const consumers = (graph?.edges ?? []).filter((e) => e.from === workerKey)
+
+  /* What it has spent today, against its own daily cap. */
+  const spentToday = runs
+    .filter((r) => {
+      const d = new Date(r.createdAt); const m = new Date(); m.setHours(0, 0, 0, 0)
+      return d.getTime() >= m.getTime()
+    })
+    .reduce((sum, r) => sum + Number(r.costUSD || 0), 0)
+
   return (
     <div className="acr-fleet">
       {err ? (
@@ -350,15 +431,103 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
         ) : null}
       </section>
 
+      {/* SB.W.7 — how it is doing, in a sentence, and the facts that decide it */}
+      <section className="acr-card">
+        <header className="acr-fl-head">
+          <h3>How it is doing</h3>
+          <span className={`acr-fl-pill ${status.tone === 'good' ? 'acr-fl-pill-ok' : ''}`}>
+            {status.label}
+          </span>
+        </header>
+        <p className="acr-flw-plain">{status.reason}</p>
+
+        {failureTally.length > 0 ? (
+          <ul className="acr-flw-limits">
+            {failureTally.map((f) => (
+              <li key={f.label}>
+                <strong>{f.n}</strong> of its {runs.length} recorded run{runs.length === 1 ? '' : 's'}{' '}
+                {f.label}.
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        <div className="acr-fl-dialrow">
+          <span className="acr-fl-lbl">Where it works</span>
+          <span>
+            {charter.scopeMarketplaces?.length
+              ? charter.scopeMarketplaces.join(', ')
+              : 'Everywhere — no marketplace limit is set'}
+            {charter.scopeCampaignIds?.length
+              ? ` · ${charter.scopeCampaignIds.length} named campaign${charter.scopeCampaignIds.length === 1 ? '' : 's'}`
+              : ''}
+          </span>
+        </div>
+        <div className="acr-fl-dialrow">
+          <span className="acr-fl-lbl">Model</span>
+          <span>
+            {charter.modelName
+              ? <>{charter.modelName} <span className="acr-fl-sub">pinned for this worker</span></>
+              : <>{charter.modelFeature} <span className="acr-fl-sub">inherited from its tier</span></>}
+          </span>
+        </div>
+        <div className="acr-fl-dialrow">
+          <span className="acr-fl-lbl">Spent today</span>
+          <span>
+            {usd(spentToday)} of {usd(charter.dailyBudgetUSD)}
+            <span className="acr-fl-sub">
+              {' '}— a ceiling checked before each run, so a run past it is refused rather than cut short
+            </span>
+          </span>
+        </div>
+      </section>
+
+      {/* SB.W.7 — its place in the fleet. A picture with links, deliberately
+          NOT a second interactive canvas: /fleet/map owns that. */}
+      <section className="acr-card">
+        <header className="acr-fl-head">
+          <h3>Where it sits in the fleet</h3>
+          <Link className="acr-fl-sub" href="/fleet/map">see the whole map</Link>
+        </header>
+        {!graph ? (
+          <p className="acr-fl-empty">Reading the fleet graph…</p>
+        ) : feeders.length === 0 && consumers.length === 0 ? (
+          <p className="acr-fl-empty">
+            It stands alone in the graph — nothing hands it work and nothing reads its output
+            directly. Its findings still land on the shared board, where a director picks them up
+            when one runs.
+          </p>
+        ) : (
+          <ul className="acr-flw-limits">
+            {feeders.map((e) => (
+              <li key={`in-${e.from}`}>
+                <Link href={`/fleet/workers/${e.from}`}>{e.from}</Link> hands it{' '}
+                <strong>{e.artifact}s</strong>.
+              </li>
+            ))}
+            {consumers.map((e) => (
+              <li key={`out-${e.to}`}>
+                It hands <strong>{e.artifact}s</strong> to{' '}
+                <Link href={`/fleet/workers/${e.to}`}>{e.to}</Link>.
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="acr-fl-sub">
+          This is the graph declared in code — the shape of the built-in sweep. A stored routine on{' '}
+          <Link href="/fleet/workflows">Workflows</Link> can wire it differently.
+        </p>
+      </section>
+
       {/* my pipeline */}
       <section className="acr-card">
         <header className="acr-fl-head">
           <h3>Its pipeline — what a run looks like</h3>
           {lastRun ? <span className="acr-fl-sub">from its latest run, {ago(lastRun.createdAt)}</span> : null}
         </header>
-        {lastTrace && lastTrace.steps.length > 0 ? (
+        {lastTrace && (lastTrace.steps?.length ?? 0) > 0 ? (
           <ol className="acr-flw-pipeline">
-            {lastTrace.steps.map((s) => (
+            {(lastTrace.steps ?? []).map((s) => (
               <li key={s.seq} className={s.ok ? '' : 'bad'}>
                 <span className="acr-flw-pipestep">{s.label}</span>
                 <span className="acr-flw-pipemeta">
@@ -390,8 +559,8 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
       {/* what I read */}
       <section className="acr-card">
         <header className="acr-fl-head"><h3>What it reads</h3></header>
-        {lastTrace && lastTrace.evidence.length > 0 ? (
-          lastTrace.evidence.map((e) => (
+        {lastTrace && (lastTrace.evidence?.length ?? 0) > 0 ? (
+          (lastTrace.evidence ?? []).map((e) => (
             <div key={e.key} className="acr-flw-evidence">
               <button
                 className="acr-fl-checkstoggle"
@@ -527,29 +696,7 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
               Resume it now
             </button>
           ) : (
-            <button
-              className="acr-btn"
-              disabled={busy}
-              onClick={async () => {
-                const days = window.prompt('Pause this worker for how many days?', '7')
-                const n = Number(days)
-                if (!Number.isFinite(n) || n <= 0) return
-                const reason = window.prompt('Why? (recorded)') ?? ''
-                setBusy(true)
-                try {
-                  const until = new Date(Date.now() + n * 24 * 3600_000).toISOString()
-                  const r = await fetch(`${backend}/api/agent/fleet/charters/${workerKey}/pause`, {
-                    method: 'POST',
-                    headers: { 'content-type': 'application/json' },
-                    body: JSON.stringify({ until, reason }),
-                  })
-                  if (!r.ok) setErr(`pause: ${r.status}`)
-                  await load()
-                } finally {
-                  setBusy(false)
-                }
-              }}
-            >
+            <button className="acr-btn" disabled={busy} onClick={() => setConfirmPause(true)}>
               Pause it for a while
             </button>
           )}
@@ -559,6 +706,24 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
           Running it now ignores the dial — it is how you test a worker that is switched off,
           and it is the one control here that spends money on a dark fleet.
         </p>
+        {confirmPause ? (
+          <PauseDialog
+            workers={[{ key: charter.key, name: charter.name, from: charter.autonomyLevel }]}
+            busy={busy}
+            onCancel={() => setConfirmPause(false)}
+            onConfirm={async (days, reason) => {
+              setBusy(true)
+              try {
+                const { failed } = await applyPause(backend, [workerKey], days, reason)
+                if (failed.length) setErr(failed[0]!.error)
+                await load()
+              } finally {
+                setBusy(false)
+                setConfirmPause(false)
+              }
+            }}
+          />
+        ) : null}
         {confirmRun ? (
           <ConfirmSpend
             workerName={charter.name}
@@ -634,7 +799,7 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
             {openRun === r.id ? (
               traces[r.id] ? (
                 <ol className="acr-flw-pipeline">
-                  {traces[r.id]!.steps.map((s) => (
+                  {(traces[r.id]!.steps ?? []).map((s) => (
                     <li key={s.seq} className={s.ok ? '' : 'bad'}>
                       <span className="acr-flw-pipestep">{s.label}</span>
                       <span className="acr-flw-pipemeta">
