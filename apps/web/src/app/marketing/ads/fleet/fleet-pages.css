@@ -237,3 +237,144 @@
   .acr-pg-toolbar { align-items: stretch; }
   .acr-pg-search { min-width: 0; width: 100%; }
 }
+
+/* ── SB.6 Controls ───────────────────────────────────────────────────── */
+.acr-pg-ctrlbody { padding: 4px 2px 4px; display: flex; flex-direction: column; gap: 12px; }
+
+.acr-pg-ctrlwhat {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #5a6675;
+  max-width: 82ch;
+}
+
+.acr-pg-ctrlrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid #e6ebf1;
+  border-radius: 10px;
+  background: #fbfcfe;
+}
+.acr-pg-ctrlrow .spacer { flex: 1 1 auto; }
+.acr-pg-ctrlnote { font-size: 12px; color: #6b7a8d; }
+
+.acr-pg-statechip {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.acr-pg-statechip.halted { background: #fdeceb; color: #a3312c; border: 1px solid #f0c9c6; }
+.acr-pg-statechip.running { background: #e8f6ef; color: #14764f; border: 1px solid #cbe9dc; }
+
+.acr-pg-ctrlfacts {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #5a6675;
+  font-variant-numeric: tabular-nums;
+}
+
+/* per-worker dial cards */
+.acr-pg-dials {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 12px;
+}
+.acr-pg-dialcard {
+  border: 1px solid #e6ebf1;
+  border-radius: 10px;
+  padding: 12px 13px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.acr-pg-dialhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+.acr-pg-dialhead .nm { font-weight: 650; color: #26313f; text-decoration: none; }
+.acr-pg-dialhead .nm:hover { color: #3f6fb5; text-decoration: underline; }
+
+/* the ladder: four rungs, the current one loud, anything above the cap dead */
+.acr-pg-ladder { display: flex; gap: 0; }
+.acr-pg-rung {
+  flex: 1 1 0;
+  height: 30px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #6b7a8d;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.acr-pg-rung:first-child { border-radius: 7px 0 0 7px; }
+.acr-pg-rung:last-child { border-radius: 0 7px 7px 0; }
+.acr-pg-rung + .acr-pg-rung { border-left: 0; }
+.acr-pg-rung:hover:not(:disabled) { background: #f2f6fb; color: #34404f; }
+.acr-pg-rung.on { background: #3f6fb5; border-color: #3f6fb5; color: #fff; }
+.acr-pg-rung.blocked {
+  background: #f5f6f8;
+  color: #b8c0ca;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+.acr-pg-rung:disabled:not(.blocked) { opacity: 0.6; cursor: default; }
+
+.acr-pg-dialeffect {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #5a6675;
+}
+.acr-pg-dialfacts {
+  display: flex;
+  gap: 6px 14px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: #6b7a8d;
+  font-variant-numeric: tabular-nums;
+}
+.acr-pg-ok { color: #14764f; font-weight: 600; }
+
+/* confirmation — deliberately a plain centered panel, not a toast: a change
+   that starts spending should interrupt, and should survive a page blur */
+.acr-pg-confirmwrap {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(20, 27, 36, 0.42);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.acr-pg-confirm {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px 22px;
+  max-width: 460px;
+  box-shadow: 0 18px 46px rgba(16, 24, 40, 0.24);
+}
+.acr-pg-confirm h4 { margin: 0 0 9px; font-size: 15px; color: #26313f; }
+.acr-pg-confirm p { margin: 0 0 9px; font-size: 12.5px; line-height: 1.6; color: #5a6675; }
+.acr-pg-confirmbtns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+@media (max-width: 900px) {
+  .acr-pg-dials { grid-template-columns: 1fr; }
+  .acr-pg-ctrlrow .acr-pg-search { width: 100%; }
+}

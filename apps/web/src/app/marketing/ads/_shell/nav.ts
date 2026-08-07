@@ -97,7 +97,7 @@ export const ADS_NAV: NavItem[] = [
   // docs/2026-08-07-naf-sb-fleet-pages.md (Operate · Build · Govern).
   // Children are added as each page lands, never before: a chevron entry
   // pointing at a route that does not exist yet is a 404 with a label.
-  { label: 'Agent Fleet', route: 'fleet', Icon: Bot, children: [{ label: 'Workers', route: 'fleet/workers' }] },
+  { label: 'Agent Fleet', route: 'fleet', Icon: Bot, children: [{ label: 'Workers', route: 'fleet/workers' }, { label: 'Controls', route: 'fleet/controls' }] },
   { label: 'Rules & Automation', route: 'rules-automation', Icon: Wand2, children: [{ label: 'Control Room', route: 'rules-automation/control-room' }] },
   { label: 'AMC', route: 'amc', Icon: Users, children: [{ label: 'AMC Insights', route: 'amc' }, { label: 'Audience Insights', route: 'amc/audiences' }] },
   { label: 'Reporting', route: 'reporting', Icon: PieChart, children: [{ label: 'Brand Metrics', route: 'reporting/brand-metrics' }] },
