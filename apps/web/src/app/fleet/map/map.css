@@ -61,6 +61,11 @@
   align-items: center;
   gap: 10px;
   flex: none;
+  /* The app shell floats a notification bell at the top-right of every page,
+     outside this subtree and above it. Without this the Refresh button sits
+     underneath it. Measured on prod at 1456px: the bell occupies the last
+     ~44px, so the header reserves it. */
+  padding-right: 48px;
 }
 .sbm-asof {
   font-size: 11px;
@@ -214,6 +219,25 @@
   border-radius: 9px;
   background: #fbfcfe;
   overflow: hidden;
+  /* React Flow gives its root `height: 100%`, and a percentage height cannot
+     resolve against a flex parent whose own height is `flex: 1 1 auto` — there
+     is no definite height to be a percentage OF, so it computes to 0 and the
+     whole graph is clipped to nothing. Caught in the browser on prod, where
+     the DOM held 8 nodes and 4 edges inside a container measuring 1164 × 0.
+     Positioning the root absolutely inside a relative box gives it a definite
+     box in both axes and is xyflow's own recipe for a full-bleed canvas. */
+  position: relative;
+}
+.sbm-canvas .react-flow {
+  position: absolute;
+  inset: 0;
+  /* `height: auto` is load-bearing, not tidying. xyflow's own rule sets
+     `height: 100%`, and a percentage against a flex-sized parent is
+     indefinite — it resolved to 0 even with `inset: 0` applied. Verified in
+     the browser: with these three declarations the root measures 401px and
+     the graph draws; without `height: auto` it measures 0 and the nodes are
+     in the DOM but clipped to nothing. */
+  height: auto;
 }
 .sbm-skeleton {
   background: linear-gradient(90deg, #f4f6f9 25%, #eef1f5 37%, #f4f6f9 63%);

@@ -255,13 +255,18 @@ export function MapCanvas({
         // A plan edge can never carry a volume: the critic does not author an
         // artifact, it records a verdict on the plan in place. So it says what
         // actually crossed — the verdict — rather than a fabricated count.
+        // Kept short on purpose. Three analyst edges converge on the director,
+        // so their labels sit within a few pixels of each other; "4 carried ·
+        // 1 dropped" collided with its neighbour and truncated mid-word on
+        // prod. What the director DROPPED and why is the edge inspector's
+        // centrepiece (M.4), where there is room to print the reason it wrote.
         const label =
           e.artifact === 'plan'
             ? e.verdicts && e.verdicts.pass + e.verdicts.revise + e.verdicts.block > 0
               ? `${e.verdicts.block > 0 ? 'blocked' : e.verdicts.revise > 0 ? 'sent back' : 'passed'}`
               : 'nothing reviewed yet'
             : e.counts.crossed > 0
-              ? `${e.counts.crossed} carried${e.counts.dropped > 0 ? ` · ${e.counts.dropped} dropped` : ''}`
+              ? `${e.counts.crossed} carried`
               : `nothing carried in ${windowLabel}`
         return {
           id: e.id,
@@ -292,7 +297,11 @@ export function MapCanvas({
         edges={flowEdges}
         nodeTypes={nodeTypes}
         fitView
-        fitViewOptions={{ padding: 0.16, maxZoom: 1 }}
+        /* maxZoom 1 leaves a seven-node fleet occupying about half a 1300px
+           canvas, with the rest dead space. 1.35 fills the box without
+           blowing the 12.5px card type past the point where it looks like a
+           zoomed screenshot. Measured on prod at 1456px. */
+        fitViewOptions={{ padding: 0.14, maxZoom: 1.35 }}
         minZoom={0.3}
         maxZoom={1.6}
         nodesConnectable={false}
