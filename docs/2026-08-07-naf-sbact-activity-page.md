@@ -951,6 +951,76 @@ so multi-select worker chips need `actor` to become a csv too. ~5 lines.
 
 ---
 
+## PART 16 — ACT.2 + ACT.3 execution record (2026-08-07/08)
+
+**ACT.2 — the page renders** (`aaca58093`). Scope line, day-grouped list,
+rollups, badges, three empty states, the S6 footnote. Default view is **33
+events across 14 runs**; with the self-test, **119 across 53**, which the
+rollups render as **44 rows** — the 21 identical self-test failures collapse to
+one line with a count of 21.
+
+**ACT.3 — the controls** (`56fba1e3c`). Grain switch · multi-select worker and
+"what happened" chips · search · Clear · URL state (DT.5) · CSV export of the
+whole filtered set. Spine gained `durationMs` / `findingCount`, and
+`filters.actor` became **`actors: string[]`** — the open question at the end of
+Part 15, now closed. Tests 29 → **34**; agent-fleet suite **341 passing**.
+
+**The Runs grain is the same feed, not a second one.** It filters the timeline
+to the two run kinds and draws a DS `DataGrid`. The alternative —
+`/agent/fleet/runs` — caps at 100, has no cursor and takes three filters; using
+it behind a switch would have quietly reinstated the two-feed shape that Part 3
+rejected.
+
+**Unknown actor keys fail CLOSED.** `kind` and `outcome` are validated against
+fixed vocabularies and unknown values are dropped (falling back to *no*
+filter). Actor keys cannot work that way — they are data, and a W.8 instance
+can appear at any time — so an unknown key returns nothing rather than
+everything. Asserted by a test, because the two helpers now behave differently
+on purpose and that is exactly the kind of asymmetry that gets "tidied" later.
+
+### Six defects found in the browser. None was visible to `tsc`.
+
+1. **"Show older" survived the end of the list** (ACT.2). The cursor was
+   `string | null`, which cannot distinguish *not started* from *exhausted*, so
+   `cursor ?? page1.nextCursor` fell back to page 1's still-live cursor. The
+   page read "Showing 119 of 119" above a button that did nothing.
+2. **Multi-select was unreachable from the UI while working perfectly in the
+   API** (ACT.3). The chip vocabulary came from the *filtered* response, so
+   picking one worker made every other worker's chip vanish — a second worker
+   could never be added. Facets now come from a read narrowed only by the
+   self-test toggle, which is how Sentry and GitHub facets behave.
+3. **The `fleet-sweep` badge printed on top of the next column.** Under
+   `table-layout: fixed`, an unsized column takes an equal share of what is
+   left; sizing only the prose column left Worker at ~10% and the nowrap badge
+   escaped its cell. **Size every column, or none.**
+4. **"Filtered — this is not the whole history" showed when only the grain had
+   changed** — implying a second, invisible narrowing on top of a button the
+   operator could already see was pressed.
+5. **"5 events across 0 runs"** — true, and nonsense. Happens the moment a
+   filter excludes every run event.
+6. **A bare "14" above the runs table.** `GridToolbar`'s `count` slot renders
+   the number alone; it now says "14 runs · newest first".
+
+The pattern worth keeping: **every one of these six is a page saying something
+untrue or unusable, and not one of them is a type error.** The browser pass is
+not polish on this page — it is the only gate that can see them.
+
+### Verified against production, through the read-only stub
+
+`33 → 12 → 20` events as one then two worker chips go on, chips staying
+available throughout · `kind=run.ok` → 12 across 12 runs · `q="wasting money"`
+→ 5 events, 1 rolled-up row · `?grain=runs` surviving a reload · the grid at
+`table-layout: fixed` with **zero** cells overflowing their column and **zero**
+page overflow · the export writing **33 data rows across 18 columns**, every
+row the same width.
+
+**Still open: ACT.4** (the failure tiles, S2), **ACT.5** (the run drawer over
+the live `/runs/:id/trace`, S5), **ACT.6** (S7 explainer + the DT.8 teaching
+gate), **ACT.7** (the Overview teaser — question 5 in Part 11 is still
+unanswered).
+
+---
+
 ## Sources
 
 **Workflow execution history** ·
