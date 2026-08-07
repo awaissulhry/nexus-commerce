@@ -62,7 +62,7 @@ Dark mode in this design system is **entirely token substitution**. Every
 component reads variables. Custom properties inherit, so re-declaring them on a
 container beats an ancestor `.dark` for that container's whole subtree.
 
-That fix is not hypothetical here — it is shipped, twice, and reviewed:
+That fix is not hypothetical here — it is shipped, twice:
 
 - `.productsNextLight` (`products/next/products-next-shell.css`) — on the very
   page the operator named as the standard.
@@ -73,6 +73,41 @@ That fix is not hypothetical here — it is shipped, twice, and reviewed:
 So `/products/next` is *already* a light-pinned surface running the DS DataGrid.
 The combination the GuardrailGrid comment calls impossible is the combination
 the reference page is built on.
+
+### ⚠ The two pins are not interchangeable — copy the right one
+
+They disagree about what a token *is*, and this is a known live defect, not a
+style difference:
+
+```css
+/* ads.css .h10-shell — Tailwind TRIPLETS, for rgb(var(--x) / <alpha>) */
+--border-default: 203 213 225;
+
+/* products-next-shell.css .productsNextLight — WHOLE COLOUR VALUES */
+--border-default: var(--h10-grey-200);
+```
+
+`design-system/styles/primitives.css` consumes them as whole values:
+`border: 1px solid var(--border-default)`. Under the triplet convention that
+becomes `1px solid 203 213 225`, which is invalid, so the **entire declaration is
+dropped** and Tailwind preflight's `border: 0px solid` wins. That is why DS
+buttons render with no border in the ads console and correctly on
+`/products/next`, and it is why the hand-rolled hex overrides all over the ads
+console exist — they are workarounds for a base style that never applied.
+(`reference_ds_token_triplet_collision`; measured on prod 2026-08-05.)
+
+**Copying ACR.1.6's block onto `.fleet-surface` would reproduce that defect on
+every fleet page.** The pin to copy is **`.productsNextLight`** — semantic
+aliases expressed through the `--h10-*` primitive ramp, which the `.dark` block
+never touches, so there is one source of truth for the hex.
+
+The corollary, and it becomes a rule for this subtree: **inside
+`.fleet-surface`, semantic tokens are whole colours.** Do not use Tailwind
+colour utilities that consume them as triplets (`text-primary`, `surface-card`,
+`border-default` and friends) anywhere under it. The fleet pages consume none
+today — they are `acr-*` with literal hex — so the subtree starts consistent and
+must stay that way. Verify with the ten-second console check in that reference:
+`getComputedStyle(btn).borderTopWidth` must not be `0px`.
 
 ### A latent defect on `/fleet`, found on the way
 
@@ -96,10 +131,10 @@ sessions.
 
 **Consequences to handle, not to discover later.**
 
-1. **Pin all, or none.** Copy the ACR.1.6 block whole, with a comment naming it
-   as the source of truth. `ads.css` already carries a `TODO(P7)` to de-duplicate
-   this class of value; add ours to it rather than inventing a third copy
-   silently.
+1. **Pin all, or none — and pin the `productsNextLight` way**, semantic aliases
+   expressed through `var(--h10-*)`, never as Tailwind triplets. See the warning
+   above; getting this wrong is invisible in review and produces borderless
+   buttons in production.
 2. **Two visual families on one page.** The roster becomes a DS grid card among
    `acr-*` cards. That tension already exists across the ads console and is
    accepted there. The header, strip and drawers stay `acr-*`; only the *table*
@@ -379,5 +414,6 @@ Tuesday that cost more than $0.01", that is Activity, and this page links there.
 | 2 | Seed `fleet-auditor` | one existing POST, any time |
 | 3 | Move the failure classifier into shared code so roster / Activity / detail agree | W.1, then reused |
 | 4 | `AgentControlAudit` is empty after real dial use — diagnose | before W.4 writes more attributable changes |
-| 5 | Pin the DS tokens on `.fleet-surface` | Study 0, precedes W.1 |
-| 6 | De-duplicate the light-pin block against `ads.css`'s `TODO(P7)` | opportunistic |
+| 5 | Pin the DS tokens on `.fleet-surface`, the `productsNextLight` way | Study 0, precedes W.1 |
+| 6 | Verify no DS button under `.fleet-surface` computes `border-top-width: 0px` | W.1 browser check on prod |
+| 7 | `.h10-shell` pins the semantic tokens as triplets and breaks DS borders across the ads console — not ours to fix, but do not copy it | noted; owner's call per `reference_ds_token_triplet_collision` |
