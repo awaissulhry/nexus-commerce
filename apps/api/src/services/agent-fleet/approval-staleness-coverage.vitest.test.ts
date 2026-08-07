@@ -23,7 +23,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { listTools } from '../agents/tool-registry.js'
-import { MATERIAL_PREVIEW_FIELDS } from './approval-inbox.service.js'
+import { DECIDED_STATUSES, MATERIAL_PREVIEW_FIELDS } from './approval-inbox.service.js'
 
 describe('staleness coverage', () => {
   const executing = listTools().filter((t) => typeof t.execute === 'function')
@@ -57,6 +57,21 @@ describe('staleness coverage', () => {
     for (const name of ['set-target-bid', 'create-negative-keyword', 'graduate-keyword']) {
       expect(MATERIAL_PREVIEW_FIELDS[name], `${name} is still declared`).toBeDefined()
     }
+  })
+
+  it('an EDITED proposal stays visible in the record', () => {
+    // NAF.AQ.8 — editing supersedes the original rather than mutating it. If
+    // `superseded` is not one of the decided statuses, that original appears
+    // in NO view: not waiting, not decided, not expired. That is the
+    // silent-terminal-failure shape this page was built to remove, reintroduced
+    // by the feature meant to improve it.
+    //
+    // Asserted against the exported VALUE, not against the source text. The
+    // first version of this test grepped the file for the string and would
+    // have passed on the comment above it — a check that cannot fail for the
+    // right reason is not a check, which is the same lesson as the `?? []`
+    // default it sits next to.
+    expect(DECIDED_STATUSES).toContain('superseded')
   })
 
   it('finds at least one executing tool — a registry that resolves to nothing would pass vacuously', () => {

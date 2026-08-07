@@ -47,7 +47,7 @@ export type InboxView = 'waiting' | 'decided' | 'expired'
  * whether the fleet was wrong or merely corrected. It is not `rejected` —
  * the operator did not say no, they said "not that number".
  */
-const DECIDED_STATUSES = ['approved', 'executed', 'rejected', 'executing', 'superseded']
+export const DECIDED_STATUSES = ['approved', 'executed', 'rejected', 'executing', 'superseded']
 
 export interface InboxActor {
   /** What gets stored and shown. A name if we have one, never a bare id. */
