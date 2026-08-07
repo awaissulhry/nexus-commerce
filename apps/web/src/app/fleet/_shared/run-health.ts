@@ -285,11 +285,20 @@ export function deriveStatus(
  * account. Counting it into headline numbers makes every figure on the page
  * mostly about a self-test.
  *
- * The rule is the DOMAIN, not the key — it generalises to `fleet-auditor` and
- * to whatever ops workers come next, where a hard-coded key would not.
+ * The charter declares this itself (`CharterDefinition.diagnostic`). A rule on
+ * `domain` was tried first and is wrong twice over: `fleet-auditor` is
+ * `domain: 'fleet'` and would be missed, and `domain: 'ops'` is exactly where
+ * docs/AGENT_FLEET.md Part 6 puts `ops-schema-drift`, `ops-sync-health` and
+ * `ops-tech-debt-triage` — real business analysts that a domain rule would
+ * silently drop out of the totals the day they are written.
  */
-export function isDiagnostic(charter: { domain: string }): boolean {
-  return charter.domain === 'ops'
+export function isDiagnostic(charter: { diagnostic?: boolean; key?: string }): boolean {
+  if (typeof charter.diagnostic === 'boolean') return charter.diagnostic
+  // Deploy-window fallback only: the web can reach production ahead of the
+  // API, and for those few minutes the flag is absent. Without this the
+  // self-test's 47 findings would briefly land in the headline totals.
+  // Delete once the field is live everywhere.
+  return charter.key === 'fleet-selftest'
 }
 
 export const DIAGNOSTIC_HINT =

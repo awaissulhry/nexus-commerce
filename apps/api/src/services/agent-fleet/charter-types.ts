@@ -36,6 +36,20 @@ export interface CharterDefinition {
   fallbackFeature?: string
   /** Ceiling the operator cannot exceed; DB may only clamp downward. */
   autonomyCap: AutonomyLevel
+  /**
+   * NAF.SB.W.1 — this worker's findings are about the FLEET, not about the
+   * operator's account, so the registry badges it and leaves it out of the
+   * headline totals. `fleet-selftest` alone holds 47 of 64 open findings and
+   * 38 of 47 runs; counted in, every figure on the Workers page is mostly
+   * about a self-test.
+   *
+   * An explicit flag rather than a heuristic on `domain`. Two reasons, both
+   * concrete: `fleet-auditor` is `domain: 'fleet'` and would be missed, and
+   * `domain: 'ops'` is where docs/AGENT_FLEET.md Part 6 puts `ops-schema-drift`,
+   * `ops-sync-health` and `ops-tech-debt-triage` — real business analysts a
+   * domain rule would wrongly exclude the day they are written.
+   */
+  diagnostic?: boolean
   /** Cron expr; undefined = orchestrated only. */
   cadence?: string
   /** NAF.B — regex source every finding's dedupeKey must match. Enforced

@@ -76,7 +76,11 @@ Section 2 below.
 | `amazon-bid-tuner` | analyst | amazon-ads | OFF | OBSERVE | $0.10 | yes |
 | `amazon-ads-director` | director | amazon-ads | OFF | PROPOSE | $0.30 | yes |
 | `plan-critic` | critic | amazon-ads | OFF | OBSERVE | $0.20 | yes |
-| `fleet-auditor` | auditor | ops | OFF | OBSERVE | — | **NO** |
+| `fleet-auditor` | auditor | fleet | OFF | OBSERVE | — | **NO** |
+
+(That domain is `fleet`, not `ops` — the row has no database entry, so the value
+comes from the code charter. An earlier draft of this table guessed `ops`, and
+the guess went on to produce a real bug; see Study 1 §1.5.)
 
 Every `cadence` is `null` and every `scopeMarketplaces` is `[]`. So a "Next run"
 column has nothing per-worker to say, and a "Scope" column says *everything,
@@ -650,7 +654,9 @@ All four as recommended.
    It stays in the table, visibly marked as a diagnostic worker. The health
    strip's counts — findings, runs, spend — are **business workers only**, with
    the self-test's contribution shown as a footnote rather than hidden. Nothing
-   is concealed; nothing is averaged into a lie.
+   is concealed; nothing is averaged into a lie. Implemented as an explicit
+   `CharterDefinition.diagnostic` flag — see Study 1 §1.5 for why the `domain`
+   heuristic this document originally proposed was wrong, and how prod caught it.
 4. **Real-time is visibility-gated polling — APPROVED.** One shared hook:
    refetch roughly every 10s while the document is visible, pause when hidden, an
    "as of" stamp, and a *changed since you looked* cue rather than a silent

@@ -15,6 +15,9 @@ export const fleetSelftestCharter: CharterDefinition = {
   name: 'Fleet self-test analyst',
   description:
     'Reads the cron-health observation and reports failing or stale jobs. The fleet pipeline smoke test.',
+  // SB.W.1 — the only worker whose findings are about the fleet rather than
+  // the account. The registry badges it and leaves it out of the totals.
+  diagnostic: true,
   systemPrompt: [
     'You are an operations analyst for the Nexus commerce platform.',
     'You receive ONE piece of evidence: a precomputed cron-health summary',

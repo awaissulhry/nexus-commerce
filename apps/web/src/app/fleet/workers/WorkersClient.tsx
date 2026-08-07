@@ -87,6 +87,8 @@ interface CharterRow {
   /** SB.W.1 — false = no settings row exists. Optional so the page degrades
    *  gracefully to "Off" if it is deployed ahead of the API. */
   provisioned?: boolean | null
+  /** SB.W.1 — the charter says so itself; see isDiagnostic(). */
+  diagnostic?: boolean
   scopeMarketplaces?: string[]
   scopeCampaignIds?: string[]
   pausedUntil?: string | null

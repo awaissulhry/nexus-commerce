@@ -241,9 +241,21 @@ on this page is mostly about a self-test.
   findings are not about your account."
 - Headline numbers in the health strip are **business workers only**, with the
   self-test's contribution as a footnote — never hidden, never averaged in.
-- The classifier for "is this a diagnostic worker" is `domain === 'ops'`, which
-  today selects `fleet-selftest` and `fleet-auditor`. That is the right rule and
-  it generalises; hard-coding the key would not.
+- **The classifier is a flag on the charter, not a heuristic on `domain`.**
+  `CharterDefinition.diagnostic`, set only on `fleet-selftest`.
+
+  This document first proposed `domain === 'ops'`, "which today selects
+  `fleet-selftest` and `fleet-auditor`". That was wrong twice, and prod caught
+  it: `fleet-auditor` is `domain: 'fleet'`, so the rule missed it — and
+  `domain: 'ops'` is precisely where Part 6 of `docs/AGENT_FLEET.md` puts
+  `ops-schema-drift`, `ops-sync-health` and `ops-tech-debt-triage`, three real
+  business analysts the rule would have silently dropped out of the totals on
+  the day they were written. A heuristic that is right by coincidence today and
+  wrong by design tomorrow is worse than the hard-coded key it was avoiding.
+
+  Which leaves `fleet-auditor` a **business** worker, correctly: it writes the
+  operator brief and attributes outcomes. Reporting on the fleet is its job, not
+  a self-test.
 
 ### 1.6 Empty and degenerate states
 
