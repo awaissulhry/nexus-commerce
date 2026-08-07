@@ -111,7 +111,12 @@ export interface AffectedWorker {
   key: string
   name: string
   from: string
+  /** Its daily cap, so a confirmation can say what the change authorises to be
+   *  spent rather than only what it permits to happen. */
+  budgetUSD?: number
 }
+
+const money = (n: number) => `$${n.toFixed(2)}`
 
 /**
  * Shown ONLY for changes that let a worker do more — see the safety rule at the
@@ -184,6 +189,19 @@ export function ConfirmAutonomy({
             )
           })}
         </ul>
+
+        {/* What it authorises to be SPENT, not only what it permits to happen.
+            Every rung above OFF costs money on AI, and an operator who has
+            decided not to spend yet needs the number before the click, not on
+            the bill. */}
+        {to !== 'OFF' && raises.length > 0 && raises.some((w) => w.budgetUSD != null) ? (
+          <p>
+            This lets {raises.length === 1 ? 'it' : `those ${raises.length}`} spend up to{' '}
+            <b>{money(raises.reduce((sum, w) => sum + (w.budgetUSD ?? 0), 0))} a day</b> on AI
+            between {raises.length === 1 ? 'runs' : 'them'} — a ceiling the server enforces before
+            each run, not a forecast.
+          </p>
+        ) : null}
 
         <p className="acr-pg-muted">
           You can move {many ? 'them' : 'it'} back to OFF at any time, and that takes effect
@@ -334,6 +352,90 @@ export function PauseDialog({
           </button>
         </div>
       </form>
+    </div>
+  )
+}
+
+
+/* ── the controls that ignore the OFF switch ───────────────────────────── */
+
+/**
+ * NAF.SB.W — three paths deliberately bypass the autonomy dial and call the
+ * model on a worker that is switched OFF:
+ *
+ *   · `POST /agent/fleet/run/:key`            (`ignoreEnabled: true`) — "Run it now"
+ *   · `POST /agent/fleet/charters/:key/preview`  (`preview: true`)
+ *   · the charter evaluation / A-B path        (`preview: true`)
+ *
+ * That is the correct design — it is how you test a worker without granting it
+ * anything — and it is also the only way to spend money on a dark fleet. The
+ * executor's OFF gate is the FIRST thing it does, so nothing else can:
+ * `executeCharter` returns `skipped: 'disabled'` before it writes a run row,
+ * before the budget guards, before any model call. The nightly sweep proves it
+ * — 2026-08-07 04:45 reported `started=6 skipped=6`, $0.00, while still
+ * computing 14 scorecards and ~5,800 graph edges.
+ *
+ * So this dialog exists for exactly one reason: an operator who has decided not
+ * to spend yet should not be one unlabelled click away from spending. It states
+ * that the worker is off, that this runs it anyway, and what the ceiling is.
+ */
+export function ConfirmSpend({
+  workerName,
+  isOff,
+  dailyBudgetUSD,
+  what,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  workerName: string
+  /** True when the dial says OFF — the whole point of the warning. */
+  isOff: boolean
+  dailyBudgetUSD?: number
+  /** "Run it once now" · "Preview this revision" · "Score this revision" */
+  what: string
+  busy?: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div
+      className="acr-pg-confirmwrap"
+      role="dialog"
+      aria-modal="true"
+      aria-label="This will spend money"
+      onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
+    >
+      <div className="acr-pg-confirm">
+        <h4>{what} — this spends money</h4>
+        <p>
+          {isOff ? (
+            <>
+              <b>{workerName} is switched off.</b> This runs it anyway — that is what this control
+              is for, and it is the one thing that ignores the dial.
+            </>
+          ) : (
+            <>This runs <b>{workerName}</b> immediately rather than waiting for its schedule.</>
+          )}
+        </p>
+        <p>
+          One run calls the AI provider and is billed to your account.
+          {dailyBudgetUSD != null ? (
+            <> It cannot exceed <b>{money(dailyBudgetUSD)}</b> in a day — the server refuses the run
+            past that, rather than truncating it.</>
+          ) : null}
+        </p>
+        <p className="acr-pg-muted">
+          It still cannot change anything on Amazon: a run at OBSERVE writes findings, and
+          everything beyond that passes the approval gate first.
+        </p>
+        <div className="acr-pg-confirmbtns">
+          <button className="acr-btn" onClick={onCancel} disabled={busy}>Cancel</button>
+          <button className="acr-btn go" onClick={onConfirm} disabled={busy}>
+            {busy ? 'Running…' : 'Yes — run it and spend'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

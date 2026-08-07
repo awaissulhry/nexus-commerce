@@ -607,7 +607,10 @@ export function WorkersClient() {
     setPendingRaise({
       to,
       workers: changing.map((r) => ({
-        key: r.charter.key, name: r.charter.name, from: r.charter.autonomyLevel,
+        key: r.charter.key,
+        name: r.charter.name,
+        from: r.charter.autonomyLevel,
+        budgetUSD: Number(r.charter.dailyBudgetUSD ?? 0),
       })),
     })
   }, [backend, runAction])

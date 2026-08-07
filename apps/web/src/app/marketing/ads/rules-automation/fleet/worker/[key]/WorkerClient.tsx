@@ -13,6 +13,7 @@ import { ArrowLeft, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { PlanLabels } from '../../PlanStory'
 import { CharterStudio } from './CharterStudio'
+import { ConfirmSpend } from '@/app/fleet/_shared/autonomy'
 
 interface Charter {
   key: string
@@ -141,6 +142,11 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  /** SB.W — "Run it now" is one of only three paths that ignore the autonomy
+   *  dial and call the model on a worker that is switched OFF. It fired
+   *  immediately, with nothing said about cost. With the fleet deliberately
+   *  dark it is the likeliest way to spend by accident, so it asks first. */
+  const [confirmRun, setConfirmRun] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -501,20 +507,7 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
           ) : null}
         </header>
         <div className="acr-fl-dialrow">
-          <button
-            className="acr-btn"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true)
-              try {
-                const r = await fetch(`${backend}/api/agent/fleet/run/${workerKey}`, { method: 'POST' })
-                if (!r.ok) setErr(`run now: ${r.status}`)
-                await load()
-              } finally {
-                setBusy(false)
-              }
-            }}
-          >
+          <button className="acr-btn" disabled={busy} onClick={() => setConfirmRun(true)}>
             Run it now
           </button>
           {charter.pausedUntil ? (
@@ -563,8 +556,30 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
         </div>
         <p className="acr-fl-sub">
           A pause always has an end date, so stopping a worker is never a forgotten off switch.
-          Running it now ignores the dial — it is how you test a worker that is switched off.
+          Running it now ignores the dial — it is how you test a worker that is switched off,
+          and it is the one control here that spends money on a dark fleet.
         </p>
+        {confirmRun ? (
+          <ConfirmSpend
+            workerName={charter.name}
+            isOff={!charter.enabled || charter.autonomyLevel === 'OFF'}
+            dailyBudgetUSD={Number(charter.dailyBudgetUSD)}
+            what="Run it once now"
+            busy={busy}
+            onCancel={() => setConfirmRun(false)}
+            onConfirm={async () => {
+              setBusy(true)
+              try {
+                const r = await fetch(`${backend}/api/agent/fleet/run/${workerKey}`, { method: 'POST' })
+                if (!r.ok) setErr(`run now: ${r.status}`)
+                await load()
+              } finally {
+                setBusy(false)
+                setConfirmRun(false)
+              }
+            }}
+          />
+        ) : null}
       </section>
 
       {/* AC.1–AC.3 — Charter Studio */}
