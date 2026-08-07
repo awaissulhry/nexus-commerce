@@ -12,6 +12,7 @@ import Link from 'next/link'
 import { ArrowLeft, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { PlanLabels } from '../../PlanStory'
+import { CharterStudio } from './CharterStudio'
 
 interface Charter {
   key: string
@@ -32,6 +33,11 @@ interface Charter {
   dedupeKeyPattern?: string
   maxEvidenceAgeHours?: number
   degraded: boolean
+  // AC.6
+  pausedUntil?: string | null
+  pausedReason?: string | null
+  // AC.1
+  activeRevisionNumber?: number
 }
 interface RunRow {
   id: string
@@ -124,7 +130,13 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
   const [scorecards, setScorecards] = useState<Scorecard[]>([])
   const [traces, setTraces] = useState<Record<string, Trace>>({})
   const [openRun, setOpenRun] = useState<string | null>(null)
-  const [showCharter, setShowCharter] = useState(false)
+  const [audit, setAudit] = useState<Array<{
+    id: string
+    action: string
+    note: string | null
+    actor: string | null
+    createdAt: string
+  }>>([])
   const [showEvidence, setShowEvidence] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -133,11 +145,12 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [c, r, f, s] = await Promise.all([
+      const [c, r, f, s, au] = await Promise.all([
         fetch(`${backend}/api/agent/fleet/charters`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/runs?charterKey=${workerKey}&limit=20`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/findings?charterKey=${workerKey}&limit=30`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/scorecards?charterKey=${workerKey}&limit=8`, { cache: 'no-store' }),
+        fetch(`${backend}/api/agent/fleet/charters/${workerKey}/audit`, { cache: 'no-store' }),
       ])
       if (c.ok) {
         const all = ((await c.json()) as { charters: Charter[] }).charters
@@ -150,6 +163,7 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
         setLabels(fj.labels ?? { campaigns: {}, targets: {} })
       }
       if (s.ok) setScorecards(((await s.json()) as { scorecards: Scorecard[] }).scorecards)
+      if (au.ok) setAudit(((await au.json()) as { audit: typeof audit }).audit)
       setErr(null)
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
@@ -476,20 +490,116 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
         )}
       </section>
 
-      {/* my charter */}
+      {/* AC.6 — run controls */}
       <section className="acr-card">
         <header className="acr-fl-head">
-          <h3>Its charter — the job description it actually runs on</h3>
-          <span className="acr-fl-sub">version {charter.version}</span>
+          <h3>Run controls</h3>
+          {charter.pausedUntil ? (
+            <span className="acr-fl-pill acr-fl-pill-halt">
+              paused until {new Date(charter.pausedUntil).toLocaleString()}
+            </span>
+          ) : null}
         </header>
+        <div className="acr-fl-dialrow">
+          <button
+            className="acr-btn"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true)
+              try {
+                const r = await fetch(`${backend}/api/agent/fleet/run/${workerKey}`, { method: 'POST' })
+                if (!r.ok) setErr(`run now: ${r.status}`)
+                await load()
+              } finally {
+                setBusy(false)
+              }
+            }}
+          >
+            Run it now
+          </button>
+          {charter.pausedUntil ? (
+            <button
+              className="acr-btn"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true)
+                try {
+                  await fetch(`${backend}/api/agent/fleet/charters/${workerKey}/resume`, { method: 'POST' })
+                  await load()
+                } finally {
+                  setBusy(false)
+                }
+              }}
+            >
+              Resume it now
+            </button>
+          ) : (
+            <button
+              className="acr-btn"
+              disabled={busy}
+              onClick={async () => {
+                const days = window.prompt('Pause this worker for how many days?', '7')
+                const n = Number(days)
+                if (!Number.isFinite(n) || n <= 0) return
+                const reason = window.prompt('Why? (recorded)') ?? ''
+                setBusy(true)
+                try {
+                  const until = new Date(Date.now() + n * 24 * 3600_000).toISOString()
+                  const r = await fetch(`${backend}/api/agent/fleet/charters/${workerKey}/pause`, {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({ until, reason }),
+                  })
+                  if (!r.ok) setErr(`pause: ${r.status}`)
+                  await load()
+                } finally {
+                  setBusy(false)
+                }
+              }}
+            >
+              Pause it for a while
+            </button>
+          )}
+        </div>
         <p className="acr-fl-sub">
-          This is the literal instruction the worker receives, word for word. Changing its
-          behaviour means changing this text — reviewed, versioned, revertible.
+          A pause always has an end date, so stopping a worker is never a forgotten off switch.
+          Running it now ignores the dial — it is how you test a worker that is switched off.
         </p>
-        <button className="acr-fl-rawtoggle" onClick={() => setShowCharter(!showCharter)}>
-          {showCharter ? 'hide' : 'show'} the charter
-        </button>
-        {showCharter ? <pre className="acr-fl-raw">{charter.systemPrompt}</pre> : null}
+      </section>
+
+      {/* AC.1–AC.3 — Charter Studio */}
+      <section className="acr-card">
+        <header className="acr-fl-head">
+          <h3>Its charter — the instruction it actually runs on</h3>
+          <span className="acr-fl-sub">code version {charter.version}</span>
+        </header>
+        <CharterStudio workerKey={workerKey} onChanged={() => void load()} />
+      </section>
+
+      {/* AC.7 — control history */}
+      <section className="acr-card">
+        <header className="acr-fl-head">
+          <h3>What has been changed, and by whom</h3>
+          <span className="acr-fl-sub">{audit.length === 0 ? 'nothing yet' : `${audit.length} changes`}</span>
+        </header>
+        {audit.length === 0 ? (
+          <p className="acr-fl-empty">
+            Every dial move, charter activation, policy edit and pause is recorded here with who
+            did it and why.
+          </p>
+        ) : (
+          <ul className="acr-fl-sweeps">
+            {audit.map((a) => (
+              <li key={a.id}>
+                <span className="acr-fl-pill">{a.action.replace(/_/g, ' ')}</span>
+                {a.note ? <span>{a.note}</span> : null}
+                <span className="acr-fl-sub">
+                  {a.actor ?? 'operator'} · {new Date(a.createdAt).toLocaleString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       {/* run history */}

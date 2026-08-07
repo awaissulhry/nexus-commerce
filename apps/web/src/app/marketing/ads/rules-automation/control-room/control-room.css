@@ -1201,3 +1201,47 @@ a.acr-refresh { text-decoration: none; }
   width: 146px; padding: 7px 10px; border-radius: 8px; text-align: center;
   font-size: 10.5px; color: #8d97a6; background: #f4f7fa; border: 1px dashed #dfe5ec;
 }
+
+/* ── NAF.AC — Charter Studio ─────────────────────────────────────────── */
+.acr-cs { display: flex; flex-direction: column; gap: 12px; }
+.acr-cs-editor {
+  width: 100%; min-height: 300px; padding: 12px 14px; border-radius: 9px;
+  border: 1px solid #dfe5ec; background: #fbfcfe; color: #232c37;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; line-height: 1.6; resize: vertical;
+}
+.acr-cs-editor:focus { outline: none; border-color: #1f6fde; box-shadow: 0 0 0 3px rgb(31 111 222 / 0.12); }
+.acr-cs-diff {
+  border: 1px solid #e9edf3; border-radius: 9px; padding: 10px 12px; background: #fbfcfe;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
+  max-height: 220px; overflow-y: auto;
+}
+.acr-cs-difftitle {
+  display: block; margin-bottom: 6px; font-family: inherit; font-size: 10.5px;
+  font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; color: #8d97a6;
+}
+.acr-cs-line { display: flex; gap: 8px; padding: 1px 0; white-space: pre-wrap; word-break: break-word; }
+.acr-cs-line.added { color: #14724d; background: #f1faf5; }
+.acr-cs-line.removed { color: #9c2f2a; background: #fdf2f2; }
+.acr-cs-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.acr-cs-notewrap { display: inline-flex; gap: 8px; align-items: center; flex: 1; min-width: 320px; }
+.acr-cs-note {
+  flex: 1; font-size: 12px; padding: 6px 10px; border: 1px solid #dfe5ec;
+  border-radius: 8px; color: #232c37;
+}
+.acr-cs-note:focus { outline: none; border-color: #1f6fde; }
+.acr-cs-result {
+  padding: 11px 13px; border-radius: 9px; border: 1px solid #e9edf3; background: #fbfcfe;
+  display: flex; flex-direction: column; gap: 7px; font-size: 12.5px; color: #34404f;
+}
+.acr-cs-result.bad { border-color: #e6bcba; background: #fdf2f2; }
+.acr-cs-result.verdict-better { border-color: #c3e5d3; background: #f1faf5; }
+.acr-cs-result.verdict-worse { border-color: #e6bcba; background: #fdf2f2; }
+.acr-cs-result td.good { color: #14724d; font-weight: 650; }
+.acr-cs-result td.bad { color: #9c2f2a; font-weight: 650; }
+.acr-cs-findings { margin: 0; padding-left: 18px; font-size: 12px; color: #5a6675; }
+.acr-cs-revlist { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.acr-cs-revlist li { display: flex; flex-direction: column; gap: 4px; padding-top: 8px; border-top: 1px solid #eef1f5; }
+.acr-cs-revhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acr-cs-revnote { font-size: 12.5px; color: #34404f; }
+.acr-cs-revactions { display: flex; gap: 6px; flex-wrap: wrap; }
