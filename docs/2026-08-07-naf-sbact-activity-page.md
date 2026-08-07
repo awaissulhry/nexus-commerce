@@ -1014,10 +1014,53 @@ available throughout · `kind=run.ok` → 12 across 12 runs · `q="wasting money
 page overflow · the export writing **33 data rows across 18 columns**, every
 row the same width.
 
+### ACT.7 — the Overview teaser (operator approved question 5, 2026-08-08)
+
+`dffc0efa2`. The Overview's "Decision timeline" card is now **"Latest
+activity"**: five events, flat, no paging, and a link out. The checkable
+boundary is deliberately trivial to check — **the Overview's fetch is
+`?limit=5` and it never sends a cursor or a filter.**
+
+**The part that was not a ten-line edit.** `onOpenPlan` — the "see the plan"
+button on a decided approval — scrolled to `#plan-<id>` inside the stream the
+Overview no longer renders. Left alone it would have failed **silently**, which
+is worse than the duplication being removed. It is now a permalink to
+`/fleet/activity#e-plan.<id>`, and Activity honours it.
+
+Making that scroll actually happen took three attempts, none of them visible to
+`tsc`, and all three are the same lesson in different clothes — *something else
+ran after me*:
+
+1. **The filter-sync effect deleted the hash.** Its no-filters branch replaced
+   the URL with `pathname`, dropping the permalink before anything could read
+   it. The hash is now captured during the **first render** (a `useRef`
+   initialiser runs before any effect), and the URL sync preserves it — a
+   permalink should survive someone typing in the search box.
+2. **A smooth scroll was cancelled** by the re-render arriving with the first
+   fetch.
+3. **An instant scroll one frame later was undone** by the router's own scroll
+   reset after navigation.
+
+It now scrolls, **checks**, and scrolls again only if something put it back.
+Self-correcting beats guessing a delay that is right on this machine and wrong
+on a slower one. Worth knowing for every fleet page: **the app scrolls inside
+`<main class="overflow-auto">`, not the document**, so `window.scrollY` stays
+`0` throughout and makes a working scroll look broken.
+
+Verified: teaser renders five rows with no "show older" · the Overview → "see
+the plan" → Activity round trip lands on the right row, highlighted, in the
+viewport (`main.scrollTop` 0 → 1008) · after scrolling away, **two full 10s poll
+cycles leave the scroll position exactly where the reader put it** — the jump
+fires once. Suite 360 passing across 40 files.
+
 **Still open: ACT.4** (the failure tiles, S2), **ACT.5** (the run drawer over
 the live `/runs/:id/trace`, S5), **ACT.6** (S7 explainer + the DT.8 teaching
-gate), **ACT.7** (the Overview teaser — question 5 in Part 11 is still
-unanswered).
+gate).
+
+One consequence to note: `TimelineStream.tsx` is now rendered by **nothing** —
+Activity has its own list, and the Overview has a teaser. It is left in place
+rather than deleted; it belongs to another stream's directory, and whoever does
+the SB.2 route move owns that call.
 
 ---
 
