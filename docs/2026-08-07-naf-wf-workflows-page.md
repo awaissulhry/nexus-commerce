@@ -542,6 +542,26 @@ is the only thing that changes production). The card becomes the revision
 list the moment the model lands; its promise text is the acceptance criteria
 for full S4.
 
+**EXECUTED 2026-08-07 (`fa25a559e`), verified on prod.** §4 REVIEWED same day
+("Half B is clear to build", with the enumeration caveat recorded as Workers'
+half and the instance-not-in-built-in-sweep caveat routed to their create
+flow). Landed: the two models in the marked schema block + two nullable
+`AgentRun` stamp columns; migration `20260807c` applied clean on the Railway
+deploy; built-ins **derived from `FLEET_GRAPH` + cron envs at read time** so
+code truth cannot drift; `validateDefinition` resolves steps via the async
+`resolveCharter` (a sync truthiness check would have always passed — caught
+before commit) and proves acyclicity with the orchestrator's own
+`topoLevels`; routes in `agent-fleet-workflows.routes.ts` with a one-line
+`index.ts` registration; seed run via `railway run` — three rows,
+`source=code · revisions=0 · seeded=true`. Web verified live: the revisions
+fetch returns 200 and the card renders from it (its static fallback covered
+the deploy window, so no lying interval existed). Two `strict:false` traps
+hit and encoded: union narrowing (optional-`error` member per the fleet
+convention) and literal widening on `Object.freeze` (annotate the definition
+closures). The sibling's W.6 note proved true here too:
+`document.visibilityState` is `hidden` in an automated tab, so polls pause in
+automation — mount loads still fire, which is what the verification used.
+
 ---
 
 ## Sources
