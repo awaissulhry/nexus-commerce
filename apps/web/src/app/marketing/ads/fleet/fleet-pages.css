@@ -1,0 +1,239 @@
+/* NAF.SB — stylesheet for the fleet's OWN pages (workers, controls, and the
+   rest of the ten-page map in docs/2026-08-07-naf-sb-fleet-pages.md).
+
+   Deliberately a THIRD stylesheet: control-room.css belongs to the Control
+   Room's visual family and fleet-sections.css belongs to the NAF.DT session
+   rebuilding the single-page sections. Both are being edited by other
+   sessions right now. This file is the SB seam — same acr-* visual language,
+   no shared lines to collide on.
+
+   Light-only, like the rest of the fleet surfaces. */
+
+/* ── page scaffold ───────────────────────────────────────────────────── */
+.acr-pg-intro {
+  font-size: 13px;
+  line-height: 1.55;
+  color: #5a6675;
+  max-width: 78ch;
+  margin: 0 0 14px;
+}
+
+.acr-pg-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.acr-pg-toolbar .spacer { flex: 1 1 auto; }
+
+.acr-pg-search {
+  height: 30px;
+  min-width: 210px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  color: #34404f;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 7px;
+}
+.acr-pg-search:focus {
+  outline: none;
+  border-color: #9db4d0;
+  box-shadow: 0 0 0 3px rgba(74, 122, 184, 0.14);
+}
+
+/* filter chips — one row, no dropdown, so the whole filter state is visible */
+.acr-pg-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.acr-pg-chip {
+  height: 28px;
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #5a6675;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.acr-pg-chip:hover { border-color: #c3ccd8; color: #34404f; }
+.acr-pg-chip.on {
+  color: #fff;
+  background: #3f6fb5;
+  border-color: #3f6fb5;
+}
+.acr-pg-chip .n {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+  font-weight: 500;
+}
+
+/* ── summary strip ───────────────────────────────────────────────────── */
+.acr-pg-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.acr-pg-stat {
+  background: #fff;
+  border: 1px solid #e6ebf1;
+  border-radius: 10px;
+  padding: 11px 13px;
+}
+.acr-pg-stat .k {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #8d97a6;
+  margin-bottom: 5px;
+}
+.acr-pg-stat .v {
+  display: block;
+  font-size: 19px;
+  font-weight: 700;
+  color: #26313f;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+.acr-pg-stat .sub {
+  display: block;
+  font-size: 11.5px;
+  color: #8d97a6;
+  margin-top: 3px;
+}
+
+/* ── the roster ──────────────────────────────────────────────────────── */
+.acr-pg-tablewrap { overflow-x: auto; }
+
+.acr-pg-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.acr-pg-tbl th {
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #8d97a6;
+  padding: 4px 12px 7px 0;
+  border-bottom: 1px solid #dfe5ec;
+  white-space: nowrap;
+}
+.acr-pg-tbl th.num, .acr-pg-tbl td.num { text-align: right; padding-right: 18px; }
+.acr-pg-tbl td {
+  padding: 9px 12px 9px 0;
+  border-bottom: 1px solid #eef1f5;
+  color: #34404f;
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+.acr-pg-tbl tbody tr:hover td { background: #f7f9fc; }
+
+.acr-pg-sortbtn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.acr-pg-sortbtn:hover { color: #3f6fb5; }
+.acr-pg-sortbtn .caret { font-size: 9px; opacity: 0.9; }
+
+/* worker identity cell */
+.acr-pg-who { display: flex; align-items: center; gap: 10px; min-width: 230px; }
+.acr-pg-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  background: #eef2f7;
+  color: #6b7a8d;
+}
+.acr-pg-who .nm {
+  display: block;
+  font-weight: 650;
+  color: #26313f;
+  text-decoration: none;
+}
+.acr-pg-who .nm:hover { color: #3f6fb5; text-decoration: underline; }
+.acr-pg-who .ky {
+  display: block;
+  font-size: 11px;
+  color: #98a2b0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* dial + cap, rendered as one honest pair */
+.acr-pg-dial { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.acr-pg-lvl {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+}
+.acr-pg-lvl.off      { background: #f0f2f5; color: #78828f; border-color: #e2e6ec; }
+.acr-pg-lvl.observe  { background: #eaf2fb; color: #2f6096; border-color: #d3e2f4; }
+.acr-pg-lvl.propose  { background: #fdf4e3; color: #91640f; border-color: #f3e3c2; }
+.acr-pg-lvl.auto     { background: #e8f6ef; color: #14764f; border-color: #cbe9dc; }
+.acr-pg-capnote { font-size: 11px; color: #98a2b0; }
+
+.acr-pg-grade {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.acr-pg-grade.g-A { background: #e8f6ef; color: #14764f; }
+.acr-pg-grade.g-B { background: #eaf2fb; color: #2f6096; }
+.acr-pg-grade.g-C { background: #fdf4e3; color: #91640f; }
+.acr-pg-grade.g-D, .acr-pg-grade.g-F { background: #fdeceb; color: #a3312c; }
+.acr-pg-grade.g-none { background: #f0f2f5; color: #98a2b0; font-weight: 600; }
+
+.acr-pg-muted { color: #98a2b0; }
+
+.acr-pg-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #a3312c;
+}
+
+/* ── teaching empty state ────────────────────────────────────────────── */
+.acr-pg-empty {
+  border: 1px dashed #dfe5ec;
+  border-radius: 10px;
+  padding: 26px 22px;
+  text-align: center;
+  color: #6b7a8d;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.acr-pg-empty strong { display: block; color: #34404f; margin-bottom: 5px; font-size: 13.5px; }
+
+@media (max-width: 900px) {
+  .acr-pg-toolbar { align-items: stretch; }
+  .acr-pg-search { min-width: 0; width: 100%; }
+}

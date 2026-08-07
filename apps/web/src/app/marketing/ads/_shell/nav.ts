@@ -93,7 +93,11 @@ export const ADS_NAV: NavItem[] = [
   // is prefix-based, so leaving the page inside the rules subtree would light BOTH rows.
   // The components still sit under rules-automation/fleet/ until the parallel session
   // editing them lands; see the note in fleet/page.tsx.
-  { label: 'Agent Fleet', route: 'fleet', Icon: Bot },
+  // NAF.SB.3+ — the section grows into the ten-page map in
+  // docs/2026-08-07-naf-sb-fleet-pages.md (Operate · Build · Govern).
+  // Children are added as each page lands, never before: a chevron entry
+  // pointing at a route that does not exist yet is a 404 with a label.
+  { label: 'Agent Fleet', route: 'fleet', Icon: Bot, children: [{ label: 'Workers', route: 'fleet/workers' }] },
   { label: 'Rules & Automation', route: 'rules-automation', Icon: Wand2, children: [{ label: 'Control Room', route: 'rules-automation/control-room' }] },
   { label: 'AMC', route: 'amc', Icon: Users, children: [{ label: 'AMC Insights', route: 'amc' }, { label: 'Audience Insights', route: 'amc/audiences' }] },
   { label: 'Reporting', route: 'reporting', Icon: PieChart, children: [{ label: 'Brand Metrics', route: 'reporting/brand-metrics' }] },
