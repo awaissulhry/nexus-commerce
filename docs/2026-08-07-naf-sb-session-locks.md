@@ -32,7 +32,7 @@ Everything in §3 is shared and needs a claim.
 | Page / stream | Session | Status | Owns exclusively |
 |---|---|---|---|
 | **Workers** (`SB.W`) | this session | **W.1 LANDED** — status column, failure taxonomy, teaching empty states, DS DataGrid substrate. Next: W.2 (health strip tiles filter the table). Studies in `docs/2026-08-07-naf-sbw-workers-page.md` + `-section-studies.md` | `app/fleet/workers/**`, `app/fleet/_shared/run-health.ts`, `apps/api/scripts/_sbw-*.mts` |
-| **Workflows** (`SB.8` / `NAF.WF`) | parallel session | WF.1 building — routine list; study `docs/2026-08-07-naf-wf-workflows-page.md`. Glossary append (+`workflow`, +`trigger`) landing in the WF.1 commit — claim released on land. | `app/fleet/workflows/**`, `app/fleet/_shared/use-visibility-poll.ts` (created; shared consumption) |
+| **Workflows** (`SB.8` / `NAF.WF`) | parallel session | **S1 + S2 LANDED, prod-verified** (`99e46bb74`, `76b3486f0`) — routine list + per-routine story pages at `/fleet/workflows[/key]`. Glossary +`workflow` +`trigger` landed (claim released). Uses `run-health.ts` for failure semantics and splits self-test findings out of headlines per decision 3. Next: S3 (runs section on the detail page). | `app/fleet/workflows/**`, `app/fleet/_shared/use-visibility-poll.ts` (created; shared consumption) |
 
 Update this table when a stream starts, pauses or lands.
 
