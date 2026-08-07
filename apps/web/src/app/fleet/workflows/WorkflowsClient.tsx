@@ -16,22 +16,19 @@
  */
 
 import { useCallback, useMemo, useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Workflow, RefreshCw, ShieldAlert, AlertTriangle, Plus } from 'lucide-react'
+import { RefreshCw, ShieldAlert, AlertTriangle, Plus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
 import { isDiagnostic } from '../_shared/run-health'
 import { BUILTIN_ROUTINES, type BuiltinRoutine } from './routines'
 import { HowWorkflowsWork } from './HowWorkflowsWork'
+import { RoutineCard } from './RoutineCard'
 import {
-  CHIP_CLASS,
   DAY,
-  agoTs,
   customStatus,
   groupRuns,
-  prettyCron,
   routineStatus,
   until,
   type CharterRow,
@@ -61,6 +58,8 @@ interface ListRow {
   purpose: string
   touch: string
   kind: 'builtin' | 'custom'
+  /** Where the effective wiring comes from — the card's version chip reads it. */
+  source: 'code' | 'revision' | 'none'
   builtin: BuiltinRoutine | null
   status: RoutineStatus
   groups: RunGroup[]
@@ -143,6 +142,7 @@ export function WorkflowsClient() {
         purpose: builtin?.purpose ?? row.description ?? 'A custom routine.',
         touch: builtin?.touch ?? 'Findings and plans on the board; queueing stays the council’s.',
         kind: builtin ? ('builtin' as const) : ('custom' as const),
+        source: row.source,
         builtin,
         status: builtin
           ? routineStatus(builtin, state, jobs, charters)
@@ -199,7 +199,7 @@ export function WorkflowsClient() {
   const degraded = charters.filter((c) => c.degraded).length
 
   return (
-    <div className="acr-fleet">
+    <div className="acr-fleet wf-page">
       {err ? (
         <div className="acr-banner err" role="alert">
           <ShieldAlert size={15} /> {err}
@@ -207,24 +207,18 @@ export function WorkflowsClient() {
         </div>
       ) : null}
 
+      {/* One intro, not two: the page header above already names the noun, so
+          this line exists to carry the glossary links and the boundary. */}
       <p className="acr-pg-intro">
-        A <Term k="workflow">workflow</Term> is a named routine — which workers run, in what
-        order, and what each hands to the next. The fleet ships with three built-in routines;
-        the map shows the whole fleet live, this page shows each routine on its own. Nothing
-        here reaches Amazon without passing an <Term k="approval">approval</Term>.
+        A <Term k="workflow">workflow</Term> is a named routine — which workers run, in what order,
+        and what each hands to the next. Nothing here reaches Amazon without passing an{' '}
+        <Term k="approval">approval</Term>.
       </p>
 
-      <div className="acr-pg-strip">
-        <div className="acr-pg-stat">
-          <span className="k">Routines</span>
-          <span className="v">{loaded ? rows.length : BUILTIN_ROUTINES.length}</span>
-          <span className="sub">
-            {loaded
-              ? `${rows.filter((r) => r.kind === 'builtin').length} built-in · ${rows.filter((r) => r.kind === 'custom').length} custom`
-              : 'built-in'}
-          </span>
-        </div>
-        <div className="acr-pg-stat">
+      {/* One card, four facts. Four separate tiles spent 8.8% of the viewport
+          on four numbers, and the 19px value outshouted the page title. */}
+      <div className="wf-factbar">
+        <div className="wf-fact">
           <span className="k">Next scheduled run</span>
           <span className="v">
             {loaded && totals.next ? (until(totals.next.nextFireAt) ?? '—') : '—'}
@@ -242,7 +236,7 @@ export function WorkflowsClient() {
                   : 'the fleet clock is off'}
           </span>
         </div>
-        <div className="acr-pg-stat">
+        <div className="wf-fact">
           <span className="k">Runs, last 7 days</span>
           <span className="v">{loaded ? totals.runs7d : '—'}</span>
           <span className="sub">
@@ -255,30 +249,53 @@ export function WorkflowsClient() {
                   : `${totals.accountFindings} findings reported`}
           </span>
         </div>
-        <div className="acr-pg-stat">
+        <div className="wf-fact">
           <span className="k">Spent, last 7 days</span>
           <span className="v">{loaded ? `$${totals.cost7d.toFixed(4)}` : '—'}</span>
           <span className="sub">model spend across every routine</span>
         </div>
+        <div className="wf-fact">
+          <span className="k">Workers switched on</span>
+          <span className="v">{loaded ? charters.filter((c) => c.enabled && c.autonomyLevel !== 'OFF').length : '—'}</span>
+          <span className="sub">
+            {loaded ? `of ${charters.length} in the fleet — the dials decide` : 'reading the dials…'}
+          </span>
+        </div>
       </div>
 
-      <div className="acr-pg-toolbar">
-        {asOf ? (
-          <span className="wf-asof">
-            as of {asOf.toLocaleTimeString()} · refreshes every 10s while you watch
-          </span>
-        ) : null}
-        <span className="spacer" />
+      {/* The toolbar was 65% empty space with the create action rendered as
+          bare text. The count now captions the list it sits above, and the
+          primary uses the fleet's own filled variant (Workers does the same). */}
+      <div className="wf-listhead">
+        <span className="wf-listcount">
+          {loaded ? (
+            <>
+              <strong>{rows.length}</strong> routine{rows.length === 1 ? '' : 's'}
+              <span className="sep" aria-hidden>·</span>
+              {rows.filter((r) => r.kind === 'builtin').length} built-in
+              <span className="sep" aria-hidden>·</span>
+              {rows.filter((r) => r.kind === 'custom').length} custom
+            </>
+          ) : (
+            <>Reading the fleet…</>
+          )}
+        </span>
+        <span className="wf-listhead-spacer" />
         <button
-          className="acr-btn"
+          className="acr-btn go"
           onClick={() => { setNewName(''); setNewDesc(''); setCreateErr(null); setCreating(true) }}
           disabled={!loaded}
         >
           <Plus size={13} /> New workflow…
         </button>
-        <button className="acr-btn" onClick={refresh}>
+        <button className="acr-btn ghost" onClick={refresh}>
           <RefreshCw size={13} /> Refresh
         </button>
+        {asOf ? (
+          <span className="wf-asof" title="This page re-reads the fleet every 10 seconds while the tab is visible, and pauses when it is not.">
+            as of {asOf.toLocaleTimeString()}
+          </span>
+        ) : null}
       </div>
 
       {degraded > 0 ? (
@@ -297,127 +314,23 @@ export function WorkflowsClient() {
             : 'The schedule, the run history, worker settings and the fleet status.'}
         </div>
       ) : (
-        <div className="acr-pg-tablewrap">
-          <table className="acr-pg-tbl">
-            <thead>
-              <tr>
-                <th>Routine</th>
-                <th>Status</th>
-                <th><Term k="trigger">When it runs</Term></th>
-                <th>Last run</th>
-                <th>Recent</th>
-                <th>What it may touch</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(({ key, name, purpose, touch, kind, builtin, status, groups, job, activeRevisionNo }) => {
-                const last = groups[0] ?? null
-                const dots = groups.slice(0, 8).reverse()
-                return (
-                  <tr key={key}>
-                    <td>
-                      <div className="acr-pg-who">
-                        <span className="acr-pg-avatar" aria-hidden><Workflow size={15} /></span>
-                        <span>
-                          <Link className="nm" href={`/fleet/workflows/${key}`}>
-                            {builtin?.termKey
-                              ? <Term k={builtin.termKey}>{name}</Term>
-                              : name}
-                            {' '}
-                            <span className="wf-builtin">{kind === 'builtin' ? 'Built-in' : 'Custom'}</span>
-                            {activeRevisionNo != null ? (
-                              <>{' '}<span className="wf-vbadge">rev {activeRevisionNo}</span></>
-                            ) : null}
-                          </Link>
-                          <span className="wf-purpose">{purpose}</span>
-                        </span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="wf-statecell">
-                        <span className={`acr-pg-statechip ${CHIP_CLASS[status.kind]}`}>
-                          {status.label}
-                        </span>
-                        <span className="why">{status.why}</span>
-                      </span>
-                    </td>
-                    <td>
-                      <span className="wf-when">
-                        {job
-                          ? prettyCron(job.schedule)
-                          : kind === 'builtin' || status.kind === 'ready'
-                            ? 'When you start it'
-                            : '—'}
-                      </span>
-                      <span className="wf-sub">
-                        {job
-                          ? job.enabled
-                            ? (until(job.nextFireAt) ? `next ${until(job.nextFireAt)}` : 'next time unknown')
-                            : 'not scheduled — the clock is off'
-                          : kind === 'builtin'
-                            ? 'from a worker’s page, or the console'
-                            : status.kind === 'ready'
-                              ? 'Run now, from its page'
-                              : 'publish a first revision to run it'}
-                      </span>
-                    </td>
-                    <td>
-                      {last ? (
-                        <>
-                          {agoTs(last.startedAt)}{' · '}
-                          {last.running ? (
-                            <span className="wf-run">running now…</span>
-                          ) : last.halted ? (
-                            <span className="wf-halt">stopped early</span>
-                          ) : last.ok ? (
-                            <span className="acr-pg-ok">ok</span>
-                          ) : (
-                            <span className="acr-pg-warn">failed</span>
-                          )}
-                          <span className="wf-sub">
-                            ${last.costUSD.toFixed(4)} · {last.findings} finding{last.findings === 1 ? '' : 's'}
-                            {last.runs > 1 ? ` · ${last.runs} workers` : ''}
-                          </span>
-                        </>
-                      ) : job?.lastRun ? (
-                        /* Dagster's tick-vs-run lesson: the clock firing and
-                           launching nothing IS the answer to "why didn't it
-                           run?" — say it, don't show a bare "never". */
-                        <>
-                          <span className="acr-pg-muted">no runs yet</span>
-                          <span className="wf-sub">
-                            clock last fired {agoTs(new Date(job.lastRun.startedAt).getTime())} and
-                            launched nothing — every worker was off
-                          </span>
-                        </>
-                      ) : (
-                        <span className="acr-pg-muted">never run</span>
-                      )}
-                    </td>
-                    <td>
-                      {groups.length > 0 ? (
-                        <>
-                          <span className="wf-dots" aria-label={`Last ${dots.length} runs, oldest first`}>
-                            {dots.map((g) => (
-                              <span
-                                key={g.id}
-                                className={`wf-dot ${g.running ? 'run' : g.halted ? 'halt' : g.ok ? 'ok' : 'fail'}`}
-                                title={`${new Date(g.startedAt).toLocaleString()} — ${g.running ? 'running now' : g.halted ? 'stopped early' : g.ok ? 'ok' : 'failed'}`}
-                              />
-                            ))}
-                          </span>
-                          <span className="wf-sub">{groups.length} run{groups.length === 1 ? '' : 's'} on record</span>
-                        </>
-                      ) : (
-                        <span className="acr-pg-muted">—</span>
-                      )}
-                    </td>
-                    <td><span className="wf-touch">{touch}</span></td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        <div className="wf-list">
+          {rows.map((r) => (
+            <RoutineCard
+              key={r.key}
+              routineKey={r.key}
+              name={r.name}
+              purpose={r.purpose}
+              touch={r.touch}
+              kind={r.kind}
+              source={r.source}
+              builtin={r.builtin}
+              status={r.status}
+              groups={r.groups}
+              job={r.job}
+              activeRevisionNo={r.activeRevisionNo}
+            />
+          ))}
         </div>
       )}
 

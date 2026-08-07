@@ -322,7 +322,7 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
             <p className="acr-sub">No routine by this name.</p>
           </div>
         </header>
-        <div className="acr-fleet">
+        <div className="acr-fleet wf-page">
           <div className="acr-pg-empty">
             <strong>This workflow does not exist.</strong>
             It may have been renamed, or the link is stale.{' '}
@@ -343,7 +343,7 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
           <p className="acr-sub">{sub}</p>
         </div>
       </header>
-      <div className="acr-fleet">
+      <div className="acr-fleet wf-page">
         {err ? (
           <div className="acr-banner err" role="alert">
             <ShieldAlert size={15} /> {err}

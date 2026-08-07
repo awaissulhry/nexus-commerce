@@ -1,54 +1,241 @@
 /* NAF.WF — page-local styles for /fleet/workflows.
    Locks-doc decision 4: fleet-pages.css is frozen to shared primitives;
    everything this page needs beyond them lives here, wf-* prefixed, same
-   light acr-* palette. */
+   light acr-* palette.
 
-.wf-statecell {
+   ⚠ SCOPING RULE (WF-S1R). Anything that OVERRIDES a shared `acr-pg-*`
+   primitive must be scoped to `.wf-page` — a class this section's two client
+   roots add to themselves — and NEVER to `.acr-fleet`, which the Workers page
+   also wears. A page-local stylesheet can outlive a client-side route change,
+   so an `.acr-fleet` override here would repaint a sibling's page.
+   `wf-*` selectors need no scope: the prefix is ours alone.
+
+   ── The four greys (WF-S1R, measured on prod, all ≥ 4.5:1 on white) ────────
+     #26313f  headings                      #34404f  strong body
+     #5a6675  prose            5.40:1       #5f6a78  metadata      5.50:1
+   The audit found SEVEN text roles below the 4.5:1 floor, and every one of
+   them carried an honesty sentence — the status reason at 4.05:1, the purpose
+   and every `.wf-sub` at 2.73:1. Six phases went into making this page tell
+   the truth; it was rendering that truth in its least readable type. Nothing
+   on this page goes lighter than #5f6a78. */
+
+/* ── WF-S1R / S1.a — the routine list ────────────────────────────────────
+   Was a six-column `acr-pg-tbl`. Four of those columns carried SENTENCES,
+   `table-layout: auto` let one row's longest string size a column for every
+   row (the widest column on the page was "Last run", at 24.7%), and
+   `vertical-align: middle` centred each cell independently — a measured
+   19.8px ragged edge per row. Cards on a fixed lane grid fix all three
+   structurally: lane k starts at the same x in every card, every lane starts
+   at the same y, and prose is free to wrap without moving anything. */
+
+.wf-list { display: flex; flex-direction: column; gap: 14px; }
+
+.wf-card {
+  display: block;
+  background: #fff;
+  border: 1px solid #e0e6ee;
+  border-radius: 12px;
+  padding: 15px 18px 16px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+/* The whole card is the target. It used to be the name link alone — 18.0% of
+   a 1614px row, with no cursor change and no affordance. */
+.wf-card:hover {
+  border-color: #c3d2e6;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 6px 16px rgba(16, 24, 40, 0.07);
+}
+.wf-card:focus-visible { outline: 2px solid #3f6fb5; outline-offset: 2px; }
+
+/* ── card header: identity, and when it runs ─────────────────────────── */
+.wf-card-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  margin-bottom: 13px;
+  border-bottom: 1px solid #eef1f6;
+}
+.wf-card-spacer { flex: 1 1 auto; }
+
+/* The glyph carries the TRIGGER TYPE — clock or by hand — tinted by status.
+   Four identical workflow icons used to cost 38px a row and say nothing. */
+.wf-glyph {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  background: #eef2f7;
+  color: #5f6a78;
+}
+.wf-glyph.k-on     { background: #e8f6ef; color: #14764f; }
+.wf-glyph.k-ready  { background: #eaf2fb; color: #2f6096; }
+.wf-glyph.k-idle   { background: #fdf4e3; color: #8a5f0e; }
+.wf-glyph.k-off    { background: #f0f2f5; color: #5c6673; }
+.wf-glyph.k-halted { background: #fdeceb; color: #a3312c; }
+
+.wf-card-name { font-size: 15px; font-weight: 650; color: #26313f; }
+.wf-card:hover .wf-card-name { color: #2f5f9e; }
+
+.wf-kind {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #5f6a78;
+  background: #eef2f7;
+  border: 1px solid #e2e7ee;
+  border-radius: 6px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.wf-card-when {
+  font-size: 12.5px;
+  color: #34404f;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+.wf-card-when .nx {
+  font-size: 11.5px;
+  color: #5f6a78;
+  font-variant-numeric: tabular-nums;
+}
+.wf-card-when .sep,
+.wf-lastline .sep,
+.wf-listcount .sep { color: #b3bdc9; }
+
+.wf-card-go { color: #9aa7b6; display: inline-flex; flex: none; }
+.wf-card:hover .wf-card-go { color: #3f6fb5; }
+
+/* ── card body: three lanes, two flexible and one FIXED ──────────────────
+   The 224px lane is fixed on purpose — a lane that cannot be resized by a
+   sibling's content is what keeps the numerals in a column down the list and
+   what stops the "Last run" defect from ever recurring. */
+.wf-card-body {
+  display: grid;
+  grid-template-columns: minmax(340px, 1.5fr) minmax(250px, 1fr) 224px;
+  column-gap: 28px;
+  align-items: start;
+}
+.wf-lane {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 9px;
+  align-self: start;
+  min-width: 0;
+}
+.wf-lane-rhythm { gap: 6px; }
+
+.wf-purpose,
+.wf-touch,
+.wf-why {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #5a6675;
+}
+.wf-purpose { max-width: 56ch; }
+.wf-touch {
+  max-width: 56ch;
+  display: flex;
   align-items: flex-start;
+  gap: 7px;
 }
-.wf-statecell .why {
-  font-size: 11.5px;
-  color: #6b7a8d;
-  line-height: 1.45;
-  max-width: 30ch;
-}
+.wf-touch svg { color: #6f7c8c; flex: none; margin-top: 3px; }
+.wf-why { max-width: 40ch; }
 
-.wf-purpose {
-  display: block;
-  font-size: 11.5px;
-  color: #8d97a6;
-  line-height: 1.5;
-  max-width: 40ch;
-  margin-top: 2px;
-}
-
-.wf-builtin {
-  font-size: 10px;
+.wf-lane-k {
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #6b7a8d;
-  background: #eef2f7;
-  border: 1px solid #e2e6ec;
-  border-radius: 5px;
-  padding: 1px 6px;
-  vertical-align: 1px;
+  color: #5f6a78;
 }
 
-/* status-chip variants fleet-pages.css does not have (it ships halted/running) */
-.acr-pg-statechip.wf-chip-idle  { background: #fdf4e3; color: #91640f; border: 1px solid #f3e3c2; }
-.acr-pg-statechip.wf-chip-off   { background: #f0f2f5; color: #78828f; border: 1px solid #e2e6ec; }
-.acr-pg-statechip.wf-chip-ready { background: #eaf2fb; color: #2f6096; border: 1px solid #d3e2f4; }
+.wf-lastline {
+  font-size: 12.5px;
+  color: #34404f;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.wf-lastline.muted { color: #5f6a78; }
 
-.wf-when { font-size: 12.5px; color: #34404f; }
+.wf-recent { display: flex; flex-direction: column; gap: 5px; margin-top: 4px; }
+
+/* ── the fact bar — one card, four facts ─────────────────────────────────
+   Four separate tiles spread to 396px each and spent 8.8% of the viewport on
+   four numbers, and their 19px value nearly outsized the 20px page title. */
+.wf-factbar {
+  display: flex;
+  background: #fff;
+  border: 1px solid #e0e6ee;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.wf-fact {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 12px 20px;
+  border-left: 1px solid #edf1f5;
+}
+.wf-fact:first-child { border-left: 0; }
+.wf-fact .k {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #5f6a78;
+  margin-bottom: 5px;
+}
+.wf-fact .v {
+  display: block;
+  font-size: 17px;
+  font-weight: 700;
+  color: #26313f;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.wf-fact .sub {
+  display: block;
+  font-size: 11.5px;
+  color: #5f6a78;
+  margin-top: 3px;
+  line-height: 1.45;
+}
+
+/* ── the list header — the old toolbar was 65% empty space ─────────────── */
+.wf-listhead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.wf-listhead-spacer { flex: 1 1 auto; }
+.wf-listcount { font-size: 12.5px; color: #5f6a78; }
+.wf-listcount strong { color: #26313f; font-weight: 650; font-size: 13px; }
+
+/* status-chip variants fleet-pages.css does not have (it ships halted/running).
+   `off` darkened from #78828f (3.43:1 on its own background) to clear AA. */
+.acr-pg-statechip.wf-chip-idle  { background: #fdf4e3; color: #91640f; border: 1px solid #f3e3c2; }
+.acr-pg-statechip.wf-chip-off   { background: #f0f2f5; color: #5c6673; border: 1px solid #e2e6ec; }
+.acr-pg-statechip.wf-chip-ready { background: #eaf2fb; color: #2f6096; border: 1px solid #d3e2f4; }
 
 .wf-sub {
   display: block;
-  font-size: 11px;
-  color: #8d97a6;
+  font-size: 11.5px;
+  color: #5f6a78;
+  line-height: 1.5;
   margin-top: 2px;
   font-variant-numeric: tabular-nums;
 }
@@ -63,32 +250,55 @@
 .wf-dot.ok   { background: #2f9e6e; }
 .wf-dot.fail { background: #d4574e; }
 .wf-dot.halt { background: #e0a63f; }
+.wf-dot.run  { background: #4a7ab8; }
 
 .wf-halt {
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: #91640f;
+  color: #8a5f0e;
 }
 
 .wf-run {
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: #2f6096;
-}
-.wf-dot.run { background: #4a7ab8; }
-
-.wf-touch {
-  font-size: 12px;
-  color: #5a6675;
-  line-height: 1.5;
-  max-width: 34ch;
-  display: inline-block;
 }
 
 .wf-asof {
   font-size: 11.5px;
-  color: #8d97a6;
+  color: #5f6a78;
   font-variant-numeric: tabular-nums;
+}
+
+/* ── overrides of SHARED primitives — scoped to .wf-page, never .acr-fleet ──
+   These three roles live in the frozen fleet-pages.css at #8d97a6 (2.73–2.95:1)
+   and all ten fleet pages inherit them. Measurements are posted in the locks
+   doc so another stream can fix them centrally; this section overrides them
+   for its own two surfaces rather than claim a frozen file. */
+.wf-page .acr-pg-intro { color: #5a6675; max-width: 96ch; margin-bottom: 16px; }
+.wf-page .acr-pg-stat .k,
+.wf-page .acr-pg-stat .sub,
+.wf-page .acr-pg-tbl th,
+.wf-page .acr-pg-muted,
+.wf-page .acr-pg-capnote { color: #5f6a78; }
+.wf-page .acr-pg-empty { color: #5a6675; }
+
+@media (max-width: 1180px) {
+  .wf-card-body {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    row-gap: 16px;
+  }
+  .wf-lane-rhythm { grid-column: 1 / -1; }
+}
+@media (max-width: 900px) {
+  .wf-factbar { flex-wrap: wrap; }
+  .wf-fact { flex: 1 1 44%; border-left: 0; border-top: 1px solid #edf1f5; }
+  .wf-fact:nth-child(-n + 2) { border-top: 0; }
+}
+@media (max-width: 760px) {
+  .wf-card-body { grid-template-columns: 1fr; }
+  .wf-lane-rhythm { grid-column: auto; }
+  .wf-card-when { white-space: normal; }
 }
 
 /* ── S2: routine detail ──────────────────────────────────────────────── */
@@ -149,7 +359,7 @@
   align-items: center;
   gap: 7px;
 }
-.wf-legend { font-size: 11.5px; color: #8d97a6; }
+.wf-legend { font-size: 11.5px; color: #5f6a78; }
 
 /* the story canvas */
 .wf-canvas {
@@ -197,7 +407,7 @@
   margin-top: 3px;
   font-size: 11px;
   line-height: 1.45;
-  color: #6b7a8d;
+  color: #5a6675;
 }
 .wf-node-live {
   display: block;
@@ -222,7 +432,7 @@
   border: 0;
   padding: 2px;
   cursor: pointer;
-  color: #6b7a8d;
+  color: #5f6a78;
   display: inline-flex;
   align-items: center;
 }
@@ -268,6 +478,17 @@
   border: 1px solid #d3e2f4;
   border-radius: 6px;
   padding: 2px 8px;
+  white-space: nowrap;
+}
+/* A built-in on the code default has no revision, and a custom with no
+   published wiring has nothing to run. Both are facts worth stating — three
+   of four rows used to carry no version information at all. */
+.wf-vbadge.neutral {
+  font-family: inherit;
+  font-weight: 600;
+  color: #5f6a78;
+  background: #f2f5f8;
+  border-color: #e2e7ee;
 }
 .wf-vname { font-size: 12.5px; font-weight: 600; color: #26313f; }
 .wf-vnote {
@@ -311,7 +532,7 @@
   border: 0;
   padding: 3px;
   cursor: pointer;
-  color: #98a2b0;
+  color: #5f6a78;
   display: inline-flex;
 }
 .wf-stepremove:hover { color: #a3312c; }
@@ -322,7 +543,7 @@
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #8d97a6;
+  color: #5f6a78;
   margin-bottom: 4px;
 }
 .wf-gate .acr-pg-ladder { max-width: 280px; }
@@ -341,7 +562,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #6b7a8d;
+  color: #5a6675;
 }
 
 .wf-problems {
