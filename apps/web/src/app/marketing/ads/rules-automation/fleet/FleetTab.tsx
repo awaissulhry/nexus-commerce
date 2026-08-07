@@ -42,7 +42,7 @@ import { FleetMapCanvas, type CanvasFinding, type NodeRunInfo } from './FleetMap
 import { Term } from './glossary'
 import { FirstVisitIntro, HowItWorks } from './HowItWorks'
 import { type PlanLabels, type StoryPlan } from './PlanStory'
-import { TimelineStream, type FleetTimelinePage } from './TimelineStream'
+import { type FleetTimelinePage } from './TimelineStream'
 
 /* ── types mirroring the fleet API ─────────────────────────────────── */
 
@@ -147,7 +147,12 @@ export function FleetTab() {
   const [runs, setRuns] = useState<RunRow[]>([])
   const [findings, setFindings] = useState<FindingRow[]>([])
   const [plans, setPlans] = useState<PlanRow[]>([])
-  const [planLabels, setPlanLabels] = useState<PlanLabels>({ campaigns: {}, targets: {} })
+  // ACT.7 — the label map is still built from the /plans response, but nothing
+  // on this page reads it now that the stream (and its PlanStory) moved to
+  // /fleet/activity. Kept as a setter-only binding rather than deleted: the
+  // parsing is one line, it is this session's data flow, and ACT.5's run
+  // drawer will want the same map. Drop it if it is still unread by then.
+  const [, setPlanLabels] = useState<PlanLabels>({ campaigns: {}, targets: {} })
   const [approvals, setApprovals] = useState<ApprovalRow[]>([])
   // NAF.AP.2 — waiting / decided / expired, with counts for the tabs.
   const [inboxView, setInboxView] = useState<InboxView>('waiting')
@@ -164,14 +169,15 @@ export function FleetTab() {
   const [mapView, setMapView] = useState<'workers' | 'entities'>('workers')
   const [entityGraph, setEntityGraph] = useState<EntityGraphData | null>(null)
   const [entityLoading, setEntityLoading] = useState(false)
-  const [openPlan, setOpenPlan] = useState<string | null>(null)
   const [schedule, setSchedule] = useState<ScheduleJob[]>([])
   const [scorecards, setScorecards] = useState<ScorecardRow[]>([])
   const [busy, setBusy] = useState(false)
-  // NAF.DT — the decision timeline's own feed, paged independently of the
-  // rest of the page so "show older" never re-fetches the whole fleet.
+  // NAF.SB.ACT.7 — the Overview keeps a five-event TEASER, not the stream.
+  // /fleet/activity is the record: same endpoint, but with filters, search,
+  // export and permalinks. Two complete streams over one endpoint diverge the
+  // moment either grows a control, and growing controls is Activity's whole
+  // job. The checkable boundary: this page never sends a cursor or a filter.
   const [timeline, setTimeline] = useState<FleetTimelinePage | null>(null)
-  const [timelineMore, setTimelineMore] = useState(false)
 
   const load = useCallback(async (opts: { silent?: boolean } = {}) => {
     if (!opts.silent) setLoading(true)
@@ -187,7 +193,7 @@ export function FleetTab() {
         fetch(`${backend}/api/agent/fleet/sweeps?limit=8`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/schedule`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/scorecards?limit=40`, { cache: 'no-store' }),
-        fetch(`${backend}/api/agent/fleet/timeline?limit=40`, { cache: 'no-store' }),
+        fetch(`${backend}/api/agent/fleet/timeline?limit=5`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/precedents?limit=25`, { cache: 'no-store' }),
       ])
       if (!c.ok) throw new Error(`charters: ${c.status}`)
@@ -257,26 +263,6 @@ export function FleetTab() {
   useEffect(() => {
     if (mapView === 'entities' && !entityGraph && !entityLoading) void loadEntityGraph()
   }, [mapView, entityGraph, entityLoading, loadEntityGraph])
-
-  // NAF.DT.2 — "show older" appends the next page. The totals come from the
-  // freshest response, so the count stays right as history grows.
-  const loadMoreTimeline = useCallback(async () => {
-    if (!timeline?.nextCursor || timelineMore) return
-    setTimelineMore(true)
-    try {
-      const r = await fetch(
-        `${backend}/api/agent/fleet/timeline?limit=40&cursor=${encodeURIComponent(timeline.nextCursor)}`,
-        { cache: 'no-store' },
-      )
-      if (!r.ok) throw new Error(`timeline: ${r.status}`)
-      const next = (await r.json()) as FleetTimelinePage
-      setTimeline({ ...next, events: [...timeline.events, ...next.events] })
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
-    } finally {
-      setTimelineMore(false)
-    }
-  }, [backend, timeline, timelineMore])
 
   // NAF.AP.4 — the brake. `post` keeps these four handlers to one shape.
   const post = useCallback(
@@ -633,30 +619,67 @@ export function FleetTab() {
       </section>
 
 
-      {/* 3 — decision timeline (NAF.DT.1–DT.3): every event the fleet has
-          produced, newest first, grouped by day and by episode. It used to
-          list plans, and only one plan has ever existed. */}
+      {/* 3 — latest activity (NAF.SB.ACT.7). A TEASER, deliberately: the full
+          record lives at /fleet/activity, which is the same endpoint with
+          filters, search, export and permalinks on top. This card answers
+          "anything happened?" in one glance and then gets out of the way.
+          Reuses the shipped dt-* row styles, so it adds no CSS to
+          fleet-sections.css — that stylesheet belongs to this page's session. */}
       <section className="acr-card">
         <header className="acr-fl-head">
-          <h3>Decision timeline</h3>
-          <span className="acr-fl-sub">
-            everything the fleet has done — newest first
-          </span>
+          <h3>Latest activity</h3>
+          <span className="acr-fl-sub">the last five things the fleet did</span>
         </header>
         <p className="acr-fl-schedule">
-          Each line says who did it, what happened, and what set it off. A group of
-          related events — one run and everything it produced, or a whole{' '}
-          <Term k="council">council</Term> — collapses into a single card you can open.
+          Each line says who did it, what happened, and what set it off. The whole
+          record — every run, finding, plan and decision, with filters, search and
+          export — is on the Activity page.
         </p>
-        <TimelineStream
-          page={timeline}
-          plans={plans}
-          labels={planLabels}
-          loading={loading}
-          loadingMore={timelineMore}
-          onLoadMore={() => void loadMoreTimeline()}
-          focusPlanId={openPlan}
-        />
+        {loading && !timeline ? (
+          <p className="acr-fl-empty">Reading the fleet’s history…</p>
+        ) : (timeline?.events.length ?? 0) === 0 ? (
+          <p className="acr-fl-empty">
+            Nothing has happened yet. When a worker runs, every step it takes lands here.
+          </p>
+        ) : (
+          <ul className="dt-stream">
+            {timeline!.events.slice(0, 5).map((e) => (
+              <li key={e.id} className="dt-row">
+                <span className={`dt-marker o-${e.outcome}`}>
+                  <span className="dt-sr">
+                    {e.outcome === 'bad' ? 'something failed' : 'an event'}
+                  </span>
+                </span>
+                <div className="dt-body">
+                  <span className="dt-title">{e.title}</span>
+                  <span className="dt-meta">
+                    <span>from {e.source}</span>
+                    {e.outcome === 'bad' ? <span className="dt-state o-bad">failed</span> : null}
+                  </span>
+                </div>
+                <time
+                  className="dt-time"
+                  dateTime={e.at}
+                  title={new Date(e.at).toLocaleString()}
+                >
+                  {new Date(e.at).toLocaleTimeString(undefined, {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </time>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="acr-fl-schedule">
+          <button
+            type="button"
+            className="acr-fl-dcard-plan"
+            onClick={() => router.push('/fleet/activity')}
+          >
+            Open Activity — the whole record →
+          </button>
+        </p>
       </section>
 
       {/* 4 — approval inbox */}
@@ -689,10 +712,12 @@ export function FleetTab() {
           onBulkPreview={bulkPreview}
           onBulkDecide={(ids, decision, reason) => void bulkDecide(ids, decision, reason)}
           onOpenPlan={(planId) => {
-            setOpenPlan(planId)
-            document
-              .getElementById(`plan-${planId}`)
-              ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            // ACT.7 — the plan's story used to be one card down this page. It
+            // is on Activity now, so this is a permalink rather than a scroll:
+            // Activity honours `#e-<event id>` and a plan's event id is
+            // `plan.<id>`. Scrolling to an element this page stopped rendering
+            // would have failed silently, which is the worse outcome.
+            router.push(`/fleet/activity#e-plan.${planId}`)
           }}
         />
       </section>

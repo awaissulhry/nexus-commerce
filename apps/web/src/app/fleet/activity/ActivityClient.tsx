@@ -527,7 +527,10 @@ export function ActivityClient() {
     if (q.trim()) p.set('q', q.trim())
     if (includeSelfTest) p.set('selfTest', '1')
     const s = p.toString()
-    window.history.replaceState(null, '', s ? `?${s}` : window.location.pathname)
+    // Keep the hash: it is a permalink to a row, and filtering is not a reason
+    // to forget which row you arrived for.
+    const hash = window.location.hash
+    window.history.replaceState(null, '', `${window.location.pathname}${s ? `?${s}` : ''}${hash}`)
   }, [grain, actors, kinds, q, includeSelfTest])
 
   const load = useCallback(async () => {
@@ -626,6 +629,56 @@ export function ActivityClient() {
   }, [shown, older])
 
   const days = useMemo(() => byDay(events), [events])
+
+  /**
+   * ACT.7 — permalinks. The Overview's "see the plan" button now sends
+   * `/fleet/activity#e-plan.<id>` rather than scrolling to a row on its own
+   * page, because that row moved here. Honour the hash once the events it
+   * names are actually on screen: scroll to it and mark it, so arriving from
+   * somewhere else lands on the thing you clicked rather than at the top.
+   *
+   * Runs on every event change, but only acts once — a poll must not yank the
+   * page back to an anchor the reader has since scrolled away from.
+   */
+  const jumped = useRef(false)
+  /**
+   * Captured during the first render, NOT inside the effect. The filter-sync
+   * effect below rewrites the URL on mount, and its no-filters branch used to
+   * replace the whole location with `pathname` — which silently deleted the
+   * permalink before anything could act on it. Reading it here happens first.
+   */
+  const hashOnMount = useRef<string>(
+    typeof window === 'undefined' ? '' : decodeURIComponent(window.location.hash.slice(1)),
+  )
+  useEffect(() => {
+    if (jumped.current || events.length === 0) return
+    const id = hashOnMount.current
+    if (!id) return
+    const el = document.getElementById(id)
+    if (!el) return
+    jumped.current = true
+    el.classList.add('sba-jumped')
+
+    // Getting this to actually move took three tries, so the reasons are here.
+    //
+    // The page scrolls inside `<main class="overflow-auto">`, not the
+    // document. A SMOOTH scroll started here is cancelled by the re-render
+    // that lands with the first fetch. And an instant scroll on the next
+    // frame is undone a moment later by the router's own scroll reset, which
+    // runs after a navigation completes — the row was highlighted and the
+    // container sat at zero.
+    //
+    // So: scroll now, then CHECK, and only scroll again if something put it
+    // back. Self-correcting beats guessing a delay that is right on this
+    // machine and wrong on a slower one.
+    const bring = () => el.scrollIntoView({ block: 'center' })
+    requestAnimationFrame(bring)
+    const recheck = setTimeout(() => {
+      const r = el.getBoundingClientRect()
+      if (r.top < 0 || r.bottom > window.innerHeight) bring()
+    }, 400)
+    return () => clearTimeout(recheck)
+  }, [events])
 
   const runCount = useMemo(() => {
     const c = shown?.countsByKind ?? {}
