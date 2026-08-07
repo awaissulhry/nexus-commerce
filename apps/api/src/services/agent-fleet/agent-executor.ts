@@ -36,6 +36,7 @@ import type { EffectiveCharter } from './charter-types.js'
 import { getFleetState } from './fleet-state.service.js'
 import { renderExemplarBlock, retrieveExemplars } from './exemplar.service.js'
 import { getObservation, type ObservationResult } from './observation-builder.js'
+import { singleMarketplace } from './observations/scope-filter.js'
 import { recordStep } from './tracing.js'
 
 export interface ExecuteOptions {
@@ -296,7 +297,10 @@ export async function executeCharter(
     const observations: ObservationResult[] = []
     for (const obsKey of charter.observationKeys) {
       const t0 = Date.now()
-      const obs = await getObservation(obsKey)
+      // AC.4 — the charter's marketplace scope reaches the evidence layer.
+      const obs = await getObservation(obsKey, {
+        marketplace: singleMarketplace(charter.scopeMarketplaces),
+      })
       observations.push(obs)
       await step({
         type: 'observation',

@@ -18,6 +18,7 @@ import prisma from '../../../db.js'
 import { previewHarvest } from '../../advertising/ads-harvest.service.js'
 import { analyzeNgrams } from '../../advertising/ads-ngram.service.js'
 import type { ObservationBuilder } from '../observation-builder.js'
+import { filterToMarketplace } from './scope-filter.js'
 
 const NEGATIVES_CAP = 25
 const PRODUCT_NEGATIVES_CAP = 10
@@ -37,7 +38,8 @@ async function searchTermVintage(): Promise<Date> {
 export const negativeCandidatesBuilder: ObservationBuilder = {
   key: 'negative-candidates',
   ttlMinutes: 360,
-  async build() {
+  async build(scope) {
+    const marketplace = scope.marketplace
     const [preview, grams, existing, vintage] = await Promise.all([
       previewHarvest({}),
       analyzeNgrams({}),
@@ -49,9 +51,16 @@ export const negativeCandidatesBuilder: ObservationBuilder = {
       searchTermVintage(),
     ])
 
-    const negatives = preview.negatives.slice(0, NEGATIVES_CAP)
-    const productNegatives = preview.productNegatives.slice(0, PRODUCT_NEGATIVES_CAP)
-    const ngramWasteful = grams.wasteful.slice(0, NGRAM_CAP)
+    // AC.4 — scope, enforced: a worker scoped to one marketplace never
+    // sees another market's candidates. Drops are counted, never silent.
+    const scopedNeg = await filterToMarketplace(preview.negatives, marketplace)
+    const scopedProd = await filterToMarketplace(preview.productNegatives, marketplace)
+    const negatives = scopedNeg.kept.slice(0, NEGATIVES_CAP)
+    const productNegatives = scopedProd.kept.slice(0, PRODUCT_NEGATIVES_CAP)
+    // n-grams are cross-campaign aggregates with no campaign of their own,
+    // so they cannot be scoped — they are withheld entirely under a scope
+    // rather than shown misleadingly.
+    const ngramWasteful = marketplace ? [] : grams.wasteful.slice(0, NGRAM_CAP)
 
     // Relevance filter: the analyst only needs the existing negatives that
     // could collide with what it might propose — those sharing a word with
@@ -76,7 +85,7 @@ export const negativeCandidatesBuilder: ObservationBuilder = {
 
     return {
       payload: {
-        scope: 'account',
+        scope: marketplace ? `marketplace:${marketplace}` : 'account',
         windowDays: preview.windowDays,
         thresholds: { minSpendCents: 1500, minOrders: 2, ngramMinCostCents: 300 },
         counts: {
@@ -85,9 +94,14 @@ export const negativeCandidatesBuilder: ObservationBuilder = {
           productNegativesTotal: preview.productNegatives.length,
           ngramWastefulTotal: grams.wasteful.length,
           existingNegatives: existingNegativeTerms.length,
+          droppedOutOfScope: scopedNeg.droppedOutOfScope + scopedProd.droppedOutOfScope,
+          unresolvedCampaign: scopedNeg.unresolved + scopedProd.unresolved,
+          ngramsWithheldUnderScope: marketplace ? grams.wasteful.length : 0,
         },
         caveats: [
-          'Evidence is account-global (the engines have no marketplace filter); the account is IT-primary.',
+          marketplace
+            ? `Evidence is filtered to marketplace ${marketplace}; n-gram themes are account-wide and are withheld under a scope rather than shown misleadingly.`
+            : 'Evidence is account-global (the engines have no marketplace filter); the account is IT-primary.',
           'N-gram rows attribute whole-query metrics to every gram — grams overlap, so their spend must NOT be summed.',
           'existingNegativeTerms lists already-negated terms RELEVANT to the shown candidates (relevance-filtered): never propose one of these again.',
         ],

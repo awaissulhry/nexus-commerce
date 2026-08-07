@@ -32,6 +32,19 @@ import {
   getEntityGraphOverview,
   getEntityNeighborhood,
 } from '../services/agent-fleet/entity-graph.service.js'
+import { evaluateRevision, latestEvalFor } from '../services/agent-fleet/charter-eval.service.js'
+import {
+  activateRevision,
+  createRevision,
+  diffPrompts,
+  getActiveRevision,
+  listRevisions,
+  revertToCode,
+} from '../services/agent-fleet/charter-revisions.service.js'
+import {
+  listControlAudit,
+  recordControlChange,
+} from '../services/agent-fleet/control-audit.service.js'
 import { collectRefs, resolveFleetLabels } from '../services/agent-fleet/fleet-labels.service.js'
 import { getFleetSchedule } from '../services/agent-fleet/fleet-schedule.service.js'
 import { getRunTrace } from '../services/agent-fleet/fleet-trace.service.js'
@@ -234,13 +247,67 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
   // know the ceiling exists, not silently get less than they asked.
   fastify.patch<{
     Params: { key: string }
-    Body: { enabled?: boolean; autonomyLevel?: string }
+    Body: {
+      enabled?: boolean
+      autonomyLevel?: string
+      // AC.4 — policy the operator may TIGHTEN (the code value is the ceiling)
+      dailyBudgetUSD?: number
+      maxTokensPerRun?: number
+      maxFindingsPerRun?: number
+      modelProvider?: string | null
+      modelName?: string | null
+      // AC.5 / AC.4 — tool policy and scope
+      toolNames?: string[]
+      scopeMarketplaces?: string[]
+    }
   }>('/agent/fleet/charters/:key', async (request, reply) => {
     const { key } = request.params
     const def = FLEET_CHARTERS[key]
     if (!def) return reply.code(404).send({ error: `unknown charter: ${key}` })
+    const before = (await listCharters()).find((c) => c.key === key)
     const data: Record<string, unknown> = {}
     if (request.body?.enabled !== undefined) data.enabled = !!request.body.enabled
+    // AC.4 — numbers are stored as given; the registry clamps them DOWN
+    // against the code ceiling on every read, so a too-generous value can
+    // never take effect.
+    const nums: Array<['dailyBudgetUSD' | 'maxTokensPerRun' | 'maxFindingsPerRun', number | undefined]> = [
+      ['dailyBudgetUSD', request.body?.dailyBudgetUSD],
+      ['maxTokensPerRun', request.body?.maxTokensPerRun],
+      ['maxFindingsPerRun', request.body?.maxFindingsPerRun],
+    ]
+    for (const [field, value] of nums) {
+      if (value === undefined) continue
+      if (!Number.isFinite(value) || value <= 0) {
+        return reply.code(400).send({ error: `${field} must be a positive number` })
+      }
+      data[field] = value
+    }
+    if (request.body?.modelProvider !== undefined) {
+      data.modelProviderOverride = request.body.modelProvider || null
+    }
+    if (request.body?.modelName !== undefined) {
+      data.modelNameOverride = request.body.modelName || null
+    }
+    if (request.body?.toolNames !== undefined) {
+      const unknownTools = request.body.toolNames.filter((t) => !def.toolNames.includes(t))
+      if (unknownTools.length > 0) {
+        return reply.code(400).send({
+          error: `these tools are not in this worker's code charter and cannot be granted: ${unknownTools.join(', ')}`,
+        })
+      }
+      data.toolNames = request.body.toolNames
+    }
+    if (request.body?.scopeMarketplaces !== undefined) {
+      // Only a SINGLE-marketplace scope is enforced end-to-end today, and
+      // this series' rule is that an unenforced control is never offered.
+      if (request.body.scopeMarketplaces.length > 1) {
+        return reply.code(400).send({
+          error:
+            'only one marketplace can be scoped today — multi-market scope is not enforced yet, so it is refused rather than ignored',
+        })
+      }
+      data.scopeMarketplaces = request.body.scopeMarketplaces
+    }
     if (request.body?.autonomyLevel !== undefined) {
       const level = request.body.autonomyLevel
       if (!isAutonomyLevel(level)) {
@@ -275,6 +342,31 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: `charter ${key} v${def.version} not seeded — POST /agent/fleet/charters/seed first` })
     }
     bustCharterCache()
+    await recordControlChange({
+      charterKey: key,
+      action:
+        request.body?.autonomyLevel !== undefined
+          ? 'dial'
+          : request.body?.enabled !== undefined
+            ? 'enable'
+            : request.body?.toolNames !== undefined
+              ? 'tools'
+              : request.body?.scopeMarketplaces !== undefined
+                ? 'scope'
+                : 'policy',
+      from: before
+        ? {
+            enabled: before.enabled,
+            autonomyLevel: before.autonomyLevel,
+            dailyBudgetUSD: before.dailyBudgetUSD,
+            maxTokensPerRun: before.maxTokensPerRun,
+            maxFindingsPerRun: before.maxFindingsPerRun,
+            toolNames: before.toolNames,
+            scopeMarketplaces: before.scopeMarketplaces,
+          }
+        : null,
+      to: data,
+    })
     return { ok: true, charters: await listCharters() }
   })
 
@@ -365,6 +457,200 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
       return { ok: true, rejected, of: pending.length }
+    },
+  )
+
+
+  /* ── NAF.AC — Agent Control ─────────────────────────────────────────
+     Charter Studio (revisions), preview, evals, policy, pause, audit.
+     All under the existing /api/agent/ RBAC mapping. */
+
+  // AC.1 — revision history + the prompt that is actually running.
+  fastify.get<{ Params: { key: string } }>(
+    '/agent/fleet/charters/:key/revisions',
+    async (request, reply) => {
+      const { key } = request.params
+      const def = FLEET_CHARTERS[key]
+      if (!def) return reply.code(404).send({ error: `unknown charter: ${key}` })
+      const [revisions, active] = await Promise.all([
+        listRevisions(key),
+        getActiveRevision(key),
+      ])
+      const running = active?.systemPrompt ?? def.systemPrompt
+      return {
+        codePrompt: def.systemPrompt,
+        runningPrompt: running,
+        source: active ? 'revision' : 'code',
+        activeRevisionId: active?.id ?? null,
+        revisions,
+        // the diff a reviewer actually wants: code → what is running
+        diffFromCode: diffPrompts(def.systemPrompt, running),
+      }
+    },
+  )
+
+  // AC.1 — save a draft revision (never auto-activates).
+  fastify.post<{
+    Params: { key: string }
+    Body: { systemPrompt?: string; note?: string; policy?: Record<string, number | string | null> }
+  }>('/agent/fleet/charters/:key/revisions', async (request, reply) => {
+    const { key } = request.params
+    if (!FLEET_CHARTERS[key]) return reply.code(404).send({ error: `unknown charter: ${key}` })
+    try {
+      const rev = await createRevision({
+        charterKey: key,
+        systemPrompt: request.body?.systemPrompt ?? '',
+        note: request.body?.note ?? '',
+        policy: request.body?.policy as never,
+        author: 'operator',
+      })
+      return { ok: true, revision: rev }
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) })
+    }
+  })
+
+  // AC.1 + AC.3 — activate, gated on the eval verdict.
+  fastify.post<{
+    Params: { key: string; revisionId: string }
+    Body: { overrideReason?: string }
+  }>('/agent/fleet/charters/:key/revisions/:revisionId/activate', async (request, reply) => {
+    const { key, revisionId } = request.params
+    if (!FLEET_CHARTERS[key]) return reply.code(404).send({ error: `unknown charter: ${key}` })
+    const override = (request.body?.overrideReason ?? '').trim()
+    const evaluation = await latestEvalFor(revisionId)
+    // The operator decision (AC §6.3): a regression BLOCKS, and the
+    // override is recorded rather than silent.
+    if (evaluation?.verdict === 'worse' && !override) {
+      return reply.code(409).send({
+        error:
+          'this revision measured WORSE than the charter it would replace — activate it with an overrideReason if you still want it live',
+        verdict: evaluation.verdict,
+      })
+    }
+    const before = await getActiveRevision(key)
+    const activated = await activateRevision(key, revisionId)
+    if (!activated) return reply.code(404).send({ error: 'revision not found for this charter' })
+    bustCharterCache()
+    await recordControlChange({
+      charterKey: key,
+      action: override ? 'eval_override' : 'activate_revision',
+      from: before ? { revision: before.revision, id: before.id } : { source: 'code' },
+      to: { revision: activated.revision, id: activated.id },
+      note: override || activated.note,
+    })
+    return { ok: true, revision: activated }
+  })
+
+  // AC.1 — back to the charter that ships in the code.
+  fastify.post<{ Params: { key: string } }>(
+    '/agent/fleet/charters/:key/revert-to-code',
+    async (request, reply) => {
+      const { key } = request.params
+      if (!FLEET_CHARTERS[key]) return reply.code(404).send({ error: `unknown charter: ${key}` })
+      const before = await getActiveRevision(key)
+      const out = await revertToCode(key)
+      bustCharterCache()
+      await recordControlChange({
+        charterKey: key,
+        action: 'revert_to_code',
+        from: before ? { revision: before.revision, id: before.id } : null,
+        to: { source: 'code' },
+      })
+      return { ok: true, ...out }
+    },
+  )
+
+  // AC.2 — try a charter against real evidence; writes nothing.
+  fastify.post<{
+    Params: { key: string }
+    Body: { systemPrompt?: string }
+  }>('/agent/fleet/charters/:key/preview', async (request, reply) => {
+    const { key } = request.params
+    if (!FLEET_CHARTERS[key]) return reply.code(404).send({ error: `unknown charter: ${key}` })
+    if (isAiKillSwitchOn()) {
+      return reply.code(503).send({ error: 'AI is temporarily disabled (kill switch).' })
+    }
+    const result = await executeCharter(key, {
+      trigger: 'manual',
+      mode: 'ask',
+      preview: true,
+      promptOverride: request.body?.systemPrompt?.trim() || undefined,
+    })
+    return result
+  })
+
+  // AC.3 — score a draft against what is running, on the same evidence.
+  fastify.post<{
+    Params: { key: string }
+    Body: { systemPrompt?: string; revisionId?: string; cases?: number }
+  }>('/agent/fleet/charters/:key/evaluate', async (request, reply) => {
+    const { key } = request.params
+    if (!FLEET_CHARTERS[key]) return reply.code(404).send({ error: `unknown charter: ${key}` })
+    if (isAiKillSwitchOn()) {
+      return reply.code(503).send({ error: 'AI is temporarily disabled (kill switch).' })
+    }
+    let prompt = request.body?.systemPrompt?.trim()
+    if (!prompt && request.body?.revisionId) {
+      const revs = await listRevisions(key)
+      prompt = revs.find((r) => r.id === request.body!.revisionId)?.systemPrompt
+    }
+    if (!prompt) return reply.code(400).send({ error: 'a prompt or a revisionId is required' })
+    const result = await evaluateRevision({
+      charterKey: key,
+      candidatePrompt: prompt,
+      revisionId: request.body?.revisionId ?? null,
+      cases: request.body?.cases,
+    })
+    return result
+  })
+
+  // AC.6 — pause with an expiry; resume clears it.
+  fastify.post<{
+    Params: { key: string }
+    Body: { until?: string; reason?: string }
+  }>('/agent/fleet/charters/:key/pause', async (request, reply) => {
+    const { key } = request.params
+    if (!FLEET_CHARTERS[key]) return reply.code(404).send({ error: `unknown charter: ${key}` })
+    const untilRaw = request.body?.until
+    const until = untilRaw ? new Date(untilRaw) : null
+    if (!until || Number.isNaN(until.getTime()) || until.getTime() <= Date.now()) {
+      return reply.code(400).send({ error: 'until must be a future date — a pause always expires' })
+    }
+    await prisma.agentCharter.updateMany({
+      where: { key },
+      data: { pausedUntil: until, pausedReason: request.body?.reason?.trim() || null },
+    })
+    bustCharterCache()
+    await recordControlChange({
+      charterKey: key,
+      action: 'pause',
+      to: { until: until.toISOString() },
+      note: request.body?.reason ?? null,
+    })
+    return { ok: true, pausedUntil: until }
+  })
+
+  fastify.post<{ Params: { key: string } }>(
+    '/agent/fleet/charters/:key/resume',
+    async (request, reply) => {
+      const { key } = request.params
+      if (!FLEET_CHARTERS[key]) return reply.code(404).send({ error: `unknown charter: ${key}` })
+      await prisma.agentCharter.updateMany({
+        where: { key },
+        data: { pausedUntil: null, pausedReason: null },
+      })
+      bustCharterCache()
+      await recordControlChange({ charterKey: key, action: 'resume' })
+      return { ok: true }
+    },
+  )
+
+  // AC.7 — the control history for one worker.
+  fastify.get<{ Params: { key: string } }>(
+    '/agent/fleet/charters/:key/audit',
+    async (request) => {
+      return { audit: await listControlAudit(request.params.key) }
     },
   )
 
