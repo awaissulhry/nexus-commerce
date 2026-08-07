@@ -752,6 +752,28 @@ council service needed zero edits — `runFleet`'s signature is unchanged, so
 4a's blast surface was exactly three fleet files. Remaining: 4b gates, 4c
 schedule.
 
+**WF.4b+4c EXECUTED 2026-08-07 (`c6ed9a5ab` + test fix `63d285ee1`),
+round-trip proven on the DEPLOYED process.** 4b: `forceAsk` on
+`runOrQueueTool` (tighten-only — it can force the approval branch, never
+skip it); the council gates each item by its ORIGIN analyst's step via
+`finding.charterKey`, director fallback; 11 parity tests green, plus the
+council test now asserts `forceAsk: false` on an unrevised walk — after the
+Workers stream caught that `c6ed9a5ab` broke that very expectation (pre-push
+runs only the security suite; the full vitest gap is now a known hole). 4c:
+`nextCronFire` extracted to pure `cron-eval.ts` (a cycle otherwise);
+clocks arm from the effective definition and **re-arm on activate/revert**;
+the schedule feed reports the same truth. **Live proof, one round trip:**
+trigger panel → cron `20 5 * * 1` → Publish (diff: `trigger changed`) →
+page NEXT RUN moved to Mondays 05:20 UTC → deployed-process log
+`19:06:27 [fleet-council] weekly council scheduled (20 5 * * 1)` → Revert →
+page back to 05:15 → log `19:07:53 … scheduled (15 5 * * 1)`. The page and
+the firing read the same truth, and changing it is one publish and one
+revert, both on the record (rev 2 supersedes rev 1 in the history).
+Milestone note: the sibling's W.8 landed the §4 Half A (instances,
+`templateKey`, migration `20260807d`) — instances are already wireable into
+workflows through `resolveCharter` with zero change on this side, exactly
+as the contract intended. WF.4 is COMPLETE; WF.5 (test-run lane) remains.
+
 ---
 
 ## Sources

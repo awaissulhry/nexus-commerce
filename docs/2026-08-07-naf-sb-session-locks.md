@@ -52,7 +52,7 @@ Update this table when a stream starts, pauses or lands.
 | `apps/web/src/app/_shared/app-nav.ts` | Nav tree; a bad rewrite duplicated a whole block once already. | Should be complete for all ten pages. If it is not, claim it, and never drive edits with `str.index()`. |
 | `apps/api/src/services/agent-fleet/charter-registry.ts` | Resolver for every worker. | Claim. Coupled to §4. |
 | `apps/api/src/services/agent-fleet/fleet-graph.ts` | The static DAG. | Claim. Coupled to §4. |
-| `orchestrator.ts` · `agent-executor.ts` · `apps/api/src/jobs/fleet-sweep.job.ts` · `fleet-council.service.ts` · `fleet-schedule.service.ts` (agent-fleet core execution) | The machinery every mode shares — a bad edit breaks sweep AND council. | **CLAIMED by Workflows 2026-08-07 for WF.4** (stored execution: walk source parameterized, two stamp fields threaded, effective-cron). Study in `docs/2026-08-07-naf-wf-workflows-page.md`. Released on land. |
+| `orchestrator.ts` · `agent-executor.ts` · `apps/api/src/jobs/fleet-sweep.job.ts` · `fleet-council.service.ts` · `fleet-schedule.service.ts` (agent-fleet core execution) | The machinery every mode shares — a bad edit breaks sweep AND council. | **RELEASED — WF.4 landed 2026-08-07** (`6fb2962a8`, `c6ed9a5ab`, `63d285ee1`): stored walk + stamps + forceAsk (tighten-only) + effective-cron with re-arm on activate/revert, round-trip proven on the deployed process. Also touched, additive-only: `services/agents/approval-gate.service.ts` (optional `forceAsk` param) and new pure `cron-eval.ts`. The council test the Workers stream flagged is fixed — thank you; the full-vitest pre-push gap remains a known hole. |
 | `docs/2026-08-07-naf-sb-fleet-pages.md` | The parent map both streams cite. | Append to your own page's section only. |
 
 ---
