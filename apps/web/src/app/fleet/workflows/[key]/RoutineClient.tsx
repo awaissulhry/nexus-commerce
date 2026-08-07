@@ -31,6 +31,22 @@ import {
   type ScheduleJob,
 } from '../lib'
 
+interface RevisionRow {
+  id: string
+  revision: number
+  note: string
+  author: string | null
+  createdAt: string
+  activatedAt: string | null
+  supersededAt: string | null
+}
+interface VersionsResp {
+  key: string
+  kind: string
+  source: 'code' | 'revision' | 'none'
+  revisions: RevisionRow[]
+}
+
 export function RoutineClient({ routineKey }: { routineKey: string }) {
   const backend = getBackendUrl()
   const routine = BUILTIN_ROUTINES.find((r) => r.key === routineKey)!
@@ -38,6 +54,7 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
   const [runs, setRuns] = useState<RunRow[]>([])
   const [charters, setCharters] = useState<CharterRow[]>([])
   const [state, setState] = useState<FleetState | null>(null)
+  const [vers, setVers] = useState<VersionsResp | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -62,6 +79,16 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
       setRuns(((await run.json()) as { runs: RunRow[] }).runs)
       setCharters(((await cha.json()) as { charters: CharterRow[] }).charters)
       setState((await st.json()) as FleetState)
+      // Versions is deliberately NON-fatal: until the workflows API deploys,
+      // the card falls back to its static (and still true) code-truth text.
+      try {
+        const v = await fetch(`${backend}/api/agent/fleet/workflows/${routine.key}/revisions`, {
+          cache: 'no-store',
+        })
+        if (v.ok) setVers((await v.json()) as VersionsResp)
+      } catch {
+        /* card falls back */
+      }
       setErr(null)
       setLoaded(true)
     } catch (e) {
@@ -259,17 +286,48 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
           <h3>Versions</h3>
         </header>
         <div className="wf-versions">
+          {vers && vers.revisions.length > 0 ? (
+            <>
+              {vers.source === 'revision' ? (
+                <div className="acr-banner warn" role="status">
+                  <AlertTriangle size={15} />
+                  A revision is active and recorded — but runs keep following the built-in
+                  definition until stored execution ships. Nothing behaves differently yet.
+                </div>
+              ) : null}
+              {vers.revisions.map((r) => (
+                <div className="wf-vrow" key={r.id}>
+                  <span className="wf-vbadge">rev {r.revision}</span>
+                  <span className="wf-vname">{r.note}</span>
+                  <span className="wf-sub">
+                    {r.author ?? 'unattributed'} · {agoTs(new Date(r.createdAt).getTime())}
+                  </span>
+                  {r.activatedAt && !r.supersededAt ? (
+                    <span className="acr-pg-statechip running">active</span>
+                  ) : r.supersededAt ? (
+                    <span className="acr-pg-statechip wf-chip-off">superseded</span>
+                  ) : (
+                    <span className="acr-pg-statechip wf-chip-ready">draft</span>
+                  )}
+                </div>
+              ))}
+            </>
+          ) : null}
           <div className="wf-vrow">
             <span className="wf-vbadge">v1</span>
             <span className="wf-vname">Built-in — defined in code</span>
-            <span className="acr-pg-statechip running">active</span>
+            {!vers || vers.source !== 'revision' ? (
+              <span className="acr-pg-statechip running">active</span>
+            ) : (
+              <span className="wf-sub">the fallback every revert returns to</span>
+            )}
           </div>
           <p className="wf-vnote">
-            Every future change to this routine will be an immutable revision: a mandatory note
-            saying why, a readable diff of steps, connections, gates and trigger, and a one-click
-            return to this built-in that cannot fail. Every run will stamp the revision that
-            served it. Editing arrives with the editor — and editing never changes what runs
-            until you publish.
+            Every change to this routine is an immutable revision: a mandatory note saying why,
+            a readable diff of steps, connections, gates and trigger, and a one-click return to
+            this built-in that cannot fail. Every run will stamp the revision that served it.
+            Editing arrives with the editor — and editing never changes what runs until you
+            publish.
           </p>
         </div>
       </section>

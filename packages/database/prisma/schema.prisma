@@ -11387,6 +11387,10 @@ model AgentRun {
   orchestrationId String?
   findingCount    Int     @default(0)
   haltedReason    String?
+  /// NAF.WF.2 — the stored workflow + revision that served this run.
+  /// Null = a code-path run (built-in definition, or pre-workflow history).
+  workflowKey        String?
+  workflowRevisionId String?
 
   createdAt    DateTime         @default(now())
   endedAt      DateTime?
@@ -15789,4 +15793,47 @@ model AgentShadowGrade {
   gradedAt           DateTime @default(now())
 
   @@index([engineKey, agrees])
+}
+
+// ─── NAF.SB.8 ────────────────────────────────────────────────────────────
+
+/// NAF.WF.2 — a named routine over the fleet: which workers run, in what
+/// order, what crosses each edge, behind which gate, on what trigger.
+/// Layer 2 of the capability/composition split (docs/2026-08-07-naf-wf-
+/// workflows-page.md Part 5; locks doc §4, REVIEWED). kind='builtin' rows
+/// mirror the code-declared routines and fall back to the CODE definition
+/// when no revision is active — revert-to-built-in can never fail. A
+/// custom workflow's floor is disabled, never a code fallback.
+model AgentWorkflow {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  kind        String   @default("builtin") // builtin | custom
+  enabled     Boolean  @default(true)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// NAF.WF.2 — an immutable versioned definition of a workflow. Editing
+/// writes a NEW revision, activation moves a pointer, and every activation
+/// supersedes its predecessor — byte-for-byte the AgentCharterRevision
+/// contract, because two versioning grammars would teach the operator two
+/// different lies. `definition` holds contract v1:
+/// { v:1, trigger: {type:'schedule',cron}|{type:'manual'},
+///   steps: [{charterKey, gate}], edges: [{from,to,artifact}] }.
+model AgentWorkflowRevision {
+  id           String    @id @default(cuid())
+  workflowKey  String
+  revision     Int
+  definition   Json
+  note         String // mandatory — the change log IS the audit
+  author       String?
+  createdAt    DateTime  @default(now())
+  activatedAt  DateTime?
+  supersededAt DateTime?
+
+  @@unique([workflowKey, revision])
+  @@index([workflowKey, activatedAt])
 }

@@ -1,0 +1,271 @@
+/**
+ * NAF.WF.2 — the workflow registry: code truth ⊕ DB rows, the same shape the
+ * charter registry taught the fleet (session-locks doc §4, REVIEWED).
+ *
+ * The three built-in routines are DERIVED from the code that actually runs
+ * them — `FLEET_GRAPH` and the cron envs — so this module cannot drift from
+ * the truth: if the graph gains a node, the built-in definition gains a step
+ * on the next read. A built-in's stored row adds presence and an enabled
+ * toggle; its DEFINITION comes from an active revision when one exists, else
+ * from code — revert-to-built-in can never fail. A custom workflow with no
+ * active revision is simply disabled: its floor is "nothing", never a code
+ * fallback it does not have.
+ *
+ * Steps reference charter keys resolved via `resolveCharter` — never
+ * `FLEET_CHARTERS` directly — which is the one meeting point with the
+ * Workers stream's future instances (§4 contract).
+ */
+
+import prisma from '../../db.js'
+import { FLEET_GRAPH, topoLevels, type FleetGraph } from './fleet-graph.js'
+import { resolveCharter } from './charter-registry.js'
+import { nextCronFire } from './fleet-schedule.service.js'
+import { getActiveWorkflowRevision } from './workflow-revisions.service.js'
+
+/* ── definition contract v1 ────────────────────────────────────────────── */
+
+export interface WorkflowStepV1 {
+  charterKey: string
+  /** ask = force the approval path · act = tool policy decides · inherit =
+   *  today's behaviour. Tighten-only: enforcement (WF.4) can never let a
+   *  gate loosen below tool-policy floors. */
+  gate: 'ask' | 'act' | 'inherit'
+}
+export interface WorkflowEdgeV1 {
+  from: string
+  to: string
+  artifact: 'finding' | 'plan' | 'strategy'
+}
+export type WorkflowTriggerV1 = { type: 'schedule'; cron: string } | { type: 'manual' }
+export interface WorkflowDefinitionV1 {
+  v: 1
+  trigger: WorkflowTriggerV1
+  steps: WorkflowStepV1[]
+  edges: WorkflowEdgeV1[]
+}
+
+/* ── the built-ins, derived from code truth ────────────────────────────── */
+
+interface BuiltinWorkflow {
+  key: string
+  name: string
+  description: string
+  definition: () => WorkflowDefinitionV1
+}
+
+const walkSteps = (): WorkflowStepV1[] =>
+  FLEET_GRAPH.nodes
+    .filter((n) => !n.standalone)
+    .map((n) => ({ charterKey: n.key, gate: 'inherit' as const }))
+
+const graphEdges = (): WorkflowEdgeV1[] =>
+  FLEET_GRAPH.edges.map((e) => ({ from: e.from, to: e.to, artifact: e.artifact }))
+
+export const BUILTIN_WORKFLOWS: readonly BuiltinWorkflow[] = Object.freeze([
+  {
+    key: 'fleet-sweep',
+    name: 'Nightly sweep',
+    description:
+      'Every switched-on worker reads fresh evidence and reports findings; report cards recompute afterwards.',
+    definition: (): WorkflowDefinitionV1 => ({
+      v: 1,
+      trigger: {
+        type: 'schedule',
+        cron: process.env.NEXUS_FLEET_SWEEP_SCHEDULE ?? '45 4 * * *',
+      },
+      steps: [
+        ...walkSteps(),
+        // The auditor is standalone in FLEET_GRAPH and runs explicitly after
+        // scorecards (fleet-sweep.job.ts) — it IS a step of this routine.
+        { charterKey: 'fleet-auditor', gate: 'inherit' },
+      ],
+      edges: graphEdges(),
+    }),
+  },
+  {
+    key: 'fleet-council',
+    name: 'Weekly council',
+    description:
+      'Workers report, the director compiles one ranked plan, and the critic rules on it.',
+    definition: (): WorkflowDefinitionV1 => ({
+      v: 1,
+      trigger: {
+        type: 'schedule',
+        cron: process.env.NEXUS_FLEET_COUNCIL_SCHEDULE ?? '15 5 * * 1',
+      },
+      steps: walkSteps(),
+      edges: graphEdges(),
+    }),
+  },
+  {
+    key: 'on-demand-check',
+    name: 'On-demand check',
+    description: 'One worker, run by hand, with the result readable as a story.',
+    definition: (): WorkflowDefinitionV1 => ({
+      v: 1,
+      trigger: { type: 'manual' },
+      // The worker is chosen at run time — an empty step list is this
+      // routine's honest shape, and validation permits it for manual only.
+      steps: [],
+      edges: [],
+    }),
+  },
+])
+
+export function builtinByKey(key: string): BuiltinWorkflow | null {
+  return BUILTIN_WORKFLOWS.find((b) => b.key === key) ?? null
+}
+
+/* ── seed & list ───────────────────────────────────────────────────────── */
+
+/** Create-if-absent, never clobbers — the seedCharters contract. */
+export async function seedWorkflows(): Promise<{ created: number }> {
+  let created = 0
+  for (const b of BUILTIN_WORKFLOWS) {
+    const existing = await prisma.agentWorkflow.findUnique({ where: { key: b.key } })
+    if (!existing) {
+      await prisma.agentWorkflow.create({
+        data: { key: b.key, name: b.name, description: b.description, kind: 'builtin' },
+      })
+      created++
+    }
+  }
+  return { created }
+}
+
+export interface WorkflowListRow {
+  key: string
+  name: string
+  description: string | null
+  kind: 'builtin' | 'custom'
+  enabled: boolean
+  /** Where the effective definition comes from right now. */
+  source: 'code' | 'revision' | 'none'
+  activeRevision: { id: string; revision: number; note: string; activatedAt: Date } | null
+  revisionCount: number
+  /** Row exists in the DB (seeded) — presence of built-ins never depends on it. */
+  seeded: boolean
+}
+
+/** Code-first union: built-ins are always present, whatever the DB holds. */
+export async function listWorkflows(): Promise<WorkflowListRow[]> {
+  const rows = await prisma.agentWorkflow.findMany({ orderBy: { createdAt: 'asc' } })
+  const byKey = new Map(rows.map((r) => [r.key, r]))
+  const counts = await prisma.agentWorkflowRevision.groupBy({
+    by: ['workflowKey'],
+    _count: { _all: true },
+  })
+  const countByKey = new Map(counts.map((c) => [c.workflowKey, c._count._all]))
+
+  const out: WorkflowListRow[] = []
+  const seen = new Set<string>()
+  for (const b of BUILTIN_WORKFLOWS) {
+    seen.add(b.key)
+    const row = byKey.get(b.key)
+    const active = await getActiveWorkflowRevision(b.key)
+    out.push({
+      key: b.key,
+      name: row?.name ?? b.name,
+      description: row?.description ?? b.description,
+      kind: 'builtin',
+      enabled: row?.enabled ?? true,
+      source: active ? 'revision' : 'code',
+      activeRevision: active
+        ? { id: active.id, revision: active.revision, note: active.note, activatedAt: active.activatedAt! }
+        : null,
+      revisionCount: countByKey.get(b.key) ?? 0,
+      seeded: row != null,
+    })
+  }
+  for (const row of rows) {
+    if (seen.has(row.key)) continue
+    const active = await getActiveWorkflowRevision(row.key)
+    out.push({
+      key: row.key,
+      name: row.name,
+      description: row.description,
+      kind: 'custom',
+      enabled: row.enabled,
+      source: active ? 'revision' : 'none',
+      activeRevision: active
+        ? { id: active.id, revision: active.revision, note: active.note, activatedAt: active.activatedAt! }
+        : null,
+      revisionCount: countByKey.get(row.key) ?? 0,
+      seeded: true,
+    })
+  }
+  return out
+}
+
+/** Active revision's definition, else the code default (built-ins only). */
+export async function getEffectiveDefinition(
+  key: string,
+): Promise<{ source: 'code' | 'revision' | 'none'; definition: WorkflowDefinitionV1 | null }> {
+  const active = await getActiveWorkflowRevision(key)
+  if (active) {
+    return { source: 'revision', definition: active.definition as unknown as WorkflowDefinitionV1 }
+  }
+  const b = builtinByKey(key)
+  if (b) return { source: 'code', definition: b.definition() }
+  return { source: 'none', definition: null }
+}
+
+/* ── validation: Layer 2 checked against Layer 1 on save ───────────────── */
+
+const GATES = new Set(['ask', 'act', 'inherit'])
+const ARTIFACTS = new Set(['finding', 'plan', 'strategy'])
+
+/** Every rejection is a sentence an operator can act on. The union carries
+ *  an optional `error` member because apps/api compiles with strict:false,
+ *  where discriminated-union narrowing does not survive (the recorded fleet
+ *  convention — see BudgetVerdict). */
+export async function validateDefinition(
+  def: unknown,
+): Promise<{ ok: boolean; error?: string }> {
+  if (typeof def !== 'object' || def === null) return { ok: false, error: 'definition must be an object' }
+  const d = def as Partial<WorkflowDefinitionV1>
+  if (d.v !== 1) return { ok: false, error: 'definition.v must be 1 — the only contract this build understands' }
+  if (!d.trigger || typeof d.trigger !== 'object') return { ok: false, error: 'a workflow needs a trigger' }
+  if (d.trigger.type === 'schedule') {
+    if (typeof d.trigger.cron !== 'string' || !nextCronFire(d.trigger.cron, new Date())) {
+      return { ok: false, error: `the schedule "${String((d.trigger as { cron?: unknown }).cron)}" is not a cron expression this fleet can evaluate` }
+    }
+  } else if (d.trigger.type !== 'manual') {
+    return { ok: false, error: 'trigger.type must be "schedule" or "manual"' }
+  }
+  if (!Array.isArray(d.steps)) return { ok: false, error: 'steps must be a list' }
+  if (!Array.isArray(d.edges)) return { ok: false, error: 'edges must be a list' }
+  if (d.steps.length === 0 && d.trigger.type === 'schedule') {
+    return { ok: false, error: 'a scheduled workflow needs at least one step — a clock that starts nothing teaches nothing' }
+  }
+  const keys = new Set<string>()
+  for (const s of d.steps) {
+    if (!s || typeof s.charterKey !== 'string') return { ok: false, error: 'every step names a charterKey' }
+    if (keys.has(s.charterKey)) return { ok: false, error: `the worker "${s.charterKey}" appears twice — one step per worker in contract v1` }
+    keys.add(s.charterKey)
+    if (!GATES.has(s.gate)) return { ok: false, error: `step "${s.charterKey}": gate must be ask, act or inherit` }
+    // The §4 meeting point: resolveCharter (async), never FLEET_CHARTERS
+    // directly — the day worker instances exist they are wireable with zero
+    // change here.
+    if (!(await resolveCharter(s.charterKey))) {
+      return { ok: false, error: `"${s.charterKey}" is not a worker this fleet can resolve — a workflow cannot invent workers (law L3)` }
+    }
+  }
+  for (const e of d.edges) {
+    if (!e || typeof e.from !== 'string' || typeof e.to !== 'string') return { ok: false, error: 'every edge needs from and to' }
+    if (!keys.has(e.from) || !keys.has(e.to)) return { ok: false, error: `edge ${e.from} → ${e.to} names a step that is not in this workflow` }
+    if (!ARTIFACTS.has(e.artifact)) return { ok: false, error: `edge ${e.from} → ${e.to}: artifact must be finding, plan or strategy` }
+  }
+  // Acyclicity via the SAME code law the orchestrator runs on — a malformed
+  // graph is a save error here for the same reason it is a build error there.
+  try {
+    const g: FleetGraph = {
+      nodes: [...keys].map((k) => ({ key: k, tier: 'analyst' })),
+      edges: d.edges.map((e) => ({ from: e.from, to: e.to, artifact: e.artifact })),
+    }
+    topoLevels(g)
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'the graph has a cycle' }
+  }
+  return { ok: true }
+}
