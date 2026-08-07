@@ -22,6 +22,7 @@ import {
 const KINDS: FleetEventKind[] = [
   'run.ok',
   'run.failed',
+  'run.running',
   'finding.raised',
   'plan.drafted',
   'plan.critiqued',

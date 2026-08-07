@@ -40,6 +40,7 @@ import {
   CircleDot,
   ClipboardList,
   Hand,
+  Loader,
   Octagon,
   Download,
   RefreshCw,
@@ -53,7 +54,7 @@ import { DataGrid, type Column } from '@/design-system/components'
 import { GridToolbar } from '@/design-system/patterns'
 import { PlanStory, type PlanLabels, type StoryPlan } from '@/app/marketing/ads/rules-automation/fleet/PlanStory'
 import { RunDetail } from '../_shared/RunDetail'
-import { ago, DIAGNOSTIC_HINT } from '../_shared/run-health'
+import { ago, classifyFailure, DIAGNOSTIC_HINT, type FailureClass } from '../_shared/run-health'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
 
 /* ── the shape the spine returns (ACT.1) ───────────────────────────────── */
@@ -61,6 +62,7 @@ import { useVisibilityPoll } from '../_shared/use-visibility-poll'
 export type FleetEventKind =
   | 'run.ok'
   | 'run.failed'
+  | 'run.running'
   | 'finding.raised'
   | 'plan.drafted'
   | 'plan.critiqued'
@@ -93,6 +95,9 @@ export interface FleetEvent {
   findingCount: number | null
   /** ACT.5 — the run behind this event; opens the "what it did" drawer. */
   runId: string | null
+  /** ACT.4 — raw, so the ONE canonical classifier decides what "failed" means. */
+  errorMessage: string | null
+  haltedReason: string | null
   href: string | null
   rollupKey: string
 }
@@ -121,6 +126,7 @@ interface FleetStateRow {
 const MARKER: Record<FleetEventKind, { icon: typeof Check; label: string }> = {
   'run.ok': { icon: Check, label: 'a run that finished' },
   'run.failed': { icon: X, label: 'a run that failed' },
+  'run.running': { icon: Loader, label: 'a run happening right now' },
   'finding.raised': { icon: CircleDot, label: 'something a worker found' },
   'plan.drafted': { icon: ClipboardList, label: 'a plan the director wrote' },
   'plan.critiqued': { icon: ShieldCheck, label: "the critic's ruling" },
@@ -401,6 +407,7 @@ function whatHappened(e: FleetEvent): string {
 const WHAT_LABEL: Record<string, string> = {
   'run.ok': 'Ran fine',
   'run.failed': 'Run failed',
+  'run.running': 'Running now',
   'finding.raised': 'Noticed something',
   'plan.drafted': 'Drafted a plan',
   'plan.critiqued': 'Plan reviewed',
@@ -410,7 +417,70 @@ const WHAT_LABEL: Record<string, string> = {
 }
 
 /** The two kinds the Runs grain is. Named once so nothing can drift. */
-const RUN_KINDS: FleetEventKind[] = ['run.ok', 'run.failed']
+const RUN_KINDS: FleetEventKind[] = ['run.ok', 'run.failed', 'run.running']
+
+/* ── S2 · what needs a look ────────────────────────────────────────────── */
+
+/**
+ * Failure classes, counted through `run-health.classifyFailure` — the SAME
+ * function the worker roster and the worker page call. That is the point: the
+ * spine has its own `explainError`/`errorSignature`, and the two disagree about
+ * whether a budget halt is a failure (it is not). This page refuses to be the
+ * third opinion, so it takes the raw fields and asks the canonical classifier.
+ *
+ * Two traps this closes by construction:
+ *  · a run still in flight is never counted — `classifyFailure` returns null
+ *    for `status: 'running'`, which is why the spine now emits `run.running`;
+ *  · nothing is ever grouped on the error STRING. The three credit errors each
+ *    carry a distinct `request_id`, so a group-by on the message shows four
+ *    causes where there are two.
+ */
+const CLASS_ORDER: FailureClass[] = [
+  'provider-unreachable',
+  'provider-refused',
+  'contract',
+  'unknown',
+  'limit', // amber, and last: a limit doing its job is not a defect
+]
+
+function failureTally(events: FleetEvent[]): Array<{
+  klass: FailureClass
+  label: string
+  count: number
+  severe: boolean
+}> {
+  const byClass = new Map<FailureClass, { label: string; count: number; severe: boolean }>()
+  for (const e of events) {
+    if (e.kind !== 'run.failed') continue
+    const f = classifyFailure({
+      // Always 'done' here, and tsc proves it: the spine emits `run.running`
+      // as its own kind, so a run in flight cannot reach this line. The guard
+      // lives one layer down instead of being repeated — which is the whole
+      // reason the kind was added rather than the check copied.
+      status: 'done',
+      ok: false,
+      errorMessage: e.errorMessage,
+      haltedReason: e.haltedReason,
+      createdAt: e.at,
+    })
+    if (!f) continue
+    const cur = byClass.get(f.klass)
+    if (cur) cur.count++
+    else byClass.set(f.klass, { label: f.label, count: 1, severe: f.severe })
+  }
+  return CLASS_ORDER.filter((k) => byClass.has(k)).map((k) => ({ klass: k, ...byClass.get(k)! }))
+}
+
+/**
+ * The big number and this text are ONE sentence read together — "21" then
+ * "runs could not reach the AI provider". An earlier version put the count in
+ * both, so every tile read "21 21 runs could not…". `classifyFailure().label`
+ * is already written to follow a count ("3 of its runs <label>"), so all this
+ * owes it is the noun.
+ */
+function tileSentence(label: string, n: number): string {
+  return `${n === 1 ? 'run' : 'runs'} ${label}`
+}
 
 /* ── export ────────────────────────────────────────────────────────────── */
 
@@ -511,6 +581,68 @@ function PlanDrawer({
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * S7 (ACT.6) — "How this page works".
+ *
+ * Collapsed by default, so it costs an experienced operator nothing, and last
+ * in the reading order because only after seeing the rows does a beginner want
+ * the words. Not a tour, not a modal, not a first-visit overlay: those get
+ * dismissed once and never found again.
+ */
+function HowActivityWorks() {
+  const [open, setOpen] = useState(false)
+  return (
+    <section className="acr-card sba-how">
+      <button
+        type="button"
+        className="sba-howhead"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <span>How this page works</span>
+        <span className="sba-howtoggle">{open ? 'Close' : 'Read it'}</span>
+      </button>
+      {open ? (
+        <div className="sba-howbody">
+          <p>
+            <strong>A <Term k="run">run</Term> is one worker doing its job once.</strong> It reads
+            evidence that code prepared for it, thinks, and writes down what it found. Everything
+            else on this page — findings, plans, approvals — was produced by some run, which is
+            why almost every line here opens the run behind it.
+          </p>
+          <p>
+            <strong>Workers only ever write things down.</strong> A{' '}
+            <Term k="finding">finding</Term> is an observation, not an action. Turning findings
+            into a change takes a <Term k="plan">plan</Term> from the director, a{' '}
+            <Term k="critic">critic</Term> that tries to block it, and then your{' '}
+            <Term k="approval">approval</Term>. Nothing on this page has touched Amazon by
+            itself.
+          </p>
+          <p>
+            <strong>Failing is four different things, and only one is the worker&apos;s fault.</strong>{' '}
+            It could not reach the AI provider (a connection problem), the provider refused us (a
+            billing problem), it broke its own output contract (the worker), or it stopped at one
+            of its own limits — and that last one is a limit working, not a defect. The band at
+            the top says which.
+          </p>
+          <p>
+            <strong>The <Term k="selftest">self-test</Term> is hidden by default.</strong> It
+            checks that the fleet itself works, so its findings are about our scheduled jobs
+            rather than your account. It has produced most of the history on record, so counting
+            it in would make every number on this page mostly about the fleet testing itself.
+          </p>
+          <p>
+            <strong>Nothing here is deleted on a schedule.</strong> This page keeps everything the
+            fleet has ever done. It refreshes about every ten seconds while you are looking at
+            it, pauses when you are not, and never moves rows under you — new events wait behind
+            a button.
+          </p>
+        </div>
+      ) : null}
+    </section>
   )
 }
 
@@ -849,6 +981,40 @@ export function ActivityClient() {
     }
   }, [backend, includeSelfTest])
 
+  /**
+   * S2's tiles count the WHOLE filtered set, not the rows that happen to be
+   * loaded. Tallying `events` would have been a silent cap — with the self-test
+   * included only 50 of 119 events are on screen, so the band would have
+   * under-reported by more than half and looked authoritative doing it.
+   *
+   * Its own fetch, therefore, narrowed to failures. It is cheap: 2 rows with
+   * the self-test hidden, 26 with it shown.
+   */
+  const failuresInScope = effectiveKinds.length === 0 || effectiveKinds.includes('run.failed')
+  const [failures, setFailures] = useState<FleetEvent[]>([])
+  useEffect(() => {
+    if (!failuresInScope) {
+      setFailures([])
+      return
+    }
+    const p = new URLSearchParams({ limit: '200', kind: 'run.failed' })
+    if (!includeSelfTest) p.set('includeSelfTest', '0')
+    if (actors.length) p.set('actor', actors.join(','))
+    if (q.trim()) p.set('q', q.trim())
+    let live = true
+    fetch(`${backend}/api/agent/fleet/timeline?${p.toString()}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: TimelinePage | null) => live && d && setFailures(d.events))
+      .catch(() => {
+        /* the list's error banner covers a dead endpoint */
+      })
+    return () => {
+      live = false
+    }
+  }, [backend, includeSelfTest, actors, q, failuresInScope])
+
+  const tally = useMemo(() => failureTally(failures), [failures])
+
   const actorChips = facets?.actors ?? []
   const kindChips = useMemo(() => {
     const c = facets?.countsByKind ?? {}
@@ -1055,6 +1221,61 @@ export function ActivityClient() {
           </button>
         </div>
       </div>
+
+      {/* ── S2: what needs a look ────────────────────────────────────────── */}
+      <section className="sba-needs">
+        <h3>What needs a look</h3>
+        {tally.length === 0 ? (
+          <p className="sba-allclear">
+            <Check size={13} aria-hidden />
+            {failuresInScope
+              ? 'Nothing has failed in what you are looking at.'
+              : 'Failures are filtered out of this view.'}
+          </p>
+        ) : (
+          <div className="sba-tiles">
+            {tally.map((t) => (
+              <button
+                key={t.klass}
+                type="button"
+                className={`sba-tile${t.severe ? ' severe' : ' mild'}`}
+                aria-pressed={kinds.includes('run.failed')}
+                onClick={() => {
+                  // Clicking a tile IS the filter — the operator learns the
+                  // grammar by using the diagnosis, and the tile and the chip
+                  // are the same predicate so they cannot disagree.
+                  setGrain('all')
+                  setKinds((prev) => (prev.includes('run.failed') ? prev : [...prev, 'run.failed']))
+                }}
+              >
+                <span className="sba-tilen">{t.count}</span>
+                <span className="sba-tiletext">{tileSentence(t.label, t.count)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {/* The history, placed rather than hidden. Without this the operator
+            can see "nothing has failed" while the list below shows a bad
+            afternoon, and concludes the band is broken. */}
+        {/* Whenever the self-test is hidden, not only when the band is empty.
+            Its failures are exactly what this band would otherwise under-report,
+            and "excluded, never concealed" does not get a quiet exception when
+            there happens to be one real failure to show. */}
+        {!includeSelfTest ? (
+          <p className="sba-needsnote">
+            The self-test had a bad afternoon on 6 August — a run of failures in six minutes
+            when its model server restarted. It is fixed, and it was never your Amazon
+            account.{' '}
+            <button
+              type="button"
+              className="sba-inlinebtn"
+              onClick={() => setIncludeSelfTest(true)}
+            >
+              Show me
+            </button>
+          </p>
+        ) : null}
+      </section>
 
       {/* ── S3: the controls ─────────────────────────────────────────────── */}
       <div className="sba-toolbar">
@@ -1330,6 +1551,8 @@ export function ActivityClient() {
           </li>
         </ul>
       </section>
+
+      <HowActivityWorks />
     </div>
   )
 }

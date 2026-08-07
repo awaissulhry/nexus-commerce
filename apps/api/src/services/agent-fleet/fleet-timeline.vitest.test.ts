@@ -388,6 +388,67 @@ describe('ACT.1 — approvals belong to the fleet, or they do not appear', () =>
   })
 })
 
+describe('ACT.4 — a run in flight is not a failure', () => {
+  /* This is the bug `run-health.classifyFailure` has guarded since W.1, and the
+     locks doc records it being shipped and re-fixed three times elsewhere. It
+     was in the spine too. A test rather than vigilance. */
+  const RUNNING = {
+    id: 'run4',
+    agentKey: 'amazon-negative-miner',
+    mode: 'sweep',
+    trigger: 'schedule',
+    ok: false, // ← created false, flips true only when it FINISHES
+    status: 'running',
+    findingCount: 0,
+    costUSD: '0',
+    latencyMs: null,
+    errorMessage: null,
+    haltedReason: null,
+    orchestrationId: null,
+    createdAt: new Date('2026-08-06T06:00:00Z'),
+    workflowKey: null,
+  }
+
+  beforeEach(() => {
+    const all = [...RUNS, RUNNING]
+    db.agentRun.findMany.mockImplementation((args: never) => {
+      const a = args as unknown as { take?: number }
+      return Promise.resolve(
+        (a?.take
+          ? all
+          : all.map((r) => ({ id: r.id, orchestrationId: r.orchestrationId, agentKey: r.agentKey }))) as never,
+      )
+    })
+  })
+
+  it('calls it running, not failed, however `ok` reads', async () => {
+    const { events } = await getFleetTimeline()
+    const e = events.find((x) => x.id === 'run.run4')!
+    expect(e.kind).toBe('run.running')
+    expect(e.title).toBe('Negative miner is running now')
+    expect(e.outcome).toBe('neutral')
+    expect(e.detail).toBeNull()
+  })
+
+  it('keeps it out of the failure count', async () => {
+    const { countsByKind } = await getFleetTimeline()
+    expect(countsByKind['run.failed']).toBe(1) // run2 only
+    expect(countsByKind['run.running']).toBe(1)
+  })
+
+  it('hands the raw failure fields to the client, so one classifier decides', async () => {
+    const { events } = await getFleetTimeline()
+    const failed = events.find((x) => x.id === 'run.run2')!
+    expect(failed.errorMessage).toBe('fetch failed')
+    expect(failed.haltedReason).toBeNull()
+    // and nothing that is not a run pretends to have them
+    for (const e of events.filter((x) => !x.kind.startsWith('run.'))) {
+      expect(e.errorMessage).toBeNull()
+      expect(e.haltedReason).toBeNull()
+    }
+  })
+})
+
 describe('ACT.1 — diagnostic workers are excluded, never concealed', () => {
   const SELFTEST_RUN = {
     id: 'run3',

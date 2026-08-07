@@ -49,6 +49,16 @@ import { FLEET_CHARTERS } from './charter-registry.js'
 export type FleetEventKind =
   | 'run.ok'
   | 'run.failed'
+  /**
+   * ACT.4 — a run still in flight. It exists because `!ok` alone is WRONG: an
+   * `AgentRun` is created `ok: false` and only flips true when it finishes, so
+   * a run that is going perfectly well was being titled "tried to run, and
+   * failed". `run-health.classifyFailure` has guarded this since W.1 and the
+   * locks doc records it being shipped and re-fixed three times; this was the
+   * fourth, in the spine itself. Latent only because no run was in flight when
+   * the page was built — it would have lied the day the fleet was lit.
+   */
+  | 'run.running'
   | 'finding.raised'
   | 'plan.drafted'
   | 'plan.critiqued'
@@ -117,6 +127,18 @@ export interface FleetEvent {
    * "why did it decide that" drawer reachable from 119 rows instead of 53.
    */
   runId: string | null
+  /**
+   * ACT.4 — the RAW failure fields, unprocessed, on run events only.
+   *
+   * They exist so the client can call `run-health.classifyFailure()` — the
+   * same function the worker roster and the worker page call — instead of this
+   * page inventing a third opinion. This service already has `explainError`
+   * and `errorSignature`, which is the second one, and they disagree with
+   * `run-health` about whether a budget halt is a failure (it is not).
+   * Handing over the raw values is how one page stops adding to that.
+   */
+  errorMessage: string | null
+  haltedReason: string | null
   /** Where clicking it should go, when there is somewhere to go. */
   href: string | null
   /**
@@ -394,20 +416,23 @@ async function runEvents(
   return rows.map((r) => {
     const who = nameOf(names, r.agentKey)
     const src = sourcePhrase(r.mode, r.trigger)
-    const failed = !r.ok || r.status === 'failed'
-    const sig = failed ? errorSignature(r.errorMessage, r.haltedReason) : 'ok'
+    const running = r.status === 'running'
+    const failed = !running && (!r.ok || r.status === 'failed')
+    const sig = failed ? errorSignature(r.errorMessage, r.haltedReason) : running ? 'running' : 'ok'
     return {
       id: `run.${r.id}`,
       at: r.createdAt.toISOString(),
-      kind: failed ? ('run.failed' as const) : ('run.ok' as const),
+      kind: running ? ('run.running' as const) : failed ? ('run.failed' as const) : ('run.ok' as const),
       actorKind: 'worker' as const,
       actor: who,
       actorKey: r.agentKey,
-      title: failed
-        ? `${who} tried to run, and failed`
-        : runSentence(who, names.get(r.agentKey)?.tier, r.findingCount),
+      title: running
+        ? `${who} is running now`
+        : failed
+          ? `${who} tried to run, and failed`
+          : runSentence(who, names.get(r.agentKey)?.tier, r.findingCount),
       detail: failed ? explainError(r.errorMessage, r.haltedReason) : null,
-      outcome: failed ? ('bad' as const) : ('ok' as const),
+      outcome: running ? ('neutral' as const) : failed ? ('bad' as const) : ('ok' as const),
       source: src,
       riskTier: null,
       costUSD: Number(r.costUSD),
@@ -422,6 +447,8 @@ async function runEvents(
       durationMs: r.latencyMs,
       findingCount: r.findingCount,
       runId: r.id,
+      errorMessage: r.errorMessage,
+      haltedReason: r.haltedReason,
       href: `/fleet/workers/${r.agentKey}`,
       rollupKey: `run:${r.agentKey}:${sig}`,
     }
@@ -482,6 +509,8 @@ async function findingEvents(
       durationMs: null,
       findingCount: null,
       runId: r.runId,
+      errorMessage: null,
+      haltedReason: null,
       href: `/fleet/workers/${r.charterKey}`,
       rollupKey: `finding:${r.charterKey}:${r.kind}`,
     }
@@ -544,6 +573,8 @@ async function planEvents(
       durationMs: null,
       findingCount: null,
       runId: r.runId,
+      errorMessage: null,
+      haltedReason: null,
       href,
       rollupKey: `plan:${r.charterKey}`,
     })
@@ -590,7 +621,9 @@ async function planEvents(
         durationMs: null,
         findingCount: null,
         runId: r.runId,
-        href,
+        errorMessage: null,
+      haltedReason: null,
+      href,
         rollupKey: `critic:${r.criticVerdict}`,
       })
     }
@@ -669,7 +702,9 @@ async function approvalEvents(
         durationMs: null,
         findingCount: null,
         runId: r.agentRunId,
-        href: null,
+        errorMessage: null,
+      haltedReason: null,
+      href: null,
         rollupKey: `approval-req:${key}:${r.toolName}`,
       })
     }
@@ -706,7 +741,9 @@ async function approvalEvents(
         durationMs: null,
         findingCount: null,
         runId: r.agentRunId,
-        href: null,
+        errorMessage: null,
+      haltedReason: null,
+      href: null,
         rollupKey: `approval-dec:${r.status}:${r.toolName}`,
       })
     }
@@ -751,6 +788,8 @@ async function haltEvents(f: FleetTimelineFilters, cursor: Cursor | null): Promi
       findingCount: null,
       // The halt is the fleet's own act; no run produced it.
       runId: null,
+      errorMessage: null,
+      haltedReason: null,
       href: null,
       rollupKey: 'halt',
     },
