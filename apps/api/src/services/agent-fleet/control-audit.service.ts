@@ -33,6 +33,12 @@ export type ControlAction =
   // described had moved. Recorded because a silent non-execution is worse
   // than a failure nobody can explain.
   | 'stale_refused'
+  // NAF.AQ.8 — the operator edited a proposal before approving it. Its own
+  // action rather than an approve, because the interesting fact is that the
+  // worker's number was WRONG and a human corrected it: that is the highest
+  // quality signal the fleet ever gets, and folding it into `approve_action`
+  // would lose it.
+  | 'amend_action'
   // NAF.SB.AS — the two human endings of an assignment. Starting one reuses
   // `run_now` above rather than minting a synonym: it is the same event —
   // a person deliberately spending money on a worker — and two words for it

@@ -37,8 +37,17 @@ export const FLEET_TOOLS = ['create-negative-keyword', 'graduate-keyword', 'set-
 
 export type InboxView = 'waiting' | 'decided' | 'expired'
 
-/** `executing` is a transient claim inside approve; it belongs with decided. */
-const DECIDED_STATUSES = ['approved', 'executed', 'rejected', 'executing']
+/**
+ * `executing` is a transient claim inside approve; it belongs with decided.
+ *
+ * NAF.AQ.8 adds `superseded` — a proposal the operator EDITED rather than
+ * answered. It belongs in the record for the reason ServiceNow keeps its "No
+ * Longer Required" state: without somewhere to put an overtaken request, it
+ * either rots in the queue or is deleted, and you lose the ability to tell
+ * whether the fleet was wrong or merely corrected. It is not `rejected` —
+ * the operator did not say no, they said "not that number".
+ */
+const DECIDED_STATUSES = ['approved', 'executed', 'rejected', 'executing', 'superseded']
 
 export interface InboxActor {
   /** What gets stored and shown. A name if we have one, never a bare id. */

@@ -716,3 +716,89 @@
 .aq-note::placeholder {
   color: #9aa7b8;
 }
+
+/* ── AQ.8 · edit-then-approve ───────────────────────────────────────────── */
+
+/*
+ * Typed and bounded, never a free-text box over a money field. The affordance
+ * is quiet until asked for: "right idea, wrong number" is a common verdict but
+ * it should not compete with the two verbs for attention.
+ */
+
+.aq-editopen {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  margin: 8px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.aq-editopen:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.aq-edit {
+  margin: 9px 0 0;
+  padding: 10px 11px;
+  border: 1px solid #cddcf5;
+  border-radius: 6px;
+  background: #f7faff;
+}
+.aq-editrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-items: center;
+  font-size: 12.5px;
+  color: #3a4658;
+}
+.aq-editeuro {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  padding: 3px 8px;
+  border: 1px solid #9fb8e3;
+  border-radius: 5px;
+  background: #fff;
+  font-weight: 600;
+  color: #1c2530;
+}
+.aq-editeuro input {
+  width: 72px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.aq-editwas {
+  font-size: 11.5px;
+  color: #6b7688;
+}
+.aq-editnote {
+  margin: 7px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #6b7688;
+}
+.aq-editerr {
+  margin: 7px 0 0;
+  padding: 6px 9px;
+  border: 1px solid #f0c9c9;
+  border-radius: 5px;
+  background: #fdf5f5;
+  font-size: 12px;
+  color: #9b2c2c;
+}
+.aq-editactions {
+  display: flex;
+  gap: 8px;
+  margin: 9px 0 0;
+}

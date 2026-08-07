@@ -439,6 +439,7 @@ function OutsideQueue({
   onUndo,
   onCommit,
   onRecheck,
+  onAmend,
 }: {
   rows: OutsideRow[]
   labels: FleetLabels
@@ -448,6 +449,7 @@ function OutsideQueue({
   onUndo: (id: string) => void
   onCommit: (id: string) => void
   onRecheck: (id: string) => Promise<{ stale: boolean; why: string | null }>
+  onAmend: (id: string, args: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>
 }) {
   const [open, setOpen] = useState(true)
 
@@ -533,6 +535,7 @@ function OutsideQueue({
                   canExecute={a.canExecute}
                   onDecide={onDecide}
                   onRecheck={onRecheck}
+                  onAmend={onAmend}
                 />
               </div>
             ),
@@ -653,6 +656,25 @@ export function ApprovalsClient() {
     [backend],
   )
 
+  /**
+   * AQ.8 — supersede a proposal with the operator's own number. The server
+   * re-runs the tool's own handler, so a refusal here is the tool's words.
+   */
+  const amend = useCallback(
+    async (id: string, args: Record<string, unknown>) => {
+      const r = await fetch(`${backend}/api/agent/fleet/approvals/${id}/amend`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ args }),
+      })
+      const d = (await r.json().catch(() => null)) as { error?: string } | null
+      if (!r.ok) return { ok: false, error: d?.error ?? `edit failed (${r.status})` }
+      refresh()
+      return { ok: true }
+    },
+    [backend, refresh],
+  )
+
   /** Which tools can actually do something — straight from the gate state. */
   const canExecute = useCallback(
     (toolName: string) => gate?.tools.find((t) => t.name === toolName)?.canExecute ?? false,
@@ -748,6 +770,7 @@ export function ApprovalsClient() {
               void post('approvals/bulk-decide', { ids, decision: d, reason }).then(after)
             }}
             onRecheck={recheck}
+            onAmend={amend}
           />
         ) : (
           <RecordList rows={approvals} nameOf={nameOf} />
@@ -774,6 +797,7 @@ export function ApprovalsClient() {
         onUndo={(id) => void post(`approvals/${id}/undo`).then(after)}
         onCommit={(id) => void post(`approvals/${id}/commit`).then(after)}
         onRecheck={recheck}
+        onAmend={amend}
       />
     </>
   )

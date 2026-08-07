@@ -291,6 +291,7 @@ export function WaitingList({
   onBulkPreview,
   onBulkDecide,
   onRecheck,
+  onAmend,
 }: {
   rows: ApprovalRow[]
   labels: FleetLabels
@@ -304,6 +305,7 @@ export function WaitingList({
   onBulkPreview: (ids: string[], decision: 'approve' | 'reject') => Promise<string>
   onBulkDecide: (ids: string[], decision: 'approve' | 'reject', reason?: string) => void
   onRecheck: (id: string) => Promise<{ stale: boolean; why: string | null }>
+  onAmend: (id: string, args: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [pendingBulk, setPendingBulk] = useState<{ decision: 'approve' | 'reject'; sentence: string } | null>(null)
@@ -466,6 +468,7 @@ export function WaitingList({
                   canExecute={canExecute(a.toolName)}
                   onDecide={onDecide}
                   onRecheck={onRecheck}
+                  onAmend={onAmend}
                 />
               </div>
             ),

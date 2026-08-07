@@ -1318,3 +1318,68 @@ classified stale.
 
 **Cleaned up again**: `AgentApproval` back to exactly **18**, 0 audit rows,
 0 runs left behind.
+
+### AQ.8 — edit-then-approve (2026-08-07), taken out of order
+
+**Re-sequenced deliberately.** AQ.5 is next in the plan — the queue-shape
+strip, filters, and the rail badge — and all three render **nothing** today:
+the strip has no rows to summarise, the study itself says filters must be
+"absent entirely at zero", and the badge's count is zero and stays zero until
+the fleet can queue, which is exactly what the operator's Q5 answer requires
+(*"zero when the fleet is off"*). Building three surfaces that display nothing,
+across three shared files including the app-wide rail, is the thing this
+engagement has spent all night arguing against. So AQ.8 went first: it is the
+study's **#1 named gap versus the industry**, it does not depend on volume, and
+it can be verified with a seeded card.
+
+**The gap.** The operator's most common real verdict on a proposal is not "no"
+— it is *"right idea, wrong number"*. Without an edit path, every near-miss
+becomes a reject plus a wait for the worker to propose again, which costs a
+model call and lets the auction move in between.
+
+Three decisions, each taken against the research rather than for convenience:
+
+**1 · Supersede, never mutate.** The edit expires the original and mints a NEW
+approval. Mutating in place is how the number approved and the number written
+come apart, and it destroys the record of what the worker *actually* proposed —
+which is the thing you want six months later when asking whether the worker or
+the operator was wrong. The original lands in the record as **`superseded`**,
+a status added for the reason ServiceNow keeps *No Longer Required*: without
+somewhere to put an overtaken request it either rots in the queue or is
+deleted. It is explicitly **not** `rejected` — the operator did not say no,
+they said *not that number*.
+
+**2 · The tool's own handler is the validator.** We do not copy the bid floor,
+the authority pins or the protected-term rules into a second place where they
+can drift. The server re-runs `tool.handler(editedArgs)` and takes its refusal
+verbatim. That is the same code that produced the preview the operator read, so
+the check cannot disagree with what they were shown — and it means the edit
+path inherits every guard the propose path has, for free, permanently.
+
+This matters more than it sounds. The reference implementation everyone copies
+renders one free-text textarea per argument and stringifies every value — its
+own README admits the values come back as strings. Over a money field that is a
+hole straight through the bid rails: **an operator typing `4.2` for `0.42` gets
+a ten-times bid with nothing in the way.** Here the field is typed, bounded
+client-side as a courtesy, and re-validated server-side by the authority that
+owns the rule.
+
+**3 · The preview is regenerated, not patched**, so the card the operator sees
+next describes *their* number rather than the worker's.
+
+The editable field is **declared per tool** (`EDITABLE`), not inferred: a
+generic "edit the args" box cannot be validated or labelled, so an action with
+no safe numeric field simply shows no edit affordance. `set-target-bid` and
+`graduate-keyword` have one today.
+
+`amend_action` is its own audit action rather than an approve, because the
+interesting fact is that the worker's number was **wrong and a human corrected
+it** — the highest-quality signal the fleet ever gets, and folding it into
+`approve_action` would lose it.
+
+**Shared-file changes, declared:** `control-audit.service.ts` (+1 union
+member), `approval-inbox.service.ts` (`superseded` added to `DECIDED_STATUSES`
+so an edited proposal appears in the record instead of vanishing).
+
+**Verified:** `tsc` clean on both apps; DS ratchet clean; agent-fleet suite
+**372 passing across 41 files**.

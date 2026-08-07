@@ -37,6 +37,7 @@ import {
   Clock,
   FileText,
   History,
+  Pencil,
   RotateCcw,
   ShieldAlert,
   X,
@@ -170,6 +171,56 @@ const REJECT_CODES: Record<string, string[]> = {
 }
 
 const rejectCodesFor = (toolName: string) => REJECT_CODES[toolName] ?? DEFAULT_REJECT_CODES
+
+/* ── AQ.8 · what the operator may edit ─────────────────────────────────── */
+
+/**
+ * The editable field per action, declared rather than inferred.
+ *
+ * Deliberately NOT a generic "edit the args as JSON" box. The reference
+ * implementation everyone copies renders one free-text textarea per argument
+ * and stringifies every value — its own README admits the values come back as
+ * strings — which over a money field is a hole straight through the bid rails:
+ * an operator typing 4.2 for 0.42 gets a ten-times bid with nothing in the way.
+ *
+ * So each entry says what the field IS, and the input is typed to match. The
+ * bound here is a courtesy that catches a typo before the round trip; the
+ * REAL check is the server re-running the tool's own handler, which owns the
+ * bid floor, the authority pins and the protected terms. This list can never
+ * be more permissive than that — only kinder about saying so early.
+ */
+interface Editable {
+  /** The key in `args` the server will patch. */
+  arg: string
+  label: string
+  /** Money is entered in euros and sent in cents. */
+  unit: 'euro-cents'
+  min: number
+  max: number
+  /** Where to read the current proposal from, so the input starts populated. */
+  fromPreview: string
+}
+
+const EDITABLE: Record<string, Editable> = {
+  'set-target-bid': {
+    arg: 'proposedBidCents',
+    label: 'bid',
+    unit: 'euro-cents',
+    // 5c is BID_FLOOR_CENTS in the tool itself; the ceiling is a sanity bound
+    // on a typo, not a policy — policy lives at the write gate.
+    min: 5,
+    max: 1000,
+    fromPreview: 'proposedBidCents',
+  },
+  'graduate-keyword': {
+    arg: 'bidCents',
+    label: 'starting bid',
+    unit: 'euro-cents',
+    min: 5,
+    max: 1000,
+    fromPreview: 'suggestedBidCents',
+  },
+}
 
 /* ── what it touches, and what it changes ──────────────────────────────── */
 
@@ -334,6 +385,7 @@ export function ApprovalCard({
   canExecute,
   onDecide,
   onRecheck,
+  onAmend,
 }: {
   approval: CardApproval
   labels: FleetLabels
@@ -343,6 +395,8 @@ export function ApprovalCard({
   canExecute: boolean
   onDecide: (id: string, decision: 'approve' | 'reject', reason?: string) => void
   onRecheck: (id: string) => Promise<{ stale: boolean; why: string | null }>
+  /** AQ.8 — supersede this proposal with the operator's own number. */
+  onAmend: (id: string, args: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>
 }) {
   const vocab = toolCardFor(approval.toolName)
   const rev = reversibilityOf(approval.toolName)
@@ -359,6 +413,29 @@ export function ApprovalCard({
   const [acked, setAcked] = useState(false)
   const [recheck, setRecheck] = useState<{ stale: boolean; why: string | null } | null>(null)
   const [rechecking, setRechecking] = useState(false)
+
+  // AQ.8 — editing. `editable` is null for actions with no safe numeric field;
+  // the affordance simply does not appear rather than offering a box that
+  // cannot be validated.
+  const editable = EDITABLE[approval.toolName] ?? null
+  const proposedNow =
+    editable && typeof (approval.preview as any)?.[editable.fromPreview] === 'number'
+      ? ((approval.preview as any)[editable.fromPreview] as number)
+      : null
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState<string>(
+    proposedNow != null ? (proposedNow / 100).toFixed(2) : '',
+  )
+  const [amendErr, setAmendErr] = useState<string | null>(null)
+  const [amending, setAmending] = useState(false)
+
+  const draftCents = Math.round(Number(draft) * 100)
+  const draftValid =
+    Number.isFinite(draftCents) &&
+    editable != null &&
+    draftCents >= editable.min &&
+    draftCents <= editable.max &&
+    draftCents !== proposedNow
 
   const needsAck = heavy && canExecute
   const approveBlocked = needsAck && !acked
@@ -552,6 +629,65 @@ export function ApprovalCard({
             {rev === 'never' ? ' — and that it cannot be undone' : ''}.
           </span>
         </label>
+      ) : null}
+
+      {/* AQ.8 — right idea, wrong number. */}
+      {editable && proposedNow != null ? (
+        editing ? (
+          <div className="aq-edit">
+            <label className="aq-editrow">
+              <span>Your {editable.label}</span>
+              <span className="aq-editeuro">
+                €
+                <input
+                  autoFocus
+                  inputMode="decimal"
+                  value={draft}
+                  onChange={(e) => {
+                    setDraft(e.target.value)
+                    setAmendErr(null)
+                  }}
+                />
+              </span>
+              <span className="aq-editwas">
+                the worker proposed €{(proposedNow / 100).toFixed(2)}
+              </span>
+            </label>
+            <p className="aq-editnote">
+              Between €{(editable.min / 100).toFixed(2)} and €
+              {(editable.max / 100).toFixed(2)}. Your number is re-checked against the same rules
+              the worker had to pass — the bid floor, the pins, the protected terms — and the
+              worker&apos;s original proposal is kept on the record beside yours.
+            </p>
+            {amendErr ? <p className="aq-editerr">{amendErr}</p> : null}
+            <div className="aq-editactions">
+              <button
+                className="acr-btn go"
+                disabled={busy || amending || !draftValid}
+                onClick={async () => {
+                  setAmending(true)
+                  setAmendErr(null)
+                  try {
+                    const r = await onAmend(approval.id, { [editable.arg]: draftCents })
+                    if (!r.ok) setAmendErr(r.error ?? 'that change was refused')
+                    else setEditing(false)
+                  } finally {
+                    setAmending(false)
+                  }
+                }}
+              >
+                {amending ? 'Checking…' : `Use €${(Number(draft) || 0).toFixed(2)} instead`}
+              </button>
+              <button className="acr-btn" disabled={busy || amending} onClick={() => setEditing(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button className="aq-editopen" disabled={busy} onClick={() => setEditing(true)}>
+            <Pencil size={12} /> Right idea, wrong number? Edit the {editable.label}
+          </button>
+        )
       ) : null}
 
       {/*
