@@ -1,0 +1,927 @@
+# NAF.AQ — The Approvals page (`/fleet/approvals`): what it is for, and what is on it
+
+**Status: STUDY — awaiting operator approval. No code written.**
+
+Page 2 of ten (`docs/2026-08-07-naf-sb-fleet-pages.md` Part 3, Operate group).
+Stream `SB.AQ`, claimed in `docs/2026-08-07-naf-sb-session-locks.md` §2.
+
+A new series letter on purpose. **AP.1–AP.8 is closed** — it built the approval
+*panel* on the fleet Overview and did it well. This is a different object: a
+page, with room for things a panel could not hold, and a duty the panel never
+had. Calling it AP.9 would make the record ambiguous about which artefact a
+phase belongs to.
+
+---
+
+## PART 0 — The one sentence
+
+> **This is where the fleet stops and asks, and where you answer.**
+
+Everything else is a consequence. If a section cannot be justified as *helping
+the operator answer well, telling them what became of an answer, or telling
+them honestly why there is nothing to answer* — it belongs on another page.
+
+---
+
+## PART 1 — Ground truth, and the two facts that reorganise the page
+
+Everything below was verified against the code and against the production
+database this session. Where a number is stated, the query is cited.
+
+### 1.1 The headline: the Waiting view cannot fill. Not "is empty" — *cannot fill*.
+
+The queue is filtered to three tools:
+
+```ts
+// approval-inbox.service.ts:36,77
+export const FLEET_TOOLS = ['create-negative-keyword', 'graduate-keyword', 'set-target-bid']
+if (view === 'waiting')
+  return { status: { in: ['pending','scheduled'] }, toolName: { in: FLEET_TOOLS } }
+```
+
+All three are **preview-only**. `ads-propose.tools.ts:1-12` says so in its own
+header — *"there is deliberately NO `execute`"* — and the gate refuses to queue
+a tool that has none:
+
+```ts
+// approval-gate.service.ts:71-74
+if (!tool.execute) {
+  return { ok: true, mode: 'preview', preview: pv.preview ?? pv.data }   // ← no row created
+}
+```
+
+And the council, which is the only thing that would ever queue one:
+
+```ts
+// fleet-council.service.ts:164-176
+const outcome = await runOrQueueTool(item.tool, item.args, …)
+if (outcome.mode === 'queued' && outcome.approvalId) { queued++ }
+else { blocked++ }                                    // ← every fleet tool lands here
+```
+
+So **a plan that passes the critic still produces zero approvals**, and the
+counter that records this is called `blocked` — which the fleet surfaces as
+though the critic had refused it. The one plan in production
+(`status='critiqued'`, `criticVerdict='block'`, `approvalIds=[]`) never reached
+that loop, so this has not yet been observed; it is waiting.
+
+A second, independent lock says the same thing from the other end: **six of
+seven charters cap at OBSERVE**. Only `amazon-ads-director` has
+`autonomyCap='PROPOSE'`. At maximum dial, one worker of seven could ever ask
+for anything — and its tools cannot be queued.
+
+> **The page's queue is structurally unreachable. Building triage UI over it
+> without saying so would be building a waiting room with no door.**
+
+This is not a defect of AP.1–AP.8; it is Phase F of the fleet
+(`AGENT_FLEET.md` — *"AUTO, tightly scoped"* adds the executors). It is this
+page's job to **say it**, because no other surface can: Controls knows the
+dials, Overview knows the schedule, and nothing anywhere knows whether a tool
+can execute.
+
+### 1.2 The inversion: the requests that *can* act are the ones nobody can see
+
+`requestApproval()` (`approval-gate.service.ts:100-116`) — the copilot's
+"Request approval" path — can mint an approval for `set-price`,
+`publish-listing`, `send-customer-message` or `apply-content` **today**. Those
+four have executors. They are the only rows on this page that can reach the
+outside world.
+
+They are also filtered out of Waiting. And the sweep does *not* share the
+filter:
+
+```ts
+// approval-inbox.service.ts:514-517 — no toolName clause
+where: { status: 'pending', expiresAt: { not: null, lt: now } }
+```
+
+So a real, executable request is **created → never shown in any view → silently
+expired in 24 hours**. The Assignments stream, reading the same finding from
+their side, named it better than I did: this is not a visibility gap, it is a
+*silent terminal failure*.
+
+### 1.3 What is actually in the table (prod, 2026-08-07)
+
+| | |
+|---|---|
+| Rows | **18**, all created inside one 3-hour window on **2026-06-17** — 51 days ago |
+| Status | 15 rejected, 3 executed. **0 pending, 0 scheduled, 0 expired** |
+| Tools | apply-content 12 · set-price 3 · send-customer-message 2 · publish-listing 1 — **not one ads tool** |
+| Risk | medium 12, high 6. **`low` has never been written** |
+| `decidedBy` | **null on 18/18** |
+| Reasons | 15/18, every one a script tag: `acp3b-verify`, `acp3b-reject-test`, `acp4a-verify-cleanup` |
+| Median decision latency | **0.6 seconds** — machine speed |
+| From the fleet | **zero**. All 16 producing runs have `mode = NULL` (pre-fleet ACP, `manual-action` / `listing-quality-keeper`) |
+| `AgentExemplar` | **0** · `AgentControlAudit` **0** · `executeAfter` set on **0** rows |
+| Charters | 7, all `enabled=false`, all `OFF`; effective autonomy OFF for all 7; **0 instances** |
+
+A beginner opening the page today reads **"Decided 18"** and concludes they have
+made eighteen decisions. They have made none.
+
+### 1.4 Eight more defects, each verified in code this session
+
+1. **The glossary lies about the clock by 7×.** `glossary.tsx` tells the
+   operator *"Approvals expire after 7 days"*; `approval-gate.service.ts:22`
+   is `EXPIRY_HOURS = 24`.
+2. **A failed execution silently re-enters Waiting.** `approval-gate.service.ts:162-187`
+   writes `status:'pending', reason:'execution failed: …'` and **leaves
+   `decidedBy`/`decidedAt` set**. `DecisionCard` only explains a comeback when
+   the reason starts with `not run —` (the AP.6 staleness prefix), so an
+   execution failure returns with **no explanation at all** and a stale decider
+   on the row.
+3. **Approving a fleet tool reads as success and does nothing.** With no
+   `execute`, the terminal state is `status:'approved'`, reason *"approved;
+   this tool is preview-only (no execute)"*. The UI renders "Approved" in the
+   ok tone. The card's own teaching line — *"nothing reaches Amazon without
+   passing through here"* — is true, and its unstated converse is also true:
+   nothing reaches Amazon **after** passing through here either.
+4. **Reject is harder than approve.** Reject demands a typed reason; a
+   low-risk approve is one click. This is the exact asymmetry the oversight
+   literature names as *the mechanism that manufactures rubber stamps*. AP.8
+   built anti-rubber-stamp machinery and left the strongest lever pointing the
+   wrong way.
+5. **The depth ladder has one rung.** All three fleet tools are
+   `riskTier: 'high'` (`ads-propose.tools.ts:94,153,220`), and `heavy = high ||
+   !undoable`. So **100% of fleet approvals would be heavy cards with the ack
+   tick** — precisely the blanket friction AP.8's own comment says it is
+   avoiding. The compact lane has no population to serve.
+6. **The card never says which campaign.** The API resolves entity ids to
+   names and returns them as `labels`; the client destructures them away. Every
+   card describes an action on an unnamed thing.
+7. **The blast-radius sentence has no money in it.** `previewBulk` produces
+   *"This approves 1 action: 1 × set target bid."* The page map promised
+   *"…across 3 campaigns, €12.40 of daily spend."* It also counts only
+   `status:'pending'`, so a selection containing a parked row **under-reports
+   its own blast radius**, and `reject-all` can promise "reject all 5" and
+   reject 3.
+8. **The execution result is discarded.** `tool.execute()` returns `res.data`,
+   documented as an undo snapshot; nothing stores it.
+   `advertising/rollback.service.ts` exists, so control #18 (Rollback) is real
+   — and unreachable from an approval. Nor is there a rail badge:
+   `app-nav.ts` supports `badge:` on any item and Approvals has none, though
+   the page map says it "earns a permanent badge".
+
+Also: `trackRecord` is an unbounded two-query scan of every decided approval,
+run on **every** waiting-view request. It is free at 18 rows and is the first
+thing to break at 500.
+
+---
+
+## PART 2 — What the industry does, and what binds us
+
+Six lenses, ~120 products. Only the conclusions that change a decision here.
+
+### 2A · The verb set (LangChain Agent Inbox, LangGraph 1.x, Claude Agent SDK, OpenAI, Vercel, Gumloop)
+
+The 2026 field has **narrowed** to a boolean. OpenAI's MCP approvals, Vercel AI
+SDK 6, Microsoft Agent Framework and Gumloop all ship approve/deny with no edit
+path. Exactly two shipped things let a human *change* the action:
+LangChain 1.x's `edited_action` (typed dict, rebuilds the tool call preserving
+the original id) and the Claude Agent SDK's `canUseTool → {behavior:"allow",
+updatedInput}`.
+
+- **Copy the LangChain 1.x contract, not the 2025 Agent Inbox one.** The inbox
+  renders one free-text `<Textarea>` per arg and stringifies every value — its
+  own README admits *"the values of the keys will be strings"*. For a bid
+  field that is a hole straight through the CPC ceiling: an operator typing
+  `4.2` for `0.42` gets a 10× bid with nothing in the way.
+- **Invert the Claude SDK's silence.** Its documented behaviour is *"Claude
+  sees the result but isn't told you changed anything."* Correct for a
+  permission prompt; wrong for a fleet that is supposed to learn. A correction
+  is the highest-quality training signal we will ever get — not "rejected" but
+  "rejected to €0.30", a labelled gradient.
+- **Supersede, don't mutate.** The production-queue literature is firm: an
+  operator edit expires the request and mints a new one with a new idempotency
+  key, and execution runs the *stored, hash-verified* args. Mutating in place
+  lets the number approved and the number written diverge.
+- **Three exits, not two.** MCP elicitation distinguishes `decline` (I
+  considered it and said no) from `cancel` (I am walking away). Agent Inbox
+  distinguishes *ignore* (the agent hears it) from *mark resolved* (the agent
+  never hears). Declining teaches; dismissing does not.
+
+### 2B · Work-lists (UiPath Action Center, ServiceNow, Camunda, Flowable, Temporal, ITIL)
+
+Two-thirds of this surface is machinery for arbitrating between humans —
+claim/unclaim, candidate groups, delegation, quorums, CAB. Delete all of it.
+What survives:
+
+- **Bulk gated by homogeneity.** UiPath permits Bulk Edit only for actions *of
+  the same type* **and** *generated by the same process version*. The single
+  most transferable safety rule found. "Approve all" must never span a bid
+  nudge and a customer message.
+- **A supersession state.** ServiceNow's **No Longer Required** — the state for
+  a request overtaken by events. Without it, stale proposals either rot in the
+  queue or get deleted, and you lose the ability to tell whether the fleet was
+  *wrong* or merely *late*.
+- **Two clocks.** Camunda's `followUpDate` (latest you should start) vs
+  `dueDate` (deadline to finish). For us: *evidence goes stale at X* and *the
+  request dies at Y*.
+- **No queue item without a declared expiry behaviour** — and **`Auto Complete`
+  must never mean auto-approve**. UiPath offers it; Zapier and Workato default
+  to it; for spend it is wrong in every case.
+- **Risk classification decides the gate before a human looks.** ITIL's
+  Standard (template pre-approved once, runs unattended, logged against the
+  template) / Normal (operator approves, tiered) / Emergency. This is the only
+  thing that makes a one-person queue tractable at volume: the queue shrinks by
+  *class*, not by the operator getting faster.
+
+### 2C · Diff-gates (Terraform/HCP, Spacelift, Atlantis, CloudFormation, Argo, GitHub Actions)
+
+Three architectures exist. **Diff-first** computes a machine-readable dry-run
+and makes apply a separate transaction against the saved artefact.
+**Message-first** (n8n, Zapier, Workato) pushes hand-written text plus two
+buttons. **Identity-first** (GitHub Actions) gates on *who*, showing the
+approver nothing about *what*. We are diff-first, and should stay there.
+
+- **Apply consumes a stored plan, never a re-derivation.** What was approved is
+  byte-identical to what executes.
+- **World-drift is a section separate from the intent diff.** Terraform 0.15.4+
+  leads with *"Objects have changed outside of Terraform… the following plan may
+  include actions to undo or respond to these changes."* Before that it silently
+  absorbed drift. **The ads equivalent — quietly overwriting a Seller Central
+  edit — is the worst outcome available to us, and we already detect it as
+  CONFLICT rows.**
+- **Scope the staleness check to the fields the proposal reads.** Terraform's
+  global state serial produces false positives, and people learn to re-plan
+  reflexively. Atlantis's targeted `undiverged` check is the corrective. Our
+  AP.6 re-check — re-running the tool's own dry-run and comparing a per-tool
+  list of *material* fields — is already the good version. Keep it.
+- **Partial failure is normal and deserves a designed screen.** Terraform's
+  answer is "run plan again and read it". Ours must be *"Applied 7 of 11: 7
+  bids updated, 1 failed (429 throttled), 3 not attempted"*, with the Amazon
+  error per item.
+- **Approval should gate the credential, not just a flag.** GitHub gets this
+  right — approval is what unlocks the environment's secrets. This is the
+  structural fix for the class of bug this repo already knows
+  (`dryRun` a dead field; the halt guarding 2 engines of 8).
+
+### 2D · Control planes (Agent 365, AgentCore, ACP/AP2, LangSmith, Langfuse, Phoenix, Braintrust)
+
+- **An approval is a scoped, expiring, single-use grant — not a boolean.**
+  AgentCore Policy makes approvals *consumed*: one approval permits one act,
+  look-back capped at 24h. Stripe/OpenAI's ACP token carries
+  `{max_amount, expires_at, reason:"one_time"}`. AP2 splits it into three
+  layers we already have objects for: standing authority (the charter), the
+  specific act (the approval), and a **receipt** carrying what actually
+  happened including `error`+`error_description`. What we lack is the **hash
+  binding** between them.
+- **`execution_path` on every write** — `auto | human-reviewed` — is the
+  highest-value/lowest-cost field in the whole survey. It is the only field
+  that makes an autonomy dial auditable after the fact.
+- **The best approval screen found anywhere is AP2's reference card**, and it
+  shows three things most consoles omit: the **current** value beside the
+  proposed one, an explicit **distance to the threshold**, and a sentence
+  saying what you are authorising to happen *later, unattended*.
+- **"Pending approval" is a risk state, not a workflow step** (Agent 365 ranks
+  it Medium, next to prompt injection). Our version: *a worker enabled with no
+  approval on record*.
+- **One record shape for human and machine labels** (Phoenix's
+  `annotator_kind ∈ HUMAN|LLM|CODE`) turns "does my auto-grader agree with me"
+  into a `GROUP BY` instead of a project.
+
+### 2E · What is actually owed — and what is theatre
+
+This corrects a framing carried in `docs/2026-08-07-naf-ap-approval-inbox.md`
+and in `AGENT_FLEET.md` L10, and it is worth getting right because it changes
+how much we build:
+
+> **An Amazon-ads bid/keyword agent is almost certainly not an Annex III
+> high-risk system.** Annex III covers biometrics, critical infrastructure,
+> education, employment, essential services, law enforcement, migration and
+> justice. Marketing automation is outside it. The Digital Omnibus agreement of
+> 7 May 2026 deferred Annex III obligations to **2 December 2027** in any case.
+> GDPR Art. 22 does not engage either — a bid change has no legal or similarly
+> significant effect on a natural person. Art. 4 (AI literacy) and Art. 50
+> (transparency) are the live obligations, and neither is about this page.
+
+So **Article 14 is a design template we steal, not a conformity regime we
+satisfy.** L10's *"Human oversight on high-risk decisions is a legal
+requirement, not a preference"* is overclaimed for ads. I am not editing
+`AGENT_FLEET.md` — it is not this stream's file — but it should be softened by
+whoever owns it, because a false legal justification is a bad reason to build
+something and a worse reason to keep it when it stops working.
+
+What we build here is owed **to the money, to Amazon's ToS, and to our own
+future selves at 2am**. That is a sufficient reason, and it changes what we
+build:
+
+- **Four-eyes is structurally impossible and simulating it is worse than
+  admitting it.** The AI Act itself mandates two-person verification in exactly
+  one place (Art. 14(5), biometric identification) — direct evidence that
+  four-eyes is not what oversight generally means. A second login operated by
+  the same human produces a record that *asserts* independent review where none
+  occurred. Write the exception down instead; ISO 27001 A.5.3 explicitly
+  permits compensating controls where segregation cannot be achieved.
+- **DORA is the permission slip to build less.** External approval bodies
+  correlate *negatively* with lead time, deploy frequency and restore time, and
+  **not at all** with change failure rate; organisations with formal external
+  approval are 2.6× more likely to be low performers. Ceremony does not buy
+  safety. Automated pre-checks, reversibility and fast detection do.
+- **Automation bias is measured, not folklore**: erroneous decision support
+  raises incorrect decisions by **26%** (Goddard 2012, 74 studies). The
+  measured mitigators are *present information rather than recommendations* and
+  *position the advice less prominently* — so the delta and the evidence should
+  be the largest things on the card, and the recommendation should not be the
+  default focus target.
+- **Habituation is neurological.** Visual processing of a warning collapses
+  after the **second** exposure. Polymorphic (appearance-varying) confirms
+  resist it for at least five days. Use sparingly, top tier only — polymorphism
+  on routine approvals is just an inconsistent UI.
+- **Cognitive forcing functions beat explanations** at reducing over-reliance,
+  *and* users prefer them least. Apply to exactly one tier or we will route
+  around our own control.
+- **Coded reasons, customised per action type, plus optional free text.** Coded
+  lists matched free-text reasoning in only 46% of 15,636 alerts, and free text
+  alone is unanalysable (one study found 209 spellings of "will monitor as
+  recommended"). A randomised crossover trial found customised lists beat a
+  generic one at p < 0.001. Include *"the recommendation itself is
+  inappropriate"* as a first-class option — it is the highest-value signal for
+  tuning a fleet and generic lists suppress it.
+- **Rubber-stamp detectors have published thresholds**: sustained approval rate
+  >98%, median decision time <5s, zero rejections in two cycles. Two or more
+  signals means the control is a ceremony.
+
+### 2F · Triage craft (Superhuman, Linear, Gmail, Gerrit, GitHub, Stripe Radar, Ramp, GitLab)
+
+- **Digits for dispositions, letters for navigation** (Linear). A beginner
+  browsing with j/k presses letters exploratively; digits are never pressed by
+  accident. `1` Apply · `2` Apply with my edit · `3` Decline, and every letter
+  stays safe. The buttons can carry the digit as a chip, which teaches the map
+  without a tooltip.
+- **Gerrit's attention set is the only honest badge.** Count only items where
+  the operator is *the blocker*, never everything open, and give the hovercard
+  that says why and when. A permanently-lit badge is ignored within a week.
+- **Undo by holding the write, not by compensating it** (Gmail). A compensating
+  re-write leaves two entries in Amazon's change history, can race the agent's
+  next run and burns write quota. AP.4 already got this right; it is worth
+  recording *why* so nobody "improves" it into a toast.
+- **The button states the consequence, not the verb.** Never ship a button
+  labelled "Approve". *"Apply — daily budget €40 → €65"*. Stripe and Ramp both
+  do this; it also makes a screenshot self-documenting.
+- **Order by consequence, not by `createdAt`.** Creation order puts a €2 bid
+  nudge above a budget doubling.
+- **Three empty states, not one** — *the fleet is off* / *the fleet ran and
+  found nothing* / *your filter hides 12* look identical if you ship one
+  generic empty, and all three read as "broken" to a first-time operator.
+- **Snooze is a first-class verb.** Without a "not now" key the only way to
+  clear a badge is to approve — the exact failure a spend queue cannot afford.
+- **A command palette is the best onboarding device ever built** because it
+  prints the shortcut beside every action. Ship a palette, not a tour: a tour
+  on an empty queue has nothing to attach itself to.
+- **Never rely on colour alone** (WCAG 1.4.1). Safe verbs quiet and left; the
+  spend-affecting action alone on the right behind a divider, carrying a euro
+  figure in its own label and a glyph, and **not the focus target**.
+
+---
+
+## PART 3 — What this page is NOT
+
+Stated once, so nothing gets built twice. Derived from the other nine pages'
+own claims, quoted from their files.
+
+| Neighbour | Their claim | The boundary |
+|---|---|---|
+| **Overview** | "what needs you (approval count, expiring approvals)" | Overview states **the number** and links. Approvals states **the shape of the number** — oldest, expiring, parked, came back — and says nothing about runs, findings or spend |
+| **Activity** | "Decisions: the event stream… `approval.requested` and `approval.decided`" — **already shipped**, reading `AgentApproval` directly with *no* tool filter (`fleet-timeline.service.ts:444-536`) | Activity **narrates that a decision happened**; Approvals is where a decision **is taken**, and is the only reader that defines what "waiting" means. DT.4's *"act where you read: approve or reject inline"* must not ship — it would duplicate or bypass the evidence gate, the track record, the staleness re-check and the undo window. Activity's events link here (`href` is `null` on both today) |
+| **Fleet map** | overlays: autonomy / health / cost | The map may **show that approvals are waiting**; it may not decide them. Agreed with the SB.M stream this session |
+| **Workers** | roster, report card, acceptance rate | Workers owns the scorecard. This page shows one narrow number — how this worker's proposals **of this kind** have fared with you. ⚠ **The two already disagree in code**: `scorecard.service.ts` counts `approved`; the inbox counts `executed` as approved too. Whichever page prints a rate must name its counting rule |
+| **Workflows** | per-step `ask` gates | A gated step links here. There is never a second inbox there, and no gate editing here |
+| **Assignments** | "New → Running → **Awaiting your approval** → Done" | **Settled with SB.AS this session** — they own the lifecycle state, we own the decision. `/fleet/approvals?assignment=<id>` lands the queue filtered. Contract in Part 7 |
+| **Files & data** | uploads constrain reasoning | A file must never become a second write path that skips this gate |
+| **Cost & value** | cost per accepted action, euros moved | "What it costs to be wrong" for **this** action is decision input and stays on the card. Any aggregate is Cost's. The likely leak is a euro total creeping onto the bulk confirmation — that one is ours, because it is a blast-radius statement, not analytics |
+| **Controls** | the 20 controls, the ladder, the audit feed | Controls owns **what may reach this queue and why** — dials, tiers, the `alwaysAsk` floor, expiry policy, notification settings. This page explains the gate on **this** request and links. No dial is editable here. Note every decision already writes a `AgentControlAudit` row (`approve_action`, `reject_action`, `undo_approval`, `stale_refused`) which Controls renders — our record section stays the **approvals table**, not the audit feed |
+
+Two more, explicitly out:
+
+- **`BulkAutomationApproval` / `/api/bulk-automation-approvals`** — the listing
+  automation queue. A separate system sharing no code. Putting it here would
+  make the rail badge count two unrelated things.
+- **`/marketing/ads/bulk`** — owns bulksheets. Part 7's homogeneous batch is not
+  a second bulk editor.
+
+---
+
+## PART 4 — The proposed sections
+
+Ten. The teaching layer is a condition of done on every one, not a section.
+
+A structural idea that runs through S2 and S3: **the two strips trade places.**
+When the queue is empty, S2 ("can anything arrive?") is the page and S3 is one
+line. When the queue is full, S3 ("what is here, and what is urgent") is the
+page and S2 is one line. Neither is ever absent, because the day S2 silently
+disappears is the day an empty queue starts lying again.
+
+### AQ-S1 · The header and the standing promise
+
+**Purpose.** Tell someone who has never seen the fleet what this queue
+guarantees, before they read a number — and keep saying it on the day the queue
+is full.
+
+Contents: `FleetPageShell` title and subtitle; a persistent two-line promise
+that does not scroll away — *nothing on this page has happened yet*, and
+*nothing the fleet proposes reaches Amazon unless you say yes here*; the shared
+"How approvals work" drawer answering six questions (who may ask you · what the
+critic already rejected before you saw it · what happens the moment you say yes
+· what happens if you say nothing · whose name goes on the record · what this
+page cannot do); a `Cmd+K` palette that prints every shortcut beside its action;
+and `<Term>` tooltips on every piece of jargon.
+
+**Why its own section.** The promise is the one sentence that must survive a
+full queue. Inside the empty state it disappears exactly when volume makes
+rubber-stamping tempting.
+
+**Glossary debt** (append-only, one definition per term — re-read the file
+immediately before editing): `approval`, `risk-tier`, `undo-window`,
+`staleness`, `blast-radius`, `propose`, `critic`, `exemplar` exist.
+New: **`reversibility-class`**, **`superseded`**, **`preview-only`**.
+
+### AQ-S2 · Can anything reach this queue? — the gate's own state
+
+**Purpose.** Answer the question an empty queue always raises: *is this empty
+because nothing needs me, or because something is broken?* Today the honest
+answer is **both**, and no other page can give it.
+
+One plain sentence for each:
+
+1. **Is the fleet on?** Today: no — seven charters, all OFF.
+2. **Who could ask?** Only workers at PROPOSE. Today: none, and **six of seven
+   cap at OBSERVE**, so at maximum dial exactly one worker could ever ask.
+3. **Can what they propose actually run?** Today: **no** — all three fleet
+   tools are preview-only, the gate refuses to queue a tool with no
+   `execute()`, and an approve on one would record your decision, teach the
+   fleet, and write nothing to Amazon. *This is the most load-bearing fact on
+   the page and it is currently stated nowhere in the product.*
+4. **When could something appear?** Next sweep, next council.
+5. **What happens if you do nothing?** A request expires **24 hours** after it
+   is made; expiry means refused-and-recorded and **never** auto-approved; the
+   sweep runs every 30 seconds whether the fleet is on or off.
+6. **What this queue does not cover.** The four tools with executors that route
+   through their own downstream gates, and the ads write gate behind
+   everything.
+
+**Why its own section.** It joins three facts that live on three different
+pages — the dials (Controls), the schedule (Overview) and executability
+(nowhere) — into the one answer this queue needs. Without it, an empty state is
+indistinguishable from a broken pipe. Today it genuinely *is* a broken pipe, and
+the operator deserves to be told rather than to discover it.
+
+**Data.** `/agent/fleet/state` and `/schedule` exist. New and trivial: one
+derived boolean per tool, `typeof tool.execute === 'function'`, read straight
+off the registry. `EXPIRY_HOURS` and the cron cadence surfaced as declared
+constants rather than retyped into copy — that is how the glossary drifted to
+"7 days" in the first place.
+
+### AQ-S3 · Where the queue stands
+
+**Purpose.** A different question from the list below it: *do I have to act in
+the next hour, and what is the rail badge actually counting?*
+
+Tiles, each one a filter (the house pattern from Workers S2): **Waiting ·
+Expiring within the hour · Parked right now · Came back · Oldest**. Plus the
+reconciliation line: how many requests are waiting **outside** the fleet views,
+with a jump to S5.
+
+**Why its own section.** These are cross-cutting derivations over the whole set
+that no row can carry, and this is the only place the badge's number is
+explained. Folded into a list header, the two facts that most change behaviour
+— the expiry clock and "a yes may write nothing" — become the footnote nobody
+reads, which is exactly where they sit today.
+
+### AQ-S4 · Waiting for you — the list, the empty state, and the first item
+
+**Purpose.** The queue itself, and for the coming weeks the most important
+screen on the page: an empty queue that teaches instead of apologising.
+
+- Grouped by worker under the worker's **real name** (never a raw key, never
+  "unknown"; "an agent we cannot identify" is the existing, correct fallback).
+- **Ordered by consequence, not by `createdAt`** — euros at risk × reversibility
+  — with age and time-to-expiry on every row. `expiresAt` is stored on every row
+  and rendered nowhere today.
+- The row carries the money and the target so most decisions need no opening:
+  worker · action in plain words · **the entity by name** · before → after ·
+  the reason · risk · time left.
+- **Three distinct empty states**: *the fleet is off and here is why nothing can
+  arrive* (links S2) · *the fleet ran and found nothing* · *your filter hides
+  N*.
+- **A worked sample card, visibly inert**, so the operator has read a real
+  proposal before their first real one arrives.
+- **A one-time band above the first genuine fleet approval this account ever
+  receives**: that it is the first, that nothing has happened yet, and that
+  taking twenty minutes over it is the correct speed.
+- A deep-link anchor per item, plus `?assignment=` (the SB.AS contract).
+
+**Why its own section.** The empty state *is* this page for weeks. Reviewed as
+a footnote to the list it gets written last and worst — and the first-item
+moment is the single transition where the page stops being theory and starts
+being money.
+
+### AQ-S5 · Waiting from outside the fleet
+
+**Purpose.** Show the requests no view shows — the only ones on this page that
+can actually change a price, publish a listing or email a customer.
+
+Same card vocabulary (all four are already in `TOOL_CARDS`), decided through
+the **fleet** route so the decision is attributed, parked with the same
+twenty-second undo, audited and turned into precedent — never through the older
+route, which records no name, skips the undo, skips the staleness re-check and
+teaches nothing. Honest about what cannot be shown for these rows: no worker
+join, no track record, no resolved entity names. One line per action saying
+where a yes actually goes, and that each has its own gate after this page.
+Collapses to a single line when empty, which it usually will be.
+
+**Why its own section.** Different producer, different endpoint, different cap,
+thinner payload — and the *opposite* consequence. Appending them to the waiting
+list would put two truncation rules and two qualities of attribution under one
+count, which is precisely how a queue starts lying to the person who trusts it.
+
+⚠ **This is the section that closes the silent terminal failure of §1.2**, and
+it needs an operator decision (Part 6, Q1): does this page own **all**
+approvals, or only the fleet's?
+
+### AQ-S6 · The decision card
+
+**Purpose.** One proposal, with enough on it to decide without opening anything
+else, and enough friction that a serious change cannot be waved through.
+
+Seven things, in this order — the "decision packet" the research converges on:
+
+1. **What would change, and on what** — naming the actual campaign, ad group or
+   search term. The API already resolves this and the client throws it away.
+2. **The change as before → after**, with the current value read **live**, not
+   the value the worker happened to see. *"€0.31 → €0.84 (+171%)"*; never
+   *"bid €0.84"*, which is unjudgeable.
+3. **Why**, in the worker's words, with **the evidence rows it read and how
+   fresh they are**. *"decided on 3 days of AMS coverage"* is a fact the
+   operator can weigh; a confidence percentage is not. This repo already knows
+   sparse AMS coverage produces confident-looking garbage
+   (`reference_ams_per_campaign_coverage`).
+4. **What it costs if it is wrong**, in euros wherever a euro figure is honest.
+5. **Whether it can be undone**, as one of three classes — *we can put it back*
+   / *only compensated for, the spend is gone* / *not at all*. Never softened,
+   never asserted in two places that can drift.
+6. **How this worker's proposals of this kind have fared with you.**
+7. **The expiry clock**, and what happens when it runs out.
+
+Plus, as its own stacked block above the intent diff: **"Changed outside Nexus
+since we last looked"** — the Terraform drift preamble. Seller Central edits,
+Amazon's own automation, `CONFLICT` portfolio rows. The sentence a single
+operator needs before an agent reverts a deliberate human edit.
+
+**Re-tier the depth ladder.** Today `heavy = high risk || not undoable`, and
+100% of fleet approvals are high risk, so the ladder has one rung and the ack
+tick is blanket friction. Drive depth from **reversibility class × euros at
+risk**, not from `riskTier` alone.
+
+**Why its own section.** This is the entire product. Every other section is a
+container for it, and it is the only one where getting the contents wrong
+produces a confident, well-designed, wrong decision.
+
+### AQ-S7 · The four answers
+
+**Purpose.** Give the operator the four responses a real decision needs — yes,
+yes-but-not-like-that, no, and I-need-to-know-more — instead of forcing every
+near-miss into a rejection and a rerun.
+
+- **Approve** — parks rather than fires (S8), may carry an optional note.
+  Today approve is called with no reason at all, so only rejections can teach.
+- **Edit-then-approve** — the one thing the industry standard has that we do
+  not. **Typed, bounded fields**, never free-text: a bid is euros to two
+  decimals inside the min-bid floor and under the CPC ceiling; a match type is
+  an enum. Re-validated against **the same guards the write path uses**, and it
+  **supersedes** the original row with a new idempotency key rather than
+  mutating it. The edited card shows which fields the operator changed beside
+  what the worker proposed.
+- **Reject**, with a **coded reason customised to the action type** plus
+  optional free text — including *"the recommendation itself is
+  inappropriate"*.
+- **Ask** — sends a question back to the worker and leaves the request waiting
+  rather than deciding it.
+- **Snooze** — "not now", waking on a clock **or on new evidence**.
+
+**Symmetric friction.** Reject must be no harder than approve. Today it is
+harder, and that asymmetry is the documented mechanism that manufactures rubber
+stamps. Coded reasons on both sides fixes it: one click each, free text
+optional on either.
+
+**Buttons state the consequence**: *"Apply — daily budget €40 → €65"*, not
+"Approve". Dispositions on digits `1`/`2`/`3`; every letter stays safe.
+
+**Why its own section.** The verb set is this page's contract with the operator,
+it carries the only genuinely new backend, and **edit** is where an operator
+typing `4.2` instead of `0.42` becomes a ten-times bid. It needs its own review,
+not a bullet inside the card.
+
+### AQ-S8 · Deciding many at once
+
+**Purpose.** Make clearing forty near-identical proposals a two-minute job
+without making a mass mistake possible.
+
+- **Homogeneity rule** (UiPath's): many may be decided together only when they
+  are the same worker, same action kind and **same worker version**. "Approve
+  all" can never span a bid nudge and a customer message.
+- **Select-all scoped to the visible group or filter, never to the queue.**
+  Gmail's two-step disambiguation is the minimum bar; a select-all that silently
+  means "all 340 matching an unseen filter" is the most dangerous control we
+  could ship.
+- **The blast-radius sentence built server-side** so it cannot drift — count,
+  kinds, high-risk share, **the aggregate euro ceiling**, and the irreversible
+  count the server already computes and never uses. Reconciled against the rows
+  that can actually be decided, so it cannot promise "reject all 5" and reject 3.
+- **A result the operator can read** — *"37 done, 3 failed, here they are"* —
+  instead of the silent reload that follows a partial failure now. Both bulk
+  endpoints already return `failed[]` and the client discards it.
+
+**Why its own section.** Bulk is where a trust-first page most easily becomes a
+rubber stamp, and it is the only section whose failure mode is euros × N. It is
+placed after the single-item verbs deliberately: bulk should be the last thing
+an operator learns, not the first.
+
+### AQ-S9 · The twenty seconds after yes — and what actually landed
+
+**Purpose.** Make approving safe to do quickly by making it reversible, and
+never claim something happened before it did.
+
+- The **parked row** — green, in place, live countdown, inline Undo,
+  deliberately not a toast. Keep AP.4's reasoning in the code so nobody
+  "improves" it: a toast dies on reload; **the row is the undo**; and the write
+  is *held*, never compensated, so Undo means the Amazon call never happened.
+- The **stale hand-back**, saying what moved.
+- **"Approved" and "it ran" are different words**, and only the second is a
+  claim about Amazon. Today the preview-only terminal state renders as plain
+  success.
+- **What actually landed** — the receipt. Per-item status, the Amazon error on
+  each failure, retry-the-remaining. Partial failure is normal when writing to
+  a rate-limited third-party API and deserves a screen, not a log line.
+- **Beyond the window**: a Revert action honestly labelled as a *new change
+  Amazon will see*, not as an undo. `rollback.service.ts` exists; nothing links
+  an approval to it.
+
+**Three live defects this section must fix**, all found this session: a parked
+row with a null `executeAfter` renders "Running now…" forever with no Undo and
+never commits; a stale hand-back never resets its 24-hour clock, so the next
+sweep can expire it seconds later; and a failed execution returns to `pending`
+with `decidedBy` still set and **no explanation on the card**.
+
+### AQ-S10 · The record, and what your decisions taught the fleet
+
+**Purpose.** What you answered, why, when, who answered it — whether it
+actually ran — and what the fleet learned from it.
+
+- Decided and Expired as a compact ledger. Outcomes in impersonal words that do
+  not overclaim. Your reason in your own words. Honest truncation
+  (*"showing 100 of 143"*).
+- **The eighteen pre-fleet rows labelled and explained**: not one is a fleet
+  tool, not one carries a decider, every one was answered in under half a
+  minute by a script. They are history, not precedent, and a beginner reading
+  "Decided 18" must not conclude they have made eighteen decisions.
+- **Expired rows read as what they are** — requests that died waiting for you,
+  with how long they waited. That number is the one signal the queue is beating
+  the operator.
+- **Precedent**, read-only: worker, action, accepted/rejected, your note
+  verbatim — plus a plain statement of how it is used (the most recent N go
+  into that worker's next prompt) and the honest empty state, which today is
+  the true one. Nothing in the API can switch off, reweight or correct a
+  precedent; do not render a control that cannot act.
+- Every row links to the same event on **Activity** rather than restating it.
+
+**Why one section and not two.** The precedent panel is the *consequence* of the
+record, it is the only argument against rubber-stamping that does not rely on
+fear, and it is the entire justification for asking for a reason at all.
+Separating them puts the reward on a different screen from the work.
+
+### Deferred, and named so it is not lost: the oversight check
+
+Rubber-stamp detection over the operator's own behaviour — approval rate,
+median decision latency per action type, edit rate, override rate **per worker**
+(never in aggregate, which hides the one worker being blindly trusted). The
+research gives published thresholds and the honest reading: near-zero override
+is ambiguous between a great worker and a rubber stamp, so it is read alongside
+latency and sampled review, never alone.
+
+**It cannot ship yet.** It needs ~20 real decisions before it can say anything,
+and today there are zero. Shipping it now means an empty chart on an
+already-empty page — the exact thing that makes an operator stop trusting a
+surface. It is AQ.10, after the queue has been used.
+
+---
+
+## PART 5 — What is deliberately not here
+
+- **Notifications, digests, push, one-click approve from Slack or email.**
+  Settled by the operator in AP §6.4: notification belongs to the daily brief.
+  And one-click approve from a notification is rejected outright for anything
+  that spends — it strips the evidence and the blast-radius sentence, and makes
+  a stray tap indistinguishable from a considered decision in the record. This
+  page states in one sentence that you will be told; the switch is on Controls.
+- **Assign, delegate, route, escalate, second approvers, quorums.** Two-thirds
+  of the enterprise approval surface exists to arbitrate between humans. There
+  is one. `AgentApproval` has no assignee column and even the resolved actor's
+  `userId` is discarded — `decidedBy` is free text.
+- **"Always approve this shape in future."** The strongest volume mechanic in
+  the whole research, and the wrong home. It edits autonomy policy, which
+  Controls owns, and the research's own warning applies: rules minted in a
+  moment of impatience accumulate into invisible auto-approvals nobody can
+  audit. The honest equivalent is the trust ladder, linked from S10.
+- **SLA / expiry configuration.** The 24-hour clock is *explained* here and
+  *set* on Controls. A settings form on a decision surface is how a queue page
+  becomes a settings page.
+- **Saved views, server-side search, cursor pagination — at first.** The
+  endpoint has no `q`, no cursor and three hardcoded views, and there is no
+  index on `toolName` or `decidedAt`. Filtering starts client-side over the
+  loaded set with an honest *"showing N of M"*, and graduates only above a
+  volume threshold. Filters over an empty table teach a beginner a concept and
+  give them nothing.
+- **Live staleness re-checking on every render.** `checkStaleness` re-runs each
+  tool's database-backed dry-run. On-demand button, plus the automatic check at
+  commit.
+- **A chat thread with the worker.** Chat-first review is the named
+  antipattern: a conversation is where decisions go to be lost. *Ask* stays a
+  structured verb whose answer returns to the card.
+- **A separate "currently parked" view.** The parked row already sits where the
+  operator is looking. A separate view splits attention during the twenty
+  seconds when attention matters most.
+
+---
+
+## PART 6 — Operator decisions requested
+
+**Q1 · Does this page own every approval, or only the fleet's?**
+*Recommendation: every approval, with the fleet / non-fleet split visible
+(S5).* The alternative leaves live, executable requests — price changes,
+listing publishes, customer emails — created, invisible, and expired unseen in
+24 hours. That is happening today.
+
+**Q2 · Do we say out loud, on the page, that a yes writes nothing right now?**
+*Recommendation: yes, prominently, in S2.* The alternative is a screen that
+implies a gate is protecting Amazon when the actual protection is that the
+action cannot execute at all. When Phase F adds executors, that sentence
+changes — and the operator will know exactly when it changed.
+
+**Q3 · Edit-then-approve: supersede or mutate?**
+*Recommendation: supersede.* A new row, a new idempotency key, the dry-run
+re-run to regenerate the preview, the edited numbers re-validated against the
+write path's own guards. It costs more and it is the only version where the
+number approved is provably the number written.
+
+**Q4 · Symmetric friction — coded reasons on approve as well as reject?**
+*Recommendation: yes.* Today reject demands typing and approve is one click,
+which is the documented mechanism that manufactures rubber stamps. One click
+each, a short customised coded list on both, free text optional on either.
+
+**Q5 · What does the rail badge count?**
+*Recommendation: only items blocking you* — Gerrit's attention set —
+**including** the non-fleet ones under Q1, and **zero** when the fleet is off.
+A badge that lights up for informational output is ignored within a week. If
+the badge counts three views and the page shows four sources, the first thing
+the operator learns is that the badge is wrong.
+
+**Q6 · Snooze?** *Recommendation: yes*, waking on new evidence as well as on a
+clock. Without a "not now", the only way to clear a badge is to approve.
+
+**Q7 · Should I fix the glossary's "7 days" now, in AQ.0?** It is a one-line
+change to a shared append-only file and the UI currently contradicts its own
+constant by 7×.
+
+---
+
+## PART 7 — The cross-stream contract (settled 2026-08-07)
+
+Agreed with the **Assignments** stream (`SB.AS`) this session, over five
+exchanges. Recorded here and mirrored into locks §5 when both studies land.
+
+- `AgentRun.assignmentId String?` — **theirs**, additive, migration
+  `20260807e`. I never read `AgentAssignment`.
+- **I expose** `GET /agent/fleet/approvals/rollup?assignmentIds=…` →
+  `{ waiting, parked, returned, decided, expired }`. The `decidedBy`-set-on-
+  `pending` exclusion lives **inside** the rollup, not in a comment beside it.
+  ≤100 ids, **rejected over the cap, never truncated** — a silently short
+  answer is a wrong count on a queue that gates every write.
+- **They expose** `GET /agent/fleet/assignments/labels?ids=…` →
+  `{ label, targetLabel, dueAt, state, href }`. Rendered verbatim; no
+  synthesised labels; no hardcoded route shape. They refused a denormalised
+  label column because it goes stale on rename — the same class as this doc's
+  own two stale constants (the map drawing `FLEET_GRAPH`; the glossary's 7 days
+  against `EXPIRY_HOURS = 24`) and the third the Assignments stream then found
+  (`scopeCampaignIds`, rendered on two shipped surfaces and enforced by
+  nothing — locks §5 decision 7). Four instances in one evening makes this a
+  class, not a run of bad luck: **a read surface drawing a constant no
+  executor honours.** Worth a standing check on any new fleet surface.
+- Deep link `/fleet/approvals?assignment=<id>`; the queue lands filtered.
+- **`blocked` → `returned`.** "Blocked" is already **the critic's verdict on a
+  plan**, and the fleet's only plan to date is blocked, so the operator meets
+  that word in the other sense first. A naming collision caught before either
+  side built it.
+- Their deadline, my expiry. The 7-days-vs-24-hours contradiction stays visible
+  on my surface until I fix it; they will not paper over it.
+
+Also agreed with the **Fleet map** stream (`SB.M`): the map may show that
+approvals are waiting; it may not decide them. The same rule goes to
+**Activity**, and that one is not yet agreed — see Part 8.
+
+**Migration letter:** a–e are taken (a AC · b AP · c WF · d W.8 · e SB.AS).
+**AQ takes `20260807f`** if it needs one.
+
+---
+
+## PART 8 — Open with other streams
+
+1. **Activity (`SB.ACT`) — mostly settled, and better than I proposed.**
+   `fleet-timeline.service.ts` already reads `AgentApproval` directly, with
+   **no** `FLEET_TOOLS` filter, and emits `approval.requested` /
+   `approval.decided` with `href: null` — so two fleet surfaces read the same
+   table with different rules, in production, today. Reading their study
+   (`docs/2026-08-07-naf-sbact-activity-page.md`), the important half is
+   already resolved without either of us asking: their run-detail boundary is
+   *"renders no controls — no retry, no re-run, no approve/reject, no cancel;
+   `/fleet/approvals` owns decidable items"*, and their first principle is
+   **"a record is read, not operated"**. DT.4's inline approve is dead. Good.
+   Two things remain, both small:
+   - **They are scoping the 18 pre-fleet approvals out of the timeline** and
+     pointing at this page instead — correct, because Activity should not claim
+     the fleet decided something it never did. But it **falsifies a comment I
+     inherit**: `ApprovalInbox.tsx`'s header justifies keeping that history
+     *"because the decision timeline already shows it"*. The history still
+     belongs here — for a better reason, that this is the only page that can
+     contextualise it — so the comment is mine to rewrite in AQ.1, not a
+     behaviour change.
+   - **Ask:** give the two approval events an `href` into this queue. Today
+     Activity can tell the operator a request is waiting and offer nowhere to
+     go.
+2. **Workers (`SB.W`) — the two acceptance rates.** `scorecard.service.ts`
+   counts `approved`; `approval-inbox.service.ts` counts `executed` as approved
+   too. Both pages plan to show a number derived from the same decisions.
+   Whichever prints a rate must name its counting rule, or they contradict each
+   other on screen. Proposal: Workers owns the rate; this page shows only
+   per-worker-per-tool history and never a percentage.
+3. **`AGENT_FLEET.md` L10 overclaims the legal position** for an ads fleet
+   (Part 2E). Not my file; flagged for whoever owns it.
+
+---
+
+## PART 9 — Proposed build order
+
+Ordered by *what is true and unsaid* first, then by what has data.
+
+| Phase | What | Why here |
+|---|---|---|
+| **AQ.0** | Tell the truth: fix the glossary's 24h/7d contradiction; surface `EXPIRY_HOURS` and the cron cadence as declared constants | One-line honesty fixes that stop the UI contradicting its own code. No page needed |
+| **AQ.1** | The page exists: shell, promise, **S2 gate state**, three views, waiting list with the three teaching empty states, the record | Mostly re-housing what AP.1–AP.8 shipped, plus the one section only this page can host |
+| **AQ.2** | **S5 — the non-fleet queue.** Close the silent terminal failure | The only live correctness bug on the page. Gated on Q1 |
+| **AQ.3** | **S6 — the card, properly**: render `labels`, before→after with the live current value, evidence freshness, reversibility class, the drift block, re-tiered depth | Where a wrong decision actually gets made |
+| **AQ.4** | **S7 — symmetric friction**, coded reasons, consequence-labelled buttons, digit dispositions, keyboard + palette | Cheap, and it removes the rubber-stamp asymmetry we shipped by accident |
+| **AQ.5** | **S3 — the queue-shape strip**, the rail badge, filters above a volume threshold | Needs the badge decision (Q5). Useless until something arrives |
+| **AQ.6** | **S8 — bulk** with homogeneity, euros in the blast radius, readable partial results | Only matters at volume; dangerous before the card is right |
+| **AQ.7** | **S9 — what actually landed**: executed ≠ approved, the receipt, partial failure, revert-beyond-the-window | Needs an executor to exist to be exercised honestly |
+| **AQ.8** | **Edit-then-approve** (supersede, typed fields, re-validation) | The largest new backend, and the single highest-value gap versus the industry |
+| **AQ.9** | **Ask** | Needs a channel back into a suspended run. Nothing in the fleet suspends or resumes today. Likely deferred past this series |
+| **AQ.10** | The oversight check | Needs ~20 real decisions |
+
+**Honest constraint, stated once.** With the fleet dark and the fleet tools
+preview-only, **AQ.2 is the only phase that can be exercised on live data**.
+Everything else ships proven by tests plus a seeded row, and must be re-verified
+the first time a worker actually asks — exactly as AP.1–AP.8 recorded, and for
+the same reason.
+
+---
+
+## PART 10 — Build conventions this page is bound by
+
+- **CSS prefix `aq-`, in `app/fleet/approvals/approvals.css`.** `ap-` is taken
+  by `fleet-sections.css` (the old panel) and both could load on one page.
+- `fleet-pages.css` stays frozen to shared `acr-pg-*` primitives.
+  `.fleet-surface` already pins the DS tokens the `productsNextLight` way —
+  copy that, never `.h10-shell` (`reference_ds_token_triplet_collision`).
+- DS `DataGrid` + `GridToolbar` + `FilterBar` + `Pagination` inside
+  `h10-ds-gridcard` for any table, all four DS stylesheets imported. Settled by
+  Workers STUDY 0.
+- **Zero native `<select>` under `app/fleet`** — the DS ratchet checks the
+  working tree, so one offender blocks every session's push.
+- Real-time is `_shared/use-visibility-poll.ts` — 10s, visibility-gated, an "as
+  of" stamp and a *changed since you looked* cue rather than a silent re-sort
+  under the cursor. Settled for all ten pages.
+- Routes go in **`agent-fleet-approvals.routes.ts`**, registered with one line
+  in `index.ts`. Never `agent-fleet.routes.ts` (771 lines, a `€` binary byte so
+  `grep -a`, and a duplicate path is a boot crash).
+- `nav-permissions.ts` is prefix-matched, so `/fleet/approvals` already inherits
+  `pages.advertising`. No new row.
+- Nothing under `rules-automation/fleet/` is touched — the Overview still
+  renders `ApprovalInbox` and `DecisionCard`, and that move belongs to whoever
+  takes the Overview.
+
+---
+
+## Sources
+
+Code and data cited inline. Research sources by lens:
+
+**Agent inboxes** — [LangChain Agent Inbox](https://github.com/langchain-ai/agent-inbox) · [LangGraph human-in-the-loop](https://docs.langchain.com/oss/python/langgraph/interrupts) · [`HumanInTheLoopMiddleware`](https://docs.langchain.com/oss/python/langchain/middleware) · [Claude Agent SDK `canUseTool`](https://code.claude.com/docs/en/agent-sdk/user-input) · [OpenAI Agents SDK](https://openai.github.io/openai-agents-js/) · [Vercel AI SDK 6 approvals](https://ai-sdk.dev/) · [MCP elicitation](https://modelcontextprotocol.io/specification) · [Gumloop HITL](https://docs.gumloop.com/core-concepts/human_in_the_loop)
+
+**Work-lists** — [UiPath Action Center](https://docs.uipath.com/action-center) · [ServiceNow approvals](https://www.servicenow.com/docs/) · [Camunda 8 user tasks](https://docs.camunda.io/) · [Flowable](https://www.flowable.com/open-source/docs/) · [Temporal HITL](https://temporal.io/blog) · ITIL 4 change enablement
+
+**Diff-gates** — [Terraform plan/apply](https://developer.hashicorp.com/terraform/cli/commands/plan) · [HCP Terraform runs](https://developer.hashicorp.com/terraform/cloud-docs/run) · [Atlantis apply requirements](https://www.runatlantis.io/docs/apply-requirements.html) · [CloudFormation drift-aware change sets](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-updating-stacks-changesets.html) · [Spacelift runs](https://docs.spacelift.io/concepts/run) · [GitHub Actions environments](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments) · [n8n Wait node](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.wait/) · [Zapier Human in the Loop](https://help.zapier.com/) · [Airflow HITL operators](https://airflow.apache.org/docs/apache-airflow-providers-standard/) · [Prefect pause/suspend](https://docs.prefect.io/)
+
+**Control planes** — [Microsoft Agent 365](https://learn.microsoft.com/en-us/microsoft-agent-365/) · [AWS Bedrock AgentCore Policy](https://docs.aws.amazon.com/bedrock-agentcore/) · [Agentic Commerce Protocol](https://developers.openai.com/commerce/) · [Google AP2](https://ap2-protocol.org/) · [LangSmith annotation queues](https://docs.langchain.com/langsmith/annotation-queues) · [Langfuse annotation](https://langfuse.com/docs/scores/annotation) · [Arize Phoenix annotations](https://arize.com/docs/phoenix/) · [Braintrust review](https://www.braintrust.dev/docs) · [ServiceNow AI Control Tower](https://www.servicenow.com/products/ai-control-tower.html)
+
+**Compliance & oversight** — [EU AI Act Art. 14](https://artificialintelligenceact.eu/article/14/) · [EDPS ADM human-intervention checklist, 18 May 2026](https://www.edps.europa.eu/) · ISO/IEC 42001 A.6/A.9 · [NIST AI RMF](https://www.nist.gov/itl/ai-risk-management-framework) · Goddard, Roudsari & Wyatt, *Automation bias*, JAMIA 2012 · Buçinca, Malaya & Gajos, *To Trust or to Think*, CSCW 2021 · Anderson et al., *polymorphic warnings*, CHI 2015/2017 · Ben Green, *The flaws of policies requiring human oversight*, CLSR 2022 · [DORA change approval research](https://dora.dev/capabilities/streamlining-change-approval/) · *What You Approve Is What Executes*, arXiv 2606.02668
+
+**Triage craft** — [Superhuman shortcuts](https://blog.superhuman.com/) · [Linear Triage](https://linear.app/docs/triage) · [Gerrit attention set](https://gerrit-review.googlesource.com/Documentation/user-attention-set.html) · [GitHub reviews & suggested changes](https://docs.github.com/en/pull-requests) · [Stripe Radar reviews](https://docs.stripe.com/radar/reviews) · [Ramp policy agent](https://ramp.com/) · [GitLab Pajamas destructive actions](https://design.gitlab.com/patterns/destructive-actions) · [WCAG 1.4.1](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html) · [NN/g bulk actions](https://www.nngroup.com/articles/bulk-actions/)
