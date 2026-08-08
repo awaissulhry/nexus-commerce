@@ -2611,7 +2611,8 @@ closes** — S2R's late catch came from doing exactly this.
 | Test | Before | After |
 |---|---|---|
 | Row-height spread | **35px** | **0** — every group row 46.3px |
-| Widest column | 694.8px = **44.2%** | **34%**, all seven declared as percentages summing to 100 |
+| Widest column | 694.8px = **44.2%** | **30%**, all seven declared as percentages summing to 100 |
+| Type scale | 5 sizes / **4** weights | **5 sizes / 3 weights** (400 · 650 · 700) |
 | Constant columns | **3 of 8** | `Workers` became the affordance's label |
 | Expand target | **324px²** | **2318px²** (84.9 × 27.3) |
 | Em-dash for a known zero | 6 | **0** |
@@ -2673,10 +2674,29 @@ not dials), renders the note, marks one row, and changes the step sentence from
 **16.5–34.2%**. A shared table column has one width for every row, so it cannot
 hug per-row content — the criterion was unachievable as written, not missed.
 What it stood in for is met and measured: **no outlier sizes any column** (the
-sentence has its own row) and **the widest lane is capped at 34%** (from 44.2%).
+sentence has its own row) and **the widest lane is 30%** (from 44.2%).
 The row also now answers what expansion was previously the only way to ask —
 each worker named on the summary line with a dot for how its run ended — which
 was the substance of the complaint behind the number.
+
+**Two criteria I reported on without measuring, caught when asked whether the
+section was finished, and both were unmet** (`406a13a7c`):
+
+- **Weights were 4, not 3.** `.wf-suboutcome` had been moved 600 → 650 and the
+  job declared done, but `.wf-halt` and `.wf-run` were still 600 — and those
+  are what the amber *"stopped at a limit"* and *"running now…"* text use, so
+  the stray weight was carried by exactly the states the taxonomy cares most
+  about. All eight remaining 600s in this stylesheet are now 650, which also
+  brings the list card and the pipeline onto the same three weights instead of
+  leaving the runs table as the only conforming surface.
+- **The widest column was 34% against a criterion of ≤30%.** The first version
+  of this record wrote "capped at 34%" as though that discharged it. It did
+  not. Now 30%, with the slack given to the provenance lane (which carries the
+  trigger and the revision chip) and the worker affordance.
+
+Neither was visible without measuring — which is the entire reason the criteria
+were written as numbers, and a reminder that reporting a number is not the same
+as having read one.
 
 **Not built, as scoped:** no retry / re-run / replay affordance. Universal in
 the research, no fleet write path, L2 forbids minting one for a UI; filed to
