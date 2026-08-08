@@ -475,6 +475,99 @@
   stroke: #cbd5e0;
 }
 
+/* ── M8 · the teaching layer ───────────────────────────────────────────── */
+
+.sbm-how {
+  flex: none;
+}
+.sbm-how-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #dde4ec;
+  background: #fff;
+  border-radius: 7px;
+  padding: 5px 10px;
+  font-size: 11.5px;
+  color: #4a5666;
+  cursor: pointer;
+}
+.sbm-how-toggle:hover {
+  border-color: #b9c6d6;
+}
+.sbm-how-toggle:focus-visible {
+  outline: 2px solid #2b6cb0;
+  outline-offset: 1px;
+}
+.sbm-how-body {
+  margin-top: 8px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #e6ebf1;
+  border-radius: 9px;
+  max-width: 88ch;
+}
+.sbm-how-body p {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #4a5666;
+}
+.sbm-how-body h4 {
+  margin: 16px 0 6px;
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9aa5b3;
+}
+.sbm-how-body h4:first-child {
+  margin-top: 0;
+}
+
+/*
+ * The definition tooltip. NOT a `title` attribute: that is unreachable by
+ * keyboard, unreliable for screen readers, and never appears on touch. The
+ * trigger owns the text through `aria-describedby`, and the bubble shows on
+ * hover AND on focus, so the keyboard path is the same path.
+ *
+ * Opens DOWNWARD — these triggers sit near the top of the page, where an
+ * upward bubble would be clipped by the header.
+ */
+.sbm-def {
+  position: relative;
+  display: inline-flex;
+}
+.sbm-def-tip {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  z-index: 45;
+  width: 288px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: #1c2530;
+  color: #eef2f6;
+  font-size: 11.5px;
+  line-height: 1.5;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  box-shadow: 0 4px 14px rgba(28, 37, 48, 0.22);
+}
+.sbm-def:hover .sbm-def-tip,
+.sbm-def:focus-within .sbm-def-tip {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sbm-def-tip {
+    transition: none;
+  }
+}
+
 /* ── M6 · entity mode ──────────────────────────────────────────────────── */
 
 .sbm-crumbs {

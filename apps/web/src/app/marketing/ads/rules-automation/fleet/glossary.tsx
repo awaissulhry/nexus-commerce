@@ -204,6 +204,15 @@ export const GLOSSARY: Record<string, { title: string; body: string }> = {
     title: 'Revision',
     body: 'One saved version of a routine’s wiring. Revisions are immutable and numbered, every one carries a note saying why, and every run records which revision produced it. A built-in that has never been edited says "as shipped" instead of a number, and going back to that can never fail.',
   },
+  // NAF.SB.M.8 — one term for the Fleet map. Everything else that page needed
+  // was already here (worker, finding, plan, director, critic, ceiling), which
+  // is the glossary working as intended. "Handoff" is the exception: the map
+  // is the only surface that makes a line between two workers something you
+  // can select and read, so it is the only one that has to name the thing.
+  handoff: {
+    title: 'Handoff',
+    body: 'One worker’s findings being picked up by the next. The map draws it as a line, and the number on it counts what was actually carried — how many of those findings the director named in its plan. The rest is as interesting: the director has to give a reason for every finding it left behind, and those reasons are on the line’s panel.',
+  },
 }
 
 /**

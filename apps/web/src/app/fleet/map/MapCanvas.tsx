@@ -221,6 +221,56 @@ export function MapCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hash])
 
+  /**
+   * KEYBOARD TRAVERSAL. React Flow binds the arrow keys to *moving* a node,
+   * which is right for an editor and wrong here — it would let a keyboard user
+   * silently wreck a layout they cannot see, and it wastes the one spatial
+   * idiom the graph has. On a read-only map the arrows should mean what the
+   * arrows on screen mean: Right goes to the worker this one hands its work
+   * to, Left goes back to the one that feeds it, Up and Down move between
+   * workers standing in the same column.
+   *
+   * Implemented on the wrapper rather than inside the node, so it does not
+   * fight React Flow's own focus handling or add a second tab stop per card.
+   */
+  const onKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      const focused = (document.activeElement as HTMLElement | null)?.closest(
+        '.react-flow__node',
+      ) as HTMLElement | null
+      const id = focused?.getAttribute('data-id')
+      if (!id) return
+
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        onSelect(id === selectedKey ? null : id)
+        return
+      }
+
+      let next: string | undefined
+      if (e.key === 'ArrowRight') next = edges.find((x) => x.from === id)?.to
+      else if (e.key === 'ArrowLeft') next = edges.find((x) => x.to === id)?.from
+      else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        const me = nodes.find((n) => n.key === id)
+        if (!me) return
+        const column = nodes
+          .filter((n) => n.lane === me.lane && n.rank === me.rank)
+          .sort((a, b) => a.key.localeCompare(b.key))
+        const i = column.findIndex((n) => n.key === id)
+        const step = e.key === 'ArrowDown' ? 1 : -1
+        next = column[(i + step + column.length) % column.length]?.key
+      } else return
+
+      if (!next || next === id) return
+      e.preventDefault()
+      const target = document.querySelector(
+        `.react-flow__node[data-id="${CSS.escape(next)}"]`,
+      ) as HTMLElement | null
+      target?.focus()
+    },
+    [edges, nodes, onSelect, selectedKey],
+  )
+
   const flowNodes: Node[] = useMemo(() => {
     const out: Node[] = positions.lanes.map((l) => ({
       id: l.id,
@@ -231,14 +281,40 @@ export function MapCanvas({
       selectable: false,
       connectable: false,
     }))
-    for (const n of nodes) {
+    /* Tab order follows the pipeline, not the render order React Flow would
+       otherwise inherit from an arbitrary array. A keyboard user should walk
+       the graph left to right the way a sighted reader does. */
+    const ordered = [...nodes].sort(
+      (a, b) =>
+        (a.rank ?? 99) - (b.rank ?? 99) ||
+        a.lane.localeCompare(b.lane) ||
+        a.key.localeCompare(b.key),
+    )
+    for (const n of ordered) {
       const p = positions.pos.get(n.key)
       if (!p) continue
       const s = statusOf(n)
+      const feeds = edges.filter((e) => e.from === n.key).map((e) => e.to)
+      const fedBy = edges.filter((e) => e.to === n.key).map((e) => e.from)
+      const nameOf = (k: string) => nodes.find((x) => x.key === k)?.name ?? k
       out.push({
         id: n.key,
         type: 'worker',
         position: p,
+        /* An edge is information a sighted reader gets for free and a screen
+           reader user loses entirely, so the label carries the topology:
+           identity, then state, then who it is wired to. */
+        ariaLabel: [
+          `${n.name}.`,
+          `${n.tier}.`,
+          `${s.label}.`,
+          n.runs.lifetime === 0 ? 'Never run.' : `${n.runs.lifetime} runs.`,
+          n.findings.open > 0 ? `${n.findings.open} open findings.` : '',
+          fedBy.length > 0 ? `Fed by ${fedBy.map(nameOf).join(', ')}.` : 'Starts the chain.',
+          feeds.length > 0 ? `Feeds ${feeds.map(nameOf).join(', ')}.` : 'Ends the chain.',
+        ]
+          .filter(Boolean)
+          .join(' '),
         data: {
           name: n.name,
           tier: n.tier,
@@ -261,7 +337,7 @@ export function MapCanvas({
       })
     }
     return out
-  }, [nodes, positions, dimmedKeys, selectedKey, overlay])
+  }, [nodes, edges, positions, dimmedKeys, selectedKey, overlay])
 
   const flowEdges: Edge[] = useMemo(
     () =>
@@ -342,7 +418,13 @@ export function MapCanvas({
   }, [refit])
 
   return (
-    <div className="sbm-canvas" ref={wrapRef}>
+    <div
+      className="sbm-canvas"
+      ref={wrapRef}
+      onKeyDown={onKeyDown}
+      role="application"
+      aria-label="Fleet map. Use Tab to move between workers, Left and Right arrows to follow the work, Enter to open one."
+    >
       <ReactFlow
         key={hash}
         onInit={(inst) => {

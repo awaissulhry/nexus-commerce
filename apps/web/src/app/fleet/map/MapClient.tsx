@@ -24,6 +24,8 @@ import { InspectorRail } from './InspectorRail'
 import { OverlayRail } from './OverlayRail'
 import { ListView } from './ListView'
 import { EntityCanvas, relationOf, type EntityGraph } from './EntityCanvas'
+import { HowThisMapWorks } from './HowThisMapWorks'
+import { Def } from './definitions'
 import { overlayById } from './overlays'
 import {
   visibleCensus,
@@ -266,6 +268,8 @@ export function MapClient() {
         </div>
       ) : null}
 
+      <HowThisMapWorks />
+
       {/* ── M6 · entity mode: a different universe, the same shell ─────── */}
       {mode === 'entities' ? (
         <>
@@ -468,20 +472,25 @@ export function MapClient() {
                 {rank === 'fact' ? <span className="sbm-chiprow-label">also</span> : null}
                 {group.map(({ chip, count }) => {
                   const on = activeChip === chip.id
-                  const note = count === 0 && chip.zeroNote ? chip.zeroNote : chip.definition
+                  // A zero with a structural cause explains itself rather than
+                  // reading as an empty inbox.
+                  const note = count === 0 && chip.zeroNote ? chip.zeroNote : undefined
                   return (
-                    <button
-                      key={chip.id}
-                      type="button"
-                      className={`sbm-chip ${on ? 'on' : ''} ${chip.rank === 'subject' ? 'subject' : ''}`}
-                      aria-pressed={on}
-                      title={note}
-                      onClick={() =>
-                        setActiveChip(chip.id === 'workers' ? null : on ? null : chip.id)
-                      }
-                    >
-                      <span className="n">{count}</span> {chip.label}
-                    </button>
+                    <Def key={chip.id} k={chip.id} note={note}>
+                      {(described) => (
+                        <button
+                          type="button"
+                          className={`sbm-chip ${on ? 'on' : ''} ${chip.rank === 'subject' ? 'subject' : ''}`}
+                          aria-pressed={on}
+                          {...described}
+                          onClick={() =>
+                            setActiveChip(chip.id === 'workers' ? null : on ? null : chip.id)
+                          }
+                        >
+                          <span className="n">{count}</span> {chip.label}
+                        </button>
+                      )}
+                    </Def>
                   )
                 })}
               </div>

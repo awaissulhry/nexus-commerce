@@ -32,6 +32,7 @@
 
 import Link from 'next/link'
 import { ArrowRight, X } from 'lucide-react'
+import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { ago } from '../_shared/run-health'
 import { statusOf, type MapEdge, type MapNode } from './lib'
 
@@ -247,7 +248,15 @@ function EdgePanel({ edge, nodes }: { edge: MapEdge; nodes: MapNode[] }) {
           <div className="nm">
             {nameOf(edge.from)} → {nameOf(edge.to)}
           </div>
-          <div className="ky">{edge.artifact === 'plan' ? 'a plan crosses here' : 'findings cross here'}</div>
+          <div className="ky">
+            {edge.artifact === 'plan' ? (
+              'a plan crosses here'
+            ) : (
+              <>
+                a <Term k="handoff">handoff</Term>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
