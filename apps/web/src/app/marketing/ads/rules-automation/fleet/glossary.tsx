@@ -8,7 +8,7 @@
  * keyboard-reachable via tabIndex, no positioning library.
  */
 
-import type { ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 
 export const GLOSSARY: Record<string, { title: string; body: string }> = {
   worker: {
@@ -206,11 +206,92 @@ export const GLOSSARY: Record<string, { title: string; body: string }> = {
   },
 }
 
+/**
+ * NAF.AQ-S1R S1.d — the two WCAG 2.2 SC 1.4.13 requirements this had never met.
+ *
+ * Measured on production before the change, not inferred:
+ *
+ * · **Dismissible** — "A mechanism is available to dismiss the additional
+ *   content without moving pointer hover or keyboard focus." There was no key
+ *   handler anywhere in this file, so Esc did nothing.
+ * · **Hoverable** — "the pointer can be moved over the additional content
+ *   without the additional content disappearing." `.acr-term-tip` was
+ *   `pointer-events: none`, and hit-testing the centre of an open tooltip
+ *   returned the element BEHIND it. Even with pointer events restored there is
+ *   an 8px gap between the term and its tip, and crossing that gap drops
+ *   `:hover` — so the CSS side of this fix is a transparent bridge, not just
+ *   deleting one declaration.
+ * · **Persistent** already passed, as did keyboard reach (`tabIndex={0}`) and
+ *   contrast (12.94:1). None of those is changed.
+ *
+ * The `:hover` / `:focus` CSS rules are deliberately left in place and still do
+ * all the showing. This component only ever *hides* — one class, set by Esc and
+ * cleared when the pointer or focus leaves — so every one of the nineteen
+ * surfaces using `<Term>` keeps exactly today's behaviour plus the two missing
+ * requirements. Nothing here can make a tooltip appear that would not have.
+ *
+ * Known and NOT fixed here, because it is a different change with a different
+ * risk: the tip is a DOM child of the focusable span, so its text joins the
+ * trigger's accessible name and a screen reader says the term twice. The fix is
+ * an `aria-describedby` restructure, which is worth doing on its own.
+ */
 export function Term({ k, children }: { k: keyof typeof GLOSSARY & string; children: ReactNode }) {
   const entry = GLOSSARY[k]
+  /**
+   * `engaged` is "the pointer or focus is on this term", and it exists ONLY so
+   * that the Escape listener belongs to the one term actually on screen.
+   *
+   * The first version of this listened on `document` from every un-dismissed
+   * Term, which is wrong in a way worth recording: one Escape anywhere marked
+   * every Term on the page dismissed, and a term the pointer had never touched
+   * could not re-arm — because re-arming happens on ITS OWN mouseleave/blur,
+   * which never fires for an element you never entered. On the Controls page
+   * that would have silently killed every tooltip until a reload. Caught by
+   * reasoning about the fan-out rather than by any gate: nineteen files use
+   * this component and not one of them would have failed to compile.
+   *
+   * Hooks are declared before the `!entry` bail-out because hook order cannot
+   * be conditional.
+   */
+  const [engaged, setEngaged] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
+  const enter = useCallback(() => {
+    setEngaged(true)
+    setDismissed(false)
+  }, [])
+  const leave = useCallback(() => {
+    setEngaged(false)
+    setDismissed(false)
+  }, [])
+
+  useEffect(() => {
+    if (!engaged || dismissed) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      /*
+       * Deliberately no preventDefault and no stopPropagation. An Escape meant
+       * for a drawer or a modal must still reach it — a tooltip is the cheapest
+       * thing on screen to dismiss and can afford to share the key. And the
+       * listener is on `document` rather than on the element because the
+       * requirement is that Esc works while merely HOVERING, when nothing is
+       * focused and no element-level key event would ever fire.
+       */
+      setDismissed(true)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [engaged, dismissed])
+
   if (!entry) return <>{children}</>
   return (
-    <span className="acr-term" tabIndex={0}>
+    <span
+      className={`acr-term${dismissed ? ' dismissed' : ''}`}
+      tabIndex={0}
+      onMouseEnter={enter}
+      onMouseLeave={leave}
+      onFocus={enter}
+      onBlur={leave}
+    >
       {children}
       <span role="tooltip" className="acr-term-tip">
         <strong>{entry.title}</strong>

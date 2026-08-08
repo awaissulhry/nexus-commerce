@@ -1065,10 +1065,33 @@ a.acr-refresh { text-decoration: none; }
   padding: 10px 12px; border-radius: 8px; background: #1c2530; color: #e7ebf1;
   font-size: 12px; line-height: 1.55; font-weight: 400; text-transform: none;
   letter-spacing: normal; box-shadow: 0 10px 26px rgb(20 28 38 / 0.3);
-  pointer-events: none; white-space: normal; text-align: left;
+  white-space: normal; text-align: left;
 }
 .acr-term-tip strong { color: #fff; font-size: 12.5px; }
 .acr-term:hover .acr-term-tip, .acr-term:focus .acr-term-tip { display: flex; }
+
+/* NAF.AQ-S1R S1.d — WCAG 2.2 SC 1.4.13, the two requirements this never met.
+   Claimed and released in docs/2026-08-07-naf-sb-session-locks.md §3.
+
+   HOVERABLE. `pointer-events: none` was removed above: the tip is a DESCENDANT
+   of `.acr-term`, so once it can receive the pointer, hovering it keeps the
+   parent's `:hover` and the tip stays. That alone is not enough — the tip sits
+   8px clear of the term, and crossing that gap drops `:hover` before the
+   pointer arrives, so the tooltip vanished exactly when you reached for it.
+   These two transparent strips bridge the gap on whichever side the tip opens.
+   They exist only while the tip is displayed, so they intercept nothing the
+   rest of the time.
+
+   DISMISSIBLE. Esc sets `.dismissed` on the one term the pointer or focus is
+   on (see the component). The `:hover`/`:focus` rules above are untouched and
+   still do all the showing; this only ever hides. */
+.acr-term-tip::before,
+.acr-term-tip::after {
+  content: ''; position: absolute; left: 0; right: 0; height: 9px;
+}
+.acr-term-tip::before { bottom: 100%; }
+.acr-term-tip::after  { top: 100%; }
+.acr-term.dismissed .acr-term-tip { display: none; }
 
 .acr-flx-intro {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
