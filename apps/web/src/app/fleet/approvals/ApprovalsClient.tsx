@@ -440,6 +440,7 @@ function OutsideQueue({
   onCommit,
   onRecheck,
   onAmend,
+  onSnooze,
 }: {
   rows: OutsideRow[]
   labels: FleetLabels
@@ -450,6 +451,7 @@ function OutsideQueue({
   onCommit: (id: string) => void
   onRecheck: (id: string) => Promise<{ stale: boolean; why: string | null }>
   onAmend: (id: string, args: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>
+  onSnooze: (id: string, until: Date | null) => void
 }) {
   const [open, setOpen] = useState(true)
 
@@ -536,6 +538,7 @@ function OutsideQueue({
                   onDecide={onDecide}
                   onRecheck={onRecheck}
                   onAmend={onAmend}
+                  onSnooze={onSnooze}
                 />
               </div>
             ),
@@ -675,6 +678,14 @@ export function ApprovalsClient() {
     [backend, refresh],
   )
 
+  /** NAF.AQ — set aside, or bring back. */
+  const snooze = useCallback(
+    (id: string, until: Date | null) => {
+      void post(`approvals/${id}/${until ? 'snooze' : 'unsnooze'}`, until ? { until: until.toISOString() } : undefined).then(after)
+    },
+    [post, after],
+  )
+
   /** Which tools can actually do something — straight from the gate state. */
   const canExecute = useCallback(
     (toolName: string) => gate?.tools.find((t) => t.name === toolName)?.canExecute ?? false,
@@ -771,6 +782,7 @@ export function ApprovalsClient() {
             }}
             onRecheck={recheck}
             onAmend={amend}
+            onSnooze={snooze}
           />
         ) : (
           <RecordList rows={approvals} nameOf={nameOf} />
@@ -798,6 +810,7 @@ export function ApprovalsClient() {
         onCommit={(id) => void post(`approvals/${id}/commit`).then(after)}
         onRecheck={recheck}
         onAmend={amend}
+        onSnooze={snooze}
       />
     </>
   )

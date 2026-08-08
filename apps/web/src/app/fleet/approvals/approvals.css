@@ -802,3 +802,48 @@
   gap: 8px;
   margin: 9px 0 0;
 }
+
+/* An execution failure is not a staleness hand-back: something was actually
+   sent. Louder, because the operator may need to check Amazon. */
+.aq-cameback.attempted {
+  border-color: #f0c9c9;
+  background: #fdf5f5;
+}
+.aq-cameback.attempted svg {
+  color: #c53030;
+}
+
+/* ── "Not now" ──────────────────────────────────────────────────────────── */
+
+/*
+ * Quiet, and last in the action row. It is an escape, not a verb — giving it
+ * button weight would put a third equal-looking choice beside approve and
+ * reject, and the whole point is that it is the option with no consequence.
+ */
+.aq-snooze {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+  margin-left: auto;
+  font-size: 11.5px;
+  color: #6b7688;
+}
+.aq-snoozeopt {
+  padding: 2px 7px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  color: #3a4658;
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.aq-snoozeopt:hover:not(:disabled) {
+  border-color: #9aa7b8;
+  background: #f4f6f9;
+}
+.aq-snoozeopt:disabled {
+  opacity: 0.55;
+  cursor: default;
+}

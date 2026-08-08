@@ -367,6 +367,68 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  /**
+   * NAF.AQ — "not now" (operator decision Q6).
+   *
+   * Without a snooze the only way to clear a badge is to approve, which is the
+   * one failure a spend queue cannot afford. The research calls the counter
+   * "keeping state so 'later' does not become 'never'" — so it is a column,
+   * not client state: a snooze held in a browser dies on reload, is invisible
+   * to the rail badge, and lets the count disagree with the queue.
+   *
+   * **A snooze can never outlive the request.** `expiresAt` still owns its
+   * life. Waking something after it has already been refused would be worse
+   * than not deferring it at all, so a snooze past expiry is refused here
+   * rather than silently clamped — silently clamping would tell the operator
+   * they had until Friday when they had until tomorrow.
+   */
+  fastify.post<{ Params: { id: string }; Body: { until?: string } }>(
+    '/agent/fleet/approvals/:id/snooze',
+    async (request, reply) => {
+      const until = request.body?.until ? new Date(request.body.until) : null
+      if (!until || Number.isNaN(until.getTime())) {
+        return reply.code(400).send({ error: 'a valid "until" timestamp is required' })
+      }
+      if (until.getTime() <= Date.now()) {
+        return reply.code(400).send({ error: 'that time has already passed' })
+      }
+
+      const ap = await prisma.agentApproval.findUnique({
+        where: { id: request.params.id },
+        select: { status: true, expiresAt: true },
+      })
+      if (!ap) return reply.code(404).send({ error: 'approval not found' })
+      if (ap.status !== 'pending') {
+        return reply
+          .code(409)
+          .send({ error: `only a waiting request can be set aside (this one is ${ap.status})` })
+      }
+      if (ap.expiresAt && until >= ap.expiresAt) {
+        return reply.code(400).send({
+          error: `this request expires ${ap.expiresAt.toISOString()} — it cannot be set aside past that, or it would be refused while you were not looking`,
+        })
+      }
+
+      await prisma.agentApproval.update({
+        where: { id: request.params.id },
+        data: { snoozedUntil: until },
+      })
+      return { ok: true, snoozedUntil: until.toISOString() }
+    },
+  )
+
+  /** Bring a set-aside request back now. */
+  fastify.post<{ Params: { id: string } }>(
+    '/agent/fleet/approvals/:id/unsnooze',
+    async (request) => {
+      await prisma.agentApproval.updateMany({
+        where: { id: request.params.id },
+        data: { snoozedUntil: null },
+      })
+      return { ok: true }
+    },
+  )
+
   fastify.get('/agent/fleet/approvals/outside', async () => {
     const rows = await prisma.agentApproval.findMany({
       where: {

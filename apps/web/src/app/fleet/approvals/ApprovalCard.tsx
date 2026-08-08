@@ -356,6 +356,51 @@ function describe(a: CardApproval, labels: FleetLabels): Described {
   return out
 }
 
+/* ── why a request came back ───────────────────────────────────────────── */
+
+interface Comeback {
+  headline: string
+  detail: string
+  tail: string
+  /** True when it reached Amazon and failed, rather than never being tried. */
+  attempted: boolean
+}
+
+/**
+ * `reason` carries the prefix the server wrote. Three shapes exist today, and
+ * conflating them is what made a failed execution indistinguishable from a
+ * fresh proposal:
+ *
+ *   `not run — …`         AP.6 staleness. Nothing was attempted.
+ *   `execution failed: …` the tool ran and returned an error.
+ *   `execution error: …`  the tool threw.
+ */
+function classifyComeback(reason: string | null | undefined): Comeback | null {
+  if (!reason) return null
+  if (reason.startsWith('not run —')) {
+    return {
+      headline: 'You approved this before, and it did not run.',
+      detail: reason.replace(/^not run — /, ''),
+      tail: '— it is back here so you can decide again with the facts as they are now.',
+      attempted: false,
+    }
+  }
+  const failed = /^execution (failed|error):\s*/.exec(reason)
+  if (failed) {
+    return {
+      headline: 'You approved this, it was attempted, and it failed.',
+      detail: reason.replace(/^execution (failed|error):\s*/, ''),
+      // The distinction that matters: something was actually sent. Whether it
+      // half-landed is not knowable from here, which is worth saying rather
+      // than implying a clean no-op.
+      tail:
+        '— nothing here can tell you whether any part of it took effect, so check before deciding again.',
+      attempted: true,
+    }
+  }
+  return null
+}
+
 /* ── the clock ─────────────────────────────────────────────────────────── */
 
 function timeLeft(iso: string | null): { text: string; urgent: boolean } | null {
@@ -386,6 +431,7 @@ export function ApprovalCard({
   onDecide,
   onRecheck,
   onAmend,
+  onSnooze,
 }: {
   approval: CardApproval
   labels: FleetLabels
@@ -397,11 +443,14 @@ export function ApprovalCard({
   onRecheck: (id: string) => Promise<{ stale: boolean; why: string | null }>
   /** AQ.8 — supersede this proposal with the operator's own number. */
   onAmend: (id: string, args: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>
+  /** NAF.AQ — "not now". Null `until` brings it straight back. */
+  onSnooze: (id: string, until: Date | null) => void
 }) {
   const vocab = toolCardFor(approval.toolName)
   const rev = reversibilityOf(approval.toolName)
   const d = describe(approval, labels)
   const left = timeLeft(approval.expiresAt)
+  const comeback = classifyComeback(approval.reason)
 
   // Depth scales with CONSEQUENCE, not with riskTier alone. Every fleet tool
   // is riskTier 'high', so a tier-only rule made 100% of cards heavy and the
@@ -447,6 +496,25 @@ export function ApprovalCard({
    * self-documenting. Falls back to the tool vocabulary when there is no
    * delta worth naming.
    */
+  /**
+   * Snooze presets, and every one is checked against the expiry.
+   *
+   * A request lives 24 hours. Offering "next week" would be offering to hide
+   * something until well after it has been refused — the operator would come
+   * back to an empty queue believing they had deferred a decision when they had
+   * actually forfeited it. So the options are filtered, and if none survive the
+   * control does not render at all.
+   */
+  const snoozeOptions = (() => {
+    const expiry = approval.expiresAt ? new Date(approval.expiresAt).getTime() : Infinity
+    const now = Date.now()
+    return [
+      { label: '2 hours', ms: 2 * 3600_000 },
+      { label: '6 hours', ms: 6 * 3600_000 },
+      { label: 'tomorrow morning', ms: 16 * 3600_000 },
+    ].filter((o) => now + o.ms < expiry - 5 * 60_000)
+  })()
+
   const primaryDelta = d.deltas[0]
   const approveLabel = primaryDelta
     ? primaryDelta.from
@@ -536,14 +604,21 @@ export function ApprovalCard({
         </p>
       ) : null}
 
-      {/* AP.6 — it was approved once and handed back */}
-      {approval.reason?.startsWith('not run —') ? (
-        <p className="aq-cameback">
+      {/*
+        A request that came back. TWO different things can put it here and the
+        operator must be able to tell them apart:
+        · staleness (AP.6) — nothing was attempted; the world moved first.
+        · execution failure — it WAS attempted, against Amazon, and failed.
+        The shipped card only ever explained the first, so an execution failure
+        returned to the queue looking exactly like a brand-new request. That is
+        the defect catalogued in the study's §1.4 as #2 and left unfixed until
+        now.
+      */}
+      {comeback ? (
+        <p className={`aq-cameback${comeback.attempted ? ' attempted' : ''}`}>
           <RotateCcw size={12} aria-hidden />
           <span>
-            <strong>You approved this before, and it did not run.</strong>{' '}
-            {approval.reason.replace(/^not run — /, '')} — it is back here so you can decide again
-            with the facts as they are now.
+            <strong>{comeback.headline}</strong> {comeback.detail} {comeback.tail}
           </span>
         </p>
       ) : null}
@@ -722,6 +797,25 @@ export function ApprovalCard({
             Cancel
           </button>
         )}
+
+        {/* "Not now" — the third answer. Without it the only way to clear a
+            badge is to approve, which is the one thing a spend queue must not
+            teach. Quiet and last: it is an escape, not a verb. */}
+        {snoozeOptions.length > 0 && !rejecting ? (
+          <span className="aq-snooze">
+            <Clock size={12} aria-hidden /> Not now —
+            {snoozeOptions.map((o) => (
+              <button
+                key={o.label}
+                className="aq-snoozeopt"
+                disabled={busy}
+                onClick={() => onSnooze(approval.id, new Date(Date.now() + o.ms))}
+              >
+                {o.label}
+              </button>
+            ))}
+          </span>
+        ) : null}
       </div>
 
       {rejecting ? (

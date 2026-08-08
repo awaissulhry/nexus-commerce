@@ -297,6 +297,7 @@ export function WaitingList({
   onBulkDecide,
   onRecheck,
   onAmend,
+  onSnooze,
 }: {
   rows: ApprovalRow[]
   labels: FleetLabels
@@ -311,6 +312,7 @@ export function WaitingList({
   onBulkDecide: (ids: string[], decision: 'approve' | 'reject', reason?: string) => void
   onRecheck: (id: string) => Promise<{ stale: boolean; why: string | null }>
   onAmend: (id: string, args: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>
+  onSnooze: (id: string, until: Date | null) => void
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [pendingBulk, setPendingBulk] = useState<{ decision: 'approve' | 'reject'; sentence: string } | null>(null)
@@ -480,6 +482,7 @@ export function WaitingList({
                   onDecide={onDecide}
                   onRecheck={onRecheck}
                   onAmend={onAmend}
+                  onSnooze={onSnooze}
                 />
               </div>
             ),

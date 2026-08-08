@@ -11445,6 +11445,10 @@ model AgentApproval {
   /// can be taken back. Set with status='scheduled'; null otherwise. Nothing
   /// reaches Amazon before this instant.
   executeAfter DateTime?
+  /// NAF.AQ — "not now". Set aside until this instant; the waiting view hides
+  /// it and the counts exclude it, so the queue and the badge agree. Never
+  /// later than `expiresAt` — a snooze cannot outlive the request it defers.
+  snoozedUntil DateTime?
 
   @@index([status, requestedAt])
   /// NAF.AP.4/AP.5 — the maintenance sweep's two queries: commit what is due,

@@ -1603,3 +1603,47 @@ nothing and said nothing, a test grepped its own comment and passed, and a
 cleanup deleted the wrong subset and announced success. **An operation whose
 failure mode is silence will eventually be wrong quietly** — the only defence
 is asserting the end state rather than trusting the step.
+
+### Closing the gaps I owed (2026-08-08)
+
+Three items that were not "blocked" — they were named and then not delivered.
+
+**1 · The comeback banner now tells the two cases apart.** Study §1.4 defect #2,
+catalogued and left unfixed through five phases. Two different things return a
+request to the queue and the card only ever explained one:
+
+| `reason` prefix | What happened | What the card says now |
+|---|---|---|
+| `not run — …` | AP.6 staleness. **Nothing was attempted** | *"You approved this before, and it did not run… decide again with the facts as they are now."* |
+| `execution failed:` / `execution error:` | It **was attempted, against Amazon, and failed** | *"You approved this, it was attempted, and it failed… nothing here can tell you whether any part of it took effect, so check before deciding again."* |
+
+The second is louder and says the uncomfortable part: a failed execution is not
+a clean no-op, and this page cannot tell you whether it half-landed. Pretending
+otherwise would be the same lie as calling a spend reversible.
+
+**2 · Snooze — the decision approved in Part 6 Q6 and never built.** Without a
+"not now" the only way to clear a badge is to approve, which is the one habit a
+spend queue must not teach.
+
+A **column**, not client state: the research's phrasing is *"keeping state so
+'later' does not become 'never'"*, and a snooze held in a browser dies on
+reload, is invisible to the rail badge, and lets the count disagree with the
+queue. Migration `20260808b` — additive, one nullable column and one index.
+(The letter moved: `20260807f` was claimed before midnight, and `20260808a` had
+since been taken by SB.AS.)
+
+**The constraint that makes it honest: a snooze can never outlive the request.**
+`expiresAt` still owns its life. The API refuses a snooze past expiry rather
+than silently clamping it — clamping would tell the operator they had until
+Friday when they had until tomorrow. The UI filters its presets the same way, so
+an option that would forfeit the decision is never offered at all: at a 24-hour
+clock you get *2 hours · 6 hours · tomorrow morning*, and as expiry approaches
+they disappear one by one.
+
+**The counts use the same clause as the queue.** If the badge counted what the
+list hides, the first thing the operator would learn is that the badge lies —
+and a snooze that does not move the number is not a snooze, it is a filter.
+
+It renders quiet and last in the action row: an escape, not a verb. Giving it
+button weight would put a third equal-looking choice beside approve and reject,
+when the entire point is that it is the option with no consequence.

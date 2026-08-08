@@ -78,12 +78,22 @@ export function resolveActor(authUser?: {
 
 /* ── reading ───────────────────────────────────────────────────────────── */
 
-function whereFor(view: InboxView) {
+function whereFor(view: InboxView, now: Date = new Date()) {
   // `scheduled` belongs with waiting, not decided: the action has not run and
   // the operator can still take it back, so it must stay where they are
   // looking even after a reload.
+  //
+  // NAF.AQ — a snoozed request is hidden until it is due. The COUNTS use this
+  // same clause, deliberately: if the badge counted what the queue hides, the
+  // first thing the operator would learn is that the badge lies. Snoozing is
+  // the counter to clearing a queue by approving it, and it only works if the
+  // number moves too.
   if (view === 'waiting')
-    return { status: { in: ['pending', 'scheduled'] }, toolName: { in: FLEET_TOOLS } }
+    return {
+      status: { in: ['pending', 'scheduled'] },
+      toolName: { in: FLEET_TOOLS },
+      OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: now } }],
+    }
   if (view === 'expired') return { status: 'expired' }
   return { status: { in: DECIDED_STATUSES } }
 }
