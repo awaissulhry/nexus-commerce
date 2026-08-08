@@ -1728,9 +1728,105 @@ Idle statuses directly under the numbers; and the built-in version chip reads
 **"as shipped"** rather than "built-in wiring", because the latter sat beside a
 "Built-in" badge and read as a stutter.
 
-**Still open in this engagement:** S1.b (the run bars — the reserved 108px in
-the rhythm lane is scaffolding that S1.b makes real), S1.c (the step chain,
-with its one named additive API field), S1.d (the teaching pass).
+### 9.12 · S1.b / S1.c / S1.d SHIPPED + PROD-VERIFIED 2026-08-08 — WF-S1R COMPLETE
+
+| Commit | Phase | What |
+|---|---|---|
+| `bbb5bb00b` + `a3d1a115f` | **S1.b** | Twelve run bars — colour = outcome, height = duration — replacing eight outcome-only dots |
+| `b046cd0c1` | **S1.c** | The step chain on every card, over one additive API field |
+| `e7a4e8cf5` | **S1.d** | Two glossary terms, the card-reading paragraph, and one a11y defect S1.a introduced |
+| `d5fa162d7` | **S1.b fix** | The newest run belongs at the right edge |
+
+**S1.b — the strip earns its ink.** Twelve bars, oldest left, colour for how a
+run ended and **height for how long it took**, scaled against the longest run
+drawn — `durationMs` has been computed per orchestration in `lib.ts` since S2
+and was discarded on this page. Every shipped honesty rule needed its own
+branch: a run in flight has no duration, so it draws full height in the running
+colour and is **never** shown as a failure; a group whose duration was never
+recorded draws at a neutral mid height (not zero, which reads as instant; not
+full, which reads as slowest) and says *"duration not recorded"* on hover; the
+cap is on screen as `latest 12 of 43`; and the strip carries its own encoding
+in a tooltip, because **a tall red bar must not be readable as "very bad" when
+height means "slow"**. Never-run is twelve grey slots — UiPath's rule that
+never-executed is a colour, not an absence.
+
+Two defects prod caught, neither visible in a screenshot:
+
+- **The rhythm lane reserved 124px and the sweep's lane measured 137.3**,
+  because its tick-vs-run sentence wraps to two lines — one card stood 13.3px
+  taller than its neighbours and its strip sat 13.2px lower. The general form
+  is worth keeping: **when a layout reserves space, reserve for the tallest
+  honest sentence**, or the honest sentence becomes the thing that breaks the
+  rhythm.
+- **The strip filled from the left**, so the council — one run on record — drew
+  its bar at the far left with eleven blanks after it, i.e. *"one run happened,
+  eleven are coming"*. The blanks are the past that never happened. Empty slots
+  first, newest hard against the right edge, adjacent to the last-run line above
+  it. Found by measuring which index held the non-empty bar, not by looking: at
+  6px wide and one bar deep the error is invisible until there are enough runs
+  for the habit of misreading it to have set.
+
+**S1.c — the chain, and which chain is honest.** The list now draws the routine
+as an ordered sequence of steps, and **a worker that is switched off renders
+struck through**. That is the point: the status reason has said *"the clock
+ticks, but every worker is off"* since WF.1 with nothing to point at, and the
+sentence and the picture now read the same charter feed and cannot drift.
+
+Choosing the source is where this could have become the stale-constant class in
+a new place, so it is explicit in `chainFor()`:
+
+| Row | Chain source | Why |
+|---|---|---|
+| Built-in on the code default | `routines.ts` | **Richer than the definition** — grading, report cards and the approval gate are job-code ordering and deliberately are not in any definition (the furniture caveat `getEffectiveWiring` carries for the Fleet map) |
+| Built-in on a published revision | the API's `chain` | The code story is no longer what runs |
+| Custom | the API's `chain` | Same |
+| Custom with no published wiring | none — the card says *"No wiring published yet — nothing would run."* | An empty chain would imply an empty routine |
+
+**The one API change, exactly as the study named it.** `listWorkflows()` gains
+`chain: string[] | null` — the effective definition's steps in execution order,
+response-only, additive, in this stream's own files. `chainOf()` is pure and
+lives in `workflow-defs.ts` (the prisma-free layer, which is what makes it
+testable) and is **deliberately forgiving where the executor is deliberately
+strict**: a definition `topoLevels` refuses to walk still has real steps worth
+naming, so it falls back to declaration order instead of throwing. Four vitests
+pin it, including one asserting `topoLevels` *still throws* on the same input —
+the picture and the plan must not be confused.
+
+**S1.d — the teaching pass, and an a11y defect S1.a introduced.** Two glossary
+terms appended as one block: **`step`** and **`revision`**. Neither is new
+jargon — `gate` and the editor have said "step" since WF.3, `draft` and
+`publish` have said "revision" since WF.2, and neither word had a definition.
+The rebuilt list put both on screen literally, so the gap stopped being
+theoretical. The "How workflows work" card gains the paragraph that reads a
+card: the chain, the struck-through worker and who decides it, the bars' two
+dimensions, and what twelve empty slots mean.
+
+And the defect: **`<Term>` renders `tabIndex={0}`**, so the Term wrapped around
+the routine name became a second focus stop *inside* the link the whole card had
+just become — whose Enter key activates the link anyway. Removed; the purpose
+sentence directly beneath and the chain beside it carry that meaning better than
+a tooltip did. That left `BuiltinRoutine.termKey` with zero readers, so it went
+too. Recorded in the locks doc for any stream nesting a Term in a link.
+
+**Final acceptance, measured on the deployed page:**
+
+| Test | Result |
+|---|---|
+| Run strip order (council · on-demand · never-run) | `...........#` · `############` · `............` |
+| Card height spread | **0** |
+| Lane x spread across cards | **0** |
+| Horizontal overflow | **0** |
+| Viewport fill | **1.60×**, scrolls |
+| Text roles below AA | **0** owned (`.acr-btn.go` 3.46:1 remains, shared, reported) |
+| Type scale | 5 sizes × 3 weights owned (+12px, +550 from shared components) |
+| `<Term>` focus stops inside a link | **0** |
+| Step pills rendered | 20 across 4 cards, every off-worker struck through |
+| Custom's chain from the API | `Keyword harvester → Negative miner`, live from Railway |
+
+**WF-S1R is complete.** S1.e stays declined; the list is read-only and the card
+is the door. Follow-ups from §9.9 that remain open are recorded there, and the
+detail page inherited the contrast fixes via `.wf-page` on both roots as §9.9
+item 1 required.
 
 ---
 
