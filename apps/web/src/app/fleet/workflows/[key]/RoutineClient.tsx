@@ -595,8 +595,9 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
                 /* S3.c — the picture is no longer "now", so it says so, and
                    says why the worker dials are missing from it. */
                 <span className="wf-legend wf-pipe-histnote">
-                  showing the run from {agoTs(shownGroup.startedAt)} · worker settings are
-                  today&rsquo;s, so they are not shown for a past run
+                  showing the run from {agoTs(shownGroup.startedAt)}
+                  {' · '}
+                  worker settings are today&rsquo;s, so they are not shown for a past run
                   <button className="acr-btn ghost" onClick={() => setSelectedRun(null)}>
                     Back to the latest run
                   </button>

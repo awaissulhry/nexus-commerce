@@ -881,7 +881,12 @@
    the honesty sentence rendered on three lines inside a 1442px cell, at 23% of
    the width available to it. A `ch` is the advance of "0" in the *resolved*
    font, and it is not a safe proxy for a measure when the font is not certain. */
-.wf-whytext {
+/* Specificity, not value: `.wf-runs td span.acr-pg-warn { max-width: 42ch }`
+   from the original S3 styles was winning at 0,2,2 against `.wf-whytext` at
+   0,1,0 — and the why-text carries that same outcome class, so 42ch (336.1px
+   here) was clamping the sentence regardless of what this rule said. Matched
+   the selector rather than reaching for !important. */
+.wf-runs td span.wf-whytext {
   display: inline-block;
   font-size: 12px;
   line-height: 1.5;
