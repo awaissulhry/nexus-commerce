@@ -288,16 +288,23 @@ export function MapClient() {
           <Link href="/fleet/workers">Go to Workers</Link>
         </div>
       ) : (
-        <div className="sbm-body">
-          <OverlayRail
-            overlay={overlay}
-            onOverlay={setOverlayId}
-            nodes={nodes}
-            tierFilter={tierFilter}
-            onTierFilter={setTierFilter}
-            hideDiagnostic={hideDiagnostic}
-            onHideDiagnostic={setHideDiagnostic}
-          />
+        <div className={`sbm-body ${view === 'list' ? 'is-list' : ''}`}>
+          {/* The overlay rail explains the CANVAS's colours. In list view it
+              would be a legend for tints the table does not use, while taking
+              216px the adjacency columns need — so the table gets the width
+              instead. The colour choice is remembered and comes back with the
+              map. */}
+          {view === 'map' ? (
+            <OverlayRail
+              overlay={overlay}
+              onOverlay={setOverlayId}
+              nodes={nodes}
+              tierFilter={tierFilter}
+              onTierFilter={setTierFilter}
+              hideDiagnostic={hideDiagnostic}
+              onHideDiagnostic={setHideDiagnostic}
+            />
+          ) : null}
           <div className="sbm-centre">
             {/* Map or List changes how the middle is drawn, not what the page
                 is about — so it belongs above the canvas, not with the title. */}

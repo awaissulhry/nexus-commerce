@@ -221,9 +221,19 @@
   grid-template-columns: 216px minmax(0, 1fr) 340px;
   gap: 12px;
 }
+/* List view drops the overlay rail — see MapClient — so the table gets the
+   216px back for its adjacency columns, which are its reason to exist. */
+.sbm-body.is-list {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
 @media (max-width: 1400px) {
-  .sbm-body {
+  .sbm-body,
+  .sbm-body.is-list {
     grid-template-columns: 200px minmax(0, 1fr);
+  }
+  .sbm-body.is-list {
+    grid-template-columns: minmax(0, 1fr);
   }
   .sbm-rail {
     display: none;
@@ -528,6 +538,12 @@
   color: #2b6cb0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* The name truncates; the badge does not. A clipped "SELF-TES" is worse than
+   a shortened name, because the badge is the thing that explains why that
+   row's numbers dwarf everyone else's. */
+.sbm-listname .sbm-tag-diag {
+  flex: none;
 }
 .sbm-listname:hover .nm {
   text-decoration: underline;
