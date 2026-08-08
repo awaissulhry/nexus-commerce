@@ -2239,6 +2239,81 @@ token is minted by this section.
 
 ---
 
+### 10.8 · S2.a–S2.d SHIPPED + PROD-VERIFIED 2026-08-08 — WF-S2R COMPLETE
+
+| Commit | Phase | What |
+|---|---|---|
+| `2792044f2` | **S2.a** | Actions beside the title; identity chips; status + next-run unified into one band |
+| `789061d3f` | **S2.b** | The fact bar; no cell may render a bare em-dash; `RunBars` extracted |
+| `f56e2065d` → `2463cfc5a` → `be9a25b69` | **S2.c** | The pipeline, plus two layout defects prod found |
+| `4095128a7` | **S2.d** | The not-found page earns its viewport; the read-this-page paragraph |
+
+**Acceptance, measured on the deployed page at 1728 × 906:**
+
+| Test | Before | After |
+|---|---|---|
+| Smallest text in the pipeline | **5.00px** (council, zoom 0.455) | **10.5px** — and no zoom exists |
+| Node ink / dead width | 9.4% sweep · 5.0% custom (682px dead each side) | **every card fills its stage — 0 dead width**, verified per level on all three routines |
+| Element overlaps in the picture | **9** label/node collisions | **0** |
+| Fact-bar cells reading a bare `—` | **4 of 5** on two of three routines | **0** on all three |
+| Action-row void | 767.7px (47.6%) | **0** — the row has content on both sides |
+| Contrast failures in the zone | 0 | **0** |
+| Type scale (owned) | 7 sizes / 5 weights | **5 sizes / 3 weights** |
+| `<Term>` inside a link | — | **0** |
+| Horizontal overflow | 0 | **0** |
+| Not-found page | 168px of content, 1 recovery link | **312.8px, 4 recovery targets** |
+
+**The last-run overlay, verified live on the council:** four workers read
+*"skipped — it was switched off"*, the director *"ok · 2m 47s · $0.1944 ·
+0 findings"*, the critic *"ok · 22s · $0.0182 · 0 findings"*, and both code
+steps *"always runs · not separately timed"*. The picture now changes when the
+routine does — which is the whole point of D7, and it needed no API change.
+
+**Three defects prod found that a screenshot of an intention would not have.**
+Each is the same lesson landing in a new place:
+
+1. **The artifact gutters were grid children**, so `grid-auto-columns:
+   minmax(0,1fr)` gave each of the four an equal share — **698px of 1572 spent
+   on four arrows and four one-word labels**, squeezing every card to 174.7px.
+   A layout written to remove dead width had invented some. The artifact rides
+   the stage label now, which also makes a label-on-card collision impossible.
+2. **A solo stage gives each card ~780px, and stacked contents used 22.9%.**
+   The dead width had moved from around the card to inside it. Wide cards lay
+   their facts out in lanes, exactly as the list card does; narrow ones stay
+   stacked, because at 300px lanes would be the wrong instrument.
+3. **The back link inside the title block made the actions align to it**, not
+   to the title, and pushed the row to `y=20` where the app shell's own
+   top-right chrome sits. Its own row fixes both.
+
+**Two exit criteria from §10.6 were not met, and both were mis-specified by
+me rather than missed.** Recording the numbers and the reasoning rather than
+quietly dropping them:
+
+- **"Zone height ≤ 60% of viewport"** — measured **89.8%** (sweep) and
+  **94.3%** (council). The criterion assumed that replacing an empty canvas
+  would *shrink* the zone. It does the opposite: the old 392.5px canvas was
+  ~90% empty, and a pipeline that is 100% used is taller, not shorter. The
+  zone grew ~53px and its informative content went from almost none to all of
+  it. The right criterion was never height — it was **dead area**, which is
+  now zero and is measured above.
+- **"404 content ≥ 60% of viewport"** — measured **34.5%**. A dead end has
+  only so much to honestly say, and filling 543px more would mean inventing
+  content. What actually improved is measurable and was the point: content
+  168px → **312.8px**, recovery targets 1 → **4**, each naming a routine and
+  what it does.
+
+**One measurement that stays imperfect and is stated rather than hidden:** on
+the two-worker custom, the solo cards fill **41.3% / 44.2%** by text-width.
+The three lanes are ratio-sized and its sentences are short; once that routine
+runs, the last lane grows from "never run" to a full outcome line and the fill
+rises with it. A per-step run strip would close the rest, but that needs
+per-worker history and belongs with S3's run selection (§10.7 item 1).
+
+**`RoutineCanvas.tsx` was not touched**, as promised — `RoutineEditor.tsx:486`
+still imports it, and the editor's canvas is S5's decision.
+
+---
+
 ## Sources
 
 **Part 10 (WF-S2R, detail-page research, 2026-08-08)** — Astronomer [intro to the Airflow UI](https://www.astronomer.io/docs/learn/airflow-ui) (single-DAG page: header actions top-right; grid columns = runs, squares = task instances, height = duration, colour = outcome; **the graph is annotated with a selected run's task states**; `g` toggles grid↔graph) · Temporal [Web UI](https://docs.temporal.io/web-ui) (execution page: Start/Close/Duration + Run ID + Type + Task Queue in the header; History in Timeline / All / Compact / JSON; **no workflow diagram** — a Relationships tree instead) · Dagster [webserver & UI](https://docs.dagster.io/guides/operate/webserver) (job page tabs: **Overview = the graph** · Launchpad · Runs · Partitions) · Inngest [observability & metrics](https://www.inngest.com/docs/platform/monitor/observability-metrics) (per-function charts: status breakdown, throughput, steps throughput, backlog, failure frequency, all time-range filtered) · GitHub Actions [manually running a workflow](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow) (**"Run workflow" renders only when the workflow declares `workflow_dispatch`**)
