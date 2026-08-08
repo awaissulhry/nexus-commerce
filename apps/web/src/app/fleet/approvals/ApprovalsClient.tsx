@@ -627,10 +627,27 @@ export function ApprovalsClient() {
     async (path: string, body?: unknown) => {
       setBusy(true)
       try {
+        /*
+         * The content-type is set ONLY when there is a body.
+         *
+         * Sending `content-type: application/json` with no body makes Fastify
+         * reject the request before the handler ever runs —
+         * `FST_ERR_CTP_EMPTY_JSON_BODY`, a flat 400. Three calls on this page
+         * pass no body: **undo, commit and unsnooze**. All three were failing
+         * silently, because the client fires them with `void post(...)` and
+         * nothing reads the result.
+         *
+         * Consequence while it lasted: the 20-second window could not be taken
+         * back from the UI at all, and the browser could not commit early — a
+         * parked action just sat there until the 30-second maintenance sweep
+         * picked it up. The undo LOOKED present and did nothing, which is worse
+         * than not offering one.
+         */
         const r = await fetch(`${backend}/api/agent/fleet/${path}`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: body === undefined ? undefined : JSON.stringify(body),
+          ...(body === undefined
+            ? {}
+            : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
         })
         const d = (await r.json().catch(() => null)) as
           | { error?: string; sentence?: string }

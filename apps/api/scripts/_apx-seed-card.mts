@@ -39,8 +39,12 @@ if (mode === 'clean') {
   const ids = runs.map((r) => r.id)
   const aps = await prisma.agentApproval.deleteMany({ where: { agentRunId: { in: ids } } })
   const rr = await prisma.agentRun.deleteMany({ where: { id: { in: ids } } })
+  // Audit rows from decide/undo carry the RUN's agentKey as charterKey and a
+  // null note, so matching on the marker missed them entirely — the same
+  // over-narrow-cleanup shape that left a row behind earlier. Match the seed's
+  // worker key, which nothing real uses while the fleet is off.
   const audit = await prisma.agentControlAudit.deleteMany({
-    where: { note: { contains: MARKER } },
+    where: { OR: [{ note: { contains: MARKER } }, { charterKey: 'amazon-bid-tuner' }] },
   })
   console.log(`deleted approvals=${aps.count} runs=${rr.count} audit=${audit.count}`)
   const left = await prisma.agentApproval.count()
@@ -62,6 +66,9 @@ const run = await prisma.agentRun.create({
     status: 'done',
     ok: true,
     endedAt: new Date(),
+    // NAF.AQ — stamped so the rollup contracted with SB.AS can be exercised.
+    // Their column; a fake id that resolves to no real assignment.
+    assignmentId: 'AQ-VERIFY-ASSIGNMENT',
   },
 })
 

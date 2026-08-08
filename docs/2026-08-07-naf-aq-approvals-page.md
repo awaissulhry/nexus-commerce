@@ -1679,3 +1679,56 @@ notification landing on one.
 the wrong default and the study says why: creation order puts a €2 bid nudge
 above a budget doubling. Now ranked by what a wrong answer costs — irreversible
 first, then high risk, then euro exposure, with age only as the tie-break.
+
+### Verifying snooze and the rollup found a shipped bug in the undo (2026-08-08)
+
+**Snooze, verified on prod:**
+
+| | |
+|---|---|
+| snooze past the expiry | **refused** — *"this request expires … it cannot be set aside past that, or it would be refused while you were not looking"* |
+| snooze into the past | refused |
+| valid snooze | accepted; the row left the list **and the count went 1 → 0** |
+
+That last column is the design requirement: a snooze that does not move the
+number is a filter, not a snooze — and a badge that counts what the queue hides
+teaches the operator to distrust the badge.
+
+**The rollup, verified against the contract:** `waiting: 1` for the stamped
+assignment, a **zeroed bucket** for an assignment with no runs (a complete map
+beats a sparse one for the consumer), and **101 ids refused** rather than
+truncated.
+
+### And the bug it surfaced, which was mine and already shipped
+
+The row did not come back after `unsnooze`. Chasing it found the client sending
+`content-type: application/json` with **no body**, which Fastify rejects before
+the handler runs — `FST_ERR_CTP_EMPTY_JSON_BODY`, a flat 400.
+
+**Three calls on this page pass no body: `undo`, `commit` and `unsnooze`.** All
+three were failing, and failing *silently*, because they are fired as
+`void post(...)` and nothing reads the result.
+
+While it lasted, that meant **the twenty-second window could not be taken back
+from the UI at all**, and the browser could not commit early — a parked action
+simply sat there until the 30-second maintenance sweep collected it. The undo
+button looked present and did nothing, which is worse than not offering one.
+
+Fixed by setting the header only when there is a body, then verified end to end
+on prod: unsnooze → 200 and listed; approve → `scheduled` with `executeAfter`;
+undo → back to `pending` with `decidedBy` cleared.
+
+**The same shape exists in the shipped Overview panel** (`FleetTab.tsx:275`),
+which is not this stream's file. Flagged rather than fixed.
+
+Two things worth keeping from how it was found. First: **it was invisible to
+every check I had.** `tsc` passes, the build passes, the tests mock `fetch`
+away, and the UI shows a button. Only exercising the actual path against the
+actual server surfaced it. Second: **I only noticed because a number
+disagreed** — the rollup said `waiting: 1` while the queue said 0. Neither
+number was wrong; the contradiction was the entire signal.
+
+**Cleaned up**, and the cleanup needed widening again: audit rows from
+decide/undo carry the *run's* `agentKey` as `charterKey` with a null note, so
+matching on the marker missed them — the same over-narrow-cleanup shape as
+before. Final state: **18 approvals, 0 exemplars, 0 audit rows.**
