@@ -1561,3 +1561,45 @@ when not.
 
 **Verified:** `tsc` clean on both apps; DS ratchet clean; agent-fleet suite
 **379 passing across 41 files** (7 new).
+
+### AQ.6 verified on prod (2026-08-07)
+
+Three seeded cards — two bid changes and one negative keyword, all inert — then
+deleted.
+
+**The money, summed from the previews the operator was shown:**
+
+> *"This approves 2 actions: 2 × set target bid… It raises what you pay per
+> click by **€0.56** in total across 2 keywords. You have 20 seconds to take it
+> back."*
+
+**The homogeneity rule, all three ways:**
+
+| | |
+|---|---|
+| mixed **approve** preview | `homogeneous: false`, and the sentence IS the refusal |
+| mixed **reject** preview | allowed — *"This rejects 2 actions: 1 × set target bid, 1 × create negative keyword."* |
+| mixed **approve** through `bulk-decide` | **`ok: false, done: 0`** with the refusal |
+
+The third is the one that matters. The rule holds at the point of action, not
+just in the confirmation — a client that never calls the preview still cannot
+approve two kinds of consequence with one yes.
+
+### And a third self-inflicted lesson, same shape as the other two
+
+The cleanup **reported success while leaving a row behind**. `_apx-seed-card.mts
+clean` matched on `agentKey: 'amazon-bid-tuner'` **and** the marker, so the
+negative-keyword seed — written under a different worker key — survived a clean
+that printed `deleted approvals=1` and looked fine. Caught only by re-probing
+and reading `19` where `18` was expected.
+
+Fixed twice over: the query keys on the **marker alone** (the thing that means
+"mine"; the agent key was incidental), and `clean` now **fails loudly** —
+non-zero exit and a `⚠ NOT CLEAN` line — if the table is not back to 18 or any
+seed run survives.
+
+That is three for three tonight on the same failure mode: `?? []` compared
+nothing and said nothing, a test grepped its own comment and passed, and a
+cleanup deleted the wrong subset and announced success. **An operation whose
+failure mode is silence will eventually be wrong quietly** — the only defence
+is asserting the end state rather than trusting the step.

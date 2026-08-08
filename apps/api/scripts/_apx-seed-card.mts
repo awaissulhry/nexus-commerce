@@ -27,8 +27,13 @@ const MARKER = 'AQ-VERIFY-SEED'
 const mode = process.argv[2] ?? 'seed'
 
 if (mode === 'clean') {
+  // Keyed on the MARKER alone. The first version also required
+  // `agentKey: 'amazon-bid-tuner'`, so a seed written with any other worker key
+  // survived a clean that reported success — the same silent-partial-success
+  // shape this engagement keeps finding. The marker is the thing that means
+  // "mine"; the agent key is incidental.
   const runs = await prisma.agentRun.findMany({
-    where: { agentKey: 'amazon-bid-tuner', trigger: MARKER },
+    where: { trigger: MARKER },
     select: { id: true },
   })
   const ids = runs.map((r) => r.id)
@@ -39,7 +44,12 @@ if (mode === 'clean') {
   })
   console.log(`deleted approvals=${aps.count} runs=${rr.count} audit=${audit.count}`)
   const left = await prisma.agentApproval.count()
+  const stragglers = await prisma.agentRun.count({ where: { trigger: MARKER } })
   console.log(`AgentApproval rows now: ${left}  (must be 18)`)
+  if (left !== 18 || stragglers > 0) {
+    console.error(`⚠ NOT CLEAN: ${left} approvals, ${stragglers} seed runs still present`)
+    process.exitCode = 1
+  }
   await prisma.$disconnect()
   process.exit(0)
 }
