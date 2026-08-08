@@ -72,6 +72,8 @@ interface WorkerNodeData {
   dimmed: boolean
   selected: boolean
   overlayClass: string
+  /** The topology, in a sentence, for a reader who cannot see the arrows. */
+  wiring: string
   [key: string]: unknown
 }
 
@@ -119,6 +121,19 @@ function WorkerNode({ data }: NodeProps) {
           <span className="sbm-fact">${d.costWindow.toFixed(4)}</span>
         ) : null}
       </div>
+      {/*
+        The wiring, for a screen reader. An edge is information a sighted
+        reader gets for free from an arrow and a screen-reader user loses
+        entirely, so it has to be in the DOM.
+
+        It lives here, inside the card, rather than on the node's `ariaLabel`:
+        that field exists on the Node type and tsc accepts it, but xyflow
+        12.11.1 does not render it — measured on prod, the wrapper carries
+        class/data-id/tabindex/role/aria-roledescription/aria-describedby and
+        no aria-label at all. A visually-hidden span is honoured by every
+        screen reader and depends on nothing the library chooses to do.
+      */}
+      <span className="sr-only">{d.wiring}</span>
       <Handle type="source" position={Position.Right} className="sbm-handle" />
     </div>
   )
@@ -301,10 +316,8 @@ export function MapCanvas({
         id: n.key,
         type: 'worker',
         position: p,
-        /* An edge is information a sighted reader gets for free and a screen
-           reader user loses entirely, so the label carries the topology:
-           identity, then state, then who it is wired to. */
-        ariaLabel: [
+        data: {
+          wiring: [
           `${n.name}.`,
           `${n.tier}.`,
           `${s.label}.`,
@@ -312,10 +325,9 @@ export function MapCanvas({
           n.findings.open > 0 ? `${n.findings.open} open findings.` : '',
           fedBy.length > 0 ? `Fed by ${fedBy.map(nameOf).join(', ')}.` : 'Starts the chain.',
           feeds.length > 0 ? `Feeds ${feeds.map(nameOf).join(', ')}.` : 'Ends the chain.',
-        ]
-          .filter(Boolean)
-          .join(' '),
-        data: {
+          ]
+            .filter(Boolean)
+            .join(' '),
           name: n.name,
           tier: n.tier,
           word: s.word,

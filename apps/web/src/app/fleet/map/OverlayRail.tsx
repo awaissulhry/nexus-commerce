@@ -20,6 +20,7 @@
  * banner directly above.
  */
 
+import { Def } from './definitions'
 import type { MapNode } from './lib'
 import { OVERLAYS, visibleBuckets, type Overlay } from './overlays'
 
@@ -101,16 +102,19 @@ export function OverlayRail({
               every role
             </button>
             {tiers.map((t) => (
-              <button
-                key={t}
-                type="button"
-                className={`sbm-chip ${tierFilter === t ? 'on' : ''}`}
-                aria-pressed={tierFilter === t}
-                onClick={() => onTierFilter(tierFilter === t ? null : t)}
-                title={`Show only the ${t}s. The rest stay on the map, dimmed.`}
-              >
-                {t}
-              </button>
+              <Def key={t} k={`tier-${t}`} note={`Show only the ${t}s. The rest stay on the map, dimmed.`}>
+                {(described) => (
+                  <button
+                    type="button"
+                    className={`sbm-chip ${tierFilter === t ? 'on' : ''}`}
+                    aria-pressed={tierFilter === t}
+                    onClick={() => onTierFilter(tierFilter === t ? null : t)}
+                    {...described}
+                  >
+                    {t}
+                  </button>
+                )}
+              </Def>
             ))}
           </div>
           {hasDiagnostic ? (

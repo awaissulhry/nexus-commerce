@@ -135,9 +135,10 @@ export function ListView({
       sortValue: (n) => n.cost.windowUSD,
       render: (n) =>
         n.cost.runs === 0 ? (
-          <span className="sbm-listdim" title="It did not run in this window, so there is nothing to measure.">
-            no runs
-          </span>
+          // Not a `title`: the distinction between "did not run" and "ran and
+          // cost nothing" is load-bearing, so it has to be reachable rather
+          // than hover-only. The row is not focusable, so the text carries it.
+          <span className="sbm-listdim">no runs in this window</span>
         ) : (
           `$${n.cost.windowUSD.toFixed(4)}`
         ),
