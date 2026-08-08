@@ -175,6 +175,33 @@ export function CreateAssignment({
   const overCap = !!kind && mode === 'each' && picked.length > BULK_CAP
   const canSubmit = !!workerKey && (!kind || picked.length > 0) && !saving && !overCap
 
+  /**
+   * S2.c — what the commit bar says, in three moods.
+   *
+   * `blocker` names the ONE thing standing in the way, never a list of rules:
+   * a form that recites its whole contract at someone who has done most of it
+   * is nagging, not helping.
+   */
+  const kindNoun =
+    kind === 'CAMPAIGN' ? 'campaign' : kind === 'PORTFOLIO' ? 'portfolio' : 'marketplace'
+  const blocker = !workerKey
+    ? 'Pick a worker to begin.'
+    : overCap
+      ? `${picked.length} is more than the ${BULK_CAP} this can make at once — remove some, or make one covering all of them.`
+      : `Pick a ${kindNoun} to continue.`
+  const targetPhrase = !kind
+    ? 'your whole account'
+    : picked.length === 1
+      ? picked[0].label
+      : `${picked.length} ${kindNoun}s`
+  const consequence =
+    kind && picked.length > 1 && mode === 'each'
+      ? `Creates ${picked.length} assignments, one per ${kindNoun}. Nothing runs until you start it.`
+      : `Creates 1 assignment · ${worker?.name ?? ''} on ${targetPhrase}. Nothing runs until you start it.`
+  const receiptLine = bulkResult
+    ? `${bulkResult.created.length} created${bulkResult.refused.length > 0 ? `, ${bulkResult.refused.length} refused` : ''}. None of them has run.`
+    : ''
+
   const submit = useCallback(async () => {
     if (!workerKey) return
     setSaving(true)
@@ -261,27 +288,55 @@ export function CreateAssignment({
       subtitle="One worker, one thing to look at."
       width={560}
       footer={
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button className="acr-pg-sortbtn" onClick={bulkResult ? onCreated : onClose} disabled={saving}>
-            {bulkResult ? 'Close' : 'Cancel'}
-          </button>
-          {!bulkResult && (
-          <button
-            className="acr-pg-sortbtn"
-            onClick={submit}
-            disabled={!canSubmit}
-            title={
-              canSubmit
-                ? 'Creates it. It will not run until you start it.'
-                : 'Pick a worker, and a target if you chose one.'
-            }
-          >
-            {saving ? <Loader2 size={14} className="spin" /> : <Target size={14} />}
-            {kind && picked.length > 1 && mode === 'each'
-              ? `Create ${picked.length}`
-              : 'Create it'}
-          </button>
-          )}
+        /**
+         * S2.c — the commit bar.
+         *
+         * Google Ads is the only researched create-flow that states the
+         * consequence before you commit, and it spends a whole step on it. We
+         * cannot afford a step; we can put the sentence next to the button,
+         * which is the same idea at zero extra clicks.
+         *
+         * And when the form is not ready it carries the REASON — as text.
+         * Before this, the only explanation lived in `title` on the disabled
+         * Create button, and a disabled button suppresses pointer events in
+         * every major browser, so that sentence could never be shown to
+         * anybody, by mouse or otherwise.
+         */
+        <div className="as-commit">
+          <p className={`as-commitline${canSubmit || bulkResult ? '' : ' blocked'}`}>
+            {bulkResult ? receiptLine : canSubmit ? consequence : blocker}
+          </p>
+          <div className="as-commitacts">
+            {!bulkResult && (
+              <button className="acr-btn" onClick={onClose} disabled={saving}>
+                Cancel
+              </button>
+            )}
+            {!bulkResult && (
+              <button
+                className="acr-btn go"
+                onClick={submit}
+                disabled={!canSubmit}
+                title="Creates it. It will not run until you start it."
+              >
+                {saving ? <Loader2 size={14} className="spin" /> : <Target size={14} />}
+                {saving
+                  ? 'Creating…'
+                  : kind && picked.length > 1 && mode === 'each'
+                    ? `Create ${picked.length}`
+                    : 'Create it'}
+              </button>
+            )}
+            {/* One action, one word. The footer used to say "Close" while the
+                panel said "Done" — 700px apart, both calling the same
+                function, and a first-timer had to guess whether they
+                differed. The panel's copy is now the only one. */}
+            {bulkResult && (
+              <button className="acr-btn go" onClick={onCreated} disabled={saving}>
+                Back to your assignments
+              </button>
+            )}
+          </div>
         </div>
       }
     >
@@ -289,10 +344,11 @@ export function CreateAssignment({
           form, because closing on a partial success would hide the refusals. */}
       {bulkResult && (
         <div className="as-step">
-          <span className="as-steplabel">
-            {bulkResult.created.length} created
+          <h3 className="as-receipt-h">
+            {bulkResult.created.length} assignment
+            {bulkResult.created.length === 1 ? '' : 's'} created
             {bulkResult.refused.length > 0 && `, ${bulkResult.refused.length} refused`}
-          </span>
+          </h3>
           <p className="as-hint">
             None of them has run. They will sit in your list until you start
             them one at a time.
@@ -313,22 +369,22 @@ export function CreateAssignment({
               ))}
             </div>
           )}
-          <div className="as-kinds" style={{ marginTop: 12 }}>
-            <button type="button" className="as-kind" onClick={onCreated}>
-              Done
-            </button>
-            {bulkResult.created.length > 0 && (
+          {/* No "Done" here: the footer owns the way out, and two words for
+              one action is what this phase exists to remove. Undo stays,
+              because it is a different action and only reachable here. */}
+          {bulkResult.created.length > 0 && (
+            <div className="as-receipt-undo">
               <button
                 type="button"
-                className="as-kind"
+                className="acr-btn"
                 disabled={saving}
                 onClick={undoBulk}
                 title="Deletes the ones just created. Possible only because none of them has run."
               >
                 Undo — delete {bulkResult.created.length}
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 

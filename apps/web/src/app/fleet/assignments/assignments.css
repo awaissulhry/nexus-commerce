@@ -447,6 +447,35 @@
   margin-top: 8px;
 }
 
+/* ── S2.c · the commit bar ───────────────────────────────────────────────
+   The consequence sits next to the control that commits it, and when the form
+   is not ready the same line carries the reason as TEXT. It used to live in
+   `title` on the disabled Create button, which no browser will ever show. */
+.as-commit {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+.as-commitline {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #5b6573;
+}
+.as-commitline.blocked { color: #7a5a22; font-weight: 600; }
+.as-commitacts { display: flex; gap: 8px; flex: none; }
+
+.as-receipt-h {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2a37;
+}
+.as-receipt-undo { margin-top: 12px; }
+
 /* ── S2.a · the pickers ───────────────────────────────────────────────────
    NO `overflow` and NO `max-height` in this block, deliberately. The drawer
    body is the only scroll container in the drawer; both pickers used to own
