@@ -218,6 +218,42 @@
   background: #fff;
 }
 
+/* S2.d — the loading skeleton, sized to the readout it stands in for. The old
+   `return null` is why the queue card painted 347px above where it landed. */
+.aq-gateskel {
+  min-height: 363px;
+  background: linear-gradient(90deg, #f6f8fa 25%, #eef1f5 37%, #f6f8fa 63%);
+  background-size: 400% 100%;
+  animation: aq-shimmer 1.4s ease infinite;
+  border-color: #eef1f5;
+}
+@keyframes aq-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aq-gateskel {
+    animation: none;
+  }
+}
+
+/* A failed read is the one state besides the halt that is genuinely a fault,
+   so it is allowed the danger accent — on the border only, because the content
+   is an admission rather than an alarm. */
+.aq-gateunknown {
+  border-left: 3px solid #c53030;
+}
+.aq-gateunknown .aq-gate-head {
+  border-bottom: 0;
+}
+.aq-gateunknown .aq-gate-head svg {
+  color: #9c2f2a;
+}
+
 .aq-gate-head {
   display: flex;
   gap: 9px;

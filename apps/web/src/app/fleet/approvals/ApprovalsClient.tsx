@@ -316,8 +316,61 @@ function ConditionRow({
   )
 }
 
-function GateStateSection({ gate, waiting }: { gate: GateState | null; waiting: number }) {
-  if (!gate) return null
+function GateStateSection({
+  gate,
+  waiting,
+  loading,
+  err,
+}: {
+  gate: GateState | null
+  waiting: number
+  loading: boolean
+  err: string | null
+}) {
+  /*
+   * S2.d — loading. This used to `return null`, which is why the queue card
+   * painted at y=175 and landed at y=522 once the read resolved: 347px of the
+   * page moving under the reader, measured in §12.7. A skeleton at the
+   * readout's real height reserves the space instead.
+   */
+  if (!gate && loading) {
+    return (
+      <div className="aq-gate aq-gateskel" aria-busy="true" aria-label="Reading the fleet’s state" />
+    )
+  }
+
+  /*
+   * S2.d — the read FAILED, and silence is the wrong answer.
+   *
+   * `return null` here meant a failed gate-state read looked exactly like a
+   * healthy page with an empty queue — on the one section whose entire job is
+   * to tell those two apart.
+   *
+   * ⚠ A correction to the study (Part 13 §13.4.3f), found by implementing it:
+   * it specified "the readout frame with `Unknown` on every row". That is not
+   * possible. Every requirement sentence is COMPOSED SERVER-SIDE, so a failed
+   * read has no rows to label — inventing three from a client-side constant
+   * would be exactly the stale-constant class this page exists to stop. The
+   * honest version is the frame, and one sentence admitting the page cannot
+   * answer its own question.
+   */
+  if (!gate) {
+    return (
+      <section className="aq-gate aq-gateunknown">
+        <div className="aq-gate-head">
+          <AlertTriangle size={15} aria-hidden />
+          <p>
+            <strong>The fleet’s state could not be read.</strong>{' '}
+            <span className="aq-gate-sub">
+              So this page cannot tell you whether anything is able to reach you. The queue below
+              may be empty for a reason it cannot currently see
+              {err ? <> — {err}</> : null}.
+            </span>
+          </p>
+        </div>
+      </section>
+    )
+  }
 
   const conditions = gate.conditions ?? []
   const unmet = conditions.filter((c) => !c.met)
@@ -869,7 +922,7 @@ export function ApprovalsClient() {
         </p>
       ) : null}
 
-      <GateStateSection gate={gate} waiting={counts.waiting} />
+      <GateStateSection gate={gate} waiting={counts.waiting} loading={loading} err={err} />
 
       <section className="acr-card aq-queue" aria-label="Approvals">
         <div className="acr-cardhead">
