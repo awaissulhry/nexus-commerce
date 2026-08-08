@@ -361,7 +361,13 @@
   font-weight: 600;
 }
 .aq-condowner {
-  flex: 0 0 auto;
+  /* `0 0 auto` refused to shrink, so below ~300px of container the owner text
+     ran 45px past the card and the page grew a horizontal scrollbar. Measured
+     at nine widths: overflow at 360 and below, none at 320+. `0 1 auto` with
+     `min-width: 0` lets it wrap instead, and desktop is byte-identical —
+     362.8px tall, owner at x=431, before and after. */
+  flex: 0 1 auto;
+  min-width: 0;
   font-weight: 400;
   color: #55616f;
 }

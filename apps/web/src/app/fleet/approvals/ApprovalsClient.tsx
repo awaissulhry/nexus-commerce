@@ -29,7 +29,7 @@
  * create two dictionaries that drift — the defect AP.3 was written to fix.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -223,6 +223,48 @@ function PageDescription() {
  * it is not a precondition at all, and S1's teaching drawer already states it.
  */
 
+/**
+ * S2.d — glossary terms inside SERVER-COMPOSED copy.
+ *
+ * A consequence of S2.a that I did not foresee and the tab-stop audit caught:
+ * once `requirement` and `detail` are composed on the server, the client can no
+ * longer wrap individual words in `<Term>`, so PROPOSE, council and sweep lost
+ * the tooltips they had. Server composition was still the right call — it is
+ * what removed the 22 duplicated words — but it moved the copy out of JSX, and
+ * the tooltips went with it.
+ *
+ * So the sentence is tokenised on an EXPLICIT list, never on the whole glossary:
+ * an automatic pass over every key would eventually wrap a word that merely
+ * looks like jargon ("plan", "run", "target" all appear in ordinary sentences
+ * here). First occurrence only — one tooltip per term per sentence is the
+ * house rule S1 set, and repeating it turns prose into a minefield of dotted
+ * underlines.
+ */
+const S2_TERMS: Array<[RegExp, string]> = [
+  [/\bPROPOSE\b/, 'propose'],
+  [/\bcouncil\b/, 'council'],
+  [/\bsweep\b/, 'sweep'],
+]
+
+function withTerms(text: string): ReactNode[] {
+  let parts: ReactNode[] = [text]
+  for (const [re, key] of S2_TERMS) {
+    parts = parts.flatMap((part) => {
+      if (typeof part !== 'string') return [part]
+      const m = re.exec(part)
+      if (!m) return [part]
+      return [
+        part.slice(0, m.index),
+        <Term key={`${key}-${m.index}`} k={key as never}>
+          {m[0]}
+        </Term>,
+        part.slice(m.index + m[0].length),
+      ]
+    })
+  }
+  return parts
+}
+
 const OWNER_LINE: Record<GateCondition['owner'], string> = {
   operator: 'Yours to change',
   engineering: 'Ours to build — nothing you can do here',
@@ -271,7 +313,7 @@ function ConditionRow({
             Inline and adjacent costs nothing and reads immediately. A <span>,
             not a <p>: a paragraph inside a paragraph is invalid HTML. */}
         <p className="aq-condreq">
-          {condition.requirement}
+          {withTerms(condition.requirement)}
           <span className="aq-condowner">
             {OWNER_LINE[condition.owner]}
             {condition.href ? (
@@ -283,7 +325,7 @@ function ConditionRow({
           </span>
         </p>
         <p className="aq-conddetail">
-          {condition.detail}
+          {withTerms(condition.detail)}
           {condition.at ? (
             <>
               {' '}
