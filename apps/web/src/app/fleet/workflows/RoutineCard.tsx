@@ -307,6 +307,16 @@ export function RoutineCard(props: RoutineCardProps) {
 
           <span className="wf-recent">
             <span className="wf-bars" title={stripHint} aria-label={stripHint}>
+              {/* Empty slots come FIRST. The strip reads left to right like
+                  time does, so the unfilled past belongs on the left and the
+                  newest run belongs hard against the right edge. Filling from
+                  the left instead put one run at the far left with eleven
+                  blanks after it, which reads as eleven runs still to come.
+                  UiPath's rule holds either way: never-run is twelve grey
+                  slots — a state, not an absence. */}
+              {Array.from({ length: MAX_BARS - bars.length }, (_, i) => (
+                <span key={`slot-${i}`} className="wf-bar empty" />
+              ))}
               {bars.map((g) => (
                 <span
                   key={g.id}
@@ -314,11 +324,6 @@ export function RoutineCard(props: RoutineCardProps) {
                   style={{ height: `${barHeight(g)}px` }}
                   title={barTitle(g)}
                 />
-              ))}
-              {/* UiPath's rule: never-run is a colour, not an absence. The
-                  empty slots say "twelve runs would show here". */}
-              {Array.from({ length: MAX_BARS - bars.length }, (_, i) => (
-                <span key={`slot-${i}`} className="wf-bar empty" />
               ))}
             </span>
             <span className="wf-sub">{stripCaption}</span>
