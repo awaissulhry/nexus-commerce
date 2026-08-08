@@ -35,6 +35,7 @@ import {
   Handle,
   Position,
   ReactFlow,
+  useNodesInitialized,
   useStore,
   type Edge,
   type Node,
@@ -157,6 +158,24 @@ function EntityCard({ data }: NodeProps) {
 }
 
 const nodeTypes = { entity: EntityCard }
+
+/**
+ * fitView frames the graph from the nodes' measured sizes — and at mount they
+ * have none yet, so it fits against xyflow's default 150×40 guess and the real
+ * 210×62 cards overflow the viewport. On prod that clipped the right-hand
+ * column of every family. `useNodesInitialized` flips true once every node has
+ * been measured, which is the only honest moment to frame the picture.
+ *
+ * A child of <ReactFlow> so it sits inside the store's provider; it renders
+ * nothing.
+ */
+function FitWhenMeasured({ onReady }: { onReady: () => void }) {
+  const ready = useNodesInitialized()
+  useEffect(() => {
+    if (ready) onReady()
+  }, [ready, onReady])
+  return null
+}
 
 /* ── connected components, then a grid per component ───────────────────── */
 
@@ -330,6 +349,7 @@ export function EntityCanvas({
         }}
         onPaneClick={() => onSelect(null)}
       >
+        <FitWhenMeasured onReady={refit} />
         <Background variant={BackgroundVariant.Dots} gap={26} size={1.4} />
         <Controls showInteractive={false} />
       </ReactFlow>
