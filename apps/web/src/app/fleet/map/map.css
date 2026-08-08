@@ -838,6 +838,12 @@
 }
 .sbm-row .v {
   flex: 1 1 auto;
+  /* Without min-width:0 a flex child refuses to shrink below its content, so
+     a long value — "fleet-sweep, fleet-council" — pushes past the rail's edge
+     and is clipped rather than wrapped. `anywhere` because these are keys and
+     ids with no spaces to break at. */
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: #364152;
   display: flex;
   flex-wrap: wrap;
