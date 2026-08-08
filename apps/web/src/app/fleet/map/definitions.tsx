@@ -22,30 +22,24 @@
  */
 
 import type { ReactNode } from 'react'
+import { CHIPS } from './lib'
 
+/**
+ * ⚠ S1R — a correction to rule 1, found while building on it.
+ *
+ * This file used to RESTATE all eleven census definitions, which `lib.ts`
+ * already carried on `CHIPS[].definition`. So the header claimed one source
+ * while shipping two copies of the same eleven sentences, and those copies were
+ * themselves the drift the rule exists to prevent. They are derived now: a
+ * chip's definition can only be written where the chip is declared, and the
+ * zero-notes come from the same declaration.
+ */
 export const DEFINITIONS: Record<string, string> = {
-  /* the census */
-  workers:
-    'Every worker drawn on this map: the ones your enabled routines name, plus the ones the nightly job runs itself. Retired workers are not drawn.',
-  running: 'Working right now — a run has started and has not finished.',
-  working: 'Switched on, allowed to act, and its last run finished cleanly.',
-  off: 'You have switched it off, or its dial is at OFF. It will not start, whatever the schedule says.',
-  paused: 'Temporarily stopped, with an end date. A pause is never a forgotten off switch.',
-  'not-set-up':
-    'It exists in code but has no settings row yet, so it cannot be switched on until one is created.',
-  attention: 'Something about this worker needs a decision from you. The card says what.',
-  'never-run':
-    'Has never run at all, over the whole life of the fleet — not just in the window you are looking at.',
-  'last-failed':
-    'Its most recent run ended in a real failure. A run stopped by one of its own limits is counted separately, because that is a limit working.',
-  'hit-a-limit':
-    'Its last run hit one of its own budget or token limits and stopped part-way. Nothing is broken — this is a safety limit doing its job.',
-  waiting: 'Proposals from this worker that are waiting for your yes or no.',
-
-  /* the zeros that have a cause worth stating */
-  'waiting-zero':
-    'No worker can put anything here yet: the fleet’s proposal tools are preview-only, so a plan that passes the critic still queues nothing.',
-  'running-zero': 'Nothing is running at this moment.',
+  /* the census — derived from the chips, never restated */
+  ...Object.fromEntries(CHIPS.map((c) => [c.id, c.definition])),
+  ...Object.fromEntries(
+    CHIPS.filter((c) => c.zeroNote != null).map((c) => [`${c.id}-zero`, c.zeroNote as string]),
+  ),
 
   /* the edges */
   carried:
@@ -54,6 +48,14 @@ export const DEFINITIONS: Record<string, string> = {
     'Findings the director read and chose not to carry. It has to give a reason for every one, and those reasons are on the line’s panel.',
   'no-count':
     'The critic does not write anything of its own — it records a verdict on the plan in place. So there is nothing crossing this line to count, and it shows the verdict instead.',
+
+  /* the standing facts beside the counts (S1R) — neither of these is a filter.
+     A lens counts workers and its number is exactly the nodes left undimmed
+     when you press it; these two count something else, so they are facts. */
+  'spend-today':
+    'What the whole fleet has spent on AI since midnight, against the hard daily cap. Past the cap, runs are refused before any model is called.',
+  'findings-open':
+    'Suggestions the workers have written that nothing has used or dismissed yet. This counts findings, not workers, so it is not something you can filter the map by.',
 
   /* cost */
   spend: 'What this worker spent on AI in the window you are looking at.',

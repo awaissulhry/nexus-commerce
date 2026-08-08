@@ -17,7 +17,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Map as MapIcon, RefreshCw, ShieldAlert, ArrowRight } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
 import { MapCanvas } from './MapCanvas'
 import { InspectorRail } from './InspectorRail'
@@ -25,15 +24,9 @@ import { OverlayRail } from './OverlayRail'
 import { ListView } from './ListView'
 import { EntityCanvas, relationOf, type EntityGraph } from './EntityCanvas'
 import { HowThisMapWorks } from './HowThisMapWorks'
-import { Def } from './definitions'
+import { CensusBand, CensusBandSkeleton } from './CensusBand'
 import { overlayById } from './overlays'
-import {
-  visibleCensus,
-  filterSummary,
-  diagnosticFootnote,
-  CHIPS,
-  type FleetMapPayload,
-} from './lib'
+import { CHIPS, type FleetMapPayload } from './lib'
 
 const WINDOWS: Array<{ key: string; label: string }> = [
   { key: '24h', label: '24 hours' },
@@ -64,6 +57,9 @@ export function MapClient() {
   const [entitySel, setEntitySel] = useState<string | null>(null)
   /** The walk back. The breadcrumb IS the back-stack — one of them, not two. */
   const [trail, setTrail] = useState<Array<{ type: string; id: string; label: string }>>([])
+  /** A signal, not a boolean: the band asks the teaching drawer to open at
+   *  "What each number counts", and asking twice in a row must work. */
+  const [explainAt, setExplainAt] = useState<number | undefined>(undefined)
 
   const loadEntities = useCallback(
     async (focus?: { type: string; id: string }) => {
@@ -125,8 +121,6 @@ export function MapClient() {
   const { asOf, refresh } = useVisibilityPoll(load)
 
   const nodes = data?.nodes ?? []
-  const rows = useMemo(() => visibleCensus(nodes), [nodes])
-  const footnote = useMemo(() => diagnosticFootnote(nodes), [nodes])
 
   /* Filtering DIMS; it never removes and never re-lays-out. A node that jumps
      position when you press a chip destroys the spatial memory that is the
@@ -291,7 +285,7 @@ export function MapClient() {
         </div>
       ) : null}
 
-      <HowThisMapWorks />
+      <HowThisMapWorks openSignal={explainAt} />
 
       {/* ── M6 · entity mode: a different universe, the same shell ─────── */}
       {mode === 'entities' ? (
@@ -484,62 +478,20 @@ export function MapClient() {
         </>
       ) : (
         <>
-      {/* ── M1 · the census strip ─────────────────────────────────────── */}
-      <section className="sbm-census" aria-label="What is on this map">
-        <div className="sbm-census-rows">
-          {(['subject', 'state', 'fact'] as const).map((rank) => {
-            const group = rows.filter((r) => r.chip.rank === rank)
-            if (group.length === 0) return null
-            return (
-              <div key={rank} className={`sbm-chiprow rank-${rank}`}>
-                {rank === 'fact' ? <span className="sbm-chiprow-label">also</span> : null}
-                {group.map(({ chip, count }) => {
-                  const on = activeChip === chip.id
-                  // A zero with a structural cause explains itself rather than
-                  // reading as an empty inbox.
-                  const note = count === 0 && chip.zeroNote ? chip.zeroNote : undefined
-                  return (
-                    <Def key={chip.id} k={chip.id} note={note}>
-                      {(described) => (
-                        <button
-                          type="button"
-                          className={`sbm-chip ${on ? 'on' : ''} ${chip.rank === 'subject' ? 'subject' : ''}`}
-                          aria-pressed={on}
-                          {...described}
-                          onClick={() =>
-                            setActiveChip(chip.id === 'workers' ? null : on ? null : chip.id)
-                          }
-                        >
-                          <span className="n">{count}</span> {chip.label}
-                        </button>
-                      )}
-                    </Def>
-                  )
-                })}
-              </div>
-            )
-          })}
-        </div>
-        <div className="sbm-census-side">
-          {data ? (
-            <span className="sbm-spend">
-              spent <b>${data.state.spentTodayUSD.toFixed(4)}</b> of the{' '}
-              <Term k="ceiling">${data.state.dailyCeilingUSD.toFixed(2)} daily ceiling</Term> today
-            </span>
-          ) : null}
-        </div>
-      </section>
-
-      {activeChip ? (
-        <p className="sbm-filterline" role="status">
-          {filterSummary(nodes, activeChip)} — the rest are dimmed, not hidden.{' '}
-          <button type="button" className="sbm-linkbtn" onClick={() => setActiveChip(null)}>
-            Show all
-          </button>
-        </p>
-      ) : null}
-
-      {footnote ? <p className="sbm-footnote">{footnote}</p> : null}
+      {/* ── M1 · the census band (S1R) ────────────────────────────────── */}
+      {data == null ? (
+        <CensusBandSkeleton />
+      ) : (
+        <CensusBand
+          nodes={nodes}
+          halted={data.state.halted}
+          spentTodayUSD={data.state.spentTodayUSD}
+          dailyCeilingUSD={data.state.dailyCeilingUSD}
+          activeChip={activeChip}
+          onChip={setActiveChip}
+          onExplain={() => setExplainAt(Date.now())}
+        />
+      )}
 
       {data?.warnings.map((w) => (
         <p key={w} className="sbm-footnote warn">

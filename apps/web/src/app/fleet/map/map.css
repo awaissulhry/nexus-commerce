@@ -103,7 +103,347 @@
   outline-offset: -2px;
 }
 
-/* ── M1 · the census strip ─────────────────────────────────────────────── */
+/* ── M1 · the census band (S1R) ────────────────────────────────────────────
+ *
+ * Study: docs/2026-08-08-naf-sbm-s1-census-strip.md.
+ *
+ * THE LAYOUT DECISION, and it is the whole of this block. The strip this
+ * replaces was a `space-between` row holding two shrink-wrapped children, which
+ * left **1063px of empty card at 1728 — 65.9%** — and the waste GREW with the
+ * viewport (52.7% at 1280 → 69.5% at 1920), because two short things at
+ * opposite ends of a wide band always leave a hole and no amount of padding
+ * closes it. The fix is structural: put a **width-absorbing element between
+ * them**. That is the meter. It is the only child here that wants to be wide,
+ * so it takes the fractional column and the two prose cells are cut to their
+ * content — which is the same law the Workflows stream paid for twice:
+ * *prose has a reading measure and will not stretch, so cut the lane to it.*
+ *
+ * There are no media queries here on purpose. The band is width-independent
+ * flex/grid all the way down, which is what let the audit probe 1280/1440/1920
+ * honestly by constraining the host instead of the window.
+ */
+
+.sbm-band {
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(240px, 0.9fr) minmax(120px, 1.1fr) auto;
+  grid-template-areas:
+    'verdict meter facts'
+    'lenses lenses lenses';
+  align-items: center;
+  column-gap: 20px;
+  row-gap: 8px;
+  padding: 9px 12px;
+  background: #fff;
+  border: 1px solid #e6ebf1;
+  border-radius: 9px;
+}
+
+/* the verdict — the sentence that answers the section's question */
+.sbm-verdict {
+  grid-area: verdict;
+  min-width: 0;
+}
+.sbm-verdict-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 650;
+  line-height: 1.25;
+  color: #1c2530;
+}
+/* Reserved whether or not a filter is on. The old strip inserted its filter
+   summary as a new block BELOW the card, which moved the canvas 29.3px and the
+   node you were pointing at with it — this page's own law, broken from outside
+   the canvas it was written for. */
+.sbm-verdict-sub {
+  margin: 2px 0 0;
+  min-height: 17px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #55616f;
+}
+.sbm-band.tone-halted .sbm-verdict-head svg,
+.sbm-band.tone-failed .sbm-verdict-head svg {
+  color: #b3261e;
+}
+.sbm-band.tone-running .sbm-verdict-head svg {
+  color: #1f6fde;
+}
+.sbm-band.tone-mixed .sbm-verdict-head svg {
+  color: #15804f;
+}
+.sbm-band.tone-off .sbm-verdict-head svg,
+.sbm-band.tone-empty .sbm-verdict-head svg {
+  color: #55616f;
+}
+
+/* the meter — the width-absorber, and the only shape that SHOWS a partition
+   summing. Segments are separated by white rather than by a border, so two
+   adjacent states are always distinguishable however close their hues. */
+.sbm-meterwrap {
+  grid-area: meter;
+  min-width: 0;
+}
+.sbm-meter {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  border-radius: 4px;
+  background: #eef1f5;
+  overflow: hidden;
+}
+.sbm-seg {
+  /* A non-zero state must never round away to nothing: one worker in sixty is
+     still a worker, and a segment you cannot see is a count you cannot read. */
+  min-width: 16px;
+  border-radius: 2px;
+}
+.sbm-seg.is-dim {
+  opacity: 0.3;
+}
+
+/* One class per state drives BOTH the segment and the lens's swatch, so the
+   legend and the bar cannot become two sources — the same rule M.4's overlay
+   legend is built on. */
+.seg-running {
+  background: #1f6fde;
+}
+.seg-working {
+  background: #15804f;
+}
+.seg-off {
+  background: #78838f;
+}
+.seg-paused {
+  background: #9a6c12;
+}
+.seg-not-set-up {
+  background: #5c6b7d;
+}
+.seg-attention {
+  background: #b3261e;
+}
+
+/* the standing facts — laid out in lanes, not stacked, because a cell this
+   wide stacking its contents just moves the dead width inside the cell */
+.sbm-facts {
+  grid-area: facts;
+  display: flex;
+  gap: 18px;
+}
+.sbm-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border-radius: 5px;
+}
+.sbm-fact .k {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #55616f;
+}
+.sbm-fact .v {
+  font-size: 13px;
+  font-weight: 650;
+  color: #1c2530;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sbm-fact .v i {
+  margin-left: 5px;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 400;
+  color: #55616f;
+}
+.sbm-fact:focus-visible {
+  outline: 2px solid #2b6cb0;
+  outline-offset: 3px;
+}
+
+/* the lenses — one tab stop, arrow keys inside (ARIA APG puts the threshold
+   for a toolbar at three controls; this section had five and would have had
+   eleven) */
+.sbm-lensbar {
+  grid-area: lenses;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.sbm-lensgrp {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sbm-lens-sep {
+  margin: 0 2px 0 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  /* The old "ALSO" was #9aa5b3 = 2.50:1, the lowest-contrast text in the
+     section and the only thing naming its most important distinction. */
+  color: #55616f;
+}
+
+.sbm-lens {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px 3px 6px;
+  /* 1.4.11 wants 3:1 for a control's own boundary. The old chip's was
+     #dde4ec = 1.28:1 — the control had no perceptible edge at all. */
+  border: 1px solid #78838f;
+  border-radius: 999px;
+  background: #fff;
+  color: #37414f;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.sbm-lens.rank-fact {
+  border-style: dashed;
+}
+.sbm-lens .mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Fixed slot: the check appears INSIDE it, so pressing a lens cannot resize
+     it and shuffle its neighbours. */
+  width: 11px;
+  flex: none;
+}
+.sbm-lens .sw {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex: none;
+}
+.sbm-lens .n {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  /* A lens counts WORKERS, and there are seven, so two digits is the honest
+     reservation. The four-digit case belongs to open findings, which is a fact
+     and not in this row. */
+  min-width: 2ch;
+  text-align: right;
+  color: #1c2530;
+}
+.sbm-lens:hover {
+  background: #f2f6fb;
+  border-color: #4a5666;
+}
+/* The pressed state, which used to be carried by aria-pressed alone: measured
+   on the shipped chip, resting→active was 1.11:1 on fill, 1.40:1 on border and
+   1.10:1 on text. Now it is an inverted fill (past 3:1 by a mile), a check
+   glyph and the word — Carbon's "at least three of these elements". */
+.sbm-lens.on {
+  background: #1f4f8b;
+  border-color: #1f4f8b;
+  border-style: solid;
+  color: #fff;
+}
+.sbm-lens.on .n {
+  color: #fff;
+}
+.sbm-lens:focus-visible {
+  outline: 2px solid #2b6cb0;
+  outline-offset: 2px;
+}
+
+/* A count of zero is a sentence, never a control: pressing the old
+   "0 waiting in Approvals" dimmed all seven nodes and reported "0 of 7". */
+.sbm-note {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: #55616f;
+}
+.sbm-note .n {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #37414f;
+}
+
+.sbm-explain {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  font-size: 11.5px;
+  color: #2b6cb0;
+  cursor: pointer;
+}
+.sbm-explain:hover {
+  background: #eef4fb;
+  text-decoration: underline;
+}
+.sbm-explain:focus-visible {
+  outline: 2px solid #2b6cb0;
+  outline-offset: 1px;
+}
+
+/* Before the first successful read the band shows a shape and not one number.
+   The strip it replaces asserted "0 workers · 0 running · 0 waiting in
+   Approvals" as fact while its own request was in flight, with those zeros as
+   live buttons — measured on prod 2026-08-08. */
+.sbm-band.is-loading .sbm-meter {
+  background: #eef1f5;
+}
+.sbm-skel {
+  display: block;
+  background: #eef1f5;
+  border-radius: 4px;
+}
+.sbm-skel.sk-head {
+  width: 250px;
+  height: 16px;
+}
+.sbm-skel.sk-sub {
+  width: 330px;
+  height: 11px;
+}
+.sbm-skel.sk-fact {
+  width: 108px;
+  height: 32px;
+}
+
+/* the definitions list in the teaching drawer — the keyboard- and
+   touch-reachable home the tooltips could never be */
+.sbm-defs {
+  margin: 6px 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 8px 20px;
+}
+.sbm-defs > div {
+  min-width: 0;
+}
+.sbm-defs dt {
+  font-size: 12px;
+  font-weight: 650;
+  color: #1c2530;
+}
+.sbm-defs dd {
+  margin: 1px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #45505f;
+}
+
+/* ── M1 · the census strip — entity mode still wears it (S1.d retires it) ── */
 
 .sbm-census {
   display: flex;
@@ -184,7 +524,10 @@
 .sbm-selline {
   margin: 0;
   font-size: 11.5px;
-  color: #667485;
+  /* #667485 measured 4.41:1 against this page's #f4f6f9 background — under AA
+     at 11.5px. #55616f measures 5.83:1 on the same ground. (Three other fleet
+     streams have quoted 6.02 for this colour; they measured it on white.) */
+  color: #55616f;
   flex: none;
 }
 .sbm-footnote.warn {

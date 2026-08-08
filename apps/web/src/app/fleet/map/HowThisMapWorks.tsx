@@ -16,12 +16,39 @@
  * genuinely cannot be avoided is linked to the shared glossary with `<Term>`.
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BookOpen, ChevronDown, ChevronUp } from 'lucide-react'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
+import { DEFINITIONS } from './definitions'
+import { CHIPS } from './lib'
 
-export function HowThisMapWorks() {
+export function HowThisMapWorks({ openSignal }: { openSignal?: number }) {
   const [open, setOpen] = useState(false)
+  const numbers = useRef<HTMLHeadingElement | null>(null)
+
+  /**
+   * S1R — the band's "What each number counts" affordance lands here.
+   *
+   * The definitions used to exist only as hover/focus tooltips, which is the
+   * one place the field is unanimous they must not be: NN/g's rule is that a
+   * tooltip must not carry what the task needs, and GOV.UK's is that a
+   * disclosure must not hide what most readers need. What a number counts is
+   * the number. So it lives here as real text, reachable by keyboard AND by
+   * touch, and the tooltip is demoted to an accelerator.
+   *
+   * `behavior: 'auto'` deliberately — a smooth scroll would be motion this
+   * page has no way to switch off, and the reader asked to be moved.
+   */
+  useEffect(() => {
+    if (openSignal == null) return
+    setOpen(true)
+    const t = window.setTimeout(() => {
+      numbers.current?.scrollIntoView({ block: 'center', behavior: 'auto' })
+      numbers.current?.focus()
+    }, 0)
+    return () => window.clearTimeout(t)
+  }, [openSignal])
+
   return (
     <section className={`sbm-how ${open ? 'is-open' : ''}`}>
       <button
@@ -98,6 +125,38 @@ export function HowThisMapWorks() {
             anything from here — that is deliberate, so a page you read quickly can never be a page
             you break something on by accident.
           </p>
+
+          <h4 id="sbm-numbers" ref={numbers} tabIndex={-1}>
+            What each number counts
+          </h4>
+          <p>
+            Every figure in the band above the map, defined once. These are the same
+            sentences the band itself shows when you hover or tab onto a number — written
+            here as well, because a definition you can only reach with a mouse is a
+            definition half the people reading this page cannot reach at all.
+          </p>
+          <dl className="sbm-defs">
+            {/* Generated from the chips themselves. A list retyped here would be a
+                second copy of eleven sentences, and the second copy is always the
+                one that goes stale. */}
+            {CHIPS.map((c) => (
+              <div key={c.id}>
+                <dt>{c.label}</dt>
+                <dd>
+                  {c.definition}
+                  {c.zeroNote ? <> {c.zeroNote}</> : null}
+                </dd>
+              </div>
+            ))}
+            <div>
+              <dt>Spent today</dt>
+              <dd>{DEFINITIONS['spend-today']}</dd>
+            </div>
+            <div>
+              <dt>Open findings</dt>
+              <dd>{DEFINITIONS['findings-open']}</dd>
+            </div>
+          </dl>
 
           <h4>Two numbers that surprise people</h4>
           <p>
