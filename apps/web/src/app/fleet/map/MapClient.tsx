@@ -13,13 +13,14 @@
  * none of the three dial-bypassing paths the spend audit found.
  */
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Map as MapIcon, RefreshCw, ShieldAlert, ArrowRight } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
 import { MapCanvas } from './MapCanvas'
+import { InspectorRail } from './InspectorRail'
 import {
   visibleCensus,
   filterSummary,
@@ -41,7 +42,10 @@ export function MapClient() {
   const [err, setErr] = useState<string | null>(null)
   const [windowKey, setWindowKey] = useState('7d')
   const [activeChip, setActiveChip] = useState<string | null>(null)
-  const [selected, setSelected] = useState<string | null>(null)
+  /** One selection for the whole page: a worker, an edge, or nothing. Two
+   *  separate selection states would let the rail show a worker while the
+   *  canvas highlights an edge. */
+  const [selection, setSelection] = useState<{ kind: 'worker' | 'edge'; id: string } | null>(null)
 
   const load = useCallback(async () => {
     const r = await fetch(`${backend}/api/agent/fleet/map?window=${windowKey}`, {
@@ -72,6 +76,21 @@ export function MapClient() {
   }, [activeChip, nodes])
 
   const windowLabel = WINDOWS.find((w) => w.key === windowKey)?.label ?? windowKey
+
+  /* Escape precedence for this page, agreed once across the section studies:
+     an open dialog first, then a confirm, then an active filter chip if focus
+     is in the strip, then the selection. Only the last two exist today, so
+     this is the whole of it — and it is written here rather than in four
+     components that would each claim the key. */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (selection) setSelection(null)
+      else if (activeChip) setActiveChip(null)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [selection, activeChip])
 
   return (
     <div className="sbm-page">
@@ -202,9 +221,11 @@ export function MapClient() {
         </p>
       ))}
 
-      {/* ── M2 · the canvas ───────────────────────────────────────────── */}
+      {/* ── M2 · the canvas, M3 · the rail beside it ──────────────────── */}
       {data == null ? (
-        <div className="sbm-canvas sbm-skeleton" aria-busy="true" aria-label="Loading the map" />
+        <div className="sbm-body">
+          <div className="sbm-canvas sbm-skeleton" aria-busy="true" aria-label="Loading the map" />
+        </div>
       ) : nodes.length === 0 ? (
         <div className="acr-pg-empty">
           <strong>No workers to draw yet.</strong>
@@ -215,25 +236,26 @@ export function MapClient() {
           <Link href="/fleet/workers">Go to Workers</Link>
         </div>
       ) : (
-        <MapCanvas
-          nodes={nodes}
-          edges={data.edges}
-          windowLabel={windowLabel}
-          dimmedKeys={dimmed}
-          selectedKey={selected}
-          onSelect={setSelected}
-        />
+        <div className="sbm-body">
+          <MapCanvas
+            nodes={nodes}
+            edges={data.edges}
+            windowLabel={windowLabel}
+            dimmedKeys={dimmed}
+            selectedKey={selection?.kind === 'worker' ? selection.id : null}
+            selectedEdgeId={selection?.kind === 'edge' ? selection.id : null}
+            onSelect={(k) => setSelection(k ? { kind: 'worker', id: k } : null)}
+            onSelectEdge={(id) => setSelection(id ? { kind: 'edge', id } : null)}
+          />
+          <InspectorRail
+            nodes={nodes}
+            edges={data.edges}
+            selection={selection}
+            onSelect={setSelection}
+            onClose={() => setSelection(null)}
+          />
+        </div>
       )}
-
-      {/* Until the inspector rail lands (M.3), a selection still has to lead
-          somewhere — a node you can click and cannot act on is a dead end. */}
-      {selected ? (
-        <p className="sbm-selline" role="status">
-          Selected <b>{nodes.find((n) => n.key === selected)?.name ?? selected}</b> —{' '}
-          <Link href={`/fleet/workers/${selected}`}>open its profile</Link>. The detail panel
-          arrives with the next step.
-        </p>
-      ) : null}
 
       <footer className="sbm-foot">
         {data ? (

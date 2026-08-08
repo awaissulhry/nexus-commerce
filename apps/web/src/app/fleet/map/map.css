@@ -211,8 +211,26 @@
 
 /* ── M2 · the canvas ───────────────────────────────────────────────────── */
 
-.sbm-canvas {
+/* canvas + rail, side by side. The rail is a fixed column so the canvas never
+   reflows as the panel's contents change length — a graph that resizes when
+   you select a node is a graph you cannot aim at. */
+.sbm-body {
   flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 12px;
+}
+@media (max-width: 1100px) {
+  .sbm-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sbm-rail {
+    display: none;
+  }
+}
+
+.sbm-canvas {
   min-height: 0; /* NOT calc(100vh - x): a mobile bar or a live banner would
                     push a hard height off the bottom of the viewport */
   border: 1px solid #e6ebf1;
@@ -428,6 +446,244 @@
 .sbm-canvas .react-flow__edge.never-crossed .react-flow__edge-path {
   stroke-dasharray: 4 4;
   stroke: #cbd5e0;
+}
+
+/* ── M3 · the inspector rail ───────────────────────────────────────────── */
+
+.sbm-rail {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #e6ebf1;
+  border-radius: 9px;
+  overflow: hidden;
+}
+.sbm-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border-bottom: 1px solid #eef2f6;
+  flex: none;
+}
+.sbm-rail-head h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #7d879a;
+}
+.sbm-rail-close {
+  border: 0;
+  background: none;
+  color: #8a95a3;
+  cursor: pointer;
+  display: flex;
+  padding: 2px;
+  border-radius: 4px;
+}
+.sbm-rail-close:hover {
+  background: #f1f4f8;
+  color: #4a5666;
+}
+.sbm-rail-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+}
+.sbm-rail-body h4 {
+  margin: 14px 0 6px;
+  font-size: 10.5px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9aa5b3;
+}
+.sbm-rail-body h4:first-child {
+  margin-top: 0;
+}
+.sbm-rail-hint,
+.sbm-rail-note {
+  margin: 0 0 10px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #7d879a;
+}
+.sbm-rail-reason {
+  margin: 8px 0 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #4a5666;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #f7f9fc;
+  border-left: 3px solid #c3ccd8;
+}
+.sbm-rail-reason.tone-bad { border-left-color: #c53030; }
+.sbm-rail-reason.tone-warn { border-left-color: #b7791f; }
+.sbm-rail-reason.tone-good { border-left-color: #2f855a; }
+.sbm-rail-reason.tone-busy { border-left-color: #2b6cb0; }
+
+.sbm-rail-id {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.sbm-rail-id .nm {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: #1c2530;
+  line-height: 1.3;
+}
+.sbm-rail-id .ky {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  color: #9aa5b3;
+}
+
+.sbm-row {
+  display: flex;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 11.5px;
+  border-bottom: 1px solid #f4f6f9;
+}
+.sbm-row .k {
+  flex: none;
+  width: 108px;
+  color: #8a95a3;
+}
+.sbm-row .v {
+  flex: 1 1 auto;
+  color: #364152;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+.sbm-dim {
+  color: #9aa5b3;
+}
+.sbm-warnline {
+  width: 100%;
+  color: #8a6d3b;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.sbm-rail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sbm-rail-listbtn {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 7px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  border-bottom: 1px solid #f4f6f9;
+}
+.sbm-rail-listbtn:hover {
+  background: #f7f9fc;
+}
+.sbm-rail-listbtn .nm {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1c2530;
+}
+.sbm-rail-listbtn .st {
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.sbm-rail-listbtn .st.tone-neutral { color: #8a95a3; }
+.sbm-rail-listbtn .st.tone-good { color: #2f855a; }
+.sbm-rail-listbtn .st.tone-busy { color: #2b6cb0; }
+.sbm-rail-listbtn .st.tone-warn { color: #b7791f; }
+.sbm-rail-listbtn .st.tone-bad { color: #c53030; }
+.sbm-rail-listbtn .meta {
+  grid-column: 1 / -1;
+  font-size: 10.5px;
+  color: #9aa5b3;
+}
+
+.sbm-drops {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sbm-drops li {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #4a5666;
+  padding: 7px 9px;
+  background: #fbfcfe;
+  border: 1px solid #eef2f6;
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+.sbm-samples {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sbm-samples li {
+  font-size: 11.5px;
+  color: #4a5666;
+  padding: 4px 0;
+  border-bottom: 1px solid #f4f6f9;
+}
+.sbm-samples .sev {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #eef2f6;
+  color: #5a6675;
+}
+.sbm-samples .sev-critical,
+.sbm-samples .sev-high {
+  background: #fdecec;
+  color: #a33a3a;
+}
+.sbm-samples .sev-medium {
+  background: #fdf3e3;
+  color: #8a6d3b;
+}
+
+.sbm-rail-exits {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid #eef2f6;
+}
+.sbm-rail-exits a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: #2b6cb0;
+  text-decoration: none;
+}
+.sbm-rail-exits a:hover {
+  text-decoration: underline;
+}
+
+/* a selected edge thickens, so the rail and the canvas agree */
+.sbm-canvas .react-flow__edge.is-selected .react-flow__edge-path {
+  stroke: #2b6cb0;
+  stroke-width: 2.4;
 }
 
 .sbm-foot {

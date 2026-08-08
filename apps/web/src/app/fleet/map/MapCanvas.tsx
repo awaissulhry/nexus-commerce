@@ -151,14 +151,18 @@ export function MapCanvas({
   windowLabel,
   dimmedKeys,
   selectedKey,
+  selectedEdgeId,
   onSelect,
+  onSelectEdge,
 }: {
   nodes: MapNode[]
   edges: MapEdge[]
   windowLabel: string
   dimmedKeys: Set<string>
   selectedKey: string | null
+  selectedEdgeId: string | null
   onSelect: (key: string | null) => void
+  onSelectEdge: (id: string | null) => void
 }) {
   const hash = topologyHash(nodes, edges)
 
@@ -276,9 +280,15 @@ export function MapCanvas({
             'sbm-edge',
             e.everCrossed ? 'has-crossed' : 'never-crossed',
             e.counts.crossed > 0 ? 'is-live' : '',
+            e.id === selectedEdgeId ? 'is-selected' : '',
           ]
             .filter(Boolean)
             .join(' '),
+          /* A 1.4px line is not a click target. xyflow renders an invisible
+             wider path underneath for hit-testing; this widens it so an edge
+             is as clickable as a node, which it has to be — half the graph's
+             information lives on the edges. */
+          interactionWidth: 22,
           animated: false,
           label,
           labelShowBg: true,
@@ -286,7 +296,7 @@ export function MapCanvas({
           labelBgBorderRadius: 4,
         }
       }),
-    [edges, windowLabel],
+    [edges, windowLabel, selectedEdgeId],
   )
 
   return (
@@ -313,6 +323,7 @@ export function MapCanvas({
         onNodeClick={(_e, node) => {
           if (node.type === 'worker') onSelect(node.id === selectedKey ? null : node.id)
         }}
+        onEdgeClick={(_e, edge) => onSelectEdge(edge.id === selectedEdgeId ? null : edge.id)}
         onPaneClick={() => onSelect(null)}
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} className="sbm-bg" />
