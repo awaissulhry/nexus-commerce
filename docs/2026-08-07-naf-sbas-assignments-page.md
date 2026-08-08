@@ -2484,6 +2484,70 @@ extending a shared component and so has this. Nothing here needs a new prop.
 
 ---
 
+### 12.14 · EXECUTED 2026-08-08 — S2.a–S2.e, prod-verified
+
+Approved by the operator, built in the study's order. Commits: `eb3950ca5`
+(S2.a) · `18788a4a2` (S2.b) · `292273134` (S2.c) · `3f08b8810` (S2.d) ·
+`0235f3323` + `32619565e` (S2.e) · `ff1f5ceb5` (the button I broke).
+
+| # | Criterion | Before | After |
+|---|---|---|---|
+| 1 | Scroll containers inside the drawer | 2 | **0 descendants** — the body only |
+| 2 | Drawer body blank on open | 461px / **59%** | 311px / **37.6%** — *target missed, see below* |
+| 3 | Campaign options reachable | 40 of 86, silently | **all 86**, counted in words |
+| 4 | Text roles below 4.5:1 | **9** | **0** |
+| 5 | Max content-nesting depth | **4** | **2** |
+| 6 | Distinct font sizes | 6 | **5** — *target missed, see below* |
+| 7 | Inline `style` attributes | **13** | **0** |
+| 8 | Words for one action on the receipt | 2 | **1** |
+| 9 | Reason the action is unavailable, visible | no | **yes** |
+| 10 | Tab presses to reach the first control | **41** | **1** |
+| 11 | Dialog accessible name | none | **"New assignment"** |
+| 12 | Width / truncation | 560px, 0 truncated | **unchanged** |
+
+**Two criteria missed, stated rather than quietly dropped.**
+
+- **Criterion 2 (≤15% blank) is unreachable and the target was wrong.** 59% →
+  37.6% came from showing the whole shape of the task; getting below ~35% would
+  mean putting filler in a fixed-height slide-over to hit a number I chose. A
+  right-side drawer is 827px tall and a genuinely two-decision form does not
+  fill it. **The honest criterion is the one this actually fixed: the task's
+  shape is legible at t=0 and the form no longer grows under the reader.**
+- **Criterion 6 (≤4 font sizes) sits at 5.** Four belong to this page's content
+  (11.5 / 12 / 12.5 / 13); the fifth is the DS drawer title at 15px, which
+  *should* be larger than body text. Chasing it would mean overriding DS
+  typography to satisfy a number.
+
+**Five things learned that the study did not know:**
+
+1. **A page-local root class does not reach a portal.** `.as-page` never
+   wrapped the drawer, because `Drawer` renders into `<body>` — so every
+   contrast override this engagement owned missed it entirely until
+   `.as-drawer` existed. Part 11 learned that a page needs a root; this is the
+   same lesson one portal further out.
+2. **I introduced an accessibility failure while fixing one.** Giving the
+   commit action the shared `.acr-btn.go` made it read as primary and made it
+   **3.46:1**. Fixed page-locally at `#15804f` (4.96:1); the central fix at
+   `control-room.css:53` is recommended, and this is the **third independent
+   measurement** of that number by a fleet stream.
+3. **I nearly repeated a defect I had documented.** The first ghost-step
+   styling used `opacity: 0.55` — exactly how the DS chip's counts reached
+   3.4:1 in Part 11. Opacity multiplies the contrast of whatever it dims.
+4. **A shared focus trap must defer, not assert.** Reviewing the 22 consumers
+   found `ProductDrawer` and `StudioConfirm` with their own traps and four
+   drawers with `autoFocus` inputs. Binding to `document` unconditionally would
+   have taken over two working implementations and stolen four considered
+   choices. It binds to the panel, honours `defaultPrevented`, and never steals
+   focus that is already inside.
+5. **"No deadline" is not a `::placeholder`.** It is a `span.ph` inside the DS
+   listbox button, so the placeholder rule passed straight over it and it was
+   the single survivor of the contrast sweep. The probe found it; reading the
+   CSS would not have.
+
+**Prod left at zero assignments. Nothing was started.**
+
+---
+
 ## Sources
 
 **RPA queues** — [UiPath queues](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/about-queues-and-transactions) · [item statuses](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/transaction-statuses) · [queue triggers](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/queue-triggers) · [Action Center](https://docs.uipath.com/action-center/automation-cloud/latest/user-guide/managing-actions) · [Blue Prism work queues](https://docs.blueprism.com/en-US/bundle/blue-prism-enterprise-7-3/page/user-guide/control-room/ug-cr-queue-management.htm) · [Automation Anywhere WLM](https://docs.automationanywhere.com/bundle/enterprise-v2019/page/enterprise-cloud/topics/aae-client/bot-creator/using-workload/cloud-queues.html) · [Power Automate work queues](https://learn.microsoft.com/en-us/power-automate/desktop-flows/work-queues)
