@@ -32,20 +32,52 @@
 .as-chip.busy .as-dot { animation: as-pulse 1.4s ease-in-out infinite; }
 @keyframes as-pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.25 } }
 
-/* ── the row ──────────────────────────────────────────────────────────── */
-.as-title {
+/* ── the row ──────────────────────────────────────────────────────────────
+   S1.a — the grid substrate. Everything below assumes DataGrid, one line per
+   cell, ellipsis, and the full value in the title attribute. */
+
+/* The whole title cell is the way in. Before S1.a the only click target in a
+   row was the title's inline anchor — measured on prod at 214×15px against a
+   1066×56px row, i.e. 5.4% of the row. A block anchor with the cell's own
+   padding turns that into the cell. */
+.as-titlelink {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  margin: -11px -14px;
+  padding: 11px 14px;
+  min-width: 0;
+}
+.as-titlelink .nm {
+  display: block;
   font-weight: 600;
   color: #1f2a37;
-  display: block;
   line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.as-title a { color: inherit; text-decoration: none; }
-.as-title a:hover { text-decoration: underline; }
+.as-titlelink:hover .nm { text-decoration: underline; }
+.as-titlelink:focus-visible {
+  outline: 2px solid #2f6feb;
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+/* The narrow-width second line: the target and the deadline ride here when
+   they have no column of their own. Every row gets it at that width, which is
+   what keeps row height uniform. */
+.as-titlelink .sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  min-width: 0;
+}
 
 .as-want {
   display: block;
   font-size: 11.5px;
-  color: #8d97a6;
+  color: #5b6573; /* was #8d97a6 — 2.73:1, below the 4.5:1 floor */
   line-height: 1.5;
   max-width: 44ch;
   margin-top: 2px;
@@ -64,16 +96,89 @@
   border: 1px solid #dae4f2;
   border-radius: 6px;
   padding: 2px 8px;
-  max-width: 30ch;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The icon must not be the thing that gives way. Measured on prod: a chip
+   holding "GALE JACKET PRODUCT TARGETING" rendered its <svg> at width 0 while
+   every other chip rendered it at 11px — flex shrinks a flex item before the
+   text ellipsises, so the one chip that most needed to say "this is a
+   campaign" was the one that stopped saying it. */
+.as-target > svg { flex: none; }
+.as-target > :not(svg) { overflow: hidden; text-overflow: ellipsis; }
 .as-target.gone { color: #a11d2b; background: #fdecee; border-color: #f6d4d9; }
-.as-target.account { color: #6b7a8d; background: #f4f6f9; border-color: #e6eaf0; }
+.as-target.account { color: #5b6573; background: #f4f6f9; border-color: #e6eaf0; }
+.as-target.inline { max-width: 26ch; }
 
-.as-outcome { font-size: 12px; color: #52627a; }
-.as-outcome.muted { color: #97a1b0; }
+.as-outcome {
+  display: block;
+  font-size: 12px;
+  color: #52627a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* was #97a1b0 — 2.41:1, and it is the colour of "never run", the one word this
+   page exists to say about a fleet that has never run anything. */
+.as-outcome.muted { color: #5b6573; }
+
+.as-when { font-size: 12px; color: #52627a; font-variant-numeric: tabular-nums; }
+.as-when.muted { color: #8a93a1; }
+
+/* ── S1.a · the grid card ─────────────────────────────────────────────────
+   Scoped to `.as-page`, a root class this page alone wears, NOT to `.acr-fleet`
+   — a page-local stylesheet can persist across a client-side route change, and
+   `.acr-fleet` is worn by three fleet pages. */
+.as-page .as-gridcard { margin-top: 4px; }
+
+/* The table-layout trap, third instance in this series. `.h10-ds-grid` is
+   `table-layout: auto` with `white-space: nowrap`, so a declared width is only
+   a hint and the longest string wins the slack. Measured on the shipped
+   `acr-pg-tbl` at 1728px: 675px — 41.8% of the table — was allocated to
+   nothing, and "Points at" ran 3.43× its widest content while carrying the one
+   fact this page exists for. `fixed` makes every declared width exact. */
+.as-page .h10-ds-grid { table-layout: fixed; width: 100%; }
+.as-page .h10-ds-grid th,
+.as-page .h10-ds-grid td {
+  overflow: hidden;
+  vertical-align: middle;
+}
+/* No cell wraps here — one line, ellipsis, full value in the tooltip. That is
+   what makes row height uniform at every width; the shipped table varied 34%
+   down one list at 896px because titles wrapped and subtitles did not. */
+.as-page .h10-ds-grid td { white-space: nowrap; }
+/* The header's own colour is the DS `--text-secondary` (#5b6573 on #f7f9fb =
+   5.6:1), which is why moving to this substrate fixes the 2.73:1 header that
+   `acr-pg-tbl` shipped. Recorded so nobody "helpfully" re-greys it. */
+.as-page .h10-ds-grid-empty { color: #5b6573; padding: 34px 20px; }
+
+/* The strip's label was #8d97a6 on white = 2.95:1. Overridden here rather than
+   in the frozen shared file; the same two numbers were measured independently
+   by the Workflows stream on its own page. */
+.as-page .acr-pg-stat .k { color: #5a6675; }
+
+.as-page .h10-ds-toolbar { flex-wrap: wrap; row-gap: 6px; }
+.as-order,
+.as-asof {
+  font-size: 11.5px;
+  color: #5b6573;
+  white-space: nowrap;
+}
+.as-order::before { content: '↕ '; opacity: 0.7; }
+.as-cap { color: #92400e; }
+
+.as-gridempty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  color: #5b6573;
+  line-height: 1.6;
+}
+.as-gridempty strong { color: #34404f; font-size: 13.5px; }
+.as-gridempty-acts { display: flex; gap: 8px; }
 
 /* ── the due badge. Grey → amber → red, and it never blocks anything. ─── */
 .as-due {
@@ -84,9 +189,10 @@
   border: 1px solid transparent;
   white-space: nowrap;
 }
-.as-due.later { color: #6b7a8d; background: #f4f6f9; border-color: #e6eaf0; }
+.as-due.later { color: #5b6573; background: #f4f6f9; border-color: #e6eaf0; }
 .as-due.soon  { color: #92400e; background: #fdf3e3; border-color: #f5e2c0; }
 .as-due.over  { color: #a11d2b; background: #fdecee; border-color: #f6d4d9; }
+.as-due.none  { color: #8a93a1; font-weight: 400; }
 
 /* ── strip tiles are buttons; every tile filters the list below it ───── */
 .as-tile {
@@ -281,7 +387,7 @@
 }
 
 @media (max-width: 900px) {
-  .as-want, .as-target { max-width: 24ch; }
+  .as-want { max-width: 24ch; }
 }
 
 /* ── DS-ratchet clean: no inline fontSize, no inline hex, no native date
@@ -318,9 +424,13 @@
 .as-emptybody {
   max-width: 54ch;
   margin: 0 auto;
-  color: #8d97a6;
+  color: #5b6573; /* was #8d97a6 — 2.73:1 */
   line-height: 1.65;
 }
+/* The claims this panel makes are checkable, so they link to the page that can
+   check them. A promise with nowhere to verify it is just a promise. */
+.as-emptybody a { color: #2f6feb; text-decoration: underline; }
+.as-emptybody a:hover { color: #1d4ed8; }
 
 /* ── AS.6 — several targets. */
 .as-bulk {
