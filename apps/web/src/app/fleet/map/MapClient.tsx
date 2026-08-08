@@ -22,6 +22,7 @@ import { useVisibilityPoll } from '../_shared/use-visibility-poll'
 import { MapCanvas } from './MapCanvas'
 import { InspectorRail } from './InspectorRail'
 import { OverlayRail } from './OverlayRail'
+import { ListView } from './ListView'
 import { overlayById } from './overlays'
 import {
   visibleCensus,
@@ -51,6 +52,7 @@ export function MapClient() {
   const [overlayId, setOverlayId] = useState('autonomy')
   const [tierFilter, setTierFilter] = useState<string | null>(null)
   const [hideDiagnostic, setHideDiagnostic] = useState(false)
+  const [view, setView] = useState<'map' | 'list'>('map')
 
   const load = useCallback(async () => {
     const r = await fetch(`${backend}/api/agent/fleet/map?window=${windowKey}`, {
@@ -87,6 +89,45 @@ export function MapClient() {
   }, [activeChip, nodes, tierFilter, hideDiagnostic])
 
   const windowLabel = WINDOWS.find((w) => w.key === windowKey)?.label ?? windowKey
+
+  /**
+   * The URL is the shareable unit. Selection state that lives only in React
+   * cannot be pasted into a message, which is most of what an operations map
+   * is for.
+   *
+   * Read once on mount, written with `replaceState` so selecting six workers
+   * in a row does not leave six entries in the back button. Deliberately
+   * `window.location` rather than `useSearchParams`: the hook drags a Suspense
+   * boundary requirement onto the page for a value this component owns
+   * outright, and `history.replaceState` needs no router.
+   *
+   * Semantic state only — which worker, which view, which window. Not the
+   * viewport: "centred on this worker" survives a layout change, an absolute
+   * pan-and-zoom does not.
+   */
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    const w = q.get('worker')
+    const e = q.get('edge')
+    if (w) setSelection({ kind: 'worker', id: w })
+    else if (e) setSelection({ kind: 'edge', id: e })
+    if (q.get('view') === 'list') setView('list')
+    const win = q.get('window')
+    if (win && WINDOWS.some((x) => x.key === win)) setWindowKey(win)
+    const ov = q.get('colour')
+    if (ov) setOverlayId(ov)
+  }, [])
+
+  useEffect(() => {
+    const q = new URLSearchParams()
+    if (selection?.kind === 'worker') q.set('worker', selection.id)
+    if (selection?.kind === 'edge') q.set('edge', selection.id)
+    if (view === 'list') q.set('view', 'list')
+    if (windowKey !== '7d') q.set('window', windowKey)
+    if (overlayId !== 'autonomy') q.set('colour', overlayId)
+    const s = q.toString()
+    window.history.replaceState(null, '', s ? `?${s}` : window.location.pathname)
+  }, [selection, view, windowKey, overlayId])
 
   /* Escape precedence for this page, agreed once across the section studies:
      an open dialog first, then a confirm, then an active filter chip if focus
@@ -257,17 +298,51 @@ export function MapClient() {
             hideDiagnostic={hideDiagnostic}
             onHideDiagnostic={setHideDiagnostic}
           />
-          <MapCanvas
-            nodes={nodes}
-            edges={data.edges}
-            windowLabel={windowLabel}
-            overlay={overlay}
-            dimmedKeys={dimmed}
-            selectedKey={selection?.kind === 'worker' ? selection.id : null}
-            selectedEdgeId={selection?.kind === 'edge' ? selection.id : null}
-            onSelect={(k) => setSelection(k ? { kind: 'worker', id: k } : null)}
-            onSelectEdge={(id) => setSelection(id ? { kind: 'edge', id } : null)}
-          />
+          <div className="sbm-centre">
+            {/* Map or List changes how the middle is drawn, not what the page
+                is about — so it belongs above the canvas, not with the title. */}
+            <div className="sbm-viewswitch">
+              <div className="sbm-seg" role="radiogroup" aria-label="How to show the fleet">
+                {(['map', 'list'] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    role="radio"
+                    aria-checked={view === v}
+                    className={view === v ? 'on' : ''}
+                    onClick={() => setView(v)}
+                  >
+                    {v === 'map' ? 'Map' : 'List'}
+                  </button>
+                ))}
+              </div>
+              <span className="sbm-viewhint">
+                {view === 'map'
+                  ? 'Best for seeing where work goes next.'
+                  : 'Best for ranking — who costs most, who has the most open.'}
+              </span>
+            </div>
+            {view === 'map' ? (
+              <MapCanvas
+                nodes={nodes}
+                edges={data.edges}
+                windowLabel={windowLabel}
+                overlay={overlay}
+                dimmedKeys={dimmed}
+                selectedKey={selection?.kind === 'worker' ? selection.id : null}
+                selectedEdgeId={selection?.kind === 'edge' ? selection.id : null}
+                onSelect={(k) => setSelection(k ? { kind: 'worker', id: k } : null)}
+                onSelectEdge={(id) => setSelection(id ? { kind: 'edge', id } : null)}
+              />
+            ) : (
+              <ListView
+                nodes={nodes}
+                edges={data.edges}
+                selectedKey={selection?.kind === 'worker' ? selection.id : null}
+                onSelect={(k) => setSelection(k ? { kind: 'worker', id: k } : null)}
+              />
+            )}
+          </div>
           <InspectorRail
             nodes={nodes}
             edges={data.edges}

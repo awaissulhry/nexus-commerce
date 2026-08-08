@@ -456,6 +456,108 @@
   stroke: #cbd5e0;
 }
 
+/* ── M5 · the centre pane: view switch, then map or list ───────────────── */
+
+.sbm-centre {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sbm-viewswitch {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sbm-viewhint {
+  font-size: 11px;
+  color: #9aa5b3;
+}
+
+.sbm-listwrapper {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #e6ebf1;
+  border-radius: 9px;
+  padding: 4px;
+}
+
+/*
+ * The table-layout trap, recorded by the Workers stream and inherited here:
+ * `.h10-ds-grid` is `table-layout: auto` with `white-space: nowrap` on every
+ * cell, so a declared column width is only a hint and long content wins —
+ * a worker's name or an adjacency list expands its column and overruns the
+ * ones to its right. Pin the table to `fixed` so widths are honoured, and let
+ * the cells that carry lists wrap on purpose.
+ *
+ * A plain global class, NOT a CSS-module one: a hashed class has resolved to
+ * `undefined` at render in this repo before. Verify with
+ * `getComputedStyle(table).tableLayout === 'fixed'`.
+ */
+.sbm-listwrapper .h10-ds-grid {
+  table-layout: fixed;
+  width: 100%;
+}
+.sbm-listwrapper .h10-ds-grid th,
+.sbm-listwrapper .h10-ds-grid td {
+  overflow: hidden;
+  vertical-align: top;
+}
+.sbm-listwrapper .h10-ds-grid td .sbm-listwrap {
+  white-space: normal;
+  line-height: 1.4;
+}
+
+.sbm-listname {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.sbm-listname .nm {
+  font-weight: 600;
+  color: #2b6cb0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sbm-listname:hover .nm {
+  text-decoration: underline;
+}
+.sbm-listname.on .nm {
+  color: #1c2530;
+  text-decoration: underline;
+}
+.sbm-liststatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: normal;
+}
+.sbm-liststatus.tone-bad { color: #c53030; }
+.sbm-liststatus.tone-warn { color: #b7791f; }
+.sbm-liststatus.tone-good { color: #2f855a; }
+.sbm-liststatus.tone-busy { color: #2b6cb0; }
+.sbm-listdim {
+  color: #9aa5b3;
+}
+.sbm-listfoot {
+  margin: 8px 6px 4px;
+  font-size: 11px;
+  color: #8a95a3;
+}
+.sbm-listfoot a {
+  color: #2b6cb0;
+}
+
 /* ── M4 · the overlay rail, and the tints it owns ──────────────────────── */
 
 .sbm-orail {
