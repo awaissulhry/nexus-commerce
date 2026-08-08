@@ -624,6 +624,21 @@ export interface BulkPreview {
   byTool: Record<string, number>
   highRisk: number
   irreversible: number
+  /**
+   * NAF.AQ.6 — the money, where it can be computed HONESTLY. Null when it
+   * cannot: a fabricated euro figure on a confirmation is worse than none,
+   * because it is the number the operator will remember.
+   */
+  euro: { amount: number; label: string } | null
+  /**
+   * UiPath's rule, and the single most transferable safety constraint found in
+   * the research: bulk is permitted only across structurally identical items —
+   * same worker, same action. It is what stops "approve all" spanning a €0.02
+   * bid nudge and a customer email.
+   */
+  homogeneous: boolean
+  /** Set when a bulk APPROVE is refused. Rejecting a mixed set stays fine. */
+  blockedReason: string | null
 }
 
 const IRREVERSIBLE_TOOLS = ['send-customer-message']
@@ -632,35 +647,133 @@ const IRREVERSIBLE_TOOLS = ['send-customer-message']
  * What a bulk decision is about to do, in a sentence. Built server-side from
  * the rows themselves, so the confirmation cannot drift from the action.
  */
+/**
+ * The euro exposure of a set of proposals, computed per tool from the preview
+ * the operator was shown — never estimated, never modelled.
+ *
+ * Only bid changes and price changes yield an honest figure today. A negative
+ * keyword saves money in a way nobody can put a number on before the fact, and
+ * saying "€0.00" about it would be a lie of precision.
+ */
+function euroExposure(
+  rows: Array<{ toolName: string; preview: unknown }>,
+): { amount: number; label: string } | null {
+  let bidDeltaCents = 0
+  let bidCount = 0
+  let priceDeltaCents = 0
+  let priceCount = 0
+
+  for (const r of rows) {
+    const p = (r.preview ?? {}) as Record<string, any>
+    if (r.toolName === 'set-target-bid') {
+      const from = typeof p.currentBidCents === 'number' ? p.currentBidCents : null
+      const to = typeof p.proposedBidCents === 'number' ? p.proposedBidCents : null
+      if (from != null && to != null) {
+        bidDeltaCents += to - from
+        bidCount++
+      }
+    }
+    if (r.toolName === 'set-price') {
+      const ch = p.changes?.['base price']
+      if (ch && typeof ch.from === 'number' && typeof ch.to === 'number') {
+        priceDeltaCents += Math.round((ch.to - ch.from) * 100)
+        priceCount++
+      }
+    }
+  }
+
+  if (bidCount > 0 && priceCount === 0) {
+    const dir = bidDeltaCents >= 0 ? 'raises' : 'lowers'
+    return {
+      amount: bidDeltaCents,
+      // Deliberately "per click", not "per day": a bid is a ceiling on one
+      // click, and calling it daily spend would invent a volume nobody knows.
+      label: `${dir} what you pay per click by €${Math.abs(bidDeltaCents / 100).toFixed(2)} in total across ${bidCount} keyword${bidCount === 1 ? '' : 's'}`,
+    }
+  }
+  if (priceCount > 0 && bidCount === 0) {
+    const dir = priceDeltaCents >= 0 ? 'raises' : 'lowers'
+    return {
+      amount: priceDeltaCents,
+      label: `${dir} your prices by €${Math.abs(priceDeltaCents / 100).toFixed(2)} in total across ${priceCount} product${priceCount === 1 ? '' : 's'}`,
+    }
+  }
+  return null
+}
+
 export async function previewBulk(
   ids: string[],
   decision: 'approve' | 'reject',
 ): Promise<BulkPreview> {
-  const rows = await prisma.agentApproval.findMany({
-    where: { id: { in: ids }, status: 'pending' },
-    select: { toolName: true, riskTier: true },
+  /*
+   * AQ.6, after a test caught me getting this wrong.
+   *
+   * The study claimed a selection containing a PARKED row "under-reports its
+   * blast radius", and the first version of this widened the query to include
+   * `scheduled`. That is wrong: a parked row is already approved and counting
+   * down. It is not part of THIS decision, and counting it would over-report
+   * just as badly as omitting it under-reported.
+   *
+   * The honest answer is neither. Count what this decision will actually do —
+   * the pending rows — and if the selection contains anything else, SAY so,
+   * rather than silently dropping it and leaving the operator to wonder why
+   * three selected became two.
+   */
+  const all = await prisma.agentApproval.findMany({
+    where: { id: { in: ids } },
+    select: { toolName: true, riskTier: true, preview: true, status: true },
   })
+  const rows = all.filter((r) => r.status === 'pending')
+  const notActionable = all.length - rows.length
   const byTool: Record<string, number> = {}
   for (const r of rows) byTool[r.toolName] = (byTool[r.toolName] ?? 0) + 1
   const highRisk = rows.filter((r) => r.riskTier === 'high').length
   const irreversible = rows.filter((r) => IRREVERSIBLE_TOOLS.includes(r.toolName)).length
+  const euro = euroExposure(rows)
+
+  // Homogeneity: one action kind. Same-worker is enforced by the caller's
+  // grouping today; the action kind is what actually differs in consequence.
+  const homogeneous = Object.keys(byTool).length <= 1
+  const blockedReason =
+    decision === 'approve' && !homogeneous
+      ? `These are ${Object.keys(byTool).length} different kinds of action (${Object.keys(byTool)
+          .map((t) => t.replace(/-/g, ' '))
+          .join(', ')}). Approve one kind at a time — a single yes should never span two different consequences.`
+      : null
 
   const kinds = Object.entries(byTool)
     .map(([tool, n]) => `${n} × ${tool.replace(/-/g, ' ')}`)
     .join(', ')
   const verb = decision === 'approve' ? 'approves' : 'rejects'
+  const money = euro ? ` It ${euro.label}.` : ''
+  // Never silently drop a selected row.
+  const skipped =
+    notActionable > 0
+      ? ` ${notActionable} other${notActionable === 1 ? '' : 's'} you selected ${notActionable === 1 ? 'is' : 'are'} already decided or counting down, and ${notActionable === 1 ? 'is' : 'are'} not affected.`
+      : ''
   const tail =
     decision === 'approve'
       ? highRisk > 0
-        ? ` — ${highRisk} of them high risk. You have 20 seconds to take it back.`
-        : ' You have 20 seconds to take it back.'
+        ? ` — ${highRisk} of them high risk.${money} You have 20 seconds to take it back.`
+        : `${money} You have 20 seconds to take it back.`
       : ''
+
   return {
     count: rows.length,
-    sentence: rows.length === 0 ? 'Nothing is selected.' : `This ${verb} ${rows.length} action${rows.length === 1 ? '' : 's'}: ${kinds}.${tail}`,
+    sentence:
+      all.length === 0
+        ? 'Nothing is selected.'
+        : rows.length === 0
+          ? `Nothing here can be decided — ${all.length === 1 ? 'the one you selected has' : `all ${all.length} you selected have`} already been decided or ${all.length === 1 ? 'is' : 'are'} counting down.`
+        : blockedReason
+          ? blockedReason
+          : `This ${verb} ${rows.length} action${rows.length === 1 ? '' : 's'}: ${kinds}.${tail}${skipped}`,
     byTool,
     highRisk,
     irreversible,
+    euro,
+    homogeneous,
+    blockedReason,
   }
 }
 
@@ -669,7 +782,22 @@ export async function bulkDecide(input: {
   decision: 'approve' | 'reject'
   reason?: string
   actor: InboxActor
-}): Promise<{ ok: true; done: number; of: number; failed: string[] }> {
+}): Promise<{ ok: boolean; done: number; of: number; failed: string[]; error?: string }> {
+  // NAF.AQ.6 — the homogeneity rule is enforced HERE, not only in the
+  // confirmation. A preview a client can choose not to read is a suggestion;
+  // the rule has to hold for anything that calls this, including the next
+  // caller nobody has written yet.
+  //
+  // Approve only. Rejecting a mixed set is safe — saying no to forty different
+  // things at once cannot hurt anyone — and blocking it would be friction on
+  // the safe path, which is the asymmetry AQ.4 exists to remove.
+  if (input.decision === 'approve') {
+    const check = await previewBulk(input.ids, 'approve')
+    if (check.blockedReason) {
+      return { ok: false, done: 0, of: input.ids.length, failed: [], error: check.blockedReason }
+    }
+  }
+
   const failed: string[] = []
   let done = 0
   for (const id of input.ids) {

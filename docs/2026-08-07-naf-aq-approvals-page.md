@@ -1501,3 +1501,63 @@ submit, or a target archived mid-edit. The refusal itself is proven at the API
 
 **Cleaned up**: 2 approvals, 1 run, 1 audit row. Re-probed: **18 approvals,
 0 exemplars, 0 audit rows.**
+
+### AQ.6 — bulk, with the money and the homogeneity rule (2026-08-07)
+
+Bulk is where a trust-first page most easily becomes a rubber stamp, and it is
+the only section whose failure mode is measured in **euros × N**.
+
+**The money is in the sentence now.** It was *"This approves 1 action: 1 × set
+target bid."* — count and kind, no exposure, though the parent page map promised
+*"€12.40 of daily spend"*. Computed per tool from the preview the operator was
+shown, never modelled:
+
+- bid changes → *"raises what you pay per click by €0.63 in total across 2 keywords"*
+- price changes → the summed delta across products
+
+**And nothing where nothing can be said honestly.** A negative keyword saves
+money in a way nobody can put a number on before the fact; `"€0.00"` would be a
+lie of precision. `euro` is `null` and the sentence simply omits it. A
+fabricated figure on a confirmation is worse than none, because it is the
+number the operator will remember.
+
+**The homogeneity rule**, from UiPath — the single most transferable safety
+constraint in the whole survey. A bulk **approve** is refused across two kinds
+of action, so one yes can never span a €0.02 bid nudge and a customer email.
+Enforced in `bulkDecide`, not only in the preview: a preview a client can
+decline to read is a suggestion, and the rule has to hold for the next caller
+nobody has written yet.
+
+**Refused on approve only.** Rejecting a mixed set stays allowed — saying no to
+forty different things at once cannot hurt anyone, and blocking it would put
+friction back on the safe path, which is the asymmetry AQ.4 exists to remove.
+
+### The correction the tests forced, which is the more useful half
+
+The study claimed `previewBulk` "counts only `status:'pending'` rows, so a
+selection containing a parked row under-reports its own blast radius", and the
+first version of this widened the query to include `scheduled`. **Three
+existing tests failed, and they were right.**
+
+A parked row is *already approved and counting down*. It is not part of the
+decision being confirmed, so counting it **over**-reports exactly as badly as
+dropping it silently under-reported. The honest answer was neither: count what
+this decision will actually do, and **name what it skipped** —
+
+> *"This approves 1 action: 1 × set target bid. You have 20 seconds to take it
+> back. 1 other you selected is already decided or counting down, and is not
+> affected."*
+
+Worth recording plainly: **that was a wrong claim in the study, written
+confidently, that survived into a commit message and was caught by a test I did
+not write.** It is the same failure mode this document keeps naming — an
+assertion nobody checked — and the only reason it did not ship is that AP.4 left
+tests behind that asserted the old behaviour on purpose.
+
+The three tests were then rewritten to assert the *new* intent rather than
+having their expectations flipped, and four were added: the mixed-approve
+refusal, the mixed-reject allowance, money present when honest, and money absent
+when not.
+
+**Verified:** `tsc` clean on both apps; DS ratchet clean; agent-fleet suite
+**379 passing across 41 files** (7 new).

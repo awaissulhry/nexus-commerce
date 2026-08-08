@@ -225,39 +225,107 @@ describe('AP.5 — one expiry clock', () => {
   })
 })
 
-describe('AP.4 — the blast radius is stated before it fires', () => {
-  beforeEach(() => {
-    db.agentApproval.findMany.mockResolvedValue([
-      { toolName: 'set-target-bid', riskTier: 'low' },
-      { toolName: 'set-target-bid', riskTier: 'low' },
-      { toolName: 'create-negative-keyword', riskTier: 'high' },
-    ] as never)
+describe('AP.4 / AQ.6 — the blast radius is stated before it fires', () => {
+  const pending = (toolName: string, riskTier: string, preview: unknown = {}) => ({
+    toolName,
+    riskTier,
+    preview,
+    status: 'pending',
   })
 
   it('names the count and the kinds', async () => {
+    db.agentApproval.findMany.mockResolvedValue([
+      pending('set-target-bid', 'low'),
+      pending('set-target-bid', 'low'),
+      pending('set-target-bid', 'high'),
+    ] as never)
     const p = await previewBulk(['a', 'b', 'c'], 'approve')
     expect(p.count).toBe(3)
     expect(p.sentence).toContain('approves 3 actions')
-    expect(p.sentence).toContain('2 × set target bid')
-    expect(p.sentence).toContain('1 × create negative keyword')
+    expect(p.sentence).toContain('3 × set target bid')
   })
 
   it('calls out the high-risk share and the undo window on approve', async () => {
-    const p = await previewBulk(['a', 'b', 'c'], 'approve')
+    db.agentApproval.findMany.mockResolvedValue([
+      pending('set-target-bid', 'low'),
+      pending('set-target-bid', 'high'),
+    ] as never)
+    const p = await previewBulk(['a', 'b'], 'approve')
     expect(p.highRisk).toBe(1)
     expect(p.sentence).toContain('1 of them high risk')
     expect(p.sentence).toContain('20 seconds')
   })
 
   it('does not promise an undo window on a reject', async () => {
-    const p = await previewBulk(['a', 'b', 'c'], 'reject')
-    expect(p.sentence).toContain('rejects 3 actions')
+    db.agentApproval.findMany.mockResolvedValue([pending('set-target-bid', 'low')] as never)
+    const p = await previewBulk(['a'], 'reject')
     expect(p.sentence).not.toContain('20 seconds')
   })
 
-  it('counts only rows that are still pending', async () => {
-    await previewBulk(['a'], 'approve')
-    expect(db.agentApproval.findMany.mock.calls[0]![0]!.where).toMatchObject({ status: 'pending' })
+  /* ── AQ.6 ────────────────────────────────────────────────────────────── */
+
+  it('REFUSES a bulk approve spanning two kinds of action', async () => {
+    // UiPath's homogeneity rule. A single yes must never span two different
+    // consequences — this is what stops "approve all" covering a €0.02 bid
+    // nudge and a customer email in one click.
+    db.agentApproval.findMany.mockResolvedValue([
+      pending('set-target-bid', 'low'),
+      pending('create-negative-keyword', 'high'),
+    ] as never)
+    const p = await previewBulk(['a', 'b'], 'approve')
+    expect(p.homogeneous).toBe(false)
+    expect(p.blockedReason).toContain('Approve one kind at a time')
+    expect(p.sentence).toBe(p.blockedReason)
+  })
+
+  it('ALLOWS a mixed bulk reject — saying no to many things cannot hurt', async () => {
+    db.agentApproval.findMany.mockResolvedValue([
+      pending('set-target-bid', 'low'),
+      pending('create-negative-keyword', 'high'),
+    ] as never)
+    const p = await previewBulk(['a', 'b'], 'reject')
+    expect(p.blockedReason).toBeNull()
+    expect(p.sentence).toContain('rejects 2 actions')
+  })
+
+  it('puts the MONEY in the sentence when it can be computed honestly', async () => {
+    db.agentApproval.findMany.mockResolvedValue([
+      pending('set-target-bid', 'low', { currentBidCents: 31, proposedBidCents: 84 }),
+      pending('set-target-bid', 'low', { currentBidCents: 50, proposedBidCents: 60 }),
+    ] as never)
+    const p = await previewBulk(['a', 'b'], 'approve')
+    // 53c + 10c
+    expect(p.euro?.amount).toBe(63)
+    expect(p.sentence).toContain('€0.63')
+    // "per click", never "per day" — a bid is a ceiling on one click, and
+    // calling it daily spend would invent a volume nobody knows.
+    expect(p.sentence).toContain('per click')
+  })
+
+  it('says NOTHING about money when it cannot be computed honestly', async () => {
+    // A negative keyword saves money in a way nobody can put a number on
+    // before the fact. "€0.00" would be a lie of precision.
+    db.agentApproval.findMany.mockResolvedValue([
+      pending('create-negative-keyword', 'high', { term: 'x' }),
+    ] as never)
+    const p = await previewBulk(['a'], 'approve')
+    expect(p.euro).toBeNull()
+    expect(p.sentence).not.toContain('€')
+  })
+
+  it('counts only what this decision will DO, and names what it skipped', async () => {
+    // Corrected in AQ.6 after this test caught the first attempt. A parked row
+    // is already approved and counting down: it is not part of THIS decision,
+    // so counting it over-reports exactly as badly as dropping it silently
+    // under-reported. Count the pending ones; say what was left out.
+    db.agentApproval.findMany.mockResolvedValue([
+      pending('set-target-bid', 'low'),
+      { toolName: 'set-target-bid', riskTier: 'low', preview: {}, status: 'scheduled' },
+    ] as never)
+    const p = await previewBulk(['a', 'b'], 'approve')
+    expect(p.count).toBe(1)
+    expect(p.sentence).toContain('approves 1 action')
+    expect(p.sentence).toContain('already decided or counting down')
   })
 
   it('says so plainly when nothing is selected', async () => {

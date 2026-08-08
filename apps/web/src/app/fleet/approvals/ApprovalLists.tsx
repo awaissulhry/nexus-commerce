@@ -347,16 +347,22 @@ export function WaitingList({
                   onChange={(e) => setBulkReason(e.target.value)}
                 />
               ) : null}
-              <button
-                className="acr-btn go"
-                disabled={busy || (pendingBulk.decision === 'reject' && !bulkReason.trim())}
-                onClick={() => {
-                  onBulkDecide([...selected], pendingBulk.decision, bulkReason.trim() || undefined)
-                  clearSelection()
-                }}
-              >
-                Yes, do it
-              </button>
+              {/* AQ.6 — when the server refuses a mixed batch, the sentence
+                  IS the refusal, so there is nothing to confirm. Showing a
+                  live "Yes, do it" over an explanation of why it cannot happen
+                  is how an operator learns to distrust the confirmation. */}
+              {!/Approve one kind at a time/.test(pendingBulk.sentence) ? (
+                <button
+                  className="acr-btn go"
+                  disabled={busy || (pendingBulk.decision === 'reject' && !bulkReason.trim())}
+                  onClick={() => {
+                    onBulkDecide([...selected], pendingBulk.decision, bulkReason.trim() || undefined)
+                    clearSelection()
+                  }}
+                >
+                  Yes, do it
+                </button>
+              ) : null}
               <button className="acr-btn" disabled={busy} onClick={() => setPendingBulk(null)}>
                 Back
               </button>
