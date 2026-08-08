@@ -1830,7 +1830,418 @@ item 1 required.
 
 ---
 
+## PART 10 — NAF.WF-S2R · Section 2 restudied: the routine's story
+
+Opened 2026-08-08, immediately after WF-S1R. Scope is **everything on
+`/fleet/workflows/[key]` above the Runs section**: the header and action row,
+the status sentence, the five-cell health strip, and the read-only pipeline
+canvas. Runs (S3), Versions (S4), the editor (S5) and the test lane (S6) are
+later sections; §10.7 records what this design implies for them without
+building any of it.
+
+Two inheritances bind this study. The **model** is settled — no status logic,
+no execution, no clock, no contract changes. The **visual language** is settled
+too: WF-S1R gave the list a five-size type scale, four greys, a card idiom, a
+bar encoding and a chain treatment, and this zone must read as the same product
+rather than a second one.
+
+### 10.1 · PHASE 0 — the audit, measured on prod
+
+Method as S1R: Chrome, **1728 × 906 CSS px**, 2026-08-08, every number a
+`getBoundingClientRect()` / `getComputedStyle()` reading. Three routines cover
+the three shapes the page serves — `fleet-sweep` (built-in, code default, never
+run), `fleet-council` (built-in, one run on record), `morning-negatives-pass`
+(custom, published revision, never run). The Off state was exercised live and
+restored; the 404 was visited; the remaining branches were read from code.
+
+#### D1 · The pipeline canvas is 79–95% empty, and its text can render at 5px
+
+The canvas is a fixed `320px` box, `fitView` with `padding: 0.18, maxZoom: 1`.
+
+| Routine | nodes | zoom | node ink | dead left | dead right | dead width |
+|---|---|---|---|---|---|---|
+| `fleet-sweep` | 7 | 0.724 | **9.4%** | 437.1 | 437.1 | **55.6%** |
+| `fleet-council` *(load A)* | 8 | 0.455 | **4.5%** | 587.3 | 431.9 | **64.8%** |
+| `fleet-council` *(loads B–D)* | 8 | 1.0 | 21.8% | 1.0 | 355.0 | 22.6% |
+| `morning-negatives-pass` | 2 | 1.0 | **5.0%** | 682.0 | 682.0 | **86.8%** |
+
+At the sweep's 0.724 and the council's 0.455 the *declared* type is scaled with
+everything else:
+
+| Element | declared | at 0.724 | at 0.455 |
+|---|---|---|---|
+| Node label | 12.5px | 9.05px | **5.68px** |
+| Node sub | 11px | 7.96px | **5.00px** |
+| Edge label | 10px | 7.24px | **4.55px** |
+| Autonomy pill | 10.5px | 7.60px | **4.77px** |
+
+**The centrepiece of the page rendered its text at five pixels** on a 1728px
+desktop, while leaving 65% of its own width empty. That is the defect class S1R
+was opened to remove, in its purest form.
+
+**And the zoom is not a function of the graph and the viewport.** The same URL
+at the same viewport measured **0.455 once and 1.0 on three later loads**.
+`fitView` runs once at mount and there is no re-fit; the canvas mounts
+conditionally on `loaded && displayStory`, and anything that changes the
+container between first paint and data arrival — a banner appearing, a font
+settling — is frozen into the zoom for the life of the page. Stated as observed
+rather than as a proven mechanism: the 0.455 reading is real and was not
+reproducible on demand, and no code path re-fits.
+
+#### D2 · The health strip is an em-dash wall on two of the three routines
+
+Five cells, each **314.8 × 86.8 = 27,325 px²**.
+
+| Routine | cells reading `—` | what the *sub* line says underneath |
+|---|---|---|
+| `fleet-sweep` | **4 of 5** | "clock fired 21h ago, launched nothing" · "no runs yet" |
+| `morning-negatives-pass` | **4 of 5** | "never run" · "no runs yet" |
+| `fleet-council` | 0 of 5 | — |
+
+**109,301 px² of viewport spent rendering four em-dashes**, while the sentence
+that actually answers the question sits underneath in the quiet slot. This is
+S1R's D5 inversion in a new place: the loud element carries nothing and the
+quiet one carries everything.
+
+#### D3 · The action row is 47.6% void, and the money action looks like Refresh
+
+`.wf-backrow` children at 1614px wide:
+
+| child | width |
+|---|---|
+| "All workflows" | 99.9 |
+| "as of …" | 290.0 |
+| **spacer** | **767.7** |
+| Run now… | 90.7 |
+| Edit the wiring | 113.8 |
+| Turn off… | 86.4 |
+| Refresh | 93.5 |
+
+All four buttons are bare `.acr-btn` — `background: transparent`, `border: 1px
+solid transparent`. **"Run now…", the only control on the page that spends
+money, is visually identical to "Refresh".** S1R fixed exactly this on the list
+by adopting the fleet's own filled `.acr-btn.go`; this page never got it.
+
+#### D4 · The type scale did not come along — but the contrast fix did
+
+Overview zone only (Runs and Versions excluded):
+
+| | list, after S1R | detail, today |
+|---|---|---|
+| Sizes | **5** — 17 / 15 / 12.5 / 11.5 / 10.5 | **7** — 19 / 15 / 13 / 12.5 / 12 / 11.5 / 10.5 |
+| Weights | 3 owned | **5** — 400 / 550 / 600 / 650 / 700 |
+| Text roles below AA | 0 | **0** ✅ |
+
+Three concrete divergences: the strip value is **19px** where the list's fact
+bar is 17px; the story paragraph is **13px** where the list's prose is 12.5px;
+`.wf-back` is weight **600** where the list uses 650.
+
+**The contrast result is the good news and it is worth recording as a closed
+loop:** §9.9 item 1 asked whether putting `.wf-page` on both client roots would
+carry S1.a's palette to the detail page. It did — **0 text roles below 4.5:1 on
+this page**, with no work in this section.
+
+#### D5 · The legend describes furniture the picture does not draw
+
+On `morning-negatives-pass` the caption reads *"showing the ACTIVE REVISION's
+wiring — code steps and your approval still wrap it"* while the canvas renders
+**2 nodes, 0 edges, no code step and no gate**. The sentence is true about the
+system and false about the image directly beneath it.
+
+#### D6 · Nine edge-label / node collisions on the council graph
+
+Measured overlap rectangles: `findings` × 5 (8 px² each) and `survivors` × 4
+(22, 21, 2, 2 px²). Labels are placed at edge midpoints with no avoidance, so
+a short edge puts its label inside the node it points at.
+
+#### D7 · The canvas is blind to what actually happened
+
+It draws the definition plus a live autonomy tint. It does not draw the last
+run: which steps ran, which were skipped, what each produced, what each cost.
+**Measured consequence:** the custom routine was switched **Off** live and the
+canvas rendered identically — same nodes, same tints, same everything. A
+picture that does not change when the routine stops is not reporting on the
+routine.
+
+#### D8 · The story block wastes 58% of its width
+
+`.wf-sentence` is 1614 wide; its paragraph renders at **611.6**. After the chip
+and padding, ~940px of the block is empty. S1R's rule applies unchanged: prose
+has a reading measure and will not stretch, so the container must be cut to the
+prose.
+
+#### D9 · The overview zone consumes 83.9% of the viewport before Runs
+
+| Block | height |
+|---|---|
+| Action row | 34.8 |
+| Status sentence | 68.0 |
+| Health strip | 86.8 |
+| **Pipeline card** | **392.5** |
+| **Zone total** | **760.3** of a 906px viewport |
+
+The pipeline card is **51.6% of the zone** and is 79–95% empty inside.
+
+#### D10 · The 404 leaves 81% of the viewport empty
+
+Content ends at ~168px in a 906px viewport. The copy is honest and correct;
+the page is a strip of text with nothing under it.
+
+#### D11 · The header does not say what kind of routine you are looking at
+
+The list card carries `Built-in` / `Custom` and `rev N` / `as shipped` /
+`not composed yet`. The detail header carries the title and one sentence — so
+the page that should know the most about a routine says less about its identity
+than the row you clicked to reach it. (Versions, below, has the revision; that
+is S4's surface, not an answer at a glance.)
+
+---
+
+### 10.2 · PHASE 1 — how the industry builds a workflow's detail page
+
+The S1R research (Part 9.2) covered list pages; this pass asks only about the
+**one-object page**. Same sourcing honesty: documented facts are cited in
+Sources, and nothing below rests on an undocumented claim.
+
+| Product | Header carries | Metrics at a glance | Graph ↔ run reality | Actions | Structure |
+|---|---|---|---|---|---|
+| **Airflow 3** (one DAG) | title + action buttons top-right: **Trigger**, favourite ★, reparse, delete | minimal in the header; recent runs + asset events on an Overview tab | **The graph is annotated with a selected run's task states.** Grid columns are runs, squares are task instances, **height = duration, colour = outcome**; picking a run's bar re-draws the graph *for that run*. Toggle grid↔graph with `g` | top-right of the header | grid/graph pane + tabs |
+| **Dagster** (job) | job identity | per-tab | **The graph IS the Overview tab** — the job page's primary object | **Launchpad** is its own tab: a config editor that launches | 4 tabs — Overview · Launchpad · Runs · Partitions |
+| **Temporal** (one execution) | Start / Close / **Duration**, Run ID, Type, Task Queue, parent, SDK, state transitions, billable actions | the header metadata *is* the metric strip | **No diagram at all** — a Relationships *tree* instead; history is the object | — | History in **four views**: Timeline · All · Compact · JSON |
+| **Inngest** (one function) | — | **7 charts**: status breakdown, throughput, steps throughput, backlog, failure frequency — all with a time-range filter | — | — | charts + runs |
+| **GitHub Actions** (one workflow) | workflow name | — | — | **"Run workflow" appears only if the workflow declares `workflow_dispatch`** | runs list |
+| **n8n / Zapier / Make** | the canvas is the page; chrome is thin | on separate history/insights views | the canvas is the *editor*, not a run report | edit / activate | canvas-first |
+
+**The five things this settles for us:**
+
+1. **A graph earns its area by being a view of a RUN, not a diagram of a
+   definition.** Airflow's whole design is the grid and the graph being the
+   same object seen twice — pick a run, the graph re-colours to that run. Ours
+   is a static diagram with an autonomy tint, which is why it can be 95% empty
+   and *still* not be missing anything: there is almost nothing per pixel to
+   miss. D7 is not a small gap; it is the reason D1 exists.
+2. **Airflow's run encoding is the one S1R already adopted** — height for
+   duration, colour for outcome. The detail page should not invent a third
+   vocabulary; the bars on the list and any run marks here must be the same
+   language.
+3. **Temporal ships a detail page with no diagram at all** and nobody considers
+   it impoverished, because the header metadata carries duration/timing and the
+   history carries the truth. That is the licence to shrink or replace a canvas
+   that is not paying for itself.
+4. **GitHub gates the action on the capability**: no `workflow_dispatch`, no
+   Run button. That is our rule (`observations/scope-filter.ts:6-7`, *"a control
+   that is not enforced must not be rendered"*) arrived at independently — and
+   this page already does it right, hiding Run-now on built-ins and on an Off
+   custom.
+5. **Actions live top-right of the header, next to the title** — Airflow,
+   Dagster, GitHub all do this. Ours are in a separate row below the title with
+   767.7px of nothing to their left (D3).
+
+**Judged for our N.** This fleet has 7 workers; the graphs are **2 to 8 nodes**
+across **1 to 5 levels**; runs are measured in dozens, not thousands. Airflow's
+canvas exists because a DAG can have 200 tasks and a scroll/zoom viewport is
+the only way to hold them. At 2 nodes, a zoomable viewport is pure cost: it
+buys pan and zoom nobody needs, and it charges 320px of fixed height, a frozen
+zoom, and 5px text.
+
+### 10.3 · The decision the canvas forces
+
+**Recommendation: replace the xyflow canvas in this zone with a deterministic
+DOM pipeline that carries the last run's reality.** Argued, with the
+alternative stated fairly.
+
+| | **A · Deterministic DOM pipeline** (recommended) | **B · Keep xyflow, fix it** |
+|---|---|---|
+| Dead area | 0 by construction — it is a grid that fills its container | Unfixable at 2 nodes: a viewport shows what the graph occupies |
+| Text size | always 12.5px | must pin `maxZoom`/`minZoom` to 1 and accept clipping instead |
+| Zoom determinism | no zoom exists | needs a `ResizeObserver` re-fit; D1's non-determinism is a `fitView`-at-mount property |
+| Run reality (D7) | each step row carries its own last-run outcome, duration, cost | must be built either way |
+| Edge labels (D6) | artifact named once between level groups, no overlap possible | needs label-placement work xyflow does not do for us |
+| Height | content-driven | fixed, or content-driven with more work |
+| Cost | one new component | four fixes plus the same run overlay |
+
+**What tips it is not effort, it is honesty.** Option B ends with a viewport
+containing two cards and a lot of dotted background, and no amount of sizing
+work changes that — the picture genuinely has two things in it. Option A
+renders the same two things as two full-width rows that each say what the step
+is, whether it will run, and what it did last time. The area is earned rather
+than filled.
+
+**`RoutineCanvas.tsx` is NOT deleted and NOT modified.** It is imported by
+`RoutineEditor.tsx` (`:486`), which is **S5's surface** — a live canvas while
+you wire a draft is a different job from a run report, and that decision is
+S5's to revisit. This section builds a new, S2-owned component beside it and
+records the convergence question in §10.7.
+
+### 10.4 · THE PROPOSAL — the overview zone
+
+#### 10.4.1 · Skeleton
+
+```
+┌ header band ────────────────────────────────────────────────────────────┐
+│ ← All workflows                                                          │
+│ Weekly council   BUILT-IN   as shipped        [Run now…] [Edit] [⋯] [⟳]  │
+│ Workers report, the director compiles one ranked plan…                   │
+└──────────────────────────────────────────────────────────────────────────┘
+┌ status band ─────────────────────────────────────────────────────────────┐
+│ ⏱ Idle · Needs the director and the critic switched on. · Mondays 05:15  │
+└──────────────────────────────────────────────────────────────────────────┘
+┌ fact bar (the S1R .wf-factbar token) ────────────────────────────────────┐
+│ LAST RUN │ RECORD │ TYPICAL DURATION │ COST PER RUN │ NEXT RUN           │
+└──────────────────────────────────────────────────────────────────────────┘
+┌ the pipeline — levels left→right, one row per step, last run overlaid ───┐
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 10.4.2 · Header band (closes D3, D11)
+
+The action row folds into the header. Title line: **name · kind chip · version
+chip** (the S1R chips, same components, same words — `Built-in` / `Custom`,
+`rev N` / `as shipped` / `not composed yet`), then a spacer, then the actions
+**right-aligned beside the title**, which is where Airflow, Dagster and GitHub
+all put them. `Run now…` becomes `.acr-btn.go` — the fleet's own filled
+primary, already used by the list's "New workflow…" and by Workers' "Create a
+worker". `Edit the wiring` stays a ghost button; `Turn off…`/`Turn on…` and
+`Refresh` stay ghost. The `as of …` stamp trails `Refresh`, exactly as the list
+places it. The 767.7px spacer disappears because the row now has content on
+both sides.
+
+**No `⋯` overflow menu**, despite every researched product having one: with at
+most four actions and no destructive one, a menu would hide affordances to save
+space this row has in surplus.
+
+#### 10.4.3 · Status band (closes D8, unifies status + next run)
+
+One line, not a card with 940px of empty: the status chip, its reason at
+12.5px, and the trigger sentence with next fire. Today the reason lives in the
+sentence block and the next fire lives in a strip cell four hundred pixels
+away; they answer one question and belong together. The routine's own
+one-sentence story moves up into the header band as the page's `sub`, which is
+where a description belongs and where the shell already renders one.
+
+Every shipped branch is preserved verbatim — halted, off, idle-with-reason,
+ready, on, and the unread-feed case that says *"its status is unknown, not
+off."*
+
+#### 10.4.4 · The fact bar (closes D2, closes D4's 19px)
+
+Adopt the list's `.wf-factbar` token: one card, five facts, dividers, value at
+**17px**, label 10.5px, sub 11.5px. Two changes beyond the reskin:
+
+- **No cell renders a bare `—` when there is a sentence that answers it.** The
+  value slot takes the sentence's headline and the sub carries the detail:
+
+| Cell | today (never-run) | proposed |
+|---|---|---|
+| Last run | `—` / "clock fired 21h ago, launched nothing" | **"never run"** / "the clock fired 21h ago and launched nothing — every worker was off" |
+| Record | `—` / "no runs yet" | **"no runs yet"** / "this will read *N of M finished clean*" |
+| Typical duration | `—` / "average across recorded runs" | **"not yet known"** / "averages appear after the first run" |
+| Cost per run | `—` / "average model spend" | **"not yet known"** / "averages appear after the first run" |
+| Next run | (already speaks) | unchanged |
+
+  A cell that cannot know something says what would fill it — the teaching
+  empty-state rule this engagement already applies everywhere else.
+- **The run bars from S1.b appear in the Record cell** when there is history,
+  using the identical encoding (colour = outcome, height = duration, newest at
+  the right, twelve slots). One vocabulary across both pages.
+
+#### 10.4.5 · The pipeline (closes D1, D5, D6, D7, D9)
+
+A CSS grid of **levels**, left to right, each level a labelled group, each step
+a full-width row inside it. Between levels, the artifact that crosses, named
+once — which removes the possibility of a label overlapping a node (D6).
+
+Each **step row** carries, in fixed lanes that align down the whole block:
+
+| Lane | Content |
+|---|---|
+| Identity | step name · autonomy pill (worker) / `code` / `you decide` |
+| What it does | the one-line sub already in `routines.ts` |
+| Will it run | **switched off → struck through, exactly as the S1R chain does** · degraded → "settings unreadable, fail-safe posture" |
+| Last time | what this step did on the routine's most recent run: ok / failed / stopped early / **skipped** · duration · cost · findings |
+
+**The last-run overlay needs no API change.** `groupRuns()` already returns
+each orchestration's member `rows`, and every `AgentRun` carries `agentKey`,
+`ok`, `status`, `haltedReason`, `costUSD`, `findingCount`, `createdAt`,
+`endedAt`. Joining the newest group's rows to the step list by `charterKey` is
+a client-side `Map`. Two honesty rules fall straight out and both are stated on
+screen:
+
+- **A code step has no run row** — grading, report cards and the approval gate
+  are job-code ordering, not `AgentRun`s. They render "always runs · not
+  separately timed", never a fabricated outcome.
+- **A worker with no row in that group did not run**, and the reason is already
+  known: it was off. That renders as **"skipped — it was switched off"**, which
+  is the same fact the status reason states and the chain draws, from the same
+  feed, so all three cannot disagree.
+
+At **2 steps** the block is two full-width rows, ~120px total, carrying more
+information than the 320px canvas did. At **8 steps** it is five level groups
+and eight rows, ~340px, with no zoom and 12.5px type throughout. Dead area is
+zero at both ends because a grid fills its container and the lanes are cut to
+their content (S1R's rule).
+
+**The legend stops lying (D5):** it describes what is drawn. When the wiring
+comes from a revision, the job furniture that wraps it is *drawn as its own
+level group*, marked as code, rather than claimed in a caption.
+
+#### 10.4.6 · Type, spacing and colour — inherited, not re-chosen
+
+Five sizes (17 / 15 / 12.5 / 11.5 / 10.5), three owned weights (400 / 650 /
+700), the four greys, `.wf-page` scoping, 4px spacing base, and the S1.b bar
+palette. The three D4 divergences are corrected to the list's values. No new
+token is minted by this section.
+
+### 10.5 · Every state, and what it says
+
+| State | Reachable | Behaviour |
+|---|---|---|
+| Built-in, code default, never run | `fleet-sweep` ✅ verified | facts speak; pipeline shows the code story with all workers struck through |
+| Built-in, with runs | `fleet-council` ✅ verified | last-run overlay populated; Record cell shows bars |
+| Built-in on a published revision | not live today | pipeline draws the revision's wiring **plus** the code furniture as its own group |
+| Custom, published, Ready | `morning-negatives-pass` ✅ verified | Run-now primary; overlay empty with "never run" |
+| Custom, switched Off | ✅ **exercised live and restored** | banner + chip + "switched off"; **pipeline gains the off treatment** — today it renders identically, which is D7 |
+| Custom, no wiring | from code | pipeline says "No wiring published yet — nothing would run", the same sentence the list card uses |
+| Halted | from code (`state.halted`) | chip Halted + stored reason; the pipeline states that nothing runs, scheduled or manual |
+| Feed unreadable | from code | *"its status is unknown, not off"* preserved verbatim; no cell invents a value |
+| 404 | ✅ verified | copy correct; **D10** — the page is 81% empty and should offer the routine list inline rather than a single link |
+
+### 10.6 · Build phases, with measurable exit criteria
+
+| Phase | What | Exit criteria (measured on prod) |
+|---|---|---|
+| **S2.a** | Header band + action row + status band. Identity chips, `.acr-btn.go` primary, status and next-run unified, story to the header sub, type scale converged. | Action-row void **0px** · sizes ≤ 5, weights ≤ 3 owned · prose block dead width **< 5%** · 0 roles below 4.5:1 · every status branch renders its shipped string verbatim |
+| **S2.b** | The fact bar: `.wf-factbar` reused, em-dash cells replaced with honest sentences, S1.b bars in Record. | **0 cells rendering a bare `—`** on all three routines · bar encoding byte-identical to the list's · strip height ≤ 72px (from 86.8) |
+| **S2.c** | The pipeline: new S2-owned component, levels + step rows + last-run overlay. `RoutineCanvas.tsx` untouched. | Dead area inside the block **< 10%** at 2, 7 and 8 steps · **no text below 12.5px** · no element overlaps another · block height content-driven · off/degraded/skipped states render · zone height ≤ 60% of viewport |
+| **S2.d** | States + teaching: 404 fills, no-wiring/halted/feed-error verified, `<Term>` audit, "How workflows work" gains a read-this-page paragraph. | Every row of §10.5 screenshotted or code-verified · 404 content ≥ 60% of viewport · 0 `<Term>` inside a link |
+
+### 10.7 · Recorded, not built
+
+1. **S3 (Runs) should drive the pipeline overlay.** Airflow's grid↔graph link is
+   the whole idea: pick a run, the picture re-colours. This section defaults the
+   overlay to the newest run; making a Runs row select the overlaid run is S3's
+   to build, and the component should take the group as a prop from day one so
+   S3 needs no refactor.
+2. **S5 (editor) still imports `RoutineCanvas`.** If the DOM pipeline proves
+   itself here, the editor may converge onto it — but an editing canvas has a
+   different job, and that call is S5's.
+3. **`.acr-btn.go` is still 3.46:1** on committed `main` (verified 2026-08-08:
+   `control-room.css:53` unchanged at `#1a9d6a`). S1R published the tested
+   `#15804f` (4.96:1). This section adopts `.acr-btn.go` for its primary and
+   inherits the defect rather than forking the fleet's green — same call, same
+   reason.
+4. **`approval-inbox.vitest.test.ts` is still red** on `main` (verified
+   2026-08-08: 1 failed of 19). Unmoved since S1R reported it; still Approvals'
+   judgement to make.
+5. **The 19px strip value survives on other fleet pages** — `.acr-pg-stat .v`
+   is a shared `fleet-pages.css` primitive. This section moves *its* strip onto
+   the page-local `.wf-factbar` rather than touching the frozen file.
+
+---
+
 ## Sources
+
+**Part 10 (WF-S2R, detail-page research, 2026-08-08)** — Astronomer [intro to the Airflow UI](https://www.astronomer.io/docs/learn/airflow-ui) (single-DAG page: header actions top-right; grid columns = runs, squares = task instances, height = duration, colour = outcome; **the graph is annotated with a selected run's task states**; `g` toggles grid↔graph) · Temporal [Web UI](https://docs.temporal.io/web-ui) (execution page: Start/Close/Duration + Run ID + Type + Task Queue in the header; History in Timeline / All / Compact / JSON; **no workflow diagram** — a Relationships tree instead) · Dagster [webserver & UI](https://docs.dagster.io/guides/operate/webserver) (job page tabs: **Overview = the graph** · Launchpad · Runs · Partitions) · Inngest [observability & metrics](https://www.inngest.com/docs/platform/monitor/observability-metrics) (per-function charts: status breakdown, throughput, steps throughput, backlog, failure frequency, all time-range filtered) · GitHub Actions [manually running a workflow](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow) (**"Run workflow" renders only when the workflow declares `workflow_dispatch`**)
 
 **Part 9 (WF-S1R, list-page research, 2026-08-08)** — Airflow 3 [UI overview](https://airflow.apache.org/docs/apache-airflow/stable/ui.html) · Astronomer [intro to the Airflow UI](https://www.astronomer.io/docs/learn/airflow-ui) (card view default, bars = duration × status, run-type icons, ⌘K, list view for many DAGs) · Trigger.dev [scheduled tasks](https://trigger.dev/docs/tasks/scheduled) (declarative vs imperative rows, next/last run, dashboard-editable only for imperative) · UiPath Orchestrator [monitoring processes](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/monitoring-processes) (count-vector columns, colour persistence, grey = never executed) · Make [scenario list & history](https://help.make.com/scenario-history) · Power Automate [create & manage a cloud flow](https://learn.microsoft.com/en-us/power-automate/get-started-logic-flow) (⋮ menu, 28-day history on the detail) · Temporal [Web UI](https://docs.temporal.io/web-ui) · n8n [workflow tags](https://docs.n8n.io/workflows/tags/) · Zapier [product updates, Feb 2026](https://zapier.com/blog/february-2026-product-updates/) (favourites across asset listings)
 
