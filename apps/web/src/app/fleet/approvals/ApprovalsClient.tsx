@@ -34,12 +34,12 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   AlertTriangle,
-  Check,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
-  CircleSlash,
   Clock,
   Info,
+  MinusCircle,
   ShieldCheck,
   Undo2,
 } from 'lucide-react'
@@ -47,6 +47,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { FleetPageShell } from '../_shell/FleetPageShell'
 import { HowApprovalsWork } from './HowApprovalsWork'
+import { toolCardFor } from '@/app/marketing/ads/rules-automation/fleet/DecisionCard'
 import { ApprovalCard, type FleetLabels } from './ApprovalCard'
 import {
   PrecedentPanel,
@@ -189,162 +190,224 @@ function PageDescription() {
 /* ── S2 · can anything reach this queue? ───────────────────────────────── */
 
 /**
- * The section only this page can host. Controls knows the dials, Overview
- * knows the schedule, and NOTHING anywhere knows whether the actions a worker
- * can propose are able to run. Joined here, they answer the one question an
- * empty queue always raises.
+ * NAF.AQ-S2R (study Part 13) — the readiness readout.
  *
- * It collapses to a single line when the pipe is open, and expands when it is
- * not — the inverse of the queue-shape strip, so exactly one of the two is
- * ever large.
+ * The section only this page can host: Controls knows the dials, Overview knows
+ * the schedule, and nothing anywhere knows whether the actions a worker can
+ * propose are able to RUN. Joined here, they answer the question an empty queue
+ * always raises — is this broken, or just quiet?
+ *
+ * It is a READOUT, not a checklist and not a status banner, and the distinction
+ * is a safety property rather than a style preference:
+ *
+ * · Not a banner. Argo CD ranks `Suspended` ("waiting for some external event
+ *   to resume") as a different STATUS from `Degraded`; LaunchDarkly frames OFF
+ *   as deliberate configuration; Statuspage gives "Under Maintenance" the
+ *   LOWEST precedence of any status. This fleet is off because the operator
+ *   chose that, so painting it amber told them something was wrong every single
+ *   day — and it was a FOURTH amber, when `.acr-banner.warn` already serves
+ *   seven fleet surfaces.
+ * · Not a checklist. A checklist invites completion, and two of the three
+ *   conditions must NOT be completed by the operator: setting a worker to
+ *   PROPOSE arms a fleet that is off by deliberate constraint, and the missing
+ *   executors are Phase F work nobody here can act on.
+ *
+ * So every row carries an OWNER — yours, ours, or automatic. That is the half
+ * of "what would have to change" the old design did not attempt, and it is why
+ * there is no progress bar, no "2 of 3 complete", and no per-row action button.
+ *
+ * The four tiles are gone. Their contract needed a delta and a trend and none
+ * of the four numbers could supply either: two were counts of configuration,
+ * one a countdown, one a policy constant. Numbers live inside the sentences
+ * they qualify now. The `24h` tile is deleted outright rather than restyled —
+ * it is not a precondition at all, and S1's teaching drawer already states it.
  */
-function GateStateSection({ gate }: { gate: GateState | null }) {
-  const [open, setOpen] = useState(true)
+
+const OWNER_LINE: Record<GateCondition['owner'], string> = {
+  operator: 'Yours to change',
+  engineering: 'Ours to build — nothing you can do here',
+  automatic: 'Automatic',
+}
+
+/**
+ * The state word per condition. Colour is never the carrier: every state pairs
+ * a distinct glyph WITH a word (the status-page convention, and WCAG 1.4.1,
+ * which this stylesheet's own header already committed to).
+ *
+ * Note what is deliberately absent: any word implying fault. "Not yet" and
+ * "Not built" are states, not failures.
+ */
+function stateWord(c: GateCondition): string {
+  if (c.met) return 'Ready'
+  if (c.owner === 'engineering') return 'Not built'
+  if (c.owner === 'automatic') return 'Not set up'
+  return 'Not yet'
+}
+
+function ConditionRow({
+  condition,
+  tools,
+}: {
+  condition: GateCondition
+  /** Only the `action-can-run` row renders these — the evidence for its claim. */
+  tools: GateTool[]
+}) {
+  const met = condition.met
+  return (
+    <li className={`aq-cond${met ? ' met' : ''}`}>
+      <span className="aq-condstate">
+        {met ? (
+          <CheckCircle2 size={14} aria-hidden />
+        ) : (
+          <MinusCircle size={14} aria-hidden />
+        )}
+        {stateWord(condition)}
+      </span>
+      <div className="aq-condbody">
+        <p className="aq-condreq">{condition.requirement}</p>
+        <p className="aq-conddetail">
+          {condition.detail}
+          {condition.at ? (
+            <>
+              {' '}
+              <time dateTime={condition.at} title={new Date(condition.at).toLocaleString()}>
+                Next {whenNext(condition.at)}
+              </time>
+              .
+            </>
+          ) : null}
+        </p>
+
+        {tools.length > 0 ? (
+          <ul className="aq-toollist">
+            {tools.map((t) => (
+              <li key={t.name}>
+                <span className={t.canExecute ? 'aq-can' : 'aq-cannot'}>
+                  {t.canExecute ? 'can run' : 'describes only'}
+                </span>
+                {/* FX.1: names, not identifiers. `toolCardFor` is the vocabulary
+                    this page already imports for its card — copying it into a
+                    second dictionary is the defect AP.3 was written to fix. */}
+                {toolCardFor(t.name).shortAsk}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        <p className="aq-condowner">
+          {OWNER_LINE[condition.owner]}
+          {condition.href ? (
+            <>
+              {' · '}
+              <Link href={condition.href}>Controls →</Link>
+            </>
+          ) : null}
+        </p>
+      </div>
+    </li>
+  )
+}
+
+function GateStateSection({ gate, waiting }: { gate: GateState | null; waiting: number }) {
   if (!gate) return null
 
-  const proposing = gate.workers.filter((w) => w.proposesNow)
-  const couldEver = gate.workers.filter((w) => w.couldEverPropose)
+  const conditions = gate.conditions ?? []
+  const unmet = conditions.filter((c) => !c.met)
   const fleetTools = gate.tools.filter((t) => t.isFleetTool)
-  const executable = fleetTools.filter((t) => t.canExecute)
 
-  if (gate.canAnythingArrive) {
+  /*
+   * The halt is a FAULT, not an unmet precondition, so it is the one thing on
+   * this surface that earns a danger colour — and it uses the fleet's existing
+   * `.acr-banner`, read-only, exactly as Activity does, rather than a fifth
+   * palette. Placed ABOVE the readout per GOV.UK's notification-banner rule;
+   * the readout still renders beneath it, because a halt does not make the
+   * other conditions unknowable.
+   */
+  const halt = gate.halted ? (
+    <div className="acr-banner err aq-halt" role="alert">
+      <AlertTriangle size={14} aria-hidden />
+      <span>
+        <strong>The whole fleet is halted.</strong>{' '}
+        {gate.haltReason ?? 'No reason was recorded.'} No worker runs at all until it is released
+        on <Link href="/fleet/controls">Controls</Link>.
+      </span>
+    </div>
+  ) : null
+
+  /*
+   * S2 ⇄ S3, settled in the study rather than left half-written: S2's size is a
+   * function of the QUEUE, never of a toggle. On the day something is waiting,
+   * the operator's attention belongs on the request and this shrinks itself.
+   * That is also why there is no chevron — a disclosure whose correct state is
+   * always "open" is not a disclosure.
+   */
+  if (waiting > 0) {
     return (
-      <p className="aq-gate-ok">
-        <Check size={13} aria-hidden />
-        The gate is open: {proposing.length} worker{proposing.length === 1 ? '' : 's'} can ask you
-        for something, and the next chance is the weekly council {whenNext(gate.arrival.councilNext)}.
-      </p>
+      <>
+        {halt}
+        <p className="aq-gate-line">
+          <MinusCircle size={13} aria-hidden />
+          {conditions.length - unmet.length} of {conditions.length} conditions met — nothing NEW
+          can reach this queue yet.
+        </p>
+      </>
+    )
+  }
+
+  // The open pipe. Never rendered anywhere in this fleet's history; designed
+  // as one line, because it is a fact rather than an event.
+  if (gate.canAnythingArrive) {
+    const scheduled = conditions.find((c) => c.at)
+    return (
+      <>
+        {halt}
+        <p className="aq-gate-line ok">
+          <CheckCircle2 size={13} aria-hidden />
+          Ready — a worker can ask you
+          {scheduled?.at ? <>, and the next chance is the weekly council {whenNext(scheduled.at)}</> : null}.
+        </p>
+      </>
     )
   }
 
   return (
-    <section className="aq-gate" aria-labelledby="aq-gate-h">
-      <button
-        className="aq-gate-head"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-        id="aq-gate-h"
-      >
-        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        <CircleSlash size={14} aria-hidden />
-        <span>
-          <strong>Nothing can reach this queue right now.</strong> An empty queue and a blocked
-          one look the same, so here is which it is.
-        </span>
-      </button>
-
-      {open ? (
-        <div className="aq-gate-body">
-          {/* S2.a — the same sentences, from the enumerated conditions rather
-              than a failures-only `blockers[]`. Visually identical on purpose:
-              this phase moves the data shape, S2.b rebuilds the readout. The
-              halt is no longer among them (it is a fault, not an unmet
-              precondition) and it was already rendered separately below, so
-              dropping it here removes a duplication rather than a fact. */}
-          <ol className="aq-blockers">
-            {gate.conditions
-              .filter((c) => !c.met)
-              .map((c) => (
-                <li key={c.key}>{c.detail}</li>
-              ))}
-          </ol>
-
-          <div className="aq-gate-grid">
-            <div>
-              <h4>Who could ask</h4>
-              <p className="aq-gate-num">
-                {proposing.length} of {gate.workers.length}
-              </p>
-              <p className="aq-gate-sub">
-                set to <Term k="propose">PROPOSE</Term> — the only setting that puts a request
-                here. {couldEver.length} of {gate.workers.length} could ever be; the rest are
-                capped lower in code, and a <Term k="cap">cap</Term> is a ceiling the dial cannot
-                pass.
-              </p>
-              <Link className="aq-gate-link" href="/fleet/workers">
-                See the workers →
-              </Link>
-            </div>
-
-            <div>
-              <h4>Whether their actions can run</h4>
-              <p className="aq-gate-num">
-                {executable.length} of {fleetTools.length}
-              </p>
-              <p className="aq-gate-sub">
-                of the actions the fleet can propose are able to run.{' '}
-                {executable.length === 0 ? (
-                  <>
-                    All of them produce a <Term k="preview-only">preview only</Term>, so nothing
-                    can be queued for you — and approving one would record your decision and
-                    change nothing on Amazon. This is the part no other page will tell you.
-                  </>
-                ) : null}
-              </p>
-              <ul className="aq-toollist">
-                {fleetTools.map((t) => (
-                  <li key={t.name}>
-                    <span className={t.canExecute ? 'aq-can' : 'aq-cannot'}>
-                      {t.canExecute ? 'can run' : 'preview only'}
-                    </span>
-                    {humanTool(t.name)}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <h4>When one could appear</h4>
-              <p className="aq-gate-num">{whenNext(gate.arrival.councilNext)}</p>
-              <p className="aq-gate-sub">
-                the weekly <Term k="council">council</Term>, and nothing else. A nightly{' '}
-                <Term k="sweep">sweep</Term> cannot queue a request, and neither can a one-off
-                run — only the council reaches the part of the code that asks you.
-              </p>
-            </div>
-
-            <div>
-              <h4>If you never answer</h4>
-              <p className="aq-gate-num">{gate.expiry.hours}h</p>
-              <p className="aq-gate-sub">
-                then the request expires, and expiry means <strong>refused</strong> — never
-                approved because nobody looked. Checked every {gate.expiry.maintenanceSeconds}{' '}
-                seconds, and that check keeps running even with the fleet switched off, so a
-                decision you already took is never stranded.
-              </p>
-            </div>
-          </div>
-
-          {gate.outside.pending > 0 ? (
-            <p className="aq-outside">
-              <AlertTriangle size={13} aria-hidden />
-              <span>
-                <strong>
-                  {gate.outside.pending} request{gate.outside.pending === 1 ? '' : 's'} from
-                  outside the fleet {gate.outside.pending === 1 ? 'is' : 'are'} waiting and{' '}
-                  {gate.outside.pending === 1 ? 'is' : 'are'} not shown below.
-                </strong>{' '}
-                {gate.outside.byTool.map((t) => `${t.count} × ${humanTool(t.toolName)}`).join(', ')}.
-                These come from the older agent system, they can genuinely change something, and
-                the list below only shows the fleet&apos;s own three actions. They will expire in{' '}
-                {gate.expiry.hours} hours if nobody answers them.
-              </span>
-            </p>
-          ) : null}
-
-          {gate.halted ? (
-            <p className="aq-outside">
-              <AlertTriangle size={13} aria-hidden />
-              <span>
-                The whole fleet is halted{gate.haltReason ? ` — ${gate.haltReason}` : ''}. No
-                worker runs at all until it is released on{' '}
-                <Link href="/fleet/controls">Controls</Link>.
-              </span>
-            </p>
-          ) : null}
+    <>
+      {halt}
+      <section className="aq-gate" aria-labelledby="aq-gate-h">
+        <div className="aq-gate-head">
+          <MinusCircle size={15} aria-hidden />
+          <p id="aq-gate-h">
+            <strong>Nothing can reach this queue yet — and nothing is broken.</strong>{' '}
+            <span className="aq-gate-sub">
+              {conditions.length} things have to be true before a worker can ask you for anything.{' '}
+              {conditions.length - unmet.length === 0
+                ? 'None of them is.'
+                : conditions.length - unmet.length === 1
+                  ? 'One of them is.'
+                  : `${conditions.length - unmet.length} of them are.`}
+            </span>
+          </p>
         </div>
-      ) : null}
-    </section>
+
+        <ol className="aq-conds">
+          {conditions.map((c) => (
+            <ConditionRow
+              key={c.key}
+              condition={c}
+              tools={c.key === 'action-can-run' ? fleetTools : []}
+            />
+          ))}
+        </ol>
+
+        {gate.outside.pending > 0 ? (
+          <p className="aq-gate-foot">
+            Separately, {gate.outside.pending} request{gate.outside.pending === 1 ? '' : 's'} from
+            the older agent system {gate.outside.pending === 1 ? 'is' : 'are'} waiting — those can
+            genuinely change something, and they are listed at the foot of this page.
+          </p>
+        ) : null}
+      </section>
+    </>
   )
 }
 
@@ -798,7 +861,7 @@ export function ApprovalsClient() {
         </p>
       ) : null}
 
-      <GateStateSection gate={gate} />
+      <GateStateSection gate={gate} waiting={counts.waiting} />
 
       <section className="acr-card aq-queue" aria-label="Approvals">
         <div className="acr-cardhead">

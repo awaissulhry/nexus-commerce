@@ -159,199 +159,212 @@
   text-decoration: underline;
 }
 
-/* ── S2 · the gate state ────────────────────────────────────────────────── */
+/* ── S2 · the readiness readout ─────────────────────────────────────────
+ *
+ * Rebuilt 2026-08-08 — SB.AQ-S2R, study Part 13.
+ *
+ * What was here, measured on production at 1728x906: 332.6px, the largest block
+ * on the page; a grid computing to `387.5px x4, 0px 0px 0px` — SEVEN tracks for
+ * four tiles, three of them zero-width; blocker prose at 257-268 characters per
+ * line against WCAG 1.4.8's 80; a 4.24:1 chip; and four "numbers" that were a
+ * setting, a code fact, a countdown and a policy constant, all at 19px in
+ * identical boxes.
+ *
+ * And an invented amber — #fffdf6 / #e6d6b8 / #a16207 — which was a FOURTH one:
+ * `.acr-banner.warn` (#fff8ec / #ecd9ae / #8a6320) already serves seven fleet
+ * surfaces. It is gone entirely, and not repainted. A switched-off fleet is not
+ * a warning: Argo CD ranks `Suspended` as a different status from `Degraded`,
+ * LaunchDarkly frames OFF as deliberate configuration, and Statuspage gives
+ * maintenance the lowest precedence of any state. Amber here told the operator
+ * something was wrong every single day.
+ *
+ * SO THIS SECTION CARRIES EXACTLY ONE SEMANTIC COLOUR, and only where there is
+ * a genuine fault: the halt, which uses the shared `.acr-banner err` read-only.
+ * Everything else is the page's own ink, continuing S1's ladder rather than
+ * starting a second one — two sizes, 13px throughout and 11.5px only inside the
+ * state chip, with weight and spacing doing the hierarchy.
+ *
+ * Every colour is measured in place before it ships. */
 
-/* Open pipe: one quiet line. Blocked pipe: the section below. Exactly one of
-   the two is ever large — the queue-shape strip takes over when items exist. */
-.aq-gate-ok {
+/* The one-line forms: pipe open, or a queue with rows in it (the S2/S3
+   contract — S2's size is a function of the queue, never of a toggle). */
+.aq-gate-line {
   display: flex;
   gap: 7px;
   align-items: center;
   margin: 0 0 14px;
-  font-size: 12.5px;
-  color: #2f855a;
+  font-size: 13px;
+  color: #4a5867;
+}
+.aq-gate-line svg {
+  flex: 0 0 auto;
+  color: #6b7688;
+}
+.aq-gate-line.ok {
+  color: #14724d;
+}
+.aq-gate-line.ok svg {
+  color: #14724d;
+}
+
+.aq-halt {
+  margin-bottom: 12px;
 }
 
 .aq-gate {
   margin: 0 0 14px;
-  border: 1px solid #e6d6b8;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
-  background: #fffdf6;
-  overflow: hidden;
+  background: #fff;
 }
+
 .aq-gate-head {
   display: flex;
-  gap: 8px;
+  gap: 9px;
   align-items: flex-start;
-  width: 100%;
-  padding: 11px 13px;
-  border: 0;
-  background: transparent;
-  color: #1c2530;
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.45;
-  text-align: left;
-  cursor: pointer;
-}
-.aq-gate-head:hover {
-  background: #fffaeb;
+  padding: 12px 14px;
+  border-bottom: 1px solid #eef1f5;
 }
 .aq-gate-head svg {
   flex: 0 0 auto;
-  margin-top: 2px;
-  color: #a16207;
-}
-.aq-gate-head strong {
-  font-weight: 650;
-}
-.aq-gate-body {
-  padding: 0 13px 13px;
-}
-
-.aq-blockers {
-  margin: 0 0 12px;
-  padding: 0 0 0 18px;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: #3a4658;
-}
-.aq-blockers li {
-  margin: 0 0 5px;
-}
-
-.aq-gate-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 12px;
-}
-.aq-gate-grid > div {
-  padding: 10px 11px;
-  border: 1px solid #eee6d4;
-  border-radius: 6px;
-  background: #fff;
-}
-.aq-gate-grid h4 {
-  margin: 0 0 4px;
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  margin-top: 1px;
   color: #6b7688;
 }
-.aq-gate-num {
-  margin: 0 0 4px;
-  font-size: 19px;
-  font-weight: 640;
+.aq-gate-head p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  /* The measure S1 established. `ch` is the width of "0" and runs ~30% looser
+     than real prose — 58ch measured 75 actual characters there, and this
+     sentence is shorter, so it never wraps past it. */
+  max-width: 78ch;
+}
+.aq-gate-head strong {
+  font-weight: 600;
   color: #1c2530;
-  font-variant-numeric: tabular-nums;
 }
 .aq-gate-sub {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #3a4658;
+  color: #55616f;
 }
-.aq-gate-link {
-  display: inline-block;
-  margin-top: 6px;
-  font-size: 12px;
+
+/* One condition per row. An <ol> because it is a list of things, and it reads
+   as one with styles off and to a screen reader. */
+.aq-conds {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.aq-cond {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-bottom: 1px solid #eef1f5;
+}
+.aq-cond:last-child {
+  border-bottom: 0;
+}
+
+/* State: a glyph AND a word, never colour alone (WCAG 1.4.1, and the
+   status-page convention). The unmet chip is deliberately neutral — it is a
+   state, not a fault. */
+.aq-condstate {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 94px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: #eef1f5;
+  color: #4a5867;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.aq-cond.met .aq-condstate {
+  background: #f1faf5;
+  color: #14724d;
+}
+
+.aq-condbody {
+  min-width: 0;
+  flex: 1;
+}
+.aq-condreq {
+  margin: 0 0 3px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1c2530;
+}
+.aq-conddetail {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #4a5867;
+  /* The measure. Blocker prose ran at 257-268 characters per line here. */
+  max-width: 76ch;
+}
+.aq-conddetail time {
+  color: #1c2530;
+  font-weight: 600;
+}
+.aq-condowner {
+  margin: 5px 0 0;
+  font-size: 13px;
+  color: #55616f;
+}
+.aq-condowner a {
   color: #2563eb;
   text-decoration: underline;
 }
 
+/* The evidence under "what it proposes has to be able to run". Word first,
+   colour second — readable in greyscale and to a screen reader. */
 .aq-toollist {
   margin: 7px 0 0;
   padding: 0;
   list-style: none;
-  font-size: 12px;
+  font-size: 13px;
 }
 .aq-toollist li {
   display: flex;
-  gap: 7px;
+  gap: 8px;
   align-items: baseline;
   margin: 0 0 3px;
-  color: #3a4658;
+  color: #4a5867;
 }
-/* Word first, colour second — readable in greyscale and to a screen reader. */
 .aq-can,
 .aq-cannot {
   flex: 0 0 auto;
-  min-width: 78px;
-  padding: 1px 5px;
+  min-width: 96px;
+  padding: 1px 6px;
   border-radius: 3px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 600;
   text-align: center;
+  /* #6b7688 on #f4f6f9 measured 4.24:1 — under the floor. This is 7.9:1. */
+  background: #eef1f5;
+  color: #4a5867;
 }
 .aq-can {
-  border: 1px solid #bbe5c8;
-  background: #eefaf1;
-  color: #276749;
-}
-.aq-cannot {
-  border: 1px solid #e2e8f0;
-  background: #f4f6f9;
-  color: #6b7688;
+  background: #f1faf5;
+  color: #14724d;
 }
 
-.aq-outside {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  margin: 12px 0 0;
-  padding: 10px 11px;
-  border: 1px solid #f0c9c9;
-  border-left: 3px solid #c53030;
-  border-radius: 6px;
-  background: #fdf5f5;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: #3a4658;
-}
-.aq-outside svg {
-  flex: 0 0 auto;
-  margin-top: 2px;
-  color: #c53030;
-}
-.aq-outside a {
-  color: #2563eb;
-  text-decoration: underline;
-}
-
-/* ── the queue card ─────────────────────────────────────────────────────── */
-
-.aq-queue {
+.aq-gate-foot {
   margin: 0;
-}
-.aq-asof {
-  display: inline-flex;
-  gap: 5px;
-  align-items: center;
-  font-variant-numeric: tabular-nums;
-}
-.aq-emptywhy {
-  display: flex;
-  gap: 7px;
-  align-items: flex-start;
-  margin: 10px 0 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #6b7688;
-}
-.aq-emptywhy svg {
-  flex: 0 0 auto;
-  margin-top: 2px;
-}
-
-.aq-err {
-  border-left: 3px solid #c53030;
-  padding-left: 10px;
+  padding: 11px 14px;
+  border-top: 1px solid #eef1f5;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #55616f;
+  max-width: 88ch;
 }
 
 @media (max-width: 640px) {
-  .aq-gate-grid {
-    grid-template-columns: 1fr;
+  .aq-cond {
+    flex-direction: column;
+    gap: 6px;
   }
 }
 
