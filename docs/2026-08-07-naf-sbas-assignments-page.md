@@ -1975,6 +1975,66 @@ Every phase re-runs this probe at 1728 and 896, with 0, 1 and 24 rows:
 
 ---
 
+### 11.14 · EXECUTED 2026-08-08 — S1.a–S1.f, all six, prod-verified
+
+Approved by the operator and built in the order the study proposed. Commits:
+`5ee2d3ee2` (S1.a) · `0f91520a0` (S1.b) · `c1d0e713f` (S1.c) · `550e86143`
+(S1.d) · `d716f4ef8` (S1.e + S1.f) · `d05f5cd08` (two acceptance fixes).
+
+**Measured on the deployed build, 1728×906, 24 rows, all eight states.** The
+synthetic rows were injected **client-side only** — `window.fetch` patched in
+the page — so nothing was written; the last pass then used four **real**
+assignments created and deleted through the API, and **nothing was ever
+started**.
+
+| Acceptance criterion | Before | After |
+|---|---|---|
+| Recoverable slack in the fixed columns | **627px — 38.9%** of the table | **78px — 4.8%** (the rest is cell padding) |
+| Worst column ratio | Points at at **3.43×** its widest content | Points at at **1.14×** |
+| Row-height variance | 34% at 896px (56 / 73 / 75) | **0** at both widths (49px wide, 68px narrow) |
+| Column header at row 22 | scrolled to **y = −515** | **pinned**, and the page itself does not scroll |
+| Row navigation target | **5.4%** of the row | **~41%** (33.4% until the content-box fix) |
+| Text roles below 4.5:1 | **4** (worst 2.41:1, the "never run" delta) | **0** |
+| Filter state in the URL | none | state · closed · search · sort · direction |
+| Row actions | none | Open · Close · Cancel · Reopen · Delete + bulk delete |
+
+**Verified live, not inferred:** the sticky header holding at row 22 with the
+page still; the row menu portalling clear of `.h10-ds-gridcard` at z-index 1200
+with **Delete correctly disabled** and carrying the API's own refusal sentence;
+the four-column drop order at 896px with the target chip and the deadline riding
+the title line; `?sort=title&dir=asc` restoring the order on load with the
+header's caret and *"sorted by name — use the default order"*; and **the gone
+chip on a real row** — `⚠ ARCHIVED TEST CAMPAIGN · gone` — with the overdue row
+sorted to the top above it.
+
+**Five things this engagement learned that the study did not know:**
+
+1. **`createAssignment` accepts a target id that resolves to nothing.** The
+   `ARCHIVED TEST CAMPAIGN` row was created against `999999999999999` and the
+   API took it. That is not a bug to fix at create — a campaign can vanish at
+   any time afterwards, so the row must be *able* to say it either way — but it
+   does mean the gone state was always reachable and was simply never shown.
+2. **`min-height` under `border-box` includes the padding**, so the first
+   attempt at the full-height click target shipped and changed nothing. Caught
+   only because the acceptance probe re-ran against the deployed build; the diff
+   looked right.
+3. **A colour that passes on the card can fail on the page.** `#2f6feb` is
+   4.56:1 on a white card and 4.22:1 on `#f4f6f9` — and every text link this
+   page owns sits on the page background.
+4. **The DS chip dims its own count to `opacity: 0.75`** (~3.4:1). On a filter
+   band, those counts are the numbers being read.
+5. **The list page cannot be probed through its SSR HTML** — the client subtree
+   is not in it, so "grep the deployed HTML for a marker" reports *not deployed*
+   forever. It cost about twenty minutes of waiting for a deploy that had
+   already landed. Verify in the browser or not at all.
+
+**Deliberately not built, and why:** no Start on a row (§11.11 phase d), no bulk
+Start, no Overdue chip (the ordering and the badge already carry it twice), and
+no partial-target marker — a row whose campaigns are *half* archived still runs,
+so reddening it would be a new lie replacing an old silence.
+
+---
+
 ## Sources
 
 **RPA queues** — [UiPath queues](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/about-queues-and-transactions) · [item statuses](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/transaction-statuses) · [queue triggers](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/queue-triggers) · [Action Center](https://docs.uipath.com/action-center/automation-cloud/latest/user-guide/managing-actions) · [Blue Prism work queues](https://docs.blueprism.com/en-US/bundle/blue-prism-enterprise-7-3/page/user-guide/control-room/ug-cr-queue-management.htm) · [Automation Anywhere WLM](https://docs.automationanywhere.com/bundle/enterprise-v2019/page/enterprise-cloud/topics/aae-client/bot-creator/using-workload/cloud-queues.html) · [Power Automate work queues](https://learn.microsoft.com/en-us/power-automate/desktop-flows/work-queues)
