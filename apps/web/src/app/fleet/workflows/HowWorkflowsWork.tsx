@@ -70,6 +70,17 @@ export function HowWorkflowsWork() {
             job rather than a worker with a run of its own.
           </p>
           <p>
+            <strong>Reading the runs.</strong> One line per <Term k="run">run</Term> of the whole
+            routine, newest first: when it went, what started it, how it ended, and a pill for
+            each worker in it with a dot for how that worker did. When something went wrong the
+            explanation gets its own line underneath, in full — an amber one means the run hit one
+            of its own limits and stopped, which is the system working, not a fault. Open{' '}
+            <em>N workers</em> for each worker&rsquo;s own cost, time and a link to its full
+            story. And selecting a run re-draws the pipeline above as <em>that</em> run: what each
+            step actually did, that time. Worker dials are today&rsquo;s and are not shown for a
+            past run, because nothing records what they were set to back then.
+          </p>
+          <p>
             <strong>What a <Term k="trigger">trigger</Term> is.</strong> The thing that starts a
             routine — a clock, or you. Each row says when the next run comes, and if the clock
             fired but launched nothing, the row says that too, so &ldquo;why didn&rsquo;t it
