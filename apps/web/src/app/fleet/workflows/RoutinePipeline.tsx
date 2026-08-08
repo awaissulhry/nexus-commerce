@@ -31,8 +31,7 @@
  *  - a run still in flight is "working now…", never a failure.
  */
 
-import { Fragment } from 'react'
-import { ArrowDown, ArrowRight } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { fmtDuration, type CharterRow, type RunGroup, type RunRow } from './lib'
 import type { RoutineStory, StoryStep } from './routines'
 
@@ -78,17 +77,15 @@ export function RoutinePipeline({ story, charters, lastGroup }: RoutinePipelineP
       {levels.map((steps, i) => {
         const artifact = i > 0 ? incomingArtifact(story, steps.map((s) => s.id)) : null
         return (
-          <Fragment key={cols[i]}>
-            {i > 0 ? (
-              <div className="wf-pipe-gutter" aria-hidden>
-                <ArrowRight size={14} className="wf-pipe-arrow-h" />
-                <ArrowDown size={14} className="wf-pipe-arrow-v" />
-                {artifact ? <span className="wf-pipe-artifact">{artifact}</span> : null}
-              </div>
-            ) : null}
-            <div className="wf-pipe-level">
+            <div className="wf-pipe-level" key={cols[i]}>
+              {/* The artifact rides the stage label. As its own grid column it
+                  took an equal 1fr share — four gutters ate 698px of 1572 and
+                  squeezed every card to 174.7px, which is how a layout meant to
+                  remove dead width invented some. */}
               <span className="wf-pipe-levelk">
+                {i > 0 ? <ArrowRight size={11} className="wf-pipe-arrow" aria-hidden /> : null}
                 {steps.length > 1 ? 'at the same time' : i === 0 ? 'first' : 'then'}
+                {artifact ? <span className="wf-pipe-artifact">{artifact}</span> : null}
               </span>
               <div className="wf-pipe-steps">
                 {steps.map((s) => {
@@ -150,7 +147,6 @@ export function RoutinePipeline({ story, charters, lastGroup }: RoutinePipelineP
                 })}
               </div>
             </div>
-          </Fragment>
         )
       })}
     </div>
