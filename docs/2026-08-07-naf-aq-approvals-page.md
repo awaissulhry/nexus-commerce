@@ -2723,3 +2723,570 @@ once the fleet is switched on. **S1 was not the bigger half of the wall**, and
 that was said before the build rather than after it: the gate-state section is
 still 333px of amber carrying 65 words at 257–268 characters per line. It is
 the obvious next engagement.
+
+---
+
+# PART 13 — S2 DESIGN STUDY: the gate state, "can anything reach this queue?"
+
+**Status: AWAITING OPERATOR APPROVAL.** No code written. Stream tag `SB.AQ-S2R`,
+opened 2026-08-08, immediately after S1R.
+
+Scope: **AQ-S2 only** — `GateStateSection()`, the `.aq-gate*` rules, and the
+`GET /agent/fleet/approvals/gate-state` response that feeds them. S1 is finished
+and is not reopened; S3–S10 are untouched. §13.8 lists what I found elsewhere and
+left.
+
+The facts S2 states are correct and were verified against production in AQ.1.
+**This part changes how they are said, not what is true.**
+
+---
+
+## 13.0 — What S2 is FOR, in one sentence
+
+> **Let someone who has never seen the fleet decide, correctly and out loud,
+> whether this page is broken or simply quiet — and say what would have to
+> change for a request to appear.**
+
+Two consequences fall out of that sentence and they decide most of the design:
+
+- **"What would have to change" is the half that is missing today.** Every
+  sentence on S2 currently describes a state. None of them says *whose* state it
+  is, and three of the four are not the operator's to change at all.
+- **If S2 reads as an alarm, it has failed its own sentence.** The honest answer
+  today is "quiet, on purpose" — and the block is painted like a fault.
+
+---
+
+## 13.1 — What is on screen today, measured
+
+Live Vercel + Railway, 2026-08-08, 1728×906, against the resolved surface. Every
+number is `getComputedStyle` / `getBoundingClientRect` / a canvas text
+measurement.
+
+| | |
+|---|---|
+| S2's footprint | **332.6px**, from y=144 to y=476 — the largest block on the page |
+| Grid | `grid-template-columns` computes to **`387.5px ×4, then 0px 0px 0px`** — **seven tracks for four tiles, three of them zero-width** |
+| Blocker prose | **268 and 257 chars/line**, `max-width: none` |
+| Head sentence | 112 chars/line |
+| Tile prose | 62–65 chars/line — the only text in range, and only because the grid cuts it to 364px |
+| Tile label | 11px/650 `#6b7688` on `#fff` — **4.59:1**, clearing AA by 0.09 |
+| Tool chip | 10.5px/600 `#6b7688` on `#f4f6f9` — **4.24:1 ✗** |
+| Freshness inside S2 | **none** — and `in 43h` is the only value on the page that moves by itself |
+| Tool names rendered | `create negative keyword` · `graduate keyword` · `set target bid` — internal identifiers, regex-humanised |
+| Standalone 19px figures | `font-variant-numeric: tabular-nums` |
+
+### 13.1.1 The duplication, quoted
+
+The server composes a blocker sentence and the client composes a tile sentence
+**from the same fields**, so one fact is written twice, in two places, by two
+authors:
+
+> **server** (`agent-fleet-approvals.routes.ts:152`): *"None of the actions the
+> fleet can propose is able to run yet. They produce a preview only, so nothing
+> can be queued for you — and approving one would record your decision and change
+> nothing on Amazon."*
+>
+> **client** (`ApprovalsClient.tsx:248-256`): *"…of the actions the fleet can
+> propose are able to run. All of them produce a preview only, so nothing can be
+> queued for you — and approving one would record your decision and change nothing
+> on Amazon. This is the part no other page will tell you."*
+
+**Twenty-two words are verbatim identical.** The same is true of the PROPOSE
+pair. This is not sloppy copy — it is a structural consequence of the API
+sending *only the failures*, as prose, while the client needs to render *all*
+the conditions, including the ones that pass. Two composers over one set of
+facts is the root cause, and §13.6 fixes it there rather than by editing words.
+
+### 13.1.2 The four numbers are four different kinds of thing
+
+| Rendered | What it actually is |
+|---|---|
+| `0 of 7` | a count of a **setting** the operator controls |
+| `0 of 3` | a count of a **code fact** the operator cannot change at all |
+| `in 43h` | a **countdown** to a scheduled job |
+| `24h` | a **policy constant** — `EXPIRY_HOURS`, which cannot differ tomorrow |
+
+All four are rendered at 19px/640 in identical boxes. A beginner is being asked
+to read a constant and a problem in the same typeface, at the same size, in the
+same row.
+
+---
+
+## 13.2 — What the industry does with this exact surface
+
+Seven sources, read for the mechanism rather than for principles.
+
+### A · The strongest finding: "deliberately off" is its own status, and it is not a warning
+
+[Argo CD's health vocabulary][argo] is the clearest statement of the distinction
+S2 exists to make. It defines **Suspended** as *"the resource is suspended and
+waiting for some external event to resume (e.g. suspended CronJob or paused
+Deployment)"* — separate from **Degraded**, which is failure. Intentional pause
+and malfunction are **different statuses**, not different intensities of one.
+
+[LaunchDarkly][ld] presents an OFF flag in neutral, operational language — a
+deliberate configuration with a configurable outcome, not a fault. [Statuspage's
+top-level calculation][statuspage] makes the same point in ranking: **"Under
+Maintenance" has the LOWEST precedence** of every status and surfaces only when
+nothing worse is happening.
+
+**This is the verdict on S2's palette, and it is not a taste argument.** The
+fleet is off because the operator chose that. Painting it amber says *fault*
+where the truth is *suspended*. **Steal:** deliberately-off gets its own status
+word and a neutral treatment. **Reject:** any severity ramp that puts "switched
+off" and "broken" on the same scale.
+
+### B · Conditions: the shape of "not ready, and here is why"
+
+[Kubernetes Pod conditions][k8s] are the most transferable structure found. Each
+condition carries `type` · `status` (`True`/`False`/`Unknown`) · `reason`
+(machine-readable) · `message` (human) · `lastTransitionTime`, and the set of
+them "paint a complete picture of readiness without requiring inspection of
+individual container states".
+
+Two properties matter here. **Conditions are enumerated whether or not they
+pass** — you can see that `PodScheduled=True` and `Ready=False`, which is what
+makes the failing one legible. And **the reason and the message are separate
+fields**, so the machine-readable cause never has to be reverse-engineered from
+prose.
+
+Today S2 sends `blockers: string[]` — failures only, prose only. Both properties
+are absent, and §13.1.1's duplication is the direct cost.
+
+### C · All-must-pass surfaces show every check, not just the failures
+
+[Vercel's Checks][vercel] gates a deployment on a conjunction: *"Vercel waits
+until all the created checks receive a `conclusion`"*, and only then does the
+deployment go live. [GitHub environment protection][gh] is the same shape — a job
+"must follow any protection rules for the environment before running". In both,
+the passing checks stay on screen beside the pending ones.
+
+**Steal:** enumerate every precondition, met and unmet. **Reject:** a
+progress-bar or "3 of 4 complete" framing — see D.
+
+### D · Activation checklists are the wrong analogue, and it took reading them to see why
+
+[Stripe's activation flow][stripe] and [GitLab Pajamas' "Configuration
+required" empty state][pajamas] are the closest-looking analogues: a list of
+blocking items, each with a primary action to go and complete it. Pajamas is
+explicit that this variant carries *"a primary action for configuring"*.
+
+**They do not fit, and the reason is a safety property rather than a style
+preference.** A checklist implies the reader should complete it. Two of S2's
+three conditions must **not** be completed by the operator: switching a worker to
+PROPOSE arms a fleet that is off by deliberate constraint, and the missing
+executors are Phase F engineering the operator cannot act on at all. A surface
+that invites its reader to tick off "no worker is set to PROPOSE" is actively
+dangerous.
+
+**Steal:** one line per condition, each carrying what to do about it. **Reject:**
+completion framing — no progress bar, no "2 of 4 done", no primary action per
+row. The disposition of each row is *whose it is*, not *do it now*.
+
+### E · Colour is never the carrier, and the shape must change too
+
+The status-page convention is settled — green operational, yellow degraded,
+orange partial, red major, plus maintenance — and so is its accessibility
+correction: [colour alone fails][statusdesign], because protanopia and
+deuteranopia make the green/red pair nearly indistinguishable. The fix named
+there is the one Cloudflare ships: **every state pairs a colour with a distinct
+glyph *and* a text label** — a filled circle for operational, a minus for
+degraded, an X for outage.
+
+This matches what `approvals.css` already says in its own header comment
+(*"Colour is never the only carrier of meaning here (WCAG 1.4.1)"*) and what S1
+shipped. S2 keeps the rule and gains the missing half: **the glyph shape must
+differ per state, not only its colour.**
+
+### F · When a number deserves a tile — and these four do not
+
+The `dataviz` skill's stat-tile contract is `label` · `value` · optional
+**delta** (signed, versus a named period) · optional **trend** (a sparkline).
+**None of S2's four numbers can supply a delta or a trend**, because none of them
+is a measurement over time: two are counts of configuration, one is a countdown,
+one is a constant. Its form table sends "a single ratio against a limit" to a
+**meter**, not a tile — and a meter is wrong here too, because a meter implies
+progress toward a target and *7 of 7 workers at PROPOSE is not a target anyone
+should aim at*.
+
+It also names the exact defect in §13.1's last row: **proportional figures for
+standalone values, `tabular-nums` only for columns that must align** — *"a number
+like 121 looks loose at display sizes"*.
+
+**Steal:** the number goes inside the sentence it qualifies. **Reject:** the KPI
+row entirely.
+
+### G · Progressive disclosure of a diagnosis
+
+[GitLab Pajamas' contextual-help ranking][pajamashelp] — inline text, then a
+drawer, then a popover, then a tooltip — already governs this page after S1.
+Its hard rule applies directly: **essential information must never be hidden
+behind a trigger.** S2's content is the most essential on the page, and it is
+currently behind a chevron that defaults open. A disclosure whose correct state
+is always "open" is not a disclosure.
+
+---
+
+## 13.3 — The framing decision
+
+> **S2 is a readiness READOUT: an enumerated set of preconditions, each with a
+> state, a reason, and an owner. It is not a checklist and it is not a status
+> banner.**
+
+Both rejected framings fail for a specific, checkable reason:
+
+- **Not a status banner.** A banner asserts something is wrong. Argo's
+  Suspended/Degraded split and Statuspage's ranking of maintenance *below*
+  everything both say the opposite of what amber says. Nothing is wrong here.
+- **Not a checklist.** A checklist invites completion, and two of the three
+  conditions must not be completed by the operator (§13.2 D). The brief proposed
+  this framing and it is *nearly* right — the correction is that a readiness
+  readout enumerates and explains, where a checklist enumerates and *asks*.
+
+**The organising principle, which is the one genuinely new idea here: split the
+conditions by WHO CAN CHANGE THEM.** Every row says *yours*, *ours*, or
+*automatic*. That is what turns "nothing can reach this queue" from a complaint
+into an answer, and it is precisely the half of §13.0's sentence the current
+design does not attempt.
+
+---
+
+## 13.4 — The proposal
+
+### 13.4.1 Three conditions, not four
+
+The `24h` tile is **removed**, and not relocated. It is not a precondition for
+anything arriving — it is a policy that applies *after* something has arrived —
+and **S1's teaching drawer already states it**, under the heading *"Silence
+becomes a no, never a yes"*, reading the same `gate.expiry.hours`. Keeping it
+here made it the third copy of one fact.
+
+What remains is a genuine conjunction — all three must be true before a request
+can exist:
+
+| # | Condition | Today | Owner |
+|---|---|---|---|
+| 1 | A worker has to be allowed to ask | **not met** — none of 7 is set to PROPOSE; only 1 ever could be | **yours** → Controls |
+| 2 | What it proposes has to be able to run | **not met** — all three of the fleet's actions describe what they would do and stop there | **ours** — not built yet |
+| 3 | Something has to be scheduled to ask | **met** — the weekly council, next in 43 hours | automatic |
+
+### 13.4.2 The shape
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ⏸  Nothing can reach this queue yet — and nothing is broken.                  │
+│    Three things have to be true before a worker can ask you for anything.     │
+│    One of them is.                                                            │
+│                                                                               │
+│    ⏸  Not yet    A worker has to be allowed to ask                            │
+│                  None of your 7 workers is set to PROPOSE. Only 1 ever could  │
+│                  be — the other 6 are capped lower in code.                   │
+│                  Yours to change · Controls →                                 │
+│                                                                               │
+│    ⏸  Not built  What it proposes has to be able to run                       │
+│                  All three of the fleet's actions can describe what they      │
+│                  would do and stop there: stop ads showing for a search term, │
+│                  promote a search term to its own keyword, change a keyword's │
+│                  bid. Approving one would record your decision and change     │
+│                  nothing on Amazon.                                           │
+│                  Ours to build — nothing you can do here                      │
+│                                                                               │
+│    ✓  Ready      Something has to be scheduled to ask                         │
+│                  The weekly council, next in 43 hours. A nightly sweep cannot │
+│                  queue a request, and neither can a one-off run.              │
+│                  Automatic                                                    │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+Notes on what changed and why, each traceable to a defect:
+
+- **The headline gains its second clause** — *"and nothing is broken"*. That is
+  the sentence §13.0 exists to deliver and no wording on the page says it today.
+- **Numbers live inside sentences** (§13.2 F). `0 of 7` becomes *"None of your 7
+  workers is"*, which is the same fact in the register a non-technical operator
+  reads.
+- **Tool names come from `toolCardFor().shortAsk`** — *"stop ads showing for a
+  search term"* — the vocabulary **this page already imports** for its card
+  (`ApprovalCard.tsx:45`). No new dictionary, no API change, and it closes defect
+  6 with the one-dictionary rule AP.3 established.
+- **The owner line is new**, and it is the design.
+- **Rows are `<li>` in an `<ol>`** with the state word as text, so the readout is
+  a list to a screen reader and reads correctly with styles off.
+
+### 13.4.3 Every state, designed
+
+| State | What renders |
+|---|---|
+| **(a) all three unmet** *(today, minus condition 3 which passes)* | The block above. Headline *"Nothing can reach this queue yet — and nothing is broken."* |
+| **(b) some cleared** | Same block; cleared rows collapse to a single `✓ Ready` line with no detail paragraph, so the unmet ones carry the whole visual weight. Headline counts: *"…Two of them are."* |
+| **(c) pipe fully open** — never rendered anywhere, ever | **One line, and it keeps the glyph+word contract:** `✓ Ready · A worker can ask you, and the next chance is the weekly council in 43 hours.` No card, no border — it is a fact, not an event. Verified per §13.7 |
+| **(d) fleet halted** | The halt is the **only genuine fault state on this surface**, so it is the only one that earns danger colour: a `.acr-banner err` **above** the readout (GOV.UK's placement rule, already adopted by Activity), with the reason verbatim and a link to Controls. The readout still renders beneath it — a halt does not make the other conditions unknowable |
+| **(e) non-fleet requests waiting** | Stays, but stops being a warning stripe inside S2 and becomes **one sentence at the foot of the readout** pointing down at S5, which owns those rows and already renders them in full. Today S2 and S5 both explain them |
+| **(f) loading** | **A skeleton of the readout at its real height**, which is also the fix for the 347px load shift §12.7 recorded. Today `if (!gate) return null` renders nothing, so the queue card paints at y=175 and lands at y=522 |
+| **(f) fetch failed** | **Not silence — that is the current behaviour and it is wrong.** A failed read of *this* endpoint means the page cannot answer its own question, and rendering nothing makes an empty queue look normal. It renders the readout frame with `Unknown` on every row and one line: *"Could not read the fleet's state. This page cannot tell you whether anything is waiting to reach you — the queue below may be empty for a reason it cannot see."* |
+
+**(c) is the state that has never existed**, and it is the one this design is
+most likely to get wrong. §13.7 says exactly how it will be exercised.
+
+### 13.4.4 The S2 ⇄ S3 contract, settled now rather than discovered later
+
+Part 4 specified that S2 and S3 trade places: empty queue → S2 is the page;
+full queue → S3 is the page and S2 is one line. S3 does not exist, so that has
+been half a contract since AQ.1.
+
+**Settled: S2's size is a function of the queue, never of a toggle.**
+
+| Queue | S2 renders |
+|---|---|
+| empty | the full readout (a)/(b)/(c) |
+| **any row waiting** | **one line**, whatever the conditions say — `⏸ Nothing new can reach this queue · 1 of 3 conditions met · why →`, expanding on click |
+
+This is also the answer to defect 5. The chevron disappears because the collapse
+is **data-driven, not user-driven**: on the day a request is waiting, the
+operator's attention belongs on the request, and S2 shrinks itself. When S3
+lands it inherits this contract unchanged and needs nothing from S2.
+
+### 13.4.5 Type, colour and spacing — exact
+
+Continuing S1's ladder rather than starting a second one. **Two sizes**: 13px for
+everything, 11.5px only for the state word inside its chip.
+
+| Element | Size / weight | Colour | On | Contrast |
+|---|---|---|---|---|
+| Headline | 13 / 600 | `#1c2530` | `#f7f9fb` | 13.4 |
+| Headline second clause | 13 / 400 | `#55616f` | `#f7f9fb` | 5.6 |
+| Condition requirement | 13 / 600 | `#1c2530` | `#fff` | 15.5 |
+| Condition detail | 13 / 400 | `#4a5867` | `#fff` | 8.6 |
+| Owner line | 13 / 400 | `#55616f` | `#fff` | 6.7 |
+| State chip — *Not yet* / *Not built* | 11.5 / 600 | `#4a5867` on `#eef1f5` | — | 7.9 |
+| State chip — *Ready* | 11.5 / 600 | `#14724d` on `#f1faf5` | — | 5.6 |
+| State chip — *Unknown* | 11.5 / 600 | `#55616f` on `#eef1f5` | — | 6.2 |
+| Rule between rows | 1px `#e4e9ef` | — | — | — |
+
+**Every value is measured in place before it ships**, per S1R's lesson that
+`#6b7684` passes on white and fails on `#f4f6f9`.
+
+### 13.4.6 The colour decision, stated once
+
+> **S2 carries exactly one semantic colour, and only where there is a genuine
+> fault: the halt, and a failed read. Everything else is the page's normal ink.**
+
+Three reasons, in order of weight:
+
+1. **"Switched off" is not a warning** (§13.2 A). Amber on a deliberately-dark
+   fleet tells the operator something is wrong every single day, which is both
+   false and the fastest possible route to the habituation S1 already designed
+   against.
+2. **The invented amber was a *fourth* palette, not a first.** The fleet already
+   has a status vocabulary — `.acr-banner` `err`/`warn`/`ok` in
+   `control-room.css`, used by **seven** fleet surfaces (Controls ×3, Workflows
+   ×4, Activity ×2). `.aq-gate` is `#fffdf6`/`#e6d6b8`/`#a16207`;
+   `.acr-banner.warn` is `#fff8ec`/`#ecd9ae`/`#8a6320`. Two ambers, one intent.
+   **Where S2 genuinely needs a fault colour it uses `.acr-banner`, read-only,
+   exactly as Activity does** — no new palette, no claim on a shared file.
+3. **The DS status ramp is available and dark-safe, and I checked rather than
+   assumed.** `--status-warning-*` / `--status-danger-*` resolve through
+   `--h10-amber-*` / `--h10-red-*`, and **tokens.css's single `.dark` block never
+   redefines those ramps** — so they are whole colours in both themes with no pin
+   needed. They are the right tool the day S2 needs a second tone. It does not
+   need one now, and inventing a use for an available token is how a fourth
+   palette gets born.
+
+The neutral chip greys (`#eef1f5`, `#4a5867`) are the page's existing ink, not
+new values.
+
+---
+
+## 13.5 — Verdict on each of the nine defects
+
+| # | Defect | Verdict |
+|---|---|---|
+| 1 | Invented amber palette | **FIX — by removing the colour, not repainting it.** Deliberately-off is not a warning (Argo, LaunchDarkly, Statuspage all agree). And the sharper version of the finding: it was a **fourth** amber, when `.acr-banner.warn` already serves seven fleet surfaces. One semantic colour, faults only |
+| 2 | The same information twice | **FIX AT THE ROOT.** Not a copy-editing job — 22 words are verbatim identical because the API sends *failures as prose* and the client re-composes *all conditions* from the same raw fields. §13.6 moves composition server-side, once |
+| 3 | Four kinds of fact, one visual weight | **FIX, and go further than the brief.** One of the four (`24h`) is not a condition at all and is **removed**, because S1's drawer already says it. The remaining three get a state word each, so "problem" vs "how it works" is carried by the state, not inferred from the number |
+| 4 | Accidental grid | **FIX.** Confirmed: `387.5px ×4 + 0px 0px 0px` — seven tracks, three collapsed. Replaced by rows, which is what a conjunction of preconditions is |
+| 5 | Borrowed disclosure affordance | **FIX.** The chevron goes entirely. A disclosure whose correct state is always "open" is not a disclosure (Pajamas: essential information must never be hidden behind a trigger). Collapse becomes **data-driven** via the S2⇄S3 contract, §13.4.4 |
+| 6 | Raw tool names | **FIX, with no new dictionary.** `toolCardFor().shortAsk` — *"stop ads showing for a search term"* — already imported by this page for its card |
+| 7 | No freshness | **FIX, partially, and say what I am not doing.** The council countdown becomes `<time dateTime>` with the absolute instant in its accessible name — so the one self-moving value is checkable. **I am not building a second freshness instrument:** the page-level "as of" belongs in S1's header `aside`, and that needs Activity's `Freshness` extracted to `_shared/`, which is an open ask (§12.8), not S2's to fork |
+| 8 | The healthy state has never rendered | **FIX, and verify it for real.** Designed as one line in §13.4.3(c) and exercised against a stubbed payload per §13.7 — not reasoned about |
+| 9 | No tooltip audit | **FIX** — §13.7.1, to the standard S1 set: every term listed, keyboard, 200% zoom, and no term minted that the UI does not show |
+
+---
+
+## 13.6 — The API change, and why it is the fix rather than a refactor
+
+**Yes, the response shape changes**, in this stream's own file. `blockers:
+string[]` becomes an enumerated conditions array, modelled on
+[Kubernetes conditions][k8s]:
+
+```ts
+interface GateCondition {
+  key: 'worker-may-ask' | 'action-can-run' | 'something-scheduled'
+  met: boolean
+  /** Null when the read failed — renders as Unknown, never as met. */
+  known: boolean
+  /** The precondition, in the operator's words. Server-composed, rendered verbatim. */
+  requirement: string
+  /** Why it is / is not met, with the numbers already in the sentence. */
+  detail: string
+  /** Who can change it. The organising idea of the whole section. */
+  owner: 'operator' | 'engineering' | 'automatic'
+  href: string | null
+}
+```
+
+`conditions: GateCondition[]` replaces `blockers`. `canAnythingArrive` stays and
+becomes `conditions.every(c => c.met)`.
+
+**Why this is the defect-2 fix and not tidying.** Today the server can only
+describe failures, so the client *must* re-derive sentences for the conditions
+that pass — which is why two authors ended up writing the same 22 words. With
+every condition enumerated and composed once, server-side, there is exactly one
+place a sentence can come from, and a met condition has a sentence for the first
+time. It is the same argument AQ.1 made for computing the blockers server-side
+and rendering them verbatim; it was simply applied to half the set.
+
+`workers`, `tools`, `arrival`, `expiry`, `outside`, `halted` all stay — the
+client still needs `tools` for the per-action list and `arrival.councilNext` for
+the countdown's `dateTime`. **Nothing is removed that another consumer reads:**
+`gate-state` has exactly one caller, `ApprovalsClient.tsx`, verified by grep.
+
+No migration, no schema change, no new endpoint.
+
+---
+
+## 13.7 — How each state gets verified, including the one that has never existed
+
+**⚠ The safety rule is absolute and is restated here because it is the whole
+reason (c) is hard: nothing in this engagement enables a charter, moves an
+autonomy dial, sets `AgentDefinition.enabled`, or turns on a cron.** States are
+produced by stubbing the *response*, never by changing the world.
+
+**Chosen method for (b), (c), (d) and (f): option (1) — a local dev run against a
+read-only stub**, per `reference_web_verify_without_local_api`, whose two newest
+traps are exactly the ones that would cost the time: browse **`localhost`, never
+`127.0.0.1`** (Next dev blocks its own HMR resources from a foreign origin, the
+page never hydrates, and the console is clean), and use **one hostname for both
+ends** so Private Network Access does not block the fetch. The stub serves
+`gate-state` from a fixture file and nothing else; `apps/api` is never booted, so
+no cron can touch prod Neon.
+
+If the stub proves unreliable I fall back to **option (2)** — a component test
+per state — and will **say which was used**. A state will not be described as
+verified on the strength of having been reasoned about.
+
+| State | How |
+|---|---|
+| (a) today's | prod, in the browser, geometry measured |
+| (b) partial | stub: one condition flipped `met: true` |
+| (c) fully open | stub: all three `met: true` — **the state no human has seen** |
+| (d) halted | stub: `halted: true` with a reason |
+| (e) outside pending | prod — `_apx-seed-card.mts seed`, then `clean`, then `_apx-probe.mts` back to exactly **18 approvals, 0 exemplars, 0 audit rows** |
+| (f) loading / failed | stub: a delayed response, then a 500 |
+
+Plus, on prod, to S1's standard: nine widths, 200% zoom, real keyboard input,
+`getBoundingClientRect` against `innerWidth`, and deploy detection by grepping
+the public route chunk for a string unique to the phase.
+
+### 13.7.1 Tooltip inventory
+
+| Term S2 will show | Entry | Decision |
+|---|---|---|
+| **PROPOSE** | ✓ `propose` | tag |
+| **cap** | ✓ `cap` | tag — used in "capped lower in code" |
+| **council** | ✓ `council` | tag |
+| **sweep** | ✓ `sweep` | tag |
+| **preview only** | ✓ `preview-only` | tag |
+| **worker** | ✓ `worker` | already tagged once in S1's description; **not tagged again** — one tooltip per page per term |
+| *refused*, *halted*, *scheduled*, *condition*, *ready* | ✗ | **plain English, deliberately untagged.** S1 set the precedent: never mint a term the UI does not actually show as jargon |
+| **`gate`** | ✓ — but defined as a **workflow step gate** | **must never be tagged here.** The word is avoided in S2's copy for the same reason S1 avoided it |
+
+**Glossary changes required: none.** No claim on `glossary.tsx`.
+
+⚠ **One S1R finding applies directly:** `.acr-term-tip` opens *upward* and is
+118px tall, so any `<Term>` within ~120px of the viewport top needs the
+page-local downward flip S1.c added. S2 begins at y=144 today and will begin
+higher once the readout is shorter — **the flip must be extended to S2's rows and
+measured**, not assumed.
+
+---
+
+## 13.8 — Found while auditing S2, belongs elsewhere, LEFT ALONE
+
+1. **`.aq-outnone` (S5) is 4.24:1** — same failing chip colour as S2's, on the
+   line that renders when nothing is waiting from outside the fleet.
+2. **The 347px load shift is S2's and is fixed here** (§13.4.3(f)) — recorded in
+   §12.7 as S2's to fix, and this is that.
+3. **`FleetTab.tsx:275` on the Overview still sends `content-type:
+   application/json` with no body** — the silent-400 bug fixed on this page on
+   2026-08-08. Not this stream's file. Third time flagged.
+
+---
+
+## 13.9 — What I am explicitly NOT doing
+
+- **S1 and S3–S10.** The header, the drawer, the queue card, the lists, the
+  card, the outside queue, the record. S5 keeps its own full treatment of
+  non-fleet rows; S2 only points at it.
+- **No second freshness instrument.** The page-level "as of" belongs in S1's
+  header `aside` once Activity extracts `Freshness` to `_shared/` (§12.8's open
+  ask). S2 will not fork it.
+- **No glossary edits, no claim on `glossary.tsx`.**
+- **No new shared-file edits.** `control-room.css` is *used* (`.acr-banner`),
+  not modified. `fleet-pages.css`, `fleet-sections.css` untouched.
+- **No migration, no schema change, no new endpoint.** One response shape
+  changes, in this stream's own routes file, with one caller.
+- **No progress bar, no "N of 3 complete", no per-row primary action.** §13.2 D:
+  completion framing on this surface invites arming a fleet that is off by
+  operator constraint.
+- **Nothing that enables anything.** No charter, no dial, no cron, no
+  `AgentDefinition` row — including to make a screenshot look better.
+
+---
+
+## 13.10 — Proposed build order
+
+| Phase | What | Shared files |
+|---|---|---|
+| **S2.a** | The API: `conditions[]` replaces `blockers[]`, composed once server-side, with `owner` | none — own routes file |
+| **S2.b** | The readout: three rows, state chips, numbers inline, real tool names, the chevron and the grid retired, the `24h` tile removed | none |
+| **S2.c** | The states: loading skeleton at real height (kills the 347px shift), the failed-read readout, halted, outside-pointer, and **the open pipe** — each exercised per §13.7 | none |
+| **S2.d** | The S2⇄S3 collapse contract + the tooltip pass (flip extended, keyboard, 200% zoom) and the measured close-out | none |
+
+---
+
+## 13.11 — Sources
+
+**Readiness and conditions** — [Argo CD health status][argo] ·
+[Kubernetes Pod conditions][k8s] · [Vercel Checks][vercel] ·
+[GitHub environment protection rules][gh]
+
+**Deliberately-off vs broken** — [LaunchDarkly flag targeting][ld] ·
+[Statuspage top-level status calculation][statuspage]
+
+**Checklists and empty states** — [Stripe account activation][stripe] ·
+[GitLab Pajamas empty states][pajamas] · [GitLab Pajamas contextual help][pajamashelp]
+
+**Status vocabulary and colour** — [status-page design patterns and the
+colour-alone failure][statusdesign]
+
+**Numbers and tiles** — the `dataviz` skill: `references/choosing-a-form.md`
+(is it even a chart), `references/marks-and-anatomy.md` (the stat-tile contract,
+proportional vs tabular figures), `references/anti-patterns.md` (status colour
+is reserved)
+
+**In repo** — Part 12 (the S1 study this one continues) ·
+`reference_web_verify_without_local_api` (the stub method and its two traps) ·
+`reference_ds_token_triplet_collision` (whole colours under `.fleet-surface`)
+
+[argo]: https://argo-cd.readthedocs.io/en/stable/operator-manual/health/
+[k8s]: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/
+[vercel]: https://vercel.com/docs/deployments/checks
+[gh]: https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments
+[ld]: https://launchdarkly.com/docs/home/flags/toggle
+[statuspage]: https://support.atlassian.com/statuspage/docs/top-level-status-and-incident-impact-calculations/
+[stripe]: https://docs.stripe.com/get-started/account/activate
+[pajamas]: https://design.gitlab.com/patterns/empty-states/
+[pajamashelp]: https://design.gitlab.com/usability/contextual-help
+[statusdesign]: https://www.pttrns.com/status-page-design-patterns-how-the-best-saas-companies-communicate-downtime/
