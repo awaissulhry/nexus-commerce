@@ -1967,3 +1967,78 @@ stream will want to know the path was exercised on production at
 
 **In-repo, measured** · live Vercel + Railway at 1728×962, 2026-08-08 03:26–03:35 CEST ·
 `apps/api/scripts/_sba-closeout.mts` · `GET /api/agent/fleet/{timeline,state,charters,schedule}`
+
+---
+
+## 18.11 — S1R execution record (2026-08-08)
+
+**Shipped in `7de406df1`.** `+1776 / −402` across six files: the shell's `aside`
+slot, `ActivityClient.tsx`, `activity.css`, `page.tsx`, the verification stub,
+and this study.
+
+| File | What |
+|---|---|
+| `app/fleet/_shell/FleetPageShell.tsx` | `aside?: ReactNode` as the header's second flex child. Claim taken and released in locks §3; the other five shell pages pass nothing and render byte-identically |
+| `app/fleet/activity/ActivityClient.tsx` | `<Freshness>` · the scope block and its seven states · both banners moved · `FleetPageShell` moved into the client (the instrument needs client state, so a server component cannot pass it) |
+| `app/fleet/activity/activity.css` | the whole S1 block rewritten; `.sba-asof`, `.sba-refresh` and `.sba-banner` deleted |
+| `app/fleet/activity/page.tsx` | the `.sba-page` root that scopes the page-local overrides |
+| `apps/api/scripts/_sba-stub.mts` | `/charters`; `STUB_HALT` / `STUB_FAIL` / `STUB_EMPTY=1\|selftest`; real CORS |
+
+### Measured on live Vercel + Railway, 1728×906
+
+| §18.1 defect | Before | After |
+|---|---|---|
+| Distinct font sizes in S1 | 4 (20 · 13 · 12 · 11.5) | **3** (20 · 13 · 12), and 12px only inside the bordered instrument |
+| WCAG AA failures | **3** — 2.39 · 2.39 · 4.41 | **0**; worst is 5.00 |
+| Freshness stamp | `as of 03:25:22`, 11.5px, 2.39:1 | `● Live · updated 5s ago`, ticking, 5.68:1 |
+| Dead space in the header row | **1187px** | **0** — instrument right edge flush with the content edge |
+| Distance from Refresh to its subject | 1080px | in the same bordered object as the readout |
+| "is anything still happening?" | unanswered | *"Nothing new for 7 hours — no worker is switched on."* |
+| What the default view hides | unstated | *"86 more from the self-test are hidden. **Show them**"* |
+| Halt banner | never rendered | verified, under the title block, `Open Controls →` right-aligned |
+
+**States verified against the production database**, all seven: loading ·
+normal · filtered (`8 events across 3 runs … Filtered from 33.`) · halted ·
+failed refresh · stale · zero events, both branches. The three that real data
+cannot produce were simulated **read-only in the stub** — nothing written, no
+charter enabled, production untouched.
+
+**Live on prod:** `Live → Not updating → Refresh → Live · updated 2s ago`;
+header `33 events across 14 runs` above footer `Showing 33 of 33`; tick the
+self-test and both move to 119 together (86 + 33 = 119); runs grain + one worker
+chip reads `3 runs` above a grid of 3. Three S1 controls, none unnamed, none
+keyboard-unreachable; no horizontal overflow; at a 652px content width the
+instrument wraps below the title instead of crushing it.
+
+### Four defects found in the browser. None was visible to `tsc`.
+
+1. **A failed FIRST read left an empty paragraph** where the sentence belongs —
+   `shown` null, `loading` false, so every branch was false and the block
+   silently grew a 19.5px gap. The `<p>` is now rendered only when it has
+   something to say.
+2. **"Nothing new for 2 minutes"** — a strange thing to say two minutes after
+   something happened; it reads as a complaint about a page that is working.
+   Under a quarter of an hour the same fact is now phrased as news. Found by
+   watching a sibling session run the bid tuner live.
+3. **`#6b7684` measures 4.26:1 on this page.** It passes against white and
+   fails against the `#f4f6f9` it actually sits on — which is the argument for
+   measuring every colour *in place* rather than on paper.
+4. **`.sba-inlinebtn` was 4.40:1**, just under the floor, and S1's *Show them*
+   is one of them. Darkened to 5.40; S2 and S4's uses get it too.
+
+**One environment trap worth banking**, because it cost twenty minutes and
+looked exactly like a code defect: browsing the dev server at **`127.0.0.1`
+instead of `localhost`** makes Next refuse its own dev resources
+(*"Blocked cross-origin request to Next.js dev resource"*), so the page
+server-renders and **never hydrates** — no effects, no fetches, no React fibers
+on the DOM, and a header frozen on *Reading…* with a clean console. And a
+Chrome-side sibling: `localhost:3010 → 127.0.0.1:8099` is blocked by Private
+Network Access even with `access-control-allow-origin: *`. The stub now echoes
+the origin, answers the preflight and sends
+`access-control-allow-private-network`. **Use one hostname for both ends.**
+
+### The through-line, unchanged and now at 21
+
+Twenty-one defects have been found on this page. **Not one has been a type
+error.** Four more today: an empty paragraph, a sentence that reads as a
+complaint, and two colours that pass on paper and fail on the page.
