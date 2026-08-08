@@ -2067,6 +2067,423 @@ passed.
 
 ---
 
+## PART 12 — NAF.SB.AS-S2R · Section 2 restudied: the create drawer
+
+**Status: AWAITING OPERATOR APPROVAL. No code written.**
+
+Scope: `CreateAssignment.tsx` — the drawer, its four steps, both pickers, the
+pre-flight panel and the bulk receipt. Not the list (Part 11, done), not the
+detail page. **The model is unchanged**: same workers, same target kinds, same
+refusals, same endpoints, same words for what a run will read.
+
+### 12.1 · PHASE 0 — the audit, measured on the deployed page
+
+Method: the live Vercel build at 1728×906 and in a same-origin 896px frame,
+driving the real drawer against the real account — **219 campaigns, 86 of them
+ENABLED**. Two assignments were created through the UI to reach the receipt
+screen and removed with its own Undo; prod ended at zero rows and **nothing was
+started**.
+
+Eleven findings. Two of the operator's ten are wrong, and both are recorded as
+wrong rather than quietly built.
+
+#### D1 · The wheel trap, quantified — and there are two of them
+
+The campaign list is a **210px window onto 1940px of content: it shows 10.8% of
+itself.** It sits at y=561–771, which is **26.9% of the visible drawer body**,
+and while the pointer is anywhere in that band the wheel drives the list, not
+the drawer — which still has **330px hidden below it**, holding the pre-flight,
+the brief and the deadline.
+
+**The operator found one; there are two.** `PortfolioPicker` has its own
+`maxHeight: 230, overflowY: auto` (`CreateAssignment.tsx:853`). Same defect,
+same fix, and it would have survived a repair aimed only at the campaign list.
+
+Worth naming because the obvious fix is the wrong one: `overscroll-behavior:
+contain` prevents an inner scroller from *chaining* to its parent. That is not
+this bug. This is **capture** — the inner region consumes a gesture aimed at the
+outer one — and no CSS property fixes it. Only removing the inner scroller does.
+
+#### D2 · 59% of the drawer is empty at the moment it opens
+
+Drawer body 782px tall; content on open **321px**. **461px — 59% — is blank**,
+and the operator's first impression of the page's primary action is mostly
+nothing. It is worse at the end: the receipt screen renders ~100px of content in
+the same 782px body, **87% empty**.
+
+#### D3 · A keyboard cannot reach this drawer: 41 Tab presses
+
+Measured: **63 focusable elements on the page, and the first one inside the
+drawer is number 41.** Because `Drawer.tsx` portals to the end of `<body>`,
+moves focus nowhere on open (`document.activeElement` is `BODY`), traps nothing,
+and leaves the page behind fully tabbable. The panel also carries
+`role="dialog" aria-modal="true"` with **`aria-labelledby` and `aria-label` both
+null — the dialog has no accessible name.**
+
+This is the most serious finding in the audit and **it is not in this page's
+code** — it is in the shared `Drawer.tsx`, which **22 files render**.
+
+#### D4 · The picker hides 53% of what it offers, silently
+
+`options.slice(0, 40)` (`:745`). The account has **219 campaigns, 86 ENABLED,
+and the picker renders 40** — so **46 running campaigns (53%) cannot be reached
+at all** unless the operator guesses a substring that matches one. Nothing on
+screen says a cap exists. This is the same defect class as the list's silent
+200-row cap that S1.c made speak, in a worse place: a list can be scrolled, a
+missing option cannot be discovered.
+
+#### D5 · Nine text roles below 4.5:1 — including the text you choose by
+
+| Role | Size | Colour | Ratio |
+|---|---|---|---|
+| worker description ×3 (`.as-workerbtn .ds`) | 11.5px | `#8d97a6` | **2.82–2.95** |
+| every `.as-hint` (5 of them) | 11.5px | `#8d97a6` | **2.82–2.95** |
+| drawer subtitle | 12px | `#8a93a1` | **3.10** |
+| DateField placeholder | 13px | `#8a93a1` | **3.10** |
+
+The worst offenders are the three sentences that describe what each worker does
+— **the only text on the screen that tells you which one to pick.**
+
+#### D6 · Four levels of nesting to reach what the worker will read
+
+Measured depth from the drawer body to the `<details>`: **3** (step → pre-flight
+panel → details), four counting the drawer. NN/g's rule is explicit: *"designs
+that go beyond 2 disclosure levels typically have low usability because users
+often get lost."*
+
+#### D7 · Two words for one action, 700px apart
+
+On the receipt screen the footer says **Close** and the panel says **Done**, and
+**both call `onCreated`** — byte-identical behaviour, two labels, and a
+first-timer has to guess whether they differ. Meanwhile the header still reads
+*"New assignment · One worker, one thing to look at"* on a screen that is a
+receipt for work already done.
+
+#### D8 · The one hint about what is missing is attached to the one element that cannot show it
+
+The disabled Create button carries `title="Pick a worker, and a target if you
+chose one."` **A disabled button suppresses pointer events in every major
+browser, so that tooltip can never appear.** There is no other inline
+validation: the form's only feedback is the button being grey.
+
+#### D9 · Thirteen inline-styled elements and six type sizes
+
+`style={{…}}` on 13 nodes (`maxHeight`, `marginTop`, `paddingLeft`,
+`lineHeight`, `cursor`, `width`). None trips the DS ratchet, which greps
+`fontSize` and hex — they are exactly the pattern the design-system rule exists
+to prevent, one gate short of being caught. Six distinct font sizes in one
+drawer: 11.5 / 12 / 12.5 / 13 / 15 / 16.
+
+#### D10 · **Suspicion 7 is wrong: 560px is wide enough.** Do not widen it
+
+The longest ENABLED campaign label in the account is 68 characters —
+`IT_DEF_Gale_"Targets=All-Asins"_"Ads=All-ASINs-Except-Black-XL" · IT` — and it
+measures **498px inside a 498px option**: `scrollWidth === clientWidth`, **0 of
+40 options truncated**, and 0 truncated when searched for directly. Widening the
+drawer would solve nothing and cost the list behind it. Recorded so it is not
+re-proposed.
+
+#### D11 · **Suspicion 2 is half wrong: the numbers do not lie, the length does**
+
+Steps are numbered 1–4 and always in that order; nothing renumbers. What
+actually happens is that the form **grows from 321px to 1112px** the moment a
+worker is picked, because steps 2–4 do not exist before it. The defect is not a
+false number — it is that at no point can you see how much task is left.
+
+---
+
+### 12.2 · PHASE 1 — how the world lets someone create a scoped piece of work
+
+| Product | Minimum to create | Shape | Notable |
+|---|---|---|---|
+| **Linear** | **A title.** `C` opens the modal anywhere; everything else is optional and set with keyboard shortcuts inside it | one modal, no steps | Esc offers **save as draft** rather than discarding. The minimum-viable-object model: create now, refine later |
+| **GitHub · assign to Copilot** | **Assign the issue.** Optional prompt field for extra context | no form at all — a field on an object that already exists | The work item is created *by delegating an existing object*, not by filling a form |
+| **Google Ads** | goal → type → settings → ad groups → ads → **review** | true wizard, 6 steps, and **step 6 is a review page that lists what you configured and flags what is missing** | The only researched flow with a genuine commit-time summary |
+| **Jira** | project + type + summary, then a screen whose fields are admin-configurable | one long screen | Documented as a source of *"cognitive overload"*; the Navigator's field picker only exposes ~10 fields, so the rest are unreachable |
+| **Amazon Ads** | campaign settings, then bulk operations for scale | form + spreadsheet | At real scale it gives up on the picker entirely and hands you a bulksheet |
+| **Zapier / n8n / Make** | pick a trigger app, then configure | staged, one step per node | Each step's configuration is revealed only when its node is selected |
+
+**Five findings, ranked by what they change here:**
+
+1. **Red Hat's UX research compared exactly our question and the wizard lost.**
+   Progressive form (all steps on one surface) vs wizard: the progressive form
+   was **faster in both tasks**, rated **easier**, and preferred **6 of 7** for
+   sequential flows, **6 of 7** for familiar tasks, and still **5 of 7** for
+   tasks with 10+ steps. Ours has two decisions.
+2. **NN/g draws the line at two disclosure levels** — *"designs that go beyond 2
+   disclosure levels typically have low usability"* — and says staged disclosure
+   (a wizard) *"is problematic when the steps are interdependent and users must
+   alternate between them."* **Our steps are interdependent by construction**:
+   the worker determines which target kinds exist, the target determines the
+   pre-flight, and changing the worker can invalidate a target already chosen.
+   A wizard would force the operator backwards through it.
+3. **Google Ads is the one product that shows consequences before commit**, and
+   it spends a whole step on it. We cannot afford a step — but we can put the
+   consequence *next to the button*, which is the same idea at one-tenth the
+   cost.
+4. **At 200+ options every source says search-first.** A combobox that filters
+   beats a scrolling list, and the guidance is explicit that for long lists you
+   must **expose the fact that more exist**, or they are never seen.
+5. **Validation on blur, never as you type.** Baymard/NN/g-aligned consensus:
+   on-blur beats both alternatives; as-you-type produces "premature error
+   blindness" and measurably worse completion. And the thing this drawer needs
+   is not stricter validation — it is a *visible statement of what is missing*.
+
+---
+
+### 12.3 · What this section IS
+
+**A two-decision form wearing four labels.** Everything that is actually
+required is *which worker* and *what it looks at*. The brief and the deadline
+are optional and always have been; the pre-flight is a statement, not an input;
+the bulk chooser only appears when the operator has already done something
+ambiguous.
+
+So the design target is not "a better wizard". It is: **make the two decisions
+obvious, make their consequence visible at the moment of commit, and stop the
+optional half from looking like homework.**
+
+---
+
+### 12.4 · The flow decision — one progressive form, and the DS Stepper is declined
+
+**Decision: keep a single scrolling form with numbered sections. No stepper, no
+pagination, no multi-screen wizard.** Four reasons, in order of weight:
+
+1. **The research measured this exact comparison and the progressive form won**
+   (§12.2 finding 1) — on speed, on perceived difficulty, and 6-of-7 on
+   preference.
+2. **Our steps are interdependent**, which is the specific case NN/g names as
+   the one where staged disclosure fails.
+3. **A wizard would make the shortest path longer.** The common case is one
+   worker, one campaign, no brief, no deadline — two decisions. Paginating two
+   decisions into four screens adds three commits to a task that has one.
+4. **`Stepper` is display-only.** Its whole surface is `steps · current ·
+   className`; it renders badges and connector lines and owns no navigation
+   (`design-system/components/Stepper.tsx`). Adopting it would draw a progress
+   bar over a form that is not paginated — a picture of steps we are not making
+   the operator take. It is used by the two genuine wizards in this app
+   (`list-wizard`, `EbayImportWizard`) and it is right there and wrong here.
+
+**What replaces the sense of progress the operator is missing (D11):** all four
+section headings render **from the moment the drawer opens** — 3 and 4 as quiet,
+collapsed one-line rows marked *optional* until they become active. The shape of
+the task is legible at t=0, the form stops growing under the reader, and D2's
+461px of blank is spent on something true.
+
+---
+
+### 12.5 · The scroll-ownership rule
+
+> **The drawer body is the only scroll container inside the drawer. No
+> descendant of it may scroll, ever.**
+
+That is the whole fix for D1, and it is a rule rather than a patch because the
+defect appeared twice independently (campaigns and portfolios) and would
+reappear the third time somebody needs a long list in here.
+
+Consequences, each of which is a real design change and not a CSS tweak:
+
+- **The campaign picker becomes search-first and renders inline**, at most 8
+  results, with no `maxHeight` and no `overflow`. Eight rows is 320px of drawer
+  — long enough to choose from, short enough that the pre-flight stays reachable
+  by the same gesture that moves everything else.
+- **The portfolio picker renders all 10 in full.** It never needed a scroller;
+  it has one because the campaign picker did.
+- **The pre-flight never scrolls**, and neither does the receipt.
+
+**Verification is mechanical**, which is the point: *count the elements inside
+`.h10-ds-drawer` whose computed `overflow-y` is `auto|scroll` and whose
+`scrollHeight > clientHeight`. The answer must be exactly one — the body.*
+
+---
+
+### 12.6 · The picker at 86 running campaigns
+
+The list is search-first, and **it states its own arithmetic** — the failure in
+D4 was silence, not the cap:
+
+- Empty query → the first 8 alphabetically, above the line
+  **"86 campaigns are running. Type to narrow — showing 8."**
+- With a query → up to 8 matches, **"12 match "gale" — showing 8."**
+- Zero matches → **"Nothing matches "xyz". 86 campaigns are running; 133 more
+  are paused."** with a one-click *include paused* toggle, since that is the
+  actual reason a real campaign appears to be missing.
+- Ranking stays `@/lib/option-search` — plain substring returns nothing for
+  `GALE | IT | Broad` (`reference_ads_picker_search`).
+- **Selected items are never hidden by a filter.** Chips above the search keep
+  their position regardless of the query, which is already true and is worth
+  keeping when the list stops scrolling.
+
+**Explicitly not built:** virtualization. At 86 rows with 8 rendered it would be
+machinery for nothing, and the falsifier is written down — if this account ever
+exceeds ~2,000 campaigns, the picker becomes a virtualized combobox and this
+paragraph is the reason it was not one sooner.
+
+---
+
+### 12.7 · The disclosure budget, and where the consequence goes
+
+**Two levels, never three** (NN/g). Level 1 is the form. Level 2 is the single
+disclosure *"What will it read?"*. The pre-flight panel stops being a level: its
+headline sentence — *"It will look at GALE BROAD DE only — nothing else in your
+account"* — becomes a plain line in the form, and the disclosure becomes its
+sibling rather than its child. Measured target: **max depth 4 → 2**.
+
+**And the consequence moves next to the button.** A commit bar above the footer
+actions, always visible once a worker is chosen:
+
+> **Creates 1 assignment** · Negative miner on GALE BROAD DE · **nothing runs
+> until you start it**
+
+That is Google Ads' review step compressed to one line and zero clicks. When the
+form is not yet valid the same bar carries the reason **as text, not as a
+tooltip on a disabled button** (D8):
+
+> **Pick a campaign to continue** — Negative miner is chosen.
+
+The button stays disabled — it cannot succeed — but the reason is now readable
+by everyone, including the keyboard and screen-reader users who could never
+reach a `title` on a disabled control.
+
+---
+
+### 12.8 · Every state, written out
+
+| State | What the drawer says |
+|---|---|
+| **Open, nothing chosen** | Four headings; 1 active; 2–4 collapsed and marked optional where they are. Commit bar: *"Pick a worker to begin."* |
+| **Worker chosen, no target** | Kind chips; the sentence naming what this worker *can* be pointed at, and what it cannot and why (already shipped, kept verbatim). Commit bar: *"Pick a campaign to continue."* |
+| **Worker + whole account** | Valid. Commit bar: *"Creates 1 assignment · Negative miner on your whole account."* |
+| **Target picked** | Pre-flight line + the one disclosure. Commit bar names the target. |
+| **Several targets picked** | The AS.6 chooser, unchanged in meaning. Commit bar switches to *"Creates 3 assignments"* / *"Creates 1 covering 3"* to match the chosen reading. |
+| **Over the cap of 25** | The existing sentence, kept: refused, never truncated. Commit bar: *"26 is more than 25 — remove some, or make one covering all of them."* |
+| **A worker/kind pair the evidence layer refuses** | The API's own refusal sentence, rendered where the pre-flight line is. Never a greyed control with no reason. |
+| **Submitting** | The button says *Creating…*; nothing else moves. |
+| **Created — one** | Drawer closes; the list behind it already refreshes. No receipt for a single row: the row IS the receipt. |
+| **Created — several** | The receipt screen, with **its own title** (*"3 assignments created"*), **one** primary action, and Undo. |
+| **Partly refused** | Receipt lists created and refused separately with each refusal's own sentence — shipped behaviour, kept, because closing on a partial success would hide the refusals. |
+| **Network/API error** | The error sentence stays in the form; nothing is cleared; the operator's choices survive. |
+
+---
+
+### 12.9 · Tooltip and microcopy inventory
+
+Rule, inherited from Part 11: **every control has a tooltip or a visible
+sentence, and it says what the thing does or why it cannot be used — never a
+restatement of its label.**
+
+| Element | Copy | Status |
+|---|---|---|
+| Worker card | its description, at **≥4.5:1** | shipped, contrast fails today |
+| *"N other workers cannot be assigned…"* | shipped sentence + link to Workers | keep |
+| Kind chip · One campaign / marketplace / portfolio | *"Narrow this worker to one {kind}. Everything else in your account is out of scope for this job."* | **new** |
+| Kind chip · The whole account | *"No narrowing. It reads everything it normally reads."* | **new** |
+| A kind this worker cannot honour | absent, with the printed reason | shipped |
+| Search box | *"Every word you type must appear, in any order — so "gale broad" finds "GALE \| IT \| Broad \| Brand"."* | **new** |
+| *Only campaigns that are running* | *"Most of this account is paused. Untick to include the other 133."* | **new** (count is live) |
+| Result count line | *"86 running · showing 8. Type to narrow."* | **new** |
+| Selected chip ✕ | *"Remove this one"* | shipped as `title="Remove"`, keep |
+| Pre-flight line | the headline sentence | shipped, keep verbatim |
+| *What will it read?* | disclosure; contents unchanged | shipped, re-parented |
+| *Show me how much there is* | *"Reads the last 60 days of your search terms and may take a few seconds. It calls no AI and writes nothing."* | shipped, keep |
+| Spend ceiling sentence | shipped | keep |
+| Brief box + 3 example chips | shipped (S1 follow-up) | keep |
+| Deadline field | *"A deadline colours the row and moves it up the list. It never starts anything and never stops anything."* | shipped, keep |
+| Commit bar | §12.7 | **new** |
+| Create button | *"Creates it. It will not run until you start it."* | shipped, keep |
+| Receipt · single action | *"Back to your assignments"* | **new**, replaces Close/Done |
+| Receipt · Undo | *"Deletes the ones just created. Possible only because none of them has run."* | shipped, keep |
+
+---
+
+### 12.10 · What this section must never become
+
+- **A charter editor.** No system prompt, no model, no observation-key picker,
+  no budget, no autonomy dial (Part 5, unchanged and non-negotiable).
+- **A campaign manager.** The picker selects; it never edits, pauses or reports.
+  If it grows a metric column it has become the ads console.
+- **A second Workers page.** The worker list here is a picker with a name and a
+  one-line description. A second sortable attribute makes it the roster.
+- **A place that starts anything.** Create is not Start, here or anywhere on
+  this page. The fleet is off and this drawer must never be the thing that
+  changes that.
+- **A wizard.** §12.4 decided it once, with evidence; reopening it needs new
+  evidence, not new taste.
+
+---
+
+### 12.11 · Build order — five independently shippable phases
+
+**S2.a — Scroll ownership.** Both inner scrollers removed; campaign picker
+search-first with 8 inline results and the honest count line; portfolio picker
+rendered in full. *Closes D1, D4.*
+
+**S2.b — The shape of the task.** All four headings from open, 3–4 collapsed and
+marked optional; the form stops growing under the reader. *Closes D2, D11.*
+
+**S2.c — The commit bar.** Consequence next to the action; the missing-input
+reason as visible text; one word for one action; the receipt gets its own title
+and single primary action. *Closes D7, D8.*
+
+**S2.d — Legibility.** Nine sub-AA roles fixed page-locally under `.as-page`;
+type scale to ≤4 sizes; 13 inline styles to classes; the pre-flight flattened to
+two disclosure levels. *Closes D5, D6, D9.*
+
+**S2.e — Keyboard and screen reader. NEEDS AN OPERATOR DECISION (§12.13).**
+Initial focus, focus trap, accessible name. *Closes D3.*
+
+---
+
+### 12.12 · Acceptance criteria — measured on the deployed page
+
+Every number's "before" was measured in §12.1, not estimated.
+
+| # | Criterion | Before | Target |
+|---|---|---|---|
+| 1 | Scroll containers inside the drawer | **2** | **0** (the body is the only one) |
+| 2 | Drawer body blank on open | **461px, 59%** | **≤ 15%** |
+| 3 | Campaign options reachable without guessing a substring | **40 of 86 (47%)** | **100%**, and any cap stated in words |
+| 4 | Text roles below 4.5:1 | **9** | **0** |
+| 5 | Max content-nesting depth to any information | **4** | **≤ 2** |
+| 6 | Distinct font sizes in the drawer | **6** | **≤ 4** |
+| 7 | Inline `style` attributes in the drawer | **13** | **0** |
+| 8 | Words for the same action on the receipt | **2** (Close / Done) | **1** |
+| 9 | Reason the primary action is unavailable, visible without hover | **no** | **yes** |
+| 10 | Tab presses to reach the first control in the drawer | **41** | **1** (focus enters on open) — S2.e only |
+| 11 | Dialog has an accessible name | **no** | **yes** — S2.e only |
+| 12 | Drawer width | 560px, **0 of 40 labels truncated** | **unchanged, still 0** (regression guard — do not widen) |
+| 13 | Horizontal scroll at 896px | none | **none** |
+
+---
+
+### 12.13 · Cross-session, and the one decision I need
+
+**S2.a–S2.d touch only `app/fleet/assignments/**`.** No shared file, no claim,
+no backend change, no migration.
+
+**S2.e is the exception and it is your call.** The keyboard defect (D3) lives in
+`design-system/components/Drawer.tsx`, which **22 files render**. Two ways:
+
+- **(a) Fix it in `Drawer.tsx` — recommended.** Move focus to the panel on open,
+  trap Tab inside it, restore focus to the opener on close, and give the dialog
+  an accessible name from its own `title`. Additive and defaulted; every drawer
+  in the app becomes keyboard-operable. **But it is a behaviour change on 22
+  surfaces**, and that is exactly the kind of thing the locks protocol says to
+  ask about rather than assume.
+- **(b) Fix it page-locally.** Only this drawer improves; the other 21 stay
+  unreachable; and I would be writing a focus trap inside a feature component,
+  which is where they rot.
+
+I recommend (a), taken as its own commit with the claim recorded in locks §3, so
+it can be reverted independently of everything else in this engagement.
+
+**Noted, not claimed:** `Drawer.tsx` already carries the `overlay` prop for
+exactly the confirm case this drawer would need — Section 1 checked before
+extending a shared component and so has this. Nothing here needs a new prop.
+
+---
+
 ## Sources
 
 **RPA queues** — [UiPath queues](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/about-queues-and-transactions) · [item statuses](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/transaction-statuses) · [queue triggers](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/queue-triggers) · [Action Center](https://docs.uipath.com/action-center/automation-cloud/latest/user-guide/managing-actions) · [Blue Prism work queues](https://docs.blueprism.com/en-US/bundle/blue-prism-enterprise-7-3/page/user-guide/control-room/ug-cr-queue-management.htm) · [Automation Anywhere WLM](https://docs.automationanywhere.com/bundle/enterprise-v2019/page/enterprise-cloud/topics/aae-client/bot-creator/using-workload/cloud-queues.html) · [Power Automate work queues](https://learn.microsoft.com/en-us/power-automate/desktop-flows/work-queues)
@@ -2080,5 +2497,7 @@ passed.
 **Ads entity scoping** — [Amazon Ads bulk operations](https://advertising.amazon.com/help/GHTRFDZRJPW6764R) · [Google Ads automated rules](https://support.google.com/google-ads/answer/2472779) · [Shopify Flow](https://help.shopify.com/en/manual/shopify-flow)
 
 **List-page design (Part 11, AS-S1R)** — [Linear display options](https://linear.app/docs/display-options) · [Sentry issues](https://docs.sentry.io/product/issues/) · [Datadog monitor list](https://docs.datadoghq.com/monitors/manage/) · [UiPath queue item statuses](https://docs.uipath.com/orchestrator/docs/queue-item-statuses) · [Temporal Web UI](https://docs.temporal.io/web-ui) · [Airflow UI](https://airflow.apache.org/docs/apache-airflow/stable/ui.html) · [**Airflow issue #66946** — the bar chart you cannot count, sort or act on](https://github.com/apache/airflow/issues/66946) · [GitHub Copilot agent sessions](https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/manage-and-track-agents) · [GitHub agents panel](https://github.blog/changelog/2025-08-19-agents-panel-launch-copilot-coding-agent-tasks-anywhere-on-github-com/) · [Vercel redesigned deployments list](https://vercel.com/changelog/redesigned-deployments-list) · [Carbon data table](https://carbondesignsystem.com/components/data-table/usage/) · [Carbon empty states](https://carbondesignsystem.com/patterns/empty-states-pattern/) · [WCAG 1.4.1 Use of Color](https://www.w3.org/WAI/WCAG21/Understanding/use-of-color) · [WCAG content on hover or focus](https://www.w3.org/WAI/WCAG21/Understanding/content-on-hover-or-focus) · [Jira column/field overload](https://community.atlassian.com/forums/Jira-Cloud-Admins-discussions/Rethinking-Issue-View-Field-Configuration/td-p/2916049)
+
+**Create-flow design (Part 12, AS-S2R)** — [Linear create issues](https://linear.app/docs/creating-issues) · [GitHub · assign an issue to Copilot](https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/kick-off-a-task) · [Google Ads step 6 — review and publish](https://support.google.com/google-ads/answer/15864935) · [Google Ads campaign creation steps](https://support.google.com/google-ads/answer/15864533) · [**Red Hat / PatternFly — progressive form vs wizard**](https://medium.com/patternfly/comparing-web-forms-a-progressive-form-vs-a-wizard-110eefc584e7) · [**NN/g — progressive disclosure** (the two-level rule, and staged disclosure with interdependent steps)](https://www.nngroup.com/articles/progressive-disclosure/) · [Jira field-configuration overload](https://community.atlassian.com/forums/Jira-Cloud-Admins-discussions/Rethinking-Issue-View-Field-Configuration/td-p/2916049) · [W3C APG combobox patterns](https://www.w3.org/WAI/ARIA/apg/patterns/combobox/examples/combobox-autocomplete-list/) · [Combobox vs multiselect vs listbox at scale](https://smart-interface-design-patterns.com/articles/combobox-multiselect-listbox/) · [Baymard — inline form validation](https://baymard.com/blog/inline-form-validation) · [Amazon Ads campaign manager + bulk operations](https://advertising.amazon.com/library/news/introducing-improved-campaign-manager-features) · [overscroll-behavior and dialog scroll containment](https://css-tricks.com/prevent-a-page-from-scrolling-while-a-dialog-is-open/)
 
 **In repo** — `docs/2026-08-07-naf-sb-fleet-pages.md` §7 · `docs/2026-08-07-naf-sbw-workers-page.md` · `docs/2026-08-07-naf-wf-workflows-page.md` · `docs/2026-08-07-naf-sb-session-locks.md` · `docs/AGENT_FLEET.md` Parts 4, 6, 7 · `apps/api/src/services/agent-fleet/agent-executor.ts` · `charter-registry.ts` · `orchestrator.ts` · `observations/scope-filter.ts` · `apps/api/src/services/agents/approval-gate.service.ts` · `apps/api/scripts/_sbas-assignment-truth.mts`
