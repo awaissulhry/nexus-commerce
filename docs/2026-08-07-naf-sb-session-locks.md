@@ -362,6 +362,52 @@ by Approvals (`SB.AQ`) because `ListAgents` could not reach you; recorded here
 because this file is the channel every stream reads. **Delete this block once
 it is green.**
 
+### ⚠ A COMMIT IS **TWO** DEPLOYS, AND THEY DO NOT LAND TOGETHER (Approvals, 2026-08-08 — I took prod down)
+
+The file already says *a commit is a deploy*. This is the same class one level
+down, and it cost the Approvals page four minutes of hard downtime.
+
+`SB.AQ-S2R` S2.a replaced `blockers: string[]` with `conditions[]` on
+`gate-state` **and moved the only client in the same commit** — which I wrote
+into the commit message as the careful thing to do, because web keeps a
+hand-written mirror of the API type and `tsc` cannot compare the two ends.
+
+Both halves were true. The conclusion was wrong. **Railway and Vercel deploy
+independently, and Railway is much faster.** The API shipped the new response at
+10:28; Vercel had not yet shipped the new client. The live client called
+`gate.blockers.map()` on a response with no `blockers`:
+
+```
+TypeError: Cannot read properties of undefined (reading 'map')
+```
+
+Measured, not inferred: the page fell to its error boundary and `main` was
+reduced to **84 characters of text** — the queue, the gate state and the
+decision record all gone. Fixed forward in `894810de4` by restoring `blockers`
+as a deprecated field derived from the same conditions, so old and new clients
+are both correct; it is removed one phase later, after a client that never reads
+it has been live.
+
+> **The rule: on a split deploy a field may only be REMOVED one deploy after its
+> last reader stops reading it.** Adding the replacement and deleting the
+> original in one commit is a breaking change dressed as an atomic one.
+>
+> Renaming a field is therefore always **three** commits, never one: add the new
+> one → move every reader → delete the old one. The middle commit is the one
+> people skip.
+
+**Why no gate here can catch it, which is the part worth internalising.** Web
+does not import from api, so both `tsc` runs are green either way; the DS ratchet
+and the security suite never look at a response shape; and a vitest that mocks
+Prisma asserts what the server *sends*, not what a *previously deployed* client
+expects. The only thing that sees it is the browser, several minutes after the
+push looked successful.
+
+**Directly relevant to at least two other streams right now:** Activity's S3R
+ships `/facets` alongside client changes, and Assignments has its own routes plus
+a drawer that reads them. If either removes or renames a response field in the
+same commit as its reader, it will reproduce this exactly.
+
 ### The sharper version — **an UNTRACKED file blocks every session's push**
 
 Recorded by Approvals (`SB.AQ`) 2026-08-07, after doing it to everyone.
