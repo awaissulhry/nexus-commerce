@@ -65,6 +65,15 @@ const MARKETPLACES = ['IT', 'DE', 'FR', 'ES']
 /** Mirrors the server's BULK_CAP; the server refuses over it rather than truncating. */
 const BULK_CAP = 25
 
+/**
+ * Three briefs, from the master document's own examples. They replace a
+ * prefill: an example you choose is a decision, a prefill is a default nobody
+ * decided. Deliberately short and deliberately not worker-specific — a
+ * per-worker list would drift the day a charter's wording changed, which is
+ * exactly how the prefill went wrong.
+ */
+const WANT_EXAMPLES = ['Find wasted spend', 'Propose bids', 'Audit structure']
+
 export function CreateAssignment({
   onClose,
   onCreated,
@@ -85,7 +94,6 @@ export function CreateAssignment({
     prefill ? [{ id: prefill.id, label: prefill.label }] : [],
   )
   const [wantBack, setWantBack] = useState('')
-  const [wantBackTouched, setWantBackTouched] = useState(false)
   const [dueAt, setDueAt] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -118,11 +126,25 @@ export function CreateAssignment({
   const assignable = (workers ?? []).filter((w) => !w.refusal)
   const refused = (workers ?? []).filter((w) => w.refusal)
 
-  // Prefill the brief from the worker's own description — editable and
-  // clearable. A blank required box is where a first-timer stalls.
-  useEffect(() => {
-    if (worker && !wantBackTouched) setWantBack(worker.description ?? '')
-  }, [worker, wantBackTouched])
+  /**
+   * NAF.SB.AS-S1R — the brief is NOT prefilled, and that is the change.
+   *
+   * It used to fill itself from `worker.description`, which meant every
+   * assignment made from the same worker carried an identical sentence — so the
+   * list's second line was the same grey text on every row, looking like
+   * information and carrying none. That measured as the reason a row was 56px
+   * instead of 38px, i.e. five rows of visible list per screen spent saying
+   * nothing (study §11.1 D2).
+   *
+   * A field that fills itself is not an answer. Three examples do the teaching
+   * a blank box cannot, without manufacturing content nobody wrote.
+   *
+   * Also removed with it: a `wantBackTouched` guard whose setter was never
+   * called anywhere in the file. It read as protection against overwriting a
+   * typed note when the worker changed, and it protected nothing — pick a
+   * worker, type your note, change your mind about the worker, and your note
+   * was silently replaced.
+   */
 
   const overCap = !!kind && mode === 'each' && picked.length > BULK_CAP
   const canSubmit = !!workerKey && (!kind || picked.length > 0) && !saving && !overCap
@@ -439,18 +461,27 @@ export function CreateAssignment({
           <label htmlFor="as-want">3 · What do you want back? (optional)</label>
           <textarea
             id="as-want"
-            className="acr-pg-search"
-            style={{ width: '100%', minHeight: 66, resize: 'vertical', padding: 9 }}
+            className="acr-pg-search as-wantbox"
             value={wantBack}
             placeholder="What does finished look like?"
-            onChange={(e) => {
-              setWantBackTouched(true)
-              setWantBack(e.target.value)
-            }}
+            onChange={(e) => setWantBack(e.target.value)}
           />
+          <div className="as-wantchips">
+            {WANT_EXAMPLES.map((w) => (
+              <button
+                key={w}
+                type="button"
+                className="acr-pg-chip"
+                onClick={() => setWantBack(w)}
+                title="Use this as your note. You can edit it, and you can leave the box empty."
+              >
+                {w}
+              </button>
+            ))}
+          </div>
           <p className="as-hint">
-            Prefilled from what this worker does. It is a note for you — it does
-            not change the worker&apos;s instructions.
+            A note for you — it does not change the worker&apos;s instructions.
+            Leave it empty if you have nothing to add.
           </p>
         </div>
       )}

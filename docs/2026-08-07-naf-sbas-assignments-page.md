@@ -415,6 +415,15 @@ it did.
 
 **Purpose.** Answer *"is anything waiting on me?"* before reading a single row.
 
+> **SUPERSEDED IN PART by AS-S1R (Part 11), approved 2026-08-08.** The strip is
+> now a chip band, not metric tiles, and it carries **six** state chips plus an
+> *All* chip — not five. **The Overdue tile reserved below is retired, not
+> deferred**: overdue is already carried twice, by the badge on the row and by
+> the default ordering that lifts it to the top, and a seventh chip that appears
+> and disappears with the data makes the band's arithmetic harder to trust for a
+> fact the first row already shows. Everything else in this section still holds,
+> and the counts still come from `views.ts`.
+
 **Contents.** **One tile per state, tile label identical to the chip label,
 character for character**, both read from `ASSIGNMENT_STATES`: Not started ·
 Running · Finished · Stopped · Failed. Each tile's number is exactly the number
