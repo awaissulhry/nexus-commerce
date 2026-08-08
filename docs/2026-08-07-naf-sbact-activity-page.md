@@ -2626,3 +2626,52 @@ overflow.
 page and **not one has been a type error.** Today's four: a missing preposition,
 a run-on sentence assembled from someone else's vocabulary, a blame stated
 twice, and a number quoted at the wrong scope.
+
+### Prod verification, 2026-08-08 — live Vercel + Railway
+
+Everything above was verified through the read-only stub against the production
+*database*. That is not the deployed thing, so the band was then checked on
+**live Vercel + Railway** at 1728×906, with real RBAC.
+
+| Check | Result |
+|---|---|
+| Contrast, re-measured in place | **0 failures**, worst **5.42** (was 2.73) |
+| Font sizes in S2 | **13px and 12px only** (was 20/18/13/12/11.5 across S1+S2) |
+| Headline | *"Nothing is failing now"* |
+| Evidence line | *"2 runs failed on 6 August, and the 11 runs since have all been clean."* |
+| **Count vs consequence** | button *"Show these **2** runs"* → scope `2 events across 2 runs`, footer **`Showing 2 of 2`**, **2 rows** |
+| Pressed state | `false → true`, background `#fff → rgb(47,97,192)`, word changes to *"Showing only failed runs"*; pressing again restores 33 events |
+| Controls | **3, 0 unnamed, 0 keyboard-unreachable** |
+| Horizontal overflow | none |
+| Panel height | 238px with two failures listed; **46px** when nothing has failed |
+
+**`curl` remains useless as a deployment check for this page**, and this pass
+re-proved it: the SSR response is an 18,509-byte shell containing **zero**
+occurrences of `sba-needs`, `sba-needshead`, `sba-tile` or `sba-fresh` — the
+markup exists only after client render, so a grep returns 0 whether or not the
+build shipped. The browser is the only valid signal, and a cache-busting query
+was needed even there.
+
+---
+
+## PART 20 — Where the page stands after S1R and S2R
+
+| Section | State |
+|---|---|
+| **S1** header · scope · freshness | **REBUILT, prod-verified** (Part 18, `7de406df1`) |
+| **S2** what needs a look | **REBUILT, prod-verified** (Part 19, `73b6abcf2`) |
+| **S3** the controls | ACT.3 as shipped. **Two open items** — the frozen facet chips (§18.9) and the approved-but-unbuilt test-run toggle (§18.7) |
+| **S4–S7** list · drawer · footnote · explainer | ACT.2/5/6 as shipped, not re-examined |
+
+**S3 is the next unit, and it has the only known live correctness bug left on
+the page:** the filter chips are frozen at first paint (§18.9), caught showing
+`Asked permission 2` for events the API no longer returned while the scope line
+correctly followed the data down. It also carries the §18.7 test-run toggle,
+which the operator approved on 2026-08-08 and which will take the default
+headline to **26 events across 7 runs**.
+
+**Twenty-five defects have now been found on this page. Not one has been a type
+error.** The three from S2 that mattered most were a count that disagreed with
+the list it produced, a control state announced only to screen readers, and a
+green tick standing in for three different kinds of "I do not know" — none of
+which any compiler, test or `curl` could have seen.
