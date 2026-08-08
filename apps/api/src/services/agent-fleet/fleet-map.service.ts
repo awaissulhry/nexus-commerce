@@ -46,6 +46,7 @@
 import prisma from '../../db.js'
 import { listCharters } from './charter-registry.js'
 import { FLEET_GRAPH } from './fleet-graph.js'
+import { resolveFleetLabels } from './fleet-labels.service.js'
 import { getFleetSchedule, type FleetScheduleJob } from './fleet-schedule.service.js'
 import { getFleetState, type FleetStateView } from './fleet-state.service.js'
 import { defToGraph } from './workflow-defs.js'
@@ -735,6 +736,55 @@ export async function getFleetMap(windowKey: WindowKey = '7d'): Promise<FleetMap
     }
   })
 
+  /* 7b — resolve the sample findings' entity ids to something a person can
+     read. `AgentFinding.entityName` is nullable and is null for every bid
+     finding on prod, so without this the inspector prints a bare cuid —
+     `cmpsr2iyx00rwry01ji8d1pec` — which tells the operator nothing. The
+     resolver already exists and already handles both shapes the fleet emits:
+     a numeric external campaign id and an `AdTarget` cuid, which it turns into
+     the keyword text plus its match type. Resolving here rather than in the
+     browser is the rule: the client is never handed a bare id to render. */
+  const sampleEntityIds = [
+    ...new Set(
+      [...samplesByPair.values()].flat().map((s) => s.entityId).filter((v): v is string => !!v),
+    ),
+  ]
+  let labels: Awaited<ReturnType<typeof resolveFleetLabels>> = { campaigns: {}, targets: {} }
+  if (sampleEntityIds.length > 0) {
+    labels = await resolveFleetLabels({ args: [], entityIds: sampleEntityIds }).catch(() => ({
+      campaigns: {},
+      targets: {},
+    }))
+  }
+  /**
+   * The fleet emits four shapes of `entityId`, and the resolver keys campaigns
+   * by the HEAD of a composite one (`fleet-labels.service.ts:42-44` splits on
+   * `:`), so reading it back has to split the same way or every composite id
+   * misses and renders raw:
+   *   · an AdTarget cuid                      → the keyword and its match type
+   *   · `<externalCampaignId>:<search term>`  → the term, and the campaign it
+   *                                             was searched in
+   *   · `ngram:<phrase>`                      → a phrase seen across campaigns
+   *   · a bare external campaign id           → the campaign name
+   * Anything else stays as itself. That is the house rule from the entity
+   * graph — "an unresolved id is shown as itself — honest, never invented".
+   */
+  const labelFor = (entityId: string): string | null => {
+    const t = labels.targets[entityId]
+    if (t) return `${t.text} (${t.matchType.toLowerCase()}) in ${t.campaignName}`
+    const c = labels.campaigns[entityId]
+    if (c) return c.name
+    const idx = entityId.indexOf(':')
+    if (idx > 0) {
+      const head = entityId.slice(0, idx)
+      const tail = entityId.slice(idx + 1)
+      if (head === 'ngram') return `“${tail}” — a phrase seen across campaigns`
+      const hc = labels.campaigns[head]
+      return hc ? `“${tail}” in ${hc.name}` : `“${tail}”`
+    }
+    return null
+  }
+
   /* 8 — assemble the edges. One per (from, to, artifact), however many
      workflows declare it; `declaredBy` carries the provenance. */
   const known = new Set(nodes.map((n) => n.key))
@@ -760,7 +810,10 @@ export async function getFleetMap(windowKey: WindowKey = '7d'): Promise<FleetMap
           : crossedLifetime > 0,
         dropped,
         conflicts,
-        samples: samplesByPair.get(id) ?? [],
+        samples: (samplesByPair.get(id) ?? []).map((s) => ({
+          ...s,
+          entityName: s.entityName ?? labelFor(s.entityId),
+        })),
         verdicts: isPlan ? (verdicts ?? { pass: 0, revise: 0, block: 0 }) : null,
         lastCritique: lastCritiqueByPair.get(id) ?? null,
         lineage: isPlan ? 'none' : 'plan-items',
