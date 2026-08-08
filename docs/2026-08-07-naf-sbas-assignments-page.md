@@ -1353,6 +1353,628 @@ assignment"* line has nothing to render yet.
 
 ---
 
+## PART 11 — NAF.SB.AS-S1R · Section 1 restudied: the list as a *design*
+
+**Status: AWAITING OPERATOR APPROVAL. No code written.**
+
+Scope: `AssignmentsClient.tsx` — the list and the state strip. Not the create
+drawer (AS-S3), not the detail page (AS-S5). The *model* is settled and
+unchanged by this engagement: same states, same payload, same guards, same
+words. Only what the operator looks at changes.
+
+### 11.1 · PHASE 0 — the audit, measured on production
+
+Method: the live Vercel build at 1728×906 and at 896px, with the list payload
+replaced **client-side only** by 24 synthetic rows spanning all eight states
+(`window.fetch` patched in the page; **nothing was written to the database and
+nothing was started**). Geometry via `getBoundingClientRect`, contrast computed
+from resolved `getComputedStyle` values against the resolved backdrop.
+
+Nine defects. Every number below was measured, not estimated.
+
+#### D1 · 42% of the table's width is allocated to nothing
+
+At 1728px, 22 open rows, table width 1614px:
+
+| Column | x | Width | Widest content | Unused | Ratio |
+|---|---|---|---|---|---|
+| STATE | 90 | **197** | 92 | 105 | 2.14× |
+| ASSIGNMENT | 287 | 618 | 606 | 12 | 1.02× |
+| POINTS AT | 905 | **429** | 125 | **304** | **3.43×** |
+| LAST RUN | 1334 | **253** | 54 | 199 | 4.69× |
+| DUE | 1587 | 117 | 50 | 67 | 2.34× |
+
+**675px — 41.8% of the table — is empty by accident.** `acr-pg-tbl` is
+`table-layout: auto` with no declared widths, so the browser distributes slack
+by *text length*, which is not the same quantity as importance. The operator's
+suspicion 4 is confirmed and it is worse than it looked: POINTS AT, the column
+that carries this page's entire reason to exist, is three and a half times wider
+than the widest thing in it.
+
+#### D2 · The second line of every row is the same sentence
+
+`CreateAssignment.tsx:124` prefills `wantBack` from `worker.description`. So
+every row made from the negative miner renders *"Judges which zero-order
+spenders and wasteful n-gra…"* — identical, truncated mid-word at 44ch, on every
+row. Measured: it is what makes the row **56px instead of ~38px**, so on a
+906px viewport it costs **five rows of the visible list** to say nothing.
+
+The defect is not the truncation. It is that a *prefilled* field is not
+information: it is the same string re-rendered per row, and the eye has to
+re-read it each time to re-discover that.
+
+#### D3 · The navigation target is 5.4% of the row
+
+Measured on a 1066px-wide row: the row is 59,696px²; the only clickable thing
+in it is the title anchor at 214×15 = 3,210px². **5.4%** — and it shrinks as
+the viewport grows, because the row widens and the anchor does not. There is no
+row action of any kind (suspicion 7, confirmed): no Open, no Close, no menu, no
+whole-row target, no keyboard path to a row.
+
+#### D4 · The column headers leave the screen and never come back
+
+`.acr-pg-tbl th` computes `position: static`. With 22 rows the table is 1256px
+tall inside a 723–906px viewport, so after one scroll the header sits at
+**y = −515** and 22 rows of grey chips are on screen with nothing naming the
+columns. The server cap is `take: 200` (`assignment.service.ts:408`), which is
+~11,300px of exactly that. Suspicion 5, confirmed — and the failure is not
+"slow", it is "unlabelled".
+
+#### D5 · Four text roles fail WCAG AA, measured in place
+
+| Role | Size / weight | Colour | Ratio | Verdict |
+|---|---|---|---|---|
+| `.acr-pg-stat .k` (tile label) | 10.5px / 700 | `#8d97a6` | **2.95** | fail |
+| `.acr-pg-tbl th` (column header) | 10.5px / 700 | `#8d97a6` | **2.73** | fail |
+| `.as-want` (row subtitle) | 11.5px | `#8d97a6` | **2.73** | fail |
+| `.as-outcome.muted` (the delta) | 12px | `#97a1b0` | **2.41** | fail |
+| `.as-title a` | 12.5px / 600 | `#1f2a37` | 13.43 | pass |
+| `.as-target` | 11.5px | `#35507a` | 7.31 | pass |
+| `.acr-pg-intro` | 13px | `#5a6675` | 5.40 | pass |
+
+The first two are the shared roles the Workflows stream measured and posted in
+locks §3 — **the same two numbers, independently reproduced on a second page**,
+which settles that they are the stylesheet's and not one page's. The last two
+failures are mine, page-local, in `assignments.css`.
+
+The worst one is the one that matters most: **`.as-outcome.muted` at 2.41:1 is
+the "never run" delta** — the single word the page exists to say about a fleet
+that has never run anything.
+
+#### D6 · The target chip silently drops its own icon
+
+Measured across seven chips: six render an 11px icon; `GALE JACKET PRODUCT
+TARGETING` renders **`svgW: 0`** and `scrollWidth 226 > clientWidth 218`.
+`.as-target` is `overflow: hidden; max-width: 30ch` and the lucide `<svg>`
+carries no `flex: none`, so on a long label the flex algorithm shrinks the icon
+to zero before it truncates the text. The chip that most needs to say *"this is
+a campaign"* is the one that stops saying it.
+
+#### D7 · A portfolio target is labelled a marketplace
+
+`AssignmentsClient.tsx:304-307` is a two-branch ternary: CAMPAIGN, else
+*"Marketplace {label}."* AS.2 shipped PORTFOLIO as a third kind and never
+reached this line, so hovering a portfolio row reads **"Marketplace Xavia GALE
+IT."** — a false sentence about the object, on the page whose whole subject is
+what the object points at.
+
+#### D8 · The promise of a dead target chip was never kept
+
+`.as-target.gone` exists in `assignments.css:72` and is applied **nowhere** —
+grep across `app/fleet/` returns only `as-target` and `as-target account`. AS-S1
+says *"If the target no longer resolves the chip goes red: Campaign no longer
+exists"*. It does not, and it cannot: nothing on the list read resolves the
+target. Today the only way to learn that a campaign is gone is to **start the
+run and spend money to be told it stopped**.
+
+This is the inverse of the fleet's stale-constant class: not a constant nobody
+reads, but a **style nobody writes**. Same detection rule — grep for the writer,
+not the declaration.
+
+#### D9 · Small, specific untruths and omissions
+
+- **The 200-row cap is silent.** `take: 200`, no total, no "showing the newest
+  200". A silent cap reads as *"that is all of them"*.
+- **"Nothing matches that filter"** does not name the filter, though AS-S1 says
+  it must. With six tiles and a hidden closed-set, "that filter" is ambiguous
+  between three different things.
+- **Seven type sizes in one page body** — 10.5, 11, 11.5, 12, 12.5, 16, 19 —
+  and the **16px** is the toolbar: `.acr-pg-sortbtn` and the "as of" stamp
+  inherit the body size, so *"+ New assignment"* and the freshness stamp render
+  larger than every row of actual content.
+- **No search, no sort, no URL state** (suspicion 3, confirmed). Both sibling
+  pages already mirror filter state to the address bar —
+  `WorkersClient.tsx:287-292`, `ActivityClient.tsx:923-936` — so this page is
+  the exception, not the precedent.
+- **The strip spends 81px of vertical space on six numbers that are all `0`**
+  in the shipped state, using `.acr-pg-stat`, which is a *metric* component,
+  while `fleet-pages.css:126-151` already ships `.acr-pg-chip` — a filter chip
+  **with a count slot and an `.on` state** — unused by this page.
+
+#### D10 · Narrow widths: nothing drops, everything squeezes
+
+Measured in a same-origin 900px iframe (an element-width probe does not fire a
+media query — the Workflows stream's recorded trap), 12 rows:
+
+| Column | 1728px | 896px |
+|---|---|---|
+| STATE | 197 | 106 |
+| ASSIGNMENT | 618 | 299 |
+| POINTS AT | 429 | 186 |
+| LAST RUN | 253 | 129 |
+| DUE | 117 | 62 |
+
+All five columns survive; the title wraps to two lines; row heights become
+**56 / 73 / 75 px — a 34% variance** down one list. The strip reflows to 4+2
+with ~400px of blank beside the last two tiles. AS-S1's rule — *"state chip,
+title and delta are the row's identity and never drop; worker, due and age drop
+first; target collapses into the title line"* — was never implemented in any
+form. Suspicion 6, confirmed.
+
+---
+
+### 11.2 · PHASE 1 — how the world renders *a list of work items with state*
+
+Part 2 of this document researched the **model** (what an assignment is). This
+pass is narrower: only the list page, and only *what does one row show and how
+does it say it*.
+
+**Sourcing honesty.** List pages are the least-documented screen in every
+product — vendors document the editor and the detail view. Where a fact is
+documented it is cited; where it is product knowledge the docs do not state, no
+decision below rests on it alone.
+
+| Product | Row carries | State shown as | "What happened" | Row actions | Notable |
+|---|---|---|---|---|---|
+| **Linear** | id · title · status · assignee · priority · labels · dates — **every one of them individually switchable** via *Display properties* | icon + colour, word on hover | — | keyboard-first; multi-select | **Grouping is a first-class control** (status, assignee, project, priority, cycle, label, parent, team, customer, release, SLA) with its own shortcut. Ordering is separate from grouping and from filtering. |
+| **Sentry** | title + culprit · **events** · **users** · assignee · last/first seen | word + colour | **two counts**, sortable | assign, ignore, resolve | The row's two numbers are the triage input; sorting by them is the workflow. |
+| **Datadog monitors** | Status · **Muted elapsed · Muted left** · Name · Tags, with a **column-visibility dropdown** | Alert / Warn / No Data / OK, colour + word | status graph on detail | hover → Edit, Clone, Mute, Delete; **bulk** mute/resolve/delete/edit | Has a *separate* "Triggered Monitors" page: the "needs you" subset is a view, not a badge. |
+| **UiPath Orchestrator** | Transactions: Status · Progress · Started · Ended · Robot · exception type · reference | **grey = never executed is a state, not an absence** | per-item exception + retry lineage | retry, delete | *Retried* creates a **new item in New** rather than mutating — the "one job, many attempts" rule this page already follows. |
+| **Temporal** | workflow type · id · run id · **status** · start/close time; filter by status/type/time; **Saved Views** | word | — | — | Status vocabulary is closed and small: Running / Completed / Failed / Canceled / Terminated / ContinuedAsNew / TimedOut. |
+| **Airflow 3** | DAG id · schedule · next run · latest run · tags; **card view is the default, table is the escape hatch "for many DAGs"** | colour-coded run states | **bars: colour = outcome, height = duration** | pause, trigger, favourite, delete | And the counter-evidence — see below. |
+| **GitHub Copilot agents page** | one row per delegated task, "**a clear status for each**"; click → session log with progress, token usage, session length | word | checklist inside the PR | open, steer, stop, archive | The nearest analogue to this page: *jobs a human handed to a machine*. |
+| **Vercel deployments** | status · environment · branch · commit · duration; redesigned to a **denser layout "so you can see more deployments at once"**, grouped by environment | word + colour | duration | — | Density was the explicit goal of a redesign, not a side effect. |
+| **Stripe payments** | amount · **status** · description · date | word | — | — | Four columns. The most-used financial list in the world is four columns wide. |
+| **Jira** | list view: configurable columns | word | — | bulk change | The cautionary tale: the field configuration is a documented source of *"cognitive overload"*, and the Navigator's column picker only exposes the first ~10 fields — beyond that they are unreachable. |
+
+**The seven things this changes for us, ranked:**
+
+1. **Airflow's own users have falsified the picture-instead-of-a-number
+   design.** Airflow 3 replaced per-DAG run-state counts with a bar chart;
+   issue [#66946](https://github.com/apache/airflow/issues/66946) says it
+   plainly — *the bar chart shows no numbers, you cannot tell if a DAG had 1
+   failure or 50, you cannot sort by it, you cannot act on it.* Our AS-S1 rule
+   ("one quantitative delta per row, never a spinner or a percentage") is
+   independently confirmed by the strongest available counter-example. **Keep
+   the number. Never trade it for a sparkline.**
+2. **Sentry is the shape of this page.** Its row is identity + **two sortable
+   numbers** + assignee + recency, and triage *is* sorting by those numbers.
+   Ours is identity + one number (findings) + one clock (due). That is the same
+   surface with a smaller vocabulary — which is an argument for a table, not
+   against one.
+3. **Datadog splits "needs you" into a view, not a badge.** The Triggered
+   Monitors page shows only triggered monitors and supports bulk mute/resolve
+   from there. Our equivalent already exists as the strip filter; what it lacks
+   is that the *default* view is not the triage view. Ordering solves this
+   more cheaply than a second page.
+4. **UiPath makes "never executed" a colour.** Grey is a state, not a shrug.
+   Ours is a state (`Not started`) and it is the majority state — Part 9 risk 1
+   says the likeliest steady state of this page is *one row, Not started,
+   forever*. So the empty-ish row must be **designed**, not defaulted.
+5. **Linear separates grouping, ordering and filtering into three controls,
+   and makes per-property visibility a user setting.** At our N this is too
+   much machinery, but the *distinction* is the useful part: our tiles are a
+   **filter**, and they are currently drawn as metrics. That single category
+   error is D9's root.
+6. **Every one of them has an explicit, persistent row-action affordance.**
+   Carbon states the rule the others follow: overflow menus are **persistent on
+   each row by default**, because "always visible signals to the user that
+   actions can be taken", and hover-only actions are invisible to keyboard and
+   touch users — an accessibility failure, not a space saver
+   ([Carbon data table](https://carbondesignsystem.com/components/data-table/usage/),
+   [WCAG 2.1 content on hover or focus](https://www.w3.org/WAI/WCAG21/Understanding/content-on-hover-or-focus)).
+7. **Status must never be colour alone** — WCAG 1.4.1 Level A. Our chip already
+   carries dot + word; the rule is recorded so no future "compact mode" drops
+   the word.
+
+**What a first-time user understands with no training, in all of them:** a word
+they already know for the state; a name they chose themselves for the object; a
+number they can compare to the number in the row below; a date; and a control
+that says what happens next. Nothing on that list is a graph.
+
+---
+
+### 11.3 · What this section IS — and therefore what shape it takes
+
+Three candidate identities. Only one survives our data.
+
+- **A queue** (UiPath transactions): items arrive by machine, are worked
+  automatically, and the human watches throughput. **Fails.** Nothing arrives on
+  its own and nothing runs on its own; §6.4 and the fleet-off state make every
+  throughput number structurally zero.
+- **A monitor** (Datadog / Activity): rows are health. **Fails by boundary** —
+  locks §5 decision 5 gives the unscoped cross-fleet feed to Activity, and this
+  page must never grow an outcome filter or an export.
+- **A worklist**: a small set of jobs *this operator made by hand*, each of
+  which is waiting for **them** — to start it, to read what came back, or to
+  close it. **This is it.** The nearest true analogue in the research is the
+  GitHub agents page: tasks a human delegated to a machine, each with one clear
+  status and a way in.
+
+**The consequence is the whole design.** Every row's next action belongs to the
+human, so the list is not a monitoring surface — it is **triage of the
+operator's own backlog**. Status is therefore an *instruction*, not a
+decoration; ordering is the primary "what needs me" mechanism; and the row must
+end in something you can press.
+
+And unlike Workflows' four named routines, **this list is built to get long on
+purpose**: AS.6 ships bulk creation capped at 25 per action, against 220
+campaigns and 10 portfolios. One click makes 25 rows.
+
+---
+
+### 11.4 · The substrate decision: DataGrid, and why — with the sibling's
+argument answered
+
+The standing rule is **tables use the shared DS DataGrid + GridToolbar +
+FilterBar, in `h10-ds-gridcard`, with all four DS stylesheets**
+(`feedback_tables_use_datagrid`). Three of the ten fleet pages already comply:
+**Workers** (`WorkersClient.tsx:1381`), **Activity** (`ActivityClient.tsx:1842`)
+and the **Fleet map's list view** — which records *"uses the shared DS DataGrid
+(operator decision, 2026-08-08)"* (`map/ListView.tsx:26`). Assignments and
+`workflows/RunsSection` are the two hold-outs on raw `acr-pg-tbl`.
+
+The Workflows stream declined DataGrid for its routine list (their §9.4) on four
+arguments. They were right **there** and each one inverts **here**:
+
+| Their argument (routines) | Here (assignments) |
+|---|---|
+| *N=4; sorting four rows is furniture* | N is unbounded by design — bulk create makes 25 at a click. They wrote the falsifier themselves: *"the moment the list needs to be sorted, filtered or bulk-acted — in practice around 25 routines — it becomes a table and converges onto DataGrid."* **We are past it on day one.** |
+| *Four of six columns are prose; a table compares values down a column and nobody compares two paragraphs* | Once `wantBack` leaves the row (D2), **not one cell is prose**: a state word, a title, a target label, a short delta, a relative time, a date badge. Every one of them is a value that compares down a column. |
+| *`table-layout: auto` + `nowrap` is hostile to prose and had to be defeated page-locally* | Same override, opposite reason: we **want** `fixed` + `nowrap` + declared widths — it is the direct fix for D1, and we need no wrapping allow-list because we have no prose. |
+| *No bulk action exists on a routine* | Bulk actions exist and ship server-side already: `POST /assignments/bulk-delete`, plus close/cancel per row. Selection is real here. |
+
+Three further reasons, checked in code rather than asserted:
+
+1. **DataGrid's header is sticky** (`components.css:884-896`, `position: sticky;
+   top: 0; z-index: 4`). That is D4 fixed by adopting the component rather than
+   by re-implementing it — and D4 is the defect that gets worse every time the
+   operator bulk-creates.
+2. **`aria-sort` is already there** (added by Workers at W.1), so sortable
+   headers are announced correctly without this page inventing anything.
+3. **Consistency has a reader, not just a rule.** The operator will move between
+   Workers, Activity, Map-list and this page in one sitting. Four tables, one
+   behaviour.
+
+**The three things DataGrid cannot do, and the exact answer to each:**
+
+- **No `onRowClick` / row href** — its whole prop surface is `columns · rows ·
+  rowKey · selectable · selected · onSelectedChange · rowSelectable ·
+  rowSelectableHint · selectAllHint · selectRowHint · showTotals · emptyState ·
+  initialSort · maxHeight · className` (`DataGrid.tsx:22-45`). **Answer: no
+  shared-file change.** The title cell renders a `display:block` anchor that
+  fills its cell (turning D3's 5.4% into ~44% of the row), and an always-visible
+  actions menu closes the rest. A whole-row `<a>` is not available and is not
+  worth extending a 50-page component for.
+- **Sort is internal state; there is no `onSortChange`** — so sort cannot be
+  URL-persisted, and the page cannot offer "reset to the default order".
+  **Answer: phase S1.e, and it is optional.** Two additive optional props
+  (`sort`, `onSortChange`) make sorting controlled with a defaulted fallback —
+  ~6 lines, no behaviour change for any existing consumer, under a locks §3
+  claim. Until then, sort is session-local and the default order is *stated in
+  words* in the toolbar rather than implied.
+- **A menu inside a grid cell is a known trap, twice over** —
+  `.h10-ds-gridcard` is `overflow: hidden` (`patterns.css:465-470`), which clips
+  a dropdown, and a sticky cell opens its own stacking context, which no
+  `z-index` escapes. **Answer: the actions column is NOT sticky, and the menu
+  portals to `document.body`** — the proven pattern in
+  `dayparting/ScheduleRowActions.tsx`.
+
+**FilterBar is deliberately not adopted.** It is a collapsible multi-dimension
+panel; our whole filter state is *one state + closed-or-not + a search string*,
+which is visible in one chip row. A panel that hides a filter behind a
+disclosure would make the strip's arithmetic invisible, and the strip's
+arithmetic — every tile's number equals the rows it reveals — is the invariant
+`views.ts` exists to protect.
+
+**The falsifier, written down.** If this list ever needs more than one filter
+dimension at once (state **and** worker **and** target kind), FilterBar is
+correct and this decision reopens.
+
+---
+
+### 11.5 · What the row must answer without a click
+
+Six questions. Each with the evidence for why it is on the row rather than one
+click away.
+
+| # | Question | On the row as | Evidence |
+|---|---|---|---|
+| 1 | *What is this job?* | **Title**, one line, ellipsised | Derived at create from worker + target, operator-overridable, guaranteed non-empty because Approvals renders it as provenance (§10.2). It carries the worker's name already — which is why there is **no Worker column** (§11.6). |
+| 2 | *What does it point at?* | **Target chip** — kind icon + frozen label; red + *"no longer exists"* when it does not resolve | This page exists because scope binds (AS.1/AS.2). A row that hides its target hides its reason to exist. The raw id stays in the tooltip: ids survive renames, which is a correctness concern, not a reading one. |
+| 3 | *Where did it get to?* | **State chip**: dot + word, tone from `states.ts` | WCAG 1.4.1 — colour alone is a Level A failure. The word is not optional. Eight states, one source, already enforced by `assignments.vitest`. |
+| 4 | *What came back?* | **Delta**, as words and a number: *"3 findings" · "nothing to do" · "the fleet's day budget" · "never run"* | Airflow #66946: a picture you cannot count, sort or act on is a downgrade. `outcomeLine()` already produces exactly this. |
+| 5 | *Is it late?* | **Due badge** + **overdue rows sort first** | Overdue is a flag, never a state (Part 4). `views.ts:overdueRank` already ranks it and nothing on screen says so. |
+| 6 | *What do I do next?* | **An actions menu, always visible** | Carbon: persistent overflow menus signal that rows are actionable; hover-only is invisible to keyboard and touch. D3 today is 5.4%. |
+
+**What moves one click away, and why:**
+
+- **`wantBack`** — it is an instruction *to the worker*, not an identity of the
+  job, and while it is prefilled it is literally the same string on every row
+  (D2). It belongs on the detail page and in the row's title tooltip.
+  **Recommendation, separate from this section: stop prefilling it from
+  `worker.description`** in AS-S3. A field that is filled for you is not
+  information; the three example chips the study already specifies
+  (*find wasted spend · propose bids · audit structure*) do the teaching without
+  manufacturing noise. Not in this engagement's scope — recorded for the
+  operator's call.
+- **Cost per row.** `$0.0173` at four decimals is not a triage input. One
+  honest number replaces twenty-two: the toolbar count line carries
+  *"22 assignments · $0.04 spent"*, with the `hasUnknownCost` caveat in its
+  tooltip (an abandoned run's cost is unknown, not zero). This respects Cost &
+  value's boundary — one number, no analysis.
+- The error text, the findings themselves, the evidence vintages, the trace,
+  the pre-flight, the close note: all already on the detail page.
+
+---
+
+### 11.6 · The exact column set, and what drops
+
+`table-layout: fixed`, declared widths, one elastic column.
+
+| # | Column | Content | Width | Sortable by | Drops |
+|---|---|---|---|---|---|
+| 1 | **State** | chip: dot + word | 132 | "needs you" rank, then alphabetical | never |
+| 2 | **Assignment** | title, one line, ellipsised; below 900px it also carries the target chip and due badge | elastic | title A–Z | never |
+| 3 | **Points at** | target chip | 300 | label A–Z | < 900 → into column 2 |
+| 4 | **Last run** | delta phrase | 240 | state rank then findings desc | never |
+| 5 | **When** | `8h ago` / `—`, right-aligned | 104 | recency | < 1400 → into the Last-run tooltip |
+| 6 | **Due** | badge | 96 | date, undated last | < 1100 → into column 2 |
+| 7 | *(actions)* | ⋮ menu, always visible | 48 | — | never |
+
+Fixed total 920px; at 1728 the title takes the remaining ~694px. Every fixed
+column is sized to **≤ 1.35× its widest real content** (from 3.43× today).
+
+**Why no Worker column.** The title already reads *"Negative miner on GALE BROAD
+DE"*; a Worker column would print the same string twice. Part 3.2's rule is that
+the worker's roster identity — health, grade, dial — belongs to Workers, and
+this page must never sort or group by it. Sorting by *title* sorts by worker
+name for free, because the worker's name starts the string.
+
+**The drop order honours AS-S1's own rule**: state chip, title and delta never
+drop; When and Due go first; the target collapses into the title line last.
+Implemented with `window.matchMedia` breakpoints, **not** an element-width
+probe — an element-width probe never fires a media query (the Workflows
+stream's recorded trap).
+
+**Row height is uniform at every width** because no cell wraps: one line each,
+ellipsis with the full value in the tooltip. Today's 34% variance (D10) goes to
+zero.
+
+---
+
+### 11.7 · The five states of this list, written out
+
+**1 · Never had data (0 rows, ever).** Render the teaching panel *instead of*
+the grid card — a toolbar and a header row above nothing is chrome around
+nothing. Copy stays as shipped (it is good and it is prod-verified for
+geometry), with two additions: the sentence *"Every worker in this fleet is
+switched off"* gets a link to Controls so the claim is checkable, and a second
+line offers the other door: *"Some workers cannot be narrowed to one thing at
+all — run those from Workers."*
+
+**2 · One row.** Grid card renders. Chips render (the arithmetic must stay
+total). **Search does not render below 8 rows** — a search box over one row is
+furniture, and the number is stated here so it is a rule rather than a taste.
+Sort carets stay (they cost nothing and they teach that the table sorts).
+
+**3 · Many rows (8–200).** `maxHeight` pins the grid to the viewport so the
+sticky header stays put and the page chrome never scrolls away; the toolbar
+count reads *"Showing 22 of 24 · $0.04 spent"*. **At exactly 200 the cap must
+speak**: *"Showing the newest 200 assignments. Older ones are not listed."*
+A silent truncation reads as completeness.
+
+**4 · Filtered to nothing.** The grid card stays (so the control that got you
+here is still on screen) and DataGrid's `emptyState` names the filter:
+
+> **No assignments are *Stopped*.** — *Clear the filter* to see all 24.
+
+and with a query: **Nothing matches *"gale broad"* in *Stopped*.** — *Clear
+search* · *Clear filter*.
+
+**5 · Nothing open, everything closed.** Not an empty list — a *finished* one:
+
+> **Nothing open.** 3 closed, 1 cancelled. — *Show them* · *New assignment*
+
+This is the state today's code renders as "Nothing matches that filter", which
+is both wrong (nothing is filtered) and unhelpful.
+
+---
+
+### 11.8 · The complete tooltip inventory
+
+Rule: **every chip, badge, number and column header has a tooltip, and the
+tooltip says what it counts or what to do about it — never a restatement of the
+label.** Today: seven exist (six tiles + the as-of stamp) and six are missing.
+
+| Element | Tooltip | Status |
+|---|---|---|
+| State chip (×8) | `ASSIGNMENT_STATES[k].tip` | ships |
+| Strip chip (×6) | same `tip`, plus *"Click to show only these"* | ships (add the second clause) |
+| Strip chip count | *"N of 24 assignments are in this state"* | **new** |
+| Column header *State* | *"Where this job got to. Eight states; hover any chip for what it means."* | **new** |
+| Column header *Assignment* | *"The name given when it was made — the worker and what it points at. You can rename it."* | **new** |
+| Column header *Points at* | *"The one thing this worker is allowed to look at. Everything else in your account is out of scope for this job."* | **new** |
+| Column header *Last run* | *"What came back the last time it ran. An assignment can be run many times; each attempt keeps its own result."* | **new** |
+| Column header *When* | *"When the last attempt started."* | **new** |
+| Column header *Due* | *"A deadline you set. It colours the row and moves it up the list. It never starts anything and never stops anything."* | **new** |
+| Target chip (campaign) | *"{label} — campaign {id}. The name was frozen when you made this, so a rename cannot quietly relabel your history."* | ships |
+| Target chip (portfolio) | *"{label} — portfolio {id}, resolved to its member campaigns each time it runs. A campaign added to the portfolio tomorrow is in scope tomorrow."* | **new** (fixes D7) |
+| Target chip (marketplace) | *"Marketplace {label} — everything in your account for that marketplace."* | ships |
+| Target chip (gone) | *"The {kind} this points at no longer exists. Starting this will stop immediately rather than widen to your whole account."* | **new** (fixes D8) |
+| Target chip (whole account) | *"This worker reads the whole account every time — it has no way to be narrowed."* | ships |
+| Delta *"N findings"* | *"N things this worker judged worth your attention. Open it to read them; nothing has been changed on Amazon."* | **new** |
+| Delta *"nothing to do"* | *"It ran, read the evidence and judged that nothing needed doing. That is a result, not a failure."* | **new** |
+| Delta *"never run"* | *"Nothing has run. Nothing will start it but you."* | **new** |
+| Delta (stopped/failed) | `reasonSentence(haltedReason)` / `errorSentence(errorMessage)` — the full sentence with the fix | exists in `states.ts`, **not used on the list** |
+| Due badge | as shipped | ships |
+| Toolbar count *$ spent* | *"What every assignment shown here has cost in model calls. N runs stopped reporting and their cost is unknown — left out rather than counted as zero."* | **new** |
+| "as of" stamp | as shipped | ships |
+| ⋮ menu items | each disabled item says why (*"This has already run — close it instead"*) | **new** |
+
+Every one of these sentences already exists somewhere in `states.ts` or the API
+refusals. **None of it is new prose invented for the row** — that is the point:
+the tooltip layer is a second consumer of the one vocabulary, not a second
+vocabulary.
+
+---
+
+### 11.9 · What this section must never become
+
+- **Activity's run log.** The moment a row wants an outcome filter, a date
+  range, an export or a permalink to a trace, the reader wanted Activity —
+  locks §5 decision 5. One assignment's runs live on its own page; the
+  cross-fleet feed is not ours.
+- **The Workers roster.** No health, no grade, no dial, no autonomy, no
+  per-worker sort or group. If a worker column ever appears with a second
+  sortable attribute, this has become the roster.
+- **A dashboard.** No sparkline, no trend, no cost breakdown, no per-worker
+  split. The one number in the toolbar is a total, not an analysis.
+- **A place that spends money.** No Start on a row and no bulk Start, ever —
+  §11.11 phase d states the reasoning. Making spending easy on a fleet the
+  operator deliberately switched off is the one thing this page must not do.
+- **A dense mode that drops the word from the chip.** WCAG 1.4.1.
+
+---
+
+### 11.10 · Where this contradicts the existing study
+
+Stated plainly, because the study is the contract:
+
+1. **AS-S1 puts *"what you want back (truncated)"* on the row. That is wrong**,
+   and D2 is the proof — prefilled, it is the same sentence on every row. It
+   leaves the row. If prefilling is also dropped in AS-S3, an operator-written
+   note becomes worth showing again — on the detail page, not here.
+2. **AS-S1 promises the red "no longer exists" chip. It never shipped and it
+   cannot ship client-side** (D8) — the list read resolves nothing. Either the
+   API resolves target existence on read (one indexed `IN` query per kind,
+   phase S1.f) or the promise is retracted. **Recommendation: build it.** A page
+   whose subject is *what this points at* should not need to spend money to
+   discover the thing is gone.
+3. **AS-S1 promises search + URL filter state. Neither shipped** (D9). Now in
+   scope.
+4. **AS-S1 lists row actions as Open / Start again / Close. I ship Open, Close,
+   Reopen, Cancel and Delete — and deliberately NOT Start.** Start is the only
+   irreversible, money-spending action on this page, and it belongs where its
+   pre-flight is: the detail page, where AS.3 already states what it will read
+   and what it costs before you press it.
+5. **AS-S2 says five tiles; six ship** (Abandoned too). The code is right and
+   the study is wrong: Abandoned is an open state, so a filter that could not
+   reach it would break the "tiles + remainder account for everything"
+   invariant.
+6. **AS-S2 reserves a sixth Overdue tile "only if a due date has ever been
+   set". Recommend dropping it permanently.** Overdue is already carried twice —
+   the badge and the default ordering — and a seventh chip that appears and
+   disappears makes the strip's arithmetic harder to trust, for a fact the first
+   row already shows.
+7. **AS-S2 says "tile label identical to the chip label, character for
+   character".** The tile is uppercased by CSS (`text-transform`) while the chip
+   is sentence case. That is presentational, not a vocabulary drift — but the
+   chip-row rebuild drops the uppercase anyway, which makes the rule literally
+   true instead of nearly true.
+
+---
+
+### 11.11 · Build order — six independently shippable phases
+
+Each phase is a commit that leaves the page better than it found it, verified on
+prod before the next starts.
+
+**S1.a — Substrate and geometry.** DataGrid + GridToolbar inside
+`h10-ds-gridcard`; `table-layout: fixed` with the declared widths;
+sticky header; `maxHeight`; the seven columns; `wantBack` off the row; the
+title anchor fills its cell; the chip icon gets `flex: none`; the portfolio
+tooltip (D7); the four contrast failures fixed **page-locally under an
+`.as-page` root** — `fleet-pages.css` is not touched and no claim is taken.
+*Closes D1, D2, D3, D4, D5, D6, D7, D10.*
+
+**S1.b — The strip becomes a filter.** Six `.acr-pg-chip`s with counts,
+replacing six 261×67 metric tiles; the remainder sentence moves into the
+GridToolbar count line; filter + show-closed mirrored to the URL via
+`replaceState`, matching Workers and Activity. *Closes half of D9; frees ~40px
+of vertical space.*
+
+**S1.c — Search and honest counts.** `@/lib/option-search` over title + target
+label + worker name (plain substring returns zero for `GALE | IT | Broad`);
+appears at N ≥ 8; URL-persisted; the 200 cap stated in words; the three real
+empty states of §11.7 with copy that names what is filtered.
+
+**S1.d — Row actions.** An always-visible ⋮ per row, portalled to
+`document.body`: **Open · Close · Reopen · Cancel · Delete**, each offered only
+where the API accepts it and each disabled item saying why in its tooltip
+(`deleteAssignment` refuses a row that has run; `setAssignmentState('cancelled')`
+refuses the same). Selection + a bulk **Delete** through the existing
+`POST /assignments/bulk-delete`, in the GridToolbar's selection swap, exactly as
+the Workers roster does it. **No Start, no bulk Start.**
+
+**S1.e — Controlled sort (optional; needs a shared-file claim).** Additive
+optional `sort` / `onSortChange` on `DataGrid`, defaulted so all ~50 existing
+consumers are byte-identical; sort mirrored to the URL; a *"Sorted by … · use
+the default order"* affordance. **If the operator would rather not touch a
+50-page component, S1.a–S1.d still stand** — sort simply stays session-local and
+the default order is stated in words.
+
+**S1.f — Target resolution on the list read (one API change, mine).**
+`listAssignments` resolves each distinct target id against `Campaign` /
+portfolio membership in one query per kind and returns `targetResolves:
+boolean`. Delivers D8's red chip and makes the page able to say *"this points at
+something that is gone"* without spending a cent.
+
+---
+
+### 11.12 · Acceptance — measured on prod, not eyeballed
+
+Every phase re-runs this probe at 1728 and 896, with 0, 1 and 24 rows:
+
+1. **No fixed-width column exceeds 1.35× its widest content** (today: 3.43×).
+2. **Every text role ≥ 4.5:1** against its resolved backdrop (today: four below,
+   worst 2.41).
+3. **Row-height variance = 0** at every width (today: 34% at 896).
+4. **The column header is on screen at row 22** — `rect.y ≥ 0` after scrolling
+   to the last row (today: −515).
+5. **The row's navigation target ≥ 40% of the row's area** (today: 5.4%).
+6. **Every number on screen has a tooltip**, asserted by a vitest walking the
+   rendered row, not by eye.
+7. **Tiles still equal what clicking them reveals** — the existing `views.ts`
+   invariant test must stay green, unmodified, through all six phases.
+8. **The page fills its viewport at 0 rows** — `.as-empty` bottom within 40px of
+   the fold, as measured today.
+
+---
+
+### 11.13 · Cross-session
+
+- **No shared file is touched by S1.a–S1.d.** `fleet-pages.css` stays frozen;
+  the two failing shared roles are overridden page-locally under `.as-page`,
+  the same way Workflows and Activity handled the identical numbers.
+- **`DataGrid.tsx` is claimed only at S1.e**, additive and defaulted, and only
+  if the operator wants URL-persisted sort.
+- **One finding for whoever owns `fleet-pages.css`:** the two shared failures
+  (`.acr-pg-stat .k` 2.95:1, `.acr-pg-tbl th` 2.73:1) are now measured
+  independently on two pages. Three fleet pages are working around them
+  page-locally. That is the point at which the central fix costs less than the
+  workarounds.
+- **For Activity (`SB.ACT`):** your `FleetPageShell` `aside` claim is welcome
+  here — when it lands, this page's "as of / Refresh" pair moves into the header
+  slot and the toolbar keeps only count, search and chips. Nothing is asked of
+  you; this page does not block on it and will not add a second prop for the
+  same idea.
+- **For Workflows (`SB.8`):** your §9.4 falsifier is what decides this page the
+  other way, and the reasoning is quoted rather than paraphrased in §11.4. Two
+  pages, two substrates, one test — that is the rule working, not a split.
+
+---
+
 ## Sources
 
 **RPA queues** — [UiPath queues](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/about-queues-and-transactions) · [item statuses](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/transaction-statuses) · [queue triggers](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/queue-triggers) · [Action Center](https://docs.uipath.com/action-center/automation-cloud/latest/user-guide/managing-actions) · [Blue Prism work queues](https://docs.blueprism.com/en-US/bundle/blue-prism-enterprise-7-3/page/user-guide/control-room/ug-cr-queue-management.htm) · [Automation Anywhere WLM](https://docs.automationanywhere.com/bundle/enterprise-v2019/page/enterprise-cloud/topics/aae-client/bot-creator/using-workload/cloud-queues.html) · [Power Automate work queues](https://learn.microsoft.com/en-us/power-automate/desktop-flows/work-queues)
@@ -1364,5 +1986,7 @@ assignment"* line has nothing to render yet.
 **Orchestration** — [Temporal workflow id reuse](https://docs.temporal.io/workflow-execution/workflowid-runid) · [Airflow task instances](https://airflow.apache.org/docs/apache-airflow/stable/core-concepts/tasks.html) · [Dagster backfills](https://docs.dagster.io/guides/build/partitions-and-backfills/backfilling-data) · [Prefect work pools](https://docs.prefect.io/v3/concepts/work-pools) · [SQS DLQ](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html)
 
 **Ads entity scoping** — [Amazon Ads bulk operations](https://advertising.amazon.com/help/GHTRFDZRJPW6764R) · [Google Ads automated rules](https://support.google.com/google-ads/answer/2472779) · [Shopify Flow](https://help.shopify.com/en/manual/shopify-flow)
+
+**List-page design (Part 11, AS-S1R)** — [Linear display options](https://linear.app/docs/display-options) · [Sentry issues](https://docs.sentry.io/product/issues/) · [Datadog monitor list](https://docs.datadoghq.com/monitors/manage/) · [UiPath queue item statuses](https://docs.uipath.com/orchestrator/docs/queue-item-statuses) · [Temporal Web UI](https://docs.temporal.io/web-ui) · [Airflow UI](https://airflow.apache.org/docs/apache-airflow/stable/ui.html) · [**Airflow issue #66946** — the bar chart you cannot count, sort or act on](https://github.com/apache/airflow/issues/66946) · [GitHub Copilot agent sessions](https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/manage-and-track-agents) · [GitHub agents panel](https://github.blog/changelog/2025-08-19-agents-panel-launch-copilot-coding-agent-tasks-anywhere-on-github-com/) · [Vercel redesigned deployments list](https://vercel.com/changelog/redesigned-deployments-list) · [Carbon data table](https://carbondesignsystem.com/components/data-table/usage/) · [Carbon empty states](https://carbondesignsystem.com/patterns/empty-states-pattern/) · [WCAG 1.4.1 Use of Color](https://www.w3.org/WAI/WCAG21/Understanding/use-of-color) · [WCAG content on hover or focus](https://www.w3.org/WAI/WCAG21/Understanding/content-on-hover-or-focus) · [Jira column/field overload](https://community.atlassian.com/forums/Jira-Cloud-Admins-discussions/Rethinking-Issue-View-Field-Configuration/td-p/2916049)
 
 **In repo** — `docs/2026-08-07-naf-sb-fleet-pages.md` §7 · `docs/2026-08-07-naf-sbw-workers-page.md` · `docs/2026-08-07-naf-wf-workflows-page.md` · `docs/2026-08-07-naf-sb-session-locks.md` · `docs/AGENT_FLEET.md` Parts 4, 6, 7 · `apps/api/src/services/agent-fleet/agent-executor.ts` · `charter-registry.ts` · `orchestrator.ts` · `observations/scope-filter.ts` · `apps/api/src/services/agents/approval-gate.service.ts` · `apps/api/scripts/_sbas-assignment-truth.mts`
