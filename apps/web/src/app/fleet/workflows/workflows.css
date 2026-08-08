@@ -576,6 +576,22 @@
   grid-auto-columns: minmax(0, 1fr);
   gap: 10px;
 }
+/* A solo stage gives each card ~780px, and stacked contents used 22.9% of it —
+   the dead width this section exists to remove, reappearing inside the card
+   instead of around it. Wide cards lay their facts out in lanes, exactly as
+   the list card does; narrow ones (a multi-stage routine) stay stacked. */
+.wf-pipe.is-solo .wf-pipe-step {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.15fr) minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: 16px;
+  row-gap: 3px;
+}
+.wf-pipe.is-solo .wf-pipe-deg { grid-column: 1 / -1; }
+.wf-pipe.is-solo .wf-pipe-last { margin-top: 0; }
+@media (max-width: 1100px) {
+  .wf-pipe.is-solo .wf-pipe-step { grid-template-columns: 1fr; }
+}
 
 .wf-pipe-level { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .wf-pipe-levelk {
