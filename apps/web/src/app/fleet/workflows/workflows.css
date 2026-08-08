@@ -128,7 +128,7 @@
 .wf-card-body {
   display: grid;
   grid-template-columns:
-    minmax(300px, 1.15fr) minmax(250px, 0.95fr) minmax(240px, 0.9fr) 264px;
+    minmax(260px, 1.15fr) minmax(220px, 0.95fr) minmax(210px, 0.9fr) 264px;
   column-gap: 28px;
   align-items: start;
 }
@@ -314,21 +314,29 @@
 .wf-page .acr-pg-capnote { color: #5f6a78; }
 .wf-page .acr-pg-empty { color: #5a6675; }
 
+/* The lanes fold, they never span. A lane stretched across two columns gets a
+   width its sentence cannot use — measured at 970px holding 490px of prose,
+   which is the same dead-width defect one breakpoint down. The rhythm lane
+   keeps its 264px at every width and simply grows taller. */
 @media (max-width: 1420px) {
   .wf-card-body {
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.95fr) 264px;
     row-gap: 16px;
   }
-  .wf-lane-reach { grid-column: 1 / 3; }
-  .wf-lane-rhythm { grid-row: 1 / 3; grid-column: 3; }
+  .wf-lane-what   { grid-column: 1; grid-row: 1; }
+  .wf-lane-where  { grid-column: 2; grid-row: 1; }
+  .wf-lane-reach  { grid-column: 1; grid-row: 2; }
+  .wf-lane-rhythm { grid-column: 3; grid-row: 1 / 3; }
 }
 @media (max-width: 1020px) {
   .wf-card-body {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    row-gap: 16px;
+    grid-template-columns: minmax(0, 1fr) 264px;
+    row-gap: 14px;
   }
-  .wf-lane-reach { grid-column: auto; }
-  .wf-lane-rhythm { grid-row: auto; grid-column: 1 / -1; min-height: 0; }
+  .wf-lane-what   { grid-column: 1; grid-row: 1; }
+  .wf-lane-where  { grid-column: 1; grid-row: 2; }
+  .wf-lane-reach  { grid-column: 1; grid-row: 3; }
+  .wf-lane-rhythm { grid-column: 2; grid-row: 1 / 4; }
 }
 @media (max-width: 900px) {
   .wf-factbar { flex-wrap: wrap; }
@@ -337,7 +345,11 @@
 }
 @media (max-width: 760px) {
   .wf-card-body { grid-template-columns: 1fr; }
-  .wf-lane-rhythm { grid-column: auto; }
+  .wf-lane-what,
+  .wf-lane-where,
+  .wf-lane-reach,
+  .wf-lane-rhythm { grid-column: 1; grid-row: auto; }
+  .wf-lane-rhythm { min-height: 0; }
   .wf-card-when { white-space: normal; }
 }
 
