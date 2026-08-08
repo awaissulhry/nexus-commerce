@@ -18,23 +18,56 @@ import { agoTs, fmtDuration, type RunGroup, type RunRow } from './lib'
 
 const SHOW = 12
 
-function groupOutcome(g: RunGroup): { chip: 'ok' | 'fail' | 'halt' | 'run'; text: string } {
-  if (g.running) return { chip: 'run', text: 'running now…' }
-  if (g.ok) return { chip: 'ok', text: 'finished clean' }
+/* S3.a — the summary line carries a WORD; the sentence only appears when there
+   is something to explain. Nine of twelve rows said "finished clean" inside a
+   694.8px column sized by the longest failure sentence in the table; splitting
+   the word from the explanation is what stops an outlier setting the width for
+   every row. Both come from the shared taxonomy — never re-derived here. */
+function groupOutcome(g: RunGroup): {
+  chip: 'ok' | 'fail' | 'halt' | 'run'
+  word: string
+  why: string | null
+} {
+  if (g.running) return { chip: 'run', word: 'running now…', why: null }
+  if (g.ok) return { chip: 'ok', word: 'finished clean', why: null }
   const finished = g.rows.filter((r) => r.status !== 'running')
   if (finished.length === 1) {
     const f = classifyFailure(finished[0]!)
-    if (f) return { chip: f.severe ? 'fail' : 'halt', text: f.sentence }
+    if (f) {
+      return {
+        chip: f.severe ? 'fail' : 'halt',
+        word: f.severe ? 'failed' : 'stopped at a limit',
+        why: f.sentence,
+      }
+    }
   }
   const haltN = finished.filter((r) => r.haltedReason != null).length
   const failN = finished.filter((r) => !r.ok && r.haltedReason == null).length
   if (failN === 0 && haltN > 0) {
-    return { chip: 'halt', text: `${haltN} of ${finished.length} stopped at a limit` }
+    return {
+      chip: 'halt',
+      word: 'stopped at a limit',
+      why: `${haltN} of ${finished.length} workers stopped at one of their own limits.`,
+    }
   }
   const bits: string[] = []
   if (failN > 0) bits.push(`${failN} of ${finished.length} failed`)
   if (haltN > 0) bits.push(`${haltN} stopped at a limit`)
-  return { chip: 'fail', text: bits.join(' · ') || 'failed' }
+  return { chip: 'fail', word: 'failed', why: bits.join(' · ') || null }
+}
+
+/** One mark per worker in the orchestration, coloured by how that worker's run
+ *  ended — so a group answers "how did the pieces go" without being expanded.
+ *  Same vocabulary as the run bars on the list. */
+function StepMarks({ g }: { g: RunGroup }) {
+  return (
+    <span className="wf-stepmarks" aria-hidden>
+      {g.rows.map((r) => {
+        const o = runOutcome(r)
+        return <span key={r.id} className={`wf-stepmark ${o.chip}`} title={o.text} />
+      })}
+    </span>
+  )
 }
 
 function runOutcome(r: RunRow): { chip: 'ok' | 'fail' | 'halt' | 'run'; text: string } {
@@ -96,17 +129,29 @@ export function RunsSection({
         </div>
       ) : (
         <div className="acr-pg-tablewrap">
+          {/* S3.a — `table-layout: fixed` with declared widths. The old auto
+              layout let the longest failure sentence size the Outcome column
+              for every row: 694.8px, 44.2% of the table, filled 12.3% by the
+              nine rows that only said "finished clean". */}
           <table className="acr-pg-tbl wf-runs">
+            <colgroup>
+              <col className="wf-c-when" />
+              <col className="wf-c-prov" />
+              <col className="wf-c-out" />
+              <col className="wf-c-num" />
+              <col className="wf-c-num" />
+              <col className="wf-c-num" />
+              <col className="wf-c-exp" />
+            </colgroup>
             <thead>
               <tr>
-                <th aria-label="Expand" />
                 <th>When</th>
                 <th>Started by</th>
                 <th>Outcome</th>
-                <th className="num">Workers</th>
                 <th className="num">Findings</th>
                 <th className="num">Cost</th>
                 <th className="num">Duration</th>
+                <th className="num">Workers</th>
               </tr>
             </thead>
             <tbody>
@@ -116,17 +161,6 @@ export function RunsSection({
                 return (
                   <Fragment key={g.id}>
                     <tr className="wf-grouprow">
-                      <td className="wf-expandcell">
-                        <button
-                          type="button"
-                          className="wf-expandbtn"
-                          aria-expanded={isOpen}
-                          aria-label={isOpen ? 'Collapse this run' : 'Show the workers in this run'}
-                          onClick={() => setOpen(isOpen ? null : g.id)}
-                        >
-                          {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        </button>
-                      </td>
                       <td title={new Date(g.startedAt).toLocaleString()}>{agoTs(g.startedAt)}</td>
                       <td>
                         {g.rows[0]?.trigger === 'schedule' ? 'the clock' : 'by hand'}
@@ -137,21 +171,50 @@ export function RunsSection({
                         })()}
                       </td>
                       <td>
-                        <span className={CHIP_WORD[o.chip]}>{o.text}</span>
+                        <span className="wf-outcell">
+                          <span className={CHIP_WORD[o.chip]}>{o.word}</span>
+                          <StepMarks g={g} />
+                        </span>
                       </td>
-                      <td className="num">{g.runs}</td>
-                      <td className="num">
-                        {g.findings > 0 ? g.findings : <span className="acr-pg-muted">—</span>}
-                      </td>
+                      {/* A known zero is a zero. An em-dash on this page means
+                          "unknown", which is a different thing. */}
+                      <td className="num">{g.findings}</td>
                       <td className="num">${g.costUSD.toFixed(4)}</td>
                       <td className="num">{fmtDuration(g.durationMs)}</td>
+                      <td className="num wf-expandcell">
+                        {/* The worker count stops being a column that reads "1"
+                            twelve times and becomes the affordance's label — it
+                            says what expanding will show, which is the only
+                            reason the number matters. */}
+                        <button
+                          type="button"
+                          className="wf-expandbtn"
+                          aria-expanded={isOpen}
+                          aria-label={
+                            isOpen
+                              ? 'Collapse this run'
+                              : `Show the ${g.runs} worker${g.runs === 1 ? '' : 's'} in this run`
+                          }
+                          onClick={() => setOpen(isOpen ? null : g.id)}
+                        >
+                          {g.runs} worker{g.runs === 1 ? '' : 's'}
+                          {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                        </button>
+                      </td>
                     </tr>
+                    {o.why ? (
+                      <tr className="wf-whyrow">
+                        <td />
+                        <td colSpan={6}>
+                          <span className={`wf-whytext ${CHIP_WORD[o.chip]}`}>{o.why}</span>
+                        </td>
+                      </tr>
+                    ) : null}
                     {isOpen
                       ? g.rows.map((r) => {
                           const ro = runOutcome(r)
                           return (
                             <tr key={r.id} className="wf-subrow">
-                              <td />
                               <td className="wf-subname" colSpan={2}>
                                 {nameByKey.get(r.agentKey) ?? r.agentKey}
                               </td>
@@ -160,16 +223,16 @@ export function RunsSection({
                                   {ro.text}
                                 </span>
                               </td>
-                              <td className="num">
+                              <td className="num">{r.findingCount}</td>
+                              <td className="num">${Number(r.costUSD || 0).toFixed(4)}</td>
+                              <td className="num">{runDuration(r)}</td>
+                              {/* `full story →` used to render inside the
+                                  WORKERS column, right-aligned as a number. */}
+                              <td>
                                 <Link className="wf-sublink" href={`/fleet/workers/${r.agentKey}`}>
                                   full story →
                                 </Link>
                               </td>
-                              <td className="num">
-                                {r.findingCount > 0 ? r.findingCount : <span className="acr-pg-muted">—</span>}
-                              </td>
-                              <td className="num">${Number(r.costUSD || 0).toFixed(4)}</td>
-                              <td className="num">{runDuration(r)}</td>
                             </tr>
                           )
                         })
