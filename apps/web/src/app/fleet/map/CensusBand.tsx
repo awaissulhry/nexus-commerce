@@ -281,10 +281,37 @@ export function CensusBand({
   )
 }
 
-/** The band before the first successful read: a shape, and not one number.
- *  Measured on prod 2026-08-08 — the strip it replaces asserted three counts
- *  about a fleet it had not read, with those zeros as live buttons. */
-export function CensusBandSkeleton() {
+/**
+ * The band before the first successful read: a shape, and not one number.
+ * Measured on prod 2026-08-08 — the strip it replaces asserted three counts
+ * about a fleet it had not read, with those zeros as live buttons.
+ *
+ * `failed` is the state my own Part 6 promised and the first build did not
+ * have. When the FIRST read fails there are no last-good figures to keep, and
+ * what shipped was this skeleton, `aria-busy="true"`, forever: visually
+ * indistinguishable from still-loading, and announced as busy to a screen
+ * reader that would wait for a change that is never coming. On a surface whose
+ * silence means *all clear*, "we could not look" and "we are still looking"
+ * must not be the same pixels — the same rule that put the loading state here
+ * in the first place, one step further along.
+ */
+export function CensusBandSkeleton({ failed = false }: { failed?: boolean }) {
+  if (failed) {
+    return (
+      <section className="sbm-band tone-failed" aria-label="The fleet could not be read">
+        <div className="sbm-verdict">
+          <p className="sbm-verdict-head">
+            <AlertTriangle size={15} aria-hidden />
+            <span>The fleet could not be read.</span>
+          </p>
+          <p className="sbm-verdict-sub">
+            Nothing is shown rather than guessed at — this says nothing about whether your
+            workers are running. Try again above.
+          </p>
+        </div>
+      </section>
+    )
+  }
   return (
     <section className="sbm-band is-loading" aria-busy="true" aria-label="Reading the fleet">
       <div className="sbm-verdict">

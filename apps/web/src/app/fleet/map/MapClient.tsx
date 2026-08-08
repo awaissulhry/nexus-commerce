@@ -54,6 +54,7 @@ export function MapClient() {
   const [mode, setMode] = useState<'workers' | 'entities'>('workers')
   const [entity, setEntity] = useState<EntityGraph | null>(null)
   const [entityLoading, setEntityLoading] = useState(false)
+  const [entityErr, setEntityErr] = useState(false)
   const [entitySel, setEntitySel] = useState<string | null>(null)
   /** The walk back. The breadcrumb IS the back-stack — one of them, not two. */
   const [trail, setTrail] = useState<Array<{ type: string; id: string; label: string }>>([])
@@ -70,8 +71,13 @@ export function MapClient() {
         if (!r.ok) throw new Error(String(r.status))
         setEntity((await r.json()) as EntityGraph)
         setEntitySel(null)
+        setEntityErr(false)
       } catch {
         setEntity(null)
+        // S1R: "could not read" and "still reading" must not be the same
+        // pixels. Without this the band cannot tell them apart, and a failed
+        // first read spins a skeleton with aria-busy set, forever.
+        setEntityErr(true)
       } finally {
         setEntityLoading(false)
       }
@@ -298,7 +304,11 @@ export function MapClient() {
               control, and the two counts are a sentence. Measured dead width in
               that mode was 977.6px — 60.6%. */}
           {entity == null ? (
-            <CensusBandSkeleton />
+            /* `entityErr`, not `err`: `err` is the MAP read, and this mode is
+               reading a different endpoint. Wiring the wrong signal here would
+               have reported "the fleet could not be read" over a perfectly
+               healthy entity graph. */
+            <CensusBandSkeleton failed={entityErr} />
           ) : (
             <section className="sbm-band tone-entities" aria-label="What this view shows">
               <div className="sbm-verdict">
@@ -514,7 +524,7 @@ export function MapClient() {
         <>
       {/* ── M1 · the census band (S1R) ────────────────────────────────── */}
       {data == null ? (
-        <CensusBandSkeleton />
+        <CensusBandSkeleton failed={err != null} />
       ) : (
         <CensusBand
           nodes={nodes}

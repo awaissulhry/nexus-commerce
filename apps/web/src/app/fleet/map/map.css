@@ -473,41 +473,22 @@
   color: #45505f;
 }
 
-/* ── M1 · the census strip — entity mode still wears it (S1.d retires it) ── */
-
-.sbm-census {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex: none;
-  padding: 10px 12px;
-  background: #fff;
-  border: 1px solid #e6ebf1;
-  border-radius: 9px;
-}
-.sbm-census-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.sbm-chiprow {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.sbm-chiprow-label {
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #9aa5b3;
-  margin-right: 2px;
-}
-.sbm-chiprow.rank-fact {
-  padding-top: 6px;
-  border-top: 1px dashed #eaeef3;
-}
+/* ── the tier-filter chips in the M3 rail, and the page's small text ───────
+ *
+ * What used to live here was the census strip: `.sbm-census`, `.sbm-chiprow`,
+ * `.sbm-chiprow-label`, `.sbm-spend`, `.sbm-filterline` and `.sbm-selline`.
+ * S1R replaced all of it with `.sbm-band` and S1.d took the last user (entity
+ * mode), so they are deleted rather than left to be copied by the next person
+ * who greps for a chip.
+ *
+ * ⚠ `.sbm-chip` STAYS, because the M3 rail's tier filters still wear it — and
+ * it therefore still carries both defects S1R measured and fixed on the lens:
+ * a boundary at 1.28:1 and a pressed state whose best channel is 1.40:1,
+ * against 1.4.11's 3:1. `.sbm-lens` is the fix, three metres away. NOT changed
+ * here: the rail is section M3 and its visual weight is M3's decision, not a
+ * free ride on this one. Recorded in the S1R study so the M3 restudy inherits
+ * the numbers rather than re-measuring them.
+ */
 
 .sbm-chip {
   display: inline-flex;
@@ -544,14 +525,7 @@
   outline-offset: 1px;
 }
 
-.sbm-spend {
-  font-size: 11.5px;
-  color: #667485;
-  white-space: nowrap;
-}
-.sbm-filterline,
-.sbm-footnote,
-.sbm-selline {
+.sbm-footnote {
   margin: 0;
   font-size: 11.5px;
   /* #667485 measured 4.41:1 against this page's #f4f6f9 background — under AA
