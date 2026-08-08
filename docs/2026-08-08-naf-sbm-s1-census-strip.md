@@ -1,8 +1,9 @@
 # NAF.SB.M-S1R — Section 1, the census strip: a measured audit and a rebuild
 
 **Status: APPROVED by the operator 2026-08-08 (Option A, and the findings fact
-added). S1.a–S1.d ALL SHIPPED AND PROD-VERIFIED. See PART 12 for the execution
-record and the two exit criteria I missed.**
+added). SECTION COMPLETE — S1.a–S1.f ALL SHIPPED AND PROD-VERIFIED. See PART 12
+for the execution record, the two exit criteria I missed, and the two rows of
+this study's own Part 6 that were wrong.**
 
 | | |
 |---|---|
@@ -847,6 +848,8 @@ then measured on the deployed build at 1728×906.
 | **S1.b** the band: layout, meter, lens toolbar, standing facts, loading state, drawer section | `9d7eaeeb6` + `e294c33a8` |
 | **S1.c** SC 1.4.13, the a11y tree, and two class collisions | `77407e92f` |
 | **S1.d** entity mode's band, and the second collision | `e7d068a68` |
+| **S1.e** the failed-read state, and deleting the old strip's dead CSS | `a8218df62` |
+| **S1.f** the summary clause about workers that are not there | `d281c7371` |
 
 ### 12.1 · The exit criteria, against what shipped
 
@@ -928,3 +931,52 @@ the harness rather than the page.
 
 The general rule, and it is the third time this page has taught it: **when a
 probe and the code disagree, suspect the probe.**
+
+### 12.5 · The two Part 6 rows that were wrong, and the one state I had not built
+
+Exercising the degenerate states rather than the happy path found three things,
+and two of them were mistakes in **this document** rather than in the code.
+
+1. **A failed FIRST read had no state at all.** Part 6 said "keeps the last good
+   figures", which is right — and silent about the case where there are none.
+   What shipped was the loading skeleton with `aria-busy="true"`, forever:
+   pixel-identical to still-loading and announced as busy to a screen reader
+   waiting for a change that was never coming. Built in S1.e; verified on prod
+   by failing the first read (`tone-failed`, no `aria-busy`, **0 digits**, and
+   the error banner above it naming the status code).
+2. **"A four-digit count: min-width sized to four digits" was wrong**, and the
+   code deliberately reserves two. A lens counts *workers*, so its number is
+   bounded by the size of the fleet; four digits would spend ~20px per lens on
+   a count no lens can produce, which is dead space wearing a safety label.
+3. **"Halted: meter fully grey" was wrong**, and was deliberately not built. It
+   contradicts the parent study's rule for this page — the halt is stated once,
+   and encoding it in colour spends the whole channel on one bit that is already
+   a sentence — and it is already stated twice, in the banner and the verdict.
+
+And one real defect the same pass found: **the summary said "The rest are
+dimmed, not hidden" when there was no rest.** `7 switched off` matches every
+node today, so pressing it produced that clause over a canvas with nothing
+dimmed. A section whose entire subject is numbers that do not contradict the
+page cannot end its own sentence with a claim about workers that are not there.
+Fixed in S1.f and verified live: the clause is gone at 7-of-7 and kept at 1-of-7.
+
+### 12.6 · Left deliberately, for the M3 restudy
+
+**`.sbm-chip` still carries both defects S1R measured and fixed.** The M3 rail's
+tier filters wear it, so its boundary is still **1.28:1** and its best
+pressed-state channel still **1.40:1**, against 1.4.11's 3:1. `.sbm-lens` is the
+fix and it is three metres away in the same stylesheet. **Not applied**: the
+rail is section M3, its visual weight is M3's decision, and a section rebuild
+does not get to redesign its neighbour on the way past. The numbers are here so
+the M3 restudy inherits them instead of re-measuring.
+
+### 12.7 · A third probe lesson, and it cost the most time
+
+Beyond the two harness traps in 12.4: **a deploy probe must match a string that
+exists ONLY in the new build.** Two consecutive probes reported "DEPLOYED after
+15s" against the *old* bundle — the first because the string it grepped for was
+already there, the second because I guessed at the old build's minified form and
+guessed wrong, making its "absent" test trivially true. Both were believed for a
+few minutes. The only signal that never lied was **the rendered behaviour in the
+browser**, and for a change with no new user-visible string that is the only
+honest probe there is.
