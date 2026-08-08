@@ -561,6 +561,11 @@
 .as-drawer .h10-ds-drawer-h .st { color: #5b6573; }
 .as-drawer input::placeholder,
 .as-drawer textarea::placeholder { color: #6b7480; }
+/* The DateField's "No deadline" is NOT a `::placeholder` — it is a
+   `<span class="ph">` inside the DS listbox button, so the rule above sailed
+   straight past it and it stayed at 3.10:1. Measured, not assumed: the probe
+   found one survivor and the survivor named itself. */
+.as-drawer .h10-ds-listbox-btn .ph { color: #6b7480; }
 /* The worker descriptions were 2.82–2.95:1 — and they are the only text on
    this screen that tells you which worker to pick. */
 .as-drawer .as-workerbtn .ds { color: #5b6573; }

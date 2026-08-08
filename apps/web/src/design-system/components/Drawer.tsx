@@ -55,7 +55,29 @@ export function Drawer({ open, onClose, title, subtitle, footer, children, class
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') return onClose()
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
+  /**
+   * The Tab trap is bound to the PANEL, not to `document`, and it defers to
+   * anything that has already handled the key.
+   *
+   * Both of those are about the 22 consumers rather than about this drawer:
+   * `ProductDrawer` and `StudioConfirm` already implement their own traps, and
+   * several drawers carry `autoFocus` inputs. A document-level handler here
+   * would fire before theirs and quietly take over; a panel-level one only
+   * sees keystrokes from inside this drawer, and `defaultPrevented` means a
+   * consumer that has its own opinion keeps it.
+   */
+  useEffect(() => {
+    if (!open) return
+    const el = panel.current
+    if (!el) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return
       if (e.key !== 'Tab' || !panel.current) return
       // Cycle within the panel. Read the focusables fresh on every Tab: a
       // drawer's contents change as the form fills in, and a list captured on
@@ -68,7 +90,15 @@ export function Drawer({ open, onClose, title, subtitle, footer, children, class
       const first = list[0]
       const last = list[list.length - 1]
       const active = document.activeElement
-      if (e.shiftKey && (active === first || !panel.current.contains(active))) {
+      // `active === panel.current` is the state right after opening, before the
+      // first Tab. Without it here, Shift+Tab from a freshly opened drawer
+      // walks backwards out of the panel into the page behind — which is the
+      // leak this trap exists to close, arriving through the one door nobody
+      // tests.
+      if (
+        e.shiftKey &&
+        (active === first || active === panel.current || !panel.current.contains(active))
+      ) {
         e.preventDefault()
         last.focus()
       } else if (!e.shiftKey && active === last) {
@@ -79,9 +109,9 @@ export function Drawer({ open, onClose, title, subtitle, footer, children, class
         first.focus()
       }
     }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+    el.addEventListener('keydown', onKey)
+    return () => el.removeEventListener('keydown', onKey)
+  }, [open])
 
   // Focus moves in on open and back to the opener on close — otherwise closing
   // a drawer drops the caret at the top of the document and the operator has
@@ -89,7 +119,15 @@ export function Drawer({ open, onClose, title, subtitle, footer, children, class
   useEffect(() => {
     if (!open) return
     returnTo.current = document.activeElement
-    const t = window.setTimeout(() => panel.current?.focus(), 0)
+    const t = window.setTimeout(() => {
+      // Never steal focus from something that already has it inside the panel.
+      // Several consumers put `autoFocus` on their first input, and React sets
+      // that on mount — before this timeout — so taking it back would turn a
+      // considered choice into a worse default.
+      if (panel.current && !panel.current.contains(document.activeElement)) {
+        panel.current.focus()
+      }
+    }, 0)
     return () => {
       window.clearTimeout(t)
       const back = returnTo.current
