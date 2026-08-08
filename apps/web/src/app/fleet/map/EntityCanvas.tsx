@@ -258,15 +258,13 @@ export function EntityCanvas({
   const { pos, groups } = useMemo(() => layout(graph), [hash]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const flowNodes: Node[] = useMemo(() => {
-    const out: Node[] = groups.map((g, i) => ({
-      id: `grp-${i}`,
-      type: 'group-label',
-      position: { x: 0, y: g.y },
-      data: {},
-      draggable: false,
-      selectable: false,
-      hidden: true,
-    }))
+    /* No hidden marker nodes here. An earlier cut added one per family with a
+       `type` that had no entry in `nodeTypes`; xyflow could never measure it,
+       so `nodesInitialized` stayed false forever and BOTH the `fitView` prop
+       and every manual fit silently did nothing — the viewport sat at the
+       identity matrix while a 1818px-tall graph overflowed a 664px box. A node
+       you never draw is not free. */
+    const out: Node[] = []
     for (const n of graph.nodes) {
       const p = pos.get(keyOf(n.type, n.id))
       if (!p) continue
@@ -301,10 +299,37 @@ export function EntityCanvas({
     [graph],
   )
 
-  const fitRef = useRef<{ fitView: (o?: object) => void } | null>(null)
+  /**
+   * FIT THE WIDTH, NOT THE WHOLE THING — and this is the decision that makes
+   * the mode work rather than a preference.
+   *
+   * The families stack vertically, so on real data the graph is ~918 wide and
+   * ~1818 tall inside a 1034 × 664 box. Fitting all of it means zoom 0.36,
+   * which is below the tier at which a card shows its name — so a "fit"
+   * would render 37 anonymous dots and re-create the exact unreadability this
+   * mode exists to fix. Every label would be gone at the moment of arrival.
+   *
+   * So: fit the WIDTH, clamp to a zoom that still carries text, and start at
+   * the top-left. The reader arrives able to read the first family and scrolls
+   * to the rest, which is how a tall document is meant to behave. `Fit view`
+   * in the corner controls is still there for anyone who wants the shape.
+   */
+  const fitRef = useRef<{
+    fitView: (o?: object) => void
+    setViewport: (v: { x: number; y: number; zoom: number }, o?: object) => void
+    getNodes: () => Array<{ position: { x: number; y: number }; measured?: { width?: number } }>
+  } | null>(null)
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const refit = useCallback(() => {
-    fitRef.current?.fitView({ padding: 0.1, maxZoom: 1, duration: 0 })
+    const inst = fitRef.current
+    const box = wrapRef.current?.getBoundingClientRect()
+    if (!inst || !box || box.width === 0) return
+    const ns = inst.getNodes()
+    if (ns.length === 0) return
+    const maxRight = Math.max(...ns.map((n) => n.position.x + (n.measured?.width ?? CARD_W)))
+    const pad = 24
+    const zoom = Math.max(0.55, Math.min(1, (box.width - pad * 2) / Math.max(1, maxRight)))
+    inst.setViewport({ x: pad, y: pad, zoom }, { duration: 0 })
   }, [])
   useEffect(() => {
     const el = wrapRef.current
@@ -326,14 +351,12 @@ export function EntityCanvas({
       <ReactFlow
         key={hash}
         onInit={(inst) => {
-          fitRef.current = inst as unknown as { fitView: (o?: object) => void }
+          fitRef.current = inst as unknown as typeof fitRef.current
           refit()
         }}
         nodes={flowNodes}
         edges={flowEdges}
         nodeTypes={nodeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.1, maxZoom: 1 }}
         minZoom={0.15}
         maxZoom={1.8}
         nodesConnectable={false}
