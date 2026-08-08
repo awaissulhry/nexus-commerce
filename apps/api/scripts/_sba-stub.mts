@@ -53,7 +53,24 @@ const SIM = {
    *                          told apart from "nothing is wrong"
    */
   band: process.env.STUB_BAND ?? '',
+  /**
+   * S3R Phase 0 — make the data MOVE, so the facet chips and the scope line can
+   * be watched over successive polls.
+   *
+   * `STUB_DRIFT=1` hides the newest event during odd 15-second windows, so the
+   * stream alternates between N and N−1 events: one direction exercises the
+   * adopt path, the other makes an id reappear at the head and exercises the
+   * hold path behind the "N new events" button.
+   *
+   * The window is derived from the CLOCK rather than a request counter on
+   * purpose — the page issues three or four reads per tick, and a counter would
+   * hand them different worlds, which is precisely the bug under test. Every
+   * read inside one window sees the same history.
+   */
+  drift: process.env.STUB_DRIFT === '1',
 }
+
+const driftHidesNewest = () => SIM.drift && Math.floor(Date.now() / 15_000) % 2 === 1
 
 /** The band asks for exactly this, and nothing else on the page does — so it is
  *  a safe discriminator for simulating the band alone. */
@@ -65,6 +82,30 @@ interface Timelineish {
   total: number
   countsByKind: Record<string, number>
   actors: unknown[]
+}
+
+/**
+ * Remove the newest event and keep every derived number consistent with it —
+ * `total` and `countsByKind` included. A drift that moved the rows but not the
+ * counts would be testing the harness, not the page.
+ *
+ * `limit=1` reads (the base-scope facets and the whole-history total) carry one
+ * event but a full `total`/`countsByKind`, so the kind is taken from the counts
+ * when the row itself is not in the page.
+ */
+function dropNewest(page: Timelineish): Timelineish {
+  if (page.total <= 0) return page
+  const newest = page.events[0]
+  const kind = newest ? String(newest.kind) : null
+  const counts = { ...page.countsByKind }
+  if (kind && counts[kind]) counts[kind] = counts[kind]! - 1
+  if (kind && counts[kind] === 0) delete counts[kind]
+  return {
+    ...page,
+    events: page.events.slice(1),
+    total: page.total - 1,
+    countsByKind: counts,
+  }
 }
 
 function simulateBand(page: Timelineish): Timelineish {
@@ -133,7 +174,8 @@ async function handle(url: URL): Promise<unknown> {
       },
       { limit: Number(q.get('limit')) || 50, cursor: q.get('cursor') ?? undefined },
     )) as unknown as Timelineish
-    return isBandRead ? simulateBand(page) : page
+    const drifted = driftHidesNewest() ? dropNewest(page) : page
+    return isBandRead ? simulateBand(drifted) : drifted
   }
   if (p.endsWith('/state')) {
     const real = await getFleetState()

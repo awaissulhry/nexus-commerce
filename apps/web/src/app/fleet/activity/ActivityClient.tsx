@@ -57,6 +57,7 @@ import { DataGrid, type Column } from '@/design-system/components'
 import { GridToolbar } from '@/design-system/patterns'
 import { PlanStory, type PlanLabels, type StoryPlan } from '@/app/marketing/ads/rules-automation/fleet/PlanStory'
 import { FleetPageShell } from '../_shell/FleetPageShell'
+import { hiddenByScope, reconcilePoll, type FacetSnapshot } from './poll-view'
 import { RunDetail } from '../_shared/RunDetail'
 import {
   ago,
@@ -1002,6 +1003,11 @@ export function ActivityClient() {
 
   /** What is on screen. Never replaced by a poll — see `incoming`. */
   const [shown, setShown] = useState<TimelinePage | null>(null)
+  /** A mirror of `shown` for `load()`, which needs to decide adopt-vs-hold
+   *  BEFORE calling any setter. Reading it inside a functional updater used to
+   *  work, but the decision now moves two other pieces of state with it and a
+   *  reducer is no place for that. */
+  const shownRef = useRef<TimelinePage | null>(null)
   /** Pages the operator asked for with "Show older", kept apart so a refresh
    *  of page 1 cannot silently drop them. */
   const [older, setOlder] = useState<FleetEvent[]>([])
@@ -1022,6 +1028,13 @@ export function ActivityClient() {
    * reader: the operator is told and chooses.
    */
   const [incoming, setIncoming] = useState<TimelinePage | null>(null)
+  /** The facets and whole-history total read alongside `incoming`, staged so
+   *  they are adopted in the same moment the rows are. Holding the rows while
+   *  letting the chips advance would be the §18.9 bug in the other direction. */
+  const [pending, setPending] = useState<{ facets: FacetSnapshot | null; whole: number | null }>({
+    facets: null,
+    whole: null,
+  })
   const [state, setState] = useState<FleetStateRow | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -1114,29 +1127,79 @@ export function ActivityClient() {
     window.history.replaceState(null, '', `${window.location.pathname}${s ? `?${s}` : ''}${hash}`)
   }, [grain, actors, kinds, q, includeSelfTest])
 
+  /**
+   * The two — and only two — ways a read pair reaches the screen.
+   *
+   * `adopt` puts the whole pair on screen at once. `hold` stages the whole pair
+   * behind the "N new events" button. There is deliberately no operation that
+   * takes the page without its facets, which is what makes §18.9 unrepresentable
+   * rather than merely fixed.
+   */
+  const adopt = useCallback(
+    (view: { page: TimelinePage; facets: FacetSnapshot | null }, whole: number | null) => {
+      shownRef.current = view.page
+      shownIds.current = new Set(view.page.events.map((e) => e.id))
+      setShown(view.page)
+      if (view.facets) setFacets(view.facets)
+      if (whole != null) setHistoryTotal(whole)
+      setIncoming(null)
+      setPending({ facets: null, whole: null })
+    },
+    [],
+  )
+
+  const hold = useCallback(
+    (view: { page: TimelinePage; facets: FacetSnapshot | null }, whole: number | null) => {
+      setIncoming(view.page)
+      setPending({ facets: view.facets, whole })
+    },
+    [],
+  )
+
+  /**
+   * S3R Phase 0 — the list, its facet chips and the hidden-count are read in
+   * ONE tick and adopted in ONE moment.
+   *
+   * Before this, `facets` was fetched once per `includeSelfTest` change and
+   * never again while the list refetched every ten seconds, so the page showed
+   * a scope line reading 33 events sixty pixels above chips summing to 37 — for
+   * events the API no longer returned (§18.9, caught on production).
+   *
+   * The base-scope semantics are unchanged and must stay: the facet read is
+   * narrowed by the SCOPE TOGGLES ONLY, never by the facet selections, or
+   * picking one worker makes every other worker's chip vanish and a second can
+   * never be added (Part 16, defect 2). Refreshing it does not change what it
+   * asks for, only how often.
+   */
   const load = useCallback(async () => {
     try {
-      const [t, s] = await Promise.all([
+      const base = new URLSearchParams({ limit: '1' })
+      if (!includeSelfTest) base.set('includeSelfTest', '0')
+      const [t, s, f, h] = await Promise.all([
         fetch(`${backend}/api/agent/fleet/timeline?${qs()}`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/state`, { cache: 'no-store' }),
+        fetch(`${backend}/api/agent/fleet/timeline?${base.toString()}`, { cache: 'no-store' }),
+        // Only when something is hidden — with the self-test shown the whole
+        // history IS the base scope and this read has no question to answer.
+        includeSelfTest
+          ? Promise.resolve(null)
+          : fetch(`${backend}/api/agent/fleet/timeline?limit=1`, { cache: 'no-store' }),
       ])
       if (!t.ok) throw new Error(`timeline: ${t.status}`)
       const page = (await t.json()) as TimelinePage
       if (s.ok) setState((await s.json()) as FleetStateRow)
 
-      setShown((current) => {
-        if (current === null) {
-          shownIds.current = new Set(page.events.map((e) => e.id))
-          return page
-        }
-        const fresh = page.events.filter((e) => !shownIds.current.has(e.id))
-        if (fresh.length > 0) {
-          setIncoming(page)
-          return current
-        }
-        shownIds.current = new Set(page.events.map((e) => e.id))
-        return page
-      })
+      // A failed facet read yields `null` and travels as part of the pair; it
+      // is never quietly replaced by the previous tick's counts.
+      const facetPage = f.ok ? ((await f.json()) as TimelinePage) : null
+      const nextFacets: FacetSnapshot | null = facetPage
+        ? { actors: facetPage.actors, countsByKind: facetPage.countsByKind, total: facetPage.total }
+        : null
+      const wholeHistory = h == null ? null : h.ok ? ((await h.json()) as TimelinePage).total : null
+
+      const r = reconcilePoll(shownRef.current, { page, facets: nextFacets }, shownIds.current)
+      if (r.action === 'adopt') adopt(r.view, wholeHistory)
+      else hold(r.view, wholeHistory)
       setErr(null)
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
@@ -1146,7 +1209,7 @@ export function ActivityClient() {
     } finally {
       setLoading(false)
     }
-  }, [backend, qs])
+  }, [backend, qs, includeSelfTest, adopt, hold])
 
   /* The plan feed is small (one plan exists) and static enough not to poll —
      it is fetched once so a plan row has something to open. */
@@ -1206,20 +1269,10 @@ export function ActivityClient() {
     void loadWorkers()
   }, [loadWorkers])
 
-  useEffect(() => {
-    let live = true
-    fetch(`${backend}/api/agent/fleet/timeline?limit=1`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: TimelinePage | null) => {
-        if (live && d) setHistoryTotal(d.total)
-      })
-      .catch(() => {
-        /* the hidden-count clause is omitted rather than guessed */
-      })
-    return () => {
-      live = false
-    }
-  }, [backend])
+  /* The whole-history read moved INTO `load()` at S3R Phase 0. On its own
+     effect it refreshed once per mount while the base scope refreshed every ten
+     seconds, so "33 shown + 86 hidden" could drift away from the 119 the
+     operator sees the moment they tick the box. Same tick, same adoption. */
 
   /* Nothing shifts under someone reading a run. Throwing is how the hook is
      told "we did not read", so the `as of` stamp stays honest too. */
@@ -1242,22 +1295,23 @@ export function ActivityClient() {
     refresh()
   }, [refresh, loadWorkers])
 
-  /** Adopt the waiting page. The only way rows ever change under the reader. */
+  /** Adopt the waiting page — rows AND the chips that were read with them. The
+   *  only way anything ever changes under the reader. */
   const showIncoming = useCallback(() => {
     if (!incoming) return
-    shownIds.current = new Set(incoming.events.map((e) => e.id))
-    setShown(incoming)
-    setIncoming(null)
+    adopt({ page: incoming, facets: pending.facets }, pending.whole)
     // "Show older" pages were fetched against the OLD head; keeping them would
     // interleave two reads of a moving list. Start the tail again.
     setOlder([])
     setCursor(undefined)
-  }, [incoming])
+  }, [incoming, pending, adopt])
 
   /* A filter change is a reload, not a merge. */
   useEffect(() => {
     setShown(null)
+    shownRef.current = null
     setIncoming(null)
+    setPending({ facets: null, whole: null })
     setOlder([])
     setCursor(undefined)
     shownIds.current = new Set()
@@ -1378,30 +1432,12 @@ export function ActivityClient() {
    * you refine — the behaviour Sentry and GitHub facets have — and what you are
    * actually looking at is stated by the scope line and the footer instead.
    */
-  const [facets, setFacets] = useState<
-    Pick<TimelinePage, 'actors' | 'countsByKind' | 'total'> | null
-  >(null)
-  useEffect(() => {
-    const p = new URLSearchParams({ limit: '1' })
-    if (!includeSelfTest) p.set('includeSelfTest', '0')
-    let live = true
-    fetch(`${backend}/api/agent/fleet/timeline?${p.toString()}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: TimelinePage | null) => {
-        // `total` here is this page's scope with the self-test toggle applied
-        // and NO other filter — which is what "filtered from N" must count
-        // against, and what the hidden-count clause subtracts from the whole
-        // history. Taking either from `shown` would compare a number with
-        // itself.
-        if (live && d) setFacets({ actors: d.actors, countsByKind: d.countsByKind, total: d.total })
-      })
-      .catch(() => {
-        /* the list's own error banner covers a dead endpoint; chips just stay put */
-      })
-    return () => {
-      live = false
-    }
-  }, [backend, includeSelfTest])
+  const [facets, setFacets] = useState<FacetSnapshot | null>(null)
+  /* Its read lives in `load()` since S3R Phase 0 — same tick as the list, same
+     moment of adoption. `total` is the base scope with the toggles applied and
+     NO facet selection, which is what "filtered from N" counts against and what
+     the hidden-count subtracts from the whole history. Taking either from
+     `shown` would compare a number with itself. */
 
   /**
    * S2 keeps its OWN read. Tallying the loaded rows would be a silent cap —
@@ -1647,10 +1683,7 @@ export function ActivityClient() {
    *  *excluded, never concealed* applies to the COUNT and not only to the rows.
    *  86 of 119 events are hidden by default and the shipped header said so
    *  nowhere. */
-  const hiddenBySelfTest =
-    !includeSelfTest && historyTotal != null && facets != null
-      ? Math.max(0, historyTotal - facets.total)
-      : 0
+  const hiddenBySelfTest = includeSelfTest ? 0 : hiddenByScope(historyTotal, facets)
 
   /** The counts, as nodes rather than a string, so the numbers can carry the
    *  weight and the prose can stay one size. Hierarchy from weight and colour,
