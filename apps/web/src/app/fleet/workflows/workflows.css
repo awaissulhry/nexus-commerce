@@ -142,8 +142,13 @@
 /* The rhythm lane reserves its full height and pins the run strip to the
    bottom (S1.b), so the bars sit on one line across every card no matter how
    much the last-run sentence above them wrapped — and a routine that has
-   never run does not make its card shorter than its neighbours. */
-.wf-lane-rhythm { gap: 6px; min-height: 124px; }
+   never run does not make its card shorter than its neighbours.
+
+   138px is measured, not chosen: the tallest rhythm lane on prod is the
+   nightly sweep's at 137.3px, because its tick-vs-run sentence ("the clock
+   fired and launched nothing") wraps to two lines. Reserve for the tallest
+   honest sentence, or the honest sentence is what breaks the rhythm. */
+.wf-lane-rhythm { gap: 6px; min-height: 138px; }
 .wf-lane-rhythm .wf-recent { margin-top: auto; }
 
 .wf-purpose,
