@@ -259,122 +259,97 @@
 /* `.sba-asof` (11.5px / 2.39:1) and `.sba-refresh` were removed at S1R —
    the freshness readout and its Refresh are one instrument now, above. */
 
-/* ── ACT.3 · the controls ─────────────────────────────────────────────── */
+/* ── S3 · the controls ────────────────────────────────────────────────────
+   Rebuilt 2026-08-08 — SB.ACT.S3R, study Part 21.
 
-.sba-toolbar {
+   The hand-rolled strip is gone. `FilterBar`, `GridToolbar`, `SegmentedControl`,
+   `Input` and `Button` are the design system's own, so the type scale, the
+   focus rings and the contrast come from tokens rather than from this file
+   getting it right a fourth time. What was deleted with it:
+
+     .sba-toolbar      17 controls in one wrapping row
+     .sba-grain*       including .sba-grainlabel at 11.5px / 2.82:1 — the fifth
+                       sub-AA role on this page, in the size S1 and S2 both
+                       had to remove
+     .sba-chipset      ten chips eating 76% of the row at SIX workers
+     .acr-pg-chip.on   a selected state this page redefined on a shared class
+     .sba-toolright · .sba-searchwrap · .sba-search · .sba-clear · .sba-export
+
+   What remains here is the one thing the DS has no opinion about: the row of
+   applied-filter pills, which lives OUTSIDE the collapsible panel so that what
+   is applied stays visible when the controls are folded away. */
+
+.sba-applied {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   flex-wrap: wrap;
-  padding: 9px 11px;
-  background: #f8fafc;
-  border: 1px solid #e7ecf2;
-  border-radius: 8px;
 }
 
-.sba-grain {
+.sba-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-}
-.sba-grainlabel {
-  font-size: 11.5px;
-  color: #8d97a6;
-  margin-right: 2px;
-}
-.sba-grainbtn {
-  font-size: 12px;
-  font-weight: 600;
-  color: #4a5867;
-  background: #fff;
-  border: 1px solid #dfe5ec;
-  padding: 4px 10px;
-  cursor: pointer;
-}
-.sba-grainbtn:first-of-type {
-  border-radius: 6px 0 0 6px;
-}
-.sba-grainbtn:last-of-type {
-  border-radius: 0 6px 6px 0;
-  border-left: none;
-}
-.sba-grainbtn:hover {
-  background: #f2f5f9;
-}
-.sba-grainbtn.on {
-  background: #1c2530;
-  border-color: #1c2530;
-  color: #fff;
-}
-
-.sba-chipset {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-wrap: wrap;
-}
-/* `.acr-pg-chip` is the shared primitive; `.on` is the selected state this
-   page adds. Kept as a modifier so fleet-pages.css stays frozen. */
-.acr-pg-chip.on {
-  background: #1c2530;
-  border-color: #1c2530;
-  color: #fff;
-}
-.sba-chipn {
-  opacity: 0.65;
-  font-variant-numeric: tabular-nums;
-  margin-left: 3px;
-}
-
-.sba-toolright {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-left: auto;
-}
-
-.sba-searchwrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: #fff;
-  border: 1px solid #dfe5ec;
-  border-radius: 6px;
-  padding: 3px 8px;
-  color: #98a2b0;
-}
-.sba-search {
-  border: none;
-  outline: none;
-  font-size: 12px;
+  gap: 6px;
+  max-width: 100%;
+  font-size: 13px;
   color: #34404f;
-  width: 170px;
-  background: transparent;
-}
-
-.sba-clear,
-.sba-export {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #4a5867;
   background: #fff;
-  border: 1px solid #dfe5ec;
-  border-radius: 6px;
-  padding: 4px 9px;
+  border: 1px solid #d7e0ee;
+  border-radius: 999px;
+  padding: 3px 9px 3px 11px;
   cursor: pointer;
 }
-.sba-clear:hover,
-.sba-export:hover:not(:disabled) {
-  background: #f2f5f9;
-  color: #1c2530;
+.sba-pill:hover {
+  border-color: #9db6e4;
+  background: #f4f7fd;
 }
-.sba-export:disabled {
-  opacity: 0.55;
-  cursor: default;
+.sba-pill:focus-visible {
+  outline: 2px solid #1f6fde;
+  outline-offset: 1px;
+}
+.sba-pilltext {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The dimension name is the quiet half: "Worker: Bid tuner or Plan critic"
+   reads as one phrase, and the values are what the operator is scanning for. */
+.sba-pilldim {
+  color: #606b79;
+}
+.sba-pill svg {
+  flex-shrink: 0;
+  color: #6b7684;
+}
+.sba-pill:hover svg {
+  color: #2f61c0;
+}
+
+/* A scope pill ADDS rows where every other pill removes them. One treatment for
+   both would teach that a pill always means "less", so this one is tinted and
+   says "Counting" rather than naming a dimension of a row. */
+.sba-pill.widening {
+  border-color: #cfe0d6;
+  background: #f4faf6;
+  color: #1f5c42;
+}
+.sba-pill.widening:hover {
+  border-color: #9dc7ae;
+  background: #edf7f1;
+}
+.sba-pill.widening .sba-pilldim {
+  color: #3f7a5c;
+}
+
+.sba-clearall {
+  font-size: 13px;
+}
+
+/* The DS search field is sized for a grid workspace; inside this toolbar it
+   only has to hold a short phrase. */
+.sba-searchfield {
+  min-width: 240px;
 }
 
 /* ── ACT.3 · the runs grid ────────────────────────────────────────────── */
@@ -1225,4 +1200,48 @@
 }
 .sba-howbody strong {
   color: #1c2530;
+}
+
+/* Scope lives in the panel's preset row, above the facet grid — one labelled
+   group, so §18.7's test-run toggle is an ENTRY in it rather than a sixth
+   control looking for a home. */
+.sba-scopegroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.sba-scopelabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: #34404f;
+}
+.sba-scopeopt {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #4a5867;
+}
+
+/* The DS panel title ships at 18px, which on this page would be a FOURTH size
+   competing with the 20px h1 — S1 and S2 both had to strip sizes back to
+   20/13/12 and a filter panel is not the place to reintroduce one. Pinned page
+   locally under `.sba-page`, the same way S1 fixed `.acr-sub`'s contrast:
+   the component stays the DS's, only its scale answers to this page. */
+.sba-page .h10-ds-fpanel-head h3 {
+  font-size: 13px;
+  font-weight: 600;
+}
+/* `.sba-inlinebtn` sets `font: inherit`, which resets size from the container;
+   this needs the extra specificity to land on the ladder rather than at 16px. */
+.sba-applied .sba-clearall {
+  font-size: 13px;
+}
+.sba-facetwarn {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #8a6320;
+  max-width: 92ch;
 }

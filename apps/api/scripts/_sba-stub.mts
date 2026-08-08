@@ -68,6 +68,20 @@ const SIM = {
    * read inside one window sees the same history.
    */
   drift: process.env.STUB_DRIFT === '1',
+  /**
+   * S3R — two states the real data cannot reach.
+   *
+   *   STUB_FACETS=err   every `limit=1` read fails, which is how the facet
+   *                     vocabulary and the whole-history total arrive. The
+   *                     panel must SAY the options are missing rather than
+   *                     offer empty dropdowns that look ready.
+   *   STUB_ACTORS=25    pads the actor list to 25, the roster size W.8
+   *                     instances are designed for. This is the state that
+   *                     decides the whole design: a chip row cannot hold it,
+   *                     a dropdown does not care.
+   */
+  facets: process.env.STUB_FACETS ?? '',
+  actors: Number(process.env.STUB_ACTORS ?? 0),
 }
 
 const driftHidesNewest = () => SIM.drift && Math.floor(Date.now() / 15_000) % 2 === 1
@@ -106,6 +120,18 @@ function dropNewest(page: Timelineish): Timelineish {
     total: page.total - 1,
     countsByKind: counts,
   }
+}
+
+/** Synthesise a realistic roster: real workers first, then W.8-style instances
+ *  with the long-ish names an operator would actually create. */
+function padActors(real: unknown[]): unknown[] {
+  const out = [...real]
+  const suffixes = ['DE', 'FR', 'ES', 'IT', 'NL', 'PL', 'SE']
+  for (let i = out.length; i < SIM.actors; i++) {
+    const s = suffixes[i % suffixes.length]
+    out.push({ key: `amazon-negative-miner-${s?.toLowerCase()}-${i}`, name: `Negative miner ${s} #${i}`, kind: 'worker' })
+  }
+  return out
 }
 
 function simulateBand(page: Timelineish): Timelineish {
@@ -174,8 +200,14 @@ async function handle(url: URL): Promise<unknown> {
       },
       { limit: Number(q.get('limit')) || 50, cursor: q.get('cursor') ?? undefined },
     )) as unknown as Timelineish
+    const isFacetRead = q.get('limit') === '1'
+    if (isFacetRead && SIM.facets === 'err') {
+      throw new Error('simulated: the facet read failed')
+    }
     const drifted = driftHidesNewest() ? dropNewest(page) : page
-    return isBandRead ? simulateBand(drifted) : drifted
+    const padded =
+      isFacetRead && SIM.actors > 0 ? { ...drifted, actors: padActors(drifted.actors) } : drifted
+    return isBandRead ? simulateBand(padded) : padded
   }
   if (p.endsWith('/state')) {
     const real = await getFleetState()

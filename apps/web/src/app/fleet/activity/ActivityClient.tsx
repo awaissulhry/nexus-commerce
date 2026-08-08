@@ -54,7 +54,14 @@ import {
 import { getBackendUrl } from '@/lib/backend-url'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { DataGrid, type Column } from '@/design-system/components'
-import { GridToolbar } from '@/design-system/patterns'
+import { FilterBar, GridToolbar, type FilterBarOption, type FilterDimension } from '@/design-system/patterns'
+import {
+  Button,
+  Input,
+  SegmentedControl,
+  Toggle,
+  type SegmentedOption,
+} from '@/design-system/primitives'
 import { PlanStory, type PlanLabels, type StoryPlan } from '@/app/marketing/ads/rules-automation/fleet/PlanStory'
 import { FleetPageShell } from '../_shell/FleetPageShell'
 import { hiddenByScope, reconcilePoll, type FacetSnapshot } from './poll-view'
@@ -1530,26 +1537,170 @@ export function ActivityClient() {
     setKinds((prev) => (prev.length === 1 && prev[0] === 'run.failed' ? [] : ['run.failed']))
   }, [])
 
-  const actorChips = facets?.actors ?? []
-  const kindChips = useMemo(() => {
-    const c = facets?.countsByKind ?? {}
-    return Object.entries(c)
-      .filter(([, n]) => n > 0)
-      .sort((a, b) => b[1] - a[1])
-  }, [facets])
-
-  const toggle = <T,>(list: T[], v: T): T[] =>
-    list.includes(v) ? list.filter((x) => x !== v) : [...list, v]
-
   const filterCount = actors.length + (grain === 'runs' ? 0 : kinds.length) + (q.trim() ? 1 : 0)
   const anyNarrowing = filterCount > 0 || grain === 'runs'
 
+  /** Clear removes NARROWING. It deliberately leaves the scope toggles alone:
+   *  including the self-test is a widening, and a Clear that silently re-hid a
+   *  population would be the opposite of what the word promises. The scope pill
+   *  carries its own ✕. */
   const clearAll = useCallback(() => {
     setActors([])
     setKinds([])
     setQ('')
     setGrain('all')
   }, [])
+
+  /* ── S3 · the DS filter dimensions ───────────────────────────────────── */
+
+  /**
+   * In the Runs grain the kind facet used to VANISH — five chips gone and the
+   * list jumping 38px with no explanation. It is still meaningful there: the
+   * three run kinds are exactly what a reader wants to narrow to. So it stays,
+   * showing only those, which removes the jump and adds the capability.
+   */
+  const kindOptions = useMemo<FilterBarOption[]>(() => {
+    const c = facets?.countsByKind ?? {}
+    return Object.entries(c)
+      .filter(([k, n]) => n > 0 && (grain !== 'runs' || (RUN_KINDS as string[]).includes(k)))
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, n]) => ({ value: k, label: WHAT_LABEL[k] ?? k, count: n }))
+  }, [facets, grain])
+
+  /**
+   * Workers carry no count: `page.actors` returns key/name/kind and the spine
+   * tallies nothing per actor. Counting them is a few lines in
+   * `fleet-timeline.service.ts` and is NOT done here — an option showing a
+   * count it guessed would be worse than one showing none.
+   */
+  const actorOptions = useMemo<FilterBarOption[]>(
+    () => (facets?.actors ?? []).map((a) => ({ value: a.key, label: a.name })),
+    [facets],
+  )
+
+  const filterDimensions = useMemo<FilterDimension[]>(
+    () => [
+      {
+        key: 'worker',
+        label: 'Worker',
+        kind: 'multiselect',
+        options: actorOptions,
+        value: actors,
+        onChange: setActors,
+        placeholder: 'Any worker',
+        wide: true,
+      },
+      {
+        key: 'what',
+        label: 'What happened',
+        kind: 'multiselect',
+        options: kindOptions,
+        value: kinds,
+        onChange: (next) => setKinds(next as FleetEventKind[]),
+        placeholder: 'Anything',
+        wide: true,
+      },
+    ],
+    [actorOptions, actors, kindOptions, kinds],
+  )
+
+  /**
+   * SCOPE, in the panel's preset row rather than among the facet fields.
+   *
+   * It is not a facet. A facet describes an aspect of a row — which worker,
+   * what happened; this decides which population is on the table at all, and
+   * NN/g's filters-vs-facets line is exactly that distinction. Rendering it as
+   * a fourth field in the same grid said the opposite, which is how §18.7's
+   * second scope toggle came to look like a sixth control with nowhere to go.
+   * Here it is one labelled group, and a new population is an entry in it.
+   */
+  const scopePresets = (
+    <>
+      <div className="sba-scopegroup">
+        <span className="sba-scopelabel">Counting</span>
+        <span className="sba-scopeopt">
+          <Toggle
+            checked={includeSelfTest}
+            onChange={setIncludeSelfTest}
+            aria-label="Count the self-test"
+          />
+          <span>
+            the <Term k="selftest">self-test</Term>
+          </span>
+        </span>
+      </div>
+      {/* The facet vocabulary comes from its own read. When that read fails
+          there is nothing to offer, and empty dropdowns that look ready are the
+          same lie S2 shipped when it rendered an all-clear it had not earned.
+          Say it, and name what still works. */}
+      {shown && !facets ? (
+        <p className="sba-facetwarn">
+          The worker and event options could not be read, so those two are empty.
+          Search, the scope switch and the list itself are unaffected.
+        </p>
+      ) : null}
+    </>
+  )
+
+  const GRAIN_OPTIONS: SegmentedOption[] = [
+    { value: 'all', label: 'Everything' },
+    { value: 'runs', label: 'Runs only' },
+  ]
+
+  /**
+   * The applied-filter pills. Values inside one pill are joined by "or" and the
+   * pills read as "and" between them — which is how the OR-within/AND-across
+   * semantics Solr and Elasticsearch both settle on gets STATED rather than
+   * documented.
+   *
+   * A scope change is marked `widening`, because "counting the self-test" adds
+   * rows where every other pill removes them, and one treatment for both would
+   * teach the reader that a pill always means "less".
+   */
+  const appliedPills = useMemo(() => {
+    const out: Array<{
+      key: string
+      dimension: string
+      value: string
+      widening?: boolean
+      onRemove: () => void
+    }> = []
+    if (actors.length) {
+      const names = actors.map((k) => facets?.actors.find((a) => a.key === k)?.name ?? k)
+      out.push({
+        key: 'worker',
+        dimension: 'Worker',
+        value: names.join(' or '),
+        onRemove: () => setActors([]),
+      })
+    }
+    if (kinds.length) {
+      out.push({
+        key: 'what',
+        dimension: 'What happened',
+        value: kinds.map((k) => WHAT_LABEL[k] ?? k).join(' or '),
+        onRemove: () => setKinds([]),
+      })
+    }
+    if (q.trim()) {
+      out.push({
+        key: 'q',
+        dimension: 'Search',
+        value: `“${q.trim()}”`,
+        onRemove: () => setQ(''),
+      })
+    }
+    if (includeSelfTest) {
+      out.push({
+        key: 'selftest',
+        dimension: 'Counting',
+        value: 'the self-test',
+        widening: true,
+        onRemove: () => setIncludeSelfTest(false),
+      })
+    }
+    return out
+  }, [actors, kinds, q, includeSelfTest, facets])
 
   /* ── export ──────────────────────────────────────────────────────────── */
 
@@ -2053,96 +2204,97 @@ export function ActivityClient() {
           ) : null}
         </section>
 
-        {/* ── S3: the controls ─────────────────────────────────────────────── */}
-        <div className="sba-toolbar">
-          <div className="sba-grain" role="group" aria-label="What to show">
-            <span className="sba-grainlabel">Show</span>
-            <button
-              type="button"
-              className={`sba-grainbtn${grain === 'all' ? ' on' : ''}`}
-              aria-pressed={grain === 'all'}
-              onClick={() => setGrain('all')}
-            >
-              Everything
-            </button>
-            <button
-              type="button"
-              className={`sba-grainbtn${grain === 'runs' ? ' on' : ''}`}
-              aria-pressed={grain === 'runs'}
-              onClick={() => setGrain('runs')}
-            >
-              Runs only
-            </button>
-          </div>
+        {/* ── S3: the controls ──────────────────────────────────────────────
+            Rebuilt at S3R on the DESIGN SYSTEM's own filter composition, which
+            the page should have used from the start: `FilterBar` describes
+            itself as "the ONE declarative, config-driven filter bar for every
+            grid workspace… so feature pages own *configuration*, never the
+            bar's UI", and it is what products, listings, fulfillment, reviews
+            and bulk-operations all use. ACT.3 hand-rolled a strip without
+            looking.
 
-          <div className="sba-chipset">
-            {actorChips.map((a) => (
+            The IA it enforces is the one this section was missing. Four classes
+            of control were sharing one wrapping row as if they were one thing:
+
+              SCOPE   which population is on the table at all (the self-test,
+                      and §18.7's test runs). NOT an aspect of a row — NN/g's
+                      filters-vs-facets line — which is exactly why a sixth
+                      control felt like it had nowhere to go. Grouped, a new
+                      population costs an ENTRY, not a control class.
+              FACETS  worker · what happened. OR within one, AND across two.
+              LENS    the grain switch: what a row IS, not which rows show.
+                      Modes belong with the content they reshape.
+              ACTIONS search and the export.
+
+            Measured before: 17 controls in one row, and ten chips eating 1226
+            of 1614px — 76% of the row at SIX workers, against a roster designed
+            for 25+. A dropdown scales where a chip row cannot. */}
+        <FilterBar
+          title="Filters"
+          defaultOpen={false}
+          presets={scopePresets}
+          dimensions={filterDimensions}
+          activeCount={filterCount}
+          onClear={clearAll}
+        />
+
+        {/* What is applied, always visible — the panel collapses, this does not.
+            Unanimous across the research: active filters render as removable
+            tags with a Clear-all beside them. It is also where the OR/AND
+            semantics is SAID rather than documented: values joined by "or"
+            inside one pill, separate pills reading as and. */}
+        {appliedPills.length > 0 ? (
+          <div className="sba-applied">
+            {appliedPills.map((p) => (
               <button
-                key={a.key}
+                key={p.key}
                 type="button"
-                className={`acr-pg-chip${actors.includes(a.key) ? ' on' : ''}`}
-                aria-pressed={actors.includes(a.key)}
-                onClick={() => setActors((prev) => toggle(prev, a.key))}
+                className={`sba-pill${p.widening ? ' widening' : ''}`}
+                onClick={p.onRemove}
               >
-                {a.name}
+                <span className="sba-pilltext">
+                  <span className="sba-pilldim">{p.dimension}:</span> {p.value}
+                </span>
+                <X size={11} aria-hidden />
+                <span className="sba-sr">Remove this filter</span>
               </button>
             ))}
+            <button type="button" className="sba-inlinebtn sba-clearall" onClick={clearAll}>
+              Clear all
+            </button>
           </div>
+        ) : null}
 
-          {grain === 'all' ? (
-            <div className="sba-chipset">
-              {kindChips.map(([k, n]) => (
-                <button
-                  key={k}
-                  type="button"
-                  className={`acr-pg-chip${kinds.includes(k as FleetEventKind) ? ' on' : ''}`}
-                  aria-pressed={kinds.includes(k as FleetEventKind)}
-                  onClick={() => setKinds((prev) => toggle(prev, k as FleetEventKind))}
-                >
-                  {WHAT_LABEL[k] ?? k} <span className="sba-chipn">{n}</span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="sba-toolright">
-            <label className="sba-toggle" title={DIAGNOSTIC_HINT}>
-              <input
-                type="checkbox"
-                checked={includeSelfTest}
-                onChange={(e) => setIncludeSelfTest(e.target.checked)}
-              />
-              Include the <Term k="selftest">self-test</Term>
-            </label>
-            <label className="sba-searchwrap">
-              <Search size={12} aria-hidden />
-              <input
-                className="sba-search"
-                type="search"
-                placeholder="Search what happened…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                aria-label="Search the activity"
-              />
-            </label>
-            {anyNarrowing ? (
-              <button type="button" className="sba-clear" onClick={clearAll}>
-                <X size={11} aria-hidden /> Clear
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="sba-export"
-              onClick={exportCsv}
-              disabled={exporting || !shown?.total}
-            >
-              <Download size={12} aria-hidden />
+        {/* The lens and the list-scoped actions, in the DS toolbar's own slots.
+            No count here on purpose: S1 already states the scope and S4's footer
+            states the rows, and a third number in the same viewport is how this
+            page breaks. */}
+        <GridToolbar
+          right={
+            <Button size="sm" onClick={exportCsv} disabled={exporting || !shown?.total}>
+              <Download size={13} />
               {exporting
                 ? 'Preparing…'
                 : `Download ${shown?.total ?? 0} ${shown?.total === 1 ? 'row' : 'rows'} (CSV)`}
-            </button>
-          </div>
-        </div>
+            </Button>
+          }
+        >
+          <SegmentedControl
+            size="sm"
+            options={GRAIN_OPTIONS}
+            value={grain}
+            onChange={(v) => setGrain(v as 'all' | 'runs')}
+          />
+          <Input
+            type="search"
+            fieldClassName="sba-searchfield"
+            leadingIcon={<Search size={13} aria-hidden />}
+            placeholder="Search what happened…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            aria-label="Search the activity"
+          />
+        </GridToolbar>
 
         {/* S1R — the read-failure banner moved UP into the header block, beside
             the freshness instrument that reports the same failure. It is not
