@@ -2577,6 +2577,419 @@ report a defect that is its own.**
 
 ---
 
+## PART 13 — NAF.SB.AS-S3R · Section 3 restudied: one assignment's page
+
+**Status: AWAITING OPERATOR APPROVAL. No code written.**
+
+Scope: `[id]/AssignmentClient.tsx`. Not the list (Part 11), not the drawer
+(Part 12). The model, the states, the endpoints and the vocabulary are
+unchanged.
+
+### 13.1 · PHASE 0 — the audit, and this page had never been opened
+
+**Nobody had ever seen this page**, including me — an assignment had never
+existed long enough to click into. So this audit is the first render in the
+product's history.
+
+Method: two real assignments created through the UI on prod and deleted
+afterwards (**prod ends at zero; nothing was started**). That gives **Not
+started for real**. Every later state was constructed by replacing the detail
+payload client-side — 8 runs across finished / stopped / failed / abandoned,
+12 findings, 2 evidence rows, an overdue deadline and an unknown-cost run.
+**Which states are real and which are constructed is listed in §13.6**, because
+the difference matters when reading the numbers below.
+
+Fourteen findings. Three of the operator's ten came back different from the
+hypothesis, and are recorded as such.
+
+#### D1 · The action that spends money is byte-identical to the one that deletes
+
+Measured on the live page: all actions render `acr-pg-sortbtn` with
+`background: rgba(0,0,0,0)`, **`border: none`**, `font-size: 16px`, 24px tall.
+*Start it* sits at x=90 and *Delete* at x=242 — **85px apart, same colour, same
+weight, no border, no icon distinction that survives a glance.** They are not
+even buttons visually; they are three pieces of text in a row.
+
+NN/g names this exact thing: *placing destructive and benign actions in close
+proximity is one of the top-10 application design mistakes.* Here the benign
+one is bookkeeping and the consequential one **calls a model and spends real
+money on a fleet the operator deliberately switched off.**
+
+#### D2 · The spending confirm is not a confirm
+
+`.acr-pg-confirmwrap` is the fleet's own confirm pattern — a fixed overlay with
+`role="dialog" aria-modal="true"` — used by Workflows in four places and by the
+shared autonomy dial in two, and its CSS comment states the reasoning verbatim:
+*"a change that starts spending should interrupt, and should survive a page
+blur."*
+
+**This page uses `.acr-pg-confirm` without the wrapper.** It takes the white
+card and drops the half that makes it a confirmation. Measured:
+
+| | Measured |
+|---|---|
+| Overlay behind it | **none** |
+| `role="dialog"` | **absent** |
+| Focus after opening | **`BODY`** — focus never moves to it |
+| Content pushed down | **254px** — the run table and every caveat below jump |
+| Page behind | **fully interactive** — Delete is clickable while "spend money?" is open |
+| Position | left-aligned at x=90, not centred |
+
+Its two buttons — *Not now* and *Start it* — are also the same bare text as each
+other. The research is unambiguous on all of it: the safe path should be the
+default, focus should never land on the consequential action, and the dialog
+should state the action and its consequence.
+
+#### D3 · Eleven text roles below 4.5:1, worst 2.39:1
+
+| Role | Size | Ratio |
+|---|---|---|
+| every brief label — *Worker · Points at · Due · Made · Spent so far* | 10.5px | **2.41** |
+| the "as of" stamp | 16px | **2.39** |
+| *"Every worker in this fleet is switched off…"* | 13px | **2.39** |
+| *"Nothing yet."* | 13px | **2.39** |
+| the approvals caveat | 11.5px | **2.73** |
+| *"It hasn't run yet."* | 13px | 4.05 |
+| the shell subtitle | 13px | 4.41 |
+
+Worse than the drawer's nine (Part 12), and it includes **every label in the
+brief** — the five words that say what this object is.
+
+#### D4 · The page never names the thing you are looking at
+
+Measured `false`: the assignment's own **title does not appear anywhere on its
+page.** The list shows *"Negative miner on GALE BROAD DE"*, Approvals renders it
+as provenance, the create drawer derives it — and the object's own page shows
+the shell's generic *"Assignment"* and reconstructs the parts in a grid. Rename
+it and this page still will not say your name for it.
+
+#### D5 · Thirteen inline `style` attributes
+
+Same debt Part 12 drove to zero in the drawer, in the same page directory. Eight
+render in the Not-started state; the rest arrive with the confirm, the toast and
+the findings caveat.
+
+#### D6 · One run-table column takes 70% of the table
+
+Measured with 8 runs at 1728px: **HOW IT WENT is 1132px of 1614** — because it
+renders `reasonSentence()`, the *long-form* explanation with the fix in it
+(*"The whole fleet has spent its ceiling for today. Raise it in Controls, or run
+this tomorrow."*). The list uses `shortReason()` in its cell for exactly this
+reason. **This page uses the long form where the short one belongs and then has
+nowhere to put the long one.**
+
+#### D7 · No absolute time anywhere
+
+`0 of 8` run rows carry a `title`. Every time on the page is relative — *2h
+ago*, *9d ago* — with no way to obtain the actual timestamp. On a page whose
+subject is *when did this run and what did it cost*, that is the one number an
+operator eventually needs.
+
+#### D8 · Overdue does not exist on this page
+
+A deadline **two days past** renders `rgb(31,42,55)` — plain body colour,
+identical to any other date. The list turns an overdue row amber/red and sorts
+it to the top; Part 4 makes overdue a first-class flag. The object's own page is
+the one surface that does not know.
+
+#### D9 · Close is offered while a run is open — and the list says it should not be
+
+In the `running` state the *Close* button is **enabled**. Section 1's row menu
+disables the same action with the sentence *"A run is open right now. Wait for
+it to come back — closing it would not stop it."* **Two surfaces disagree about
+the same action on the same object**, and the list is the one that is right.
+
+#### D10 · The state banner speaks the list's language
+
+`Finished` renders *"It ran and came back. What it found — or that it found
+nothing — **is on the row**."* There is no row here. The tips in `states.ts` were
+written for chips in a list and are reused verbatim as this page's headline
+explanation.
+
+#### D11 · The empty-state sentence is not centred
+
+`.acr-pg-empty` is `text-align: center`; the explanation inside it is a 459px
+block sitting at x=113 inside a 1568px box. `max-width` without `margin: 0 auto`
+— **the identical trap Part 11 fixed in `.as-emptybody`**, reappearing in the
+neighbouring file.
+
+#### D12 · Two currencies, unexplained
+
+The page prints `$0.2871` for spend and `$0.10` for the ceiling, while findings
+talk in euro and the whole advertising side of this product is €. Model spend
+genuinely is billed in USD, so the dollar is *correct* — but nothing on the page
+says so, and an operator reading a euro rationale under a dollar total has to
+guess.
+
+#### D13 · It shows "as of" and gives you no way to refresh
+
+The list ships an explicit refresh control beside its freshness stamp. This page
+shows the stamp alone.
+
+#### D14 · 225px of dead space, and two large boxes of nothing
+
+In the real Not-started state: content ends at y=681 in a 906px viewport, and
+the two empty states — *"It hasn't run yet."* (96px) and *"Nothing yet."* (75px)
+— are the largest objects on the page.
+
+#### Three hypotheses that came back different
+
+- **Suspicion 8 (narrow viewport) is mostly wrong.** At 896px: no horizontal
+  page scroll, the table fits at 782px with no inner scroller, the brief reflows
+  to four columns, the action row wraps. The only blemish is a ragged brief row
+  where *Made* wraps to two lines. **No rebuild needed for width.**
+- **Suspicion 5 understates it.** The persistent "toast" panel is real, but it
+  only ever appears for two cases (a run already open, a run halted before
+  spending). **Close and Cancel produce no feedback at all** — and AS-S5 promised
+  *"a 6-second 'Closed. Undo' toast plus a real Reopen route… copy the pair or
+  neither."* **The undo half was never built.** That is the larger defect.
+- **Suspicion 9 understates it too.** The run table had never held *one* row; it
+  had never held *any*. It is measured here at 8 for the first time.
+
+**One artifact of my own instrument, disclosed.** I rendered `cancelled` with 8
+runs and the banner read *"You called it off before it ran"* — which looks like
+a bug and is not: `setAssignmentState` refuses `cancelled` once a run exists, so
+that combination is unreachable through the API. My synthetic payload built an
+impossible object. Not a defect; recorded so nobody "fixes" it.
+
+---
+
+### 13.2 · PHASE 1 — how the world shows one unit of work
+
+| Product | Above the fold | Repeated attempts | Actions | Provenance |
+|---|---|---|---|---|
+| **GitHub Actions run** | run name, trigger, status, duration | **attempts are first-class**: a *Latest* dropdown beside the run name switches between them, capped at 50; a re-run's jobs appear alongside the previous ones | re-run all / re-run failed, scoped by outcome | logs per job, collapsed |
+| **Vercel deployment** | status, **build time, detected framework**, and the error summary if there is one | one deployment = one attempt; redeploy makes a new object | redeploy, promote, rollback | expandable *Building* accordion |
+| **Stripe payment** | amount, status, customer, date | `PaymentAttemptRecord` → entries: an **append-only log per attempt** reconstructing the lifecycle | refund, dispute, capture — each a distinct control | the event objects behind it |
+| **Sentry issue** | title, culprit, counts, first/last seen | events within the issue | assign, resolve, ignore | **breadcrumbs** — a chronological log of what happened *before*, in five columns |
+| **Temporal workflow** | type, id, status, timings | event history; **attempt counts deliberately kept out of the UI to avoid noise**, available via the Describe API | terminate, reset, signal | full event history |
+| **Linear / Jira issue** | title, status, assignee, description | activity feed | status change, assign, delete | comments + history |
+
+**Six things this changes here, ranked:**
+
+1. **NN/g: proximity of consequential and benign options is a top-10 design
+   mistake.** That is D1 exactly, and it is the most serious item in this
+   engagement. The prescriptions are specific: destructive actions *look*
+   dangerous, the safe path is the default, **focus never lands on the
+   consequential action**, and destructive controls are *separated* from normal
+   ones rather than sitting in the same row.
+2. **Confirmations must name the action and its consequence**, with a primary
+   destructive CTA and a secondary safe exit — and *"Cancel focused by
+   default"*. Our confirm has the right words and none of the structure.
+3. **GitHub makes attempts navigable and keeps the latest as the default view.**
+   Ours are a table of eight equal rows with no notion of "the current one".
+   The cheap version of GitHub's idea: **the latest attempt is summarised above,
+   the rest are history below.**
+4. **Vercel puts the failure summary at the top, not in the log.** Our stop
+   reason is already in the state band — that part is right and should stay.
+5. **Sentry's breadcrumbs are provenance as a first-class panel, not a
+   footnote.** Our evidence provenance is currently the second of three stacked
+   grey paragraphs and only renders when findings exist.
+6. **Temporal deliberately omits attempt counts to avoid noise.** A useful
+   counterweight: not every number about a run belongs on the page. Ours should
+   carry cost, outcome and time — not a step count, not a token count.
+
+---
+
+### 13.3 · What this page IS
+
+**The record of one job, and the only place the chain
+assignment → run → finding → cost exists.** It is not a monitor (nothing here
+updates on its own — the fleet is off), and it is not a log (Activity owns
+that). It is what an operator opens to answer four questions in order:
+
+> *What is this? · Where did it get to and why? · What did it cost me? · What may
+> I do about it — and which of those spends money?*
+
+Everything on the page should be answering one of those four, and the fourth is
+the one currently answered worst.
+
+---
+
+### 13.4 · The action model — three tiers, and only one of them spends
+
+The single most important change in this engagement.
+
+| Tier | Actions | Treatment |
+|---|---|---|
+| **Spends money** | *Start it* / *Start again* | Its own zone, separated from the rest by a rule and a label — **"Running this costs money"**. Primary-styled, with the ceiling on the button's own line. Behind a **real** confirm: `.acr-pg-confirmwrap` overlay, `role="dialog"`, `aria-modal`, focus on **Not now**, Escape closes to *Not now*, zero page reflow. |
+| **Reversible bookkeeping** | *Close · Cancel · Reopen* | Plain secondary buttons, grouped. **No confirm** — because they are reversible — but each one now produces the undo AS-S5 promised and never shipped: *"Closed. Undo"*, six seconds, and the Reopen route already exists. |
+| **Irreversible** | *Delete* | Separated to the far end, danger-styled, offered **only** when it is legal (never run). Confirmed, with the object named — the same shape Section 1's row menu already ships, so the two surfaces agree. |
+
+**The rule that falls out, and it is the one to keep:** *on this page an action's
+appearance is a statement about its consequence, not about its importance.*
+
+**Disabled states carry the reason as a tooltip AND a visible sentence** when the
+action is the one an operator is most likely to want — *Start again* during a
+run being exactly that.
+
+---
+
+### 13.5 · The information hierarchy
+
+Above the fold, in this order:
+
+1. **The assignment's name** — the title, which today appears nowhere (D4). One
+   line, page-heading weight, with the state chip beside it.
+2. **Where it got to, and why** — the state band, rewritten for a page rather
+   than a row (D10), carrying the guard sentence or the failure blame when there
+   is one, and **the overdue fact when it is overdue** (D8).
+3. **The standing truth, promoted out of small print** (operator item 4):
+   *"Nothing this finds reaches Amazon on its own."* It is the most important
+   fact about the object and it is currently the last line of the page. It
+   becomes one quiet, legible line inside the state band — not a panel, not a
+   banner, and not repeated three times.
+4. **The brief** — worker (linked), points at, due, made, and **what you wanted
+   back**, which is currently below the grid and is part of the brief.
+5. **Cost** — one number, with the currency explained once (D12).
+6. **The actions**, in the three tiers above.
+
+Then, below: **every attempt** · **what it found** · **what it was read from**.
+
+The two remaining caveats (the finding-attribution note and the approvals fact)
+stop being stacked grey paragraphs: the approvals fact moves up into item 3, and
+the attribution note becomes the *"What it found"* section's own subtitle.
+
+---
+
+### 13.6 · The eight states — and which of them I have actually seen
+
+**Seen for real on prod:** `not_started` only. Everything else was constructed
+from a synthetic payload, because reaching them costs money.
+
+| State | Band says | Actions offered | Real? |
+|---|---|---|---|
+| **Not started** | *You made this. Nothing has run.* + the never-starts-itself sentence | Start it · Cancel · Delete | **real** |
+| **Running** | *A run is open. There is no way to stop it.* + when it started | Start again **disabled, with the reason visible** · Close **disabled** (D9) | constructed |
+| **Finished** | *It ran and came back* + what it found, in page language not row language | Start again · Close | constructed |
+| **Stopped** | the guard's own sentence, verbatim, as the headline | Start again · Close | constructed |
+| **Failed** | `classifyFailure`'s blame — *the provider being unreachable is not the worker being wrong* | Start again · Close | constructed |
+| **Abandoned** | *It stopped reporting and was closed after two hours; what it spent is unknown* | Start again · Close | constructed |
+| **Closed** | *You are done with it. Its runs and findings are kept.* + the close note | Reopen | constructed |
+| **Cancelled** | *You called it off before it ran.* | Reopen · Delete | constructed |
+
+**Empty / one / many:**
+
+- **No runs** — one honest line, not a 96px dashed box: *"It hasn't run yet.
+  Nothing will start it but you."* The two big empty boxes (D14) become two
+  short lines.
+- **One run** — the attempt summarised above the table; the table renders one
+  row and does not pretend to be history.
+- **Many runs (8 measured, 50+ possible)** — the newest attempt is summarised;
+  the rest are a table with short outcomes and the long sentence one hover away.
+  **No pagination and no filter** — the moment it needs either, the reader
+  wanted Activity.
+
+---
+
+### 13.7 · Tooltip and microcopy inventory
+
+| Element | Copy | Status |
+|---|---|---|
+| State chip | `ASSIGNMENT_STATES[k].tip` | ships — **rewritten for a page** (D10) |
+| Title | the assignment's own title | **new** (D4) |
+| Overdue marker | *"This was due {date} — {n} days ago. A deadline never starts or stops anything."* | **new** (D8) |
+| Brief · Worker | *"The worker this points at. Its dial, its budget and its history live on its own page."* | **new** |
+| Brief · Points at | *"The one thing this worker is allowed to look at. Everything else in your account is out of scope."* | **new** |
+| Brief · Due | absolute date + the never-blocks sentence | partial |
+| Brief · Made | **absolute timestamp** + who made it | **new** (D7) |
+| Brief · Spent so far | *"Every run this assignment has made, in US dollars — model time is billed in USD even though your ads are in euro."* + the unknown-cost caveat | **extended** (D12) |
+| Start / Start again | *"Runs this worker now. This calls a model, which is real spend."* + ceiling | ships |
+| Start, disabled | *"A run is open right now. It ends on its own, on a budget, or is closed after two hours."* — **visible, not only a title** | **new** |
+| Close | *"Done with it. Its runs and findings are kept, and Reopen puts it back."* | **new** |
+| Close, disabled during a run | the list's exact sentence (D9) | **new** |
+| Cancel | *"You called it off before it ran. Reversible."* | **new** |
+| Delete | *"Removes it outright. Only possible because it has never run."* | ships |
+| Run row · When | **absolute timestamp** | **new** (D7) |
+| Run row · How it went | short phrase in the cell, **full sentence with the fix in the tooltip** | **new** (D6) |
+| Run row · Cost | *"What this attempt cost in model calls."* / for orphaned: *"Unknown — the reaper that closed this run does not record what it spent."* | partial |
+| Run row · Took | *"Wall-clock time from start to finish."* | **new** |
+| Finding · severity | *"How much this matters, as the worker judged it."* | **new** |
+| Finding · rationale | verbatim, never parsed | ships |
+| *What it found* subtitle | the attribution note, promoted out of the caveat stack | **moved** |
+| Evidence provenance | *"What they were read from"* + vintages | ships — **always rendered**, not only when findings exist |
+
+---
+
+### 13.8 · What this page must never become
+
+- **Activity's run log.** No filter bar, no export, no permalink to a trace, no
+  step waterfall. The moment a run row wants any of those, the reader wanted
+  Activity — locks §5 decision 5.
+- **A second approvals inbox.** No approve/reject affordance in any form, ever
+  (Part 10.2). The page states that an assignment cannot produce an approval and
+  links out; it never renders a queue.
+- **A worker page.** Worker health, dial, grade and budget belong to Workers.
+  This links to them and shows none of them.
+- **A cost dashboard.** One number, plus per-attempt cost in the table. No
+  charts, no trends, no model split.
+- **A place where the spending action is easy to hit by accident.**
+
+---
+
+### 13.9 · Build order — five independently shippable phases
+
+**S3.a — The action model.** Three tiers, the spending zone separated and
+labelled, Delete danger-styled and separated, and the real confirm
+(`.acr-pg-confirmwrap` + `role="dialog"` + focus on *Not now* + no reflow).
+*Closes D1, D2.*
+
+**S3.b — The hierarchy.** Title, state band rewritten for a page, overdue
+surfaced, the reaches-Amazon fact promoted out of small print, the caveat stack
+dissolved. *Closes D4, D8, D10, and operator item 4.*
+
+**S3.c — The run history.** Short outcomes in cells with the long sentence in
+the tooltip, absolute timestamps, column widths declared, the latest attempt
+summarised above the table. *Closes D6, D7.*
+
+**S3.d — Legibility.** Eleven sub-AA roles, 13 inline styles, empty-state
+centring, currency explained, dead space. *Closes D3, D5, D11, D12, D14.*
+
+**S3.e — Parity and the promised undo.** Close disabled during a run to match
+the list, and the *"Closed. Undo"* pair AS-S5 promised and never shipped.
+*Closes D9 and the shortfall behind operator item 5.*
+
+---
+
+### 13.10 · Acceptance criteria — measured on the deployed page
+
+| # | Criterion | Before | Target |
+|---|---|---|---|
+| 1 | Actions distinguishable by consequence without reading | **0 of 3** (identical class, no border, no background) | **3 of 3** |
+| 2 | Spending confirm interrupts | no overlay · no `role=dialog` · focus `BODY` · **254px reflow** | overlay · `role=dialog` · focus on the safe option · **0px reflow** |
+| 3 | Text roles below 4.5:1 | **11** (worst 2.39) | **0** |
+| 4 | Inline `style` attributes | **13** | **0** |
+| 5 | Widest run-table column share | **70%** (1132 of 1614) | **≤ 40%** |
+| 6 | The assignment's title on its own page | **absent** | **present** |
+| 7 | Run rows offering an absolute timestamp | **0 of 8** | **all** |
+| 8 | Overdue visible on the detail page | **no** | **yes**, consistent with the list |
+| 9 | Close during a run | **enabled** | **disabled**, with the list's sentence |
+| 10 | Empty-state sentence centred | **no** (459px block at x=113) | **yes** |
+| 11 | Dead space below content, Not started | **225px** | **≤ 80px** |
+| 12 | "Nothing reaches Amazon" position | **last line of the page** | **above the fold** |
+| 13 | Horizontal scroll at 896px | none | **none** (regression guard) |
+
+---
+
+### 13.11 · Cross-session
+
+**No shared file, no backend change, no migration.** Everything is inside
+`app/fleet/assignments/[id]/**` plus `assignments.css`.
+
+**Two findings carried in from Part 12, and both apply here.** This page has
+**no root class at all** — `[id]/page.tsx` renders `AssignmentClient` straight
+into the shell — so the `.as-page` overrides from Part 11 do not reach it, in
+exactly the way `.as-page` failed to reach the portalled drawer. It gets
+`.as-detail`, and the confirm, when it becomes a real overlay, is portalled and
+will need its own scoping for the same reason.
+
+**One note for Workflows and the autonomy dial, no action asked:**
+`.acr-pg-confirmwrap` is doing real work as the fleet's shared confirm and its
+CSS comment is the clearest statement of the rule in the repo. This page will
+start using it properly rather than borrowing half of it.
+
+---
+
 ## Sources
 
 **RPA queues** — [UiPath queues](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/about-queues-and-transactions) · [item statuses](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/transaction-statuses) · [queue triggers](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/queue-triggers) · [Action Center](https://docs.uipath.com/action-center/automation-cloud/latest/user-guide/managing-actions) · [Blue Prism work queues](https://docs.blueprism.com/en-US/bundle/blue-prism-enterprise-7-3/page/user-guide/control-room/ug-cr-queue-management.htm) · [Automation Anywhere WLM](https://docs.automationanywhere.com/bundle/enterprise-v2019/page/enterprise-cloud/topics/aae-client/bot-creator/using-workload/cloud-queues.html) · [Power Automate work queues](https://learn.microsoft.com/en-us/power-automate/desktop-flows/work-queues)
@@ -2592,5 +3005,7 @@ report a defect that is its own.**
 **List-page design (Part 11, AS-S1R)** — [Linear display options](https://linear.app/docs/display-options) · [Sentry issues](https://docs.sentry.io/product/issues/) · [Datadog monitor list](https://docs.datadoghq.com/monitors/manage/) · [UiPath queue item statuses](https://docs.uipath.com/orchestrator/docs/queue-item-statuses) · [Temporal Web UI](https://docs.temporal.io/web-ui) · [Airflow UI](https://airflow.apache.org/docs/apache-airflow/stable/ui.html) · [**Airflow issue #66946** — the bar chart you cannot count, sort or act on](https://github.com/apache/airflow/issues/66946) · [GitHub Copilot agent sessions](https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/manage-and-track-agents) · [GitHub agents panel](https://github.blog/changelog/2025-08-19-agents-panel-launch-copilot-coding-agent-tasks-anywhere-on-github-com/) · [Vercel redesigned deployments list](https://vercel.com/changelog/redesigned-deployments-list) · [Carbon data table](https://carbondesignsystem.com/components/data-table/usage/) · [Carbon empty states](https://carbondesignsystem.com/patterns/empty-states-pattern/) · [WCAG 1.4.1 Use of Color](https://www.w3.org/WAI/WCAG21/Understanding/use-of-color) · [WCAG content on hover or focus](https://www.w3.org/WAI/WCAG21/Understanding/content-on-hover-or-focus) · [Jira column/field overload](https://community.atlassian.com/forums/Jira-Cloud-Admins-discussions/Rethinking-Issue-View-Field-Configuration/td-p/2916049)
 
 **Create-flow design (Part 12, AS-S2R)** — [Linear create issues](https://linear.app/docs/creating-issues) · [GitHub · assign an issue to Copilot](https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/kick-off-a-task) · [Google Ads step 6 — review and publish](https://support.google.com/google-ads/answer/15864935) · [Google Ads campaign creation steps](https://support.google.com/google-ads/answer/15864533) · [**Red Hat / PatternFly — progressive form vs wizard**](https://medium.com/patternfly/comparing-web-forms-a-progressive-form-vs-a-wizard-110eefc584e7) · [**NN/g — progressive disclosure** (the two-level rule, and staged disclosure with interdependent steps)](https://www.nngroup.com/articles/progressive-disclosure/) · [Jira field-configuration overload](https://community.atlassian.com/forums/Jira-Cloud-Admins-discussions/Rethinking-Issue-View-Field-Configuration/td-p/2916049) · [W3C APG combobox patterns](https://www.w3.org/WAI/ARIA/apg/patterns/combobox/examples/combobox-autocomplete-list/) · [Combobox vs multiselect vs listbox at scale](https://smart-interface-design-patterns.com/articles/combobox-multiselect-listbox/) · [Baymard — inline form validation](https://baymard.com/blog/inline-form-validation) · [Amazon Ads campaign manager + bulk operations](https://advertising.amazon.com/library/news/introducing-improved-campaign-manager-features) · [overscroll-behavior and dialog scroll containment](https://css-tricks.com/prevent-a-page-from-scrolling-while-a-dialog-is-open/)
+
+**One-object detail design (Part 13, AS-S3R)** — [**NN/g — consequential options next to benign ones**, a top-10 application design mistake](https://www.nngroup.com/articles/proximity-consequential-options/) · [GitLab Pajamas — destructive actions](https://design.gitlab.com/patterns/destructive-actions/) · [Smashing — managing dangerous actions in UI](https://www.smashingmagazine.com/2024/09/how-manage-dangerous-actions-user-interfaces/) · [GitHub Actions — re-running workflows and navigating attempts](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs) · [Vercel — troubleshooting a build (what the detail page leads with)](https://vercel.com/docs/deployments/troubleshoot-a-build) · [Stripe — payment records and attempt entries](https://docs.stripe.com/payments/payment-records) · [Sentry — issue details](https://docs.sentry.io/product/issues/issue-details/) · [Sentry — breadcrumbs as provenance](https://docs.sentry.io/product/issues/issue-details/breadcrumbs/) · [Temporal — event history (and why attempt counts are kept out of the UI)](https://docs.temporal.io/encyclopedia/event-history) · [Temporal — retry policies](https://docs.temporal.io/encyclopedia/retry-policies)
 
 **In repo** — `docs/2026-08-07-naf-sb-fleet-pages.md` §7 · `docs/2026-08-07-naf-sbw-workers-page.md` · `docs/2026-08-07-naf-wf-workflows-page.md` · `docs/2026-08-07-naf-sb-session-locks.md` · `docs/AGENT_FLEET.md` Parts 4, 6, 7 · `apps/api/src/services/agent-fleet/agent-executor.ts` · `charter-registry.ts` · `orchestrator.ts` · `observations/scope-filter.ts` · `apps/api/src/services/agents/approval-gate.service.ts` · `apps/api/scripts/_sbas-assignment-truth.mts`
