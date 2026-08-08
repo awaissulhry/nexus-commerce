@@ -101,6 +101,8 @@ export function RunsSection({
   nameByKey,
   fetchCapReached,
   revisionNoById,
+  selectedId,
+  onSelect,
 }: {
   groups: RunGroup[]
   /** Charter key → display name, for the expanded per-worker rows. */
@@ -110,6 +112,10 @@ export function RunsSection({
   /** Revision id → revision number, so a stamped run can say which wiring
    *  served it (WF.4a). Unstamped runs are code-path runs and say nothing. */
   revisionNoById?: Map<string, number>
+  /** S3.c — the run whose reality the pipeline above is drawing. */
+  selectedId?: string | null
+  /** Toggle selection. Passing the already-selected id clears it. */
+  onSelect?: (id: string) => void
 }) {
   const [open, setOpen] = useState<string | null>(null)
   const visible = groups.slice(0, SHOW)
@@ -167,8 +173,30 @@ export function RunsSection({
                 const isOpen = open === g.id
                 return (
                   <Fragment key={g.id}>
-                    <tr className="wf-grouprow">
-                      <td title={new Date(g.startedAt).toLocaleString()}>{agoTs(g.startedAt)}</td>
+                    <tr
+                      className={`wf-grouprow${selectedId === g.id ? ' is-selected' : ''}`}
+                      onClick={onSelect ? () => onSelect(g.id) : undefined}
+                    >
+                      <td title={new Date(g.startedAt).toLocaleString()}>
+                        {/* The whole row is the mouse target; this button is
+                            the keyboard one, because a <tr> cannot be. */}
+                        <button
+                          type="button"
+                          className="wf-selectbtn"
+                          aria-pressed={selectedId === g.id}
+                          title={
+                            selectedId === g.id
+                              ? 'Stop showing this run in the pipeline above'
+                              : 'Show what this run did, in the pipeline above'
+                          }
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onSelect?.(g.id)
+                          }}
+                        >
+                          {agoTs(g.startedAt)}
+                        </button>
+                      </td>
                       <td>
                         {g.rows[0]?.trigger === 'schedule' ? 'the clock' : 'by hand'}
                         {(() => {
@@ -202,7 +230,10 @@ export function RunsSection({
                               ? 'Collapse this run'
                               : `Show the ${g.runs} worker${g.runs === 1 ? '' : 's'} in this run`
                           }
-                          onClick={() => setOpen(isOpen ? null : g.id)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setOpen(isOpen ? null : g.id)
+                          }}
                         >
                           {g.runs} worker{g.runs === 1 ? '' : 's'}
                           {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
@@ -210,7 +241,7 @@ export function RunsSection({
                       </td>
                     </tr>
                     {o.why ? (
-                      <tr className="wf-whyrow">
+                      <tr className={`wf-whyrow${selectedId === g.id ? ' is-selected' : ''}`}>
                         <td />
                         <td colSpan={6}>
                           <span className={`wf-whytext ${CHIP_WORD[o.chip]}`}>{o.why}</span>
@@ -221,7 +252,7 @@ export function RunsSection({
                       ? g.rows.map((r) => {
                           const ro = runOutcome(r)
                           return (
-                            <tr key={r.id} className="wf-subrow">
+                            <tr key={r.id} className={`wf-subrow${selectedId === g.id ? ' is-selected' : ''}`}>
                               <td className="wf-subname" colSpan={2}>
                                 {nameByKey.get(r.agentKey) ?? r.agentKey}
                               </td>

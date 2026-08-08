@@ -134,6 +134,9 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
   const [toggleDialog, setToggleDialog] = useState<'off' | 'on' | null>(null)
   const [toggleBusy, setToggleBusy] = useState(false)
   const [toggleErr, setToggleErr] = useState<string | null>(null)
+  /* S3.c — which run the pipeline is drawing. null = the newest, which is what
+     S2R shipped and what the page returns to when the selection is cleared. */
+  const [selectedRun, setSelectedRun] = useState<string | null>(null)
 
   /* WF.6b — Run-now for a published custom. A REAL run: findings write to
      the board; OFF workers still skip; the fleet gates bind. */
@@ -257,6 +260,11 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
     () => groupRuns(runs, builtin ? builtin.mode : { workflowKey: routineKey }),
     [runs, builtin, routineKey],
   )
+
+  const shownGroup = groups.find((g) => g.id === selectedRun) ?? groups[0] ?? null
+  /* Historical only when the operator picked something that is NOT the newest
+     run — selecting the newest is the same picture the page defaults to. */
+  const historical = shownGroup != null && groups[0] != null && shownGroup.id !== groups[0].id
 
   const { main: triggerMain, sub: triggerSub } = triggerLineFor({
     job,
@@ -583,9 +591,17 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
           <section className="acr-card">
             <header className="wf-cardhead">
               <h3>The pipeline</h3>
-              {/* S2.c — the legend describes what is DRAWN. It used to claim
-                  "code steps and your approval still wrap it" over a picture
-                  showing neither, on the one routine where that was visible. */}
+              {historical && shownGroup ? (
+                /* S3.c — the picture is no longer "now", so it says so, and
+                   says why the worker dials are missing from it. */
+                <span className="wf-legend wf-pipe-histnote">
+                  showing the run from {agoTs(shownGroup.startedAt)} · worker settings are
+                  today&rsquo;s, so they are not shown for a past run
+                  <button className="acr-btn ghost" onClick={() => setSelectedRun(null)}>
+                    Back to the latest run
+                  </button>
+                </span>
+              ) : (
               <span className="wf-legend">
                 {showingRevision ? (
                   <>the wiring you published · every path still ends at an{' '}
@@ -595,12 +611,14 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
                     <Term k="approval">approval</Term></>
                 )}
               </span>
+              )}
             </header>
             {loaded && displayStory ? (
               <RoutinePipeline
                 story={displayStory}
                 charters={charters}
-                lastGroup={groups[0] ?? null}
+                lastGroup={shownGroup}
+                historical={historical}
                 /* §10.5 promised the picture would change when the ROUTINE's
                    own state does — the whole indictment of the old canvas.
                    A worker being off is already on its card; this is the
@@ -639,6 +657,8 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
               new Map(charters.map((c) => [c.key, c.name ?? c.key] as [string, string]))
             }
             fetchCapReached={runs.length >= 100}
+            selectedId={selectedRun}
+            onSelect={(id) => setSelectedRun((cur) => (cur === id ? null : id))}
             revisionNoById={
               new Map((vers?.revisions ?? []).map((r) => [r.id, r.revision] as [string, number]))
             }

@@ -806,6 +806,42 @@
 .wf-runs col.wf-c-num  { width: 9%; }
 .wf-runs col.wf-c-exp  { width: 16%; }
 
+/* ── S3.c — selecting a run re-colours the pipeline above ────────────────
+   Airflow's move: the run list and the picture are the same object seen
+   twice. The whole row is the mouse target; the "when" button is the keyboard
+   one, because a <tr> cannot be. */
+.wf-runs .wf-grouprow { cursor: pointer; }
+.wf-runs .wf-grouprow:hover td { background: #f7f9fc; }
+.wf-runs tr.is-selected td { background: #f2f7fd; }
+.wf-runs tr.is-selected td:first-child { box-shadow: inset 3px 0 0 #3f6fb5; }
+
+.wf-selectbtn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  border-bottom: 1px dashed #c3ccd8;
+}
+.wf-selectbtn:hover { color: #2f5f9e; border-bottom-color: #9db4d0; }
+.wf-grouprow.is-selected .wf-selectbtn { font-weight: 650; color: #2f5f9e; }
+
+/* The note replaces the legend, so the card header never claims "what runs, in
+   order" over a picture that is showing one particular past run. */
+.wf-pipe-histnote {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: #8a5f0e;
+  background: #fdf4e3;
+  border: 1px solid #f3e3c2;
+  border-radius: 9px;
+  padding: 5px 10px;
+}
+
 .wf-outcell { display: inline-flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 
 /* Who ran, and how each went, on the summary line — the row answers what

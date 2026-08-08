@@ -45,6 +45,18 @@ export interface RoutinePipelineProps {
    *  cards already carry, and D7 was about the picture not changing when the
    *  routine's own state did. */
   blockedReason?: string | null
+  /**
+   * S3.c — true when `lastGroup` is a run the operator picked out of history
+   * rather than the newest one.
+   *
+   * It suppresses the autonomy pill on worker steps, and that is the whole
+   * point: the pill comes from the LIVE charter feed, which is correct for
+   * "what happens next time" and false for a run that happened two days ago.
+   * `AgentCharter` keeps no history, so the dial at that moment is genuinely
+   * unknown — and this page's oldest rule is that it does not claim a status
+   * from a feed that cannot answer.
+   */
+  historical?: boolean
 }
 
 /** What crosses INTO a level — the artifact named once, in the gutter, so a
@@ -63,7 +75,7 @@ function roleOf(s: StoryStep, c: CharterRow | undefined): { label: string; cls: 
   return { label: lvl, cls: `lvl-${lvl.toLowerCase()}` }
 }
 
-export function RoutinePipeline({ story, charters, lastGroup, blockedReason }: RoutinePipelineProps) {
+export function RoutinePipeline({ story, charters, lastGroup, blockedReason, historical }: RoutinePipelineProps) {
   const byKey = new Map(charters.map((c) => [c.key, c]))
   /* The newest orchestration's rows, by worker. A step missing from this map
      simply did not run in that orchestration — which is a fact, not a gap. */
@@ -110,7 +122,11 @@ export function RoutinePipeline({ story, charters, lastGroup, blockedReason }: R
                     >
                       <span className="wf-pipe-head">
                         <span className="nm">{s.label}</span>
-                        <span className={`wf-pipe-role ${role.cls}`}>{role.label}</span>
+                        {/* A worker's dial is today's; for a past run it is
+                            unknown, so it is not shown rather than guessed. */}
+                        {historical && isWorker ? null : (
+                          <span className={`wf-pipe-role ${role.cls}`}>{role.label}</span>
+                        )}
                       </span>
                       <span className="wf-pipe-sub">{s.sub}</span>
                       {c?.degraded ? (
@@ -147,7 +163,11 @@ export function RoutinePipeline({ story, charters, lastGroup, blockedReason }: R
                           )
                         ) : (
                           <span className="muted">
-                            {on ? 'did not run last time' : 'skipped — it was switched off'}
+                            {historical
+                              ? 'did not run in this one'
+                              : on
+                                ? 'did not run last time'
+                                : 'skipped — it was switched off'}
                           </span>
                         )}
                       </span>
