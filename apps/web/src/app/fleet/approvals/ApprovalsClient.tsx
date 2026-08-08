@@ -29,7 +29,14 @@
  * create two dictionaries that drift — the defect AP.3 was written to fix.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -246,21 +253,39 @@ const S2_TERMS: Array<[RegExp, string]> = [
   [/\bsweep\b/, 'sweep'],
 ]
 
-function withTerms(text: string): ReactNode[] {
-  let parts: ReactNode[] = [text]
+type Piece = string | ReactElement
+
+function withTerms(text: string): Piece[] {
+  /*
+   * An explicit loop, not `flatMap`. `ReactNode` includes `Iterable<ReactNode>`,
+   * so flatMap's return type collapses into something React's children type
+   * will not accept — and `npx tsc --noEmit` accepts it anyway while
+   * `next build`'s own TypeScript pass does not. That gap is documented in the
+   * locks file and this is the second time it has bitten; the narrower `Piece`
+   * type is what makes both agree.
+   */
+  let parts: Piece[] = [text]
   for (const [re, key] of S2_TERMS) {
-    parts = parts.flatMap((part) => {
-      if (typeof part !== 'string') return [part]
+    const next: Piece[] = []
+    for (const part of parts) {
+      if (typeof part !== 'string') {
+        next.push(part)
+        continue
+      }
       const m = re.exec(part)
-      if (!m) return [part]
-      return [
-        part.slice(0, m.index),
+      if (!m) {
+        next.push(part)
+        continue
+      }
+      next.push(part.slice(0, m.index))
+      next.push(
         <Term key={`${key}-${m.index}`} k={key as never}>
           {m[0]}
         </Term>,
-        part.slice(m.index + m[0].length),
-      ]
-    })
+      )
+      next.push(part.slice(m.index + m[0].length))
+    }
+    parts = next
   }
   return parts
 }
