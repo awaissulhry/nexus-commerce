@@ -168,6 +168,95 @@
 .as-order::before { content: '↕ '; opacity: 0.7; }
 .as-cap { color: #92400e; }
 
+/* ── S1.d · row actions ───────────────────────────────────────────────────
+   Always visible, never hover-only: an action that appears on hover is
+   invisible to keyboard and touch users. */
+.as-kebab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: #5b6573;
+  cursor: pointer;
+}
+.as-kebab:hover { background: #eef2f7; border-color: #dfe5ec; color: #26313f; }
+.as-kebab:focus-visible { outline: 2px solid #2f6feb; outline-offset: 1px; }
+.as-kebab[aria-expanded='true'] { background: #eef2f7; border-color: #c6d2e2; }
+
+/* Portalled to document.body, so it escapes both `.h10-ds-gridcard`'s
+   overflow:hidden and the stacking context a sticky cell would open. The
+   z-index only works BECAUSE it is out here. */
+.as-menu {
+  position: fixed;
+  z-index: 1200;
+  width: 216px;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(23, 35, 52, 0.16);
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.as-menu-item {
+  text-align: left;
+  border: none;
+  background: none;
+  border-radius: 7px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  color: #34404f;
+  cursor: pointer;
+}
+.as-menu-item:hover:not(:disabled) { background: #f2f6fb; }
+.as-menu-item:focus-visible { outline: 2px solid #2f6feb; outline-offset: -2px; }
+.as-menu-item.danger { color: #a11d2b; }
+.as-menu-item.danger:hover:not(:disabled) { background: #fdecee; }
+.as-menu-item:disabled { color: #8a93a1; cursor: not-allowed; }
+
+.as-menu-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 9px;
+  font-size: 12px;
+  color: #52627a;
+  line-height: 1.5;
+}
+.as-menu-confirm strong { color: #1f2a37; font-size: 12.5px; }
+.as-menu-confirm .acts { display: flex; gap: 6px; margin-top: 2px; }
+
+.as-actionerr {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  justify-content: space-between;
+}
+.as-actionerr button {
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  flex: none;
+}
+
+/* A header that exists for screen readers only. The actions column needs a
+   name; it does not need a visible one. */
+.as-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .as-gridempty {
   display: flex;
   flex-direction: column;

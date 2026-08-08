@@ -31,7 +31,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Plus, RefreshCw, Target, AlertTriangle, Layers, Globe } from 'lucide-react'
+import { Plus, RefreshCw, Target, AlertTriangle, Layers, Globe, Trash2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { searchOptions } from '@/lib/option-search'
 import { DataGrid, type Column } from '@/design-system/components'
@@ -54,6 +54,7 @@ import {
 import { closedCount, tileCounts, visibleRows } from './views'
 import { CreateAssignment } from './CreateAssignment'
 import { HowAssignmentsWork } from './HowAssignmentsWork'
+import { RowActions } from './RowActions'
 
 export interface AssignmentRow {
   id: string
@@ -137,6 +138,9 @@ export function AssignmentsClient() {
   const [showClosed, setShowClosed] = useState(false)
   const [creating, setCreating] = useState(false)
   const [q, setQ] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const width = useWidth()
   /**
    * NAF.SB.AS.2 — the deep link from the object the operator was standing on.
@@ -246,6 +250,43 @@ export function AssignmentsClient() {
   )
   /** What the "All" chip counts — and it must equal what clicking it reveals. */
   const openTotal = searched.length - (showClosed ? 0 : closed)
+
+  /**
+   * S1.d — the only honest bulk action on this page.
+   *
+   * Bulk CREATE ships capped at 25 (AS.6), so undoing a batch later is the real
+   * complement to it — AS.6's own Undo only exists in the moment of creating.
+   * There is no bulk Close and no bulk Start: close is per-row on the API, and
+   * starting spends money on a fleet that is deliberately switched off.
+   *
+   * Only never-run rows are selectable, because `deleteAssignment` refuses the
+   * rest — offering a checkbox that will be refused is how bulk earns its
+   * reputation.
+   */
+  const bulkDelete = useCallback(async () => {
+    const ids = [...selected]
+    if (ids.length === 0) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/agent/fleet/assignments/bulk-delete`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null
+        setActionError(body?.error ?? `That did not work (${res.status}).`)
+        return
+      }
+      setSelected(new Set())
+      await load()
+    } catch (e) {
+      setActionError(String(e))
+    } finally {
+      setDeleting(false)
+    }
+  }, [selected, load])
 
   /** What everything on screen has cost, and what we cannot know. */
   const spend = useMemo(() => {
@@ -372,8 +413,20 @@ export function AssignmentsClient() {
       })
     }
 
+    // S1.d — the row action affordance. Never sticky: a sticky cell opens its
+    // own stacking context and the menu inside it could not escape.
+    cols.push({
+      key: 'acts',
+      label: <span className="as-sr">Actions</span>,
+      width: 52,
+      align: 'right',
+      render: (a) => (
+        <RowActions a={a} onDone={refresh} onError={setActionError} />
+      ),
+    })
+
     return cols
-  }, [width])
+  }, [width, refresh])
 
   if (error && !rows) {
     return (
@@ -473,6 +526,12 @@ export function AssignmentsClient() {
         <div className="h10-ds-gridcard as-gridcard">
           <GridToolbar
             count={
+              selected.size > 0 ? (
+                <>
+                  Selected <b>{selected.size}</b> assignment
+                  {selected.size === 1 ? '' : 's'}
+                </>
+              ) : (
               <>
                 Showing <b>{visible.length}</b> of <b>{rows.length}</b> assignment
                 {rows.length === 1 ? '' : 's'}
@@ -496,8 +555,19 @@ export function AssignmentsClient() {
                   </span>
                 ) : null}
               </>
+              )
             }
             right={
+              selected.size > 0 ? (
+                <>
+                  <button className="acr-btn stop" onClick={bulkDelete} disabled={deleting}>
+                    <Trash2 size={13} /> {deleting ? 'Deleting…' : `Delete ${selected.size}`}
+                  </button>
+                  <button className="acr-btn" onClick={() => setSelected(new Set())} disabled={deleting}>
+                    Clear
+                  </button>
+                </>
+              ) : (
               <>
                 <span
                   className="as-order"
@@ -518,6 +588,7 @@ export function AssignmentsClient() {
                   <Plus size={13} /> New assignment
                 </button>
               </>
+              )
             }
           >
             {/* A search box over four rows is furniture. Eight is where a list
@@ -540,6 +611,13 @@ export function AssignmentsClient() {
             rows={visible}
             rowKey={(a) => a.id}
             maxHeight="calc(100vh - 22rem)"
+            selectable
+            selected={selected}
+            onSelectedChange={setSelected}
+            rowSelectable={(a) => a.runCount === 0}
+            rowSelectableHint="This has already run, so it cannot be deleted. Close it instead — its runs are part of the record."
+            selectAllHint="Select every assignment shown that has never run"
+            selectRowHint="Select this assignment for a bulk action"
             emptyState={
               <FilteredEmpty
                 filter={filter}
@@ -555,6 +633,17 @@ export function AssignmentsClient() {
             }
           />
         </div>
+      )}
+
+      {/* A refusal is the API's own sentence, shown where the action was, and
+          dismissible — not a toast that vanishes before it is read. */}
+      {actionError && (
+        <p className="as-err as-actionerr" role="alert">
+          {actionError}
+          <button type="button" onClick={() => setActionError(null)} aria-label="Dismiss">
+            <X size={13} />
+          </button>
+        </p>
       )}
 
       {creating && (
