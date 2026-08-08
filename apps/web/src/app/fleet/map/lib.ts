@@ -230,7 +230,7 @@ export const CHIPS: Chip[] = [
   {
     id: 'off',
     rank: 'state',
-    label: 'off',
+    label: 'switched off',
     matches: (n) => statusOf(n).word === 'off',
     definition:
       'You have switched it off, or its dial is at OFF. It will not start, whatever the schedule says.',
@@ -262,7 +262,7 @@ export const CHIPS: Chip[] = [
   {
     id: 'never-run',
     rank: 'fact',
-    label: 'never run',
+    label: 'never run, ever',
     matches: (n) => n.runs.lifetime === 0,
     definition:
       'Has never run at all, over the whole life of the fleet — not just in the window you are looking at.',
@@ -319,7 +319,151 @@ export function filterSummary(nodes: MapNode[], activeChipId: string | null): st
   const chip = CHIPS.find((c) => c.id === activeChipId)
   if (!chip) return ''
   const n = nodes.filter(chip.matches).length
-  return `${n} of ${nodes.length} workers shown: ${chip.label}`
+  return `Showing ${n} of ${nodes.length} — ${chip.label}`
+}
+
+/* ── S1R · the verdict ─────────────────────────────────────────────────── */
+
+/**
+ * NAF.SB.M-S1R — the sentence that answers the section's question.
+ *
+ * The section's whole contract is *is anything wrong, and is anything even
+ * on?*, and until S1R nothing on it answered that in a sentence: the answer had
+ * to be assembled by the reader out of five equal pills, one of which read `7
+ * off` in the same 11.5px as `1 never run`.
+ *
+ * TWO PROPERTIES THIS FUNCTION MUST KEEP.
+ *
+ * 1. **It invents no predicate.** Every number it speaks comes from `census()`,
+ *    which is the same `matches` the canvas dims by. A verdict derived its own
+ *    way is the drift `lib.vitest.test.ts` exists to make impossible — the
+ *    Workers stream shipped that bug twice before this rule was written down.
+ * 2. **It never speaks before the page has read.** `nodes` is `[]` until the
+ *    first successful load, and `[]` produces the `empty` tone rather than a
+ *    confident "0 workers" — measured on prod 2026-08-08, the old strip stated
+ *    `0 workers · 0 running · 0 waiting in Approvals` as fact while its own
+ *    request was still in flight, with those zeros as live buttons. The caller
+ *    must still render the skeleton while `data == null`; this is the belt to
+ *    that brace.
+ */
+export type VerdictTone = 'halted' | 'running' | 'failed' | 'off' | 'mixed' | 'empty'
+
+export interface Verdict {
+  tone: VerdictTone
+  headline: string
+  /** The reserved sub-line. Null is a legitimate answer; the caller keeps the
+   *  space either way, because that row is also where the active filter's
+   *  summary lands and a row that appears on click moves the graph. */
+  detail: string | null
+}
+
+export function verdict(nodes: MapNode[], halted: boolean): Verdict {
+  const total = nodes.length
+  if (total === 0) {
+    return { tone: 'empty', headline: 'No workers are wired up yet.', detail: null }
+  }
+
+  const counts = new Map(census(nodes).map((r) => [r.chip.id, r.count]))
+  const n = (id: string) => counts.get(id) ?? 0
+
+  /** The partition, spoken — optionally minus the state the headline already
+   *  named, so no sentence says the same thing twice. Zero-count states are
+   *  omitted here and handled as notes beside the lenses. */
+  const rest = (skip: string | null) =>
+    CHIPS.filter((c) => c.rank === 'state' && c.id !== skip && n(c.id) > 0)
+      .map((c) => `${n(c.id)} ${c.label}`)
+      .join(' · ')
+
+  if (halted) {
+    return {
+      tone: 'halted',
+      headline: 'The fleet is halted.',
+      detail: 'Nothing will run, whatever any dial says.',
+    }
+  }
+
+  const running = n('running')
+  if (running > 0) {
+    const r = rest('running')
+    return {
+      tone: 'running',
+      headline: `${running} ${running === 1 ? 'worker is' : 'workers are'} running now.`,
+      detail: r ? `The rest: ${r}.` : null,
+    }
+  }
+
+  const failed = n('last-failed')
+  if (failed > 0) {
+    const r = rest(null)
+    return {
+      tone: 'failed',
+      headline: `${failed} ${failed === 1 ? "worker's" : "workers'"} last run failed.`,
+      detail: r ? `${r}.` : null,
+    }
+  }
+
+  if (n('off') === total) {
+    return {
+      tone: 'off',
+      headline: 'The whole fleet is switched off.',
+      detail: 'Nothing will start, whatever any schedule says.',
+    }
+  }
+
+  const on = total - n('off')
+  const r = rest(null)
+  return {
+    tone: 'mixed',
+    // The noun agrees with the denominator and the verb with the subject:
+    // "1 of 3 workers is switched on", never "1 of 3 worker is".
+    headline: `${on} of ${total} ${total === 1 ? 'worker' : 'workers'} ${
+      on === 1 ? 'is' : 'are'
+    } switched on.`,
+    detail: r ? `${r}.` : null,
+  }
+}
+
+/* ── S1R · the standing facts ──────────────────────────────────────────── */
+
+/**
+ * The two figures that sit beside the counts and are NOT lenses.
+ *
+ * The rule is the Workers strip's, and it is why these are here rather than in
+ * `CHIPS`: **a lens counts workers and its number is exactly the nodes left
+ * undimmed when you press it; a figure that does not filter may count something
+ * else.** Open findings counts findings, so pressing it could never produce 64
+ * rows over 7 nodes — it is a fact, and it must never become a button.
+ *
+ * `openExpired` is here because the map's payload has carried it since M.1a and
+ * **no surface in the ten pages says it**: on prod today all 47 of the
+ * self-test's open findings are past their expiry date.
+ */
+export interface FindingsTotals {
+  open: number
+  expired: number
+  diagnostic: number
+}
+
+export function findingsTotals(nodes: MapNode[]): FindingsTotals {
+  return {
+    open: nodes.reduce((s, x) => s + x.findings.open, 0),
+    expired: nodes.reduce((s, x) => s + x.findings.openExpired, 0),
+    diagnostic: nodes.filter((x) => x.diagnostic).reduce((s, x) => s + x.findings.open, 0),
+  }
+}
+
+/**
+ * Money, at one precision per sentence.
+ *
+ * The shipped strip read `spent $0.0000 of the $2.00 daily ceiling today` — two
+ * precisions inside one sentence, four decimals of them spent saying zero. A
+ * sub-cent amount is real and must not round to `$0.00`, so it gets a form of
+ * its own rather than more decimals for everybody.
+ */
+export function usd(v: number): string {
+  if (v === 0) return '$0.00'
+  if (v > 0 && v < 0.01) return '<$0.01'
+  return `$${v.toFixed(2)}`
 }
 
 /** Said once, under the strip, and referenced rather than repeated. The

@@ -7,7 +7,17 @@
  * of bug impossible here rather than watched for.
  */
 import { describe, it, expect } from 'vitest'
-import { CHIPS, census, visibleCensus, filterSummary, diagnosticFootnote, type MapNode } from './lib'
+import {
+  CHIPS,
+  census,
+  visibleCensus,
+  filterSummary,
+  diagnosticFootnote,
+  findingsTotals,
+  usd,
+  verdict,
+  type MapNode,
+} from './lib'
 
 function node(over: Partial<MapNode> & { key: string }): MapNode {
   return {
@@ -193,8 +203,11 @@ describe('census', () => {
   })
 
   it('filterSummary is the one sentence, and it counts the same way', () => {
+    // Reads the label from CHIPS rather than restating it: the point of the
+    // sentence is that there is ONE source for both the number and the word.
+    const chip = CHIPS.find((c) => c.id === 'never-run')!
     expect(filterSummary(FIXTURE, 'never-run')).toBe(
-      `${FIXTURE.filter((n) => n.runs.lifetime === 0).length} of ${FIXTURE.length} workers shown: never run`,
+      `Showing ${FIXTURE.filter((n) => n.runs.lifetime === 0).length} of ${FIXTURE.length} — ${chip.label}`,
     )
     expect(filterSummary(FIXTURE, null)).toBe('')
   })
@@ -202,5 +215,112 @@ describe('census', () => {
   it('the diagnostic footnote names the skew rather than hiding it', () => {
     expect(diagnosticFootnote(FIXTURE)).toContain('47 of the 47 open findings')
     expect(diagnosticFootnote([node({ key: 'plain' })])).toBeNull()
+  })
+})
+
+/* ── S1R ────────────────────────────────────────────────────────────────── */
+
+describe('verdict', () => {
+  const off = (k: string) => node({ key: k })
+  const on = (k: string, over: Partial<MapNode> = {}) =>
+    node({
+      key: k,
+      charter: { ...node({ key: 'x' }).charter, enabled: true, autonomyLevel: 'OBSERVE' },
+      ...over,
+    })
+
+  it('says nothing at all before the page has read', () => {
+    expect(verdict([], false)).toEqual({
+      tone: 'empty',
+      headline: 'No workers are wired up yet.',
+      detail: null,
+    })
+  })
+
+  it('a halted fleet outranks everything, including a run in flight', () => {
+    const v = verdict(FIXTURE, true)
+    expect(v.tone).toBe('halted')
+    expect(v.headline).toBe('The fleet is halted.')
+  })
+
+  it('names the running workers before it names the broken ones', () => {
+    const v = verdict(FIXTURE, false)
+    expect(v.tone).toBe('running')
+    expect(v.headline).toBe('1 worker is running now.')
+  })
+
+  it('a failure is the headline when nothing is in flight', () => {
+    const nodes = [
+      off('a'),
+      on('broke', {
+        lastRun: run({ ok: false, errorMessage: 'fetch failed' }),
+        runs: { window: 1, lifetime: 1, notOkWindow: 1, runningNow: false, runningRunId: null, runningSince: null },
+      }),
+    ]
+    const v = verdict(nodes, false)
+    expect(v.tone).toBe('failed')
+    expect(v.headline).toBe("1 worker's last run failed.")
+  })
+
+  it('an entirely off fleet says so in words — the defect this section exists for', () => {
+    const v = verdict([off('a'), off('b'), off('c')], false)
+    expect(v.tone).toBe('off')
+    expect(v.headline).toBe('The whole fleet is switched off.')
+    expect(v.detail).toBe('Nothing will start, whatever any schedule says.')
+  })
+
+  it('speaks only numbers the census produced, and never a zero state', () => {
+    const nodes = [off('a'), off('b'), on('c', { lastRun: run() })]
+    const v = verdict(nodes, false)
+    expect(v.tone).toBe('mixed')
+    expect(v.headline).toBe('1 of 3 workers is switched on.')
+    // the partition, spoken; the five states at zero are absent, not "0 paused"
+    expect(v.detail).toBe('1 working · 2 switched off.')
+    expect(v.detail).not.toContain('0 ')
+  })
+
+  it('every number it speaks is a census count, for every shape a node can be', () => {
+    for (const halted of [false, true]) {
+      const v = verdict(FIXTURE, halted)
+      const counts = new Set(census(FIXTURE).map((r) => String(r.count)))
+      counts.add(String(FIXTURE.length))
+      for (const num of `${v.headline} ${v.detail ?? ''}`.match(/\d+/g) ?? []) {
+        expect(counts.has(num), `verdict spoke "${num}", which no chip counted`).toBe(true)
+      }
+    }
+  })
+
+  it('never claims a plural of one, in either the noun or the verb', () => {
+    const one = [
+      on('solo', {
+        runs: { window: 1, lifetime: 1, notOkWindow: 0, runningNow: true, runningRunId: 'r', runningSince: null },
+      }),
+    ]
+    expect(verdict(one, false).headline).toBe('1 worker is running now.')
+    // A fleet of one that is on: the noun agrees with the denominator, the
+    // verb with the subject. Caught by a test expectation of mine that was
+    // wrong before the code was.
+    expect(verdict([on('solo', { lastRun: run() })], false).headline).toBe(
+      '1 of 1 worker is switched on.',
+    )
+  })
+})
+
+describe('the standing facts', () => {
+  it('findings are totalled across every node, diagnostic included', () => {
+    expect(findingsTotals(FIXTURE)).toEqual({ open: 47, expired: 47, diagnostic: 47 })
+  })
+
+  it('a fleet with no findings reports zeros rather than nothing', () => {
+    expect(findingsTotals([node({ key: 'a' })])).toEqual({ open: 0, expired: 0, diagnostic: 0 })
+  })
+
+  it('money keeps one precision per sentence, and a real sub-cent is not rounded away', () => {
+    expect(usd(0)).toBe('$0.00')
+    expect(usd(2)).toBe('$2.00')
+    expect(usd(0.2773)).toBe('$0.28')
+    // the shipped strip rendered this as "$0.0000"; rounding it to $0.00 would
+    // say "nothing spent" about a run that did spend
+    expect(usd(0.0042)).toBe('<$0.01')
   })
 })
