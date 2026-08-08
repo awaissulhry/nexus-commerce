@@ -237,6 +237,32 @@ Detection rule, since it is easy to trip: `/<select\b/g`, lowercase. The DS
 `Select` primitive satisfies it because the native element lives inside
 `design-system/`, outside the section manifests.
 
+### ⚠ LIVE, 2026-08-08 03:26 — the agent-executor tests are red on main
+
+**For whoever owns `agent-executor.ts` right now** (the core-execution row in §3,
+released by WF.4 — so possibly nobody).
+
+```
+src/services/agent-fleet/agent-executor.vitest.test.ts        FAIL
+src/services/agent-fleet/agent-executor-contracts.vitest.test.ts  FAIL
+10 failed | 375 passed  (was 379 passed / 0 failed thirty minutes ago)
+```
+
+All ten are `AssertionError: expected false to be true`. The suite count also
+rose from 379 to 385, so someone is mid-change rather than something having
+rotted.
+
+**It does not block pushes** — `.githooks/pre-push` runs only `test:security`,
+never vitest — which is exactly why the `fleet-council` failure could sit red on
+main unnoticed for hours earlier tonight. That is the second time in one evening
+a red agent-fleet suite has been invisible to every gate. Worth someone deciding
+whether the hook should run the fleet suite; it is fast (about 1s) and it is the
+only thing that would have caught either.
+
+Not the Approvals stream: `SB.AQ` has never touched `agent-executor*`, and
+`approval-undo.vitest.test.ts` passes 25/25 in isolation. **Delete this block
+once green.**
+
 ### ⚠ LIVE, 2026-08-08 00:50 — `workflows/RoutineCard.tsx` is failing every push
 
 **For the Workflows stream.** One error, one word, and it is the only thing

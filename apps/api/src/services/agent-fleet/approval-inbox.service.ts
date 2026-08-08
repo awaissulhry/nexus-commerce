@@ -755,7 +755,7 @@ export async function previewBulk(
     decision === 'approve'
       ? highRisk > 0
         ? ` — ${highRisk} of them high risk.${money} You have 20 seconds to take it back.`
-        : `${money} You have 20 seconds to take it back.`
+        : `.${money} You have 20 seconds to take it back.`
       : ''
 
   return {
@@ -767,7 +767,12 @@ export async function previewBulk(
           ? `Nothing here can be decided — ${all.length === 1 ? 'the one you selected has' : `all ${all.length} you selected have`} already been decided or ${all.length === 1 ? 'is' : 'are'} counting down.`
         : blockedReason
           ? blockedReason
-          : `This ${verb} ${rows.length} action${rows.length === 1 ? '' : 's'}: ${kinds}.${tail}${skipped}`,
+          : // The kinds clause takes its own full stop only when nothing
+            // follows it. The shipped version always added one and then began
+            // the tail with an em-dash, producing "…set target bid. — 2 of
+            // them high risk." — a period followed by a dash, which reads as a
+            // typo on the one sentence that has to be trusted.
+            `This ${verb} ${rows.length} action${rows.length === 1 ? '' : 's'}: ${kinds}${tail ? '' : '.'}${tail}${skipped}`,
     byTool,
     highRisk,
     irreversible,
