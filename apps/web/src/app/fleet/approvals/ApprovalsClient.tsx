@@ -264,7 +264,24 @@ function ConditionRow({
         {stateWord(condition)}
       </span>
       <div className="aq-condbody">
-        <p className="aq-condreq">{condition.requirement}</p>
+        {/* S2.c — the owner sits ON the requirement line, not under the detail.
+            Right-aligning it put "Yours to change" ~1000px from the sentence it
+            qualifies, which is both dead space in the middle of the row and a
+            association the reader has to track across the width of the page.
+            Inline and adjacent costs nothing and reads immediately. A <span>,
+            not a <p>: a paragraph inside a paragraph is invalid HTML. */}
+        <p className="aq-condreq">
+          {condition.requirement}
+          <span className="aq-condowner">
+            {OWNER_LINE[condition.owner]}
+            {condition.href ? (
+              <>
+                {' · '}
+                <Link href={condition.href}>Controls →</Link>
+              </>
+            ) : null}
+          </span>
+        </p>
         <p className="aq-conddetail">
           {condition.detail}
           {condition.at ? (
@@ -294,15 +311,6 @@ function ConditionRow({
           </ul>
         ) : null}
 
-        <p className="aq-condowner">
-          {OWNER_LINE[condition.owner]}
-          {condition.href ? (
-            <>
-              {' · '}
-              <Link href={condition.href}>Controls →</Link>
-            </>
-          ) : null}
-        </p>
       </div>
     </li>
   )

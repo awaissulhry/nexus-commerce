@@ -237,7 +237,7 @@
   /* The measure S1 established. `ch` is the width of "0" and runs ~30% looser
      than real prose — 58ch measured 75 actual characters there, and this
      sentence is shorter, so it never wraps past it. */
-  max-width: 78ch;
+  max-width: 56ch; /* 74 real characters — see the note on .aq-conddetail */
 }
 .aq-gate-head strong {
   font-weight: 600;
@@ -258,7 +258,7 @@
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  padding: 12px 14px;
+  padding: 10px 14px;
   border-bottom: 1px solid #eef1f5;
 }
 .aq-cond:last-child {
@@ -290,7 +290,14 @@
   min-width: 0;
   flex: 1;
 }
+/* The requirement and its OWNER share a line. Right-aligning the owner put it
+   ~1000px from the sentence it qualifies — dead space in the middle of the row,
+   and an association the reader has to track across the page. */
 .aq-condreq {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
   margin: 0 0 3px;
   font-size: 13px;
   font-weight: 600;
@@ -301,17 +308,31 @@
   font-size: 13px;
   line-height: 1.55;
   color: #4a5867;
-  /* The measure. Blocker prose ran at 257-268 characters per line here. */
-  max-width: 76ch;
+  /*
+   * The measure. Blocker prose ran at 257-268 characters per line here.
+   *
+   * ⚠ S2.c — this was `76ch` and measured **99** actual characters on prod,
+   * which is the SAME `ch` trap S1.c documented and I then walked straight back
+   * into. `ch` is the advance width of the digit "0" (8.20px at 13px here) while
+   * real prose averages 6.33px, so a ch cap runs ~30% looser than it reads.
+   * 58ch = 75 real characters. Re-measure with a canvas text measurement after
+   * any copy change; do not trust the unit, in either direction.
+   */
+  max-width: 58ch;
 }
 .aq-conddetail time {
   color: #1c2530;
   font-weight: 600;
 }
 .aq-condowner {
-  margin: 5px 0 0;
-  font-size: 13px;
+  flex: 0 0 auto;
+  font-weight: 400;
   color: #55616f;
+}
+.aq-condowner::before {
+  content: '·';
+  margin-right: 8px;
+  color: #98a2b0;
 }
 .aq-condowner a {
   color: #2563eb;
@@ -320,8 +341,13 @@
 
 /* The evidence under "what it proposes has to be able to run". Word first,
    colour second — readable in greyscale and to a screen reader. */
+/* One wrapping row rather than three stacked lines: the same evidence, 40px
+   shorter, and it reads as a set rather than a list of three separate claims. */
 .aq-toollist {
-  margin: 7px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 6px 0 0;
   padding: 0;
   list-style: none;
   font-size: 13px;
@@ -330,7 +356,7 @@
   display: flex;
   gap: 8px;
   align-items: baseline;
-  margin: 0 0 3px;
+  margin: 0;
   color: #4a5867;
 }
 .aq-can,
