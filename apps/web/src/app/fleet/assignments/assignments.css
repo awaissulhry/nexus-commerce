@@ -359,10 +359,23 @@
 }
 .as-hint {
   font-size: 11.5px;
-  color: #8d97a6;
+  color: #5b6573; /* was #8d97a6 — 2.95:1, and these sentences are the teaching */
   line-height: 1.55;
   margin-top: 6px;
 }
+
+/* ── S2.b · the steps you have not reached yet ────────────────────────────
+   Headings only, greyed and inert. Not a stepper (§12.4 declined one with
+   evidence) — the same single form, telling the truth about its own length
+   instead of growing 321px → 1112px under the reader. */
+/* NOT `opacity`. Dimming with opacity is how the DS chip's counts ended up at
+   3.4:1 (Part 11) — it multiplies the contrast of whatever it dims, so a role
+   that passes at full strength quietly fails when it is quieted. These carry
+   real teaching text, so they are quieted with an explicit colour that still
+   measures ≥4.5:1. */
+.as-step-ghost .as-steplabel { font-weight: 600; color: #6b7480; }
+.as-step-ghost .as-hint { color: #6b7480; }
+.as-step-ghost .opt { font-weight: 400; text-transform: none; letter-spacing: 0; }
 .as-refusal {
   font-size: 11.5px;
   line-height: 1.55;

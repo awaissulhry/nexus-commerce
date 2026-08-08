@@ -74,6 +74,32 @@ const BULK_CAP = 25
  */
 const WANT_EXAMPLES = ['Find wasted spend', 'Propose bids', 'Audit structure']
 
+/**
+ * What steps 2–4 are, shown before a worker is chosen so the whole task is
+ * legible at once. The wording matches the live headings exactly — two names
+ * for one step would be the defect this page has spent six phases removing.
+ */
+const GHOST_STEPS = [
+  {
+    n: 2,
+    title: 'What should it look at?',
+    optional: false,
+    hint: 'One campaign, one marketplace, one portfolio — or your whole account.',
+  },
+  {
+    n: 3,
+    title: 'What do you want back?',
+    optional: true,
+    hint: 'A note for you. It does not change what the worker does.',
+  },
+  {
+    n: 4,
+    title: 'By when?',
+    optional: true,
+    hint: 'A deadline only colours the row. It never starts anything.',
+  },
+] as const
+
 export function CreateAssignment({
   onClose,
   onCreated,
@@ -349,6 +375,34 @@ export function CreateAssignment({
           </>
         )}
       </div>}
+
+      {/**
+        * S2.b — the shape of the task, from the moment it opens.
+        *
+        * Steps 2–4 did not exist until a worker was picked, so the form grew
+        * from 321px to 1112px under the reader and there was no point at which
+        * you could see how much was left. Measured with it: 461px — 59% — of
+        * the drawer was blank on open, which is the first impression of this
+        * page's primary action.
+        *
+        * These are the headings only, greyed and inert: what is coming, in
+        * what order, and which parts you are allowed to skip. They are NOT a
+        * stepper — §12.4 declined that with evidence — they are the same
+        * single form, telling the truth about its own length.
+        */}
+      {!worker && !bulkResult && (
+        <>
+          {GHOST_STEPS.map((s) => (
+            <div key={s.n} className="as-step as-step-ghost" aria-hidden="true">
+              <span className="as-steplabel">
+                {s.n} · {s.title}
+                {s.optional ? <span className="opt"> — optional</span> : null}
+              </span>
+              <p className="as-hint">{s.hint}</p>
+            </div>
+          ))}
+        </>
+      )}
 
       {/* 2 — the target */}
       {worker && !bulkResult && (
