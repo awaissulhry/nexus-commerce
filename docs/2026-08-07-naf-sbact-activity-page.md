@@ -3044,3 +3044,104 @@ tick's counts.
 **In-repo** · `apps/web/src/design-system/patterns/FilterBar.tsx` ·
 `GridToolbar.tsx` · `FilterPanel.tsx` · live prod measurement at 1728×906,
 2026-08-08
+
+---
+
+## 21.10 — S3R execution record (2026-08-08)
+
+Three commits, each verified before the next: **`f44c436af`** Phase 0 (§21.8),
+**`3ff8bc2fb`** the IA rebuild, **`743065c7c`** §18.7's test-run toggle. All
+prod-verified on live Vercel + Railway.
+
+### The DS composition, adopted
+
+| Was | Is |
+|---|---|
+| `.sba-toolbar` — 17 controls in one wrapping row | DS `FilterBar` (collapsed) · a pill row · DS `GridToolbar` |
+| hand-rolled chips | `multiselect` dimensions with counts |
+| `.sba-grain*` buttons | DS `SegmentedControl` |
+| `.sba-searchwrap`/`.sba-search` | DS `Input` with `leadingIcon` |
+| `.sba-export` | DS `Button` in `GridToolbar`'s documented `right` slot |
+| a checkbox in the row | a `Counting` group in the panel's `presets` |
+
+**One deviation from §21.4, recorded:** `GridToolbar` is used **standalone**
+rather than inside an `h10-ds-gridcard`. Wrapping the Everything list in the
+grid card would restyle S4's container, and S4 is a later unit. `.h10-ds-toolbar`
+is a bare flex row with a `grow` spacer, so the slots work unwrapped; the Runs
+grain's existing gridcard is untouched.
+
+### Measured, prod, 1728×906
+
+| §21.2 defect | Before | After |
+|---|---|---|
+| Controls in one row | **17** | a collapsed panel, a pill row, a 3-control toolbar |
+| Chip width at 6 workers | **1226 / 1614px (76%)** | a dropdown; panel height fixed |
+| **25 workers** — the deciding state | ~2,700px of wrapped chips | **panel height unchanged at 196px**, 26-option scrollable popover, **zero overflow** |
+| `.sba-grainlabel` | 11.5px, **2.82:1** | gone with the strip |
+| Contrast failures | **1** | **0**, worst 5.83 |
+| Font sizes | 11.5 + 12 | **12 · 13 · 20** — S1's ladder |
+| Runs-grain jump | 5 chips vanish, list moves **38px** | kind facet stays (run kinds only); **0px** |
+
+Two DS defaults had to be pinned page-locally, both because they would have
+added a fourth size: the panel title ships at **18px** (pinned to 13), and
+`Clear all` inherited **16px** through `.sba-inlinebtn`'s `font: inherit`.
+
+### §18.7's arithmetic, predicted then verified
+
+| | Test runs hidden *(new default)* | shown |
+|---|---|---|
+| S1 | **26 events across 7 runs** | 33 across 14 |
+| hidden clause | **93 more — the self-test and the test lane** | 86 more — the self-test |
+| footer | Showing 26 of 26 | Showing 33 of 33 |
+| S2's tally | **2 failures** | **2 failures** |
+| S2's sub-line | the **4** runs since | the **11** runs since |
+
+26 + 93 = 119 = 33 + 86. **S2's tally is unchanged exactly as §21.5 predicted**,
+because 0 of the 26 not-ok runs has ever been a test run — the band still takes
+the flag so that the day one does fail while the lane is hidden, it will not
+quietly under-report.
+
+Server-side, beside `includeDiagnostic` in `matchesFilters`, for ACT.1's reason:
+filtering in the client would leave `total`, `countsByKind` and `actors`
+counting rows the page had already hidden. 4 new service tests (39 → 43;
+agent-fleet suite **399 green**), including that the two switches compose rather
+than fight and that non-run events are untouched.
+
+### States verified
+
+All eight of §21.6. Two needed new read-only stub modes:
+
+- **`STUB_ACTORS=25`** — the roster W.8 instances are designed for. This is the
+  state the whole design turns on and it is now demonstrated, not asserted.
+- **`STUB_FACETS=err`** — the panel says *"The worker and event options could
+  not be read, so those two are empty. Search, the scope switch and the list
+  itself are unaffected."* Empty dropdowns that look ready would have been S2's
+  green-tick mistake repeated one section along.
+
+Applied pills verified in all four kinds — `Worker: Bid tuner or Plan critic` ·
+`What happened: Ran fine` · `Search: “bid”` · `Counting: the self-test`
+(tinted differently, because it **adds** rows where the others remove them).
+Counts equal rows throughout: two workers selected gave *10 events across 5
+runs, filtered from 33* above *Showing 10 of 10*; every filter round-trips
+through the URL.
+
+### Three things found while building
+
+1. **A copy assertion that is now wrong in a file I do not own.** The `selftest`
+   glossary entry ends *"Hidden by default; tick the box to see it."* — there is
+   no box any more, it is a switch in a Counting group. `glossary.tsx` is
+   append-only shared ground; **not edited**, recorded here for whoever claims
+   it next.
+2. **The hidden-note over-attributed.** With both switches off it read *"…the
+   self-test and the test lane"* beside a count of 24 failures that are **all**
+   the self-test's. The note names no population now — it says how many hidden
+   runs failed and offers the way to see them.
+3. **`page.actors` carries no counts**, so worker options show none while event
+   kinds do. Left honest rather than guessed; tallying per actor is a few lines
+   in `fleet-timeline.service.ts` and belongs with the except-own facet counting
+   in §21.3B, at the same ~25-worker trigger.
+
+**Twenty-five defects and counting, none of them a type error.** S3's were a
+count that disagreed with the list it produced, a filter row that could not hold
+its own roster, and a section that hid a control class by putting six of them in
+one line.
