@@ -2546,6 +2546,35 @@ Approved by the operator, built in the study's order. Commits: `eb3950ca5`
 
 **Prod left at zero assignments. Nothing was started.**
 
+#### 12.14b · The three verification gaps, closed
+
+The record above was written with three things unverified. Closing them found
+no defects — but two of my own probes lied first, and both are worth keeping.
+
+1. **Narrow width (criterion 13).** Measured in a same-origin 896px frame on the
+   rebuilt drawer: 560px panel = 62.5% of the viewport, **no horizontal scroll**
+   (`scrollWidth === clientWidth === 896`), **zero scroll containers inside the
+   drawer**, and the commit bar fits without overflow (line 335px + actions
+   177px inside 524px). All four headings render.
+2. **The focus trap actually cycling.** Tab from the last control wraps to the
+   first, Shift+Tab from the first wraps to the last, and Shift+Tab from the
+   panel itself goes to the last — each with `preventDefault`.
+3. **A second `Drawer` consumer** — `HowApprovalsWork` on `/fleet/approvals`, a
+   different page and a different feature. Focus enters the panel, the dialog
+   announces *"How approvals work"*, both wraps hold, Escape closes, and focus
+   returns to the opener.
+
+**Two probes that reported false failures, and why.** A real `Tab` keypress
+through the automation harness never reached the page — the tab is not truly
+focused when driven remotely — so "the trap does not wrap" was an artifact of
+the measurement, not the code; dispatching the event directly showed the wrap
+working. And "focus does not return to the opener" was an artifact of opening
+the drawer with a programmatic `.click()`, which does not focus the button, so
+there was nothing to return to; focusing the opener first showed the restore
+working. **The lesson is not "trust the code" — it is that a probe is an
+instrument, and an instrument that has never been calibrated will happily
+report a defect that is its own.**
+
 ---
 
 ## Sources
