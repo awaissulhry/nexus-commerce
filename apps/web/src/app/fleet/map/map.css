@@ -466,6 +466,92 @@
   stroke: #cbd5e0;
 }
 
+/* ── M6 · entity mode ──────────────────────────────────────────────────── */
+
+.sbm-crumbs {
+  font-size: 11.5px;
+  color: #7d879a;
+}
+.sbm-ent {
+  width: 210px;
+  height: 62px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #dde4ec;
+  border-radius: 7px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(28, 37, 48, 0.05);
+  overflow: hidden;
+}
+.sbm-ent.is-focused {
+  border-color: #2b6cb0;
+  box-shadow: 0 0 0 2px rgba(43, 108, 176, 0.2);
+}
+.sbm-ent.t-product { border-left: 3px solid #7f9dc0; }
+.sbm-ent.t-campaign { border-left: 3px solid #2f5d94; }
+.sbm-ent.t-variation { border-left: 3px solid #b7cbe4; }
+
+/* Zoomed out, the card stops pretending to carry a label. Rendering type you
+   know the reader cannot read is worse than rendering none: it looks like
+   information and is a smudge. */
+.sbm-ent.is-tiny {
+  width: 210px;
+  height: 62px;
+  align-items: center;
+  justify-content: center;
+  background: #f7f9fc;
+}
+.sbm-ent-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #c3ccd8;
+}
+.sbm-ent-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1c2530;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sbm-ent-sub {
+  font-size: 10px;
+  color: #9aa5b3;
+}
+
+/* the relation vocabulary — one class per relation, legend and edge alike */
+.sbm-swatch.rel-competes { background: #2f5d94; }
+.sbm-swatch.rel-cannibalizes { background: #c53030; }
+.sbm-swatch.rel-targets { background: #6b8fc4; }
+.sbm-swatch.rel-shares { background: #b7791f; }
+.sbm-swatch.rel-harvested { background: #2f855a; }
+.sbm-swatch.rel-negated { background: #8a6d3b; }
+.sbm-swatch.rel-variant { background: #b7cbe4; }
+.sbm-swatch.rel-promoted { background: #7f9dc0; }
+.sbm-swatch.rel-ranks { background: #4a5666; }
+.sbm-swatch.rel-suppressed { background: #a33a3a; }
+.sbm-swatch.rel-other { background: #c3ccd8; }
+
+.sbm-canvas .react-flow__edge.sbm-eedge .react-flow__edge-path {
+  stroke: #c3ccd8;
+  stroke-width: 1.2;
+  opacity: 0.75;
+}
+.sbm-canvas .react-flow__edge.rel-competes .react-flow__edge-path { stroke: #2f5d94; }
+.sbm-canvas .react-flow__edge.rel-cannibalizes .react-flow__edge-path { stroke: #c53030; }
+.sbm-canvas .react-flow__edge.rel-targets .react-flow__edge-path { stroke: #6b8fc4; }
+.sbm-canvas .react-flow__edge.rel-shares .react-flow__edge-path { stroke: #b7791f; }
+.sbm-canvas .react-flow__edge.rel-harvested .react-flow__edge-path { stroke: #2f855a; }
+.sbm-canvas .react-flow__edge.rel-negated .react-flow__edge-path { stroke: #8a6d3b; }
+.sbm-canvas .react-flow__edge.rel-promoted .react-flow__edge-path { stroke: #7f9dc0; }
+
 /* ── M5 · the centre pane: view switch, then map or list ───────────────── */
 
 .sbm-centre {

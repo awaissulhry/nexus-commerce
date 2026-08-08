@@ -23,6 +23,7 @@ import { MapCanvas } from './MapCanvas'
 import { InspectorRail } from './InspectorRail'
 import { OverlayRail } from './OverlayRail'
 import { ListView } from './ListView'
+import { EntityCanvas, relationOf, type EntityGraph } from './EntityCanvas'
 import { overlayById } from './overlays'
 import {
   visibleCensus,
@@ -53,6 +54,36 @@ export function MapClient() {
   const [tierFilter, setTierFilter] = useState<string | null>(null)
   const [hideDiagnostic, setHideDiagnostic] = useState(false)
   const [view, setView] = useState<'map' | 'list'>('map')
+  /** Which universe the page is showing: the workers, or the things they
+   *  reason about. Two different node sets, one shell. */
+  const [mode, setMode] = useState<'workers' | 'entities'>('workers')
+  const [entity, setEntity] = useState<EntityGraph | null>(null)
+  const [entityLoading, setEntityLoading] = useState(false)
+  const [entitySel, setEntitySel] = useState<string | null>(null)
+  /** The walk back. The breadcrumb IS the back-stack — one of them, not two. */
+  const [trail, setTrail] = useState<Array<{ type: string; id: string; label: string }>>([])
+
+  const loadEntities = useCallback(
+    async (focus?: { type: string; id: string }) => {
+      setEntityLoading(true)
+      try {
+        const qs = focus ? `?type=${encodeURIComponent(focus.type)}&id=${encodeURIComponent(focus.id)}` : ''
+        const r = await fetch(`${backend}/api/agent/fleet/entity-graph${qs}`, { cache: 'no-store' })
+        if (!r.ok) throw new Error(String(r.status))
+        setEntity((await r.json()) as EntityGraph)
+        setEntitySel(null)
+      } catch {
+        setEntity(null)
+      } finally {
+        setEntityLoading(false)
+      }
+    },
+    [backend],
+  )
+
+  useEffect(() => {
+    if (mode === 'entities' && entity == null && !entityLoading) void loadEntities()
+  }, [mode, entity, entityLoading, loadEntities])
 
   const load = useCallback(async () => {
     const r = await fetch(`${backend}/api/agent/fleet/map?window=${windowKey}`, {
@@ -158,6 +189,26 @@ export function MapClient() {
           </p>
         </div>
         <div className="sbm-head-right">
+          {/* The mode switch changes the page's whole subject — which universe
+              of nodes you are looking at — so it belongs with the title, not
+              above the canvas where Map/List sits. */}
+          <div className="sbm-seg" role="radiogroup" aria-label="What to show">
+            {(['workers', 'entities'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="radio"
+                aria-checked={mode === m}
+                className={mode === m ? 'on' : ''}
+                onClick={() => {
+                  setMode(m)
+                  setSelection(null)
+                }}
+              >
+                {m === 'workers' ? 'Workers' : 'What they watch'}
+              </button>
+            ))}
+          </div>
           <div className="sbm-seg" role="radiogroup" aria-label="Time window">
             {WINDOWS.map((w) => (
               <button
@@ -215,6 +266,197 @@ export function MapClient() {
         </div>
       ) : null}
 
+      {/* ── M6 · entity mode: a different universe, the same shell ─────── */}
+      {mode === 'entities' ? (
+        <>
+          <section className="sbm-census" aria-label="What is on this map">
+            <div className="sbm-census-rows">
+              <div className="sbm-chiprow rank-subject">
+                <span className="sbm-chip subject">
+                  <span className="n">{entity?.nodes.length ?? 0}</span> things
+                </span>
+                <span className="sbm-chip subject">
+                  <span className="n">{entity?.edges.length ?? 0}</span> relationships
+                </span>
+              </div>
+            </div>
+            <div className="sbm-census-side">
+              <span className="sbm-spend">
+                what the fleet has worked out about your campaigns — not what the fleet is
+              </span>
+            </div>
+          </section>
+
+          {entity?.truncated ? (
+            <p className="sbm-footnote warn">
+              This view is capped, so it shows the strongest links first. Open one thing to see
+              everything around it.
+            </p>
+          ) : null}
+
+          <div className="sbm-body">
+            <aside className="sbm-orail" aria-label="What the lines mean">
+              <div className="sbm-orail-sec">
+                <h3>What the lines mean</h3>
+                <ul className="sbm-legend">
+                  {Object.entries(entity?.relationCounts ?? {})
+                    .sort(([, a], [, b]) => b - a)
+                    .map(([rel, n]) => {
+                      const meta = relationOf(rel)
+                      return (
+                        <li key={rel}>
+                          <span className={`sbm-swatch ${meta.className}`} aria-hidden />
+                          <span className="txt">
+                            <span className="lab">
+                              {meta.label} · {n}
+                            </span>
+                            {meta.meaning ? <span className="note">{meta.meaning}</span> : null}
+                          </span>
+                        </li>
+                      )
+                    })}
+                </ul>
+                <p className="sbm-orail-foot">
+                  Zoom in to read the names — the cards show more the closer you get. Double-click
+                  anything to see everything around it.
+                </p>
+              </div>
+            </aside>
+
+            <div className="sbm-centre">
+              <div className="sbm-viewswitch">
+                {trail.length > 0 ? (
+                  <nav className="sbm-crumbs" aria-label="Where you have been">
+                    <button
+                      type="button"
+                      className="sbm-linkbtn"
+                      onClick={() => {
+                        setTrail([])
+                        void loadEntities()
+                      }}
+                    >
+                      Everything
+                    </button>
+                    {trail.map((t, i) => (
+                      <span key={`${t.type}|${t.id}`}>
+                        {' › '}
+                        <button
+                          type="button"
+                          className="sbm-linkbtn"
+                          onClick={() => {
+                            setTrail(trail.slice(0, i + 1))
+                            void loadEntities({ type: t.type, id: t.id })
+                          }}
+                        >
+                          {t.label}
+                        </button>
+                      </span>
+                    ))}
+                  </nav>
+                ) : (
+                  <span className="sbm-viewhint">
+                    Your campaigns, grouped into the families that actually touch each other.
+                  </span>
+                )}
+              </div>
+              {entityLoading && entity == null ? (
+                <div className="sbm-canvas sbm-skeleton" aria-busy="true" />
+              ) : entity && entity.nodes.length > 0 ? (
+                <EntityCanvas
+                  graph={entity}
+                  selectedKey={entitySel}
+                  onSelect={setEntitySel}
+                  onFocus={(type, id) => {
+                    const n = entity.nodes.find((x) => x.type === type && x.id === id)
+                    setTrail([...trail, { type, id, label: n?.label ?? id }])
+                    void loadEntities({ type, id })
+                  }}
+                />
+              ) : (
+                <div className="acr-pg-empty">
+                  <strong>No relationships worked out yet.</strong>
+                  <p>
+                    The fleet rebuilds this every night with the sweep. Until it has, there is
+                    nothing here to draw — which is not the same as there being nothing to find.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <aside className="sbm-rail" aria-label="Details">
+              <header className="sbm-rail-head">
+                <h3>{entitySel ? 'Thing' : 'What this is'}</h3>
+              </header>
+              <div className="sbm-rail-body">
+                {(() => {
+                  const n = entity?.nodes.find((x) => `${x.type}|${x.id}` === entitySel)
+                  if (!n) {
+                    return (
+                      <p className="sbm-rail-hint">
+                        These are your campaigns and products, and the links the fleet worked out
+                        between them by reading your data. It is what the workers reason{' '}
+                        <i>about</i> — the Workers view is what the fleet <i>is</i>.
+                      </p>
+                    )
+                  }
+                  const links = (entity?.edges ?? []).filter(
+                    (e) =>
+                      `${e.fromType}|${e.from}` === entitySel || `${e.toType}|${e.to}` === entitySel,
+                  )
+                  return (
+                    <>
+                      <div className="sbm-rail-id">
+                        <div>
+                          <div className="nm">{n.label}</div>
+                          <div className="ky">{n.type.toLowerCase()}</div>
+                        </div>
+                      </div>
+                      <h4>Its links</h4>
+                      {links.length === 0 ? (
+                        <p className="sbm-dim">None in this view.</p>
+                      ) : (
+                        <ul className="sbm-samples">
+                          {links.slice(0, 12).map((e, i) => {
+                            const otherKey =
+                              `${e.fromType}|${e.from}` === entitySel
+                                ? `${e.toType}|${e.to}`
+                                : `${e.fromType}|${e.from}`
+                            const other = entity?.nodes.find((x) => `${x.type}|${x.id}` === otherKey)
+                            return (
+                              <li key={`${otherKey}-${e.relation}-${i}`}>
+                                <span className="sbm-dim">{relationOf(e.relation).label}</span>{' '}
+                                {other?.label ?? otherKey}
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      )}
+                      <div className="sbm-rail-exits">
+                        <button
+                          type="button"
+                          className="sbm-linkbtn"
+                          onClick={() => {
+                            setTrail([...trail, { type: n.type, id: n.id, label: n.label }])
+                            void loadEntities({ type: n.type, id: n.id })
+                          }}
+                        >
+                          Show everything around it →
+                        </button>
+                      </div>
+                    </>
+                  )
+                })()}
+              </div>
+            </aside>
+          </div>
+
+          <footer className="sbm-foot">
+            Rebuilt every night by the sweep. An id shown instead of a name is one the fleet could
+            not resolve — shown as itself rather than invented.
+          </footer>
+        </>
+      ) : (
+        <>
       {/* ── M1 · the census strip ─────────────────────────────────────── */}
       <section className="sbm-census" aria-label="What is on this map">
         <div className="sbm-census-rows">
@@ -376,6 +618,8 @@ export function MapClient() {
           </>
         ) : null}
       </footer>
+        </>
+      )}
     </div>
   )
 }
