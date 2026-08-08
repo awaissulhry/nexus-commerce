@@ -72,6 +72,48 @@ export interface GateTool {
   isFleetTool: boolean
 }
 
+/**
+ * AQ-S2R (study Part 13) — one enumerated precondition.
+ *
+ * This replaces `blockers: string[]`, and the reason is a defect rather than a
+ * preference. The old shape sent **only the failures, as prose**, so the client
+ * had to re-compose sentences for the conditions that PASS in order to render
+ * them at all — and two composers over one set of facts is how twenty-two words
+ * ended up verbatim identical between this file and `ApprovalsClient.tsx`.
+ * Enumerating every condition, composed once, here, is the fix at the root.
+ *
+ * Modelled on Kubernetes Pod conditions, which are the same problem solved
+ * properly: conditions are listed whether or not they pass, and the
+ * human-readable message is a field rather than something to be reverse-
+ * engineered from a failure string.
+ *
+ * `owner` is the organising idea of the whole section and the one genuinely new
+ * field: it says WHO can change this. Two of the three conditions are not the
+ * operator's to act on — setting a worker to PROPOSE arms a fleet that is off
+ * by deliberate constraint, and the missing executors are Phase F work — so a
+ * surface that reads as a to-do list would be actively dangerous.
+ */
+export interface GateCondition {
+  key: 'worker-may-ask' | 'action-can-run' | 'something-scheduled'
+  met: boolean
+  /** The precondition itself, in the operator's words. Rendered verbatim. */
+  requirement: string
+  /** Why it is or is not met, with the numbers already inside the sentence. */
+  detail: string
+  /** Who can change it: the operator, us, or nobody (it just happens). */
+  owner: 'operator' | 'engineering' | 'automatic'
+  /** Where the operator would go, when it is theirs. Null otherwise. */
+  href: string | null
+  /**
+   * An instant this condition refers to, ISO, or null.
+   *
+   * Deliberately NOT baked into `detail` as "in 43 hours": a relative time
+   * composed on the server is stale the moment it is serialised, and this page
+   * exists because of stale constants. The client renders it from the instant.
+   */
+  at: string | null
+}
+
 const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * AQ-S2 — "can anything reach this queue?"
@@ -128,35 +170,68 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
     const sweep = schedule.jobs.find((j) => j.key === 'fleet-sweep') ?? null
 
     /**
-     * The reasons nothing can arrive, in the order an operator would hit them.
-     * Empty array = the pipe is open. Each string is rendered verbatim, so it
-     * is written as a sentence, not a code.
+     * AQ-S2R — the three preconditions, ENUMERATED, met or not.
+     *
+     * All three must be true before a request can exist. Composed here and
+     * rendered verbatim, so the sentence the operator reads cannot drift from
+     * the condition that produced it — and, unlike the `blockers[]` this
+     * replaces, a condition that PASSES has a sentence too.
+     *
+     * The halt is deliberately NOT one of these. A halt is a fault, not an
+     * unmet precondition, and it gets its own treatment above the readout; it
+     * still forces `canAnythingArrive` false below.
      */
-    const blockers: string[] = []
-    if (state?.halted) {
-      blockers.push(
-        `The whole fleet is halted${state.haltReason ? ` — ${state.haltReason}` : ''}, so no worker runs at all.`,
-      )
-    }
-    if (!workers.some((w) => w.proposesNow)) {
-      const ceiling = workers.filter((w) => w.couldEverPropose).length
-      blockers.push(
-        ceiling === 0
-          ? 'No worker is allowed to ask for anything. Every worker is capped below PROPOSE in code, which is the only setting that puts a request here.'
-          : `No worker is set to PROPOSE, the only setting that puts a request here. ${ceiling} of ${workers.length} could be — the rest are capped below it in code.`,
-      )
-    }
-    const fleetToolsExecutable = tools.filter((t) => t.isFleetTool && t.canExecute).length
-    if (fleetToolsExecutable === 0) {
-      blockers.push(
-        'None of the actions the fleet can propose is able to run yet. They produce a preview only, so nothing can be queued for you — and approving one would record your decision and change nothing on Amazon.',
-      )
-    }
-    if (!council || !council.enabled) {
-      blockers.push(
-        'The weekly council is not scheduled, and it is the only thing that can put a request here — a nightly sweep cannot, and neither can a one-off run.',
-      )
-    }
+    const proposingCount = workers.filter((w) => w.proposesNow).length
+    const ceiling = workers.filter((w) => w.couldEverPropose).length
+    const fleetTools = tools.filter((t) => t.isFleetTool)
+    const fleetToolsExecutable = fleetTools.filter((t) => t.canExecute).length
+    const councilScheduled = Boolean(council?.enabled)
+
+    const conditions: GateCondition[] = [
+      {
+        key: 'worker-may-ask',
+        met: proposingCount > 0,
+        requirement: 'A worker has to be allowed to ask',
+        detail:
+          proposingCount > 0
+            ? `${proposingCount} of your ${workers.length} workers ${proposingCount === 1 ? 'is' : 'are'} set to PROPOSE, which is the setting that puts a request here.`
+            : ceiling === 0
+              ? `None of your ${workers.length} workers is set to PROPOSE, and none of them ever could be — every one is capped below it in code.`
+              : `None of your ${workers.length} workers is set to PROPOSE. Only ${ceiling} ever could be — the other ${workers.length - ceiling} are capped lower in code.`,
+        owner: 'operator',
+        href: '/fleet/controls',
+        at: null,
+      },
+      {
+        key: 'action-can-run',
+        met: fleetToolsExecutable > 0,
+        requirement: 'What it proposes has to be able to run',
+        detail:
+          fleetToolsExecutable > 0
+            ? `${fleetToolsExecutable} of the fleet's ${fleetTools.length} actions can actually run.`
+            : `All ${fleetTools.length} of the fleet's actions can describe what they would do and stop there. Approving one would record your decision and teach the fleet, and change nothing on Amazon.`,
+        // Not the operator's, at any dial: this is a missing executor, which is
+        // a deploy. Saying so is the difference between an answer and a chore.
+        owner: 'engineering',
+        href: null,
+        at: null,
+      },
+      {
+        key: 'something-scheduled',
+        met: councilScheduled,
+        requirement: 'Something has to be scheduled to ask',
+        detail: councilScheduled
+          ? 'The weekly council, and nothing else. A nightly sweep cannot queue a request, and neither can a one-off run.'
+          : 'The weekly council is not scheduled, and it is the only thing that can put a request here — a nightly sweep cannot, and neither can a one-off run.',
+        owner: 'automatic',
+        href: null,
+        // Serialised explicitly. `nextFireAt` is a `Date`, and the neighbouring
+        // `arrival.councilNext` has always shipped one — it only ever looked
+        // like a string because that object is inferred and Fastify serialises
+        // on the way out. Annotating this field is what surfaced it.
+        at: council?.nextFireAt ? new Date(council.nextFireAt).toISOString() : null,
+      },
+    ]
 
     // What the sweep would delete if a request DID arrive from outside the
     // fleet's three tools: the AP.5 sweep filters by no tool, while the
@@ -178,9 +253,13 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
     return {
       halted: Boolean(state?.halted),
       haltReason: state?.haltReason ?? null,
-      /** True only when nothing at all stands in the way. */
-      canAnythingArrive: blockers.length === 0,
-      blockers,
+      /**
+       * True only when nothing at all stands in the way. The halt is not one of
+       * the conditions — it is a fault laid over them — so it is ANDed here
+       * explicitly rather than smuggled in as a fourth precondition.
+       */
+      canAnythingArrive: !state?.halted && conditions.every((c) => c.met),
+      conditions,
       workers,
       tools,
       arrival: {

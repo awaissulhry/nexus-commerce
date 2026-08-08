@@ -81,11 +81,29 @@ interface GateTool {
   isFleetTool: boolean
 }
 
+/**
+ * AQ-S2R — one enumerated precondition, composed server-side.
+ *
+ * Mirrors `GateCondition` in `agent-fleet-approvals.routes.ts`. It is a
+ * hand-written mirror rather than a shared type because web does not import
+ * from api — which means **tsc cannot catch a drift between them**, and the
+ * only thing that can is the browser. Worth knowing before changing either.
+ */
+interface GateCondition {
+  key: 'worker-may-ask' | 'action-can-run' | 'something-scheduled'
+  met: boolean
+  requirement: string
+  detail: string
+  owner: 'operator' | 'engineering' | 'automatic'
+  href: string | null
+  at: string | null
+}
+
 interface GateState {
   halted: boolean
   haltReason: string | null
   canAnythingArrive: boolean
-  blockers: string[]
+  conditions: GateCondition[]
   workers: GateWorker[]
   tools: GateTool[]
   arrival: {
@@ -217,10 +235,18 @@ function GateStateSection({ gate }: { gate: GateState | null }) {
 
       {open ? (
         <div className="aq-gate-body">
+          {/* S2.a — the same sentences, from the enumerated conditions rather
+              than a failures-only `blockers[]`. Visually identical on purpose:
+              this phase moves the data shape, S2.b rebuilds the readout. The
+              halt is no longer among them (it is a fault, not an unmet
+              precondition) and it was already rendered separately below, so
+              dropping it here removes a duplication rather than a fact. */}
           <ol className="aq-blockers">
-            {gate.blockers.map((b, i) => (
-              <li key={i}>{b}</li>
-            ))}
+            {gate.conditions
+              .filter((c) => !c.met)
+              .map((c) => (
+                <li key={c.key}>{c.detail}</li>
+              ))}
           </ol>
 
           <div className="aq-gate-grid">
