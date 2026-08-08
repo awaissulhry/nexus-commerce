@@ -24,7 +24,7 @@ import { useVisibilityPoll } from '../_shared/use-visibility-poll'
 import { isDiagnostic } from '../_shared/run-health'
 import { BUILTIN_ROUTINES, type BuiltinRoutine } from './routines'
 import { HowWorkflowsWork } from './HowWorkflowsWork'
-import { RoutineCard } from './RoutineCard'
+import { RoutineCard, type ChainStep } from './RoutineCard'
 import {
   DAY,
   customStatus,
@@ -49,6 +49,10 @@ interface ApiWorkflowRow {
   source: 'code' | 'revision' | 'none'
   activeRevision: { id: string; revision: number; note: string } | null
   revisionCount: number
+  /** S1.c — the EFFECTIVE definition's steps in execution order. Null when a
+   *  workflow has no effective wiring at all. Absent on an older API build,
+   *  which the assembly treats as "unknown", never as "empty". */
+  chain?: string[] | null
 }
 
 /** One assembled list row: API truth joined to presentation. */
@@ -65,6 +69,50 @@ interface ListRow {
   groups: RunGroup[]
   job: ScheduleJob | null
   activeRevisionNo: number | null
+  chain: ChainStep[]
+}
+
+/**
+ * S1.c — which chain is the honest one for this row.
+ *
+ * A built-in running the code default has a RICHER truth than its stored
+ * definition: `routines.ts` carries the deterministic code steps (grading,
+ * report cards) and the approval gate, and a definition deliberately does not
+ * — that ordering is job code, which is the same furniture caveat
+ * `getEffectiveWiring` warns the Fleet map about. So the hand-authored story
+ * wins there.
+ *
+ * The moment a revision is published, the code story is no longer what runs,
+ * and the API's chain is the only thing that can be trusted. Same for every
+ * custom. Getting this backwards would draw a picture of wiring the executor
+ * is already ignoring — the stale-constant class, in a new place.
+ */
+function chainFor(
+  row: ApiWorkflowRow,
+  builtin: BuiltinRoutine | null,
+  charters: CharterRow[],
+): ChainStep[] {
+  const on = (key: string) => {
+    const c = charters.find((x) => x.key === key)
+    return c ? c.enabled && c.autonomyLevel !== 'OFF' : undefined
+  }
+  if (builtin && row.source === 'code') {
+    return builtin.story.steps.map((s) => ({
+      charterKey: s.charterKey ?? null,
+      label: s.label,
+      kind: s.kind,
+      on: s.kind === 'worker' && s.charterKey ? on(s.charterKey) : undefined,
+    }))
+  }
+  const keys = row.chain ?? []
+  return keys.map((key) => ({
+    charterKey: key,
+    // An unresolvable key still gets drawn — the operator seeing a raw key is
+    // better informed than the operator seeing a gap.
+    label: charters.find((c) => c.key === key)?.name ?? key,
+    kind: 'worker' as const,
+    on: on(key),
+  }))
 }
 
 export function WorkflowsClient() {
@@ -150,6 +198,7 @@ export function WorkflowsClient() {
         groups: groupRuns(runs, builtin ? builtin.mode : { workflowKey: row.key }),
         job,
         activeRevisionNo: row.activeRevision?.revision ?? null,
+        chain: chainFor(row, builtin, charters),
       }
     })
   }, [apiRows, state, jobs, charters, runs])
@@ -329,6 +378,7 @@ export function WorkflowsClient() {
               groups={r.groups}
               job={r.job}
               activeRevisionNo={r.activeRevisionNo}
+              chain={r.chain}
             />
           ))}
         </div>

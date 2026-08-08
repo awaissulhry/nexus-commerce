@@ -63,6 +63,16 @@ function outcomeClass(g: RunGroup): string {
   return g.running ? 'run' : g.halted ? 'halt' : g.ok ? 'ok' : 'fail'
 }
 
+/** NAF.WF-S1R / S1.c — one link in the "who hands to whom" chain. */
+export interface ChainStep {
+  /** Charter key when a worker runs; null for code steps and the gate. */
+  charterKey: string | null
+  label: string
+  kind: 'worker' | 'code' | 'gate'
+  /** Worker steps only: is this worker switched on right now. */
+  on?: boolean
+}
+
 export interface RoutineCardProps {
   routineKey: string
   name: string
@@ -76,6 +86,8 @@ export interface RoutineCardProps {
   groups: RunGroup[]
   job: ScheduleJob | null
   activeRevisionNo: number | null
+  /** Empty when there is no effective wiring — the card then says so. */
+  chain: ChainStep[]
 }
 
 /** The trigger, as one line: what starts it, and when that is next.
@@ -130,6 +142,17 @@ function versionChip(p: RoutineCardProps): { label: string; neutral: boolean; hi
   }
 }
 
+/** Every pill explains itself, and a worker's pill also says whether it will
+ *  actually do anything — the dials live on another page, so the chain is
+ *  where a beginner first meets the consequence. */
+function stepHint(s: ChainStep): string {
+  if (s.kind === 'gate') return `${s.label} — a person decides here; nothing passes it on its own.`
+  if (s.kind === 'code') return `${s.label} — deterministic code, not judgment. It always runs.`
+  return s.on === false
+    ? `${s.label} is switched OFF, so this step is skipped and costs nothing. The Workers page decides.`
+    : `${s.label} is switched on and will run when this routine does.`
+}
+
 const KIND_HINT: Record<'builtin' | 'custom', string> = {
   builtin:
     'Ships with the fleet. Its wiring comes from code; publish a revision to change it, and reverting to the built-in can never fail.',
@@ -138,7 +161,7 @@ const KIND_HINT: Record<'builtin' | 'custom', string> = {
 }
 
 export function RoutineCard(props: RoutineCardProps) {
-  const { routineKey, name, purpose, touch, kind, builtin, status, groups, job } = props
+  const { routineKey, name, purpose, touch, kind, builtin, status, groups, job, chain } = props
   const trigger = triggerLine(props)
   const version = versionChip(props)
   const last = groups[0] ?? null
@@ -205,6 +228,30 @@ export function RoutineCard(props: RoutineCardProps) {
       <div className="wf-card-body">
         <div className="wf-lane wf-lane-what">
           <p className="wf-purpose">{purpose}</p>
+          {/* S1.c — the routine's shape, at a glance. This is the one thing
+              the old list never showed: a beginner could read four sentences
+              and still not know a routine IS a sequence of workers. A worker
+              that is switched off renders muted, so "the clock ticks, but
+              every worker is off" is visible as well as stated. */}
+          {chain.length ? (
+            <span className="wf-chain">
+              {chain.map((s, i) => (
+                <span key={`${s.charterKey ?? s.kind}-${i}`} className="wf-chainitem">
+                  {i > 0 ? <span className="wf-chainarrow" aria-hidden>→</span> : null}
+                  <span
+                    className={`wf-step k-${s.kind}${s.kind === 'worker' && s.on === false ? ' is-off' : ''}`}
+                    title={stepHint(s)}
+                  >
+                    {s.label}
+                  </span>
+                </span>
+              ))}
+            </span>
+          ) : (
+            <span className="wf-chain-empty">
+              No wiring published yet — nothing would run.
+            </span>
+          )}
         </div>
 
         <div className="wf-lane wf-lane-where">

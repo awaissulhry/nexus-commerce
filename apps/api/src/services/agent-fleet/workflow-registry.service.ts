@@ -27,6 +27,7 @@ import { getActiveWorkflowRevision } from './workflow-revisions.service.js'
 import {
   BUILTIN_WORKFLOWS,
   builtinByKey,
+  chainOf,
   type WorkflowDefinitionV1,
 } from './workflow-defs.js'
 
@@ -73,6 +74,15 @@ export interface WorkflowListRow {
   revisionCount: number
   /** Row exists in the DB (seeded) — presence of built-ins never depends on it. */
   seeded: boolean
+  /** NAF.WF-S1R / S1.c — the EFFECTIVE definition's steps in execution order,
+   *  so a list surface can draw who hands to whom without one fetch per row.
+   *  `null` when there is no effective definition at all (a custom with no
+   *  published wiring runs nothing, and an empty array would imply otherwise).
+   *  Presentation only: job furniture — the auditor's post-scorecards run,
+   *  grading, report cards — is code ordering and is NOT in a definition, so
+   *  a caller drawing a built-in's full story must overlay it (the same
+   *  caveat `getEffectiveWiring` carries). */
+  chain: string[] | null
 }
 
 /** Code-first union: built-ins are always present, whatever the DB holds. */
@@ -103,6 +113,9 @@ export async function listWorkflows(): Promise<WorkflowListRow[]> {
         : null,
       revisionCount: countByKey.get(b.key) ?? 0,
       seeded: row != null,
+      chain: chainOf(
+        active ? (active.definition as unknown as WorkflowDefinitionV1) : b.definition(),
+      ),
     })
   }
   for (const row of rows) {
@@ -120,6 +133,9 @@ export async function listWorkflows(): Promise<WorkflowListRow[]> {
         : null,
       revisionCount: countByKey.get(row.key) ?? 0,
       seeded: true,
+      chain: active
+        ? chainOf(active.definition as unknown as WorkflowDefinitionV1)
+        : null,
     })
   }
   return out

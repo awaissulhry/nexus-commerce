@@ -11,6 +11,7 @@ import {
   MODE_WORKFLOW_KEY,
   assembleTestStatus,
   builtinByKey,
+  chainOf,
   defToGraph,
   resolveItemGate,
   stepGatesOf,
@@ -152,5 +153,51 @@ describe('defToGraph', () => {
       edges: [{ from: 'a', to: 'ghost', artifact: 'finding' }],
     })
     expect(() => topoLevels(dangling)).toThrow()
+  })
+})
+
+/* ── NAF.WF-S1R / S1.c — the chain the list page draws ─────────────────── */
+
+describe('chainOf — a picture, not a plan', () => {
+  it('returns the built-in sweep in the same order the executor walks it', () => {
+    const def = builtinByKey('fleet-sweep')!.definition()
+    expect(chainOf(def)).toEqual(topoLevels(defToGraph(def)).flat())
+  })
+
+  it('orders a hand-built definition by dependency, not by declaration', () => {
+    // Declared critic-first on purpose: the chain must still read
+    // miner -> director -> critic, or the picture lies about who hands to whom.
+    const chain = chainOf({
+      v: 1,
+      trigger: { type: 'manual' },
+      steps: [
+        { charterKey: 'critic', gate: 'inherit' },
+        { charterKey: 'director', gate: 'inherit' },
+        { charterKey: 'miner', gate: 'inherit' },
+      ],
+      edges: [
+        { from: 'director', to: 'critic', artifact: 'plan' },
+        { from: 'miner', to: 'director', artifact: 'finding' },
+      ],
+    })
+    expect(chain).toEqual(['miner', 'director', 'critic'])
+  })
+
+  it('falls back to declaration order instead of throwing on an unwalkable definition', () => {
+    // `topoLevels` throws here, and it SHOULD — execution must refuse a
+    // definition it cannot walk. A picture must not take the page down with
+    // it, so the steps that do exist are still named.
+    const broken = {
+      v: 1 as const,
+      trigger: { type: 'manual' as const },
+      steps: [{ charterKey: 'a', gate: 'inherit' as const }],
+      edges: [{ from: 'a', to: 'ghost', artifact: 'finding' as const }],
+    }
+    expect(() => topoLevels(defToGraph(broken))).toThrow()
+    expect(chainOf(broken)).toEqual(['a'])
+  })
+
+  it('an empty definition yields an empty chain, never a throw', () => {
+    expect(chainOf({ v: 1, trigger: { type: 'manual' }, steps: [], edges: [] })).toEqual([])
   })
 })

@@ -14,7 +14,7 @@
  * presentation, never editable wiring.
  */
 
-import { FLEET_GRAPH, type FleetGraph } from './fleet-graph.js'
+import { FLEET_GRAPH, topoLevels, type FleetGraph } from './fleet-graph.js'
 
 /* ── definition contract v1 ────────────────────────────────────────────── */
 
@@ -130,6 +130,24 @@ export function defToGraph(def: WorkflowDefinitionV1): FleetGraph {
   return {
     nodes: def.steps.map((s) => ({ key: s.charterKey, tier: 'analyst' })),
     edges: def.edges.map((e) => ({ from: e.from, to: e.to, artifact: e.artifact })),
+  }
+}
+
+/** NAF.WF-S1R / S1.c — the definition's steps in execution order, flattened
+ *  from `topoLevels` so the list page can draw "who hands to whom" without
+ *  fetching each workflow's definition separately.
+ *
+ *  Pure, and deliberately forgiving: this feeds a PICTURE, never a decision.
+ *  A definition that cannot be walked (a cycle, an edge naming a step that
+ *  is not there) still has real steps worth showing, so the declaration order
+ *  is the fallback rather than an empty chain or a thrown request. Execution
+ *  keeps using `topoLevels` directly and keeps throwing — the two must not be
+ *  confused, which is why this returns names and not a plan. */
+export function chainOf(def: WorkflowDefinitionV1): string[] {
+  try {
+    return topoLevels(defToGraph(def)).flat()
+  } catch {
+    return def.steps.map((s) => s.charterKey)
   }
 }
 
