@@ -368,6 +368,48 @@
   }
 }
 
+/* ── S4/S5 rules recovered after S2.b ───────────────────────────────────
+ *
+ * These are NOT S2's. They sat physically between the S2 and S5 section
+ * markers, and S2.b replaced that whole range in one edit — so a rebuild of one
+ * section silently deleted four rules belonging to two others. `.aq-emptywhy`
+ * lost its 12px/#6b7688 and rendered at the body's inherited size, which is
+ * what gave it away in a screenshot; `.aq-queue`, `.aq-asof` and `.aq-err` were
+ * silently unstyled and would not have shown up in any gate.
+ *
+ * The lesson is about the EDIT, not the CSS: a section-marker range is a
+ * comment convention, not a boundary the file enforces. Replacing a range
+ * wholesale assumes everything inside it belongs to that section, and here it
+ * did not. Restored verbatim and parked next to their own section, so the next
+ * range replacement cannot take them again. */
+
+.aq-queue {
+  margin: 0;
+}
+.aq-asof {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.aq-emptywhy {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #6b7688;
+}
+.aq-emptywhy svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+.aq-err {
+  border-left: 3px solid #c53030;
+  padding-left: 10px;
+}
+
 /* ── S5 · waiting from outside the fleet (AQ.2) ─────────────────────────── */
 
 /*
