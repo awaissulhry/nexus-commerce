@@ -16,7 +16,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { useVisibilityPoll } from '../../_shared/use-visibility-poll'
 import { BUILTIN_ROUTINES } from '../routines'
-import { RoutineCanvas, type StepLive } from '../RoutineCanvas'
+import { RoutinePipeline } from '../RoutinePipeline'
 import { HowWorkflowsWork } from '../HowWorkflowsWork'
 import { RunsSection } from '../RunsSection'
 import { RunBars } from '../RunBars'
@@ -273,21 +273,6 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
   }, [builtin, vers, charters])
   const showingRevision = vers?.source === 'revision' && vers.effective != null
 
-  const liveByCharter = useMemo(() => {
-    const m = new Map<string, StepLive>()
-    const runningKeys = new Set(
-      runs.filter((r) => r.status === 'running').map((r) => r.agentKey),
-    )
-    for (const c of charters) {
-      m.set(c.key, {
-        autonomyLevel: c.autonomyLevel,
-        degraded: c.degraded,
-        running: runningKeys.has(c.key),
-      })
-    }
-    return m
-  }, [charters, runs])
-
   const health = useMemo(() => {
     const last = groups[0] ?? null
     const okCount = groups.filter((g) => g.ok).length
@@ -364,11 +349,16 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
           GitHub all put them. `.acr-head` was already a space-between flex with
           only one child, so the old separate action row existed for no reason
           and carried a 767.7px void. */}
+      {/* The back link gets its own row: with it inside the title block the
+          actions aligned to IT rather than to the title, 26.4px high, and the
+          row reached y=20 where the app shell's own top-right chrome lives. */}
+      <div className="wf-backline">
+        <Link className="wf-back" href="/fleet/workflows">
+          <ArrowLeft size={13} /> All workflows
+        </Link>
+      </div>
       <header className="acr-head wf-head">
         <div className="wf-head-main">
-          <Link className="wf-back" href="/fleet/workflows">
-            <ArrowLeft size={13} /> All workflows
-          </Link>
           <div className="wf-titleline">
             <h1>{title}</h1>
             {loaded && kindLabel ? (
@@ -500,7 +490,10 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
             <span className="sub">
               {loaded && groups.length ? 'runs finished clean' : 'this will read “N of M” once it has run'}
             </span>
-            {loaded ? <RunBars groups={groups} /> : null}
+            {/* Only when there IS history. The value already says "no runs
+                yet" at 17px, so twelve grey slots plus "nothing to chart yet"
+                would be a third way of saying the same nothing. */}
+            {loaded && groups.length ? <RunBars groups={groups} /> : null}
           </div>
           <div className="wf-fact">
             <span className="k">Typical duration</span>
@@ -578,18 +571,25 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
           <section className="acr-card">
             <header className="wf-cardhead">
               <h3>The pipeline</h3>
+              {/* S2.c — the legend describes what is DRAWN. It used to claim
+                  "code steps and your approval still wrap it" over a picture
+                  showing neither, on the one routine where that was visible. */}
               <span className="wf-legend">
                 {showingRevision ? (
-                  <>showing the ACTIVE REVISION&rsquo;s wiring — code steps and{' '}
-                    <Term k="approval">your approval</Term> still wrap it</>
+                  <>the wiring you published · every path still ends at an{' '}
+                    <Term k="approval">approval</Term></>
                 ) : (
-                  <>blue = findings · violet = plan · grey = deterministic code · the last stop is{' '}
-                    <Term k="approval">your approval</Term></>
+                  <>what runs, in order · every path ends at an{' '}
+                    <Term k="approval">approval</Term></>
                 )}
               </span>
             </header>
             {loaded && displayStory ? (
-              <RoutineCanvas story={displayStory} liveByCharter={liveByCharter} />
+              <RoutinePipeline
+                story={displayStory}
+                charters={charters}
+                lastGroup={groups[0] ?? null}
+              />
             ) : (
               <div className="acr-pg-empty">
                 <strong>
