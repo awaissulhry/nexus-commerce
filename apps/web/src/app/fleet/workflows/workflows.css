@@ -914,10 +914,15 @@
 }
 .wf-expandbtn:hover { color: #3f6fb5; border-color: #c3d2e6; background: #f7f9fc; }
 .wf-grouprow td { color: #34404f; }
-.wf-runs td span.acr-pg-ok,
-.wf-runs td span.acr-pg-warn,
-.wf-runs td span.wf-halt,
-.wf-runs td span.wf-run {
+/* The 42ch clamp is for the SHORT outcome words in a cell, not for the
+   explanation sentence — which carries the same outcome class and was being
+   clamped with them. Excluded by name rather than by out-specifying it: my
+   first attempt matched the specificity exactly (0,2,2 both) and lost on
+   source order, because this rule sits 29 lines further down. */
+.wf-runs td span.acr-pg-ok:not(.wf-whytext),
+.wf-runs td span.acr-pg-warn:not(.wf-whytext),
+.wf-runs td span.wf-halt:not(.wf-whytext),
+.wf-runs td span.wf-run:not(.wf-whytext) {
   display: inline-block;
   max-width: 42ch;
   line-height: 1.5;
