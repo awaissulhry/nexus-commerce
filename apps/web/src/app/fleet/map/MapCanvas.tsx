@@ -36,7 +36,7 @@
  *    the rails; the canvas carries words, not tooltips.
  */
 
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   Background,
   BackgroundVariant,
@@ -309,10 +309,46 @@ export function MapCanvas({
     [edges, windowLabel, selectedEdgeId],
   )
 
+  /**
+   * fitView runs once, at mount, against whatever the container measured at
+   * that instant — and this canvas is a grid cell that settles slightly later,
+   * so the first fit was computed against the wrong box and left the furniture
+   * lane below the fold. `Fleet auditor` is exactly the node that lane exists
+   * to make visible, so a fit that clips it defeats the section.
+   *
+   * A ResizeObserver refits whenever the box genuinely changes size, which
+   * covers the settle-after-mount race, a window resize, and the rails
+   * appearing or disappearing at the responsive breakpoints. It is debounced
+   * to a frame so a drag-resize does not refit per pixel.
+   */
+  const fitRef = useRef<{ fitView: (o?: object) => void } | null>(null)
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+  const refit = useCallback(() => {
+    fitRef.current?.fitView({ padding: 0.14, maxZoom: 1.35, duration: 0 })
+  }, [])
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    let frame = 0
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(refit)
+    })
+    ro.observe(el)
+    return () => {
+      cancelAnimationFrame(frame)
+      ro.disconnect()
+    }
+  }, [refit])
+
   return (
-    <div className="sbm-canvas">
+    <div className="sbm-canvas" ref={wrapRef}>
       <ReactFlow
         key={hash}
+        onInit={(inst) => {
+          fitRef.current = inst as unknown as { fitView: (o?: object) => void }
+          refit()
+        }}
         nodes={flowNodes}
         edges={flowEdges}
         nodeTypes={nodeTypes}
