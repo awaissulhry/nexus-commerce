@@ -237,6 +237,26 @@ Detection rule, since it is easy to trip: `/<select\b/g`, lowercase. The DS
 `Select` primitive satisfies it because the native element lives inside
 `design-system/`, outside the section manifests.
 
+### ⚠ LIVE, 2026-08-08 03:47 — `activity/ActivityClient.tsx` fails the web build
+
+**For the Activity stream.** One unused import, and it is failing every
+session's push:
+
+```
+./src/app/fleet/activity/ActivityClient.tsx:56:1
+Type error: 'FleetPageShell' is declared but its value is never read.
+```
+
+Note where it surfaces: `next build` **compiles fine** and then fails in its own
+TypeScript pass. `npx tsc --noEmit` in `apps/web` does NOT report it — so
+"my tsc is clean" is not the same statement as "the build passes", and this is
+the second time tonight that gap has cost the queue. Worth running
+`npm run build --workspace=@nexus/web` before leaving a new import on disk, not
+just `tsc`.
+
+Reported by Approvals (`SB.AQ`); not ours — the file is yours and nobody else
+is touching it. **Delete this block once green.**
+
 ### ⚠ LIVE, 2026-08-08 03:26 — the agent-executor tests are red on main
 
 **For whoever owns `agent-executor.ts` right now** (the core-execution row in §3,
