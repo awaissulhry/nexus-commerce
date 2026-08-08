@@ -163,6 +163,33 @@ export function AssignmentsClient() {
     window.history.replaceState({}, '', window.location.pathname)
   }, [])
 
+  /**
+   * S1.b — the filter lives in the address bar, so a filtered list can be sent
+   * to someone.
+   *
+   * History API rather than `useSearchParams`: the page is force-dynamic, this
+   * is a UI convenience rather than navigation, and `replaceState` neither
+   * re-renders the tree nor fills the back button with states nobody wants to
+   * walk. Same shape as the Workers roster and Activity, deliberately — this
+   * page was the only one of the three without it.
+   */
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    // `new=1` deep links are consumed by the effect above; do not fight it.
+    if (p.get('new') === '1') return
+    const s = p.get('state')
+    if (s && s in ASSIGNMENT_STATES) setFilter(s as AssignmentState)
+    if (p.get('closed') === '1') setShowClosed(true)
+  }, [])
+
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    filter ? p.set('state', filter) : p.delete('state')
+    showClosed ? p.set('closed', '1') : p.delete('closed')
+    const qs = p.toString()
+    window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname)
+  }, [filter, showClosed])
+
   const load = useCallback(async () => {
     const res = await fetch(`${getBackendUrl()}/api/agent/fleet/assignments`, {
       cache: 'no-store',
@@ -191,6 +218,8 @@ export function AssignmentsClient() {
     () => visibleRows(rows ?? [], { filter, showClosed }),
     [rows, filter, showClosed],
   )
+  /** What the "All" chip counts — and it must equal what clicking it reveals. */
+  const openTotal = (rows?.length ?? 0) - (showClosed ? 0 : closed)
 
   /** What everything on screen has cost, and what we cannot know. */
   const spend = useMemo(() => {
@@ -348,8 +377,34 @@ export function AssignmentsClient() {
         start it. <HowAssignmentsWork />
       </p>
 
-      {/* ── the strip. Every tile is a filter over the list below it. ── */}
-      <div className="acr-pg-strip" role="group" aria-label="Filter by state">
+      {/**
+        * S1.b — the strip is a FILTER, so it is drawn as filters.
+        *
+        * It shipped as six `.acr-pg-stat` metric cards: 261×67px each, 81px of
+        * vertical space, and in the page's own steady state six of them read
+        * `0`. `.acr-pg-chip` has been in the shared stylesheet all along —
+        * with a count slot and an `on` state — and it is the right primitive,
+        * because a filter drawn as a metric invites the dashboard this section
+        * must never become.
+        *
+        * The whole arithmetic stays in one band and stays total: All, the six
+        * open states, then the closed remainder with its own control.
+        */}
+      <div className="acr-pg-chips as-chips" role="group" aria-label="Filter by state">
+        <button
+          type="button"
+          className={`acr-pg-chip${filter === null ? ' on' : ''}`}
+          aria-pressed={filter === null}
+          title={
+            showClosed
+              ? 'Every assignment you have ever made.'
+              : 'Every open assignment. Closed and cancelled ones are counted at the end of this row.'
+          }
+          onClick={() => setFilter(null)}
+        >
+          {showClosed ? 'All' : 'All open'}
+          <span className="n">{openTotal}</span>
+        </button>
         {TILE_ORDER.map((k) => {
           const def = ASSIGNMENT_STATES[k]
           const n = counts[k] ?? 0
@@ -358,27 +413,27 @@ export function AssignmentsClient() {
             <button
               key={k}
               type="button"
-              className="acr-pg-stat as-tile"
+              className={`acr-pg-chip${on ? ' on' : ''}`}
               aria-pressed={on}
               title={`${def.tip}\n\nClick to show only these.`}
               onClick={() => setFilter(on ? null : k)}
             >
-              <span className="k">{def.label}</span>
-              <span className="v">{n}</span>
+              {def.label}
+              <span className="n" title={`${n} of ${rows?.length ?? 0} assignments are in this state`}>
+                {n}
+              </span>
             </button>
           )
         })}
+        {closed > 0 && (
+          <span className="as-remainder">
+            · {counts.closed ?? 0} closed, {counts.cancelled ?? 0} cancelled{' '}
+            <button type="button" onClick={() => setShowClosed((v) => !v)}>
+              {showClosed ? 'hide them' : 'show them'}
+            </button>
+          </span>
+        )}
       </div>
-
-      {closed > 0 && (
-        <p className="as-remainder">
-          Showing open assignments — {counts.closed ?? 0} closed,{' '}
-          {counts.cancelled ?? 0} cancelled.{' '}
-          <button type="button" onClick={() => setShowClosed((v) => !v)}>
-            {showClosed ? 'Hide them' : 'Show them'}
-          </button>
-        </p>
-      )}
 
       {rows === null ? (
         <div className="acr-pg-empty">

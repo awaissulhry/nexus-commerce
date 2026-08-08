@@ -154,11 +154,6 @@
    `acr-pg-tbl` shipped. Recorded so nobody "helpfully" re-greys it. */
 .as-page .h10-ds-grid-empty { color: #5b6573; padding: 34px 20px; }
 
-/* The strip's label was #8d97a6 on white = 2.95:1. Overridden here rather than
-   in the frozen shared file; the same two numbers were measured independently
-   by the Workflows stream on its own page. */
-.as-page .acr-pg-stat .k { color: #5a6675; }
-
 .as-page .h10-ds-toolbar { flex-wrap: wrap; row-gap: 6px; }
 .as-order,
 .as-asof {
@@ -194,24 +189,26 @@
 .as-due.over  { color: #a11d2b; background: #fdecee; border-color: #f6d4d9; }
 .as-due.none  { color: #8a93a1; font-weight: 400; }
 
-/* ── strip tiles are buttons; every tile filters the list below it ───── */
-.as-tile {
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-  transition: border-color 0.12s ease, background 0.12s ease;
+/* ── S1.b · the filter band ───────────────────────────────────────────────
+   One row: All, the six open states, then the closed remainder. The whole
+   arithmetic of the page is visible in one band and it is total — which is the
+   invariant `views.ts` exists to protect, now also visible in one glance
+   instead of spread across 81px of metric cards. */
+.as-chips {
+  align-items: center;
+  margin-bottom: 12px;
 }
-.as-tile:hover { border-color: #c6d2e2; }
-.as-tile[aria-pressed='true'] {
-  border-color: #2f6feb;
-  background: #f5f9ff;
-  box-shadow: inset 0 0 0 1px #2f6feb;
-}
+/* The shared chip dims its count to `opacity: 0.75`, which computes to roughly
+   #838c97 on white — about 3.4:1, below the floor. These counts ARE the
+   numbers the operator reads, so they are the last thing that should be faint.
+   Full opacity inherits the chip's own colour in both states (5.84:1 unselected,
+   5.06:1 white-on-blue selected). */
+.as-chips .acr-pg-chip .n { opacity: 1; }
 
 .as-remainder {
   font-size: 11.5px;
-  color: #8d97a6;
-  margin-top: 8px;
+  color: #5b6573;
+  margin-left: 2px;
 }
 .as-remainder button {
   background: none;
