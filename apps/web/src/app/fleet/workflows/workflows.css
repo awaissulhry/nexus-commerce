@@ -281,6 +281,10 @@
   margin-top: 3px;
   line-height: 1.45;
 }
+/* S2.b — the Record cell carries the run strip, in the same encoding the list
+   uses. One vocabulary for run history across both pages. */
+.wf-fact .wf-recent { margin-top: 8px; }
+.wf-fact .wf-recent .wf-sub { margin-top: 4px; }
 
 /* ── the list header — the old toolbar was 65% empty space ─────────────── */
 .wf-listhead {

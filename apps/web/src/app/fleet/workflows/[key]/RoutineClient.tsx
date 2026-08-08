@@ -19,6 +19,7 @@ import { BUILTIN_ROUTINES } from '../routines'
 import { RoutineCanvas, type StepLive } from '../RoutineCanvas'
 import { HowWorkflowsWork } from '../HowWorkflowsWork'
 import { RunsSection } from '../RunsSection'
+import { RunBars } from '../RunBars'
 import { DiffList, RoutineEditor } from '../RoutineEditor'
 import {
   CHIP_CLASS,
@@ -463,13 +464,20 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
           </span>
         </div>
 
-        <div className="acr-pg-strip">
-          <div className="acr-pg-stat">
+        {/* S2.b — the S1R fact-bar token, and no cell may render a bare
+            em-dash. Four of five cells read "—" on two of the three routines,
+            spending 109,301px2 on em-dashes while the sentence that answers
+            the question sat underneath in the quiet slot. A cell that cannot
+            know something says what WOULD fill it. */}
+        <div className="wf-factbar">
+          <div className="wf-fact">
             <span className="k">Last run</span>
-            <span className="v">{loaded && health.last ? agoTs(health.last.startedAt) : '—'}</span>
+            <span className="v">
+              {!loaded ? 'reading…' : health.last ? agoTs(health.last.startedAt) : 'never run'}
+            </span>
             <span className="sub">
               {!loaded
-                ? '—'
+                ? 'the fleet has not answered yet'
                 : health.last
                   ? health.last.running
                     ? 'running now…'
@@ -479,49 +487,61 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
                         ? `ok · $${health.last.costUSD.toFixed(4)} · ${health.last.findings} finding${health.last.findings === 1 ? '' : 's'}`
                         : 'failed — see Runs below'
                   : job?.lastRun
-                    ? `clock fired ${agoTs(new Date(job.lastRun.startedAt).getTime())}, launched nothing`
-                    : 'never run'}
+                    ? /* Dagster's tick-vs-run lesson, word for word. */
+                      `the clock fired ${agoTs(new Date(job.lastRun.startedAt).getTime())} and launched nothing — every worker was off`
+                    : 'nothing has started this routine yet'}
             </span>
           </div>
-          <div className="acr-pg-stat">
+          <div className="wf-fact">
             <span className="k">Record</span>
             <span className="v">
-              {loaded && groups.length ? `${health.okCount} of ${groups.length}` : '—'}
+              {!loaded ? 'reading…' : groups.length ? `${health.okCount} of ${groups.length}` : 'no runs yet'}
             </span>
             <span className="sub">
-              {!loaded ? '—' : groups.length ? 'runs finished clean' : 'no runs yet'}
+              {loaded && groups.length ? 'runs finished clean' : 'this will read “N of M” once it has run'}
+            </span>
+            {loaded ? <RunBars groups={groups} /> : null}
+          </div>
+          <div className="wf-fact">
+            <span className="k">Typical duration</span>
+            <span className="v">
+              {!loaded ? 'reading…' : health.avgDuration != null ? fmtDuration(health.avgDuration) : 'not yet known'}
+            </span>
+            <span className="sub">
+              {loaded && health.avgDuration != null
+                ? 'average across recorded runs'
+                : 'averages appear after the first run'}
             </span>
           </div>
-          <div className="acr-pg-stat">
-            <span className="k">Typical duration</span>
-            <span className="v">{loaded ? fmtDuration(health.avgDuration) : '—'}</span>
-            <span className="sub">average across recorded runs</span>
-          </div>
-          <div className="acr-pg-stat">
+          <div className="wf-fact">
             <span className="k">Cost per run</span>
             <span className="v">
-              {loaded && health.avgCost != null ? `$${health.avgCost.toFixed(4)}` : '—'}
+              {!loaded ? 'reading…' : health.avgCost != null ? `$${health.avgCost.toFixed(4)}` : 'not yet known'}
             </span>
-            <span className="sub">average model spend</span>
+            <span className="sub">
+              {loaded && health.avgCost != null
+                ? 'average model spend'
+                : 'averages appear after the first run'}
+            </span>
           </div>
-          <div className="acr-pg-stat">
+          <div className="wf-fact">
             <span className="k">Next run</span>
             <span className="v">
               {!loaded
-                ? '—'
+                ? 'reading…'
                 : job
                   ? job.enabled
-                    ? (until(job.nextFireAt) ?? '—')
+                    ? (until(job.nextFireAt) ?? 'next time unknown')
                     : 'not scheduled'
                   : builtin || canRunNow
                     ? 'when you start it'
                     : canToggle && vers && !vers.enabled
                       ? 'switched off'
-                      : '—'}
+                      : 'nothing to run yet'}
             </span>
             <span className="sub">
               {!loaded
-                ? '—'
+                ? 'the fleet has not answered yet'
                 : job
                   ? prettyCron(job.schedule)
                   : builtin
