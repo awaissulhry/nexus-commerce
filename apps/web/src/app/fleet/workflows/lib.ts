@@ -328,6 +328,84 @@ export function diffIsEmpty(d: WfDiff): boolean {
   )
 }
 
+/** NAF.WF-S2R / S2.a — the version chip, shared by the list card and the
+ *  detail header so the two surfaces cannot describe the same routine
+ *  differently. Every routine carries one: a built-in on the code default has
+ *  no revision, which is a fact worth stating rather than an absence to hide. */
+export interface VersionChip {
+  label: string
+  /** True for the two non-numbered states — rendered quiet, not blue. */
+  neutral: boolean
+  hint: string
+}
+export function versionChipFor(v: {
+  activeRevisionNo: number | null
+  source: 'code' | 'revision' | 'none'
+}): VersionChip {
+  if (v.activeRevisionNo != null) {
+    return {
+      label: `rev ${v.activeRevisionNo}`,
+      neutral: false,
+      hint: `Running published revision ${v.activeRevisionNo}. Every run stamps the revision that served it.`,
+    }
+  }
+  if (v.source === 'code') {
+    return {
+      /* Not "built-in wiring" — it sits beside a "Built-in" badge and the pair
+         read as a stutter. "As shipped" says the same thing to a beginner. */
+      label: 'as shipped',
+      neutral: true,
+      hint: 'No revision published — this routine runs the wiring that ships in code. Reverting to it can never fail.',
+    }
+  }
+  return {
+    label: 'not composed yet',
+    neutral: true,
+    hint: 'No wiring published, so there is nothing to run. Compose it in the editor and publish a first revision.',
+  }
+}
+
+/** NAF.WF-S2R / S2.a — the trigger as one line, shared by the list card and
+ *  the detail status band. Every branch is the WF.1/WF.6 wording moved
+ *  verbatim: a routine with no clock evidence says so rather than inventing
+ *  one, and the two surfaces cannot phrase the same clock differently. */
+export function triggerLineFor(v: {
+  job: ScheduleJob | null
+  kind: 'builtin' | 'custom'
+  statusKind: StatusKind
+}): { main: string; sub: string } {
+  if (v.job) {
+    return {
+      /* prettyCron already answers 'manual' with "When you start it" — the
+         schedule feed reports a stored manual trigger that way (WF.4c). */
+      main: prettyCron(v.job.schedule),
+      sub: v.job.enabled
+        ? (until(v.job.nextFireAt) ? `next ${until(v.job.nextFireAt)}` : 'next time unknown')
+        : 'not scheduled — the clock is off',
+    }
+  }
+  if (v.kind === 'builtin') {
+    return { main: 'When you start it', sub: 'from a worker’s page, or the console' }
+  }
+  return {
+    main: 'When you start it',
+    sub:
+      v.statusKind === 'ready'
+        ? 'Run now, above — or publish a schedule'
+        : v.statusKind === 'off'
+          ? 'turn it back on, or publish a first revision'
+          : 'publish a first revision to run it',
+  }
+}
+
+/** The capability each kind badge states — not a category label. */
+export const KIND_HINT: Record<'builtin' | 'custom', string> = {
+  builtin:
+    'Ships with the fleet. Its wiring comes from code; publish a revision to change it, and reverting to the built-in can never fail.',
+  custom:
+    'You created this one. It runs only what you published, and it can be switched off from its own page.',
+}
+
 /** WF.6a/6c — the one honest status for a CUSTOM workflow. Precedence:
  *  halt → switched off → no wiring → armed clock → ready-by-hand. */
 export function customStatus(

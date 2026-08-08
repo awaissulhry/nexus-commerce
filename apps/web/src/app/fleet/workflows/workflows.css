@@ -422,6 +422,74 @@
   .wf-card-when { white-space: normal; }
 }
 
+/* ── WF-S2R / S2.a — the detail page's header and status bands ───────────
+   The actions used to sit in their own row below the title with a 767.7px
+   spacer to their left, and "Run now…" — the only control on the page that
+   spends money — rendered as bare text identical to "Refresh". `.acr-head`
+   was already a space-between flex with a single child, so the second row
+   existed for no reason at all. */
+.wf-head { align-items: flex-start; }
+.wf-head-main { min-width: 0; }
+.wf-head .wf-back { margin-bottom: 6px; }
+
+.wf-titleline {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.wf-titleline h1 { margin: 0; }
+
+.wf-headactions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* One band: the status, its reason, and when it next runs. Those answer one
+   question and used to sit 400px apart — the reason in a card with ~940px of
+   empty beside it, the next fire in a strip cell. */
+.wf-statusband {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #fff;
+  border: 1px solid #e0e6ee;
+  border-radius: 12px;
+  padding: 11px 16px;
+  margin-bottom: 16px;
+}
+.wf-band-spacer { flex: 1 1 auto; }
+.wf-statusband .wf-why { max-width: 78ch; }
+.wf-bandwhen {
+  font-size: 12.5px;
+  color: #34404f;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+.wf-bandwhen .nx {
+  font-size: 11.5px;
+  color: #5f6a78;
+  font-variant-numeric: tabular-nums;
+}
+.wf-bandwhen .sep { color: #9aa5b2; }
+
+/* The subtitle is prose and belongs on the list's prose token, not 13px. */
+.wf-page .acr-sub { font-size: 12.5px; color: #5a6675; max-width: 104ch; }
+.wf-page .wf-back { font-weight: 650; }
+
+@media (max-width: 860px) {
+  .wf-head { flex-direction: column; }
+  .wf-headactions { justify-content: flex-start; }
+  .wf-bandwhen { white-space: normal; }
+}
+
 /* ── S2: routine detail ──────────────────────────────────────────────── */
 
 .wf-backrow {

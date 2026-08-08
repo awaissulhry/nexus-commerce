@@ -25,10 +25,12 @@ import Link from 'next/link'
 import { ArrowRight, Clock, Play, Shield } from 'lucide-react'
 import {
   CHIP_CLASS,
+  KIND_HINT,
   agoTs,
   fmtDuration,
   prettyCron,
   until,
+  versionChipFor,
   type RoutineStatus,
   type RunGroup,
   type ScheduleJob,
@@ -113,34 +115,6 @@ function triggerLine(p: RoutineCardProps): { main: string; sub: string } {
   }
 }
 
-/** The version chip: every card carries one. Three of four rows used to
- *  carry nothing, because a built-in on the code default has no revision —
- *  which is a fact worth stating, not an absence worth hiding. */
-function versionChip(p: RoutineCardProps): { label: string; neutral: boolean; hint: string } {
-  if (p.activeRevisionNo != null) {
-    return {
-      label: `rev ${p.activeRevisionNo}`,
-      neutral: false,
-      hint: `Running published revision ${p.activeRevisionNo}. Every run stamps the revision that served it.`,
-    }
-  }
-  if (p.source === 'code') {
-    return {
-      /* Not "built-in wiring" — it sits beside a "Built-in" badge and the pair
-         read as a stutter. "As shipped" says the same thing and says it to a
-         beginner: no revision has ever been published over this one. */
-      label: 'as shipped',
-      neutral: true,
-      hint: 'No revision published — this routine runs the wiring that ships in code. Reverting to it can never fail.',
-    }
-  }
-  return {
-    label: 'not composed yet',
-    neutral: true,
-    hint: 'No wiring published, so there is nothing to run. Compose it in the editor and publish a first revision.',
-  }
-}
-
 /** Every pill explains itself, and a worker's pill also says whether it will
  *  actually do anything — the dials live on another page, so the chain is
  *  where a beginner first meets the consequence. */
@@ -152,17 +126,10 @@ function stepHint(s: ChainStep): string {
     : `${s.label} is switched on and will run when this routine does.`
 }
 
-const KIND_HINT: Record<'builtin' | 'custom', string> = {
-  builtin:
-    'Ships with the fleet. Its wiring comes from code; publish a revision to change it, and reverting to the built-in can never fail.',
-  custom:
-    'You created this one. It runs only what you published, and it can be switched off from its own page.',
-}
-
 export function RoutineCard(props: RoutineCardProps) {
   const { routineKey, name, purpose, touch, kind, builtin, status, groups, job, chain } = props
   const trigger = triggerLine(props)
-  const version = versionChip(props)
+  const version = versionChipFor({ activeRevisionNo: props.activeRevisionNo, source: props.source })
   const last = groups[0] ?? null
   /* Oldest on the left, so the strip reads left-to-right like time does. */
   const bars = groups.slice(0, MAX_BARS).reverse()

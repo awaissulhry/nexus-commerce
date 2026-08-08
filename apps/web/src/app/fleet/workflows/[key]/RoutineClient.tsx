@@ -22,6 +22,7 @@ import { RunsSection } from '../RunsSection'
 import { DiffList, RoutineEditor } from '../RoutineEditor'
 import {
   CHIP_CLASS,
+  KIND_HINT,
   agoTs,
   computeDiff,
   customStatus,
@@ -30,7 +31,9 @@ import {
   groupRuns,
   prettyCron,
   routineStatus,
+  triggerLineFor,
   until,
+  versionChipFor,
   type CharterRow,
   type FleetState,
   type RunRow,
@@ -220,7 +223,20 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
   }
 
   const title = builtin?.name ?? vers?.name ?? routineKey
-  const sub = builtin?.purpose ?? vers?.description ?? 'A custom routine.'
+  /* S2.a — the routine's own story is the page's subtitle, which is where a
+     description belongs and where the shell already renders one. It used to
+     live in a card below with 940px of empty beside it. */
+  const sub = builtin
+    ? builtin.story.sentence
+    : (vers?.description ?? 'A custom routine over the fleet’s workers.')
+
+  const kindLabel: 'builtin' | 'custom' | null = builtin ? 'builtin' : vers ? 'custom' : null
+  const activeRevisionNo =
+    vers?.revisions.find((r) => r.activatedAt && !r.supersededAt)?.revision ?? null
+  const version = versionChipFor({
+    activeRevisionNo,
+    source: vers?.source ?? (builtin ? 'code' : 'none'),
+  })
 
   const job = builtin?.scheduleKey
     ? (jobs.find((j) => j.key === builtin.scheduleKey) ?? null)
@@ -240,6 +256,12 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
     () => groupRuns(runs, builtin ? builtin.mode : { workflowKey: routineKey }),
     [runs, builtin, routineKey],
   )
+
+  const { main: triggerMain, sub: triggerSub } = triggerLineFor({
+    job,
+    kind: builtin ? 'builtin' : 'custom',
+    statusKind: status.kind,
+  })
 
   /* WF.3a/6a — honesty first: an active revision's wiring is what renders;
      the hand-authored story is the pure-code built-in state only. */
@@ -336,44 +358,48 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
   }
 
   return (
-    <div className="acr">
-      <header className="acr-head">
-        <div>
-          <h1>{title}</h1>
-          <p className="acr-sub">{sub}</p>
-        </div>
-      </header>
-      <div className="acr-fleet wf-page">
-        {err ? (
-          <div className="acr-banner err" role="alert">
-            <ShieldAlert size={15} /> {err}
-            <button className="acr-btn" onClick={refresh}>Try again</button>
-          </div>
-        ) : null}
-
-        <div className="wf-backrow">
+    <div className="acr wf-page">
+      {/* S2.a — the actions live beside the title, where Airflow, Dagster and
+          GitHub all put them. `.acr-head` was already a space-between flex with
+          only one child, so the old separate action row existed for no reason
+          and carried a 767.7px void. */}
+      <header className="acr-head wf-head">
+        <div className="wf-head-main">
           <Link className="wf-back" href="/fleet/workflows">
             <ArrowLeft size={13} /> All workflows
           </Link>
-          {asOf ? (
-            <span className="wf-asof">
-              as of {asOf.toLocaleTimeString()} · refreshes every 10s while you watch
-            </span>
-          ) : null}
-          <span className="spacer" />
+          <div className="wf-titleline">
+            <h1>{title}</h1>
+            {loaded && kindLabel ? (
+              <span className="wf-kind" title={KIND_HINT[kindLabel]}>
+                {kindLabel === 'builtin' ? 'Built-in' : 'Custom'}
+              </span>
+            ) : null}
+            {loaded && version ? (
+              <span
+                className={`wf-vbadge${version.neutral ? ' neutral' : ''}`}
+                title={version.hint}
+              >
+                {version.label}
+              </span>
+            ) : null}
+          </div>
+          <p className="acr-sub">{sub}</p>
+        </div>
+        <div className="wf-headactions">
           {loaded && canRunNow && !editing ? (
-            <button className="acr-btn primary" onClick={() => void openRunDialog()}>
+            <button className="acr-btn go" onClick={() => void openRunDialog()}>
               Run now…
             </button>
           ) : null}
           {loaded && vers && !editing ? (
-            <button className="acr-btn" onClick={() => setEditing(true)}>
+            <button className="acr-btn ghost" onClick={() => setEditing(true)}>
               Edit the wiring
             </button>
           ) : null}
           {loaded && canToggle && vers && !editing ? (
             <button
-              className="acr-btn"
+              className="acr-btn ghost"
               title={
                 vers.enabled
                   ? 'Disarm its clock and refuse Run now until you turn it back on'
@@ -387,10 +413,26 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
               {vers.enabled ? 'Turn off…' : 'Turn on…'}
             </button>
           ) : null}
-          <button className="acr-btn" onClick={refresh}>
+          <button className="acr-btn ghost" onClick={refresh}>
             <RefreshCw size={13} /> Refresh
           </button>
+          {asOf ? (
+            <span
+              className="wf-asof"
+              title="This page re-reads the fleet every 10 seconds while the tab is visible, and pauses when it is not."
+            >
+              as of {asOf.toLocaleTimeString()}
+            </span>
+          ) : null}
         </div>
+      </header>
+      <div className="acr-fleet">
+        {err ? (
+          <div className="acr-banner err" role="alert">
+            <ShieldAlert size={15} /> {err}
+            <button className="acr-btn" onClick={refresh}>Try again</button>
+          </div>
+        ) : null}
 
         {runNotice ? (
           <div className="acr-banner warn" role="status">
@@ -399,20 +441,26 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
           </div>
         ) : null}
 
-        <div className="wf-sentence">
+        {/* S2.a — one band. The status, its reason and when it next runs answer
+            a single question and used to sit 400px apart, the reason in a card
+            with 940px of empty beside it and the next fire in a strip cell. */}
+        <div className="wf-statusband">
           {loaded ? (
             <span className={`acr-pg-statechip ${CHIP_CLASS[status.kind]}`}>{status.label}</span>
           ) : null}
-          <div>
-            <p>{builtin ? builtin.story.sentence : (vers?.description ?? 'A custom routine over the fleet’s workers.')}</p>
-            <span className="wf-sub">
-              {loaded
-                ? status.why
-                : err
-                  ? 'The fleet could not be read — its status is unknown, not off.'
-                  : 'Reading the fleet…'}
-            </span>
-          </div>
+          <p className="wf-why">
+            {loaded
+              ? status.why
+              : err
+                ? 'The fleet could not be read — its status is unknown, not off.'
+                : 'Reading the fleet…'}
+          </p>
+          <span className="wf-band-spacer" />
+          <span className="wf-bandwhen">
+            {triggerMain}
+            <span className="sep" aria-hidden>·</span>
+            <span className="nx">{triggerSub}</span>
+          </span>
         </div>
 
         <div className="acr-pg-strip">
