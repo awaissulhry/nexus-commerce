@@ -1645,6 +1645,95 @@ add search; ≥ **25** routines → the list becomes a table and converges onto
 
 ---
 
+### 9.11 · S1.a SHIPPED + PROD-VERIFIED 2026-08-08
+
+Approved by the operator; **S1.e declined** per the recommendation in §9.6, so
+the list stays read-only and the card is the door. Landed in three commits —
+the first cut, then two rounds of defects that only the deployed page could
+show, which is the point of verifying on prod rather than in a screenshot of
+an intention.
+
+| Commit | What |
+|---|---|
+| `53e62a5cd` | The substrate: cards, fact bar, list header, palette, `.wf-page` on both roots |
+| `b03ba5960` | Four lanes not three; chips are pills again; reserved rhythm height |
+| `6b2cd6d33` | Lanes fold instead of spanning; grid floor lowered for headroom |
+
+**The two defects prod caught, both invisible to `tsc` and to intention:**
+
+1. **A column flex container stretches its children across the cross axis**, so
+   every status chip rendered as a **518.4px bar**, not a pill. Fixed with
+   `align-self: flex-start` on the chip.
+2. **Three lanes recreated the very defect this section exists to remove.** On
+   a 1614px card the flexible lanes measured **777.6px and 518.4px while their
+   prose rendered at 441.6px and 315.4px** — 336px and 203px of dead width
+   *inside* the lanes. The lesson is general and worth keeping: **prose has a
+   reading measure and will not stretch to fill a lane, so the lane must be cut
+   to the prose, never the other way round.** Splitting "what it may touch" into
+   its own lane made all four lanes the width of the sentence they carry. The
+   same error reappeared one breakpoint down, where the reach lane spanned two
+   columns and came out 970px holding 490px of prose — hence the rule now
+   written into the stylesheet: **lanes fold into rows, they never span.**
+
+**Acceptance, measured on the deployed page at 1728 × 962** (§9.10's tests, in
+order):
+
+| # | Test | Before | After |
+|---|---|---|---|
+| 1 | Lane start alignment (x spread / y spread) | 19.8px ragged edge | **0 / 0** |
+| 2 | Text roles below AA 4.5:1 | **7**, all honesty sentences | **0 that this section owns** (1 shared, below) |
+| 3 | Type scale | 9 sizes × 5 weights (14 pairs) | **5 sizes × 3 weights** owned (+1 size, +1 weight from shared components) |
+| 4 | Dead space | 153.8px unused, page did not scroll | content **1331px in a 962px scroller**, fill ratio **1.38**, scrolls |
+| 5 | Navigation target | 290.2px of a 1614px row = **18.0%** | the card is an `<a>`, cursor pointer = **100%** |
+| 6 | Symmetry | gutters 24/24 | gutters 24/24, card padding **18/18** |
+| 7 | Card/row height spread | 6.5px @1614, **33.4px** @1000 | **0px** @1614, **19.8px** @1000 |
+| 8 | Honesty regression | — | **0 of 7 checked strings missing** |
+| — | Horizontal overflow, 1614 → 700 | 0 | **0** |
+
+Responsive, measured per breakpoint by simulating each rule against the live
+page (the element-width probe alone never fires a viewport media query — worth
+knowing, it silently reported 458px of overflow that does not exist):
+
+| viewport | height spread | lane-x spread | prose fill | overflow |
+|---|---|---|---|---|
+| 1614 | 0 | 0 | 100 / 100 / 100 | 0 |
+| 1300 | 0.4 | 0 | 97 / 100 / 97 | 0 |
+| 1140 | 0.4 | 0 | 100 / 100 / 100 | 0 |
+| 1000 | 19.8 | 0 | 100 / 100 / 100 | 0 |
+| 980 | 19.4 | 0 | 75 / 75 / 75 | 0 |
+| 800 | 19.4 | 0 | 100 / 100 / 100 | 0 |
+
+The 75% fill at 980 is the 62ch measure binding inside a 650px lane — correct
+typography, not dead layout. A line of prose should not grow past its measure
+just because the lane can.
+
+**The one contrast failure left, and why it was not fixed here.**
+`.acr-btn.go` is white on `#1a9d6a` and measures **3.46:1**. It is the fleet's
+shared primary in `control-room.css`, used by the Workers page for "Create a
+worker". Forking the green on one page would trade an accessibility defect for
+an inconsistency defect, and the file is not this stream's. Measured, and
+reported to its owner in the locks doc **with a tested passing value —
+`#15804f`, which measures 4.96:1 against white** — so the fix is one hex away
+for whoever owns it. The same treatment as the three frozen `fleet-pages.css`
+roles: measure it, publish the number, do not fork the file.
+
+**Two more sizes and one more weight render than this section's scale allows,
+and all three come from components other streams own** — the glossary `Term`
+tooltip (12px) and `.acr-btn` (12.5px / 550). Noted, not forked.
+
+**Also delivered beyond the §9.5 spec, because the audit found them:** a fourth
+fact ("Workers switched on — 0 of 7 in the fleet, the dials decide") replacing
+the deleted "Routines" tile, which answers the *why* behind two of the four
+Idle statuses directly under the numbers; and the built-in version chip reads
+**"as shipped"** rather than "built-in wiring", because the latter sat beside a
+"Built-in" badge and read as a stutter.
+
+**Still open in this engagement:** S1.b (the run bars — the reserved 108px in
+the rhythm lane is scaffolding that S1.b makes real), S1.c (the step chain,
+with its one named additive API field), S1.d (the teaching pass).
+
+---
+
 ## Sources
 
 **Part 9 (WF-S1R, list-page research, 2026-08-08)** — Airflow 3 [UI overview](https://airflow.apache.org/docs/apache-airflow/stable/ui.html) · Astronomer [intro to the Airflow UI](https://www.astronomer.io/docs/learn/airflow-ui) (card view default, bars = duration × status, run-type icons, ⌘K, list view for many DAGs) · Trigger.dev [scheduled tasks](https://trigger.dev/docs/tasks/scheduled) (declarative vs imperative rows, next/last run, dashboard-editable only for imperative) · UiPath Orchestrator [monitoring processes](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/monitoring-processes) (count-vector columns, colour persistence, grey = never executed) · Make [scenario list & history](https://help.make.com/scenario-history) · Power Automate [create & manage a cloud flow](https://learn.microsoft.com/en-us/power-automate/get-started-logic-flow) (⋮ menu, 28-day history on the detail) · Temporal [Web UI](https://docs.temporal.io/web-ui) · n8n [workflow tags](https://docs.n8n.io/workflows/tags/) · Zapier [product updates, Feb 2026](https://zapier.com/blog/february-2026-product-updates/) (favourites across asset listings)
