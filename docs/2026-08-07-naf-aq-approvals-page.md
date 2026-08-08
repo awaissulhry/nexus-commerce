@@ -1751,3 +1751,744 @@ every tool surveyed. It now says what happened:
 The reasons verbatim, capped at four with a count for the rest. A bare number
 tells the operator something is wrong and nothing about what — which is the
 same silence this page keeps finding in other clothes.
+
+---
+
+# PART 12 — S1 DESIGN STUDY: the header, the standing promise, and the teaching layer
+
+**Status: AWAITING OPERATOR APPROVAL.** No code written. Stream tag `SB.AQ-S1R`,
+opened 2026-08-08 against the operator's judgement on the shipped page: *"way
+off, very odd and imperfect."*
+
+That is about the look, not the data. Parts 0–11 stand: the gate-state facts are
+true, the card is honest, the queue is empty for three verified structural
+reasons. **This part does not re-litigate any of that.** It rebuilds the top of
+the page — and only the top.
+
+Scope: **AQ-S1 only** — `page.tsx`'s hand-rolled header, `StandingPromise()`,
+`HowThisWorks()`, and the `.aq-promise` / `.aq-how*` rules behind them. S2–S10
+are untouched; §12.7 lists what I found in them and left alone.
+
+---
+
+## 12.0 — What S1 is FOR, in one sentence
+
+> **Tell someone who has never seen the fleet what this queue guarantees — in
+> the time it takes to read the top of the page — and keep that sentence true on
+> the day the queue is full.**
+
+Everything below is judged against that. Two consequences fall straight out of
+it and they decide most of the design:
+
+- **S1 is an invariant, not a status.** If a sentence in S1 stops being true
+  when the fleet is switched on, it does not belong in S1 — it belongs in S2,
+  which exists to say what is true *today*.
+- **S1 must be the same height and shape whether the queue holds 0 rows or 400.**
+  Anything that only makes sense while the queue is empty is S4's teaching empty
+  state, not S1.
+
+---
+
+## 12.1 — What is on screen today, measured
+
+Measured in a browser on live Vercel + Railway, 2026-08-08, viewport
+1728×906, dpr 2, against the resolved page background `#f4f6f9`. Every number is
+`getComputedStyle` / `getBoundingClientRect` / a canvas text measurement — not a
+reading of the source.
+
+### 12.1.1 The type and colour ladder
+
+| Element | Size / weight | Colour | On | Contrast |
+|---|---|---|---|---|
+| `.acr-head h1` — *Approvals* | 20 / 650 | `#1c2530` | `#f4f6f9` | 14.30 ✓ |
+| `.acr-sub` — the purpose sentence | 13 / 400 | `#667485` | `#f4f6f9` | **4.41 ✗** |
+| `.aq-promise` — the promise body | 13 / 400 | `#1c2530` | `#f3faf5` | 14.60 ✓ |
+| `.acr-fl-checkstoggle` — *How approvals work* | 12.5 / 650 | `#34404f` | `#f4f6f9` | 9.74 ✓ |
+| `.aq-howbody` — the drawer prose | 12.5 / 400 | `#3a4658` | `#fbfcfd` | 9.39 ✓ |
+| *(S2, for contrast)* `.aq-gate-num` | 19 / 640 | `#1c2530` | `#fff` | 15.48 ✓ |
+| *(S2)* `.aq-gate-grid h4` | 11 / 650 | `#6b7688` | `#fff` | 4.59 ✓ |
+| *(S2)* `.aq-can` / `.aq-cannot` chip | 10.5 / 600 | `#6b7688` | `#f4f6f9` | **4.24 ✗** |
+| *(S2)* `.aq-gate-ok` — the open-pipe line | 12.5 / 400 | `#2f855a` | `#f4f6f9` | **4.20 ✗** |
+
+**Seven distinct font sizes above the queue card** — 20, 19, 13, 12.5, 12, 11,
+10.5 — in ten size/weight pairs. Activity's S1 audit called four sizes a wall;
+this is seven. The fix for that is *fewer* sizes, not different ones
+(hierarchy from weight and spacing on a 4px scale — the mechanic both the
+Linear and Vercel teardowns land on, and the one Activity's S1R adopted).
+
+Three of the contrast failures are S2's and are recorded in §12.7. The one that
+is S1's — `.acr-sub` at **4.41:1** — is the same shared `control-room.css` value
+that Activity, Workflows and Assignments have each already overridden
+page-locally. This page would be the fourth.
+
+### 12.1.2 The structural finding: 75% of the header row is dead
+
+`.acr-head` is `display: flex; justify-content: space-between`, and this page
+hand-rolls it with exactly **one** child.
+
+| | |
+|---|---|
+| Header row | **1614px** wide |
+| Its only child | **397px** |
+| Dead | **1217px — 75% of the row** |
+
+This is the defect Activity measured at 1187px on the shell, fixed by adding an
+`aside` slot to `FleetPageShell` — *and this page cannot use that fix, because it
+does not use the shell.* The header markup here is byte-identical to what the
+shell emits; the only difference is that the second flex child is unreachable and
+that every future shell change lands on six pages and not on this one.
+
+**Correction to the brief's framing, because accuracy matters more than a
+tidier story:** six of the ten fleet pages use `FleetPageShell` (`activity`,
+`assignments`, `assignments/[id]`, `cost`, `files`, `workflows`). Approvals is
+one of **four** that hand-roll the same markup — Overview, Controls and Workers
+do too — and `map` deliberately does not use it at all, with its reason written
+in the file. So this is not "structurally different from every other page in the
+section". It is *one of four copies of a component that exists*, and the cost is
+specific and measurable: 1217px of unusable header, and no share in the shell's
+improvements.
+
+### 12.1.3 The wall, in words and in characters per line
+
+| Block | Words | Measured line length |
+|---|---|---|
+| `.acr-sub` | 12 | — |
+| `.aq-promise` | 33 | **171 chars/line** |
+| *How approvals work* toggle | 3 | — |
+| `.aq-howbody` when opened | **276** | **261–266 chars/line** |
+| *(S2)* gate headline + blockers | ~65 | 112 / **257–268 chars/line** |
+
+[WCAG 1.4.8][wcag148] puts the ceiling at **80 characters**; typographic practice
+is 45–75. **The teaching layer runs at 3.3× the WCAG ceiling.** Nothing in S1 has
+a `max-width`; `.aq-howbody` computes to `max-width: none` and stretches the full
+1590px content width. The only text on the page inside the ceiling is in S2's
+tiles — at 65 chars/line — and it is only there because the grid happens to cut
+it to 364px.
+
+That is the measurable content of "wall of prose". It is not a matter of taste.
+
+### 12.1.4 The same claim is made twice, in two different shapes
+
+> `.acr-sub`: *"Everything the fleet wants to do and cannot do until you say yes."*
+>
+> `.aq-promise`: *"Nothing on this page has happened yet. Every card is something
+> one of your AI workers wants to do — and nothing the fleet proposes reaches
+> Amazon unless you say yes here."*
+
+One page description and one green notification box, 38px apart, asserting the
+same guarantee. A reader who reads both learns nothing from the second.
+
+### 12.1.5 The teaching drawer contains a sentence that is no longer true
+
+`.aq-howbody`'s last paragraph, live on production right now:
+
+> *"And it cannot yet let you amend a proposal before approving it; today a
+> number you disagree with has to be rejected."*
+
+**AQ.8 shipped edit-then-approve on 2026-08-07 and it was verified end to end on
+production** (Part 11: the client bound probed across four values, the server
+refusal quoted verbatim from `ads-propose.tools.ts`, the superseded row carrying
+the first attributed `decidedBy` in this database's history). The one place on
+the page that exists to teach a beginner what they can do is telling them they
+cannot do the thing the same engagement shipped.
+
+This is the class this document keeps re-finding: **a read surface stating a
+constant no executor honours.** Four instances were logged in Part 7; this is the
+fifth, and it is the first one written by this stream about its own feature.
+
+### 12.1.6 Three more, found in the browser
+
+1. **The queue card is painted 347px above where it lands.** Measured: with the
+   gate-state section absent (the first paint, before `/gate-state` resolves) the
+   queue card's top is **175px**; once the read returns it is **522px**. The
+   first screenshot of a cold load shows the skeleton rows sitting directly under
+   the *How approvals work* toggle. Nothing reserves that space. *(S2's to fix —
+   §12.7.)*
+2. **The disclosure control is 142.7 × 18.8px.** Under [WCAG 2.5.8][wcag258]'s
+   24×24 minimum, saved only by the Spacing exception (its 24px circle clears the
+   gate-state header's box by 12.6px). It passes; it is still an 18.8px-tall
+   control on a page for a non-technical operator, and the brief's standing rule
+   is visibility over minimalism.
+3. **Three border radii inside one section** — 6px (`.aq-promise`), 8px
+   (`.aq-gate`), 6px (`.aq-gate-grid > div`), 9px (`.aq-queue`) — and four
+   background tints (`#f3faf5`, `#fffdf6`, `#fbfcfd`, `#fff`) chosen per block.
+
+### 12.1.7 Live ground truth, 2026-08-08
+
+Read off the deployed page with the operator's session, so the design is drawn
+against what is actually there:
+
+| | |
+|---|---|
+| Waiting | **0** · Decided **18** · Expired **0** |
+| Gate | **closed** — 0 of 7 workers at PROPOSE, 0 of 3 fleet actions executable, next chance *in 2 days* |
+| Outside queue | empty |
+| Horizontal overflow | none — `documentElement.scrollWidth === innerWidth === 1728` |
+| `.acr` width | 1662 of 1662 available — **100%**, no right-hand dead zone |
+| S1's vertical footprint | header top **20px** → gate-state top **175px** = **155px**, drawer closed |
+
+---
+
+## 12.2 — What the industry does with this exact strip
+
+Six primary sources, read for anatomy rather than for principles. Where a source
+only confirms something Activity's Part 18 already established for the fleet, I
+say so and do not re-derive it — two pages agreeing by copying the same source is
+the point.
+
+### A · A page header has a fixed anatomy, and a right-hand slot is part of it
+
+[HashiCorp Helios][helios] specifies the order **title → breadcrumb → icon →
+badges → subtitle → description → metadata → actions**, with **only the title
+required**, and three rules that land on us:
+
+- **Subtitle ≠ description.** A subtitle is metadata that "does not change
+  frequently"; a description is "more detailed information about the page",
+  limited to 1–2 sentences. Ours is a full sentence, so in Helios terms this page
+  has a *description* and no subtitle — which means the promise banner and the
+  `.acr-sub` are competing to be the same slot.
+- **"Do not communicate page-level information anywhere other than the top of
+  the page."** A standing guarantee is page-level information by definition.
+- **Actions: 1–3, and never two primary actions.** One quiet secondary control
+  in the header is exactly what is allowed.
+
+[GitHub Primer][primer] independently lands on the same split — `TitleArea`
+(LeadingVisual / Title / TrailingVisual) · `Description` · `ContextArea` ·
+`Actions` — with actions on the right of the title row.
+
+**Steal:** the right-hand slot; one description, not two; a single secondary
+control there. **Reject:** breadcrumbs (the rail says where you are), badges (S2
+and S3 own the counts, and a badge in the header would be a fourth place the
+same number lives).
+
+### B · Help belongs in the UI, and a drawer is the sanctioned place for it
+
+[GitLab Pajamas][pajamas] is the most directly useful source found, because it
+ranks the mechanisms instead of describing them:
+
+> *"The UI should be self-explanatory. If extra help is required, it should be
+> in the UI itself, as either UI text or as text within a drawer."*
+
+Its order is **inline UI text → drawer → popover → tooltip → documentation
+link**, with one hard rule: **essential information must never be hidden behind
+a trigger.** [NN/g's tooltip guidelines][nngtool] say the same thing from the
+other end — tooltips are "microcontent", never for task-critical information,
+and *"users shouldn't need to find a tooltip in order to complete their task."*
+
+That decides two things at once. The 276 words of *How approvals work* are
+"supplemental, moderate length" — textbook drawer content, and **not** something
+that should sit in the page flow as a disclosure. And the facts that are *not*
+supplemental — that nothing has happened yet, that a yes is the only way through
+— must stay inline where nobody has to click for them.
+
+### C · Progressive disclosure fails on the label, not on the mechanism
+
+[NN/g][nngpd]: the split must put "everything that users frequently need up
+front", the label must create "strong information scent", and designs with three
+or more disclosure levels "typically have low usability". Ours has one level and
+a good label. The mechanism is fine; the *placement* is the problem — an inline
+disclosure occupies a row of the page forever in exchange for content 95% of
+readers will open once.
+
+### D · Front-load the answer; do not write headings as questions
+
+[GOV.UK's structure guidance][govukstructure] is unambiguous and it contradicts
+how our drawer is written. Headings should be **descriptive, front-loaded,
+active**, and — verbatim — they should not be questions, because *"they're hard
+to frontload and users want answers, not questions."*
+
+All six leads in the drawer today are questions in noun-phrase clothing: *"What
+happens if you say nothing."* The answer — 24 hours, and expiry means refused —
+is the fourth clause of the paragraph beneath it. **A reader scanning six bold
+leads currently learns six things they do not know, and zero things they do.**
+
+### E · A standing truth stated as a notification stops being read
+
+The habituation literature is settled and this document already cites it
+(Part 2E): visual processing of a warning collapses after the **second**
+exposure, and polymorphic (appearance-varying) warnings are the only measured
+mitigation, effective for at least five days ([Anderson et al., CHI 2015][chi];
+[Vance et al.][byu]). The corollary for a *non*-varying element is direct: a
+green box that says the same thing on every visit forever is the definition of
+the stimulus that habituates fastest.
+
+[Atlassian][atlassian] and [Carbon][carbon] both reserve banner/notification
+treatments for **system-level messages and state changes**. A guarantee that has
+been true since the page was created is neither.
+
+**Steal:** state the guarantee, do not decorate it. **Reject:** a sticky banner
+(it spends viewport forever on the element most likely to be ignored) and any
+notification chrome around an invariant.
+
+### F · Empty-first surfaces: encourage, never apologise
+
+[Shopify's empty-state pattern][shopifyempty] is the clearest statement of the
+tone rule: rather than making the merchant feel unsuccessful, an empty state
+gives *"a clear explanation of what will appear here"* plus a way forward — and
+it explicitly covers the case where emptiness persists by design ("prompting
+feature activation or configuration"), which is exactly this page for the coming
+weeks.
+
+**This confirms a boundary rather than changing S1.** The teaching empty state is
+S4's, and it is already built. S1's job in an empty-first world is the opposite:
+be identical whether the queue is empty or full, so that the day rows arrive
+nothing about the top of the page has to change.
+
+### G · Tooltips: the accessibility contract is a checklist, and we fail two of it
+
+[WCAG 2.2 SC 1.4.13][wcag1413] has three requirements. Measured against our
+shared `<Term>`:
+
+| Requirement | Normative wording | `<Term>` |
+|---|---|---|
+| **Dismissible** | *"A mechanism is available to dismiss the additional content without moving pointer hover or keyboard focus"* | **✗** — no key handler anywhere in `glossary.tsx`; Esc does nothing |
+| **Hoverable** | *"the pointer can be moved over the additional content without the additional content disappearing"* | **✗** — `.acr-term-tip` is `pointer-events: none`; hit-testing the centre of an open tooltip returns `.aq-gate-body`, not the trigger |
+| **Persistent** | remains until trigger removed / dismissed / invalid | **✓** |
+
+Everything else about it measures well: keyboard-reachable (`tabIndex={0}`,
+verified by focusing it with real document focus and watching the tip appear),
+12.94:1 contrast, 300px wide, `z-index: 40`, and on this page not clipped —
+the closest one has 36px of clearance above it inside `.aq-gate`'s
+`overflow: hidden`.
+
+---
+
+## 12.3 — Verdict on each of the seven defects in the brief
+
+| # | Defect | Verdict |
+|---|---|---|
+| 1 | Bypasses the shared shell | **FIX — and the reason is sharper than "consistency".** Adopt `FleetPageShell`. The cost today is not that the markup differs (it is byte-identical) — it is **1217px, 75% of the header row, that cannot be reached** because the shell's `aside` slot does not exist in this copy. Correcting the brief: 4 of 10 pages hand-roll it, not 1 |
+| 2 | Opens with a wall of prose | **FIX, and disagree with the scope.** S1 owns 48 visible words + 276 behind a toggle; **S2's gate-state section is the larger block** (333px tall, 65 words at 257–268 chars/line) and the brief puts it out of scope. Fixing S1 alone takes the top of the page from 155px to ~104px and removes 276 words from the flow — a real improvement that will **not** on its own make the page feel un-walled. Said plainly now rather than discovered after the deploy: **S2 is the obvious next engagement** |
+| 3 | Colour semantics are ad hoc | **FIX for S1, by removing the colour rather than repainting it.** The green promise box is deleted; S1 ends up carrying no semantic colour at all, because nothing in it is a state. That is the correct resolution of "green means both safe and informational": S1 was never signalling either. **No new palette is introduced** — a page-wide palette would be a claim over S2's amber and S5's treatment, and those are not in scope |
+| 4 | Borrowed classes | **FIX.** `.acr-fl-checkstoggle` belongs to `PlanStory`/`CharterStudio` on another surface. The replacement is not a new bespoke class either: the trigger becomes a real control, and the panel becomes the **DS `Drawer`**, which is what `assignments/HowAssignmentsWork.tsx` already uses for the identical job |
+| 5 | The drawer is six unstructured paragraphs | **FIX, plus one thing the brief did not know.** Structure (headed sections, front-loaded answers per GOV.UK) *and* measure: 261 chars/line → ~72 inside a 520px drawer. **And one of the six paragraphs is factually stale** — it tells the operator they cannot amend a proposal, which AQ.8 shipped and prod-verified (§12.1.5) |
+| 6 | No tooltip audit | **FIX — audit in §12.5.** Findings: keyboard access works; contrast is 12.94:1; **two of WCAG 1.4.13's three requirements fail in the shared component**; and `gate` is already defined in the glossary as a *workflow* concept, so this page must never tag its own use of the word. The 1.4.13 repair lands on ten pages at once, so it is offered as an **optional, separately-claimed phase**, not smuggled into S1 |
+| 7 | Not verified responsive | **PARTIALLY DISAGREE — measured, and the real defect is the opposite one.** No horizontal overflow at any width; `.acr` fills 100% of its available width; the S2 grid is `auto-fit minmax(190px, 1fr)` and reflows 4→2→1 columns cleanly with nothing overflowing at container widths 1400/1100/900/700/560/420; at a 200% zoom proxy the page still does not scroll horizontally. **The genuine width defect is at the wide end, not the narrow one: 261 characters per line at 1728px.** The verification gap is real and is closed by this build |
+
+---
+
+## 12.4 — The proposal
+
+### 12.4.1 The shape
+
+```
+┌───────────────────────────────────────────────────────────────────────────────┐
+│ Approvals                                              ┌────────────────────┐ │
+│ Nothing on this page has happened yet.                 │ ? How approvals    │ │
+│ Every card is a change one of your workers wants to    │   work             │ │
+│ make. It does not happen unless you say yes.           └────────────────────┘ │
+│ ───────────────────────────────────────────────────────────────────────────── │
+└───────────────────────────────────────────────────────────────────────────────┘
+   14px
+   ⊘ Nothing can reach this queue right now.  …           (S2 — UNCHANGED)
+```
+
+Two blocks where there are four, and the rule is the only new furniture:
+
+1. **Identity** — who this page is and what it promises. Static. Never changes
+   with fleet state, queue depth, or a failed read.
+2. **A 1px rule**, full content width, carried as `border-bottom` on the header
+   itself so no wrapper element is inserted around S2. It says *above is the
+   page, below is today* — the exact device Activity shipped at S1R, so the two
+   pages read the same way.
+
+The teaching control moves into the header's right slot. That is Helios's and
+Primer's actions slot used for its designed purpose, it consumes the 1217px of
+dead row, and it takes a row out of the page flow.
+
+### 12.4.2 The copy, and why each line is where it is
+
+**Title:** `Approvals` — unchanged.
+
+**Description**, replacing both `.acr-sub` and `.aq-promise`:
+
+> **Nothing on this page has happened yet.**
+> Every card is a change one of your workers wants to make. It does not happen
+> unless you say yes.
+
+- Line 1 carries the load and gets **weight, not colour** (13/600 `#1c2530`,
+  14.3:1) — the same mechanic, and it ends up *darker and heavier* than the same
+  words are inside today's green box.
+- Line 2 is 13/400 `#55616f` (6.0:1 — the value Activity settled for this exact
+  role, reused so the two pages cannot drift).
+- **"one of your workers", not "the fleet".** `worker` has a glossary entry;
+  `fleet` does not, and minting one would be a claim on a shared append-only file
+  for a word this page does not need. Cheaper copy and better copy.
+- **"It does not happen unless you say yes"** is deliberately *not* "nothing
+  reaches Amazon unless you say yes here". The second half of that sentence —
+  that today a yes writes nothing either — is state-dependent, and S2 and the
+  card already say it. **An invariant that will need rewording the day Phase F
+  lands is not an invariant.** This wording stays true in both worlds.
+
+**The header control:** `? How approvals work` — the words kept visible, not a
+bare `?` icon (the standing preference is visibility over minimalism, and a
+non-technical operator should not have to guess an icon).
+
+### 12.4.3 Type, colour, spacing — exact
+
+**Two sizes in S1, not seven.** 20px for the title, 13px for everything else in
+the block; 12px only inside the header control, which has its own border and is
+therefore allowed its own scale.
+
+| Element | Size / weight | Colour | On | Contrast |
+|---|---|---|---|---|
+| `h1` *Approvals* | 20 / 650, `-0.01em` | `#1c2530` | `#f4f6f9` | 14.30 |
+| Description line 1 | 13 / 600 | `#1c2530` | `#f4f6f9` | 14.30 |
+| Description line 2 | 13 / 400 | `#55616f` | `#f4f6f9` | **6.02** (was 4.41) |
+| `? How approvals work` | 12 / 500 | `#46536a` | `#ffffff` | 7.66 |
+| The rule | 1px `#e4e9ef` | — | — | non-text |
+| Drawer heading | 13 / 650 | `#1c2530` | `#ffffff` | 15.48 |
+| Drawer prose | 13 / 400, `line-height 1.7` | `#35414f` | `#ffffff` | 10.87 |
+
+Every text value ≥ 4.5:1, each measured **in place against the surface it
+actually sits on** — the trap Activity recorded (`#6b7684` passes on white and
+fails on `#f4f6f9`).
+
+**Vertical rhythm**, 4px grid:
+
+```
+h1                              30px line box
+  4
+description line 1              19.5px
+  2
+description line 2 (wraps to 2) 39px
+ 16
+──── 1px rule #e4e9ef ────      full content width
+ 14
+S2 · gate state (unchanged)
+```
+
+S1's footprint: **155px → ~104px**, and 276 words leave the page flow.
+
+**Reading measure is specified, not left to the container.** Every prose element
+in S1 gets an explicit cap — `max-width: 76ch` on the description, and the drawer
+is 520px wide, which puts its body at ~72 chars/line. Nothing in S1 will exceed
+[WCAG 1.4.8][wcag148]'s 80-character ceiling at any viewport width. This is the
+single change that fixes the "wall" measurably rather than aesthetically.
+
+**Target sizes.** The header control is 30px tall (padding 6/11 at 12px), against
+today's 18.8px — comfortably over SC 2.5.8's 24px without relying on the Spacing
+exception.
+
+### 12.4.4 The teaching drawer — the specification
+
+A **DS `Drawer`** at `width={520}`, byte-for-byte the pattern
+`assignments/HowAssignmentsWork.tsx` already ships: `<h4>` section heads, prose
+beneath, portalled, Esc-closable, backdrop-closable. One component for one
+concept across the fleet; nothing new is invented.
+
+Six sections, **headings rewritten as answers** per GOV.UK — the reader learns
+six facts from the headings alone:
+
+| Today's lead (a question) | Proposed lead (the answer) |
+|---|---|
+| *Who is allowed to ask you.* | **Only a worker set to PROPOSE can ask you.** |
+| *What was already refused before you saw it.* | **The critic has already said no to everything it could.** |
+| *What happens the moment you say yes.* | **A yes waits twenty seconds before anything happens.** |
+| *What happens if you say nothing.* | **Silence becomes a no after 24 hours.** |
+| *Whose name goes on the record.* | **Your name goes on every decision taken here.** |
+| *What this page cannot do.* | **This page decides; it does not change what a worker may do.** |
+
+The hours figure keeps reading from the live `gate.expiry.hours` rather than
+being retyped — that is how the glossary drifted 7× in the first place (AQ.0).
+
+**The stale paragraph is corrected**, and this is a content fix, not a wording
+one: the sixth section now says an operator *can* change a number before
+approving it, that the edit replaces the worker's request rather than editing it
+in place, and that it is re-checked by the same code that produced the original —
+which is what AQ.8 built and proved on production.
+
+**No `<Term>` inside the drawer**, and the reason is checkable rather than
+stylistic: `.h10-ds-drawer-b` is `overflow-y: auto`, and `.acr-term-tip` is an
+absolutely-positioned box that opens *upward* out of its line — so a tooltip in a
+drawer is clipped by its own scroll container. `HowAssignmentsWork` imports no
+`Term` either. The drawer *is* the long-form definition surface; tooltips serve
+the terse inline copy.
+
+### 12.4.5 Every state S1 must render
+
+The point of making S1 an invariant is that this table is mostly one row. That is
+the design working, not a gap in it.
+
+| State | S1 renders | Why |
+|---|---|---|
+| **First paint / loading** | Identical. Title, description, rule, control — all static, all server-rendered | S1 reads no data, so it cannot flicker, shift or skeleton. The 347px shift below it is S2's (§12.7) |
+| **Fleet off, nothing can arrive** *(today)* | Identical | The invariant is still true; S2 says why nothing is here |
+| **Fleet on, queue empty** | Identical | |
+| **Queue full (1–400 rows)** | Identical | This is the requirement the promise exists for. Because it is the page description and not a banner inside the empty state, it cannot disappear exactly when volume makes rubber-stamping tempting |
+| **API unreachable** | Identical; the error paragraph renders **below** the rule, where it already does | An error is about today's data, not about what the page is |
+| **Fleet halted** | Identical | The halt is S2's sentence and already rendered there |
+| **Narrow / 200% zoom** | Identity block wraps; the control is `flex-shrink: 0` and never wraps; `flex-wrap: wrap` on the header lets it drop to its own line below ~560px | Matches Activity's header behaviour exactly |
+
+### 12.4.6 Colour and spacing decision — am I introducing tokens?
+
+**No new tokens, and no new colour values.** Three reasons, in order of weight:
+
+1. **S1 stops carrying semantic colour entirely.** Nothing in it is a state, so
+   nothing in it needs a tone. The green box is removed rather than repainted.
+2. **The neighbours are literal hex.** `control-room.css` and `fleet-sections.css`
+   hard-code theirs, and `.fleet-surface`'s own comment sets the rule for this
+   subtree: *"inside `.fleet-surface` semantic tokens are WHOLE COLOURS"*, with a
+   standing prohibition on Tailwind colour utilities that read them as triplets
+   (`reference_ds_token_triplet_collision`). Mixing conventions inside one
+   section is how that class of defect is born. Activity's S1R made the same call
+   and wrote the reasoning into its stylesheet; this copies it.
+3. **Every value I use already exists in the fleet for the same role** —
+   `#1c2530` (primary ink), `#55616f` (description, from Activity S1R), `#e4e9ef`
+   (the rule, from Activity S1R), `#46536a`/`#d7dee7` (the header control, from
+   `control-room.css`'s `.acr-refresh`, which was written for this slot).
+   Same role → same value → the two pages cannot drift.
+
+The DS **components** are used where a component is the answer: `Drawer` for the
+teaching layer. The DS is not used to restyle `acr-*` prose, which would be a
+rewrite of two files owned elsewhere to solve a problem scoping already solves.
+
+### 12.4.7 Where the CSS lives
+
+A new page-local root, **`.aq-page`**, set in this page's own `page.tsx` —
+matching `.sba-page` (Activity), `.wf-page` (Workflows) and `.as-page`
+(Assignments). Deliberately **not** hung on `.acr-fleet` or `.acr`, which
+siblings also carry: a page-local stylesheet survives a client-side route change,
+so an override on a shared class silently restyles a neighbour's page. That trap
+is recorded in the locks file by the Workflows stream, which hit it first.
+
+`.acr-sub`'s 4.41:1 is fixed **under `.aq-page`**, not in the shared file. This
+is the **fourth** fleet page to work around that value page-locally, which is the
+point at which the central fix costs less than the workarounds — the number is
+posted again in §12.8 for whoever wants to take it. I am not claiming
+`control-room.css`.
+
+---
+
+## 12.5 — The tooltip inventory
+
+Every piece of jargon in S1, today and as proposed, with a decision for each. The
+one-definition rule means a word is either tagged everywhere it is jargon or is
+not jargon here.
+
+### 12.5.1 S1's own copy
+
+| Term | In S1 today | Glossary entry | Decision |
+|---|---|---|---|
+| **worker** | untagged, in the promise (*"your AI workers"*) | ✓ `worker` | **Tag it.** First occurrence in the description, once |
+| **the fleet** | untagged, in `.acr-sub` **and** the promise | ✗ none — `running` is titled "Fleet status", which is a different idea | **Remove the word from S1.** The description says "one of your workers". No glossary claim needed |
+| **Amazon** | plain | n/a | Leave |
+| **card** | plain | ✗ | Leave — plain English for the thing on screen, not jargon |
+| **approval** | not in S1 today | ✓ `approval` | Not used in S1's copy; it is tagged in S4's empty state already |
+| **gate** | not in S1 today | ✓ — but defined as a **workflow** step gate | **Never tag it on this page.** If S1 copy ever says "gate" in the approvals sense it would collide with a shipped definition. Avoided in the proposed copy |
+
+### 12.5.2 The drawer's vocabulary
+
+No `<Term>` inside the drawer (§12.4.4 — the scroll container clips it). Every
+word below is therefore **defined in the drawer's own prose**, which is what a
+drawer is for. Listed so the audit is complete and so nobody later "fixes" the
+missing tooltips:
+
+| Word | Glossary entry exists | Handled in the drawer by |
+|---|---|---|
+| PROPOSE | ✓ `propose` | The heading itself is the definition: *"Only a worker set to PROPOSE can ask you"*, then one sentence on OBSERVE and OFF |
+| OBSERVE / OFF | ✓ `observe`, `off` | Same sentence |
+| critic | ✓ `critic` | *"an adversarial reviewer whose job is to find reasons to say no"* — kept verbatim, it is good |
+| undo window | ✓ `undo-window` | The twenty-second section explains it in full |
+| expire | ✓ inside `approval` | *"Silence becomes a no after 24 hours"* + the sweep cadence, both read from `gate.expiry` |
+| precedent | ✓ `exemplar` | One sentence in the name section |
+| preview only | ✓ `preview-only` | One pointer to S2, which is where the live count is |
+
+**Glossary changes required: none.** `glossary.tsx` is not claimed, not edited,
+and not appended to by this engagement. Every word S1 needs is already defined,
+and the one word it would have needed (`fleet`) is removed from the copy instead.
+
+### 12.5.3 The mechanism, measured
+
+| Check | Result |
+|---|---|
+| Keyboard reachable | ✓ `tabIndex={0}`; tooltip opens on `:focus`, verified with real document focus |
+| Tab order sane | ✓ — in S1 the order is *How approvals work* → (rule) → S2's controls |
+| Contrast | ✓ 12.94:1, 12px/18.6px |
+| Clipped by an ancestor | ✗ not on this page — 36px clearance inside `.aq-gate`'s `overflow: hidden` |
+| Readable at 200% | not measurable in this harness (see §12.6); **verified in the build** |
+| **WCAG 1.4.13 Dismissible** | **✗ fails** — no Esc handler |
+| **WCAG 1.4.13 Hoverable** | **✗ fails** — `pointer-events: none`; hit-test at the tooltip's centre returns the element behind it |
+
+The two failures are in the **shared** `Term` component and its rules in
+`control-room.css`. Fixing them changes the tooltip on all ten fleet pages, so it
+is **phase S1.d and it is optional** — offered, costed, and not taken without a
+word from the operator (§12.6).
+
+---
+
+## 12.6 — Build order, if approved
+
+Four phases, each independently shippable, each committed, pushed and
+prod-verified before the next.
+
+| Phase | What | Files | Risk |
+|---|---|---|---|
+| **S1.a** | **The shell and the identity block.** Adopt `FleetPageShell` (no change to the shell itself — `aside` already exists); `.aq-page` root; description replaces `.acr-sub` + `.aq-promise`; the 1px rule; the `.acr-sub` contrast fix page-locally; `StandingPromise()` and `.aq-promise` deleted | `approvals/page.tsx`, `ApprovalsClient.tsx`, `approvals.css` | None shared |
+| **S1.b** | **The teaching drawer.** New `HowApprovalsWork.tsx` on the DS `Drawer` at 520px; six front-loaded sections; **the stale amend paragraph corrected**; trigger moves into the header `aside`; `HowThisWorks()`, `.aq-how`, `.aq-howbody` and the borrowed `.acr-fl-checkstoggle` retired from this page | `approvals/HowApprovalsWork.tsx` (new), `ApprovalsClient.tsx`, `approvals.css` | None shared |
+| **S1.c** | **The tooltip pass and the measured close-out.** Tag `worker` once; re-measure every value in §12.4.3 in the browser on prod; geometry, not presence; 200% zoom; keyboard walk | `ApprovalsClient.tsx` | None shared |
+| **S1.d** | ⚠ **OPTIONAL, needs the operator's word — the WCAG 1.4.13 repair.** Make `<Term>` dismissible (Esc) and hoverable (drop `pointer-events: none`, add a small exit tolerance). **Lands on all ten fleet pages at once** and touches `glossary.tsx` + `control-room.css`, both shared. My recommendation: **yes, but as its own engagement with its own claim**, not folded into an S1 commit where a regression on nine other pages would be attributed to a header rebuild | `glossary.tsx`, `control-room.css` | **Shared — a claim in the locks file, and a note to every stream** |
+
+**Verification method for every phase**, since four ways to check this page are
+known to fail (curl cannot see the rendered page; the shell chunk hash is not a
+deploy discriminator; a relative fetch hits Vercel not Railway; an empty queue
+shows no card):
+
+- **Deploy detection** — fetch the deployed route chunk and grep it for a string
+  unique to the phase. The bundle is public, so this works unauthenticated.
+- **Geometry, not presence** — `getBoundingClientRect` against `innerWidth`; the
+  header's second child must be non-zero and the dead space must be gone.
+- **Contrast in place** — `getComputedStyle` + the resolved background, not the
+  intended one.
+- **Measure** — a canvas text measurement per prose element, asserting ≤ 80
+  chars/line at 1728px.
+- No card seeding is needed: **S1 renders identically at 0 rows and 400**, which
+  is the whole design. `_apx-seed-card.mts` is not touched, and the table stays
+  at 18.
+
+**One harness limitation, stated rather than papered over.** `resize_window` did
+not change this tab's CSS viewport (it stayed 1728 while `outerWidth` went to
+756), so media-query behaviour could not be exercised by resizing. The narrow-width
+numbers in §12.3 row 7 come from a **container** probe, which exercises the
+auto-fit grid and flex wrapping but **does not fire a media query** — a trap the
+Workflows stream recorded. Media-query behaviour is verified in the build with a
+real window, or it is reported as unverified.
+
+---
+
+## 12.7 — Found while auditing S1, belongs to S2–S5, LEFT ALONE
+
+Recorded so they are not re-derived, and so it is clear they were seen and not
+silently absorbed into an S1 commit.
+
+1. **347px of load shift.** The queue card paints at `top: 175` and lands at
+   `top: 522` once `/gate-state` resolves; nothing reserves the space. The fix is
+   S2's: render the section's box while the read is in flight, or reserve its
+   height. Measured by hiding `.aq-gate` and re-reading the queue's top.
+2. **Two AA contrast failures in S2/S5**, measured in place:
+   `.aq-can` / `.aq-cannot` (10.5px/600) `#6b7688` on `#f4f6f9` = **4.24:1**, and
+   `.aq-gate-ok` (12.5px) `#2f855a` on `#f4f6f9` = **4.20:1**. The second is the
+   line that will be on screen *every day* once the fleet is switched on — the
+   open-pipe state — and it is the least legible thing on the page.
+   `.aq-outnone` (S5) is the same `4.24:1`.
+3. **S2's tile headings are 11px.** Below the 12px floor the rest of the fleet
+   holds, and at 4.59:1 they clear AA by 0.09.
+4. **Four background tints and three border radii** across S1+S2. S1's
+   contribution disappears in this rebuild; S2 keeps `#fffdf6`/`#fff` at 8px and
+   6px.
+5. **`FleetTab.tsx:275` on the Overview still sends `content-type:
+   application/json` with no body** — the bug fixed on this page on 2026-08-08
+   (`FST_ERR_CTP_EMPTY_JSON_BODY`, a silent 400 that made undo do nothing). Not
+   this stream's file; flagged again because it is still live.
+
+---
+
+## 12.8 — For the other streams
+
+- **The `.acr-sub` 4.41:1 override is now on its fourth page.** Activity
+  (`.sba-page`), Workflows (`.wf-page`), Assignments (`.as-page`) and — if this
+  is approved — Approvals (`.aq-page`) will each carry the same one-line fix for
+  the same shared value in `control-room.css`. Four workarounds is past the point
+  where the central fix is cheaper. **No claim taken, and the value is posted so
+  whoever takes it does not have to re-measure: `#667485` → `#55616f` is 4.41 →
+  6.02 on `#f4f6f9`.**
+- **For Activity (`SB.ACT`): thank you for the `aside` slot, and one ask.** Your
+  `Freshness` component is page-agnostic and three pages now want the same
+  object — Assignments said so in the locks file, and this page has an `as of`
+  stamp buried inside its queue card head. **If you extract it to
+  `_shared/Freshness.tsx` I will consume it and delete mine; I will not fork it,
+  and I am not asking you to do it on my timetable.** Nothing in S1.a–S1.c
+  depends on it.
+- **For every stream: a `<Term>` inside a DS `Drawer` is clipped.**
+  `.h10-ds-drawer-b` is `overflow-y: auto` and `.acr-term-tip` opens upward out
+  of its line. `assignments/HowAssignmentsWork.tsx` already avoids this (no
+  `Term` import); now it is written down rather than folklore.
+- **For every stream: the shared `<Term>` fails two of WCAG 1.4.13's three
+  requirements** (§12.5.3). It is nobody's fault and it is on all ten pages. I
+  have offered to fix it as its own claimed unit (S1.d); if another stream would
+  rather own it, take it — say so here and I will drop the phase.
+
+---
+
+## 12.9 — What I am explicitly NOT doing
+
+- **S2 through S10.** The gate-state section, the queue card, the lists, the
+  decision card, the outside queue, the precedent panel, the record — untouched,
+  including the five defects in §12.7. If the operator wants the gate-state
+  section rebuilt, that is the next engagement and it is the bigger one.
+- **No glossary edits.** No claim on `glossary.tsx`, no new terms, nothing
+  appended. Every word S1 needs already has a definition, and the one that did
+  not (`fleet`) is removed from the copy instead of minted.
+- **No shared-file edits in S1.a–S1.c.** `FleetPageShell` is *used*, not
+  modified. `fleet-pages.css`, `control-room.css` and `fleet-sections.css` are
+  not touched. S1.d is the only phase that would touch shared ground and it is
+  opt-in.
+- **No backend, no endpoint, no migration.** S1 reads no data at all — that is
+  the design, not an omission.
+- **No sticky promise.** The approved AQ-S1 text says "a persistent two-line
+  promise that does not scroll away". **This is the one place I depart from the
+  approved study, and the operator should overrule me if they disagree.** The
+  property that actually mattered — that the promise is not inside the empty
+  state, so it cannot vanish when the queue fills — is *better* served by making
+  it the page description, which is present in every state including a full
+  queue. A genuinely sticky element spends viewport forever on the element the
+  habituation literature says will be ignored fastest, and the guarantee is
+  restated at the point of decision on every card anyway (AQ.3).
+- **No `Cmd+K` palette.** AQ-S1's original text names one. The same argument
+  AQ.4 used to defer the keyboard map applies unchanged: a palette over a queue
+  with no rows has nothing to move around and cannot be verified by anyone. It
+  belongs with AQ.5, where filters and the queue-shape strip give it something to
+  act on.
+- **No badge, no count, no status in the header.** Helios allows badges; three
+  other surfaces already own this number (the rail badge, S2, S3's tiles), and a
+  fourth copy is a fourth thing to keep in sync.
+- **No new component in the DS.** Everything S1 needs — `Drawer`, the shell —
+  already exists.
+
+---
+
+## 12.10 — Sources
+
+**Page-header anatomy** — [HashiCorp Helios · Page Header][helios] ·
+[GitHub Primer · PageHeader][primer]
+
+**Help, disclosure and tooltips** — [GitLab Pajamas · Contextual help and
+info][pajamas] · [NN/g · Progressive Disclosure][nngpd] · [NN/g · Tooltip
+Guidelines][nngtool] · [Adobe Spectrum · Contextual help][spectrum]
+
+**Writing for a non-expert reader** — [GOV.UK · Create a clear
+structure][govukstructure]
+
+**Standing statements, banners and habituation** — [Atlassian Design System ·
+Section message][atlassian] · [IBM Carbon · Notification pattern][carbon] ·
+Anderson et al., *How Polymorphic Warnings Reduce Habituation in the Brain*,
+[CHI 2015][chi] · Vance et al., [*A Longitudinal fMRI Study of Habituation and
+Polymorphic Warnings*][byu]
+
+**Empty-first surfaces** — [Shopify · Empty state pattern][shopifyempty]
+
+**Accessibility** — [WCAG 2.2 · 1.4.13 Content on Hover or Focus][wcag1413] ·
+[WCAG · 1.4.8 Visual Presentation (80 characters)][wcag148] ·
+[WCAG 2.2 · 2.5.8 Target Size (Minimum)][wcag258]
+
+**In-repo** — the memory `reference_ds_token_triplet_collision` and the comment
+block in `app/fleet/fleet-pages.css` (why this subtree is literal hex) ·
+`docs/2026-08-07-naf-sbact-activity-page.md` Part 18 (the header rebuild this
+page follows) · `app/fleet/assignments/HowAssignmentsWork.tsx` (the teaching
+drawer this page copies)
+
+[helios]: https://helios.hashicorp.design/components/page-header
+[primer]: https://primer.style/product/components/page-header/
+[pajamas]: https://design.gitlab.com/usability/contextual-help
+[nngpd]: https://www.nngroup.com/articles/progressive-disclosure/
+[nngtool]: https://www.nngroup.com/articles/tooltip-guidelines/
+[spectrum]: https://spectrum.adobe.com/page/contextual-help/
+[govukstructure]: https://guidance.publishing.service.gov.uk/writing-to-gov-uk-standards/writing-guidelines/clear-structure/
+[atlassian]: https://atlassian.design/components/section-message/usage
+[carbon]: https://carbondesignsystem.com/patterns/notification-pattern/
+[chi]: https://dl.acm.org/doi/10.1145/2702123.2702322
+[byu]: https://scholarsarchive.byu.edu/facpub/9293/
+[shopifyempty]: https://shopify.dev/docs/api/app-home/patterns/compositions/empty-state
+[wcag1413]: https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html
+[wcag148]: https://www.w3.org/WAI/WCAG22/Understanding/visual-presentation.html
+[wcag258]: https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html
