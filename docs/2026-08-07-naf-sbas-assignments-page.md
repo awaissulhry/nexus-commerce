@@ -1165,6 +1165,47 @@ and what to do instead.
 
 **29 web tests**, both apps clean, DS ratchet green.
 
+### AS.5 — EXECUTED 2026-08-08, attribution that survives the night
+
+**The problem, restated exactly.** `AgentFinding` has ONE `runId`, and the
+upsert's update branch rewrites it on every re-detection. So a finding produced
+by an assignment silently re-attributes to whichever run noticed it most
+recently — usually the next nightly sweep. No error, no warning: *"what this
+assignment found"* just becomes shorter overnight. The detail page carried an
+honest caveat about this since AS.1; it is now gone because the defect is.
+
+**Why `firstRunId` was rejected** (the study's own first answer): freezing the
+column picks a *different* lie. The finding unique is
+`(charterKey, entityType, entityId, dedupeKey)` and carries **no scope**, so two
+assignments over overlapping evidence collide on one row — the second would
+render "found nothing" while its findings sat under the first's name. Both
+failures are asserted in `assignment-attribution.vitest.test.ts`, including a
+test that **demonstrates the old bug** so the reason for the join cannot be
+forgotten.
+
+**Shipped:** `AgentFindingRun` (composite PK, `@@index([runId])`, migration
+`20260808a`, applied clean to prod) · written on **both** upsert branches,
+because a re-detection is a real detection by that run · one batched insert with
+`skipDuplicates`, so a model emitting the same `dedupeKey` twice cannot fail a
+run · `getAssignment` reads findings through the join · **evidence provenance**
+on the detail page: the observation rows the findings cite, with their vintages,
+so a stale-evidence stop is explainable without opening a trace.
+
+**One judgement the tests forced, worth recording.** The first version let the
+join write throw. Ten existing executor tests went red, and the reason was the
+real signal rather than a mock gap: **if that bookkeeping insert fails, a run
+that has already persisted its findings and already paid for its model call
+would be marked Failed.** The operator would see a failure for work sitting on
+the board. So it degrades loudly instead — caught, logged with the run id and
+count, run unaffected. Losing attribution is the smaller loss; destroying a
+completed run to protect a foreign key is not a trade worth making.
+
+**Verified:** table exists on prod, read path clean, 385 tests across 42 files.
+**Honest limit:** the join holds **zero rows**, and will until an assignment is
+actually started — which spends real money on a fleet deliberately switched off,
+so it is the operator's call, not mine. The mechanism is proven by test and by
+schema, not yet by a live row.
+
 ---
 
 **One deliberate deviation from Part 3.4, stated rather than skipped.** The study

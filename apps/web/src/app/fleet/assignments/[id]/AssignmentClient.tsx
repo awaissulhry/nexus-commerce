@@ -67,8 +67,12 @@ interface Detail {
     entityId: string
     entityName: string | null
     rationale: string
+    evidenceRefs: string[]
+    dataVintage: string
     createdAt: string
   }[]
+  findingTotal: number
+  evidence: { id: string; key: string; dataVintage: string; computedAt: string }[]
 }
 
 export function AssignmentClient({ id }: { id: string }) {
@@ -402,12 +406,24 @@ export function AssignmentClient({ id }: { id: string }) {
             </div>
           ))}
           <p className="as-caveat">
-            Showing up to 12. A <Term k="finding">finding</Term> here is a note
-            for you — nothing reaches Amazon without passing through Approvals.
-            One honest caveat while this is new: a finding records the run that
-            most recently <em>re-detected</em> it, so if a nightly sweep later
-            sees the same thing, it will move off this list. That is being fixed.
+            {a.findingTotal > a.findings.length
+              ? `Showing 12 of ${a.findingTotal}. `
+              : ''}
+            A <Term k="finding">finding</Term> here is a note for you — nothing
+            reaches Amazon without passing through Approvals. These stay
+            attributed to this assignment even if a later sweep sees the same
+            thing again.
           </p>
+          {a.evidence.length > 0 && (
+            <p className="as-caveat">
+              <strong>What they were read from:</strong>{' '}
+              {a.evidence
+                .map((e) => `${e.key} (data as of ${new Date(e.dataVintage).toLocaleString()})`)
+                .join(' · ')}
+              . If a run ever stops because the evidence was too old, this is
+              the date it was judged against.
+            </p>
+          )}
         </div>
       )}
 

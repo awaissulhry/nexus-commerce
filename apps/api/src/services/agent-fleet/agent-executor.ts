@@ -24,6 +24,7 @@ import {
 } from '@nexus/shared/agent-fleet'
 import { foldPlanBlast } from './plan-blast.js'
 import prisma from '../../db.js'
+import { logger } from '../../utils/logger.js'
 import {
   getProviderForFeature,
   resolveModelForFeature,
@@ -629,6 +630,8 @@ export async function executeCharter(
     let dropped = 0
     let scanned: number | null = null
     let notes: string | null = null
+    /** NAF.SB.AS.5 — every finding THIS run detected, new or re-detected. */
+    const detectedFindingIds: string[] = []
     if (charter.outputSchemaKey === 'analyst-output') {
       const out = validated.data as AnalystOutputT
       scanned = out.scanned
@@ -636,7 +639,7 @@ export async function executeCharter(
       const kept = out.findings.slice(0, charter.maxFindingsPerRun)
       dropped = out.findings.length - kept.length
       for (const f of kept) {
-        await prisma.agentFinding.upsert({
+        const saved = await prisma.agentFinding.upsert({
           where: {
             charterKey_entityType_entityId_dedupeKey: {
               charterKey: key,
@@ -685,7 +688,42 @@ export async function executeCharter(
             status: 'open',
           },
         })
+        detectedFindingIds.push(saved.id)
         findingCount++
+      }
+
+      /**
+       * NAF.SB.AS.5 — record which runs detected which finding.
+       *
+       * Written for BOTH branches of the upsert above, because a re-detection
+       * is a real detection by this run. `AgentFinding.runId` cannot carry
+       * this: its update branch rewrites it, so a finding produced under an
+       * assignment silently re-attributes to the next sweep that sees it.
+       *
+       * One batched insert, and `skipDuplicates` makes it idempotent — a model
+       * that emits the same dedupeKey twice in one reply must not fail a run
+       * that has already been paid for.
+       */
+      if (detectedFindingIds.length) {
+        // NOT fatal, and the reasoning matters: the findings themselves are
+        // already persisted above, and the model call is already paid for. If
+        // this bookkeeping insert failed and took the run down with it, the
+        // operator would see "Failed" for a run whose output is sitting on the
+        // board — the cost charged, the work done, the result hidden. Losing
+        // attribution is the smaller loss, so it degrades loudly in the log
+        // rather than destroying a completed run.
+        await prisma.agentFindingRun
+          .createMany({
+            data: detectedFindingIds.map((findingId) => ({ findingId, runId: run.id })),
+            skipDuplicates: true,
+          })
+          .catch((err) => {
+            logger.error('[naf-as] failed to record finding attribution', {
+              runId: run.id,
+              findings: detectedFindingIds.length,
+              error: String(err),
+            })
+          })
       }
     }
 

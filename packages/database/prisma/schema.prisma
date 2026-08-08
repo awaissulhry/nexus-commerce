@@ -15920,3 +15920,28 @@ model AgentAssignment {
   @@index([state, createdAt])
   @@index([charterKey, createdAt])
 }
+
+/// NAF.SB.AS.5 — which runs detected which finding.
+///
+/// `AgentFinding.runId` cannot answer this. The upsert's UPDATE branch rewrites
+/// it on every re-detection, so a finding produced by an assignment silently
+/// re-attributes to whichever run saw it most recently — typically the next
+/// nightly sweep. "What this assignment found" would quietly become "what the
+/// last run to notice these things found", with no error and no visible change.
+///
+/// Freezing `runId` instead (a `firstRunId` column) only picks a different lie:
+/// the finding unique is (charterKey, entityType, entityId, dedupeKey) and
+/// carries NO scope, so two assignments over overlapping evidence collide on one
+/// row — the second would render "found nothing" while its findings sat under
+/// the first assignment's name.
+///
+/// A finding legitimately belongs to every run that detected it. This records
+/// exactly that, and leaves `AgentFinding.runId` untouched.
+model AgentFindingRun {
+  findingId  String
+  runId      String
+  detectedAt DateTime @default(now())
+
+  @@id([findingId, runId])
+  @@index([runId])
+}

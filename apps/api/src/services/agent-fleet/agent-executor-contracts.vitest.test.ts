@@ -11,6 +11,10 @@ vi.mock('../../db.js', () => ({
     agentRun: { create: vi.fn(), update: vi.fn(), aggregate: vi.fn() },
     agentObservation: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
     agentFinding: { upsert: vi.fn() },
+    // NAF.SB.AS.5 — the executor records which runs detected which
+    // finding. Declared here because a missing model on the mock throws
+    // on property access, before any .catch can attach.
+    agentFindingRun: { createMany: vi.fn(async () => ({ count: 0 })) },
     agentStep: { create: vi.fn() },
     agentFleetState: { upsert: vi.fn() },
     cronRun: { groupBy: vi.fn() },

@@ -456,14 +456,28 @@ export async function getAssignment(id: string) {
   })
   const rollups = runs.map(toRollup)
 
-  // Findings this assignment's runs produced. Honest caveat, surfaced to the
-  // UI rather than hidden: AgentFinding.runId is REWRITTEN on every
-  // re-detection, so a finding first seen here re-attributes to whichever run
-  // saw it most recently. AS.5 fixes that with a join table; until then the
-  // page says so rather than implying the list is complete.
-  const findings = runs.length
-    ? await prisma.agentFinding.findMany({
+  /**
+   * NAF.SB.AS.5 — findings THIS assignment's runs detected, read through the
+   * join rather than `AgentFinding.runId`.
+   *
+   * `runId` is rewritten by the upsert's update branch on every re-detection,
+   * so reading it here would quietly hand this assignment's findings to
+   * whichever run noticed them most recently — usually the next nightly sweep.
+   * The join records every run that detected a finding, which is the true
+   * relationship and survives re-detection by anyone.
+   */
+  const links = runs.length
+    ? await prisma.agentFindingRun.findMany({
         where: { runId: { in: runs.map((r) => r.id) } },
+        orderBy: { detectedAt: 'desc' },
+        select: { findingId: true },
+        take: 200,
+      })
+    : []
+  const findingIds = [...new Set(links.map((l) => l.findingId))]
+  const findings = findingIds.length
+    ? await prisma.agentFinding.findMany({
+        where: { id: { in: findingIds } },
         orderBy: { createdAt: 'desc' },
         take: 12,
         select: {
@@ -474,8 +488,23 @@ export async function getAssignment(id: string) {
           entityId: true,
           entityName: true,
           rationale: true,
+          evidenceRefs: true,
+          dataVintage: true,
           createdAt: true,
         },
+      })
+    : []
+
+  /**
+   * NAF.SB.AS.5 — the evidence the findings cite, with its vintage. This is
+   * what makes a stale-evidence stop explainable without opening a trace, and
+   * what makes "what it was allowed to see" auditable after the fact.
+   */
+  const evidenceIds = [...new Set(findings.flatMap((f) => f.evidenceRefs))]
+  const evidence = evidenceIds.length
+    ? await prisma.agentObservation.findMany({
+        where: { id: { in: evidenceIds } },
+        select: { id: true, key: true, dataVintage: true, computedAt: true },
       })
     : []
 
@@ -497,6 +526,9 @@ export async function getAssignment(id: string) {
       : null,
     runs: rollups,
     findings,
+    evidence,
+    /** Total detected, so the capped list can say what it is a slice of. */
+    findingTotal: findingIds.length,
     costUSD: rollups.reduce(
       (s, r) => s + (r.haltedReason?.startsWith('orphaned:') ? 0 : r.costUSD),
       0,
