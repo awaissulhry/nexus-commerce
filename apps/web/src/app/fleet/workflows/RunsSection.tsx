@@ -56,15 +56,22 @@ function groupOutcome(g: RunGroup): {
   return { chip: 'fail', word: 'failed', why: bits.join(' · ') || null }
 }
 
-/** One mark per worker in the orchestration, coloured by how that worker's run
- *  ended — so a group answers "how did the pieces go" without being expanded.
- *  Same vocabulary as the run bars on the list. */
-function StepMarks({ g }: { g: RunGroup }) {
+/** Who ran, and how each one went — on the summary line, so the row answers
+ *  the question expansion was the only way to ask. Naming them is what earns
+ *  the column its width: with only a status word in it the cell filled 14% of
+ *  45.9% of the table. Expansion still adds each worker's cost, duration and
+ *  the link to its full story. */
+function StepPills({ g, nameByKey }: { g: RunGroup; nameByKey: Map<string, string> }) {
   return (
-    <span className="wf-stepmarks" aria-hidden>
+    <span className="wf-steppills">
       {g.rows.map((r) => {
         const o = runOutcome(r)
-        return <span key={r.id} className={`wf-stepmark ${o.chip}`} title={o.text} />
+        return (
+          <span key={r.id} className="wf-steppill" title={`${nameByKey.get(r.agentKey) ?? r.agentKey} — ${o.text}`}>
+            <span className={`wf-stepmark ${o.chip}`} aria-hidden />
+            {nameByKey.get(r.agentKey) ?? r.agentKey}
+          </span>
+        )
       })}
     </span>
   )
@@ -173,7 +180,7 @@ export function RunsSection({
                       <td>
                         <span className="wf-outcell">
                           <span className={CHIP_WORD[o.chip]}>{o.word}</span>
-                          <StepMarks g={g} />
+                          <StepPills g={g} nameByKey={nameByKey} />
                         </span>
                       </td>
                       {/* A known zero is a zero. An em-dash on this page means

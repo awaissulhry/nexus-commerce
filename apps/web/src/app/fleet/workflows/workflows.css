@@ -800,15 +800,30 @@
 .wf-runs col.wf-c-when { width: 130px; }
 .wf-runs col.wf-c-prov { width: 210px; }
 .wf-runs col.wf-c-out  { width: auto; }
+.wf-runs col.wf-c-num  { width: 118px; }
 .wf-runs col.wf-c-num  { width: 120px; }
 .wf-runs col.wf-c-exp  { width: 150px; }
 
 .wf-outcell { display: inline-flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 
-/* One mark per worker, coloured by how that worker's run ended — so a group
-   answers "how did the pieces go" without being expanded. Same vocabulary as
-   the run bars on the list. */
-.wf-stepmarks { display: inline-flex; gap: 3px; align-items: center; }
+/* Who ran, and how each went, on the summary line — the row answers what
+   expansion used to be the only way to ask. Same colour vocabulary as the run
+   bars on the list. */
+.wf-steppills { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.wf-steppill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: #5f6a78;
+  background: #f4f7fa;
+  border: 1px solid #e6ebf1;
+  border-radius: 6px;
+  padding: 1px 8px 1px 6px;
+  white-space: nowrap;
+  cursor: help;
+}
 .wf-stepmark {
   width: 7px;
   height: 7px;
