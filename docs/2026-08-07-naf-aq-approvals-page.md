@@ -2618,20 +2618,58 @@ done the most damage, and proven absent.
    flow, behind one control, structured under six scannable answers, at a third
    of the line length. "Fewer words" was never the goal; "not a wall" was.
 
-### What this session could not verify, stated rather than papered over
+### The three checks that were open, now closed
 
-- **Real-keyboard Escape on the drawer.** The harness's key injection does not
-  reach the page's `document` listener — the same artifact that made
-  `el.focus()` not match `:focus` until the page was clicked. A *synthetic*
-  `keydown` closes the drawer and the backdrop click closes it, so the handler
-  is present and correct, but it is the DS `Drawer`'s own shipped behaviour and
-  not something this change introduced.
-- **Media-query behaviour at narrow viewports.** `resize_window` did not change
-  this tab's CSS viewport (it stayed 1728 while `outerWidth` went to 756), so
-  the narrow-width evidence is a **container** probe — it exercises flex
-  wrapping and the auto-fit grid and does **not** fire a media query. No
-  horizontal overflow was produced at any container width, and none at a 200%
-  zoom proxy.
+The first pass left three items unverified and said so. All three are closed,
+with real keyboard input and against the deployed page.
+
+**1 · Responsive — and the container probe turned out to be the *correct* test,
+not a fallback.** `resize_window` never changed this tab's CSS viewport
+(`innerWidth` stayed 1728 while `outerWidth` went to 0), and a sized popup was
+blocked, so real viewport control is simply not available in this harness. That
+matters less than it first appeared, because **S1 contains no media queries at
+all** — verified from source: `approvals.css`'s only `@media` targets
+`.aq-gate-grid`, which is S2's; `control-room.css` has no `@media` touching
+`.acr-head`, `.acr-sub` or `.acr-term`; and the single query affecting S1's
+container is `fleet-pages.css`'s `@media (min-width: 768px)` changing
+`.fleet-surface`'s margin from −12 to −24px, i.e. **a 24px container-width
+change** — exactly what a container probe varies. S1's responsiveness is
+`flex-wrap` + `max-width` + `flex-shrink: 0`, all container-driven.
+
+Probed across nine widths on the deployed page:
+
+| `.acr` width | header height | description | control | overflow |
+|---|---|---|---|---|
+| 1662 → 744 | 110px, one row | 476px = **75 chars** | 160×31, right | none |
+| 640 | 160px, **control wraps to its own line** | 476px = 75 chars | 160×31 | none |
+| 520 | 160px | 472px = 75 chars | 160×31 | none |
+| 420 | 160px | 372px = 59 chars | 160×31 | none |
+| 360 | 160px | 312px = 49 chars | 160×31 | none |
+
+The control never shrinks and never wraps its own label; the description never
+exceeds 75 characters at any width; there is no overflow anywhere down to 360px.
+
+**2 · The tooltip at 200% zoom.** Focused with the page holding real focus, at
+both 100% and 200%: opens, **fully on screen** at both, renders at an effective
+**24px** at 200%, and **nothing is clipped**. One number needed chasing rather
+than reporting: `scrollHeight − clientHeight` is **9px**, which is exactly the
+height of the hover bridge S1.d adds as an absolutely-positioned `::after`, and
+the tip is `overflow: visible` so nothing could be cut off in any case. A
+9px delta that matches a 9px element is an explanation, not a defect.
+
+**3 · Real-keyboard Escape.** The earlier failure was a harness artifact — key
+injection reaches the page only once the document holds focus, the same
+condition that made `el.focus()` not match `:focus`. With the page clicked
+first:
+
+| | |
+|---|---|
+| Drawer, real `Escape` | **closes** |
+| `<Term>` tooltip, real `Escape` | **hidden**, `.dismissed` set, **focus unmoved** |
+| `<Term>` re-arm after blur → focus | **shows again** |
+
+So SC 1.4.13's *Dismissible* is now proven by a real key press, not a synthetic
+event, and the drawer's Esc is proven rather than inferred from the DS.
 
 ### Where the page stands
 
