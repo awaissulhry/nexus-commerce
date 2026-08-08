@@ -3414,3 +3414,93 @@ re-run, no approve — a record is read, not operated (Part 0).
 **The UTC day-grouping bug class** · [ccusage #349][cc] · [litellm #29568][ll]
 
 **In-repo, measured** · live prod at 1728×906, 2026-08-08
+
+---
+
+## 22.7 — S4R execution record (2026-08-08)
+
+Shipped in **`ff79dcdd1`**, prod-verified on live Vercel + Railway.
+
+### The bug no screenshot could have shown
+
+`dayKey` was a UTC calendar date printed above a local clock. Measured at UTC+2
+before the fix: `2026-08-06T23:30:00Z` filed under **Thursday 6 August** and
+rendered **01:30** — the 7th where the reader sits. The fleet has never produced
+an event between 22:00 and 24:00 UTC, so the page looked right in every
+screenshot and stops being right the first night a run lands late.
+
+The arithmetic moved to `day-grouping.ts` with **12 tests that assert the
+relationship rather than an offset**: rebuild the instant from what the row
+actually shows the reader — `dayKey` + `hhmm` — and require it back within a
+minute. They run in whatever zone the machine is in and hard-code nothing.
+
+**Verified the test guards the regression:** reverting `dayKey` to
+`toISOString().slice(0,10)` fails **5 of 12**, including
+`round-trips 2026-08-06T23:30:00Z`. Restored, 12 pass.
+
+**And the test caught something looking never would have.** `hhmm` was
+locale-dependent: `toLocaleTimeString` returns **`01:30 AM`** on an en-US
+machine — eight characters with a word in it, in a gutter the eye is meant to
+run straight down. Now explicitly `hourCycle: 'h23'`. This machine's browser
+renders `01:30`, so no amount of looking here would have found it.
+
+### Five AA failures → zero
+
+| | Before | After |
+|---|---|---|
+| `.sba-sep` — the `·` separators | **1.60** | not text at all (below) |
+| `.sba-daycount` | **2.43** | 5.34 |
+| `.sba-foot span` (via `.acr-pg-muted`) | **2.54** | ≥ 4.5 |
+| `.sba-time` — **every row** | **2.58** | ≥ 4.5 |
+| `.sba-meta` — **every row** | **2.95** | ≥ 4.5 |
+| Worst on the section | 1.60 | **4.76** |
+
+The separator **stopped being text** rather than being darkened until it passed:
+darkening a separator until it reads like prose defeats what a separator is for.
+It is a 3px `aria-hidden` dot which clears 4.5:1 anyway, so there is nothing to
+argue about. `.acr-pg-muted` lives in the frozen `fleet-pages.css` and was fixed
+page-locally under `.sba-page`, exactly as S1 did for `.acr-sub`.
+
+### The answer to why the same mistakes kept coming back
+
+S1 set a **20/13/12** ladder. S2 was dragged back to it, then S3. **S4 — the
+section with the most text on the page — still held 10.5px and 11.5px**, so
+every neighbouring edit kept picking them up again. S4 is now **12/13 only**,
+and the four remaining 11.5px rules on the page all belong to S5, S6 and S7 —
+recorded below rather than swept, because those are later units.
+
+### The row
+
+The time **leads**, in a fixed 46px gutter with tabular numerals — **verified
+aligned at x=127 on every row**, where it had been a 33px stub against the right
+edge at x=1634, the one position a chronological list cannot be scanned from.
+
+The meta line went from up to five `·`-joined fragments to **at most two facts**:
+the state word left because `MARKER` already carries it in *shape* and in
+screen-reader text; the risk tier appears on approval rows only and belongs in
+the drawer; the upsert vintage became a tooltip rather than a fourth clause.
+
+### One fact, one statement
+
+The Runs grain said *"7 runs · newest first"* three rows above *"Showing 7 of
+7"* and below S1's *"across 7 runs"*. The inner `GridToolbar` is gone and the
+footer states a number **only while paging** — verified both ways: *"That is the
+whole history."* with everything shown, and *"Showing 50 of 111"* beside **Show
+older** with the self-test included.
+
+### Unchanged on purpose
+
+Rollups (verified 15 → 19 rows on expanding *show all 4*), sticky day headers,
+the pull-not-push arrivals banner, `table-layout: fixed` with **zero** cell
+overflow across 7 columns, and **Show older** — which NN/g independently
+endorses over both infinite scroll and pagination for goal-directed readers.
+
+### Left for later units, recorded not swept
+
+`.sba-notshown li` (S6), `.sba-dmeta` and `.sba-stepmeta` (S5) and
+`.sba-howtoggle` (S7) are still 11.5px. They are the last of the small type on
+this page and they belong to sections that have not been rebuilt.
+
+**Twenty-eight defects found on this page. Not one has been a type error** — and
+S4's headline defect could not have been found by looking either, which is the
+first time that has been true here.
