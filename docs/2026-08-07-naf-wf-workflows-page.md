@@ -2330,7 +2330,278 @@ still imports it, and the editor's canvas is S5's decision.
 
 ---
 
+## PART 11 — NAF.WF-S3R · Section 3 restudied: Runs
+
+Opened 2026-08-08 after S1R (the list) and S2R (the detail's overview zone).
+Scope is the **Runs section inside `RoutineClient.tsx`** — orchestration groups,
+their expandable per-worker rows, the failure sentences, the cap line, the
+revision chips — **plus the one hook S2R deliberately left**: selecting a run
+should re-colour the pipeline above it.
+
+Versions (S4), the editor (S5) and the test lane (S6) are later sections.
+**No retry or re-run affordance is proposed**: this fleet has no such write
+path, law L2 forbids minting one, and §11.6 records the research finding as a
+WF.7-adjacent follow-up rather than a button.
+
+### 11.1 · PHASE 0 — the audit, measured on prod
+
+Chrome, **1728 × 906**, 2026-08-08. Four routines cover the shapes: the
+on-demand check (43 orchestrations, the cap line, three distinct failure
+classes), the weekly council (a two-worker group, expanded), the nightly sweep
+and the custom (never-run empty state).
+
+#### D1 · The OUTCOME column is 44.2% of the table, and nine of twelve rows fill 12.3% of it
+
+`table-layout: auto` again — the longest failure sentence sizes the column for
+every row.
+
+| Column | width | % of table |
+|---|---|---|
+| (expand) | 26 | 1.7% |
+| When | 118.6 | 7.5% |
+| Started by | 160.8 | 10.2% |
+| **Outcome** | **694.8** | **44.2%** |
+| Workers | 145.4 | 9.2% |
+| Findings | 140.8 | 9.0% |
+| Cost | 135.6 | 8.6% |
+| Duration | 150.0 | 9.5% |
+
+Measured fill of the Outcome cell, per row: **12.3%** on the nine rows that say
+"finished clean", 46.4% / 49.8% on the three that carry a failure sentence. So
+"finished clean" — fourteen characters — is rendered inside 694.8px, and the
+609px beside it is empty on three quarters of the rows. **This is S1R's D3, in
+the one section S1R never touched.**
+
+#### D2 · Row heights spread 35px
+
+40.3 · 40.3 · **71.3** · 40.3 · **75.3** · 40.3 × 6 · 54.0 — the failure
+sentences wrap to three lines and the rows they sit in grow with them. Same
+rhythm defect the list had at 33.4px before S1.a.
+
+#### D3 · Three of eight columns are constant on the on-demand routine
+
+`Started by` is "by hand" on all twelve rows. `Workers` is "1" on all twelve.
+Plus the expand column, which is chrome. **The section's own doc-comment says
+"an always-empty column teaches nothing"** — about the version column it
+correctly refused to ship — and then ships three always-*identical* ones.
+
+#### D4 · "full story →" renders inside the WORKERS column
+
+Measured on the expanded council group: the link is child index 3 of the
+sub-row, under a `<th>` reading **WORKERS**, right-aligned by `.num`. A
+navigation link in a numeric column, under a header that means a count.
+
+#### D5 · Sub-rows are indented 0px
+
+Group first cell `x = 137.0`. Sub-row name `x = 137.0`. The only parent/child
+cue is a background step from transparent to `#fbfcfe` — roughly a 1%
+luminance difference. Nothing says these rows belong to the one above.
+
+#### D6 · The expand target is 324px²
+
+18 × 18. WCAG 2.5.8 asks for 24 × 24 (576px²). The chevron is also the *only*
+affordance — the row itself is not clickable, and nothing else hints that a
+group opens.
+
+#### D7 · Findings renders `—` for a known zero
+
+Three cells on the on-demand routine, three on the council. S2R settled the
+rule for the fact bar: *a cell that cannot know something says what would fill
+it.* Zero findings is not unknown — it is zero, and an em-dash reads as
+"unknown" beside cells where an em-dash means exactly that.
+
+#### D8 · One weight outside the S1R scale
+
+Zone type: **5 sizes** (15 / 12.5 / 12 / 11.5 / 10.5) ✅ and **4 weights**
+(400 / **600** / 650 / 700). The 600 is `.wf-suboutcome`; the owned scale is
+three. **Contrast: 0 failures** — S1.a's palette carried here with no work,
+the third surface to inherit it.
+
+#### D9 · The row barely answers anything without expanding, and expanding often adds one link
+
+On the on-demand routine **every group has exactly one worker** — 43 of 43. So
+the expansion renders a single sub-row that repeats the group's own outcome
+verbatim and adds `full story →`. The affordance promises detail and delivers a
+link.
+
+#### D10 · The runs and the picture above them are unconnected
+
+The pipeline S2R built shows the *newest* run's reality and nothing else. There
+is no way to ask "what did the run from 45h ago actually do" and see it. This
+is the hook, and §11.4 designs it.
+
+#### D11 · The cap line is honest, and today invisible — with 15.1% of the fetch wasted
+
+Measured against the live API: **53 runs fetched of a 100 limit**, so
+`fetchCapReached` is false and the "from the newest 100 recorded runs" caveat
+correctly does not render. Of those 53, **8 (15.1%) are `preview` rows** —
+still served by the shared route (`agent-fleet.routes.ts:77` filters
+`mode: { not: null }`), still excluded client-side. **§5 row 10 remains
+unactioned by the route's owner.** Not urgent at 53, and the study does not
+re-ask for it.
+
+#### A strength worth recording, because it was never deliberately tested
+
+Six of those rows carry `workflowKey: 'fleet-sweep'` — WF.5 test-lane previews
+of the sweep draft — while the sweep itself has **never run**. Built-in
+selection is by **mode**, not by `workflowKey`, and `groupRuns` excludes
+`preview` on the key branch. So the sweep's Runs section correctly shows zero.
+**Had built-ins selected by key, the sweep would today display six phantom runs
+that never happened.** The preview-invisibility rule holds under a case nobody
+set up on purpose; §11.5's state table pins it.
+
+---
+
+### 11.2 · PHASE 1 — how the industry shows a routine's run history
+
+The S1R (Part 9.2) and S2R (Part 10.2) research covered list and detail pages.
+This pass asks only about **run history and per-run drill-down**.
+
+| Product | Run row shows | Drill-down | Bound to the picture? | Failure presentation |
+|---|---|---|---|---|
+| **Airflow 3** grid | a column per run; **height = the run's duration**, colour = state; run-origin icons (play / backfill / asset) | click a task square → **that task instance's logs**; a run's bar → a **Gantt** for that run | **Yes — the reference.** The grid and the graph are the same object seen twice; selecting a run re-draws the graph *with that run's task states* | logs, syntax-highlighted, level-filtered, free-text searchable |
+| **Inngest** | status indicator per row; filter by status / queued / started / app; CEL search over event + output | **expands in place** into three sections: trigger + event payload · steps timeline · per-step inspection | — | expanding a failed step shows **every retry attempt with its own error**; errors serialized as JSON on `output` |
+| **n8n** | executions tab per workflow, filterable by Failed / Running / Success / Waiting | opens the execution | **"Copy to editor"** pins a past execution's data into the canvas — the overlay idea, but as an *editing* affordance | per-node, in the canvas |
+| **Temporal** | executions list, filter by status/type/time, Saved Views | one execution page | no diagram at all | history in **four views** — Timeline · All · Compact · JSON |
+| **Dagster** | a Runs tab on the job; a per-run timeline | run page | the job's graph is the Overview tab, separate | — |
+| **GitHub Actions** | runs list under the workflow | run page → jobs, then steps | — | per-step logs |
+
+**What this settles for us:**
+
+1. **Airflow is the model for the hook, and it is a two-way binding, not a
+   link.** Selecting a run does not navigate — it re-colours the picture that is
+   already on screen. S2R built the picture; S3R supplies the selection.
+2. **Inngest is the model for the expansion: in place, not away.** Our section
+   already expands in place; what it lacks is anything worth expanding *into*.
+   Inngest's answer is a per-step timeline with real per-step facts.
+3. **Everybody's run row is compact and value-shaped; the prose lives one level
+   down.** Ours puts a three-line sentence in the widest column of the summary
+   row, which is why 44.2% of the table is one column.
+4. **Retry-from-failed-step is universal — Inngest replays, n8n re-runs, Airflow
+   clears and reschedules — and we will not build it.** There is no fleet write
+   path for it and L2 forbids inventing one. Recorded in §11.6.
+5. **Nobody encodes a run's cost.** We do, on every row, because this fleet
+   spends real money per run — that stays, and it is a genuine divergence with a
+   reason.
+
+**Judged for our N:** dozens of runs, 2–6 steps, one operator. Airflow's grid
+exists to compare hundreds of runs across dozens of tasks; at 43 runs × 1 worker
+a matrix would be a column of identical squares. We want Airflow's *binding*,
+not Airflow's *matrix*.
+
+---
+
+### 11.3 · The run row, restated
+
+A group answers, without expanding: **when · what started it and on which
+wiring · how it went, in words · what it cost and how long · how many workers
+are inside it.** Lanes, not `table-layout: auto` columns — the S1R rule, since
+one of those five is prose and the rest are values.
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│ 38h ago      the clock · wiring rev 2   finished clean    $0.2126  3m 10s  │
+│                                                            2 workers  ⌄     │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Outcome is capped to a reading measure** and wraps inside its own lane, so
+  a three-line sentence stops setting the width of a column twelve rows deep.
+- **`Started by` and the revision chip merge into one provenance lane** — they
+  are the same question ("what caused this run, running what").
+- **`Workers` stops being a column and becomes the expand affordance's label**:
+  `2 workers ⌄`. It tells you what expanding will show, which is the only reason
+  the number matters, and it closes D3 and D6 together — the affordance becomes
+  a real target with a word in it, not an 18px chevron.
+- **Findings renders `0`, not `—`.** An em-dash on this page means *unknown*.
+- **The whole row is the selection target** (§11.4), so the click area goes from
+  324px² to the row.
+
+**Expanded**, per worker: the name, its outcome sentence, its own cost and
+duration, and the link to its full story — **in lanes that line up with the
+group's**, indented by a real amount with a left rule, so a child is visibly a
+child. `full story →` leaves the numeric column it never belonged in.
+
+### 11.4 · The selection ⇄ pipeline contract
+
+The hook S2R left. Three rules, and the third is the one that keeps it honest.
+
+1. **Selecting a run re-colours the pipeline above.** Click a group row; the
+   pipeline's per-step overlay switches from "the newest run" to *that* run.
+   The selected row is marked, and the pipeline gains a header line naming what
+   it is showing: *"showing the run from 45h ago"*, with **Back to the latest
+   run** beside it. Clicking the selected row again, or that control,
+   deselects — and the default is exactly what S2R ships today, the newest
+   run's reality.
+2. **A running orchestration is selectable and says so.** Its steps read
+   "working now…", and the 10s visibility-gated poll keeps them current — the
+   one case where the overlay is live rather than historical.
+3. **A past run must not borrow today's worker settings.** This is the trap.
+   S2R's step card shows the autonomy pill (`OFF`, `OBSERVE`…) from the *live*
+   charter feed. That is correct for "what will happen next time" and **false
+   for a run that happened 45 hours ago** — `AgentCharter` keeps no history, so
+   the dial at that moment is genuinely unknown. When a past run is selected the
+   role pill is therefore **suppressed for worker steps**, and the header says
+   why: *"Worker settings are today's, so they are not shown for a past run."*
+   That is the shipped rule — *no status claims from a feed that cannot answer* —
+   applied to time instead of to a failed fetch.
+
+A step with no row in the selected group keeps its existing sentence
+("skipped — it was switched off" / "did not run last time"), which is a fact
+about that orchestration and stays true whichever run is selected.
+
+### 11.5 · Every state, and how it will be discharged
+
+Discharged means screenshotted on prod or verified in code **before S3.d
+closes** — S2R's late catch came from doing exactly this.
+
+| State | Reachable | Expectation |
+|---|---|---|
+| Never run | custom, sweep | teaching empty state, unchanged |
+| One group, multi-worker | council | expands to 2 rows; selection re-colours the pipeline |
+| Many groups + cap line | on-demand (43) | "latest 12 of 43 on record" |
+| Fetch cap reached | not today (53 of 100) | code-verified; caveat appends only when true |
+| Failure — contract | on-demand | red, "did not match the format it promised" |
+| Failure — billing | on-demand | red, "out of credit" |
+| Halted at a limit | on-demand | **AMBER**, "That limit worked" |
+| Failure — unknown / no reason | code | red, "failed, and recorded no reason" |
+| Running now | code (no live case) | "running now…", never a failure; selectable; poll keeps it fresh |
+| Preview runs | 8 exist today | **invisible** — and the sweep must still show 0 despite 6 preview rows stamped with its key |
+| Past run selected | after S3.c | pipeline re-coloured; role pills suppressed; header names the run |
+| Selection cleared | after S3.c | pipeline returns to the newest run's reality |
+
+### 11.6 · Recorded, not built
+
+1. **Retry / re-run / replay-from-failed-step.** Universal in the research
+   (Inngest replay, n8n re-run, Airflow clear-and-reschedule) and deliberately
+   absent here: there is no fleet write path for it, and L2 forbids minting one
+   for a UI. It belongs with **WF.7**'s dynamic-capabilities charter, where
+   retry policy is already listed as an axis.
+2. **The full step trace** still lives inside `WorkerClient.tsx` (Workers'
+   file); this section keeps linking out to it rather than forking a viewer, as
+   the original S3 study decided. If Activity ever extracts it to `_shared/`,
+   this section is a consumer.
+3. **§5 row 10 is still unactioned** — the shared runs route still serves
+   `preview` rows (15.1% of today's fetch). Client-side exclusion stands. Not
+   re-asked.
+4. **`.acr-btn.go` is still 3.46:1** and **`approval-inbox.vitest.test.ts` is
+   still red on `main`** — both re-verified 2026-08-08, both still their
+   owners'.
+
+### 11.7 · Build phases, with measurable exit criteria
+
+| Phase | What | Exit criteria (measured on prod) |
+|---|---|---|
+| **S3.a** | The group row: lanes not auto-columns; outcome capped to a measure; provenance lane merges trigger + revision; `Workers` becomes the expand affordance; findings `0` not `—`; weight scale to 3. | Widest lane ≤ **30%** of the row (from 44.2%) · outcome fill ≥ **60%** on every row (from 12.3%) · row-height spread ≤ **12px** (from 35) · **0** constant columns · **0** em-dashes for known zeroes · 5 sizes / 3 weights |
+| **S3.b** | The expansion: real indentation with a left rule, lanes aligned to the group's, `full story →` out of the numeric column, per-worker facts. | Child indent ≥ **24px** · `full story` not inside a `.num` cell · expanded sub-row lanes align to the group's within **2px** |
+| **S3.c** | The hook: row selection, pipeline overlay binding, deselect, running-now case, and the **role-pill suppression + header sentence** for past runs. | Selecting re-colours the pipeline (verified per-step against the API) · deselect restores the newest run · a past selection shows **0** autonomy pills and the explaining sentence · selection target = the row, ≥ **95%** of its area |
+| **S3.d** | States + teaching: discharge every §11.5 row, `<Term>` audit, "How workflows work" gains a reading-the-runs paragraph. | Every §11.5 row screenshotted or code-verified · **0** `<Term>` inside a link · 0 contrast failures |
+
+---
+
 ## Sources
+
+**Part 11 (WF-S3R, run-history research, 2026-08-08)** — Astronomer [Airflow UI](https://www.astronomer.io/docs/learn/airflow-ui) (grid = a column per run, **height = the run's duration**, colour = state, run-origin icons; a run's bar opens a Gantt, a task square opens that task instance's logs) · Inngest [inspecting function runs](https://www.inngest.com/docs/platform/monitor/inspecting-function-runs) (a run **expands in place** into trigger+payload, a steps timeline, and per-step inspection showing **every retry attempt with its own error**) · n8n [debug and re-run past executions](https://docs.n8n.io/workflows/executions/debug/) + [single-workflow executions](https://docs.n8n.io/build/understand-workflows/understand-executions/view-executions-for-a-single-workflow) (**"Copy to editor"** pins a past execution's data into the canvas; filter by Failed/Running/Success/Waiting) · Temporal [Web UI](https://docs.temporal.io/web-ui) (history in Timeline / All / Compact / JSON) · Dagster [webserver & UI](https://docs.dagster.io/guides/operate/webserver) (Runs tab per job) · GitHub Actions [view workflow run history](https://docs.github.com/en/actions/how-tos/monitor-workflows/view-workflow-run-history)
 
 **Part 10 (WF-S2R, detail-page research, 2026-08-08)** — Astronomer [intro to the Airflow UI](https://www.astronomer.io/docs/learn/airflow-ui) (single-DAG page: header actions top-right; grid columns = runs, squares = task instances, height = duration, colour = outcome; **the graph is annotated with a selected run's task states**; `g` toggles grid↔graph) · Temporal [Web UI](https://docs.temporal.io/web-ui) (execution page: Start/Close/Duration + Run ID + Type + Task Queue in the header; History in Timeline / All / Compact / JSON; **no workflow diagram** — a Relationships tree instead) · Dagster [webserver & UI](https://docs.dagster.io/guides/operate/webserver) (job page tabs: **Overview = the graph** · Launchpad · Runs · Partitions) · Inngest [observability & metrics](https://www.inngest.com/docs/platform/monitor/observability-metrics) (per-function charts: status breakdown, throughput, steps throughput, backlog, failure frequency, all time-range filtered) · GitHub Actions [manually running a workflow](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow) (**"Run workflow" renders only when the workflow declares `workflow_dispatch`**)
 
