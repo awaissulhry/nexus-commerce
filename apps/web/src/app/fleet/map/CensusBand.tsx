@@ -185,7 +185,7 @@ export function CensusBand({
         <Def k="spend-today">
           {(described) => (
             <div
-              className="sbm-fact"
+              className="sbm-bfact"
               tabIndex={0}
               aria-label={`Spent today ${usd(spentTodayUSD)} of ${usd(dailyCeilingUSD)}`}
               {...described}
@@ -206,7 +206,7 @@ export function CensusBand({
         >
           {(described) => (
             <div
-              className="sbm-fact"
+              className="sbm-bfact"
               tabIndex={0}
               aria-label={`Open findings ${totals.open}${
                 totals.expired > 0 ? `, ${totals.expired} past their expiry` : ''

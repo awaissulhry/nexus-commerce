@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Map as MapIcon, RefreshCw, ShieldAlert, ArrowRight } from 'lucide-react'
+import { Map as MapIcon, Network, RefreshCw, ShieldAlert, ArrowRight } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
 import { MapCanvas } from './MapCanvas'
@@ -290,30 +290,64 @@ export function MapClient() {
       {/* ── M6 · entity mode: a different universe, the same shell ─────── */}
       {mode === 'entities' ? (
         <>
-          <section className="sbm-census" aria-label="What is on this map">
-            <div className="sbm-census-rows">
-              <div className="sbm-chiprow rank-subject">
-                <span className="sbm-chip subject">
-                  <span className="n">{entity?.nodes.length ?? 0}</span> things
-                </span>
-                <span className="sbm-chip subject">
-                  <span className="n">{entity?.edges.length ?? 0}</span> relationships
-                </span>
+          {/* S1.d — the same band, for a universe with no partition to draw.
+              What this replaces was two <span className="sbm-chip subject">
+              elements: cursor:pointer, no role, no tabindex, no definition, and
+              pixel-identical to the Workers-mode chips that ARE buttons and DO
+              filter. Nothing here filters, so nothing here is drawn as a
+              control, and the two counts are a sentence. Measured dead width in
+              that mode was 977.6px — 60.6%. */}
+          {entity == null ? (
+            <CensusBandSkeleton />
+          ) : (
+            <section className="sbm-band tone-entities" aria-label="What this view shows">
+              <div className="sbm-verdict">
+                <p className="sbm-verdict-head">
+                  <Network size={15} aria-hidden />
+                  <span>
+                    {entity.nodes.length} things the fleet watches, and {entity.edges.length} links
+                    it worked out between them.
+                  </span>
+                </p>
+                <p className="sbm-verdict-sub">
+                  {entity.truncated
+                    ? 'Capped, so it shows the strongest links first — open one thing to see everything around it.'
+                    : 'This is what the workers reason about. The Workers view is what the fleet is.'}
+                </p>
               </div>
-            </div>
-            <div className="sbm-census-side">
-              <span className="sbm-spend">
-                what the fleet has worked out about your campaigns — not what the fleet is
-              </span>
-            </div>
-          </section>
 
-          {entity?.truncated ? (
-            <p className="sbm-footnote warn">
-              This view is capped, so it shows the strongest links first. Open one thing to see
-              everything around it.
-            </p>
-          ) : null}
+              {/* The relation mix, which IS a partition of the links — the same
+                  device as the workers meter, reading from the same counts the
+                  rail names beside it, so the bar and the legend cannot become
+                  two sources. */}
+              <div className="sbm-meterwrap">
+                <div
+                  className="sbm-meter"
+                  role="img"
+                  aria-label={`Link types: ${Object.entries(entity.relationCounts ?? {})
+                    .map(([r, n]) => `${n} ${relationOf(r).label}`)
+                    .join(', ')}`}
+                >
+                  {Object.entries(entity.relationCounts ?? {})
+                    .sort(([, a], [, b]) => b - a)
+                    .map(([rel, n]) => (
+                      <span
+                        key={rel}
+                        className={`sbm-mseg sbm-swatch ${relationOf(rel).className}`}
+                        style={{ flexGrow: n }}
+                      />
+                    ))}
+                </div>
+              </div>
+
+              <div className="sbm-facts">
+                <div className="sbm-bfact">
+                  <span className="k">Rebuilt</span>
+                  <span className="v">every night, by the sweep</span>
+                </div>
+              </div>
+            </section>
+          )}
 
           <div className="sbm-body">
             <aside className="sbm-orail" aria-label="What the lines mean">

@@ -176,8 +176,25 @@
   color: #15804f;
 }
 .sbm-band.tone-off .sbm-verdict-head svg,
-.sbm-band.tone-empty .sbm-verdict-head svg {
+.sbm-band.tone-empty .sbm-verdict-head svg,
+.sbm-band.tone-entities .sbm-verdict-head svg {
   color: #55616f;
+}
+/* Entity mode has no lens row, so its band is one grid row; without this the
+   `lenses` area reserves a track and the band grows a blank strip. */
+.sbm-band.tone-entities {
+  grid-template-areas: 'verdict meter facts';
+}
+/* Its verdict is a sentence rather than a headline plus a sub-line, so it is
+   allowed to wrap; the reserved-sub-line rule exists to stop the FILTER
+   summary moving the graph, and there is no filter in this mode. */
+.sbm-band.tone-entities .sbm-verdict-head {
+  font-size: 13px;
+  align-items: flex-start;
+}
+.sbm-band.tone-entities .sbm-verdict-head svg {
+  margin-top: 2px;
+  flex: none;
 }
 
 /* the meter — the width-absorber, and the only shape that SHOWS a partition
@@ -234,40 +251,47 @@
 }
 
 /* the standing facts — laid out in lanes, not stacked, because a cell this
-   wide stacking its contents just moves the dead width inside the cell */
+   wide stacking its contents just moves the dead width inside the cell.
+   `sbm-bfact`, not `sbm-fact`: the short name is the canvas node's badge
+   (`.sbm-node-facts .sbm-fact`, seventeen of them on prod) and shipping the
+   collision put `display:flex; flex-direction:column`, a 5px radius and a
+   focus ring on every one. It happened to change nothing visible because each
+   badge holds a single text node — which is exactly why it would have been
+   found by the second child rather than by anybody looking. Second class
+   collision in one build; inside a page, a class name is still global. */
 .sbm-facts {
   grid-area: facts;
   display: flex;
   gap: 18px;
 }
-.sbm-fact {
+.sbm-bfact {
   display: flex;
   flex-direction: column;
   gap: 1px;
   border-radius: 5px;
 }
-.sbm-fact .k {
+.sbm-bfact .k {
   font-size: 10.5px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: #55616f;
 }
-.sbm-fact .v {
+.sbm-bfact .v {
   font-size: 13px;
   font-weight: 650;
   color: #1c2530;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.sbm-fact .v i {
+.sbm-bfact .v i {
   margin-left: 5px;
   font-style: normal;
   font-size: 11px;
   font-weight: 400;
   color: #55616f;
 }
-.sbm-fact:focus-visible {
+.sbm-bfact:focus-visible {
   outline: 2px solid #2b6cb0;
   outline-offset: 3px;
 }
