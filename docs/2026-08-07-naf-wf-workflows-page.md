@@ -2597,6 +2597,94 @@ closes** — S2R's late catch came from doing exactly this.
 | **S3.c** | The hook: row selection, pipeline overlay binding, deselect, running-now case, and the **role-pill suppression + header sentence** for past runs. | Selecting re-colours the pipeline (verified per-step against the API) · deselect restores the newest run · a past selection shows **0** autonomy pills and the explaining sentence · selection target = the row, ≥ **95%** of its area |
 | **S3.d** | States + teaching: discharge every §11.5 row, `<Term>` audit, "How workflows work" gains a reading-the-runs paragraph. | Every §11.5 row screenshotted or code-verified · **0** `<Term>` inside a link · 0 contrast failures |
 
+### 11.8 · S3.a–S3.d SHIPPED + PROD-VERIFIED 2026-08-08 — WF-S3R COMPLETE
+
+| Commit | Phase |
+|---|---|
+| `3d4ab9b00` → `b54f2265f` → `1aa19773a` | **S3.a** the group row |
+| `142cf2995` | **S3.b** the expansion |
+| `c2210ab59` → `07c1cc4d8` → `f25cbb194` | **S3.c** the selection hook |
+| `ab550de9d` | **S3.d** teaching |
+
+**Acceptance, measured on the deployed page at 1728 × 906:**
+
+| Test | Before | After |
+|---|---|---|
+| Row-height spread | **35px** | **0** — every group row 46.3px |
+| Widest column | 694.8px = **44.2%** | **34%**, all seven declared as percentages summing to 100 |
+| Constant columns | **3 of 8** | `Workers` became the affordance's label |
+| Expand target | **324px²** | **2318px²** (84.9 × 27.3) |
+| Em-dash for a known zero | 6 | **0** |
+| Child indent | **0px** | **28px** behind a left rule |
+| `full story →` in a `.num` cell | yes | **no** — its own cell |
+| Failure sentence width | 336.1px / 3 lines | **660px / 2 lines** |
+| Contrast failures · `<Term>` in links | 0 · 0 | **0 · 0** |
+
+**The hook, verified against the API rather than by eye:** selecting a past run
+takes the pipeline's role pills from **3 → 2** (the worker's dial suppressed,
+the gate's "you decide" and the code step's "code" correctly kept — those are
+not dials), renders the note, marks one row, and changes the step sentence from
+*"did not run last time"* to *"did not run in this one"*. Clearing restores
+3 pills, no note, 0 selected rows and the original legend.
+
+**§11.5's state table, discharged in full:**
+
+| State | How | Result |
+|---|---|---|
+| Never run | sweep, prod | 0 group rows, teaching empty state |
+| One group, multi-worker | council, prod | 2 children, both worker pills on the summary line |
+| Many groups + cap line | on-demand, prod | "latest 12 of 43 on record" |
+| Fetch cap reached | code | `runs.length >= 100`; 53 today, so correctly absent |
+| Failure — contract | prod | red, "did not match the format it promised" |
+| Failure — billing | prod | red, "the account is out of credit" |
+| Halted at a limit | prod | **`rgb(138,95,14)` — amber, not red** |
+| Failure — unknown | code | "It failed, and recorded no reason." |
+| Running now | code | `g.running` → "running now…" on the group; `r.status === 'running'` per run |
+| Preview invisible | **live API** | **6 rows stamped `workflowKey: 'fleet-sweep'`, all `mode: 'preview'` → 0 rendered.** Built-ins select by mode; had they selected by key the sweep would show six runs that never happened |
+| Past run selected | prod | pills 3 → 2, note, 1 row marked |
+| Selection cleared | prod | pills → 3, note gone, legend restored |
+
+**Four defects prod found, and one of them was my own fix being wrong.**
+
+1. **`width: auto` in a fixed table absorbs every unclaimed pixel** — the
+   outcome column stayed at 45.9% until all seven were declared as percentages
+   summing to 100.
+2. **`max-width: 92ch` computed to 336px — about 3.65px per character.** A `ch`
+   is the advance of "0" in the *resolved* font, so it is only a measure when
+   you know which font resolved.
+3. **A `ch`-clamp I could not see beat a px-value I could.**
+   `.wf-runs td span.acr-pg-warn { max-width: 42ch }` was clamping the
+   explanation sentence, because the sentence carries that same outcome class
+   for its colour. 42 × 8px is exactly the 336.115px prod reported, which is
+   what made it findable at all.
+4. **My first fix for (3) matched the offending selector's specificity — and
+   lost on source order.** 0,2,2 against 0,2,2 falls through to document order,
+   and the rule I was trying to beat sits 29 lines further down the file. The
+   sentence therefore rendered clamped through **two** deploys whose source
+   read as though it were fixed. Resolved with `:not(.wf-whytext)` on the four
+   outcome-word selectors, which is also the truer statement of the rule: the
+   42ch clamp is for the short status *words*, and the sentence was only ever
+   caught by it incidentally. **The lesson is not about CSS: a fix that cannot
+   be verified where it takes effect is a hypothesis, and this one was wrong
+   twice before the page said so.**
+
+**One exit criterion was wrong in kind and is recorded rather than dropped.**
+§11.7 asked for **"outcome fill ≥ 60% on every row"**; it measures
+**16.5–34.2%**. A shared table column has one width for every row, so it cannot
+hug per-row content — the criterion was unachievable as written, not missed.
+What it stood in for is met and measured: **no outlier sizes any column** (the
+sentence has its own row) and **the widest lane is capped at 34%** (from 44.2%).
+The row also now answers what expansion was previously the only way to ask —
+each worker named on the summary line with a dot for how its run ended — which
+was the substance of the complaint behind the number.
+
+**Not built, as scoped:** no retry / re-run / replay affordance. Universal in
+the research, no fleet write path, L2 forbids minting one for a UI; filed to
+WF.7 (§11.6). **§5 row 10 still unactioned** — the shared runs route still
+serves `preview` rows, 8 of 53 today. **`.acr-btn.go` (3.46:1) and the red
+`approval-inbox` vitest** were re-verified unmoved on 2026-08-08; both remain
+their owners'.
+
 ---
 
 ## Sources
