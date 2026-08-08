@@ -104,6 +104,13 @@ export function CensusBand({
       !(r.chip.id === 'running' && (v.tone === 'off' || v.tone === 'halted')),
   )
 
+  /** How many the active lens leaves undimmed. Read from the chip's own
+   *  `matches`, never counted a second way — the identity `lib.vitest.test.ts`
+   *  exists to protect. */
+  const matched = activeChip
+    ? nodes.filter((n) => rows.find((r) => r.chip.id === activeChip)?.chip.matches(n)).length
+    : nodes.length
+
   const meterLabel =
     states
       .filter((r) => r.count > 0)
@@ -151,7 +158,14 @@ export function CensusBand({
         <p className="sbm-verdict-sub" role="status">
           {activeChip ? (
             <>
-              {filterSummary(nodes, activeChip)}. The rest are dimmed, not hidden.{' '}
+              {filterSummary(nodes, activeChip)}.
+              {/* Only when there IS a rest. A lens can match every node — today
+                  `7 switched off` does — and the shipped sentence read
+                  "Showing 7 of 7 … The rest are dimmed, not hidden" over a
+                  canvas with nothing dimmed. A section whose whole subject is
+                  numbers that do not contradict the page cannot end its own
+                  sentence with a clause about workers that are not there. */}
+              {matched < nodes.length ? ' The rest are dimmed, not hidden.' : ''}{' '}
               <button type="button" className="sbm-linkbtn" onClick={() => onChip(null)}>
                 Show all
               </button>
