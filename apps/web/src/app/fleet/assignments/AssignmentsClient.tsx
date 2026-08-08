@@ -33,6 +33,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Plus, RefreshCw, Target, AlertTriangle, Layers, Globe } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { searchOptions } from '@/lib/option-search'
 import { DataGrid, type Column } from '@/design-system/components'
 import { GridToolbar } from '@/design-system/patterns'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
@@ -135,6 +136,7 @@ export function AssignmentsClient() {
   const [filter, setFilter] = useState<AssignmentState | null>(null)
   const [showClosed, setShowClosed] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [q, setQ] = useState('')
   const width = useWidth()
   /**
    * NAF.SB.AS.2 — the deep link from the object the operator was standing on.
@@ -180,15 +182,18 @@ export function AssignmentsClient() {
     const s = p.get('state')
     if (s && s in ASSIGNMENT_STATES) setFilter(s as AssignmentState)
     if (p.get('closed') === '1') setShowClosed(true)
+    const query = p.get('q')
+    if (query) setQ(query)
   }, [])
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
     filter ? p.set('state', filter) : p.delete('state')
     showClosed ? p.set('closed', '1') : p.delete('closed')
+    q.trim() ? p.set('q', q.trim()) : p.delete('q')
     const qs = p.toString()
     window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname)
-  }, [filter, showClosed])
+  }, [filter, showClosed, q])
 
   const load = useCallback(async () => {
     const res = await fetch(`${getBackendUrl()}/api/agent/fleet/assignments`, {
@@ -212,14 +217,35 @@ export function AssignmentsClient() {
     }, [load]),
   )
 
-  const counts = useMemo(() => tileCounts(rows ?? []), [rows])
-  const closed = useMemo(() => closedCount(rows ?? []), [rows])
+  /**
+   * S1.c — search runs BEFORE the counts, on purpose.
+   *
+   * The page's one invariant is that a chip's number equals the rows clicking
+   * it reveals. A search that filtered only the list would break it silently:
+   * the chip would say 8 and land on 2. So the search narrows the set, and the
+   * counts, the remainder and the list are all derived from that same set by
+   * the same `views.ts` functions the vitest proves.
+   *
+   * `searchOptions`, not `includes`: real ads names are separator-heavy
+   * ("GALE | IT | Broad | Brand", "DE_Exact_3_Keywords") and a plain substring
+   * test returns zero for every realistic query an operator types.
+   */
+  const searched = useMemo(() => {
+    const all = rows ?? []
+    if (!q.trim()) return all
+    return searchOptions(q, all, (a) =>
+      `${a.title} ${a.targetLabels.join(' ')} ${a.targetIds.join(' ')}`,
+    )
+  }, [rows, q])
+
+  const counts = useMemo(() => tileCounts(searched), [searched])
+  const closed = useMemo(() => closedCount(searched), [searched])
   const visible = useMemo(
-    () => visibleRows(rows ?? [], { filter, showClosed }),
-    [rows, filter, showClosed],
+    () => visibleRows(searched, { filter, showClosed }),
+    [searched, filter, showClosed],
   )
   /** What the "All" chip counts — and it must equal what clicking it reveals. */
-  const openTotal = (rows?.length ?? 0) - (showClosed ? 0 : closed)
+  const openTotal = searched.length - (showClosed ? 0 : closed)
 
   /** What everything on screen has cost, and what we cannot know. */
   const spend = useMemo(() => {
@@ -450,6 +476,7 @@ export function AssignmentsClient() {
               <>
                 Showing <b>{visible.length}</b> of <b>{rows.length}</b> assignment
                 {rows.length === 1 ? '' : 's'}
+                {q.trim() ? <> matching “{q.trim()}”</> : null}
                 {' · '}
                 <span
                   title={
@@ -492,7 +519,22 @@ export function AssignmentsClient() {
                 </button>
               </>
             }
-          />
+          >
+            {/* A search box over four rows is furniture. Eight is where a list
+                stops being scannable in one look, so that is where it appears —
+                a number rather than a taste, so it can be argued with. */}
+            {rows.length >= 8 ? (
+              <input
+                className="acr-pg-search as-search"
+                type="search"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search name or target…"
+                aria-label="Search assignments by name or target"
+                title="Matches the assignment's name and what it points at. Every word you type must appear, in any order — so “gale broad” finds “GALE | IT | Broad | Brand”."
+              />
+            ) : null}
+          </GridToolbar>
           <DataGrid<AssignmentRow>
             columns={columns}
             rows={visible}
@@ -501,11 +543,13 @@ export function AssignmentsClient() {
             emptyState={
               <FilteredEmpty
                 filter={filter}
+                q={q}
                 total={rows.length}
                 onClear={() => {
                   setFilter(null)
                   setShowClosed(true)
                 }}
+                onClearSearch={() => setQ('')}
                 onCreate={() => setCreating(true)}
               />
             }
@@ -622,15 +666,41 @@ function DueBadge({ dueAt }: { dueAt: string | null }) {
  */
 function FilteredEmpty({
   filter,
+  q,
   total,
   onClear,
+  onClearSearch,
   onCreate,
 }: {
   filter: AssignmentState | null
+  q: string
   total: number
   onClear: () => void
+  onClearSearch: () => void
   onCreate: () => void
 }) {
+  const query = q.trim()
+  if (query) {
+    return (
+      <div className="as-gridempty">
+        <strong>
+          Nothing matches “{query}”
+          {filter ? <> in {stateDef(filter).label.toLowerCase()}</> : null}.
+        </strong>
+        <span>It looks at the assignment’s name and what it points at.</span>
+        <span className="as-gridempty-acts">
+          <button className="acr-btn" onClick={onClearSearch}>
+            Clear search
+          </button>
+          {filter ? (
+            <button className="acr-btn" onClick={onClear}>
+              Show all {total}
+            </button>
+          ) : null}
+        </span>
+      </div>
+    )
+  }
   if (filter) {
     return (
       <div className="as-gridempty">

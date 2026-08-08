@@ -155,6 +155,10 @@
 .as-page .h10-ds-grid-empty { color: #5b6573; padding: 34px 20px; }
 
 .as-page .h10-ds-toolbar { flex-wrap: wrap; row-gap: 6px; }
+.as-search { min-width: 240px; }
+/* The count is the toolbar's anchor, so it does not shrink under the search
+   box — a truncated "Showing 22 of 24" is worse than a narrower input. */
+.as-page .h10-ds-toolbar .cnt { flex: none; }
 .as-order,
 .as-asof {
   font-size: 11.5px;
