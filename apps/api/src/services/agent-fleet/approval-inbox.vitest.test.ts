@@ -170,17 +170,37 @@ describe('rejectAllForCharter — AP.1', () => {
 describe('listInbox — AP.2', () => {
   // AP.4 — a parked approve stays in `waiting` so its Undo is still
   // reachable after a reload; it is not "decided" until it has actually run.
-  it('waiting shows fleet tools that are pending or parked', async () => {
+  it('waiting shows fleet tools that are pending or parked, and hides a snoozed one until it is due', async () => {
     await listInbox('waiting')
-    expect(db.agentApproval.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          status: { in: ['pending', 'scheduled'] },
-          toolName: { in: expect.any(Array) },
-        },
-        orderBy: { requestedAt: 'asc' },
-      }),
-    )
+    /*
+     * Two `findMany` calls happen here — AP.8's track record runs first — so
+     * this picks the inbox query rather than asserting on whichever came first.
+     *
+     * The expectation was rewritten rather than loosened. It broke because the
+     * NAF.AQ snooze column added an `OR` clause to `whereFor('waiting')` and
+     * this test still described the pre-snooze query; `objectContaining`
+     * deep-compares the `where` VALUE, so one extra key fails it. Asserting the
+     * new intent is the point: a set-aside request leaves the queue until it is
+     * due, and the counts use this same clause deliberately, so the badge can
+     * never disagree with the list.
+     */
+    const call = db.agentApproval.findMany.mock.calls.find((c) => {
+      const w = c[0]?.where as { status?: { in?: string[] } } | undefined
+      return Boolean(w?.status?.in?.includes('pending'))
+    })
+    expect(call, 'the waiting query was never issued').toBeDefined()
+    const where = call![0]!.where as {
+      status: { in: string[] }
+      toolName: { in: string[] }
+      OR: unknown[]
+    }
+    expect(where.status.in).toEqual(['pending', 'scheduled'])
+    expect(Array.isArray(where.toolName.in)).toBe(true)
+    expect(where.OR).toEqual([
+      { snoozedUntil: null },
+      { snoozedUntil: { lte: expect.any(Date) } },
+    ])
+    expect(call![0]!.orderBy).toEqual({ requestedAt: 'asc' })
   })
 
   it('decided covers every decided status, including the transient claim', async () => {
