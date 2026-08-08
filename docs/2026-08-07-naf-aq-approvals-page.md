@@ -2501,3 +2501,144 @@ drawer this page copies)
 [wcag1413]: https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html
 [wcag148]: https://www.w3.org/WAI/WCAG22/Understanding/visual-presentation.html
 [wcag258]: https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html
+
+---
+
+## 12.11 — S1R execution record (2026-08-08)
+
+Four phases, four commits, each one built and pushed on its own and measured on
+production before the next.
+
+| Phase | Commit | What landed |
+|---|---|---|
+| **S1.a** | `2031ed38c` | `FleetPageShell` adopted; the promise became the page description; the `.aq-page` root; the `.acr-sub` contrast fix; the 1px rule; `.aq-promise` deleted |
+| **S1.b** | `83aa5a3fb` | `HowApprovalsWork.tsx` on the DS `Drawer`; the trigger into the header's `aside`; six headings rewritten as answers; **the stale amend paragraph corrected**; `.acr-fl-checkstoggle` retired from this page |
+| **S1.c** | `626e17d7e` | Two defects the browser found and `tsc` could not (below) |
+| **S1.d** | `dd9a179da` | The shared `<Term>` meets WCAG 1.4.13 on all ten fleet pages |
+
+### Measured on live Vercel + Railway, 1728×906, after S1.c
+
+| | Before | After |
+|---|---|---|
+| S1's vertical footprint | 155px | **124px** |
+| Header row children | **1**, leaving 1217px (75%) dead | **2** — identity block + the teaching control |
+| Teaching control target size | 18.8px tall (passed 2.5.8 only via the Spacing exception) | **30.8px** — clears the 24px minimum outright |
+| Distinct font sizes in S1 | **7** (20/19/13/12.5/12/11/10.5) | **2** (20 and 13), plus 12 inside the bordered control |
+| Description contrast | `#667485` — **4.41 ✗** | `#55616f` — **5.83 ✓** |
+| Description measure | the promise it replaced ran at **171 chars/line** | **75 chars/line** |
+| Teaching prose measure | **261–266 chars/line** | **78 chars/line**, at 10.39:1 in a 520px drawer |
+| `<Term>` inside the drawer | n/a | **0** — verified, not assumed |
+| Horizontal overflow | none | none; `.acr` still fills 100% of its available width |
+
+### Two defects found in the browser. Neither was visible to `tsc`, the DS ratchet or a full build.
+
+**1 · The reading measure I specified did not bind.** `max-width: 76ch` on the
+description bought **96 actual characters per line** — over the WCAG 1.4.8
+ceiling that S1.b existed to get under. Measured in place: `1ch` here is
+**8.20px** (the advance width of the digit `0`) while the average character in
+that sentence is **6.33px**, so a `ch` cap reads about 30% tighter than it
+behaves. `58ch` = 476px = **75 real characters**.
+
+**The generalisable form, worth more than the fix:** `ch` is not "characters"
+for prose. If a measure matters, assert it with a canvas text measurement
+against the actual copy — do not trust the unit. Every "chars/line" figure in
+this Part is measured that way for exactly this reason.
+
+**2 · The one tooltip in S1 opened fifty pixels above the viewport.**
+`.acr-term-tip` opens upward and is 118px tall; the page description sits ~54px
+from the top of the page, so the definition of *workers* rendered at
+`top: -50` with half of it unreadable — on the page whose standing requirement
+is that a beginner understands every screen. Flipped down page-locally, which
+is deterministic here because this element is always near the top; the general
+fix (flip on available space) belongs with the shared component.
+
+Both were introduced by S1.a/S1.b and caught by measuring the deployed page.
+The through-line this document keeps re-finding holds again: **the defects that
+survive every gate are the ones only a browser can see.**
+
+### The bug S1.d nearly shipped, and no gate would have caught it
+
+The first version of the Escape handler registered a `document` keydown
+listener from **every** un-dismissed `<Term>` on the page. One Escape anywhere
+would have marked all of them dismissed — and a term the pointer had never
+touched could never re-arm, because re-arming happens on *its own*
+`mouseleave`/`blur`, which never fires for an element you never entered. On the
+Controls page that would have silently killed every tooltip until a reload.
+
+It compiled, it passed the ratchet, and it built. It was caught by reasoning
+about the fan-out of a shared component across nineteen files — which is the
+argument for S1.d being its own phase with its own claim rather than a line
+inside a header rebuild.
+
+### S1.d verified on production, on two pages
+
+The shared `<Term>` change lands on nineteen files, so it was verified where the
+blast radius is, not only where it was written.
+
+| Check | Before | After |
+|---|---|---|
+| `pointer-events` on the tip | `none` | `auto` |
+| **Hoverable** — hit-test the centre of an open tooltip | returned `.aq-gate-body`, the element *behind* it | returns `.acr-term-tip` ✓ |
+| **Hoverable** — hit-test the 8px gap between term and tip | the gap dropped `:hover` before the pointer arrived | returns `.acr-term-tip` — the bridge works ✓ |
+| **Dismissible** — Esc | nothing happened | tip hidden, `.dismissed` set, **focus unmoved** ✓ |
+| Re-arm | n/a | blur → focus shows it again ✓ |
+| Position | the S1 tooltip opened at `top: -50` | fully on screen, `top: 99 → bottom: 217` ✓ |
+
+**And the fan-out test, which is the reason this was its own phase.** On
+`/fleet/controls`, which carries **39** `<Term>` instances:
+
+| | |
+|---|---|
+| Terms dismissed by one Escape | **1** — the one the focus was on |
+| Other terms marked dismissed | **0** |
+| A different term still opens afterwards | yes |
+| The dismissed term recovers on blur → focus | yes |
+
+That is exactly the failure the first implementation would have produced — all
+39 dismissed, none able to re-arm — measured on the page where it would have
+done the most damage, and proven absent.
+
+### Three corrections to the study, from measuring what shipped
+
+1. **The description's contrast is 5.83:1, not the 6.02 §12.4.3 predicted.** The
+   6.0 figure came from Activity's Part 18 and is against a different resolved
+   background. Both are above the floor; the measured number is the one that
+   counts, and the lesson is the one already in Activity's stylesheet: measure
+   in place, not on paper.
+2. **The drawer runs at 78 chars/line, not the ~72 §12.4.4 predicted.** Inside
+   WCAG 1.4.8's ceiling of 80, and three characters above the 45–75 comfort
+   band. **Not chased**, deliberately: closing it would mean either narrowing
+   the panel away from the 520px the Assignments drawer uses, or an asymmetric
+   internal gutter, and the operator's standing rule on balanced symmetric
+   spacing costs more than three characters buys.
+3. **The drawer holds 473 words, not the 276 it replaced.** Stated plainly
+   rather than buried: the teaching layer got *longer*, because the stale amend
+   paragraph had to be replaced with what AQ.8 actually built, and snooze
+   needed a sentence. What changed is where those words are — out of the page
+   flow, behind one control, structured under six scannable answers, at a third
+   of the line length. "Fewer words" was never the goal; "not a wall" was.
+
+### What this session could not verify, stated rather than papered over
+
+- **Real-keyboard Escape on the drawer.** The harness's key injection does not
+  reach the page's `document` listener — the same artifact that made
+  `el.focus()` not match `:focus` until the page was clicked. A *synthetic*
+  `keydown` closes the drawer and the backdrop click closes it, so the handler
+  is present and correct, but it is the DS `Drawer`'s own shipped behaviour and
+  not something this change introduced.
+- **Media-query behaviour at narrow viewports.** `resize_window` did not change
+  this tab's CSS viewport (it stayed 1728 while `outerWidth` went to 756), so
+  the narrow-width evidence is a **container** probe — it exercises flex
+  wrapping and the auto-fit grid and does **not** fire a media query. No
+  horizontal overflow was produced at any container width, and none at a 200%
+  zoom proxy.
+
+### Where the page stands
+
+S1 is done and S2–S10 are untouched, including the five findings in §12.7 — of
+which the two that matter most are the **347px of load shift** under the header
+and the **4.20:1 open-pipe line**, the sentence that will be on screen every day
+once the fleet is switched on. **S1 was not the bigger half of the wall**, and
+that was said before the build rather than after it: the gate-state section is
+still 333px of amber carrying 65 words at 257–268 characters per line. It is
+the obvious next engagement.
