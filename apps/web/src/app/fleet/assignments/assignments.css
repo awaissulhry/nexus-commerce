@@ -538,10 +538,13 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  /* Measured on prod, not guessed: the box sits ~285px down, so a fixed
-     420px still left 257px blank. This fills to the fold with a small
-     breathing margin and never overflows into a scrollbar on an empty page. */
-  min-height: max(320px, calc(100vh - 21rem));
+  /* Measured on prod, not guessed, and re-measured after S1.b: the box used to
+     sit ~285px down, hence `21rem`. Replacing the 81px strip with a 28px chip
+     band moved it up to ~208px, so the same constant then left **128px** of
+     dead space below the fold — the shortening of one band silently became a
+     gap in another. `15rem` puts the bottom edge ~32px above the fold again.
+     If this band ever changes height, re-measure this number with it. */
+  min-height: max(320px, calc(100vh - 15rem));
 }
 .as-emptyicon { color: #b6c0cd; }
 .as-emptybody {
