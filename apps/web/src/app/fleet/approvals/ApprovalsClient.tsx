@@ -572,6 +572,19 @@ export function ApprovalsClient() {
   const [gate, setGate] = useState<GateState | null>(null)
   const [outside, setOutside] = useState<OutsideRow[]>([])
   const [loading, setLoading] = useState(true)
+  /**
+   * What a bulk decision actually did. Both bulk endpoints have always
+   * returned `{done, of, failed[]}` and every client discarded it, so a
+   * partial failure looked identical to a success: the page just reloaded and
+   * some rows were still there. Partial failure is the NORMAL case when
+   * writing to a rate-limited third-party API, and it deserves a sentence.
+   */
+  const [bulkResult, setBulkResult] = useState<{
+    done: number
+    of: number
+    failed: string[]
+    error?: string
+  } | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -804,6 +817,34 @@ export function ApprovalsClient() {
 
         <ViewTabs view={view} counts={counts} onChange={setView} />
 
+        {bulkResult ? (
+          <p
+            className={`aq-bulkresult${bulkResult.failed.length || bulkResult.error ? ' partial' : ''}`}
+            role="status"
+          >
+            {bulkResult.error ? (
+              <>{bulkResult.error}</>
+            ) : bulkResult.failed.length === 0 ? (
+              <>All {bulkResult.done} went through.</>
+            ) : (
+              <>
+                <strong>
+                  {bulkResult.done} of {bulkResult.of} went through — {bulkResult.failed.length}{' '}
+                  did not.
+                </strong>{' '}
+                {/* The reasons verbatim: a count alone tells the operator
+                    something is wrong and nothing about what. */}
+                {bulkResult.failed.slice(0, 4).join('; ')}
+                {bulkResult.failed.length > 4 ? ` (+${bulkResult.failed.length - 4} more)` : ''}. The
+                ones that did not are still in the list below.
+              </>
+            )}
+            <button className="aq-bulkdismiss" onClick={() => setBulkResult(null)}>
+              Dismiss
+            </button>
+          </p>
+        ) : null}
+
         {loading ? (
           <div aria-busy="true" aria-label="Loading approvals">
             {[70, 70].map((h, i) => (
@@ -842,7 +883,23 @@ export function ApprovalsClient() {
               return r?.sentence ?? `This affects ${ids.length} actions.`
             }}
             onBulkDecide={(ids, d, reason) => {
-              void post('approvals/bulk-decide', { ids, decision: d, reason }).then(after)
+              void post('approvals/bulk-decide', { ids, decision: d, reason }).then((r) => {
+                const res = r as unknown as {
+                  done?: number
+                  of?: number
+                  failed?: string[]
+                  error?: string
+                } | null
+                if (res) {
+                  setBulkResult({
+                    done: res.done ?? 0,
+                    of: res.of ?? ids.length,
+                    failed: res.failed ?? [],
+                    error: res.error,
+                  })
+                }
+                return after()
+              })
             }}
             onRecheck={recheck}
             onAmend={amend}

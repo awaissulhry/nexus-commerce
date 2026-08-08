@@ -1732,3 +1732,22 @@ number was wrong; the contradiction was the entire signal.
 decide/undo carry the *run's* `agentKey` as `charterKey` with a null note, so
 matching on the marker missed them — the same over-narrow-cleanup shape as
 before. Final state: **18 approvals, 0 exemplars, 0 audit rows.**
+
+### Partial failure gets a sentence (2026-08-08)
+
+Both bulk endpoints have always returned `{ done, of, failed[] }` and **every
+client discarded it**, so a partial failure looked exactly like a success: the
+page reloaded and some rows were simply still there.
+
+Partial failure is the *normal* case when writing to a rate-limited third-party
+API — Terraform's whole apply model is built around it — and the research is
+blunt that presenting it as a stack trace, or not at all, is the weakest part of
+every tool surveyed. It now says what happened:
+
+> *"7 of 10 went through — 3 did not. already scheduled; approval not found;
+> still inside the undo window. The ones that did not are still in the list
+> below."*
+
+The reasons verbatim, capped at four with a count for the rest. A bare number
+tells the operator something is wrong and nothing about what — which is the
+same silence this page keeps finding in other clothes.
