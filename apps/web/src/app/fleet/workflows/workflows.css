@@ -139,9 +139,12 @@
   align-self: start;
   min-width: 0;
 }
-/* The rhythm lane always reserves its three slots, so a routine that has
-   never run does not make its card 36px shorter than its neighbours. */
-.wf-lane-rhythm { gap: 6px; min-height: 108px; }
+/* The rhythm lane reserves its full height and pins the run strip to the
+   bottom (S1.b), so the bars sit on one line across every card no matter how
+   much the last-run sentence above them wrapped — and a routine that has
+   never run does not make its card shorter than its neighbours. */
+.wf-lane-rhythm { gap: 6px; min-height: 124px; }
+.wf-lane-rhythm .wf-recent { margin-top: auto; }
 
 .wf-purpose,
 .wf-touch,
@@ -260,17 +263,30 @@
   font-variant-numeric: tabular-nums;
 }
 
-.wf-dots { display: inline-flex; gap: 3px; align-items: center; }
-.wf-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #dfe5ec;
+/* ── S1.b — the run bars ─────────────────────────────────────────────────
+   Airflow's two-dimensional strip in the ink eight dots used for one: colour
+   is how the run ended, height is how long it took relative to the longest
+   run drawn. Twelve slots always, so the strip is the same width on every
+   card and an empty one reads as a state rather than a gap. */
+.wf-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 24px;
+  cursor: help;
 }
-.wf-dot.ok   { background: #2f9e6e; }
-.wf-dot.fail { background: #d4574e; }
-.wf-dot.halt { background: #e0a63f; }
-.wf-dot.run  { background: #4a7ab8; }
+.wf-bar {
+  width: 6px;
+  min-height: 6px;
+  border-radius: 2px;
+  background: #dfe5ec;
+  flex: none;
+}
+.wf-bar.ok    { background: #2f9e6e; }
+.wf-bar.fail  { background: #d4574e; }
+.wf-bar.halt  { background: #e0a63f; }
+.wf-bar.run   { background: #4a7ab8; }
+.wf-bar.empty { background: #e7ecf2; height: 6px; }
 
 .wf-halt {
   font-size: 12.5px;

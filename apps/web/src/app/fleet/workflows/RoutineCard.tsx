@@ -27,6 +27,7 @@ import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import {
   CHIP_CLASS,
   agoTs,
+  fmtDuration,
   prettyCron,
   until,
   type RoutineStatus,
@@ -34,6 +35,33 @@ import {
   type ScheduleJob,
 } from './lib'
 import type { BuiltinRoutine } from './routines'
+
+/* ── S1.b — the run-history strip ────────────────────────────────────────
+   Was eight 8px dots that encoded outcome and nothing else, capped silently
+   at 8 while the caption said "43 runs on record". Airflow's DAG cards spend
+   the same ink on two dimensions — colour for how a run ended, HEIGHT for how
+   long it took — and we already compute `durationMs` per orchestration in
+   lib.ts and threw it away here.
+
+   The honesty rules the shipped list established carry over exactly: a run
+   still in flight is never drawn as a failure, a routine that has never run
+   gets UiPath's grey — twelve empty slots, a state rather than an absence —
+   and the cap is stated on screen ("latest 12 of 43"), not only in an
+   aria-label. Nothing is inferred: a group whose duration was never recorded
+   draws at a neutral mid height and says so when you hover it. */
+const MAX_BARS = 12
+const BAR_MIN = 6
+const BAR_MAX = 24
+/** Neutral height for a group whose duration is unknown — never zero, which
+ *  would read as "instant", and never full, which would read as "slowest". */
+const BAR_UNKNOWN = 13
+
+function outcomeWord(g: RunGroup): string {
+  return g.running ? 'running now' : g.halted ? 'stopped early' : g.ok ? 'ok' : 'failed'
+}
+function outcomeClass(g: RunGroup): string {
+  return g.running ? 'run' : g.halted ? 'halt' : g.ok ? 'ok' : 'fail'
+}
 
 export interface RoutineCardProps {
   routineKey: string
@@ -114,7 +142,35 @@ export function RoutineCard(props: RoutineCardProps) {
   const trigger = triggerLine(props)
   const version = versionChip(props)
   const last = groups[0] ?? null
-  const dots = groups.slice(0, 8).reverse()
+  /* Oldest on the left, so the strip reads left-to-right like time does. */
+  const bars = groups.slice(0, MAX_BARS).reverse()
+  const longest = Math.max(
+    0,
+    ...bars.map((g) => (g.running ? 0 : (g.durationMs ?? 0))),
+  )
+  const barHeight = (g: RunGroup): number => {
+    if (g.running) return BAR_MAX
+    const d = g.durationMs
+    if (d == null || d <= 0 || longest <= 0) return BAR_UNKNOWN
+    return BAR_MIN + Math.round((BAR_MAX - BAR_MIN) * (d / longest))
+  }
+  const barTitle = (g: RunGroup): string => {
+    const when = new Date(g.startedAt).toLocaleString()
+    const took = g.running
+      ? 'still running'
+      : g.durationMs != null && g.durationMs > 0
+        ? `took ${fmtDuration(g.durationMs)}`
+        : 'duration not recorded'
+    return `${when} — ${outcomeWord(g)}, ${took}`
+  }
+  const stripHint = bars.length
+    ? 'Each bar is one run, oldest on the left. Its colour is how the run ended; its height is how long it took, next to the longest run shown here.'
+    : 'No runs recorded for this routine yet. Each slot will fill with one run.'
+  const stripCaption = !groups.length
+    ? 'nothing to chart yet'
+    : groups.length > bars.length
+      ? `latest ${bars.length} of ${groups.length} runs`
+      : `${groups.length} run${groups.length === 1 ? '' : 's'} on record`
   /* The glyph is the trigger TYPE, not its state: a routine with a clock is a
      clock routine even when the clock is off. No clock evidence → by hand,
      which is exactly what the sentence beside it says. */
@@ -200,24 +256,24 @@ export function RoutineCard(props: RoutineCardProps) {
             <span className="wf-lastline muted">never run</span>
           )}
 
-          {groups.length > 0 ? (
-            <span className="wf-recent">
-              <span className="wf-dots" aria-label={`Last ${dots.length} runs, oldest first`}>
-                {dots.map((g) => (
-                  <span
-                    key={g.id}
-                    className={`wf-dot ${g.running ? 'run' : g.halted ? 'halt' : g.ok ? 'ok' : 'fail'}`}
-                    title={`${new Date(g.startedAt).toLocaleString()} — ${g.running ? 'running now' : g.halted ? 'stopped early' : g.ok ? 'ok' : 'failed'}`}
-                  />
-                ))}
-              </span>
-              <span className="wf-sub">
-                {groups.length > dots.length
-                  ? `latest ${dots.length} of ${groups.length} runs`
-                  : `${groups.length} run${groups.length === 1 ? '' : 's'} on record`}
-              </span>
+          <span className="wf-recent">
+            <span className="wf-bars" title={stripHint} aria-label={stripHint}>
+              {bars.map((g) => (
+                <span
+                  key={g.id}
+                  className={`wf-bar ${outcomeClass(g)}`}
+                  style={{ height: `${barHeight(g)}px` }}
+                  title={barTitle(g)}
+                />
+              ))}
+              {/* UiPath's rule: never-run is a colour, not an absence. The
+                  empty slots say "twelve runs would show here". */}
+              {Array.from({ length: MAX_BARS - bars.length }, (_, i) => (
+                <span key={`slot-${i}`} className="wf-bar empty" />
+              ))}
             </span>
-          ) : null}
+            <span className="wf-sub">{stripCaption}</span>
+          </span>
         </div>
       </div>
     </Link>
