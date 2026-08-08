@@ -45,6 +45,7 @@ import {
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
+import { FleetPageShell } from '../_shell/FleetPageShell'
 import { ApprovalCard, type FleetLabels } from './ApprovalCard'
 import {
   PrecedentPanel,
@@ -123,20 +124,46 @@ function whenNext(iso: string | null): string {
 /* ── S1 · the standing promise ─────────────────────────────────────────── */
 
 /**
- * Two sentences that must survive a FULL queue, which is why they are not
- * inside the empty state: the empty state disappears exactly when volume makes
- * rubber-stamping tempting.
+ * S1.a (study Part 12) — the promise IS the page description now, not a green
+ * banner under it.
+ *
+ * Three measured reasons, all on production before the change:
+ *
+ *   1. It was said twice. `.acr-sub` read "Everything the fleet wants to do and
+ *      cannot do until you say yes" and the banner 38px below it made the same
+ *      guarantee at 171 characters per line. A reader who read both learned
+ *      nothing from the second.
+ *   2. It was GREEN — a success colour on a statement that is not a success —
+ *      and it never changed. A never-changing element in notification clothing
+ *      is the stimulus the habituation literature says is ignored fastest
+ *      (visual processing collapses after the SECOND exposure). Helios,
+ *      Atlassian and Carbon all reserve that treatment for state changes; a
+ *      standing guarantee is page-level identity, and Helios is explicit that
+ *      page-level information belongs at the top of the page.
+ *   3. As a description it survives a full queue by construction — it is not
+ *      inside the empty state, so it cannot vanish exactly when volume makes
+ *      rubber-stamping tempting. That was the property the study wanted; the
+ *      banner was one way of getting it, and not the good one.
+ *
+ * Hierarchy comes from WEIGHT, not colour: the lede is 13/600 at 14.3:1, which
+ * is darker and heavier than the same words were inside the tinted box.
+ *
+ * "one of your workers", NOT "the fleet": `worker` has a glossary entry and
+ * `fleet` does not, and this page will not mint a term in a shared append-only
+ * file for a word it does not need.
+ *
+ * The second sentence stops at "unless you say yes" on purpose. The other half
+ * — that today a yes writes nothing either — is state-dependent, and S2 and the
+ * card both say it. An invariant that needs rewording the day Phase F lands is
+ * not an invariant.
  */
-function StandingPromise() {
+function PageDescription() {
   return (
-    <p className="aq-promise">
-      <ShieldCheck size={14} aria-hidden />
-      <span>
-        <strong>Nothing on this page has happened yet.</strong> Every card is something one of
-        your AI workers <em>wants</em> to do — and nothing the fleet proposes reaches Amazon
-        unless you say yes here.
-      </span>
-    </p>
+    <>
+      <span className="aq-lede">Nothing on this page has happened yet.</span>
+      Every card is a change one of your <Term k="worker">workers</Term> wants to make. It does
+      not happen unless you say yes.
+    </>
   )
 }
 
@@ -779,8 +806,7 @@ export function ApprovalsClient() {
   )
 
   return (
-    <>
-      <StandingPromise />
+    <FleetPageShell title="Approvals" sub={<PageDescription />}>
       <HowThisWorks gate={gate} />
 
       {err ? (
@@ -933,6 +959,6 @@ export function ApprovalsClient() {
         onAmend={amend}
         onSnooze={snooze}
       />
-    </>
+    </FleetPageShell>
   )
 }

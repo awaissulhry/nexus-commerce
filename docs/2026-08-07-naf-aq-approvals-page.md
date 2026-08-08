@@ -1756,9 +1756,18 @@ same silence this page keeps finding in other clothes.
 
 # PART 12 — S1 DESIGN STUDY: the header, the standing promise, and the teaching layer
 
-**Status: AWAITING OPERATOR APPROVAL.** No code written. Stream tag `SB.AQ-S1R`,
-opened 2026-08-08 against the operator's judgement on the shipped page: *"way
-off, very odd and imperfect."*
+**Status: APPROVED by the operator 2026-08-08, and in build.** Three decisions
+taken on the study as written:
+
+1. **Approved as specified — build S1.a–S1.c.**
+2. **§12.9's departure is upheld: the promise becomes the page description and
+   is NOT sticky.** The approved AQ-S1 wording ("does not scroll away") is
+   superseded by this decision, for the reasons in §12.9.
+3. **S1.d is taken** — the WCAG 1.4.13 repair to the shared `<Term>` ships as
+   its own phase, with its own claim, after S1.c.
+
+Stream tag `SB.AQ-S1R`, opened 2026-08-08 against the operator's judgement on
+the shipped page: *"way off, very odd and imperfect."*
 
 That is about the look, not the data. Parts 0–11 stand: the gate-state facts are
 true, the card is honest, the queue is empty for three verified structural

@@ -11,29 +11,63 @@
  * so that block is the only element allowed to be visually loud.
  */
 
-/* ── S1 · the standing promise ──────────────────────────────────────────── */
+/* ── S1 · the identity block ────────────────────────────────────────────
+ *
+ * Rebuilt 2026-08-08 — SB.AQ-S1R, study Part 12.
+ *
+ * What was here before, measured on production at 1728x906 against the
+ * resolved #f4f6f9 background: SEVEN font sizes above the queue card in ten
+ * size/weight pairs, a page description and a green promise banner asserting
+ * the SAME guarantee 38px apart, and prose at 171-266 characters per line
+ * against WCAG 1.4.8's ceiling of 80. The header row was 1614px wide with a
+ * single 397px child — 1217px, 75% of it, unreachable — because this page
+ * hand-rolled the header instead of using `FleetPageShell`.
+ *
+ * The rule that replaces it: TWO sizes for the whole block (20px title, 13px
+ * everything else), weight and colour carrying the hierarchy, an explicit
+ * reading measure on every prose element, and a single 1px rule marking where
+ * the page's identity ends and today's situation begins. Identical in every
+ * state — S1 reads no data, so it cannot flicker, shift or skeleton, and it is
+ * the same height at 0 rows and at 400.
+ *
+ * Every colour below is >= 4.5:1 on the surface it actually sits on, and is a
+ * value that already exists in the fleet for the same role, so the two rebuilt
+ * headers cannot drift. Re-measure with getComputedStyle after any change —
+ * tsc cannot see a contrast failure and neither can a screenshot. */
 
-.aq-promise {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  margin: 0 0 10px;
-  padding: 10px 12px;
-  border: 1px solid #cfe3d4;
-  border-left: 3px solid #2f855a;
-  border-radius: 6px;
-  background: #f3faf5;
+.aq-page .acr-head {
+  /* The identity block and the header control are centred against each other;
+     `flex-wrap` lets the control drop below the title on a narrow viewport
+     rather than crushing the description. */
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  /* The rule. Carried as the header's own border rather than on a wrapper, so
+     nothing is inserted around S2. */
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e4e9ef;
+  margin-bottom: 14px;
+}
+
+/* #667485 in control-room.css measures 4.41:1 — under the 4.5 floor for 13px
+   text. That file is frozen shared ground; the fix lives here, under a root
+   only this page carries. #55616f is 6.02:1 and is the value Activity settled
+   for this same role at its S1R. Four fleet pages now carry this one-line
+   override, which is the point at which the central fix is cheaper. */
+.aq-page .acr-sub {
+  color: #55616f;
+  line-height: 1.5;
+  /* Nothing in S1 had a measure before; the promise ran at 171 characters per
+     line and the teaching drawer at 261. WCAG 1.4.8 caps at 80. */
+  max-width: 76ch;
+}
+
+/* The load-bearing sentence gets WEIGHT, not a success colour: 14.3:1, darker
+   and heavier than it was inside the green box it replaces. */
+.aq-lede {
+  display: block;
+  font-weight: 600;
   color: #1c2530;
-  font-size: 13px;
-  line-height: 1.45;
-}
-.aq-promise svg {
-  flex: 0 0 auto;
-  margin-top: 2px;
-  color: #2f855a;
-}
-.aq-promise strong {
-  font-weight: 650;
 }
 
 /* ── S1 · how this works ────────────────────────────────────────────────── */
