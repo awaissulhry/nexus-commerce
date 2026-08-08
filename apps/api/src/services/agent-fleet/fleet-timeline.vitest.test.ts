@@ -551,6 +551,73 @@ describe('ACT.1 — diagnostic workers are excluded, never concealed', () => {
   })
 })
 
+/**
+ * S3R (§18.7) — the test lane is a SECOND population switch, and it has to
+ * behave exactly like the first one: enforced centrally, defaulting to include,
+ * and with the headline counts derived from the same predicate as the rows.
+ *
+ * Measured on production before this was built: the 7 test runs own 7 events
+ * between them and no findings, plans or approvals, so hiding them can never
+ * orphan a child row.
+ */
+describe('S3R — hiding the test lane', () => {
+  const PREVIEW_RUN = {
+    id: 'runp',
+    agentKey: 'amazon-bid-tuner',
+    mode: 'preview',
+    trigger: 'manual',
+    ok: true,
+    status: 'done',
+    findingCount: 0,
+    costUSD: '0.0343',
+    latencyMs: 900,
+    errorMessage: null,
+    haltedReason: null,
+    orchestrationId: null,
+    createdAt: new Date('2026-08-07T21:38:00Z'),
+    workflowKey: null,
+  }
+
+  beforeEach(() => {
+    const all = [...RUNS, PREVIEW_RUN]
+    db.agentRun.findMany.mockImplementation((args: never) => {
+      const a = args as unknown as { take?: number }
+      return Promise.resolve(
+        (a?.take
+          ? all
+          : all.map((r) => ({ id: r.id, orchestrationId: r.orchestrationId, agentKey: r.agentKey }))) as never,
+      )
+    })
+  })
+
+  it('includes test runs by default, so no existing caller changes behaviour', async () => {
+    const { events } = await getFleetTimeline()
+    expect(events.some((e) => e.id === 'run.runp')).toBe(true)
+  })
+
+  it('drops them when asked, and the totals agree with the rows', async () => {
+    const withThem = await getFleetTimeline()
+    const without = await getFleetTimeline({ includeTestRuns: false })
+    expect(without.events.some((e) => e.id === 'run.runp')).toBe(false)
+    expect(without.total).toBe(withThem.total - 1)
+    // The invariant this page exists to keep: the headline and the rows are one
+    // derivation counted twice, never two derivations that can disagree.
+    expect(without.total).toBe(without.events.length)
+    expect(Object.values(without.countsByKind).reduce((a, b) => a + b, 0)).toBe(without.total)
+  })
+
+  it('composes with the self-test switch rather than fighting it', async () => {
+    const both = await getFleetTimeline({ includeDiagnostic: false, includeTestRuns: false })
+    expect(both.events.some((e) => e.id === 'run.runp')).toBe(false)
+    expect(both.total).toBe(both.events.length)
+  })
+
+  it('leaves non-run events alone — only a run carries a mode', async () => {
+    const without = await getFleetTimeline({ includeTestRuns: false })
+    expect(without.events.some((e) => e.kind === 'finding.raised')).toBe(true)
+  })
+})
+
 describe('ACT.1 — the fields a row needs to explain itself', () => {
   it('carries the routine that ran it, when one did', async () => {
     db.agentRun.findMany.mockImplementation((args: never) => {

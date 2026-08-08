@@ -177,6 +177,20 @@ export interface FleetTimelineFilters {
    * existing stream must not change behaviour under it.
    */
   includeDiagnostic?: boolean
+  /**
+   * S3R (§18.7) — set false to drop the Workflows test lane's runs, the same
+   * way `includeDiagnostic` drops the self-test. Enforced in the same place for
+   * the same reason: filtering in the client would leave `total`,
+   * `countsByKind` and `actors` counting rows the caller had already hidden.
+   *
+   * **Defaults to true**, so every existing caller — the Overview's stream
+   * included — is unchanged.
+   *
+   * Measured on production before this was written: the 7 test runs own exactly
+   * 7 events between them and no findings, plans or approvals, so hiding them
+   * removes 7 rows and orphans nothing.
+   */
+  includeTestRuns?: boolean
 }
 
 export interface FleetTimelinePage {
@@ -833,6 +847,12 @@ function matchesFilters(e: FleetEvent, f: FleetTimelineFilters): boolean {
   // rows the headline counts disagree with. Undefined means include, so the
   // Overview's existing stream is untouched.
   if (f.includeDiagnostic === false && e.diagnostic) return false
+  // S3R — the same rule for the test lane. `mode` is the fact; the badge that
+  // used to sniff the source SENTENCE for the word "test" was always false and
+  // was the wrong check anyway (ACT.4b). Only run events carry a mode, which is
+  // correct here: a test run writes nothing, so it owns no findings or plans
+  // that could be orphaned by hiding it.
+  if (f.includeTestRuns === false && e.mode === 'preview') return false
   // The actor filter is enforced HERE, not only in each source's where
   // clause, so it means one thing everywhere: "who performed this act".
   // A plan row belongs to the director, but the critic's ruling on it is the

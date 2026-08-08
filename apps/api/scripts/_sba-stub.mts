@@ -188,15 +188,19 @@ async function handle(url: URL): Promise<unknown> {
     if (isBandRead && SIM.band === 'err') {
       throw new Error('simulated: the band could not check')
     }
-    const raw = q.get('includeSelfTest')
-    const includeDiagnostic =
-      raw === null ? undefined : !['0', 'false', 'no'].includes(raw.trim().toLowerCase())
+    const flag = (name: string): boolean | undefined => {
+      const raw = q.get(name)
+      return raw === null ? undefined : !['0', 'false', 'no'].includes(raw.trim().toLowerCase())
+    }
+    const includeDiagnostic = flag('includeSelfTest')
+    const includeTestRuns = flag('includeTestRuns')
     const page = (await getFleetTimeline(
       {
         q: q.get('q') ?? undefined,
         actors: q.get('actor')?.split(',').map((v) => v.trim()).filter(Boolean),
         kinds: (q.get('kind')?.split(',').filter(Boolean) as never) ?? undefined,
         includeDiagnostic,
+        includeTestRuns,
       },
       { limit: Number(q.get('limit')) || 50, cursor: q.get('cursor') ?? undefined },
     )) as unknown as Timelineish

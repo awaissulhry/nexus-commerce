@@ -49,13 +49,19 @@ function parseDate(raw: string | undefined): Date | undefined {
 }
 
 /**
- * ACT.1 — `?includeSelfTest=0` drops diagnostic workers' events server-side.
+ * ACT.1 — the shape both scope switches use: `?includeSelfTest=0` and, since
+ * S3R, `?includeTestRuns=0`.
  *
- * Absent means INCLUDE, so the Overview's existing stream is unchanged; the
- * Activity page opts out explicitly. Only an explicit false-ish value excludes
- * — an unparseable value must not silently hide 73% of the fleet's history.
+ * Absent means INCLUDE, so the Overview's existing stream is unchanged and each
+ * page opts out explicitly. Only an explicit false-ish value excludes — an
+ * unparseable value must not silently hide 73% of the fleet's history.
+ *
+ * Note the asymmetry with `csv()` above, which is deliberate and tested: kind
+ * and outcome validate against an allow-list and drop unknowns into NO filter,
+ * while `actor` fails CLOSED because actor keys are data. A scope switch fails
+ * OPEN for the same reason kind does — an unreadable value must not hide rows.
  */
-function parseIncludeSelfTest(raw: string | undefined): boolean | undefined {
+function parseIncludeFlag(raw: string | undefined): boolean | undefined {
   if (raw === undefined) return undefined
   const v = raw.trim().toLowerCase()
   if (v === '0' || v === 'false' || v === 'no') return false
@@ -83,6 +89,7 @@ const agentFleetTimelineRoutes: FastifyPluginAsync = async (fastify) => {
       limit?: string
       cursor?: string
       includeSelfTest?: string
+      includeTestRuns?: string
     }
   }>('/agent/fleet/timeline', async (request) => {
     const q = request.query
@@ -100,7 +107,12 @@ const agentFleetTimelineRoutes: FastifyPluginAsync = async (fastify) => {
       kinds: csv(q.kind, KINDS),
       outcomes: csv(q.outcome, OUTCOMES),
       q: q.q?.trim() || undefined,
-      includeDiagnostic: parseIncludeSelfTest(q.includeSelfTest),
+      includeDiagnostic: parseIncludeFlag(q.includeSelfTest),
+      // S3R (§18.7) — `?includeTestRuns=0` drops the Workflows test lane, the
+      // same shape and the same fail-safe as the self-test switch above: absent
+      // means INCLUDE, so every existing caller is unchanged, and only an
+      // explicit false-ish value hides anything.
+      includeTestRuns: parseIncludeFlag(q.includeTestRuns),
     }
     return getFleetTimeline(filters, {
       limit: Number(q.limit) || 50,

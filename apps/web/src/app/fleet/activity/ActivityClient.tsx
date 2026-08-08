@@ -611,15 +611,21 @@ interface BandView {
  */
 function deriveBand(
   runs: FleetEvent[],
-  includeSelfTest: boolean,
+  scope: { selfTest: boolean; testRuns: boolean },
   capped: boolean,
   span: (oldest: string, newest: string) => string,
 ): BandView {
-  const inScope = includeSelfTest ? runs : runs.filter((r) => !r.diagnostic)
+  // S3R — the band's scope follows the PAGE's, across both population switches
+  // (§19.5 clause 1). Test runs own no failures today, so this changes no
+  // number; it is written this way so that the day one fails while the lane is
+  // hidden, the band under-reports nothing.
+  const isHidden = (r: FleetEvent) =>
+    (!scope.selfTest && r.diagnostic) || (!scope.testRuns && r.mode === 'preview')
+  const inScope = runs.filter((r) => !isHidden(r))
   const rows = groupFailures(inScope)
   const total = rows.reduce((n, r) => n + r.count, 0)
 
-  const hiddenRuns = includeSelfTest ? [] : runs.filter((r) => r.diagnostic)
+  const hiddenRuns = runs.filter(isHidden)
   const hiddenRows = groupFailures(hiddenRuns)
   const hiddenTotal = hiddenRows.reduce((n, r) => n + r.count, 0)
   const hidden = {
@@ -1083,6 +1089,9 @@ export function ActivityClient() {
       kinds: csv('kind') as FleetEventKind[],
       q: p.get('q') ?? '',
       selfTest: p.get('selfTest') === '1',
+      // §18.7 — approved default: test runs are HIDDEN, and the honest headline
+      // is the smaller one.
+      testRuns: p.get('testRuns') === '1',
     }
   }, [])
 
@@ -1091,6 +1100,7 @@ export function ActivityClient() {
   const [kinds, setKinds] = useState<FleetEventKind[]>(initial.kinds)
   const [q, setQ] = useState(initial.q)
   const [includeSelfTest, setIncludeSelfTest] = useState(initial.selfTest)
+  const [includeTestRuns, setIncludeTestRuns] = useState(initial.testRuns)
 
   /** The ids currently rendered — what "new" is measured against. */
   const shownIds = useRef<Set<string>>(new Set())
@@ -1109,13 +1119,14 @@ export function ActivityClient() {
       // `countsByKind` and the rows can never disagree. Filtering here would
       // leave the headline counting rows the page had already hidden.
       if (!includeSelfTest) p.set('includeSelfTest', '0')
+      if (!includeTestRuns) p.set('includeTestRuns', '0')
       if (actors.length) p.set('actor', actors.join(','))
       if (effectiveKinds.length) p.set('kind', effectiveKinds.join(','))
       if (q.trim()) p.set('q', q.trim())
       for (const [k, v] of Object.entries(extra ?? {})) p.set(k, v)
       return p.toString()
     },
-    [includeSelfTest, actors, effectiveKinds, q],
+    [includeSelfTest, includeTestRuns, actors, effectiveKinds, q],
   )
 
   /* Mirror the filters into the address bar. `replaceState`, not `push` —
@@ -1127,12 +1138,13 @@ export function ActivityClient() {
     if (kinds.length) p.set('kind', kinds.join(','))
     if (q.trim()) p.set('q', q.trim())
     if (includeSelfTest) p.set('selfTest', '1')
+    if (includeTestRuns) p.set('testRuns', '1')
     const s = p.toString()
     // Keep the hash: it is a permalink to a row, and filtering is not a reason
     // to forget which row you arrived for.
     const hash = window.location.hash
     window.history.replaceState(null, '', `${window.location.pathname}${s ? `?${s}` : ''}${hash}`)
-  }, [grain, actors, kinds, q, includeSelfTest])
+  }, [grain, actors, kinds, q, includeSelfTest, includeTestRuns])
 
   /**
    * The two — and only two — ways a read pair reaches the screen.
@@ -1182,6 +1194,7 @@ export function ActivityClient() {
     try {
       const base = new URLSearchParams({ limit: '1' })
       if (!includeSelfTest) base.set('includeSelfTest', '0')
+      if (!includeTestRuns) base.set('includeTestRuns', '0')
       const [t, s, f, h] = await Promise.all([
         fetch(`${backend}/api/agent/fleet/timeline?${qs()}`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/state`, { cache: 'no-store' }),
@@ -1216,7 +1229,7 @@ export function ActivityClient() {
     } finally {
       setLoading(false)
     }
-  }, [backend, qs, includeSelfTest, adopt, hold])
+  }, [backend, qs, includeSelfTest, includeTestRuns, adopt, hold])
 
   /* The plan feed is small (one plan exists) and static enough not to poll —
      it is fetched once so a plan row has something to open. */
@@ -1525,8 +1538,13 @@ export function ActivityClient() {
         capped: false,
         hidden: { total: 0, rows: [], when: null },
       }
-    return deriveBand(bandRuns.runs, includeSelfTest, bandRuns.capped, dateRange)
-  }, [failuresInScope, bandErr, bandRuns, includeSelfTest])
+    return deriveBand(
+      bandRuns.runs,
+      { selfTest: includeSelfTest, testRuns: includeTestRuns },
+      bandRuns.capped,
+      dateRange,
+    )
+  }, [failuresInScope, bandErr, bandRuns, includeSelfTest, includeTestRuns])
 
   /** The band's one filter, and it is exactly the one its number describes.
    *  SET, never appended: appending to an existing kind selection would produce
@@ -1628,6 +1646,20 @@ export function ActivityClient() {
             the <Term k="selftest">self-test</Term>
           </span>
         </span>
+        {/* §18.7, approved 2026-08-08. The whole point of grouping scope: the
+            second population is an ENTRY here, not a sixth control looking for
+            a home in a wrapping row. Default OFF — the honest headline is the
+            smaller one, which the operator accepted when approving it. */}
+        <span className="sba-scopeopt">
+          <Toggle
+            checked={includeTestRuns}
+            onChange={setIncludeTestRuns}
+            aria-label="Count test runs"
+          />
+          <span title="A rehearsal from the Workflows page: it read real evidence and used a real model, but nothing it decided was written.">
+            test runs
+          </span>
+        </span>
       </div>
       {/* The facet vocabulary comes from its own read. When that read fails
           there is nothing to offer, and empty dropdowns that look ready are the
@@ -1699,8 +1731,17 @@ export function ActivityClient() {
         onRemove: () => setIncludeSelfTest(false),
       })
     }
+    if (includeTestRuns) {
+      out.push({
+        key: 'testruns',
+        dimension: 'Counting',
+        value: 'test runs',
+        widening: true,
+        onRemove: () => setIncludeTestRuns(false),
+      })
+    }
     return out
-  }, [actors, kinds, q, includeSelfTest, facets])
+  }, [actors, kinds, q, includeSelfTest, includeTestRuns, facets])
 
   /* ── export ──────────────────────────────────────────────────────────── */
 
@@ -1834,7 +1875,20 @@ export function ActivityClient() {
    *  *excluded, never concealed* applies to the COUNT and not only to the rows.
    *  86 of 119 events are hidden by default and the shipped header said so
    *  nowhere. */
-  const hiddenBySelfTest = includeSelfTest ? 0 : hiddenByScope(historyTotal, facets)
+  /**
+   * S3R — TWO populations can be hidden now, so the clause names which switches
+   * are doing it. The TOTAL is exact (whole history minus the base scope); the
+   * per-population split is deliberately NOT invented, because it would cost a
+   * read per population and this page does not print numbers it had to guess.
+   */
+  const hiddenCount =
+    includeSelfTest && includeTestRuns ? 0 : hiddenByScope(historyTotal, facets)
+  const hiddenWhat =
+    !includeSelfTest && !includeTestRuns
+      ? 'the self-test and the test lane'
+      : !includeSelfTest
+        ? 'the self-test'
+        : 'the test lane'
 
   /** The counts, as nodes rather than a string, so the numbers can carry the
    *  weight and the prose can stay one size. Hierarchy from weight and colour,
@@ -1881,14 +1935,17 @@ export function ActivityClient() {
     if (filterCount > 0) {
       return facets ? <>Filtered from {facets.total.toLocaleString()}.</> : null
     }
-    if (hiddenBySelfTest > 0) {
+    if (hiddenCount > 0) {
       return (
         <>
-          {num(hiddenBySelfTest)} more from the <Term k="selftest">self-test</Term> are hidden.{' '}
+          {num(hiddenCount)} more are hidden — {hiddenWhat}.{' '}
           <button
             type="button"
             className="sba-inlinebtn"
-            onClick={() => setIncludeSelfTest(true)}
+            onClick={() => {
+              setIncludeSelfTest(true)
+              setIncludeTestRuns(true)
+            }}
           >
             Show them
           </button>
@@ -2181,15 +2238,18 @@ export function ActivityClient() {
               minutes when its model server restarted", which explains 21 of the
               24 and is silently wrong about the 3 that were the AI account
               running out of credit. */}
-          {!includeSelfTest && band.hidden.total > 0 ? (
+          {band.hidden.total > 0 ? (
             <p className="sba-needsnote">
-              The <Term k="selftest">self-test</Term> is hidden. {band.hidden.total} of its runs
-              failed{band.hidden.when ? ` on ${band.hidden.when}` : ''} — the fleet testing
-              itself, never your Amazon account.{' '}
+              {band.hidden.total} hidden {band.hidden.total === 1 ? 'run' : 'runs'} also failed
+              {band.hidden.when ? ` on ${band.hidden.when}` : ''} — the fleet exercising itself
+              rather than your Amazon account.{' '}
               <button
                 type="button"
                 className="sba-inlinebtn"
-                onClick={() => setIncludeSelfTest(true)}
+                onClick={() => {
+                  setIncludeSelfTest(true)
+                  setIncludeTestRuns(true)
+                }}
               >
                 Show me
               </button>
@@ -2197,9 +2257,13 @@ export function ActivityClient() {
                   ONE — "a run of failures in six minutes when its model server
                   restarted" — which is true of 21 of the 24 and silently wrong
                   about the 3 that were the AI account running out of credit.
-                  Pressing Show me puts all 24 into the rows above, classified
-                  correctly and per class, which is the honest way to explain
-                  them: excluded, never concealed, and never mis-explained. */}
+                  Pressing Show me puts them into the rows above, classified per
+                  class: excluded, never concealed, and never mis-explained.
+
+                  S3R — worded across BOTH hidden populations. Test runs own no
+                  failures today, so this reads identically; it is written this
+                  way so the day one fails while the lane is hidden, the band
+                  does not quietly under-report it. */}
             </p>
           ) : null}
         </section>
