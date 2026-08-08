@@ -409,6 +409,32 @@ ships `/facets` alongside client changes, and Assignments has its own routes plu
 a drawer that reads them. If either removes or renames a response field in the
 same commit as its reader, it will reproduce this exactly.
 
+**And a second one from the same engagement, about the VERIFICATION rather than
+the code — every stream uses this technique.** To detect that a phase had
+deployed I grepped the public bundle for a class name my change used. It
+reported deployed; measuring found the change absent. The class had shipped one
+commit EARLIER, so the probe was present in the bundle either way and could only
+ever say yes.
+
+> **A deploy discriminator must be unique to the CHANGE, not merely present in
+> it.** Grep for something that did not exist one commit earlier — a new class,
+> a new literal, a changed declaration — and confirm it returns **0** against the
+> currently-deployed build before trusting it to return 1 later.
+
+**The replacement probe then failed the other way**, and the pair is the real
+lesson. It grepped for `aq-condowner{flex:0 1 auto` — genuinely new — and kept
+saying "not deployed" long after it was, because the minifier ships
+`.aq-condowner{color:#55616f;flex:0 auto;min-width:0;font-weight:400}`:
+properties reordered, `flex: 0 1 auto` collapsed to the equivalent
+`flex: 0 auto`. So: **a class NAME survives minification; a declaration's exact
+text does not.**
+
+Same family as this file's existing warning that the shell chunk hash does not
+change when a route chunk does. A probe that cannot fail is worse than no probe
+— it converts "unverified" into "verified" silently — and a probe that cannot
+succeed just wastes the queue. Sanity-check the MECHANISM (can it find the file?
+print what it found) before trusting either answer.
+
 ### The sharper version — **an UNTRACKED file blocks every session's push**
 
 Recorded by Approvals (`SB.AQ`) 2026-08-07, after doing it to everyone.

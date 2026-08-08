@@ -3290,3 +3290,187 @@ is reserved)
 [pajamas]: https://design.gitlab.com/patterns/empty-states/
 [pajamashelp]: https://design.gitlab.com/usability/contextual-help
 [statusdesign]: https://www.pttrns.com/status-page-design-patterns-how-the-best-saas-companies-communicate-downtime/
+
+---
+
+## 13.12 — S2R execution record (2026-08-08)
+
+Approved by the operator on the study as written. Five phases and three repairs,
+each committed, pushed and measured on production before the next.
+
+| Phase | Commit | What landed |
+|---|---|---|
+| **S2.a** | `799f365c7` | `blockers[]` → enumerated `conditions[]` with `owner`, on the Kubernetes-conditions model |
+| *repair* | `894810de4` | `blockers` restored — **S2.a took the page down** (§13.13) |
+| **S2.b** | `d777c6247` | The readout: three rows, state chips, real tool names; the amber, the tiles, the grid, the chevron and the `24h` tile all retired |
+| *repair* | `e8d28bd53` | Four rules S2.b deleted that belonged to S4 and S5 |
+| **S2.c** | `de012f37a` | The `ch` trap again, and 113px of avoidable height |
+| **S2.d** | `41999c81d` | The loading skeleton and the failed-read state; deprecated `blockers` dropped |
+| **S2.e** | `cc146a160` | Tooltips restored; narrow-width overflow |
+| *repair* | `72fccc782` | `withTerms` typed so `next build` agrees with `tsc` |
+
+### Measured on live Vercel + Railway, 1728×906
+
+| | Before | After |
+|---|---|---|
+| S2's footprint | 332.6px | **362.8px** |
+| Font sizes in the section | **7** (20/19/13/12.5/12/11/10.5) | **2** (13 and 11.5) |
+| Line length | 257–268 chars | **75** |
+| Worst contrast in the section | `.aq-can` **4.24 ✗** | **5.57 ✓** (that chip is now 6.43) |
+| Grid | `387.5px ×4, 0px 0px 0px` — 7 tracks, 3 collapsed | rows |
+| Tool names | `create negative keyword` | *"stop ads showing for a search term"* |
+| Semantic colours | a fourth invented amber | **one**, faults only, from the shared `.acr-banner` |
+| Horizontal overflow | overflow below ~300px | **none at any width down to 220px** |
+| 200% zoom | — | no overflow; chip at an effective 23px |
+| Tab stops in S2 | a full-width chevron button | one link + **three `<Term>`s**, all keyboard-reachable and fully on screen |
+
+**The footprint went UP by 30px and that is the one number that did not improve.**
+Stated plainly rather than buried: the old block was smaller because it crammed
+four unlike facts into a grid. Three fully explained conditions, each with an
+owner and the evidence under the one that needs it, cost 30px more. That trade
+is deliberate. 475.6px — where S2.b first landed — was not, and S2.c took 113px
+back out of it.
+
+### Every state, and how each was actually exercised
+
+**Method, stated because the brief requires it: option (3) — the gate-state
+RESPONSE was intercepted in the deployed page.** Not a local stub, and the
+reason is that this is *stronger* evidence here, not weaker: it exercises the
+production bundle rather than a dev build, needs no local API (so no cron can
+touch prod Neon), and needs no auth. Read-only, client-side, nothing persisted.
+**Nothing in the world was changed — no charter, no dial, no cron, no
+`AgentDefinition` row**, including to make a screenshot look better.
+
+| State | Exercised | Result |
+|---|---|---|
+| (a) all unmet | real prod data | readout, 362.8px |
+| (b) some cleared | stub | chips → `Ready / Not built / Ready` |
+| **(c) the open pipe** | stub | **one line, 19.5px** — *"Ready — a worker can ask you, and the next chance is the weekly council in 42h."* **The first time this state has rendered anywhere in this fleet's history.** |
+| (d) halted | stub | shared `.acr-banner err`, `role="alert"`, above the readout, which still renders beneath |
+| (e) outside pending | stub | one sentence at the foot pointing to S5; 426.1px |
+| (f) loading | intercept + SPA remount | skeleton at **363px**, the readout's exact height, `aria-busy` |
+| (f) read failed | intercept + SPA remount | renders the admission; **invents zero condition rows** |
+
+**One harness fact worth recording, because it silently defeats every state
+test:** the automation drives the tab offscreen, so `document.visibilityState`
+is `hidden` and `useVisibilityPoll` never fires — correctly. No stub takes
+effect until the document is presented as visible. The first two attempts read
+as "the interceptor does not work" and were neither.
+
+### Five defects of my own, every one caught by measuring rather than reviewing
+
+Recorded together because the pattern matters more than any single one.
+
+1. **S2.a took the page down.** Removing `blockers` and updating its reader in
+   one commit ignored that Railway and Vercel deploy independently. The live
+   client called `gate.blockers.map()` on a response without it; `main` fell to
+   84 characters of text. §13.13 has the rule.
+2. **S2.b deleted four rules belonging to S4 and S5** by replacing a
+   marker-to-marker range. Only one was visible enough to notice.
+3. **S2.c: I walked back into the `ch` trap I documented in S1.c**, one phase
+   earlier, in the same stylesheet. `76ch` bought 99 characters.
+4. **S2.e: server composition had silently removed every tooltip.** Once
+   `requirement` and `detail` are composed on the server the client cannot wrap
+   a word in `<Term>`. Caught by auditing tab stops — one, where §13.7.1
+   expected five.
+5. **The repair to S2.e passed `tsc` and failed `next build`**, blocking every
+   parallel session's push.
+6. **My deploy probe gave a false positive**, and this one is in the
+   verification rather than the code — see §13.14. It is the reason rows in the
+   table above are marked pending rather than verified.
+
+**Not one was visible to `tsc`, the DS ratchet, the security suite or the
+build** — except the fifth, which only the build could see. The thing that
+caught them was opening the deployed page and measuring it. That is the
+argument for this engagement's verification discipline, made against my own
+work rather than someone else's.
+
+### Two corrections to the study itself
+
+1. **§13.4.3(f) specified "the readout frame with `Unknown` on every row" and
+   that is not implementable.** Every requirement sentence is composed
+   server-side, so a failed read has no rows to label — and inventing three
+   from a client-side constant would be the stale-constant class this page
+   exists to stop. Shipped as the frame plus one sentence admitting the page
+   cannot answer its own question.
+2. **The `known` field was dropped** from the `GateCondition` interface the
+   study proposed. The server can never return a condition it does not know;
+   "unknown" is a client state for when there is no response at all.
+
+### What is NOT done
+
+- **The S2 ⇄ S3 collapse is built but has never rendered**, because it needs a
+  row in the queue and the queue is structurally unreachable (§1.1). The code
+  path is `waiting > 0`; it is one line and it is unexercised. Named rather
+  than claimed.
+- **`.aq-outnone` (S5) is still 4.24:1** — §13.8, left alone.
+- **S3–S10** untouched.
+
+---
+
+## 13.13 — The rule S2.a produced: a commit is TWO deploys
+
+Posted to `docs/2026-08-07-naf-sb-session-locks.md` §6c as well, because at
+least two other streams ship API and client in single commits.
+
+> **On a split deploy, a field may only be REMOVED one deploy after its last
+> reader stops reading it.** Adding the replacement and deleting the original in
+> one commit is a breaking change dressed as an atomic one.
+>
+> So renaming a response field is always **three** commits, never one: add the
+> new one → move every reader → delete the old one. The middle commit is the one
+> people skip.
+
+**Why no gate catches it:** web keeps a hand-written mirror of the API type, so
+both `tsc` runs are green either way; the ratchet and the security suite never
+look at a response shape; and a vitest that mocks Prisma asserts what the server
+*sends*, not what a *previously deployed* client expects. Only the browser sees
+it, minutes after the push looked successful.
+
+The locks file already said *a commit is a deploy*. This is the same class one
+level down: **a commit is two deploys, and they do not land together.**
+
+---
+
+## 13.14 — The sixth defect, and it is in the verification
+
+Worth its own section because it nearly put a false claim into §13.12.
+
+To detect that S2.e had deployed I grepped the public bundle for
+`aq-condowner`. It reported READY, so I measured — and found **zero tooltips
+and the narrow-width overflow still present at 280px and below.** The probe was
+wrong: **`aq-condowner` shipped in S2.b.** It was present in the bundle either
+way, so the probe could only ever say yes.
+
+Had I not measured the thing the probe was supposed to be gating, §13.12 would
+have recorded S2.e as verified on the strength of a signal that could not fail.
+
+This is the same trap this page's own verification notes already warn about —
+*"the shell chunk hash does NOT change when a route chunk does"* — wearing a
+different costume. The general form:
+
+> **A deploy discriminator must be unique to the CHANGE, not merely present in
+> it.** Grep for a string that did not exist one commit earlier — a new class
+> name, a new literal, a changed declaration — and confirm it returns 0 against
+> the currently-deployed build *before* trusting it to return 1 later.
+
+**And the corrected probe was ALSO wrong, which is the more useful half.** It
+grepped the deployed stylesheet for `aq-condowner{flex:0 1 auto` — a declaration
+that exists only after S2.e. It returned 0 against the live build, exactly as a
+good discriminator should… and kept returning 0 after the deploy landed, because
+**the minifier had rewritten it**: the shipped rule is
+`.aq-condowner{color:#55616f;flex:0 auto;min-width:0;font-weight:400}` —
+properties reordered, and `flex: 0 1 auto` collapsed to the equivalent
+`flex: 0 auto`.
+
+So the rule needs a second clause:
+
+> **A CSS discriminator must survive minification.** A class NAME does; a
+> declaration's exact text does not — values get collapsed to equivalent
+> shorthands and properties get reordered. Grep for a name that is new, or read
+> the rule back and compare semantically.
+
+It was caught by sanity-checking the probe's MECHANISM rather than trusting its
+answer: confirming it could find the stylesheet at all, and printing the rule it
+found. That printout is what revealed the change had been live for some time.
+S2.e was then measured properly and is verified in §13.12.
