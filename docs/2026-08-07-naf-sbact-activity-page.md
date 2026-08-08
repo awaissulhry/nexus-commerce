@@ -3145,3 +3145,272 @@ through the URL.
 count that disagreed with the list it produced, a filter row that could not hold
 its own roster, and a section that hid a control class by putting six of them in
 one line.
+
+---
+
+# PART 22 — S4 REBUILD: the list
+
+**Status: STUDY ONLY. Nothing is built. Needs operator approval.**
+
+Stream tag `SB.ACT.S4R`. Scope: **S4 only** — `.sba-list` and its day groups,
+`EventRow` / `RollupRow` / `byDay` / `rollUp`, the runs `DataGrid` and its
+columns, the arrivals banner, the footer and "Show older". S1–S3 are shipped;
+S5 (the drawer), S6 (the footnote) and S7 (the explainer) are later units.
+
+---
+
+## 22.0 — What S4 is FOR, in one sentence
+
+> **Show, newest first, every single thing the fleet has done — densely enough
+> to scan and clearly enough to trust — and let one click ask why.**
+
+---
+
+## 22.1 — What is on screen today, measured
+
+Live prod, 1728×906, `#f4f6f9` page, white card.
+
+### Five WCAG AA failures — more than S1, S2 and S3 had between them
+
+| Element | Size | Contrast | Where it appears |
+|---|---|---|---|
+| `.sba-sep` — the `·` separators | 11.5px | **1.60** | every meta line |
+| `.sba-daycount` — *26 events* | 11.5px | **2.43** | every day header |
+| `.sba-foot span` — *Showing 26 of 26* | 12px | **2.54** | the footer |
+| `.sba-time` — the clock on each row | 11.5px | **2.58** | **every row** |
+| `.sba-meta` — *from a test run · $0.0343* | 11.5px | **2.95** | **every row** |
+
+S1 fixed 3, S2 fixed 2, S3 fixed 1. **S4 alone has 5**, and the two worst-placed
+are on *every row* — so the most-repeated text on the page is the least legible
+on it. `1.60:1` is not a near miss; it is roughly the contrast of a watermark.
+
+### Four font sizes, two of them below the ladder
+
+Measured in S4: **10.5px · 11.5px · 12px · 13px**. S1 established 20/13/12 and
+S2 and S3 were both dragged back to it. **S4 is where 10.5 and 11.5 have been
+hiding all along** — which is why the same two mistakes kept reappearing: they
+were never removed from the section that has the most text.
+
+### The day header groups by UTC; the clock beside it is local
+
+`dayKey()` is `new Date(iso).toISOString().slice(0, 10)` — UTC. `hhmm()` is
+`toLocaleTimeString` — local. Proven in the browser at UTC+2:
+
+| Event | Files under | Renders as |
+|---|---|---|
+| `2026-08-06T23:30:00Z` | **Thursday 6 August** | **01:30** |
+| `2026-08-06T21:45:00Z` | Thursday 6 August | 23:45 ✓ |
+
+So any event between **22:00 and 24:00 UTC** lands under a day header that
+disagrees with the time printed on it, by one day. **Latent, not visible today**
+— the fleet has no event in that window — and entirely real. This is a
+well-documented bug class with exactly this root cause: [ccusage #349][cc],
+[litellm #29568][ll], and a GitLab issue for time zones west of UTC all reduce
+to *"`getDateKey()` uses UTC conversion before extracting the date"*.
+
+It is also why S2's copy says *"Nothing new for 6 hours"* rather than
+*"yesterday"*: I hit this during that build and routed around it rather than
+fixing it, because it was S4's. This is the unit that fixes it.
+
+### The same number, three times, in one viewport
+
+In the Runs grain:
+
+| Says | Where |
+|---|---|
+| *26 events across **7** runs* | S1's scope line |
+| ***7** runs · newest first* | the grid card's own `GridToolbar` |
+| *Showing **7** of 7* | S4's footer |
+
+Three statements of one fact within ~500px. The page's own rule is that a number
+appearing twice is a number that can disagree.
+
+### Two grains, two containers
+
+`Everything` renders into `.acr-card sba-list`; `Runs only` renders into
+`.h10-ds-gridcard`. Same data, same page, different chrome — and after S3R the
+DS card is the house shape.
+
+### The rest of the shape
+
+Rows are **60–118px** tall (rollups the taller); the list is 1,524px for 26
+events. The timestamp is a **33px column hard against the right edge** at
+x=1634. The day header is correctly `position: sticky`. `table-layout: fixed`
+holds in the runs grid with **zero** cell overflow — ACT.3's fix is intact.
+
+---
+
+## 22.2 — What the industry does
+
+### A · The timestamp leads
+
+Every chronological log surface puts time **first**, in a fixed, tabular gutter:
+Datadog's log list is "timestamp-based ordering by default, displaying the most
+recent logs on top… the fastest and therefore recommended sorting method"
+([Datadog][dd-vis]), and its list is a *table* whose first column is the time.
+The reason is mechanical: in a chronological list the reader scans **down the
+time column** to locate a moment, and a right-aligned 33px stub cannot be
+scanned that way.
+
+**Steal:** a leading, tabular, fixed-width time gutter. **Reject:** monospace
+for the whole row — only the numerals need to align.
+
+### B · Density is a decision, not a default
+
+[Carbon][carbon] ties row height to content: *"Tall row heights are only
+recommended if your data is expected to have 2 lines of content in a single
+row"*, and pairs toolbar size with row size so they cannot drift. [Primer][primer]
+ships three named densities — condensed *"maximizes data visibility in a small
+area"*, normal, and spacious *"for dense or complex content"*.
+
+Our rows carry two or three lines, so the current height is roughly right. What
+is wrong is *what* fills it: a meta line of up to five optional fragments joined
+by 1.60:1 separators. **Steal:** the principle that a row's height is earned by
+its content. **Reject:** a density switch — one more control on a page whose
+S3 study just spent its argument on having fewer.
+
+### C · "Load more" beats both alternatives here
+
+[NN/g][nng-scroll] is unusually clear: infinite scrolling suits *homogeneous
+content streams* where *"discovery is the primary goal rather than finding
+specific items"*, and creates *"serious backtracking issues"* for goal-directed
+users; pagination suits comparison; and the **"Load More" button is a hybrid**
+that *"can outperform both infinite scroll and traditional pagination when built
+correctly, combining rapid content display with user control."*
+
+Our reader is goal-directed and arrives from a permalink or a filter. **Steal:
+"Show older" stays exactly as it is** — this is a case where the research
+endorses what shipped. **Reject:** infinite scroll, again (Part 8 rejected the
+live-tail family on different grounds; this is the second independent reason).
+
+### D · What these products leave out of a row
+
+- **Datadog** shows no per-row action; the row opens a side panel.
+- **Sentry's** issue row has no separator-joined metadata strip; it uses
+  discrete aligned columns.
+- **None** repeats the group header's information inside its rows.
+
+That last one is worth naming: our rows print `from a test run` on every row of
+a day whose header already says the day, next to a badge that already says
+`test run`.
+
+---
+
+## 22.3 — The proposal
+
+### 22.3.1 The row: two aligned scan columns, then the sentence
+
+```
+ 21:45  ✓  Plan critic reviewed a plan                        fleet-sweep
+           from the weekly council · $0.0049
+
+ 21:42  ✕  Bid tuner tried to run, and failed
+           the worker itself · $0.1924
+           Answer did not match the format it promised: findings.1.dataVintage…
+```
+
+| Slot | Content | Type |
+|---|---|---|
+| **Time gutter** | `21:45`, tabular, fixed 52px, **13px**, ≥ 4.5:1 | label |
+| **Marker** | the kind glyph, shape-differentiated as today | label |
+| **Title** | the sentence, 13px — opens the drawer where a run exists | **control** |
+| **Badges** | `self-test` · `test run` · the workflow key, right-aligned | label |
+| **Meta** | **at most two** facts at 12px ≥ 4.5:1 — the trigger, and cost or duration | label |
+| **Detail** | the verbatim error or finding, 12px, only when present | label |
+
+**What comes out of the meta line:** the `·` separators as a styled element
+(1.60:1) — replaced by spacing and a single mid-grey bullet at ≥ 4.5:1; the
+state word where the marker already carries it in shape *and* screen-reader
+text; and the risk tier, which appears on approval rows only and belongs in the
+drawer.
+
+**Every size is 13px or 12px.** 10.5 and 11.5 are deleted from this page.
+
+### 22.3.2 The day boundary, fixed at the root
+
+`dayKey` becomes **local**, matching the clock printed beside it:
+
+```ts
+const dayKey = (iso: string) => {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+```
+
+and `dayLabel`'s `today`/`yesterday` comparisons move to the same basis. A pure
+function with a unit test that pins the exact case measured above — an event at
+`23:30Z` must file under **7 August** at UTC+2 — because the hazard is invisible
+in the data we have and will appear the first night the fleet runs late.
+
+**This also lets S2 say "yesterday" again**, which it currently refuses to for
+this reason.
+
+### 22.3.3 One container, one count
+
+- Both grains render into **`.h10-ds-gridcard`**, the shape S3R adopted.
+- The grid card's inner `GridToolbar` is **removed** — S3's toolbar above
+  already carries the controls, and its count was one of the three.
+- The footer states the count **only when it is not S1's**: while paging,
+  *"Showing 50 of 119 · Show older"*; when everything is shown,
+  *"That is the whole history."* with no number.
+
+Result: the count appears **once** on the page, in S1, and S4 speaks up only
+when it has something S1 does not know.
+
+### 22.3.4 What is deliberately unchanged
+
+Rollups (Part 8's answer to 21 identical rows), the sticky day headers, the
+arrivals banner's pull-not-push behaviour, `table-layout: fixed` with every
+column sized, the drawer trigger being a `<button>` rather than an `<a>`, the
+permalink scroll and its self-correcting re-check, and the seven runs columns.
+
+---
+
+## 22.4 — Every state
+
+| # | State | What renders |
+|---|---|---|
+| 1 | **Loading, first read** | *"Reading the fleet's history…"* — unchanged |
+| 2 | **Normal** | day groups, newest first |
+| 3 | **A day with one event** | the header still renders; a group of one is still a day |
+| 4 | **Rollup collapsed / expanded** | one line with a count and *show all N*; unchanged behaviour, restyled to the new row |
+| 5 | **An event with no detail** | two lines, not a reserved empty third |
+| 6 | **Paging active** | footer states *Showing N of M* + **Show older** |
+| 7 | **Everything shown** | *"That is the whole history."* — no number |
+| 8 | **Filters hide everything** | S1 says so; the list offers the way back — unchanged |
+| 9 | **Runs grain** | the DataGrid in the same card, no inner toolbar |
+| 10 | **Arrivals waiting** | the pull banner — unchanged |
+| 11 | **Day boundary** | an event at 23:30Z files under the local day and its clock agrees — the case that has never occurred |
+
+---
+
+## 22.5 — The boundary
+
+**Against S3 above.** S3 decides what the list is asked for; S4 renders the
+answer. S4 adds no filter, no chip and no count of its own beyond the paging
+statement.
+
+**Against S5 below.** A row opens the drawer; it does not explain. No retry, no
+re-run, no approve — a record is read, not operated (Part 0).
+
+**Against S1.** S1 owns the scope count. S4 states a number only while paging.
+
+---
+
+## 22.6 — Sources
+
+[dd-vis]: https://docs.datadoghq.com/logs/explorer/visualize/
+[carbon]: https://carbondesignsystem.com/components/data-table/usage/
+[primer]: https://primer.style/components/data-table
+[nng-scroll]: https://www.nngroup.com/articles/infinite-scrolling-tips/
+[cc]: https://github.com/ryoppippi/ccusage/issues/349
+[ll]: https://github.com/BerriAI/litellm/issues/29568
+
+**Row anatomy and density** · [Datadog — log visualizations][dd-vis] ·
+[Carbon — data table usage][carbon] · [Primer — DataTable densities][primer]
+
+**Paging** · [NN/g — infinite scrolling: when to use it, when to avoid it][nng-scroll]
+
+**The UTC day-grouping bug class** · [ccusage #349][cc] · [litellm #29568][ll]
+
+**In-repo, measured** · live prod at 1728×906, 2026-08-08
