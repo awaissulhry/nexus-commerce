@@ -706,8 +706,28 @@ function Preflight({
 }
 
 
-/** Campaign picker — searchable, ENABLED by default (60% of the estate is
- *  paused, so an unfiltered list offers mostly dormant scope). */
+/**
+ * Campaign picker — search-first, ENABLED by default (most of the estate is
+ * paused, so an unfiltered list offers mostly dormant scope).
+ *
+ * TWO RULES, both from measuring the shipped version on production.
+ *
+ * 1. **IT DOES NOT SCROLL.** It used to be a 210px box holding 1940px of
+ *    options — a window onto 10.8% of itself — sitting across 26.9% of the
+ *    visible drawer while the drawer had 330px more below it. A wheel gesture
+ *    aimed at the drawer moved the list instead, which is why the pre-flight
+ *    and the last two steps were hard to reach at all. The drawer body is the
+ *    only scroll container in the drawer, and this renders inline underneath
+ *    it. (`overscroll-behavior: contain` does NOT fix this: it stops an inner
+ *    scroller *chaining* to its parent, and the bug was *capture*.)
+ * 2. **IT STATES ITS OWN ARITHMETIC.** It used to render `.slice(0, 40)` of 86
+ *    running campaigns and say nothing about the other 46, so half the account
+ *    was reachable only by guessing a substring. A cap is fine; a silent one
+ *    is a lie, and a missing option cannot be discovered the way a missing row
+ *    can be scrolled to.
+ */
+const PICKER_ROWS = 8
+
 function CampaignPicker({
   picked,
   onChange,
@@ -733,34 +753,44 @@ function CampaignPicker({
     })().catch(() => setAll([]))
   }, [])
 
-  const options = useMemo(() => {
-    let list = (all ?? []).filter((c) => !!c.externalCampaignId)
-    if (enabledOnly) list = list.filter((c) => c.status === 'ENABLED')
-    const mapped = list.map((c) => ({
+  const { matches, poolSize, pausedCount } = useMemo(() => {
+    const live = (all ?? []).filter((c) => !!c.externalCampaignId)
+    const paused = live.filter((c) => c.status !== 'ENABLED').length
+    const pool = enabledOnly ? live.filter((c) => c.status === 'ENABLED') : live
+    const mapped = pool.map((c) => ({
       value: c.externalCampaignId as string,
       label: `${c.name} · ${c.marketplace}`,
     }))
     // searchOptions ranks the way ads names need — plain substring matching
     // returns nothing for "gale broad" against "GALE | IT | Broad | Brand".
-    return (q.trim() ? searchOptions(q, mapped, (o) => o.label) : mapped).slice(0, 40)
+    return {
+      matches: q.trim() ? searchOptions(q, mapped, (o) => o.label) : mapped,
+      poolSize: mapped.length,
+      pausedCount: paused,
+    }
   }, [all, q, enabledOnly])
 
+  const shown = matches.slice(0, PICKER_ROWS)
+  const query = q.trim()
+
   return (
-    <div style={{ marginTop: 10 }}>
+    <div className="as-picker">
       <input
-        className="acr-pg-search"
+        className="acr-pg-search as-pickersearch"
         placeholder="Search campaigns…"
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        style={{ width: '100%' }}
+        aria-label="Search campaigns"
+        title="Every word you type must appear, in any order — so “gale broad” finds “GALE | IT | Broad | Brand”."
       />
-      <label className="as-hint" style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
+      <label className="as-checkline">
         <input
           type="checkbox"
           checked={enabledOnly}
           onChange={(e) => setEnabledOnly(e.target.checked)}
         />
-        Only campaigns that are running (most of the account is paused)
+        Only campaigns that are running
+        {pausedCount > 0 && enabledOnly ? ` (${pausedCount} paused are hidden)` : ''}
       </label>
 
       {picked.length > 0 && (
@@ -770,7 +800,7 @@ function CampaignPicker({
               key={p.id}
               type="button"
               className="as-target"
-              title="Remove"
+              title="Remove this one"
               onClick={() => onChange(picked.filter((x) => x.id !== p.id))}
             >
               <Target size={11} />
@@ -780,31 +810,60 @@ function CampaignPicker({
         </div>
       )}
 
-      <div style={{ maxHeight: 210, overflowY: 'auto', marginTop: 8 }}>
-        {all === null && <p className="as-hint">Loading campaigns…</p>}
-        {all !== null && options.length === 0 && (
-          <p className="as-hint">No campaign matches that.</p>
-        )}
-        {options.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            className="as-workerbtn"
-            aria-pressed={picked.some((p) => p.id === o.value)}
-            onClick={() =>
-              onChange(
-                picked.some((p) => p.id === o.value)
-                  ? picked.filter((p) => p.id !== o.value)
-                  : [...picked, { id: o.value, label: o.label }],
+      {all === null ? (
+        <p className="as-hint">Loading campaigns…</p>
+      ) : (
+        <>
+          {/* The arithmetic, always. Nothing is hidden without being counted. */}
+          <p className="as-pickcount">
+            {query ? (
+              matches.length > 0 ? (
+                <>
+                  <strong>{matches.length}</strong> match “{query}”
+                  {matches.length > shown.length ? <> · showing {shown.length}</> : null}
+                </>
+              ) : (
+                <>Nothing matches “{query}”.</>
               )
-            }
-          >
-            <span className="nm as-optlabel">
-              {o.label}
-            </span>
-          </button>
-        ))}
-      </div>
+            ) : (
+              <>
+                <strong>{poolSize}</strong> campaign{poolSize === 1 ? '' : 's'}{' '}
+                {enabledOnly ? 'running' : 'in your account'}
+                {poolSize > shown.length ? (
+                  <> · showing {shown.length} — type to narrow</>
+                ) : null}
+              </>
+            )}
+          </p>
+
+          {matches.length === 0 && enabledOnly && pausedCount > 0 && (
+            <p className="as-hint">
+              {pausedCount} paused campaign{pausedCount === 1 ? ' is' : 's are'} hidden.{' '}
+              <button type="button" className="as-linkbtn" onClick={() => setEnabledOnly(false)}>
+                Include paused ones
+              </button>
+            </p>
+          )}
+
+          {shown.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              className="as-workerbtn"
+              aria-pressed={picked.some((p) => p.id === o.value)}
+              onClick={() =>
+                onChange(
+                  picked.some((p) => p.id === o.value)
+                    ? picked.filter((p) => p.id !== o.value)
+                    : [...picked, { id: o.value, label: o.label }],
+                )
+              }
+            >
+              <span className="nm as-optlabel">{o.label}</span>
+            </button>
+          ))}
+        </>
+      )}
     </div>
   )
 }
@@ -812,11 +871,16 @@ function CampaignPicker({
 /**
  * NAF.SB.AS.2 — the portfolio picker.
  *
- * Twelve rows, so this is a plain list rather than a search surface. It shows
- * the campaign count and the marketplaces each portfolio spans, because a
- * portfolio is only meaningful as "these N campaigns" — and the server only
- * returns portfolios that HAVE campaigns, so nothing offered here can be
- * refused later for being empty.
+ * Ten rows, so this is a plain list rather than a search surface. It shows the
+ * campaign count and the marketplaces each portfolio spans, because a portfolio
+ * is only meaningful as "these N campaigns" — and the server only returns
+ * portfolios that HAVE campaigns, so nothing offered here can be refused later
+ * for being empty.
+ *
+ * S2.a — it used to carry its own `maxHeight: 230; overflow-y: auto`, a second
+ * wheel trap nobody had reported: the campaign picker had one, so this one
+ * copied it. Ten rows never needed a scroller. The rule that replaces the
+ * habit: **the drawer body is the only scroll container in the drawer.**
  */
 function PortfolioPicker({
   picked,
@@ -850,7 +914,7 @@ function PortfolioPicker({
   }
 
   return (
-    <div style={{ marginTop: 10, maxHeight: 230, overflowY: 'auto' }}>
+    <div className="as-picker">
       {all.map((p) => {
         const on = picked.some((x) => x.id === p.portfolioId)
         return (
