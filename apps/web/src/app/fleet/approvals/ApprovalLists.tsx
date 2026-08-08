@@ -63,6 +63,11 @@ function outcomeWords(status: string): { word: string; tone: 'ok' | 'bad' | 'neu
   if (status === 'approved') return { word: 'Approved', tone: 'ok' }
   if (status === 'executing') return { word: 'Approved, running now', tone: 'ok' }
   if (status === 'expired') return { word: 'Ran out of time', tone: 'bad' }
+  // AQ.8 — an edited proposal. Named rather than left to the humanizer, which
+  // rendered a bare "superseded": true, but it reads as something that happened
+  // TO the operator rather than something they did. They did not say no; they
+  // said not that number.
+  if (status === 'superseded') return { word: 'You changed the number', tone: 'neutral' }
   return { word: humanize(status), tone: 'neutral' }
 }
 
