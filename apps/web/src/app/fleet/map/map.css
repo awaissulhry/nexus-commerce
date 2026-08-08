@@ -195,13 +195,19 @@
   background: #eef1f5;
   overflow: hidden;
 }
-.sbm-seg {
+/* `sbm-mseg`, not `sbm-seg`. The short name was already this page's segmented
+   RADIOGROUP (the mode switch, the window switch, the overlay picker, the
+   Map/List switch) and shipping the collision re-radiused all four of them
+   from 7px to 2px — caught by a prod probe that listed every `.sbm-seg` on the
+   page and found five, four of which were not mine. A page-local stylesheet is
+   only page-local; inside the page a name is still global. */
+.sbm-mseg {
   /* A non-zero state must never round away to nothing: one worker in sixty is
      still a worker, and a segment you cannot see is a count you cannot read. */
   min-width: 16px;
   border-radius: 2px;
 }
-.sbm-seg.is-dim {
+.sbm-mseg.is-dim {
   opacity: 0.3;
 }
 
@@ -896,14 +902,37 @@
   font-weight: 400;
   text-transform: none;
   letter-spacing: 0;
+  /* `visibility`, not `opacity` alone. An opacity-0 tip stays in the
+     accessibility tree, and the strip this replaced measured 808 characters of
+     flat text for 60 characters of label — every definition read once in
+     browse mode and again as the trigger's description. Hidden this way it is
+     out of browse mode and still reachable through `aria-describedby`, which
+     is the difference between describing and labelling. */
+  visibility: hidden;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.12s ease;
   box-shadow: 0 4px 14px rgba(28, 37, 48, 0.22);
 }
-.sbm-def:hover .sbm-def-tip,
-.sbm-def:focus-within .sbm-def-tip {
+/* Driven by a class now rather than by :hover/:focus-within, because the
+   Escape dismissal has to be able to close a tip the pointer is still on. */
+.sbm-def.is-open .sbm-def-tip {
+  visibility: visible;
   opacity: 1;
+  /* SC 1.4.13 Hoverable: hit-testing the centre of an open tip used to return
+     the element behind it, five times out of five. */
+  pointer-events: auto;
+}
+/* The bridge across the 7px gap. Without it the pointer leaves the wrapper on
+   its way to the tip and the tip closes underneath it — Hoverable satisfied on
+   paper and not in the hand. */
+.sbm-def.is-open .sbm-def-tip::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: 0;
+  right: 0;
+  height: 7px;
 }
 @media (prefers-reduced-motion: reduce) {
   .sbm-def-tip {

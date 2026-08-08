@@ -172,7 +172,7 @@ export function CensusBand({
             .map((r) => (
               <span
                 key={r.chip.id}
-                className={`sbm-seg seg-${r.chip.id} ${
+                className={`sbm-mseg seg-${r.chip.id} ${
                   activeChip && activeChip !== r.chip.id ? 'is-dim' : ''
                 }`}
                 style={{ flexGrow: r.count }}
@@ -184,7 +184,12 @@ export function CensusBand({
       <div className="sbm-facts">
         <Def k="spend-today">
           {(described) => (
-            <div className="sbm-fact" tabIndex={0} {...described}>
+            <div
+              className="sbm-fact"
+              tabIndex={0}
+              aria-label={`Spent today ${usd(spentTodayUSD)} of ${usd(dailyCeilingUSD)}`}
+              {...described}
+            >
               <span className="k">Spent today</span>
               <span className="v">
                 {usd(spentTodayUSD)} <i>of {usd(dailyCeilingUSD)}</i>
@@ -200,7 +205,14 @@ export function CensusBand({
           note={skew ? `${DEFINITIONS['findings-open']} ${skew}` : undefined}
         >
           {(described) => (
-            <div className="sbm-fact" tabIndex={0} {...described}>
+            <div
+              className="sbm-fact"
+              tabIndex={0}
+              aria-label={`Open findings ${totals.open}${
+                totals.expired > 0 ? `, ${totals.expired} past their expiry` : ''
+              }`}
+              {...described}
+            >
               <span className="k">Open findings</span>
               <span className="v">
                 {totals.open}
@@ -228,6 +240,12 @@ export function CensusBand({
                   <button
                     type="button"
                     className={`sbm-lens rank-${r.chip.rank} ${on ? 'on' : ''}`}
+                    /* The number and the label are separate elements with a
+                       flex gap between them, which reads as a space and is
+                       not one: the accessible name came out "7switched off".
+                       Spelled here so what is announced matches what is on
+                       screen. */
+                    aria-label={`${r.count} ${r.chip.label}`}
                     aria-pressed={on}
                     tabIndex={i === rovingIndex ? 0 : -1}
                     {...described}

@@ -21,7 +21,7 @@
  * page where an upward bubble would be clipped by the header.
  */
 
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { CHIPS } from './lib'
 
 /**
@@ -67,6 +67,31 @@ export const DEFINITIONS: Record<string, string> = {
  * Wraps a trigger and gives it a focusable, screen-reader-associated
  * definition. The child must accept `aria-describedby`; in practice it is a
  * button, and the definition appears on hover AND on keyboard focus.
+ *
+ * S1R — TWO MEASURED FAILURES OF WCAG 2.2 SC 1.4.13, both fixed here.
+ *
+ * **Hoverable** — *"the pointer can be moved over the additional content
+ * without the additional content disappearing."* The tip was
+ * `pointer-events: none`, and hit-testing the centre of each of the five open
+ * tooltips on prod returned the element behind it, five times out of five. It
+ * takes the pointer now, and a bridge spans the 7px gap so the pointer can
+ * cross without leaving the wrapper.
+ *
+ * **Dismissible** — *"a mechanism is available to dismiss the additional
+ * content without moving pointer hover or keyboard focus."* There was no key
+ * handler at all. Escape dismisses now, and the listener is registered **only
+ * while a tip is actually shown** — the Approvals stream's first cut of the
+ * same fix registered from every un-dismissed instance, so one Escape on a page
+ * with 39 of them dismissed all 39.
+ *
+ * AND ONE THING THAT WAS NOT A WCAG FAILURE BUT WAS WORSE IN PRACTICE: the tip
+ * was hidden with `opacity: 0` while staying `visibility: visible`, with no
+ * `aria-hidden`, so it was in the accessibility tree whether open or closed.
+ * The census strip's flat text measured **808 characters for 60 characters of
+ * label** — every definition read once in browse mode and again as the
+ * trigger's description. `visibility: hidden` takes it out of browse mode while
+ * leaving it reachable through `aria-describedby`, which is the whole point of
+ * describing rather than labelling.
  */
 export function Def({
   k,
@@ -80,9 +105,45 @@ export function Def({
 }) {
   const text = note ?? DEFINITIONS[k]
   const id = `sbm-def-${k}`
+  const [over, setOver] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
+  const shown = over && !dismissed
+
+  useEffect(() => {
+    if (!shown) return
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      // Dismiss the tip and stop there: the page's own Escape handler clears
+      // the selection and then the active filter, and dismissing a tooltip
+      // must not also drop the reader's filter.
+      e.stopPropagation()
+      setDismissed(true)
+    }
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
+  }, [shown])
+
   if (!text) return <>{children({ 'aria-describedby': '' })}</>
+
+  // Re-arms on leave/blur, so a tip dismissed with Escape comes back the next
+  // time you actually ask for it.
+  const enter = () => {
+    setOver(true)
+    setDismissed(false)
+  }
+  const leave = () => {
+    setOver(false)
+    setDismissed(false)
+  }
+
   return (
-    <span className="sbm-def">
+    <span
+      className={`sbm-def ${shown ? 'is-open' : ''}`}
+      onMouseEnter={enter}
+      onMouseLeave={leave}
+      onFocus={enter}
+      onBlur={leave}
+    >
       {children({ 'aria-describedby': id })}
       <span role="tooltip" id={id} className="sbm-def-tip">
         {text}
