@@ -2309,6 +2309,22 @@ runs, the last lane grows from "never run" to a full outcome line and the fill
 rises with it. A per-step run strip would close the rest, but that needs
 per-worker history and belongs with S3's run selection (§10.7 item 1).
 
+**One self-declared miss, found by discharging a criterion instead of assuming
+it, and closed (`2ee74c9f6`).** §10.5 promised the pipeline would gain an off
+treatment. Turning the custom off *on the rebuilt page* — rather than trusting
+the audit run against the old one — showed it still rendered identically: the
+exact indictment written against the canvas, surviving one layer down. A worker
+being off is already on its card; the ROUTINE being off is a fact no card can
+carry, so it now goes on the block as a sentence with the steps at 62% opacity,
+still legible because they remain the truth about the wiring. Verified live:
+*"This routine is switched off — none of these steps will run until you turn it
+back on."*, `is-blocked` set, opacity 0.62 — then restored to Ready, blocked
+line gone, opacity 1, Run-now back. **Prod left exactly as found.**
+
+**Every row of the §10.5 state table is now discharged** — sweep, council,
+custom Ready, custom Off and the 404 verified on the rebuilt page; built-in-on-
+revision, no-wiring, halted and feed-unreadable verified in code.
+
 **`RoutineCanvas.tsx` was not touched**, as promised — `RoutineEditor.tsx:486`
 still imports it, and the editor's canvas is S5's decision.
 
