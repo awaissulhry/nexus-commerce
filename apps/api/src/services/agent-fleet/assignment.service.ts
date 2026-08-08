@@ -422,6 +422,8 @@ export async function listAssignments(filter: { charterKey?: string } = {}) {
     byAssignment.set(r.assignmentId, list)
   }
 
+  const resolves = await targetsThatStillResolve(rows)
+
   return rows.map((a) => {
     const rs = byAssignment.get(a.id) ?? []
     const last = rs[0] ?? null
@@ -430,6 +432,7 @@ export async function listAssignments(filter: { charterKey?: string } = {}) {
       state: deriveState(a.state, rs),
       storedState: a.state,
       runCount: rs.length,
+      targetResolves: resolves.get(a.id) ?? true,
       lastRun: last,
       costUSD: rs.reduce(
         // An abandoned run's cost is unknown, not zero — the reclaimer never
@@ -442,6 +445,73 @@ export async function listAssignments(filter: { charterKey?: string } = {}) {
       findingCount: rs.reduce((s, r) => s + r.findingCount, 0),
     }
   })
+}
+
+/**
+ * NAF.SB.AS-S1R / S1.f — does each assignment still point at something?
+ *
+ * The list has never been able to say this. `.as-target.gone` was written into
+ * the stylesheet at AS.1 and applied by nothing, because nothing on the read
+ * path resolved a target — so the only way to learn that a campaign had been
+ * archived was to START the run and pay for the model call that told you it had
+ * stopped. On a fleet the operator switched off precisely to avoid spending,
+ * that is the wrong place to find out.
+ *
+ * TWO QUERIES FOR THE WHOLE PAGE, not two per row: every campaign id across
+ * every assignment goes into one indexed `IN`, and every portfolio id into a
+ * second. At the 200-row cap that is still two.
+ *
+ * **The rule is copied from the executor, deliberately, and it is `some` not
+ * `every`:** `resolveAssignmentScope` stops with `target_gone` only when NONE
+ * of the named campaigns survive — a partially-archived target still runs, on
+ * what is left. A red chip on a row that would run fine would be a new lie
+ * replacing the old silence. The two must agree, so this asks the same
+ * question: *would a run stop before it started?*
+ */
+export async function targetsThatStillResolve(
+  rows: { id: string; targetKind: string | null; targetIds: string[] }[],
+): Promise<Map<string, boolean>> {
+  const out = new Map<string, boolean>()
+  const campaignIds = new Set<string>()
+  const portfolioIds = new Set<string>()
+  for (const r of rows) {
+    if (r.targetKind === 'CAMPAIGN') r.targetIds.forEach((i) => i && campaignIds.add(i))
+    else if (r.targetKind === 'PORTFOLIO') r.targetIds.forEach((i) => i && portfolioIds.add(i))
+  }
+
+  const live = new Set<string>()
+  if (campaignIds.size) {
+    const found = await prisma.campaign.findMany({
+      where: { externalCampaignId: { in: [...campaignIds] } },
+      select: { externalCampaignId: true },
+    })
+    for (const c of found) if (c.externalCampaignId) live.add(c.externalCampaignId)
+  }
+
+  const stocked = new Set<string>()
+  if (portfolioIds.size) {
+    // A portfolio resolves only if it still HOLDS campaigns — an emptied
+    // portfolio narrows to nothing and the executor refuses it, so an existence
+    // check on the portfolio alone would disagree with the run.
+    const found = await prisma.campaign.findMany({
+      where: { portfolioId: { in: [...portfolioIds] } },
+      select: { portfolioId: true },
+      distinct: ['portfolioId'],
+    })
+    for (const c of found) if (c.portfolioId) stocked.add(c.portfolioId)
+  }
+
+  for (const r of rows) {
+    if (r.targetKind === 'CAMPAIGN') {
+      out.set(r.id, r.targetIds.some((i) => live.has(i)))
+    } else if (r.targetKind === 'PORTFOLIO') {
+      out.set(r.id, r.targetIds.some((i) => stocked.has(i)))
+    } else {
+      // A marketplace is a constant and the whole account is always there.
+      out.set(r.id, true)
+    }
+  }
+  return out
 }
 
 export async function getAssignment(id: string) {

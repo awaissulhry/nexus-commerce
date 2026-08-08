@@ -39,6 +39,23 @@ export interface DataGridProps<T> {
   showTotals?: boolean
   emptyState?: ReactNode
   initialSort?: { key: string; dir: 'asc' | 'desc' }
+  /**
+   * Controlled sort (NAF.SB.AS-S1R S1.e — additive, opt-in).
+   *
+   * Pass `sort` AND `onSortChange` to own the sort state yourself: the grid
+   * then renders the order you give it and reports header clicks instead of
+   * keeping its own. That is what lets a page put its sort in the URL, choose
+   * which direction a first click means per column, or offer a "back to the
+   * default order" control — none of which are reachable while the state lives
+   * in here.
+   *
+   * Omit both (every existing consumer) and nothing changes: the grid keeps its
+   * own state seeded from `initialSort`, exactly as before. `undefined` means
+   * uncontrolled; `null` means controlled-and-currently-unsorted, which is a
+   * real state — it renders `rows` in the order they were passed.
+   */
+  sort?: { key: string; dir: 'asc' | 'desc' } | null
+  onSortChange?: (next: { key: string; dir: 'asc' | 'desc' }) => void
   /** cap height + scroll (sticky header/footer stay pinned) */
   maxHeight?: number | string
   className?: string
@@ -63,10 +80,18 @@ export function DataGrid<T>({
   showTotals,
   emptyState,
   initialSort,
+  sort: controlledSort,
+  onSortChange,
   maxHeight,
   className,
 }: DataGridProps<T>) {
-  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(initialSort ?? null)
+  const [ownSort, setOwnSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(
+    initialSort ?? null,
+  )
+  // `undefined` = uncontrolled (every consumer before S1.e). `null` = controlled
+  // and deliberately unsorted, which is not the same thing.
+  const controlled = controlledSort !== undefined
+  const sort = controlled ? controlledSort : ownSort
 
   const sortedRows = useMemo(() => {
     if (!sort) return rows
@@ -81,8 +106,14 @@ export function DataGrid<T>({
     })
   }, [rows, sort, columns])
 
-  const toggleSort = (key: string) =>
-    setSort((s) => (s?.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' }))
+  const toggleSort = (key: string) => {
+    const next: { key: string; dir: 'asc' | 'desc' } =
+      sort?.key === key
+        ? { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: 'desc' }
+    if (onSortChange) onSortChange(next)
+    if (!controlled) setOwnSort(next)
+  }
 
   const allKeys = (rowSelectable ? rows.filter(rowSelectable) : rows).map(rowKey)
   const selCount = selected?.size ?? 0

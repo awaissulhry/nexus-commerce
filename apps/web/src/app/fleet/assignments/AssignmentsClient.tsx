@@ -65,6 +65,12 @@ export interface AssignmentRow {
   targetLabels: string[]
   wantBack: string | null
   dueAt: string | null
+  /**
+   * S1.f — does this still point at something? Absent on an older payload, so
+   * it defaults to true: a page that reddened every chip because a field was
+   * missing would be a worse lie than the silence it replaces.
+   */
+  targetResolves?: boolean
   state: AssignmentState
   runCount: number
   findingCount: number
@@ -120,6 +126,34 @@ function useWidth(): Width {
  * to make that first click show the rows that want attention rather than the
  * ones that are finished with.
  */
+/**
+ * S1.e — which direction a FIRST click on each header should mean.
+ *
+ * DataGrid's own first click is always descending, which is right for a number
+ * and wrong for a name. Now that sort is controlled, the page can say what each
+ * column's useful direction is: most-urgent-first, A–Z, newest-first,
+ * soonest-first. A control whose first use gives you the least useful answer is
+ * a control people stop using.
+ */
+const FIRST_DIR: Record<string, 'asc' | 'desc'> = {
+  state: 'desc', // NEEDS_YOU is negated, so desc = what wants you most
+  title: 'asc',
+  target: 'asc',
+  last: 'desc',
+  when: 'desc',
+  due: 'asc', // soonest deadline first; undated sort last in both directions
+}
+
+/** The column's name in the operator's words, for the "sorted by …" line. */
+const SORT_WORD: Record<string, string> = {
+  state: 'state',
+  title: 'name',
+  target: 'what it points at',
+  last: 'last run',
+  when: 'when it ran',
+  due: 'deadline',
+}
+
 const NEEDS_YOU: Record<AssignmentState, number> = {
   failed: 0,
   stopped: 1,
@@ -138,6 +172,7 @@ export function AssignmentsClient() {
   const [showClosed, setShowClosed] = useState(false)
   const [creating, setCreating] = useState(false)
   const [q, setQ] = useState('')
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [actionError, setActionError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -188,6 +223,9 @@ export function AssignmentsClient() {
     if (p.get('closed') === '1') setShowClosed(true)
     const query = p.get('q')
     if (query) setQ(query)
+    const sk = p.get('sort')
+    const sd = p.get('dir')
+    if (sk && sk in FIRST_DIR) setSort({ key: sk, dir: sd === 'asc' ? 'asc' : 'desc' })
   }, [])
 
   useEffect(() => {
@@ -195,9 +233,16 @@ export function AssignmentsClient() {
     filter ? p.set('state', filter) : p.delete('state')
     showClosed ? p.set('closed', '1') : p.delete('closed')
     q.trim() ? p.set('q', q.trim()) : p.delete('q')
+    if (sort) {
+      p.set('sort', sort.key)
+      p.set('dir', sort.dir)
+    } else {
+      p.delete('sort')
+      p.delete('dir')
+    }
     const qs = p.toString()
     window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname)
-  }, [filter, showClosed, q])
+  }, [filter, showClosed, q, sort])
 
   const load = useCallback(async () => {
     const res = await fetch(`${getBackendUrl()}/api/agent/fleet/assignments`, {
@@ -304,7 +349,10 @@ export function AssignmentsClient() {
             State
           </span>
         ),
-        width: 132,
+        // 120, not 132: the widest chip measures 92px on prod, and the rule
+        // this rebuild holds itself to is that no fixed column exceeds 1.35×
+        // its widest content. 132 was 1.43×.
+        width: 120,
         sortable: true,
         sortValue: (a) => -(NEEDS_YOU[a.state] ?? 9),
         render: (a) => {
@@ -569,12 +617,23 @@ export function AssignmentsClient() {
                 </>
               ) : (
               <>
-                <span
-                  className="as-order"
-                  title="The default order: anything overdue first, then newest. Click a column header to sort by it instead."
-                >
-                  overdue first, then newest
-                </span>
+                {sort ? (
+                  <button
+                    type="button"
+                    className="as-order as-orderbtn"
+                    onClick={() => setSort(null)}
+                    title="Go back to the order this page chooses: anything overdue first, then newest."
+                  >
+                    sorted by {SORT_WORD[sort.key] ?? sort.key} — use the default order
+                  </button>
+                ) : (
+                  <span
+                    className="as-order"
+                    title="The default order: anything overdue first, then newest. Click a column header to sort by it instead."
+                  >
+                    overdue first, then newest
+                  </span>
+                )}
                 <span
                   className="as-asof"
                   title="The time of the last successful read. The page refreshes itself about every 10 seconds while this tab is visible."
@@ -611,6 +670,14 @@ export function AssignmentsClient() {
             rows={visible}
             rowKey={(a) => a.id}
             maxHeight="calc(100vh - 22rem)"
+            sort={sort}
+            /* The grid proposes descending for every first click; the page
+               decides what a first click on THIS column should mean. */
+            onSortChange={(next) =>
+              setSort(
+                sort?.key === next.key ? next : { key: next.key, dir: FIRST_DIR[next.key] ?? 'desc' },
+              )
+            }
             selectable
             selected={selected}
             onSelectedChange={setSelected}
@@ -708,6 +775,8 @@ function TargetChip({ a, inline }: { a: AssignmentRow; inline?: boolean }) {
   }
   const label = a.targetLabels.join(', ') || a.targetIds.join(', ')
   const ids = a.targetIds.join(', ')
+  const gone = a.targetResolves === false
+  const kindWord = a.targetKind === 'PORTFOLIO' ? 'portfolio' : 'campaign'
   // The id lives in the tooltip, not the cell. Ids exist to survive renames,
   // which is a correctness concern, not a reading one.
   //
@@ -723,9 +792,17 @@ function TargetChip({ a, inline }: { a: AssignmentRow; inline?: boolean }) {
         : `Marketplace ${label} — everything in your account for that marketplace.`
   const Icon = a.targetKind === 'PORTFOLIO' ? Layers : a.targetKind === 'MARKETPLACE' ? Globe : Target
   return (
-    <span className={`as-target${inline ? ' inline' : ''}`} title={tip}>
-      <Icon size={11} />
+    <span
+      className={`as-target${gone ? ' gone' : ''}${inline ? ' inline' : ''}`}
+      title={
+        gone
+          ? `The ${kindWord} this points at no longer exists${a.targetKind === 'PORTFOLIO' ? ' or holds no campaigns' : ''}. Starting this would stop immediately rather than widen to your whole account — which is exactly what it should do. Make a new assignment against something that is still there.`
+          : tip
+      }
+    >
+      {gone ? <AlertTriangle size={11} /> : <Icon size={11} />}
       {label}
+      {gone ? <span className="as-gonemark"> · gone</span> : null}
     </span>
   )
 }

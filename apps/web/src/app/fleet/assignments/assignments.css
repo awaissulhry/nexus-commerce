@@ -41,12 +41,20 @@
    1066×56px row, i.e. 5.4% of the row. A block anchor with the cell's own
    padding turns that into the cell. */
 .as-titlelink {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   color: inherit;
   text-decoration: none;
   margin: -11px -14px;
   padding: 11px 14px;
   min-width: 0;
+  /* The row is 49px because the actions menu button (26px) is the tallest cell
+     content, while the title's own line box is 18px — so a naturally-sized
+     anchor filled 40 of 49 and the click target measured 32.8% of the row
+     instead of the 40% this rebuild committed to. The min-height is that 9px,
+     stated rather than left to chance. */
+  min-height: 27px;
 }
 .as-titlelink .nm {
   display: block;
@@ -108,7 +116,10 @@
    campaign" was the one that stopped saying it. */
 .as-target > svg { flex: none; }
 .as-target > :not(svg) { overflow: hidden; text-overflow: ellipsis; }
+/* S1.f — and it says the word as well as changing colour, because colour alone
+   is a WCAG 1.4.1 failure and because "gone" is not a shade of blue. */
 .as-target.gone { color: #a11d2b; background: #fdecee; border-color: #f6d4d9; }
+.as-gonemark { font-weight: 700; flex: none; }
 .as-target.account { color: #5b6573; background: #f4f6f9; border-color: #e6eaf0; }
 .as-target.inline { max-width: 26ch; }
 
@@ -125,7 +136,10 @@
 .as-outcome.muted { color: #5b6573; }
 
 .as-when { font-size: 12px; color: #52627a; font-variant-numeric: tabular-nums; }
-.as-when.muted { color: #8a93a1; }
+/* The em-dash placeholders are not decoration — they say "there is nothing
+   here", which is this page's most common answer. Measured at #8a93a1 they
+   were 3.1:1; #6b7480 is 4.73:1 and still reads as quieter than a value. */
+.as-when.muted { color: #6b7480; }
 
 /* ── S1.a · the grid card ─────────────────────────────────────────────────
    Scoped to `.as-page`, a root class this page alone wears, NOT to `.acr-fleet`
@@ -166,6 +180,15 @@
   white-space: nowrap;
 }
 .as-order::before { content: '↕ '; opacity: 0.7; }
+.as-orderbtn {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: #2f6feb;
+  cursor: pointer;
+  text-decoration: underline;
+}
 .as-cap { color: #92400e; }
 
 /* ── S1.d · row actions ───────────────────────────────────────────────────
@@ -280,7 +303,7 @@
 .as-due.later { color: #5b6573; background: #f4f6f9; border-color: #e6eaf0; }
 .as-due.soon  { color: #92400e; background: #fdf3e3; border-color: #f5e2c0; }
 .as-due.over  { color: #a11d2b; background: #fdecee; border-color: #f6d4d9; }
-.as-due.none  { color: #8a93a1; font-weight: 400; }
+.as-due.none  { color: #6b7480; font-weight: 400; }
 
 /* ── S1.b · the filter band ───────────────────────────────────────────────
    One row: All, the six open states, then the closed remainder. The whole
