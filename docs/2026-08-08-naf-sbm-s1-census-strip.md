@@ -1,6 +1,8 @@
 # NAF.SB.M-S1R — Section 1, the census strip: a measured audit and a rebuild
 
-**Status: STUDY LANDED 2026-08-08, AWAITING OPERATOR APPROVAL. No code written.**
+**Status: APPROVED by the operator 2026-08-08 (Option A, and the findings fact
+added). S1.a–S1.d ALL SHIPPED AND PROD-VERIFIED. See PART 12 for the execution
+record and the two exit criteria I missed.**
 
 | | |
 |---|---|
@@ -830,3 +832,99 @@ Repo and prod evidence is cited inline. External:
 - Linear — [display options](https://linear.app/docs/display-options) (group header: icon, label, muted count, sticky)
 - Microsoft — [Agent Registry in the M365 admin center](https://learn.microsoft.com/en-us/microsoft-365/admin/manage/agent-registry?view=o365-worldwide) (governance signals: pending approvals, ownership gaps, risks)
 - Sentry — [issue states and triage](https://docs.sentry.io/product/issues/states-triage/) · Temporal [Web UI](https://docs.temporal.io/web-ui) · Honeycomb [query results](https://docs.honeycomb.io/investigate/query/) · Metabase [numbers](https://www.metabase.com/docs/latest/questions/visualizations/numbers)
+
+---
+
+## PART 12 — The execution record
+
+Approved 2026-08-08: **Option A**, and **add the findings fact** rather than
+delete the footnote. Four commits, each type-checked, tested, ratchet-clean and
+then measured on the deployed build at 1728×906.
+
+| | commit |
+|---|---|
+| **S1.a** the verdict, `findingsTotals`, `usd`, label rewording | `f47e392d6` |
+| **S1.b** the band: layout, meter, lens toolbar, standing facts, loading state, drawer section | `9d7eaeeb6` + `e294c33a8` |
+| **S1.c** SC 1.4.13, the a11y tree, and two class collisions | `77407e92f` |
+| **S1.d** entity mode's band, and the second collision | `e7d068a68` |
+
+### 12.1 · The exit criteria, against what shipped
+
+| | target | measured on prod | |
+|---|---|---|---|
+| dead width @1280/1440/1728/1920 | ≤5% | **0 / 0 / 0 / 0** | ✅ |
+| band block, card top → canvas top | ≤96px | **101.5px** | ❌ over by 5.5 |
+| chrome above the canvas | ≤240px | **246.3px** (27.2%, was 34.1%) | ❌ over by 6.3 |
+| canvas movement on filter | 0 | **0** — canvas top 283.5→283.5, node0 unmoved | ✅ |
+| text roles below 4.5:1 | 0 | **0** (worst 5.42:1; was 2 with a worst of 2.50:1) | ✅ |
+| pressed vs unpressed | ≥3:1 + non-colour | **8.24:1** fill, plus a check glyph | ✅ |
+| control boundary | ≥3:1 | **3.86:1** | ✅ |
+| counted assertions before the first read | 0 | **0 digits in the band while loading** | ✅ |
+| lenses that can only produce an empty graph | 0 | **0** | ✅ |
+| lens tab stops | 1 | **1** (arrow traversal verified with a real key) | ✅ |
+| `lib.vitest.test.ts` | 10 passing | **22 passing** (12 added) | ✅ |
+| flat text of the band | ≤200 chars | **not met, and the metric was wrong** — see 12.3 | ❌ |
+
+**The two height misses are real and I am not rounding them away.** The band is
+89.5px and the gap to the canvas is 12px; the remaining 101.5 − 96 comes from a
+13.5px headline over a reserved 17px sub-line over a 25.3px lens row, and
+shaving it would mean either dropping the reserved row (which is what stopped
+the canvas moving) or setting type below the house floor. The right call was to
+miss the number rather than buy it with a regression, and to say so.
+
+### 12.2 · What is on screen now
+
+> ⏻ **The whole fleet is switched off.**
+> Nothing will start, whatever any schedule says.
+> ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬  SPENT TODAY $0.00 of $2.00 · OPEN FINDINGS 64 · 47 past their expiry
+> `▣ 7 switched off`  ALSO  `⌐1 never run, ever⌐`  0 waiting in Approvals — No worker can put anything here yet…  ⓘ What each number counts
+
+Entity mode: **0 dead width**, band 56.3px, `38 things the fleet watches, and
+103 links it worked out between them`, a relation meter reading from the same
+`relationCounts` the rail names, and **zero elements with a pointer cursor that
+are not controls** (there were two).
+
+### 12.3 · Four things I got wrong, all caught on prod
+
+1. **Two class collisions, the same mistake twice.** `.sbm-seg` was already this
+   page's segmented radiogroup — shipping it re-radiused the mode switch, the
+   window switch, the overlay picker and the Map/List switch from 7px to 2px.
+   `.sbm-fact` was already the canvas node's badge, seventeen of them, and my
+   band rules put `flex-direction: column`, a 5px radius and a focus ring on
+   every one. The second changed nothing visible **only because each badge holds
+   a single text node** — it would have been found by the next child, not by
+   anyone looking. Renamed `.sbm-mseg` / `.sbm-bfact`. **A page-local stylesheet
+   is only page-local; inside the page a class name is still global**, and the
+   cheap check is to list every element carrying the name before you ship it.
+2. **The accessible name was not the visible name.** The number and the label
+   are separate elements with a flex gap, which reads as a space and is not one:
+   the lens announced as `7switched off` and the fact as `Spent today$0.00 of
+   $2.00`. Both carry an explicit `aria-label` now.
+3. **The flat-text exit criterion measured the wrong thing.** I set "≤200 chars"
+   using `textContent`, and `visibility: hidden` removes an element from the
+   accessibility tree but **not** from `textContent`. The fix is right — the tip
+   is out of browse mode — and the metric could never show it. The honest
+   replacement is a11y-tree inspection, not string length.
+4. **`definitions.tsx` claimed one source while shipping two.** Its header rule
+   was right and its content restated all eleven chip definitions that `lib.ts`
+   already carried. Derived now.
+
+### 12.4 · Two verification traps, worth more than the fixes
+
+Both made me write down a defect that was not there, and both are properties of
+the harness rather than the page.
+
+1. **`element.focus()` from an injected script fires no focus events.**
+   `document.activeElement` updates and nothing else does — I attached native
+   `focus` and `focusin` listeners on `document` and caught **zero**. A tooltip
+   driven by CSS `:focus-within` therefore *looks* fine under that probe and one
+   driven by JS state *looks* broken, and the difference is the probe. I
+   reported the keyboard path as broken before catching it. A real `Tab` through
+   the `computer` tool works and is the only honest way to test focus.
+2. **The harness's Escape key never reaches the page at all** — zero `keydown`
+   events at `document` in either phase, while `Tab` from the same tool arrives
+   fine. So Dismissible cannot be tested with a real key here; dispatch the
+   event instead and say that is what you did.
+
+The general rule, and it is the third time this page has taught it: **when a
+probe and the code disagree, suspect the probe.**
